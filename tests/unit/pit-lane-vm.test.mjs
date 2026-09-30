@@ -258,6 +258,18 @@ test("the stop is seen: up on the jacks, four wheels off and on, down again — 
   assert.ok(boxS > 2 && boxS < 2.5, `the hold is ${boxS} s`);
 });
 
+test("fit gate is mid-hold: wheels are fully off when stopAnim.u crosses 0.5", async () => {
+  // The box branch fits at u >= 0.5 so the compound stripe changes while the
+  // wheels are off, not at latch. This pins the anim numbers that gate uses.
+  await fresh();
+  const pits = g.G.pits, boxS = pits.zoneOf().boxS;
+  const at = (u) => pits.stopAnim({ pitState: "box", pitT: boxS * (1 - u) });
+  assert.ok(at(0.45).off > 0.5, "wheels already off just before the fit gate");
+  assert.ok(at(0.50).off > 0.5, "wheels still off at the fit gate");
+  assert.ok(at(0.50).lift > 0.2, "still on the jacks at the fit gate");
+  assert.ok(at(0.27).off > 0.5, "off-complete is before the fit gate");
+});
+
 // Step the sim under a controller until `pred` holds, and return the state the
 // cue was read in (read BEFORE the step, so what comes back is what was true).
 // `ctrl(ps, q, c)` → { x, throttle, brake }: the lateral to hold, and the pedals.

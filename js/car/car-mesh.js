@@ -383,18 +383,20 @@ function getCompoundRing(col) {
   return m;
 }
 
-// THE STOP'S KIT, no people: a jack at each end of the car — the beam under
-// the nose or the gearbox, its cradle, its two castors and the upright
-// handle, in the team's colour — and a wheel gun on the ground at each wheel.
-// One mesh per team colour in the car's own frame (+z the nose, wheels at
-// x +/-0.79 / z 1.7 and -1.6), drawn only while the car is held in its box
-// (car-draw drawPitCrew). Built from GaragePrims' blocks; a VM without them
-// draws nothing.
+// THE STOP'S CREW: a jack at each end of the car — cradle, team-colour beam,
+// castors, upright handle — a wheel gun with its hose at each wheel, and the
+// six people who work them (four gunmen + two jack operators). One mesh per
+// team colour in the car's own frame (+z the nose, wheels at x +/-0.79 /
+// z 1.7 and -1.6), drawn only while the car is held in its box (car-draw
+// drawPitCrew). Built from GaragePrims' blocks; a VM without them draws
+// nothing. CREW_PEOPLE is the body-block count the browser spec pins so a
+// kit-only regression cannot silently ship again.
 // FIFO-capped like getAeroFlap: the key is the team colour, and a livery
 // editor or custom team mints a new colour per edit, so an uncapped map kept
 // every one's GPU buffers for the page's life. Map order IS insertion order.
 const _crewMeshes = new Map();
 const CREW_CACHE_MAX = 32;   // one per team colour on the grid, with room for custom liveries
+const CREW_PEOPLE = 6;       // four gunmen + front and rear jack ops
 function getCrewMesh(col) {
   const key = col[0].toFixed(2) + "," + col[1].toFixed(2) + "," + col[2].toFixed(2);
   let m = _crewMeshes.get(key);
@@ -403,25 +405,47 @@ function getCrewMesh(col) {
   if (!P) return null;
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   const steel = [0.62, 0.63, 0.66], dark = [0.16, 0.17, 0.19], rubber = [0.07, 0.07, 0.08];
+  const suit = [0.92, 0.93, 0.95], skin = [0.78, 0.62, 0.50], helm = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.55];
+  const mid = (P.MAT && P.MAT.METAL != null) ? P.MAT.METAL : 4;
   // A jack: `z0` is where its cradle meets the car, `dir` the way its beam
   // runs away from it (+1 ahead of the nose, -1 behind the gearbox).
   const jack = (z0, dir) => {
-    P.block(out, 0, 0.11, z0, 0.36, 0.05, 0.07, steel);                        // the cradle under the car
-    P.block(out, 0, 0.14, z0 + dir * 0.62, 0.06, 0.04, 0.55, col);              // the beam, in the team's colour
-    for (const x of [-0.30, 0.30]) P.block(out, x, 0.07, z0 + dir * 1.10, 0.03, 0.07, 0.07, rubber);   // castors
-    P.block(out, 0, 0.13, z0 + dir * 1.10, 0.33, 0.03, 0.03, steel);            // the axle between them
-    P.block(out, 0, 0.55, z0 + dir * 1.22, 0.025, 0.40, 0.025, col);            // the upright handle…
-    P.block(out, 0, 0.95, z0 + dir * 1.22, 0.22, 0.025, 0.025, dark);           // …and its grip
+    P.block(out, 0, 0.11, z0, 0.36, 0.05, 0.07, steel, mid);                   // the cradle under the car
+    P.block(out, 0, 0.14, z0 + dir * 0.62, 0.06, 0.04, 0.55, col, mid);         // the beam, in the team's colour
+    for (const x of [-0.30, 0.30]) P.block(out, x, 0.07, z0 + dir * 1.10, 0.03, 0.07, 0.07, rubber, mid);   // castors
+    P.block(out, 0, 0.13, z0 + dir * 1.10, 0.33, 0.03, 0.03, steel, mid);       // the axle between them
+    P.block(out, 0, 0.55, z0 + dir * 1.22, 0.025, 0.40, 0.025, col, mid);       // the upright handle…
+    P.block(out, 0, 0.95, z0 + dir * 1.22, 0.22, 0.025, 0.025, dark, mid);      // …and its grip
   };
   jack(2.6, 1);
   jack(-2.4, -1);
   // A wheel gun laid on the ground beside each wheel, its hose running out
   // toward the garage side of the box (+x).
   for (const [x, z] of [[1.35, 1.7], [-1.35, 1.7], [1.35, -1.6], [-1.35, -1.6]]) {
-    P.block(out, x, 0.06, z, 0.07, 0.06, 0.16, dark);                          // the gun
-    P.block(out, x + 0.55, 0.02, z + 0.05, 0.50, 0.02, 0.02, rubber);          // its hose
+    P.block(out, x, 0.06, z, 0.07, 0.06, 0.16, dark, mid);                     // the gun
+    P.block(out, x + 0.55, 0.02, z + 0.05, 0.50, 0.02, 0.02, rubber, mid);     // its hose
   }
+  // THE PEOPLE. Block figures in race suits — four at the guns, one on each
+  // jack handle — so a stop reads as a crew, not an empty bay with tools.
+  // Built as solids (never billboards) so a chase/side camera that wanders
+  // past the car still sees bodies from every angle.
+  const person = (x, z, faceZ) => {
+    P.block(out, x, 0.42, z, 0.11, 0.22, 0.09, suit, mid);                     // torso
+    P.block(out, x, 0.78, z, 0.09, 0.09, 0.09, helm, mid);                      // helmet
+    P.block(out, x, 0.70, z + faceZ * 0.06, 0.07, 0.05, 0.04, skin, mid);      // visor / face
+    P.block(out, x - 0.06, 0.12, z, 0.05, 0.12, 0.05, dark, mid);              // left leg
+    P.block(out, x + 0.06, 0.12, z, 0.05, 0.12, 0.05, dark, mid);              // right leg
+    P.block(out, x - 0.18, 0.48, z, 0.05, 0.05, 0.14, suit, mid);              // left arm
+    P.block(out, x + 0.18, 0.48, z, 0.05, 0.05, 0.14, suit, mid);              // right arm
+  };
+  for (const [x, z] of [[1.55, 1.7], [-1.55, 1.7], [1.55, -1.6], [-1.55, -1.6]]) {
+    person(x, z, z > 0 ? -1 : 1);                                              // facing the wheel
+  }
+  person(0.55, 3.55, -1);                                                      // front jack op
+  person(-0.55, -3.35, 1);                                                     // rear jack op
   m = _gfx.createMesh(out);
+  m._crewPeople = CREW_PEOPLE;
+  m._crewVerts = out.pos.length / 3;
   _crewMeshes.set(key, m);
   if (_crewMeshes.size > CREW_CACHE_MAX) {
     const old = _crewMeshes.keys().next().value;
@@ -1115,6 +1139,6 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
 })();
 Object.freeze(CarMesh);
