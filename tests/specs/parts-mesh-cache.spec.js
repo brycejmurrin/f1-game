@@ -444,27 +444,20 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       // between the last captured frame and the evaluate that measures under
       // it, and on an undulating circuit that is centimetres of drift.
       window.__apex.freeze(true);
-      window.__wheelGroundProbe.length = 0;
     });
-    // Restart the game tick chain, then wait for draws. Browser rAF alone is
-    // not enough: under a loaded selected shard the game's own
-    // requestAnimationFrame(tick) chain can die (LoopHealth fatal / throw), so
-    // awaiting rAF resolved with 0 GLX.draw samples for 19 s (CI #564/#604 on
-    // 44f9dca1b). XrBoot.chainWindowRaf() re-arms windowTick (= tick) once;
-    // afterTick then keeps the loop alive. Same 20 s budget, no timeout raise.
-    await page.evaluate(async () => {
+    // Synchronous paintFrame — not rAF / chainWindowRaf. Under a loaded selected
+    // shard XrBoot.chainWindowRaf is a no-op while _windowPending is true, and
+    // awaiting rAF alone returned 0 GLX.draw samples for 19 s (CI #564/#604 on
+    // 44f9dca1b / 2ce85189d). Clear the probe in the SAME evaluate as the paints
+    // so a pending tick cannot sneak samples in before the wait starts. Same
+    // 20 s budget, no timeout raise, 0.005 height bound untouched.
+    await page.evaluate(() => {
       try { window.__apex.headless(false); } catch (_) { /* harness */ }
-      if (typeof XrBoot !== "undefined" && XrBoot.chainWindowRaf) {
-        XrBoot.chainWindowRaf();
-      }
+      window.__wheelGroundProbe.length = 0;
       const t0 = performance.now();
       while (window.__wheelGroundProbe.length < 4) {
         if (performance.now() - t0 > 19_000) break;
-        // Re-arm if the chain dropped again (deduped while a frame is pending).
-        if (typeof XrBoot !== "undefined" && XrBoot.chainWindowRaf) {
-          XrBoot.chainWindowRaf();
-        }
-        await new Promise((r) => requestAnimationFrame(r));
+        if (typeof window.__apex.paintFrame !== "function" || !window.__apex.paintFrame(1 / 60)) break;
       }
       if (window.__wheelGroundProbe.length < 4) {
         throw new Error(

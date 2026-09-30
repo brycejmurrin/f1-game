@@ -578,6 +578,8 @@ interface GameCtx {
   readonly invalidateDecalTextures: (teamId: string) => void;
   /** Drop every procedural body/wheel GPU cache so the next warm/draw rebuilds through Car3D.build. */
   readonly invalidateFactoryMeshCaches: () => void;
+  /** One synchronous render/present (harness; when rAF/tick cannot force a frame). */
+  readonly paintFrame: (dt?: number) => true;
 
   // ── Menus: selection state + the screens game.js still owns ───────────────
   driverIdx: number;

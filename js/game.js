@@ -3487,6 +3487,9 @@ const G = {
   get frame() { return frame; }, set frame(v) { frame = v; },
   get frameSky() { return frameSky; }, set frameSky(v) { frameSky = v; },
   get frozen() { return frozen; }, set frozen(v) { frozen = v; },
+  // One render/present now — harnesses that must sample GLX.draw when rAF is
+  // starved (parts-mesh-cache wheel probe). Same path as the live tick's render().
+  paintFrame: (dt) => { render(dt == null ? 1 / 60 : Math.min(+dt || 1 / 60, 1 / 20)); return true; },
   get headlessMode() { return headlessMode; }, set headlessMode(v) { headlessMode = v; },
   get hideMeshes() { return hideMeshes; }, set hideMeshes(v) { hideMeshes = v; },
   get paused() { return paused; }, set paused(v) { paused = v; },
