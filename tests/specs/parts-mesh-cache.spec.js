@@ -412,6 +412,14 @@ test.describe("Parts mesh caches — eviction bounds", () => {
         return draw(mesh, matrix);
       };
       window.__wheelGroundProbe = centres;
+      // sharedTest (and a prior race on this worker) leaves wheelMeshCache /
+      // fieldWheelCache warm: race()'s warmCarAssets is then all cache hits
+      // (cpuMs:0), createMesh never sees rotating data, and paintFrame draws
+      // untagged meshes → 0 probe samples for 19 s (CI selected shards
+      // 36771184315 / 36771182471 on 62adf2801). Same cure as
+      // parts-factory-presets.spec.js: drop caches AFTER the hook so the next
+      // warm rebuilds through it.
+      if (window.__apex.clearCarMeshCaches) window.__apex.clearCarMeshCaches();
     });
     await pinFreePlay(page);
 
