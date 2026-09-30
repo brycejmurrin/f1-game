@@ -404,8 +404,8 @@ const WGXChunked = (function () {
         //  - contiguous: the next run vertex/index is exactly this chunk's
         //    first. Emission order already guarantees it (write order ==
         //    push order == bucket first-touch == arc order, and a culled
-        //    chunk flushes above), so this term never rejects a merge that
-        //    used to happen — it makes the merge provable instead of
+        //    chunk flushes above), so this term rejects no otherwise-valid
+        //    merge — it makes the merge provable instead of
         //    order-dependent, and is a no-op on the indexed path, which packs
         //    firstIndex monotonically.
         //  - vertex_index is dead: a merged run is a large non-indexed draw,
@@ -429,7 +429,7 @@ const WGXChunked = (function () {
         const chFirst = indexed ? _chunkFirstIndex(ch) : (ch.first | 0);
         const vidDead = indexed || !!core.roadLutBG;
         const nightOK = indexed || !maskL;
-        // Pooled bag (see _mrRun): `run.active` is what `run &&` used to be.
+        // Pooled bag (see _mrRun): `run.active` means a run is open.
         const run = _mrRun;
         const contig = run.active && (indexed ? run.firstIndex : (run.first | 0)) + run.count === chFirst;
         if (run.active && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG

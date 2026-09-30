@@ -74,9 +74,8 @@ const VertexPack = (function () {
 
   // Interleave pos/nrm/col/mat(/trk) into one packed ArrayBuffer, ready for
   // bufferData. `mat` and `trk` may be null. A missing material column encodes
-  // 0 = MAT.FLAT, which is exactly what the old layout's disabled attribute 3
-  // read from its generic default — so a mesh that never had a material column
-  // behaves identically, and now costs no extra byte when it does have one.
+  // 0 = MAT.FLAT, and the column rides in the colour attribute's alpha, so it
+  // costs no extra byte when present.
   function pack(vCount, pos, nrm, col, mat, trk) {
     const stride = trk ? STRIDE_TRK : STRIDE;
     const buf = new ArrayBuffer(vCount * stride);

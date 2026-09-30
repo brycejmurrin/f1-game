@@ -154,8 +154,7 @@ const GLXPost = (function () {
         // always-4 path while FXAA still cleans specular shimmer.
         // Mobile: no MSAA — two extra full-res multisampled surfaces
         // (~20-30 MB) against a tight jetsam budget; FXAA alone carries the AA.
-        // Phones used to inherit 2× when GRAPHICS: HIGH flipped the whole
-        // memory tier; IS_MOBILE keeps that from coming back.
+        // IS_MOBILE, not the memory tier: GRAPHICS: HIGH must not hand phones 2×.
         msaaSamples = IS_MOBILE ? 0 : Math.min(4, cMax, dMax);
         if (!IS_MOBILE) {
           // THE SIGNAL WAS MOBILE-ONLY. `apex26.gfxHigh` is written by
@@ -222,7 +221,7 @@ const GLXPost = (function () {
     // Free every post target before disabling post. The textures/renderbuffers
     // hold the memory (FBO objects are pennies); deletion only auto-detaches
     // from the BOUND framebuffer (see the NOTE inside createTargets), so bind
-    // each one first — the disable paths used to leave the just-allocated
+    // each one first, or the disable paths leave the just-allocated
     // scene/depth/MSAA surfaces resident for the context's whole life.
     function abandonTargets() {
       const drop = (fbo, a, b) => {
@@ -622,12 +621,11 @@ const GLXPost = (function () {
         gl.uniform1f(godrayU.uCloudCover, F.cloud);
         gl.uniform1f(godrayU.uCloudSpeed, F.cloudSpeed);
         // Lamp volumetrics: upload the nearest GR_MAX_LIGHTS (6) lamps to the eye
-        // + the haze gate. This used to sort and upload 12 while the beam march
-        // in GODRAY_FS read 6, which cost double the packing and uploads AND
-        // broke the beam shadow: grLampIdx below is a position in THIS ordering,
-        // so the mapped lamp sorting 7th-12th produced an index the march's
-        // `li == uLampShadowIdx` test could never reach and the lamp's shadow
-        // silently stopped being carved into its own beam.
+        // + the haze gate — exactly as many as the beam march in GODRAY_FS reads:
+        // grLampIdx below is a position in THIS ordering, so a mapped lamp
+        // sorting past the march's count would produce an index its
+        // `li == uLampShadowIdx` test never reaches, and the lamp's shadow would
+        // silently stop being carved into its own beam.
         let grNL = 0, grLampIdx = -1;
         const frameLights = F.lights, frameEye = F.eye;
         if (lampVol > 0 && frameLights) {
@@ -931,7 +929,7 @@ const GLXPost = (function () {
       const reflStr = (opts && opts.reflect) || 0;
       // Depth is ALWAYS bound: the shader's car-paint branch fires on the carPx
       // tag alone, so on a probe-less path (setup preview never sets frame.proj)
-      // it used to sample whatever texture unit 4 last held, against the
+      // it would sample whatever texture unit 4 last held, against the
       // PREVIOUS race's stale matrices. uSsrOk gates the whole branch instead.
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
