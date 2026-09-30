@@ -2604,7 +2604,12 @@ let _menuFly = null;
 // (SwiftShader) and linked NOTHING — a held card for nothing
 // (23 links, all in the menu and the flyby).
 let _warmKey = "";
-const warmPrograms = () => { try { if (gfx.warm) { gfx.warm(); _warmKey = menuKey(trackIdx); } } catch (_) { /* optimisation only */ } };
+// ONE WARM PER WORLD PER SESSION (`_warmed`; "|lit" is a dark world's second one).
+// Its programs stay built, and a repeat links nothing yet holds TLX's presents for
+// seconds: on a phone, RACE! on a circuit already raced met it pending, so the
+// garage drive-out waited behind the card and the flyby played instead.
+const _warmed = new Set();
+const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); } } } catch (_) { /* optimisation only */ } };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
   if (!current()) return;
@@ -2615,7 +2620,7 @@ async function menuFinish(current, key) {
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   while (current() && !step()) await menuSlice();
   if (current()) _menuFly = fly;
-  if (lit && await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
+  if (lit && await menuIdle(current)) { warmPrograms("|lit"); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
 // THE GARAGE, PRE-BUILT ON RACE SETTINGS. RACE! opens on the garage drive-out, and
 // a player who came straight from the picker has never drawn the garage: its first
@@ -3977,8 +3982,9 @@ function studioClose(n) {
   if (loadingScreen.phase() === "garage") loadingScreen.building(info);   // the car is out and the build is not: the card covers the rest
 }
 async function studioDone(live, n) {
-  // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length).
-  while (_studio && _studio.n === n && !_studio.skip && live() && setupCam.driveOutLeft() > 0 && performance.now() - _studio.at < _studio.ms * 3) await menuSlice();
+  // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length,
+  // from the garage's first frame — a card held for a pending warm is not the car's time, and has its own ceiling).
+  while (_studio && _studio.n === n && !_studio.skip && live() && setupCam.driveOutLeft() > 0 && performance.now() - _studio.at < (_studio.cardUp ? 30000 : _studio.ms * 3)) await menuSlice();
   studioClose(n);
 }
 // A READY, WARM WORLD STILL OPENS ON THE GARAGE: introBuild and introWarm play the

@@ -108,7 +108,7 @@ test('game.js plays the studio drive-out AT ONCE on every RACE!, with no card, a
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   assert.match(cam, /const arriving = driveOut \? stepDriveOut\(\) : preview \? stepPreview\(dt\) : arrival\.step\(dt\);/, 'the wall clock, not the 1\/20 s capped render dt; the PREVIEW between the two');
   assert.match(cam, /if \(!cfg\.enabled \|\| reducedMotion\(\)\) return 0;/, 'the arrival tuner and reduced motion gate it');
-  assert.match(game, /!_studio\.skip && live\(\) && setupCam\.driveOutLeft\(\) > 0 && performance\.now\(\) - _studio\.at < _studio\.ms \* 3\)/, 'a build stall delays the car, never cuts it off in the doorway');
+  assert.match(game, /!_studio\.skip && live\(\) && setupCam\.driveOutLeft\(\) > 0 && performance\.now\(\) - _studio\.at < \(_studio\.cardUp \? 30000 : _studio\.ms \* 3\)\)/, 'a build stall delays the car, never cuts it off in the doorway — and a card held for a pending warm does not spend its time');
   assert.match(game, /function studioClose\(n\) \{\n  if \(!_studio \|\| _studio\.n !== n\) return;/, 'only the intro run that opened it closes it');
 });
 
@@ -254,4 +254,24 @@ test('PREVIEW: Escape and DONE stop it; refused while the garage or the drive-ou
   assert.equal($('garrival').hidden, true, 'the next DONE closes the tool');
   const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   assert.match(shell, /<button id="ga-preview-in" type="button">PREVIEW IN<\/button>\s*<button id="ga-preview-out" type="button">PREVIEW OUT<\/button>/);
+});
+
+test('a circuit already raced opens RACE! on the garage: its programs are not warmed a second time', () => {
+  // On a phone, a repeat warm (which links nothing) held TLX's presents for seconds;
+  // RACE! met it pending (studioOpen's cardUp), so the drive-out waited behind the card.
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const src = game.slice(game.indexOf('const _warmed = new Set();'), game.indexOf('async function menuFinish('));
+  const calls = [];
+  const ctx = { gfx: { warm: () => calls.push('warm') }, trackIdx: 3, menuKey: (i) => 'k' + i, _warmKey: '' };
+  const run = new Function('ctx', 'with (ctx) {' + src + '; return { warmPrograms, key: () => ctx._warmKey }; }');
+  const { warmPrograms, key } = run(ctx);
+  warmPrograms(); warmPrograms();
+  assert.deepEqual(calls, ['warm'], 'the second request for the same world asks nothing of the backend');
+  assert.equal(key(), 'k3', 'and still names the world, so the lights skip their own request');
+  warmPrograms('|lit');
+  assert.deepEqual(calls, ['warm', 'warm'], 'a dark world\'s lamp-baked warm is its own');
+  ctx.trackIdx = 4; warmPrograms();
+  assert.equal(calls.length, 3, 'another world warms');
+  ctx.gfx = {}; warmPrograms();
+  assert.equal(calls.length, 3, 'a backend with no warm() is not asked');
 });
