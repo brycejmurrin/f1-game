@@ -11,6 +11,9 @@ const SaveMigrate = (function () {
     (c) => { c.season = c.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; },
   ];
 
+  // Guarded: the node VM harnesses load this file without js/core/log.js.
+  function log(level, msg) { if (typeof Log !== "undefined") Log[level]("game", msg); }
+
   function finiteNumber(value) {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
@@ -111,9 +114,13 @@ const SaveMigrate = (function () {
   // PURE — it mutates the save it is handed and returns it, but it does NOT write.
   // Career.save() is the one thing that persists, and it knows the slot.
   function migrateCareer(career) {
-    if (!career || typeof career !== "object" || Array.isArray(career)) return null;
+    if (!career || typeof career !== "object" || Array.isArray(career)) {
+      if (career != null) log("warn", "Career save rejected: not an object type=" + (Array.isArray(career) ? "array" : typeof career));
+      return null;
+    }
     let v = career.v | 0;
-    while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); v++; }
+    while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
+    if (v > CAREER_V) log("warn", "Career save newer than build: v" + v + " > v" + CAREER_V + ", kept as-is");
     // Never DOWNGRADE: a save from a newer build (a stale cached shell opening
     // it) keeps its version, so that build's ladder is not re-run on it.
     career.v = Math.max(v, CAREER_V);

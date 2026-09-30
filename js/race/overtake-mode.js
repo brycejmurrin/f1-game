@@ -56,6 +56,12 @@ const OvertakeMode = (function () {
     return to > 0 && to <= step;
   }
 
+  // One line per EDGE, never per tick: the human at info, the AI at debug.
+  // Guarded so a bare VM that loads this file without js/core/log.js still runs.
+  function note(c, what) {
+    if (typeof Log !== "undefined") Log[c.human ? "info" : "debug"]("race", "Overtake " + what + " car=" + c.code + " lap=" + (c.lap | 0));
+  }
+
   function reset(c) {
     c.otE = 0; c.otOn = false; c.otEarned = false; c.otArmed = false; c.otT = 0;
     c._otS = null; c._otLap = null;   // re-seeded from the car on its next tick
@@ -66,14 +72,21 @@ const OvertakeMode = (function () {
   // earning under the Safety Car or in low grip.
   function lines(c, track, gapAhead, open) {
     if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
-    if (track && crossed(c._otS, c.s, detectS(track), track.total)) c.otEarned = !!open && gapAhead < (consts().OT_GAP || 1);
+    if (track && crossed(c._otS, c.s, detectS(track), track.total)) {
+      c.otEarned = !!open && gapAhead < (consts().OT_GAP || 1);
+      if (c.otEarned) note(c, "earned gap=" + (+gapAhead).toFixed(2) + "s");
+      else if (!open && gapAhead < (consts().OT_GAP || 1)) note(c, "denied detection-closed");
+    }
     c._otS = c.s;
     // The Activation Line. Highest lap seen, so a car shoved back over the line
     // and re-crossing (RaceControl.lineTransition's recross) is not re-granted
     // — nor stripped of what it was given the first time.
     if ((c.lap | 0) > c._otLap) {
       c._otLap = c.lap | 0;
+      const left = c.otE;
       c.otE = c.otEarned ? energy() : 0;   // unused allowance expires at the line
+      if (c.otE > 0) note(c, "granted mj=" + mj(c).toFixed(2));
+      else if (left > 0) note(c, "lapsed unused=" + (left * (consts().ES_MJ || 4)).toFixed(2) + "MJ");
       c.otEarned = false; c.otOn = false;
     }
   }
@@ -81,7 +94,7 @@ const OvertakeMode = (function () {
   // `gate`: the race-wide switch (otEnabled) and the car's own (not finished,
   // not held by the pit limiter). `speedOK`: above OT_MIN_SPEED.
   function arm(c, gate, speedOK) {
-    if (!gate) c.otOn = false;
+    if (!gate) { if (c.otOn) note(c, "cut gate-closed"); c.otOn = false; }
     c.otArmed = !!gate && !!speedOK && c.otE > 0 && !c.otOn;
     return c.otArmed;
   }
@@ -91,14 +104,17 @@ const OvertakeMode = (function () {
   // the allowance is gone. Returns true on the tick it starts deploying.
   function spend(c, dt, fire, gate, speedOK, pushS) {
     let started = false;
+    const wasOn = c.otOn;
     if (!gate || !(c.otE > 0)) c.otOn = false;
     else if (fire && c.otOn && c.human) c.otOn = false;
     else if (fire && c.otArmed) { c.otOn = true; started = true; }
+    if (started) note(c, "on mj=" + mj(c).toFixed(2));
+    else if (wasOn && !c.otOn) note(c, gate ? "off" : "cut gate-closed");
     const rate = energy() / Math.max(0.5, pushS || 4);
     const live = c.otOn && !!speedOK;   // paused below OT_MIN_SPEED, not cancelled
     if (live) {
       c.otE = Math.max(0, c.otE - rate * dt);
-      if (c.otE <= 0) c.otOn = false;
+      if (c.otE <= 0) { c.otOn = false; note(c, "spent"); }
     }
     c.otT = live && c.otOn ? c.otE / rate : 0;
     return started;

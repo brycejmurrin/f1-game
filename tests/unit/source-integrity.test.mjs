@@ -285,7 +285,7 @@ test("portrait race blocker is an actionable accessible dialog", () => {
   assert.match(html, /id="rotate-exit"/);
   // Bounded to the handler's own body ([^}]*): unbounded, the match ran 21k
   // characters on to another setPaused(true) (audit 2026-09-29).
-  assert.match(game, /\$\("rotate-controls"\)\.onclick = \(\) => \{[^}]*setPaused\(true\)/,
+  assert.match(game, /\$\("rotate-controls"\)\.onclick = \(\) => \{[^}]*setPaused\(true, "rotate-help"\)/,
     "Controls must pause before yielding the blocker to help");
   assert.match(game, /\$\("rotate-exit"\)\.onclick\s*=\s*\(\)\s*=>\s*quitToMenu\(\)/,
     "Exit Race must use the real session cleanup path");
