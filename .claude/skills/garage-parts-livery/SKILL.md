@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: Use when editing the GARAGE parts catalog, livery/finish/shark fin, a number/crest/sponsor mark unreadable against its paint (livery contrast, cover legibility), SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, or Car3D visual recipes. Isolated studio renders → playwright-probe; on-track handling → tune-physics.
+description: Use when editing the GARAGE parts catalog, livery/finish/shark fin, a number/crest/sponsor mark unreadable against the car's own paint (livery contrast, cover legibility; HUD digits are ui-menu-a11y, billboards scenery-dress), SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, or Car3D visual recipes. Isolated studio renders → playwright-probe; on-track handling → tune-physics.
 ---
 
 # Garage — parts, livery, and car mesh

@@ -76,7 +76,7 @@ frozen frame (DOM menus stay usable; RENDERER re-pick is the way out):
 - visible, within 3 s of `visibilitychange`/bfcache `pageshow` (iOS
   background loss) -> `_lost`, reload in 300 ms, rung and pick untouched.
 - visible otherwise -> writes `envProbeOff` + `perChunkOff`, `_wgxEscalate`
-  (~L744): rung < 2 reloads one rung up, but ONLY if `gfxWgxLevel` reads back
+  (~L741): rung < 2 reloads one rung up, but ONLY if `gfxWgxLevel` reads back
   (blocked storage falls through); rung 2 / unpersistable -> `_markGlxBound`,
   `sessionStorage gfxClaimFail`, reload into GLX. Skip unarmable (blocked
   sessionStorage) -> no reload, `_lost` stays: freeze by design, the boot
@@ -93,7 +93,7 @@ climbs the ladder", "...climbs to minimal", "minimal rung: ... exits to GLX",
 "a JS throw in begin() strikes out...", "a minimal loss with blocked
 sessionStorage re-arms the boot canary instead of freezing", "clean sessions
 heal the ladder") and, as source-text only, `gfx-backend-canary.test.mjs`
-(~L510; it does not name the constants). A visible-loss freeze that is NOT
+(~L514, a comment pointing back at the lifecycle tests; no constant is asserted). A visible-loss freeze that is NOT
 blocked storage is a real bug: run the lifecycle test first.
 Verdict to record: which branch ran (read `apex26.gfxWgxFail`, `gfxWgxLevel`,
 sessionStorage `gfxClaimFail`, `gfxBackendProbe`) and whether reload fired.

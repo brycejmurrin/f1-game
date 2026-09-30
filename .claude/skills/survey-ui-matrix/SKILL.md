@@ -2,7 +2,7 @@
 name: survey-ui-matrix
 context: fork
 agent: general-purpose
-description: Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device.
+description: Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play).
 ---
 
 # Surveying the whole UI across the whole matrix

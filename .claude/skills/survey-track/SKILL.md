@@ -43,7 +43,7 @@ circuit's pair — def + scenery closure; no browser runs).
    `turns` × `path.len` = metres per corner, `sectors` × `path.len` = sector lengths;
    `tests/data/f1-circuit-reference.geojson` = OSM length; elevation = `js/track/circuit-elevations.js`
    (64 samples). A wrong LAYOUT → **new-track**. Probe flags are NOT findings until confirmed off lat 0
-   ([loop.md](references/loop.md) §Artefacts).
+   ([loop.md](references/loop.md), "Artefacts" paragraph).
 3. Real-place photos: `WebSearch` / image search. Treat heights/distances as
    best-effort.
 
