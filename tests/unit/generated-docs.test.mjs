@@ -34,12 +34,19 @@ const GENERATORS = [
   { tool: "tools/gen/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
   { tool: "tools/gen/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
   // One --check covers its registered TARGET and the two docs it rewrites in place.
-  { tool: "tools/gen/gen-ladder-figures.mjs", target: "docs/notes/PREPUSH-GATE-LADDER.md" },
+  // `figures`: derived from the tree, so two PRs that each add a unit file
+  // regenerate it identically against their own base, merge cleanly, and leave
+  // the merged tip a file short. On a pull request that is a red (the PR must
+  // regenerate); on the merged tip it is a warning under
+  // APEX_DOCS_FIGURES_ADVISORY, which ci.yml's guards step sets off pull
+  // requests only — the same rule docs-integrity applies to the counts in prose.
+  { tool: "tools/gen/gen-ladder-figures.mjs", target: "docs/notes/PREPUSH-GATE-LADDER.md", figures: true },
 ];
 
 function check(tool) {
   return spawnSync(process.execPath, [path.join(ROOT, tool), "--check"], { encoding: "utf8", cwd: ROOT, timeout: 60000 });
 }
+const FIGURES_ADVISORY = process.env.APEX_DOCS_FIGURES_ADVISORY === "1";
 
 function block(doc, name) {
   const open = `<!-- GENERATED: ${name} -->`, close = "<!-- /GENERATED -->";
@@ -51,6 +58,10 @@ function block(doc, name) {
 for (const g of GENERATORS) {
   test(`${g.target} matches a fresh \`${g.tool} --check\``, () => {
     const r = check(g.tool);
+    if (g.figures && FIGURES_ADVISORY && r.status === 1) {
+      console.warn(`::warning::${g.target} is a file behind the tree — advisory off a pull request; the next PR regenerates it (npm run gen:docs)`);
+      return;
+    }
     assert.equal(r.status, 0,
       `${g.target} is stale or the generator failed (exit ${r.status}).\n${r.stdout}${r.stderr}\n` +
       `Regenerate with: node ${g.tool}`);

@@ -7,7 +7,9 @@ side branch at `8d55063`. The fixes are in the same change as this note.
 
 ## What clogged
 
-- **The account runs at most 20 jobs at once.** From 08:15 to 15:15 UTC on
+- **The account runs at most 20 jobs at once** (GitHub Free; on 2026-09-30 the
+  account moved to Pro, which allows 40 standard and 5 macOS concurrent jobs —
+  https://docs.github.com/en/actions/reference/limits). From 08:15 to 15:15 UTC on
   09-29 all 20 were busy and **200–290 jobs waited**. Median queue wait was
   12–26 min per hour, worst 97 min. Before 07:00 queue waits were ~0.
 - **Unqueued, a PR run finishes in ~6 min** (56 runs on 09-28: median 5.8, p90
@@ -94,7 +96,21 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   `branches:` filter did not stop), `docs-guards.yml` exits before `npm ci`
   on a mixed PR (its files all run in ci.yml's guards job there), and
   `ci.yml` accepts `merge_group` so a merge queue can replace the per-PR
-  `sync-pr` loop (the repository setting is the other half).
+  `sync-pr` loop (the repository setting is the other half). Later the same
+  day: GitHub offers the merge queue only to organisation-owned repositories,
+  so classic branch protection landed instead — a PR required, the eight
+  fast-tier checks required, no bypass — and with it `ci.yml`'s
+  `pull_request` trigger lost its `paths-ignore` (a required check that never
+  reports blocks a prose-only PR for good; the node plan keeps such a run to
+  guards plus seconds), `docs-guards.yml` runs on every PR with its early
+  exit, and every PR diff resolves its base through `tools/ci/ci-pr-base.sh`
+  (`pull_request.base.sha` lags one sync behind the merge under test, which
+  had the plan — and the sweeps, parts and renderer filters — reading the
+  base's own recent commits as the PR's diff). Then: the derived doc figures
+  (spec/unit counts, the gate ladder) fail only on a pull request and warn on
+  the merged tip (`APEX_DOCS_FIGURES_ADVISORY`), which retires the
+  merge-ordering red class above; sync a PR only on a conflict or a red tip;
+  nine history checkouts use `filter: blob:none`.
 - **49 unit files run twice per PR** (in tooling-fast under guards, and in
   the `vm-b` slice's topical groups). The rebalanced slices keep that off the
   wall clock. Removing it means changing what the topical groups mean.
