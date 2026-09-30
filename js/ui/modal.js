@@ -14,7 +14,8 @@ window.TopModal = (function () {
     if (!menu) return false;
     const ids = (window.UiLayers && window.UiLayers.LAYER_IDS) || [];
     const covered = ids.some((id) => {
-      if (id === "overlay" || id === "rotate-device" || id === "photo-controls") return false;
+      // #tl-editor edits the title page itself: it must stay live under it.
+      if (id === "overlay" || id === "rotate-device" || id === "photo-controls" || id === "tl-editor") return false;
       const el = document.getElementById(id);
       return !!el && !el.hidden;
     });

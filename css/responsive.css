@@ -373,5 +373,38 @@ body[data-tl-peek] #overlay { opacity: 1; }
 body[data-tl-peek] #pmsettings { background: transparent; }
 body[data-tl-peek] #pmsettings::backdrop { background: transparent; }
 body[data-tl-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
+/* EDIT ON TITLE SCREEN (html[data-tl-edit], js/ui/title-layout.js): the pieces
+   are outlined and dragged whole — their own controls take no pointer, so a
+   press on a door is the door's piece, never its click. #tl-art is the
+   drawing's transparent stand-in (the drawing itself is pointer-events:none),
+   laid under the doors so where they overlap the doors win. #tl-editor is a
+   small bar docked at the foot, above #overlay (z 20); #tl-handle, fixed at the
+   selected piece's corner, sizes it. No zoom on the bar: its fixed handle
+   would move with it. */
+:root[data-tl-edit] :is(#menu-buttons, #menu-brand, #tl-art) {
+  outline: 2px dashed color-mix(in oklab, var(--text) 55%, transparent);
+  outline-offset: 4px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+:root[data-tl-edit] :is(#menu-buttons, #menu-brand, #tl-art)[data-tl-sel] { outline: 2px solid var(--red); }
+:root[data-tl-edit] :is(#menu-buttons, #menu-brand) * { pointer-events: none; }
+:root[data-tl-edit] #tl-art { position: absolute; z-index: -1; zoom: normal; pointer-events: auto; }
+:root[data-tl-edit] #tl-editor {
+  position: fixed; z-index: 44;
+  left: 0; right: 0; bottom: var(--safe-b); margin-inline: auto;
+  width: max-content; max-width: calc(100vw - 16px);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: calc(var(--gap) * 0.5); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
+  background: var(--panel); border: 1px solid var(--plate-line); border-radius: 10px;
+}
+:root[data-tl-edit] #tl-editor > button { margin: 0; min-height: var(--tap-min); }
+:root[data-tl-edit] #tl-piece { padding-inline: calc(var(--gap) / 3); }
+:root[data-tl-edit] #tl-handle {
+  position: fixed; width: 22px; height: 22px; translate: -50% -50%;
+  border-radius: 50%; background: var(--red); border: 2px solid var(--text);
+  cursor: nwse-resize; touch-action: none;
+}
 
 } /* @layer overlays */
