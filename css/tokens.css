@@ -788,6 +788,13 @@ body:not(.desktop) {
      costs nothing; js/ui/scale.js only sets the property once the player moves
      it, exactly as --hud-btn-scale works. */
   --hud-btn-opacity: 1;
+  /* HUD PANEL OPACITY (Settings › Display › HUD), the same XAG 104 backing
+     control for the dark plates behind the readouts. js/ui/scale.js writes
+     --hud-panel-a inline on <html> only once the player moves the slider, so
+     unset this is 1 and every plate keeps its shipped alpha. css/hud.css
+     multiplies each plate's alpha by the EFFECTIVE value below, which HIGH
+     CONTRAST pins at 1 (its block further down) — solid plates always win. */
+  --hud-panel-a-eff: var(--hud-panel-a, 1);
   --ui-compact-brand-scale: min(var(--ui-scale), 1);
   --ui-compact-scale: min(var(--ui-scale), 1.25);
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
@@ -1017,6 +1024,7 @@ body:not(.desktop) {
   --card-line: color-mix(in oklab, var(--text) 40%, transparent);
   --hc-hud-plate: color-mix(in oklab, #000 92%, transparent);
   --hc-hud-line: rgba(255, 255, 255, 0.55);
+  --hud-panel-a-eff: 1;   /* PANEL OPACITY never thins a HIGH CONTRAST plate */
   --hud-halo: 0 0 2px #000, 0 1px 3px #000;
   --look-hud-bg: var(--hc-hud-plate);
   --look-hud-dim: var(--look-hud-ink);

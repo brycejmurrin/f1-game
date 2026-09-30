@@ -383,14 +383,17 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     // Shared page: back to the title with the default car pinned, then the
     // probe, then the race — the probe must be in place before the wheels build.
     await toMenu(page);
-    await pinFreePlay(page);
+    // Hook BEFORE pinFreePlay / race — the probe must see buildWheelLayers and
+    // every later GLX.draw of those meshes. CI #541 (run 36741124003) timed out
+    // here with a live race HUD and a "THAT WAS A BIG ONE" radio: the field at
+    // f=0.04 turned the braking run into contact; rivals([]) below clears it.
     await page.evaluate(() => {
       const rotatingData = new WeakSet();
       const rotatingMeshes = new WeakSet();
       const centres = [];
       const buildLayers = Car3D.buildWheelLayers;
-      const createMesh = GLX.createMesh;
-      const draw = GLX.draw;
+      const createMesh = GLX.createMesh.bind(GLX);
+      const draw = GLX.draw.bind(GLX);
       Car3D.buildWheelLayers = function () {
         const layers = buildLayers.apply(this, arguments);
         rotatingData.add(layers.rotating);
@@ -406,15 +409,23 @@ test.describe("Parts mesh caches — eviction bounds", () => {
           centres.push([matrix[12], matrix[13], matrix[14]]);
           if (centres.length > 32) centres.splice(0, centres.length - 32);
         }
-        return draw.apply(this, arguments);
+        return draw(mesh, matrix);
       };
       window.__wheelGroundProbe = centres;
     });
+    await pinFreePlay(page);
 
-    await page.evaluate(() => window.__apex.race("monza"));
+    await page.evaluate(async () => {
+      await window.__apex.race("monza");
+    });
     await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
+      window.__apex.headless(false);
       window.__apex.go();
+      // Solo: a full field at f=0.04 turned the braking run into a multi-car
+      // hit ("THAT WAS A BIG ONE" on CI #541) and the probe never saw four
+      // clean wheel draws. Same clearField pattern as steering.spec.js.
+      try { window.__apex.rivals([]); } catch (_) { /* older builds */ }
       // 0.04, NOT 0.10 — BRAKE ON THE STRAIGHT, not into a chicane. f = 0.10 is
       // s ~ 579 m at monza and the Variante del Rettifilo begins around 600 m,
       // so 90 steps of braking at 35 m/s with steer: 0 carried the car straight

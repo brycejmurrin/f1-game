@@ -1197,6 +1197,15 @@ body { --compact-at: 600px; --wide-at: 620px; }
   letter-spacing: var(--ls-3);
   white-space: nowrap;
 }
+/* FAVOURITE CIRCUITS: a ♥ in the tile's own padding corner (★ is the TT
+   record). A pseudo-element on [data-fav] only, so a strip with no favourites
+   paints exactly as it always has — position: relative included. */
+#sel-tracks .track-row[data-fav] { position: relative; }
+#sel-tracks .track-row[data-fav]::after {
+  content: "♥"; position: absolute; top: 2px; right: 4px;
+  font-size: var(--fs-micro); line-height: 1; color: var(--red);
+  pointer-events: none;
+}
 #sel-track-empty { padding: var(--pad); text-align: center; align-self: center; margin: 0; }
 /* Season: the calendar strip is read-only. */
 #sel-tracks[data-mode="season"] .track-row { cursor: default; }
