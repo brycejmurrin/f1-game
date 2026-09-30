@@ -27,6 +27,15 @@
  *      reward; raising it is a deliberate edit with a reason in the commit.
  *      Same idiom as tests/data/ratchets.json and tools/track/clip-baseline.json.
  *
+ * tests/ and tools/ joined the walk 2026-09-30, after a sweep found ~50 line
+ * citations there that had drifted onto unrelated lines (a spec citing the
+ * `await ensureScenery` line of js/game.js landed on a menuFinish call). Those
+ * two trees are full of string-literal fixtures shaped exactly like a citation
+ * (stack traces, `site @ file.js:N` report rows), so for them the scan reads
+ * COMMENT TEXT ONLY, extracted by espree rather than the line heuristic; a file
+ * espree cannot parse falls back to the heuristic. This file is skipped: its
+ * header quotes the citation form as examples.
+ *
  * Run: node --test tests/unit/comment-citations.test.mjs   (npm run test:tooling-fast)
  */
 import { test } from "node:test";
@@ -34,6 +43,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -72,6 +82,41 @@ function walk(dir, out = []) {
 const FILES = [...walk(path.join(ROOT, "js")), ...walk(path.join(ROOT, "css")),
                ...walk(path.join(ROOT, "types"))];
 
+// tests/ and tools/: scanned for citations, comments only (see the header), but
+// NOT added to the resolution index below — that stays js/ css/ types/, so a
+// test file sharing a basename with a js/ file cannot make the js/ one ambiguous.
+const SELF = path.relative(ROOT, fileURLToPath(import.meta.url)).split(path.sep).join("/");
+function walkCode(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { if (e.name !== "node_modules") walkCode(p, out); }
+    else if (/\.(js|mjs|cjs)$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+const CODE_FILES = [...walkCode(path.join(ROOT, "tests")), ...walkCode(path.join(ROOT, "tools"))]
+  .filter((abs) => path.relative(ROOT, abs).split(path.sep).join("/") !== SELF);
+const espree = createRequire(import.meta.url)("espree");
+
+// [{ line, text }] for every line of every comment in `src`, or null when espree
+// cannot parse it (the caller then falls back to the line heuristic).
+function commentLines(src, rel) {
+  const base = { ecmaVersion: "latest", comment: true, loc: true };
+  const tries = rel.endsWith(".cjs") ? [{ sourceType: "commonjs" }]
+    : rel.endsWith(".mjs") ? [{ sourceType: "module" }]
+    : [{ sourceType: "module" }, { sourceType: "script" }];
+  for (const t of tries) {
+    let ast;
+    try { ast = espree.parse(src, { ...base, ...t }); } catch (_) { continue; }
+    const out = [];
+    for (const c of ast.comments) {
+      c.value.split("\n").forEach((text, k) => out.push({ line: c.loc.start.line + k, text }));
+    }
+    return out;
+  }
+  return null;
+}
+
 // Index every js/ file by full repo-relative path AND by basename, so both
 // `js/render/glx/shaders/glsl-lit.js:344` and a bare `lit.js:344` resolve. A basename
 // shared by two files is ambiguous and deliberately skipped rather than guessed.
@@ -85,24 +130,36 @@ for (const abs of FILES) {
 }
 
 const CITE = /((?:[\w.-]+\/)*[\w.-]+\.js):(\d+)(?:-(\d+))?/g;
+// tests/ + tools/ also match .mjs/.cjs/.css/.ts targets: tools cite each other
+// as often as they cite js/. (Widening CITE for js/ too would count two js/
+// comments that cite a tests/unit/*.mjs line — convert those first.)
+const CITE_CODE = /((?:[\w.-]+\/)*[\w.-]+\.(?:[mc]?js|css|ts)):(\d+)(?:-(\d+))?/g;
+
+function heuristicComments(text) {
+  const out = [];
+  text.split("\n").forEach((line, i) => {
+    // Comments only. A URL or a stack-trace string is not a citation, and
+    // `//` inside a string literal is not a comment — this is a heuristic on
+    // purpose: over-matching here would make the ratchet meaningless.
+    const c = line.indexOf("//") >= 0 ? line.slice(line.indexOf("//"))
+      : (/^\s*\*/.test(line) || line.includes("/*") ? line : null);
+    if (c != null) out.push({ line: i + 1, text: c });
+  });
+  return out;
+}
 
 function citations() {
   const out = [];
-  for (const abs of FILES) {
+  for (const [abs, code] of [...FILES.map((f) => [f, false]), ...CODE_FILES.map((f) => [f, true])]) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     const text = fs.readFileSync(abs, "utf8");
-    const lines = text.split("\n");
-    lines.forEach((line, i) => {
-      // Comments only. A URL or a stack-trace string is not a citation, and
-      // `//` inside a string literal is not a comment — this is a heuristic on
-      // purpose: over-matching here would make the ratchet meaningless.
-      const c = line.indexOf("//") >= 0 ? line.slice(line.indexOf("//"))
-        : (/^\s*\*/.test(line) || line.includes("/*") ? line : null);
-      if (c == null || c.includes("http")) return;
-      for (const m of c.matchAll(CITE)) {
-        out.push({ from: rel, line: i + 1, target: m[1], a: +m[2], b: m[3] ? +m[3] : +m[2] });
+    const comments = (code && commentLines(text, rel)) || heuristicComments(text);
+    for (const { line, text: c } of comments) {
+      if (c.includes("http")) continue;
+      for (const m of c.matchAll(code ? CITE_CODE : CITE)) {
+        out.push({ from: rel, line, target: m[1], a: +m[2], b: m[3] ? +m[3] : +m[2] });
       }
-    });
+    }
   }
   return out;
 }
@@ -129,7 +186,7 @@ test("a cited line number exists in the file it names", () => {
 
 test("cross-file line citations are not multiplying", () => {
   assert.ok(ALL.length <= CITATION_CEILING,
-    `${ALL.length} cross-file line citations in js/, ceiling ${CITATION_CEILING}. ` +
+    `${ALL.length} cross-file line citations in js/ css/ types/ tests/ tools/, ceiling ${CITATION_CEILING}. ` +
     "A line number in another file cannot be kept true — nothing edits both. Cite the SYMBOL " +
     "(\"LIT_FS in js/render/glx/shaders/glsl-lit.js\") instead, or raise the ceiling here and say why.");
 });
