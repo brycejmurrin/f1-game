@@ -2627,7 +2627,17 @@ Deferred with reasoning, none lost:
   `js/game.js` re-sniffed navigator without `forceMobileTier`, so a desktop
   with the flag set still loaded an alternate backend — the "phone" path under
   test was never the phone path.
-- **`TUNE_DEFS` hand-mirrors** — the registry is restated in six places.
+- **`TUNE_DEFS` hand-mirrors** — the registry is restated in six places,
+  among them the fallback defaults in `js/render/glx/glx.js` ("defaults here MUST
+  mirror LightTune.TUNE_DEFS") and the contract comment in `js/render/gfx.js` —
+  comments that must track the registry by hand; replace with a checked mapping.
+  (Moved from ARCHITECTURE.md §Deferred follow-ups, 2026-09-30.)
+- **game.js pass 2** — promote the remaining closure `let`s in `js/game.js` to a
+  shared state object, so extracted modules stop needing a `G` getter per
+  variable. Still open: the `G` façade remains the migration device. Take
+  candidates by boundary crossings, not line count, and read ARCHITECTURE.md
+  §Extraction lessons first (leftover-symbol grep, megafunctions stay fenced,
+  lower the ratchet). (Moved from ARCHITECTURE.md §Deferred follow-ups, 2026-09-30.)
 - **`GameStore` cross-tab — RESOLVED.** `store.onForeignWrite`, armed by the
   module itself on `window.storage`. Not a merge (two divergent career saves
   have no defined join): a foreign `apex26.*` write drops that ONE cached key
@@ -2660,7 +2670,7 @@ Deferred with reasoning, none lost:
   branch is a guarded feature slot with a shipping bake tool. What was genuinely
   dead has been trimmed: `GLTF.load` and `Reliability.levels` deleted outright,
   plus export-object entries in `reliability.js`, `store.js`, `lighting.js` and
-  `light-store.js` whose functions stay because they are internally live.
+  `js/lighting/profiles.js` whose functions stay because they are internally live.
   Remaining owner decisions, evidence gathered but not acted on:
   `js/track/scenery/themes.js`'s `variants` tables (zero readers anywhere) and
   `CarMesh.getBoostFlame`.

@@ -84,7 +84,7 @@ signal and the absolute ms as an upper bound.
 Summing every `wasm-function[…]` entry with `debrisworld.js:step` puts **~16 %
 of physics CPU in the Rapier debris side-world** — the largest cost centre after
 `update`/`updateCar`, and a subsystem with a recorded history of being the
-expensive one (see the `perf.js` crash-sentinel header on shipping `vendor/`).
+expensive one (see the `js/perf/governor.js` crash-sentinel header on shipping `vendor/`).
 `pairContact` + `resolveCollisions` is a further ~9.5 %.
 
 *Traced, not a defect:* `buildWorld` also appears at 0.6 %, but
@@ -327,8 +327,8 @@ Two distinct defects were hiding in there, and both are worth knowing:
 - **`window.LightTune` is undefined, and always was.** `js/lighting/lighting.js`
   declares `const LightTune = (function () {`, and a top-level `const` in a
   CLASSIC script creates a **script-scoped binding, not a property of `window`**
-  — unlike `var` or the explicit `window.X =` form that `ariastate.js`,
-  `css-zoom.js` and `sheetshape.js` use. The spec's `page.evaluate` reached for
+  — unlike `var` or the explicit `window.X =` form that `aria-state.js`,
+  `css-zoom.js` and `sheet-shape.js` use. The spec's `page.evaluate` reached for
   `window.LightTune.TUNE_DEFS` and threw. It was the ONLY `window.LightTune` in
   the tree; every other reader uses the bare identifier, as `js/agent/apex.js`
   does itself. **When a page global is missing under `page.evaluate`, check how
@@ -461,7 +461,7 @@ build, and not one of them changed a pixel.
   Up to 16 dependent texture fetches, 2 `vnoise`, a `normalize`, a `sqrt` and a
   `sin`/`cos` pair. **The general lesson: a uniform-level gate does not imply
   the per-fragment gate has been taken. Check for both.**
-- **The static sun shadow PRODUCER** matched to its consumer. `lit.js` opens
+- **The static sun shadow PRODUCER** matched to its consumer. `glsl-lit.js` opens
   `sampleShadow` with `if (uShadowStr <= 0.0) return 1.0;`, so on an overcast /
   wet / foggy night nothing reads the map — yet the frame still paid a 2048²
   clear, terrain and road cast unchunked, and a 512² PCSS blocker pass, 300+
@@ -564,7 +564,7 @@ stall. For a hitch, read inclusive time and ask which frame it lands on.**
 The five multiplied-by-zero ones, all bit-identical, all argued from mechanism
 and counted rather than timed:
 
-- **`sky.js` sun corona + disc** ran on every NIGHT frame. `coronaDamp` is
+- **`glsl-sky.js` sun corona + disc** ran on every NIGHT frame. `coronaDamp` is
   `(1.0 - overcast * 0.92) * (1.0 - nightSky)` and `overcast <= 1` keeps the
   first factor `>= 0.08`, so `coronaDamp == 0` **exactly when** `nightSky == 1`
   — and all three `c +=` add nothing. SKY_FS drew BEFORE the opaque world at
@@ -575,7 +575,7 @@ and counted rather than timed:
   actually depth-tests — WGX's declared `depthCompare:"always"` and the late
   sky erased the whole WebGPU world; fixed to `"less-equal"`, pinned by
   tests/unit/webgpu-lifecycle.test.mjs.)
-- **`sky.js` day gradient band** — an **`atan2`**, one of the costliest GPU
+- **`glsl-sky.js` day gradient band** — an **`atan2`**, one of the costliest GPU
   transcendentals, feeding a `vnoise`, per pixel, whole frame, multiplied by
   `daytime`. `daytime` is exactly 0 on every night frame AND every dawn/dusk
   frame with the sun under ~14.5°. `daytime` itself stays live; two later
@@ -594,7 +594,7 @@ and counted rather than timed:
   pixel, on a daytime tier-4 frame: the frame that has already shed god-rays,
   SSAO and SSR. Another operand of an armed producer — the third time that
   exact grep has paid.
-- **`lit.js` lamp-shadow PCF had the uniform gate but not the per-fragment
+- **`glsl-lit.js` lamp-shadow PCF had the uniform gate but not the per-fragment
   one.** `lampSh` has two readers: one multiplied by `NoLl`, one already inside
   `if (NoLl > 0.0)`. So a fragment facing AWAY from the mapped floodlight paid
   4 dependent `sampler2DShadow` fetches, a `mat4` transform, a perspective
@@ -727,7 +727,7 @@ That is wrong and the correction matters, because the suggested action was to
 reach it. `createChunkedMesh` (`js/render/glx/chunked.js`) **never carried
 `data.trk`** — the fifth attribute `createMesh` builds (`js/render/glx/glx.js`)
 for road-marking coordinates. Without it the shader reads the generic default,
-`float hw = vTrk.z` is 0, and `lit.js`'s `if (hw <= 0.5) return;` guard fires — its
+`float hw = vTrk.z` is 0, and `glsl-lit.js`'s `if (hw <= 0.5) return;` guard fires — its
 own comment even says *"(or no trk attribute)"*. **Every edge line, centre dash
 and marking would silently disappear.** (SUPERSEDED: this fix SHIPPED —
 `chunked.js` now reads and interleaves `data.trk`, and GLX/WGX publish
@@ -3324,11 +3324,11 @@ down from **157 / 5,082,769 B** the same day. **1,415 KB, 28.5%**, in one round:
 | move | KB | how |
 |---|---|---|
 | circuit `scenery: function (api)` × 40 | 1,083 | `js/circuits/scenery/<id>.js`, LAZY_SCENERY |
-| `light-presets.js` | 338 | LAZY_RACE |
+| `js/lighting/presets.js` | 338 | LAZY_RACE |
 | `defer` on all 157 tags | 0 | stops blocking the parser |
 
 The two lazy payloads need DIFFERENT mechanisms, and the reason is worth
-keeping. Presets need **no gate**: `light-store.js` reads `window.LightPresets`
+keeping. Presets need **no gate**: `js/lighting/profiles.js` reads `window.LightPresets`
 at call time, so an absent file resolves to TUNE_DEFS defaults and
 `applyLightTune()` re-walks the knobs when it lands. Scenery needs a **real
 gate**: `Tracks.build()` is synchronous and every `loadTrack()` caller touches
@@ -4134,7 +4134,7 @@ silverstone 64, spa 53, mexico 26, shanghai 16, monaco 15.
 `onTrack(cx, cz, sz[0] / 2 + 6)` uses `sz[0]` — the box's length ALONG the
 tangent, since `addBox` takes basis `[t, u, r]` and the reach toward the road is
 `sz[2]/2` — as a RADIAL margin. That is the same anti-pattern this repo already
-fixed for billboards (`scenery-city.js`: "all 44 at Qatar, all 7 at Monaco").
+fixed for billboards (`js/track/scenery/city.js`: "all 44 at Qatar, all 7 at Monaco").
 
 I expected the corrected oriented test to recover scenery. Measured A/B, dense
 sampling along `t` with margin `sz[2]/2 + 6`:

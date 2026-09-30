@@ -56,6 +56,7 @@ branches remain source-backed rather than end-to-end walkthroughs.
 | Garage | `#mb-garage` | Car setup/customisation |
 | Settings | `#mb-settings` | Settings index |
 | How to Play | `#mb-help` | Anchored help sheet |
+| Use as Controller | `#mb-phonepad` | Phone only: opens `controller.html` to type another screen's room code. Hidden unless the pointer is coarse (`syncPointerKind()` in `js/game.js`) |
 
 The title also carries the sound toggle, Apex 26 branding, grid/circuit summary
 and unofficial disclaimer.
@@ -79,7 +80,11 @@ defaults contract.
 
 **Controls.** Throttle `HOLD`; Left-handed `OFF`; Gears `AUTO`; Active Aero
 `MANUAL`. Other actions are Reset Keys, Button Names `AUTO`, Calibrate Stick,
-Set Up a Wheel and Reset Controller.
+Set Up a Wheel and Reset Controller. STEER THIS GAME WITH A PHONE (`#pm-phonepad`)
+mints a room code and shows it with a QR for `controller.html#pad=CODE`
+(`#pm-phonepad-box`). On a touch device, `#pm-phonepad-go` is the phone's end of
+the same pairing (`js/input/phone-pad.js`; the protocol is in
+[MULTIPLAYER.md](MULTIPLAYER.md) §Phone as controller).
 
 | Device | Bindings shown |
 |---|---|
@@ -135,9 +140,19 @@ Team Radio `OFF`; Engine Tone `TEAM` with pitch/roughness sliders; Spotify
 | Live | Weather, classification, refresh and auto-refresh |
 | Telemetry | Driver chips such as NOR and VER |
 | Export | Gather, then Download; download begins disabled |
+| Race It | One real Grand Prix, lap by lap, from OpenF1 timing (`js/data/real-race-tab.js`). Pick a DRIVE AS seat, then START or JUMP IN at any lap. LOAD pulls every car's real positions; then HIGHLIGHTS or WATCH FROM L*n* replays the race, with its own WATCH CAMERA pick. `js/race/real-race.js` stages it |
 
 Session filters include P1, P2, P3, Qualifying and Race. Close returns to the
 title.
+
+**The pre-race card for a real race.** JUMP IN, WATCH and HIGHLIGHTS close the
+hub and go through the same pre-race screen as RACE!: the `#loading` card with
+its flyby and the announcer. `RealRace.launch(…, { intro: true })` calls
+`G.raceIntro`, which hides the title (`#overlay`) behind the card. The card reads
+`RealRace.intro()`: the real event's title, the driver whose seat you take, the
+start lap and the race so far. A mid-race JUMP IN is a rolling start. The AI
+drives your car for a few seconds while a big countdown on the start lights
+(`G.handoverCount`) runs to GO, then hands it to you.
 
 ### Career modes (`#career`)
 
@@ -257,6 +272,12 @@ Other in-race roots are:
 - `#photo-controls` — free-camera overlay.
 - `#quali`, `#standings` and `#results` — session flow.
 - `#rotate-device` — portrait race blocker.
+
+The camera cycle (CAM button, `C` key; `js/camera/mode-switch.js`) includes
+VISOR: the cockpit view without its steering wheel and dash (`js/camera/vantage.js`).
+When a phone links as the controller, the screen switches to VISOR, because the
+phone in your hand is the wheel. It switches back when the phone leaves, unless
+you picked another camera meanwhile (`VISOR_CAM` in `js/game.js`).
 
 ### Mapping on a weak box
 

@@ -1927,8 +1927,8 @@ Set tilt params with `setPhysics({ maxTilt, deadzone, tiltCutoff })`, the pause-
 sliders, or `Input.setTilt*`. `runLap(page, settings, { mode: "tilt" })` drives a
 whole lap this way; `opts.tremorDeg` controls the tremor amplitude.
 
-Run it: `npx playwright test tests/specs/autopilot.spec.js` (or against a separate
-server with `--config playwright.alt.config.js`, see below).
+Run it: `npx playwright test tests/specs/autopilot.spec.js` (or against an already-running
+server: `APEX_PORT=<port> APEX_REUSE_SERVER=1`, read by `playwright.config.js`).
 
 ---
 
