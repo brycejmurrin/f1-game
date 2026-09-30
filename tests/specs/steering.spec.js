@@ -85,18 +85,15 @@ async function startLiveRace(page) {
    with no clue which step was slow.
    Every test needs a LIVE race - the real sim, twenty cars built, the physics
    stepped - and under SwiftShader a single page.evaluate against it measures
-   20-28 s while the build alone takes 30-90 s. Measured on this container:
-   80-190 s per test, with the work genuinely progressing throughout (the one
-   test that fits inside 120 s returns a real assertion result, not a hang).
-   playwright.config.js's own note asks that a case needing materially more
-   than the shared budget declare it at its own site; this is that declaration.
-   It does NOT paper over a hang: the actionability stall these tests used to
-   suffer was a locator-click problem and is fixed in startLiveRace above, and
-   actionTimeout stays 60 s, so a stuck locator still fails in a minute and
-   names itself. Only genuinely slow WORK reaches this budget.
-   480 s because the heaviest case here - road-follow, which drives four full
-   cornering runs - measured 343.5 s; the rest land between 80 s and 210 s. */
-test.describe.configure({ timeout: 480_000 });
+   20-28 s while the build alone takes 30-90 s. playwright.config.js's own note
+   asks that a case needing materially more than the shared budget declare it
+   at its own site; this is that declaration. It does NOT paper over a hang:
+   actionTimeout stays 60 s, so a stuck locator still fails in a minute.
+   Was 480 s when road-follow alone measured 343.5 s (assist leak across
+   sharedTest). After shared-page assist reset (#564) the whole file is ~32 s
+   wall locally (heaviest case 8.3 s, 2026-09-30); 170 s is the re-time so
+   select-specs can bill the file under the 180 s selected gate. */
+test.describe.configure({ timeout: 170_000 });
 
 const probe = (page) => page.evaluate(() => window.__apex.probe());
 
