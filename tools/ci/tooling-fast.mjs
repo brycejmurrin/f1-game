@@ -209,6 +209,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/digital-steer.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   "tests/unit/driving-coach.test.mjs",
+  "tests/unit/driving-cues.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
   // named legend has to round-trip through two setters, and the inert VM DOM
   // builds no SettingRow children, so painting the row would assert nothing.

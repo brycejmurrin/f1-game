@@ -165,6 +165,7 @@
     "tests/unit/digital-steer.test.mjs",
     "tests/unit/docs-integrity.test.mjs",
     "tests/unit/driving-coach.test.mjs",
+    "tests/unit/driving-cues.test.mjs",
     "// …and the DUEL ROW that reaches it: one control carrying OFF / ON / a",
     "// named legend has to round-trip through two setters, and the inert VM DOM",
     "// builds no SettingRow children, so painting the row would assert nothing.",
@@ -1053,6 +1054,7 @@
       "files": [
         "tests/unit/brake-cue.test.mjs",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/driving-cues.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/phone-pad.test.mjs",

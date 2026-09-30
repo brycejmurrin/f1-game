@@ -281,6 +281,7 @@ const FULL = [
   "js/lighting/tuner-panel.js",
   "js/camera/tuner-panel.js",
   "js/physics/brake-cue.js",
+  "js/audio/driving-cues.js",
   "js/input/steer-tuning.js",
   "js/perf/governor.js",
   "js/perf/loop-health.js",
@@ -608,6 +609,8 @@ const HARD_EDGES = [
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"], // RadioVoice.create builds a VoicePack
   ["js/race/race-radio.js", "js/game.js"],               // game.js calls RaceRadio.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
+  ["js/audio/driving-cues.js", "js/input/steer-tuning.js"], // SteerTuning.create calls DrivingCues.create(G)
+  ["js/audio/driving-cues.js", "js/game.js"],             // game.js calls DrivingCues.tick() each frame
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
@@ -1090,6 +1093,7 @@ const MOVED = {
   "js/game/aerozones.js": "js/physics/aero-zones.js",
   "js/game/bodyattitude.js": "js/physics/body-attitude.js",
   "js/game/brake-cue.js": "js/physics/brake-cue.js",
+  "js/game/driving-cues.js": "js/audio/driving-cues.js",
   "js/game/debrisworld.js": "js/physics/debris-world.js",
   "js/game/incidentsim.js": "js/physics/incident-sim.js",
   "js/game/racecontrol.js": "js/race/race-control.js",

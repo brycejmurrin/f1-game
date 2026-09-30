@@ -970,6 +970,7 @@ it lands.
 | `js/camera/vantage.js` | `vantage` | **broadcast-only** | only heli/side/cinematic broadcast cams; 0 in every driven mode |
 | `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
 | `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
+| `js/audio/driving-cues.js` | `tick` / `cornerSide` | **assist-gated** | behind the AUDIO DRIVING CUES slider (`audioCues`, notch 1 = OFF, STANDARD/PRO stay OFF; ROOKIE/RELAX bundle mid notches); braking tone + L/R corner calls via `GameAudio.driveBrakeTone` / `cornerCall` — audio-only, no force/steer path, never `G.announce` / race radio. Early-returns before any `Tracks.curvature` read when OFF |
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
