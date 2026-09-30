@@ -50,6 +50,33 @@ const RaceSettings = (function () {
     return null;
   }
 
+  /* REMEMBER LAST RACE SETUP (apex26.raceDraft). A solo one-off Grand Prix
+   * remembers what it last STARTED with — laps as a ladder rung or "FULL",
+   * weather, time of day, MIXED — so the next circuit opens on the same race
+   * instead of 3 laps / dry / default. Pure halves, exported for the tests. The
+   * laps are stored as a rung, not a number: FULL is 44 at Spa and 79 at Monaco,
+   * so "the full race" is what carries between circuits, not its count. */
+  const DRAFT_LAPS = ["3", "5", "10", "25"];
+  function draftOf(laps, full, weather, tod, mixed) {
+    const n = +laps;
+    const out = { weather: String(weather), tod: String(tod), mixed: !!mixed };
+    if (n >= full) out.laps = "FULL";
+    else if (DRAFT_LAPS.includes(String(n))) out.laps = String(n);
+    return out;
+  }
+  /** A stored draft read back for a circuit whose FULL is `full`: null when
+   *  there is nothing usable; a field the sheet does not offer is left out. */
+  function draftFor(d, full) {
+    if (!d || typeof d !== "object" || Array.isArray(d)) return null;
+    const out = {};
+    if (d.laps === "FULL") out.laps = full;
+    else if (DRAFT_LAPS.includes(d.laps)) out.laps = +d.laps < full ? +d.laps : full;
+    if (RS_WEATHER.some(([id]) => id === d.weather)) out.weather = d.weather;
+    if (RS_TIME.some(([id]) => id === d.tod)) out.tod = d.tod;
+    if (typeof d.mixed === "boolean") out.mixed = d.mixed;
+    return Object.keys(out).length ? out : null;
+  }
+
   function create(G, deps) {
     const {
       $, store, GAME_LAPS, TT_LAPS, scheduleFlybyTrack, setCautionEnabled,
@@ -62,6 +89,11 @@ const RaceSettings = (function () {
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
     const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (G.raceQuali && !isTimeTrial()));
+    // The one flow whose setup is remembered: a solo one-off GP. Time trial
+    // (and the Daily inside it), championship rounds and a VS FRIEND room all
+    // stage laps/weather/time of their own, and a REAL RACE never reaches here.
+    const soloGp = () => G.flow === "gp" && !isTimeTrial() && !isChampionship() && !netRoom;
+    const fullLaps = () => (Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].gpLaps) || 57;
 
     let rsReturn = "select";
     let draftKey = "";
@@ -377,6 +409,13 @@ const RaceSettings = (function () {
           G.raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
           G.raceWeather = daily ? daily.weather : "dry";
           G.raceTimeOfDay = daily ? daily.tod : "default";
+          const d = soloGp() ? draftFor(store.get("raceDraft", null), fullLaps()) : null;
+          if (d) {
+            if (d.laps != null) G.raceLaps = d.laps;
+            if (d.weather) G.raceWeather = d.weather;
+            if (d.tod) G.raceTimeOfDay = d.tod;
+            if (d.mixed != null) { G.raceChangeable = d.mixed; G.wxArcPlan = null; }
+          }
         }
       }
       buildRaceSettings();
@@ -412,6 +451,7 @@ const RaceSettings = (function () {
           netLobby.roomChanged("race");
           return;
         }
+        if (soloGp()) store.set("raceDraft", draftOf(G.raceLaps, fullLaps(), G.raceWeather, G.raceTimeOfDay, G.raceChangeable));
         if (getSteerMode() === "tilt") enableTilt();
         // Same gesture, same reason: Chromium needs user activation before
         // navigator.vibrate will fire and no longer accepts touchstart as one,
@@ -449,6 +489,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue, presetValues };
+  return { create, duelOpts, duelValue, presetValues, draftOf, draftFor };
 })();
 Object.freeze(RaceSettings);

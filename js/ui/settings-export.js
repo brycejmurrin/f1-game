@@ -174,6 +174,11 @@ const SPEC = [
   { k: "unlimitedBudget", lane: "json", group: "driving", def: false, src: "js/game.js",
     subsystem: "removes the career economy constraint for everyone — a design change, not a preference" },
   { k: "bodyAttitude", lane: "raw", group: "driving", def: null, src: "js/physics/body-attitude.js (null = on)" },
+  // PRE-RACE MEMORY. Both unset until used: the race sheet saves a draft only
+  // when a solo one-off GP STARTs, and the list exists only once a circuit is
+  // starred. Their readers validate every field, so a file cannot poison them.
+  { k: "raceDraft", lane: "json", group: "driving", def: null, src: "js/race/race-settings.js REMEMBER LAST RACE SETUP (null = 3 laps / dry / default; else {laps: \"3\"|\"5\"|\"10\"|\"25\"|\"FULL\", weather, tod, mixed})" },
+  { k: "favTracks", lane: "json", group: "driving", def: null, src: "js/ui/select-screen.js FAVOURITE CIRCUITS (null = none; else an array of track ids)" },
   // STEERING (js/input/steer-tuning.js applySteerTuning)
   { k: "preset", lane: "json", group: "steering", def: "standard", src: "js/input/steer-tuning.js",
     subsystem: "selects a whole steering sheet, i.e. the driving model — see pace below" },

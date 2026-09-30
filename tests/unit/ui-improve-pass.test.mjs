@@ -116,6 +116,125 @@ test("select track filter persists via store", () => {
   assert.match(js, /\btrackFilter\b/);
   assert.match(js, /store\.set\(\s*"trackFilter"/);
   assert.match(js, /"classic"\s*,\s*"CLASSICS"/);
+  // FAVOURITES joins the same filter table, is accepted by the persisted-value
+  // check, and skips tiles beside the season/classic/daily-open rules.
+  assert.match(js, /\["fav",\s*"♥ FAVOURITES"\]/);
+  assert.match(js, /trackFilter\s*!==\s*"fav"\)\s*trackFilter\s*=\s*"all"/);
+  assert.match(js, /filter\s*===\s*"fav"\s*&&\s*!favs\.includes\(t\.id\)\)\s*return/);
+  assert.ok(ruleFor(css("css/menus.css"), /^#sel-tracks \.track-row\[data-fav\]::after$/), "the ♥ badge is a pseudo-element on [data-fav]");
+  assert.equal(decl(css("css/menus.css"), "#sel-tracks .track-row[data-fav]", "position"), "relative",
+    "only a favourited tile is positioned — the shipped strip paints unchanged");
+});
+
+/* ── FAVOURITE CIRCUITS on the mini DOM: Menus.create with a stub G ─────── */
+function bootMenus(disk = {}, o = {}) {
+  const dom = makeDom();
+  dom.body.insertAdjacentHTML = () => {};
+  const data = new Map(Object.entries(disk).map(([k, v]) => [k, JSON.stringify(v)]));
+  const store = {
+    broken: null, subscribe: () => () => {},
+    get: (k, d) => (data.has(k) ? JSON.parse(data.get(k)) : d),
+    set: (k, v) => { data.set(k, JSON.stringify(v)); return true; },
+    rawDel: (k) => { data.delete(k); return true; },
+  };
+  const LIST = [
+    { id: "monza", name: "Monza", country: "Italy" },
+    { id: "spa", name: "Spa", country: "Belgium" },
+    { id: "imola", name: "Imola", country: "Italy", classic: true },
+  ];
+  const sb = uiSandbox(dom, {
+    Tracks: { LIST }, Teams: { LIST: [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
+    SeasonCal: { canRace: () => true, rounds: () => 0 },
+    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
+  });
+  vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
+  const $ = (id) => dom.byId(id);
+  const selTracks = $("sel-tracks");
+  // mini-dom's textContent is a plain field; buildSelect clears the strip with it.
+  Object.defineProperty(selTracks, "textContent", { get: () => "", set() { selTracks.children.length = 0; } });
+  const announced = [];
+  const G = {
+    $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {},
+    els: { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
+      selCircuitLabel: $("sel-circuit-label"), selPreviewMap: null, selTeams: $("sel-teams") },
+    trackIdx: 1, teamIdx: 0, timeTrial: false, seasonMode: false, netRoom: false, daily: null, soundOn: false,
+    announce: (m) => announced.push(m), ...o,
+  };
+  const menus = sb.Menus.create(G);
+  menus.buildSelect();
+  const tiles = () => selTracks.querySelectorAll(".track-row");
+  const tile = (id) => tiles().find((r) => LIST[+r.dataset.trackIdx].id === id);
+  const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
+  return { dom, data, G, menus, tiles, tile, chips, announced, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
+}
+
+test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
+  const h = bootMenus();
+  assert.deepEqual(h.chips(), ["all", "season", "classic"], "the shipped filter bar, no FAVOURITES chip");
+  assert.equal(h.tiles().length, 3);
+  assert.ok(h.tiles().every((r) => !("fav" in r.dataset)), "no tile carries data-fav");
+  assert.equal(h.data.has("favTracks"), false);
+});
+
+test("FAVOURITE CIRCUITS: the CIRCUIT DETAIL toggle → store → data-fav → the chip, and back", () => {
+  const h = bootMenus();
+  h.menus.openTrackDetail();
+  const btn = h.dom.byId("track-detail-fav");
+  assert.equal(btn.tagName, "BUTTON");
+  assert.equal(btn.textContent, "☆ FAVOURITE");
+  assert.equal(btn.getAttribute("aria-pressed"), "false");
+  btn.onclick();
+  assert.deepEqual(h.favs(), ["spa"]);
+  assert.equal(btn.textContent, "★ FAVOURITE");
+  assert.equal(btn.getAttribute("aria-pressed"), "true");
+  assert.equal(h.tile("spa").dataset.fav, "1", "the strip was rebuilt with the badge");
+  assert.ok(!("fav" in h.tile("monza").dataset));
+  assert.deepEqual(h.chips(), ["all", "season", "classic", "fav"], "the chip appears with the first favourite");
+  // FAVOURITES filters the strip; selection still indexes Tracks.LIST.
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "fav").onclick({ stopPropagation() {} });
+  assert.equal(JSON.parse(h.data.get("trackFilter")), "fav");
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["1"]);
+  // The last one out: key deleted, the filter falls back to ALL, the chip goes.
+  btn.onclick();
+  assert.equal(h.data.has("favTracks"), false, "an empty list is the shipped state — nothing stored");
+  assert.equal(btn.textContent, "☆ FAVOURITE");
+  assert.equal(JSON.parse(h.data.get("trackFilter")), "all");
+  assert.deepEqual(h.chips(), ["all", "season", "classic"]);
+  assert.equal(h.tiles().length, 3);
+});
+
+test("FAVOURITE CIRCUITS: F on a focused tile toggles it and keeps focus; modifiers and the season calendar do not", () => {
+  const h = bootMenus();
+  const press = (el, key, extra = {}) => h.dom.dispatch(el, { type: "keydown", key, bubbles: true, ...extra });
+  press(h.tile("monza"), "f", { ctrlKey: true });
+  assert.equal(h.data.has("favTracks"), false, "Ctrl+F is the browser's");
+  press(h.tile("monza"), "F");
+  assert.deepEqual(h.favs(), ["monza"]);
+  assert.equal(h.tile("monza").dataset.fav, "1");
+  assert.equal(h.dom.document.activeElement, h.tile("monza"), "focus returns to the rebuilt tile");
+  assert.match(h.announced.at(-1), /MONZA/);
+  press(h.tile("imola"), "f");
+  assert.deepEqual(h.favs(), ["monza", "imola"]);
+  press(h.tile("monza"), "f");
+  assert.deepEqual(h.favs(), ["imola"]);
+  const season = bootMenus({}, { seasonMode: true });
+  const cal = season.dom.byId("sel-tracks");
+  cal.dataset.mode = "season";
+  const row = season.dom.makeElement("button"); row.className = "track-row"; row.dataset.trackIdx = "0"; cal.appendChild(row);
+  season.dom.dispatch(row, { type: "keydown", key: "f", bubbles: true });
+  assert.equal(season.data.has("favTracks"), false, "the calendar strip is read-only");
+});
+
+test("FAVOURITE CIRCUITS: a stored FAVOURITES filter with no (known) favourites opens on ALL", () => {
+  for (const favTracks of [undefined, [], ["no-such-circuit"], "spa"]) {
+    const disk = { trackFilter: "fav" };
+    if (favTracks !== undefined) disk.favTracks = favTracks;
+    const h = bootMenus(disk);
+    assert.deepEqual(h.chips(), ["all", "season", "classic"], JSON.stringify(favTracks));
+    assert.equal(h.tiles().length, 3, JSON.stringify(favTracks) + ": every circuit shown");
+  }
+  const h = bootMenus({ trackFilter: "fav", favTracks: ["imola"] });
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["2"], "a real favourite keeps the filter");
 });
 
 /* ── SheetShape on the mini DOM ─────────────────────────────────────────── */

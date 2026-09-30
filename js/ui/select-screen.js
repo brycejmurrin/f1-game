@@ -260,11 +260,53 @@ const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refre
 
 // Circuit list filter: all / championship calendar / retired classics.
 // Persisted so a player who only races classics does not re-tap every open.
+// FAVOURITE CIRCUITS (apex26.favTracks, an array of track ids) are HIDDEN UNTIL
+// USED: no chip, no badge and nothing written until a circuit is starred in
+// CIRCUIT DETAIL (or with F on a tile), so the shipped #select pixels hold.
+// Ids, not indices — Tracks.LIST reorders; an id no longer in it is ignored.
+const favList = () => {
+  const v = store.get("favTracks", null);
+  return Array.isArray(v) ? v.filter((id) => Tracks.LIST.some((t) => t.id === id)) : [];
+};
 let trackFilter = store.get("trackFilter", "all");
-if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic" && trackFilter !== "daily-open") trackFilter = "all";
-const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"], ["daily-open", "DAILY OPEN"]];
+if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic" && trackFilter !== "daily-open" && trackFilter !== "fav") trackFilter = "all";
+const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"], ["fav", "♥ FAVOURITES"], ["daily-open", "DAILY OPEN"]];
 let trackQuery = "";
-const visibleTrackFilter = () => (!G.timeTrial && trackFilter === "daily-open" ? "all" : trackFilter);
+const visibleTrackFilter = () => ((!G.timeTrial && trackFilter === "daily-open") || (trackFilter === "fav" && !favList().length) ? "all" : trackFilter);
+
+/** Star or unstar a circuit; the strip and its filter bar are rebuilt so the
+ *  badge and the FAVOURITES chip follow. The last one out deletes the key (and
+ *  drops a FAVOURITES filter back to ALL): an empty list is the shipped state. */
+function toggleFav(id) {
+  const list = favList();
+  const on = !list.includes(id);
+  const next = on ? list.concat(id) : list.filter((x) => x !== id);
+  if (next.length) store.set("favTracks", next);
+  else {
+    store.rawDel("favTracks");
+    if (trackFilter === "fav") { trackFilter = "all"; store.set("trackFilter", "all"); }
+  }
+  if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
+  if (els.select && !els.select.hidden) { buildSelect(); tickUi(); }
+  return on;
+}
+
+// F on a focused circuit tile stars it — the keyboard's way to the CIRCUIT
+// DETAIL toggle. Keydown on the strip, so the search field (on the shelf, not
+// in the strip) never sees it; the season calendar's tiles are not buttons.
+els.selTracks.addEventListener("keydown", (e) => {
+  if ((e.key !== "f" && e.key !== "F") || e.ctrlKey || e.metaKey || e.altKey) return;
+  const row = e.target && e.target.closest ? e.target.closest(".track-row") : null;
+  if (!row || row.tagName !== "BUTTON" || els.selTracks.dataset.mode === "season") return;
+  const t = Tracks.LIST[+row.dataset.trackIdx];
+  if (!t) return;
+  e.preventDefault();
+  const on = toggleFav(t.id);
+  if (G.announce) G.announce(on ? t.name.toUpperCase() + " ♥ FAVOURITE" : t.name.toUpperCase() + " REMOVED FROM FAVOURITES");
+  const again = els.selTracks.querySelector('.track-row[data-track-idx="' + row.dataset.trackIdx + '"]')
+    || els.selTracks.querySelector(".track-row");
+  if (again) again.focus();
+});
 
 function applyTrackSearch(value) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
@@ -304,7 +346,8 @@ function trackFilterBar() {
   bar.className = "sel-chip-row";
   bar.setAttribute("role", "group");
   bar.setAttribute("aria-label", "Circuit list controls");
-  const filters = trackFilters.filter(([id]) => id !== "daily-open" || G.timeTrial);
+  const hasFav = favList().length > 0;
+  const filters = trackFilters.filter(([id]) => (id !== "daily-open" || G.timeTrial) && (id !== "fav" || hasFav));
   filters.forEach(([id, label], index) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -507,10 +550,12 @@ function buildSelect() {
     // Filter chips (ALL / SEASON / CLASSICS) hide a group rather than renumber
     // Tracks.LIST — selection still indexes into the full list.
     let group = null;
+    const favs = favList();
     Tracks.LIST.forEach((t, i) => {
       const filter = visibleTrackFilter();
       if (filter === "season" && t.classic) return;
       if (filter === "classic" && !t.classic) return;
+      if (filter === "fav" && !favs.includes(t.id)) return;
       if (filter === "daily-open" && (!G.daily || t.id !== G.daily.plan().trackId)) return;
       const g = t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       if (g !== group) {
@@ -530,6 +575,7 @@ function buildSelect() {
       row.dataset.search = [t.name, t.country, t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
         .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
+      if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
       if (G.timeTrial) {
         const board = ttBoard(t.id);
         const rec = board.length ? board[0].t : Infinity;
@@ -849,6 +895,28 @@ function openTrackDetail() {
   if (nightEl) nightEl.hidden = !t.night;
   if (streetEl) streetEl.hidden = !t.street;
   if (bankedEl) bankedEl.hidden = !t.banked;
+
+  // ☆ FAVOURITE — built here, not in index.html, so the shell carries no node
+  // for it; created once and repainted per circuit.
+  const panel = document.getElementById("track-detail-panel");
+  let fav = panel && panel.querySelector("#track-detail-fav");
+  if (!fav && panel) {
+    fav = document.createElement("button");
+    fav.type = "button";
+    fav.id = "track-detail-fav";
+    fav.className = "sel-chip";
+    panel.insertBefore(fav, document.getElementById("track-detail-flags"));
+  }
+  if (fav) {
+    const paintFav = () => {
+      const on = favList().includes(t.id);
+      fav.textContent = on ? "★ FAVOURITE" : "☆ FAVOURITE";
+      fav.classList.toggle("active", on);
+      fav.setAttribute("aria-pressed", on ? "true" : "false");
+    };
+    fav.onclick = () => { toggleFav(t.id); paintFav(); };
+    paintFav();
+  }
 
   // Elevation sparkline — same painter as the preview chart above; here the
   // canvas has a WRAPPER that carries the hidden state (the preview canvas

@@ -185,16 +185,22 @@ press Start Career. Supporting layers include `#career-offers`,
 
 ### One Grand Prix (`#select` → `#race-settings`)
 
-1. Choose `ALL`, `SEASON` or `CLASSICS`, optionally search, then select a
-   circuit.
+1. Choose `ALL`, `SEASON` or `CLASSICS` (plus `♥ FAVOURITES` once any circuit
+   is starred), optionally search, then select a circuit. `F` on a focused
+   tile stars or unstars it; a starred tile wears a small ♥ badge.
 2. Read the circuit card: layout, location, length, turns, direction,
    elevation, DRS, slowest corner and night tag.
 3. Optionally open `#track-detail` for the map, elevation graph, DRS and turn
-   classes; close returns to the picker.
+   classes, and the `☆ FAVOURITE` / `★ FAVOURITE` toggle (`#track-detail-fav`,
+   built in JS, `aria-pressed`; stored as `apex26.favTracks`); close returns to
+   the picker.
 4. `BACK` returns to title, `YOUR CAR` opens Garage, and `NEXT` opens Race
    Settings.
 5. Configure laps, weather, conditions, time of day, difficulty, grid,
-   cautions, Duel, driving line, tyre wear, strategy and reliability.
+   cautions, Duel, driving line, tyre wear, strategy and reliability. A solo
+   one-off GP opens a new circuit on the laps (a rung, or FULL), weather, time
+   of day and MIXED it last STARTED with (`apex26.raceDraft`); time trial, the
+   Daily, championship rounds and a VS FRIEND room keep their own staging.
 6. `RACE!` starts the session.
 
 Observed session values are only examples, not defaults. In particular, the
