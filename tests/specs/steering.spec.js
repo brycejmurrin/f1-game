@@ -249,9 +249,27 @@ test.describe("Apex 26 — steering", () => {
     // (CI 36649674195: −16 … +0.2). 18 m/s × 55 ticks keeps BOTH runs inside
     // |x| < hw − 0.5 on bahrain's first real corner (measured) while still
     // clearing the same 2 m authority bar. Assertion unchanged.
-    const zero = await run(page, { frac, speed: 18, steer: 0, throttle: false, ticks: 55 });
-    const held = await run(page, { frac, speed: 18, steer: lockDir, throttle: false, ticks: 55 });
-    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
+    //
+    // FROZEN WHILE MEASURED (2026-09-30). `run()` steps the sim by hand, but
+    // the page's own frame loop was stepping it too, between the evaluates:
+    // every wall-clock frame from jump() to the last step() added ticks the
+    // recipe never counted, so a slow runner held lock for LONGER and the
+    // car left the window — train 36656970688 on 8a5fe2d5: held.after.x
+    // 7.446 against hw − 0.5 = 6.3, on a tree with no physics change since
+    // this recipe passed (#488). docs/notes/DEFECT-LEDGER.md (2026-09-22,
+    // item 2) had already named the cure: freeze + field clear. The field
+    // clear landed; this is the freeze. With G.frozen the loop skips
+    // update() and step() still calls it directly (js/agent/apex.js), so
+    // exactly 3 + 55 ticks run per recipe, on every machine. The shared page
+    // resets freeze between tests; the finally covers a failed expect.
+    await page.evaluate(() => window.__apex.freeze(true));
+    let zero, held;
+    try {
+      zero = await run(page, { frac, speed: 18, steer: 0, throttle: false, ticks: 55 });
+      held = await run(page, { frac, speed: 18, steer: lockDir, throttle: false, ticks: 55 });
+    } finally {
+      await page.evaluate(() => { window.__apex.freeze(false); window.__apex.setPhysics({ roadFollow: 0 }); });
+    }
 
     const dxZero = zero.after.x - zero.before.x;
     const dxHeld = held.after.x - held.before.x;   // should be far more toward lockDir

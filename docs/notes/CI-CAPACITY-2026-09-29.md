@@ -146,6 +146,17 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   now read `APEX_CIRCUITS` (their anti-vacuity tests build fixtures or named
   circuits, so they hold at any scope); `pit-complex` stays whole. Expected
   on a circuit-only PR: sweeps step ≈ 2.5 min, verify-track ≈ 2 s.
+- **The deploy push and the train scope too** (2026-09-30): the push that
+  merged a circuit-only PR rebuilt the whole fleet the PR had just scoped
+  (two elevation shards, the sweeps, verify-track: ~6 runner-minutes per
+  merge). The tip is gated whole inductively — the previous tip passed its
+  gate and this push's diff against it is gated for what it touched — so the
+  node plan and the sweeps filter now diff a deploy push against its `before`
+  when `tools/ci/base-green.sh` finds a completed, successful ci.yml or
+  pages.yml run on that exact sha (`green` only: a red or unknown previous
+  tip, a first push and a force push run everything). A Pages call's
+  before_sha is the live commit, gated whole by definition, so the train
+  scopes without a lookup. The selected gate already diffed a push this way.
 - **49 unit files run twice per PR** (in tooling-fast under guards, and in
   the `vm-b` slice's topical groups). The rebalanced slices keep that off the
   wall clock. Removing it means changing what the topical groups mean.

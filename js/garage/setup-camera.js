@@ -18,8 +18,29 @@ const { $, gfx, clamp, getTeamParts } = G;
 const { resolveLivery, partsVisualKey, drawAeroFlaps, teamDecalState, carDecalNum,
         drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X } = deps;
 
-const arrival = GarageArrival.create($, () => G.store.get("motion", null) === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  GarageArrival.bindSettings($, G.store));
+const reducedMotion = () => G.store.get("motion", null) === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store));
+// THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
+// played by js/game.js under the loading card while the circuit builds. Its pose
+// stays "active" until stopDriveOut(), so the camera never falls back to the
+// turntable framing on the held last frame.
+let driveOut = null;
+function startDriveOut() {
+  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  driveOut = null;
+  if (!cfg.enabled || reducedMotion()) return 0;
+  driveOut = { t: 0, cfg };
+  return Math.round(GarageArrival.OUT_DURATION * 1000 / cfg.speed);
+}
+// Wall ms of the drive-out still to play: it advances on the clamped frame dt, so a
+// stalled frame (a circuit build on the main thread) delays it rather than skipping it.
+function driveOutLeft() {
+  return driveOut ? Math.max(0, (GarageArrival.OUT_DURATION - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
+}
+function stepDriveOut(dt) {
+  driveOut.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * driveOut.cfg.speed;
+  return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg), { active: true });
+}
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
@@ -331,7 +352,7 @@ const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on stor
 const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
 function renderSetupPreview(dt) {
   gfx.resize();
-  const arriving = arrival.step(dt);
+  const arriving = driveOut ? stepDriveOut(dt) : arrival.step(dt);
   if (!arriving || !arriving.active) applyHeldSetupCam(dt);                               // held on-screen controls
   if (setupPreviewSpin && !(arriving && arriving.active)) setupPreviewAz += dt * 0.35;   // slow turntable
   stepSetupAero(dt);
@@ -632,6 +653,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
 // spellings __apex.garageCam() and types/game-ctx.d.ts already name).
 return {
   startArrival: arrival.start, cancelArrival: arrival.cancel,
+  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },
