@@ -2473,12 +2473,14 @@ __apex.race("albert_park"); __apex.pitSigns();
 // → { cells: 12, mesh: true, tex: true, drawn: 41, calls: 41 }
 ```
 
-### `mirror(mode?) → {mode, shown, rect, cars, drawn, cam, lite, quality, backend} | null`
+### `mirror(mode?) → {mode, shown, collapsed, rect, cars, drawn, cam, lite, quality, backend} | null`
 The HUD rear-view mirror (`js/render/shared/mirror-pass.js`): a second camera
 on the player's car looking back, rendered by the backend into its own target
 BEFORE the main `begin()` and composited, flipped, into the `#hud-mirror`
 frame. `mirror("auto" | "on" | "off")` sets HUD > MIRROR (persisted as
-`apex26.hudMirror`) first. `mode` is the setting; `shown` whether this frame
+`apex26.hudMirror`) first. `collapsed` is true after a tap on the mirror tucked
+it into `#hud-mirror-chip` for the session (a tap on the chip, or the MIRROR
+key, brings it back; the setting is untouched). `mode` is the setting; `shown` whether this frame
 resolved it on (AUTO: the onboard cameras, not on a software renderer; ON:
 every camera — performance never hides it; never outside `state ===
 "race"`, under a debug camera, with the HUD hidden or while LOOK BACK is

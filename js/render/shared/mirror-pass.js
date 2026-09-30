@@ -12,7 +12,9 @@
    corrupt the one the player is looking at.
    Setting HUD > MIRROR (apex26.hudMirror): AUTO shows it in the onboard views
    (where nothing behind is visible), ON in every view, OFF never. The MIRROR
-   key flips it on / off. Performance never HIDES it — a slower device gets a
+   key flips it on / off. A TAP on the mirror collapses it to a small MIRROR
+   chip for the rest of the session (phones have no M key), and a tap on the
+   chip brings it back; the stored setting is untouched. Performance never HIDES it — a slower device gets a
    cheaper mirror instead (QUALITY below).
    One MirrorPass.create(G, deps) at boot; the render loop calls render().
    Reads G.gfx / G.state / G.player / G.cars / G.track / G.camMode / G.dbgCam /
@@ -63,12 +65,26 @@ const MirrorPass = (function () {
     // Canvas fractions [x, y, w, h], top-left origin, of the #hud-mirror frame.
     let _rect = null, _measureIn = 0, _shown = false, _frame = 0, _cars = 0, _drawn = 0;
     let _el = null, _canvas = null, _dead = false, _lastW = 0, _lastH = 0;
+    // COLLAPSED: tapped away this session. Not persisted — the next page load
+    // shows the mirror the setting asks for — and cleared by the MIRROR key.
+    let _collapsed = false, _chip = null, _chipShown = false, _wired = false;
     let _bx = 0, _bz = -1;   // the mirror's look direction (the player's back), horizontal unit
     let _q = QUALITY[0];
     // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
     const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null };
 
     function el() { return _el || (_el = document.getElementById("hud-mirror")); }
+    function chip() { return _chip || (_chip = document.getElementById("hud-mirror-chip")); }
+    // Tap the mirror: collapse it; tap the chip: bring it back. Wired once, on
+    // the first frame the elements exist (index.html owns both).
+    function wire() {
+      if (_wired) return;
+      const e = el(), c = chip();
+      if (!e || !c || !e.addEventListener) return;
+      _wired = true;
+      e.addEventListener("click", () => { _collapsed = true; _measureIn = 0; });
+      c.addEventListener("click", () => { _collapsed = false; _measureIn = 0; });
+    }
     function canvasEl() { return _canvas || (_canvas = document.getElementById("game")); }
 
     function softGpu() {
@@ -173,7 +189,15 @@ const MirrorPass = (function () {
     function render(frame, frameSky, night, wet, floodEmit) {
       if (G.state === "race" && typeof Input !== "undefined" && Input.consumeMirror && Input.consumeMirror()) toggle();
       const g = G.gfx;
-      const want = wanted();
+      wire();
+      const eligible = wanted();
+      const want = eligible && !_collapsed;
+      const chipOn = eligible && _collapsed;
+      if (chipOn !== _chipShown) {
+        _chipShown = chipOn;
+        const c = chip();
+        if (c) c.hidden = !chipOn;
+      }
       if (want !== _shown) {
         _shown = want;
         const e = el();
@@ -249,7 +273,7 @@ const MirrorPass = (function () {
       if (onModeChange) onModeChange(mode);
     }
     // The MIRROR key: whatever is showing now goes off, anything else goes ON.
-    function toggle() { setMode(_shown ? "off" : "on"); }
+    function toggle() { const on = _shown; _collapsed = false; setMode(on ? "off" : "on"); }
 
     return (_instance = {
       MODES,
@@ -258,7 +282,7 @@ const MirrorPass = (function () {
       setMode,
       mode: () => mode,
       // __apex.mirror(): the setting, what this frame resolved, and the backend's own count.
-      state: () => ({ mode, shown: _shown, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
+      state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null }),
     });
   }
