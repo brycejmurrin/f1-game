@@ -12,6 +12,34 @@ const TrackBuildProps = (function () {
 
   const RAW = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain };
 
+  // Feather steep clearance cliffs on barL/barR so wallAt / the clamp do not
+  // teleport a car ~7–9 m sideways at run-off termini (DEFECT-LEDGER 2026-09-26).
+  // Only LOWERs the wide side toward the tight face — never raises a barrier.
+  // Keep in lockstep with tools/track/barrier-jumps.cjs featherBarrierEnds.
+  function featherBarrierEnds(arr, hw, cliff, nodes) {
+    cliff = cliff == null ? 3 : cliff;
+    nodes = Math.max(1, nodes == null ? 3 : nodes);
+    if (!arr || !hw || arr.length !== hw.length || arr.length < 2) return;
+    const N = arr.length;
+    for (let k = 0; k < N; k++) {
+      const j = (k + 1) % N;
+      const oK = arr[k] - hw[k], oJ = arr[j] - hw[j], d = oK - oJ;
+      if (d >= cliff) {
+        for (let i = 0; i < nodes; i++) {
+          const idx = (k - i + N) % N;
+          const target = hw[idx] + oJ + (oK - oJ) * ((i + 1) / (nodes + 1));
+          if (target < arr[idx]) arr[idx] = target;
+        }
+      } else if (-d >= cliff) {
+        for (let i = 0; i < nodes; i++) {
+          const idx = (j + i) % N;
+          const target = hw[idx] + oK + (oJ - oK) * ((i + 1) / (nodes + 1));
+          if (target < arr[idx]) arr[idx] = target;
+        }
+      }
+    }
+  }
+
   function transformSceneryApi(api, def, n) {
     const RK = (k) => TrackSpace.sceneryNode(def, k, n);
     const RS = (s) => TrackSpace.sceneryFrac(def, s);
@@ -2153,6 +2181,6 @@ const TrackBuildProps = (function () {
     const it = buildSteps(track);
     for (;;) { const r = it.next(); if (r.done) return r.value; }
   }
-  return { build, buildSteps };
+  return { build, buildSteps, featherBarrierEnds };
 })();
 Object.freeze(TrackBuildProps);

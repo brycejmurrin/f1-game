@@ -100,10 +100,54 @@ function syntheticCliff(n, at, high, low, feather) {
   return arr;
 }
 
+/**
+ * Feather steep clearance cliffs on a barrier array in place.
+ * Only LOWERs wide nodes toward their tighter neighbour — never raises a
+ * tight face (Jeddah / street absolute wallAt checks stay put).
+ *
+ * @param {Float32Array|number[]} arr track.barL or barR
+ * @param {Float32Array|number[]} hw track.hw
+ * @param {{ cliff?: number, nodes?: number }} [opts]
+ *   cliff — min |Δ(over)| to treat as a terminus (default 3 m)
+ *   nodes — ramp length on the wide side (default 3 ≈ 12 m at ds=4)
+ */
+function featherBarrierEnds(arr, hw, opts) {
+  opts = opts || {};
+  const cliff = opts.cliff != null ? opts.cliff : 3;
+  const nodes = Math.max(1, opts.nodes != null ? opts.nodes : 3);
+  if (!arr || !hw || arr.length !== hw.length || arr.length < 2) return arr;
+  const n = arr.length;
+  for (let k = 0; k < n; k++) {
+    const j = (k + 1) % n;
+    const oK = arr[k] - hw[k];
+    const oJ = arr[j] - hw[j];
+    const d = oK - oJ;
+    if (d >= cliff) {
+      // k side is wider — ramp from the tight face at j back through k…
+      for (let i = 0; i < nodes; i++) {
+        const idx = (k - i + n) % n;
+        const targetOver = oJ + (oK - oJ) * ((i + 1) / (nodes + 1));
+        const target = hw[idx] + targetOver;
+        if (target < arr[idx]) arr[idx] = target;
+      }
+    } else if (-d >= cliff) {
+      // j side is wider — ramp forward from the tight face at k through j…
+      for (let i = 0; i < nodes; i++) {
+        const idx = (j + i) % n;
+        const targetOver = oK + (oJ - oK) * ((i + 1) / (nodes + 1));
+        const target = hw[idx] + targetOver;
+        if (target < arr[idx]) arr[idx] = target;
+      }
+    }
+  }
+  return arr;
+}
+
 module.exports = {
   maxAdjDelta,
   maxAdjOver,
   maxWallAtStep,
   summariseTrack,
   syntheticCliff,
+  featherBarrierEnds,
 };

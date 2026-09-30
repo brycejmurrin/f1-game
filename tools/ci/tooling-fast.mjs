@@ -91,7 +91,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bahrain-grandstand-rake.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/baku-migration.test.mjs",
-  // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / feather probe + monza characterisation until Slice 2 feathers termini. Pure helper + one track-build-vm build, ~1 s.
+  // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / featherBarrierEnds + fleet caps (monza/spa/bahrain/silverstone/monaco maxOver < 3). Pure helper + a few track-build-vm builds, ~6 s.
   "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/behind-ship.test.mjs",

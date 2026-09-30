@@ -314,6 +314,12 @@ const Tracks = (function () {
       // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
       // opening the driving boundary across it puts nothing in a car's path.
       TrackPit.openBoundary(track);
+      // Feather bar* cliffs AFTER openBoundary (pit tapers) and every
+      // markBarrier/recordBarrier — see TrackBuildProps.featherBarrierEnds.
+      if (TrackBuildProps.featherBarrierEnds && track.barL && track.hw) {
+        TrackBuildProps.featherBarrierEnds(track.barL, track.hw);
+        TrackBuildProps.featherBarrierEnds(track.barR, track.hw);
+      }
       const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;
       // The tallest prop above its own ground: what the sun shadow map's depth
