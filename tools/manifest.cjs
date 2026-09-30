@@ -537,6 +537,7 @@ const HARD_EDGES = [
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
   ["js/car/parts.js", "js/career/ai-dev.js"],       // AI winter develops catalog options through Parts
   ["js/data/teams.js", "js/career/ai-dev.js"],
+  ["js/core/mat4.js", "js/career/ai-dev.js"],         // aliases M4.clamp at eval
   ["js/career/ai-dev.js", "js/career/career.js"],     // rolloverTeams calls CareerAiDev.developWinter
   ["js/career/save-migrate.js", "js/core/store.js"],
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)

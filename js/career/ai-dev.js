@@ -13,6 +13,8 @@
 const CareerAiDev = (function () {
   "use strict";
 
+  const clamp = M4.clamp;
+
   function scoreMods(mods) {
     if (!mods) return 0;
     return (mods.speed || 1) + (mods.accel || 1) + (mods.cornering || 1) + (mods.braking || 1);
@@ -112,8 +114,6 @@ const CareerAiDev = (function () {
       if (bag.owned.indexOf(step.id) < 0) bag.owned.push(step.id);
     }
   }
-
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
   return { developWinter, fittedOf, teamCap, pickStep, scoreMods };
 })();
