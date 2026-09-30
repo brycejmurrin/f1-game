@@ -9,7 +9,7 @@
  * none of them says anything about strategy. This runs full races in the VM
  * (tools/lib/game-vm.cjs) with wear REAL and reports, per car, the plan it
  * gridded with, the compounds it ran, its stop count, and each stop's reason
- * (`plan`, `worn`, `weather`, `caution`) with the wear it was made at.
+ * (`plan`, `worn`, `weather`, `caution`, `cover`, `undercut`) with the wear it was made at.
  *
  * What to read: a `worn` stop is a set the plan ran off its cliff; a stop
  * armed well past w1.00 is a plan that stopped too late; a DSQ is the
@@ -43,13 +43,19 @@ const g = await createGame({ track: TRACK, storage: { tyreWear: "real", difficul
 if (g.apex.seed) g.apex.seed(SEED);
 await g.race(TRACK, "day", WX, { laps: LAPS });
 const G = g.G;
+// The player's car is never driven here: parked on its grid slot it is a
+// wall the field has to find a way round, and one did not (SAI, 2026-09-30:
+// stuck behind it from lap 3, no stop, a one-compound DSQ). Parked well off
+// the road instead (retired, the race ends with the player: state "results").
+const parkPlayer = () => { if (G.player) { G.player.x = 60; G.player.speed = 0; } };
+parkPlayer();
 const ai = G.cars.filter((c) => !c.human);
 const plan0 = new Map(ai.map((c) => [c, c.pitPlan ? { seq: c.pitPlan.seq.slice(), lapsAt: c.pitPlan.lapsAt.slice() } : null]));
 const stops = new Map(ai.map((c) => [c, []])), armed = new Map();
 const DT = 1 / 60, MAXF = Math.round((LAPS * 400 + 600) / DT);   // generous: 400 s a lap
 let f = 0;
 while (f < MAXF && G.state !== "results" && !ai.every((c) => c.finished || c.retired)) {
-  g.step(1, DT); f++;
+  g.step(1, DT); f++; parkPlayer();
   if (f % 6) continue;
   for (const c of ai) {
     const a = !!c.pitArmed;
@@ -61,6 +67,7 @@ const rows = ai.map((c) => ({
   code: c.code, stops: c.pitStops || 0, ran: (c.tyreLog || []).map((e) => e.code).join(""),
   plan: plan0.get(c) ? { seq: plan0.get(c).seq, lapsAt: plan0.get(c).lapsAt } : null,
   finalWear: +G.tyres.spent(c).toFixed(2), finished: !!c.finished, retired: !!c.retired, dsq: c.dsq || "",
+  replans: c.pitReplans || 0,
   calls: stops.get(c),
 }));
 const hist = {}, reasons = {};
@@ -70,15 +77,16 @@ const out = {
   wallS: Math.round((Date.now() - t0) / 1000), stopHistogram: hist, reasons,
   overLifeAtStop: rows.reduce((a, r) => a + r.calls.filter((s) => s.wear >= 1).length, 0),
   finishedOverLife: rows.filter((r) => r.finished && r.finalWear >= 1).length,
-  dsq: rows.filter((r) => r.dsq).length, cars: rows,
+  dsq: rows.filter((r) => r.dsq).length, replans: rows.reduce((a, r) => a + r.replans, 0),
+  strategies: [...new Set(rows.map((r) => r.ran))].length, cars: rows,
 };
 if (argv.includes("--json")) console.log(JSON.stringify(out, null, 2));
 else {
   console.log(`${TRACK} · ${LAPS} laps · ${WX} · severity ${out.severity} · ${out.cars.length} AI cars · ${out.simS} s sim / ${out.wallS} s wall`);
-  console.log(`  stops ${JSON.stringify(hist)}  reasons ${JSON.stringify(reasons)}  armed over 100 %: ${out.overLifeAtStop}  finished over 100 %: ${out.finishedOverLife}  DSQ: ${out.dsq}`);
+  console.log(`  stops ${JSON.stringify(hist)}  reasons ${JSON.stringify(reasons)}  armed over 100 %: ${out.overLifeAtStop}  finished over 100 %: ${out.finishedOverLife}  DSQ: ${out.dsq}  strategies run: ${out.strategies}  AI re-cuts: ${out.replans}`);
   for (const r of rows) {
     const p = r.plan ? r.plan.seq.map((s) => s[0].toUpperCase()).join("") + " @" + r.plan.lapsAt.join(",") : "-";
-    console.log(`  ${r.code.padEnd(4)} plan ${p.padEnd(12)} ran ${r.ran.padEnd(4)} end w${r.finalWear.toFixed(2)} ${r.finished ? "fin" : r.retired ? "RET" : "run"} ${r.dsq} ${r.calls.map((s) => `${s.why}@L${s.lap}/w${s.wear}`).join(" ")}`);
+    console.log(`  ${r.code.padEnd(4)} plan ${p.padEnd(12)} ran ${r.ran.padEnd(4)} end w${r.finalWear.toFixed(2)} ${r.finished ? "fin" : r.retired ? "RET" : "run"} ${r.replans ? "re" + r.replans : "   "} ${r.dsq} ${r.calls.map((s) => `${s.why}@L${s.lap}/w${s.wear}`).join(" ")}`);
   }
 }
 g.close();

@@ -1,0 +1,124 @@
+name: Browser group
+
+# ONE browser group, sharded, and nothing else. Started by hand (or by
+# `node tools/ci/remote-group.mjs <group>`) to get a verdict on a test:* group
+# in minutes instead of the 30-45 a local SwiftShader run takes in a cloud
+# container (no /dev/dri, so no llvmpipe there — playwright.config.js).
+#
+# WHY NOT `ci.yml` WITH `group:`. That dispatch works, but it is the whole CI
+# workflow: on 2026-09-30 a `group: ui` dispatch started 25 jobs (unit slices,
+# geometry sweeps, parts census, VR, driving model, structural guards …) to get
+# the 4 Smoke shards that ran the group — ~20 of the account's 40 concurrent
+# slots spent re-proving what the PR run had already proved. This workflow is
+# those four shards and their setup, the same composite actions, the same env.
+#
+# NOT A GATE. Nothing requires it and nothing reads its timings (spec-timings.yml
+# learns from the Pages train only); a PR's own ci.yml run still decides merge.
+# It is a fast answer to "is this group green on my branch?".
+#
+# Docs: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
+#       https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
+
+on:
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "browser group from package.json (the part after test:), e.g. ui, input, hooks, tiny"
+        required: true
+        type: string
+      shards:
+        description: "how many runners to split the group across"
+        required: false
+        default: "4"
+        type: choice
+        options: ["1", "2", "4", "6", "8"]
+      gl:
+        description: "llvmpipe (Mesa, 8-12x faster) or swiftshader (the local renderer, to reproduce a local-only red)"
+        required: false
+        default: llvmpipe
+        type: choice
+        options: [llvmpipe, swiftshader]
+
+# The group and branch are in the run's name, so the CLI (and a human in the
+# Actions tab) can tell dispatches apart.
+run-name: "browser group ${{ inputs.group }} on ${{ github.ref_name }} (${{ inputs.shards }} shards, ${{ inputs.gl }})"
+
+permissions:
+  contents: read
+
+# A second dispatch of the same group on the same branch supersedes the first.
+concurrency:
+  group: browser-group-${{ github.ref_name }}-${{ inputs.group }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The group must name a real script: an input is text from whoever
+      # dispatched, so it goes through env (never interpolated into the shell)
+      # and is checked against package.json before any runner is spent.
+      - name: Plan shards
+        id: plan
+        env:
+          GROUP: ${{ inputs.group }}
+          SHARDS: ${{ inputs.shards }}
+        run: node tools/ci/remote-group.mjs --plan >> "$GITHUB_OUTPUT"
+
+  group:
+    name: "${{ inputs.group }} (${{ matrix.shard }}/${{ inputs.shards }})"
+    needs: [plan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
+      - name: Mesa llvmpipe + Xvfb
+        if: inputs.gl != 'swiftshader'
+        uses: ./.github/actions/mesa-xvfb
+      # The same env ci.yml's dispatched-group step runs with.
+      - name: Run the group's shard (llvmpipe)
+        if: inputs.gl != 'swiftshader'
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+          APEX_WITH_TWINNED: 1
+          APEX_GL: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
+          GROUP: ${{ inputs.group }}
+          SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
+        run: npm run "test:${GROUP}" -- --timeout=900000 "--shard=${SHARD}"
+      - name: Run the group's shard (SwiftShader)
+        if: inputs.gl == 'swiftshader'
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+          APEX_WITH_TWINNED: 1
+          GROUP: ${{ inputs.group }}
+          SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
+        run: npm run "test:${GROUP}" -- --timeout=900000 "--shard=${SHARD}"
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-artifacts-${{ inputs.group }}-${{ matrix.shard }}
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore

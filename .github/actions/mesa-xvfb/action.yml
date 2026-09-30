@@ -14,9 +14,28 @@ description: >-
 runs:
   using: composite
   steps:
+    # BOUNDED APT (2026-09-30). The two apt calls had no limit of their own, so
+    # a stalled mirror or a held dpkg lock spent the CALLER's whole job budget:
+    # PR #537's selected-specs shard sat 31.6 min in `apt-get update/install`
+    # (job 109932275468) and was cancelled before a single spec ran — a red
+    # verdict with no test behind it. Now each call is capped (`timeout`),
+    # apt retries a failed fetch itself with a per-connection timeout, waits
+    # at most 60 s for the dpkg lock, and the pair gets three attempts; a
+    # mirror that is down for good still fails here, in minutes, named.
+    # Options: apt.conf(5) Acquire::Retries, apt-transport-http(1)
+    # Acquire::http::Timeout (https://manpages.debian.org/bookworm/apt/).
     - shell: bash
       run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
+        APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60"
+        ok=0
+        for attempt in 1 2 3; do
+          if sudo timeout 240 apt-get update -qq $APT_OPTS \
+             && sudo timeout 300 apt-get install -y -qq --no-install-recommends $APT_OPTS mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb; then
+            ok=1; break
+          fi
+          echo "::warning::mesa-xvfb: apt attempt $attempt failed or timed out; retrying"
+          sleep 10
+        done
+        if [ "$ok" != 1 ]; then echo "::error::mesa-xvfb: apt could not install Mesa/Xvfb in 3 bounded attempts (runner mirror down?)"; exit 1; fi
         Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
         echo "DISPLAY=:99" >> "$GITHUB_ENV"

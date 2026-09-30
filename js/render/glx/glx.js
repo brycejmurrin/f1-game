@@ -433,8 +433,9 @@ const GLXBackend = (function () {
   // that program). Reading the status right after linkProgram — the old
   // link() — forced every compile to finish before the next was even issued:
   // 18 programs in strict series, the 1.9 s GLX first-frame cliff the Metal
-  // census measured. Absent the extension (WebKit < 17, software GL) nothing
-  // is deferred and link() behaves exactly as before.
+  // census measured. Absent the extension (Firefox, Safari < 14.1, and some
+  // software GL — MDN BCD api.KHR_parallel_shader_compile: Chrome 76, Safari
+  // 14.1, Firefox none) nothing is deferred and link() behaves exactly as before.
   let _parallelExt = null, _pendingLinks = null;
   function beginLinks() { if (_parallelExt) _pendingLinks = []; }
   function checkLink(prog) {
@@ -649,7 +650,7 @@ const GLXBackend = (function () {
     if (!gl) return false;
     if (_softPresent) ensureSoftDisplay();
 
-    // Parallel shader compile (Chrome, Firefox, Safari 17+): see link().
+    // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
     try { _parallelExt = gl.getExtension("KHR_parallel_shader_compile"); } catch (_) { _parallelExt = null; }
     // GPU timer extension (Chrome/Android; absent on iOS Safari). Acquired once;
     // actual querying is gated behind gpuTimer(true).
@@ -822,7 +823,7 @@ const GLXBackend = (function () {
       IS_MOBILE,
       ctxGone,
       useProg, bindVAO, setBlend, setDepthMask, setCull, setPolyOffset,
-      compile, link, locs,
+      compile, link, locs, beginLinks, resolveLinks,
       toF32, createMesh, litMaterial,
       // ARITY 3 ON PURPOSE, and this is a REVERT, not the original oversight.
       //

@@ -14,7 +14,7 @@ const GLXPost = (function () {
 
   function init(core) {
     const gl = core.gl;
-    const { useProg, bindVAO, setBlend, setDepthMask, link, locs } = core;
+    const { useProg, bindVAO, setBlend, setDepthMask, link, locs, beginLinks, resolveLinks } = core;
     const MOBILE_TIER = core.MOBILE_TIER;
     const IS_MOBILE = core.IS_MOBILE;
     const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS,
@@ -126,6 +126,9 @@ const GLXPost = (function () {
       const ext = gl.getExtension("EXT_color_buffer_float");
       colorType = ext ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
 
+      // One parallel batch, like the core programs (glx.js beginLinks): read
+      // straight after each link, these eight compiled in strict series.
+      if (beginLinks) beginLinks();
       brightProg = link(POST_VS, BRIGHT_FS);
       blurProg = link(POST_VS, BLUR_FS);
       downProg = link(POST_VS, DOWN_FS);
@@ -134,6 +137,11 @@ const GLXPost = (function () {
       ssaoProg = link(POST_VS, SSAO_FS);
       godrayProg = link(POST_VS, GODRAY_FS);
       fxaaProg = link(POST_VS, FXAA_FS);
+      if (resolveLinks) {
+        const bad = resolveLinks(), ok = (p) => (p && !bad.has(p) ? p : null);
+        brightProg = ok(brightProg); blurProg = ok(blurProg); downProg = ok(downProg); upProg = ok(upProg);
+        compProg = ok(compProg); ssaoProg = ok(ssaoProg); godrayProg = ok(godrayProg); fxaaProg = ok(fxaaProg);
+      }
       if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
       if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
       for (const k in _compUf) delete _compUf[k];

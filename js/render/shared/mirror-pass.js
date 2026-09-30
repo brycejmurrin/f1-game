@@ -49,6 +49,11 @@ const MirrorPass = (function () {
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
   const MEASURE_EVERY = 30;           // frames between #hud-mirror layout reads
+  // A RUNG HOLDS ~1.5 s before the governor may move it. On a phone the tier
+  // moves on its own measurements, and every move swapped resolution, draw
+  // distance and cadence at once — scenery popping in and out of the mirror,
+  // reported as flashing. The first rung is taken at once (nothing to hold).
+  const Q_DWELL = 90;
 
   function create(G, deps) {
     Log.info("game", "MirrorPass.create");
@@ -69,7 +74,11 @@ const MirrorPass = (function () {
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
     let _collapsed = false, _chip = null, _chipShown = false, _wired = false;
     let _bx = 0, _bz = -1;   // the mirror's look direction (the player's back), horizontal unit
-    let _q = QUALITY[0];
+    let _q = QUALITY[0], _qi = -1, _qWant = -1, _qHeld = 0;
+    // The frame's CSS box (measure()): the target is sized from THAT, not from
+    // the render buffer, which the governor's dynamic resolution rescales every
+    // few seconds on a phone — each rescale reallocated the mirror target.
+    let _cssW = 0, _cssH = 0;
     // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
     const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null };
 
@@ -126,6 +135,7 @@ const MirrorPass = (function () {
       if (!(er.width > 4 && er.height > 4 && cr.width > 0 && cr.height > 0)) { _rect = null; return; }
       _rect = [(er.left - cr.left) / cr.width, (er.top - cr.top) / cr.height,
         er.width / cr.width, er.height / cr.height];
+      _cssW = er.width; _cssH = er.height;
       side(er);
     }
     // THE RADIO CARD BESIDE THE MIRROR, not under it. Right of the frame is the
@@ -245,8 +255,15 @@ const MirrorPass = (function () {
       // at governor tier 2+, where the frame rate itself is the problem.
       _frame++;
       const tier = PerfGov.tier();
-      _q = QUALITY[tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0];
-      const w = Math.round(_rect[2] * g.width * _q.res), h = Math.round(_rect[3] * g.height * _q.res);
+      const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0;
+      if (qi !== _qWant) { _qWant = qi; _qHeld = 0; }
+      if (qi !== _qi && (_qi < 0 || ++_qHeld >= Q_DWELL)) _qi = qi;
+      _q = QUALITY[_qi];
+      // Device pixels of the frame (DPR capped at 2), independent of the
+      // governor's render scale — a stable target, reallocated only when the
+      // frame itself resizes or the rung changes.
+      const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
+      const w = Math.round(_cssW * dpr * _q.res), h = Math.round(_cssH * dpr * _q.res);
       if (w < 16 || h < 8) return;
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;

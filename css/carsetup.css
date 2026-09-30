@@ -326,8 +326,10 @@
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
   /* 14 tabs in 7×2 grid. Stretch to fill the fixed 28px row; centre the
-     label so short codes (TEAM) and long ones (SUSPENSION) share one axis. */
-  min-width: 0;
+     label so short codes (TEAM) and long ones (SUSPENSION) share one axis.
+     Never narrower than the tap floor: ERS, the shortest label, measured
+     22px wide at 844x390 (layout audit, 2026-09-30). */
+  min-width: var(--tap-min);
   min-height: 0;
   padding: 2px calc(var(--gap) * 0.2);
   justify-content: center;

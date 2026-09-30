@@ -1059,6 +1059,7 @@ const WGX = (function () {
     let frameBindGroup, drawBindGroup, skyBindGroup;
     let skyPipeline, blitPipeline, linearSampler, envCubeSamp;
     const _litPipelines = new Map();   // depthBias constant -> slope -> packed flags -> pipeline
+    const _litPending = new WeakMap();   // leaf map -> flags whose warm is in flight (createRenderPipelineAsync)
     const _litPipelineKeys = [];       // one readable "blend|dbl|noAW|samples|dbC|dbS|decal" per minted variant (litPipelineStats)
     // Size of the variant cache at the first present() — the boundary between
     // "built during boot" and "built while driving".
@@ -1801,7 +1802,7 @@ const WGX = (function () {
     }
     _buildFx();
 
-    function _litPipeline(opts) {
+    function _litPipeline(opts, warm) {
       const blend = !!(opts && opts.alpha !== undefined && opts.alpha < 1);
       const dbl   = !!(opts && opts.doubleSided);
       // Scene alpha is the SSR car-paint tag, written by OPAQUE draws only: ANY
@@ -1849,6 +1850,7 @@ const WGX = (function () {
       if (!byF) { byF = new Map(); byS.set(dbS, byF); }
       let p = byF.get(flags);
       if (p) return p;
+      if (warm && _litPending.has(byF) && _litPending.get(byF).has(flags)) return null;
       const target = {
         format: SCENE_FORMAT,
         writeMask: noAW
@@ -1869,7 +1871,7 @@ const WGX = (function () {
         depthStencil.depthBiasSlopeScale = dbS;
         depthStencil.depthBiasClamp = 0;
       }
-      p = device.createRenderPipeline({
+      const desc = {
         layout: litLayout,
         vertex: { module: litModule, entryPoint: "vs_main", buffers: [VERTEX_POS_LAYOUT, INSTANCE_LAYOUT] },
         fragment: { module: litModule, entryPoint: "fs_main", targets: [target] },
@@ -1888,12 +1890,31 @@ const WGX = (function () {
         primitive: { topology: "triangle-list", cullMode: dbl ? "none" : "back", frontFace: "cw" },
         depthStencil,
         multisample: { count: samples },
-      });
+      };
+      const key = (blend ? 1 : 0) + "|" + (dbl ? 1 : 0) + "|" + (noAW ? 1 : 0) + "|" + samples
+                + "|" + dbC + "|" + dbS + "|" + (decal ? 1 : 0);
+      // THE WARM COMPILES OFF THE MAIN THREAD. createRenderPipelineAsync resolves
+      // once the variant is ready to draw with no further delay (MDN); the sync
+      // call below makes Dawn compile it before returning. A draw that needs the
+      // variant before its promise settles still mints it synchronously, and the
+      // settled one is then dropped: first-use behaviour is unchanged.
+      if (warm && device.createRenderPipelineAsync) {
+        let pend = _litPending.get(byF);
+        if (!pend) { pend = new Set(); _litPending.set(byF, pend); }
+        pend.add(flags);
+        device.createRenderPipelineAsync(desc).then((ap) => {
+          if (_lost || byF.has(flags)) return;
+          byF.set(flags, ap);
+          _litPipelineKeys.push(key);
+        }, () => { /* the lazy path still covers it, and reports a real error there */ })
+          .finally(() => pend.delete(flags));
+        return null;
+      }
+      p = device.createRenderPipeline(desc);
       byF.set(flags, p);
       // Readable variant list for litPipelineStats, built on the MISS path only
       // (nine of these exist for the life of the device).
-      _litPipelineKeys.push((blend ? 1 : 0) + "|" + (dbl ? 1 : 0) + "|" + (noAW ? 1 : 0) + "|" + samples
-                          + "|" + dbC + "|" + dbS + "|" + (decal ? 1 : 0));
+      _litPipelineKeys.push(key);
       return p;
     }
 
@@ -5351,7 +5372,10 @@ const WGX = (function () {
     // first decal, first biased detail draw each landed a mid-race
     // createRenderPipeline hitch. The boot-gate pipelines above stay sync
     // (refusal detection depends on their errors surfacing); anything not in
-    // this list still lazy-compiles exactly as before.
+    // this list still lazy-compiles exactly as before. Each one is requested
+    // through createRenderPipelineAsync where the device has it (Chrome 113+,
+    // Safari 26, MDN BCD), so the warm itself no longer blocks: it was eight
+    // (sixteen with MSAA) synchronous Dawn compiles in one timer task.
     try {
       setTimeout(function () {
         if (_lost || !_runtimeReady) return;
@@ -5367,7 +5391,7 @@ const WGX = (function () {
           for (let c = 0; c < counts.length; c++) {
             _passSamples = counts[c];
             for (let i = 0; i < warm.length; i++) {
-              try { _litPipeline(warm[i]); } catch (_) { /* lazy path still covers it */ }
+              try { _litPipeline(warm[i], true); } catch (_) { /* lazy path still covers it */ }
             }
           }
         } finally { _passSamples = save; }
