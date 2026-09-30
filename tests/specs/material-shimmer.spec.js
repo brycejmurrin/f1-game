@@ -44,7 +44,23 @@ async function roadFrames(page, mix) {
     // Let the camera settle and the texture upload land before sampling.
     await new Promise((r) => setTimeout(r, 600));
 
-    const cv = document.querySelector("canvas");
+    // Read the PRESENTED surface. Headless Chrome hides #game and the backend
+    // blits each frame onto #game-soft by async readback, so drawing #game
+    // samples an uncomposited buffer and every capture came back blank
+    // (remote shimmer group, run 36752762251). On real hardware softPresent()
+    // is false and #game is what the player sees.
+    const soft = typeof GLX !== "undefined" && GLX.softPresent?.();
+    const cv = soft ? document.getElementById("game-soft") : document.getElementById("game");
+    const gen = () => (soft ? GLX.softPresentState?.()?.gen ?? 0 : 0);
+    // Wait for two soft blits after a step: the readback is asynchronous and
+    // newest-frame-wins, so the first one can still carry the pre-step frame.
+    const presented = async () => {
+      if (!soft) return;
+      const g0 = gen(), t0 = performance.now();
+      while (gen() < g0 + 2 && performance.now() - t0 < 10_000) {
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+    };
     const W = 96, H = 48;                       // downsample target
     const off = document.createElement("canvas");
     off.width = W; off.height = H;
@@ -54,6 +70,7 @@ async function roadFrames(page, mix) {
       window.__apex.step(STEP, 1);
       // Two rAFs: one to submit the frame, one to be sure it composited.
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await presented();
       // Crop the lower-middle band (the road) out of the live canvas. Drawing
       // the canvas into a 2D context works even without preserveDrawingBuffer,
       // because drawImage samples the composited surface.
