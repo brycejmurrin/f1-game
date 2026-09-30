@@ -23,12 +23,6 @@
       "since": "2026-09-22",
       "owner": "input-controls / the clickLive helper (docs/notes/AGENT-PROCESS-RESEARCH-2026-09-16.md \u00a71, \u00a72 B2)",
       "why": "8 tests, 18.6 min per selected shard, failed 4 of 5 sampled CI runs on one test (09-16 note B2) \u2014 CI's dominant flake; the clickLive fix it motivated is still open."
-    },
-    {
-      "spec": "tests/specs/steering.spec.js",
-      "since": "2026-09-22",
-      "owner": "tune-physics skill / js/input/steer-tuning.js (racing-line assist and curvature-drift authority)",
-      "why": "4 of the 14 red ci.yml runs on 2026-09-22, across three branches: 'racing-line assist: PULL eases toward the line, PUSH sends it wider' failed 3x in the oversize-steering lane (runs 35769571096, 35765129621, 35762975987) and 'steering has authority to fight the curvature drift' 1x in Smoke on a deploy-branch dispatch (35753682415); each pass needed a retry or none. 13 tests at 480 s cap, its own runner every time it is selected."
     }
   ]
 }
