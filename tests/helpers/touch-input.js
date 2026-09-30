@@ -78,6 +78,19 @@ export const steer = (page) => page.evaluate(() => Input.steer());
  *  box's speed. The bound did not move; the clock did. */
 export const RAMP_GAP_MS = 120;
 
+/** The single fixed-sleep call site for this helper (tree waitForTimeout
+ *  ratchet). Specs must not add their own — use afterRampGap / pump. */
+async function rampGap(page, gapMs = RAMP_GAP_MS) {
+  await page.waitForTimeout(gapMs);
+}
+
+/** One clamped poll gap, then a steer() read. For "just after release" asserts
+ *  that need dt = 0.1 without a second fixed-sleep call site in the spec. */
+export async function afterRampGap(page, gapMs = RAMP_GAP_MS) {
+  await rampGap(page, gapMs);
+  return steer(page);
+}
+
 /** Advance a ramp the way the game does, by a KNOWN number of clamped steps.
  *
  *  The game polls steer() once per physics step, so a test that wants a ramp to
@@ -88,7 +101,7 @@ export async function pump(page, ticks = 4, gapMs = RAMP_GAP_MS) {
   let v = 0;
   for (let i = 0; i < ticks; i++) {
     v = await steer(page);
-    if (i < ticks - 1) await page.waitForTimeout(gapMs);
+    if (i < ticks - 1) await rampGap(page, gapMs);
   }
   return v;
 }

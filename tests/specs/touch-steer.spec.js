@@ -26,7 +26,7 @@
 // The other parts are touch-buttons.spec.js and touch-pedals.spec.js; the
 // shared setup is ../helpers/touch-input.js. Keep each part under 10 tests.
 import { test, expect } from "../helpers/fixtures.js";
-import { useTouchCanvas, touchEvt, steer, pump, RAMP_GAP_MS } from "../helpers/touch-input.js";
+import { useTouchCanvas, touchEvt, steer, pump, afterRampGap } from "../helpers/touch-input.js";
 
 useTouchCanvas(test);
 
@@ -87,13 +87,13 @@ test.describe("touch steering is an anchored drag, not a screen half", () => {
     await touchEvt(page, "touchmove", [{ identifier: 1, clientX: 5000, clientY: 200 }]);
     expect(await steer(page)).toBe(1);
     await touchEvt(page, "touchend", [{ identifier: 1, clientX: 5000, clientY: 200 }]);
-    // One clamped tick (RAMP_GAP_MS → dt = 0.1): KEY_RAMP_OUT=8/s × 0.1 = 0.8
+    // One clamped tick (afterRampGap → dt = 0.1): KEY_RAMP_OUT=8/s × 0.1 = 0.8
     // leaves 0.2. A snap would read 0. Reading steer() with no fixed gap races
     // the CDP round-trip (dt = min(0.1, elapsed)) and encodes the box's speed
     // into the bound — the same failure mode RAMP_GAP_MS was introduced to kill
     // (CI #495 run 36667965511: justAfter 0.2 vs >0.3 on a slow round-trip).
-    await page.waitForTimeout(RAMP_GAP_MS);
-    const justAfter = await steer(page);
+    // Gap lives in touch-input.js so the tree waitForTimeout ratchet stays put.
+    const justAfter = await afterRampGap(page);
     expect(justAfter).toBeCloseTo(0.2, 1);
     expect(await pump(page)).toBe(0);    // KEY_RAMP_OUT = 8/s → home in ~125 ms
   });
