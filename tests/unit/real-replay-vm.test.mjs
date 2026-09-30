@@ -156,9 +156,15 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
     assert.ok(Math.abs(by("STR").prog - (-30 + 45 * 60)) < 1, "parked where the data ended: " + by("STR").prog);
     assert.equal(by("RUS").retired, false);
     // The flag: the winner's data ends at 200 s; a few seconds later the results take the order.
+    // Nobody DROVE it: the followed car (G.player) gets no YOUR RACE card — the
+    // sheet reads RealRace.status().watch, still live while endRace builds it.
+    // (The badge half of that gate is pinned in ui-sheets-audit.test.mjs: here
+    // the followed car reads retired at the flag, so forRace is empty anyway.)
     RR.replay().seek(205);
     g.step(5 * 60 / 8 + 60);
     assert.equal(G.state, "results");
+    const personal = (el) => (el.children || []).some((e) => e.className === "res-personal" && /YOUR RACE/.test((e.children || []).map((x) => x.textContent).join(" ")));
+    assert.equal(personal(G.els.resultsTable), false, "a watched replay draws no YOUR RACE card");
     g.step(1);
     assert.equal(RR.replay().isRunning(), false, "the replay stopped with the director at the results");
     assert.equal(RR.status().armed, false);
