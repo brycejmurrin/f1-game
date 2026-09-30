@@ -691,6 +691,7 @@
         "tests/unit/red-flag-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
@@ -743,6 +744,7 @@
         "tests/unit/red-flag-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
@@ -795,6 +797,7 @@
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/red-flag-pit-vm.test.mjs",
         "tests/unit/session-entry-vm.test.mjs",
+        "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"

@@ -404,6 +404,8 @@ interface GameCtx {
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
   readonly pitCrewDrawn: () => number;
   readonly roadWetness: () => number;
+  /** Continuous track wetness 0..1 (alias of roadWetness; look=drive contract). */
+  readonly trackWetness: () => number;
   readonly recordControls: () => Record<string, unknown>;
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown> };

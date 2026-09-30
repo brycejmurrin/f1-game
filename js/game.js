@@ -946,8 +946,9 @@ function isWetRoad() { return raceWeather === "wet" || raceWeather === "rain"; }
 function isRaining() { return raceWeather === "rain"; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
-function roadWetness() { return TyreModel.wetness(raceWeather, wxArc.arc); }
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, roadWetness()); }
+function trackWetness() { return TyreModel.wetness(raceWeather, wxArc && wxArc.arc); }
+function roadWetness() { return trackWetness(); }   // alias — grip / pits / engineer
+function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, trackWetness()); }
 
 // IncidentSim owns motion during a takeover, but the ordinary line-crossing
 // presentation still belongs here. Core lap/clock/finish state is advanced by
@@ -3655,7 +3656,7 @@ const G = {
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, isErsDeploying, cautionInfo, cautionLevel,
+  announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
@@ -7076,6 +7077,9 @@ function armBackendProbe() {
   }
 }
 function render(dt) {
+  // Look=drive: keep frame.wetness on the physics wetness even when headless
+  // skips the rest of this frame (menu flyby / live race both need it).
+  if (wxArc) wxArc.syncWetness(dt);
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   if (gfx.warming && gfx.warming()) return;
@@ -7535,17 +7539,9 @@ function render(dt) {
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
   frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
-  // Wet-road material (rain): ramp wetness in/out smoothly so the surface
-  // darkens and starts mirroring lamps/sky over ~1s rather than popping.
-  if (LT.wetness >= 0) {
-    // Tuner override: pin the road wetness directly (skips the auto ramp, which
-    // saturates a few seconds after a weather flip — rate 0.8/s below).
-    frame.wetness = LT.wetness;
-  } else {
-    const wetTarget = roadWetness();
-    const cur = frame.wetness || 0;
-    frame.wetness = cur + (wetTarget - cur) * Math.min(1, dt * 0.8);
-  }
+  // frame.wetness: synced at the top of render (and every wxArc.tick) so
+  // headless and on-screen share one continuous trackWetness. LT.wetness ≥ 0
+  // remains the live tuner diagnostic pin only — never a shipped preset.
 
   // Moon: use the value set by applyRaceSettings; pass through for default
   // night tracks that didn't go through the explicit raceTimeOfDay branch.
@@ -7703,7 +7699,7 @@ function render(dt) {
     // and at a 16-24 slot cap 35-39 % of it comes from lamps outside the set
     // (docs/notes/LAMP-POPPING-PLAN-2026-09-24.md, b) — so they pop. Per-chunk
     // lamps, road included, cover them; the governor shed still wins.
-    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.75 ? 0.6 : 0;   // 0.75: dry night presets pin ~0.55 sheen (≤ 8 % pops)
+    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.75 ? 0.6 : 0;   // 0.75: rain/wet only — dry sheen is ssrDryNight, not wetness
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
       : (_pcShed >= 1 ? Math.min(0.3, Math.max(_pcWet, +LT.perChunkLights || 0)) : Math.max(_pcWet, +LT.perChunkLights || 0));
     frame.roadChunkLamps = (frame.perChunkLights > 0 && (LT.roadChunkLamps || _pcWet > 0)) ? 1 : 0;
