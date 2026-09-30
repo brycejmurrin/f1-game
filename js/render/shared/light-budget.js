@@ -1,5 +1,5 @@
-/* Apex 26 — LightBudget: the ONE source for point-light slot counts. Every
-   number that used to be restated per backend lives here: the lit-shader slot
+/* Apex 26 — LightBudget: the ONE source for point-light slot counts. No
+   backend restates them: the lit-shader slot
    count (GLX MAX_LIGHTS / WGX MAX_LIGHTS / TLX default), the phone cap, the
    TLX lite cap (WebGL2 fragment-uniform floor, tsl-lit.js), the per-chunk cap
    (LampChunks) and the tail-light reserve. The bound backend publishes its

@@ -37,13 +37,10 @@
   // converter, so this is ours, with the subnormal and overflow cases handled
   // rather than wrapped.
   //
-  // ROUNDS, half-to-even. It used to truncate — `man >>> 13` and nothing else —
-  // which is always-toward-zero and therefore a DARKENING bias on every value
-  // it touches, not a wash: measured -6.5e-4 mean signed error against ~0 now,
-  // with the worst case twice as large. That is live on both legs for emissive
-  // colour and material ids. It is small, and it is still a bias where there
-  // should be none, which is the kind of thing that is invisible in one frame
-  // and argued about for a week in a look review.
+  // ROUNDS, half-to-even. Truncating (`man >>> 13` alone) is always-toward-zero
+  // and therefore a DARKENING bias on every value it touches: measured -6.5e-4
+  // mean signed error against ~0 rounded, with the worst case twice as large,
+  // live on both legs for emissive colour and material ids.
   const _fb = new Float32Array(1), _ib = new Uint32Array(_fb.buffer);
   function _toHalf(v) {
     _fb[0] = v;
@@ -96,12 +93,11 @@
   // attribute as RGBA.
   // WIDEN rather than give up, on the WebGPU leg.
   //
-  // `fmt24` used to set kind = null for every 1- or 3-wide channel, so normal,
-  // colour and mat all fell back to Float32 there: the WebGL2 leg packed to
-  // ~23 bytes a vertex while the WebGPU leg ran the same geometry at the full
-  // 40. That is the wrong conclusion to draw from the restriction — a 3-wide
-  // channel fits a 4-wide FORMAT perfectly well with a zero in w, and WebGPU
-  // lets a vertex format carry MORE components than the shader input reads.
+  // `fmt24` sets kind = null for every 1- or 3-wide channel; left there, normal,
+  // colour and mat would fall back to Float32 (~23 bytes a vertex on WebGL2 vs
+  // the full 40 on WebGPU). But a 3-wide channel fits a 4-wide FORMAT with a
+  // zero in w, and WebGPU lets a vertex format carry MORE components than the
+  // shader input reads.
   // tsl-lit.js keeps reading attribute("color", "vec3"); no TSL changes.
   //
   // mat is left alone: it is one scalar, float32 is already the narrowest lane
