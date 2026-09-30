@@ -166,7 +166,6 @@ read here — follow the link.
 | [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) | [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) + [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) |
 | [OCCLUSION-PROBE.md](OCCLUSION-PROBE.md) | [notes/OCCLUSION-PROBE.md](notes/OCCLUSION-PROBE.md) |
 | [COCKPIT-DATUMS.md](COCKPIT-DATUMS.md) | [notes/COCKPIT-DATUMS.md](notes/COCKPIT-DATUMS.md) |
-| [PARALLEL-WORK.md](PARALLEL-WORK.md) | [notes/PARALLEL-WORK.md](notes/PARALLEL-WORK.md) |
 
 For day-to-day workflows, see the **skills** in `.claude/skills/`
 (`.claude/skills/README.md`) and the **tools** in `tools/` (`tools/README.md`).

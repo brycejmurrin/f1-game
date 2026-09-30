@@ -11,13 +11,14 @@ zero-dependency philosophy, this time in true 3D.
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-across the **24-round 2026 calendar** recreated as low-poly 3D tracks — plus 28
-retired classics, 52 circuits in all: Bahrain, Monaco,
-Silverstone, Spa, Monza, Suzuka, Singapore, COTA, Interlagos, Las Vegas, the
-brand-new Madrid Madring (with its 24%-banked Monumental curve), Zandvoort in
-its farewell year, Imola, Baku, Jeddah, Albert Park, Shanghai, Miami, Mexico
-City, Montreal, Qatar, Red Bull Ring, Hungaroring, and Abu Dhabi. Night races
-run under floodlights.
+across a **24-round season** of low-poly 3D tracks. The season rounds:
+Bahrain, Monaco, Silverstone, Spa, Monza, Suzuka, Singapore, COTA,
+Interlagos, Las Vegas, Madrid, Jeddah, Albert Park, Shanghai, Miami,
+Montreal, Red Bull Ring, Hungaroring, Baku, Mexico City, Qatar, Abu Dhabi,
+Istanbul, Portimão. Madrid is the brand-new Madring, with its 24%-banked
+Monumental curve. On top of those sit 28 retired classics (Zandvoort and
+Imola among them), 52 circuits in all.
+Night races run under floodlights.
 
 2026-regulation game mechanics:
 
@@ -32,7 +33,7 @@ run under floodlights.
   down for corner exits; the limiter makes you upshift to reach top speed.
   Auto mode shifts for you.
 - Five red lights, lights out. Real points (25-18-15-12-10-8-6-4-2-1).
-- **Season mode**: all 24 rounds in calendar order with persistent
+- **Season mode**: all 24 rounds in order with persistent
   championship standings.
 
 ### Controls

@@ -470,6 +470,56 @@ test("README's retired-classics count matches the circuits flagged classic", () 
     assert.equal(Number(m[1]), classics, `README.md's layout line claims ${m[1]} retired; ${classics} carry classic: true`);
 });
 
+test("README's season round list names exactly the non-classic circuits", () => {
+  // README.md sold a "24-round 2026 calendar" that named Zandvoort and Imola —
+  // both `classic: true`, so neither is in Tracks.SEASON (LIST minus classics) —
+  // and left out Istanbul and Portimão, which are. The list is one sentence,
+  // "The season rounds: A, B, …, Z." — compared as a set, accents folded, to
+  // each non-classic circuit's `name:`.
+  const fold = (n) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+  const season = ls("js/circuits", /\.js$/)
+    .map((f) => read(path.join("js/circuits", f)))
+    .filter((src) => !/\bclassic:\s*true\b/.test(src))
+    .map((src) => fold((src.match(/\bname:\s*"([^"]+)"/) || [])[1] || ""))
+    .sort();
+  assert.ok(season.length > 0 && !season.includes(""), "could not read every non-classic circuit's name");
+  const m = read("README.md").match(/The season rounds:\s*([^.]+)\./);
+  assert.ok(m, "README.md no longer has a 'The season rounds: …' sentence");
+  const listed = m[1].split(",").map(fold).sort();
+  assert.deepEqual(listed, season, "README.md's season round list differs from the circuits without classic: true");
+});
+
+// A BARE `name.js` in a live doc names a file by basename alone, so the path
+// check above never sees it — which is how `debrisworld.js`, `light-presets.js`
+// and `light-store.js` outlived the files they named by weeks. Each backticked
+// bare basename must be the basename of a tracked file. Exempt: lines that say
+// they are history (historical / old / split from / was / former), and
+// docs/plans/, whose proposals name files that do not exist yet by definition
+// (the superpowers exemption above, for the same reason).
+const BARE_JS_ALLOW = new Map([
+  // An npm package (steamworks.js), not a file of ours.
+  ["steamworks.js", /DESKTOP-TEST-PLAN\.md$/],
+]);
+test("live docs name only real files in backticked bare `name.js` tokens", () => {
+  if (!TRACKED) return;                         // outside a checkout there is no index to consult
+  const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
+  const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
+  const bad = [];
+  for (const doc of LIVE_DOCS) {
+    if (doc.startsWith(path.join("docs", "plans") + path.sep)) continue;
+    read(doc).split("\n").forEach((line, i) => {
+      if (HISTORY.test(line)) return;
+      for (const [, name] of line.matchAll(/`([A-Za-z0-9_.-]+\.js)`/g)) {
+        if (bases.has(name)) continue;
+        const allow = BARE_JS_ALLOW.get(name);
+        if (allow && allow.test(doc)) continue;
+        bad.push(`${doc}:${i + 1} ${name}`);
+      }
+    });
+  }
+  assert.deepEqual(bad, [], "a live doc names a .js file no tracked file is called — write its real path, or mark the line historical");
+});
+
 // The three counts below all drifted in the same way and for the same reason:
 // something ELSE changed (a circuit was added, four part categories were added,
 // a knob's default was flipped) and the prose that quoted it did not move.
