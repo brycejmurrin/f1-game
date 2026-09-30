@@ -1,7 +1,6 @@
 ---
 name: lighting-tuner
-description: Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing, the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating lighting knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as a GPU/shader defect is webgl-debug.
-paths: ["js/lighting/**"]
+description: Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing (dusk/dawn/night gate, lamp cap), the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating lighting knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as a GPU/shader defect is webgl-debug; adding or moving floodlight masts is scenery-dress.
 
 ---
 
@@ -48,7 +47,7 @@ Related: **webgl-debug**, **playwright-probe** (`references/cameras.md`).
 
 ## Visual A/B with slider-effect
 
-`slider-effect` classifies all 183 knobs (no browser) and runs live Playwright
+`slider-effect` classifies all 185 knobs (no browser) and runs live Playwright
 A/B captures with pixel-diff outputs. Use it to confirm a knob is wired and to
 see *what region* of the frame it changes.
 

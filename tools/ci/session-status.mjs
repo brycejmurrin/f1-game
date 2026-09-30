@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // session-status.mjs — the session's handoff block, GENERATED from git and the logs, never hand-kept.
-// @doc Prints this branch's handoff block (sessions from `Claude-Session:` trailers, commits vs the deploy branch, dirty/unpushed state, each test log's verdict, a live run) as Markdown for the draft PR body, or `--json`.
+// @doc Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run) as Markdown or `--json`.
+// Full description: Prints this branch's handoff block (sessions from `Claude-Session:` trailers, commits vs the deploy branch, dirty/unpushed state, each test log's verdict, a live run) as Markdown for the draft PR body, or `--json`.
 // @skill check-changes
 //
 // AGENTS.md §The loop: every session pushes its claude/<topic> branch and keeps

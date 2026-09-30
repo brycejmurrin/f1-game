@@ -1,8 +1,9 @@
 # js/circuits/ — circuit DATA only
 
 52 circuit definition files. Engine behaviour lives in `js/track/` — if a fix
-needs code, it goes there; these files carry layout, palette, theme, metadata,
-and the `scenery(api)` callback (reference: `docs/SCENERY-API.md`).
+needs code, it goes there; these files carry layout, palette, theme and metadata;
+the `scenery(api)` callback lives beside them in `js/circuits/scenery/<id>.js`,
+lazy-loaded (reference: `docs/SCENERY-API.md`).
 
 - **Script-tag order == `Tracks.LIST` == picker order.** Adding a circuit is
   the full new-file lockstep (root AGENTS.md) — tag position matters.

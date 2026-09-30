@@ -1,6 +1,6 @@
 ---
 name: race-incidents-control
-description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, VSC, safety car, overtake gating, reliability retirements, or race-control tests are being changed or debugged. AI that merely races badly and causes contact is ai-racecraft, not this skill."
+description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, yellow/red flags, VSC, safety car (never deploys / stuck out), overtake gating, reliability retirements, or race-control tests are being changed or debugged. AI that merely races badly, dives too aggressively or misuses ERS/overtake deploy is ai-racecraft; DNF money/contracts/R&D inside a career save is career-mode."
 ---
 
 ## Overview
@@ -41,13 +41,13 @@ Flags / storage:
 
 | Key | Meaning |
 |---|---|
-| `apex26.debris` | Enables Rapier debris side-world (`"0"` disables) |
-| `apex26.breakBarriers` | Breakable barrier panels |
+| `apex26.debris` | Rapier debris side-world; default OFF, only `"1"` enables (read once at boot) |
+| `apex26.breakBarriers` | Breakable barrier panels (`"0"` disables; likewise the keys below) |
 | `apex26.marbleGrip` | Marble grip scalar |
 | `apex26.r2Airborne` | Airborne/rollover takeover |
 | `apex26.r3Contact` | Heavy car-car contact takeover |
 | `apex26.c1Pileup` | Multi-car pile-up takeover |
-| `apex26.caution` | Race-control cautions |
+| `apex26.caution` | Race-control cautions (default off) |
 
 Hooks:
 
@@ -65,7 +65,7 @@ Commands:
 
 ```sh
 npm run test:tooling-fast
-node --test tests/unit/race-control.test.mjs
+node --test tests/unit/race-control.test.mjs   # 35 tests, <1 s; also incident-gate, reliability (4 tests), debris-*.test.mjs
 node tools/ci/test-bg.mjs physics-core   # race-control.spec rides here; background
 ```
 

@@ -1,0 +1,10 @@
+[
+{"query":"The menu button families in css/components.css and css/menus.css have drifted into several near-duplicate variants. Plan and carry out a consolidation of those component classes onto the shared tokens in css/tokens.css, updating the matching markup in index.html without changing how any screen looks.","expect":"css-play"},
+{"query":"want to tweak the --red accent + spacing tokens n see how the main menu looks b4/after, just quick screenshots, no need for a full audit. can u hot swap the css and show me","expect":"css-play"},
+{"query":"We have a #dlg-pause dialog, a season setup layer and a garage screen that each implement their own overlay backdrop and close button. Every new screen copies another slightly different pile of divs. How should we restructure the layers and DOM so this stops happening?","expect":"css-play"},
+{"query":"Our stylesheets are getting messy across css/hud.css, css/career.css and css/tuner.css. Is it worth adopting BEM or CUBE CSS or ITCSS here, or should we stay with the token system? Look at how the classes are actually used before recommending.","expect":"css-play"},
+{"query":"index.html owns all the static DOM and it's huge. Could we split it per screen, and make the menus respond to viewport height instead of only width in css/responsive.css? Sketch the approach and do the first screen.","expect":"css-play"},
+{"query":"The track detail screen is cramped on a short phone in landscape: the start button is clipped below the fold and the list needs scroll. Fix just that one screen so everything fits and is reachable.","expect":"ui-menu-a11y"},
+{"query":"Check every menu screen at every orientation, UI scale and pointer type, measuring clipping, truncated text and tap-target size, so I know whether my css/components.css change regressed any other layout.","expect":"survey-ui-matrix"},
+{"query":"Find dead selectors and unused classes in css/menus.css and css/overlays.css and delete the ones nothing in index.html or js/ references, since the stylesheets keep growing.","expect":"slim-bloat"}
+]

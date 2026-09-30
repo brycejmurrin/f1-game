@@ -1,6 +1,6 @@
 ---
 name: audio-debug
-description: Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or debugging WebAudio, engine pitch, sfx, sound, music layers, or audio in Apex 26.
+description: Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or debugging WebAudio, engine pitch, sfx, sound, music layers, or audio in Apex 26. Not for game-feel polish that must not change physics (tune-physics), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y).
 ---
 
 # Debug and tune the audio engine
@@ -24,7 +24,7 @@ GameAudio.enabled()
 GameAudio.setEnabled(true)          // master gain → 0.8
 GameAudio.setSfxEnabled(false)      // engine/SFX off; music can stay
 GameAudio.setMusicEnabled(false)    // soundtrack off; engine keeps humming
-GameAudio.debug()                   // samplesReady, usingSamples, engineOn, loop
+GameAudio.debug()                   // contextState, samplesReady, usingSamples, engineOn, loop
 GameAudio.rate()                    // idle-sample playbackRate (0 if synth/off)
 GameAudio.centroidHz()              // spectral centroid of live engine
 ```
@@ -41,5 +41,5 @@ user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
 
 ## Load on demand
 
-- Layer table, in-race `#audioset`, pitch curve, silence diagnosis →
-  [references/diagnose.md](references/diagnose.md).
+- Layer table, in-race `#audioset`, pitch curve, silence diagnosis, music cutting out on pause/hide →
+  [references/diagnose.md](references/diagnose.md) (incl. gear-shift cue silent).

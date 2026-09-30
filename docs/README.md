@@ -16,7 +16,7 @@ drives it.
 | 2 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | **New contributors start here** — boot path, layer map, data flow, where to edit what. Ten-minute read. |
 | 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
 | 4 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
-| 5 | the area doc | One of the seven below. Load it only when the task touches its area. |
+| 5 | the area doc | One of the area docs below. Load it only when the task touches its area. |
 | 6 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
 
 **If you are a person** reading to understand the game: [`../README.md`](../README.md)
@@ -47,7 +47,7 @@ drives it.
 |---|---|
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs vs wrap — which `apex_*` exists, which stay CLI-only, and why the ones that left, left. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
-| [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 183 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
+| [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 185 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
 | [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit); written by `tools/lighting/look-survey-sheet.py`. |
 
@@ -95,7 +95,7 @@ rather than rewriting the record.
 | Doc | Topic | Cited from |
 |---|---|---|
 | [research/PLATFORM-INPUT-NOTES.md](research/PLATFORM-INPUT-NOTES.md) | The platform behaviours that only bite on one device: pointer capture and the four-way release net, the top layer vs `z-index`, `zoom` and `--ui-scale`, `(pointer: coarse)`, Escape vs `<dialog>` close watchers, iOS WebGL context loss. | `js/input/input.js`, `js/ui/modal.js`, 4 specs |
-| [WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) | How to close WGX vs GLX: gap inventory, WebGPU API recipes (MSAA resolve, timestamp-query, texture arrays, mip-gen, god-ray), recommended slice order. §5 holds the WGSL rules a mock device cannot enforce. **Moved with the backends** in the 2026-09-03 spike-out — read it with `spike/backends/README.md`. | `spike/backends/webgpu/*` |
+| [WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) | How to close WGX vs GLX: gap inventory, WebGPU API recipes (MSAA resolve, timestamp-query, texture arrays, mip-gen, god-ray), recommended slice order. §5 holds the WGSL rules a mock device cannot enforce. Left with the backends in the 2026-09-03 spike-out and back with the 2026-09-04 re-attach — see `spike/backends/README.md`. | `js/render/webgpu/wgx.js`, `js/render/webgpu/wgsl-chunks.js` |
 | [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings. | `js/game.js`, `js/input/steer-tuning.js` |
 | [research/AI-CONTACT-RESEARCH-2026-09.md](research/AI-CONTACT-RESEARCH-2026-09.md) | Six-lens web research into AI racecraft and car-to-car contact: GT Sophy's transferable parts, overtake decision rules, field spread from driver error rather than speed, PBD/XPBD contact, where a Frenet formulation breaks and whether the Rapier handback seam is in the right place, and deterministic contact between peers. Carries three source-verified defects (straight-line defence, the contact-normal choice, the non-invertible handback) and an appendix of what was rejected, so it is not re-proposed. NOT a plan of record. | `js/physics/ai-drive.js`, `js/physics/collide.js`, `js/physics/incident-sim.js` |
 | [research/CONTROLS-AUDIT-2026-09.md](research/CONTROLS-AUDIT-2026-09.md) | Whole-surface control audit: what every device and mode ships, measured against four parallel external research passes (mobile touch, Apple platform, gamepad, desktop). Ranked improvements, the negative decisions, and the corrections to its own briefing. | `js/input/input.js`, `js/input/steer-tuning.js`, `js/ui/key-binds.js`, `js/ui/onboard.js` |
@@ -136,7 +136,7 @@ ledger lists.
 |---|---|
 | [archive/ATTIC.md](archive/ATTIC.md) | The attic ledger: one row per record deleted from `docs/` (title, original path, last SHA, one-line summary). |
 | [archive/research/](archive/research/) | Provenance investigations — the 2026-08 audit records, the UI campaign set, the browser-graphics survey, the cleanup sweep, the parallel fleet survey and the 2026-09 code survey (dead code / bugs / perf). |
-| [archive/research/raw/](archive/research/raw/) | The five workflows' verbatim per-agent output. Read when a summary's wording is doing too much work. |
+| [archive/research/raw/](archive/research/raw/) | The six workflows' verbatim per-agent output. Read when a summary's wording is doing too much work. |
 | [archive/superpowers/](archive/superpowers/) | The plans and specs, both batches. 2026-08: apex-tools MCP weeks 1-4, release safety, audit remediation, perf-hunt fixes. 2026-09: livery open gaps, logo-only mark colours, the paint-sheet redesign, spatial upscale across all three backends (and its parentless follow-ups spec), the performance-regression repair, the spine design pass and spine zones bind. All verified shipped against the tree before archiving on 2026-09-16 — but **the spine-zones-bind spec outlived two of its fields**: `ridgeTint` and `airboxTint` shipped, then were retired a day later by `Liveries.migratePaint` (`js/car/liveries.js`), which folds `ridgeTint` into `spineTint` and drops `airboxTint`. Only `saddleTint` is still authorable. |
 | [archive/slider-effect/](archive/slider-effect/) | 20 before/after slider-effect PNG pairs from the lighting classifier. |
 | [archive/manual-probes/](archive/manual-probes/) | Four single-incident diagnostic instruments (banking, throttle-rescue, skid, act) — bugs resolved, kept as reusable probe patterns. |

@@ -6,6 +6,24 @@ starve each other into 120 s timeouts that read exactly like test failures.
 Measured 2026-08-17: the same three smoke specs "failed" in three separate
 loaded runs and passed solo in 8.1 s / 69 s / 25.6 s — zero code delta.
 
+## Step 0 — "it timed out at 45 min": which timeout? (read-only, seconds)
+
+`test-bg.mjs --wait --timeout 45` exiting **124** is the WAITER giving up, not a
+test result: the group is left alive. Read the log, not the exit code:
+
+```sh
+cat /proc/loadavg                                   # >= 3 = the box was/is busy (rule 8)
+node tools/ci/test-bg.mjs --status                  # running / how it ended, elapsed, log path
+ps -eo pid,pcpu,args --sort=-pcpu | head            # who holds the CPU now; ONE busy playwright of yours is expected, a second or a sibling node suite is the load
+grep -aE '^= (run (passed|failed|timedout|interrupted)|bg exit)' artifacts/logs/<group>.log   # no line = still running (or died: --status says)
+grep -aE 'x FAIL|! retry|= FAILURES|= slowest' artifacts/logs/<group>.log | head   # per-test 78.0s-style durations; `while setting up "context"` = load
+```
+
+No `= run` line and `--status` says `running` = wait more (`--wait --timeout`
+again), do not re-run. A `= run failed` with only ~120 s timeouts on a loaded
+box goes to step 1; the load NOW is not the load THEN (compare log timestamps
+with other `artifacts/logs/*.log` mtimes).
+
 ## The decision tree
 
 **1. Was the box busy?** Check the log's failure text and the timeline first.
@@ -39,7 +57,7 @@ assertion tolerance to make a spec pass.
 
 **5. Passes loaded but fails solo?** (The inversion.) One worker serializes
 the whole file onto one machine-state; look for shared-page state leaks and
-order dependence — `docs/TESTING.md` §Field notes has the worked example.
+order dependence — `docs/notes/TESTING-FIELD-NOTES.md` has the worked example.
 
 ## Rules that prevent the class
 

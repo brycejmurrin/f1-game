@@ -10,7 +10,7 @@ UI is sized the way it is stays in
 
 ## The component inventory — what exists, who owns it, what is shared
 
-`css/` holds **507 classes in 54 families**, and until this document there was no
+`css/` holds **559 classes in 58 families**, and until this document there was no
 list of them. That absence has a cost, and it has already been paid: `.res-*` is
 defined in `components.css` *and* `career.css`, which is something I found by
 grepping in the middle of fixing an unrelated cascade-layer bug rather than by
@@ -245,7 +245,7 @@ most-shared class in the project and had no entry at all:
 
 ## Dead classes
 
-None, out of 507 — a class defined in `css/` and referenced from neither
+None, out of 559 — a class defined in `css/` and referenced from neither
 `index.html` nor any `js/` file. The three this section used to name
 (`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
 and the last of them took its whole class family with it — which is why no
@@ -265,7 +265,7 @@ being held to.
 - **Before editing a class, check whether it appears above under "more than one
   file".** If it does, you are editing more than one screen.
 - **Before adding a family**, ask whether an existing one already covers it. The
-  audit grid (`docs/LAYOUT-AUDIT.md`) measures 38 screens; a new family usually
+  audit grid (below; `SCREENS` in `tools/ui/menu-screens.mjs`) measures 48 cells; a new family usually
   means a new one-off, and one-offs are what `.pane-pair` was built to retire.
 - **Regenerate with the same method** the test uses if the numbers here drift:
   `node --test tests/unit/component-inventory.test.mjs` will say so first.
@@ -375,14 +375,14 @@ not tell you the sheet's shape, and the sheet is what the layout keys on.
 
 ### The screens, and how to reach each one
 
-The other half of the matrix. `SCREENS` in `tools/ui/layout-audit.mjs` is the
+The other half of the matrix. `SCREENS` in `tools/ui/menu-screens.mjs` is the
 executable version of this table — **it is the inventory**, so a screen missing
 from it is a screen nobody measures.
 
 The first draft of this grid held twelve entries and reported "130 cells, 0 red",
 which read as full coverage. It was not: the app has far more screen roots than
 that (**24** top-level ones are tabled below; counting the sub-views, `SCREENS`
-in `tools/ui/layout-audit.mjs` now spans 34 cells over 24 distinct roots — that
+in `tools/ui/menu-screens.mjs` now spans 48 cells over 28 distinct roots — that
 inventory, not this prose, is the count that matters), and
 several change shape entirely between states behind one root. Qualifying, the
 livery editor, the standings table, both tuner panels and every career
@@ -403,7 +403,7 @@ found a real WCAG failure in the lighting tuner within a minute.
 | `vsfriend` | `#vsfriend` | `#mb-vs` |
 | `teampicker` | `#teampicker` | garage → TEAM tab → `#cs-team-card` |
 | `racesettings` | `#race-settings` | select → `#sel-go` (NEXT) |
-| `seasonsetup` | `#season-setup` | `#mb-season` → SETUP |
+| `season-setup` | `#season-setup` | `#mb-season` → SETUP |
 | `trackdetail` | `#track-detail` | select → `#sel-map-btn` / `#sel-detail-chip` |
 | `quali` | `#quali` | race settings → QUALIFYING LAP **on** → `#rs-go` |
 | `standings` | `#standings` | in-race → pause → `#pm-standings` |
@@ -430,7 +430,7 @@ lighting tuner's failure was in a state the grid had no entry for.
 | `datatelemetry` | the trace viewer/map/playback — the densest thing in the app |
 | `dataschedule` | a wide table, the case that wants horizontal scroll |
 | `lightingtuner` | `#lighting`, a docked slider panel; `#lt-rail` goes `display: contents` when wide |
-| `cameratuner` | `#camtune`, the same shape for the 13 camera modes |
+| `cameratuner` | `#camtune`, the same shape for the 14 camera modes |
 | `hudmanual` | MANUAL moves the gearbox into the right thumb column and relocates BOOST/OT/AERO — a different control stack, not a restyle |
 
 Also measured, added when the gaps above were closed: `datastandings`,
@@ -438,7 +438,9 @@ Also measured, added when the gaps above were closed: `datastandings`,
 `resultsseason` (the same root carrying a championship table, ten rows taller
 than a Grand Prix classification), `hudtouch` and `hudbuttons` (the two remaining
 steering modes — "touch" hides the gas pedal, "buttons" adds an explicit GAS), and
-`garagewheels`.
+`garagewheels`; later, the Settings pages (`settingscontrols`, `settingsdriving`,
+`settingsdisplay`), `duelpicker`, `loading`, `flybyeditor`, `lightingtunerfly` and
+`photocontrols`.
 
 **`garagewheels` exists to MEASURE a claim rather than assert it.** The line used
 to read "the garage's other ten part tabs share one layout, so one stands for
@@ -488,7 +490,7 @@ Two axes are worth extra care because they *look* like each other:
 **Why container shape needs JavaScript at all:** querying height, `aspect-ratio`
 or `orientation` on a container requires `container-type: size`, which applies
 size containment in both axes — and a size container may not take its size from
-its contents, which every sheet here does. So `sheetshape.js` measures with a
+its contents, which every sheet here does. So `sheet-shape.js` measures with a
 `ResizeObserver` and writes the answer to an attribute. An attribute rather than
 a custom property deliberately: attribute selectors carry specificity, and
 container queries add none (see the trap below).

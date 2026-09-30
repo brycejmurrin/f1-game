@@ -1,0 +1,10 @@
+[
+{"query":"The Data Hub standings tab shows the 2025 championship even though we're in the 2026 season. Trace how js/data/standings.js picks the season for the Jolpica request, check the 60 minute cache age handling, and fix it so a stale cached year gets discarded.","expect":"data-hub"},
+{"query":"data hub telemetry tab is empty again, just says no data. openf1 maybe changed something?? can u figure out why loadTelemetry returns nothing and get it showing laps again","expect":"data-hub"},
+{"query":"After leaving the app open overnight the Live tab still shows yesterday's session and the schedule tab lists a race that already happened as upcoming. Nothing errors in the console. Work out why the cached data never refreshes and repair it.","expect":"data-hub"},
+{"query":"I want the export button in the hub (js/data/export.js) to include the telemetry-compare lap data as well as the standings, and update the data-lifecycle and telemetry-compare specs so they still cover the new columns.","expect":"data-hub"},
+{"query":"Add a fallback so when Jolpica is rate limited or down, the last race results tab falls back to OpenF1 for the classification, and make sure the loader still respects its cache and shows a sensible offline message instead of a blank panel.","expect":"data-hub"},
+{"query":"The Data Hub overlay's tab strip is cramped on a phone in portrait, the standings tab label gets clipped and the close button is hard to tap. Fix the layout and keyboard focus order in the hub dialog.","expect":"ui-menu-a11y"},
+{"query":"While driving I want to read live telemetry from the car, tyre slip, grip and sector timing per frame in a headless lap, so I can compare it against what the rival is doing. Which hooks give me that?","expect":"agent-view"},
+{"query":"The standalone Season screen's calendar and points table show the wrong race order and the sprint weekends are missing their points. Check season-cal.js and the standings table shown in the season setup.","expect":"season-mode"}
+]

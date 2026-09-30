@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# @doc Was this commit gated green? Prints `green`, `red` or `unknown` for a sha: a completed, successful ci.yml or pages.yml run on that exact head_sha.
+# @doc Was this commit gated green? Prints `green`, `red` or `unknown` for a sha from its ci.yml / pages.yml runs.
+# Full description: prints `green`, `red` or `unknown` for a sha: a completed, successful ci.yml or pages.yml run on that
+# exact head_sha.
 # @section runner
 #
 # base-green.sh <sha>

@@ -48,8 +48,9 @@ Key implementation points (`js/input/input.js`):
   fresh snapshot each frame. `Input.poll()` runs at the top of the game loop,
   before the physics step and before the paused gate (so Start can un-pause),
   keeping input to a single frame of latency.
-- **Analog steering passes through raw.** The left stick (axis 0) gets a 0.14
-  dead zone, re-scaled to still reach full lock; the game's own `STEER_EXPO`
+- **Analog steering passes through raw.** The left stick (axis 0) gets a small
+  dead zone (`padDeadzone`, default 0.05, a player knob with a per-pad rest offset
+  and saturation), re-scaled to still reach full lock; the game's own `STEER_EXPO`
   curve and slip model shape it from there, so there's no double-expo.
 - **Idle pad never fights other inputs.** A connected-but-centered controller
   returns 0 steering, so tilt/touch still work; the pad only "wins" steering
@@ -62,7 +63,8 @@ Key implementation points (`js/input/input.js`):
   `navigator.vibrate` calls. Most iOS controllers don't expose an actuator, so
   it silently no-ops there — haptics degrade gracefully.
 
-Standard mapping used:
+Standard mapping used (defaults; rebindable on CONTROLS, which also binds btn 11 look back,
+btn 10 recover and btn 13 radio check):
 
 ```
 axis 0   left-stick X  steer        btn 7 RT / btn 0 A   throttle
@@ -81,8 +83,8 @@ btn 8 View/Back  camera              btn 9 Menu/Start  pause
 - Physics runs as a **fixed 1/60 s step** with a substep cap (`js/game.js`
   `tick()`), so handling is identical whether Safari renders at 30, 60, or
   120 fps and a janky frame can never enlarge the integration step.
-- Web Audio synthesis (no codecs) keeps audio latency low; the context is
-  resumed from the first user gesture, as iOS requires.
+- Web Audio (synthesized SFX plus the baked `assets/music`, `assets/sfx` and
+  `assets/voice` mp3s) is resumed from the first user gesture, as iOS requires.
 
 ## On-device checklist
 

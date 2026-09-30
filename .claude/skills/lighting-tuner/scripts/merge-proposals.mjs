@@ -13,7 +13,7 @@
 // only the ids present are set. The shipped "*" baseline and every other
 // track's profiles stay put. This is the opposite of bake.mjs (full replace),
 // which is the ONLY tool that may take a window.LightPresets snapshot. Does NOT
-// bump cache — parent does that after the last js edit.
+// bump cache — none is needed (deploy stamps hashes; tags stay ?v=dev).
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import vm from "node:vm";

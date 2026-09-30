@@ -1,0 +1,10 @@
+[
+{"query":"The car pushes wide on slow corners at Hungaroring (js/circuits/hungaroring.js). I want to make turn-in sharper without breaking determinism: run a headless step-steer A/B on the front-axle grip constants, compare yaw response before and after, and tell me whether the change helped.","expect":"tune-physics"},
+{"query":"car feels super snappy/twitchy on turn in now?? can u do a quick sweep of ROAD_FOLLOW values and see which one feels less lazy, i dont want to eyeball it","expect":"tune-physics"},
+{"query":"Trail braking feels wrong: when I stay on the brakes into a corner the rear just steps out and I spin, even with assists off. Diagnose where in the grip model that comes from and propose a tweak I can verify.","expect":"tune-physics"},
+{"query":"Hitting the kerbs and walls feels weak. Add punchier feedback on collisions and gear shifts (screen shake, a short hit-stop, some particles) but it must not alter lap times or the physics-characterization results.","expect":"tune-physics"},
+{"query":"Before I merge the tyre grip change, compare the old and new physics settings on a skidpad and tell me whether pace or cornering balance moved, using the player-dyn VM comparison rather than screenshots.","expect":"tune-physics"},
+{"query":"The chase camera lags behind the car in fast corners and the framing drifts. Take a few before/after screenshots at Spa's Eau Rouge and tune the camera smoothing.","expect":"playwright-probe"},
+{"query":"My gamepad steering feels twitchy: the stick dead zone is too small and the car turns in too sharply on light touches. Fix the saturation and axis calibration in the steering input code.","expect":"input-controls"},
+{"query":"AI cars brake too late into turn 1 and understeer off the track on the grip they have; tune their brake targets and preferred lane in the driving code so they stop diving in.","expect":"ai-racecraft"}
+]

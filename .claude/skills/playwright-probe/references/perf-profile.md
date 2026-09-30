@@ -9,6 +9,10 @@ node tools/shot/profile-gameloop.mjs singapore render   # rAF + WebGL draw (~10 
 node tools/shot/profile-gameloop.mjs vegas physics      # __apex.step() loop (default)
 ```
 
+The tool prints a top-22 self-time table itself; `getError/finish/readPixels`
+are split out as "GPU sync" (SwiftShader draining queued GL work, not a JS
+cost) and the JS percentages are normalised without them.
+
 - **`physics`** (default): `__apex.step(1/60, 600)` — uncapped physics, no compositor.
 - **`render`**: `recordVideo`-ticked rAF with throttle on — includes WebGL upload.
 
@@ -38,8 +42,8 @@ Open `scratch/profiles/<track>-<mode>.cpuprofile` in Chrome DevTools →
 ### Interpreting GC spikes on night tracks
 
 The light-upload path was a known GC source but is **fixed**: `js/render/glx/glx.js`
-allocates its per-lamp uniform arrays (pooled as `_luA`/`_luB`/`_luC`/`_luD`)
-**once at module scope** and writes into them each frame, and
+allocates its per-lamp uniform scratch (one interleaved `_luL` Float32Array,
+16 floats per light) **once at module scope** and writes into it each frame, and
 `js/lighting/frame-lights.js`'s per-frame selection buffers (`_tlSel`, `_lightCullBuf`,
 `_lightHeap`, …) are pooled objects reused in place. **Don't blame "per-frame
 `new Float32Array` in light upload" from memory — that folklore predates the

@@ -7,12 +7,12 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 
 | Hook | Returns (verified shape) |
 |---|---|
-| `tracks()` | `Array(40)` of track objects (`.id`, name, etc.) |
+| `tracks()` | `Array` of `{id, name, i}` per `Tracks.LIST` entry |
 | `info()` | `{state, track, n, total, timeTrial, seasonMode}` — `n` nodes, `total` metres |
 | `trackShape(n)` | `Array(n)` normalised centreline pts + curvature `k` |
 | `trackProfile(n)` | `Array(n)` of `{frac, y, k, hw, slope}` — elevation/curvature/width |
 | `trackBounds()` | `{minX,maxX,minZ,maxZ,spanX,spanZ,centerFrac}` |
-| `mapPts()` | `Array(~207)` of `[x,z]` normalised 0..1 (the minimap) |
+| `mapPts()` | `Array` of `[x,z]` normalised 0..1 (the minimap) |
 | `nodeAt(frac)` | `{k, frac, x,y,z, tx,tz, rx,rz}` — world pos + tangent + right vector |
 | `corners()` | `Array` of **curvature-peak** fractions — NOT the official FIA turn count (see below) |
 
@@ -51,10 +51,21 @@ real-world corner name is needed for a caption or a scenery placement, it has to
 come from outside this API (e.g. circuit research/docs) — the game itself does
 not know one.
 
+## No browser: Node-VM route (verified 2026-09-30)
+
+Every hook above except `render`/screens runs in `tools/lib/game-vm.cjs` (~5 s per track, no GPU):
+`const {createGame}=require("./tools/lib/game-vm.cjs"); const g=await createGame({track:"spa"}); const a=g.apex;`
+then `a.info() / a.corners() / a.trackProfile(400) / a.trackInfo({what:"corners"})` as usual (end with `process.exit(0)`;
+write the script under `scratch/`, not `/tmp`). Compare circuits: loop `createGame` per id;
+elevation range = max−min of `trackProfile(n).y`, tightest radius = `1/max|k|`.
+Measured: monza 11 `turns` / 24 peaks / 6.0 m / minR 15 m; spa 20 / 42 / 102 m / 13 m.
+Note `trackInfo().cornerCount` (monza 10, spa 15) can be lower than `info().turns` (11, 20): quote which hook you used.
+`tools/track/verify-track.cjs <id>` (VM) checks the build only; it prints no geometry stats.
+
 ## Load on demand
 
 - Street half-width loop, multi-track sweep, one-off `apex-eval` recipes,
-  visual validate → [references/sweeps.md](debug-tracks-sweeps.md).
+  visual validate → [references/debug-tracks-sweeps.md](debug-tracks-sweeps.md).
 
 ---
 

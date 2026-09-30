@@ -1,0 +1,10 @@
+[
+{"query":"With apex26.gfxBackend set to webgpu, the race scene renders black on Chrome 140 and the console shows a WGSL validation error out of js/render/webgpu/wgsl-post.js. Find the failing shader, fix it, and confirm it compiles under real Dawn before I ship.","expect":"webgpu-debug"},
+{"query":"wgx road is completly white on my mac, like NaN or inf blowout, but same track looks fine on the default renderer. can u figure out whats going on in the wgx path","expect":"webgpu-debug"},
+{"query":"Game froze on a single frame partway through a lap when running the WebGPU backend, and afterwards the log says the device was lost. Nothing recovers and the canvas stays dead instead of dropping back to the WebGL2 renderer. Diagnose why.","expect":"webgpu-debug"},
+{"query":"I edited the shadow pass in js/render/webgpu/wgx-shadow.js and want to be sure the WGSL still validates, including the path where rg11b10ufloat-renderable is unavailable. Run the right validation in this container and report what it finds.","expect":"webgpu-debug"},
+{"query":"I set the backend to webgpu but the HUD looks identical to WebGL2 and I suspect it silently fell back without telling anyone. How can I prove which backend is really running and find why the WGX init bailed out, including MSAA or HDR texture-format rejections?","expect":"webgpu-debug"},
+{"query":"On the WebGL2 GLX backend the canvas goes dark after boot and the console prints GL_INVALID_OPERATION from a uniform-array light upload. Track down the bad call in the GLX renderer and fix the shader uniform handling.","expect":"webgl-debug"},
+{"query":"On the WebGPU renderer the tarmac shows the wrong colour and looks garbled, like the material layers are swapped: the kerbs pick up the grass texture. Check the baked pack MAT layer mapping and matTexMix, then fix it.","expect":"asset-pack"},
+{"query":"Night races look washed out like daytime and the floodlights never switch on, whichever renderer I pick including WebGPU. Work out why the dusk and night lighting gate is not firing and tune the exposure and ambient knobs.","expect":"lighting-tuner"}
+]

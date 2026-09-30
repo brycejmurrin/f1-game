@@ -18,9 +18,9 @@ Do not invent an id — grep `js/car/parts.js`, or point the
 player at `cost`/`desc` ("cheapest recovery-biased option") instead of a name.
 
 `Parts.ersProfile` only sets the 0..1 axes. Battery dynamics
-(`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in `js/game.js`) consume them.
+(`drainFor`/`regenFor`/`otTimeFor` in `js/game.js`) consume them.
 Verify in-race via **agent-view** `references/state.md` / `__apex.physState()` (`ersDeploy`,
-`ersRegen`, `drain`, `regen`, `otTime`, `otCool`). Measured deltas:
+`ersRegen`, `drain`, `regen`, `otTime`). Measured deltas:
 `../../../../docs/CAREER.md` (`harvest` vs `standard` vs `overcharge`).
 
 ## Career ownership is a write/UI gate
@@ -78,7 +78,20 @@ resolution.
    silently (the trap that made an early audit report 100+ dead options).
    A `--spine-side` design is applied on top of the `--livery` it is crossed
    with, so a design can be seen on every paint job, not just the team default.
-7. **Test and ship.** `node tools/ci/test-bg.mjs car` for catalog/physics/visual
+   **There is no "rear wing" category.** Wings live in the `aero` option list;
+   a new rear-wing part is an `aero` row (`cost`, stat multipliers, `visual`
+   with `rearSweep`/`rearTaper`/`beam`/`swan`/`tvane`, `visualTier`) that
+   `Car3D.build` (`js/car/car3d.js`, `car-mesh.js`) reads. Studio shot:
+   `node tools/car/render-car.mjs --team=mclaren --preset=wing` (needs :3456;
+   it has no `--help` — an unknown flag still boots Chromium).
+7. **Node gates before any browser** (no server, ~1 s each, edit-loop safe):
+   `node --test tests/unit/parts-distinct-mesh.test.mjs` (every option must
+   change the hashed mesh — the catalog pin), `parts-ladder.test.mjs` (the row
+   must be worth buying: not dominated on all four stats), `factory-ai-setup`.
+   `parts-visual-distinctness` is `test:sweeps-parts` only (~70 s+).
+   Browser specs: `tests/specs/parts-catalog.spec.js` (12 tabs),
+   `parts-physics.spec.js` (mesh-hash collision).
+8. **Test and ship.** `node tools/ci/test-bg.mjs car` for catalog/physics/visual
    recipes; `node tools/ci/test-bg.mjs modes` when you changed research locks or
    garage ownership UI (there is no `test:career`). Bump via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
    before commit.

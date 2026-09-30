@@ -23,6 +23,9 @@ node tools/track/survey-track.mjs <id> --oblique  # plus bounds-fitted topdown +
 #   survey-track.mjs monaco --oblique 0.1,0.5
 node tools/track/verify-track.cjs <id>            # after every edit
 node .claude/skills/survey-track/ground-profile.mjs <id>   # numbers only
+# survey-track.mjs and ground-profile.mjs BOOT CHROMIUM (a probe, not a test group; ~1 min).
+# No-browser first pass (Node VM, ~4 s each): verify-track.cjs <id>, float-audit.cjs <id>
+# ("clean" = 0 elevated clusters; it checks props, NOT terrain-over-road or water level).
 ```
 
 Hands off: **scenery-dress** (`js/circuits/scenery/<id>.js` `scenery(api)`),
@@ -36,7 +39,12 @@ circuit's pair — def + scenery closure; no browser runs).
 
 1. **`docs/tracks/<id>.md`** — per-circuit brief (all 52): theme, elevation,
    landmarks-by-lap-position. Start here.
-2. Real-place photos: `WebSearch` / image search. Treat heights/distances as
+2. No-browser layout check (corner order / sector lengths / elevation): `js/circuits/<id>.js`
+   `turns` × `path.len` = metres per corner, `sectors` × `path.len` = sector lengths;
+   `tests/data/f1-circuit-reference.geojson` = OSM length; elevation = `js/track/circuit-elevations.js`
+   (64 samples). A wrong LAYOUT → **new-track**. Probe flags are NOT findings until confirmed off lat 0
+   ([loop.md](references/loop.md), "Artefacts" paragraph).
+3. Real-place photos: `WebSearch` / image search. Treat heights/distances as
    best-effort.
 
 ## Short loop

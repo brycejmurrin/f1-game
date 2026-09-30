@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# @doc The base a pull_request checkout must diff against: the test commit's FIRST PARENT (the base tip GitHub actually merged), else the fallback given.
+# @doc The base a pull_request checkout diffs against: the test commit's FIRST PARENT, else the fallback given.
+# Full description: the base a pull_request checkout must diff against: the test commit's FIRST PARENT (the base tip
+# GitHub actually merged), else the fallback given.
 # @section runner
 #
 # `pull_request.base.sha` IS ONE SYNC BEHIND (2026-09-30). On the first PR runs

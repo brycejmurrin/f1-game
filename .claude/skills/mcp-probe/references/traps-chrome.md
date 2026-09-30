@@ -119,8 +119,8 @@ road visible under it, in BOTH the chase cam and a free-cam aimed exactly at
 render position wasn't near the aim point either. `physState()`/`groundY()`
 read correctly the whole time — only the drawn mesh was wrong, which is why
 this reads as "the car is floating," not as an obvious data bug. Fixed by
-also syncing `G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;`
-in `jump()` — verified: same `park(0.10)` now renders the car grounded,
+`jump()` calling `AgentView.syncRenderAnchors(G.player)` (js/agent/agentview.js;
+it sets `rPrevPx`/`rPrevPz` and the other render anchors) — verified: same `park(0.10)` now renders the car grounded,
 correctly oriented, at the exact `physState()` position. If a screenshot ever
 shows the car detached from the road again, checking `rPrevPx` vs `px` is the
 first move, not distrusting the shot.

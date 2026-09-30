@@ -39,7 +39,7 @@ calls `closeSettings()` so every resume path disarms.
 **What:** TT invalidates the lap on the first counted cut, but the fourth cut
 still did `penalty += 5` and announced `+5s TRACK LIMITS PENALTY`.
 
-**Fix:** Gate the ladder on `!isTimeTrial()`.
+**Fix:** Gate the ladder on `!isTimeTrial()` (now `!isTimeTrial() && !isQuali()`).
 
 **Test:** `tests/unit/tt-lap-validity-vm.test.mjs` — fourth cut leaves `penalty` at 0.
 
@@ -140,7 +140,7 @@ catalogue: [SCENERY-API.md](SCENERY-API.md). `scenery(api)` surface frozen at
 ### S1 — `along()` + wrapped helpers double-apply `_sceneryShift`
 **Severity:** high · **Status:** FIXED here · **Confidence:** high
 
-**Where:** `js/track/tracks.js` `transformSceneryApi`; `js/track/core/space.js`
+**Where:** `js/track/scenery/build-props.js` `transformSceneryApi`; `js/track/core/space.js`
 `sceneryNodeToAuthored`
 
 **What:** Wrapper remapped `(s0,s1)` into engine space, then callback helpers
@@ -175,7 +175,7 @@ known species.
 **Severity:** medium (trap) · **Status:** OPEN (documented) · **Confidence:** high
 
 **Where:** `js/track/tracks.js` `buildCenterline`; consumers
-`transformSceneryApi`, dress, `HKSHIFT`, bakedModel path.
+`transformSceneryApi` (build-props.js), dress, `HKSHIFT`, bakedModel path.
 
 **What:** Independent census of racing-forward leftovers with `|shift| > 0.01`:
 **13** circuits (not the earlier “15” prose). Measured on this tree (2026-09-24):
@@ -220,7 +220,7 @@ panels (bahrain/istanbul) and left hungaroring entry lamps floating.
 ### S5 — Coplanar ground slabs vs terrain
 **Severity:** medium · **Status:** FIXED (ship tip + here) · **Confidence:** high
 
-**Where:** `js/track/tracks.js` universal ground / `groundPatch` / water sheet
+**Where:** `js/track/scenery/build-props.js` universal ground / `groundPatch` (`models.js`) / water sheet
 
 **What:** Large ground slabs and patch tops sat on the terrain plane.
 
@@ -244,7 +244,7 @@ whose y-span covers the whole band had no qualifying face.
 ### S7 — Overlapping `waterBand` slabs
 **Severity:** low–medium · **Status:** FIXED here · **Confidence:** high
 
-**Where:** `js/track/tracks.js` `waterEmit`
+**Where:** `js/track/scenery/build-props.js` `waterEmit`
 
 **What:** Adjacent/overlapping bands stacked coplanar quads.
 

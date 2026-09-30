@@ -1,6 +1,7 @@
 "use strict";
 // pack-assets.cjs — the baked asset pack, readable from node.
-// @doc Node loader for assets/pack: `parseModel` (mirror of assets.js `_parseModel`) and `packAssets()`, the `Assets.modelSync` surface bakedModel() reads.
+// @doc Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface).
+// Full description: Node loader for assets/pack: `parseModel` (mirror of assets.js `_parseModel`) and `packAssets()`, the `Assets.modelSync` surface bakedModel() reads.
 // @skill asset-pack
 //
 // tools/lib/track-build-vm.cjs installs `packAssets()` as the VM's `Assets` by

@@ -51,11 +51,11 @@ return { viewport: innerWidth + 'x' + innerHeight, dpr: devicePixelRatio,
   tapRoot: getComputedStyle(document.documentElement).getPropertyValue('--tap').trim(),
   tapBody: getComputedStyle(document.body).getPropertyValue('--tap').trim(),
   uiScale: getComputedStyle(document.documentElement).getPropertyValue('--ui-scale').trim(),
-  build: document.querySelector('script[src*="game.js"]').src.match(/v=(\d+)/)[1] };
+  build: document.querySelector('meta[name="apex-build"]')?.content };
 ```
 
 `tapRoot` and `tapBody` differing IS the calibration — if they match you are
-on a desktop pointer. `build` catches a stale cache.
+on a desktop pointer. `build` is the shell's `apex-build` meta; script tags read `?v=dev`, so hard-reload rather than trust a version match.
 
 ### Tools that are not screenshots
 
@@ -83,7 +83,7 @@ grep -n "DEFS" -A 40 js/ui/layers.js
 grep -n "data-shape\|data-pair" css/*.css js/ui/sheet-shape.js
 ```
 
-Cross-check against `SCREENS` in `tools/ui/layout-audit.mjs`. A root present in
+Cross-check against `SCREENS` in `tools/ui/menu-screens.mjs`. A root present in
 `index.html` and absent from `SCREENS` is a screen nobody measures.
 
 Remember sub-views: `#career` is new-career SETUP *and* the season hub;

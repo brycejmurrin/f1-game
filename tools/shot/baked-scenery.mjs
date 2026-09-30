@@ -6,10 +6,10 @@
  *
  * Framed free-cam shots that wait for Assets.loadModels() before race() so
  * api.bakedModel() placements are actually in the prop mesh. Writes PNGs under
- * artifacts/ (or --out DIR) and prints a JSON manifest.
+ * artifacts/galleries/baked-scenery/ (or --out DIR) and prints a JSON manifest.
  *
  *   node tools/shot/baked-scenery.mjs
- *   node tools/shot/baked-scenery.mjs --out /opt/cursor/artifacts/baked-models
+ *   node tools/shot/baked-scenery.mjs --out artifacts/galleries/my-run
  *
  * Does NOT call snapCam after orbit/view (see mcp-probe / DEBUG-HOOKS).
  */

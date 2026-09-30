@@ -69,10 +69,10 @@ trace direction.
 
 ## Vertex budget — increment, not a ceiling
 
-Shipped circuits run **400k–900k** prop verts (monaco ~493k, zandvoort
-~532k, watkins_glen ~680k, suzuka ~685k). **vegas ~1.8M is the known
-ceiling — do not grow it.** Rule: `verify-track.cjs <id>` before and after;
-keep the edit at or below the existing count unless you can say why.
+Shipped circuits run roughly **340k–850k** prop verts (`verify-track --all`,
+2026-09-29: monaco ~376k, zandvoort ~343k, suzuka ~374k, watkins_glen ~533k,
+miami ~664k; **mexico ~852k is the current ceiling — do not grow it**). Rule:
+`verify-track.cjs <id>` before and after; keep the edit at or below the existing count unless you can say why.
 `every(20)` for sparse features, `every(5)` only for hero sections; jitter
 with `hash()`; double-place at two distances instead of doubling density.
 

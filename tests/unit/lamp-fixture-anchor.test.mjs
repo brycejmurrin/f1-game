@@ -10,7 +10,7 @@
 //      that for its synth fill lights, but the three START-GANTRY DOWNLIGHTS
 //      shipped at glareW 0.3 while being explicitly NOT parented to the scenery
 //      gantry — three glowing orbs 8 m over the start line with nothing holding
-//      them up, on all 40 circuits. Jeddah was far worse: its LED tunnel drew
+//      them up, on every circuit. Jeddah was far worse: its LED tunnel drew
 //      poles but registered no lights, so track.lampPosts was empty and the
 //      whole circuit fell back to the synthetic stride walk — 311 halos, none
 //      of them over a pole.

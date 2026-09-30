@@ -5,7 +5,7 @@ dependencies**; every `devDependency` is test- or tooling-only (Playwright the
 harness, jsQR to verify the QR encoder in tests, espree/eslint-scope for the
 source audits, sharp and typescript for tooling — never shipped). Four vendored
 libraries DO ship, under `vendor/`, each loaded only by the feature that needs
-it: three.js r185.1 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
+it: three.js r186 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
@@ -41,10 +41,10 @@ consult the manifest for the full, current order:
 ```
 js/core/log.js                -> Log        (levelled logging; loads FIRST)
 js/core/mat4.js               -> M4, V3
-js/render/shaders/*      -> GLXChunks, GLXShaders   (pure data, before glx.js)
+js/render/glx/shaders/*  -> GLXChunks, GLXShaders   (pure data, before glx.js)
 js/render/glx/glx.js + glx/* -> GLX        (explicit WebGL2 renderer + fallback passes)
-js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
-                                        TLX backends are DEFERRED — no script
+js/render/gfx.js         -> Gfx        (renderer selection seam; the GLX, WGX
+                                        and TLX backends are DEFERRED — no script
                                         tag, injected at boot for the resolved pick)
 js/data/teams.js          -> Teams      (2026 grid data + TIER_V pace ladder + the MY TEAM seed)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
@@ -355,7 +355,7 @@ _237 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
-| `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the 13 cameras carries its own… |
+| `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the 14 cameras carries its own… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/ reverse) as… |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
@@ -472,7 +472,7 @@ The July 2026 architecture reorg moved every module into a domain directory
 `buildProps` → four scenery modules).
 
 **That 4,700 is a historical measurement, not a current one.** `game.js` grew
-back to its ceiling (8,885 as of 2026-09) — extraction moved code out once and nothing stopped it
+back to its ceiling (9,759 lines at the 2026-09-29 ratchet) — extraction moved code out once and nothing stopped it
 accumulating again until the size ratchet (`tests/data/ratchets.json`, checked by `tools/check/ratchets.mjs`) put a ceiling on
 the file (lowered with each extraction). Treat the number as a record of what
 the reorg achieved, and `wc -l js/game.js` against the current ceiling as the
@@ -574,10 +574,10 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   detection lives in `glx.js`.
 - **`TUNE_DEFS` mirror-comment invariants** in `glx.js`/`gfx.js` — comments that
   must track the registry by hand; replace with a checked mapping.
-- **~~WebGPU lazy-load~~ (done, then SPIKED OUT)** — both backends became
-  DEFERRED (no `<script>` tag, injected by `js/game.js` on the pick), and
-  Phase 2b then moved them to `spike/backends/` outright. `DEFERRED` is `{}`
-  now, so the injection has nothing to fetch and every pick resolves to GLX.
+- **~~WebGPU lazy-load~~ (done; the 2026-09 spike-out was reversed)** — the
+  backends (GLX, WGX, TLX) are DEFERRED (no `<script>` tag, injected by
+  `js/game.js` on the pick). Phase 2b briefly moved WGX/TLX to `spike/backends/`;
+  they are back in `js/render/webgpu/` and `js/render/three/`.
   See `tools/manifest.cjs`'s `DEFERRED` map;
   `tests/unit/load-order.test.mjs` pins the manifest, game.js's loader table and
   `sw.js`'s optional precache seed to each other.
@@ -632,15 +632,14 @@ M4.invertTo(out, m)                     -> out (general 4x4 inverse; identity on
 V3.norm(a)                              -> [x,y,z]
 ```
 
-## js/render/shaders/ — `GLXChunks`, `GLXShaders`
+## js/render/glx/shaders/ — `GLXChunks`, `GLXShaders`
 
 All GLSL sources for the renderer as template-literal strings with no
-interpolation — pure data. `chunks.js` (`GLXChunks`) holds the shared leaves
-(noise/hash, GGX BRDF trio, tonemap/grade) authored once; `lit.js`, `sky.js`,
-`fx.js`, and `post.js` compose them into the program sources
-(LIT/SKY/SHADOW/MARK/DECAL/GLOW, the post chain, SSAO/GODRAY/COMPOSITE/FXAA/
-DEPTH) on the shared `GLXShaders` global. Replaces the old monolithic
-`js/render/glx/shaders/glsl-lit.js`. `glx.js` destructures `GLXShaders` at the top of
+interpolation — pure data. `glsl-chunks.js` (`GLXChunks`) holds the shared leaves
+(noise/hash, GGX BRDF trio, tonemap/grade) authored once; `glsl-lit.js`,
+`glsl-sky.js`, `glsl-fx.js`, and `glsl-post.js` compose them into the program
+sources (LIT/SKY/SHADOW/MARK/DECAL/GLOW, the post chain, SSAO/GODRAY/COMPOSITE/
+FXAA/DEPTH) on the shared `GLXShaders` global. `glx.js` destructures `GLXShaders` at the top of
 its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
 ## js/render/glx/glx.js (+ js/render/glx/) / js/render/gfx.js — renderers
@@ -660,7 +659,7 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 
 | `apex26.gfxBackend` | Backend | Notes |
 |---|---|---|
-| unset / `"three"` | **TLX** | three.js r185.1 + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
+| unset / `"three"` | **TLX** | three.js r186 + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
 | `"webgl2"` | **GLX** | Explicit WebGL2 pick and fallback backend |
 | `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) |
 
@@ -720,7 +719,7 @@ function. The 2026-08 parity pass (recipes in
 `import("three/webgpu")` inside `TLX.create()`. The `import` never touches
 `THREE` at script-eval (three doesn't exist until `create()`), so there is no
 deferred-ordering problem — the handshake IS the existing `await Gfx.create` in
-game.js. Vendored three r185.1 lives OUTSIDE `js/` at top-level
+game.js. Vendored three r186 lives OUTSIDE `js/` at top-level
 `vendor/three-0.186.0/` (the load-order test walks `js/**`; an un-versioned
 transitive `three.core` import would break the uniform-`?v=` rule otherwise);
 an inline `<script type="importmap">` in `index.html` maps the `three`/`three/*`
@@ -754,7 +753,7 @@ context object so the public `GLX` surface is unchanged. WGX is selected
 through the active Gfx seam only when `apex26.gfxBackend=webgpu` opts in and
 WebGPU initializes successfully; otherwise game.js uses GLX. One standard lit
 shader handles everything except the sky on the GLX path. Shader source
-strings live in `js/render/shaders/` (globals `GLXChunks`/`GLXShaders`).
+strings live in `js/render/glx/shaders/` (globals `GLXChunks`/`GLXShaders`).
 
 ```
 GLX.init(canvasEl) -> boolean         // false if no WebGL2
@@ -817,9 +816,9 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
                   drivers:[ {name:"George Russell", code:"RUS", num:63},
                             {name:"Kimi Antonelli", code:"ANT", num:12} ] }, ... ]
 // 11 teams in 2026 spec: Mercedes(t0), Ferrari(t1), McLaren(t1, Norris num:1),
-// Red Bull(t2, Verstappen num:33), Alpine(t3), Racing Bulls(t3), Haas(t3),
+// Red Bull(t2, Verstappen num:3), Alpine(t3), Racing Bulls(t3), Haas(t3),
 // Williams(t3), Audi(t4), Aston Martin(t4), Cadillac(t4, Perez 11 / Bottas 77)
-Teams.TIER_V -> [1.0, 0.988, 0.973, 0.958, 0.942]   // ground-speed scale per tier
+Teams.TIER_V -> [0.9695, 0.9674, 0.9648, 0.9622, 0.9594]   // ground-speed scale per tier
 Teams.DEFAULT_CUSTOM -> the MY TEAM seed record (id "custom", tier 2)
 Teams.POINTS  -> [25,18,15,12,10,8,6,4,2,1]   // top 10, no fastest-lap point
 ```
@@ -847,7 +846,7 @@ anything PER-CIRCUIT is a key of the def (below), never an id-keyed table here.
 
 ## js/track/ — the rest of the engine
 
-One concern per file, all loaded before `tracks.js`:
+One concern per file, all loaded before `tracks.js`, under `js/track/core/` (`pit`, `spline`, `mesh`, `space`, `surface`, plus `line` and `hidden-faces`) and `js/track/scenery/` (the rest; `maps.js` is `js/ui/track-maps.js`):
 
 | File | Global | Owns |
 |---|---|---|
@@ -860,8 +859,8 @@ One concern per file, all loaded before `tracks.js`:
 | `models.js` | `TrackModels` | composite prop models shared across circuits |
 | `themes.js` | `SceneryThemes` | theme tables for the city generator |
 | `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
-| `maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — was `trackmaps.js` |
-| `scenery-nature.js` / `scenery-city.js` / `scenery-structures.js` / `scenery-identity.js` | `Scenery*` | the buildProps split (below) |
+| `js/ui/track-maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine |
+| `nature.js` / `city.js` / `structures.js` / `identity.js` | `Scenery*` | the buildProps split (below) |
 | `scenery/build-props.js` | `TrackBuildProps` | `buildProps` orchestration (guards nested pending a later peel); `Tracks.build` calls `TrackBuildProps.build` |
 | `scenery/pits.js` | `SceneryPits` | the pit complex's 3D furniture, last in `buildProps` and every position `track.pit`'s: the signalling platform, wall and barrier swept along the lane, the entry boards and exit lights, and the garages — `GarageScene.buildStatic` (the setup screen's own bay) placed once per team with `TrackGeom.addMesh` under a per-bay roof, hospitality storey and race control. Emits with the RAW emitters; every other prop is kept out of the complex by `onRoadHit` / `onTrack`, and a circuit's superseded pit block is recorded as such rather than as a required failure |
 
@@ -889,7 +888,7 @@ reads every one of them off the BUILT def (`tests/unit/circuit-def-fields.test.m
 pins that they survive the copy).
 The bespoke `scenery(api)` closure lives in `js/circuits/scenery/<id>.js`
 (registered on `window.TrackScenery[id]`, no `<script>` tag: `game.js` fetches
-the one it is about to build, ~27 KB each, so a session does not parse all 40). Loaded *before* `js/track/tracks.js`, in the order their
+the one it is about to build, ~27 KB each, so a session does not parse all 52). Loaded *before* `js/track/tracks.js`, in the order their
 `<script>` tags appear in `index.html` (this is **not** the real-world F1
 calendar order). **Tag order == `Tracks.LIST` order == picker/season order.**
 
@@ -1199,8 +1198,8 @@ directory). The generated module index at the top of this file and
 | `js/ui/quali-sheet.js` | `QualiSheet` | the QUALIFYING sheet (`#quali`): `build(rows)` / `open(rows)` / `close()` over `quali.rows()` — pure DOM assembly of the model's classification (podium classes, the DRIVEN tag on a rival's real lap, the P-title). No timing, no ordering, no persist |
 | `js/race/reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
 | `js/perf/governor.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
-| `js/camera/vantage.js` | `GameCams` | the 13 player camera modes + the `__apex.view` debug free-cam framing |
-| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 13-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
+| `js/camera/vantage.js` | `GameCams` | the 14 player camera modes + the `__apex.view` debug free-cam framing |
+| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 14-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
 | `js/ui/hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
 | `js/ui/results-sheet.js` | `GameResults` | results + season-end screens, penalties, points |
 | `js/agent/apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
@@ -1215,7 +1214,7 @@ directory). The generated module index at the top of this file and
 | `js/physics/aero-zones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `inAeroZone(c)`/`aeroDfMult()` stay in game.js because they read car state |
 | `js/fx/skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `js/ui/sheet-shape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
-| `js/ui/modal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 19 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheet-shape.js` |
+| `js/ui/modal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 18 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheet-shape.js` |
 | `js/ui/aria-state.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 The table lists modules whose contracts need prose; every other extracted file
@@ -1268,18 +1267,18 @@ default, tier order), five red lights (1 s apart) then out. Race =
 indicator, gaps, minimap canvas 2D. Penalty: a repeating ladder — three
 warnings, +5 s on the 4th cut (announced in-race), then the warning count
 resets; `cuts` stays the lifetime total for the career `clean` objective. Points per Teams.POINTS; SEASON mode = Tracks.SEASON (the 24
-non-`classic` circuits; the 16 retired ones are playable but never a round)
+non-`classic` circuits; the 28 retired ones are playable but never a round)
 in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.
 
-Camera: 13 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
+Camera: 14 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
 `GameCams`) cycled with the CAM button / C key (persisted) — CHASE (close,
 behind+above), FAR (pulled back/up), DRIFT (swings outside on a slide),
 COCKPIT (onboard eye, player car hidden), HOOD (nose cam), OVERHEAD (top-down
 drone), HELI (broadcast heli), REVERSE (mounted ahead looking back), TV SIDE
 (trackside panning), CINEMATIC (slow orbit), LOW (surface skimmer), T-CAM
-(roll-hoop broadcast), REAR CAM (tail-mounted looking back). Chase modes
+(roll-hoop broadcast), REAR CAM (tail-mounted looking back), VISOR (the cockpit eye further forward, no wheel). Chase modes
 anchor a fixed arc-length behind the car so they never lag at speed; onboard
 modes ride ON the car with very high damping. fov widens with speed; a debug
 free camera (`__apex.view`) can override all of it.
@@ -1298,11 +1297,11 @@ Per-circuit scenery design briefs live in [docs/tracks/](tracks/).
 screen, pause menu, data hub root, touch buttons, help modal. Script tags must
 match `tools/manifest.cjs` (asserted by `tests/unit/load-order.test.mjs`).
 `css/*.css` = layout/HUD/menus (F1 style: black `#0a0a0f`, red `#e10600`
-accents, bold italic headings); `css/data.css` = data hub only. Cache-bust
-every script/style URL with `?v=<sha256>`, while a separate monotonic shell generation
-(check `index.html` for the current value). `version.json` `{ "build": N }`
-mirrors the same `N`; the shell version guard uses it to force-refresh a stale
-installed PWA.
+accents, bold italic headings); `css/data.css` = data hub only. The committed
+shell reads `?v=dev` on every script/style URL; `pages.yml` rewrites them to
+content hashes while staging and stamps a monotonic shell generation.
+`version.json` `{ "build": N }` carries that `N`; the shell version guard uses it
+to force-refresh a stale installed PWA.
 
 ## Deploy
 
@@ -1364,14 +1363,14 @@ would keep GLX’s dead closure).
 
 | Backend | Role | Entry | Shaders |
 |---|---|---|---|
-| **GLX** | Explicit/fallback always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
-| **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `spike/backends/webgpu/wgsl-{chunks,post,fx}.js` |
+| **GLX** | Explicit/fallback WebGL2 (DEFERRED like the others) | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/glx/shaders/` |
+| **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
 | **TLX** | Default Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.186.0/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
 `js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
 `tools/manifest.cjs` `DEFERRED`, mirrored into `js/roster.js` by `tools/gen/gen-shell.mjs`; no `<script>` tags for
-WGX/TLX.
+GLX/WGX/TLX.
 
 ### Frame pipeline (all three)
 

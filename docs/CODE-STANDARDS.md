@@ -162,7 +162,7 @@ Rules:
   copy (`shared-math.test.mjs`).
 - A helper lives at the narrowest scope that reaches every caller: inside the
   function, then the module, then the shared home. Copy-out of a constant
-  from another module is a defect (`ARCHITECTURE.md` §Reorg leftovers).
+  from another module is a defect (`ARCHITECTURE.md` §Reorg, "Check for leftovers").
 - A lookup table beats an `if` ladder over the same key.
 - Consolidate near-identical functions with one parameter that differs, unless
   the differing parameter would be a boolean flag — then keep two thin

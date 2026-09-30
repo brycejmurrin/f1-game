@@ -413,8 +413,8 @@ const USAGE = `usage:
                                                 (single-number knobs) -> strip + metrics
   ab-lighting.mjs try <id> "<replacement>"      render one custom replacement vs current
   ab-lighting.mjs apply <id> [value|"<repl>"]   WRITE the chosen value into the source
-                                                file, keep this catalog in sync, and
-                                                bump the index.html cache version`;
+                                                file and keep this catalog in sync
+                                                (no cache bump: the shell reads ?v=dev)`;
 
 async function main() {
   const [cmd = "list", ...rest] = process.argv.slice(2);
@@ -468,21 +468,14 @@ async function main() {
     seg = seg.replace("\u0001AB_APPLY\u0001", JSON.stringify(replacement));
     writeFileSync(selfPath, self.slice(0, iStart) + seg + self.slice(iEnd));
 
-    // 3. Cache-bust: a js/ file changed, so browsers must refetch.
-    const idxPath = `${ROOT}/index.html`;
-    let idx = readFileSync(idxPath, "utf8");
-    const ver = Math.max(...[...idx.matchAll(/\?v=(\d+)/g)].map((m) => +m[1]));
-    idx = idx.replace(/\?v=\d+/g, `?v=${ver + 1}`);
-    writeFileSync(idxPath, idx);
-    // version.json must track the SAME N — the PWA shell-version guard reads it
-    // (index.html itself carries no ?v=), so bumping one without the other
-    // leaves an installed shell stale. See the bump-cache contract.
-    writeFileSync(`${ROOT}/version.json`, JSON.stringify({ build: ver + 1 }) + "\n");
+    // 3. No cache bump: the committed shell reads `?v=dev` on every tag and
+    //    pages.yml stamps content hashes while staging (AGENTS.md §Critical
+    //    conventions), so a js/ edit needs nothing here.
 
     console.log(`applied ${knob.id}:`);
     console.log(`  ${knob.file}:  ${knob.find}`);
     console.log(`  ->             ${replacement}`);
-    console.log(`  catalog self-synced (find<->b swapped); index.html cache ?v=${ver} -> ?v=${ver + 1}`);
+    console.log("  catalog self-synced (find<->b swapped)");
     console.log(`  next: re-render to confirm (run ${knob.id}), then npm run test:gfx (lighting-ab) before committing`);
     return;
   }

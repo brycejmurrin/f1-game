@@ -32,8 +32,9 @@ Load from the SKILL.md index when the task needs this detail.
    - `lobbySdp().remoteTypes` answers what the peer actually received.
    - If remote SDP has no `relay`, inspect SDP packing/truncation and make sure
      ICE prefetch completed before `RTCPeerConnection` construction.
-   - **Relay candidates arrive last** — if the invite/answer string is truncated,
-     relay entries are the ones dropped. Symptom: desktop host gathers fine,
+   - **Relay candidates arrive last** — historically the invite/answer cap dropped
+     them (`sdp.js` now round-robins by kind, so >=1 relay survives; still check
+     `remoteTypes` before blaming ICE). Symptom: desktop host gathers fine,
      mobile guest never finishes ICE (`checking`/`connecting` forever). Probe ICE
      on the **stuck peer** (usually the guest), not only the host.
 
@@ -86,6 +87,18 @@ Load from the SKILL.md index when the task needs this detail.
    - Run `test:net` in the background through `tools/ci/test-bg.mjs`.
    - Use real RTC scripts only for browser/ICE behavior that loopback cannot
      exercise.
+
+## "Build mismatch" though both are on the live build
+
+Not an encoding bug: `b` rides inside the invite/answer payload (`handshake.js` `createInvite`/`acceptInvite` -> `checkBuild(await localBuild(), payload.b)`), and the `#vs=` link only carries the code (`inviteUrl`/`inviteFromUrl`; a corrupt link is `corrupt_code`/`bad_code`, never `build_mismatch`). So one tab's `<meta name="apex-build">` is stale: an installed PWA / service-worker-cached shell, or a tab left open across a deploy. Compare `document.querySelector('meta[name=apex-build]').content` on BOTH devices with the live `index.html` (deploy-research; `res.mine`/`res.theirs` hold the numbers but the lobby shows only `res.message`, and `Log` prints just `handshake <action> fail build_mismatch`). `theirs > mine` = THIS device is stale. Also `build_unknown` = no meta and `version.json` fetch failed (offline phone). The link opened from Camera lands in Safari, not the installed app, so a mismatch there means Safari's cached shell. Offline pins: `node --test tests/unit/net-transport.test.mjs` (checkBuild/localBuild/inviteFromUrl/withoutInviteUrl), `lobby-codes.test.mjs` (codeFrom on pasted links), `net-qr.test.mjs`; the shell guard/stamp side is `service-worker.test.mjs` and `deploy-stamp.test.mjs`. Fixing means getting the stale device onto the current shell, never relaxing `checkBuild`. Record: both metas, which side is older, whether installed app or Safari tab.
+
+## Rival never moves (connected, remote car frozen)
+
+Trace the path in order, stop at the first broken link:
+1. `__apex.net()` — `active`, `role`, `remotes[]` (one per rival, keyed `wire`/`driverId`), `buffered` = first remote's interpolation buffer (`remotes[i].buffered` per rival), `net` = session stats (clock sync). `remotes: []` = no grid slot bound (`slotFallback`), see `netplay.js` `status()`.
+2. `buffered` 0 while the session is alive = packets held before clock sync (session `synced()` false; see the `autoPong` comment in `apex.js` `netLoopback`) or dropped by wire id mismatch; >0 but car still = interpolation/pose (`snapshot.js`, `netplay.js`), not transport.
+3. Game side: `netPlay.owns(c)` must be true for the rival so `updateCar` early-outs (`js/game.js`, grep `netPlay.owns(c)`).
+Offline (no browser), single files: `node --test tests/unit/net-session.test.mjs` (sync/routing), `net-snapshot.test.mjs` (interp), `net-authority.test.mjs` (who owns which car). Green = fault is browser/ICE side, go to step 6 above. The whole `npm run test:net-unit` (17 files) is the pre-browser gate (step 8), not needed to localise this.
 
 ## Three-player (star topology)
 

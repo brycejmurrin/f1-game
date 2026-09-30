@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, when editing js/render/shared/assets.js or tools/gen/assets.mjs, or when tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac look. A black screen or NaN-white surface with no material involved is webgl-debug / webgpu-debug.
+description: Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, when editing js/render/shared/assets.js or tools/gen/assets.mjs, or when tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac A/B (sheen/exposure with no pack is lighting-tuner; liveries garage-parts-livery). A black screen or NaN-white surface with no material involved is webgl-debug / webgpu-debug.
 ---
 
 # Baked asset pack
@@ -35,9 +35,9 @@ device/feature miss, not "WGX has no pack."
 | Command / hook | Role |
 |---|---|
 | `node tools/gen/assets.mjs bake-synthetic` | Regenerate pack, no network |
-| `node tools/gen/assets.mjs verify` | Licence allow-list, md5, 8 MB budget |
-| `__apex.assets()` | `{ supported, pack, uploaded, tier, layers, error, … }` |
-| `__apex.matTex(v?)` | Blend 0..1; same as `lightTune({ matTexMix })` |
+| `node tools/gen/assets.mjs verify` | Licence allow-list, md5, 8 MB budget; read-only, prints `verify: OK` |
+| `__apex.assets()` (browser-only) | `{ supported, pack, uploaded, tier, layers, error, … }` |
+| `__apex.matTex(v?)` (browser-only) | Blend 0..1; same as `lightTune({ matTexMix })` |
 
 ```sh
 npm run test:tooling-fast
@@ -48,5 +48,5 @@ Related: [shell/cache](../check-changes/references/bump.md), **webgl-debug**, **
 
 ## Load on demand
 
-- MAT 17-slot lockstep, bake/A/B, mistakes →
+- MAT 17-slot lockstep, bake/A/B, one-backend-only garble trace, mistakes →
   [references/workflow.md](references/workflow.md).

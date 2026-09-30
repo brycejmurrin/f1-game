@@ -71,7 +71,7 @@ auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
-| **apex-tools** | `apex_*` | Pin safe flags on ten committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
+| **apex-tools** | `apex_*` | Pin safe flags on eleven committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `npx -y @playwright/mcp@0.0.79` |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 
@@ -205,7 +205,7 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 |---|---|---|
 | `test-bg.mjs` start / `--wait` / `--stop` | Minutes of Playwright; foreground-illegal | CLI `test-bg.mjs`; skill **check-changes** |
 | `verify-change.mjs` without `--fast` | Starts browser groups | `apex_verify_change_fast` |
-| `node tools/ci/bump-cache.mjs --apply` --at N --root _site` | Deploy-only: hashes a STAGED shell (pages.yml); the repo carries `?v=dev` and `--apply` refuses without `--root` | `check-changes/references/bump.md` |
+| `node tools/ci/bump-cache.mjs --apply --at N --root _site` | Deploy-only: hashes a STAGED shell (pages.yml); the repo carries `?v=dev` and `--apply` refuses without `--root` | `check-changes/references/bump.md` |
 | `assets.mjs bake*` | Author-time writer | skill **asset-pack** |
 | `rotate-markings.cjs --write` | Mutates circuit markings | CLI after `--check` review |
 | `graph-parity.cjs` without `BASE=` | Vacuous pass on a clean tree | `apex_graph_parity` with `base` |

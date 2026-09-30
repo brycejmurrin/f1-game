@@ -2,7 +2,7 @@
 name: survey-ui-matrix
 context: fork
 agent: general-purpose
-description: Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device.
+description: Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play).
 ---
 
 # Surveying the whole UI across the whole matrix
@@ -30,8 +30,10 @@ A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
 viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
 
 ```sh
+# BROWSER-FREE (safe anywhere; exits before any launch): --help, --list, --report
 node tools/ui/layout-audit.mjs --help
-node tools/ui/layout-audit.mjs --list
+node tools/ui/layout-audit.mjs --list            # 48 screens x 11 viewports (2026-09-30); the enumeration step
+# BROWSER-ONLY (launch Chromium: check /proc/loadavg < 3, no Playwright run live):
 node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
 node tools/ui/layout-audit.mjs --screen=settings # one cell
@@ -45,6 +47,26 @@ node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /
 CSS survey (`tools/mcp/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture.
+
+Flags (header of `layout-audit.mjs`): `--screens=a,b` / `--viewports=ios-*`
+(wildcard = prefix), `--scale=100,130` (40-200), `--circuits=`, `--shots`, `--dom`,
+`--jobs=N`, `--gallery`, `--screen=ID` + `--viewport=NAME`, `--force`, `--report`
+(summarize the last gallery, no browser), `--out=DIR`.
+
+Order: 1. `--list` and diff against `index.html` dialogs (browser-free, setup.md
+§Enumerate). 2. Measure/capture (browser-only). 3. Stop when every cell of
+screens x viewports x scales you scoped has a row or a "clean" mark; the verdict
+is the defect table sorted by failure mode (probes.md §6), not a pass count.
+
+**Proving a CSS change regressed no other shape** (no diff form exists; `--report`
+only counts skipped gallery cells). Before editing: `cp artifacts/layout-audit/audit.json
+artifacts/layout-audit/audit.before.json` (a run MERGES into audit.json by screen|viewport, so
+the baseline is gone once you re-run). After: re-run the same `--screens/--viewports/--scale`
+scope, compare rows by hand or `jq`. Pass rule: the geometry run always exits 0 - read its
+`N cells, B with something to look at, S skipped` line; pass = no cell went clean -> bad
+(clipped/offscreen/docOverflowX/tinyTaps/underHardware/starved); skips are not passes. Add
+`fit-audit.mjs --scale=` for type/spacing floors (no exit code either), and `test:baseline`
+(6 pixel PNGs) for identity. Record baseline path, scope, bad-count before/after.
 
 ## Load on demand
 

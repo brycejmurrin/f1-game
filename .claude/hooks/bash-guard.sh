@@ -1,5 +1,6 @@
 #!/bin/bash
-# PreToolUse guard for Bash. Two AGENTS.md rules made deterministic:
+# PreToolUse guard for Bash. AGENTS.md rules made deterministic (§Verification
+# 3, 6/7 and 10 below):
 #
 #  §Verification 3 — `git commit` runs `npm run test:guards` first (~5 s since
 #    the slider-doc check stopped rebuilding a regex per slider; 16 s before
@@ -11,6 +12,15 @@
 #    never by PID; `pkill -f` / `killall` against chrome, node or playwright
 #    matches your own shell and orphans browsers. Kill orphan Chrome by a
 #    listed PID (`ps -eo pid,comm | awk '$2=="chrome"{print $1}'`) instead.
+#    Also blocked: `pgrep -f … | xargs kill` / `kill $(pgrep -f …)`, and a bare
+#    `kill <pid>` whose pid is a test-bg supervisor or runner.
+#  §Verification 10 — a SUBAGENT (hook input carries agent_id / agent_type) never
+#    starts a browser run: test-bg (except --status/--tail), test-solo,
+#    run-playwright, `playwright test`, `npm test`, verify-change without
+#    --fast/--plan, the chrome daemon, `npm run test:<browser group>`.
+#  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
+#    .claude/agents; never a generated doc) runs only docs-integrity — no
+#    ratchet raise, no test:guards.
 #
 # Exit 2 blocks with the reason on stderr; exit 0 lets the normal permission
 # flow decide.

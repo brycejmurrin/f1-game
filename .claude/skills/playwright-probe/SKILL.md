@@ -2,7 +2,7 @@
 name: playwright-probe
 context: fork
 agent: general-purpose
-description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after frames, flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes (profile-gameloop), the CAR STUDIO (livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated shots via carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, camState/viewState, framing a corner, camera lag).
+description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after frames, flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes (profile-gameloop), the CAR STUDIO (livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated shots via carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, camState/viewState, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit screenshots (survey-ui-matrix) or a live canvas (mcp-probe).
 ---
 
 # Headless Playwright probing (parallel)
@@ -69,8 +69,19 @@ node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JP
 
 ```sh
 node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png] \
-  [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud]
+  [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud] \
+  [--team <id>] [--wait <s>]      # BROWSER (boots Chromium; no --help)
 ```
+
+`cam` = `park` (the in-game **chase** rig: snapCam, no free-cam) | `eye` | `orbit`
+(default) | `cinematic` | `trackside`. Default out
+`scratch/captures/playwright-probe/<track>-<pct>-<cam>.png`; it warns on
+`<5KB` (blank) and `free-cam inactive`. Find `frac` first (no browser: `turns:`
+in `js/circuits/<id>.js`; Spa Eau Rouge compression ~0.075).
+
+**Before/after:** the tools serve the working tree, so shoot A to `artifacts/…/before.png`,
+apply the edit (or `git stash`), shoot B to `…/after.png` with the SAME args, then
+compare. Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
 
 ## Motion and profiling (still this harness)
 
@@ -79,7 +90,9 @@ node tools/shot/motion-capture.mjs monaco 4 50      # driven clip → per-frame 
 node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → Chrome DevTools → Performance
 ```
 
-A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
+`flicker-gate.mjs` (still camera, fixed SITES, `--list` is no-browser) and
+`tools/track/coplanar-audit.cjs <id>` (no browser) are the z-fight pair
+motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
 both references say what the numbers mean before you A/B on them.
 
 ## Load on demand

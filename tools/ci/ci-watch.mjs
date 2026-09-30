@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // ci-watch.mjs — watch a pushed commit's CI (and optionally the Pages train that ships it), one line per job result.
-// @doc Watches every workflow run for a SHA (default HEAD) and prints one `[ci-watch]` line per job as it finishes — a red names its failing step and first annotations — then a terminal `= ci <verdict>` line; `--pages` follows the deploy train until a Pages run containing the SHA ends. Built for a Monitor (each line an event) or a background task.
+// @doc Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line.
+// Full description: Watches every workflow run for a SHA (default HEAD) and prints one `[ci-watch]` line per job as it finishes — a red names its failing step and first annotations — then a terminal `= ci <verdict>` line; `--pages` follows the deploy train until a Pages run containing the SHA ends. Built for a Monitor (each line an event) or a background task.
 // @skill steward
 //
 // AGENTS.md rule 12 / §Watching CI and Pages: a push is not done when it lands,

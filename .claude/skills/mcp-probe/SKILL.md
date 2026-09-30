@@ -1,13 +1,13 @@
 ---
 name: mcp-probe
-description: Use when driving the LIVE working-tree canvas interactively with the Chrome DevTools MCP (chrome_*) or the probe-mcp.py chrome daemon — poke __apex live, heap/perf/console during an interactive repro. Anything on the DEPLOYED site / public web (version.json STALE check, shipped-marker grep) → deploy-research. Batch screenshots → playwright-probe. Scripted hooks → agent-view. UI-layout matrix → survey-ui-matrix (canvas hidden).
+description: Use when driving the LIVE working-tree canvas interactively with the Chrome DevTools MCP (chrome_*) or the probe-mcp.py chrome daemon — poke __apex live, heap/perf/console during an interactive repro. Anything on the DEPLOYED site / public web (version.json STALE check, shipped-marker grep) → deploy-research. Batch screenshots or a scripted game-loop CPU profile → playwright-probe. Scripted hooks → agent-view. UI-layout matrix → survey-ui-matrix (canvas hidden).
 ---
 
 # Probing the live game with the Chrome MCP
 
 One MCP server sits alongside the Playwright suite for live poking:
 **chrome-devtools** (`chrome_*`, working tree, canvas-visible, WebGPU flags
-from `webgpu-chrome-args.cjs`). The deployed site / public web is **not**
+from `tools/lib/webgpu-chrome-args.cjs`). The deployed site / public web is **not**
 reachable from a container browser — that is the **deploy-research** subagent
 (host fetch / WebFetch). `tools/mcp/probe-mcp.py` is a CLI (not MCP-attached since
 2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
@@ -15,12 +15,22 @@ reachable from a container browser — that is the **deploy-research** subagent
 ## Entry
 
 ```sh
+python3 tools/mcp/probe-mcp.py status                # no browser: clone/bin/Chrome path + daemon UP/DOWN. Run FIRST
+#   "Bin: missing" -> tools/mcp/chrome-devtools-mcp.sh clone  (needs egress; else use the attached chrome_* tools)
+# Everything below launches Chromium (browser-only) except help/status/mcp-cli --dry-run:
 python3 tools/mcp/probe-mcp.py list-tools
 python3 tools/mcp/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome
 python3 tools/mcp/probe-mcp.py call chrome_...
 python3 tools/mcp/probe-mcp.py chrome-stop           # ALWAYS before test-bg.mjs
 node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
+
+HUD/menu glitch repro: serve `python3 -m http.server 3456`, `chrome-start`, navigate
+`http://127.0.0.1:3456/`, `__apex.race(id); go()` (recipes.md § Setup), then
+`take_snapshot` (DOM/a11y text, cheap) before any screenshot; the HUD is DOM, so
+`awaitPresent()` matters only if the 3D behind it must be current. Done = the
+glitch reproduced as a snapshot/`evaluate_script` value (element text/rect), then
+`navigate_page about:blank` + `chrome-stop`. Flags: `node tools/lib/webgpu-chrome-args.cjs [mcp|json]`.
 
 A bare `call` without `chrome-start` spawns a **fresh** Chromium each time —
 navigate → evaluate → screenshot across separate calls is broken. Prefer the

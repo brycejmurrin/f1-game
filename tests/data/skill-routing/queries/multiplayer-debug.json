@@ -1,0 +1,10 @@
+[
+{"query":"In VS FRIEND, the guest scans the host's QR code and the WebRTC data channel never reaches open. Please trace the flow through js/net/sdp.js, js/net/handshake.js and js/net/session.js and work out where the offer/answer exchange stalls, and whether ICE or TURN config is to blame.","expect":"multiplayer-debug"},
+{"query":"vs friend room codes r not working, i type the code my buddy gave me and it just sits on 'connecting' forever. nostr relay issue maybe?? can u figure out whats going on","expect":"multiplayer-debug"},
+{"query":"Two players race the same lap but the replicated rival on my screen jitters and then drifts several metres off the host's version of it after a few laps. Something desyncs between peers; find out why.","expect":"multiplayer-debug"},
+{"query":"tests/specs/multiplayer-npeer.spec.js fails when a third peer joins: the seat assignment in js/net/lobby.js looks wrong and js/net/rendezvous.js reports a duplicate slot. Diagnose the lobby flow and say what breaks.","expect":"multiplayer-debug"},
+{"query":"Guests on a strict corporate NAT can join a lobby but never get a media path, and the build handshake mismatch warning appears for one of them only. Check whether a TURN fallback exists and why the peers disagree on build version.","expect":"multiplayer-debug"},
+{"query":"The multiplayer lobby screen traps keyboard focus, and pressing Escape on the room-code dialog doesn't close it or return to the previous menu. Fix the back behaviour and the selected-state announcements for screen readers.","expect":"ui-menu-a11y"},
+{"query":"The phone pad controller connects by scanning a QR but the tilt steering on the phone is inverted and the dead zone feels huge once it's paired. Look at js/input/phone-pad.js and tune the steering response.","expect":"input-controls"},
+{"query":"In a session with the AI field, the rival cars keep diving too aggressively into the player at turn 1 and then get stuck in the pit lane. Adjust the overtake and brake target behaviour in ai-drive.","expect":"ai-racecraft"}
+]

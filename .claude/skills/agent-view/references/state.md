@@ -25,6 +25,17 @@ node tools/shot/apex-eval.mjs monza "(a.go(), a.jump(0.2,55), a.physState())" --
 node tools/shot/apex-eval.mjs vegas "a.lightState()"
 ```
 
+**No browser (Node VM, verified 2026-09-30):** the same loop runs in `tools/lib/game-vm.cjs`
+(~70 s of wall time per 120 s of sim; write the script under `scratch/`, end with `process.exit(0)`):
+`const g=await createGame({track:"suzuka"}); const a=g.apex; a.seed(1); a.headless(true); let o=a.reset(0.97,30,0);`
+then `a.world({detail:"brief"})` → `a.act(input,1/60,6)` → `a.terminal()`. `createGame` already calls `race()`.
+Gotchas: **`sectorState().last`/`lapHistory().best` fill only once `lap>=1`** (game.js `c.lap >= 1 && sectorValid`), so
+`reset(0.0…)` (lap 0) records no splits — reset at ~0.97, cross the line, then drive S1→S3.
+`obs()` carries `s` (metres), not `frac`; log `o.s` for where the car left the track (`|lateralM| > halfWidthM`).
+The starter policy in surface.md (`CAP` 33 m/s = 119 kph, so "top speed" just reads the cap) was tuned on Monza:
+on Suzuka it is `rescued` at ~120 s / s≈1250 m after ~17 off-track entries and never finishes a lap — tune per circuit
+before quoting sector times; record seed, start frac, policy and `terminal()` with any number.
+
 Physics tune → **tune-physics**. Parallel harness → **playwright-probe**.
 `finishRace()` jumps to the flag without driving every lap.
 

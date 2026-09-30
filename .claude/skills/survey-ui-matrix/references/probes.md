@@ -60,9 +60,10 @@ function truncIn(root) {
 // TRAP 3: getBoundingClientRect() inside `.sheet` returns ZOOMED px
 //   (zoom: var(--ui-scale)). Divide by el.currentCSSZoom for CSS px. A row that
 //   paints 60px is 52 CSS px at a UI scale of 1.15 — it PASSES a 52px floor.
-//   (1.15 was the coarse-pointer default when this was written; the shipped
-//   default is 1.0 on every pointer now, so the arithmetic bites only once a
-//   player dials UI SIZE up — which the matrix does deliberately.)
+//   (1.15 was the coarse-pointer default when this was written; it is 1.09
+//   now — `css/tokens.css` coarse block, mirrored in `js/ui/scale.js` — and 1.0
+//   on a desktop pointer, so the arithmetic bites on touch and whenever a
+//   player dials UI SIZE up, which the matrix does deliberately.)
 // TRAP 4: DO NOT SCORE ON min(width, height). Height is the thumb dimension; a
 //   full-height tab that is merely NARROW is not a small target. Scoring on the
 //   minimum produced two false alarms out of three findings in one sweep —
@@ -129,7 +130,7 @@ document.body.classList.remove('in-race');
 ```
 
 **The screen-root inventory DRIFTS — enumerate it, don't trust this list.**
-The authoritative enumeration is `SCREENS` in `tools/ui/layout-audit.mjs` (48
+The authoritative enumeration is `SCREENS` in `tools/ui/menu-screens.mjs` (48
 cells at 2026-09-18 — `node tools/ui/layout-audit.mjs --list` prints them and
 starts no browser); `index.html` currently holds 20 `<dialog>` roots (re-run
 `grep -c '<dialog' index.html`). Sweeping

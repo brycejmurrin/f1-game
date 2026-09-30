@@ -1,0 +1,10 @@
+[
+{"query":"I want a picture-driven accuracy pass on Suzuka: compare our layout against real-world reference imagery, identify where the corner sequence, elevation and terrain differ, then edit js/circuits/suzuka.js and verify the result before we ship it.","expect":"survey-track"},
+{"query":"hey can u make interlagos feel more like the real place? the infield looks off compared to pics and idk whats wrong, do a full pass and fix what u find","expect":"survey-track"},
+{"query":"On Spa the ground has visible steps and a channel running alongside the road in a couple of places, and the lake by the pit straight looks sunk. Work out what's wrong against the real circuit and fix it end to end.","expect":"survey-track"},
+{"query":"Take js/circuits/monza.js and audit it against real-world reference for gaps between the terrain and road, the Parabolica run-off shape and the Curva Grande elevation, then update the def and verify with verify-track before shipping.","expect":"survey-track"},
+{"query":"We just finished adding Madrid but I suspect it was built from a rough sketch. Survey it against actual satellite and onboard footage, list the discrepancies in order of severity, and work through them one at a time.","expect":"survey-track"},
+{"query":"Add a new grandstand cluster and more trees along the back straight at Spa, it looks too empty; edit the scenery(api) callback so the density matches the rest of the circuit.","expect":"scenery-dress"},
+{"query":"Without editing anything, dump the corner list, curvature and elevation grade for Monza with the geometry hooks, and tell me whether the terrain clips over the road anywhere using groundY and wallStats.","expect":"agent-view"},
+{"query":"Change Bahrain's layout: move the hairpin, add a flyover crossing and adjust the elevation with a new crest, then register the metadata and palette changes in the circuit file.","expect":"new-track"}
+]

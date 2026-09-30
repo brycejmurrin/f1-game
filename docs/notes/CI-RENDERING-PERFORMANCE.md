@@ -10,7 +10,7 @@ counts come from `tools/track/verify-track.cjs --all` and its byte arithmetic fr
 real interleaved layout in `js/render/glx/glx.js`. Keep the two apart when quoting
 this file.
 
-This repo's culture is measure-then-decide (`playwright.config.js:29-42` is the
+This repo's culture is measure-then-decide (the `--disable-frame-rate-limit` comment in `playwright.config.js` is the
 model: a table of rAF rates and click latencies, and a flag rejected because of
 it). Nothing in this document should be adopted without the same treatment.
 
@@ -18,7 +18,7 @@ it). Nothing in this document should be adopted without the same treatment.
 
 ## 1. The headline: SwiftShader is not the only software renderer
 
-`playwright.config.js:25` pins `--use-angle=swiftshader`. That is Chromium's
+`playwright.config.js` pins `--use-angle=swiftshader`. That is Chromium's
 own software rasteriser. **Mesa's `llvmpipe` is reportedly ~3× faster** at the
 same job, and the difference is not subtle — one report has canvas-heavy
 three.js tests going 5 min → 1.6 min on llvmpipe alone, before any GPU is
@@ -38,8 +38,9 @@ Three facts that make this actionable, and one that makes it awkward:
    the driver is installed but the kernel modules are not loaded, so `/dev/nvidia0`
    does not exist and Chromium silently falls back to software. Two `modprobe`
    calls fixed it in the cited write-up.
-4. The awkward part: **this repo deliberately forces SwiftShader**, and the
-   comment block at `playwright.config.js:29-42` shows the author has already
+4. The awkward part: **this repo deliberately forces SwiftShader locally** (CI has
+   defaulted to llvmpipe since 2026-09-16, §llvmpipe below), and the
+   comment block on `--disable-frame-rate-limit` in `playwright.config.js` shows the author has already
    been burned once by a plausible-sounding flag that made things 7× worse.
    Treat §1 as a hypothesis with a good prior, not a patch.
 
@@ -117,6 +118,11 @@ exactly why it is the one software path that has worked consistently across
 every measurement in this file. **Do not re-attempt the llvmpipe/WebGL2 swap
 without first confirming `/dev/dri` exists** (`ls /dev/dri`) or moving to an
 environment that provides it — chasing Chromium flags alone will not fix it.
+
+This is the dev container's limit, not the project's: GitHub's runners DO
+reach llvmpipe, and CI has defaulted to it since the same day
+(`APEX_GL=llvmpipe` in `playwright.config.js`, Mesa + Xvfb from
+`.github/actions/mesa-xvfb`; `gl: swiftshader` is the opt-out).
 
 ### There is no hardware adapter here — and it was never the limit (2026-08-28)
 
@@ -325,7 +331,7 @@ Consistent advice across sources, and it contradicts the obvious instinct:
 
 - **The default GitHub runner has 2 cores.** Pushing workers past ~2-3 there
   buys nothing but memory pressure. This repo already caps CI workers at 2
-  (`playwright.config.js:71`), which matches.
+  (`WORKERS` in `playwright.config.js`), which matches.
 - **A larger (4-core) runner is the cheapest real speedup**, and is almost
   always skipped in favour of sharding, which is more complex and more machines.
 - **Browser download dominates small suites.** One benchmark had 42 s of a
@@ -526,7 +532,7 @@ On SwiftShader/Lavapipe the native WebGPU swapchain never composites to the
 screen, and a single `getCurrentTexture()` breaks `mapAsync` for the whole
 device. WGX therefore routes the visible `#game` through a 2D soft-present
 blit: final pass → `COPY_SRC` texture → readback → `putImageData` on `#game`,
-never `getCurrentTexture()`. Cache **1342+** uses ephemeral per-frame staging
+never `getCurrentTexture()`. The shipped path uses ephemeral per-frame staging
 buffers + `onSubmittedWorkDone` before readback (a persistent staging buffer
 could be mapped while the next frame's copy landed on it); `awaitSoftPresent()`
 resolves only after a non-blank visible blit, so a probe that awaits it cannot

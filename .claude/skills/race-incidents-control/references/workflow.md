@@ -59,11 +59,13 @@ Load from the SKILL.md index when the task needs this detail.
    or `__apex.jump(frac, speed, x)` instead; only reach for `incident({reset:true})`
    while `incident().count > 0` / `incidents` is non-empty.
 
-   **"SC never comes out" checklist:**
-   1. `DebrisWorld.active` / `apex26.debris` — side-world enabled?
-   2. `caution({hazards:true})` — hazard `total` vs thresholds (`VSC_MIN=6`,
-      `SC_MIN=10` in `js/race/race-control.js`)?
-   3. `caution({enabled:true})` — cautions not disabled?
+   **"A team's car retires on lap 1 / every race" (reliability trace, all node-level):**
+   `Reliability.arm` (`js/race/reliability.js`, called by `armReliability` in game.js) plans `dnfAt` in [0.06, 0.94] of race DISTANCE, so in a 25-lap race a *Reliability* draw cannot land on lap 1 (a 3-lap race can: 0.06 x 3 = 0.18 lap). Per-team inputs: `TIER_RISK[car.tier]` x `1 - 0.40*devNorm(team)` (`Career.paceMult`/`tdev`), player-only `BUILD_RELIEF` (off when networked), x `LEVELS` (off 0 / low .5 / real 1). Draw = `Career.hash(seed,"dnf",round,driverId)` — same seed, same field. Other lap-1 sources to rule out first: `real-race.js` `DNS_AT = 0.002` (a game seat with no real driver retires on the first metres), `apex.js` grid setup retiring every planned car at once, and `checkRetirements` (game.js) firing on `prog/(lapsTarget*track.total)`. Steps: `__apex.retirements()` (browser) or `Reliability.plan(cars)` in a VM; `node --test tests/unit/reliability.test.mjs` (4 tests: OFF clears, seed-pure, tier/LOW rate, `at` bounds). NOT pinned by any unit test: team-dev relief, build relief, `checkRetirements`, DNS_AT — a fix there needs a new case in that file (stub `Career.paceMult`).
+
+   **"SC never comes out" checklist** (steps 1-3 are `__apex` calls = browser/live page only; the gating logic is pinned by `node --test tests/unit/race-control.test.mjs`, 35 tests, <1 s):
+   1. `caution().enabled` — **`apex26.caution` defaults OFF** (`race-control.js` `enabled` init), so a fresh page never throws a flag; `caution(true)` or the CAUTIONS race setting turns it on. The switch also gates OVERTAKE lock-out.
+   2. `debris().active` — flags are computed ONLY from `DebrisWorld.hazards()`, and `update()` returns early (level frozen, only the hard cap ages) while `DebrisWorld.active()` is false: `apex26.debris` is `"1"`, and the Rapier wasm must have loaded (`_loadState === 2`; a trapped step latches it off).
+   3. `caution({hazards:true})` — hazard `total` vs thresholds in `js/race/race-control.js`: YELLOW_MIN=3 (one sector), VSC_MIN=6, SC_MIN=10, RED_MIN=16 on `redTotal` (needs >= 2 source cars). Queried at ~4 Hz, so wait 0.25 s+. A pile-up that leaves fewer settled hazards than SC_MIN yields VSC/yellow, not SC.
    4. Multiplayer: only the **host** computes flags; guests adopt host `apply()`.
       **`__apex.net()` does NOT carry caution** — compare `__apex.caution()` on
       BOTH peers. Guest green while host shows VSC (roles correct via

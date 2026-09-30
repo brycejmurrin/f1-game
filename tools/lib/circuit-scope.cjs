@@ -1,5 +1,7 @@
 // circuit-scope.cjs — APEX_CIRCUITS, honoured in one place by every fleet sweep.
-// @doc `scope(ids)` keeps the circuits APEX_CIRCUITS names (all of them when unset): the audit CLIs' `--all` and the sweep suites' roster loops read it, so a circuit-only PR sweeps one circuit, not 52.
+// @doc `scope(ids)` keeps the circuits APEX_CIRCUITS names (all when unset); audit `--all` and sweep loops read it.
+// Full description: `scope(ids)` keeps the circuits APEX_CIRCUITS names (all of them when unset): the audit CLIs' `--all`
+// and the sweep suites' roster loops read it, so a circuit-only PR sweeps one circuit, not 52.
 // @section runner
 //
 // THE FLEET REBUILT FOR ONE CIRCUIT (2026-09-30). `test:sweeps` is ten

@@ -5,7 +5,8 @@
 // requires a pull request with the eight fast-tier checks green and allows no
 // bypass, so the default mode's final `git push` fails with GH006. `--pr` is
 // the form that lands work now; `--gate-only` is still the pre-push check.
-// @doc the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else only the targeted sweeps that read it) → verify-track → push the deploy branch (or --pr); pages.yml stamps it
+// @doc The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`.
+// Full description: the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else only the targeted sweeps that read it) → verify-track → push the deploy branch (or --pr); pages.yml stamps it
 //
 //   node tools/ci/deploy.mjs --plan        # print the steps + the union diffstat, run nothing
 //   node tools/ci/deploy.mjs               # fetch → merge → tooling-fast → the Pages gate's node
@@ -21,7 +22,7 @@
 //   node tools/ci/deploy.mjs --gate-only   # run the DEPLOY GATE and stop: tooling-fast + ci.yml's
 //                                       #   node suites + verify-track. Pushes nothing, allows a
 //                                       #   dirty tree. THE pre-push check: test:tooling-fast is a
-//                                       #   subset and does not run 69 of the 277 unit files.
+//                                       #   subset and does not run 88 of the 386 unit files.
 //                                       #   Its union is commits + staged + unstaged + untracked
 //                                       #   (changedPaths), so an uncommitted circuit edit still
 //                                       #   gets the sweeps and its verify-track.

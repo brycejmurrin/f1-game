@@ -28,8 +28,16 @@ season sprint distance and its points table. Persist at `apex26.seasonCfg`
 - Recommend `test:career` — there is no such group
 
 ```sh
-node tools/ci/test-bg.mjs modes
+node --test tests/unit/season-cal.test.mjs   # 46 tests, <1 s, VM, no browser: gates, award(), sprint table
+node tools/ci/test-bg.mjs modes              # BROWSER group (season.spec.js, season-format.spec.js, ...): background it, AGENTS.md rule 4
 ```
 
-`modes` is season + career + quali + TT. `season-(cal|ui).js` also
-routes to `ui` (the SETUP screen).
+Sprint points are scored in `SeasonCal.award()` (`SPRINT_POINTS`, `stage()`); the
+results sheet reads `race.sprint` in `js/ui/results-sheet.js` `buildResults`.
+"Sprint points missing" is a scoring bug only if the unit test's `a sprint scores
+its own table` fails; otherwise look at the sheet/standings, not the SETUP screen.
+
+Quali on/off: SETUP chip `ss-quali` (`season-ui.js` buildPool) -> `draft.quali` -> `normalize()` (only an explicit `false` turns it off) -> `SeasonCal.quali()` / `qualiNext(season)` / `qualiLabel(season)`. `stage()` is `"race"|"sprint"` only and never reads `quali`, so a "qualifying stage" that survives quali-OFF is a consumer, not the SETUP screen: `js/race/race-settings.js` (START label, GRID row locked to QUALIFYING when `quali()`), `js/ui/quali-sheet.js`, `js/game.js` (`gridFromQuali`, ~L9232 `openQuali`). Unit tests: `a season with qualifying off never qualifies` and `a no-qualifying sprint weekend...` in `season-cal.test.mjs`; the chip itself is browser-only (`season.spec.js`, `season-format.spec.js`).
+
+`modes` is real-race + season + career + quali + TT. `season-(cal|ui).js` also
+routes to `ui` (the SETUP screen) and `state-unit`.

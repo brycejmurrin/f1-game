@@ -1,0 +1,10 @@
+[
+{"query":"I want to add Portimao (Algarve) as a new circuit. Create js/circuits/ with the real centreline path, sectors and turns, a theme and palette, register it so it shows in the track picker in the right order, and make sure the track builds cleanly.","expect":"new-track"},
+{"query":"suzuka figure 8 crossover looks wrong, the overpass sits too low n the bridge deck dips. can u fix the bridge height/span in the circuit def","expect":"new-track"},
+{"query":"The Eau Rouge compression in Spa feels flat, the climb up to Raidillon is barely a hill. Rework the elevations array in js/circuits/spa.js so the dip and crest are much more pronounced, then check it still verifies.","expect":"new-track"},
+{"query":"Change Interlagos to use a different colour theme and palette, and rename a couple of the turn labels in its metadata so they match the real corner names. Keep the geometry untouched.","expect":"new-track"},
+{"query":"We need a fictional street circuit for a bonus round: design a 3.5 km loop with a long back straight and a hairpin, write it as a data-only circuit file and hook it into Tracks.LIST after the last entry.","expect":"new-track"},
+{"query":"On Monza's second chicane the road seems to clip into the terrain and I want to know the grade at turn 4 and whether the kerb sinks below groundY. Just inspect it via the hooks, no edits.","expect":"agent-view"},
+{"query":"Do a picture-driven accuracy pass on Hungaroring: compare it to real-world reference imagery, find where the layout and terrain differ, and then fix the circuit geometry to match.","expect":"survey-track"},
+{"query":"Some pillars under the Baku overpass are floating and the trees near Spa's first corner are sunken into the ground; fix the scenery(api) callback props so they sit on the terrain.","expect":"scenery-dress"}
+]

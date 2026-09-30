@@ -1,0 +1,10 @@
+[
+{"query":"Before I touch anything, I need a read-only audit of Interlagos: report the elevation profile, the steepest grade and where it occurs, curvature peaks per corner, and any stretch where terrain sits above the road surface. Give me the numbers from the geometry hooks, not screenshots.","expect":"agent-view"},
+{"query":"can u run a headless lap at monza and tell me whats the car doin thru the first chicane - slip, grip, speed, gear, all that telemetry as text. dont need pics","expect":"agent-view"},
+{"query":"The AI field looks bunched weirdly after lap 2 and I can't tell who is P4 or what the gaps to the leader are. How do I get the order, gaps and sector times as JSON without launching a screenshot session?","expect":"agent-view"},
+{"query":"Check js/circuits/suzuka.js against the others: run wallStats and the barrier audit on it and compare its map bounds and total length with Spa and Silverstone so I can see whether its walls leave gaps.","expect":"agent-view"},
+{"query":"I want a deterministic replay: reset the headless env on Catalunya with a fixed seed, step with a scripted act() sequence, and check that obs() gives identical rollout output on two runs. Also what does lightState say at the start lights?","expect":"agent-view"},
+{"query":"Add a new hill crest on the back straight of Hungaroring in js/circuits/hungaroring.js and raise the elevation by 6 m, then adjust the bridge metadata so the flyover still clears.","expect":"new-track"},
+{"query":"The car understeers badly through the slow corners; compare ROAD_FOLLOW on and off with a step-steer A/B and tell me whether the slip angle and turn-in improved.","expect":"tune-physics"},
+{"query":"AI cars keep getting wedged in traffic behind a slow car at the corner exit and never overtake; the brake targets look wrong and the world() field order shows them stuck. Fix the overtake logic in the AI driver.","expect":"ai-racecraft"}
+]

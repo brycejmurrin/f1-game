@@ -30,6 +30,12 @@ probe, auto-flagged:
 - `terrainY` sliding steadily more negative with distance → the ribbon is
   **sagging** (right for a hill, wrong for a flat island level with water).
 
+**Artefacts (track-surveyor, 2026-09-22):** `⚠ STEP` rows and `agent.mjs survey` `groundCliffs` sample at
+lat 0, where the raycast falls through the ribbon (starts ~10 m out) to `floorY`, so a flat circuit
+flags a cliff at every frac (estoril: 4 STEPs + 17 cliffs, all false). A blank first capture is the
+pre-present frame. Real = a `--` sandwiched at lat 4-24 or a >1 m step in a lateral `apex-eval.mjs <id>
+"a.groundY(frac,lat)"` sweep. Record artefact-vs-real per flag in the hand-back.
+
 Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 `--oblique` adds a bounds-fitted topdown plus N/E/S/W high obliques
 (flag may sit anywhere; `monaco --oblique 0.1,0.5` is valid).

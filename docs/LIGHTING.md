@@ -2,7 +2,7 @@
 
 Three sections: the light-record / shader / time-of-day **reference**, the
 hand-tuned **knobs** and how to A/B them, and the per-track **presets**. The
-183 tuner sliders are generated separately into
+185 tuner sliders are generated separately into
 [`LIGHTING-TUNER-SLIDERS.md`](LIGHTING-TUNER-SLIDERS.md).
 
 `js/render/glx/glx.js` owns the shaders and light upload; `js/lighting/atmosphere.js`
@@ -21,7 +21,7 @@ The lit shader combines three sources:
 |---|---|---|
 | Directional sun | `uSunDir`, `uSunColor` | With shadow map |
 | Hemisphere ambient | `uAmbSky`, `uAmbGround` | Blended by surface normal Y component |
-| Point lights (up to 32) | uniform arrays — see below | Track lamps, emissives |
+| Point lights (up to 48) | uniform arrays — see below | Track lamps, emissives |
 
 The composite pass combines AO, shafts, exposure and bloom in HDR, applies the
 live HDR image grade described below, then runs ACES → display-domain colour
@@ -109,7 +109,7 @@ There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 
 GLX uploads packed `vec4` arrays per frame — `uLightA[i]` (xyz + radius),
 `uLightB[i]` (rgb + bleed), `uLightC[i]` (aim + coneIn), `uLightD[i]` (coneOut),
-plus `uNumLights`. God-rays still use their own 12-slot unpacked set. Every
+plus `uNumLights`. God-rays still use their own 6-slot unpacked set. Every
 `lights.push(...)` in `buildTrackLights` (`js/lighting/track-lights.js`) must be
 exactly 15 values.
 
@@ -130,12 +130,12 @@ cull budgeted 48 there and no tail-light ever reached the shader.
 minimum **224** `vec4` rows; this repo's SwiftShader Chrome measured **4096**,
 UBO block **64 KB**). Four packed `vec4` arrays of 48 (`uLightA..D`) cost 192
 rows — the same budget the old six vertical arrays used at 32. God-rays stay
-at 12 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for fragment cost, not
+at 6 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for fragment cost, not
 uniforms.
 
 ### Two invariants, gated by `tests/unit/lamp-fixture-anchor.test.mjs`
 
-Both read **zero** on all 40 circuits, with no baseline and no ALLOW hatch.
+Both read **zero** on every circuit, with no baseline and no ALLOW hatch.
 
 **A light that glares needs a fixture under it.** `drawGlow` paints an additive
 halo billboard for every record with `glareW > 0`, so any such record must sit on
@@ -185,7 +185,7 @@ damped volumetrics — there is no fixture to anchor a lens halo to, so they
 read as spill from off-camera architectural lighting.
 
 Set the knob to 0 for the old behaviour. With it at the default every node on
-all 40 circuits is within 28 m of a lamp.
+every circuit was within 28 m of a lamp when measured (40 circuits then).
 
 ---
 
@@ -317,13 +317,13 @@ node tools/lighting/ab-lighting.mjs apply lamp.radius 40         # adopt the win
 per candidate and writes a side-by-side strip plus the watched metric for
 each. Structural knobs take `try` with a full replacement string instead.
 
-`apply` is the write step, and it does three things atomically: swaps the
-value into the real source file (only if the find-string is still unique),
+`apply` is the write step, and it does two things atomically: swaps the
+value into the real source file (only if the find-string is still unique) and
 self-syncs this catalog (the applied value becomes the new `find`, the old
 value becomes the new `b`, edits confined to that knob's own entry — so the
-catalog-integrity test stays green and the knob now A/Bs the reverse), and
-bumps the `?v=` cache version in index.html. After applying: re-render the
-knob to confirm, `npm test -- tests/specs/lighting-ab.spec.js`, commit.
+catalog-integrity test stays green and the knob now A/Bs the reverse). No
+cache bump: the shell reads `?v=dev` and the deploy owns cache busting. After
+applying: re-render the knob to confirm, `npm test -- tests/specs/lighting-ab.spec.js`, commit.
 
 The harness serves the repo through an in-memory server and swaps the knob's
 source string for variant B — the working tree is never modified, and the same
@@ -499,121 +499,121 @@ Don't re-specify a `"*"` value in a per-condition preset unless you're deliberat
 
 _(from `TUNE_DEFS` in `js/lighting/knobs.js`. Focus on the per-condition-relevant ones; leave the rest at default.)_
 
-_This list is auto-generated from `TUNE_DEFS` (ranges + defaults are exact). Some
+_Ranges + defaults below were re-synced from `TUNE_DEFS` (2026-09-29; 111 of the 185 knobs are listed, the rest are in `LIGHTING-TUNER-SLIDERS.md`, which is generated and always exact). Some
 knobs (e.g. `ssaoRadius`, `mistShare`, `carClearcoat`, `wetness`, `blackLift`,
 `chromAb`, `grain`, `sharpen`, `speedBlur`) are repair/stylistic and rarely need a
 per-condition preset — focus on the ones the intent notes above call out._
 
 #### SUN & MOON
-- `keyMul` [0..4] def 1 — direct sun/moon intensity (diffuse + speculars + shadows)
-- `sunTemp` [-2..2] def 0 — key white-balance (sun by day, moonlight at night); − warm, + cool
-- `sunElev` [-60..60] def 0 — sun/moon height offset (deg); − lower = longer shadows + god-rays
+- `keyMul` [0..2.5] def 1 — direct sun/moon intensity (diffuse + speculars + shadows)
+- `sunTemp` [-3.3..8.3] def 0 — key white-balance (sun by day, moonlight at night); − warm, + cool
+- `sunElev` [-50..50] def 0 — sun/moon height offset (deg); − lower = longer shadows + god-rays
 - `sunAzim` [-180..180] def 0 — rotates the key-light compass direction
-- `moonBright` [0..3] def 1 — moon disc/halo + soft blue fill (night)
-- `grMul` [0..4] def 1 — volumetric sun-shaft / god-ray strength (dawn/dusk)
-- `sunShaftMul` [0..4] def 1 — screen-space crepuscular rays from the sun disc (separate post pass from `grMul`)
+- `moonBright` [0..2.5] def 1 — moon disc/halo + soft blue fill (night)
+- `grMul` [0..2.5] def 1 — volumetric sun-shaft / god-ray strength (dawn/dusk)
+- `sunShaftMul` [0..2.5] def 1 — screen-space crepuscular rays from the sun disc (separate post pass from `grMul`)
 
 #### AMBIENT & BOUNCE
-- `ambientMul` [0..4] def 1 — hemisphere fill (shadow/unlit + night readability floor)
-- `ambTemp` [-2..2] def 0 — fill white-balance; − warm bounce, + cool sky
-- `ambBalance` [-2..2] def 0 — tip fill toward ground(−) or sky(+)
-- `nightAmbLift` [0..4] def 1 — scales the moody-night ambient floor/cap band ("how dark is night" master)
+- `ambientMul` [0..2.5] def 1 — hemisphere fill (shadow/unlit + night readability floor)
+- `ambTemp` [-4.16..10] def 0 — fill white-balance; − warm bounce, + cool sky
+- `ambBalance` [-6..6] def 0 — tip fill toward ground(−) or sky(+)
+- `nightAmbLift` [0..2.5] def 1 — scales the moody-night ambient floor/cap band ("how dark is night" master)
 - `bounceK` [0..0.3] def 0.04 — lamp bounce onto walls/kerbs/car flanks
 
 #### SHADOWS
-- `shadowStr` [0..2] def 1.15 — shadow darkness; lower lifts toward ambient, >1 crushes
-- `shadowRange` [16..160] def 80 — sun shadow box half-size (m)
-- `pcssPen` [5..500] def 80 — how fast shadows soften with caster distance
-- `shadowBias` [0..0.01] def 0.001 — depth offset (acne vs peter-pan)
-- `shadowTintAmt` [0..1.5] def 0 — cool-blue tint on shadowed areas (sunny-day look)
+- `shadowStr` [0..3] def 1.15 — shadow darkness; lower lifts toward ambient, >1 crushes
+- `shadowRange` [16..200] def 80 — sun shadow box half-size (m)
+- `pcssPen` [5..200] def 80 — how fast shadows soften with caster distance
+- `shadowBias` [0..0.004] def 0.001 — depth offset (acne vs peter-pan)
+- `shadowTintAmt` [0..1] def 0 — cool-blue tint on shadowed areas (sunny-day look)
 - `carShadow` [0..1] def 1 — real sun-projected car shadows (per-frame car-only map; desktop WebGL2 tier)
-- `aoStr` [0..3] def 1 — SSAO crease/contact darkening
-- `ssaoRadius` [0.1..4.1] def 0.6 — world-space reach of AO sampling
-- `contactStr` [0..3] def 1 — grounding shadow under car/props
+- `aoStr` [0..1.05] def 1 — SSAO crease/contact darkening
+- `ssaoRadius` [0.02..1.465] def 0.6 — world-space reach of AO sampling
+- `contactStr` [0..2] def 1 — grounding shadow under car/props
 
 #### LAMPS
-- `lampLevel` [0.02..1.5] def 0.26 — lamp brightness ceiling (street posts + flood banks)
-- `floodDay` [0..1.5] def 0 — light lamps during DAY sessions (0 = off; lit-stadium look under a blue sky)
-- `poolEnergy` [0.05..2] def 0.55 — per-lamp pool luminance
-- `lampRadiusMul` [0.3..3] def 1 — pool reach
-- `bleedMul` [0..5] def 1 — out-of-beam floor (lifts valleys)
-- `glareStr` [0..1.5] def 0.12 — lens-halo strength
-- `lampTemp` [-2..2] def 0 — lamp white-balance; − sodium/amber, + LED/white
+- `lampLevel` [0..0.687] def 0.26 — lamp brightness ceiling (street posts + flood banks)
+- `floodDay` [0..4.5] def 0 — light lamps during DAY sessions (0 = off; lit-stadium look under a blue sky)
+- `poolEnergy` [0..1.375] def 0.55 — per-lamp pool luminance
+- `lampRadiusMul` [0.4..1.9] def 1 — pool reach
+- `bleedMul` [0..2.5] def 1 — out-of-beam floor (lifts valleys)
+- `glareStr` [0..0.3] def 0.12 — lens-halo strength
+- `lampTemp` [-3.3..8.3] def 0 — lamp white-balance; − sodium/amber, + LED/white
 - `lampFlicker` [0..0.6] def 0.1 — aging-lamp pulse
-- `beamCone` [0.4..2.2] def 1 — lamp cone width
+- `beamCone` [0.08..2.2] def 1 — lamp cone width
 
 #### NIGHT GLOW & BLOOM
-- `floodEmitMul` [0..3] def 1 — lit buildings/windows/signage brightness
-- `glowAmp` [0.2..6] def 2.3 — HDR push for windows/neon/lenses
-- `cityGlowMul` [0..5] def 1 — light-pollution dome on the horizon
-- `cityGlowWarm` [-2..2] def 0 — skyglow dome white-balance + warm hue cast into night ambient
-- `bloomMul` [0..4] def 1 — halo strength around bright sources
-- `bloomSpread` [0.3..4] def 1 — halo width
-- `threshOff` [-0.5..0.2] def 0 — bloom threshold offset (lower = mid-tones glow)
+- `floodEmitMul` [0..1.425] def 1 — lit buildings/windows/signage brightness
+- `glowAmp` [0..6] def 2.3 — HDR push for windows/neon/lenses
+- `cityGlowMul` [0..2.75] def 1 — light-pollution dome on the horizon
+- `cityGlowWarm` [-5..3.3] def 0 — skyglow dome white-balance + warm hue cast into night ambient
+- `bloomMul` [0..2.5] def 1 — halo strength around bright sources
+- `bloomSpread` [0.25..2.125] def 1 — halo width
+- `threshOff` [-0.57..0.4] def 0 — bloom threshold offset (lower = mid-tones glow)
 - `bloomKnee` [0..1] def 0.5 — how much bloom is suppressed over bright pixels (0 = milky, 1 = crisp)
 
 #### ATMOSPHERE
-- `fogDensityMul` [0..5] def 1 — haze depth / distance fade
-- `fogHeight` [0..0.2] def 0.018 — fog altitude falloff
-- `fogTint` [-2..2] def 0 — haze white-balance; + warm/dusty, − cool/overcast
-- `mistDensity` [0..4] def 1 — low ground mist (dawn/humid/fog)
-- `mistHeight` [0.04..1.2] def 0.30 — ground-mist band height
-- `lampFogBase` [0..1.5] def 0.45 — lamp tint on distant fog (clear night)
-- `lampFogHaze` [0..2.5] def 0.6 — extra lamp-fog as haze/rain thickens
-- `mistShare` [0..6] def 1.5 — ground-mist vs air-fog share of the lamp glow
-- `fogClip` [0..2.5] def 0.7 — soft shoulder stopping lamp clusters whiting out the fog
-- `lampVolBase` [0..0.8] def 0.05 — volumetric beam strength (clear)
-- `lampVolHaze` [0..2.5] def 0.65 — beam swell in haze/rain
+- `fogDensityMul` [0..3.625] def 1 — haze depth / distance fade
+- `fogHeight` [0..0.25] def 0.018 — fog altitude falloff
+- `fogTint` [-6..3.9] def 0 — haze white-balance; + warm/dusty, − cool/overcast
+- `mistDensity` [0..3.75] def 1 — low ground mist (dawn/humid/fog)
+- `mistHeight` [0.05..0.675] def 0.3 — ground-mist band height
+- `lampFogBase` [0..0.9] def 0.45 — lamp tint on distant fog (clear night)
+- `lampFogHaze` [0..1.5] def 0.6 — extra lamp-fog as haze/rain thickens
+- `mistShare` [0..3.75] def 1.5 — ground-mist vs air-fog share of the lamp glow
+- `fogClip` [0..1.75] def 0.7 — soft shoulder stopping lamp clusters whiting out the fog
+- `lampVolBase` [0..0.7] def 0.05 — volumetric beam strength (clear)
+- `lampVolHaze` [0..1.5] def 0.65 — beam swell in haze/rain
 - `lampVolCap` [0..1.5] def 0.70 — beam ceiling
 
 #### ROAD & REFLECTIONS
-- `ssrWetMul` [0..2.5] def 1 — wet-road mirror strength
+- `ssrWetMul` [0..2.4] def 1 — wet-road mirror strength
 - `ssrDryNight` [0..1] def 0.08 — dry tarmac lamp/neon sheen (night)
 - `ssrDryDay` [0..0.6] def 0.07 — dry tarmac sky/tower sheen (day)
-- `roadRough` [0.05..1.2] def 1 — dry tarmac roughness (lower = glossier)
-- `surfDetail` [0..3.5] def 1 — road/terrain grain relief
-- `ssrThick` [0.02..5] def 0.20 — SSR depth tolerance
-- `wetDark` [0..2] def 1 — how much darker wet asphalt reads
+- `roadRough` [0.05..1.175] def 1 — dry tarmac roughness (lower = glossier)
+- `surfDetail` [0..2.5] def 1 — road/terrain grain relief
+- `ssrThick` [0.05..1] def 0.2 — SSR depth tolerance
+- `wetDark` [0..1.72] def 1 — how much darker wet asphalt reads
 
 #### CAR
-- `carReflect` [0..2.5] def 0.05 — world mirror on bodywork
+- `carReflect` [0..1] def 0.05 — world mirror on bodywork
 - `carEnvCube` [0..1] def 0.3 desktop / 0 mobile — live cubemap probe (ON by default on desktop; mobile stays OFF for GPU cost)
-- `carGloss` [0..1.6] def 1 — paint gloss (**`"*"` baseline 0.35 matte — leave alone unless a track needs different**)
-- `carSpecular` [0..3.5] def 1 — specular highlight brightness
-- `carClearcoat` [0..3.5] def 0.05 — lacquer coat catching crisp glints
-- `carMetal` [0..5] def 1 — how metallic the paint reads
-- `carGlow` [0..5] def 1 — night/wet livery self-glow
-- `tailLightMul` [0..5] def 1 — trailing red glow on nearby cars
+- `carGloss` [0.2..1.4] def 1 — paint gloss (**`"*"` baseline 0.35 matte — leave alone unless a track needs different**)
+- `carSpecular` [0..2.5] def 1 — specular highlight brightness
+- `carClearcoat` [0..1] def 0.05 — lacquer coat catching crisp glints
+- `carMetal` [0..2.5] def 1 — how metallic the paint reads
+- `carGlow` [0..2.5] def 1 — night/wet livery self-glow
+- `tailLightMul` [0..2.5] def 1 — trailing red glow on nearby cars
 
 #### SKY & WEATHER
 - `cloudCover` [-1..1] def 0 — cloud amount offset (+ more)
-- `cloudSpeed` [0..8] def 1 — cloud drift speed
-- `starBright` [0..4] def 1 — night star intensity
+- `cloudSpeed` [0..2.5] def 1 — cloud drift speed
+- `starBright` [0..2.5] def 1 — night star intensity
 - `wetness` [-0.05..1] def -0.05 — road wetness override (AUTO = follow weather)
-- `rainCount` [20..1400] def 360 — rain streak density
-- `rainStreak` [0.2..4] def 1 — rain streak length
-- `rainWind` [-2..2] def 0.18 — rain slant
-- `lightning` [0..6] def 1 — storm strike rate
-- `weatherSunMute` [0..2] def 1 — how much bad weather dims the sun (0 = never, >1 = deeper murk)
+- `rainCount` [20..1000] def 360 — rain streak density
+- `rainStreak` [0.04..2.44] def 1 — rain streak length
+- `rainWind` [-3..3] def 0.18 — rain slant
+- `lightning` [0..2.75] def 1 — storm strike rate
+- `weatherSunMute` [0..2.5] def 1 — how much bad weather dims the sun (0 = never, >1 = deeper murk)
 
 #### IMAGE & COLOUR
-- `exposureMul` [0.1..3] def 1 — master brightness (pre-tonemap)
-- `contrast` [0.5..3] def 1.12 — midtone gamma
-- `saturation` [0..3] def 1 — colour intensity
+- `exposureMul` [0.1..2.35] def 1 — master brightness (pre-tonemap)
+- `contrast` [0.5..2.05] def 1.12 — midtone gamma
+- `saturation` [0..2.5] def 1 — colour intensity
 - `vibrance` [0..1.5] def 0.20 — selective saturation on dull pixels
-- `tint` [-2..2] def 0 — warm(+)/cool(−) white balance
-- `gradeStr` [0..4] def 1 — cinematic split-tone amount
+- `tint` [-6..6] def 0 — warm(+)/cool(−) white balance
+- `gradeStr` [0..2.5] def 1 — cinematic split-tone amount
 - `shadowHue` [-180..180] def 0 — split-tone shadow hue rotation
 - `hiHue` [-180..180] def 0 — split-tone highlight hue rotation
 - `vignette` [0..1] def 0.80 — corner darkening (lower = stronger)
-- `vignetteSoft` [0.1..0.92] def 0.35 — vignette reach/inner edge (lower = broader, higher = thin corner ring)
+- `vignetteSoft` [0.1..0.69] def 0.35 — vignette reach/inner edge (lower = broader, higher = thin corner ring)
 - `blackLift` [0..0.2] def 0.005 — raised black floor (matte film base)
-- `whitePoint` [0.4..4] def 1 — highlight roll-off knee
-- `chromAb` [0..5] def 0 — lens colour-fringing (RGB split)
+- `whitePoint` [0.08..2.38] def 1 — highlight roll-off knee
+- `chromAb` [0..15] def 0 — lens colour-fringing (RGB split)
 - `grain` [0..0.3] def 0 — film grain
-- `flareMul` [0..3.5] def 1 — sun/lamp flare strength
-- `sharpen` [0..2] def 0 — post-FXAA crispness
-- `speedBlur` [0..2] def 0 — radial speed blur
+- `flareMul` [0..2.5] def 1 — sun/lamp flare strength
+- `sharpen` [0..2.5] def 0 — post-FXAA crispness
+- `speedBlur` [0..3] def 0 — radial speed blur
 
 **Rules of thumb:** stay within each range; keep edits tasteful (small offsets read better
 than extremes); never re-state a knob at its default; respect the `"*"` matte-paint baseline.
@@ -622,9 +622,9 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 ### Progress
 
-Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `light-presets.js`
+Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `presets.js`
 
-All 40 circuits now have a full `tod × weather` grid (800 condition keys plus `"*"`).
+40 of the 52 circuits have a full `tod × weather` grid (800 condition keys, plus `"*"` and the four ULTRA-only `"*|<tod>"` keys); the twelve added since (anderstorp, brands_hatch, buddh, dijon, donington, fuji, jerez, korea, mont_tremblant, mosport, okayama, zolder) have none and resolve to `"*"` alone.
 
 Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
 sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
@@ -741,13 +741,13 @@ condition on screen to every other circuit at the same time-of-day and weather
 Then `COPY VALUES` and bake as usual. The export is `window.LightEdits` — the
 LOCAL profiles only, current condition first — so a spread condition arrives as
 one `"track|tod|wx"` entry per circuit and `merge-proposals.mjs` folds them into
-`light-presets.js` without touching anything else. Note that a `FULL LOOK`
-spread writes every live knob on 39 circuits, so the export after one is the
+`presets.js` without touching anything else. Note that a `FULL LOOK`
+spread writes every live knob on every other circuit, so the export after one is the
 largest a delta gets; `MY EDITS` stays small. Both chips arm on the first click
 and fire on the second, and `UNDO` reverts the whole fan-out while the panel is
 open.
 
 **`FULL LOOK` is the destructive one.** It writes a local profile that outranks
-the shipped preset for every knob on 39 circuits, which is exactly what makes the
+the shipped preset for every knob on every other circuit, which is exactly what makes the
 grid uniform — and exactly what erases the per-track character this doc's intent
 notes describe. Reach for `MY EDITS` unless the uniformity IS the goal.

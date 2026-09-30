@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * @doc The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, why each stop was made.
+ * @doc The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, stop reasons.
+ * Full description: the AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, why each stop was made.
  * @skill ai-racecraft
  * ai-strategy-census.mjs — what the field actually DOES with its tyres.
  *

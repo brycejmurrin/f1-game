@@ -37,7 +37,8 @@ Catalog (`node tools/ui/css-play.mjs --list`):
 Aliases: `overlay`/`menu` → title, `pmsettings` → settings, `carsetup` →
 garage, `help` → howtoplay, `vs` → vsfriend.
 
-Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`.
+Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`
+(`--click` replaces the catalog path, so include `#mb-settings`).
 Reach through the player's door. The authoritative inventory is `SCREENS`
 in `tools/ui/layout-audit.mjs`.
 
@@ -72,7 +73,7 @@ node tools/ui/css-play.mjs --screen settings --css css/menus.css
 
 The tool finds the `<link rel="stylesheet">` whose href contains that path
 and sets `href` to `css/menus.css?play=<mtime>`. Same cascade / `@layer`
-order as boot. The `?v=<sha256>` on `index.html` is left alone.
+order as boot. The `?v=dev` on the shell tag is left alone.
 
 `--inject ".sheet{max-height:80vh}"` writes `#apex-css-play` for a snippet
 that is not a file yet. Prefer `--css` once the rule belongs in a sheet.
@@ -97,7 +98,7 @@ play is not a matrix proof.
 
 | what happened | why |
 |---|---|
-| CSS edit invisible after reload | hashed `?v=` still pointed at the old file; use `--css` / `?play=` |
+| CSS edit invisible after reload | browser cache (or a served deploy copy with a hashed `?v=`); use `--css` / `?play=` |
 | Screen "missing" | measured during the fade (`opacity: 0`) |
 | Tap floor wrong | read `--tap` off `:root` (desktop 44) instead of `body` |
 | Boxes look huge | forgot `currentCSSZoom` on `.sheet` |

@@ -1,7 +1,6 @@
 ---
 name: css-play
-description: Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots without a full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. A single screen that is cramped, clips, or misbehaves on Escape/focus is ui-menu-a11y.
-paths: ["css/**", "index.html"]
+description: Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots without a full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. A single cramped screen is ui-menu-a11y; auditing every screen is survey-ui-matrix; dead selectors are slim-bloat.
 ---
 
 # Playing with menu / HUD CSS
@@ -32,8 +31,18 @@ node tools/ui/css-play.mjs garage --sel "#cs-tabs" --css css/carsetup.css
 `no-store`). `--inject ".sheet{…}"` is an overlay. Output:
 `artifacts/css-play/<screen>-<stamp>/{shot.png,dom.json,meta.json}`.
 
-Unknown screen: `--click "#mb-foo" --root "#id"`. Catalog ids are a subset of
-`SCREENS` in `tools/ui/layout-audit.mjs`.
+Unknown screen or a sub-panel: `--click "#mb-foo" --root "#id"`. `--click`
+REPLACES the catalog path, so give the whole route: settings DISPLAY panel =
+`--click "#mb-settings,#pm-open-display" --root "#pm-panel-display" --sel ".tune-row"`
+(door ids: `pm-open-{controls,driving,display,appearance,files}`, `pm-advanced`,
+`pm-audio`). Catalog ids are a subset of `SCREENS` in `tools/ui/layout-audit.mjs`.
+Every step here needs a browser (Chromium via harness.mjs); `--help`/`--list` do not.
+
+Who owns a row: find the class in `index.html`, then `grep -n 'tune-row' css/*.css`.
+Settings sliders (`label.tune-row` > `.tune-label` + `input[type=range]`): base
+`css/tuner.css`, sheet override `.pm-group .tune-row` in `css/components.css`,
+DISPLAY panel `#pm-panel-display .tune-row`; sizes are tokens `--slider`/`--tap`
+(`css/tokens.css`). Enumerated rows are `.set-row` (components.css).
 
 ## Hard don'ts
 

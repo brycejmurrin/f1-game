@@ -67,9 +67,9 @@ in this repo, `css/components.css`:
 
 One class, fourteen contexts, zero variant classes. *Prevents:* class-family
 growth. **Measured:** Pico CSS ships a complete design system in **2,835 lines /
-16 classes / 251 custom properties**. This repo measures **11,993 lines /
-565 classes / 142 custom properties** (2026-09-18; re-run the commands at the
-top of this file to refresh) — 35x the classes on 4.2x the lines with 0.6x the
+16 classes / 251 custom properties**. This repo measures **13,426 lines /
+592 classes / 188 custom properties** (2026-09-30; `node tools/check/tree-counts.mjs`
+and restructure.md's commands refresh them) — 37x the classes on 4.7x the lines with 0.75x the
 tokens. The ratio is inverted, and that is the whole finding.
 
 **9. Reject any CSS methodology that renames without reducing.** Require a
@@ -99,7 +99,7 @@ context overrides beats N variant classes.
 **13. Do not split a monolithic HTML file on node count alone — but this shell
 has now crossed the line it used to sit under.** Lighthouse warns at ~800 body
 nodes and errors at ~1,400; the shell measured ~969 when this rule was written,
-1,133 at the last refresh, and **1,902 on 2026-09-18** (re-run
+1,133 at the last refresh, and **1,902 on 2026-09-18, 1,984 by the ratchet on 2026-09-30** (re-run
 `grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l`). The original argument
 was "comfortably under the error line, so leave it alone"; that premise is
 gone, and the conclusion has to be re-argued rather than restated.
@@ -113,7 +113,7 @@ from the shell's own script tags. So the answer is probably still "leave it
 alone" — but say so on the measurement, not on a stale number, and bring a
 parse-time or memory figure if you want to argue either way.
 *Prevents:* a large cross-cutting refactor bought with a benchmark nobody ran.
-The dominant cost here is still CSS selector complexity (565 classes), not node
+The dominant cost here is still CSS selector complexity (592 classes), not node
 count.
 
 **14. Express height responsiveness as at most TWO breakpoints, resolved once
@@ -122,7 +122,7 @@ same question N slightly different ways, which is exactly how they drift.
 Material ships three height tiers from two breakpoints; this repo measured
 eight thresholds (500/520/560/599/600/620/640/700 across five files) when this
 rule was written (2026-08-08) — that consolidation has since happened: as of
-2026-08-21 the live set is **three height queries across three files**:
+2026-08-21 the live set was **three height queries across three files** (2026-09-30: `max-height` 560/699/740/956 and `min-height: 600` remain — re-count with the restructure.md command):
 `(orientation: landscape) and (max-height: 560px)` in `css/tokens.css`
 (spacing-only density), `max-height: 699px` in `css/menus.css` (title-screen
 compact zoom cap, paired with a width arm), and `min-height: 600px` in
@@ -171,7 +171,7 @@ entries there — that test is how you prove the count went down.
 - **Fetched HTML partials on a static host** — commonly proposed, actively
   harmful here (RTT per screen, breaks the sw.js precache seed).
 - **Tailwind / Open Props / any token package** — all require a build step or
-  duplicate the 142 tokens this repo already has, and would fight
+  duplicate the ~188 custom properties this repo already has, and would fight
   `tests/unit/css-tokens.test.mjs`, which asserts every token has a consumer.
 
 ---

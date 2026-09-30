@@ -15,7 +15,7 @@ it rename things?** Renaming is not restructuring.
 ```sh
 node tools/ui/layout-audit.mjs                    # the screen x viewport matrix
 node tools/ci/pick-tests.mjs --staged             # which groups this change needs
-npm run test:tooling-fast                      # no-browser guard suite, ~3 min
+node tools/ci/tooling-fast.mjs --jobs=3       # no-browser guard suite, ~2 min idle
 ```
 
 **Record the before-numbers.** A restructure with no before/after count is an
@@ -28,13 +28,29 @@ grep -ohE '\.[a-zA-Z_-][a-zA-Z0-9_-]*' css/*.css | sort -u | wc -l
 grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l
 # height thresholds — the number that should be <= 2
 grep -ohE '(max|min)-height: *[0-9]+px' css/*.css | sort | uniq -c
+# the same counts as the ratchets see them (cssClasses, shellNodes, raw spacing/colour) — no browser, <5 s
+node tools/check/tree-counts.mjs        # current;  ceilings: tests/data/ratchets.json "tree"
+node tools/check/ratchets.mjs           # at/under ceiling?  (--update lowers after a consolidation)
+node tools/check/class-usage.mjs        # classes APPLIED (index.html/js) but styled nowhere: rename debris
+node --test tests/unit/component-inventory.test.mjs   # docs/COMPONENTS.md must shrink with the count
 ```
+
+The shell-node grep counts every tag; the ratchet's `shellNodes` excludes
+script/link, so the two differ (2,244 vs 1,984 on 2026-09-30) — quote one source.
+
+## The recommendation this procedure produces
+
+Write it in the PR body: the before-numbers above, the rule numbers that apply
+(9: methodology only if it lowers `cssClasses`; 11: lower the ratchet in the same
+commit; 13: node count needs a parse-time figure, not Lighthouse's), and a verdict
+of adopt / reject / partial. Default on the 2026-09-30 numbers (592 classes,
+188 custom properties): reject a named methodology, take rules 8 and 10 only.
 
 ---
 
 ## Load on demand
 
-- The 15 checkable rules (screens/layers, CSS variation, DOM size, anti-methodology) → [references/rules.md](restructure-screens-css-rules.md).
+- The 15 checkable rules (screens/layers, CSS variation, DOM size, anti-methodology) → [restructure-screens-css-rules.md](restructure-screens-css-rules.md).
 
 ---
 

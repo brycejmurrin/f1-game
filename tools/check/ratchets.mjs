@@ -1,5 +1,6 @@
 // ratchets.mjs — ONE ratchet mechanism for the numbers that only ever grow.
-// @doc Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps ceilings down, `--json`, `--base <ref>` names raises.
+// @doc Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update`, `--json`, `--base <ref>` (names raises).
+// Full description: Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps ceilings down, `--json`, `--base <ref>` names raises.
 //
 //   node tools/check/ratchets.mjs            # check: every metric <= its ceiling, no ceiling far above its value
 //   node tools/check/ratchets.mjs --update   # rewrite ratchets.json with the current values (after an extraction,

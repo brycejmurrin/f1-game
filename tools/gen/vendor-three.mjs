@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// @doc Vendors three.js: patches the readable npm build (vendor/three-patches), minifies with the pinned terser, writes vendor/three-<ver>/ + MANIFEST.json; `--check` verifies hashes.
+// @doc Vendors three.js (patch, terser-minify, write vendor/three-<ver>/ + MANIFEST.json); `--check` verifies hashes.
+// Full description: Vendors three.js: patches the readable npm build (vendor/three-patches), minifies with the pinned terser, writes vendor/three-<ver>/ + MANIFEST.json; `--check` verifies hashes.
 // @skill check-changes
 /**
  * vendor-three.mjs — the ONE way a three.js version enters vendor/.

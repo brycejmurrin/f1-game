@@ -1,0 +1,10 @@
+[
+{"query":"The engine note in js/audio/engine.js stops climbing above roughly 250 km/h in top gear: pitch plateaus and the sound goes flat. Trace how GameAudio maps rpm and speed to playbackRate on the f1_engine.mp3 sample and tell me where the clamp is.","expect":"audio-debug"},
+{"query":"sfx r not firing wen i hit the wall or kerb, engine hum works fine tho. also mute btn seems stuck after i toggle it twice. can u figure out whats up w/ the webaudio buses","expect":"audio-debug"},
+{"query":"After a few minutes of racing the music just goes silent, no error in the UI, and the engine sound is still there. Music layers seem to drop out and never come back. Diagnose why.","expect":"audio-debug"},
+{"query":"Gear-shift sounds in js/audio/car-sfx.js seem to play on the wrong gear, the downshift blip fires on upshifts and sometimes twice. Check the trigger logic and the synth fallback when the mp3 sample has not loaded.","expect":"audio-debug"},
+{"query":"On iOS Safari the AudioContext stays suspended until a tap and the volume slider then sits at a stuck value that ignores my saved setting. Walk through the resume-on-gesture path, the master gain and the three independent toggles.","expect":"audio-debug"},
+{"query":"I want the shake and hit-stop on wall impacts to feel punchier and add a bit of extra camera kick on kerb strikes, without changing any driving physics or determinism. Where should I tune it?","expect":"tune-physics"},
+{"query":"The sound effect mp3s in assets/sfx are not available offline after installing the PWA; the service worker precache seems to skip f1_engine.mp3 and f1_rev.mp3. Fix the cache list so audio works without network.","expect":"pwa-cache-service-worker"},
+{"query":"The music selector row in settings (the MUSIC select with prev/next buttons) is clipped on narrow phones and the arrow buttons are too small to tap. Fix the layout and keyboard navigation for the music picker.","expect":"ui-menu-a11y"}
+]

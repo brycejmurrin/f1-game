@@ -1,10 +1,10 @@
 # Per-circuit scenery API — `scenery(api)`
 
-Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
-`scenery(api)` function (see [ARCHITECTURE.md](ARCHITECTURE.md)). The engine
-(`buildProps`, split across the `js/track/scenery/nature.js` / `scenery-city.js`
-/ `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
-`js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
+Each circuit's bespoke surroundings live in `js/circuits/scenery/<id>.js` (lazy-loaded
+split of `js/circuits/<id>.js`) as a `scenery(api)` function (see [ARCHITECTURE.md](ARCHITECTURE.md)). The engine
+(`buildProps`, split across the `js/track/scenery/nature.js` / `city.js`
+/ `structures.js` / `identity.js` modules and orchestrated by
+`js/track/scenery/build-props.js`) calls it once with an `api` of placement helpers, geometry
 primitives, and composite models. The **114-member `api` surface is a frozen
 contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
@@ -335,7 +335,7 @@ authored planting, distance is still the fix.
 | `groundYAt(k, dist)` | terrain height `dist` beyond the edge |
 | `terrainYAt(x, z)` | terrain height at a WORLD XZ point, or `null` off the rendered ribbon. Reach for this the moment a placement walks away from the centreline: `groundYAt` is a NODE query, and its absence is what makes Trap B in docs/SCENERY-GROUNDING.md so easy to write — Spa's old-road ribbon reused one anchor's height for 248 m and left its treeline 17 m in the air |
 | `hash(i)` | deterministic 0–1 pseudo-random |
-| `ATM` / `COL` | named atmosphere & colour packs from `scenery-data.js` (see below) |
+| `ATM` / `COL` | named atmosphere & colour packs from `scenery/data.js` (see below) |
 
 ### Geometry primitives (world coords — non-cube shapes)
 | Primitive | Shape |
@@ -623,7 +623,7 @@ whole shape is dropped (`[scenery] ... SUPPRESSED at k=...`). Composite helpers
 same for any new composite (`rejBox(centre,[w,h,d],basis)`), never a single
 `onTrack()` point, which misses a long/deep model swinging over a curving stretch.
 `RAW.*` emissions (crowd spectators) skip the guard for speed — keep them behind a
-shell. `tests/specs/props-over-road.spec.js` audits all 51 circuits and fails on any new
+shell. `tests/specs/props-over-road.spec.js` audits every circuit and fails on any new
 intrusion; measure one with `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots`.
 
 ## Pattern: an encircling mountain range
@@ -736,7 +736,7 @@ seat.box(out,   { on: roofY,    at: […],    size: […],       basis: b, col }
 
 `seat.*` normalises the base/centre asymmetry in one place, so Trap A becomes
 unexpressible. `seat` (and `foundation`, §3.2, plus `cantilever`, §3.4) now
-ship on the `scenery(api)` contract — implemented in `js/track/tracks.js` and
+ship on the `scenery(api)` contract — implemented in `js/track/scenery/build-props.js` and
 already used by circuit files — so new scenery uses them by default. This was
 the single highest-value change — it removes a whole bug class rather than
 instances of it.
@@ -856,8 +856,9 @@ Two things learned wiring it up, both worth keeping:
   a regression somewhere else.
 
 Don't trust a "currently clean" list in prose — run the tool. At the time of
-writing it is 3 circuits (miami, portimao, sepang), and an earlier draft of
-this very section claimed 2, then 5.
+writing `float-baseline.json` caps two circuits above 0 (madrid 2, mexico 1); an
+earlier draft of this very section said 2, then 5, then 3 (miami, portimao,
+sepang).
 
 ### 5b. The inherited 12, and where the mechanical fixes ran out
 
@@ -1152,8 +1153,8 @@ audit, which is the obvious next piece of work here.
 
 ## Migrating a circuit onto the shared foundation
 
-> The migration this checklist was written for is COMPLETE — all 40 circuits
-> set `sceneryCoordinates` (39 racing, monaco source). It stays live as the
+> The migration this checklist was written for is COMPLETE — all 52 circuits
+> set `sceneryCoordinates` (51 racing, monaco source). It stays live as the
 > checklist for a NEW circuit or a foundation-touching edit to an existing one.
 
 Use one isolated track-scoped change at a time.

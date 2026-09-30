@@ -50,9 +50,59 @@ geometry bug.
 ### Pause settings overlay
 
 Opening pause settings hides `#pausemenu` so only `#pmsettings` is visible.
-Escape routes through `data-esc-close="pm-settings-close"` (same ladder in
+Escape routes through `data-esc-close="pm-settings-close"` (browser ladder in
 `tests/specs/ui-button-touch.spec.js`). Scroll region:
 `#pmsettings-inner .sheet-body.pane`.
+
+Back-stack (Escape/BACK goes to the wrong screen): Escape -> `TopModal`
+`cancel`/`onEscape` (`js/ui/modal.js`) -> clicks `#pm-settings-close` ->
+`js/game.js` `if (settingsNav.back()) closeSettings()`. `SettingsNav.back()`
+(`js/ui/settings-tabs.js`) pops a page to `home` and returns `false`; only on
+`home` does it return `true`, and `closeSettings()` then unhides `#pausemenu`
+**only if `paused`** (title-menu settings, `#mb-settings`, has no pause menu to
+return to, so it closes to the title). The pause key takes the same path via
+`Input.init` `onPause`. Suspect `paused` / `state` first, then whether
+`hidden` on `#pmsettings` was flipped by something other than the door.
+Node-level pins (no browser, run singly):
+`node --test tests/unit/menu-a11y-audit.test.mjs` (Escape/door lockstep, "repeated
+keyboard Escape advances one dialog page"), `tests/unit/ui-improve-pass.test.mjs`
+(SettingsNav on mini-DOM: BACK pops to home, then reports close),
+`tests/unit/uilayers-modal-order.test.mjs` (`top()` ranking).
+
+### A selected chip is not announced (track picker and kin)
+
+Two paths, check which the control is on. (a) Hand-built groups set
+`aria-pressed` themselves and toggle it in place: `js/ui/select-screen.js`
+filter chips (`data-filter`), `#sel-daily`, and `.track-row` tiles (the click
+handler re-writes `aria-pressed` on every tile; `aria-label` = circuit name, so
+the compact strip that hides `.track-row-name` still speaks). `AriaState`
+deliberately leaves these alone (`claimed()`: existing `aria-pressed` not in its
+`labelled` set). (b) Class-only groups (`.active`/`.on`, no attribute) are
+labelled by `AriaState` inside a `#`-root of `ROOTS`, after `setTimeout 0`, and
+only once one sibling is on. No live region is involved: the state is read on
+focus, and `#announce-live` (polite, `role=status`) is for `G.announce` text
+only. Suspect in order: a rebuilt row that skipped the `aria-pressed` write;
+a chip whose parent is not the button group (`syncGroup` walks direct children);
+a root missing from `ROOTS`. Pins (no browser): `menu-a11y-audit.test.mjs`
+("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer",
+"#announce is a live region", MenuNav landing on `aria-pressed='true'`) —
+NOTHING node-level asserts that `select-screen.js` writes `aria-pressed` on the
+tiles; the browser ladder is `tests/specs/menu-keyboard.spec.js`. A fix there
+should add a source-regex pin to that unit file.
+
+### Cramped single screen (phone shape, UI scale)
+
+Static route: `SheetShape` writes `data-density="compact"` on the sheet
+(`#sel-inner`); `css/menus.css` `#sel-inner[data-density="compact"] ...` drops
+row names, elevation, and the `.track-row` `min-height` (deliberately below the
+`--tap` rung, flags-only strip). Rungs live in `css/tokens.css`: `--tap` 44 /
+`--chip-h` 40 on a mouse pointer, 52 / 46 on `body:not(.desktop)`, each
+`max(N, 24px / --ui-scale)`. Pins: `menu-a11y-audit.test.mjs` (tap/chip rungs
+and the `.sel-chip` boxes), `ui-improve-pass.test.mjs` ("compact catalogue
+keeps a pannable toolbar"), `sheetshape-density-scale.test.mjs` (zoom-aware
+density). Measured fit is BROWSER-only (`tools/ui/menu-fit.mjs`,
+`ui-scale-axis.mjs`, `ui-scale.spec.js`); record the cell (viewport, scale,
+pointer) and the unrun tool in the PR.
 
 ## Common mistakes
 

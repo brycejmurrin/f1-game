@@ -11,13 +11,16 @@ cockpit/hood on a circuit → **playwright-probe** `shot.mjs`.
 
 ## Prereq
 
+Every command below boots Chromium (BROWSER-ONLY); `render-car` needs the `:3456` server, `carshot`/`garage-angles` self-boot.
+
 ```sh
 node tools/car/carshot.mjs 40 day 2 artifacts/tmp/apex-carshot.jpg   # az tod teamIdx out (CLI; no MCP wrap since 2026-09)
 python3 -m http.server 3456        # or: npx serve -l 3456 .
 node tools/car/render-car.mjs                                   # mclaren hero
 node tools/car/render-car.mjs --team=ferrari --views=all
+node tools/car/render-car.mjs --team=redbull --preset=livery   # side / front-3/4 / rear-3/4 livery shot
 node tools/car/render-car.mjs --team=redbull --preset=spine
-node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=/opt/cursor/artifacts/redbull-garage
+node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
 node tools/shot/garage-angles.mjs --plan --preset=mark --team=redbull --spineLogo=wrap
 node tools/shot/garage-angles.mjs --fast --preset=quick --team=redbull --spineLogo=wrap
 ```
@@ -36,4 +39,4 @@ See **garage-parts-livery** `references/garage-angles.md`. Batch audits: `tools/
 ## Load on demand
 
 - Preset views / shot sets, CLI options, `CARVIEW` API, decal handedness →
-  [references/presets.md](car-viewer-presets.md).
+  [references/car-viewer-presets.md](car-viewer-presets.md).

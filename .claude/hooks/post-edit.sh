@@ -2,6 +2,10 @@
 # PostToolUse hook for Write/Edit/MultiEdit: tell the agent AT ONCE when an
 # edit has a consequence it would otherwise learn about at the gate.
 #
+#   js/**/*.js                    -> node --check (does it still parse?)
+#   tests/specs/*.spec.js,
+#   tests/unit/*.test.{mjs,cjs}   -> is the new file registered (groups.json,
+#                                    docs/TESTING.md §5 row, spec counts)?
 #   tools/manifest.cjs            -> node tools/gen/gen-shell.mjs --check
 #   tests/groups.json             -> node tools/gen/gen-test-groups.mjs --check
 #   js/lighting/knobs.js          -> node tools/gen/gen-slider-doc.mjs --check

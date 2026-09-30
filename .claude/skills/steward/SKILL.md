@@ -1,6 +1,6 @@
 ---
 name: steward
-description: Use when driving a PR to green here — CI or Pages red, a PR event or check-in, a base merge conflict, a fix push to validate. Only what Apex 26 does differently: the draft/ready dedupe that makes `cancelled` normal, sync-pr.mjs over a hand merge, who-is-on-it.mjs before a red on the shared deploy branch, the gate a fix push clears, what live means. Rest is AGENTS.md. Which test failed is ci-red-triage; pre-push is check-changes.
+description: Use when driving a PR to green here — after a CI or Pages red (naming the failed test/assertion is ci-red-triage), a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: draft/ready dedupe (`cancelled` is normal), sync-pr.mjs over a hand merge, who-is-on-it.mjs before a shared red, what live means. Pre-push is check-changes.
 ---
 
 # Driving a PR to green in Apex 26
@@ -28,12 +28,24 @@ The other two look identical from the conclusion alone:
 
 - **A job that hit `timeout-minutes` reports `cancelled`** with zero failures
   and every test green right up to the kill — that is a real red. It blocked
-  two deploys on Pages #1959/#1961 and is why `node-suites` is its own job.
+  two deploys on Pages #1959/#1961 and is why `node-suites` is its own job (six slices now, `vm-a1 vm-a2 vm-b1 vm-b2 page slow`, 25 min cap each; the slice names are required checks).
 - Anywhere else, `cancelled` with zero failures is a timeout until proven
   otherwise (AGENTS.md rule 8).
 
 So: list the run's jobs and look for a failed one and for a job at its cap
 before you decide. `ci-red-triage` does exactly this and returns the status line.
+
+A PR that ends `cancelled` twice, zero failures — the recipe:
+
+    node tools/ci/ci-watch.mjs --sha <head sha> --once   # exit 2 / `= ci cancelled` = newest run per workflow, no failed job, no live sibling
+
+1. Is the head SHA the same both times? Then it is the draft/ready dedupe or a
+   push over a live run (a newer push to the same `head.ref` cancels the older
+   run too): wait for the newest run, do not re-run. 2. Newest run itself
+   `cancelled`: open its jobs (`ci-red-triage`) for one at its `timeout-minutes`
+   cap — a real red — and check `/proc/loadavg`. 3. Neither: re-dispatch
+   `ci.yml` once (`group: <name>`), do NOT sync the branch to "refresh" it
+   (section 2: a sync is a new full PR run and can cancel again).
 
 ## 2. A base merge is `sync-pr.mjs`, never a hand merge — and only when you must
 
@@ -49,7 +61,18 @@ is already there. A green PR merges as it stands.
 Every base merge conflicts on `tests/data/ratchets.json` and the generated
 files; `sync-pr` cures both and a hand merge does not. It leaves you ON
 `sync-pr-<branch>` and pushes nothing without `--push` — recovery is in
-`check-changes` → `references/deploy.md`.
+`check-changes` SKILL.md §After `sync-pr.mjs` (not references/deploy.md).
+
+**Hand-written files conflict (prose, a help sheet, a ratchet's FORM):**
+`sync-pr` runs `merge --abort`, prints `real conflicts … resolve by hand`
+(a `(moved to <path>)` tag = re-apply their edit there), and returns you to
+the branch you started on; `sync-pr-<branch>` is left as an unmerged copy of the
+PR head — delete it. Order: `sync-pr <branch> --plan` (names the files, runs
+nothing) → `who-is-on-it.mjs` if the base file is not yours → `git checkout
+<branch> && git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides'
+intent in each hand-written file → generated leftovers at the source + `npm
+run gen` → `git add`/commit → `deploy.mjs --gate-only` → plain `git push`
+(never force). Record the files and the resolution in the PR body.
 
 Resolve a generated-file conflict at the SOURCE and run `npm run gen`; never
 hand-edit one (the edit hook blocks it, and `gen:check` names drift). The list

@@ -1,14 +1,14 @@
 # Game-feel channels, workflow, mistakes
 
 Load this when picking a channel for kerb / wall / shift / collision juice.
-Generic trauma-shake math: [feedback-recipes.md](game-feel-feedback-recipes.md).
+Generic trauma-shake math: [game-feel-feedback-recipes.md](game-feel-feedback-recipes.md).
 
 ## Where to add feedback
 
 | Feedback | Start here | Notes |
 |---|---|---|
 | Screen shake | `js/game.js` `shake` (grep `shake = Math.min`) | Wall: `shake + 0.1 + incidence * 0.3`. Car-car: `collideFx()`. Kerb: `KERB_SHAKE`. Lines drift — grep the symbol. |
-| Kerb strike | `js/game.js` `onKerb` (grep `KERB_SHAKE`) | **Not particles.** `kerbCueT` holds shake + `GameAudio.rumble` + haptics. Tune here. |
+| Kerb strike | `js/game.js` `kerbCueT` block (grep `KERB_SHAKE`); numbers `KERB_SHAKE` 0.22 / `KERB_CUE_HOLD` 0.10 in `js/physics/consts.js` | **Not particles.** The cue block holds shake + `GameAudio.rumble` (`js/audio/engine.js`, 70 ms throttle) + haptics (`Input.vibrate/rumble`, 120 ms). Cue-only tuning: those consts, the throttles, `rumble()`. The lines just above it (`c.speed -= 6*dt`, `kerbGripSm` 0.7) are PHYSICS — never touch them for feel. |
 | Collision / wall sfx | `GameAudio.collision()` | Gate with `collideT` / `wallT`. |
 | Wall/car-car sparks | `Particles.sparks` | Wall scrape from `Tracks.wallAt` proximity; collision via `c.fxSparkI`. |
 | Off-track kickup | `Particles.kickup` | Only when `c.offroad` (`Math.abs(c.x) > hw && !c.onKerb`). Kerbs never get kickup. |
@@ -25,6 +25,10 @@ Generic trauma-shake math: [feedback-recipes.md](game-feel-feedback-recipes.md).
 2. Choose 2–3 channels. Scale from existing data (slip, impact, gear).
 3. FX may **read** physics, never write forces/pose/timers/AI.
 4. Verify visual/audio with hooks; run the relevant deterministic tests.
+5. Determinism proof, no browser: `node --test tests/unit/physics-characterization-vm.test.mjs` (~3 s, same
+   `tests/data/physics-baseline.json` as the browser spec; never regenerate it) plus `player-dynamics-vm.test.mjs`. It stays green
+   only if `shake`/`hitStop`/cue state never reach `physState` — `grep -n '\bshake\b' js/game.js` must show reads only in the camera block.
+   Then the browser spec `physics-characterization` once (test-bg `physics-core`).
 
 ## Common mistakes
 
@@ -36,6 +40,8 @@ Generic trauma-shake math: [feedback-recipes.md](game-feel-feedback-recipes.md).
 - Allocating FX inside `updateCar`. Emit `c.fxSparkI` / bump `shake`, consume
   in render/audio.
 - Applying shake to car/track/heading/collision. Camera/view only.
-- Hit-stop by pausing the physics clock. Visual/audio freeze only.
+- Hit-stop by pausing the physics clock. Visual/audio freeze only. NB the existing `hitStop` (game.js, `simTime = dt * 0.15`,
+  fed by wall impacts) DOES slow the sim clock: it is live-only determinism-affecting, so do not extend it to kerbs; a kerb
+  cue never needs it.
 - Random effects that change headless runs. Isolate RNG from the sim stream.
 - Ignoring reduce-intensity / low-end: cap shake/flash, decay quickly.

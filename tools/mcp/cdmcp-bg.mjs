@@ -23,6 +23,7 @@
  *   node tools/mcp/cdmcp-bg.mjs --status
  *   node tools/mcp/cdmcp-bg.mjs --wait
  *   node tools/mcp/cdmcp-bg.mjs --stop
+ *   (a start over a live run exits 2; add --force to SIGTERM it and start anew)
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";

@@ -8,8 +8,9 @@ Never force-push. Never rebase published history. Never push without review.
 
 ```sh
 node tools/ci/deploy.mjs --plan   # fetch, show their commits / ours / conflicts / touched circuits — runs nothing
-node tools/ci/deploy.mjs          # fetch → merge → test:tooling-fast → verify-track (touched circuits) → push HEAD:<deploy> (retry ×3)
-node tools/ci/deploy.mjs --pr     # same checks, then push the session branch and open/update a PR into the deploy branch (auto-merge)
+node tools/ci/deploy.mjs          # fetch → merge → test:tooling-fast → ci.yml's node suites → sweeps (if the union moves geometry) → verify-track (touched circuits) → push HEAD:<deploy> — REFUSED since 2026-09-30 (branch protection, GH006): use --pr
+node tools/ci/deploy.mjs --gate-only  # the same gate, pushes nothing (the pre-push check)
+node tools/ci/deploy.mjs --pr     # same checks, then push the session branch and open/update a PR into the deploy branch
 ```
 
 What changed underneath it, and why the old steps are gone:
@@ -33,13 +34,15 @@ What changed underneath it, and why the old steps are gone:
    run in the Actions tab. From a session, the host's fetch tool can read
    `version.json`, and `curl` reaches github.io too (see below) — never the
    in-repo wrapper.
-4. **`--pr` is the path that never pushes to the deploy branch** (the agent
-   permission classifier blocks that push). GitHub creates the merge commit,
-   so the PR is a real record — a local fast-forward auto-closes the PR
-   instead (#67).
+4. **`--pr` is the path that lands work** — since 2026-09-30 the deploy
+   branch is protected (a PR with the eight fast-tier checks green, no
+   bypass), so the default mode's direct push fails with GH006. GitHub
+   creates the merge commit, so the PR is a real record — a local
+   fast-forward auto-closes the PR instead (#67). Auto-merge is attempted;
+   if it does not arm, merge the PR yourself once CI is green.
 
 `deploy.mjs` refuses a dirty tree, loadavg ≥ 3, a live Playwright run, and any
-conflict outside the two shell files. Everything below is the manual
+conflict outside the generated files it can re-derive (`index.html`, `version.json`, ratchets, …). Everything below is the manual
 equivalent, kept for when the tool itself is what broke.
 
 ## Protocol (commands and sharp edges)
@@ -58,8 +61,8 @@ back to 15.
 ### Union verification
 
 - `npm run test:tooling-fast` — always.
-- `npm run test:sweeps` — when EITHER side touched `js/track/`, `js/circuits/`,
-  or `tools/`. Per-circuit clip/float/coplanar baselines are exact in BOTH
+- `npm run test:sweeps` — when EITHER side touched what the fleet build reads
+  (`tools/ci/geometry-paths.mjs`, derived from `TRACK_VM`). Per-circuit clip/float/coplanar baselines are exact in BOTH
   directions; geometry green on each lineage alone can be red on their union
   (measured 2026-08-14: one engine fix moved clip counts on 8 circuits).
 - A grown count needs `node tools/track/coplanar-audit.cjs <id>` and a dated note in
@@ -70,7 +73,7 @@ back to 15.
 ### Push and live check
 
 ```sh
-git push origin HEAD:claude/f1-game-project-26h3ng
+git push origin HEAD:claude/f1-game-project-26h3ng   # REFUSED since 2026-09-30 (GH006): land through `deploy.mjs --pr`
 ```
 
 Live `version.json`: subagent **deploy-research**, or
@@ -79,15 +82,15 @@ or `curl`, which DOES reach github.io from this container (HTTP 200 in 0.36 s,
 measured 2026-09-18; this line used to say it does not). For "is MY commit
 live?" curl is the only option that works, because the answer is a `<meta
 name="apex-sha">` in the shell and the fetch tool drops every meta tag:
-`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Pages runs take ~5–10 min. A NEWER push to the
+`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Pages runs take up to ~25 min. A NEWER push to the
 deploy branch CANCELS the pending run (concurrency group) —
 `gh run list --workflow pages.yml` when a build seems missing. A user reporting
 a just-fixed bug is usually on the previous build: check live version FIRST.
 
 ### Sharp edges
 
-- A PR into the deploy branch does NOT deploy until merged; a direct
-  fast-forward push deploys immediately.
+- A PR into the deploy branch does NOT deploy until merged; a push there
+  gets ci.yml's fast tier and, if green, pokes `pages.yml`.
 - After the deploy lands, clients may need one reload for the service worker to
   drop the old shell (`pwa-cache-service-worker`).
 - If `git push` is rejected (non-fast-forward), a session landed while you

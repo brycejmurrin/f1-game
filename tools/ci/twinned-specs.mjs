@@ -128,7 +128,7 @@ export const BROWSER_ONLY = {
   // Measured 2026-09-22 by RUNNING every statically portable spec under the
   // adapter (artifacts/logs/vmpage/*.log): these fail for a reason no static
   // scan sees, and the reason is structural, not a flake.
-  "tests/specs/new-hooks.spec.js": "6 of 56 are first-load assertions (`lapHistory()` null before a track loads); createGame settles the boot circuit, so they can never hold in the VM",
+  "tests/specs/new-hooks.spec.js": "tests/unit/new-hooks-vm.test.mjs replays 55 of 56 against the virgin boot (the VM boots without racing, so the first-load assertions hold); the Madrid foundation test needs a real Chromium, so the spec stays the browser reference rather than a TWINNED pair",
   "tests/specs/car-effects.spec.js": "every test reads the shell DOM inside evaluate (querySelector on a node the VM's document does not build): 0/9",
   "tests/specs/multiplayer-npeer.spec.js": "reads the lobby DOM inside evaluate (querySelector → null): 0/4",
   "tests/specs/multiplayer-roles.spec.js": "reads the lobby DOM inside evaluate (querySelector → null): 0/5",

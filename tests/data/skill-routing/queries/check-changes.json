@@ -1,0 +1,10 @@
+[
+{"query": "I've edited js/physics/ai-drive.js and js/game.js on my claude/ topic branch. Before I push, work out which test groups this diff actually needs, run them in the right order given how slow the software-rendered suite is, and tell me whether anything I touched is likely to have broken something.", "expect": "check-changes"},
+{"query": "did i break anything?? changed like 4 files in js/track and a css file, dont wanna run the whole suite tho. whats the minimum i should run b4 pushing", "expect": "check-changes"},
+{"query": "My last Playwright run just timed out after 45 minutes and the waiter exited 124. Nothing looked failed in the log. Is this the machine being overloaded or a real hang in one of the specs, and should I rerun it?", "expect": "check-changes"},
+{"query": "I changed the Monza centreline in js/circuits/monza.js and nudged a kerb. Verify the track edit is sound: run the track verifier, then the monza foundation spec alone, and confirm I don't need to touch any cache version or ?v= tags for the deploy.", "expect": "check-changes"},
+{"query": "I need to merge my branch into the deploy branch claude/f1-game-project-26h3ng. Run the same gate the deploy runs without actually pushing anything, and tell me which rungs of the pre-push check I've skipped so far.", "expect": "check-changes"},
+{"query": "The Pages deploy is red after my push and I need to know exactly what to do next: check whether the base was already red, see if another session is already fixing it, and get my PR back to green, handling the cancelled draft/ready runs.", "expect": "steward"},
+{"query": "After I edit sw.js and js/ files the offline PWA still serves old assets. Explain how the service worker cache gets invalidated, whether version.json needs a bump, and why a Playwright run failed when version.json changed mid-run.", "expect": "pwa-cache-service-worker"},
+{"query": "I added a new hill to js/circuits/spa.js and want to verify the track edit: check the elevation profile, corner metadata and bridge crossings are right, and then walk me through editing the geometry properly.", "expect": "new-track"}
+]
