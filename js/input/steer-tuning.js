@@ -22,8 +22,7 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 //                             low = gentle near centre. Applied to the UNIFIED
 //                             steer command in updateCar, so it shapes EVERY
 //                             source alike — pad and canvas touch as much as
-//                             tilt and keys. (The old note said "tilt + keys",
-//                             which would mislead anyone tuning for a gamepad.)
+//                             tilt and keys.
 //  pm-smooth   STEER SMOOTHING One-Euro min-cutoff, set as LAG in ms — higher
 //                             slider = more lag = steadier/smoother tilt.
 //  pm-tiltdeg  TILT RANGE     MAX_TILT — degrees of tilt for full lock (the one
@@ -43,42 +42,33 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 // The simplified default-view controls (STEERING / TILT / DRIVING HELP / RACING
 // LINE) bundle these for players who don't want the detail — see refreshMacros().
 // TILT SENSITIVITY: the phone angle that means full lock, so sensitivity is 1/deg.
-// XAG 107 asks for at least ±50 % of the DEFAULT. The old 50°..18° ramp gave
-// -50 % at the lazy end (50/25) but only +39 % at the sharp end (25/18) — half
-// compliant. Solved for f(8) = 25 exactly, so the shipped default does NOT move,
-// with f(10) = 16 (+56 %) and f(1) = 57 (-56 %): 56.5 - 4.5(v-1).
+// XAG 107 asks for at least ±50 % of the DEFAULT, in BOTH directions. Solved
+// for f(8) = 25 exactly (the shipped default), with f(10) = 16 (+56 %) and
+// f(1) = 57 (-56 %): 56.5 - 4.5(v-1).
 function tiltDegFromRange(v) { return Math.round(56.5 - 4.5 * (v - 1)); }
 const SMOOTH_LAG_LO = 55, SMOOTH_LAG_HI = 195;   // ms of lag at notch 1 / notch 10
 function lagFromSmooth(v) { return SMOOTH_LAG_LO + (SMOOTH_LAG_HI - SMOOTH_LAG_LO) * (v - 1) / 9; }
 function cutoffFromSmooth(v) { return 1000 / (2 * Math.PI * lagFromSmooth(v)); }
 // RESPONSE -> WHEELBASE m (inverted; high slider = shorter = snappier turn-in).
-// 4.4..2.6 m, recentred on a REAL car: a 2026 F1 car is ~3.6 m between the axles,
-// which the old 4.3..1.9 m range put at notch 5.9 — so notches 6-10 (2.97..1.9 m)
-// were go-kart geometry, and a player "ending up on the lower end" was correctly
-// finding the only part of the range that corresponded to an actual car. v5 is
-// now exactly 3.60 m (today's default was already 3.23 m, shorter than any F1
-// car), so the travel that used to sit below 2.6 m is redistributed across the
-// range people actually use. Moves the shipped default — see
-// docs/research/PHASE-C-SLIDER-DESIGN.md §3.
+// 4.4..2.6 m, centred on a REAL car: a 2026 F1 car is ~3.6 m between the axles,
+// so v5 is exactly 3.60 m and no notch reaches go-kart geometry below 2.6 m.
+// See docs/research/PHASE-C-SLIDER-DESIGN.md §3.
 function wheelbaseFromSlider(v) { return 4.4 + (2.6 - 4.4) * (v - 1) / 9; } // 4.4..2.6, v5=3.60
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
 // WEIGHT -> YAW_INERTIA (+ YAW_DAMP, which rides with it). The car's rotational
 // inertia: <1 is snappier, higher is lazier and more planted.
 //
 // PIECEWISE, with the knee AT THE DEFAULT NOTCH, and that is the whole point:
-// notch 5 returns 0.58 exactly — today's shipped value — so the default boot is
+// notch 5 returns 0.58 exactly — the shipped value — so the default boot is
 // bit-identical and tests/specs/physics-characterization.spec.js needs no
 // re-baseline (it never touches a slider, so it runs at notch 5). A straight
 // line through 0.58 at notch 5 could only reach ~0.73 at notch 10, which is not
 // far enough to feel planted; the knee buys the whole 0.58..1.00 range above
 // centre while keeping a little travel below for anyone who liked it lighter.
 //
-// Reported as "way too snappy and lightweight" in cockpit with the on-screen
-// buttons. Two things had just compounded: YAW_INERTIA went 0.70 -> 0.58 (a
-// deliberate "snappier turn-in"), and the cockpit viewmodel started yawing with
-// the car instead of the road — so the yaw got faster and visible in the same
-// day. A slider rather than a new constant, because which of those a player
-// wants is taste, and picking for them would just reverse someone else's pick.
+// A slider rather than a new constant: YAW_INERTIA 0.58 is a deliberate
+// "snappier turn-in", which some players read as "way too snappy and
+// lightweight" in cockpit. Which of those a player wants is taste.
 function weightFromSlider(v) {
   return v <= 5 ? 0.50 + (0.58 - 0.50) * (v - 1) / 4
                 : 0.58 + (1.00 - 0.58) * (v - 5) / 5;
@@ -93,27 +83,19 @@ function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // r
 // SPEED STEER -> STEER_SPEED_REF, the reference speed for the lock taper in
 // js/game.js. That taper is now `1 / (1 + v/ref)` (hyperbolic — see the comment
 // at lockTaper in game.js), so ref only needs to be in the same NEIGHBOURHOOD as
-// real speeds to matter; the old 44..124 m/s range was tuned for the retired
-// `1 - v/ref` line, which needed a much bigger ref for the same amount of taper.
-// 15..75 m/s is the hyperbolic-law range: every notch now does something at
-// every speed, where the old law was bit-for-bit identical across notches 1-9
-// at 72 m/s (the floor, not the slider, was doing the work). Moves the shipped
-// default — see docs/research/PHASE-C-SLIDER-DESIGN.md §2.
+// real speeds to matter. 15..75 m/s is the hyperbolic-law range: every notch
+// does something at every speed. See docs/research/PHASE-C-SLIDER-DESIGN.md §2.
 function speedRefFromSlider(v) { return 15 + (75 - 15) * (v - 1) / 9; } // 15..75, v5≈41.7
 // RACE PACE -> the ground-speed scale G.PACE. GEOMETRIC: a fixed 6.0 % per notch
 // over 19 notches. Pace is a MULTIPLIER on ground speed, so a ratio is its
-// natural unit; the old piecewise-linear grid (0.5 + 0.125/notch below the
-// default, 1.0 + 0.06/notch above) made one notch worth 14-25 % on the low half
-// and 4.8-6 % on the high half — so the half a player who wants a calmer car has
-// to use was the half with almost no resolution. That asymmetry is the mapping's,
-// not the player's.
+// natural unit; a piecewise-linear grid gives the calmer half of the range
+// (the half a player who wants a calmer car has to use) almost no resolution.
 //
 // PACE_REF = 14 is the anchor and 1.06^0 is EXACTLY 1.0 there. That is not a
 // tidy round number by accident: it is the reference scale vTop()/vStd() are
 // defined against, several specs pin it, and __apex.setPhysics({pace:1}) must
 // keep meaning what it means. An anchored grid gets that for free.
-// The DEFAULT drops to notch 11 = 0.840, which is the change the player asked
-// for and is now independent of the grid's shape.
+// The DEFAULT is notch 11 = 0.840, independent of the grid's shape.
 const PACE_MIN = 1, PACE_MAX = 19, PACE_REF = 14, PACE_DEF = 11, PACE_STEP = 1.06;
 function paceFromSlider(v)   { return Math.pow(PACE_STEP, v - PACE_REF); }   // 0.469..1.338, v14 = 1.0
 // The readout is a PERCENTAGE OF REFERENCE PACE, and deliberately NOT km/h:
@@ -124,10 +106,9 @@ function paceFromSlider(v)   { return Math.pow(PACE_STEP, v - PACE_REF); }   // 
 function paceLabel(v) { return Math.round(paceFromSlider(v) * 100) + "%"; }
 // DRIVING HELP = ROAD_FOLLOW: how much of each corner the car tracks for you.
 // v1 is a true ZERO — the car does exactly, and only, what the driver asks.
-// This used to bottom out at 0.25, so the assist was always steering a quarter of
-// every corner and there was no way to switch it off; you were permanently
-// driving against a hand you could not see or disable. That is the "forced" feel.
-// It is now opt-IN: the default is v1 (off), and the range runs 0 .. 0.70.
+// A floor above zero means the assist always steers part of every corner with
+// no way to switch it off — the "forced" feel. So it is opt-IN: the default is
+// v1 (off), and the range runs 0 .. 0.70.
 function helpFromSlider(v)   { return (v - 1) / 9 * 0.70; }            // 0..0.70 assist gain, v1 = OFF
 function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " + (-v)); }
 function adaptMixFromSlider(v) { return (v - 1) / 9; }   // 0..1, v1 = OFF
@@ -216,9 +197,9 @@ const PRESETS = {
               adaptiveButtons: 8, brakeCue: 8 },
   // STANDARD is the SHIPPED car, so it must equal the store fallbacks in
   // applySteerTuning() exactly — activePreset() compares the two and a fresh
-  // install reads CUSTOM the moment they disagree. Both became the owner's own
-  // profile on 2026-09-08: a long, lazy rack (RATE 2) with little smoothing,
-  // more lock and a later speed taper.
+  // install reads CUSTOM the moment they disagree. The shipped profile is a
+  // long, lazy rack (RATE 2) with little smoothing, more lock and a later speed
+  // taper.
   standard: { tiltDeg: 8, steerSmooth: 3, steerRate: 2,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
               adaptiveButtons: 5, brakeCue: 4 },
@@ -235,10 +216,9 @@ const PRESET_STORE = {  // slider store-key  ->  preset field
 
 // FEEL. NORMAL must be the shipped car for the same reason STANDARD must be:
 // matchSteerLevel() compares the live sliders against these, so a fresh install
-// whose values are in none of them reads CUSTOM out of the box. Re-centred
-// 2026-09-08 when the shipped profile changed. The ladder now differentiates on
-// LOCK and the speed taper over one calm rack, and SIM is the one step that also
-// quickens the rack — which is what separated it before.
+// whose values are in none of them reads CUSTOM out of the box. The ladder
+// differentiates on LOCK and the speed taper over one calm rack, and SIM is the
+// one step that also quickens the rack.
 const STEER_LEVELS = {
   easy:   { steerRate: 2, steerExpo: 4, steerLock: 5, steerSpeed: 5 },
   assist: { steerRate: 2, steerExpo: 5, steerLock: 6, steerSpeed: 6 },
@@ -486,15 +466,14 @@ function applySteerTuning() {
   const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
   const adapt   = clamp(store.get("adaptiveButtons", 5), SLIDER_MIN, SLIDER_MAX);
-  // CAR WEIGHT is the ONE slider of the owner's profile that is device-aware,
+  // CAR WEIGHT is the ONE slider of the shipped profile that is device-aware,
   // and it is device-aware because it collides with a measurement rather than
   // with a taste. 10 (YAW_INERTIA 1.0) is what they drive on a PHONE, where the
   // steering is two thumb buttons and a heavy car is easier to place. On a
-  // pointer device it costs 22 % of turn-in response against the 0.58 the
-  // 2026-09-04 drive-feel work set deliberately, and 12 % against the 0.7 that
-  // displaced (measured: heading change over 0.5 s of full lock from 40 m/s is
-  // 0.4728 / 0.4185 / 0.3684 at 0.58 / 0.7 / 1.0). So a phone keeps the owner's
-  // weight and a desktop keeps the snappier car. Safe to split: carWeight is in
+  // pointer device it costs 22 % of turn-in response against the deliberate
+  // 0.58, and 12 % against 0.7 (measured: heading change over 0.5 s of full lock from 40 m/s is
+  // 0.4728 / 0.4185 / 0.3684 at 0.58 / 0.7 / 1.0). So a phone keeps the heavy
+  // car and a desktop keeps the snappier one. Safe to split: carWeight is in
   // neither PRESET_STORE nor STEER_DEFAULTS, so no preset or FEEL row reads
   // CUSTOM because of it.
   const heavyDefault = (function () {

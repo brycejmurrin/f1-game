@@ -677,7 +677,7 @@ function drawElevProfile(cv, t, showEl) {
  * screen is shown, not the call that showed it. updateTrackPreview() runs on
  * that first (unmeasurable) pass and deliberately does not pin the canvas; the
  * observer refits once the hero has a box, and again whenever it changes — a UI
- * SIZE change, an orientation flip, sheetshape.js flipping data-shape — all of
+ * SIZE change, an orientation flip, js/ui/sheet-shape.js flipping data-shape — all of
  * which move the slot without changing the selected circuit.
  * TERMINATION: refit only when the box actually differs from the one last
  * fitted against (the refit pins the canvas, which cannot resize the hero — the

@@ -46,11 +46,9 @@
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
         place, ridge, circuitKit, modelGroup, vadd, addBox, seat, MAT } = api;
 
-      // ---------------------------------------------------------------------
       // 1. PALETTE + LOCAL HELPERS
       //    Overcast English green: desaturated, cool, low contrast. Nothing
       //    here climbs above ~0.8 in any channel.
-      // ---------------------------------------------------------------------
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
       const LEAF      = [0.20, 0.33, 0.17];   // mature broadleaf, damp
@@ -150,7 +148,6 @@
         }
       };
 
-      // ---------------------------------------------------------------------
       // 2. s 0.005 +1 14 — PITS, PADDOCK, BROADCAST, CAMERA TOWER
       //    Club-circuit pit block: one long, low, flat-roofed run. No towers.
       //
@@ -163,7 +160,6 @@
       //    frac that lands at the corrected line. Everything below block 3
       //    stays in the authoring frame on purpose.
       //    sl() wraps past 1 above f = 0.097, so keep every argument below it.
-      // ---------------------------------------------------------------------
       // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
       // the 4 dp the props were placed against (a literal 0.9027 until 2026-09-22:
       // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
@@ -198,11 +194,9 @@
       fence(sl(0.955), sl(0.055), 1, 30, 2.4, FENCE_C);
       fence(sl(0.950), sl(0.062), 1, 66, 2.2, FENCE_C);
 
-      // ---------------------------------------------------------------------
       // 3. s 0.022 -1 20 — START/FINISH STAND (modest, two shallow banks)
       //    shell/crowd are COLOUR ARRAYS; null lets the emitter pick a livery.
       //    Re-keyed with the pits — the stand and gantry face the line.
-      // ---------------------------------------------------------------------
       grandstandEx(sl(0.014), -1, 32, 64, null, null,
         { roof: "cantilever", tiers: 1 });
       // Second S/F bank: gap 30 restores positive rake (was BACKWARDS at 21).
@@ -221,13 +215,11 @@
       carPark(sl(0.960), sl(0.070), -1, 66, 9, 4, 143);
       rank(sl(0.938), sl(0.088), -1, 86, 22, 720, 9.0, 15.0);
 
-      // ---------------------------------------------------------------------
       // 4. s 0.048 +1 34 — EX-DONINGTON COLLECTION (disused)
       //    The Donington Grand Prix Exhibition closed permanently on
       //    5 Nov 2018 (Derby Telegraph / Wikipedia). Keep the long hall as a
       //    disused exhibition block — do not present it as an open museum.
       //    gap 58, not the brief's 34: closer than ~55 the hall overlaps tarmac.
-      // ---------------------------------------------------------------------
       building(K(0.048), 1, 58, 24, 7.5, 64, { col: WALL, roof: ROOF, flat: true });
       building(K(0.072), 1, 28, 12, 4.8, 18, { col: WALL_2, roof: ROOF, flat: true });
       groundPatch(K(0.046), 1, 24, [26, 0.18, 54], TARMACISH);
@@ -245,9 +237,7 @@
       rank(0.014, 0.054, 1, 84, 14, 830, 9.0, 15.0);
       rank(0.056, 0.084, 1, 46, 8, 836, 9.5, 15.5);
 
-      // ---------------------------------------------------------------------
       // 5. s 0.0663 -1 12 — REDGATE (first-corner right off the straight)
-      // ---------------------------------------------------------------------
       guardrail(0.055, 0.098, -1, 12, ARMCO);
       tyreWall(0.060, 0.080, -1, 12.5, TW_R);
       spectatorHill(0.052, 0.105, -1, 22, { h: 7.5, col: GRASS });
@@ -264,13 +254,11 @@
       hedge(0.044, 0.114, -1, 62, 2.0, HEDGE_C);
       rank(0.040, 0.120, -1, 70, 18, 940, 9.5, 16.0);
 
-      // ---------------------------------------------------------------------
       // 6. s ~0.19 -1 — HOLLYWOOD, top of the Craner drop
       //    2017–18 MSV works: large permanent grandstand (Wikipedia; MSV GP
       //    map "Hollywood Grandstand"). grandstandEx suppressed on this fold;
       //    hero is modelGroup with positive rake. Frame debt: authored fracs
       //    only — do not edit startFrac/sceneryStartFrac.
-      // ---------------------------------------------------------------------
       {
         const side = -1;
         // Footprint probe: s≈0.188 gap≥20 clears; s=0.17 rejects at any gap
@@ -349,14 +337,12 @@
       billboard(K(0.230), -1, 18, 8, 3.0, [0.68, 0.70, 0.68]);
       rank(0.112, 0.258, -1, 82, 22, 1050, 10.0, 16.5);
 
-      // ---------------------------------------------------------------------
       // 7. s 0.2500 +1 26 — MID-CRANER INFIELD: KEEP IT EMPTY
       //    Individual specimens on mown grass and one low ridge running with
       //    the slope. Nothing tall — the Hollywood bank is paying for this view.
       //    The only additions here are GROUND: mown/unmown patchwork and a
       //    second low ridge. No structures, no rank, nothing that blocks the
       //    fall from the bank above it.
-      // ---------------------------------------------------------------------
       for (let i = 0; i < 7; i++) specimen(K(0.200 + i * 0.020), 1, 30 + (i % 3) * 12, 100 + i * 13);
       slopeRidge(K(0.245), 1, 66, 110, 24, 5.5, GRASS);
       slopeRidge(K(0.290), 1, 84, 90, 20, 4.0, ROUGH);
@@ -365,9 +351,7 @@
       groundPatch(K(0.215), 1, 40, [26, 0.14, 64], GRASS_D);
       groundPatch(K(0.288), 1, 34, [24, 0.14, 58], ROUGH);
 
-      // ---------------------------------------------------------------------
       // 8. s 0.3212 -1 13 — CRANER CURVES: enclosed and dark
-      // ---------------------------------------------------------------------
       guardrail(0.255, 0.345, -1, 10.5, ARMCO);
       tyreWall(0.278, 0.294, -1, 11.5, TW_Y);
       tyreWall(0.312, 0.330, -1, 11.5, TW_Y);
@@ -380,9 +364,7 @@
       for (let i = 0; i < 6; i++) bush(K(0.258 + i * 0.017), -1, 26 + (i % 2) * 7, LEAF_D);
       hut(K(0.300), -1, 24, WALL_2);
 
-      // ---------------------------------------------------------------------
       // 9. s 0.3342 +1 15 — OLD HAIRPIN, the lowest point of the lap
-      // ---------------------------------------------------------------------
       spectatorHill(0.318, 0.372, 1, 17, { h: 8.0, col: GRASS });
       hedge(0.314, 0.378, 1, 15, 1.9, HEDGE_C);
       guardrail(0.310, 0.380, 1, 12, ARMCO);
@@ -397,9 +379,7 @@
       hedge(0.306, 0.386, 1, 54, 2.1, HEDGE_L);
       rank(0.302, 0.392, 1, 64, 16, 1270, 9.5, 16.0);
 
-      // ---------------------------------------------------------------------
       // 10. s 0.4552 +1 10 — STARKEY'S BRIDGE, on the climb back out
-      // ---------------------------------------------------------------------
       guardrail(0.415, 0.495, 1, 11, ARMCO);
       guardrail(0.415, 0.495, -1, 11, ARMCO);
       sponsorHoarding(0.440, 0.472, 1, 12);
@@ -427,9 +407,7 @@
       rank(0.420, 0.492, 1, 58, 14, 1380, 9.0, 15.0);
       rank(0.418, 0.494, -1, 56, 14, 1420, 9.5, 15.5);
 
-      // ---------------------------------------------------------------------
       // 11. s 0.5162 -1 22 — SCHWANTZ CURVE: trees, and nothing else
-      // ---------------------------------------------------------------------
       forestEdge(0.490, 0.556, -1, 22, { col: LEAF, spacing: 14 });
       forestEdge(0.495, 0.552, -1, 44, { col: LEAF_D, spacing: 17 });
       guardrail(0.492, 0.556, -1, 12, ARMCO);
@@ -440,9 +418,7 @@
       for (let i = 0; i < 7; i++) bush(K(0.494 + i * 0.010), -1, 30 + (i % 3) * 6, i % 2 ? LEAF_D : LEAF_B);
       hut(K(0.5162), -1, 27, WALL_2);
 
-      // ---------------------------------------------------------------------
       // 12. s 0.5713 +1 18 — McLEANS
-      // ---------------------------------------------------------------------
       tyreWall(0.562, 0.584, 1, 12, TW_Y);
       spectatorHill(0.558, 0.594, 1, 19, { h: 5.5, col: GRASS });
       marshalPost(K(0.5713), 1, 14);
@@ -456,9 +432,7 @@
       hedge(0.548, 0.606, 1, 56, 2.0, HEDGE_L);
       rank(0.544, 0.610, 1, 66, 16, 1600, 9.0, 15.5);
 
-      // ---------------------------------------------------------------------
       // 13. s 0.6803 -1 14 — COPPICE, the woodland the uphill right runs into
-      // ---------------------------------------------------------------------
       forestEdge(0.650, 0.720, -1, 16, { col: LEAF_D, spacing: 10 });
       forestEdge(0.655, 0.715, -1, 34, { col: LEAF, spacing: 13 });
       tyreWall(0.674, 0.690, -1, 12.5, TW_Y);
@@ -471,9 +445,7 @@
       slopeRidge(K(0.700), -1, 62, 90, 22, 5.0, GRASS_D);
       hut(K(0.6803), -1, 24, CREAM);
 
-      // ---------------------------------------------------------------------
       // 14. s 0.7592 -1 12 — THE ESSES (spectator tunnel crossing)
-      // ---------------------------------------------------------------------
       guardrail(0.735, 0.782, -1, 11, ARMCO);
       tyreWall(0.750, 0.768, -1, 12, TW_R);
       grandstandEx(0.756, -1, 24, 40, null, null,
@@ -496,9 +468,7 @@
       hut(K(0.780), -1, 24, CREAM);
       rank(0.724, 0.798, -1, 62, 18, 1840, 9.5, 16.0);
 
-      // ---------------------------------------------------------------------
       // 15. s 0.7887 +1 20 — MELBOURNE HAIRPIN: sparse and rural
-      // ---------------------------------------------------------------------
       tyreWall(0.780, 0.800, 1, 13, TW_W);   // older grey stacks out at Melbourne
       hedge(0.770, 0.815, 1, 26, 2.1, HEDGE_C);
       marshalPost(K(0.7887), 1, 16);
@@ -514,9 +484,7 @@
       hedge(0.766, 0.822, 1, 60, 1.9, HEDGE_L);
       rank(0.762, 0.828, 1, 80, 14, 1950, 9.0, 15.0);
 
-      // ---------------------------------------------------------------------
       // 16. s 0.8700 -1 30 — MELBOURNE RETURN LEG: the least developed stretch
-      // ---------------------------------------------------------------------
       hedge(0.820, 0.920, -1, 32, 2.3, HEDGE_C);
       guardrail(0.815, 0.925, -1, 11, ARMCO);
       groundPatch(K(0.870), -1, 18, [22, 0.16, 80], ROUGH);
@@ -532,9 +500,7 @@
       slopeRidge(K(0.890), -1, 58, 90, 22, 4.0, ROUGH);
       rank(0.822, 0.926, -1, 86, 18, 2060, 9.5, 16.0);
 
-      // ---------------------------------------------------------------------
       // 17. s 0.9437 +1 13 — GODDARDS, the last corner onto the pit straight
-      // ---------------------------------------------------------------------
       tyreWall(0.936, 0.954, 1, 13, TW_R);
       // No grandstandEx here — at every gap the crowdBank buried into the
       // Goddards exit berm (ground-audit). Viewing is the spectatorHill below
@@ -553,13 +519,11 @@
       // the grandstandEx + spectatorHill below cover viewing.
       rank(0.924, 0.992, -1, 66, 14, 2170, 9.0, 15.5);
 
-      // ---------------------------------------------------------------------
       // 18. WHOLE LAP — parkland scatter, base armco, marshal posts
       //     Well-spaced mature broadleaf with mown grass between: the hash gate
       //     drops ~60% of candidates and the distance jitter breaks any rank.
       //     Skipped through the Craner fall (0.17–0.33) on the infield so the
       //     drop stays visible from the Hollywood bank.
-      // ---------------------------------------------------------------------
       every(22, (k) => {
         const s = k / n;
         const h = hash(k * 37 + 5);

@@ -145,7 +145,7 @@ in CI today) boot in ~4 s on `macos-latest`'s real Metal adapter — give
 
 > **Landed 2026-09-01 (unverified until pushed — no Actions run yet):**
 > `ci.yml` `renderer-filter` (ubuntu, path filter: `js/render/**`,
-> `js/game/lighting*.js`, `light-presets.js`, `atmosphere.js`, `tuner.js`,
+> `js/game/lighting*.js` and the lighting modules since moved to `js/lighting/`,
 > the `test:gfx` specs, both playwright configs; fail-safe RUN on schedule /
 > dispatch / unresolvable diff) → `renderer-macos` (`macos-latest`,
 > `test:gfx` through `playwright.gpu.config.js` — the base config minus

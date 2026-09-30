@@ -2,7 +2,7 @@
 const GameHud = (function () {
   "use strict";
 
-const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins physics-consts.js first
+const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins js/physics/consts.js first
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
 function create(G) {
@@ -1099,7 +1099,7 @@ function drawMinimap() {
   // The next visible draw re-measures (syncHudVisClasses clears _fitKey).
   if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) return;
   // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
-  // the same convention sheetshape.js relies on). Bitmap = local x effective
+  // the same convention js/ui/sheet-shape.js relies on). Bitmap = local x effective
   // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu
   // track preview (js/ui/select-screen.js), which solved this exact blur first.
   // currentCSSZoom, not the raw --hud-scale: the element rides the CAPPED

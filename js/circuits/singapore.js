@@ -81,7 +81,7 @@
     // 746,999 — the remaining generic-city-only frontage (the ~35% of side -1
     // with no bespoke coverage) is itself already close to a 700,000 budget,
     // so 700,000 was never reachable here without either bare street or
-    // shared-engine (js/track/tracks.js / scenery-city.js) changes touching
+    // shared-engine (js/track/tracks.js / js/track/scenery/city.js) changes touching
     // every street/night circuit. tests/specs/new-hooks.spec.js's budget for this
     // circuit is raised to 1,050,000 to match the real, verified number.
     // Cool night: near-black zenith + cool fog/ambient so CBD glass & neon pop.

@@ -1938,8 +1938,8 @@ const TLX = (function () {
       // push their first draw record only once a tyre marks or smokes — after
       // the launch — so the scene warm never saw them and their three programs
       // (five pipelines) compiled together in one mid-race frame: every sync
-      // compile left on the WebGPU lap (PERF-FINDINGS §2ah,
-      // scratch/compile-attrib-probe.mjs). Compile each FX material once on its
+      // compile left on the WebGPU lap (PERF-FINDINGS §2ah).
+      // Compile each FX material once on its
       // stream's real vertex layout, under the scene target and MRT the warm has
       // already set; the throwaway Mesh is dropped, the stream geometry kept.
       // apex26.tlxWarmFx=0 is the A/B handle.

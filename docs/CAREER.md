@@ -29,8 +29,8 @@ expressible at once — a single flat enum cannot say that. The split also lets
 qualifying reuse the time-trial path instead of adding a game state.
 
 `G.seasonMode` returns `flow === "season" || flow === "career"`, and `G.timeTrial`
-returns `session === "tt"`. Every downstream module (`results.js`, `menus.js`,
-`hud.js`, `agentview.js`) and the `__apex.info()` contract are unchanged. Because a
+returns `session === "tt"`. Every downstream module (`js/ui/results-sheet.js`, `js/ui/title-menu.js`,
+`js/ui/hud.js`, `js/agent/agentview.js`) and the `__apex.info()` contract are unchanged. Because a
 career genuinely *is* a championship, the standings screens work in career with no
 career-specific branch.
 
@@ -873,6 +873,18 @@ QUALIFYING grids the sprint, and the Grand Prix runs its own session
 qualifying off the GP no longer copies the sprint result (the old `sprintOrder`
 save field is dropped on load; an old mid-weekend save that already qualified
 keeps that order for its GP).
+
+**Sprint weekends are a standalone-Season format; a career never sprints.**
+Season SETUP's SPRINT RACE row (`js/career/season-ui.js`) offers OFF, ON (every
+round) and SPRINT ROUNDS (only the rounds marked SPRINT in the calendar list,
+`sprintIds`). A sprint runs a third of the race distance (`SPRINT_FRAC`, at
+least `SPRINT_MIN` = 2 laps) before the Grand Prix and pays `SPRINT_POINTS`
+(8-7-6-5-4-3-2-1). Both legs score into one round's `roundPts`. All of it sits
+behind `fmtActive()` in `js/career/season-cal.js`, which is true only when
+`flow === "season"`. So `sprintOn()` is false in a career save, and a career
+weekend is always qualifying then the Grand Prix. The career code still reads
+`sprintOrder` and `stage` (`Career.objectiveLocked()` and the season rollover
+in `js/career/career.js`), but only to stay safe on shared season fields.
 
 **Every round qualifies, and the classification never outlives its weekend.** Two
 bugs came out of getting that wrong, and both looked like working grids:
