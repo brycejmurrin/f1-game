@@ -238,6 +238,7 @@ const FULL = [
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
   "js/physics/grip-steer.js",
+  "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-drive.js",
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
@@ -600,7 +601,12 @@ const HARD_EDGES = [
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
   ["js/core/mat4.js", "js/physics/grip-steer.js"],       // GripSteer binds M4.clamp/lerp at eval
-  ["js/physics/grip-steer.js", "js/game.js"],            // updateCar caps driverDelta via GripSteer.apply
+  ["js/physics/grip-steer.js", "js/physics/player-forces.js"], // PlayerForces.step caps via GripSteer.forPlayer
+  ["js/core/mat4.js", "js/physics/player-forces.js"],    // PlayerForces binds M4.clamp at eval
+  ["js/physics/consts.js", "js/physics/player-forces.js"], // …and reads PhysicsConsts at eval
+  ["js/physics/tyre-model.js", "js/physics/player-forces.js"], // lateralCurve / brakeBeta
+  ["js/physics/player-forces.js", "js/game.js"],         // updateCar calls PlayerForces.create(G)
+
   ["js/core/mat4.js", "js/race/pit-lane.js"],            // PitLane binds M4.clamp at eval
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
   ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval

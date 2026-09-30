@@ -389,7 +389,7 @@ function analyse(track, prims, opt) {
 // was always empty, every site resolved to "?" and the report named no emitter
 // at all (the counts were right, the attribution was dead). Measured on vegas
 // 2026-09-22: 184 pairs, all `?  X  ?`; with the sink, `strut@circuits/scenery/
-// vegas.js:40 < ferrisWheel`.
+// vegas.js:<line> < ferrisWheel`.
 //
 // `opt` may be an ARRAY of option sets: the circuit is built ONCE and every set
 // is analysed over the same prims (analyse() only reads them — facesOf builds
@@ -445,7 +445,7 @@ function main() {
   const env = buildContext();
   const ids = argv.includes("--all")
     ? require("../lib/circuit-scope.cjs").scope(env.Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
-    // Skip any token consumed as a flag's VALUE, or `--site scenery-city.js:109`
+    // Skip any token consumed as a flag's VALUE, or `--site <file>.js:<line>`
     // is read as a track id.
     : argv.filter((a, i) => !a.startsWith("--") && isNaN(Number(a)) &&
                             !(i > 0 && argv[i - 1].startsWith("--")));

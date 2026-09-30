@@ -57,7 +57,7 @@ const Tracks = g.sandbox.Tracks, track = g.G.track, L = track.total;
 const wrapS = (s) => { s %= L; return s < 0 ? s + L : s; };
 
 // PICK THE STRAIGHTS the branch actually fires on: fracs whose whole
-// lookahead window (18-70 m, as game.js:4289 reads it) stays under defendPull's
+// lookahead window (18-70 m, as updateCar in js/game.js reads it) stays under defendPull's
 // own |kA| <= 0.004, for the length of the duel.
 const cand = [];
 for (let f = 0; f < 1; f += 1 / 400) {
