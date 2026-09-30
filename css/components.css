@@ -679,6 +679,10 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    the sheet from the tyre record, so they stay out of the CSS colour count and
    cannot drift from the HUD's. */
 .res-stints { display: flex; width: 78px; height: 6px; border-radius: var(--r-pill); overflow: hidden; flex-shrink: 0; }
+/* A phone: the name wins the row. At 78px the strategy bar took the middle
+   third of a 390px results row and the name ellipsised to "RUS Geor…"; the
+   bar stays proportional at half the width. */
+body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 .res-stint { height: 100%; min-width: 2px; }
 /* RESULTS SETTLE. The classification lands row by row (18 ms apart, capped at
    the 12th row) instead of appearing; results-sheet.js writes --i per row.
