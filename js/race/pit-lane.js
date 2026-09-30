@@ -1443,17 +1443,14 @@ const PitLane = (function () {
       // a rookie gambles, a veteran runs the book. Kept on the plan, so the
       // lap-by-lap re-cut keeps the same driver's taste.
       if (!player && car && AiDrive.tasteRoll) roll = AiDrive.tasteRoll(roll, car);
-      // …and prices its sets at the AI's own wear rate (AiDrive AI_LOAD_K),
-      // kept on the plan as its starting load factor for the re-cut and think().
-      const loadK0 = player ? 1 : (AiDrive.STRAT.AI_LOAD_K || 1);
       const plan = AiDrive.stintPlan({
         laps: n,
-        lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, n) / loadK0,
+        lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, n),
         pitLossLaps, roll, stops: pin, twoCompound: twoCompoundRule(n),
         start: start || undefined,
         firstLife: start && Number.isFinite(rec.life) ? G.tyres.planLaps(rec.life, n) : undefined,
       });
-      if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; plan.roll = roll; if (!player) plan.loadK = loadK0; }
+      if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; plan.roll = roll; }
       return plan;
     }
     /** FIA 2026 SR B6.3.6: a DRY *Race* uses two dry compounds. Not below

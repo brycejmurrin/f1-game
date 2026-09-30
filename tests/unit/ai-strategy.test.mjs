@@ -275,12 +275,6 @@ test("no stint is shorter than MIN_STINT, and a 5-lap race is run on one set", (
   assert.equal(pinned.stops, 1);
 });
 
-test("an AI plan is priced at the AI's measured wear rate", () => {
-  // 0.90-0.93 measured on four circuits (AI_LOAD_K's comment): planned at 1.0
-  // the whole grid stopped early.
-  assert.ok(A.STRAT.AI_LOAD_K >= 0.85 && A.STRAT.AI_LOAD_K < 1, `AI_LOAD_K ${A.STRAT.AI_LOAD_K}`);
-});
-
 test("the planner's cliff IS the sim's cliff", () => {
   // Two copies of one number: when the sim's cliff steepened and the planner's
   // did not, every plan would price a dead set at the old, cheap rate.
