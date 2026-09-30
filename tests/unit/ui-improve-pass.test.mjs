@@ -1112,11 +1112,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/menus.css"), "#sel-track-preview", "grid-template-columns"), "minmax(0, 1fr)",
     "narrow SELECT stacks the still over the numbers");
   assert.equal(decl(css("css/menus.css"), "#sel-still", "object-fit"), "cover");
-  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"uih uih"[\s\S]*"uis uis"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
-    "DISPLAY is UI SIZE heading + slider, then HUD, METRICS, and RENDERER");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h', "grid-area"), "uih");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "uis");
+  const dispAreas = decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas");
+  assert.match(dispAreas, /^"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
+    "DISPLAY opens on HUD, then METRICS and RENDERER (UI SIZE moved to APPEARANCE › READABILITY)");
+  assert.doesNotMatch(dispAreas, /uih|uis/, "no hole left for UI SIZE");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
@@ -1246,8 +1245,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "closed FEEL summary carries the live steer step");
   assert.match(code("js/audio/panel.js"), /\["k", "MUSIC"\]/,
     "closed MUSIC summary carries ON and source");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
-    "COCKPIT is a section break after the renderer row");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-uiscale-h", "margin-top"), "calc(var(--gap) * 0.5)",
+    "UI SIZE heading is a section break under READABILITY");
   assert.match(code("js/camera/cockpit-opts.js"), /fold\.id = "pm-cockpit"[\s\S]*?getElementById\("pm-visual-tuners"\)[\s\S]*?insertBefore\(fold, tools\)/,
     "COCKPIT is its own fold, just above ADVANCED VISUALS — never inside the RENDERER backend list");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit', "grid-area"), "cockpit",
@@ -1264,7 +1263,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "WEBGL2 fallback is a value chip, not OFF — red would lie");
   assert.match(read("index.html"), /id="pm-uiscale-h"/,
     "UI SIZE is a real COCKPIT-style heading, not a tuner caption");
-  assert.equal(decl(css("css/components.css"), "#pm-panel-display > .pm-group-h", "display"), "flex",
+  assert.equal(decl(css("css/components.css"), "#pm-uiscale-h", "display"), "flex",
     "UI SIZE heading shares the row with the live %");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--steel)",
     "fold names stay heading steel");
@@ -1353,7 +1352,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // unset (0px) with no mirror, so the own slot is what shows.
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px))",
     "compact radio cards sit right under the timing row, like every other density");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-side):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
     "…and step below the flag chip while a caution shows, never on top of it");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px))");
   assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");

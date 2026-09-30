@@ -425,7 +425,7 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
 
     try {
       for (const pct of [40,80,100,130,150,200]) {
-        await press('#mb-settings'); await press('#pm-open-display');
+        await press('#mb-settings'); await press('#pm-open-appearance');
         await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); }, pct);
         await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
         await press('#pm-settings-close'); await press('#pm-open-driving');

@@ -1,6 +1,10 @@
 /* Apex 26 — TitleFx: title-screen motion, wash and the background drawing, as
    player settings under SETTINGS › APPEARANCE.
 
+   MOTION has its own heading (it reaches every screen and the race); TITLE
+   INTRO / MENU WASH / TITLE ART / REPLAY INTRO sit in the TITLE SCREEN fold,
+   whose summary js/ui/title-layout.js paints through onChange().
+
    MOTION: ON / REDUCED. An OS that asks for reduced motion always
    wins, and is followed live; otherwise the stored choice answers, and unset
    is ON. Lands on <html data-motion="reduce"> — absent when motion is on —
@@ -53,6 +57,11 @@ const TitleFx = (function () {
   const byId = (id) => (typeof document !== "undefined" ? document.getElementById(id) : null);
   const overlay = () => byId("overlay");
   let introTimer = 0;
+  // TITLE INTRO / MENU WASH / TITLE ART listeners: the TITLE SCREEN fold's
+  // summary (js/ui/title-layout.js) repaints when one of them moves.
+  const subs = [];
+  function onChange(fn) { if (typeof fn === "function") subs.push(fn); }
+  const changed = () => { for (const fn of subs) fn(); };
 
   const osReduce = () => !!(osQuery && osQuery.matches);
   // The OS asking for reduced motion always wins — the setting can only ADD
@@ -130,6 +139,7 @@ const TitleFx = (function () {
     store.set(KEY_INTRO, next);
     applyIntro();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-titleintro", introMode());
+    changed();
     return introMode();
   }
   function setWash(v) {
@@ -137,6 +147,7 @@ const TitleFx = (function () {
     store.set(KEY_WASH, next);
     applyWash();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-menuwash", washMode());
+    changed();
     return washMode();
   }
   function setArt(v) {
@@ -144,6 +155,7 @@ const TitleFx = (function () {
     store.set(KEY_ART, next);
     applyArt();
     if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-titleart", artMode());
+    changed();
     return artMode();
   }
 
@@ -207,8 +219,8 @@ const TitleFx = (function () {
     wireRows();
   }
 
-  // Static shell rows under SETTINGS › APPEARANCE (moved off DISPLAY › UI SIZE
-  // so motion + title art sit with the other visual chrome).
+  // Static shell rows under SETTINGS › APPEARANCE: MOTION, then the TITLE
+  // SCREEN fold's TITLE INTRO / MENU WASH / TITLE ART and REPLAY INTRO.
   function wireRows() {
     if (typeof SettingRow === "undefined") return;
     if (byId("pm-motion")) {
@@ -260,7 +272,7 @@ const TitleFx = (function () {
   return {
     KEY, KEY_INTRO, KEY_WASH, KEY_ART, MOTION, INTROS, WASHES, ARTS, INTRO_MS,
     mode, introMode, washMode, artMode, introHoldMs,
-    set, setIntro, setWash, setArt,
+    set, setIntro, setWash, setArt, onChange,
     apply, applyMotion, applyIntro, applyWash, applyArt, replay, initUI, wireRows,
   };
 })();

@@ -1809,13 +1809,10 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
 #pmsettings-inner[data-shape="wide"] #pm-panel-appearance > details { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-appearance :is(.pm-accent-preview, .pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
-/* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
-   Named areas so an open fold cannot steal the hole. */
+/* DISPLAY: HUD / METRICS / RENDERER each on their own row (UI SIZE moved to
+   APPEARANCE › READABILITY). Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
-    "uih uih"
-    "uis uis"
-    "uihelp uihelp"
     "hudopts hudopts"
     "metrics metrics"
     "renopts renopts"
@@ -1844,13 +1841,11 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   margin: 0;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h { grid-area: uih; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: uis; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-help { grid-area: uihelp; }
-/* DISPLAY sliders are settings rows, not tuner rows: steel label, text
-   value (tuner red is the loud bit), no extra tap-height padding around
-   a track that is already --slider. */
-#pm-panel-display .tune-row {
+/* DISPLAY sliders (and APPEARANCE's UI SIZE) are settings rows, not tuner
+   rows: steel label, text value (tuner red is the loud bit), no extra
+   tap-height padding around a track that is already --slider. */
+#pm-panel-display .tune-row,
+#pm-panel-appearance .tune-row:has(#pm-uiscale) {
   min-height: 0;
   gap: 0;
 }
@@ -1862,15 +1857,15 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   color: var(--text);
   font-size: var(--fs-micro);
 }
-/* UI SIZE heading: same .pm-group-h as COCKPIT. The % sits on the right
-   in heading steel (not tuner red). Hidden .tune-label keeps the slider
-   row labeled. The range itself inherits the shared red accent. */
-#pm-panel-display > .pm-group-h {
+/* UI SIZE heading (APPEARANCE › READABILITY): a .pm-group-h like OVERALL SPEED.
+   The % sits on the right in heading steel (not tuner red). The range's
+   aria-label names it. The range itself inherits the shared red accent. */
+#pm-uiscale-h {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-#pm-panel-display > .pm-group-h b {
+#pm-uiscale-h b {
   color: inherit;
   font-style: italic;
   font-weight: 700;
@@ -1940,9 +1935,11 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   gap: calc(var(--gap) / 3);
   padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
 }
-/* COCKPIT (js/camera/cockpit-opts.js) and APPEARANCE › TITLE LAYOUT
-   (js/ui/title-layout.js): the same column body, built at runtime. */
+/* COCKPIT (js/camera/cockpit-opts.js), APPEARANCE › TITLE SCREEN (the
+   shell's) and its TITLE LAYOUT sub-fold (js/ui/title-layout.js): the same
+   column body. */
 #pm-cockpit-body,
+#pm-titlescreen-body,
 #pm-titlelayout-body {
   display: flex;
   flex-direction: column;
@@ -2058,7 +2055,7 @@ button:has(> [data-fold]) {
   color: color-mix(in oklab, var(--steel) 55%, transparent);
   font-weight: 400;
 }
-#pmsettings-inner #pm-panel-display > .pm-group-h {
+#pmsettings-inner #pm-uiscale-h {
   margin-top: calc(var(--gap) * 0.5);
   padding-top: calc(var(--gap) / 3);
 }

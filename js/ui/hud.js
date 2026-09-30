@@ -329,6 +329,32 @@ function syncComputedRootVars() {
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
+// THE RADIO CARD'S TOP-ROW SLOT: right of the timing tower, left of the cam /
+// pause buttons, in the tower's own row — off the road and clear of the mirror
+// under the tower (a phone report: the card beside the mirror still sat on the
+// view). The strip ends at whichever button shares the tower's rows. Published
+// in SCREEN px with body.hud-radio-top — css/hud.css divides by the card's own
+// zoom — and only where a shrunk card fits; otherwise the card keeps its slot
+// under the tower (beside the mirror, js/render/shared/mirror-pass.js, or
+// below it). Never in BROADCAST, whose tower is top-left and whose mirror
+// owns the top-centre.
+const RADIO_TOP_MIN = 120, RADIO_TOP_GAP = 8;
+function radioTopSlot(root, bcast) {
+  const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
+  let right = window.innerWidth - 10;
+  for (const el of [els.btnCam, els.pausebtn]) {
+    const r = t && el && !el.hidden ? el.getBoundingClientRect() : null;
+    if (r && r.width && r.left > t.right && r.top < t.bottom && r.bottom > t.top) right = Math.min(right, r.left);
+  }
+  const x = t ? t.right + RADIO_TOP_GAP : 0;
+  const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
+  hToggle(document.body, "hud-radio-top", fits);
+  if (!fits) return;
+  hStyle(root, "--radio-top-x", x.toFixed(1) + "px");
+  hStyle(root, "--radio-top-y", t.top.toFixed(1) + "px");
+  hStyle(root, "--radio-top-w", (right - RADIO_TOP_GAP - x).toFixed(1) + "px");
+  hStyle(root, "--radio-top-h", t.height.toFixed(1) + "px");
+}
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
   // Measuring then is a forced reflow on a 0×0 box (~10 Hz) that cannot
@@ -529,6 +555,7 @@ function fitHud() {
   // Written unconditionally: the CSS only consumes it under .hud-prof-broadcast,
   // and a var that is only sometimes present is a var that is sometimes 0.
   hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
+  radioTopSlot(root, bcast);
   // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
   // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
   // where the BOOST pedal is on a touch phone, so a track-limits warning painted

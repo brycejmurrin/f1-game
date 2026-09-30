@@ -55,10 +55,12 @@ window.MenuNav = (function () {
      MenuNav does with an arrow happens first. Left to itself it would walk
      focus around the fly-cam's own EXIT/FOV buttons and preventDefault the key
      before the camera ever saw it. The tuner panel behind it is equally
-     off-limits: it is open by design the whole time you are flying. */
+     off-limits: it is open by design the whole time you are flying.
+     The TITLE LAYOUT editor (#tl-editor, js/ui/title-layout.js) is the same
+     case: its arrows move the selected title-screen piece. */
   function activeLayer() {
     const t = UL.top();
-    return (t && t.id === "photo-controls") ? null : t;
+    return (t && (t.id === "photo-controls" || t.id === "tl-editor")) ? null : t;
   }
 
   // `oyIn` lets onWheel's ancestor walk share ONE getComputedStyle between

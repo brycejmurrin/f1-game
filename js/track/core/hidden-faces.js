@@ -465,8 +465,11 @@ const TrackHiddenFaces = (function () {
   // Every test is the same arithmetic as the single-pass original, only
   // ordered and indexed to skip work whose answer is already known, so the
   // kept index buffer and the stats are identical to it on every circuit.
-  function strip(geo, opts) {
-    const t0 = now();
+  // stripSteps: the same passes as a generator that yields between them, so the
+  // pre-race build can keep the garage animating (Tracks.buildSteps). strip()
+  // drives it straight through — identical kept indices and stats by construction.
+  function* stripSteps(geo, opts) {
+    let t0 = now(), active = 0;
     const stats = { trisBefore: 0, trisAfter: 0, enclosed: 0, buried: 0, bottom: 0, boxes: 0, ms: 0 };
     if (!geo || !geo.pos || !geo.idx) return stats;
     const pos = arr(geo.pos), nrm = arr(geo.nrm), col = arr(geo.col), mat = arr(geo.mat), idx = arr(geo.idx);
@@ -477,18 +480,26 @@ const TrackHiddenFaces = (function () {
     const ceil = groundY ? terrainCeil(opts.terrain) : null;
 
     const firstTri = firstTris(idx, T, V);
+    active += now() - t0; yield; t0 = now();
     const S = scanBoxes(pos, nrm, col, mat, idx, firstTri, V);
     stats.boxes = S.NB;
+    active += now() - t0; yield; t0 = now();
     const G = S.NB ? buildGrid(S.BB, S.NB) : null;
     const enc = G ? boxEnclosure(G, S.B, S.BV, S.NB, firstTri, pos, idx, T) : null;
+    active += now() - t0; yield; t0 = now();
     const keep = new Uint8Array(T);
     const n = classify(pos, idx, mat, T, G, S.B, enc, ceil, groundY, keep);
     const kept = n[0];
     stats.enclosed = n[1]; stats.buried = n[2]; stats.bottom = n[3];
+    active += now() - t0; yield; t0 = now();
     if (kept !== T) geo.idx = keptIndices(idx, keep, kept, T);
     stats.trisAfter = kept;
-    stats.ms = now() - t0;
+    stats.ms = active + (now() - t0);
     return stats;
+  }
+  function strip(geo, opts) {
+    const it = stripSteps(geo, opts);
+    for (;;) { const r = it.next(); if (r.done) return r.value; }
   }
 
   // Per-vertex columns a props buffer can carry, with their stride. A column
@@ -548,5 +559,5 @@ const TrackHiddenFaces = (function () {
     return stats;
   }
 
-  return Object.freeze({ strip, compact });
+  return Object.freeze({ strip, stripSteps, compact });
 })();
