@@ -91,6 +91,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bahrain-grandstand-rake.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/baku-migration.test.mjs",
+  "tests/unit/base-green.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",

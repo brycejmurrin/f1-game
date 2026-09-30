@@ -324,6 +324,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **check/reject-lint.mjs** | An unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
+| **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha: a completed, successful ci.yml or pages.yml… |
 | **ci/base-verdict.sh** | Whose red is it? One line naming the last deploy-branch CI verdict below this head, with its failed job names. |
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci/ci-pr-base.sh** | The base a pull_request checkout must diff against: the test commit's FIRST PARENT (the base tip GitHub actually… |
