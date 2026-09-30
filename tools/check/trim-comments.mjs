@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Strips low-signal `//` comments (dividers, closed banners, loc pointers, orphans); `--headers` compresses file headers; `--narrative` (explicit paths only) drops essays.
+ * @doc Strips dividers, closed banners and loc pointers; `--headers` shortens headers; `--narrative` needs explicit paths.
  * @skill slim-bloat
  * trim-comments.mjs — remove low-signal comments from js/ and css/.
  *
