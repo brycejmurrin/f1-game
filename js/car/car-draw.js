@@ -258,7 +258,7 @@ const CarDraw = (function () {
     }
     // Prepare visual descriptors only: do not call makeCars(), advance the seeded
     // simulation, replace the live field, or arm a race from a menu. Existing bounded
-    // mesh/atlas caches are shared with the real race; each task warms one driver.
+    // mesh/atlas caches are shared with the real race; expensive work yields in slices.
     async function prepareMenuCarAssets(current) {
       if (carModelBuf || G.headlessMode) return;
       const teamPick = G.teamIdx, driverPick = G.driverIdx, rev = G.store.rev, solo = deps.isTimeTrial() || deps.isQuali();
@@ -274,9 +274,14 @@ const CarDraw = (function () {
         });
       });
       const visualKey = Teams.LIST[teamPick] ? deps.partsVisualKey(Teams.LIST[teamPick].id) : "";
-      let cpuMs = 0, maxCpuMs = 0;
+      let cpuMs = 0, maxCpuMs = 0, sliceAt = performance.now();
       for (const c of field) {
-        await new Promise(resolve => setTimeout(resolve, 32));
+        // Cache hits need no per-car timer. Yield only after real work spends
+        // the slice; still use the actual caches so eviction/settings stay correct.
+        if (performance.now() - sliceAt >= 8) {
+          await new Promise(resolve => setTimeout(resolve, 32));
+          sliceAt = performance.now();
+        }
         if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
         const at = performance.now();
         try {
