@@ -390,7 +390,9 @@ const RealRace = (function () {
       const seat = want && seatMap.find((s) => s.num === want.num);
       if (!seat) { Log.warn("game", "RealRace.stage: no roster seat for " + (opts.seat || "the field")); return null; }
       const ti = Teams.LIST.findIndex((t) => t.id === seat.teamId);
-      const startLap = clamp(opts.startLap | 0 || 1, 1, script.laps | 0 || 1);
+      // Never past the seat's own retirement: its car would be parked at the wall and the race over in 2 s.
+      const lastRun = want.dnf ? Math.max(1, want.lapsDone | 0) : script.laps | 0 || 1;
+      const startLap = clamp(opts.startLap | 0 || 1, 1, lastRun);
       if (!active) {
         active = { saved: { teamIdx: G.teamIdx, driverIdx: G.driverIdx, raceLaps: G.raceLaps, raceWeather: G.raceWeather,
                             raceTimeOfDay: G.raceTimeOfDay, duel: G.duel, raceTyreWear: G.raceTyreWear, raceChangeable: G.raceChangeable,
@@ -544,7 +546,7 @@ const RealRace = (function () {
       if (!active.watch && active.startLap > 1 && tables.at && G.goRolling && G.setCarRole) {
         const me = cars.find((c) => c.human && c.local);
         // The seat is the AI's BEFORE the drop (its speed is the AI's read of the road);
-        // said: the banner already names HANDOVER_S, so the spoken count starts one below it.
+        // said: the plate already shows HANDOVER_S (count below), so tickHandover's count starts one below it.
         if (me) { G.setCarRole(me, false, true); me.launch = null; me.launchOn = false; handover = { c: me, t: HANDOVER_S, said: HANDOVER_S }; }
         place();
         G.goRolling();
@@ -644,7 +646,12 @@ const RealRace = (function () {
         const ls = onTrace ? Math.floor(r.prog / total) + 1 : simLapFor(a.lap, simLaps, realLaps);
         const s = onTrace ? r.prog - (ls - 1) * total : a.frac * total;
         if (onTrace) exact++;
+        const progWas = c.prog;
         c.lap = ls; c.prog = (ls - 1) * total + s;
+        // The SEAT's own reliability draw counts only the laps it drives: the dropped-in distance is a gift
+        // (as a red-flag restart's is), or a failure point short of the join lap retired it on the first frame.
+        // The AI's dnfAt is the script's real retirement point, measured on the whole race, so it gets none.
+        if (c.local) c._progGift = (c._progGift || 0) + (c.prog - progWas);
         c.fuelLap = ls;   // crossings driven: the tank is ls - 1 laps down (js/physics/tyre-model.js fuelFrac)
         c.totalT = K0 * at.t0; c.lapTime = K0 * a.into;
         // FULL speed: the real car's when its trace says (as a fraction of a real top speed — vstd: never
@@ -802,6 +809,9 @@ const RealRace = (function () {
       if (!active) return;
       const st = G.state;
       if (st === "menu" || st === "results") { if (armed) disarm(); return; }
+      // RESTART and RACE AGAIN go race -> count (results -> count) with no menu frame between: a new
+      // field means a new race, so it is armed afresh (grid, pace, stops, hand-over, the replay's camera).
+      if (armed && field && G.cars && G.cars.length && !field.has(G.cars[0])) disarm();
       if (!armed) { if ((st === "count" || st === "race") && G.cars && G.cars.length && G.track) arm(); return; }
       if (active.watch) { replay.tick(dt); if (st !== "race") return; const wl = leaderLap(); tickCautions(wl); tickWeather(wl); return; }
       if (st !== "race") return;

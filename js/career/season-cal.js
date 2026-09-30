@@ -266,6 +266,8 @@ function resume(saved) {
   if (s.sprintOrder) delete s.sprintOrder;
   return s;
 }
+let lastLossy = false;
+function lastLoadLossy() { return lastLossy; }
 function load() {
   const raw = store.get(SAVE_KEY, null);
   const rawIds = raw && raw.config && Array.isArray(raw.config.trackIds) ? raw.config.trackIds.length : null;
@@ -276,7 +278,8 @@ function load() {
   // but NOT for a season this build could not read whole: a circuit id it does
   // not know (a stale cached shell, a renamed circuit) shrank the calendar, and
   // writing that back erased the circuit for good, or blanked a finished season.
-  const lossy = raw && (season !== raw || (rawIds != null && season.config.trackIds.length !== rawIds));
+  const lossy = !!raw && (season !== raw || (rawIds != null && season.config.trackIds.length !== rawIds));
+  lastLossy = lossy;   // boot's migrate-and-save reads it: never write a lossy read back
   if (raw && !lossy) save(season);
   return season;
 }
@@ -344,7 +347,10 @@ function stage(season) {
   if (!sprintOn(season)) return "race";
   return season && season.stage === "race" ? "race" : "sprint";
 }
-function midWeekend(season) { return sprintOn(season) && !!season && season.stage === "race"; }
+// From the saved season's OWN frozen config: the title menu's STANDINGS reads
+// it in flow "gp", where sprintOn() (fmtActive) is always false and a sprint
+// weekend read "AFTER ROUND 0" over a table holding the sprint's points.
+function midWeekend(season) { return sprintMid(season && season.config ? season.config : (fmtActive() ? rulesConfig() : null), season); }
 
 function quali() { return !fmtActive() || rulesConfig().quali; }
 // SEPARATE SPRINT QUALIFYING (FIA 2026 SR B2.2.1, B2.4.1(b)): a sprint weekend
@@ -389,10 +395,11 @@ function award(season, order, fastestId) {
     // NORMAL case here, not a time-cap corner. B4 (BUGS.md) required
     // `c.finished` as well, and from then on most of the field scored 0 while
     // the results sheet still showed their points. Only retirements score
-    // nothing; the fastest-lap bonus alone needs a lap actually completed.
+    // nothing. The fastest-lap bonus follows the same rule (a runner at the
+    // flag earns it) but skips a classified retirement.
     const classified = c.classified != null ? !!c.classified : !c.retired;   // endRace sets it: a DNF past 90 % of the winner's laps is classified (FIA 2026 SR B2.5.5(b))
     let pts = classified ? (table[i] || 0) : 0;
-    if (fl && classified && c.finished && c.driverId === fastestId && i < 10) { pts += 1; season.lastFl = fastestId; }
+    if (fl && classified && !c.retired && c.driverId === fastestId && i < 10) { pts += 1; season.lastFl = fastestId; }
     const row = rp[c.driverId] || (rp[c.driverId] = []);
     row[season.round] = (row[season.round] || 0) + pts;
     season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
@@ -552,7 +559,7 @@ return {
   SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
   config, setConfig, resetConfig, applyConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
-  load, save, clear, conflicted, saveStatus,
+  load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
   award, scored, rank, netPts, drawRound,

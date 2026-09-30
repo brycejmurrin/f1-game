@@ -900,7 +900,7 @@ function sponsorAt(round) {
     label: sponsorLabel({ type: kind.type, value, window }),
   };
 }
-function sponsor() { return career ? sponsorAt(career.season.round) : null; }
+function sponsor() { return career && !seasonDone() ? sponsorAt(career.season.round) : null; }   // none past the finale: its last window is settled
 function settleSponsor() {
   // The round just RACED, not the one the calendar has moved on to.
   const raced = career.season.round - 1;

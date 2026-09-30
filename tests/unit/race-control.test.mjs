@@ -88,6 +88,20 @@ test("a winner never ends the race while a human is still driving", () => {
     "the first multiplayer human finishing must not remove the other human");
 });
 
+test("runOrder serves a running car's time penalty on the road, at the race's speed", () => {
+  // endRace sorted the cars still running at the flag by progress alone, so a
+  // +5 s track-limits penalty was printed on the sheet and never applied.
+  const { runOrder } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const pen = { id: "pen", prog: 10000, penalty: 5 };
+  const near = { id: "near", prog: 9950, penalty: 0 };   // 50 m back: < 5 s at 60 m/s
+  const far = { id: "far", prog: 9500, penalty: 0 };     // 500 m back: > 5 s
+  const ids = (arr) => arr.map((c) => c.id);
+  assert.deepEqual(ids([pen, near, far].sort(runOrder(60))), ["near", "pen", "far"]);
+  // No penalty anywhere: pure progress, as before.
+  const clean = [{ id: "b", prog: 5 }, { id: "a", prog: 9 }, { id: "c", prog: 1 }];
+  assert.deepEqual(ids(clean.sort(runOrder(60))), ["a", "b", "c"]);
+});
+
 test("lineTransition gives normal and incident motion the same chequered-flag rule", () => {
   const R = load({ active: () => false, hazards: () => hazards(0, 0) });
   const winner = { finished: true, retired: false };

@@ -741,3 +741,72 @@ test("situation() from lap 1 is the real grid: pole, the front row, your slot an
   assert.equal(rus.you.tyre.age, 2, "Russell starts on a used set of mediums");
   assert.equal(R.properName("Charles LECLERC"), "Charles Leclerc");
 });
+
+test("RESTART / RACE AGAIN (a new field with no menu frame between) re-arms the real race: grid, hand-over and plate afresh", () => {
+  const { R, script, Teams } = load();
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G, calls } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(script, { seat: "LEC", startLap: 31 });
+  cars.find((c) => c.code === "LEC").local = true;
+  G.state = "count"; rr.update(1 / 60);
+  for (let i = 0; i < 60 * 6; i++) rr.update(1 / 60);   // past the hand-over
+  assert.equal(rr.status().handover, 0);
+  // RESTART: startRace builds a NEW field and goes straight to "count" (update() never sees "menu" or "results").
+  const cars2 = makeCars(Teams, "ferrari:0");
+  cars2.find((c) => c.code === "LEC").local = true;
+  G.cars = cars2; G.state = "count";
+  const grids = calls.filter((c) => c[0] === "gridUp").length;
+  rr.update(1 / 60);
+  assert.equal(calls.filter((c) => c[0] === "gridUp").length, grids + 1, "the new field is gridded from the script again");
+  assert.ok(rr.status().handover > 3.9, "the rolling hand-over runs again for the new seat car");
+  assert.equal(cars2.find((c) => c.code === "LEC").human, false, "…with the AI on the new car's wheel");
+});
+
+test("JUMP IN never lands past the seat's own retirement, and the seat's reliability counts only the laps it drives", () => {
+  const { R, script, Teams } = load();
+  const out = script.drivers.find((d) => d.dnf && !d.dns && (d.lapsDone | 0) > 2 && (d.lapsDone | 0) < script.laps - 3);
+  assert.ok(out, "the fixture has a mid-race retirement");
+  const team = Teams.LIST.find((t) => t.drivers.some((dr) => dr.code === out.code));
+  if (!team) return;   // a retirement from a team the 2026 roster does not seat: nothing to clamp against
+  const di = team.drivers.findIndex((dr) => dr.code === out.code);
+  const cars = makeCars(Teams, team.id + ":" + di);
+  const { G } = makeG(Teams, cars);
+  const rr = R.create(G);
+  const p = rr.stage(script, { seat: out.code, startLap: script.laps - 1 });
+  assert.equal(p.startLap, out.lapsDone | 0, "clamped to the last lap the seat started running");
+  const cars2 = makeCars(Teams, "ferrari:0");
+  const g2 = makeG(Teams, cars2);
+  const rr2 = R.create(g2.G);
+  rr2.stage(script, { seat: "LEC", startLap: 31 });
+  const me = cars2.find((c) => c.code === "LEC"); me.local = true;
+  g2.G.state = "count"; rr2.update(1 / 60);
+  assert.ok(me.prog > 0 && Math.abs((me._progGift || 0) - (me.prog + 20)) < 1e-6, "the whole dropped-in distance is a gift for the seat's reliability draw");
+  assert.ok(cars2.filter((c) => !c.local && !c.retired).every((c) => !(c._progGift > 0)), "…and for no other car");
+});
+
+test("fetchTraces never caches a set with a failed request (a hub closed mid-load, a dropped connection)", async () => {
+  const { script, ctx } = load();
+  const puts = [];
+  // A minimal IndexedDB: get() finds nothing, put() is recorded and completes.
+  ctx.indexedDB = { open() {
+    const db = { objectStoreNames: { contains: () => true }, transaction() {
+      const t = { objectStore: () => ({ get() { const rq = {}; setTimeout(() => rq.onsuccess && rq.onsuccess(), 0); return rq; },
+                                        put(v, k) { puts.push(k); setTimeout(() => t.oncomplete && t.oncomplete(), 0); } }) };
+      return t;
+    } };
+    const r = { result: db }; setTimeout(() => r.onsuccess && r.onsuccess(), 0); return r;
+  } };
+  const D = vm.runInContext("DataRealRace", ctx);
+  const s = { ...script, t0: Date.UTC(2026, 8, 20, 11), drivers: script.drivers.slice(0, 3).map((d) => ({ ...d, lapStart: [0], laps: [90] })) };
+  ctx.F1API = { locationData: () => Promise.reject(new Error("cancelled")) };
+  await assert.rejects(D.fetchTraces(s), /did not load/, "every request failed: an error, not an empty replay");
+  let n = 0;
+  ctx.F1API = { locationData: () => (n++ === 0 ? Promise.reject(new Error("cancelled")) : Promise.resolve([])) };
+  const part = await D.fetchTraces(s);
+  assert.equal(Object.keys(part.cars).length, 3, "a partial set is still handed back for this session");
+  assert.deepEqual(puts, [], "…but never cached");
+  ctx.F1API = { locationData: () => Promise.resolve([]) };
+  await D.fetchTraces(s);
+  assert.equal(puts.length, 1, "a complete set is cached");
+});

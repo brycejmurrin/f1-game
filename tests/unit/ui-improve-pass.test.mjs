@@ -794,7 +794,7 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   // Menu stick deadzone is LARGER than the driving one: 0.18 drives, but does not navigate.
   h.state.pad = h.pad(0.18); h.Input.poll();
   assert.deepEqual(h.keys(), [], "a resting stick at 0.18 must not creep through the menu");
-  assert.ok(h.Input.steer() > 0, "…even though the same deflection steers the car");
+  assert.equal(h.Input.steer(), 0, "…and a stick under a menu steers nothing (a friend race keeps simulating under the pause menu)");
   h.state.pad = h.pad(0.30); h.Input.poll();
   assert.deepEqual(h.keys(), ["ArrowRight"], "a deliberate push navigates");
   // Held: 450 ms before the first repeat, then every 130 ms.

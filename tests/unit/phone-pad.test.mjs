@@ -736,7 +736,8 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   // A linked phone is the wheel, so the screen shows VISOR (the cockpit eye past the drawn wheel)
   // while it drives, and the player's own camera comes back when the phone is gone.
   assert.match(gameJs, /const VISOR_CAM = CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
-  assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && camMode !== VISOR_CAM\) \{ phonePadCam = camMode; setCamMode\(VISOR_CAM\); \}/, "linking switches to VISOR and remembers the camera it left");
+  assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && camMode !== VISOR_CAM\) \{ phonePadCam = camMode; setCamMode\(VISOR_CAM, \{ persist: false \}\); \}/, "linking switches to VISOR (not saved as the player's camera) and remembers the camera it left");
+  assert.match(gameJs, /phonePad\.cancel\(\); phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && camMode === VISOR_CAM\) setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
   assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && camMode === VISOR_CAM\) setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
   assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
   // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:

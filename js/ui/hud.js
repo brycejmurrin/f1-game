@@ -871,6 +871,10 @@ function updateHud(force, dtMs) {
     const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     if (pl && pl.state) els.tyre.dataset.plan = pl.state; else delete els.tyre.dataset.plan;
+  } else {
+    // Both are written only above: a pit cue or WORK ON CAR up when a wear race was quit stayed up through a no-wear session.
+    if (els.pitCue) els.pitCue.hidden = true;
+    if (els.workBtn) els.workBtn.hidden = true;
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);
