@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { browserGroups, planMatrix, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW } from "../../tools/ci/remote-group.mjs";
+import { browserGroups, planMatrix, parseWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW } from "../../tools/ci/remote-group.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -43,6 +43,17 @@ test("the workflow offers exactly the shard counts the planner accepts, and neve
   assert.match(YML, /cancel-in-progress: true/, "a re-dispatch supersedes the old run");
   // The CLI finds a 204 dispatch's run by its name.
   assert.match(YML, /^run-name: "browser group \$\{\{ inputs\.group \}\} on /m);
+});
+
+test("workers: empty keeps the group's own; an integer 1-8 overrides it; the plan step rejects anything else", () => {
+  assert.deepEqual(parseWorkers(""), { workers: "" });
+  assert.deepEqual(parseWorkers(undefined), { workers: "" });
+  assert.deepEqual(parseWorkers("1"), { workers: "1" });
+  for (const bad of ["0", "9", "1.5", "x", "1; id", "$(id)"]) assert.ok(parseWorkers(bad).error, JSON.stringify(bad));
+  assert.match(YML, /^\s+workers:\n/m, "the workflow takes a workers input");
+  // Validated before any runner is spent, and only ever passed as one quoted argument.
+  assert.match(YML, /WORKERS: \$\{\{ inputs\.workers \}\}\n\s+run: node tools\/ci\/remote-group\.mjs --plan/);
+  assert.match(YML, /\$\{WORKERS:\+"--workers=\$WORKERS"\}/);
 });
 
 test("pickRun: the newest dispatch of THIS group on THIS branch since the dispatch", () => {
