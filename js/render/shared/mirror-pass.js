@@ -91,7 +91,20 @@ const MirrorPass = (function () {
     if (MODES.indexOf(pipMode) < 0) pipMode = "auto";
     const _pipExtra = { bankDy: 0 };
     // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
-    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null };
+    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null, tune: undefined };
+    // THE SUN'S VIEW-DEPENDENT TERMS STAY OUT OF THE MIRROR (a phone report:
+    // "still a little flashy … sun and shadows"). The mirror is a small target
+    // with no anti-aliasing of its own (FXAA runs before its composite), so
+    // the paint glint (12x), the metallic sparkle and the window flash alias
+    // into sub-pixel on/off specks; and the cast-shadow map is fitted around
+    // the FORWARD view, so looking back its edge sweeps the mirror as the car
+    // moves. These four knobs are read off frame.tune by every backend's lit
+    // upload (glx.js begin, wgx.js _writeFrame, tsl-lit updateFrame), so one
+    // override on the mirror camera's frame reaches all three, and the main
+    // pass re-uploads its own. One object, refreshed from the live tune each
+    // pass (the LIGHTING tuner edits it in place) — no per-frame allocation.
+    const MIRROR_TUNE = { carSunGlint: 0, carSparkle: 0, windowSunFlash: 0, shadowStr: 0 };
+    const _mirTune = {};
 
     function el() { return _el || (_el = document.getElementById("hud-mirror")); }
     function pipEl() { return _pipEl || (_pipEl = document.getElementById("bc-pip")); }
@@ -372,12 +385,13 @@ const MirrorPass = (function () {
       const sv = _sv;
       sv.viewProj = frame.viewProj; sv.view = frame.view; sv.proj = frame.proj; sv.invProj = frame.invProj;
       sv.invViewProj = frame.invViewProj; sv.eye = frame.eye; sv.cullDist = frame.cullDist;
-      sv.lite = frame.mirrorLite; sv.sky = frameSky.invViewProj;
+      sv.lite = frame.mirrorLite; sv.sky = frameSky.invViewProj; sv.tune = frame.tune;
       const cull = _q.cull;
       frame.viewProj = _vp; frame.view = _view; frame.proj = _proj; frame.invProj = _invProj;
       frame.invViewProj = _invVP; frame.eye = _eye;
       frame.cullDist = sv.cullDist > 0 ? Math.min(sv.cullDist, cull) : cull;
       frame.mirrorLite = _q.lite;
+      frame.tune = Object.assign(_mirTune, sv.tune || null, MIRROR_TUNE);
       frameSky.invViewProj = _invVP;
       let began = false;
       try {
@@ -393,8 +407,10 @@ const MirrorPass = (function () {
         frame.viewProj = sv.viewProj; frame.view = sv.view; frame.proj = sv.proj; frame.invProj = sv.invProj;
         frame.invViewProj = sv.invViewProj; frame.eye = sv.eye; frame.cullDist = sv.cullDist;
         frame.mirrorLite = sv.lite;
+        frame.tune = sv.tune;
         frameSky.invViewProj = sv.sky;
         sv.viewProj = sv.view = sv.proj = sv.invProj = sv.invViewProj = sv.eye = sv.sky = null;
+        sv.tune = undefined;
       }
     }
 
