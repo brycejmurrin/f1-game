@@ -19,20 +19,22 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false } = {}) {
+function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {} } = {}) {
   const stored = {};
   if (mode) stored.hudMirror = mode;
   let mirrorPressed = false;
-  const classes = new Set();
+  const classes = new Set(), props = {};
   const on = (o) => Object.assign(o, { handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } });
-  const frameEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114 }) });
+  const frameEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114, right: 840, bottom: 184 }) });
   const chipEl = on({ hidden: true });
   const canvasEl = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }) };
   const ctx = vm.createContext({
-    Math, Float32Array, Array, Object, Number, Infinity,
+    Math, Float32Array, Array, Object, Number, Infinity, innerWidth: 1280,
     document: {
-      getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl : null),
-      body: { classList: { contains: (c) => classes.has(c), toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) } },
+      getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl
+        : boxes[id] ? { hidden: false, getBoundingClientRect: () => boxes[id] } : null),
+      body: { classList: { contains: (c) => classes.has(c), toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) },
+        style: { setProperty: (k, v) => { props[k] = v; } } },
     },
     Input: { consumeMirror: () => { const v = mirrorPressed; mirrorPressed = false; return v; }, lookingBack: () => false },
     PerfGov: { tier: () => tier },
@@ -82,7 +84,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0 };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
-  return { mp, G, gfx, calls, stored, classes, frameEl, chipEl, frame, frameSky, mainVP, mainInv, render,
+  return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, frame, frameSky, mainVP, mainInv, render,
     press: () => { mirrorPressed = true; } };
 }
 
@@ -263,4 +265,26 @@ test("a tap collapses the mirror to a chip for the session; a tap on the chip br
   const off = boot({ mode: "off" });
   off.render();
   assert.equal(off.chipEl.hidden, true);
+});
+
+test("the radio card goes BESIDE the mirror when the row has room, and stacks under it when not", () => {
+  // Frame 440..840 at y 70..184 on a 1280-wide screen; the pause column at 1226.
+  const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const wide = boot({ mode: "on", boxes: { pausebtn: box(1226, 8, 44, 44), "btn-cam": box(1138, 8, 84, 44) } });
+  wide.render();
+  assert.ok(wide.classes.has("hud-mirror-side"), "358px free right of the frame");
+  assert.equal(wide.props["--mir-side-x"], "848.0px", "8px right of the frame");
+  assert.equal(wide.props["--mir-side-w"], "358.0px", "up to the pause column less its sector-box margin");
+  // The sector box under the buttons ends the strip where it is wider.
+  const sec = boot({ mode: "on", boxes: { pausebtn: box(1226, 8, 44, 44), "hud-sectors": box(1100, 56, 170, 77) } });
+  sec.render();
+  assert.equal(sec.props["--mir-side-w"], "244.0px");
+  // The cam button counts only where it shares the card's rows (BROADCAST).
+  const bcast = boot({ mode: "on", boxes: { "btn-cam": box(900, 60, 84, 44) } });
+  bcast.render();
+  assert.ok(!bcast.classes.has("hud-mirror-side"), "44px is no room: stack under the mirror");
+  // Hiding the mirror drops the side placement with it.
+  wide.press(); wide.render();
+  assert.equal(wide.mp.state().shown, false);
+  assert.ok(!wide.classes.has("hud-mirror-side"));
 });
