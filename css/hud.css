@@ -720,6 +720,23 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
   #hud-ot.ot-armed { animation: none; }
   .sec-row.sec-flash { animation: none; }
 }
+/* MOTION: REDUCED reaches the race too. html[data-motion="reduce"]
+   (js/ui/title-fx.js) is the player's choice, and its css/responsive.css
+   backstop is scoped to the menus — so every pulse above (redline, pit arrow,
+   OVERTAKE, VSC flag, limits, sector flash, the POS pop) ran on for a player
+   who had asked for less motion, and only the OS query stopped them. The same
+   instant-and-non-repeating shape as the css/tokens.css backstop: one-shots
+   still land on their end state, nothing throbs. The touch buttons are named
+   on their own because the dock groups live outside the HUD until
+   layoutDocks() moves them in. */
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn),
+:root[data-motion="reduce"] :is(#hud, #announce) *,
+:root[data-motion="reduce"] :is(#hud, #announce) *::before,
+:root[data-motion="reduce"] :is(#hud, #announce) *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
    below it is the clearance the old pair of literals (62 / 132) encoded. */
 :root[data-gap-drop] #hud-flag {

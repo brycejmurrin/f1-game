@@ -28,6 +28,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/input/steer-tuning.js"), "utf8");
@@ -123,4 +124,72 @@ test("RELAX is the most forgiving bundle, which is the whole point of it", () =>
   assert.ok(PRESETS.relax.drivingHelp >= PRESETS.standard.drivingHelp, "RELAX helps more");
   assert.ok(PRESETS.relax.raceLine >= PRESETS.standard.raceLine, "…and is the only one with line pull");
   assert.ok(PRESETS.pro.steerRate >= PRESETS.standard.steerRate, "PRO sharpens response");
+});
+
+// ---- the preset CHIP, driven through the real module ----------------------
+// Bug hunt 2026-09-30: wireTune() called clearPreset() for every row it wires,
+// and none of them is in PRESET_STORE — so nudging HAPTICS or the pad DEAD ZONE
+// flipped the chip from PRO to CUSTOM although every key PRO sets still held
+// PRO's value. WEIGHT (carWeight, hand-wired) did the same. Only a preset-owned
+// row may clear the chip. SteerTuning.create runs in a VM against a stub DOM, a
+// disk-backed store and an Input whose every setter is a no-op.
+function bootTuning() {
+  const els = {};
+  const noop = () => {};
+  const mk = () => ({ value: "", textContent: "", hidden: false, oninput: null, onclick: null,
+    classList: { toggle: noop, add: noop, remove: noop }, addEventListener: noop, setAttribute: noop });
+  const $ = (id) => (els[id] ||= mk());
+  const disk = {};
+  const store = {
+    get: (k, d) => (Object.prototype.hasOwnProperty.call(disk, k) ? disk[k] : d),
+    set: (k, v) => { disk[k] = v; },
+  };
+  const sb = {
+    Math, Object, Array, Number, String, JSON, isFinite,
+    Log: { info: noop, warn: noop, debug: noop, error: noop },
+    Input: new Proxy({}, { get: () => noop }),
+    SettingRow: { wire: noop, paint: noop }, Dom: { paintFold: noop }, GameAudio: { uiSelect: noop },
+  };
+  sb.window = { matchMedia: () => ({ matches: false }), addEventListener: noop };
+  const ctx = vm.createContext(sb);
+  vm.runInContext(SRC, ctx, { filename: "js/input/steer-tuning.js" });
+  vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
+    clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
+  const move = (id, v) => $(id).oninput({ target: { value: String(v) } });
+  return { $, disk, move };
+}
+const PRESET_STORE = table("PRESET_STORE");
+const presetOwned = (key) => Object.prototype.hasOwnProperty.call(PRESET_STORE, key);
+// Every wireTune row, read from the source so a row added later is covered too.
+const WIRED = [...SRC.matchAll(/wireTune\("([^"]+)", "([^"]+)", [^,]+, ([^,]+),/g)]
+  .map((m) => ({ id: m[1], key: m[2], lo: m[3].trim() }));
+
+test("a row no preset writes (HAPTICS, pad DEAD ZONE, WEIGHT, …) keeps the preset chip", () => {
+  assert.ok(WIRED.length >= 10, "found the wireTune rows (" + WIRED.length + ")");
+  const { $, disk, move } = bootTuning();
+  for (const r of WIRED.concat([{ id: "pm-weight", key: "carWeight", lo: "1" }])) {
+    $("pm-preset-pro").onclick();
+    assert.equal(disk.preset, "pro");
+    move(r.id, r.lo === "0" ? 12 : 3);
+    const owned = presetOwned(r.key);
+    assert.equal(disk.preset, owned ? "custom" : "pro",
+      `${r.id} (${r.key}) is ${owned ? "" : "not "}preset-owned, so moving it must ${owned ? "" : "not "}clear PRO`);
+  }
+  $("pm-preset-pro").onclick();
+  move("pm-haptics", 3);
+  assert.equal(disk.haptics, 3, "the slider still stores its value");
+  move("pm-paddz", 12);
+  assert.equal(disk.padDeadzone, 12);
+  assert.equal(disk.preset, "pro", "HAPTICS then DEAD ZONE: still PRO");
+});
+
+test("a preset-owned row still clears the chip", () => {
+  const { $, disk, move } = bootTuning();
+  for (const [id, key] of [["pm-rate", "steerRate"], ["pm-adaptbtn", "adaptiveButtons"], ["pm-help", "drivingHelp"]]) {
+    assert.ok(presetOwned(key), key + " is preset-owned");
+    $("pm-preset-pro").onclick();
+    assert.equal(disk.preset, "pro");
+    move(id, 5);
+    assert.equal(disk.preset, "custom", `${id} is PRESET_STORE's — PRO no longer holds`);
+  }
 });
