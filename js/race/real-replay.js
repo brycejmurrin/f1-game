@@ -9,6 +9,7 @@ const RealReplay = (function () {
   const LEAD_S = 8;       // a highlight starts this many real seconds before its moment
   const HOLD_S = 5;       // and holds this long after it
   const CAPTION_S = 3;    // a caption stays this long; an event further back than this on a seek is not re-announced
+  const SPOKEN_RATE_MAX = 2;   // replay RATE (1x, 2x...), not m/s: above it the commentator cannot keep up, captions do
   const ENDED_S = 3;      // a trace with no sample this long is a stopped car
   const FINISH_S = 6;     // the results come this long after the winner's last sample
   const MAX_X = 3;        // a car this far outside the road edge (the pit lane) is drawn at the edge
@@ -363,7 +364,7 @@ const RealReplay = (function () {
         // carries the words. A caption instead would pre-empt that card and cut
         // the voice mid-word (radio-voice stops a line an unspoken card replaces).
         const rr = G.raceRadio;
-        if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= 2) {
+        if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= SPOKEN_RATE_MAX) {
           if (rr.replayEvent(h, carOfNum(h.num), h.over != null ? carOfNum(h.over) : null)) continue;
         }
         if (G.announce) G.announce("L" + h.lap + " · " + h.text, CAPTION_S, "race");
