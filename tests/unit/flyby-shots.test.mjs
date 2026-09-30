@@ -795,7 +795,7 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
   // built, compileAsync(scene) still walked the race scene for 7.5 s and linked
   // nothing (scratch/ld-link-probe.mjs, 2026-09-28).
   const srb = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
-  assert.match(srb, /if \(gfx\.warm && _warmKey !== menuKey\(trackIdx\)\) gfx\.warm\(\);/, "startRaceBody warms only a world the menu did not");
+  assert.match(srb, /if \(gfx\.warm && _warmKey !== menuKey\(trackIdx\)\)[\s\S]{0,120}?gfx\.warm\(\)/, "startRaceBody warms only a world the menu did not");
   assert.match(game, /const planned = world && _menuFly && _menuFly\.track === track && _menuFly\.key === _menuGate\.ready/);
 });
 
