@@ -3330,7 +3330,7 @@ function endRace(forcedOrder) {
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
   // quali's qualiTrack + qualiMode stamps refuse it on another circuit or mode.
-  dbgCam = null;
+  dbgCam = null; resultsCam.onFlag();
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   els.results.hidden = false;
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
@@ -3779,6 +3779,7 @@ const realRace = RealRace.create(G);      // a real Grand Prix replayed from its
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 const replayBuf = ReplayBuf.create(G);    // solo 20 s instant-replay ring (js/camera/replay-buf.js)
+const resultsCam = ResultsCam.create(G); resultsCam.attachReplay(replayBuf);  // js/camera/results-cam.js
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -4336,7 +4337,7 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
-  Ghost.flush(); replayBuf.clear(); cancelIntro();
+  Ghost.flush(); replayBuf.clear(); resultsCam.reset(); cancelIntro();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
@@ -7110,7 +7111,8 @@ function render(dt) {
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
-  if (state === "results") return;
+  // ResultsCam (chequered / orbit / highlights) is the exception: it owns dbgCam.
+  if (state === "results" && !resultsCam.live()) return;
   if (setupPreviewOn) _menuGate.garageReady = true;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
@@ -8765,7 +8767,7 @@ function tickBody(now) {
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
-  render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
+  if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20)); render(Math.min(dt, 1 / 20));
   if (state === "race" || state === "count") updateHud(false, _dtMs);
 }
 

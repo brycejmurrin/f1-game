@@ -202,6 +202,9 @@ const ReplayBuf = (function () {
     function lastTag() {
       return tags.length ? tags[tags.length - 1] : null;
     }
+    function tagsOf() {
+      return tags.map((g) => ({ kind: g.kind, t: g.t, car: g.car }));
+    }
     function jumpLastTag() {
       const tag = lastTag();
       if (!tag || !scrubbing) return false;
@@ -329,7 +332,7 @@ const ReplayBuf = (function () {
 
     return {
       sample, clear, reset, pushTag, window: windowInfo, at,
-      beginScrub, apply, endScrub, isScrubbing, lastTag, jumpLastTag,
+      beginScrub, apply, endScrub, isScrubbing, lastTag, jumpLastTag, tags: tagsOf,
       tickScrub, status: statusOf,
       refreshButton, ensureButton,
       onRaceStart, onTick, onPause,
