@@ -1,7 +1,9 @@
 /* Apex 26 — IMOLA circuit definition (data only).
    Retired (`classic: true`): dropped from the calendar when Madrid joined for
    2026, and not among the venues contracted for 2027. Press mentions of Imola
-   are as a contingency venue only, which is not a calendar slot. */
+   are as a contingency venue only, which is not a calendar slot.
+   (CI probe 2026-09-30: a circuit-only diff must scope the node plan, the
+   elevation shards and the sweeps to this circuit — docs/notes/CI-CAPACITY-2026-09-29.md.) */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
