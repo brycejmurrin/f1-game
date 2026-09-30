@@ -274,3 +274,4 @@ const PlayerForces = (function () {
 
   return { create, tyreSat };
 })();
+Object.freeze(PlayerForces);
