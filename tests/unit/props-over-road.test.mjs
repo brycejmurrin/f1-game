@@ -292,7 +292,14 @@ const fleet = (() => {
     // (`__apex.trackGeometry(true)` calls this), so ask the same way; the
     // anti-vacuity test below is what catches it if the answer stops holding.
     assert.equal(T.setKeepGeometry(true), true, "the build must keep its geometry for this audit");
-    for (const def of T.LIST) {
+    // process.env.APEX_CIRCUITS narrows the fleet to the circuits a
+    // circuit-only pull request touched (tools/lib/circuit-scope.cjs); unset =
+    // every circuit. The two ANCHORS always build: the anti-vacuity test reads
+    // mont_tremblant's crown and the tolerance test reads shanghai off this
+    // map, and both must keep measuring at any scope.
+    const { scope } = require(path.join(ROOT, "tools", "lib", "circuit-scope.cjs"));
+    const ANCHORS = new Set(["mont_tremblant", "shanghai"]);
+    for (const def of T.LIST.filter((d) => ANCHORS.has(d.id) || scope([d.id]).length)) {
       const t = T.build(def);
       const r = auditProps(t);
       // The solid-in-the-road audit reads the PRIMITIVE records, so it runs on

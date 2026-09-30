@@ -40,7 +40,9 @@ if (args[0] === "--all") {
   // Extract ids by loading the script once and reading LIST
   let uniqueIds;
   try {
-    uniqueIds = loadTrackIds();
+    // APEX_CIRCUITS narrows --all to a circuit-only pull request's circuits
+    // (tools/lib/circuit-scope.cjs); unset = every track in Tracks.LIST.
+    uniqueIds = require("../lib/circuit-scope.cjs").scope(loadTrackIds());
   } catch (e) {
     console.error("FAIL: could not load track ids:", e.message);
     process.exit(1);
