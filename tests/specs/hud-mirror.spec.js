@@ -88,6 +88,26 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   // The backend composites where the frame is.
   expect(on.m.backend.rect, diag).toEqual(on.m.rect);
 
+  // The radio card shares the centre column: it sits BESIDE the frame where
+  // the row has room (1280 wide: it does) and never on it — the first cut
+  // stacked it under the mirror with a rule the compact/caution tops beat,
+  // so on a phone the card covered the mirror.
+  const card = await page.evaluate(() => {
+    document.getElementById("announce-who").textContent = "RUSSELL · RADIO";
+    document.getElementById("announce-text").textContent = "Box this lap, box this lap.";
+    const a = document.getElementById("announce");
+    a.hidden = false;
+    const r = (e) => { const b = e.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]; };
+    const out = { side: document.body.classList.contains("hud-mirror-side"), card: r(a), mirror: r(document.getElementById("hud-mirror")) };
+    a.hidden = true;
+    return out;
+  });
+  const cd = JSON.stringify(card);
+  expect(card.side, cd).toBe(true);
+  const [al, at, ar, ab] = card.card, [ml, mt, mr, mb] = card.mirror;
+  expect(ar <= ml || al >= mr || ab <= mt || at >= mb, cd).toBe(true);
+  expect(Math.abs(at - mt), cd + " shares the mirror's row").toBeLessThan(2);
+
   await awaitPresentedFrame(page, 12000);
   const withMirror = await mirrorPatch(page, on.m.rect);
 
