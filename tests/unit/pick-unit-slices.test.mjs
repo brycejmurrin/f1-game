@@ -1,0 +1,147 @@
+// pick-unit-slices — path → six-slice node matrix (fail-safe → all).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  SLICES, NODE_SLICES, SLICE_COST_P50_SEC, pick, costs, testFileOwners,
+} from "../../tools/ci/pick-unit-slices.mjs";
+
+function runJson(...args) {
+  return JSON.parse(
+  execFileSync("node", ["tools/ci/pick-unit-slices.mjs", "--json", ...args],
+    { encoding: "utf8" }));
+}
+
+test("SLICES / NODE_SLICES match the six-slice ci.yml matrix", () => {
+  assert.deepEqual(SLICES, [
+    "guards", "vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow", "driving-model",
+  ]);
+  assert.deepEqual(NODE_SLICES, ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"]);
+  const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
+  assert.match(ci, /include: \$\{\{ fromJSON\(needs\.unit-plan\.outputs\.slices\) \}\}/);
+});
+
+test("a scenery-only circuit file skips the physics-heavy slices", () => {
+  const r = pick(["js/circuits/scenery/monaco.js"]);
+  const sel = new Set(r.slices.keys());
+  assert.ok(sel.has("guards"));
+  assert.ok(sel.has("vm-a1"), "elevation twin shard 1");
+  assert.ok(sel.has("vm-a2"), "elevation twin shard 2");
+  assert.ok(!sel.has("vm-b1"));
+  assert.ok(!sel.has("vm-b2"));
+  assert.ok(!sel.has("page"));
+  assert.ok(!sel.has("slow"));
+  const c = costs(r.slices);
+  assert.ok(c.saved_sec > 0);
+});
+
+test("js/game.js keeps vm-b shards, page, slow and driving-model", () => {
+  const r = pick(["js/game.js"]);
+  const sel = new Set(r.slices.keys());
+  assert.ok(sel.has("vm-b1"));
+  assert.ok(sel.has("vm-b2"));
+  assert.ok(sel.has("page"));
+  assert.ok(sel.has("slow"));
+  assert.ok(sel.has("driving-model"));
+});
+
+test("an unknown path fail-safes to every slice", () => {
+  const r = pick(["totally/unknown/path.xyz"]);
+  assert.equal(r.reason, "fail-safe");
+  assert.deepEqual([...r.slices.keys()].sort(), [...SLICES].sort());
+});
+
+test("REPLAY: scenery + phone-pad-netplay-vm keeps the historically failing vm-b2 slice", () => {
+  // 2026-09-29: scenery-only plan skipped packed vm-b, then a later push edited a
+  // test-file ownership. Must not skip the slice that owns the failing file.
+  const r = pick([
+    "js/circuits/scenery/monaco.js",
+    "tests/unit/phone-pad-netplay-vm.test.mjs",
+  ]);
+  assert.ok(r.slices.has("vm-b2"), "owns phone-pad-netplay-vm → vm-b2 (must not skip)");
+  assert.ok(r.slices.has("vm-a1"), "scenery still needs elevation twin");
+  assert.ok(r.slices.has("vm-a2"));
+  const out = runJson(
+    "js/circuits/scenery/monaco.js",
+    "tests/unit/phone-pad-netplay-vm.test.mjs",
+  );
+  assert.ok(out.slices.some((row) => row.slice === "vm-b2"));
+});
+
+test("testFileOwners places elevation-tracks-vm in both vm-a shards", () => {
+  const owners = testFileOwners();
+  const set = owners.get("tests/unit/elevation-tracks-vm.test.mjs");
+  assert.ok(set?.has("vm-a1"));
+  assert.ok(set?.has("vm-a2"));
+});
+
+test("--json shape is stable for the CI consumer", () => {
+  const r = runJson("js/circuits/scenery/monaco.js");
+  assert.ok(Array.isArray(r.files) && Array.isArray(r.slices) && Array.isArray(r.skipped));
+  assert.equal(typeof r.any_node, "string");
+  assert.equal(typeof r.driving, "string");
+  for (const s of r.slices) {
+    assert.equal(typeof s.slice, "string");
+    assert.equal(typeof s.because, "string");
+  }
+});
+
+test("editing a tooling-fast-only unit file does not fail-safe to all slices", () => {
+  // pick a file known to be tooling-fast-only if present; otherwise skip-ish assert
+  const r = pick(["tests/unit/ci-verdict.test.mjs"]);
+  // ci-verdict is typically tooling-fast / guards — not every node slice
+  const sel = new Set(r.slices.keys());
+  assert.ok(sel.has("guards"));
+  assert.ok(sel.size < SLICES.length, "must not fail-safe to all");
+});
+
+test("a brand-new unit file selects guards only, not every slice", () => {
+  // Build the path at runtime so docs-integrity does not treat it as a
+  // dangling source comment pointing at a missing file.
+  const ghost = ["tests", "unit", "ghost-unlisted-" + "pickonly.test.mjs"].join("/");
+  const r = pick([ghost]);
+  assert.deepEqual([...r.slices.keys()], ["guards"]);
+});
+
+test("SLICE_COST_P50_SEC covers every slice", () => {
+  for (const s of SLICES) assert.ok(SLICE_COST_P50_SEC[s] > 0, s);
+});
+
+test("--all selects every slice for schedule/dispatch", () => {
+  const r = pick([]); // empty via --all path in CLI
+  const out = runJson("--all");
+  assert.deepEqual(out.matrix.map((x) => x.slice), NODE_SLICES);
+  assert.equal(out.any_node, "true");
+});
+
+test("--github-output writes any_node / driving / slices", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pick-unit-"));
+  const ghOut = path.join(dir, "github_output");
+  fs.writeFileSync(ghOut, "");
+  execFileSync(
+    "node",
+    [
+      "tools/ci/pick-unit-slices.mjs", "--github-output",
+      "js/circuits/scenery/monaco.js",
+    ],
+    { encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: ghOut } },
+  );
+  const text = fs.readFileSync(ghOut, "utf8");
+  assert.match(text, /^any_node=true$/m);
+  assert.match(text, /^driving=false$/m);
+  assert.match(text, /^slices=\[\{"slice":"vm-a1"\},\{"slice":"vm-a2"\}\]$/m);
+
+  // Unset-env path: stdout carries the same lines.
+  const local = execFileSync(
+    "node",
+    [
+    "tools/ci/pick-unit-slices.mjs", "--github-output",
+    "js/circuits/scenery/monaco.js",
+    ],
+    { encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: "" } },
+  );
+  assert.match(local, /^slices=\[\{"slice":"vm-a1"\},\{"slice":"vm-a2"\}\]$/m);
+});

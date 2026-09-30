@@ -138,6 +138,14 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   files never build the touched circuit; a file that walks the roster keeps
   its script. imola → `game-vm-a` (scoped) + `node-slow` (foundation-core
   builds it); portimao → `game-vm-a` alone; monza → everything.
+- **Sweeps, second pass** (2026-09-30, measured on #510, an imola comment-only
+  PR — the first circuit-only run through the lane): the sweeps step took
+  344 s scoped, of which `lamp-fixture-anchor` 54 s, `pit-signs` 69 s,
+  `props-over-road` 68 s and `pit-complex` 75 s still walked all 52 circuits,
+  and `verify-track --all` another 70 s. The first three and `verify-track`
+  now read `APEX_CIRCUITS` (their anti-vacuity tests build fixtures or named
+  circuits, so they hold at any scope); `pit-complex` stays whole. Expected
+  on a circuit-only PR: sweeps step ≈ 2.5 min, verify-track ≈ 2 s.
 - **The deploy push and the train scope too** (2026-09-30): the push that
   merged a circuit-only PR rebuilt the whole fleet the PR had just scoped
   (two elevation shards, the sweeps, verify-track: ~6 runner-minutes per
