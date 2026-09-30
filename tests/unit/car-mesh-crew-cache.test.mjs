@@ -35,6 +35,8 @@ test("a colour is built once and reused", () => {
   const { CarMesh, made, freed } = load();
   const a = CarMesh.getCrewMesh([0.1, 0.2, 0.3]);
   assert.ok(a && a.verts > 0);
+  assert.equal(a._crewPeople, CarMesh.CREW_PEOPLE, "people count is stamped on the mesh");
+  assert.equal(CarMesh.CREW_PEOPLE, 6, "six figures: four gunmen + two jack ops");
   assert.equal(CarMesh.getCrewMesh([0.1, 0.2, 0.3]), a);
   // Same 0.01 key resolution as before the cap.
   assert.equal(CarMesh.getCrewMesh([0.101, 0.2, 0.3]), a);
