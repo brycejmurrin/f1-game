@@ -127,8 +127,23 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
     // the complex over-claiming and eating real scenery — it has reported a
     // Monaco fountain 308 m from the nearest pit node — shows up here as a new
     // id, not as a count that quietly grows.
+    //
+    // After 1389215d2 dropped sceneryStartFrac 0.915, park lawns sit on the
+    // racing-frame right and the pit complex also supersedes the espace-
+    // paddock kit plus the six pit-lawn slabs along the pit wall.
     expect(session.models.suppressed.map((entry) => entry.id).sort())
-      .toEqual(["kit:montreal:pit-building", "montreal-park-lawn-l-0", "montreal-park-lawn-l-1"]);
+      .toEqual([
+        "kit:montreal:espace-paddock",
+        "kit:montreal:pit-building",
+        "montreal-park-lawn-r-0",
+        "montreal-park-lawn-r-10",
+        "montreal-pit-lawn-l-1",
+        "montreal-pit-lawn-l-2",
+        "montreal-pit-lawn-l-3",
+        "montreal-pit-lawn-l-4",
+        "montreal-pit-lawn-l-5",
+        "montreal-pit-lawn-l-6",
+      ]);
     const bridge = session.models.emitted.find((entry) => entry.id === "montreal-casino-footbridge");
     expect(bridge).toMatchObject({ required: true, overhead: true, clearance: 8 });
     const supportModels = session.models.emitted.filter((entry) =>

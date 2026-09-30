@@ -52,8 +52,10 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
         waterCoverage: {
           models: models.emitted.filter((entry) => entry.water).length,
           vertices: waterMesh.pos.length / 3,
-          // Closed boxes contribute matching top and bottom projected faces.
-          area: projectedArea / 2,
+          // Flat merged quad runs (Y delta 0) — no matching bottom face, so
+          // do not halve. Closed-box /2 under-counted the harbour at 28 584
+          // when the sheet is 57 168 m² of projected area.
+          area: projectedArea,
         },
         ground: [
           window.__apex.groundY(0.18, -10),
@@ -128,21 +130,13 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
     // MERGES occupied cells into flat quad runs (see the comment on the
     // rasteriser in js/track/tracks.js) — so as that merge got better, the
     // model and vertex counts fell while the water stayed put. Measured on
-    // this build: 3 models / 79 runs / 158 triangles / 316 verts covering
-    // 42 840 m², against assertions written when the same basin took 20+
-    // models and 480+ verts. All three failed; only one of them meant
-    // anything.
-    //
-    // So the two tessellation assertions are gone — they pinned an
-    // implementation detail and would fail again the next time the merge
-    // improves. What replaces them is a floor that says the sheet is really a
-    // sheet and not a handful of stray slabs.
+    // this build: 3 models / 126 triangles / 252 verts covering 57 168 m² of
+    // flat sheet (previously closed boxes, so the old pin halved a 42 840 m²
+    // top+bottom sum). Tessellation counts are gone — they pin an
+    // implementation detail. Floor says the sheet is really a sheet.
     expect(session.waterCoverage.models).toBeGreaterThanOrEqual(1);
     expect(session.waterCoverage.vertices).toBeGreaterThanOrEqual(100);
-    // 40 000, not 45 000. The measured basin is 42 840 m² and the old figure
-    // was set against a coarser tessellation of the same harbour; this keeps a
-    // real floor (a collapsed basin drops far below it) without re-pinning the
-    // exact output of one build.
+    // 40 000 against the flat projected sheet (not the old closed-box half).
     expect(session.waterCoverage.area).toBeGreaterThanOrEqual(40_000);
     expect(session.ground.every((sample) =>
       sample && Number.isFinite(sample.roadY) &&
