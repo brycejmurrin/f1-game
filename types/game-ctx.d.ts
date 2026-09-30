@@ -811,6 +811,7 @@ declare const AudioPanel: GameModuleFactory;
 declare const RadioVoice: GameModuleFactory;
 declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
+declare const PlayerForces: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;
 declare const PitLane: GameModuleFactory;

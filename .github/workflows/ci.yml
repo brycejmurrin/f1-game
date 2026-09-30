@@ -713,12 +713,28 @@ jobs:
               # The former `fast` slice: seconds each, so they ride with vm-b1, the
               # shorter half (measured 2026-09-30 on a runner: b1 2.2 min, b2 3.9
               # min WITH them — moved here to bring the wall to ~3 min).
+              # Always-on riders (seconds each). On a matched PR plan
+              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
+              # the `npm run` else-branch stays for gateNodeSuites / deploy.
+              # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:net-unit --skip-tf; else
               npm run test:net-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:service-worker --skip-tf; else
               npm run test:service-worker
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:lifecycle-unit --skip-tf; else
               npm run test:lifecycle-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:state-unit --skip-tf; else
               npm run test:state-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:agent-contract --skip-tf; else
               npm run test:agent-contract
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:audio-unit --skip-tf; else
               npm run test:audio-unit
+              fi
               # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
               # livery-contrast, body-split, cover-legibility, helmets) and three
               # steering files (digital-steer, key-binds, settings-export) were in
@@ -727,13 +743,21 @@ jobs:
               # them either. Measured 2026-09-10: garage-unit 39 s, steering-unit
               # 0.5 s. The sub-5 s files are in tooling-fast too; the two slow
               # livery rasters (7-10 s each) run only here.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:garage-unit --skip-tf; else
               npm run test:garage-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else
               npm run test:steering-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:desktop-unit --skip-tf; else
               npm run test:desktop-unit
+              fi
               # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
               # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
               # their fast-gate half is mcp-cli. environment-json stays gated below.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else
               npm run test:mcp
+              fi
               ;;
             vm-b2)
               if planned test:game-vm-b2; then
