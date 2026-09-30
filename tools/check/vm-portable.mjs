@@ -61,7 +61,7 @@
  *
  *   1. `requestAnimationFrame` inside an evaluate body. game-vm skips GLX, so
  *      the game's own frame callback reaches render() and throws on the first
- *      pump (measured: `_carCullPlanes[i]` undefined, js/game.js:7224). A spec
+ *      pump (measured: `_carCullPlanes[i]` undefined, render() in js/game.js). A spec
  *      that resolves an evaluate on a frame is asserting something ABOUT
  *      frames and belongs in a browser.
  *   2. `page.route` / a spec asserting stubbed Jolpica/OpenF1 CONTENT. game-vm

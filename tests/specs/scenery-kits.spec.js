@@ -23,7 +23,7 @@ test.describe.configure({ timeout: 300000 });
 // The boot split (456af0f3) moved every shipped closure out of the def and into
 // a lazy registry: js/circuits/scenery/<id>.js does
 // `(window.TrackScenery = window.TrackScenery || {})["<id>"] = fn`, fetched by
-// game.js for the one circuit being built, and build-props.js:1844 resolves
+// game.js for the one circuit being built, and `sceneryFn` in js/track/scenery/build-props.js resolves
 // `def.scenery || window.TrackScenery[def.id]`. These tests used to wrap
 // TrackDefs.push and skip any def whose `.scenery` was not ALREADY a function —
 // which, after the split, is every def. The wrapper silently never installed,
@@ -37,8 +37,8 @@ test.describe.configure({ timeout: 300000 });
 // assignment with a setter so the wrap survives whenever that script lands.
 //
 // AND WAIT FOR THE BUILD. __apex.race() calls startRace() WITHOUT awaiting it
-// (js/agent/apex.js:926), and the same split made startRace async precisely so
-// it could `await ensureScenery(trackIdx)` (js/game.js:2659). So race() now
+// (`race` in js/agent/apex.js), and the same split made startRace async precisely so
+// it could `await ensureScenery()` (the note above `startRace` in js/game.js). So race() now
 // returns before the circuit is built, and a spec that races and reads in ONE
 // page.evaluate() reads before the scenery callback has run. Every such spec
 // silently measures a half-built track. Await info().track instead.
