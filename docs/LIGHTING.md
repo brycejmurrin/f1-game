@@ -624,7 +624,7 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `presets.js`
 
-40 of the 52 circuits have a full `tod × weather` grid (800 condition keys, plus `"*"` and the four ULTRA-only `"*|<tod>"` keys); the twelve added since (anderstorp, brands_hatch, buddh, dijon, donington, fuji, jerez, korea, mont_tremblant, mosport, okayama, zolder) have none and resolve to `"*"` alone.
+44 of the 52 circuits have a full `tod × weather` grid (880 condition keys, plus `"*"` and the four ULTRA-only `"*|<tod>"` keys). Batch B1 (fuji, okayama, korea, jerez) baked 2026-09-30 from theme donors (kyalami / madrid / bahrain) with no `wetness` pins — look-survey sheets still deferred. Remaining on `"*"` alone: anderstorp, brands_hatch, buddh, dijon, donington, mont_tremblant, mosport, zolder.
 
 Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
 sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
@@ -685,6 +685,10 @@ Cross-cutting from the frames:
 | Sepang | `sepang` | green | day | ✅ |
 | Sochi | `sochi` | modern | day | ✅ |
 | Watkins Glen | `watkins_glen` | green | day | ✅ |
+| Fuji | `fuji` | green | day | ✅ (B1 donor kyalami; look-survey deferred) |
+| Okayama | `okayama` | green | day | ✅ (B1 donor kyalami; look-survey deferred) |
+| Korea | `korea` | modern | day | ✅ (B1 donor madrid; look-survey deferred) |
+| Jerez | `jerez` | desert | day | ✅ (B1 donor bahrain; look-survey deferred) |
 
 ---
 
