@@ -291,8 +291,8 @@ window.MusicLib = (function () {
         cache = cache.filter((m) => m.id !== id);
         render();
         return true;
-      }, () => { render("could not remove that track"); return false; });
-    }).catch(() => false);
+      }, (e) => { Log.warn("audio", "music library remove failed:", e && e.message); render("could not remove that track"); return false; });
+    }).catch((e) => { Log.warn("audio", "music library remove aborted:", e && e.message); return false; });
   }
 
   function clear() {
@@ -303,8 +303,8 @@ window.MusicLib = (function () {
         for (const id of ids) { call("removeTrack", pid(id)); dropUrl(id); }
         cache = [];
         render();
-      }, () => { render("could not clear the library"); });
-    }).catch(() => {});
+      }, (e) => { Log.warn("audio", "music library clear failed:", e && e.message); render("could not clear the library"); });
+    }).catch((e) => { Log.warn("audio", "music library clear aborted:", e && e.message); });
   }
 
   function list() { return init().then(() => cache.map((m) => ({ id: m.id, name: m.name, size: m.size, added: m.added }))); }
