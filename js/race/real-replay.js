@@ -201,6 +201,18 @@ const RealReplay = (function () {
     let run = null;   // {script, cars: Map car->{num, tr, d}, T, speed, follow, reel, reelIdx, list, fired, fit, finished, onKey, audio}
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
+    // THE BROADCAST (js/race/broadcast.js): the timing tower, and with camera "auto" the director.
+    const bc = typeof Broadcast !== "undefined" ? Broadcast.create(G, { follow: (w) => follow(w), setFollow: (c) => setFollow(c) }) : null;
+    // What it reads each frame — one object for the run, the lists computed only when asked.
+    const bcState = {
+      get script() { return run.script; }, get T() { return run.T; }, get speed() { return run.speed; },
+      get list() { return run.list; }, get reel() { return !!run.reel; },
+      get followNum() { const f = run.follow && run.cars.get(run.follow); return f ? f.num : null; },
+      isOut: (num) => { for (const [c, f] of run.cars) if (f.num === num) return !f.tr || !!(f.parked && c.retired); return true; },
+      carOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c; return null; },
+      colourOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c.team && G.cssCol ? G.cssCol(c.team.color) : ""; return ""; },
+      running: () => [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog).map((c) => ({ key: c, prog: c.prog, speed: c.speed })),
+    };
 
     /** start({script, traces, seats: Map car->driver, startLap, follow, rate, reel, camera}) — false when no trace fits. */
     function start(o) {
@@ -224,7 +236,8 @@ const RealReplay = (function () {
       run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
       run.savedCamera = G.camMode;
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
-      const camera = modes.findIndex((m) => m.id === o.camera);
+      const auto = o.camera === "auto";   // the TV director cuts the shots (Broadcast)
+      const camera = modes.findIndex((m) => m.id === (auto ? Broadcast.SHOTS[0] : o.camera));
       if (camera >= 0 && G.setCamMode) G.setCamMode(camera, { persist: false });
       // Pose before snapping: a mid-race start must frame the new position, not the grid.
       pose(true);
@@ -234,6 +247,7 @@ const RealReplay = (function () {
       if (!follow) for (const [c, f] of cars) if (f.tr && !follow) follow = c;
       setFollow(follow);
       if (reel && reel.length) cutTo(reel[0]);
+      if (bc) bc.start({ auto, tower: o.tower !== false });
       run.onKey = (e) => onKey(e);
       try { window.addEventListener("keydown", run.onKey, true); } catch (e) { /* no window: a VM */ }
       pose();
@@ -245,6 +259,7 @@ const RealReplay = (function () {
       if (!run) return;
       try { if (run.onKey) window.removeEventListener("keydown", run.onKey, true); } catch (e) { /* no window */ }
       if (run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; }
+      if (bc) bc.stop();
       if (G.setCamMode && run.savedCamera != null) G.setCamMode(run.savedCamera, { persist: false });
       run = null;
       Log.info("game", "RealReplay.stop");
@@ -284,6 +299,7 @@ const RealReplay = (function () {
       const c = h.num != null ? [...run.cars.keys()].find((x) => run.cars.get(x).num === h.num) : null;
       pose(true);
       if (c && !c.retired) setFollow(c); else if (!run.follow) follow(+1); else if (G.snapGameCam) G.snapGameCam();
+      if (bc) bc.onCut(h.kind);
     }
     function skip() { if (!run || !run.reel) return; run.reelIdx++; if (run.reelIdx < run.reel.length) cutTo(run.reel[run.reelIdx]); else finish(); }
 
@@ -292,8 +308,8 @@ const RealReplay = (function () {
       const tag = e.target && e.target.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       let used = true;
-      if (e.code === KEY_NEXT) follow(-1);            // up the order
-      else if (e.code === KEY_PREV) follow(+1);       // down the order
+      if (e.code === KEY_NEXT) { follow(-1); if (bc) bc.manual(); }   // up the order: the viewer has the picture
+      else if (e.code === KEY_PREV) { follow(+1); if (bc) bc.manual(); }   // down the order
       else if (e.code === KEY_SPEED_UP) stepSpeed(+1);
       else if (e.code === KEY_SPEED_DOWN) stepSpeed(-1);
       else if (e.code === KEY_SKIP && run.reel) skip();
@@ -362,6 +378,7 @@ const RealReplay = (function () {
       pose();
       if (G.state !== "race") return;
       fire();
+      if (bc) bc.tick(dt, bcState);
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
       if (run.reel) {
         const h = run.reel[run.reelIdx];
@@ -378,7 +395,7 @@ const RealReplay = (function () {
       if (!run) return null;
       return { T: +run.T.toFixed(2), speed: run.speed, follow: run.follow ? run.follow.code : null, reel: run.reel ? run.reel.length : 0, reelIdx: run.reelIdx,
                highlights: run.list.length, fit: run.fit ? { rms: +run.fit.rms.toFixed(2), refl: run.fit.refl } : null, finished: run.finished,
-               cars: [...run.cars.values()].filter((f) => f.tr).length };
+               cars: [...run.cars.values()].filter((f) => f.tr).length, broadcast: bc ? bc.status() : null };
     }
 
     return { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, isRunning: () => !!run };

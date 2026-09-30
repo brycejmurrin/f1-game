@@ -226,3 +226,100 @@ test("WATCH snaps after posing on mid-race entry and seek, and releases camera o
   assert.equal(G.camMode, 0, "unknown camera leaves the driving view usable");
   replay.stop();
 });
+
+// ── BROADCAST (js/race/broadcast.js): the timing tower and the AUTO director ──
+test("BROADCAST tower: the grid at lights out, the leader and gaps at the last line, the car out last, the fastest lap once it is set", async () => {
+  const g = await createGame({ track: "baku" });
+  try {
+    const { script } = scriptIn(g);
+    const B = vm.runInContext("Broadcast", g.ctx);
+    const racing = script.drivers.filter((d) => !d.dns);
+    const grid = host(B.towerAt(script, 0));
+    assert.deepEqual(grid.map((r) => r.code), host(racing.slice().sort((a, b) => (a.grid || 99) - (b.grid || 99)).map((d) => d.code)), "before the first line the grid is the order");
+    assert.ok(grid.every((r) => r.gap == null && !r.out), "no gaps and nobody out yet");
+    // Just after the leader starts lap 32: 31 laps done at the front.
+    const lead = script.drivers.find((d) => d.pos === 1);
+    const T = lead.lapStart[31] + 1;
+    const rows = host(B.towerAt(script, T));
+    assert.equal(rows[0].code, "RUS"); assert.equal(rows[0].lap, 31); assert.equal(rows[0].gap, null);
+    assert.ok(rows[1].gap > 0, "P2 carries a gap: " + rows[1].gap);
+    assert.ok(rows[1].interval > 0 && Math.abs(rows[1].interval - rows[1].gap) < 1e-6, "P2's interval is its gap");
+    const out = rows.filter((r) => r.out);
+    assert.ok(out.some((r) => r.code === "STR"), "Stroll out on lap 8");
+    assert.ok(rows.findIndex((r) => r.out) >= rows.length - out.length, "the cars out come last");
+    for (let i = 2; i < rows.length; i++) {
+      const a = rows[i - 1], b = rows[i];
+      if (!a.out && !b.out && a.lap === b.lap && !a.down && !b.down && a.gap != null && b.gap != null) assert.ok(b.gap >= a.gap, "gaps grow down the tower at one line: " + a.code + " " + a.gap + " / " + b.code + " " + b.gap);
+    }
+    assert.ok(rows.filter((r) => !r.out).every((r) => /^[SMHIW]$/.test(r.tyre || "")), "every running car shows its tyre");
+    assert.equal(B.fmtGap(rows[0], "gap"), "LEADER");
+    assert.match(B.fmtGap(rows[1], "gap"), /^\+\d+\.\d$/);
+    // The fastest lap turns purple only once it is set.
+    const f = script.fastest;
+    assert.ok(host(B.towerAt(script, f.t - 1)).every((r) => !r.fastest));
+    assert.deepEqual(host(B.towerAt(script, f.t + 1)).filter((r) => r.fastest).map((r) => r.num), [f.num]);
+  } finally { g.close(); }
+});
+
+test("BROADCAST director rules: the tightest battle up the order first, the next event by weight, never the same shot twice", async () => {
+  const g = await createGame({ track: "baku" });
+  try {
+    const B = vm.runInContext("Broadcast", g.ctx);
+    const cars = [{ key: "a", prog: 1000, speed: 60 }, { key: "b", prog: 970, speed: 60 }, { key: "c", prog: 600, speed: 60 }, { key: "d", prog: 590, speed: 60 }, { key: "e", prog: 400, speed: 60 }];
+    const fights = host(B.battles(cars));
+    assert.deepEqual(fights.map((x) => x.key), ["d", "b"], "0.17 s for P4 beats 0.5 s for P2; 3 s is no battle");
+    const list = [{ t: 10, kind: "pit", num: 1 }, { t: 11, kind: "pass", num: 2 }, { t: 12, kind: "radio", num: 4 }, { t: 30, kind: "out", num: 3 }];
+    assert.equal(B.nextEvent(list, 5, new Set(), 8).h.kind, "pass", "a pass outranks a stop in the same window");
+    assert.equal(B.nextEvent(list, 5, new Set([1]), 8).h.kind, "pit", "shown once");
+    assert.equal(B.nextEvent(list, 5, new Set(), 3), null, "nothing in the next 3 s");
+    for (let n = 0; n < 6; n++) assert.notEqual(B.shotFor("pass", "side", n), "side");
+  } finally { g.close(); }
+});
+
+test("BROADCAST in WATCH (camera AUTO): the tower goes up, the director cuts to the car in the next event with a new shot, a follow key hands the picture over, the results take it down", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g;
+    const RR = vm.runInContext("RealRace", g.ctx), R = vm.runInContext("RealReplay", g.ctx), CM = vm.runInContext("CamModes", g.ctx);
+    const { script } = scriptIn(g);
+    const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 400), 16: line(-22, 48, 1, -5, 400), 18: line(-30, 45, -1, -5, 60) } };
+    const side = CM.CAM_MODES.findIndex((m) => m.id === "side");
+    RR.launch(script, { seat: "LEC", watch: true, camera: "auto", traces, startLap: 1 });
+    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2);
+    let bc = RR.status().replay.broadcast;
+    assert.ok(bc && bc.auto && bc.tower, JSON.stringify(bc));
+    assert.equal(G.camMode, side, "AUTO opens on the TV trackside shot");
+    const doc = g.sandbox.document;
+    assert.equal(doc.getElementById("bc-tower").hidden, false, "the tower is up");
+    assert.ok(doc.body.classList.contains("bc-on"));
+    g.apex.go();
+    g.step(30);
+    assert.ok(RR.status().replay.broadcast.rows >= 20, "a row per driver: " + RR.status().replay.broadcast.rows);
+    // The next event with a traced car in it, a few seconds ahead.
+    const codeOf = (num) => script.drivers.find((d) => d.num === num).code;
+    const h = R.highlightsFor(script).find((x) => (x.num === 63 || x.num === 16) && ["pass", "pit", "out", "fastest"].includes(x.kind) && x.t > 20 && x.t < 380);
+    assert.ok(h, "an event for Russell or Leclerc in the first 380 s");
+    RR.replay().follow(h.num === 63 ? "LEC" : "RUS");   // on the OTHER car, so the cut is visible
+    const before = RR.status().replay.broadcast;
+    // The director's first cut comes SHOT_MIN_S after the opening shot: land the clock so the event is
+    // still ahead then, inside its lead.
+    RR.replay().seek(h.t - 9);
+    g.step(60 * 7);
+    bc = RR.status().replay.broadcast;
+    assert.equal(bc.manual, false);
+    assert.ok(bc.cuts > before.cuts, "the director cut: " + JSON.stringify(bc));
+    assert.equal(RR.status().replay.follow, codeOf(h.num), "onto the car in the " + h.kind + " at " + h.t);
+    assert.notEqual(bc.shot, "side", "with a new shot");
+    // A follow key: the viewer has the picture, and the director waits.
+    g.sandbox.dispatchEvent({ type: "keydown", code: "Period", repeat: false, target: null, preventDefault() {}, stopPropagation() {} });
+    assert.equal(RR.status().replay.broadcast.manual, true);
+    // The flag: the results take the tower down with the replay.
+    RR.replay().seek(405);
+    g.step(60 * 8);
+    assert.equal(G.state, "results");
+    g.step(1);
+    assert.equal(doc.getElementById("bc-tower").hidden, true, "the tower comes down");
+    assert.ok(!doc.body.classList.contains("bc-on"));
+  } finally { g.close(); }
+});

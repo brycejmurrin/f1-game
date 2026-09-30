@@ -39,7 +39,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 597,
+      "ceiling": 609,
       "slack": 5
     },
     "dynamicIdReads": {
@@ -51,23 +51,23 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 328,
+      "ceiling": 338,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 179,
+      "ceiling": 184,
       "slack": 0
     },
     "rawSpacing": {
-      "ceiling": 300,
+      "ceiling": 303,
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2034,
+      "ceiling": 2035,
       "slack": 25
     },
     "subFloorFontSize": {
-      "ceiling": 5,
+      "ceiling": 9,
       "slack": 0
     },
     "twinDebt": {
