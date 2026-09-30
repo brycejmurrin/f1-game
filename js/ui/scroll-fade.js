@@ -91,6 +91,10 @@ window.ScrollFade = (function () {
       // proportional height, floored so a very long list still has a visible grip
       thumb: scrollable ? Math.max(MIN_THUMB, Math.round(track * track / scrollH)) : 0,
       track,
+      // The right padding the thumb may live in (css/components.css .sf-scroll):
+      // whole px, and only what fits the 6px thumb + 2px inset, so it never
+      // lands past the scrollport.
+      pr: Math.max(0, Math.floor(parseFloat(cs.paddingRight) || 0)),
       maxX, xScrollable, left: el.scrollLeft,
     };
   }
@@ -112,6 +116,7 @@ window.ScrollFade = (function () {
       if (last.has(el)) {
         el.style.removeProperty("--sf-h");
         el.style.removeProperty("--sf-y");
+        el.style.removeProperty("--sf-pr");
         last.delete(el);
       }
       return;
@@ -121,10 +126,11 @@ window.ScrollFade = (function () {
     // still invalidates style for the whole subtree, and paintAll runs on every
     // mutation of every menu.
     const prev = last.get(el);
-    if (prev && prev.h === m.thumb && prev.y === y) return;
+    if (prev && prev.h === m.thumb && prev.y === y && prev.pr === m.pr) return;
     el.style.setProperty("--sf-h", `${m.thumb}px`);
     el.style.setProperty("--sf-y", `${y}px`);
-    last.set(el, { h: m.thumb, y });
+    el.style.setProperty("--sf-pr", `${m.pr}px`);
+    last.set(el, { h: m.thumb, y, pr: m.pr });
   }
 
   function paint(el) { write(measure(el)); }

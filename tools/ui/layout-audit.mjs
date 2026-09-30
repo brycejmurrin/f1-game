@@ -753,11 +753,15 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       // button — a harness failure that reads exactly like a broken route.
       // Cheap check, expensive fallback, and the fallback only fires when the
       // cheap check says it must.
+      // Sized AND hittable: a modal dialog nobody closed leaves #mb-race
+      // full-sized but inert, and a size check passed it (2026-09-30).
       const titleUsable = await page.evaluate(() => {
         const b = document.getElementById("mb-race");
         if (!b) return false;
         const r = b.getBoundingClientRect();
-        return r.width > 1 && r.height > 1;
+        if (!(r.width > 1 && r.height > 1)) return false;
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
       });
       if (!titleUsable) {
         await page.goto(base, { waitUntil: "domcontentloaded" });
