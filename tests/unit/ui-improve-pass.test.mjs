@@ -485,9 +485,9 @@ test("an active career locks team and seat selection in the garage", () => {
 });
 
 /* ── CamModes on the mini DOM ───────────────────────────────────────────── */
-function bootCamModes(camMode = 2) {
+function bootCamModes(camMode = 2, extra = {}) {
   const dom = makeDom();
-  const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} } });
+  const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} }, ...extra });
   vm.runInNewContext(src("js/camera/mode-switch.js"), sb, { filename: "js/camera/mode-switch.js" });
   const store = {};
   const G = { $: (id) => dom.byId(id), camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
@@ -530,6 +530,43 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   const game = code("js/game.js");
   assert.match(fnBody(game, "quitToMenu", "js/game.js"), /hideCamPicker\(\s*\)/);
   assert.match(fnBody(game, "setPaused", "js/game.js"), /hideCamPicker\(\s*\)/);
+});
+
+test("in a REAL RACE WATCH the picker and the C cycle carry AUTO (the TV director); outside one they do not", () => {
+  // js/race/real-replay.js's in-game AUTO surface, as RealRace.replay() hands it over.
+  const calls = [];
+  const r = { running: false, auto: false, isRunning: () => r.running, autoOn: () => r.auto,
+    setAuto: (v) => { calls.push("auto"); r.auto = !!v; return r.auto; }, takePicture: () => { calls.push("take"); r.auto = false; } };
+  const h = bootCamModes(2, { RealRace: { replay: () => r } });
+  const plain = h.open().children.length;
+  assert.ok(!h.open().children.some((b) => b.dataset.idx === "auto"), "no AUTO outside a WATCH");
+  h.api.hideCamPicker();
+  r.running = true; r.auto = true;
+  let picker = h.open();
+  assert.equal(picker.children.length, plain + 1);
+  assert.equal(picker.children[0].dataset.idx, "auto", "AUTO heads the list");
+  assert.equal(picker.children[0].getAttribute("aria-checked"), "true", "the director has the picture: AUTO is the checked item");
+  assert.equal(picker.children.filter((b) => b.getAttribute("aria-checked") === "true").length, 1);
+  picker.children[4].onclick({ stopPropagation() {} });   // a shot: the viewer takes the picture
+  assert.deepEqual(calls, ["take"]);
+  assert.equal(h.G.camMode, 3);
+  assert.equal(h.trigger.textContent.startsWith("AUTO"), false);
+  picker = h.open();
+  assert.equal(picker.children[0].getAttribute("aria-checked"), "false");
+  assert.equal(picker.children[4].getAttribute("aria-checked"), "true");
+  picker.children[0].onclick({ stopPropagation() {} });
+  assert.deepEqual(calls, ["take", "auto"]);
+  assert.match(h.trigger.textContent, /^AUTO · /, "the CAM button says who has the picture");
+  // The C cycle: from AUTO the next shot is the viewer's; past the last shot, AUTO again.
+  h.api.cycleCam();
+  assert.equal(r.auto, false);
+  h.G.camMode = h.open().children.length - 2;   // the last CAM_MODES entry
+  h.api.hideCamPicker();
+  assert.equal(h.api.cycleCam(), "auto");
+  assert.equal(r.auto, true);
+  // The WATCH ends: the item goes, the picker keeps its shape.
+  r.running = false;
+  assert.equal(h.open().children.length, plain);
 });
 
 test("How to Play names every input and drops the retired screen-half lie", () => {

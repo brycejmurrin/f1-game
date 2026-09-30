@@ -139,17 +139,17 @@ const RealReplay = (function () {
     for (const d of script.drivers || []) byNum[d.num] = d;
     const code = (num) => (byNum[num] ? byNum[num].code : "#" + num);
     const compoundAfter = (d, lap) => { const st = (d.stints || []).find((s) => s.from === lap + 1); return st ? st.c : ""; };
-    for (const p of script.passes || []) if (p.t != null) out.push({ t: p.t, lap: p.lap, kind: "pass", num: p.by, text: code(p.by) + " PASSES " + code(p.over) + (p.pos ? " FOR P" + p.pos : "") });
+    for (const p of script.passes || []) if (p.t != null) out.push({ t: p.t, lap: p.lap, kind: "pass", num: p.by, over: p.over, pos: p.pos, text: code(p.by) + " PASSES " + code(p.over) + (p.pos ? " FOR P" + p.pos : "") });
     for (const d of script.drivers || []) {
       (d.pits || []).forEach((lap, i) => { const t = d.pitT && d.pitT[i]; if (t != null) { const c = compoundAfter(d, lap); out.push({ t, lap, kind: "pit", num: d.num, pos: d.pos, text: d.code + " PITS" + (c ? " · " + c : "") }); } });
       if (d.dnf && !d.dns && d.outT != null) out.push({ t: d.outT, lap: (d.lapsDone | 0) + 1, kind: "out", num: d.num, text: d.code + " OUT" + (d.outWhere ? " · " + d.outWhere : "") });
     }
     for (const w of script.cautions || []) {
       const cause = w.cause || (w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VIRTUAL SAFETY CAR");
-      if (w.tFrom != null) out.push({ t: w.tFrom, lap: w.from, kind: "sc", num: null, text: cause });
+      if (w.tFrom != null) out.push({ t: w.tFrom, lap: w.from, kind: "sc", num: null, level: w.level, text: cause });
       if (w.tTo != null) out.push({ t: w.tTo, lap: w.to, kind: "green", num: null, text: cause + " IN THIS LAP" });
     }
-    if (script.fastest && script.fastest.t != null) out.push({ t: script.fastest.t, lap: script.fastest.lap, kind: "fastest", num: script.fastest.num, text: "FASTEST LAP · " + code(script.fastest.num) + " " + fmtLap(script.fastest.dur) });
+    if (script.fastest && script.fastest.t != null) out.push({ t: script.fastest.t, lap: script.fastest.lap, kind: "fastest", num: script.fastest.num, dur: script.fastest.dur, text: "FASTEST LAP · " + code(script.fastest.num) + " " + fmtLap(script.fastest.dur) });
     for (const r of script.radio || []) if (r.t != null) out.push({ t: r.t, lap: r.lap || 0, kind: "radio", num: r.num, url: r.url, text: "RADIO · " + code(r.num) });
     out.sort((a, b) => a.t - b.t);
     return out;
@@ -210,6 +210,7 @@ const RealReplay = (function () {
       get followNum() { const f = run.follow && run.cars.get(run.follow); return f ? f.num : null; },
       isOut: (num) => { for (const [c, f] of run.cars) if (f.num === num) return !f.tr || !!(f.parked && c.retired); return true; },
       carOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c; return null; },
+      codeOf: (c) => { const f = run.cars.get(c); return f && f.d ? f.d.code : null; },   // the REAL driver's code (a seat car can wear another)
       colourOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c.team && G.cssCol ? G.cssCol(c.team.color) : ""; return ""; },
       running: () => [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog).map((c) => ({ key: c, prog: c.prog, speed: c.speed })),
     };
@@ -248,6 +249,12 @@ const RealReplay = (function () {
       setFollow(follow);
       if (reel && reel.length) cutTo(reel[0]);
       if (bc) bc.start({ auto, tower: o.tower !== false });
+      // THE COMMENTARY (js/race/race-radio.js): the replay's highlights are the
+      // news, told with the REAL drivers' names, never over a team radio clip.
+      if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching({
+        nameOf: (c) => { const f = run && run.cars.get(c); return f && f.d && typeof RadioLines !== "undefined" ? RadioLines.surname(f.d) : null; },
+        radioBusy: () => !!(run && run.audio && !run.audio.paused && !run.audio.ended),
+      });
       run.onKey = (e) => onKey(e);
       try { window.addEventListener("keydown", run.onKey, true); } catch (e) { /* no window: a VM */ }
       pose();
@@ -260,6 +267,7 @@ const RealReplay = (function () {
       try { if (run.onKey) window.removeEventListener("keydown", run.onKey, true); } catch (e) { /* no window */ }
       if (run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; }
       if (bc) bc.stop();
+      if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching(null);
       if (G.setCamMode && run.savedCamera != null) G.setCamMode(run.savedCamera, { persist: false });
       run = null;
       Log.info("game", "RealReplay.stop");
@@ -351,8 +359,20 @@ const RealReplay = (function () {
         run.fired.add(i);
         if (h.t < run.T - CAPTION_S) continue;   // seeked past: not news any more
         if (h.kind === "radio") { if (run.speed === 1) playRadio(h); continue; }
+        // SPOKEN when the commentator can keep up (<= 2x): the commentary card
+        // carries the words. A caption instead would pre-empt that card and cut
+        // the voice mid-word (radio-voice stops a line an unspoken card replaces).
+        const rr = G.raceRadio;
+        if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= 2) {
+          if (rr.replayEvent(h, carOfNum(h.num), h.over != null ? carOfNum(h.over) : null)) continue;
+        }
         if (G.announce) G.announce("L" + h.lap + " · " + h.text, CAPTION_S, "race");
       }
+    }
+    function carOfNum(num) {
+      if (num == null) return null;
+      for (const [c, f] of run.cars) if (f.num === num) return c;
+      return null;
     }
     function playRadio(h) {
       if (!h.url || typeof Audio === "undefined") return;
@@ -398,7 +418,11 @@ const RealReplay = (function () {
                cars: [...run.cars.values()].filter((f) => f.tr).length, broadcast: bc ? bc.status() : null };
     }
 
-    return { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, isRunning: () => !!run };
+    return { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, isRunning: () => !!run,
+             // The in-game AUTO camera (js/camera/mode-switch.js): hand the picture to the
+             // TV director, ask who has it, or take it (a shot picked by the viewer).
+             setAuto: (v) => (bc && run ? bc.setAuto(v) : false), autoOn: () => !!(bc && run && bc.autoOn()),
+             takePicture: () => { if (bc && run) bc.manual(); } };
   }
 
   return { create, fitFrame, mapPoint, trackTrace, fromTrack, buildTraces, sampleAt, highlightsFor, reelFor, fmtLap, SPEEDS, LEAD_S, HOLD_S, ENDED_S };
