@@ -114,6 +114,12 @@ input[type="range"]:disabled { cursor: default; }
    unsupported. */
 h1, h2, h3, .sheet-head h2, .adv-sec, .pm-group-h, .tune-label { text-wrap: balance; }
 p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
+/* HELP TEXT: HIDE (APPEARANCE › READABILITY, js/ui/appearance-opts.js →
+   html[data-menu-help="off"]). Drops the grey explanations in the settings
+   sheet and the race setup. A status line, a live region or a line marked
+   data-help="keep" (warnings, forecasts, readouts) is information, not
+   explanation, and stays. */
+:root[data-menu-help="off"] :is(#pmsettings, #rs-body) .adv-help:not([role="status"]):not([aria-live]):not([data-help="keep"]) { display: none; }
 
 /* Some people turn transparency down at the OS level, and every sheet here is
    translucent over a moving 3D scene — the worst case for legibility. Give them
@@ -1154,12 +1160,29 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 2px 0 0;
 }
 /* Opaque enough that leftover HUD cannot read through the card. Color is
-   the original dim wash, not carnival inks. */
+   the original dim wash, not carnival inks.
+   --pause-wash / --pause-scrim are the PAUSE MENU › BACKGROUND setting
+   (js/ui/pause-opts.js → html[data-pause-dim], rules below). Unset, the
+   fallbacks ARE the shipped numbers, so the default card is unchanged. */
 #pausemenu.screen.dim {
   background:
-    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 14%, transparent), transparent 58%),
-    rgba(6, 6, 10, 0.58);
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--pause-wash, 14%), transparent), transparent 58%),
+    rgba(6, 6, 10, var(--pause-scrim, 0.58));
 }
+/* PAUSE MENU player settings (APPEARANCE › PAUSE MENU, js/ui/pause-opts.js).
+   Each lands on <html> only when it differs from the shipped look.
+   BACKGROUND sets the two tokens on BOTH layers that paint the scrim — the
+   card's own box above, and its ::backdrop (dialog.screen.dim::backdrop
+   below reads the same pair). Declared on the ::backdrop itself, not left to
+   inherit: older engines give ::backdrop no parent to inherit from. The
+   reduced-transparency backdrop rule still wins: same specificity, later. */
+:root[data-pause-dim="soft"] #pausemenu { --pause-wash: 7%; --pause-scrim: 0.29; }
+:root[data-pause-dim="soft"] #pausemenu::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
+:root[data-pause-dim="off"] #pausemenu,
+:root[data-pause-dim="off"] #pausemenu::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
+/* SIDE: the dialog is a one-column grid (.screen) — move its one item. */
+:root[data-pause-side="left"] #pausemenu { justify-items: start; }
+:root[data-pause-side="right"] #pausemenu { justify-items: end; }
 /* Two-up secondary doors. A 420×232 card on 852×393 spent its height on four
    full-width --tap rows; RESTART | SETTINGS share a row so RESUME stays the
    one full-width primary and QUIT stays the one full-width destructive. */
@@ -1174,6 +1197,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   gap: calc(var(--gap) * 0.6);
   align-items: start;
 }
+/* LAYOUT: LIST — every door gets its own full-width row. */
+:root[data-pause-layout="list"] #pausemenu .sheet-body.stack { grid-template-columns: minmax(0, 1fr); }
 #pm-resume,
 #pm-quit,
 #pm-standings,
@@ -1202,6 +1227,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   background: var(--plate-opaque);
   color: var(--text);
   border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+/* CONFIRM QUIT: the first press ARMS the button (js/ui/pause-opts.js) — the
+   same armed fill as every other two-press guard. The extra :not(#pm-resume)
+   is specificity, not logic: it has to outrank the three-id secondary-door
+   rule above, which would otherwise repaint an armed RESTART as a plain plate. */
+#pausemenu .sheet-body.stack > button:is(#pm-quit, #pm-restart):not(#pm-resume).armed {
+  background: var(--armed-fill);
+  border-color: var(--red);
+  color: var(--text);
 }
 
 /* ---------- settings sub-menu ----------
@@ -2225,8 +2259,8 @@ dialog.screen:not([open]) { display: none; }
 dialog.screen[open] { display: grid; }
 dialog.screen.dim::backdrop {
   background:
-    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
-    rgba(6, 6, 10, 0.38);
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--pause-wash, 12%), transparent), transparent 58%),
+    rgba(6, 6, 10, var(--pause-scrim, 0.38));
 }
 @media (prefers-reduced-transparency: reduce) {
   dialog.screen.dim::backdrop { background: rgba(0, 0, 0, 0.96); }

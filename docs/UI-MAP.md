@@ -98,7 +98,8 @@ the same pairing (`js/input/phone-pad.js`; the protocol is in
 
 - HUD `ON`; Style `STANDARD`; Layout `FULL`; Map `ON`;
   Gaps `ON`; Line Colour `F1`; Line Opacity `NORMAL`; Brake Cue `OFF`.
-- HUD and touch size/opacity `100%`; Metrics Overlay `OFF`; Page `GOV`;
+- HUD and touch size/opacity `100%`, Panel Opacity `100%` (`#pm-panelopacity`,
+  the plates behind the readouts; HIGH CONTRAST keeps them solid); Metrics Overlay `OFF`; Page `GOV`;
   Side `AUTO`; Size `S`.
 - Renderer `THREE.JS`; Resolution `AUTO`; Fullscreen `OFF`; Upscale `OFF`;
   Occlusion `OFF`; Debris `ON`; Graphics `HIGH`.
@@ -110,8 +111,14 @@ the same pairing (`js/input/phone-pad.js`; the protocol is in
 
 - COLOURS: Theme, Menu Accent (swatches, custom hex), HUD Accent.
 - READABILITY: UI Size `100%` (`#pm-uiscale`, moved here from Display), Text
-  Size, High Contrast, Speed Units.
+  Size, High Contrast, Speed Units, Help Text `SHOW` (`#pm-helptext`; HIDE drops
+  the grey `.adv-help` lines in Settings and race setup, keeping status lines,
+  live regions and `data-help="keep"` warnings/readouts).
 - MOTION: Motion `ON` (global: menus, camera shake, flyby).
+- `#pm-pausemenu`, a closed PAUSE MENU fold whose summary reads `SHIPPED` or
+  `CUSTOM` (`js/ui/pause-opts.js`; the four SettingRows mount into
+  `#pm-pausemenu-body` at runtime, like TITLE LAYOUT): Layout `GRID`, Side
+  `CENTRE`, Background `FULL`, Confirm Quit `ON`.
 - `#pm-titlescreen`, a closed TITLE SCREEN fold whose summary reads `SHIPPED`
   or `CUSTOM` (`js/ui/title-layout.js`): Title Intro `FULL`, Menu Wash `FULL`,
   Title Art `ON`, the TITLE LAYOUT sub-fold (`#pm-titlelayout`, built at
@@ -185,16 +192,22 @@ press Start Career. Supporting layers include `#career-offers`,
 
 ### One Grand Prix (`#select` → `#race-settings`)
 
-1. Choose `ALL`, `SEASON` or `CLASSICS`, optionally search, then select a
-   circuit.
+1. Choose `ALL`, `SEASON` or `CLASSICS` (plus `♥ FAVOURITES` once any circuit
+   is starred), optionally search, then select a circuit. `F` on a focused
+   tile stars or unstars it; a starred tile wears a small ♥ badge.
 2. Read the circuit card: layout, location, length, turns, direction,
    elevation, DRS, slowest corner and night tag.
 3. Optionally open `#track-detail` for the map, elevation graph, DRS and turn
-   classes; close returns to the picker.
+   classes, and the `☆ FAVOURITE` / `★ FAVOURITE` toggle (`#track-detail-fav`,
+   built in JS, `aria-pressed`; stored as `apex26.favTracks`); close returns to
+   the picker.
 4. `BACK` returns to title, `YOUR CAR` opens Garage, and `NEXT` opens Race
    Settings.
 5. Configure laps, weather, conditions, time of day, difficulty, grid,
-   cautions, Duel, driving line, tyre wear, strategy and reliability.
+   cautions, Duel, driving line, tyre wear, strategy and reliability. A solo
+   one-off GP opens a new circuit on the laps (a rung, or FULL), weather, time
+   of day and MIXED it last STARTED with (`apex26.raceDraft`); time trial, the
+   Daily, championship rounds and a VS FRIEND room keep their own staging.
 6. `RACE!` starts the session.
 
 Observed session values are only examples, not defaults. In particular, the
@@ -263,11 +276,11 @@ After `await __apex.race("monza")`, `#pausebtn` opens `#pausemenu`.
 | Control | ID | Result |
 |---|---|---|
 | Resume | `#pm-resume` | Return to the race |
-| Restart Race | `#pm-restart` | Restart the current race |
+| Restart Race | `#pm-restart` | Restart the current race (with Confirm Quit ON, the first press arms: "RESTART — TAP AGAIN") |
 | Settings… | `#pm-settings` | Open the same Settings index used from title |
 | How to Play… | `#pm-howto` | Open the help sheet |
 | Standings | `#pm-standings` | Open championship standings; hidden outside a championship |
-| Quit to Menu | `#pm-quit` | Leave the race for the title |
+| Quit to Menu | `#pm-quit` | Leave the race for the title (with Confirm Quit ON, the first press arms: "QUIT TO MENU — TAP AGAIN") |
 
 The pause card also has Previous, Pause and Next track controls in its music
 strip. Pause Settings exposes the same Controls, Driving, Display, Steering &

@@ -378,6 +378,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // looks exactly like the bug it guards against.
   "tests/unit/parts-ladder.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
+  "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/perf-try.test.mjs",

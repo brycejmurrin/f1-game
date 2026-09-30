@@ -54,7 +54,14 @@ function peelOnce() {
   const a = window.__apex;
   // A race, a countdown or a results screen: #pm-quit's handler IS quitToMenu(),
   // which also stops an active NetPlay session and hides the HUD layers.
-  if (a && a.info && a.info().state !== "menu") { $("pm-quit").click(); return "pm-quit"; }
+  // CONFIRM QUIT (js/ui/pause-opts.js, ON by default) turns the first press
+  // into an arm; the second, while armed, runs the handler.
+  if (a && a.info && a.info().state !== "menu") {
+    const q = $("pm-quit");
+    q.click();
+    if (q.classList.contains("armed")) q.click();
+    return "pm-quit";
+  }
   if (vis("customize")) { $("cz-cancel").click(); return "cz-cancel"; }
   if (vis("teampicker")) { $("tp-close").click(); return "tp-close"; }
   if (vis("carsetup")) { $("cs-back").click(); return "cs-back"; }

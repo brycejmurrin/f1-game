@@ -1713,6 +1713,13 @@ const api = {
 
   // Reset mesh-visibility overrides (companion to meshToggle).
   clearMeshes() { G.hideMeshes = {}; return G.hideMeshes; },
+  // Drop every procedural body/wheel GPU cache so the next warm/draw rebuilds
+  // through Car3D.build (parts-factory-presets and similar probes). No-op when
+  // the façade has not wired CarDraw yet.
+  clearCarMeshCaches() {
+    if (typeof G.invalidateFactoryMeshCaches === "function") G.invalidateFactoryMeshCaches();
+    return true;
+  },
 
   // The HUD rear-view mirror (js/render/shared/mirror-pass.js): mirror() reads
   // {mode, shown, rect, cars, drawn, cam, backend: gfx.mirrorState()};

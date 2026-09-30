@@ -292,6 +292,7 @@ const FULL = [
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
+  "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
@@ -457,6 +458,7 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
   ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
   ["js/core/store.js", "js/ui/title-layout.js"],  // binds GameStore.store and applies the title layout at eval
+  ["js/core/store.js", "js/ui/pause-opts.js"],    // binds GameStore.store and applies data-pause-* at eval
   ["js/core/store.js", "js/career/badges.js"],    // binds GameStore.store at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
@@ -773,6 +775,7 @@ const CONTROLLER = [
   "js/net/sdp.js",
   "js/net/transport.js",
   "js/net/handshake.js",
+  "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
   "js/input/phone-pad.js",
 ];
