@@ -1,6 +1,6 @@
 ---
 name: webgpu-debug
-description: Use when WebGPU/WGX rendering is wrong — black screen, missing road/world, NaN-white surfaces, GPU validation errors, WGSL compile failures, device lost, silent fallback to WebGL2, MSAA/HDR format issues, or when validating WGSL changes with real Dawn in-container via wgx-validate. A textured-vs-procedural or wrong-colour material look on WGX is asset-pack.
+description: Use when WebGPU/WGX rendering is wrong — black screen, missing road/world, NaN-white surfaces, GPU validation errors, WGSL compile failures, device lost or a frozen frame on WebGPU, silent fallback to WebGL2, MSAA/HDR format issues, or when validating WGSL changes with real Dawn in-container via wgx-validate. A textured-vs-procedural or wrong-colour material look on WGX is asset-pack.
 paths: ["js/render/webgpu/**"]
 ---
 
@@ -11,7 +11,8 @@ WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-fx.js`,
 DEFERRED: no `<script>` tag; `js/game.js` injects it when
 `apex26.gfxBackend === "webgpu"`. Unset ships TLX/Three; GLX is the explicit
 WebGL2 choice and universal fallback. Every WGX failure must degrade to GLX,
-never a dead canvas.
+never a dead canvas (deliberate exceptions: blocked storage, hidden-tab loss —
+defects.md "Trace").
 
 ## 1. First probe — static, then Dawn
 
@@ -87,5 +88,5 @@ full-tier run).
 
 ## Load on demand
 
-- Late-sky / derivative_uniformity / MSAA+HDR defects, device-loss ladder →
+- Late-sky / derivative_uniformity / MSAA+HDR defects, device-loss ladder and the lost-device freeze trace →
   [references/defects.md](references/defects.md).

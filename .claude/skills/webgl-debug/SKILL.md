@@ -1,6 +1,6 @@
 ---
 name: webgl-debug
-description: Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night or slider-flat scenes → lighting-tuner first. WebGPU black screen or NaN-white road → webgpu-debug. Temporal shimmer while driving → playwright-probe (references/motion-capture.md).
+description: Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/blown-out/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night or slider-flat scenes → lighting-tuner first. WebGPU black screen or NaN-white road → webgpu-debug. Temporal shimmer while driving → playwright-probe (references/motion-capture.md).
 paths: ["js/render/glx/**"]
 
 ---
@@ -23,9 +23,13 @@ of root causes — start with the probes below before reading shader source.
 GLX.hdrMode()   // boolean — true = WebGL2 HDR float-FBO path active
 ```
 
-`false` means the WebGL2 context failed to create a float framebuffer — the HDR
-composite pass is skipped and bloom/tone-map won't fire. This is normal under
-SwiftShader in CI; it's a bug in production if a modern GPU returns `false`.
+`false` means `postEnabled && colorType === HALF_FLOAT` failed (`glx/post.js`
+`hdrOk`): either the post chain fell back to direct rendering (no bloom, no
+composite at all), or `EXT_color_buffer_float` is absent so the chain runs on an
+8-bit RGBA8 target (bloom and ACES still run, but nothing exceeds 1.0 to bloom
+from). A bug in production if a modern GPU returns `false`. `true` says nothing
+about bloom strength: for over-bright/blown-out frames go to failures.md
+"Bloom blows out the whole frame".
 
 **Do not confuse with GPU timing:** when someone says HDR/GPU features are
 "unsupported", they usually mean `__apex.gpuTimer().supported === false`

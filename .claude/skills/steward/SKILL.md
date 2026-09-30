@@ -61,7 +61,18 @@ is already there. A green PR merges as it stands.
 Every base merge conflicts on `tests/data/ratchets.json` and the generated
 files; `sync-pr` cures both and a hand merge does not. It leaves you ON
 `sync-pr-<branch>` and pushes nothing without `--push` — recovery is in
-`check-changes` → `references/deploy.md`.
+`check-changes` SKILL.md §After `sync-pr.mjs` (not references/deploy.md).
+
+**Hand-written files conflict (prose, a help sheet, a ratchet's FORM):**
+`sync-pr` runs `merge --abort`, prints `real conflicts … resolve by hand`
+(a `(moved to <path>)` tag = re-apply their edit there), and returns you to
+the branch you started on; `sync-pr-<branch>` is left as an unmerged copy of the
+PR head — delete it. Order: `sync-pr <branch> --plan` (names the files, runs
+nothing) → `who-is-on-it.mjs` if the base file is not yours → `git checkout
+<branch> && git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides'
+intent in each hand-written file → generated leftovers at the source + `npm
+run gen` → `git add`/commit → `deploy.mjs --gate-only` → plain `git push`
+(never force). Record the files and the resolution in the PR body.
 
 Resolve a generated-file conflict at the SOURCE and run `npm run gen`; never
 hand-edit one (the edit hook blocks it, and `gen:check` names drift). The list

@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: Use when editing the GARAGE parts catalog, livery/finish/shark fin, SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, or Car3D visual recipes. Isolated studio renders → playwright-probe; on-track handling → tune-physics.
+description: Use when editing the GARAGE parts catalog, livery/finish/shark fin, a number/crest/sponsor mark unreadable against its paint (livery contrast, cover legibility), SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, or Car3D visual recipes. Isolated studio renders → playwright-probe; on-track handling → tune-physics.
 ---
 
 # Garage — parts, livery, and car mesh
@@ -74,6 +74,17 @@ car hides at that camera; `--plan` warns when a design flag cannot paint) or
 `shot.mjs --team`. Placement/fin gates live in `fin-design.test.mjs`; cover-legibility
 and livery-contrast are separate unit suites — a green fin-design is not proof
 those two are green.
+
+**A NUMBER / MARK unreadable on its paint** is `crest-marks.test.mjs` (mark + outline +
+halo per background; the number board and fin badge cases) and the ink pickers in
+`liverytex.js` (`inkOn` → `haloFor`, `drawNumber`, `buildAtlas`'s `ink`/`finNum`/flank
+picks), not `livery-contrast`: `tools/car/livery-contrast.mjs` and its test score only
+panels where one op owns >= 15 % of a region (bands, suns, saddles), so a green run says
+nothing about a glyph. Team-authored fix = `logo3` in `js/data/teams.js`; a picker fix
+touches `liverytex.js` and reruns `crest-marks`, `cover-legibility`, `livery-contrast`,
+`fill-gating`, `team-livery`. The lit check is browser-only (`parts-livery-contrast.spec.js`,
+`garage-angles`). `livery-contrast.mjs --team=X` is a node run (full sweep ~80 s idle; one team
+ran >2 min at loadavg 8): background it, and skip it above loadavg 4.
 
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
 **tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.

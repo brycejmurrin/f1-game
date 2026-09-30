@@ -52,8 +52,11 @@ judging a `graph-parity` mismatch.
    measured reuse, and S2/S3 draw-path notes. If §6 already lists the emitter
    as landed, skip migration and run parity/reuse only.
 
-2. **Migrate one emitter** in `js/track/scenery/*.js` (or a circuit callback if
-   inline):
+2. **Migrate one emitter** in `js/track/scenery/*.js` (`structures`, `city`,
+   `nature`, `build-props`). `ctx.instance` is engine-internal, NOT on the
+   circuit `api` (`docs/SCENERY-API.md` §Scene graph): a circuit's inline
+   `addBox`/`addCyl` runs (Monaco's `js/circuits/scenery/monaco.js` has 30+, zero `instance(`) cannot migrate
+   in place — lift them into an engine emitter first:
    - Record ops in `build(rec)` (`rec.box`, `rec.cyl`, …).
    - Call `ctx.instance(key, place, build, meta)` — the buildProps wrapper,
      not `graph.instance` directly — with a stable `key` and `meta.kind`
@@ -75,7 +78,9 @@ judging a `graph-parity` mismatch.
    before judging, and accept the look change behind regenerated visual
    baselines.
 
-4. **Reuse check** after build:
+4. **Reuse check** after build (browser-only; node substitute: the parity tool's own
+   `by emitter` table + `instanced handoff: N batches, M instances (+K un-instanceable -> bake)`
+   line — K is the `bakeOnly` count; Monaco at HEAD~1: 20 batches, 4290 inst, +4 bake, ~20 s for one id):
    ```js
    __apex.race("spa"); __apex.trackGraph().stats().byKind
    ```
@@ -84,7 +89,7 @@ judging a `graph-parity` mismatch.
    discrete keys) before expecting instancing savings. Pine reuse sits at
    ~1.00× today because dimensions are affine in height.
 
-5. **Fast contract then GL wiring**:
+5. **Fast contract** (`node --test tests/unit/track-graph.test.mjs`, 20 tests, <1 s) **then GL wiring** (browser):
    ```sh
    npm run test:tooling-fast
    node tools/ci/test-bg.mjs gfx    # instanced-draw.spec.js — background
@@ -95,7 +100,11 @@ judging a `graph-parity` mismatch.
 
 `batches()` routing: instanced when `node.full` and no radial op under
 non-uniform XZ scale; otherwise the node lands in `bakeOnly` (caller must
-`bake()`).
+`bake()`). `batches({instancedOnly:true})` skips nodes not marked `inst`.
+
+**Hand-off record** (PR body): emitter + `meta.kind`, `BASE=<ref>` used and its
+`parity exact` line, the `+K -> bake` count before/after, `track-graph.test.mjs`
+result; Not run: `gfx` group / `instanced-draw.spec.js` (browser).
 
 ### Common mistakes
 

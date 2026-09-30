@@ -37,10 +37,37 @@ in light space (not world XZ) and that the rebuild gate includes sunDir.
 
 ### Bloom / tone-map not firing
 
-Bloom requires `hdrMode() === true` (float framebuffer available). Under
-SwiftShader it falls back to the LDR path — bloom is skipped and the scene looks
-flat. In production, verify `GLX.hdrMode()` returns `true` after context
-creation.
+`hdrMode()` is `postEnabled && colorType === HALF_FLOAT`. `false` with post up = 8-bit
+target: bloom still runs but only from pixels >= threshold, so it reads flat. Post down
+(`PST.enabled()` false) = no bloom/composite. Also check `PerfGov.autoTier() >= 4`
+(game.js zeroes `po.bloom`) and GRAPHICS tier before blaming the shader.
+
+### Bloom blows out the whole frame (night, HDR on) — tuner or shader?
+
+Path: `game.js` ~8300-8431 picks `_bloom`/`_thresh` per time of day (night 0.55 / 0.97),
+then `po.bloom = _bloom * LT.bloomMul`, `po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2)`,
+`po.exposure = frame.exposure * LT.exposureMul` -> `glx/post.js` `present()` (bright-pass
+`uThreshold`, mip chain, composite `uBloomAmt = bloom*1.25/(nLv-1)`, `uBloomKnee`, `uExposure`)
+-> `shaders/glsl-post.js` BRIGHT_FS and COMPOSITE_FS (`c += bloomSample*uBloomAmt*bloomMask*uExposure`,
+then HDR grade, then ACES). The knobs are the SAME registry on TLX/WGX (`js/lighting/knobs.js`).
+
+1. Static, no browser: read the shipped values for the case.
+   `grep -n -A30 '"singapore|night|dry"' js/lighting/presets.js | grep -E 'bloom|thresh|exposure'`
+   (singapore night ships bloomMul 1.405, bloomKnee 0.72, exposureMul 0.8 — already a heavy look).
+   Compare to defs in `js/lighting/knobs.js` (bloomMul 1, threshOff 0, bloomKnee 0.5, exposureMul 1).
+   A preset/knob value far off def IS the tuner answer; fix by editing the profile (lighting-tuner).
+2. BROWSER-ONLY: `node tools/shot/apex-eval.mjs singapore "(a.setTimeOfDay('night'), a.lightTune())" --raw --backend webgl2`
+   — a stale `localStorage apex26.lightTune` outranks presets; then re-run with
+   `lightTune({bloomMul:1,threshOff:0,bloomKnee:0.5,exposureMul:1})` and `GLX.hdrMode()`.
+3. BROWSER-ONLY discriminator: same track/time on `--backend three` (TLX). Knobs and `po.*` are
+   shared, so TLX fine + GLX blown out at identical knobs = GLX defect (post.js upload, BRIGHT_FS/COMPOSITE_FS,
+   float target); both blown out = tuner/preset/game.js values. Knobs at def and still blown = shader.
+4. Shader-side suspects when knobs are at def: `uBloomAmt` normalisation vs `nLv`, bright-pass fed an
+   already-exposed or >1 clamped target, `uBloom` left bound to a stale `bloomLv[0]` when `doBloom` is false
+   (should be `blackTex`), missing `uExposure` scale on the bloom term. Static guard:
+   `node --test tests/unit/image-grade-shaders.test.mjs` (asserts grade order after bloom, before ACES).
+5. Record for the next agent: backend, track|tod|weather key, `hdrMode()`, the `lightTune()` diff from def, and
+   the TLX-vs-GLX result; verdict is "tuner/preset" (edit via lighting-tuner) or "GLX shader" (fix in glx/post.js / glsl-post.js).
 
 ### Bloom too strong / scene milky
 

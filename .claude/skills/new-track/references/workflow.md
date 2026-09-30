@@ -110,6 +110,15 @@ Green = the counts equal the baseline rows (monza: clip 17, coplanar 5, float 0,
 a geometry/scenery edit that moves a count means updating that baseline row to the measured value, in the same commit.
 `import-circuit-path.mjs --self-check` ends "1 over the 2 m bar" today (worst 3.79 m) - that is the standing state, not yours.
 
+## Adding a bridge or an elevation bump to an existing def (walked read-only on zandvoort)
+
+Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m), added to the road height in `buildCenterline` (`js/track/tracks.js` ~L76-95).
+- **`elevations`** — terrain follows the road. Silently DROPPED (`tracks.js` ~L666) when the id has a profile in `js/track/circuit-elevations.js` (SRTM bake; 18 ids, not zandvoort, which has one authored bump `s 0.56 halfM 300 rise 8`): edit the bake (`tools/gen/bake-elevation.mjs`) there, not the def. Check first: `grep -c "^    <id>:" js/track/circuit-elevations.js`.
+- **`bridges`** — road lifts, `js/track/core/surface.js` (~L74) carves the ground back flat under the deck, `build-props.js` (~L2067) adds four pillar pairs. Only suzuka has one; pick `s` from the real crossover (a bridge over nothing is a bare hump), and keep `halfM` short.
+- **`s` frame:** authored against `sceneryStartFrac` (else `startFrac`), remapped to racing frac by `materializeListPoints`, then shifted by `def._sceneryShift` at every consumer (road, ground carve, pillars). `_sceneryShift` is nonzero ONLY when the def names `sceneryStartFrac`. Zandvoort names none (its header says do not re-add), so `s` there is a plain racing-lap fraction. Never add `sceneryStartFrac` to compensate; never read `b.s`/`e.s` raw in new code, add `+ (def._sceneryShift || 0)`.
+- **Audits that move** (all no-browser except the last): `verify-track <id>` (throws), `clip-audit` and `coplanar-audit` (a bridge deck adds overhead coplanar faces; `coplanar-audit.cjs --overhead`), `float-audit` and `props-tris` (pillars, re-seated props on the new height), `tests/unit/elevation-smoothness.test.mjs` (grade cap; only baked ids, and it skips bridge windows), `tests/unit/track-foundation.test.mjs` / `circuit-def-fields.test.mjs` (def shape). Baselines: zandvoort clip 20, coplanar 7, props-tris 282691, float absent (= 0). Browser-only: `terrain-over-road.spec.js`, `elevation-tracks.spec.js`, `zandvoort-foundation.spec.js`; name them not-run in the PR when you skip them. `undulate` ripple is added after the bumps, so measure `py` from `Tracks.build(def)`, not from the numbers you typed.
+- **Hand-off note** to leave in the PR: which key, `s`/`halfM`/`rise`, the measured audit counts before and after, and which baseline rows you updated.
+
 ## Gotchas
 
 - **`path` is the geometry, full stop.** There is no hand-authored segment

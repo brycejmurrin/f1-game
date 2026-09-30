@@ -1,6 +1,6 @@
 ---
 name: new-track
-description: Use when the user asks to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges/elevation, or register a new circuit in js/circuits/. Corner/terrain diagnosis → agent-view; picture-driven accuracy → survey-track; scenery(api) props → scenery-dress.
+description: Use when the user asks to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges (flyover, overpass, figure-8 crossover)/elevation (add a hill, crest or dip), or register a new circuit in js/circuits/. Corner/terrain diagnosis → agent-view; picture-driven accuracy → survey-track; scenery(api) props → scenery-dress.
 ---
 
 # Author or edit a track
@@ -57,7 +57,7 @@ road, terrain, and prop meshes. **Track files load before `js/track/tracks.js`**
     // cityStyle: { neon: [NC names], dayPal: [DC names], bias, fh, bh, kinds, neonKinds, tone }
 
     bridges:   [{ s: 0.5, halfM: 12, rise: 6 }],   // figure-8 overpass (terrain stays flat under it)
-    elevations:[{ s: 0.3, halfM: 40, rise: 8 }],   // real terrain bump (terrain follows)
+    elevations:[{ s: 0.3, halfM: 40, rise: 8 }],   // real terrain bump (terrain follows); IGNORED if circuit-elevations.js has this id
 
   });
 })();

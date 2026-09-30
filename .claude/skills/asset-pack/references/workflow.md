@@ -71,7 +71,7 @@ WGX is a device/feature miss, not "WGX has no arrays."
 6. **Validate**:
    ```sh
    npm run test:tooling-fast
-   node tools/ci/test-bg.mjs hooks
+   node tools/ci/test-bg.mjs hooks   # whole browser group (10-40 min); a lone `npm test -- tests/specs/assets-api.spec.js` is the pack's own spec
    ```
    Visual: **lighting-tuner** or **webgl-debug** / **webgpu-debug** on a track
    with varied surfaces.
@@ -81,6 +81,35 @@ WGX is a device/feature miss, not "WGX has no arrays."
    hashes ([shell/cache](../../check-changes/references/bump.md)); run
    `node tools/gen/gen-shell.mjs --check` if you touched `js/` or `css/`. Pack
    URLs rely on SW cache generation + revalidation, not shell `?v=`.
+
+## One material garbled on ONE backend (e.g. grass, TLX only)
+
+Static trace, no browser (line anchors drift — grep the names). Every backend
+does `tex = array[layer = MAT id]`, `uv = wp.xz / scale[mid]` (wall-like ids
+1,2,4,5,7,12,13,14 use `(wp.x|wp.z, wp.y)`), `albedo * tex.rgb * 2`, only for
+mid 1..16 with scale > 0 — the same numbers in `glsl-lit.js` `matTexUV`,
+`wgsl-chunks.js` `matTexUV`/`matUvLit`, `tsl-lit.js` `matTexUV`/`matTexLayer`.
+Diff these seams, in order:
+1. **Layer index**: TLX `surfaceId = floor(matA + 0.5)` where `matA` is a SMOOTH
+   `attribute("mat")` (GLX/WGX: `flat vMat`), so a triangle spanning two
+   materials interpolates the id and samples a neighbouring layer; then
+   `.depth(int(matTexLayer(mid)))` truncates. First suspect for mixed-id seams.
+2. **Sampling state** (`tlx.js` `createTextureArray` vs the 1x1 placeholders
+   `grey()`): repeat wrap, LinearMipmapLinear, aniso 4 must match or WGSL
+   compiles a `textureLoad` edge-texel read (flat grass/asphalt on WebGPU).
+   Pinned by `gfx-backend-canary.test.mjs` "TLX placeholder material arrays…".
+3. **Pixel bytes**: TLX reads the PNGs back through a scratch WebGL2 context
+   (`readbackTextureLayers`; 2d-canvas readback is colour-managed and neutralises
+   the pack). A wrong-but-not-flat pack = check FLIP_Y false there and in GLX/WGX.
+4. **Bake side**: the layer itself (`tools/gen/assets.mjs` GRASS row of
+   `ATLAS_PRESETS.generated`, `SCALES`). If GLX/WGX look right it is not this.
+
+Parity gates (all static): `tests/unit/assets-pack.test.mjs` (MAT_LAYERS /
+`uMatTexScale[17]` / manifest ids; it does NOT pin TLX's `Array(17)` or upload
+loop — a layer-count change must grep `tsl-lit.js` by hand), the canary tests
+above and `webgpu-lifecycle.test.mjs` (WGX `textureSample` uniform-CF).
+Per-backend pixel truth is BROWSER-ONLY: `matTex(0)` vs `matTex(1)` per
+backend, `__apex.assets()` `uploaded:true`. Record which of 1-4 was ruled out.
 
 ## Common mistakes
 

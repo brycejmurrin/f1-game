@@ -17,6 +17,23 @@ A/B a rendering change on the same `(track, seconds, speed)` twice per side.
 rAF-under-headless, ffmpeg, and the near-plane A/B that proved p90 0.21→0.00 are
 below.
 
+## Kerb / surface shimmer at a known place (Monaco kerbs)
+
+Two more tools, neither a driven clip. `motion-capture.mjs` always starts at
+`jump(0.05)` (BROWSER; ~4 s @ 50 covers Monaco T1 at `turns[0]` 0.0666), so it
+cannot dwell on a later kerb.
+
+1. No browser first: `node tools/track/coplanar-audit.cjs monaco --why`
+   (same-facing coplanar faces = z-fight candidates; ~2 s, VM; needs load < 4).
+   Kerb geometry: `buildKerbs` in `js/track/core/mesh.js`.
+2. BROWSER, still camera: `node tools/shot/flicker-gate.mjs --list` (no
+   browser) prints the fixed SITES (monaco has only the tunnel ones; a kerb
+   site means adding an entry to `SITES` in that file, then
+   `--site <id> --png`; exit 1 = over the ceiling). Then confirm in motion
+   with `motion-capture.mjs monaco 4 50` twice per side and compare p90.
+
+Record: p90 per side (2 runs each), the commit A/B'd, the clip path.
+
 ## When to reach for something else
 
 - Static look / framing → **playwright-probe** (`shot.mjs`, `apex-capture.mjs`).

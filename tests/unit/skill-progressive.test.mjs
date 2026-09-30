@@ -251,7 +251,7 @@ test("skills only name real test-bg groups", () => {
   const groups = new Set(
     Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)),
   );
-  const flags = new Set(["--status", "--stop", "--wait", "--force", "--json"]);
+  const flags = new Set(["--status", "--stop", "--wait", "--timeout", "--force", "--json", "--sweep"]);
   const bad = [];
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

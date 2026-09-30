@@ -59,7 +59,7 @@ node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SH
 ```
 
 `player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, script it in
-`scratch/` — `createGame({track})`, `await g.race(track)`, `g.apex.setPhysics({frontGrip: x})`,
+`scratch/` — `createGame({track, storage: {difficulty: "normal", autoThrottle: false}})` (copy `main()`'s options), `await g.race(track)`, `g.apex.setPhysics({frontGrip: x})`,
 `measure(g, frac)` per value — and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
 slip past its peak with rear settled = understeer). `physics-tune-sweep.mjs` is BROWSER + long (sharded
 DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the

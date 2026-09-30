@@ -45,7 +45,7 @@ node tools/track/float-audit.cjs <id>       # node-VM, ~1 s: floating props; "cl
 node tools/track/ground-audit.cjs <id> --why  # ~12 s: buried / unsupported prims (--all --gate = ratchet)
 ```
 
-Grounded = float-audit clean and ground-audit no worse than `scenery-audit-baseline.json`. Then `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). Visual: **playwright-probe** `shot.mjs`. Picture-driven
+Grounded = float-audit clean and ground-audit no worse than `tests/data/scenery-audit-baseline.json`. Then `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). Visual: **playwright-probe** `shot.mjs`. Picture-driven
 accuracy / floating-tree survey → **survey-track** (Montreal already ships
 `flatTerrain`). Instancing migration →
 [references/instancing.md](references/instancing.md).

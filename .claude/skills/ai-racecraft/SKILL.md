@@ -41,6 +41,22 @@ low `vC` (k, grip, `diffCorner`, `skill`), too small `0.85`, or `errMul`/`hold`.
 point itself: `ai-race.mjs pace` (lap time) and `line` (approach/apex) are the closest VM
 proxies; for the exact point probe `__apex` live (browser, `mcp-probe`).
 
+## Stuck / unstuck (AI wedged, never recovers)
+
+Two timers, both in `updateCar` (`game.js`, grep `stuckT` / `rescueT`): `stuckT` grows while
+`speed < 7 && AiDrive.isBoxed` (no room both sides, or a blocker < 6 m); past
+`AiDrive.stuckThreshold(awareness)` (0.45-1.15 s) `unstuckActive` cancels braking and adds
+`unstuckPull` sideways (+ `unstuckLatFloor` steering floor, `queueFloor` crawl). If that fails,
+`rescueT` (`aiStuck`: offroad > 0.5 s, or `speed < 5` past `raceT > 2`) passes
+`AiDrive.aiRescueDelay` (4 s, 7 s in contact) and TELEPORTS the car to `x` inside `hw - 1.5`
+at `14·PACE` speed. Exempt: `pitState === "box"`, queued in the lane, red-held. A pit-lane car is
+rescued onto `pits.laneX`, so a wall/pit-boundary case is `pits.inLane(c)` (`game.js` ~6023
+"THE PIT WALL"), not the road branch. Unit pins: `ai-drive.test.mjs` (isBoxed/stuckThreshold).
+No CLI counts stuck/rescue: `ai-field.mjs` reports dwell/contact only (`--seconds` floor 60;
+`--track baku --seconds 60` ~1 min VM, dwellMax is the nearest proxy); for a per-car
+`stuckS` use `__apex.field()` live (agent-view, browser).
+Record: track, seed, car, `stuckT`/`rescueT` at freeze, pitState, inLane, roomL/R.
+
 ```sh
 node --test tests/unit/ai-drive.test.mjs      # 75 tests, ~1 s
 node --test tests/unit/ai-racecraft-vm.test.mjs   # VM shape gate (jitter/approach/line); read its header first

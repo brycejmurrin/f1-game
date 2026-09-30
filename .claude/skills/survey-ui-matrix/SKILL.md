@@ -58,6 +58,16 @@ Order: 1. `--list` and diff against `index.html` dialogs (browser-free, setup.md
 screens x viewports x scales you scoped has a row or a "clean" mark; the verdict
 is the defect table sorted by failure mode (probes.md §6), not a pass count.
 
+**Proving a CSS change regressed no other shape** (no diff form exists; `--report`
+only counts skipped gallery cells). Before editing: `cp artifacts/layout-audit/audit.json
+artifacts/layout-audit/audit.before.json` (a run MERGES into audit.json by screen|viewport, so
+the baseline is gone once you re-run). After: re-run the same `--screens/--viewports/--scale`
+scope, compare rows by hand or `jq`. Pass rule: the geometry run always exits 0 - read its
+`N cells, B with something to look at, S skipped` line; pass = no cell went clean -> bad
+(clipped/offscreen/docOverflowX/tinyTaps/underHardware/starved); skips are not passes. Add
+`fit-audit.mjs --scale=` for type/spacing floors (no exit code either), and `test:baseline`
+(6 pixel PNGs) for identity. Record baseline path, scope, bad-count before/after.
+
 ## Load on demand
 
 - Probe recipes and viewport catalogue: [`references/probes.md`](references/probes.md)

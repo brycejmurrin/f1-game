@@ -48,5 +48,5 @@ Related: [shell/cache](../check-changes/references/bump.md), **webgl-debug**, **
 
 ## Load on demand
 
-- MAT 17-slot lockstep, bake/A/B, mistakes →
+- MAT 17-slot lockstep, bake/A/B, one-backend-only garble trace, mistakes →
   [references/workflow.md](references/workflow.md).

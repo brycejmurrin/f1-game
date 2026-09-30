@@ -31,7 +31,7 @@ decisions → **css-play** (`references/restructure.md`).
 | Escape/back | `data-esc-close`, `data-esc="none"` | Press the named control |
 | Desktop nav | `js/ui/menu-nav.js` | Redirect wheel only when no scroller owns it |
 | Sheet class | `js/ui/sheet-shape.js` | Writes `data-shape` / `data-pair`; JS must not read it |
-| Selected a11y | `js/ui/aria-state.js` | Mirrors visual selected → `aria-pressed` unless claimed |
+| Selected a11y | `js/ui/aria-state.js` | Mirrors visual selected → `aria-pressed` unless claimed (select-screen chips/tiles write their own) |
 | Scroll fade | `js/ui/scroll-fade.js` | Measures regions; writes fade/position classes |
 
 ```sh

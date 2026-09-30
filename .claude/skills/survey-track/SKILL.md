@@ -39,7 +39,12 @@ circuit's pair — def + scenery closure; no browser runs).
 
 1. **`docs/tracks/<id>.md`** — per-circuit brief (all 52): theme, elevation,
    landmarks-by-lap-position. Start here.
-2. Real-place photos: `WebSearch` / image search. Treat heights/distances as
+2. No-browser layout check (corner order / sector lengths / elevation): `js/circuits/<id>.js`
+   `turns` × `path.len` = metres per corner, `sectors` × `path.len` = sector lengths;
+   `tests/data/f1-circuit-reference.geojson` = OSM length; elevation = `js/track/circuit-elevations.js`
+   (64 samples). A wrong LAYOUT → **new-track**. Probe flags are NOT findings until confirmed off lat 0
+   ([loop.md](references/loop.md) §Artefacts).
+3. Real-place photos: `WebSearch` / image search. Treat heights/distances as
    best-effort.
 
 ## Short loop

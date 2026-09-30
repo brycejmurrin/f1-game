@@ -65,3 +65,35 @@ touching pipelines.
 
 A misleading classic: `createBuffer failed, size (N) is too large` on a tiny
 N is Chrome's LOST DEVICE error, not an allocation bug.
+
+## Trace: "device lost mid-race and the frame freezes" (static, no browser)
+
+Handler = `device.lost.then` in `wgx.js` (~L883); every branch sets `_lost`,
+which makes begin()/present() inert, so a branch that cannot reload IS a
+frozen frame (DOM menus stay usable; RENDERER re-pick is the way out):
+
+- `reason: "destroyed"` -> ignored (own teardown).
+- visible, within 3 s of `visibilitychange`/bfcache `pageshow` (iOS
+  background loss) -> `_lost`, reload in 300 ms, rung and pick untouched.
+- visible otherwise -> writes `envProbeOff` + `perChunkOff`, `_wgxEscalate`
+  (~L744): rung < 2 reloads one rung up, but ONLY if `gfxWgxLevel` reads back
+  (blocked storage falls through); rung 2 / unpersistable -> `_markGlxBound`,
+  `sessionStorage gfxClaimFail`, reload into GLX. Skip unarmable (blocked
+  sessionStorage) -> no reload, `_lost` stays: freeze by design, the boot
+  canary `gfxBackendProbe` is re-armed for the next cold start.
+- hidden -> `_lost`, reload deferred to the next `visibilitychange`, rung kept.
+- Not device.lost: 8 uncaptured GPU errors over `GPU_ERR_ESCALATE_FRAMES`
+  frames also call `_wgxEscalate`; `_jsStrike` (begin/present throw) drops the
+  frame until `JS_STRIKE_CAP` = 3, then GLX skip (no skip armable -> re-arms
+  the canary, no reload, frozen until next boot).
+
+Constants: `HEAL_SESSIONS = 5` (~L55), `JS_STRIKE_CAP = 3` (~L623), both in
+`wgx.js` only. Pinned by `tests/unit/webgpu-lifecycle.test.mjs` ("device.lost
+climbs the ladder", "...climbs to minimal", "minimal rung: ... exits to GLX",
+"a JS throw in begin() strikes out...", "a minimal loss with blocked
+sessionStorage re-arms the boot canary instead of freezing", "clean sessions
+heal the ladder") and, as source-text only, `gfx-backend-canary.test.mjs`
+(~L510; it does not name the constants). A visible-loss freeze that is NOT
+blocked storage is a real bug: run the lifecycle test first.
+Verdict to record: which branch ran (read `apex26.gfxWgxFail`, `gfxWgxLevel`,
+sessionStorage `gfxClaimFail`, `gfxBackendProbe`) and whether reload fired.

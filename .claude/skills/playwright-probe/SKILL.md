@@ -90,7 +90,9 @@ node tools/shot/motion-capture.mjs monaco 4 50      # driven clip → per-frame 
 node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → Chrome DevTools → Performance
 ```
 
-A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
+`flicker-gate.mjs` (still camera, fixed SITES, `--list` is no-browser) and
+`tools/track/coplanar-audit.cjs <id>` (no browser) are the z-fight pair
+motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
 both references say what the numbers mean before you A/B on them.
 
 ## Load on demand
