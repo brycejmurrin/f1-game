@@ -97,7 +97,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/skill-routing-eval.py** | Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none). | slim-bloat |
 | **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`. | — |
-| **check/trim-comments.mjs** | Strips low-signal `//` comments (dividers, loc pointers, orphans); `--headers --narrative` compresses file headers. | slim-bloat |
+| **check/trim-comments.mjs** | Strips low-signal `//` comments (dividers, closed banners, loc pointers, orphans); `--headers` compresses file… | slim-bloat |
 | **check/twin-fidelity.mjs** | Prove a VM twin catches what the browser copy catches — by breaking the | — |
 | **check/vm-portable.mjs** | Which specs `tests/helpers/vm-page.js` could run under `node --test`: per-spec blocking calls + a portable count. | — |
 | **check/vstd-lint.mjs** | REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant. | tune-physics |

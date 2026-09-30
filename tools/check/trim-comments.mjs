@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Strips low-signal `//` comments (dividers, loc pointers, orphans); `--headers --narrative` compresses file headers.
+ * @doc Strips low-signal `//` comments (dividers, closed banners, loc pointers, orphans); `--headers` compresses file headers; `--narrative` (explicit paths only) drops essays.
  * @skill slim-bloat
  * trim-comments.mjs — remove low-signal comments from js/ and css/.
  *
@@ -8,7 +8,15 @@
  *   node tools/check/trim-comments.mjs [--dry-run] [--headers] [--narrative] [--help] [paths…]
  *
  * Safe by default: dividers, loc pointers, orphan fragments, category labels.
- * --narrative: drop 2+ line // blocks with no KEEP keywords (never splits a block).
+ * A divider is a divider-only line (`// -----`, or a one-line block comment of
+ * `=`/`-`/`*` runs) or a CLOSED labelled banner (`// ---- DOM ----`, or
+ * `=== helpers ===` inside a one-line block comment); an open run followed by
+ * prose (`// ---- Photo mode: a free-fly…`) is kept, as is a whitespace-padded
+ * boxed prose line in a one-line block comment.
+ * --narrative: drop 2+ line // blocks with no KEEP keywords (never splits a block;
+ *   licence / ODbL / copyright / SPDX / attribution / © blocks are always kept).
+ *   Refused (exit 2) without explicit paths. With --dry-run each candidate block
+ *   is listed on STDERR as `rel:line  <first line>` for human review.
  * --headers: compress block file headers to one line (max 220 chars, no mid-word cut).
  *
  * Skips js/render/webgpu/ for --narrative unless path is explicitly that dir.
@@ -26,7 +34,8 @@ if (args.includes("--help") || args.includes("-h")) {
 Options:
   --dry-run     report only
   --headers     compress /* file headers
-  --narrative   remove multi-line // essays (whole blocks only)
+  --narrative   remove multi-line // essays (whole blocks only; needs explicit
+                paths; with --dry-run lists each candidate on stderr)
   --help        this text
 
 Default paths: js/`);
@@ -37,10 +46,17 @@ const dryRun = args.includes("--dry-run");
 const shortenHeaders = args.includes("--headers");
 const stripNarrative = args.includes("--narrative");
 const paths = args.filter((a) => !a.startsWith("-"));
+if (stripNarrative && !paths.length) {
+  process.stderr.write("trim-comments: --narrative needs explicit paths (refusing a tree-wide essay sweep; review with --dry-run first)\n");
+  process.exit(2);
+}
+const narrativeCandidates = [];
 
-const DIVIDER = /^\s*\/\/\s*[-=─═]{3,}/;
+// Divider-only, or run + short label + closing run to end of line.
+const DIVIDER = /^\s*\/\/\s*[-=─═]{3,}(?:\s*|\s+\S.{0,79}?\s*[-=─═]{3,}\s*)$/;
 const BOX_DIVIDER = /^\s*\/\/\s*[═]{10,}\s*$/;
-const BLOCK_DIVIDER = /^\s*\/\*[\s=*\-─]{3,}[\s\S]*?\*\/\s*$/;
+// Same shape inside /* */: ≥3 real divider chars (not whitespace) after `/*`.
+const BLOCK_DIVIDER = /^\s*\/\*\s*[=*\-─═]{3,}(?:[\s=*\-─═]*|\s+\S.{0,79}?\s*[=*\-─═]{3,}\s*)\*\/\s*$/;
 const CATEGORY = /^\s*\/\/\s*(keyboard|gamepad|tilt|touch)\s*$/i;
 const EDGE_LABEL = /^\s*\/\/\s*edge-triggered:/i;
 const LINE_COMMENT = /^\s*\/\//;
@@ -48,7 +64,7 @@ const LOC_POINTER = /^\s*\/\/.*\blives in js\//i;
 const ORPHAN_FRAGMENT = /^\s*\/\/\s*[\w./-]+\)\s*[─═-]+\s*$/;
 const PHYSICS_CONSTS_POINTER = /^\s*\/\/ The immutable numbers live in js\/physics\/consts\.js/;
 
-const KEEP = /\b(must not|must|bug|measured|_sceneryShift|sceneryShift|assist|AI-only|ignored|blocked|Safari|iOS|WGX|WebGPU|port mirror|LIT_|load-order|DEFERRED|registry|silent|ratchet|WARNING|never|do not|curvature|unaided|same omission|false no-op|det −1|PACE|vTop\(|vStd\(|aStd\(|START-LINES|docs\/|NOTE:|Was \d|leftover|player with assists|Newton|understeer|oversteer|quali\.js|emulation|harness|No 4th vertex|hasTrk roads|SSR march off|debug — the __tlx|Raw RGB\. Packing|Bug-explaining|hooks-documented|lazyTrackEnsure|registry pins)\b/i;
+const KEEP = /\b(must not|must|bug|measured|_sceneryShift|sceneryShift|assist|AI-only|ignored|blocked|Safari|iOS|WGX|WebGPU|port mirror|LIT_|load-order|DEFERRED|registry|silent|ratchet|WARNING|never|do not|curvature|unaided|same omission|false no-op|det −1|PACE|vTop\(|vStd\(|aStd\(|START-LINES|docs\/|NOTE:|Was \d|leftover|player with assists|Newton|understeer|oversteer|quali\.js|emulation|harness|No 4th vertex|hasTrk roads|SSR march off|debug — the __tlx|Raw RGB\. Packing|Bug-explaining|hooks-documented|lazyTrackEnsure|registry pins|licen[cs]\w*|ODbL|copyright|SPDX|attribution)\b|©/i;
 
 const NARRATIVE_LINE = /^\s*\/\/(\s|$)/;
 const HEADER_MAX = 220;
@@ -173,6 +189,7 @@ function trimFile(abs) {
       }
 
       if (narrativeOkForFile(rel) && isRemovableNarrativeBlock(run)) {
+        narrativeCandidates.push(`${rel}:${i + 1}  ${run[0].trim()}`);
         removed += run.length;
         i = end - 1;
         continue;
@@ -221,4 +238,5 @@ for (const abs of files.sort()) {
 }
 
 deltas.sort((a, b) => b.removed - a.removed);
+if (dryRun && stripNarrative) for (const c of narrativeCandidates) process.stderr.write(c + "\n");
 console.log(JSON.stringify({ dryRun, shortenHeaders, stripNarrative, totalRemoved, files: deltas.length, top: deltas.slice(0, 30) }, null, 2));
