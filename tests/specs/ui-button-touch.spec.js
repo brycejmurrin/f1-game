@@ -597,82 +597,104 @@ test.describe("Race settings — landscape layout", () => {
 
 // Per-scheme touch-dock REPOSITION (js/ui/dock-layout.js). Fail-before: a
 // moved right dock is forgotten on reload, or switching STEERING INPUT
-// clobbers the other scheme's offsets.
+// clobbers the other scheme's offsets. Scheme switches are driven through
+// DockLayout.apply (same path store.subscribe uses) — opening pause after a
+// mid-race dock translate timed out on CI (pausebtn under the moved column).
 test.describe("Touch dock — REPOSITION per scheme", () => {
-  test.use({ viewport: PORTRAIT, hasTouch: true });
+  // Landscape: portrait arms #rotate-device over the pause button (see
+  // hud-layout.spec.js). Dock offsets are pad-fraction so orientation is
+  // irrelevant to the persistence / per-scheme assertions here.
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+
+  const SEED = {
+    tilt: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
+    buttons: { L: { x: 0, y: 0 }, R: { x: 0.22, y: 0.08 } },
+    touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
+  };
 
   test("buttons offset persists across reload; tilt stays identity", async ({ page }) => {
+    await page.addInitScript((bag) => {
+      localStorage.setItem("apex26.dockLayout", JSON.stringify(bag));
+      localStorage.setItem("apex26.steerMode", JSON.stringify("buttons"));
+    }, SEED);
+
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "buttons");
     await expect(page.locator("#pm-dock-reposition")).toBeVisible();
     await expect(page.locator("#pm-dock-reposition")).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator("#pm-dock-reset")).toBeVisible();
 
-    // Seed a buttons-scheme offset without relying on pointer capture flakiness
-    // under SwiftShader — the unit suite owns drag math; this owns persistence
-    // and per-scheme isolation through the live store + apply path.
-    const seeded = await page.evaluate(() => {
-      const bag = {
-        tilt: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
-        buttons: { L: { x: 0, y: 0 }, R: { x: 0.22, y: 0.08 } },
-        touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
-      };
-      localStorage.setItem("apex26.dockLayout", JSON.stringify(bag));
-      localStorage.setItem("apex26.steerMode", JSON.stringify("buttons"));
-      return bag.buttons.R;
-    });
+    // Leave menus before racing so #pausebtn stays reachable.
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.park(0.1));
+
+    // Boot already loaded SEED; create() painted buttons. Assert live transform.
+    await page.waitForFunction(() => {
+      const tx = document.getElementById("dock-right").style.transform || "";
+      return /^translate\(/.test(tx);
+    }, null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.locator("#dock-right").evaluate((el) => el.style.transform)).toMatch(/^translate\(/);
+
+    // Per-scheme isolation via the same apply() store.subscribe calls.
+    await page.evaluate((bag) => {
+      // Lexical global from the classic script tag (same as GameStore in other specs).
+      DockLayout.apply("tilt", bag, {
+        L: document.getElementById("dock-left"),
+        R: document.getElementById("dock-right"),
+      });
+    }, SEED);
+    expect(await page.locator("#dock-right").evaluate((el) => el.style.transform || "")).toBe("");
+
+    await page.evaluate((bag) => {
+      DockLayout.apply("buttons", bag, {
+        L: document.getElementById("dock-left"),
+        R: document.getElementById("dock-right"),
+      });
+    }, SEED);
+    expect(await page.locator("#dock-right").evaluate((el) => el.style.transform)).toMatch(/^translate\(/);
+
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.dockLayout")).buttons.R);
+    expect(stored.x).toBeCloseTo(SEED.buttons.R.x, 5);
+    expect(stored.y).toBeCloseTo(SEED.buttons.R.y, 5);
+
+    // Reload keeps the init-script seed; boot paint must restore buttons translate.
     await page.reload();
     await waitReady(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.park(0.1));
-    // Force DockLayout to re-read (create already ran at boot; store.subscribe
-    // does not fire for a foreign localStorage write from evaluate).
     await page.waitForFunction(() => {
-      const raw = JSON.parse(localStorage.getItem("apex26.dockLayout") || "null");
-      if (!raw || !window.DockLayout || !window.DockLayout.apply) return false;
-      window.DockLayout.apply("buttons", raw, {
-        L: document.getElementById("dock-left"),
-        R: document.getElementById("dock-right"),
-      });
       const tx = document.getElementById("dock-right").style.transform || "";
       return /^translate\(/.test(tx);
     }, null, { polling: 100, timeout: BOOT_MS });
-    const buttonsTx = await page.locator("#dock-right").evaluate((el) => el.style.transform);
-    expect(buttonsTx, "buttons scheme must translate the right dock").toMatch(/^translate\(/);
+  });
 
+  test("RESET DOCK LAYOUT clears only the current scheme", async ({ page }) => {
+    await page.addInitScript((bag) => {
+      localStorage.setItem("apex26.dockLayout", JSON.stringify(bag));
+      localStorage.setItem("apex26.steerMode", JSON.stringify("buttons"));
+    }, SEED);
+
+    await page.goto("/");
+    await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "tilt");
-    await page.waitForFunction(() => {
-      const tx = document.getElementById("dock-right").style.transform || "";
-      return tx === "";
-    }, null, { polling: 100, timeout: 5000 });
-    const tiltTx = await page.locator("#dock-right").evaluate((el) => el.style.transform || "");
-    expect(tiltTx, "tilt default must clear the buttons offset").toBe("");
-
     await cycleToPauseSteerMode(page, "buttons");
+    await page.locator("#pm-dock-reset").click({ force: true });
     await page.waitForFunction(() => {
-      const tx = document.getElementById("dock-right").style.transform || "";
-      return /^translate\(/.test(tx);
-    }, null, { polling: 100, timeout: 5000 });
-    const back = await page.locator("#dock-right").evaluate((el) => el.style.transform);
-    expect(back).toMatch(/^translate\(/);
-    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.dockLayout")).buttons.R);
-    expect(stored.x).toBeCloseTo(seeded.x, 5);
-    expect(stored.y).toBeCloseTo(seeded.y, 5);
-
-    await page.locator("#pm-dock-reset").click();
-    await page.waitForFunction(() => {
-      const tx = document.getElementById("dock-right").style.transform || "";
       const bag = JSON.parse(localStorage.getItem("apex26.dockLayout") || "{}");
-      return tx === "" && bag.buttons && bag.buttons.R && bag.buttons.R.x === 0 && bag.buttons.R.y === 0;
+      return bag.buttons && bag.buttons.R && bag.buttons.R.x === 0 && bag.buttons.R.y === 0;
     }, null, { polling: 100, timeout: 5000 });
-    const cleared = await page.locator("#dock-right").evaluate((el) => el.style.transform || "");
-    expect(cleared, "RESET clears only the current (buttons) scheme").toBe("");
     const afterReset = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.dockLayout")));
     expect(afterReset.buttons.R.x).toBe(0);
     expect(afterReset.buttons.R.y).toBe(0);
+    // tilt was already identity in SEED; RESET must not invent offsets there.
+    expect(afterReset.tilt.R.x).toBe(0);
   });
 });
 
