@@ -424,6 +424,22 @@ const Tracks = (function () {
   // A paced build is in flight (its caller's world is null by design until it lands).
   let _pacing = 0;
   const building = () => _pacing > 0;
+  // Every GPU resource build() uploaded for `t`, released through the backend
+  // that owns it. Null-safe per handle: the old world before a rebuild, or a
+  // paced build abandoned part-way (its partial track).
+  function free(t, gfx) {
+    const m = t && t.meshes;
+    if (!m) return;
+    const chunked = (h) => { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(h); else gfx.freeMesh(h); };
+    gfx.freeMesh(m.floor); gfx.freeMesh(m.road); gfx.freeMesh(m.terrain);
+    if (m.roadChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(m.roadChunked);
+    if (m.terrainChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(m.terrainChunked);
+    chunked(m.props);
+    if (m.propBatches && gfx.freeInstancedBatch) { for (const b of m.propBatches) gfx.freeInstancedBatch(b); m.propBatches = null; }
+    if (m.glass) chunked(m.glass);
+    if (m.water) gfx.freeMesh(m.water);
+    gfx.freeMesh(m.gate); gfx.freeMesh(m.startline);
+  }
 
   function buildMap(px, pz, n) {
     let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
@@ -931,5 +947,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
 })();

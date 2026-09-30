@@ -2400,11 +2400,9 @@ function currentCarGroundMat(c, out) {
 const sessionDarkFor = (def) => raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
   raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && !!def.night);
 const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots, retainGraph: wantAgentSurface() });
-// THE BUILD IN STEPS (Tracks.buildPaced): what loadTrack does, but ~8 ms per frame,
-// so the garage drive-out keeps animating over it. The old world is freed first
-// (loadTrack's peak discipline); the new one is adopted only when whole. A newer
-// build (sync or stepped) or live() going false abandons it and frees what it had
-// uploaded.
+// THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
+// drive-out keeps animating. Frees the old world first, adopts the new one whole; a
+// newer build or live() going false abandons it and frees its partial uploads.
 async function loadTrackStepped(idx, live) {
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
@@ -2451,23 +2449,9 @@ function loadTrack(idx) {
 // Every GPU resource a built track owns (the old world before a rebuild, or a
 // stepped build abandoned part-way: loadTrackStepped). Null-safe per handle.
 function freeTrackMeshes(t) {
-  if (t && t.meshes) {
-    gfx.freeMesh(t.meshes.floor);
-    gfx.freeMesh(t.meshes.road);
-    gfx.freeMesh(t.meshes.terrain);
-    if (t.meshes.roadChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(t.meshes.roadChunked);
-    if (t.meshes.terrainChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(t.meshes.terrainChunked);
-    if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(t.meshes.props); else gfx.freeMesh(t.meshes.props);
-    if (t.meshes.propBatches && gfx.freeInstancedBatch) {
-      for (let i = 0; i < t.meshes.propBatches.length; i++) gfx.freeInstancedBatch(t.meshes.propBatches[i]);
-      t.meshes.propBatches = null;
-    }
-    if (t.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(t.meshes.glass); else gfx.freeMesh(t.meshes.glass); }
-    if (t.meshes.water) gfx.freeMesh(t.meshes.water);
-    gfx.freeMesh(t.meshes.gate);
-    gfx.freeMesh(t.meshes.startline);
-    if (typeof PitSigns !== "undefined") PitSigns.free(gfx, t);
-  }
+  if (!t || !t.meshes) return;
+  Tracks.free(t, gfx);
+  if (typeof PitSigns !== "undefined") PitSigns.free(gfx, t);
 }
 function _loadTrackBody(idx, def, built, builtPrevId) {
   // Invalidate the sun-shadow snap cache: it's only ever written inside the
