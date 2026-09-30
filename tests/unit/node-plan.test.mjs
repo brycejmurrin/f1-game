@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { plan, toShell, SCOPED, RUN_ALL_PATHS, adaptedGroups } from "../../tools/ci/node-plan.mjs";
+import { plan, toShell, SCOPED, RUN_ALL_PATHS, adaptedGroups, circuitsOf, scriptBuilds } from "../../tools/ci/node-plan.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -33,7 +33,7 @@ test("a UI-only diff skips the VM slices; the fast scripts are never in the plan
   const p = plan(["js/ui/hud.js", "css/hud.css"]);
   assert.equal(p.all, false);
   assert.ok(p.skip.includes("test:game-vm-a"), "a HUD edit must not rebuild 40 circuits");
-  assert.ok(p.skip.includes("test:game-vm-b"));
+  assert.ok(p.skip.includes("test:game-vm-b1") && p.skip.includes("test:game-vm-b2"));
   assert.deepEqual(p.circuits, []);
   const sh = toShell(p);
   assert.match(sh, /unset APEX_CIRCUITS/);
@@ -47,9 +47,33 @@ test("a circuit-only diff runs the elevation twin narrowed to that circuit", () 
   assert.match(toShell(p), /export APEX_CIRCUITS='imola'/);
 });
 
+test("a circuit-only diff skips the scripts whose files never build that circuit (read, not listed)", () => {
+  // imola: raced by no game-vm-b twin (they sit on monza and a handful of
+  // others), but it has a foundation spec, which foundation-core-vm (node-slow)
+  // globs — so node-slow stays, the two vm-b halves go.
+  const imola = plan(["js/circuits/imola.js"]);
+  assert.deepEqual(imola.circuits, ["imola"]);
+  assert.ok(imola.run.includes("test:game-vm-a") && imola.run.includes("test:node-slow"), JSON.stringify(imola));
+  assert.ok(imola.skip.includes("test:game-vm-b1") && imola.skip.includes("test:game-vm-b2"), JSON.stringify(imola));
+  assert.match(imola.why["test:game-vm-b1"], /no file builds imola/);
+  // portimao: in the elevation roster only — vm-a alone, scoped.
+  const portimao = plan(["js/circuits/portimao.js"]);
+  assert.deepEqual(portimao.run, ["test:game-vm-a"], JSON.stringify(portimao));
+  // monza: raced by nearly every twin — every VM script runs, scoped to monza.
+  const monza = plan(["js/circuits/monza.js"]);
+  for (const s of ["test:game-vm-a", "test:game-vm-b1", "test:game-vm-b2", "test:node-slow"]) assert.ok(monza.run.includes(s), s);
+  assert.deepEqual(monza.circuits, ["monza"]);
+  // circuitsOf: literals, helper imports one hop, the foundation glob, and null for a roster walk.
+  assert.ok(circuitsOf("tests/unit/flyby-fleet.test.mjs").has("sochi"), "FLEET comes through the helper import");
+  assert.ok(circuitsOf("tests/unit/foundation-core-vm.test.mjs").has("imola") && circuitsOf("tests/unit/foundation-core-vm.test.mjs").has("albert_park"));
+  assert.equal(circuitsOf("tests/unit/prop-clipping.test.mjs"), null, "a fleet sweep walks the roster");
+  assert.equal(circuitsOf("tests/unit/" + "nowhere-" + Date.now() + ".mjs"), null, "unreadable reads as everything");
+  assert.equal(scriptBuilds("test:no-such-script", ["imola"]), true, "an unknown script runs");
+});
+
 test("a game.js diff runs every VM slice, unscoped", () => {
   const p = plan(["js/game.js"]);
-  for (const s of ["test:game-vm-a", "test:game-vm-b", "test:node-slow"]) assert.ok(p.run.includes(s), s);
+  for (const s of ["test:game-vm-a", "test:game-vm-b1", "test:game-vm-b2", "test:node-slow"]) assert.ok(p.run.includes(s), s);
   assert.deepEqual(p.circuits, [], "game.js is not a circuit file: the whole fleet");
 });
 
@@ -77,6 +101,16 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
     const re = new RegExp(`if planned ${script.replace(/[-]/g, "\\-")}; then\\n\\s+npm run ${script}\\n\\s+fi`);
     assert.match(step, re, `${script} must be guarded by planned() and stay an npm run line`);
   }
+  // SIX SLICES (2026-09-30): the elevation twin is sharded across two runners
+  // (APEX_CIRCUIT_SHARD, tools/lib/circuit-scope.cjs), game-vm-b is two
+  // groups.json partitions, vm-page and node-slow stand alone.
+  assert.match(nodeJob, /slice: \[vm-a1, vm-a2, vm-b1, vm-b2, page, slow\]/);
+  assert.match(step, /vm-a1\)\n(?:\s+#.*\n)*\s+export APEX_CIRCUIT_SHARD=1\/2\n\s+if planned test:game-vm-a; then/, "vm-a1 is the first half of the roster");
+  assert.match(step, /vm-a2\)\n(?:\s+#.*\n)*\s+export APEX_CIRCUIT_SHARD=2\/2\n\s+if planned test:game-vm-a; then/, "vm-a2 is the second half");
+  assert.equal((step.match(/npm run test:game-vm-a\n/g) || []).length, 2, "both halves run the one script");
+  const b1 = groups["test:game-vm-b1"].files, b2 = groups["test:game-vm-b2"].files;
+  assert.deepEqual([...b1, ...b2].sort(), [...groups["test:game-vm-b"].files].sort(), "b1 + b2 is exactly game-vm-b");
+  assert.equal(new Set([...b1, ...b2]).size, b1.length + b2.length, "b1 and b2 are disjoint");
   // The seconds-long scripts are NOT guarded: a skip there buys nothing.
   for (const script of gateNodeSuites().filter((s) => !(s in SCOPED)))
     assert.doesNotMatch(step, new RegExp(`planned ${script}\\b`), `${script} must always run`);

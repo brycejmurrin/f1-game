@@ -1040,6 +1040,7 @@ let wxArc = null;     // WeatherArc.create(G, deps), same deferral — live weat
                       // and the dynamic arc (js/race/weather-arc.js)
 let tyres = null;     // TyreModel.create(G), same deferral
 let pits = null;      // PitLane.create(G), same deferral
+let _pitCrewDrawn = () => 0;   // filled after CarDraw.create — __apex.pit() drains it
 // NO PASSING UNDER THE SC / VSC, for the player (the AI holds station by
 // construction): a place gained must go back inside the window, or it is priced
 // at the flag (js/race/sporting-regs.js; FIA 2026 SR B5.12.2(c), B5.13.2(c)).
@@ -3378,6 +3379,7 @@ const G = {
   },
   get tyres() { return tyres; },
   get pits() { return pits; },
+  pitCrewDrawn: () => _pitCrewDrawn(),
   retireCar: (c, reason) => retireCar(c, reason),
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
@@ -3745,8 +3747,9 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 // stay here (the garage and the setup preview share them via deps).
 const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, teamDecalState, carDecalNum,
-        drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, drawCockpitRig,
+        drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
         warmCarAssets, prepareMenuCarAssets } = carDraw;
+_pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove the crew mesh submitted
 
 // The garage setup-preview camera and its #cs-view controls
 // (js/garage/setup-camera.js). Constructed HERE rather than with the other
@@ -8104,6 +8107,14 @@ function render(dt) {
         GameCams.seatFwd(visorEye ? "visor" : "cockpit"), GameCams.seatUp(visorEye ? "visor" : "cockpit"));
       basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
       drawCockpitRig(c, _cockMat, dt, paint, visorEye);   // VISOR: no steering wheel
+      // THE STOP'S CREW still: cockpit/visor continue before the exterior path,
+      // so without this the player's own stop drew no crew at all. Kit stands
+      // on the grounded basis (not the camera-anchored viewmodel). The
+      // viewmodel fronts already take stopAnim's axle slide inside drawCockpitRig.
+      if (c.pitState === "box") {
+        _wheelOpts.emissive = night ? 0.12 : 0;
+        drawPitCrew(c, _groundMat, _wheelOpts);
+      }
       continue;
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
@@ -8114,11 +8125,14 @@ function render(dt) {
       queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
-      if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // the jacks and guns, on the ground beside it
+      if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // crew + kit, on the ground beside it
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
       queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
+      // A loaded glb is one piece (no separate wheels), but the crew still
+      // stands in the box — and without this a glb stop was an empty bay.
+      if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);
     }
     // ACTIVE AERO: the moveable upper wing elements, FRONT and REAR, swung
     // between their Z-mode and X-mode angles by this car's live `aeroX`. The
