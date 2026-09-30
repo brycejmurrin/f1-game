@@ -474,8 +474,8 @@ jobs:
         # branch-protection rule in the same breath, or every PR blocks.
         #   vm-a1  game-vm-a, circuits 1,3,5,…      ~2.8 min
         #   vm-a2  game-vm-a, circuits 2,4,6,…      ~2.8 min
-        #   vm-b1  game-vm-b1                       ~2 min
-        #   vm-b2  game-vm-b2 + the fast scripts    ~2 + 1.8 min
+        #   vm-b1  game-vm-b1 + the fast scripts    2.2 + ~1.5 min (measured)
+        #   vm-b2  game-vm-b2                       ~2.4 min (measured)
         #   page   vm-page                          2.6 min
         #   slow   node-slow                        2.2 min
         slice: [vm-a1, vm-a2, vm-b1, vm-b2, page, slow]
@@ -564,12 +564,9 @@ jobs:
               if planned test:game-vm-b1; then
               npm run test:game-vm-b1
               fi
-              ;;
-            vm-b2)
-              if planned test:game-vm-b2; then
-              npm run test:game-vm-b2
-              fi
-              # The former `fast` slice: seconds each, so they ride with vm-b2.
+              # The former `fast` slice: seconds each, so they ride with vm-b1, the
+              # shorter half (measured 2026-09-30 on a runner: b1 2.2 min, b2 3.9
+              # min WITH them — moved here to bring the wall to ~3 min).
               npm run test:net-unit
               npm run test:service-worker
               npm run test:lifecycle-unit
@@ -591,6 +588,11 @@ jobs:
               # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
               # their fast-gate half is mcp-cli. environment-json stays gated below.
               npm run test:mcp
+              ;;
+            vm-b2)
+              if planned test:game-vm-b2; then
+              npm run test:game-vm-b2
+              fi
               ;;
           esac
 
