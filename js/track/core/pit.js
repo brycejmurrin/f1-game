@@ -181,7 +181,7 @@ const TrackPit = (function () {
     // the car rejoins mid-corner — zero straight after the merge at Jerez,
     // Mosport, Zolder, Baku, Monaco, Shanghai, Donington, Anderstorp, Brands
     // Hatch, Mont-Tremblant and the Nürburgring, whose exit road peaks at |k|
-    // 0.0715, a 14 m radius (scratch/pit-exit-survey.cjs). It is the one thing
+    // 0.0715, a 14 m radius. It is the one thing
     // a pit exit should not do — a car coming off the limiter cannot dodge, and
     // the guidance for a real circuit is that entry and exit belong on a slow,
     // straight section and must not put a rejoining car on the racing line.
@@ -341,8 +341,8 @@ const TrackPit = (function () {
       // THE WORKING LANE EXISTS WHERE THE BAYS DO — and nowhere else. It used
       // to run at its full width for the whole window, so the entrance and the
       // exit were as wide as the service area with no garage beside them for
-      // 100-238 m of it (Monza 214 m before its first box, Abu Dhabi 128;
-      // scratch/pit-width-survey.cjs). The corridor and the working lane now
+      // 100-238 m of it (Monza 214 m before its first box, Abu Dhabi 128).
+      // The corridor and the working lane now
       // FLARE in over BAY_FLARE before the first box and out after the last,
       // and the entry road, the exit road and the stretches between carry the
       // FAST LANE alone — which is what a pit entrance is. `b` never exceeds

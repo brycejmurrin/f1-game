@@ -91,7 +91,7 @@ const Helmets = (function () {
     // reading as static rather than as a design, and raising the mesh
     // resolution made it WORSE, not better: the speckle was the subject.
     //
-    // Norris's real lid (scratch/refs/NOR-0.jpg) is a black squiggle over
+    // Norris's real lid is a black squiggle over
     // fluoro — connected, curved strokes of roughly even width. That is a LEVEL
     // SET: take a smooth field and paint the band where it crosses zero, and
     // the strokes come out connected and evenly wide by construction. Four
@@ -103,7 +103,7 @@ const Helmets = (function () {
     // turned over about every two rings, and ring-to-ring agreement measured
     // 66% against 60% at chance — barely a stroke at all, and the render still
     // read as speckle. Scaled to 0.6 it measures 78%, and against
-    // scratch/refs/NOR-0.jpg that is where the loops match the real doodle;
+    // the reference photo that is where the loops match the real doodle;
     // slower again (0.3, 87%) smears them into vertical streaks.
     //   sc  wavelengths round the shell (feature size)
     //   w   half-width of the stroke, in field units (ink coverage)
@@ -230,7 +230,7 @@ const Helmets = (function () {
       ...centre(10, C.white), ...z.sides((a) => z.flash(a, 5, 14, 0.08, 0.42, 24, C.black)),
       z.band(0.68, 0.74, C.black), z.key(0.74, C.white), z.band(0.90, 0.955, C.red)] },
     // McLaren: fluoro lime under a black doodle. sc 5 / w 0.48 is swept
-    // against scratch/refs/NOR-0.jpg — 5 sets the loop size, 0.48 the ink.
+    // against a reference photo — 5 sets the loop size, 0.48 the ink.
      1: { name: "NOR", base: C.lime, alt: C.cyan, visor: C.black, zones: [
       z.mottle(0.06, 0.95, 5, 0.48, 3, C.black), z.cap(0.09, C.black),
       ...z.sides((a) => z.patch(a, 13, 0.20, 0.60, C.black)),
@@ -585,8 +585,8 @@ const Helmets = (function () {
      MAX_SPLIT 1 is measured at the size the helmet is actually SEEN, not at
      the size a contact sheet shows it: rendered at 110 px — the cockpit view,
      the largest it gets outside the garage — depth 1 is a clear gain on depth
-     0 and depth 2 is barely separable from depth 1
-     (scratch/renders/sz-sweep.png). Depth 1 costs 3,292 triangles on the
+     0 and depth 2 is barely separable from depth 1.
+     Depth 1 costs 3,292 triangles on the
      busiest design against 1,120; depth 2 costs 9,292, which is more than
      twice the whole rest of the car for something ~100 px across, so it buys
      pixels no player is looking at. Past depth 1 the honest fix is not more

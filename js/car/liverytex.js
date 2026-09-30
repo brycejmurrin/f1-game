@@ -1186,8 +1186,8 @@ const LiveryTex = (function () {
       // A flat 5% of the box is 8 px on the 160 px fin badge — a rim — but
       // 21.5 px on the 430 px engine cover, and three accumulated shadow
       // passes at that radius spread into a soft cloud: Williams' dark W sat
-      // in a white haze covering a third of the cover (rendered, not guessed —
-      // scratch/renders/cars/williams/top.png). McLaren never showed it only
+      // in a white haze covering a third of the cover (rendered, not guessed).
+      // McLaren never showed it only
       // because its halo resolves DARK against dark paint. 10 px leaves every
       // surface at or below the badge's 8 px untouched and halves the cover,
       // and the halo's job is unaffected: legibility here is a COLOUR

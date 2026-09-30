@@ -847,7 +847,7 @@ function boardInfo(team, getParts, driverIdx) {
       return { cat: String(cat.label || cat.id).toUpperCase(), label: (opt && opt.label) || "Stock" };
     });
     const drv = (team.drivers || [])[driverIdx | 0] || (team.drivers || [])[0] || {};
-    // THE CAREER CAP, not the free-play constant. setup-ui.js resolves this the
+    // THE CAREER CAP, not the free-play constant. js/garage/setup-sheet.js resolves this the
     // same way and enforces against it, but the BUDGET board on the garage wall
     // read Parts.BUDGET (780) unconditionally — so a career at any team whose
     // factory build costs more than that showed "0 cr OF 780 REMAINING" with an
@@ -1293,7 +1293,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // draft — and were thrown away by the key compare, so editing ACCENT, BODY
 // STRIPE, DETAIL or TEAM LOGO left the whole bay on its old paint: shell,
 // props, floor band and the dress atlas with the crest and boards. The car
-// repainted (setup-ui.js livePreviewDraft busts the decal atlas and the
+// repainted (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
 // preview mesh key) and the bay did not, which is exactly how it was reported.
 // A slot that any future dressing reads MUST be added here too.
 let floorMesh = null, cacheKey = "";

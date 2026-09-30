@@ -4779,7 +4779,7 @@ const WGX = (function () {
     }
     // Caller-packed instance set (DebrisWorld's Rapier pools: transforms new
     // every frame, the only question is how many are live — PERF-FINDINGS 2h).
-    // Without this WGX fell to debrisworld.js's per-body loop: 17 draws steady,
+    // Without this WGX fell to debris-world.js's per-body loop: 17 draws steady,
     // 98 in a pileup, each a DrawU slot + bind + drawIndexed; instanced it is
     // four. Stride 16 in, 20 out; colour lanes stay at the 1,1,1 the batch was
     // packed with. CLEARING BOTH CULL SNAPSHOTS IS LOAD-BEARING (same contract

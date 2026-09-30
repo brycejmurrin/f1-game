@@ -56,10 +56,8 @@
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
-      // ---------------------------------------------------------------------
       // 1. PALETTE — flat coastal light, low contrast, nothing saturated.
       //    Reclaimed fill and salt-bleached grass; concrete left unfinished.
-      // ---------------------------------------------------------------------
       const RAIL      = [0.80, 0.81, 0.83];  // armco
       const APRON     = [0.40, 0.41, 0.42];  // grey asphalt run-off (not gravel)
       const FILL      = [0.52, 0.51, 0.45];  // bare reclaimed fill
@@ -98,24 +96,20 @@
           bare ? FILL : SALT, { samples: 4 });
       });
 
-      // ---------------------------------------------------------------------
       // 2. LAP BARRIER LINE — armco all the way round. Korea's run-off is wide
       //    grey asphalt, so the rail sits well back from the tarmac except in
       //    the walled stadium section, which blocks 14-17 pull in tight.
       //    Split around the two road-occupied bands (see the header note).
-      // ---------------------------------------------------------------------
       guardrail(0.000, 0.061, -1, 13, RAIL);
       guardrail(0.067, 1.000, -1, 13, RAIL);
       guardrail(0.000, 0.291,  1, 15, RAIL);
       guardrail(0.308, 1.000,  1, 15, RAIL);
 
-      // ---------------------------------------------------------------------
       // 3. s=0.005 / -1 / 12 — PIT AND PADDOCK COMPLEX.
       //    F1-standard permanent pit/paddock on the harbour-side half
       //    (RacingCircuits.info; Wikipedia). Pale fascia garage run, motorhome
       //    row, camera tower. Four ranks: pit wall, garages, paddock, freight.
       //    Named hotels / yacht clubs are UNCERTAIN — not modelled.
-      // ---------------------------------------------------------------------
       guardrail(0.000, 0.040, -1, 5.5, RAIL);          // pit wall, start->exit
       guardrail(0.962, 1.000, -1, 5.5, RAIL);
       {
@@ -165,13 +159,11 @@
       cameraTower(K(0.0), -1, 15);
       marshalPost(K(0.012), -1, 16);
 
-      // ---------------------------------------------------------------------
       // 4. s=0.020 / +1 / 22 — MAIN GRANDSTAND facing the pit straight.
       //    Permanent covered stand (RacingCircuits.info permanent facilities;
       //    venue capacity 135k — Wikipedia). Pale grey steel canopy + sparse
       //    seating; estuary water behind the roofline. Named harbour hotels
       //    are UNCERTAIN and omitted.
-      // ---------------------------------------------------------------------
       {
         const a = anchor(K(0.020), 1, 22);
         const b = [a.r, a.u, a.t];
@@ -223,12 +215,10 @@
       groundPatch(K(0.026), 1, 132, [150, 0.28, 190], LOT, { samples: 4 });
       groundPatch(K(0.026), 1, 210, [110, 0.28, 160], FILL, { samples: 4 });
 
-      // ---------------------------------------------------------------------
       // 5. s=0.065 / +1 / 30 — TURN 1 EXIT. A wide grey asphalt apron rather
       //    than gravel, closed by tyres then armco at the far edge, with a
       //    marshal post set into the apron. The scale dwarfs the corner: the
       //    debris fence behind the rail is 50 m from the white line.
-      // ---------------------------------------------------------------------
       runoffApron(K(0.062), 1, 8, 78, APRON);
       runoffApron(K(0.075), 1, 8, 62, APRON);
       tyreWall(0.048, 0.086, 1, 36, TYRE_R);
@@ -236,11 +226,9 @@
       fence(0.044, 0.092, 1, 50, 3.6, MESH);
       marshalPost(K(0.066), 1, 22);
 
-      // ---------------------------------------------------------------------
       // 6. s=0.083 / -1 / 15 — TURN 1-2 INFIELD. A marshal post and a lone
       //    billboard on bare fill, a thin scatter of bush clumps on bleached
       //    ground. Nothing else for a hundred metres.
-      // ---------------------------------------------------------------------
       marshalPost(K(0.083), -1, 15);
       billboard(K(0.092), -1, 20, 14, 6, [0.86, 0.86, 0.84]);
       groundPatch(K(0.086), -1, 22, [70, 0.28, 90], SALT, { samples: 4 });
@@ -250,21 +238,18 @@
         bush(K(0.070 + i * 0.009), -1, 17 + h * 16, SCRUB);
       }
 
-      // ---------------------------------------------------------------------
       // 7. s=0.190 / +1 / 45 — MID BACK STRAIGHT, the emptiest view on the
       //    lap: bleached ground running flat to a low rail, one distant mast
       //    breaking the skyline, water beyond. No stands, no trees, no crowd.
       //    This block stays almost bare ON PURPOSE. The only thing added is the
       //    site boundary fence 85 m out, which measures the emptiness instead
       //    of filling it.
-      // ---------------------------------------------------------------------
       groundPatch(K(0.175), 1, 45, [130, 0.28, 150], SALT, { samples: 4 });
       groundPatch(K(0.205), 1, 48, [110, 0.28, 130], FILL, { samples: 4 });
       fence(0.130, 0.270, 1, 85, 2.4, MESH);
       tower(K(0.190), 1, 150, 3.2, 58);
       waterBand(0.13, 0.27, 1, 280, 640, 26, ESTUARY);
 
-      // ---------------------------------------------------------------------
       // 8. s=0.300 / +1 / 25 — TURN 3, the heavy braking zone ending the long
       //    full-throttle run: temporary stand on the outside, huge apron,
       //    tyre wall on its far edge, camera tower on the approach.
@@ -274,7 +259,6 @@
       //    short of the apex, each pulled in a little further than the last —
       //    which is also how the real thing reads, the apex side of the corner
       //    opening out into bare apron with nothing on it at all.
-      // ---------------------------------------------------------------------
       cameraTower(K(0.282), 1, 24);
       runoffApron(K(0.296), 1, 9, 86, APRON);
       runoffApron(K(0.312), 1, 9, 64, APRON);
@@ -287,12 +271,10 @@
       fence(0.314, 0.344, 1, 46, 3.6, MESH);
       marshalPost(K(0.292), 1, 28);
 
-      // ---------------------------------------------------------------------
       // 9. s=0.306 / -1 / 18 — INSIDE THE TURN 3 HAIRPIN. Broadcast compound
       //    of trucks and dishes plus a marshal post, sitting on open fill with
       //    nothing screening it — the support paddock behind it is equally
       //    exposed, parked straight onto the reclaimed surface.
-      // ---------------------------------------------------------------------
       broadcastCompound(K(0.306), -1, 18);
       marshalPost(K(0.316), -1, 16);
       groundPatch(K(0.306), -1, 26, [60, 0.28, 70], FILL, { samples: 4 });
@@ -302,14 +284,12 @@
         place(K(0.288 + i * 0.012), -1, 50 + h * 12, [11, 3.4, 5], h < 0.5 ? PALE : STEEL);
       }
 
-      // ---------------------------------------------------------------------
       // 10. s=0.430 / -1 / 20 — TURNS 4-6 INFIELD: scrub, scattered bush, a
       //     marshal post per corner. The unfinished apartment shells first
       //     show as grey slabs on this horizon, still distant — four ranks of
       //     backdrop now, hazed and staggered, so it reads as a skyline that
       //     is still 2 km away rather than one flat card.
       //     (0.430 itself refuses a backdrop at every distance — road band.)
-      // ---------------------------------------------------------------------
       for (const s of [0.395, 0.430, 0.468]) {
         marshalPost(K(s), -1, 18);
         groundPatch(K(s), -1, 24, [66, 0.28, 80], SALT, { samples: 4 });
@@ -323,12 +303,10 @@
       backdrop(K(0.470), -1, 340, [120, 30, 24], SHELL_D);
       backdrop(K(0.452), -1, 430, [180, 26, 24], SHELL_F);
 
-      // ---------------------------------------------------------------------
       // 11. s=0.549 / +1 / 35 — TURN 7 OUTSIDE: armco hard against a raised
       //     seawall embankment, open water behind it. Hazy, no far shore.
       //     Two ranks: the concrete crest with its handrail, then the rock
       //     armour stepping down to the waterline.
-      // ---------------------------------------------------------------------
       guardrail(0.510, 0.600, 1, 33, RAIL);
       // Segmented so the embankment follows the curve instead of cutting it.
       // Stagger height slightly so adjacent crest faces are not coplanar.
@@ -344,11 +322,9 @@
       tower(K(0.560), 1, 190, 1.8, 16);                 // channel beacon offshore
       waterBand(0.49, 0.63, 1, 70, 460, 24, ESTUARY);
 
-      // ---------------------------------------------------------------------
       // 12. s=0.589 / -1 / 16 — TURN 8 INFIELD: a small uncovered stand with
       //     hoarding across its front, mostly empty seats, no back wall — so
       //     the scaffold legs and the access track behind it are in full view.
-      // ---------------------------------------------------------------------
       grandstandEx(0.589, -1, 16, 58, null, null);
       sponsorHoarding(0.576, 0.604, -1, 13);
       marshalPost(K(0.600), -1, 17);
@@ -357,12 +333,10 @@
       place(K(0.600), -1, 38, [6, 2.6, 7], PALE);
       fence(0.570, 0.612, -1, 48, 2.6, MESH);
 
-      // ---------------------------------------------------------------------
       // 13. s=0.663 / -1 / 22 — TURN 10: marina that never happened.
       //    Planned hotels / restaurants / marina (RacingCircuits.info,
       //    Wikipedia, NYT 2015) were never finished — blank unglazed concrete
       //    shells. Do NOT invent named towers or yacht clubs (UNCERTAIN).
-      // ---------------------------------------------------------------------
       cityFront(0.630, 0.700, -1, 22);
       {
         // Gap 52 keeps the declared footprint clear of the ribbon (gap 22 with
@@ -411,23 +385,19 @@
       groundPatch(K(0.663), -1, 64, [110, 0.28, 150], FILL, { samples: 4 });
       marshalPost(K(0.663), -1, 15);
 
-      // ---------------------------------------------------------------------
       // 14. s=0.723 / +1 / 6 — TURNS 11-12, entry to the walled stadium
       //     section: armco backed by tyres tight to the track edge, marshal
       //     post in a cut-out. Sight lines shut down here — the debris fence
       //     right behind the wall is what you actually see.
-      // ---------------------------------------------------------------------
       guardrail(0.700, 0.752, 1, 6, RAIL);
       tyreWall(0.700, 0.752, 1, 8.5, TYRE_K);
       fence(0.698, 0.754, 1, 11, 4.0, MESH);
       marshalPost(K(0.723), 1, 10);
 
-      // ---------------------------------------------------------------------
       // 15. s=0.760 / -1 / 8 — TURN 14: tower blocks rise directly behind the
       //     barrier — blank frontage plus one tower carrying scaffold banding,
       //     close enough to read the empty window openings. A second rank
       //     stands behind them so the wall of shells has thickness.
-      // ---------------------------------------------------------------------
       guardrail(0.735, 0.800, -1, 8, RAIL);
       cityFront(0.736, 0.798, -1, 14);
       tower(K(0.760), -1, 26, 13, 44);
@@ -441,22 +411,18 @@
       tower(K(0.772), -1, 70, 4.0, 40);                 // second bare core
       backdrop(K(0.768), -1, 250, [200, 34, 26], SHELL_F);
 
-      // ---------------------------------------------------------------------
       // 16. s=0.797 / +1 / 10 — TURN 15: tyres across the wall face with
       //     hoarding running its full length; water glimpsed over the top of
       //     the barrier line.
-      // ---------------------------------------------------------------------
       tyreWall(0.778, 0.818, 1, 11, TYRE_K);
       sponsorHoarding(0.778, 0.818, 1, 12.5);
       guardrail(0.770, 0.826, 1, 9, RAIL);
       fence(0.768, 0.828, 1, 14, 4.0, MESH);
       waterBand(0.75, 0.85, 1, 90, 420, 24, ESTUARY);
 
-      // ---------------------------------------------------------------------
       // 17. s=0.864 / -1 / 10 — TURN 17, where the wall was moved back for
       //     visibility (Wikipedia 2011 pit-entry visibility change): armco set
       //     back behind a narrow apron strip, marshal post + camera tower.
-      // ---------------------------------------------------------------------
       // Split aprons with a gap so their tops are not one flatCoplanar pair.
       runoffApron(K(0.854), -1, 7, 26, APRON);
       runoffApron(K(0.874), -1, 8, 28, APRON);
@@ -465,12 +431,10 @@
       marshalPost(K(0.858), -1, 14);
       cameraTower(K(0.870), -1, 16);
 
-      // ---------------------------------------------------------------------
       // 18. s=0.885 / +1 / 18 — FINAL TURN footbridge.
       //    Tilke footbridge drawing inspiration from local architecture
       //    (RacingCircuits.info). Required modelGroup = stair/lift tower;
       //    overheadSpan carries the deck over the ribbon.
-      // ---------------------------------------------------------------------
       overheadSpan({
         id: "korea-final-span", frac: 0.885, clearance: 8.0,
         thickness: 1.1, depth: 4.2, supportGap: 2.6, supportWidth: 1.2,
@@ -500,10 +464,8 @@
       billboard(K(0.890), 1, 20, 16, 6, PALE);
       groundPatch(K(0.900), 1, 38, [60, 0.28, 80], LOT, { samples: 4 });
 
-      // ---------------------------------------------------------------------
       // 19. LAP-WIDE MARSHAL POSTS — filling the gaps the brief rows leave, on
       //     the outfield side so they clear the wide asphalt run-off.
-      // ---------------------------------------------------------------------
       for (const s of [0.135, 0.225, 0.360, 0.500, 0.640, 0.940]) {
         const k = K(s);
         const a = anchor(k, 1, 17);

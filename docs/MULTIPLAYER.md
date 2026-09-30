@@ -8,6 +8,17 @@ behind a set of unobvious choices, which is what a reference doc is for.
 `AGENTS.md` keeps the one-paragraph summary and the rules that bind other code;
 everything below is the why.
 
+**What a player sees (RACE A FRIEND, `#vsfriend`).** HOST A RACE (`#vs-host`)
+makes an invite: a QR code, SHARE LINK and COPY CODE. JOIN A FRIEND (`#vs-join`)
+takes that invite. As a backup, room codes skip the paste: NEW CODE
+(`#vs-code-host`) shows a short code with SHARE and COPY, and a friend types it
+under ENTER CODE (`#vs-code-join` → `#vs-code-in`, JOIN). A room holds the host
+plus up to three guests (`MAX_GUESTS = 3` in `js/net/lobby.js`), so 2–4
+players. The host invites guests one at a time with INVITE ANOTHER, and the
+button reads ROOM FULL (4 PLAYERS) at the cap. How each piece works is below:
+room codes under `rendezvous.js`, the star topology under `netplay.js`, and
+the one-at-a-time invites under `lobby.js`.
+
 ---
 
 ### `js/net/transport.js` — `NetTransport`

@@ -177,10 +177,10 @@ const GLXBackend = (function () {
   // reused every frame — .subarray(0, nL*stride) is uploaded to avoid per-frame
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
   // god-ray scratch, which moved to js/render/glx/post.js with present().
-  // Four vec4s match lit.js packing (pos+rad / col+bleed / dir+coneIn / coneOut).
+  // Four vec4s match shaders/glsl-lit.js packing (pos+rad / col+bleed / dir+coneIn / coneOut).
   const MAX_LIGHTS = LightBudget.MAX;   // eval-time read: tools/manifest.cjs HARD_EDGES (light-budget.js first)
   // ONE interleaved scratch, stride 16 floats (4 vec4s) per light — matches
-  // uLight[] in shaders/lit.js so a chunk uploads in a single uniform4fv.
+  // uLight[] in shaders/glsl-lit.js so a chunk uploads in a single uniform4fv.
   const _luL = new Float32Array(MAX_LIGHTS * 16);
   let frameInvProj = null;
   let frameInvVP = null;
@@ -331,8 +331,8 @@ const GLXBackend = (function () {
     gl.uniformMatrix4fv(loc, false, m);
   }
 
-  // vec3 twin of uf1. MEASURED on the current tree (vegas night, full field,
-  // scratch/r10/state-ceiling.mjs): uniform3fv runs 32.4 times a frame and 22.8
+  // vec3 twin of uf1. MEASURED on the current tree (vegas night, full field):
+  // uniform3fv runs 32.4 times a frame and 22.8
   // of those re-send a value the program already holds — 70.2% collapsible, the
   // most concentrated redundancy left in the frame after uModel and uNumLights.
   // The cause is the same one those two had: begin() runs several times per game
@@ -781,7 +781,7 @@ const GLXBackend = (function () {
 
     // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is ~279 vec4 rows
     // (uLight 192 + uMatTexScale 17 + three mat4 + nine vec3 + ~47 scalars),
-    // above the GLES 3.0 floor of 224 that shaders/lit.js still cites. Apple
+    // above the GLES 3.0 floor of 224 that shaders/glsl-lit.js still cites. Apple
     // and desktop drivers report 1024+, so iPhone links; an Adreno at the
     // floor does not, and until now the only symptom was init() returning
     // false with a 100 KB shader dumped to the console. Say the two numbers

@@ -43,7 +43,7 @@ const LampBake = (function () {
   // Default ATLAS budget PER LAYER (x2 layers at RGBA16F = 8 bytes/texel, ~4.8
   // MB, half the old 600 k full-bbox map); the cell grows from MIN_CELL until
   // the kept tiles fit. A caller may pass another budget (bake / forTrack
-  // `maxTexels`). scratch/lampbake-parity.cjs, old bbox map -> 300 k atlas:
+  // `maxTexels`). Measured, old bbox map -> 300 k atlas:
   // cell Monza 2.27 -> 1.92 m, Vegas 2.05 -> 1.71, Singapore 1.63 -> 1.74; worst
   // bake/truth 2.49x -> 2.10x, 1.39x -> 1.31x, 1.30x -> 1.27x. 600 k buys
   // 1.15-1.27 m cells (worst 1.50x / 1.16x / 1.15x) at the old 9.6 MB.
