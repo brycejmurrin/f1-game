@@ -539,6 +539,10 @@
        its place brings it back. A phone has no MIRROR key. -->
   <button id="hud-mirror-chip" type="button" hidden aria-label="Show the rear-view mirror">MIRROR</button>
   <canvas id="minimap" width="140" height="140" role="img" aria-label="Track map"></canvas>
+  <!-- THE TIMING TOWER. A REAL RACE WATCH / HIGHLIGHTS run only: js/race/broadcast.js
+       fills it with the whole field (the TV graphic) and shows it; a row is a
+       button that puts that car on camera, the head flips GAP / INTERVAL. -->
+  <div id="bc-tower" role="region" aria-label="Timing tower" hidden></div>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
   <!-- role="alert", not role="status" + aria-live="assertive": status carries an
@@ -3407,6 +3411,7 @@
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/sporting-regs.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/broadcast.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>

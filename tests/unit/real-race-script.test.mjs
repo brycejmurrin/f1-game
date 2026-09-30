@@ -265,8 +265,8 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   assert.deepEqual(picker.children.map((o) => o.text), ["P1 · RUS · George RUSSELL", "P2 · LEC · Charles LECLERC"]);
   const camera = find(tree, (n) => n.tag === "select" && n["aria-label"] === "WATCH CAMERA")[0];
   assert.ok(camera, "WATCH camera has an accessible label");
-  assert.deepEqual(camera.children.map((o) => o.value), ["side", "heli", "tcam", "chase"]);
-  assert.equal(camera.children.find((o) => o.selected).value, "side", "TV is the opening WATCH shot");
+  assert.deepEqual(camera.children.map((o) => o.value), ["auto", "side", "heli", "tcam", "chase"]);
+  assert.equal(camera.children.find((o) => o.selected).value, "auto", "the TV director is the opening WATCH shot (js/race/broadcast.js)");
   // LAP BY LAP (the first table): 51 rows naming the leader, what happened, the fastest, with a JUMP IN (START on lap 1).
   const lapTable = tables[0];
   const lapRows = find(lapTable, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));

@@ -473,7 +473,7 @@ const DataRealRace = (function () {
     let distance = 1;   // the fraction of the real distance the player races (DISTANCES)
     let startLap = 1;   // the REAL lap the player drops into (1 = the grid)
     let lapSession = null;   // the race startLap belongs to
-    let watchCamera = "side";   // WATCH has its own opening shot; driving preferences stay intact
+    let watchCamera = "auto";   // WATCH has its own shots (AUTO: the TV director, js/race/broadcast.js); driving preferences stay intact
     let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
     let traces = null;     // the real positions for the painted script, once loaded
     let loading = null;    // {done, total} while the positions load
@@ -574,7 +574,7 @@ const DataRealRace = (function () {
       field.appendChild(el("span", "dh-pick-label", "WATCH CAMERA"));
       const pick = el("select", "dh-pick-select");
       pick.setAttribute("aria-label", "WATCH CAMERA");
-      for (const [value, label] of [["side", "TV TRACKSIDE"], ["heli", "AERIAL"], ["tcam", "T-CAM"], ["chase", "CHASE"]]) {
+      for (const [value, label] of [["auto", "AUTO · TV DIRECTOR"], ["side", "TV TRACKSIDE"], ["heli", "AERIAL"], ["tcam", "T-CAM"], ["chase", "CHASE"]]) {
         const op = el("option", null, label); op.value = value; op.selected = value === watchCamera; pick.appendChild(op);
       }
       pick.addEventListener("change", () => { watchCamera = pick.value; });
