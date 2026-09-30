@@ -783,7 +783,7 @@ test("RACE! before the menu's build: build under the garage drive-out (or the ca
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.match(body, /if \(!built && !menuWorld\(\) && introBuild\(go\)\) return;/, "no world: raceIntro diverts to the build");
   const j = game.indexOf("function introBuild(go)"), ib = game.slice(j, game.indexOf("\n}\n", j));
-  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("loadTrack(idx)"), p = ib.indexOf("FlybySeq.planSteps"), r = ib.indexOf("raceIntro(go)");
+  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("await loadTrackStepped(idx, live)"), p = ib.indexOf("FlybySeq.planSteps"), r = ib.indexOf("raceIntro(go)");
   assert.ok(b > 0 && l > b && p > l && r > p, "the garage (or the card) up, then build, then plan, then the flyby");
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
   assert.match(ib, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
@@ -812,7 +812,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
       loadingScreen: { building: () => { c._ph = "build"; events.push("build"); }, garage: () => { c._ph = "garage"; events.push("garage"); },
         stop: () => { c._ph = ""; events.push("stop"); }, phase: () => c._ph || "", nextFlyMs: () => 24000 },
       ensureScenery: () => new Promise((r, j) => { resolveScenery = r; rejectScenery = j; }),
-      loadTrack: () => events.push("load"), prepareMenuCarAssets: async () => {},
+      loadTrackStepped: async (idx, liveNow) => { events.push("load"); return liveNow(); }, prepareMenuCarAssets: async () => {},
       warmPrograms: () => { warming = mode !== "ready" && mode !== "plan-cancel"; }, gfx: { warming: () => warming },
       menuSlice: async () => {
         now += 1000; slices++;

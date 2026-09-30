@@ -2397,6 +2397,33 @@ function currentCarGroundMat(c, out) {
 }
 
 // ---------- track loading ----------
+const sessionDarkFor = (def) => raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
+  raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && !!def.night);
+const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots, retainGraph: wantAgentSurface() });
+// THE BUILD IN STEPS (Tracks.buildPaced): what loadTrack does, but ~8 ms per frame,
+// so the garage drive-out keeps animating over it. The old world is freed first
+// (loadTrack's peak discipline); the new one is adopted only when whole. A newer
+// build (sync or stepped) or live() going false abandons it and frees what it had
+// uploaded.
+async function loadTrackStepped(idx, live) {
+  const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
+  if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
+  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
+  const prevId = builtTrackId;
+  try { PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
+  let built = null;
+  try {
+    shadowPass.reset(); freeTrackMeshes(track);
+    track = null; builtTrackId = null;
+    if (typeof LampBake !== "undefined") LampBake.reset();
+    built = await Tracks.buildPaced(def, trackBuildOpts(sessionDark, wantSlots), live, freeTrackMeshes);
+  } finally {
+    try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
+  }
+  if (!built) return false;
+  _loadTrackBody(idx, def, built, prevId);
+  return true;
+}
 function loadTrack(idx) {
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
@@ -2421,7 +2448,28 @@ function loadTrack(idx) {
     try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
 }
-function _loadTrackBody(idx, def) {
+// Every GPU resource a built track owns (the old world before a rebuild, or a
+// stepped build abandoned part-way: loadTrackStepped). Null-safe per handle.
+function freeTrackMeshes(t) {
+  if (t && t.meshes) {
+    gfx.freeMesh(t.meshes.floor);
+    gfx.freeMesh(t.meshes.road);
+    gfx.freeMesh(t.meshes.terrain);
+    if (t.meshes.roadChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(t.meshes.roadChunked);
+    if (t.meshes.terrainChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(t.meshes.terrainChunked);
+    if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(t.meshes.props); else gfx.freeMesh(t.meshes.props);
+    if (t.meshes.propBatches && gfx.freeInstancedBatch) {
+      for (let i = 0; i < t.meshes.propBatches.length; i++) gfx.freeInstancedBatch(t.meshes.propBatches[i]);
+      t.meshes.propBatches = null;
+    }
+    if (t.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(t.meshes.glass); else gfx.freeMesh(t.meshes.glass); }
+    if (t.meshes.water) gfx.freeMesh(t.meshes.water);
+    gfx.freeMesh(t.meshes.gate);
+    gfx.freeMesh(t.meshes.startline);
+    if (typeof PitSigns !== "undefined") PitSigns.free(gfx, t);
+  }
+}
+function _loadTrackBody(idx, def, built, builtPrevId) {
   // Invalidate the sun-shadow snap cache: it's only ever written inside the
   // re-render gate, so a new track whose first snapped cell + sunDir happen to
   // match the old track's last values would keep the PREVIOUS track's shadow
@@ -2431,42 +2479,25 @@ function _loadTrackBody(idx, def) {
   // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
   // are rebuilt when this flips so a day-default circuit raced at night gets a
   // glowing skyline, and a night-default circuit raced by day looks like daytime.
-  const sessionDark = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
-    raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && def.night);
+  const sessionDark = sessionDarkFor(def);
   const wantSlots = fieldSize();
-  if (builtTrackId !== def.id || builtTrackNight !== sessionDark || builtGridSlots !== wantSlots) {
-    if (track && track.meshes) {
-      gfx.freeMesh(track.meshes.floor);
-      gfx.freeMesh(track.meshes.road);
-      gfx.freeMesh(track.meshes.terrain);
-      if (track.meshes.roadChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.roadChunked);
-      if (track.meshes.terrainChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.terrainChunked);
-      if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.props); else gfx.freeMesh(track.meshes.props);
-      if (track.meshes.propBatches && gfx.freeInstancedBatch) {
-        for (let i = 0; i < track.meshes.propBatches.length; i++) gfx.freeInstancedBatch(track.meshes.propBatches[i]);
-        track.meshes.propBatches = null;
-      }
-      if (track.meshes.glass) { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(track.meshes.glass); else gfx.freeMesh(track.meshes.glass); }
-      if (track.meshes.water) gfx.freeMesh(track.meshes.water);
-      gfx.freeMesh(track.meshes.gate);
-      gfx.freeMesh(track.meshes.startline);
-      if (typeof PitSigns !== "undefined") PitSigns.free(gfx, track);
-    }
+  // `built`: a track loadTrackStepped already built (it freed the old world first).
+  if (built || builtTrackId !== def.id || builtTrackNight !== sessionDark || builtGridSlots !== wantSlots) {
+    freeTrackMeshes(track);
     // Drop the old track object BEFORE building the new one: the build's
     // transient peak (plain-JS geometry arrays for up to ~5 M verts) is the
     // moment a near-limit phone gets jetsam-killed, and holding the previous
     // track's terrainGeo/_lights/mesh handles through it stacks old + new
     // resident at once. loadTrack is synchronous, so nothing can observe the
     // null between here and the assignment below.
-    const prevTrackId = builtTrackId;   // read before the reset below: sameCircuit compares against it
+    const prevTrackId = built ? builtPrevId : builtTrackId;   // read before the reset below: sameCircuit compares against it
     track = null; builtTrackId = null;   // a build that throws must not leave the old id claiming a freed world
     if (typeof LampBake !== "undefined") LampBake.reset();   // its cache holds the old track + atlas too
     // Pass the active backend so tracks.js builds its meshes through the façade
     // (opts.gfx) instead of reaching the GLX global directly. On the explicit
     // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
     // (descriptor-copied onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3,
-      gridSlots: wantSlots, retainGraph: wantAgentSurface() });
+    track = built || Tracks.build(def, trackBuildOpts(sessionDark, wantSlots));
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
@@ -3986,7 +4017,9 @@ function introBuild(go) {
       await ensureScenery(idx);
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the garage (or the card) paints first
       if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
-      loadTrack(idx); _menuGate.ready = key; _menuGate.track = track;
+      // In steps, a few ms per frame: the garage drive-out keeps animating over the build.
+      if (!(await loadTrackStepped(idx, live)) || !live()) return;
+      _menuGate.ready = key; _menuGate.track = track;
       // What menuFinish does, under the card: car assets (bounded), then hidden warm
       // frames — "build" is not active(), so they draw with the canvas hidden and
       // the flyby's first frame is not the one that compiles every shader.

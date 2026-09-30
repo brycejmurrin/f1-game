@@ -145,7 +145,10 @@ const TrackBuildProps = (function () {
     signal:     [1.15, 0.24, 0.20],
   };
 
-  function build(track) {
+  // THE PROPS PASS AS STEPS (Tracks.buildSteps delegates to it): it yields only
+  // between whole emission phases, so build() — which runs it straight through —
+  // produces byte-identical buffers.
+  function* buildSteps(track) {
     Log.info("track", "buildProps start " + (track.def && track.def.id));
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
             MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, FURN_DEF,
@@ -1432,6 +1435,7 @@ const TrackBuildProps = (function () {
     const bt = def.barrier || { a: [0.92, 0.92, 0.94], b: [0.85, 0.18, 0.16], c: [0.55, 0.57, 0.62], night: [0.18, 0.18, 0.22], tyre: [0.24, 0.22, 0.20] };
     const btSeq = [bt.a, bt.b, bt.c];
 
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     if (def.street) {
       const WH = 1.1, WT = 0.4, STEP = 2;
       const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
@@ -1493,6 +1497,7 @@ const TrackBuildProps = (function () {
       const off = def.barrierGap != null ? def.barrierGap : 0.35;
       for (let k = 0; k < n; k++) for (const side of [-1, 1]) if (!pitOwned(k, side)) markBarrier(k, side, off);
     }
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     if (!def.street) {
       // findCorners returns every local curvature peak, and two peaks a few
       // nodes apart both survive its `sm[k] >= sm[a] && sm[k] > sm[b]` test. Their
@@ -1670,6 +1675,7 @@ const TrackBuildProps = (function () {
       });
     }
 
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     if (theme === "green") {
       every(140, (k) => {
         const side = hash(HK(k)) < 0.5 ? -1 : 1;
@@ -1752,6 +1758,7 @@ const TrackBuildProps = (function () {
     // on a +1 circuit it was superseded, on a -1 circuit it stood on the
     // wrong side. Only the grandstand remains.
     const crowd = NIGHT ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
       const k = (i * 4) % n;
       // The bank sits wholly IN FRONT of the shell: from gap 8 its last riser
@@ -1901,6 +1908,7 @@ const TrackBuildProps = (function () {
     // leaves window.TrackScenery undefined, so the warning it needed most was
     // the one it could not reach.
     if (!sceneryFn) Log.warn("track", "no scenery closure for " + def.id + " — building bare");
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     if (sceneryFn) {
       // Frac -> node, UN-shifted: the `Math.round(s * n) % n` that 37 circuit
       // files each declared locally. The wrapped helpers (transformSceneryApi)
@@ -1989,7 +1997,9 @@ const TrackBuildProps = (function () {
     // world-XZ guard in clearTreeDist() sees the finished set: the per-track
     // treelines queued by forestEdge() during scenery, then the generic roadside
     // scatter deferred out of the FURN pass above.
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     for (const a of deferredFoliage) forestEdgeNow.apply(null, a);
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     plantRoadsideTrees();
 
     // The painted LENS of a fixture, per lamp kind: over-white at night (the
@@ -1997,6 +2007,7 @@ const TrackBuildProps = (function () {
     // the head reads as lit, plain by day. The masts below and the pit
     // canopy luminaires (SceneryPits) both paint from this one table, so the
     // lens always matches the light track-lights.js emits for the kind.
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     const lensAlbedo = (kind) => (NIGHT ? LENS_NIGHT : LENS_DAY)[kind] || LENS_DAY.led;
     {
       const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
@@ -2111,6 +2122,7 @@ const TrackBuildProps = (function () {
       if (pk.length) Log.info("scenery", def.id + ": superseded by the pit complex " + pk.map((k) => k + "=" + _superseded[k]).join(" "));
       if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
     }
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     flushAsm();          // the last anonymous run has no successor to close it
     // Swap every named record's guessed envelope for what it actually emitted.
     for (const rec of propList) {
@@ -2127,6 +2139,7 @@ const TrackBuildProps = (function () {
     // THE PIT COMPLEX, last — after the bespoke scenery and the generic
     // dressing have been kept out of it. Platform, wall, boards, lights and
     // the row of garages, every position off track.pit (js/track/scenery/pits.js).
+    yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     if (typeof SceneryPits !== "undefined" && track.pit) {
       const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
                                        night: NIGHT, lensAlbedo, registerLamp: registerPitLamp });
@@ -2142,6 +2155,10 @@ const TrackBuildProps = (function () {
     return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }
 
-  return { build };
+  function build(track) {
+    const it = buildSteps(track);
+    for (;;) { const r = it.next(); if (r.done) return r.value; }
+  }
+  return { build, buildSteps };
 })();
 Object.freeze(TrackBuildProps);
