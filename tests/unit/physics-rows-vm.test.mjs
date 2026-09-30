@@ -279,10 +279,12 @@ test("shipped turn-in is snappier than the understeer-safe 0.89 / 0.7 pair", asy
 });
 
 test("power-on spends the friction ellipse even when speed-limited", async () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /THR_CAP[\s\S]{0,200}THR_FLOOR|THR_FLOOR[\s\S]{0,200}THR_CAP/, "throttle demand must be the named PhysicsConsts charge (THR_FLOOR/THR_CAP/THR_VK)");
-  assert.match(src, /axThrDemand/, "ellipse cost is throttle demand, not only faded axEst");
-  assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
+  // Combined-slip / axThrDemand live in PlayerForces (carve-headroom A).
+  const forces = readFileSync(join(ROOT, "js/physics/player-forces.js"), "utf8");
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(forces + game, /THR_CAP[\s\S]{0,200}THR_FLOOR|THR_FLOOR[\s\S]{0,200}THR_CAP/, "throttle demand must be the named PhysicsConsts charge (THR_FLOOR/THR_CAP/THR_VK)");
+  assert.match(forces, /axThrDemand/, "ellipse cost is throttle demand, not only faded axEst");
+  assert.doesNotMatch(forces.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
     /axFrac[\s\S]{0,180}clamp\(1 - c\.speed/,
     "do not restore vmax-faded axEst as the only ellipse cost");
   await startRace();
@@ -406,7 +408,8 @@ test("past the peak the tyre lets go: a full-lock slide settles under the limit 
 });
 
 test("load sensitivity: both axles carry the LOAD_SENS factor, static balance is exactly 1, full braking costs ~1.3 %", () => {
-  const src = readFileSync(join(ROOT, "js", "game.js"), "utf8");
+  // Axle µ formulas live in PlayerForces (carve-headroom A).
+  const src = readFileSync(join(ROOT, "js", "physics", "player-forces.js"), "utf8");
   assert.ok(src.includes("loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1))"), "front axle lost its load-sensitivity factor");
   assert.ok(src.includes("loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1))"), "rear axle lost its load-sensitivity factor");
   const PC = g.ctx.PhysicsConsts, fw = PC.FRONT_WEIGHT, k = PC.LOAD_SENS;
