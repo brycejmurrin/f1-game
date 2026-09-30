@@ -823,7 +823,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   const intro = game.slice(game.indexOf("function introWarm(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
-  assert.match(intro, /if \(_warmKey !== key\) \{[^\n]*\n\s*warmPrograms\(\); _menuGate\.warm = 2;/, "a built but UNWARMED world is warmed under the card, as introBuild does");
+  assert.match(intro, /if \(_warmKey !== key\) \{[^\n]*\n\s*if \(warmPrograms\(\) \|\| !\(_studio && _studio\.held\)\) _menuGate\.warm = 2;/, "a built but UNWARMED world is warmed under the card (or under the held garage), as introBuild does");
   assert.match(intro, /await awaitIntroWarm\(live\)/, "same 30 s compile bound as introBuild — never fly over a pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
   assert.match(intro, /if \(!built && menuWorld\(\) && introWarm\(go\)\) return;/, "raceIntro routes a built world with a pending warm through it");

@@ -179,7 +179,7 @@ test('race settings pre-builds the garage, hidden, so the drive-out\'s first fra
   const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4000);
   const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');
   assert.ok(gate > 0 && hidden > gate, 'drawn after the visibility gate: the canvas stays hidden under race settings');
-  assert.match(render, /if \(setupPreviewOn\) _menuGate\.garageReady = true;/, 'the real garage screen counts as pre-built');
+  assert.match(render, /if \(setupPreviewOn && !heldWarm\) _menuGate\.garageReady = true;/, 'the real garage screen counts as pre-built');
 });
 
 // ── #garrival's PREVIEW IN / OUT (js/garage/setup-camera.js startArrivalPreview) ──
@@ -274,4 +274,33 @@ test('a circuit already raced opens RACE! on the garage: its programs are not wa
   assert.equal(calls.length, 3, 'another world warms');
   ctx.gfx = {}; warmPrograms();
   assert.equal(calls.length, 3, 'a backend with no warm() is not asked');
+});
+
+test('the car out, the garage HOLDS until the flyby where the backend warms (TLX): no black card between them', async () => {
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const src = game.slice(game.indexOf('function studioClose(n) {'), game.indexOf('// A READY, WARM WORLD STILL OPENS ON THE GARAGE'));
+  const run = async (gfx, extra = {}) => {
+    const calls = [];
+    const ctx = { _studio: { n: 1, skip: false, at: 0, ms: 5300, cardUp: false, info: {}, ...extra }, setupPreviewOn: true, gfx,
+      setupCam: { driveOutLeft: () => 0, stopDriveOut: () => calls.push('stop') },
+      loadingScreen: { phase: () => 'garage', building: () => calls.push('card') },
+      menuSlice: async () => {}, performance: { now: () => 0 } };
+    const { studioDone } = new Function('ctx', 'with (ctx) {' + src + '; return { studioDone }; }')(ctx);
+    await studioDone(() => true, 1);
+    return { ctx, calls };
+  };
+  const tlx = await run({ warm() {} });
+  assert.equal(tlx.ctx._studio && tlx.ctx._studio.held, true, 'held, not closed');
+  assert.equal(tlx.ctx.setupPreviewOn, true, 'the garage keeps drawing (its last pose)');
+  assert.deepEqual(tlx.calls, [], 'no build card, the drive-out not stopped');
+  const glx = await run({});
+  assert.equal(glx.ctx._studio, null, 'GLX/WGX (no warm): closed as before');
+  assert.equal(glx.ctx.setupPreviewOn, false);
+  assert.deepEqual(glx.calls, ['stop', 'card'], 'the card covers the rest, as before');
+  const skipped = await run({ warm() {} }, { skip: true });
+  assert.equal(skipped.ctx._studio, null, 'a skip closes too');
+  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 5000);
+  assert.match(render, /const heldWarm = !!\(_studio && _studio\.held && track && _menuGate\.warm > 0\);/, 'a held warm frame takes the world path with the canvas left visible (TLX paints nothing while it kicks the warm)');
+  assert.match(game, /FlybySeq\.reset\(\); if \(warmPrograms\(\) \|\| !\(_studio && _studio\.held\)\) _menuGate\.warm = 2;/, 'held: world frames only when a warm was really requested, else the world would paint over the garage');
+  assert.match(game, /studioClose\(n\);   \/\/ the held garage hands straight to the flyby\n\s*try \{ _introKey = key; raceIntro\(go\); \}/, 'introWarm closes the held garage at the handoff');
 });
