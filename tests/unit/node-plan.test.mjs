@@ -33,7 +33,7 @@ test("a UI-only diff skips the VM slices; the fast scripts are never in the plan
   const p = plan(["js/ui/hud.js", "css/hud.css"]);
   assert.equal(p.all, false);
   assert.ok(p.skip.includes("test:game-vm-a"), "a HUD edit must not rebuild 40 circuits");
-  assert.ok(p.skip.includes("test:game-vm-b"));
+  assert.ok(p.skip.includes("test:game-vm-b1") && p.skip.includes("test:game-vm-b2"));
   assert.deepEqual(p.circuits, []);
   const sh = toShell(p);
   assert.match(sh, /unset APEX_CIRCUITS/);
@@ -49,7 +49,7 @@ test("a circuit-only diff runs the elevation twin narrowed to that circuit", () 
 
 test("a game.js diff runs every VM slice, unscoped", () => {
   const p = plan(["js/game.js"]);
-  for (const s of ["test:game-vm-a", "test:game-vm-b", "test:node-slow"]) assert.ok(p.run.includes(s), s);
+  for (const s of ["test:game-vm-a", "test:game-vm-b1", "test:game-vm-b2", "test:node-slow"]) assert.ok(p.run.includes(s), s);
   assert.deepEqual(p.circuits, [], "game.js is not a circuit file: the whole fleet");
 });
 
@@ -77,6 +77,16 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
     const re = new RegExp(`if planned ${script.replace(/[-]/g, "\\-")}; then\\n\\s+npm run ${script}\\n\\s+fi`);
     assert.match(step, re, `${script} must be guarded by planned() and stay an npm run line`);
   }
+  // SIX SLICES (2026-09-30): the elevation twin is sharded across two runners
+  // (APEX_CIRCUIT_SHARD, tools/lib/circuit-scope.cjs), game-vm-b is two
+  // groups.json partitions, vm-page and node-slow stand alone.
+  assert.match(nodeJob, /slice: \[vm-a1, vm-a2, vm-b1, vm-b2, page, slow\]/);
+  assert.match(step, /vm-a1\)\n(?:\s+#.*\n)*\s+export APEX_CIRCUIT_SHARD=1\/2\n\s+if planned test:game-vm-a; then/, "vm-a1 is the first half of the roster");
+  assert.match(step, /vm-a2\)\n(?:\s+#.*\n)*\s+export APEX_CIRCUIT_SHARD=2\/2\n\s+if planned test:game-vm-a; then/, "vm-a2 is the second half");
+  assert.equal((step.match(/npm run test:game-vm-a\n/g) || []).length, 2, "both halves run the one script");
+  const b1 = groups["test:game-vm-b1"].files, b2 = groups["test:game-vm-b2"].files;
+  assert.deepEqual([...b1, ...b2].sort(), [...groups["test:game-vm-b"].files].sort(), "b1 + b2 is exactly game-vm-b");
+  assert.equal(new Set([...b1, ...b2]).size, b1.length + b2.length, "b1 and b2 are disjoint");
   // The seconds-long scripts are NOT guarded: a skip there buys nothing.
   for (const script of gateNodeSuites().filter((s) => !(s in SCOPED)))
     assert.doesNotMatch(step, new RegExp(`planned ${script}\\b`), `${script} must always run`);
