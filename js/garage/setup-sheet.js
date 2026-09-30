@@ -1179,7 +1179,7 @@ function openSetup() {
 // G.livDraftOverride live. resolveLivery() reads that override for the
 // player's team, so the next race painted the UNSAVED draft on the car, and the
 // next garage visit re-opened the editor on it. Watching the screen's own
-// `hidden` attribute (the sheetshape.js idiom) needs no new hook in game.js
+// `hidden` attribute (the js/ui/sheet-shape.js idiom) needs no new hook in game.js
 // and catches every exit, including the ones that never call this module.
 function discardLivDraft() {
   if (!csLivCreating) return;

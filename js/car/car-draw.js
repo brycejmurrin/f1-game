@@ -479,7 +479,7 @@ const CarDraw = (function () {
       G.gfx.draw(getGearDigit(M4.clamp(c.gear || 1, 0, 9)), _rigB, fx);
       const rpmF = M4.clamp(((c.rpm || PhysicsConsts.IDLE_RPM) - PhysicsConsts.IDLE_RPM) / (PhysicsConsts.MAX_RPM - PhysicsConsts.IDLE_RPM), 0, 1);
       G.gfx.draw(getLedStrip(rpmF > 0.965 ? (G.raceT * 14 % 1 < 0.5 ? 9 : 0) : Math.round(rpmF * 8)), _rigB, fx);
-      drawWheelExtras(_rigB, c, G.raceT);   // ACTIVE AERO lamp + flap-travel bar (carmesh.js)
+      drawWheelExtras(_rigB, c, G.raceT);   // ACTIVE AERO lamp + flap-travel bar (car-mesh.js)
       // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
       // reversing glitch) would otherwise stringify with a "-" character that
       // getSpeedDigit can't parse (+"-" is NaN -> SEG7[NaN] -> crash every frame).

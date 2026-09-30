@@ -1074,7 +1074,7 @@ const AgentView = (function () {
                 drivers: team.drivers.map((d) => ({ name: d.name, code: d.code, num: d.num })) },
         parts: {
           // The career cap when one owns this team, not the free-play constant —
-          // the same resolution setup-ui.js enforces against. Reporting 780 for a
+          // the same resolution js/garage/setup-sheet.js enforces against. Reporting 780 for a
           // team whose factory build costs 1,500 made this hook say
           // `remaining: -720` for a perfectly legal setup.
           budget: _partsCap(team), spent: res.cost,
