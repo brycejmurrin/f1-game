@@ -167,6 +167,16 @@ See `docs/research/CHROME-DEVTOOLS-MCP.md` § Background measure.
     screen (excludes performance; use traces for that).
   - `click` / `press_key` / `wait_for` on snapshot **uids** (`1_12`, not `1`).
 
+### Heap leak across N races (browser-only; tool names are `mcp__chrome-devtools__<name>`, `chrome_*` in prose)
+
+Every `filePath` is REQUIRED on `take_heapsnapshot` and must sit under a roots dir (`/tmp/...` works; see File writes). No `--expose-gc` in our flags, but a snapshot GCs first.
+1. `navigate_page` `http://127.0.0.1:3456/` (`ignoreCache:true` after any edit); do NOT run `lighthouse_audit` on this page first (axe strings fake a leak).
+2. Warm-up: `evaluate_script` `__apex.race(id); go()` once, wait ~5 s (Setup above), then `take_heapsnapshot` A.
+3. Repeat `race(<same or other id>); go()` for the suspect races (fresh wait each), `take_heapsnapshot` B, then C.
+4. `compare_heapsnapshots` A vs B and B vs C: growth that repeats in BOTH deltas is the leak; one-off growth is warm-up. Pass `classIndex` from the summary for one class; `get_heapsnapshot_class_nodes` (`id`) -> `get_heapsnapshot_retaining_paths` (`nodeId`) says who holds it; `close_heapsnapshot` each file when done.
+5. Same-track repeat vs different-track answers "cache never evicts" vs "rebuild leaks" (track-switch numbers: `docs/research/CHROME-DEVTOOLS-MCP.md`). SwiftShader + one session = a lead, not a verdict. Record: snapshot paths, per-class delta (count, MB), retaining path head, then `navigate_page about:blank` + `chrome-stop`.
+Frame cost instead of memory: `performance_start_trace {reload:false, autoStop:false, filePath}` -> repro -> `performance_stop_trace` -> `performance_analyze_insight`.
+
 ### A/B two trees on two ports — the strongest evidence this setup can give
 
 A source guard proves a renderer **asked** for something; only pixels prove it

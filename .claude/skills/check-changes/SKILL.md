@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang (machine load vs real failure). verify-agent gives a read-only --fast verdict (--base: was it already red?). A red GitHub Actions run (ci.yml / pages.yml) is ci-red-triage, not this skill.
+description: Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang or a `--wait` that exited 124 (machine load vs real failure). verify-agent gives a read-only --fast verdict (--base: was it already red?). A red GitHub Actions run (ci.yml / pages.yml) is ci-red-triage, not this skill.
 ---
 
 # Validate changes before committing/pushing
@@ -85,8 +85,8 @@ dance entirely when you already intend to publish.
 ## Load on demand
 
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
-- A test timed out / hangs / passes solo but not loaded (or vice versa) —
-  the decision tree and `test-solo.mjs` → [`references/triage.md`](references/triage.md)
+- A test timed out / hangs / `--wait --timeout` exited 124 / passes solo but not loaded (or vice versa) —
+  step 0 (read-only load + log anchors), the decision tree and `test-solo.mjs` → [`references/triage.md`](references/triage.md)
 - No cache bump after a `js/`/`css/` edit (`?v=dev`; the deploy stamps hashes); `gen-shell` after a manifest change (last
   edit before commit; `--merge <ref>` across lineages) → [`references/bump.md`](references/bump.md)
 - Merging with / pushing to the deploy branch, union sweeps, baseline

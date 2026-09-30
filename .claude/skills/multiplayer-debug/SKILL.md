@@ -18,7 +18,7 @@ Use this for:
   `checking`/`connecting`.
 - Multiplayer state replication, interpolation, countdown/start sync, or dropped
   rivals.
-- Nostr relay/rendezvous issues.
+- Nostr relay/rendezvous issues, or "build mismatch"/`build_unknown` refusals at pairing.
 - Tests that need the in-page loopback transport instead of a real network.
 
 Do **not** use this for:
@@ -34,7 +34,7 @@ Do **not** use this for:
 |---|---|
 | `js/net/transport.js` | Two channels: `state` unreliable/unordered, `event` reliable/ordered; `loopback()` is deterministic and in-page |
 | `js/net/sdp.js` | Packs gathered SDP facts into a scannable invite code; round-robins candidates by kind so a relay survives the cap |
-| `js/net/handshake.js` | ICE -> slim SDP -> deflate -> base64url invite; refuses mismatched `version.json` builds |
+| `js/net/handshake.js` | ICE -> slim SDP -> deflate -> base64url invite; refuses mismatched builds (the shell's `apex-build` meta, not `version.json`) |
 | `js/net/nostr.js` | Public Nostr rendezvous, signalling only |
 | `js/net/rendezvous.js` | Backup room-code courier; typed errors, never throws |
 | `js/net/snapshot.js` | 13 B/car snapshots, interpolation, road-following extrapolation |

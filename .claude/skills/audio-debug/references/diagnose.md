@@ -99,3 +99,27 @@ above. No browser needed for the unit check:
 (fake AudioContext; asserts one crack per `shift(true)`, peak scales with the
 trim, 0 is silent, duck survives). Green means `shift()` itself is sound, so
 look at the callers.
+
+## Music cuts out on pause / never resumes
+
+Pausing does NOT stop music: `setPaused(true)` (`js/game.js`) stops only the
+engine and skid; the soundtrack keeps playing under the pause card. Music stops
+for exactly these reasons, so find which one applies:
+
+1. Hidden tab / lock (`onVisibility` in `engine.js`): `stopMusic()` + `ctx.suspend()`,
+   remembering `resumeMusic`; show → `resumeIfNeeded()` then `startMusic(lastTrackIdx)`.
+   A hidden tab also calls `setPaused(true)` (game.js `document.hidden`), so this
+   reads as "paused → music died". A missing `contextState: "running"` after show
+   in `GameAudio.debug()` = the resume never ran (iOS interrupted; `onInterrupted`).
+2. `setMusicEnabled(false)` / MUSIC OFF in `#audioset` (persisted; `startMusic` returns early).
+3. Every track failed to decode → `musicLoadFailed` stops the list (`audio-recovery.test.mjs`).
+4. Resume with SOUND off: `setPaused(false)` restarts music only when `soundOn`.
+5. Not a cut-out: the engine duck (`musicGain` × `1 − 0.25·rev`, released by `stopEngine`)
+   and the radio duck (`setRadioDuck`, ×0.35 while a line is on air) only LOWER it.
+   A music level stuck low after pause = `radioDuck` never released (`voice-pack` / `radio-voice` callers).
+
+There is no "music is playing" getter: read `GameAudio.debug().contextState` plus
+DevTools → Web Audio (browser). Node level: `node --test tests/unit/audio-recovery.test.mjs`
+pins the failed-decode advance, no `resume()` in a hidden tab, and the game.js resume wiring
+(`setPaused` starts music again). NOTHING in unit tests pins the engine-side
+hide→show music restart or the duck levels; a fix there needs a new case in that file's stub-ctx `boot()`.

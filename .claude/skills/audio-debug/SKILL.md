@@ -24,7 +24,7 @@ GameAudio.enabled()
 GameAudio.setEnabled(true)          // master gain → 0.8
 GameAudio.setSfxEnabled(false)      // engine/SFX off; music can stay
 GameAudio.setMusicEnabled(false)    // soundtrack off; engine keeps humming
-GameAudio.debug()                   // samplesReady, usingSamples, engineOn, loop
+GameAudio.debug()                   // contextState, samplesReady, usingSamples, engineOn, loop
 GameAudio.rate()                    // idle-sample playbackRate (0 if synth/off)
 GameAudio.centroidHz()              // spectral centroid of live engine
 ```
@@ -41,5 +41,5 @@ user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
 
 ## Load on demand
 
-- Layer table, in-race `#audioset`, pitch curve, silence diagnosis →
+- Layer table, in-race `#audioset`, pitch curve, silence diagnosis, music cutting out on pause/hide →
   [references/diagnose.md](references/diagnose.md) (incl. gear-shift cue silent).

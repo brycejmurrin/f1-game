@@ -50,6 +50,26 @@ adjustable" (`node --test` on that file); browser, `tests/specs/gamepad.spec.js`
 "centre dead zone" (0.03 -> 0, 0.07 ramps) and `sliders.spec.js`. A new default
 reaches fresh installs only; a stored `padDeadzone` needs a STEER_SCHEMA step.
 
+## Keyboard leaks into a menu (or a menu eats the wheel)
+
+Trace, in order: `onKey` (`js/input/input.js`) computes `typing` (focused
+INPUT/TEXTAREA/SELECT/BUTTON/A, except `hudControl` = `#btn-cam, #pausebtn,
+#hud-restore, #pc-restore, .touchbtn`) and `menuOverlayOpen()` =
+`UiLayers.anyOpen()`; either one makes a keydown a no-op and a keyup a
+latch-clear only. Pause/Escape sit ABOVE that gate. The layer list and its
+`gate: false` entries (`overlay`, `rotate-device`) live only in `js/ui/layers.js`;
+arrows inside a menu belong to `js/ui/menu-nav.js` (sliders/selects keep their
+own Left/Right); focus return on close is `js/ui/modal.js` `onLayerHide`
+(`opener` / `lastFocus`). Two opposite bugs: a NEW layer missing from `DEFS`
+leaks arrows to the car; focus left on a slider/button after RESUME reads as
+`typing`, so the arrows change the slider and the car is undrivable.
+Pins — node: `tests/unit/key-binds.test.mjs` (Input in a VM, `anyOpen` mocked),
+`menu-a11y-audit.test.mjs` (layer coverage); browser only: `menu-keyboard.spec.js`
+"with the pause menu up the arrow keys stop reaching the car" / "with a race
+running the arrow keys drive the car", `steering.spec.js` "keyboard latch".
+Record: which of `typing` / `anyOpen` / focus owner (`document.activeElement`)
+was true, via `__apex.inputState().key`.
+
 ## Sharp edges
 
 - Gamepad has **no change events** — `Input.poll()` once per frame.
@@ -64,7 +84,7 @@ reaches fresh installs only; a stored `padDeadzone` needs a STEER_SCHEMA step.
   (`docs/research/PLATFORM-INPUT-NOTES.md`).
 
 ```sh
-node tools/ci/test-bg.mjs input
+node tools/ci/test-bg.mjs input   # browser group test:input; background it (AGENTS rule 4)
 ```
 
 ## Load on demand

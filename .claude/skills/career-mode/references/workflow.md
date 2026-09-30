@@ -98,3 +98,15 @@ Load from the SKILL.md index when the task needs this detail.
 - Reading `careerState().sponsor` right after a settlement as "what the sponsor
   just paid" — the round counter has already advanced, so it describes the
   NEXT window, not the one just settled.
+
+## Sponsor payout / double-pay trace (node-only)
+
+`settleRound()` -> `settleSponsor()` (`js/career/career.js`). Two guards make a second pay a bug to look for
+in THESE lines, not in the DNF path (a DNF changes only `pts`/`dnf`/`clean`, never the pay branch): (1) `settleRound`
+returns null when `career.results` already has row `r === season.round - 1`; (2) `settleSponsor` pushes the window
+`idx` onto `career.paidSponsors` BEFORE checking `met`, so a window pays once. `rollover()` resets `paidSponsors`;
+`save-migrate.js` normalises it to `[]` on old saves. Pins: `career-settle.test.mjs` "settleRound is idempotent"
+(prize/salary, no direct sponsor assert), `tests/specs/career.spec.js` ~2215 (browser: no double pay, ledger cleared
+at rollover), `docs/CAREER.md` ~811. No unit test asserts `sponsorPay` twice (the sponsor unit pin, "LAST sponsor window", is pro-rata only): add one to
+career-settle.test.mjs (MY TEAM, season.round on a window end, settle twice, then rewind `results` and settle again).
+Hand-off: record which guard the repro defeats (results row vs `paidSponsors`) and the `paidSponsors` value before/after.

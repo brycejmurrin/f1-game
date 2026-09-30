@@ -88,6 +88,10 @@ Load from the SKILL.md index when the task needs this detail.
    - Use real RTC scripts only for browser/ICE behavior that loopback cannot
      exercise.
 
+## "Build mismatch" though both are on the live build
+
+Not an encoding bug: `b` rides inside the invite/answer payload (`handshake.js` `createInvite`/`acceptInvite` -> `checkBuild(await localBuild(), payload.b)`), and the `#vs=` link only carries the code (`inviteUrl`/`inviteFromUrl`; a corrupt link is `corrupt_code`/`bad_code`, never `build_mismatch`). So one tab's `<meta name="apex-build">` is stale: an installed PWA / service-worker-cached shell, or a tab left open across a deploy. Compare `document.querySelector('meta[name=apex-build]').content` on BOTH devices with the live `index.html` (deploy-research; `res.mine`/`res.theirs` hold the numbers but the lobby shows only `res.message`, and `Log` prints just `handshake <action> fail build_mismatch`). `theirs > mine` = THIS device is stale. Also `build_unknown` = no meta and `version.json` fetch failed (offline phone). The link opened from Camera lands in Safari, not the installed app, so a mismatch there means Safari's cached shell. Offline pins: `node --test tests/unit/net-transport.test.mjs` (checkBuild/localBuild/inviteFromUrl/withoutInviteUrl), `lobby-codes.test.mjs` (codeFrom on pasted links), `net-qr.test.mjs`; the shell guard/stamp side is `service-worker.test.mjs` and `deploy-stamp.test.mjs`. Fixing means getting the stale device onto the current shell, never relaxing `checkBuild`. Record: both metas, which side is older, whether installed app or Safari tab.
+
 ## Rival never moves (connected, remote car frozen)
 
 Trace the path in order, stop at the first broken link:
