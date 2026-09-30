@@ -3908,23 +3908,51 @@ async function awaitIntroWarm(current) {
   }
   return current();
 }
-// THE STUDIO DRIVE-OUT (GarageArrival.poseOut in js/garage/setup-camera.js): RACE!
-// before the circuit is ready plays the car out of the setup screen's garage AT
-// ONCE, under the card, while the circuit builds behind it. The circuit's warm
-// waits for it (render() draws nothing while a warm is pending), and the montage
-// then opens without the pit-lane drive-out it would repeat. Tagged with its intro
-// run: only that run closes it, so a stale run backing out never closes a newer one's.
+// THE STUDIO DRIVE-OUT (GarageArrival.poseOut in js/garage/setup-camera.js): every
+// RACE! opens on the car driving out of the setup screen's garage, AT ONCE and with
+// NO CARD (LoadingScreen.garage), while the circuit builds behind it; the card and
+// the announcer arrive with the flyby, which then skips the pit-lane drive-out it
+// would repeat. The circuit's warm waits for it (render() draws nothing while a
+// warm is pending). A build still running when the car is out gets the card
+// (studioClose). Tagged with its intro run: only that run closes it, so a stale
+// run backing out never closes a newer one's.
 let _studio = null, _studioPlayed = false;
-function studioOpen(n) {
+function studioOpen(n, info) {
   if (_studio) studioClose(_studio.n);
-  const ms = setupCam.startDriveOut();
-  if (ms > 0) { _studio = { at: performance.now(), ms, n }; _studioPlayed = true; setupPreviewOn = true; }
+  const real = info && info.real;   // a race joined mid-way or watched is not your car leaving the garage
+  const ms = real && (real.watch || real.startLap > 1) ? 0 : setupCam.startDriveOut();
+  if (ms > 0) { _studio = { at: performance.now(), ms, n, info }; _studioPlayed = true; setupPreviewOn = true; }
+  if (_studio) loadingScreen.garage(info); else loadingScreen.building(info);
 }
-function studioClose(n) { if (_studio && _studio.n === n) { setupCam.stopDriveOut(); setupPreviewOn = false; _studio = null; } }
+function studioClose(n) {
+  if (!_studio || _studio.n !== n) return;
+  const info = _studio.info;
+  setupCam.stopDriveOut(); setupPreviewOn = false; _studio = null;
+  if (loadingScreen.phase() === "garage") loadingScreen.building(info);   // the car is out and the build is not: the card covers the rest
+}
 async function studioDone(live, n) {
   // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length).
   while (_studio && _studio.n === n && live() && setupCam.driveOutLeft() > 0 && performance.now() - _studio.at < _studio.ms * 3) await menuSlice();
   studioClose(n);
+}
+// A READY, WARM WORLD STILL OPENS ON THE GARAGE: introBuild and introWarm play the
+// drive-out over their own work; with nothing left to build it plays alone, then flies.
+function introGarage(go) {
+  const key = menuKey(trackIdx), n = ++_introRun, settings = entrySettings();
+  const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
+  studioOpen(n, loadingInfo());
+  if (!_studio) { loadingScreen.stop(); return false; }   // no drive-out (tuner off, a watched race): fly at once, as before
+  (async () => {
+    try { await studioDone(live, n); }
+    finally {
+      studioClose(n);
+      if (n === _introRun) {
+        if (!live()) loadingScreen.stop();
+        else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
+      }
+    }
+  })();
+  return true;
 }
 function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
@@ -3932,11 +3960,11 @@ function introBuild(go) {
   if (!(idx >= 0) || motionReduced()) return false;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
-  loadingScreen.building(info0); studioOpen(n);
+  studioOpen(n, info0);
   (async () => {
     try {
       await ensureScenery(idx);
-      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the card paints first
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the garage (or the card) paints first
       if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
       loadTrack(idx); _menuGate.ready = key; _menuGate.track = track;
       // What menuFinish does, under the card: car assets (bounded), then hidden warm
@@ -3982,7 +4010,7 @@ function introWarm(go) {
   if (!gfx.warm || (_warmKey === key && !(gfx.warming && gfx.warming()))) return false;
   const n = ++_introRun, settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
-  loadingScreen.building(loadingInfo()); studioOpen(n);
+  studioOpen(n, loadingInfo());
   (async () => { try {
       await studioDone(live, n);   // the drive-out first: a warm now would freeze it
       if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
@@ -4010,6 +4038,7 @@ function raceIntro(go) {
   const built = _introKey; _introKey = "";
   if (!built && !menuWorld() && introBuild(go)) return;
   if (!built && menuWorld() && introWarm(go)) return;
+  if (!built && !motionReduced() && introGarage(go)) return;
   flybyPlay = null;
   const world = menuWorld();
   if (world) menuGridCars();

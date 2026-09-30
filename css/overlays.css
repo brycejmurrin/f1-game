@@ -1424,6 +1424,10 @@ body[data-density="compact"] #campicker {
    the scrim would hide the scene the card is being framed against, and the
    full-screen click-swallow would eat every click meant for the panel. */
 #loading[data-phase="hold"] { background: none; pointer-events: none; }
+/* GARAGE is the car driving out of the setup screen's garage before the flyby
+   (LoadingScreen.garage): the shot is the car's, so no scrim over it, and the
+   card (hidden by default above) waits for the flyby. */
+#loading[data-phase="garage"] { background: none; }
 /* LETTERBOX — 2.35:1 bars over the flyby, which is what makes the same shots
    read as a title sequence rather than a paused game. One bar per pseudo so
    each moves on `transform` alone (compositor-only; the flyby is already
