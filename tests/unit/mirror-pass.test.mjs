@@ -95,7 +95,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
   return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render,
-    press: () => { mirrorPressed = true; } };
+    press: () => { mirrorPressed = true; }, setTier: (t) => { tier = t; } };
 }
 
 test("AUTO shows the mirror in an onboard view on a hardware renderer, and not in chase", () => {
@@ -342,4 +342,28 @@ test("the PiP: AUTO skips a software renderer and ON draws it; no subject, no Pi
   assert.equal(none.mp.state().shown, true);
   const rect = none.calls.filter((c) => c[0] === "rect").pop();
   assert.ok(rect[1] && rect[2] === undefined, "the mirror's composite: the default (flipped) path");
+});
+
+test("a phone's governor cannot make the mirror flash: the target ignores render scale, a rung holds ~1.5 s", () => {
+  const h = boot({ mode: "on", tier: 2 });
+  h.render();
+  const size = () => { const b = h.calls.filter((c) => c[0] === "begin").pop(); return [b[1], b[2]]; };
+  assert.deepEqual(size(), [200, 57], "low rung: half of the 400x114 frame");
+  // Dynamic resolution rescales the render buffer; the mirror target does not move.
+  h.gfx.width = 640; h.gfx.height = 360;
+  for (let i = 0; i < 4; i++) h.render();
+  assert.deepEqual(size(), [200, 57], "sized from the frame's CSS box, not the render buffer");
+  // A tier blip shorter than the dwell never swaps the rung…
+  h.setTier(4);
+  for (let i = 0; i < 30; i++) h.render();
+  assert.equal(h.mp.state().quality, "low", "a 30-frame blip to tier 4 holds the rung");
+  h.setTier(2);
+  for (let i = 0; i < 30; i++) h.render();
+  assert.equal(h.mp.state().quality, "low");
+  // …a tier that stays does, once.
+  h.setTier(4);
+  for (let i = 0; i < 89; i++) h.render();
+  assert.equal(h.mp.state().quality, "low", "still inside the dwell");
+  h.render();
+  assert.equal(h.mp.state().quality, "min", "90 frames on: the rung follows");
 });

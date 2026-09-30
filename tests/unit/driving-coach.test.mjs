@@ -409,3 +409,24 @@ test('lap-loss feedback waits for traffic and braking to clear', () => {
   c.brakeDemand = 0; tick(.1);
   assert.match(announcements.at(-1)[0], /^TURN 3 COST/);
 });
+
+test('the tyre watch names the corner eating a fast-wearing set, and which end of the car', () => {
+  const { G, c, tick, enable, announcements, coach } = fixture();
+  enable(); G.timeTrial = false; G.practice = false; G.tyres = { on: () => true };
+  Object.assign(c, { lap: 2, s: 300, tyreStints: 0, tyreWear: 0.2, tyreWearF: 0.2, tyreWearR: 0.2, pitPlan: { loadK: 1.4 } });
+  tick(0.2);                                     // the watch primes on this set
+  // Turn 2 (apex at 500 m): the fronts take most of the lap's wear there.
+  for (let i = 0; i < 20; i++) { c.s = 500; c.tyreWear += 0.004; c.tyreWearF += 0.006; c.tyreWearR += 0.002; tick(0.1); }
+  for (let i = 0; i < 5; i++) { c.s = 300; c.tyreWear += 0.001; c.tyreWearF += 0.001; c.tyreWearR += 0.001; tick(0.1); }
+  c.lap = 3; tick(0.2); tick(1);
+  const said = announcements.map((a) => a[0]);
+  assert.ok(said.some((m) => /TURN 2 IS EATING THE FRONTS — BRAKE EARLIER/.test(m)), said.join(' | '));
+  assert.ok(coach.feedback().counts.some((r) => r.id === 'tyres'), 'logged for the debrief');
+  // A set wearing AT its plan is nobody's business: nothing is said.
+  const f2 = fixture(); f2.enable(); f2.G.timeTrial = false; f2.G.practice = false; f2.G.tyres = { on: () => true };
+  Object.assign(f2.c, { lap: 2, s: 300, tyreStints: 0, tyreWear: 0.2, tyreWearF: 0.2, tyreWearR: 0.2, pitPlan: { loadK: 1.0 } });
+  f2.tick(0.2);
+  for (let i = 0; i < 20; i++) { f2.c.s = 500; f2.c.tyreWear += 0.004; f2.c.tyreWearF += 0.006; f2.tick(0.1); }
+  f2.c.lap = 3; f2.tick(1.2);
+  assert.ok(!f2.announcements.some((a) => /EATING/.test(a[0])), 'no tyre line at the planned rate');
+});

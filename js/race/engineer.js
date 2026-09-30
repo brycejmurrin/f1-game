@@ -66,6 +66,11 @@ const RaceEngineer = (function () {
   // "compound" too: with five laps left and one dry compound run, the stop is
   // what stands between the player and a disqualification (FIA 2026 SR B6.3.6).
   const BOX_CALLS = ["plan0", "plan1", "tread", "compound"];
+  // PACE CALLS: "push" wants this many laps of life beyond the stint, and a car
+  // within PUSH_GAP_S ahead to push FOR — tyres to spare with nobody to catch
+  // is not an instruction. THREAT_REACH: how near our own stop must be before
+  // a rival's window is a threat worth covering.
+  const PUSH_SPARE = 3, PUSH_GAP_S = 1.5, THREAT_REACH = 3;
 
   function create(G) {
     Log.info("race", "RaceEngineer.create");
@@ -112,6 +117,10 @@ const RaceEngineer = (function () {
       if (s.freeStop && s.marginS != null && s.marginS > 0) return ["CAUTION — STOP NOW LOSES NOTHING", "caution"];
       if (s.freeStop) return ["CAUTION — CHEAPER STOP" + (s.pitLoss != null ? ", ABOUT " + Math.round(s.pitLoss) + "s LOST" : " — CONSIDER BOXING"), "caution"];
       if (s.rivalBoxed) return [s.rivalBoxed + " HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS", "undercut"];
+      // …and the THREAT before it happens: the car close behind is due in
+      // (its plan's window, PitLane.windowOf) and ours is near. Boxing first
+      // is the cover; a driver who knows can choose.
+      if (s.threat) return [s.threat + " CAN UNDERCUT — BOX NEXT LAP TO COVER", "threat"];
       if (s.rainInLaps != null && s.lapsToStop != null && s.rainInLaps <= s.lapsToStop) {
         return ["RAIN BEFORE THE STOP — BOX LAP " + ((s.lap || 0) + s.rainInLaps) + " FOR WETS", "rainplan"];
       }
@@ -130,7 +139,13 @@ const RaceEngineer = (function () {
       // same call in longhand; the repeat is what a driver hears at 300 km/h,
       // so that is what this game says.
       if (s.lapsToStop === 0) return ["BOX BOX BOX" + (s.nextCode ? " — " + s.nextCode : ""), "plan0"];
-      if (s.lapsToStop === 1) return ["BOX NEXT LAP" + (s.nextCode ? " — " + s.nextCode : ""), "plan1"];
+      // …with WHERE the stop drops the car: behind the first car it will not
+      // clear, or into clear air. The lap before, when there is still a lap to
+      // push for a better gap; "BOX BOX BOX" stays short.
+      if (s.lapsToStop === 1) {
+        return ["BOX NEXT LAP" + (s.nextCode ? " — " + s.nextCode : "")
+          + (s.rejoin === "" ? " — CLEAR AIR" : s.rejoin ? " — REJOIN BEHIND " + s.rejoin : ""), "plan1"];
+      }
       if (s.graining >= GRAIN_CALL) return ["GRAINING — EASE OFF AND CLEAN THEM UP", "grain"];
       // Not on the only lap there is (a qualifying lap, a one-lap race).
       if (s.outLap && !s.finalLap && s.belowWindow >= COLD_CALL) return ["TYRES ARE COLD — TAKE A LAP", "cold"];
@@ -141,6 +156,17 @@ const RaceEngineer = (function () {
       if (s.axle >= AXLE_SPLIT) {
         return s.front ? ["FRONTS ARE GOING — BRAKE EARLIER", "axleF"]
                        : ["REARS ARE GOING — EASE ON THE THROTTLE", "axleR"];
+      }
+      // PACE, from the set's life against the laps it has to do (TyreModel
+      // lapsLeft, the measured rate), for a car with a plan (the plan says
+      // whether a stop is still coming): short of the flag with no stop left is
+      // "manage"; laps to spare with a car close ahead is "push". Each names
+      // what to do with the right foot, not a percentage.
+      if (s.planned && s.setLaps != null && s.stintLeft != null && s.stintLeft >= 2 && s.setLaps + 0.5 < s.stintLeft && s.lapsToStop == null) {
+        return ["MANAGE THE TYRES — " + s.stintLeft + " LAPS TO THE FLAG ON THAT SET", "manage"];
+      }
+      if (s.planned && s.setLaps != null && s.stintLeft != null && s.setLaps >= s.stintLeft + PUSH_SPARE && s.ahead) {
+        return ["TYRES ARE GOOD — PUSH, " + s.ahead + " IS " + s.aheadGap.toFixed(1) + "s AHEAD", "push"];
       }
       if (s.step >= 0) {
         return ["TYRES AT " + Math.round((1 - WEAR_STEPS[s.step]) * 100) + "%", "wear" + s.step];
@@ -201,8 +227,27 @@ const RaceEngineer = (function () {
         : TyreModel.AI_CLASS[nextCls] ? TyreModel.AI_CLASS[nextCls].code : null;
       let rivalBoxed = null;
       if (!b.stops) b.stops = new Map();
+      // THE CARS AROUND US, in seconds at our pace (the undercut's measure):
+      // the nearest ahead inside PUSH_GAP_S, the nearest behind due to stop
+      // (the THREAT), and on the lap before our stop the first car we would
+      // rejoin behind — every car inside a stop's worth of progress behind us.
+      const v = Math.max(1, c.speed || 1), lap = c.lap || 0;
+      const lapsToStop = !noStop && nextAt != null ? nextAt - lap : null;
+      const lossM = pit && pit.lossS != null ? pit.lossS * (lapS > 0 && G.track ? G.track.total / lapS : v) : 0;
+      let ahead = null, aheadGap = Infinity, threat = null, threatGap = Infinity, rejoin = lapsToStop === 1 && lossM > 0 ? "" : null, rejoinProg = Infinity;
+      const threatOn = lapsToStop != null && lapsToStop >= 1 && lapsToStop <= THREAT_REACH && wear >= 0.4 && pit && pit.lossS != null;
       for (const o of (G.cars || [])) {
         if (o === c) continue;
+        if (!o.retired && !o.finished && !(o.pitState && o.pitState !== "none")) {
+          const gap = ((c.prog || 0) - (o.prog || 0)) / v;
+          if (gap < 0 && -gap < PUSH_GAP_S && -gap < aheadGap) { ahead = o.code || "THE CAR"; aheadGap = -gap; }
+          if (threatOn && gap > 0 && gap < pit.lossS + 2 && gap < threatGap && G.pits && G.pits.windowOf) {
+            const w = G.pits.windowOf(o);
+            if (w && w[0] === "P" && +w.slice(1) - (o.lap || 0) <= 1) { threat = o.code || "RIVAL"; threatGap = gap; }
+          }
+          const back = (c.prog || 0) - (o.prog || 0);
+          if (rejoin != null && back > 0 && back < lossM && (o.prog || 0) < rejoinProg) { rejoin = o.code || "TRAFFIC"; rejoinProg = o.prog || 0; }
+        }
         const now = o.pitStops || 0, prev = b.stops.has(o) ? b.stops.get(o) : now;
         if (now > prev && pit && pit.lossS != null && !noStop) {
           // DIVIDED BY OUR OWN PACE, not theirs. This fires on the tick a rival's
@@ -221,8 +266,13 @@ const RaceEngineer = (function () {
       return {
         wear, step,
         lap: c.lap || 0,
-        lapsToStop: !noStop && nextAt != null ? nextAt - (c.lap || 0) : null,
+        lapsToStop,
         nextCode, rivalBoxed,
+        threat: rivalBoxed || noStop ? null : threat,
+        rejoin, planned: !!plan,
+        ahead: noStop ? null : ahead, aheadGap: ahead ? aheadGap : null,
+        setLaps: tyres.lapsLeft ? tyres.lapsLeft(c) : null,
+        stintLeft: noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (G.lapsTarget || 0) - lap + 1),
         marginS: pit ? pit.marginS : null,
         axle: wear >= AXLE_MIN_WEAR && c.tyreWearF != null ? Math.abs(c.tyreWearF - c.tyreWearR) / wear : 0,
         front: c.tyreWearF != null ? c.tyreWearF > c.tyreWearR : ax.f < ax.r,

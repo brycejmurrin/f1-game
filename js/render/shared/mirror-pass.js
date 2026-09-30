@@ -54,6 +54,11 @@ const MirrorPass = (function () {
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
   const MEASURE_EVERY = 30;           // frames between #hud-mirror layout reads
+  // A RUNG HOLDS ~1.5 s before the governor may move it. On a phone the tier
+  // moves on its own measurements, and every move swapped resolution, draw
+  // distance and cadence at once — scenery popping in and out of the mirror,
+  // reported as flashing. The first rung is taken at once (nothing to hold).
+  const Q_DWELL = 90;
 
   function create(G, deps) {
     Log.info("game", "MirrorPass.create");
@@ -74,9 +79,14 @@ const MirrorPass = (function () {
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
     let _collapsed = false, _chip = null, _chipShown = false, _wired = false;
     let _bx = 0, _bz = -1;   // the mirror's look direction (the player's back), horizontal unit
-    let _q = QUALITY[0];
-    // THE PiP: the subject car and its TV shot (broadcast.js via G.setPip), the frame, its rect.
+    let _q = QUALITY[0], _qi = -1, _qWant = -1, _qHeld = 0;
+    // The frame's CSS box (measure()): the target is sized from THAT, not from
+    // the render buffer, which the governor's dynamic resolution rescales every
+    // few seconds on a phone — each rescale reallocated the mirror target.
+    let _cssW = 0, _cssH = 0;
+    // THE PiP: the subject car and its TV shot (broadcast.js via G.setPip), the frame, its rect and CSS box.
     let _sub = null, _subMode = "tcam", _pipEl = null, _pipShown = false, _pipRect = null, _pipMeasureIn = 0;
+    let _pipCssW = 0, _pipCssH = 0;
     let pipMode = G.store.get("bcPip", "auto");
     if (MODES.indexOf(pipMode) < 0) pipMode = "auto";
     const _pipExtra = { bankDy: 0 };
@@ -155,7 +165,7 @@ const MirrorPass = (function () {
     function measure() {
       checkDead();
       _rect = rectOf(el());
-      if (_rect) side(el().getBoundingClientRect());
+      if (_rect) { const er = el().getBoundingClientRect(); _cssW = er.width; _cssH = er.height; side(er); }
     }
     // THE RADIO CARD BESIDE THE MIRROR, not under it. Right of the frame is the
     // widest free strip at that height on a landscape screen (the map and gap
@@ -287,8 +297,15 @@ const MirrorPass = (function () {
       // at governor tier 2+, where the frame rate itself is the problem.
       _frame++;
       const tier = PerfGov.tier();
-      _q = QUALITY[tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0];
-      const w = Math.round(_rect[2] * g.width * _q.res), h = Math.round(_rect[3] * g.height * _q.res);
+      const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0;
+      if (qi !== _qWant) { _qWant = qi; _qHeld = 0; }
+      if (qi !== _qi && (_qi < 0 || ++_qHeld >= Q_DWELL)) _qi = qi;
+      _q = QUALITY[_qi];
+      // Device pixels of the frame (DPR capped at 2), independent of the
+      // governor's render scale — a stable target, reallocated only when the
+      // frame itself resizes or the rung changes.
+      const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
+      const w = Math.round(_cssW * dpr * _q.res), h = Math.round(_cssH * dpr * _q.res);
       if (w < 16 || h < 8) return;
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;
@@ -308,12 +325,21 @@ const MirrorPass = (function () {
     // holds the same arrays) — at the cheapest tier, into #bc-pip, unflipped.
     function renderPip(frame, frameSky, night, wet, floodEmit) {
       const g = G.gfx;
-      if (--_pipMeasureIn <= 0) { checkDead(); _pipRect = rectOf(pipEl()); _pipMeasureIn = MEASURE_EVERY; }
+      if (--_pipMeasureIn <= 0) {
+        checkDead();
+        const e = pipEl();
+        _pipRect = rectOf(e);
+        if (_pipRect) { const er = e.getBoundingClientRect(); _pipCssW = er.width; _pipCssH = er.height; }
+        _pipMeasureIn = MEASURE_EVERY;
+      }
       if (!_pipRect) { g.mirrorRect(null); return; }
       g.mirrorRect(_pipRect, false);
       _frame++;
-      _q = QUALITY[3];
-      const w = Math.round(_pipRect[2] * g.width * _q.res), h = Math.round(_pipRect[3] * g.height * _q.res);
+      _q = QUALITY[3];   // its own pass only: the mirror's rung dwell (_qi) is left alone
+      // Sized like the mirror: the frame's CSS box in device pixels (DPR capped at 2),
+      // not the render buffer the governor rescales.
+      const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
+      const w = Math.round(_pipCssW * dpr * _q.res), h = Math.round(_pipCssH * dpr * _q.res);
       if (w < 16 || h < 8) return;
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;
