@@ -47,8 +47,8 @@ const RaceRadio = (function () {
   const COMM_GAP_S = 10;
   const AFTER_ENG_S = 2.5;      // commentary lets an engineer line breathe
   const EVAL_S = 0.5;           // state rules are re-checked this often
-  const SETTLE_S = 10;
-  const POS_HOLD_S = 8;         // a position call waits this long after the last one, then says the net change          // no gap talk in the opening seconds: the field is still sorting itself out
+  const SETTLE_S = 10;          // no gap talk in the opening seconds: the field is still sorting itself out
+  const POS_HOLD_S = 8;         // a position call waits this long after the last one, then says the net change
   const TV_CAMS = Object.freeze(["heli", "side", "cinematic", "low", "overhead"]);
   // THE CORNER RULE. Braking, or leaning on the tyres through a corner, is
   // where the driver has no attention to spare: below tier 5 the line waits for
@@ -562,6 +562,11 @@ const RaceRadio = (function () {
       /** The engineer will call the player's last lap (any chat level but OFF,
        *  in a race): game.js's plain FINAL LAP card stands down for it. */
       callsLastLap: () => live && lvl() >= 1,
+      /** …and the player's result at the flag (the same gate): the plain FINISH!
+       *  card stands down too. Queued behind it, the call reached the front just
+       *  as the results screen took over (2.2 s after the flag) and radio-voice,
+       *  which speaks only in a race, dropped it unheard. */
+      callsResult: () => live && lvl() >= 1,
       spotter: () => !!(store && store.get && store.get("spotter", true) !== false),
       setSpotter(b) { if (store && store.set) store.set("spotter", !!b); return !!b; },
       trafficBusy: () => !!(spotter && spotter.occupied()),
