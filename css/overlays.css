@@ -723,6 +723,9 @@ body.hud-hidden #hud-restore::after {
 }
 @keyframes hud-hint-out { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { body.hud-hidden #hud-restore::after { animation: none; } }
+/* …and under MOTION: REDUCED (html[data-motion]), so the hint stays put
+   rather than fading on the player who switched motion off in SETTINGS. */
+:root[data-motion="reduce"] #hud-restore::after { animation: none; }
 /* Camera picker grid: opened by press-and-hold on the CAM button. Anchored
    under the button (top-right), thumb-reachable in landscape. */
 #campicker {

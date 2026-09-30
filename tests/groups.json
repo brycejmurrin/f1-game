@@ -357,6 +357,8 @@
     "// enough to stop in, and the COMMITMENT that replaced the pit button tells",
     "// a driven pit entry from a car that ran wide there. ~0.2 s.",
     "tests/unit/pit-lane.test.mjs",
+    "// PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.",
+    "tests/unit/player-forces.test.mjs",
     "// test-coverage-audit answers \"is this file in SOME topical group\"; this one",
     "// answers the question that actually bites, \"does the pre-push gate RUN it\" —",
     "// two deploys (2026-09-02) and one (2026-09-18) went red on pins that no",

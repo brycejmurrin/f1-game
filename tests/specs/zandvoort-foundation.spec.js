@@ -275,7 +275,7 @@ test.describe("Zandvoort shared-foundation migration", () => {
     // AWAIT THE NIGHT BUILD. This called __apex.race() un-awaited and read the
     // diagnostics on the next line, so every assertion below measured the DAY
     // build that was already loaded — the night manifest was never checked.
-    // Same defect, same circuit family: redbull-foundation.spec.js:17 records
+    // Same defect, same circuit family: redbull-foundation.spec.js's AWAIT THE RACE note records
     // it reading a 5.252 m elevation swing for a 59.85 m circuit, which is
     // Bahrain's number, because race() returns a thenable and not a finished
     // build. loadZandvoort() has always done this correctly; use it.
