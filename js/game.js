@@ -2671,7 +2671,7 @@ function scheduleFlybyTrack(settle) {
       // mesh/livery work; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
       if (_menuGate.ready === key && _menuGate.track === track) {
-        await menuFinish(current, key); return;
+        await menuFinish(current, key); await garagePrewarm(current); return;
       }
       // The build holds the main thread for 1-3 s: never start it while the
       // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
