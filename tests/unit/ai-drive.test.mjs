@@ -192,6 +192,34 @@ test("craft late-brake raises the limit when attacking with room", () => {
   assert.ok(attack > plain);
 });
 
+test("aggression raises otFireRate and shortens queue patience (fire half)", () => {
+  const base = {
+    traits: { ...mid, aggression: 0 }, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
+    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false,
+  };
+  const hot = { ...base, traits: { ...mid, aggression: 1 } };
+  const cold = { ...base, traits: { ...mid, aggression: -1 } };
+  assert.ok(A.otFireRate(hot) > A.otFireRate(base));
+  assert.ok(A.otFireRate(base) > A.otFireRate(cold));
+  assert.ok(A.queuePatience(hot.traits) < A.queuePatience(base.traits));
+  assert.ok(A.passHold(hot.traits) > A.passHold(base.traits));
+});
+
+test("optimism raises brakeTarget entry speed (late markers)", () => {
+  const samples = [{ d: 50, k: 0.018, bank: 0 }];
+  const neut = A.brakeTarget({ traits: { ...mid, optimism: 0 }, samples, latMax: 22, brake: 22, grip: 1 });
+  const opt = A.brakeTarget({ traits: { ...mid, optimism: 1 }, samples, latMax: 22, brake: 22, grip: 1 });
+  const shy = A.brakeTarget({ traits: { ...mid, optimism: -1 }, samples, latMax: 22, brake: 22, grip: 1 });
+  assert.ok(opt > neut);
+  assert.ok(neut > shy);
+});
+
+test("traits defaults style axes to neutral", () => {
+  const t = A.traits({});
+  assert.equal(t.aggression, 0);
+  assert.equal(t.optimism, 0);
+});
+
 test("compound-corner brake limits exactly match the tightest individual sample", () => {
   let seed = 8556;
   const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
@@ -772,12 +800,18 @@ test("attackOK: a straight is always a place to pass; a corner entry only at its
 
 test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
   const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
-  assert.ok(Math.abs(A.mistakeChance(top, 0) - 0.0012) < 1e-6, "a metronome unpressured: 0.12 % a zone");
-  assert.ok(Math.abs(A.mistakeChance(rookie, 1) - 0.0096) < 1e-6, "a rookie under sustained pressure: ~1 % a zone");
+  // Base 0.010: metronome unpressured 0.30 %/zone; rookie under pressure 2.4 %.
+  assert.ok(Math.abs(A.mistakeChance(top, 0) - 0.003) < 1e-6, "a metronome unpressured: 0.30 % a zone");
+  assert.ok(Math.abs(A.mistakeChance(rookie, 1) - 0.024) < 1e-6, "a rookie under sustained pressure: 2.4 % a zone");
   assert.ok(A.mistakeChance(rookie, 0) > A.mistakeChance(top, 0));
   assert.ok(A.mistakeChance(top, 1) > A.mistakeChance(top, 0));
   assert.ok(A.mistakeChance(top, 1) === A.mistakeChance(top, 2), "pressure saturates at 1");
   assert.ok(A.mistakeChance(undefined, 0) > 0, "no traits: the default driver still errs");
+  // Optimism raises the rate (over-confidence); zero-mean style leaves grid mean on DIFF.err.
+  assert.ok(A.mistakeChance({ consistency: 0.75, optimism: 1 }, 0) >
+            A.mistakeChance({ consistency: 0.75, optimism: 0 }, 0));
+  assert.ok(A.mistakeChance({ consistency: 0.75, optimism: -1 }, 0) <
+            A.mistakeChance({ consistency: 0.75, optimism: 0 }, 0));
   // Phases: late/wide first, then gathering, then nothing.
   const T = A.mistakeTotal();
   assert.equal(A.mistakePhase(T), 1); assert.equal(A.mistakePhase(1.0), 2); assert.equal(A.mistakePhase(0), 0); assert.equal(A.mistakePhase(undefined), 0);

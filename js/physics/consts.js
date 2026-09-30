@@ -7,7 +7,7 @@
 // physics block, so load order matters (a HARD_EDGES entry in
 // tools/manifest.cjs).
 window.PhysicsConsts = {
-  REVISION: "2026-09-tyre-peak-1", // increment when comparable lap physics changes
+  REVISION: "2026-09-ai-mistakes-1", // increment when comparable lap physics changes
   VMAX: 72,            // m/s base (~259 km/h) — F1 race pace; scales all speeds
                        //   (PACE and the vTop()/vStd() normalisers live in game.js)
   ACCEL: 7,            // m/s^2 at low speed
@@ -202,23 +202,18 @@ window.PhysicsConsts = {
   // further from the limit instead of just being slower down the straight.
   // At or below 1.0 by policy: the AI never corners faster than its own grip
   // model says it can.
-  // `err` scales AiDrive.mistakeChance: the base rate is under one mistake for
-  // the WHOLE FIELD over a default 3-lap race
-  // (docs/notes/AI-FIELD-RESEARCH.md), which reads as "the AI never messes
-  // up" — true at every level including hard, where that low rate is
-  // deliberate (docs/PHYSICS.md "F1 22's two or three lock-ups a race was
-  // what players called too many"). TARGET: normal ~2-3 field mistakes per
-  // 3-lap race, easy ~3-4, hard unchanged (~1) — measured before/after in
-  // docs/PHYSICS.md. The rubber band (`band`, above) must NOT touch `err`:
-  // mistakes are a difficulty-ladder axis on their own, not a banded one, so
-  // this stays monotonic (easy >= normal >= hard = 1) independent of band.
+  // `err` scales AiDrive.mistakeChance: the base rate was under one mistake for
+  // the WHOLE FIELD over a default 3-lap race until the 2026-09-30 visibility
+  // raise (base 0.004 → 0.010; docs/PHYSICS.md, AI-PERSONALITY-PLAN §10).
+  // TARGET: ≥1 mistake per 10 cars per lap-equivalent on normal; easy > normal
+  // > hard via these multipliers alone — do NOT edit these literals for rate
+  // retunes (change the base / Optimism term in ai-drive.js). The rubber band
+  // (`band`, above) must NOT touch `err`: mistakes are a difficulty-ladder
+  // axis on their own, not a banded one, so this stays monotonic
+  // (easy >= normal >= hard = 1) independent of band.
   // EASY needed more than a straight ratio of its rank to NORMAL: a slower,
   // looser field (lower `ai`/`corner`) draws less following pressure, so its
-  // PRE-scaling base rate measured lower than normal's even though both
-  // rounded to the same 0.020/100s at n=5 (docs/PHYSICS.md's before/after
-  // table) — 2.5x left EASY's median mistake count at n=15 exactly where
-  // NORMAL's unscaled baseline sat, so EASY's multiplier compensates for that
-  // lower base, not just for the same 1.4x gap NORMAL:HARD implies.
+  // PRE-scaling base rate measured lower than normal's — 3.5× compensates.
   DIFF: {
     easy:   { ai: 0.851, band: 0.18, corner: 0.93, err: 3.5 },
     normal: { ai: 0.911, band: 0.08, corner: 0.97, err: 1.8 },

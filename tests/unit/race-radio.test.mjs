@@ -365,6 +365,27 @@ test("a retirement ahead is told once, as the new place — never as a pass on t
   assert.match(after[0].msg, /BBB.*P3/);
 });
 
+test("a nearby AI mistake triggers engineer + commentary radio lines", () => {
+  // Ahead car within ~1 s: eng.rivalErr + tv.mistake. commentary:"on" so TV
+  // speaks on a chase cam (default store is "tv", which needs a broadcast cam).
+  const A = car("AAA", 1060, 60, { errCount: 0 });
+  const P = car("PLY", 1000, 60, { isPlayer: true, local: true });
+  const B = car("BBB", 940, 60);
+  const r = race({ cars: [A, P, B], store: { commentary: "on" } });
+  r.step(0.05, 400);   // settle timing-loop gaps
+  const before = r.said.length;
+  A.errCount = 1;
+  r.step(0.05, 400);
+  const after = r.said.slice(before);
+  // Engineer → kind "info" (tier 2); TV → kind "comm".
+  // eng.rivalErr stays inside the recorded voice pack ("AHEAD. PUSH NOW" etc.).
+  const eng = after.filter((s) => s.kind === "info" && /AHEAD|PUSH NOW|ATTACK|GO FOR IT|LINE IT UP/i.test(s.msg)
+    && /AAA|Driver AAA/i.test(s.msg));
+  const tv = after.filter((s) => s.kind === "comm" && /RUNS WIDE|LOCKS UP|MISTAKE FROM|MISSES THE BRAKING/i.test(s.msg));
+  assert.ok(eng.length >= 1, `engineer silent on rival mistake: ${JSON.stringify(after)}`);
+  assert.ok(tv.length >= 1, `commentary silent on rival mistake: ${JSON.stringify(after)}`);
+});
+
 test("a red-flag restart does not read the bunched-up grid as the car ahead closing 6 s a lap", () => {
   const A = car("AAA", 2 * LAP + 480, 60), P = car("PLY", 2 * LAP, 60, { isPlayer: true, local: true }), B = car("BBB", 2 * LAP - 600, 60);
   const r = race({ cars: [A, P, B] });
