@@ -328,6 +328,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/ci-pr-base.sh** | The base a pull_request checkout must diff against: the test commit's FIRST PARENT (the base tip GitHub actually… |
 | **ci/ci-resolve-before.sh** | Resolves the selected-specs CI base (`EVENT`/`PUSH_BEFORE`/`PR_BASE`); a Pages call with no base selects all. |
 | **ci/ci-select-specs-step.sh** | The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`. |
+| **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
@@ -336,6 +337,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
+| **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |
 | **ci/select-budget.mjs** | Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else the measured llvmpipe… |
 | **ci/select-recall.mjs** | Would the selector have caught it? Replays `select-specs` against real past regressions and asserts recall. |
