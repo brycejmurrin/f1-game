@@ -7,7 +7,9 @@ side branch at `8d55063`. The fixes are in the same change as this note.
 
 ## What clogged
 
-- **The account runs at most 20 jobs at once.** From 08:15 to 15:15 UTC on
+- **The account runs at most 20 jobs at once** (GitHub Free; on 2026-09-30 the
+  account moved to Pro, which allows 40 standard and 5 macOS concurrent jobs —
+  https://docs.github.com/en/actions/reference/limits). From 08:15 to 15:15 UTC on
   09-29 all 20 were busy and **200–290 jobs waited**. Median queue wait was
   12–26 min per hour, worst 97 min. Before 07:00 queue waits were ~0.
 - **Unqueued, a PR run finishes in ~6 min** (56 runs on 09-28: median 5.8, p90
