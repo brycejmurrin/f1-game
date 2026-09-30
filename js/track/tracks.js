@@ -314,14 +314,18 @@ const Tracks = (function () {
       // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
       // opening the driving boundary across it puts nothing in a car's path.
       TrackPit.openBoundary(track);
-      // Feather bar* cliffs AFTER openBoundary (pit tapers) and every
-      // markBarrier/recordBarrier — see TrackBuildProps.featherBarrierEnds.
+      // Feather bar* cliffs AFTER openBoundary so pit tapers are included,
+      // but never lower a pit.keep node (that would shut the garage-line opening).
       // Two passes: overlapping termini leave a residual cliff after one.
       if (TrackBuildProps.featherBarrierEnds && track.barL && track.hw) {
-        TrackBuildProps.featherBarrierEnds(track.barL, track.hw);
-        TrackBuildProps.featherBarrierEnds(track.barR, track.hw);
-        TrackBuildProps.featherBarrierEnds(track.barL, track.hw);
-        TrackBuildProps.featherBarrierEnds(track.barR, track.hw);
+        const pit = track.pit;
+        const protect = (pit && !pit.painted)
+          ? (k) => pit.keep[k] > 0
+          : null;
+        TrackBuildProps.featherBarrierEnds(track.barL, track.hw, null, null, protect);
+        TrackBuildProps.featherBarrierEnds(track.barR, track.hw, null, null, protect);
+        TrackBuildProps.featherBarrierEnds(track.barL, track.hw, null, null, protect);
+        TrackBuildProps.featherBarrierEnds(track.barR, track.hw, null, null, protect);
       }
       const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;

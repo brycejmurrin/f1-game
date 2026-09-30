@@ -18,23 +18,30 @@ const TrackBuildProps = (function () {
   // Keep in lockstep with tools/track/barrier-jumps.cjs featherBarrierEnds.
   // cliff=1.5 so residual mid-size jumps are ramped; two passes (caller)
   // settle overlapping termini under the 1.5 m one-step clamp budget.
-  function featherBarrierEnds(arr, hw, cliff, nodes) {
+  // `protect(k)` — when true, node k is never lowered (pit keep / openBoundary).
+  function featherBarrierEnds(arr, hw, cliff, nodes, protect) {
     cliff = cliff == null ? 1.5 : cliff;
     nodes = Math.max(1, nodes == null ? 5 : nodes);
     if (!arr || !hw || arr.length !== hw.length || arr.length < 2) return;
     const N = arr.length;
+    const skip = typeof protect === "function" ? protect : null;
     for (let k = 0; k < N; k++) {
       const j = (k + 1) % N;
       const oK = arr[k] - hw[k], oJ = arr[j] - hw[j], d = oK - oJ;
       if (d >= cliff) {
+        // k side is wider — never pull a protected (pit-open) node shut.
+        if (skip && skip(k)) continue;
         for (let i = 0; i < nodes; i++) {
           const idx = (k - i + N) % N;
+          if (skip && skip(idx)) continue;
           const target = hw[idx] + oJ + (oK - oJ) * ((i + 1) / (nodes + 1));
           if (target < arr[idx]) arr[idx] = target;
         }
       } else if (-d >= cliff) {
+        if (skip && skip(j)) continue;
         for (let i = 0; i < nodes; i++) {
           const idx = (j + i) % N;
+          if (skip && skip(idx)) continue;
           const target = hw[idx] + oK + (oJ - oK) * ((i + 1) / (nodes + 1));
           if (target < arr[idx]) arr[idx] = target;
         }

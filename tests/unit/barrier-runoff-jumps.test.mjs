@@ -60,13 +60,29 @@ test("maxAdjOver ignores a pure hw step with constant clearance", () => {
 
 test("fleet: open-circuit tyre termini stay under 1.5 m after feather (Slice 2)", () => {
   // Would fail on ship tip before featherBarrierEnds (maxOver ≈ 7.9).
+  // Pit.keep edges are protected (openBoundary must stay open) — exclude
+  // pairs that touch a keep node from the cap (those cliffs are intentional).
   const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
   const { Tracks } = buildContext();
   for (const id of ["monza", "spa", "bahrain", "silverstone"]) {
     const track = Tracks.build(Tracks.LIST.find((d) => d.id === id));
-    const s = summariseTrack(track);
-    assert.ok(s.maxOver < 1.5, `${id} maxOver=${s.maxOver} (want < 1.5)`);
-    assert.ok(s.maxWallStep < 1.5, `${id} maxWallStep=${s.maxWallStep} (want < 1.5)`);
+    const pit = track.pit;
+    const keep = (k) => !!(pit && !pit.painted && pit.keep[k] > 0);
+    let maxOver = 0, maxWall = 0;
+    for (let k = 0; k < track.n; k++) {
+      const j = (k + 1) % track.n;
+      if (keep(k) || keep(j)) continue;
+      for (const arr of [track.barL, track.barR]) {
+        const d = Math.abs((arr[k] - track.hw[k]) - (arr[j] - track.hw[j]));
+        if (d > maxOver) maxOver = d;
+        const a = Math.min(arr[k], arr[j]);
+        const b = Math.min(arr[j], arr[(j + 1) % track.n]);
+        const w = Math.abs(a - b);
+        if (w > maxWall) maxWall = w;
+      }
+    }
+    assert.ok(maxOver < 1.5, `${id} maxOver=${maxOver} (want < 1.5, off-pit)`);
+    assert.ok(maxWall < 1.5, `${id} maxWallStep=${maxWall} (want < 1.5, off-pit)`);
   }
   // Interior of a known Monza stack face stays near hw+1.1 (feather must not raise it).
   const monza = Tracks.build(Tracks.LIST.find((d) => d.id === "monza"));
@@ -75,10 +91,29 @@ test("fleet: open-circuit tyre termini stay under 1.5 m after feather (Slice 2)"
   assert.ok(over < 2.0, `mid-stack over should be ~1.1, got ${over} at k=${kTight}`);
 });
 
-test("monaco pit taper: feather after openBoundary keeps maxOver under 1.5 m", () => {
+test("monaco pit keep nodes stay open; non-pit maxOver under 1.5 m", () => {
   const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
   const { Tracks } = buildContext();
   const track = Tracks.build(Tracks.LIST.find((d) => d.id === "monaco"));
-  const s = summariseTrack(track);
-  assert.ok(s.maxOver < 1.5, `monaco maxOver=${s.maxOver} (want < 1.5)`);
+  const p = track.pit;
+  assert.ok(p && !p.painted, "monaco has a street pit complex");
+  const bar = p.side > 0 ? track.barR : track.barL;
+  let checked = 0;
+  for (let k = 0; k < track.n; k++) {
+    if (!(p.keep[k] > 0)) continue;
+    assert.ok(bar[k] > track.hw[k] + 2, `keep node ${k} bar ${bar[k]} not opened`);
+    if (++checked >= 5) break;
+  }
+  assert.ok(checked >= 5, "expected keep nodes to check");
+  // Clearance jumps off the pit side (and the whole opposite side) stay under budget.
+  let maxOffPit = 0;
+  for (let k = 0; k < track.n; k++) {
+    const j = (k + 1) % track.n;
+    for (const [side, arr] of [["L", track.barL], ["R", track.barR]]) {
+      if (side === (p.side > 0 ? "R" : "L") && (p.keep[k] > 0 || p.keep[j] > 0)) continue;
+      const d = Math.abs((arr[k] - track.hw[k]) - (arr[j] - track.hw[j]));
+      if (d > maxOffPit) maxOffPit = d;
+    }
+  }
+  assert.ok(maxOffPit < 1.5, `off-pit maxOver=${maxOffPit}`);
 });

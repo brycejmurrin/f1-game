@@ -110,11 +110,13 @@ function syntheticCliff(n, at, high, low, feather) {
  * @param {{ cliff?: number, nodes?: number }} [opts]
  *   cliff — min |Δ(over)| to treat as a terminus (default 1.5 m)
  *   nodes — ramp length on the wide side (default 5 ≈ 20 m at ds=4; step ≈ H/6)
+ *   protect — optional (k) => bool; protected nodes are never lowered (pit keep)
  */
 function featherBarrierEnds(arr, hw, opts) {
   opts = opts || {};
   const cliff = opts.cliff != null ? opts.cliff : 1.5;
   const nodes = Math.max(1, opts.nodes != null ? opts.nodes : 5);
+  const skip = typeof opts.protect === "function" ? opts.protect : null;
   if (!arr || !hw || arr.length !== hw.length || arr.length < 2) return arr;
   const n = arr.length;
   for (let k = 0; k < n; k++) {
@@ -123,17 +125,19 @@ function featherBarrierEnds(arr, hw, opts) {
     const oJ = arr[j] - hw[j];
     const d = oK - oJ;
     if (d >= cliff) {
-      // k side is wider — ramp from the tight face at j back through k…
+      if (skip && skip(k)) continue;
       for (let i = 0; i < nodes; i++) {
         const idx = (k - i + n) % n;
+        if (skip && skip(idx)) continue;
         const targetOver = oJ + (oK - oJ) * ((i + 1) / (nodes + 1));
         const target = hw[idx] + targetOver;
         if (target < arr[idx]) arr[idx] = target;
       }
     } else if (-d >= cliff) {
-      // j side is wider — ramp forward from the tight face at k through j…
+      if (skip && skip(j)) continue;
       for (let i = 0; i < nodes; i++) {
         const idx = (j + i) % n;
+        if (skip && skip(idx)) continue;
         const targetOver = oK + (oJ - oK) * ((i + 1) / (nodes + 1));
         const target = hw[idx] + targetOver;
         if (target < arr[idx]) arr[idx] = target;
