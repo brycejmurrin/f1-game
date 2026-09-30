@@ -446,17 +446,24 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       window.__apex.freeze(true);
       window.__wheelGroundProbe.length = 0;
     });
-    // Pump real frames from inside the page. snapCam-only polling (prior try)
-    // only arms a soft *blit* after present(); when the selected shard starves
-    // rAF, present never runs and the probe stays empty for the whole 20 s
-    // (CI #564 after 6fed4d5c1). Awaiting requestAnimationFrame yields the
-    // main thread so tick() can draw wheel meshes into the probe — same 20 s
-    // budget, no timeout raise.
+    // Restart the game tick chain, then wait for draws. Browser rAF alone is
+    // not enough: under a loaded selected shard the game's own
+    // requestAnimationFrame(tick) chain can die (LoopHealth fatal / throw), so
+    // awaiting rAF resolved with 0 GLX.draw samples for 19 s (CI #564/#604 on
+    // 44f9dca1b). XrBoot.chainWindowRaf() re-arms windowTick (= tick) once;
+    // afterTick then keeps the loop alive. Same 20 s budget, no timeout raise.
     await page.evaluate(async () => {
       try { window.__apex.headless(false); } catch (_) { /* harness */ }
+      if (typeof XrBoot !== "undefined" && XrBoot.chainWindowRaf) {
+        XrBoot.chainWindowRaf();
+      }
       const t0 = performance.now();
       while (window.__wheelGroundProbe.length < 4) {
         if (performance.now() - t0 > 19_000) break;
+        // Re-arm if the chain dropped again (deduped while a frame is pending).
+        if (typeof XrBoot !== "undefined" && XrBoot.chainWindowRaf) {
+          XrBoot.chainWindowRaf();
+        }
         await new Promise((r) => requestAnimationFrame(r));
       }
       if (window.__wheelGroundProbe.length < 4) {
