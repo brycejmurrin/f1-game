@@ -42,10 +42,16 @@ import { forgetStored } from "../helpers/shared-page.js";
    camera and freeze between tests, which is all the isolation a spec that
    re-places the car with jump() on every run actually needs. */
 async function startLiveRace(page) {
+  // Empty the AI field: these cases measure the player's line alone. A packed
+  // grid turns a held-lock slide into contact/rescue noise (CI 36649674195).
+  const clearField = () => page.evaluate(() => {
+    window.__apex.go();
+    try { window.__apex.rivals([]); } catch (_) { /* older builds */ }
+  });
   const live = await page.evaluate(() => {
     try { return !!(window.__apex && window.__apex.info().track != null); } catch (_) { return false; }
   });
-  if (live) { await page.evaluate(() => window.__apex.go()); return; }
+  if (live) { await clearField(); return; }
   await page.goto("/");
   // Wait for boot BEFORE #mb-race: the click is a bare evaluate with no
   // actionability poll, so firing it before the title handlers attach leaves
@@ -71,7 +77,7 @@ async function startLiveRace(page) {
     () => window.__apex && window.__apex.info().track != null,
     null, { polling: 100, timeout: BOOT_MS }
   );
-  await page.evaluate(() => window.__apex.go());
+  await clearField();
 }
 
 /* THIS FILE COSTS MORE THAN THE PROJECT DEFAULT ALLOWS, and says so here
@@ -237,12 +243,20 @@ test.describe("Apex 26 — steering", () => {
     // never cared which side — it measures authority relative to coasting.)
     await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     const lockDir = Math.sign(k0);
-    const zero = await run(page, { frac, speed: 22, steer: 0, throttle: false, ticks: 75 });
-    const held = await run(page, { frac, speed: 22, steer: lockDir, throttle: false, ticks: 75 });
-    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0.7 }));
+    // ON-TRACK WINDOW. At the old 22 m/s × 75 ticks the held run saturates on
+    // the wall (x ≈ ±hw) while coasting is still free — so as zero.dx keeps
+    // growing, (dxHeld − dxZero) shrinks or flips and the >2 m gate flakes
+    // (CI 36649674195: −16 … +0.2). 18 m/s × 55 ticks keeps BOTH runs inside
+    // |x| < hw − 0.5 on bahrain's first real corner (measured) while still
+    // clearing the same 2 m authority bar. Assertion unchanged.
+    const zero = await run(page, { frac, speed: 18, steer: 0, throttle: false, ticks: 55 });
+    const held = await run(page, { frac, speed: 18, steer: lockDir, throttle: false, ticks: 55 });
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
 
     const dxZero = zero.after.x - zero.before.x;
     const dxHeld = held.after.x - held.before.x;   // should be far more toward lockDir
+    expect(Math.abs(held.after.x)).toBeLessThan(held.before.hw - 0.5); // still on track
+    expect(Math.abs(zero.after.x)).toBeLessThan(zero.before.hw - 0.5);
     // Held lock must move the car at least 2 m further toward the steered side
     // than coasting does — i.e. the driver genuinely controls the line.
     expect((dxHeld - dxZero) * lockDir).toBeGreaterThan(2);
