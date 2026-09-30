@@ -1278,12 +1278,15 @@ const api = {
   // back-pressure, and this says WHICH JavaScript, which is what decides
   // whether moving the build off the main thread would move anything.
   buildProfile: () => (G.track && G.track.buildProfile) || null,
-  // The RACE-ENTRY timeline (js/game.js, "RACE-ENTRY PROFILE"): one row per
+  // The RACE-ENTRY timeline (js/perf/race-entry-profile.js): one row per
   // phase of startRace, the build being only one of them. buildProfile() says
   // which part of the BUILD costs; this says whether the build is the part of
   // race entry that costs at all — measured at 23 % of it on the default
   // backend, so the rest of this list is where the freeze actually lives.
   raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
+  // Full race-entry attribution (js/perf/race-entry-profile.js): legs + marks +
+  // longtask ring. Soft-blit CI is not this freeze — use a real-device probe.
+  raceEntryProfile: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.snapshot()) || null,
   // WEBGL_multi_draw (GLX only, apex26.multiDraw). multiDraw(true|false)
   // toggles it live; no argument reports the COUNTED oracle — multi-draw calls
   // issued, ranges inside them, the drawElements calls thereby avoided, and the

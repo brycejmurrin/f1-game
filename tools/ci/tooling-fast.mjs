@@ -407,6 +407,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/prepush-gate-coverage.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
+  "tests/unit/race-entry-profile.test.mjs",
   "tests/unit/race-insights.test.mjs",
   // ...and the race radio: every phrasebook line fits its card when spoken,
   // pools deal like a deck, gaps come from the timing loop, a pass must hold,
