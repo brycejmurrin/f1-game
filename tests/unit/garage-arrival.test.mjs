@@ -105,3 +105,43 @@ test('drive-out shot: from the back of the bay, out THROUGH the door (never its 
   assert.deepEqual([...s.fov], [60, 60]);
   assert.equal(Out.shot(-2.75, { angle: 'right' }).eye[0].off, -s.eye[0].off);
 });
+
+// ── THE STUDIO DRIVE-OUT: RACE! before the circuit is ready (js/game.js introBuild/introWarm) ──
+test('studio drive-out (poseOut): shutter up, parked a beat, then nose first out of the door and clear of it', () => {
+  for (const angle of ['cut', 'left', 'right']) {
+    const cfg = Arrival.settings({ angle, fov: 58 });
+    const p0 = Arrival.poseOut(0, cfg);
+    assert.equal(p0.z, 0, 'parked where the arrival parks it');
+    assert.equal(p0.door, 1, 'the shutter is already up');
+    assert.equal(p0.fov, 58);
+    assert.equal(Arrival.poseOut(1.0, cfg).z, 0, 'a held beat before it moves');
+    let prior = -1;
+    for (let t = 0; t <= Arrival.OUT_DURATION + 0.5; t += 0.02) {
+      const p = Arrival.poseOut(t, cfg);
+      assert.ok(p.z >= prior, 'never backs in');
+      assert.ok(p.eye[0] > -5.4 && p.eye[0] < 5.4 && p.eye[2] > -6.4 && p.eye[2] < 6.4, 'the camera stays in the room');
+      assert.ok(p.aim[2] <= 9, 'the aim follows the car out, no further');
+      prior = p.z;
+    }
+    assert.ok(Arrival.poseOut(Arrival.OUT_DURATION, cfg).z > 6.4 + 5, 'out of the door and clear of it');
+    assert.equal(Arrival.poseOut(Arrival.OUT_DURATION, cfg).active, false);
+  }
+  assert.ok(Arrival.poseOut(0, Arrival.settings({ angle: 'right' })).eye[0] > 0 && Arrival.poseOut(0, Arrival.settings({})).eye[0] < 0, 'RIGHT stands on the other side');
+});
+test('game.js plays the studio drive-out AT ONCE when RACE! beats the circuit, and the warm waits for it', () => {
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
+  assert.match(build, /loadingScreen\.building\(info0\); studioOpen\(n\);/, 'the drive-out starts with the card, before any build step');
+  assert.ok(build.indexOf('await studioDone(live, n)') > 0 && build.indexOf('await studioDone(live, n)') < build.indexOf('warmPrograms()'), 'the warm waits for the car to be out');
+  const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
+  assert.match(warm, /loadingScreen\.building\(loadingInfo\(\)\); studioOpen\(n\);/);
+  assert.ok(warm.indexOf('await studioDone(live, n)') < warm.indexOf('warmPrograms()'));
+  assert.match(game, /const studio = !!built && _studioPlayed; _studioPlayed = false;/, 'the montage does not repeat it on the pit lane');
+  assert.match(game, /const lead = world && flybyShots && !studio &&/);
+  assert.match(game, /\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, 'the studio shows through the build card');
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  assert.match(cam, /const arriving = driveOut \? stepDriveOut\(dt\) : arrival\.step\(dt\);/);
+  assert.match(cam, /if \(!cfg\.enabled \|\| reducedMotion\(\)\) return 0;/, 'the arrival tuner and reduced motion gate it');
+  assert.match(game, /setupCam\.driveOutLeft\(\) > 0 && performance\.now\(\) - _studio\.at < _studio\.ms \* 3\)/, 'a build stall delays the car, never cuts it off in the doorway');
+  assert.match(game, /function studioClose\(n\) \{ if \(_studio && _studio\.n === n\)/, 'only the intro run that opened it closes it');
+});
