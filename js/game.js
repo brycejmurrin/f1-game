@@ -4711,21 +4711,17 @@ function updateCar(c, dt, ranked) {
 
   // --- speed targets ---
   let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
-  // asymmetric rubber band — boost only when player is ahead; no artificial slow-down when behind
-  // Rubber-band against the LEADING human, not "the" player: with a second
-  // driver on track, banding off whoever happens to be the local car would let
-  // the slower human drag the whole field back. One human => identical.
-  // ...and the band never lifts a level past the TOP OF THE LADDER. Without the
-  // cap easy's 0.851 x 1.18 = 1.004 beats hard's own 0.980: a lapped car on the
-  // easiest setting outran the fastest car on the hardest one, which makes the
-  // difficulty dial non-monotonic in the only place a player would notice it
-  // (a rival closing from a lap down). The ceiling is DIFF's own top scale, so
-  // it moves with the table rather than pinning a literal here.
+  // Rubber band (AiBand / Melder): dead zone, forward+reverse via skill and
+  // corner authority — vmax scaling retired. Against the LEADING human. DIFF.band
+  // magnitudes reused as authored; start/lapping guards only ever REMOVE help.
   if (!c.human && _leadHuman) {
-    const gap = _leadHuman.prog - c.prog;
-    const bandFactor = gap > 0 && gap < track.total * 0.5 && raceT - launchT0 > 8 ? Math.min(gap / 700, 1) * dd.band : 0;   // never off the START LINE (a P22 grid slot is 182 m back by itself = +4.7 % vmax on easy into T1, "the antithesis of what we want" — Game AI Pro ch.42) and never once LAPPED (the gap clamps the band to full, so an easy car a lap down took min(1, 0.93 x 1.18) = hard's corner authority and un-lapped itself). Both only ever REMOVE a boost, so the DIFF ladder cannot move.
-    const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
-    vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
+    const _ab = AiBand.apply({
+      gap: _leadHuman.prog - c.prog, trackTotal: track.total,
+      raceT, launchT0, band: dd.band, tierV: c.tierV, skill: c.skill,
+      aiScale: dd.ai, bandCeil: BAND_CEIL,
+    });
+    vmax *= _ab.skillMul;          // skill lever (not inert vmax)
+    c._bandNow = _ab.band;         // signed; brake target reads (1+_bandNow)
   } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans included, not only the AI.
@@ -5042,7 +5038,10 @@ function updateCar(c, dt, ranked) {
       // signed/adverse bank must not boost the player while it cuts the AI.
       AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
-    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0)));   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
+    // Signed _bandNow (AiBand): help behind raises corner; forward eases it. Floor 0.85 so a
+    // peeled-ahead car still brakes; never above 1.0 (better driver, not a faster car).
+    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
+    _aiBr.diffCorner = Math.min(1, Math.max(0.85, dd.corner * (1 + (c._bandNow || 0))));
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * tyres.tractionMul(c) * (gripMult(c) / gripMult()); _aiBr.pace = PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
     _aiBr.grip = gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;

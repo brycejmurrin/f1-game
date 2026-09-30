@@ -17,10 +17,9 @@
  * --wear off|light|real, DEFAULT off (harness pin). Band math does not read
  * tyre wear; the flag exists so a wear-on A/B cannot silently drift the default.
  *
- * Reading it (shipped tip, 2026-09-30): expect reverse-only (band when human
- * ahead / AI behind), no forward frames with band>0, no dead zone (band can
- * engage at small positive gaps once past the 8 s start guard), and vmax still
- * the primary lever (`_bandNow` multiplies vmax in game.js). Slice 5 flips those.
+ * Reading it AFTER Slice 5: expect dead zone (|gap|<40 m → band off), forward
+ * frames with band≠0 when AI ahead (signed _bandNow < 0), reverse when behind,
+ * vmaxMul retired (skill/corner levers). Tip before Slice 5 was reverse-only.
  */
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -120,9 +119,10 @@ async function measure(seed) {
       else if (isBehind) behind++;
       else if (isAhead) ahead++;
 
-      if (band > 0) {
+      // Slice 5: band is signed (ahead < 0). Count any non-zero engagement.
+      if (band !== 0) {
         bandOn++;
-        bandSum += band;
+        bandSum += Math.abs(band);
         gapWhenBanded.push(wrapped);
         if (isLapped) bandLapped++;
         else if (isDead) bandDead++;
@@ -151,7 +151,7 @@ async function measure(seed) {
     meanBandWhenOn: bandOn ? bandSum / bandOn : 0,
     medianGapWhenBanded: median(gapWhenBanded),
     // Structural flags for the Melder checklist (Slice 5 targets)
-    reverseOnly: bandAhead === 0 && bandBehind > 0,
+    reverseOnly: bandAhead === 0 && bandBehind > 0, // pre-Slice-5 shape; Slice 5 expects false
     forwardBandPresent: bandAhead > 0,
     deadZoneHolds: bandDead === 0,
     lappingQuiet: bandLapped === 0,

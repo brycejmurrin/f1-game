@@ -238,6 +238,7 @@ const FULL = [
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
   "js/physics/ai-drive.js",
+  "js/physics/ai-band.js",
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
   // The race radio: phrasebook, facts (timing loop + events), then the brain
@@ -612,6 +613,8 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
+  ["js/core/mat4.js", "js/physics/ai-band.js"],     // AiBand binds M4.clamp at eval
+  ["js/physics/ai-band.js", "js/game.js"],          // updateCar applies AiBand rubber-band
   ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];
 
