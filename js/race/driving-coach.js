@@ -10,6 +10,7 @@ const DrivingCoach = (function () {
     front: { label: "Front grip", text: "FRONTS SLIDING — UNWIND SOME STEERING", detail: "The front tyres are near their grip limit. Ease some steering instead of turning harder.", dwell: 0.6 },
     xmode: { label: "Straight Mode in corners", text: "CLOSE THE WING — STRAIGHT MODE LOSES GRIP IN CORNERS", detail: "The active aero was open while the car was cornering hard. Straight Mode trades downforce for straight-line speed; close it before you turn in.", dwell: 0.5 },
     coasting: { label: "Coasting", text: "COASTING ON THE STRAIGHT — CHECK YOUR THROTTLE", detail: "Neither pedal was used at speed on a clear straight. If you are not deliberately saving fuel or energy, build speed until your braking point.", dwell: 1.2 },
+    tyres: { label: "Tyre wear", text: "ONE CORNER IS EATING YOUR TYRES", detail: "One corner took a large share of a lap's tyre wear on a set wearing faster than its plan. Fronts: brake a little earlier and ask less of the steering. Rears: build the throttle more gently on exit.", dwell: 0 },
     limits: { label: "Track limits", text: "TRACK LIMITS — KEEP THE CAR INSIDE THE WHITE LINES", detail: "A track-limits strike was recorded and the lap time deleted. In a race the third strike brings the black-and-white flag and the fourth and every one after it add five seconds; in a Time Trial or qualifying the lap is simply deleted.", dwell: 0 }
   });
   // Braking effort against the brake ceiling, the same scalar the engine's own
@@ -21,7 +22,7 @@ const DrivingCoach = (function () {
   // keeps earning is the one worth rehearsing, and the drill is the only part
   // of this feature that can actually be practised on purpose.
   const TRAINS = Object.freeze({ trail: "trail", rearBrake: "trail", front: "corner", power: "corner",
-    rearCoast: "slalom", limits: "sector", coasting: "braking" });
+    rearCoast: "slalom", limits: "sector", coasting: "braking", tyres: "corner" });
   const APPROACH = Object.freeze({ trail: "RELEASE THE BRAKE AS YOU TURN", rearBrake: "RELEASE THE BRAKE SMOOTHLY",
     power: "BUILD THROTTLE SMOOTHLY ON EXIT", front: "AVOID ADDING STEERING IF THE FRONTS SLIDE",
     rearCoast: "KEEP YOUR INPUTS SMOOTH", xmode: "CLOSE STRAIGHT MODE BEFORE TURNING", limits: "STAY INSIDE THE WHITE LINES" });
@@ -34,6 +35,11 @@ const DrivingCoach = (function () {
   // A corner has to cost this much before the lap report names it. Below it the
   // difference is noise in the reference lap, and naming it is nagging.
   const MIN_LOSS_S = 0.2;
+  // WHERE THE TYRES GO: a turn is named when it took TYRE_SHARE of a lap's wear
+  // (and at least twice its even share) on a set the plan measured wearing
+  // TYRE_FAST_K times faster than planned — below that, the tyres are fine and
+  // naming a corner is nagging. Once per TYRE_EVERY laps per turn.
+  const TYRE_SHARE = 0.15, TYRE_FAST_K = 1.1, TYRE_EVERY = 3;
   // The practice goals as the picker names them, so the review can point at a
   // goal by the label the driver will actually look for. One list, two readers.
   const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
@@ -56,6 +62,8 @@ const DrivingCoach = (function () {
     const lastTip = new Map(), tipCounts = new Map();
     let reminderAt = 0, reminders = 0, pendingReport = null;
     const reminded = new Map();
+    let tyreAcc = null;
+    const tyreSaid = new Map();
     let log = [];   // one row per tip: which tip, which turn, when — the session's map
     // --- where the lap went, against your own best lap ---------------------
     // The coach's tips answer "is the car at its limit"; they cannot answer
@@ -241,6 +249,43 @@ const DrivingCoach = (function () {
       reminded.set(next.turn, c.lap); reminders++; quiet = 8; return true;
     }
     function advice(c) { const id = tipFor(c); return id ? TIPS[id].text : ""; }
+    // Wear gained is filed under the turn the car is at (turnAt: authored
+    // apexes, never a curvature read — this only writes a sentence); at the
+    // line the lap is judged and, if one turn is eating the set, it is named.
+    function tyreWatch(c) {
+      const w = c.tyreWear || 0, f = c.tyreWearF || 0, r = c.tyreWearR || 0, set = c.tyreStints || 0;
+      if (!tyreAcc || tyreAcc.set !== set) { tyreAcc = { lap: c.lap, set, w, f, r, turns: new Map(), sum: 0 }; return; }
+      const dw = w - tyreAcc.w, df = f - tyreAcc.f, dr = r - tyreAcc.r;
+      tyreAcc.w = w; tyreAcc.f = f; tyreAcc.r = r;
+      if (dw > 0 && dw < 0.05) {
+        tyreAcc.sum += dw;
+        const turn = turnAt();
+        if (turn != null) {
+          const e = tyreAcc.turns.get(turn) || { w: 0, f: 0, r: 0 };
+          e.w += dw; e.f += df; e.r += dr; tyreAcc.turns.set(turn, e);
+        }
+      }
+      if (c.lap === tyreAcc.lap) return;
+      const line = tyreLine(tyreAcc, c);
+      tyreAcc.lap = c.lap; tyreAcc.turns = new Map(); tyreAcc.sum = 0;
+      if (!line) return;
+      tyreSaid.set(line.turn, c.lap);
+      pendingReport = { text: line.text, expires: clock + 20 };
+      tipCounts.set("tyres", (tipCounts.get("tyres") || 0) + 1);
+      log.push({ id: "tyres", turn: line.turn, time: G.raceT, lap: c.lap }); if (log.length > 200) log.shift();
+    }
+    function tyreLine(acc, c) {
+      const plan = c.pitPlan, turns = G.track && G.track.def && G.track.def.turns;
+      if (!plan || !(plan.loadK >= TYRE_FAST_K) || !(acc.sum > 0) || !turns || !turns.length) return null;
+      let best = null;
+      for (const [turn, e] of acc.turns) if (!best || e.w > best.e.w) best = { turn, e };
+      if (!best || best.e.w / acc.sum < Math.max(TYRE_SHARE, 2 / turns.length)) return null;
+      const last = tyreSaid.get(best.turn);
+      if (last != null && c.lap - last < TYRE_EVERY) return null;
+      const end = best.e.f > best.e.r * 1.2 ? "FRONTS" : best.e.r > best.e.f * 1.2 ? "REARS" : "TYRES";
+      const how = end === "FRONTS" ? "BRAKE EARLIER, LESS STEERING" : end === "REARS" ? "SMOOTHER ON THE THROTTLE" : "EASE THE SLIDES";
+      return { turn: best.turn, text: "TURN " + best.turn + " IS EATING THE " + end + " — " + how };
+    }
     function update(dt) {
       if (!Number.isFinite(dt) || dt <= 0 || G.paused) return;
       // A suspended frame is not sustained driving evidence.
@@ -267,6 +312,7 @@ const DrivingCoach = (function () {
       if (elapsed >= 0.1) {
         elapsed %= 0.1;
         insights.update(G.player);
+        if (enabled && G.state === "race" && G.player && !G.timeTrial && G.tyres && G.tyres.on()) tyreWatch(G.player);
         if (enabled || practice) {
           if (G.player) { trace.push(sample(G.player)); if (trace.length > 600) trace.shift(); }
         }
@@ -503,7 +549,7 @@ const DrivingCoach = (function () {
     }
     function reset() {
       checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
-      rewindBuf = []; rewindAcc = 0; reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null;
+      rewindBuf = []; rewindAcc = 0; reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null; tyreAcc = null; tyreSaid.clear();
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
       prevS = null; lastMark = null; segs = []; lapReport = null;
     }

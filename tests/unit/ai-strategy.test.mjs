@@ -306,6 +306,35 @@ test("a worn stop needs laps left to pay for itself", () => {
   assert.equal(A.wornPays({ wear: 1.4 }), true);
 });
 
+test("the rival rules: an alert wall covers the undercut, an aggressive one makes it", () => {
+  const S = A.STRAT, T0 = S.TEMPER;
+  const at = (o) => now(Object.assign({ stopsLeft: 1, lapsToStop: S.UNDERCUT_REACH, wear: 0.6 }, o));
+  // The car behind has boxed: a wall that reacts covers, one that does not waits.
+  assert.equal(at({ rivalBehindBoxed: true, react: T0.REACT_MIN }), "cover");
+  assert.equal(at({ rivalBehindBoxed: true, react: T0.REACT_MIN - 0.01 }), "");
+  // Stuck behind a car that has not stopped: the attacker goes first.
+  assert.equal(at({ stuckBehind: true, attack: T0.ATTACK_MIN }), "undercut");
+  assert.equal(at({ stuckBehind: true, attack: T0.ATTACK_MIN - 0.01 }), "");
+  // Neither pulls a stop the plan does not want soon, or onto a fresh set,
+  // or spends a stop the plan does not have.
+  assert.equal(at({ rivalBehindBoxed: true, react: 1, lapsToStop: S.UNDERCUT_REACH + 1 }), "");
+  assert.equal(at({ stuckBehind: true, attack: 1, wear: S.UNDERCUT_MIN_WEAR - 0.01 }), "");
+  assert.equal(at({ rivalBehindBoxed: true, react: 1, stopsLeft: 0 }), "");
+});
+
+test("strategic temper comes from the ratings: veterans react, rookies gamble", () => {
+  const vet = { experience: 1, awareness: 0.9, craft: 0.95 }, rookie = { experience: 0.1, awareness: 0.66, craft: 0.7 };
+  const tv = A.strategyTemper(vet), tr = A.strategyTemper(rookie);
+  assert.ok(tv.react >= A.STRAT.TEMPER.REACT_MIN && tr.react < A.STRAT.TEMPER.REACT_MIN, `react ${tv.react} / ${tr.react}`);
+  assert.ok(tv.attack >= A.STRAT.TEMPER.ATTACK_MIN && tr.attack < A.STRAT.TEMPER.ATTACK_MIN);
+  // The roll's taste: 0.5 stays 0.5 for anyone; a rookie's reaches further.
+  assert.equal(A.tasteRoll(0.5, rookie), 0.5);
+  assert.ok(A.tasteRoll(0.2, rookie) < A.tasteRoll(0.2, vet), "a rookie's low roll goes lower");
+  assert.ok(A.tasteRoll(0.8, rookie) > A.tasteRoll(0.8, vet), "…and a high one higher");
+  assert.equal(A.tasteRoll(0.8, vet), 0.8, "a full-experience veteran runs the roll as drawn");
+  for (const r of [0, 0.05, 0.95, 1]) { const x = A.tasteRoll(r, rookie); assert.ok(x >= 0 && x <= 1); }
+});
+
 test("the free stop under a caution pulls a planned stop forward", () => {
   // Worth 8-12 s — the biggest single lever in the sport. VSC is level 2.
   assert.equal(now({ cautionLevel: 2, lapsToStop: A.STRAT.CAUTION_REACH }), "caution");

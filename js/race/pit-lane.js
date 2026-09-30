@@ -1178,8 +1178,9 @@ const PitLane = (function () {
       const st = c.pitState || "none";
       const zz = z(), L = G.track.total;
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
-      // The player's reference plan is re-cut once per lap (replan).
-      if (c.local && c.human && c.pitPlan && c.lap !== c._planLap) { c._planLap = c.lap; if ((c.lap || 0) > 1) replan(c); }
+      // Every plan is re-cut once per lap (replan): the player's reference, and
+      // an AI's own — not a real race's scripted stops, which are the record.
+      if (c.pitPlan && c.lap !== c._planLap && (c.human ? c.local : !c.pitPlan.scripted)) { c._planLap = c.lap; if ((c.lap || 0) > 1) replan(c); }
       // The commitment lands: armed, the crew told what to ready. With no
       // button there is no other moment the compound choice becomes visible.
       const commitNow = () => {
@@ -1452,6 +1453,10 @@ const PitLane = (function () {
       // car was not on. A wet set or no car: the planner picks, as before.
       const rec = player && car ? TyreModel.startRecord(car) : null;   // what gridUp is about to fit (c.tyre is last race's)
       const start = rec && !(rec.tread > 0) ? classOfCode(rec.code) : null;
+      // An AI's taste is its roll widened by its temper (AiDrive.tasteRoll):
+      // a rookie gambles, a veteran runs the book. Kept on the plan, so the
+      // lap-by-lap re-cut keeps the same driver's taste.
+      if (!player && car && AiDrive.tasteRoll) roll = AiDrive.tasteRoll(roll, car);
       const plan = AiDrive.stintPlan({
         laps: n,
         lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, n),
@@ -1459,7 +1464,7 @@ const PitLane = (function () {
         start: start || undefined,
         firstLife: start && Number.isFinite(rec.life) ? G.tyres.planLaps(rec.life, n) : undefined,
       });
-      if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; }
+      if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; plan.roll = roll; }
       return plan;
     }
     /** FIA 2026 SR B6.3.6: a DRY *Race* uses two dry compounds. Not below
@@ -1565,11 +1570,26 @@ const PitLane = (function () {
     /** Once per lap for the local player: re-cut the plan over the laps left,
      *  on the set that is on the car and the life it has left. Adopted only
      *  when the next stop moves by two laps or more — the stagger is a lap by
-     *  design — and said once when it is. Advice, so it may change its mind;
-     *  the AI's plan does not (its stop reasons are pitNow's three). */
+     *  design — and said once when it is. Advice, so it may change its mind.
+     *  AN AI RE-CUTS TOO, silently and on its own taste (plan.roll): a set
+     *  wearing slower than planned is run longer, a faster one is stopped
+     *  sooner. How small a move it acts on is its temper — an alert wall
+     *  (TEMPER.react) takes a one-lap change, the rest wait for two. It never
+     *  re-cuts on a wet tread or in a wet race (think() owns those stops),
+     *  nor while a stop is already armed, nor before two laps on the set. */
+    function planBLine(oldNext, newNext) {
+      if (newNext == null) return "PLAN B — NO MORE STOPS, MANAGE TO THE FLAG";
+      if (oldNext == null) return "PLAN B — TYRES WON'T LAST, BOX LAP " + newNext;
+      return newNext < oldNext ? "PLAN B — TYRES WEARING FAST, BOX LAP " + newNext
+                               : "PLAN B — TYRES HOLDING UP, EXTEND TO LAP " + newNext;
+    }
     function replan(c) {
       const plan = c.pitPlan, zz = z();
       if (!plan || !zz || !G.tyres || !c.tyre || typeof AiDrive === "undefined") return false;
+      const ai = !c.human;
+      if (ai && (c.pitArmed || (c.pitState && c.pitState !== "none") || (c.tyre.tread || 0) > 0
+          || TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness()) > 0
+          || (G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0) < 2)) return false;
       const done = c.pitStops || 0, lap = Math.max(1, c.lap || 1);
       const lapsLeft = G.lapsTarget - lap + 1;
       const oldNext = plan.lapsAt[done];
@@ -1605,12 +1625,13 @@ const PitLane = (function () {
       const log = Array.isArray(c.tyreLog) ? c.tyreLog : [];
       const used = log.slice(0, -1).map((e) => classOfCode(e && e.code)).filter(Boolean);
       const owes = typeof SportingRegs === "undefined" || SportingRegs.compoundShort(log);
-      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: 0.5,
+      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: ai && plan.roll != null ? plan.roll : 0.5,
                                       start: cls || undefined, firstLife, stops,
                                       twoCompound: twoCompoundRule(G.lapsTarget) && owes, used });
       if (!rel) return false;
       const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
-      if (newNext != null && oldNext != null && Math.abs(newNext - oldNext) < 2) return false;
+      const minMove = ai && AiDrive.strategyTemper(c).react >= AiDrive.STRAT.TEMPER.REACT_MIN ? 1 : 2;
+      if (newNext != null && oldNext != null && Math.abs(newNext - oldNext) < minMove) return false;
       if (newNext == null && oldNext == null) return false;
       plan.seq = plan.seq.slice(0, done).concat(cls ? [cls] : plan.seq.slice(done, done + 1)).concat(rel.seq.slice(1));
       // THE STOPS MADE, where they were made: the log's fit laps, not the plan's.
@@ -1622,7 +1643,10 @@ const PitLane = (function () {
       const at = [0].concat(plan.lapsAt, [G.lapsTarget]);
       plan.stints = at.slice(1).map((v, i) => Math.max(0, v - at[i]));
       plan.stops = done + rel.stops;
-      if (G.announce) G.announce(newNext != null ? "NEW PLAN — BOX LAP " + newNext : "NEW PLAN — NO MORE STOPS", 2.2, "info");
+      if (ai) { c.pitReplans = (c.pitReplans || 0) + 1; return true; }
+      // PLAN B, with the reason — the measured wear is why it changed, and a
+      // driver told "tyres wearing fast" knows what to do with the next lap.
+      if (G.announce) G.announce(planBLine(oldNext, newNext), 2.2, "info");
       return true;
     }
 
@@ -1634,6 +1658,23 @@ const PitLane = (function () {
      *  armed AI is only held to the pit side within APPROACH_M, and entryV is
      *  unbounded that far out), so the hunt counts it as h_armedAtLine, not
      *  as a stop that failed to happen. */
+    /** The two cars a pit wall watches, in seconds at OUR pace (the measure
+     *  engineer.js uses): `behind` — a car within a stop's loss behind that is
+     *  in the lane now (the undercut on us); `stuck` — a car within
+     *  STUCK_GAP_S ahead, not yet stopped, on no fresher rubber than ours. */
+    const _rivals = { behind: false, stuck: false };
+    function rivalsOf(c) {
+      _rivals.behind = false; _rivals.stuck = false;
+      const v = Math.max(1, c.speed || 1), reach = lossS() + 2, stuck = AiDrive.STRAT.STUCK_GAP_S;
+      for (const o of G.cars) {
+        if (o === c || o.retired || o.finished) continue;
+        const gap = ((c.prog || 0) - (o.prog || 0)) / v;
+        const inLane = !!(o.pitState && o.pitState !== "none");
+        if (gap > 0 && gap < reach && inLane) _rivals.behind = true;
+        else if (gap < 0 && -gap < stuck && !inLane && (o.pitStops || 0) <= (c.pitStops || 0)) _rivals.stuck = true;
+      }
+      return _rivals;
+    }
     function think(c) {
       const plan = c && c.pitPlan;
       // A HUMAN's plan is advice (planFor): nothing here ever arms it.
@@ -1650,11 +1691,20 @@ const PitLane = (function () {
       // dry->rain arc did not have.
       const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
+      const lapsToStop = nextAt == null ? 99 : nextAt - (c.lap || 0);
+      const wear = G.tyres.spent(c);
+      // The cars around it, only when a rival rule could fire (a stop near, a
+      // used set): the scan is a pass over the field, per AI per tick.
+      const near = stopsLeft > 0 && lapsToStop <= AiDrive.STRAT.UNDERCUT_REACH && wear >= AiDrive.STRAT.UNDERCUT_MIN_WEAR
+        ? rivalsOf(c) : null;
+      const temper = near ? AiDrive.strategyTemper(c) : null;
       const why = AiDrive.pitNow({
         stopsLeft,
-        lapsToStop: nextAt == null ? 99 : nextAt - (c.lap || 0),
+        lapsToStop,
+        rivalBehindBoxed: !!(near && near.behind), stuckBehind: !!(near && near.stuck),
+        react: temper ? temper.react : 0, attack: temper ? temper.attack : 0,
         cautionLevel: cautionLevel(),   // per AI per tick: the allocation-free read
-        wear: G.tyres.spent(c),
+        wear,
         wrongTread,
         // …so the worn rule can ask whether the stop has laps left to pay for
         // itself (AiDrive.wornPays).

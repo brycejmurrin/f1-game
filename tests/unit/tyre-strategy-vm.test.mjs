@@ -78,6 +78,44 @@ test("the grid runs several strategies: the roll is the driver's, not the grid s
   assert.ok(seqs.size >= 3, "strategies on the grid: " + [...seqs].join(" | "));
 });
 
+test("an AI re-cuts its own plan from the wear it measures, quietly", async () => {
+  await g.race("bahrain", "day", "dry", { laps: 25 });
+  const { G } = g;
+  const said = []; const ann = G.announce; G.announce = (m) => { said.push(m); if (ann) ann(m); };
+  try {
+    const c = G.cars.find((o) => !o.human && o.pitPlan && o.pitPlan.stops === 1);
+    assert.ok(c, "a one-stop AI");
+    const before = c.pitPlan.lapsAt[0];
+    // Four laps on the set and 80 % gone: far faster than any 25-lap plan.
+    c.lap = 5; c.tyreLap0 = 1; c.fuelLap = 5; c.tyreWear = 0.8; c.tyreWearF = 0.8; c.tyreWearR = 0.8;
+    c.pitArmed = false; c.pitState = "none"; c._planLap = 4;
+    G.pits.update(c, 1 / 60);
+    assert.ok(c.pitPlan.lapsAt[0] < before, `the stop comes forward: L${before} -> L${c.pitPlan.lapsAt[0]}`);
+    assert.equal(c.pitReplans, 1, "counted");
+    assert.equal(c.pitPlan.stints.reduce((a, v) => a + v, 0), 25, "the strip still covers the race");
+    assert.ok(!said.some((m) => /PLAN B/.test(m)), "an AI's re-cut is not the player's radio: " + said.join(" | "));
+  } finally { G.announce = ann; }
+});
+
+test("an alert AI covers a rival's stop from behind; a slow wall does not", async () => {
+  await g.race("bahrain", "day", "dry", { laps: 25 });
+  const { G } = g;
+  const ai = G.cars.filter((o) => !o.human && o.pitPlan && o.pitPlan.stops >= 1);
+  const [c, o] = ai;
+  const setup = (react) => {
+    c.experience = react; c.awareness = react;
+    c.lap = c.pitPlan.lapsAt[0] - 1; c.pitStops = 0; c.pitArmed = false; c.pitState = "none"; c.pitNext = null;
+    c.tyreWear = 0.6; c.speed = 70; c.prog = 50000;
+    o.prog = c.prog - 70 * 3; o.pitState = "lane"; o.retired = false; o.finished = false;   // 3 s behind, in the lane
+    for (const x of G.cars) if (x !== c && x !== o) x.prog = 0;
+  };
+  setup(0.3);
+  assert.equal(G.pits.think(c), "", "a rookie wall does not react");
+  setup(1);
+  assert.equal(G.pits.think(c), "cover", "a veteran wall covers the undercut");
+  o.pitState = "none";
+});
+
 test("AUTO never fits the letter a car owing its second dry compound has run", async () => {
   await g.race("bahrain", "day", "dry", { laps: 10 });
   const { G } = g;

@@ -974,6 +974,30 @@ const AiDrive = (function () {
   // Returns a REASON string (or "") rather than a boolean, so the caller can say
   // why on the radio and a test can assert which rule fired.
   const CAUTION_REACH = 6;    // laps of the plan a free stop is worth pulling forward
+  // THE RIVAL RULES, a pit wall reading the cars around it. Both only pull a
+  // stop the plan already wants forward (within UNDERCUT_REACH laps, on a set
+  // that has done some work), so neither can add a stop the race cannot pay for.
+  //   cover    — the car close BEHIND has boxed: it will come out on fresh
+  //              rubber and take the place (the undercut). An alert wall
+  //              (TEMPER.react) boxes to cover it.
+  //   undercut — stuck within STUCK_GAP_S of the car AHEAD that has not
+  //              stopped: an aggressive wall (TEMPER.attack) stops first.
+  const UNDERCUT_REACH = 2;
+  const UNDERCUT_MIN_WEAR = 0.4;
+  const STUCK_GAP_S = 1.0;
+  // STRATEGIC TEMPER from the ratings — who reacts, who attacks, who gambles.
+  // react = 0.6·experience + 0.4·awareness; attack = craft; gamble = 1 − experience.
+  const TEMPER = { REACT_MIN: 0.75, ATTACK_MIN: 0.85, GAMBLE_W: 0.8 };
+  function strategyTemper(c) {
+    const t = traits(c);
+    return { react: 0.6 * t.experience + 0.4 * t.awareness, attack: t.craft, gamble: 1 - t.experience };
+  }
+  // The plan roll, widened by the gamble: a veteran runs close to the book,
+  // a rookie's taste reaches the ends of the range (the extra stop, the
+  // marathon first stint). Keeps 0.5 at 0.5, so a neutral roll stays neutral.
+  function tasteRoll(roll, c) {
+    return clamp(0.5 + (roll - 0.5) * (1 + TEMPER.GAMBLE_W * strategyTemper(c).gamble), 0, 1);
+  }
   // A STOP YOU CANNOT RECOVER IS NOT WORTH MAKING. Rule 3 fired on wear alone,
   // with no regard for how much race was left, so a set that went over its life
   // near the flag sent the car down the lane to lose 15 s it had no laps to win
@@ -1009,6 +1033,10 @@ const AiDrive = (function () {
     if (ctx.stopsLeft <= 0) return "";
     // VSC and SC (2, 3) are the free stop; a red flag (4) is not a pit window.
     if (ctx.cautionLevel >= 2 && ctx.cautionLevel < 4 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
+    if (ctx.lapsToStop <= UNDERCUT_REACH && (ctx.wear || 0) >= UNDERCUT_MIN_WEAR) {
+      if (ctx.rivalBehindBoxed && (ctx.react || 0) >= TEMPER.REACT_MIN) return "cover";
+      if (ctx.stuckBehind && (ctx.attack || 0) >= TEMPER.ATTACK_MIN) return "undercut";
+    }
     if (ctx.lapsToStop <= 0) return "plan";
     return "";
   }
@@ -1274,7 +1302,7 @@ const AiDrive = (function () {
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
-    tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor,
-    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
+    tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, UNDERCUT_REACH, UNDERCUT_MIN_WEAR, STUCK_GAP_S, TEMPER, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
   };
 })();
