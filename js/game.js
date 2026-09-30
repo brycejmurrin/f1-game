@@ -3014,6 +3014,7 @@ async function startRaceBody() {
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
   // mashed on the title (navOpen() false) would fire at lights-out.
   Input.clearEdges();
+  if (Input.dropLatch) Input.dropLatch();
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.setVenue(track.def); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
@@ -3184,6 +3185,9 @@ function endRace(forcedOrder) {
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
   const suspended = raceCtl.level === 4;   // ended under a red flag, never resumed: B6.3.6's 30 s, not a DSQ
+  // Judged on the weather AT THE FLAG: endSession() below puts the starting weather back, and a MIXED race that
+  // turned wet then disqualified every car on one slick for "one dry compound" (B6.3.6 is off in a wet race).
+  const cmpApplies = pits.twoCompoundApplies();
   raceCtl.reset(); wxArc.endSession();   // an arc that outlives the race would override the next race's weather
   // Close every car's open stint so the results strip has an end lap. Done here
   // rather than in the sheet: a retired car stopped laps ago and its last stint
@@ -3242,7 +3246,7 @@ function endRace(forcedOrder) {
   // TWO DRY COMPOUNDS (FIA 2026 SR B6.3.6), every car: a finished Grand Prix the
   // rule covers (PitLane.twoCompoundApplies — the AI planner's own test). Not in
   // a room: a remote car's compound is not replicated.
-  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && pits.twoCompoundApplies();
+  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && cmpApplies;
   const dsq = SportingRegs.applyCompoundRule(cars, { applies: cmpOn, suspended });
   for (const c of dsq) Log.info("game", "DSQ car=" + c.code + " why=" + c.dsq);   // B6.3.6: a suspended race pays +30 s instead, carried in c.penalty
   const fin = cars.filter((c) => c.finished && !c.retired && !c.dsq).sort(RaceControl.finishOrder);   // laps, then the clock
@@ -3962,7 +3966,7 @@ function introBuild(go) {
       // Only this request may hand over; a quit or newer request owns its own screen.
       studioClose(n);
       if (n === _introRun) {
-        if (!live()) loadingScreen.stop();
+        if (!live()) { loadingScreen.stop(); titleIfBare(); }
         else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }   // "build" has no timer or skip: never leave it up
       }
     }
@@ -3992,7 +3996,7 @@ function introWarm(go) {
       if (!(await awaitIntroWarm(live)) || !live()) return;
       try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
-    finally { studioClose(n); }
+    finally { studioClose(n); if (n === _introRun && !live()) { loadingScreen.stop(); titleIfBare(); } }   // abandoned: "build" has no timer or skip, so never leave it up
   })();
   return true;
 }
@@ -4004,6 +4008,8 @@ function startRaceCovered() {
   if (!loadingScreen.phase()) loadingScreen.building(loadingInfo());
   return startRace();
 }
+// An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
+function titleIfBare() { if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
 function raceIntro(go) {
   // The card is the whole screen: the Data Hub's JUMP IN closes a dialog that sat OVER the title, which then showed round the card.
   els.overlay.hidden = true;
@@ -9511,7 +9517,12 @@ function phonePadDash() {
 }
 $("pm-phonepad").onclick = () => {
   const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE"; return; }
+  if (phonePad) {
+    phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
+    if (phonePadCam >= 0 && camMode === VISOR_CAM) setCamMode(phonePadCam);   // what lost() does: cancel() closes the link without calling it
+    phonePadCam = -1;
+    return;
+  }
   box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
   ensureNet().then((ok) => {
     if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
@@ -9529,7 +9540,7 @@ $("pm-phonepad").onclick = () => {
       },
       linked: () => {
         btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
-        if (VISOR_CAM >= 0 && camMode !== VISOR_CAM) { phonePadCam = camMode; setCamMode(VISOR_CAM); }
+        if (VISOR_CAM >= 0 && camMode !== VISOR_CAM) { phonePadCam = camMode; setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
       },
       lost: () => {
         btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn");
