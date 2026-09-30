@@ -128,13 +128,14 @@ test('studio drive-out (poseOut): shutter up, parked a beat, then nose first out
   }
   assert.ok(Arrival.poseOut(0, Arrival.settings({ angle: 'right' })).eye[0] > 0 && Arrival.poseOut(0, Arrival.settings({})).eye[0] < 0, 'RIGHT stands on the other side');
 });
-test('game.js plays the studio drive-out AT ONCE when RACE! beats the circuit, and the warm waits for it', () => {
+test('game.js plays the studio drive-out AT ONCE on every RACE!, with no card, and the warm waits for it', () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
-  assert.match(build, /loadingScreen\.building\(info0\); studioOpen\(n\);/, 'the drive-out starts with the card, before any build step');
+  assert.match(build, /  studioOpen\(n, info0\);/, 'the drive-out starts at once, before any build step');
   assert.ok(build.indexOf('await studioDone(live, n)') > 0 && build.indexOf('await studioDone(live, n)') < build.indexOf('warmPrograms()'), 'the warm waits for the car to be out');
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
-  assert.match(warm, /loadingScreen\.building\(loadingInfo\(\)\); studioOpen\(n\);/);
+  assert.match(warm, /  studioOpen\(n, loadingInfo\(\)\);/);
+  assert.match(game, /if \(!built && !motionReduced\(\) && introGarage\(go\)\) return;/, 'a ready, warm world opens on it too');
   assert.ok(warm.indexOf('await studioDone(live, n)') < warm.indexOf('warmPrograms()'));
   assert.match(game, /const studio = !!built && _studioPlayed; _studioPlayed = false;/, 'the montage does not repeat it on the pit lane');
   assert.match(game, /const lead = world && flybyShots && !studio &&/);
@@ -143,5 +144,55 @@ test('game.js plays the studio drive-out AT ONCE when RACE! beats the circuit, a
   assert.match(cam, /const arriving = driveOut \? stepDriveOut\(dt\) : arrival\.step\(dt\);/);
   assert.match(cam, /if \(!cfg\.enabled \|\| reducedMotion\(\)\) return 0;/, 'the arrival tuner and reduced motion gate it');
   assert.match(game, /setupCam\.driveOutLeft\(\) > 0 && performance\.now\(\) - _studio\.at < _studio\.ms \* 3\)/, 'a build stall delays the car, never cuts it off in the doorway');
-  assert.match(game, /function studioClose\(n\) \{ if \(_studio && _studio\.n === n\)/, 'only the intro run that opened it closes it');
+  assert.match(game, /function studioClose\(n\) \{\n  if \(!_studio \|\| _studio\.n !== n\) return;/, 'only the intro run that opened it closes it');
+});
+
+test('the garage drive-out owns the screen with no card, and the card arrives only once the car is out', async () => {
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  // The studio helpers and introGarage (the ready-world path), run for real.
+  const src = game.slice(game.indexOf('let _studio = null'), game.indexOf('function introBuild(go)'));
+  for (const mode of ['ready', 'quit', 'off', 'watched']) {
+    let now = 0;
+    const events = [];
+    const c = { state: 'menu', trackIdx: 0, _introRun: 0, _introKey: '', setupPreviewOn: false, settings: 'one',
+      entrySettings: () => c.settings, menuKey: () => 'world', performance: { now: () => now },
+      loadingInfo: () => ({ track: {}, real: mode === 'watched' ? { watch: true } : null }),
+      loadingScreen: { garage: () => { c._ph = 'garage'; events.push('garage'); }, building: () => { c._ph = 'build'; events.push('card'); },
+        stop: () => { c._ph = ''; events.push('stop'); }, phase: () => c._ph || '' },
+      setupCam: { startDriveOut: () => mode === 'off' ? 0 : 5000, stopDriveOut() { events.push('out'); }, driveOutLeft: () => Math.max(0, 5000 - now) },
+      menuSlice: async () => { now += 1000; if (mode === 'quit' && now >= 2000) c.state = 'race'; },
+      raceIntro: () => events.push('fly:' + c._introKey), go: () => events.push('go'), Log: { warn() {} } };
+    vm.createContext(c); vm.runInContext(src, c);
+    const took = c.introGarage(c.go);
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+    if (mode === 'off' || mode === 'watched') {
+      assert.equal(took, false, mode + ': no drive-out, so raceIntro flies at once');
+      assert.equal(c.setupPreviewOn, false, mode);
+      continue;
+    }
+    assert.equal(took, true, mode);
+    assert.equal(events[0], 'garage', mode + ': the drive-out owns the screen first, with no card');
+    assert.equal(c.setupPreviewOn, false, mode + ': the garage preview is down afterwards');
+    if (mode === 'ready') assert.deepEqual(events, ['garage', 'out', 'card', 'fly:world'], 'the car out, then the card, then the flyby');
+    else assert.ok(!events.some((e) => e.startsWith('fly')) && events.includes('stop'), 'a quit mid-drive-out lowers the screen and flies nothing');
+  }
+});
+test('GARAGE ARRIVAL TUNER is an ADVANCED VISUALS tool: opens over the settings page, DONE gives it back', () => {
+  const { $ } = harness();
+  $('pmsettings').hidden = false; $('pm-panel-display').hidden = false;
+  Arrival.bindSettings($, { get: () => null, set() {} });
+  $('pm-garrival').onclick();
+  assert.equal($('garrival').hidden, false);
+  assert.equal($('pmsettings').hidden, true, 'the settings page stands down');
+  assert.equal($('pm-panel-display').hidden, true, 'and so does its DISPLAY page');
+  assert.equal($('ga-close').focused, true);
+  $('ga-close').onclick();
+  assert.equal($('garrival').hidden, true);
+  assert.equal($('pmsettings').hidden, false, 'back to the settings page');
+  assert.equal($('pm-panel-display').hidden, false);
+  assert.equal($('pm-garrival').focused, true, 'focus returns to the tool button');
+  const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.match(shell, /<button id="pm-garrival"[^>]*>GARAGE ARRIVAL TUNER&hellip;<\/button>/);
+  assert.match(shell, /id="garrival" role="region"[^>]*data-esc-close="ga-close"/);
+  assert.ok(!shell.includes('id="ga-settings"'), 'no inline fold left in the tools list');
 });

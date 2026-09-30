@@ -341,6 +341,8 @@ test("test:xr is path-gated (xr-filter → xr) and feeds ci-verdict", () => {
   assert.match(filter, /js\/xr\//);
   assert.match(filter, /vr-emulated/);
   assert.match(filter, /outputs:\s*\n\s*xr:/);
+  assert.match(filter, /pull_request' && !github\.event\.pull_request\.draft/,
+    "xr-filter must skip draft PRs (heavy Chromium suite; fast tier)");
   const xr = (ciWorkflow.split("\n  xr:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(xr, "xr job missing");
   assert.match(xr, /needs: xr-filter/);

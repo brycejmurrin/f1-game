@@ -1806,6 +1806,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display > details { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-appearance > details { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-appearance :is(.pm-accent-preview, .pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
 /* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
@@ -1818,6 +1819,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
     "hudopts hudopts"
     "metrics metrics"
     "renopts renopts"
+    "cockpit cockpit"
     "visual visual";
   grid-auto-flow: dense;
 }
@@ -1836,6 +1838,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv {
   grid-area: renopts;
 }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit { grid-area: cockpit; margin: 0; min-width: 0; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-visual-tuners {
   grid-area: visual;
   margin: 0;
@@ -1937,6 +1940,15 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   gap: calc(var(--gap) / 3);
   padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
 }
+/* COCKPIT (js/camera/cockpit-opts.js) and APPEARANCE › TITLE LAYOUT
+   (js/ui/title-layout.js): the same column body, built at runtime. */
+#pm-cockpit-body,
+#pm-titlelayout-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
+}
 #pm-display-adv-body > button,
 #pm-visual-tuners-body > button {
   width: 100%;
@@ -1948,10 +1960,8 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
 /* Fold summaries are disclosures, not plates: steel + rule + left chevron
    (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate made
    HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
-:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary,
-:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary:active,
-#rs-body details > summary,
-#rs-body details > summary:active {
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary,
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary:active {
   color: var(--steel);
   font-style: italic;
   opacity: 1;
@@ -1965,7 +1975,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   box-shadow: none;
 }
 @media (hover: hover) {
-  :is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary:hover,
+  :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary:hover,
   #rs-body details > summary:hover {
     color: var(--text);
     background-color: transparent;
@@ -1977,13 +1987,13 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
     box-shadow: none;
   }
 }
-:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary::after,
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary::after,
 #rs-body details > summary::after { content: none; }
-:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary::before,
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary::before,
 #rs-body details > summary::before { content: "\25BE"; }
-:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details[open] > summary::before,
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details[open] > summary::before,
 #rs-body details[open] > summary::before { content: "\25B4"; }
-:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary,
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary,
 #rs-body details > summary {
   height: auto;
   min-height: var(--chip-h);

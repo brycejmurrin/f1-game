@@ -433,6 +433,19 @@ jobs:
       # guards the TOOL, which is where a guard belongs.
       - name: What does this gate cover?
         run: node tools/ci/ci-coverage.mjs
+      # How far is this PR head behind ship? (2026-09-30). Advisory only —
+      # prints the count and a ::warning:: over 10 commits; the tool always
+      # exits 0 so it never fails Structural guards. Ship pushes already ARE
+      # ship, so this runs on pull_request only. Do not turn this into a
+      # require-up-to-date gate (AGENTS.md §Concurrent PRs).
+      - name: How far behind ship?
+        if: github.event_name == 'pull_request'
+        env:
+          BEHIND_SHIP_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEHIND_SHIP_SHIP: origin/claude/f1-game-project-26h3ng
+        run: |
+          git fetch --no-tags --depth=1 origin claude/f1-game-project-26h3ng 2>/dev/null || true
+          node tools/ci/behind-ship.mjs
 
 # pick-unit-slices github-output: assert via temp GITHUB_OUTPUT (2026-09-29)
   # retrigger: 36644334828 + 36645018392 cancelled queued node slices (zero failures)
@@ -1775,7 +1788,10 @@ jobs:
     name: Does this diff touch WebXR?
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: ${{ !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}
+    # Draft PRs stay on the fast tier (2026-09-30): emulated XR is a heavy
+    # Chromium suite — same draft skip as renderer-filter / smoke / sweeps.
+    # Ready PRs, topic pushes, and dispatch still path-gate it.
+    if: ${{ !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
     outputs:
       xr: ${{ steps.filter.outputs.xr }}
     steps:
