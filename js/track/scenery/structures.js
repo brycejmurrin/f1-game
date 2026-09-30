@@ -5,7 +5,7 @@ const SceneryStructures = (function () {
   function create(ctx) {
     const { out, track, def, n, ds, hw, px, py, pz, NIGHT, MAT,
             indexBarrier,
-            addBox, addCyl, addFrustum, addPrism, RAW, blockAt, recordBarrier,
+            addBox, addCyl, addFrustum, addPrism, RAW, blockAt, post, recordBarrier,
             groundYAt, terrainYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
             anchor, rejBox } = ctx;
     Log.info("scenery", "scenery-structures dress " + (def && def.id));
@@ -355,6 +355,15 @@ const SceneryStructures = (function () {
       // A cantilever gantry hangs from ONE side — that is its whole silhouette.
       mast(aL.c, b);
       if (st !== "cantilever") mast(aR.c, [aR.r, u, aR.t]);
+      // Each leg is solid at hw+1.5: a POST (buildProps), so a car stops at its
+      // face from whichever side it arrives — never a blockAt, which walled off
+      // the run-off behind it (e39c2c2e5). Half-widths at wheel height.
+      if (post) {
+        const legX = { truss: 0.66, portal: 0.75, scaffold: 0.09, cantilever: 0.42, box: 0.3 }[st] || 0.3;
+        const legZ = { truss: 0.66, portal: 0.55, scaffold: 0.65, cantilever: 0.42, box: 0.3 }[st] || 0.3;
+        post(k, -1, 1.5, legX, legZ);
+        if (st !== "cantilever") post(k, 1, 1.5, legX, legZ);
+      }
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
       overheadSpan({

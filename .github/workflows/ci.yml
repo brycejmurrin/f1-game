@@ -1873,7 +1873,11 @@ jobs:
     # its before_sha is the live commit, so the plan reads "what changed since
     # what is live". The caller's event is `schedule` there, hence the third
     # clause rather than an event test.
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '' }}
+    # `schedule` is the nightly's CHANGE-AWARE lane (tools/ci/ci-resolve-before.sh):
+    # every spec the last day of merges routed, with room for more overflow
+    # shards than one change gets — so a spec a 15-minute per-change budget
+    # squeezes out runs within a day, not on its group's night in 11.
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '' }}
     # actions:read on top of the workflow default — the base-verdict step at the
     # end lists this workflow's runs on the deploy branch. A job that names
     # permissions gets ONLY what it names, hence contents too.
@@ -1906,8 +1910,12 @@ jobs:
         with:
           path: .selected-failed.txt
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
+          # A PR also inherits the DEPLOY BRANCH's last failures: only the train
+          # used to promote a spec that just failed there to rank 1, so a PR
+          # touching the same routes could skip it and merge onto the red.
           restore-keys: |
             selected-failed-${{ github.ref_name }}-
+            selected-failed-claude/f1-game-project-26h3ng-
       # tools/ci/ci-select-specs-step.sh: base via ci-resolve-before.sh, then
       # select-specs.mjs --json; it fails closed on "unmatched" and writes the
       # `shards` matrix (one budgeted shard plus one per oversize affected spec,
@@ -1924,6 +1932,13 @@ jobs:
           PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
+          # The nightly lane (tools/ci/ci-resolve-before.sh): a day's union diff
+          # routes ~70 specs, so 60-minute shards and 12 overflow shards, stale
+          # first. Simulated on 2026-09-29's 85 merges: 19 shards, 606 tests,
+          # no routed spec left skipped (menu-traversal, ui-redesign and
+          # time-trial — the day's latent reds — all run). Once a night.
+          BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || '' }}
+          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # WHOSE RED IS IT? A gate that goes red asks two different questions
       # depending on a fact nobody has to hand: was the base already red?

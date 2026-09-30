@@ -203,6 +203,25 @@ test("LOW GRIP (B7.2.2(d)): treaded-tyre conditions switch Overtake off and say 
   assert.equal(wet.rc.otEnabled(), true);
 });
 
+test("NO PASSING UNDER A CAUTION, AI TOO: the car ahead in the running order is a speed ceiling once close", () => {
+  const { RC } = load();
+  const H = RC.HOLD_M;
+  const lead = { prog: 1000, speed: 40 }, mid = { prog: 1000 - H * 0.75, speed: 50 }, tail = { prog: 1000 - H * 0.75 - H * 1.5, speed: 60 };
+  const ranked = [lead, mid, tail];
+  assert.equal(RC.holdCap(lead, ranked), Infinity, "the leader holds behind nobody");
+  assert.equal(RC.holdCap(mid, ranked), 40, "inside HOLD_M: never faster than the car ahead");
+  const near = { prog: 1000 - H * 0.25, speed: 50 };
+  assert.equal(RC.holdCap(near, [lead, near]), 36, "inside half of it: eases off (0.9)");
+  assert.equal(RC.holdCap(tail, ranked), Infinity, "further back than HOLD_M: free to close up");
+  // A car the regs let you pass is looked past to the next one.
+  const pitting = { prog: 1000 - H * 0.1, speed: 10 };
+  const r2 = [lead, pitting, mid];
+  assert.equal(RC.holdCap(mid, r2, (o) => o === pitting), 40, "a fair car is skipped: hold behind the one beyond it");
+  assert.equal(RC.holdCap(mid, r2), 10, "unskipped, it is the car to hold behind");
+  const gone = { prog: 1000 - H * 0.1, speed: 0, retired: true };
+  assert.equal(RC.holdCap(mid, [lead, gone, mid]), 40, "a retired car is never the car ahead");
+});
+
 test("SAFETY CAR QUEUE (B5.13): the leader runs SC pace, a car > 1 s adrift closes up faster, a queued car holds", () => {
   const { RC } = load();
   const vTop = 90, q = RC.SC_PACE * vTop;   // metres per second of SC-pace gap
