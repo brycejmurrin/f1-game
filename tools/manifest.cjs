@@ -763,6 +763,7 @@ const CONTROLLER = [
   "js/net/sdp.js",
   "js/net/transport.js",
   "js/net/handshake.js",
+  "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
   "js/input/phone-pad.js",
 ];
