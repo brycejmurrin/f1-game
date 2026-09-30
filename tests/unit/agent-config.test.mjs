@@ -248,9 +248,12 @@ test("auto memory is on, synced, and its tracked copy stays small, typed and sec
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md"))) {
     const text = read(`.claude/memory/${f}`);
     assert.doesNotMatch(text, SECRET, `.claude/memory/${f} holds a secret-shaped string — memories are committed`);
+    // `type:` at the top level, or under `metadata:` — memory-sync.sh writes the
+    // latter shape (2026-09-30: it dropped a top-level `type` and this pin
+    // reddened PR #498's guards), and the auto-memory format defines both.
     if (f !== "MEMORY.md")
-      assert.match(text, /^---\n[\s\S]*?^type:\s*(user|feedback|project|reference)\s*$[\s\S]*?^---/m,
-        `.claude/memory/${f} needs frontmatter with type: user|feedback|project|reference`);
+      assert.match(text, /^---\n[\s\S]*?^\s*type:\s*(user|feedback|project|reference)\s*$[\s\S]*?^---/m,
+        `.claude/memory/${f} needs frontmatter with type: user|feedback|project|reference (top level or under metadata:)`);
   }
 });
 
