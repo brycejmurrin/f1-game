@@ -460,6 +460,10 @@ export const PER_CIRCUIT_DATA = new Set([
 // of THESE is not circuit-scoped: the edit is to the loop, so it runs whole.
 export const CIRCUIT_FILTERED_TESTS = new Set([
   "tests/specs/tracks-walls.spec.js",
+  // props-over-road: one test per circuit since 2026-09-30 (was a single
+  // 1500 s all-circuits body the selected gate excluded). Honours
+  // APEX_CIRCUITS so a circuit-only PR does not bill the whole roster.
+  "tests/specs/props-over-road.spec.js",
   "tests/unit/elevation-tracks-vm.test.mjs",
   // The fleet sweeps (2026-09-30): each narrows its roster loop, or the roster
   // floor it holds a scoped audit CLI to (tools/lib/circuit-scope.cjs).

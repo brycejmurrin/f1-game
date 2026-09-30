@@ -312,12 +312,20 @@ test("each missed case is attributed to the bucket that actually excluded it", (
   const unreachable = rows.filter((r) => /^unreachable/.test(r.why || "")).map((r) => r.catches);
   assert.deepEqual(unreachable, [],
     `spec(s) declare more tests than the gate's whole capacity: ${unreachable.join(", ")}`);
-  // The three that ARE the `>=` policy, so a future change that makes them
-  // unreachable (or selectable) has to say so here.
-  for (const f of ["tests/specs/terrain-over-road.spec.js", "tests/specs/props-over-road.spec.js",
+  // The two that ARE the `>=` policy (still declare >= 180 s), so a future
+  // change that makes them unreachable (or selectable) has to say so here.
+  // props-over-road left this set on 2026-09-30 (one test per circuit at 120 s).
+  for (const f of ["tests/specs/terrain-over-road.spec.js",
                    "tests/specs/audio-smoke.spec.js"]) {
     assert.match(by[f].why, /^over budget/, `${f} should be the >= per-test policy`);
   }
+  // The push-blind hole this workstream closed: props-over-road must stay under
+  // the selected gate's per-test cap so a js/track edit can select it again.
+  const propsOwn = maxDeclaredTimeout("tests/specs/props-over-road.spec.js");
+  assert.ok(propsOwn > 0 && propsOwn < SELECTED_GATE.perTestTimeoutSec * 1000,
+    `props-over-road declares ${propsOwn / 1000}s — must be under the ${SELECTED_GATE.perTestTimeoutSec}s gate`);
+  assert.ok(declaredTests("tests/specs/props-over-road.spec.js") >= 40,
+    "props-over-road must still cover the roster (one test per circuit), not a silent shrink");
 });
 
 test("the selected-gate settings match select-budget's recommendation", () => {
