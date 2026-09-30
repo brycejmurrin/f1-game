@@ -145,3 +145,22 @@ test('game.js plays the studio drive-out AT ONCE when RACE! beats the circuit, a
   assert.match(game, /setupCam\.driveOutLeft\(\) > 0 && performance\.now\(\) - _studio\.at < _studio\.ms \* 3\)/, 'a build stall delays the car, never cuts it off in the doorway');
   assert.match(game, /function studioClose\(n\) \{ if \(_studio && _studio\.n === n\)/, 'only the intro run that opened it closes it');
 });
+test('GARAGE ARRIVAL TUNER is an ADVANCED VISUALS tool: opens over the settings page, DONE gives it back', () => {
+  const { $ } = harness();
+  $('pmsettings').hidden = false; $('pm-panel-display').hidden = false;
+  Arrival.bindSettings($, { get: () => null, set() {} });
+  $('pm-garrival').onclick();
+  assert.equal($('garrival').hidden, false);
+  assert.equal($('pmsettings').hidden, true, 'the settings page stands down');
+  assert.equal($('pm-panel-display').hidden, true, 'and so does its DISPLAY page');
+  assert.equal($('ga-close').focused, true);
+  $('ga-close').onclick();
+  assert.equal($('garrival').hidden, true);
+  assert.equal($('pmsettings').hidden, false, 'back to the settings page');
+  assert.equal($('pm-panel-display').hidden, false);
+  assert.equal($('pm-garrival').focused, true, 'focus returns to the tool button');
+  const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.match(shell, /<button id="pm-garrival"[^>]*>GARAGE ARRIVAL TUNER&hellip;<\/button>/);
+  assert.match(shell, /id="garrival" role="region"[^>]*data-esc-close="ga-close"/);
+  assert.ok(!shell.includes('id="ga-settings"'), 'no inline fold left in the tools list');
+});
