@@ -16,6 +16,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.4,
+    tyreSeverity: 0.77,  // Hungary softs 0.038 s/lap clean stint (F1 Chronicle) — ÷ 0.0493
     baseHW: 7,
     sceneryCoordinates: "racing",
     dressingExclusions: [
