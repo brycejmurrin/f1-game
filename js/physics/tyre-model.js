@@ -609,9 +609,16 @@ const TyreModel = (function () {
     // the level alone, so at Austria (1.97) every plan believed its tyres lasted
     // twice as long as they did: a medium planned for 7.4 laps of a 10-lap race
     // was gone in 3.8, and the plan said NO STOP.
+    // …AND THE FLOOR COMES AFTER THE CIRCUIT. Dividing a floored lifeLaps by
+    // severity took Austria's (1.97) sets in a 5-lap race to ~2 laps — the very
+    // race MIN_LIFE_LAPS exists to cover. effLifeLaps is the one number both the
+    // wear and the plan read, so they cannot disagree.
+    function effLifeLaps(life, lapsTarget) {
+      return Math.max(MIN_LIFE_LAPS, (life || LIFE_MID) * Math.max(1, lapsTarget || 1) / severity());
+    }
     function planLaps(life, lapsTarget) {
       const k = LEVELS[level];
-      return k > 0 ? lifeLaps(life, lapsTarget) / (k * severity()) : Math.max(1, lapsTarget || 1);
+      return k > 0 ? effLifeLaps(life, lapsTarget) / k : Math.max(1, lapsTarget || 1);
     }
 
     // Put a fresh set on a car. The ONLY place c.tyreWear is cleared, so a stop
@@ -718,8 +725,7 @@ const TyreModel = (function () {
       // WEAR is distance, so it stops when the car does.
       const lapFrac = Math.abs(c.speed || 0) * dt / track.total;
       if (!(lapFrac > 0)) return;
-      const laps = lifeLaps(c.tyre.life, G.lapsTarget);
-      const dw = lapFrac * load * severity() * LEVELS[level] / laps;
+      const dw = lapFrac * load * LEVELS[level] / effLifeLaps(c.tyre.life, G.lapsTarget);
       c.tyreWear = (c.tyreWear || 0) + dw;
       const sh = axleShare(c, G.aTop());
       c.tyreWearF = (c.tyreWearF || 0) + dw * sh[0];

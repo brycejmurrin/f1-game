@@ -761,12 +761,24 @@ const AiDrive = (function () {
   const DEG_LIN = 0.05;      // lateral grip lost across a full stint (TyreModel.DROP_LIN)
   const DEG_CLIFF = 0.50;    // ...and per unit of wear past it (TyreModel.DROP_CLIFF)
   const GRIP_TO_LAP = 0.55;  // a fraction of grip is worth this much of a lap — sub-linear
+  // THE STRATEGY TASTE (stintPlan): how far one driver's roll moves the plan.
+  // At 0.66 / 0.006 a race split into two plans; the field needs a spread.
+  const TASTE_BIAS = 0.8;      // x pitLossLaps: +/- 0.4 of a stop's cost (1.0 planned a lap-1 stop in a 5-lap race)
+  const TASTE_SOFTEN = 0.010;  // grip-per-lap preference for softer rubber
+  // A stop leaves at least MIN_STINT laps either side (a lap-1 stop is not a
+  // strategy), and a race of ONE_SET_LAPS or fewer is run on one set: the
+  // tyre model's MIN_LIFE_LAPS floor exists so that it can be.
+  const MIN_STINT = 2;
+  const ONE_SET_LAPS = 5;
   function degCost(n, life) {
     const L = Math.max(0.5, life);
     const over = Math.max(0, n - L);
     const inLife = Math.min(n, L);
-    // Mean drop over the in-life part, plus the cliff over whatever ran past it.
-    const mean = DEG_LIN * (inLife / (2 * L)) * inLife + DEG_CLIFF * (over * over) / (2 * L);
+    // The drop summed over the stint, as TyreModel.gripFor charges it: the
+    // linear slope inside the life, then EVERY lap past it carries the full
+    // DEG_LIN plus the cliff. Leaving out that DEG_LIN·over priced a 50 %
+    // overrun ~29 % light, and the planner ran sets long for it.
+    const mean = DEG_LIN * (inLife / (2 * L)) * inLife + DEG_LIN * over + DEG_CLIFF * (over * over) / (2 * L);
     return mean * GRIP_TO_LAP;
   }
 
@@ -832,15 +844,15 @@ const AiDrive = (function () {
     // the same rubber, which measured as a 20-car field on one plan — the
     // procession the TYRE table above exists to avoid.
     //
-    //   `bias`   — a taste for stopping, +/- a third of a stop's cost. A
+    //   `bias`   — a taste for stopping, +/- 0.4 of a stop's cost. A
     //              cautious driver stops early and often, an aggressive one
     //              runs the set long.
     //   `soften` — a taste for grip over durability, worth up to about half a
     //              compound step per lap. A low roll shops for hards, a high
     //              one for softs, and the field arrives at the first stop on
     //              different tyres.
-    const bias = (roll - 0.5) * 0.66 * pitLossLaps;
-    const soften = (roll - 0.5) * 0.006;
+    const bias = (roll - 0.5) * TASTE_BIAS * pitLossLaps;
+    const soften = (roll - 0.5) * TASTE_SOFTEN;
     const taste = { soft: soften, medium: 0, hard: -soften };
     // THE PINS, for the PLAYER's reference plan (js/race/pit-lane.js): `stops`
     // holds the stop count the STRATEGY row chose, `start` the compound
@@ -863,6 +875,9 @@ const AiDrive = (function () {
       if (pinStops != null && stops !== pinStops) return;
       if (twoCompound && new Set(used.concat(seq)).size < 2) return;
       if (pinStart && seq[0] !== pinStart) return;
+      // No pin, no set already on the car: a sprint this short plans no stop
+      // (measured: 2 low rolls of 21 planned hard-hard with a stop after lap 1).
+      if (stops > 0 && laps <= ONE_SET_LAPS && pinStops == null && !pinStart && !(ctx.firstLife > 0)) return;
       const lives = seq.map((cls, i) => (i === 0 && ctx.firstLife > 0 ? ctx.firstLife : lifeLaps(cls)));
       const stints = splitStints(laps, lives, FUEL_WEAR);
       let cost = stops * pitLossLaps + stops * bias;
@@ -912,16 +927,21 @@ const AiDrive = (function () {
     const lapsAt = [];
     const stints = best.stints.slice();
     let acc = 0, prev = 0;
-    // …but never LATER past the set's life. At a severe circuit the lives are
-    // short and the optimum already sits on the cliff: a +1 shift ran a third
-    // of the field a lap past it (Austria, 10 laps, measured: 8 of 21 cars
-    // over 100 % wear before their stop, 3 of them forced in by the worn rule).
-    // Earlier is always safe; later only while the stint still fits its life.
+    // …but never past a set's life IN EITHER DIRECTION. At a severe circuit the
+    // lives are short and the optimum already sits on the cliff. A +1 shift ran
+    // a third of the field a lap past it (Austria, 10 laps, measured: 8 of 21
+    // cars over 100 % wear before their stop); and a -1 shift is not "always
+    // safe" — it lengthens the NEXT stint, and the early third finished on
+    // 1.17-1.25 wear. A shift stands only while the stint it lengthens fits.
     const effLife = (i, from, len) => best.lives[i] / (1 + FUEL_WEAR * (1 - (from + len / 2) / laps));
+    const minStint = Math.max(1, Math.min(MIN_STINT, Math.floor(laps / Math.max(1, stints.length))));
     for (let i = 0; i < stints.length - 1; i++) {
       acc += best.stints[i];
-      const late = shift > 0 && acc + shift - prev > effLife(i, prev, acc + shift - prev);
-      const at = clamp(acc + (late ? 0 : shift), prev + 1, laps - (stints.length - 1 - i));
+      const to = acc + shift, last = i + 1 === stints.length - 1;
+      const nextEnd = last ? laps : acc + best.stints[i + 1];   // unshifted: the longer, safer bound
+      const over = (shift > 0 && to - prev > effLife(i, prev, to - prev))
+        || (shift < 0 && nextEnd - to > effLife(i + 1, to, nextEnd - to));
+      const at = clamp(over ? acc : to, prev + minStint, laps - minStint * (stints.length - 1 - i));
       lapsAt.push(at); stints[i] = at - prev; prev = at;
     }
     if (stints.length) stints[stints.length - 1] = laps - prev;
@@ -960,16 +980,16 @@ const AiDrive = (function () {
   // back: measured on an 8-lap Bahrain, TWELVE of 22 cars pitted on LAP 8 —
   // the last lap — every one of them for "worn".
   //
-  // Fresh rubber pays back the cliff it replaces, so the laps left have to
-  // cover the stop: gain per lap is the cliff rate over how far past life the
-  // set is, and the stop costs `pitLossLaps`. Below the break-even the flag
+  // Fresh rubber pays back the drop it replaces, so the laps left have to
+  // cover the stop: gain per lap is the whole drop of a set past its life
+  // (DEG_LIN plus the cliff over how far past it is), and the stop costs `pitLossLaps`. Below the break-even the flag
   // comes first and the car drives it home, which is what a real team does.
   // The 0.1 floor keeps a set only just over its life from claiming an
   // enormous payback window and pitting on lap one past it.
   function wornPays(ctx) {
     if (ctx.lapsLeft == null) return true;            // caller has not said; behave as before
     const over = Math.max(0.1, (ctx.wear || 0) - 1);
-    const gainPerLap = DEG_CLIFF * GRIP_TO_LAP * over;
+    const gainPerLap = (DEG_LIN + DEG_CLIFF * over) * GRIP_TO_LAP;   // the drop a fresh set gives back
     const payback = (ctx.pitLossLaps > 0 ? ctx.pitLossLaps : PIT_LOSS_FALLBACK) / Math.max(1e-3, gainPerLap);
     return ctx.lapsLeft >= payback;
   }
@@ -987,7 +1007,8 @@ const AiDrive = (function () {
     if (ctx.scripted) return ctx.stopsLeft > 0 && ctx.lapsToStop <= 0 ? "plan" : "";
     if (ctx.wear >= 1 && wornPays(ctx)) return "worn";
     if (ctx.stopsLeft <= 0) return "";
-    if (ctx.cautionLevel >= 2 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
+    // VSC and SC (2, 3) are the free stop; a red flag (4) is not a pit window.
+    if (ctx.cautionLevel >= 2 && ctx.cautionLevel < 4 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
     if (ctx.lapsToStop <= 0) return "plan";
     return "";
   }
@@ -1254,6 +1275,6 @@ const AiDrive = (function () {
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor,
-    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK },
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
   };
 })();
