@@ -4336,9 +4336,7 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
-  Ghost.flush();
-  replayBuf.clear();   // drop the live ring — next race reallocates
-  cancelIntro();
+  Ghost.flush(); replayBuf.clear(); cancelIntro();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
