@@ -984,6 +984,14 @@ const AiDrive = (function () {
   // over a lap or two and a plan sitting on a boundary flipped every lap
   // (up to 10 re-cuts in a 25-lap race, measured).
   const REPLAN_GAP = 4;
+  // THE AI'S OWN WEAR RATE, against the planner's clean-lap 1.0: an AI car's
+  // load (TyreModel aiLoad, LOAD_AI_REF) measured 0.90-0.93 of it on every
+  // circuit tried (8 laps on one set, fuel-adjusted, 2026-09-30: bahrain
+  // 0.915, redbull 0.904, monaco 0.930, silverstone 0.926). Planned at 1.0
+  // the whole grid stopped too early — a 50-lap Bahrain gridded 21 two-stops
+  // and re-cut every one to a one-stop. An AI plan starts from this; the
+  // lap-by-lap re-cut measures the driver's own.
+  const AI_LOAD_K = 0.92;
   // ONE rival call a race. With the field nose to tail (Austria, 10 laps) the
   // rules fired for 18 of 31 stops and half the grid two-stopped; an undercut
   // or a cover is a call a pit wall makes once, not a habit. And never one the
@@ -1304,6 +1312,6 @@ const AiDrive = (function () {
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,
-    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, UNDERCUT_REACH, UNDERCUT_LAPS, UNDERCUT_MIN_WEAR, STUCK_GAP_S, STUCK_LAPS, COVER_GAP_S, REPLAN_GAP, TEMPER, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, UNDERCUT_REACH, UNDERCUT_LAPS, UNDERCUT_MIN_WEAR, STUCK_GAP_S, STUCK_LAPS, COVER_GAP_S, REPLAN_GAP, AI_LOAD_K, TEMPER, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
   };
 })();

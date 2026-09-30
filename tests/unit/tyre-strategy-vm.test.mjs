@@ -147,6 +147,24 @@ test("an alert AI covers a rival's stop from behind; a slow wall does not", asyn
   o.pitState = "none";
 });
 
+test("an AI grid plan is priced at the AI's own wear rate; the player's is not", async () => {
+  // Priced at the clean-lap 1.0 every AI planned its stops ~8 % early. The
+  // plan starts from AI_LOAD_K and says so (plan.loadK), which the re-cut and
+  // think()'s fits read; the player's reference is re-cut from their own wear.
+  await g.race("bahrain", "day", "dry", { laps: 50 });
+  const { G } = g;
+  const A = vm.runInContext("AiDrive", g.ctx);
+  const ai = G.cars.filter((c) => !c.human && c.pitPlan);
+  for (const c of ai) assert.equal(c.pitPlan.loadK, A.STRAT.AI_LOAD_K, `${c.code}: plan.loadK`);
+  assert.ok(!G.player.pitPlan || G.player.pitPlan.loadK == null, "the player's plan is re-cut from their own wear");
+  // …and the first stop sits later than a 1.0-priced plan puts it.
+  const T = vm.runInContext("TyreModel", g.ctx);
+  const c = ai[0];
+  const flat = A.stintPlan({ laps: 50, lifeLaps: (k) => G.tyres.planLaps(T.AI_CLASS[k].life, 50), pitLossLaps: c.pitPlan.pitLossLaps,
+    roll: c.pitPlan.roll, twoCompound: true });
+  if (flat.seq.join() === c.pitPlan.seq.join()) assert.ok(c.pitPlan.lapsAt[0] >= flat.lapsAt[0], `L${c.pitPlan.lapsAt[0]} vs flat L${flat.lapsAt[0]}`);
+});
+
 test("AUTO never fits the letter a car owing its second dry compound has run", async () => {
   await g.race("bahrain", "day", "dry", { laps: 10 });
   const { G } = g;
