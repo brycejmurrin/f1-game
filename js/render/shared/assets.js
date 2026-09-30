@@ -94,14 +94,14 @@ const Assets = (function () {
         _releaseStrip(alt);
         throw e;
       } finally {
-        if (full.close) { try { full.close(); } catch (__) {} }
+        if (full.close) { try { full.close(); } catch { /* already closed/detached: nothing left to free */ } }
       }
     }
   }
 
   function _releaseStrip(imgs) {
     if (!imgs) return;
-    for (const b of imgs) { if (b && b.close) { try { b.close(); } catch (_) {} } }
+    for (const b of imgs) { if (b && b.close) { try { b.close(); } catch { /* already closed/detached: nothing left to free */ } } }
   }
 
   function _freeTexture(t) {
