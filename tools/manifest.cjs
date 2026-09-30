@@ -184,6 +184,7 @@ const FULL = [
   // precede tracks.js, which reads CircuitElevations at LIST build time.
   "js/track/circuit-elevations.js",
   "js/track/tracks.js",
+  "js/track/build-client.js", // TrackBuildClient: the build Worker's page side (apex26.buildWorker, default OFF)
   "js/ui/track-maps.js",
   "js/car/helmets.js",
   "js/car/car3d.js",
@@ -752,6 +753,15 @@ const LAZY_NET = [
   "js/input/phone-pad.js",
 ];
 
+// WORKER SCRIPTS: no <script> tag and never injected into the page — each is
+// a `new Worker(url)` entry that importScripts its own list. build-worker.js
+// runs the unchanged Tracks.build off the main thread (PROTOTYPE, behind
+// apex26.buildWorker; js/track/build-client.js is its page side) and imports
+// TRACK_VM, which js/roster.js carries expanded for it.
+const LAZY_WORKER = [
+  "js/track/build-worker.js",
+];
+
 // controller.html (the PHONE AS CONTROLLER page, a root page like bench.html)
 // <script> subset, in order: the signalling + transport half of js/net, the
 // shared roll math, and the pad module. No game, no renderer, no store.
@@ -1092,7 +1102,7 @@ module.exports = {
   MOVED,
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
-  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES,
+  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };
