@@ -116,8 +116,9 @@ the same pairing (`js/input/phone-pad.js`; the protocol is in
   live regions and `data-help="keep"` warnings/readouts).
 - MOTION: Motion `ON` (global: menus, camera shake, flyby).
 - `#pm-pausemenu`, a closed PAUSE MENU fold whose summary reads `SHIPPED` or
-  `CUSTOM` (`js/ui/pause-opts.js`): Layout `GRID`, Side `CENTRE`, Background
-  `FULL`, Confirm Quit `ON`.
+  `CUSTOM` (`js/ui/pause-opts.js`; the four SettingRows mount into
+  `#pm-pausemenu-body` at runtime, like TITLE LAYOUT): Layout `GRID`, Side
+  `CENTRE`, Background `FULL`, Confirm Quit `ON`.
 - `#pm-titlescreen`, a closed TITLE SCREEN fold whose summary reads `SHIPPED`
   or `CUSTOM` (`js/ui/title-layout.js`): Title Intro `FULL`, Menu Wash `FULL`,
   Title Art `ON`, the TITLE LAYOUT sub-fold (`#pm-titlelayout`, built at

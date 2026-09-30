@@ -53,14 +53,29 @@ function load({ stored = {}, readyState = "complete" } = {}) {
     addEventListener: (type, fn, capture) => listeners.push({ type, fn, capture }),
   };
   const summary = { textContent: "PAUSE MENU · SHIPPED" };
+  const bodyKids = [];
+  const pauseBody = {
+    id: "pm-pausemenu-body", dataset: {},
+    appendChild(el) { bodyKids.push(el); return el; },
+  };
   const ids = new Map([["pausemenu", pausemenu], ["pm-pausemenu-sum", summary],
+    ["pm-pausemenu-body", pauseBody],
     ["pm-quit", quit], ["pm-restart", restart], ["pm-resume", resume]]);
   const document = {
     readyState, documentElement: html, _handlers: {},
     getElementById: (id) => ids.get(id) || null,
+    createElement: (tag) => {
+      const el = { tagName: String(tag).toUpperCase(), children: [], attrs: {},
+        className: "", id: "", textContent: "",
+        setAttribute(k, v) { this.attrs[k] = v; },
+        appendChild(c) { this.children.push(c); return c; },
+      };
+      return el;
+    },
     addEventListener(ev, fn) { this._handlers[ev] = fn; },
   };
   let now = 1_000_000;
+  const built = [];
   const ctx = vm.createContext({
     Math, console, Object, Array, JSON, String, Number,
     Date: { now: () => now },
@@ -69,7 +84,18 @@ function load({ stored = {}, readyState = "complete" } = {}) {
       set: (k, v) => { written[k] = v; stored[k] = v; },
     } },
     SettingRow: {
-      wire: (id, spec) => { wired.set(id, spec); },
+      build: (id, label, values) => {
+        const row = { id, label, values };
+        const sel = { id: id + "-sel", setAttribute() {} };
+        const builtRow = { row, label: { id: id + "-label" }, sel, prev: {}, next: {} };
+        built.push(builtRow);
+        ids.set(id, row);
+        return builtRow;
+      },
+      wire: (host, spec) => {
+        const id = typeof host === "string" ? host : (host && host.id);
+        wired.set(id, spec);
+      },
       paint: (id, v) => painted.push([id, v]),
     },
     setTimeout: (fn, ms) => { const id = nextTimer++; timers.set(id, { fn, ms }); return id; },
@@ -99,6 +125,7 @@ function load({ stored = {}, readyState = "complete" } = {}) {
   return {
     M: vm.runInContext("PauseOpts", ctx),
     html, written, wired, painted, observers, timers, listeners, document, pausemenu, summary,
+    pauseBody, bodyKids, built,
     quit, restart, resume, press, handled,
     advance: (ms) => { now += ms; },
     runTimers: () => { for (const t of [...timers.values()]) t.fn(); timers.clear(); },
@@ -123,15 +150,16 @@ function bootStamp(stored) {
 }
 const pauseAttrs = (ds) => Object.fromEntries(Object.entries(ds).filter(([k]) => k.startsWith("pause")));
 
-test("shell declares the PAUSE MENU fold with four SettingRows and its summary", () => {
+test("shell declares the PAUSE MENU fold shell; rows mount via SettingRow.build", () => {
   assert.match(SHELL, /<details id="pm-pausemenu" class="pm-renderer-sub">/);
   assert.match(SHELL, /id="pm-pausemenu-sum">PAUSE MENU · SHIPPED</);
+  assert.match(SHELL, /id="pm-pausemenu-body"[^>]*aria-label="Pause menu"/);
+  // Rows and the fold help are NOT static shell — pause-opts mounts them
+  // (shellNodes absorb). Peer fold of four help lines into one stays as JS.
   for (const id of ["pm-pauselayout", "pm-pauseside", "pm-pausedim", "pm-pauseconfirm"]) {
-    for (const part of ["", "-label", "-prev", "-sel", "-next"]) assert.ok(SHELL.includes(`id="${id}${part}"`), id + part);
-    // One help line for the fold, not one per row: shellNodes sits at its ceiling.
-    assert.ok(SHELL.includes(`id="${id}-sel" aria-labelledby="${id}-label" aria-describedby="pm-pausemenu-help"`), id + " describedby");
+    assert.doesNotMatch(SHELL, new RegExp(`id="${id}"`), id + " stays out of the shell");
   }
-  assert.match(SHELL, /<p class="adv-help" id="pm-pausemenu-help">/);
+  assert.doesNotMatch(SHELL, /id="pm-pausemenu-help"/);
   // Placed after MOTION and before the TITLE SCREEN fold, inside APPEARANCE.
   const at = (s) => SHELL.indexOf(s);
   assert.ok(at('id="pm-motion-help"') < at('id="pm-pausemenu"'));
@@ -176,8 +204,12 @@ test("boot parity: index.html's inline stamp matches the module for every answer
   }
 });
 
-test("rows wire and round-trip every key; the summary follows", () => {
-  const { wired, written, html, summary, M } = load();
+test("rows mount, wire and round-trip every key; the summary follows", () => {
+  const { wired, written, html, summary, M, built, bodyKids, pauseBody } = load();
+  assert.equal(pauseBody.dataset.pauseRowsMounted, "1");
+  assert.equal(built.length, 4);
+  assert.ok(bodyKids.length >= 5, "fold help + four rows");
+  assert.equal(bodyKids[0] && bodyKids[0].id, "pm-pausemenu-help");
   assert.deepEqual([...wired.keys()].sort(), ["pm-pauseconfirm", "pm-pausedim", "pm-pauselayout", "pm-pauseside"]);
   assert.deepEqual(JSON.parse(JSON.stringify(wired.get("pm-pauseside").values)), [["centre", "CENTRE"], ["left", "LEFT"], ["right", "RIGHT"]]);
   wired.get("pm-pauselayout").write("list");

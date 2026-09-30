@@ -1011,9 +1011,9 @@
                 <input id="pm-btnopacity" type="range" min="20" max="100" step="5" value="100" aria-label="Touch button opacity"></label>
               <!-- PANEL OPACITY: the dark plates behind the race readouts, with
                    the same 20-100 range and revert as BUTTON OPACITY
-                   (js/ui/scale.js). Written as --hud-panel-a on <html>;
-                   css/tokens.css folds it into --hud-panel-a-eff, which HIGH
-                   CONTRAST pins at 1 so solid plates always win. -->
+                   (js/ui/scale.js). Written as --hud-panel-a on the root
+                   element; css/tokens.css folds it into --hud-panel-a-eff,
+                   which HIGH CONTRAST pins at 1 so solid plates always win. -->
               <label class="tune-row"><span class="tune-label">PANEL OPACITY <b id="pm-panelopacity-v">100%</b><button type="button" id="pm-panelopacity-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-panelopacity" type="range" min="20" max="100" step="5" value="100" aria-label="HUD panel opacity"></label>
               <p class="adv-help">BUTTON OPACITY: how solid the on-screen buttons are (20% is the floor, so they stay easy to find). PANEL OPACITY: how dark the plates behind the speed, timing and map are; HIGH CONTRAST keeps them solid.</p>
@@ -1223,45 +1223,13 @@
           </div>
           <p class="adv-help" id="pm-motion-help">REDUCED turns off sliding and fading between screens, camera shake in the race and the pre-race flyby. If your phone is set to reduce motion, that always wins.</p>
           <!-- PAUSE MENU: how the in-race pause card looks and behaves, in one
-               fold. js/ui/pause-opts.js wires the rows and paints the summary
-               (SHIPPED / CUSTOM across all four). -->
+               fold. js/ui/pause-opts.js builds the four SettingRows into the
+               body (SettingRow.build — same pattern as TITLE LAYOUT) and paints
+               the summary (SHIPPED / CUSTOM). Empty body keeps shellNodes under
+               the absorb; the rows are not static shell. -->
           <details id="pm-pausemenu" class="pm-renderer-sub">
             <summary class="adv-more-btn" id="pm-pausemenu-sum">PAUSE MENU · SHIPPED</summary>
-            <div id="pm-pausemenu-body" role="group" aria-label="Pause menu">
-              <p class="adv-help" id="pm-pausemenu-help">LAYOUT: GRID pairs RESTART and SETTINGS, LIST gives every button its own row. SIDE: LEFT or RIGHT keeps half the race in view. BACKGROUND: how much the race darkens behind the card. CONFIRM QUIT: ON asks for a second tap before QUIT TO MENU or RESTART RACE.</p>
-              <div id="pm-pauselayout" class="set-row" role="group" aria-labelledby="pm-pauselayout-label">
-                <span class="tune-label" id="pm-pauselayout-label">LAYOUT</span>
-                <div>
-                  <button id="pm-pauselayout-prev" type="button" data-step="-1" aria-label="Previous pause layout" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-                  <select id="pm-pauselayout-sel" aria-labelledby="pm-pauselayout-label" aria-describedby="pm-pausemenu-help"></select>
-                  <button id="pm-pauselayout-next" type="button" data-step="1" aria-label="Next pause layout" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-                </div>
-              </div>
-              <div id="pm-pauseside" class="set-row" role="group" aria-labelledby="pm-pauseside-label">
-                <span class="tune-label" id="pm-pauseside-label">SIDE</span>
-                <div>
-                  <button id="pm-pauseside-prev" type="button" data-step="-1" aria-label="Previous pause menu side" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-                  <select id="pm-pauseside-sel" aria-labelledby="pm-pauseside-label" aria-describedby="pm-pausemenu-help"></select>
-                  <button id="pm-pauseside-next" type="button" data-step="1" aria-label="Next pause menu side" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-                </div>
-              </div>
-              <div id="pm-pausedim" class="set-row" role="group" aria-labelledby="pm-pausedim-label">
-                <span class="tune-label" id="pm-pausedim-label">BACKGROUND</span>
-                <div>
-                  <button id="pm-pausedim-prev" type="button" data-step="-1" aria-label="Previous pause background" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-                  <select id="pm-pausedim-sel" aria-labelledby="pm-pausedim-label" aria-describedby="pm-pausemenu-help"></select>
-                  <button id="pm-pausedim-next" type="button" data-step="1" aria-label="Next pause background" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-                </div>
-              </div>
-              <div id="pm-pauseconfirm" class="set-row" role="group" aria-labelledby="pm-pauseconfirm-label">
-                <span class="tune-label" id="pm-pauseconfirm-label">CONFIRM QUIT</span>
-                <div>
-                  <button id="pm-pauseconfirm-prev" type="button" data-step="-1" aria-label="Previous quit confirmation setting" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-                  <select id="pm-pauseconfirm-sel" aria-labelledby="pm-pauseconfirm-label" aria-describedby="pm-pausemenu-help"></select>
-                  <button id="pm-pauseconfirm-next" type="button" data-step="1" aria-label="Next quit confirmation setting" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-                </div>
-              </div>
-            </div>
+            <div id="pm-pausemenu-body" role="group" aria-label="Pause menu"></div>
           </details>
           <!-- TITLE SCREEN: every knob that only touches the title screen, in one
                fold. js/ui/title-fx.js wires the rows; js/ui/title-layout.js

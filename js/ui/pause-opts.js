@@ -157,17 +157,32 @@ const PauseOpts = (function () {
     }
   }
 
-  // Static shell rows in APPEARANCE › PAUSE MENU (#pm-pausemenu).
+  // Rows live in #pm-pausemenu-body via SettingRow.build (not the static shell):
+  // four full set-rows were +28 shellNodes and pushed the tree past the 40-line
+  // absorb. TITLE LAYOUT already mounts this way; wire the built row element.
   function wireRows() {
-    if (typeof SettingRow === "undefined") return;
+    if (typeof SettingRow === "undefined" || !SettingRow.build) return;
+    const body = hasDoc ? document.getElementById("pm-pausemenu-body") : null;
+    if (!body || body.dataset.pauseRowsMounted) return;
+    body.dataset.pauseRowsMounted = "1";
+    // One fold help (not four per-row lines): same copy the shell used to carry
+    // as #pm-pausemenu-help before the rows moved out of index.html.
+    const help = document.createElement("p");
+    help.className = "adv-help";
+    help.id = "pm-pausemenu-help";
+    help.textContent = "LAYOUT: GRID pairs RESTART and SETTINGS, LIST gives every button its own row. SIDE: LEFT or RIGHT keeps half the race in view. BACKGROUND: how much the race darkens behind the card. CONFIRM QUIT: ON asks for a second tap before QUIT TO MENU or RESTART RACE.";
+    body.appendChild(help);
     const rows = [
-      ["pm-pauselayout", LAYOUTS, layoutMode, setLayout],
-      ["pm-pauseside", SIDES, sideMode, setSide],
-      ["pm-pausedim", DIMS, dimMode, setDim],
-      ["pm-pauseconfirm", CONFIRMS, confirmMode, setConfirm],
+      ["pm-pauselayout", "LAYOUT", LAYOUTS, layoutMode, setLayout],
+      ["pm-pauseside", "SIDE", SIDES, sideMode, setSide],
+      ["pm-pausedim", "BACKGROUND", DIMS, dimMode, setDim],
+      ["pm-pauseconfirm", "CONFIRM QUIT", CONFIRMS, confirmMode, setConfirm],
     ];
-    for (const [id, values, read, write] of rows) {
-      SettingRow.wire(id, { values, read, write: (v) => write(v) });   // a missing row is a no-op
+    for (const [id, label, values, read, write] of rows) {
+      const r = SettingRow.build(id, label, values);
+      if (r.sel) r.sel.setAttribute("aria-describedby", "pm-pausemenu-help");
+      SettingRow.wire(r.row, { values, read, write: (v) => write(v) });
+      body.appendChild(r.row);
     }
   }
 

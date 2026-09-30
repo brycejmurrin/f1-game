@@ -21,20 +21,11 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
   // instead of picking a spec it cannot pay for. A BUDGET, not a tolerance.
   test.setTimeout(300_000);
   await toMenu(page);
-  await pinFreePlay(page, {
-    team: "mclaren",
-    parts: {
-      engine: "quali_engine",
-      aero: "extreme",
-      suspension: "active",
-      brakes: "brembo_evo",
-      tyres: "hypersoft",
-      ers: "overcharge",
-      gearbox: "f1_spec",
-      fuel: "custom_formula",
-    },
-  });
-
+  // Hook BEFORE pinFreePlay: #mb-race → scheduleFlybyTrack → prepareMenuCarAssets
+  // builds every factory body into teamBodies. Installing after that means
+  // race()'s warmCarAssets is all cache hits, Car3D.build never runs again, and
+  // the wait below times out at 120 s with zero captures (CI #541 run
+  // 36741124003). Capture whatever warms — menu prep or the race — the same.
   await page.evaluate(() => {
     const captures = {};
     const build = Car3D.build;
@@ -55,7 +46,25 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
       return build(c1, c2, opts);
     };
     window.__factoryMeshCaptures = captures;
-    window.__apex.race("monza");
+  });
+  await pinFreePlay(page, {
+    team: "mclaren",
+    parts: {
+      engine: "quali_engine",
+      aero: "extreme",
+      suspension: "active",
+      brakes: "brembo_evo",
+      tyres: "hypersoft",
+      ers: "overcharge",
+      gearbox: "f1_spec",
+      fuel: "custom_formula",
+    },
+  });
+
+  await page.evaluate(async () => {
+    // Await the settled race: warmCarAssets runs inside startRaceBody. A bare
+    // race() return leaves park/aiPlace racing the async build.
+    await window.__apex.race("monza");
     window.__apex.park(0.1);
     for (let i = 0; i < window.__apex.cars().length; i++) {
       window.__apex.aiPlace(i, 0.1 + i * 0.0002, 0, (i % 4 - 1.5) * 1.5);
