@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { pearson, maxCraftClusterR, correlationMatrix, columnStats } from "../../tools/lib/ai-ratings-math.mjs";
+import { pearson, maxCraftClusterR, correlationMatrix, columnStats, styleZeroMean } from "../../tools/lib/ai-ratings-math.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -74,4 +74,22 @@ test("pace column frozen vs tip — skill() at roll 0.5 is pace-only and tip-ide
   const lin = DR.skill(DR.get("LIN"), roll);
   assert.ok(ver > lin);
   assert.equal(ver, DR.skill({ pace: 96, craft: 0, awareness: 0, consistency: 0, experience: 0 }, roll));
+});
+
+test("style axes present, zero-mean, and excluded from overall/skill", () => {
+  const DR = loadDR();
+  assert.equal(DR.STYLE_AXES.join(","), "aggression,optimism");
+  const rows = Object.entries(DR.BASE).map(([code, row]) => ({
+    code, aggression: row[5], optimism: row[6],
+  }));
+  const style = styleZeroMean(rows, DR.STYLE_AXES);
+  assert.equal(style.present, true);
+  assert.equal(style.sums.aggression, 0);
+  assert.equal(style.sums.optimism, 0);
+  const a = DR.get("VER");
+  const b = { ...a, aggression: -a.aggression, optimism: -a.optimism };
+  assert.equal(DR.overall(a), DR.overall(b), "overall ignores style");
+  assert.equal(DR.skill(a, 0.5), DR.skill(b, 0.5), "skill ignores style");
+  assert.ok(Math.abs(DR.style01(30) - 1) < 1e-9);
+  assert.ok(Math.abs(DR.style01(-30) + 1) < 1e-9);
 });
