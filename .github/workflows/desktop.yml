@@ -38,7 +38,9 @@ on:
       - "desktop-v*"
 
 concurrency:
-  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  # Per-PR head ref (not refs/pull/N/merge) so synchronize cancels the prior
+  # run on the same branch; tags / dispatch fall through to github.ref.
+  group: desktop-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref }}
   cancel-in-progress: true
 
 permissions:

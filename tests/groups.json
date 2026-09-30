@@ -48,6 +48,7 @@
     "tests/unit/baked-model-road-guard.test.mjs",
     "tests/unit/baku-migration.test.mjs",
     "tests/unit/base-green.test.mjs",
+    "tests/unit/behind-ship.test.mjs",
     "// Pure-VM physics/career suites added 2026-09-22 (the coverage census's",
     "// zero-reference module and the two thin spots): each under a second.",
     "tests/unit/body-attitude.test.mjs",
@@ -834,6 +835,7 @@
     "test:guards": {
       "files": [
         "tests/unit/agent-surface.test.mjs",
+        "tests/unit/behind-ship.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/ci-verdict.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
