@@ -188,7 +188,7 @@ const LightStore = (() => {
     //             keeps its shipped character for the knobs you never touched.
     //   "look"  — copy every LIVE value, so each track at that time and weather
     //             resolves identically to this one. It overrides the per-track
-    //             presets in light-presets.js by design; that is the only thing
+    //             presets in js/lighting/presets.js by design; that is the only thing
     //             "make them all look like this" can mean.
     //
     // Both write through put(), so a copy stores an entry only where the target

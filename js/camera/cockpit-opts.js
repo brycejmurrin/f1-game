@@ -5,14 +5,13 @@ const CockpitOpts = (function () {
 const KEY = "apex26.cockpitHalo";
 const KEY_TC = "apex26.cockpitTurnChase";         // legacy "1" / "0"
 const KEY_LEAD = "apex26.cockpitTurnChaseLead";   // 0..1, the live value
-// The shipped amount and the legacy ON amount parted on 2026-09-08: a stored
+// The shipped amount and the legacy ON amount differ: a stored
 // "1" from the old switch keeps the 0.35 it meant, an untouched install gets 0.4.
 const LEAD_DEFAULT = 0.4;
 const LEGACY_ON_LEAD = 0.35;
 const LEAD_MAX = 1;
-// COCKPIT CHOICES (owner, 2026-09-29: "a bunch of different options like options
-// for wheel, options for interior design, halo size"). All inside the same F1
-// car; each stored raw under its own apex26.* key and read once (URL overrides
+// COCKPIT CHOICES: wheel, seat, interior and halo options, all inside the same
+// F1 car; each stored raw under its own apex26.* key and read once (URL overrides
 // for shots: ?ckwheel= ?ckseat= ?ckint= ?halo=).
 //   WHEEL     the steering wheel (car-mesh.js getCockpitWheel). A wheel with no
 //             screen cannot carry gear and speed, so the HUD shows them instead

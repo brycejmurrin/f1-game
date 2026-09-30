@@ -963,7 +963,7 @@ const TrackBuildProps = (function () {
     // allowance was being counted on both sides of the lookup.)
     // Append, and keep the spatial index LIVE rather than dropping it. Nulling
     // barGrid here made the next barrierClear() re-bucket every segment, and
-    // hedge() is a query-then-dirty pair by construction (scenery-nature.js
+    // hedge() is a query-then-dirty pair by construction (js/track/scenery/nature.js
     // queries the clearance, then indexSolid()s its own footprint) — so a
     // circuit calling hedge() in a loop rebuilt a monotonically growing index
     // once per call. Measured on redbull, which calls hedge() ~170 times from
@@ -1330,7 +1330,7 @@ const TrackBuildProps = (function () {
       // MARGIN LEFT ALONE ON PURPOSE. sz[0] is the length ALONG the tangent
       // (addBox below uses basis [t, u, r]; the reach toward the road is
       // sz[2]/2), so this is the along-track-as-radial shape already fixed for
-      // billboards in scenery-city.js. The correction is NOT a swap: measured,
+      // billboards in js/track/scenery/city.js. The correction is NOT a swap: measured,
       // an oriented footprint test suppresses MORE (618 vs 539) — it recovers
       // 11 and drops 90 that currently render. Numbers and the decision:
       // docs/PERF-FINDINGS.md 2u.

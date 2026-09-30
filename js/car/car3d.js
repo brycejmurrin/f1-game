@@ -14,7 +14,7 @@ const Car3D = (function () {
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
   // it just rendered flatter TEAM-COLOURED paint. 31 darkens the albedo to bare
   // weave, and leaving 21 alone keeps genuinely carbon PARTS looking as they did.
-  // Also the ORDER the garage's finish chips render in: setup-ui.js builds that
+  // Also the ORDER the garage's finish chips render in: js/garage/setup-sheet.js builds that
   // row as ["gloss", ...Object.keys(FINISH_SURFACE)] rather than keeping its own
   // copy, because the copy drifted — the row grew from three finishes to seven
   // and the spec asserting a count of 3 stayed behind, red and unnoticed for as
@@ -1731,7 +1731,7 @@ const Car3D = (function () {
   // driver's eye (car-local z -0.18) looks straight into. BOTH its z and its
   // top edge are depth-raster measurements, not styling — the shared z 0.05 ate
   // the steering wheel, and a too-tall cap at z 0.45 then ate the nose. Numbers
-  // and method: docs/OCCLUSION-PROBE.md §4. The cockpit span (z 0.05..-0.55) is
+  // and method: docs/notes/OCCLUSION-PROBE.md §4. The cockpit span (z 0.05..-0.55) is
   // dropped: the tub around/behind the seat, already modelled by the bolsters.
   const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.32, w: 0.552, h: 0.16, t: 0.752 });
   function buildSharedChassis(out, c1, rideDY, noseStations, ckpt) {
@@ -2074,7 +2074,7 @@ const Car3D = (function () {
     // off anchors.coverAt(z).x — which is the BOTTOM half-width — and drawn at
     // a y near .top was floating in clear air: at the default recipe a service
     // panel sat 0.21 m outboard of the surface it is bolted to, and the crest
-    // sponsor quad in carmesh.js (drawn at cover.top + 0.008, spanning
+    // sponsor quad in js/car/car-mesh.js (drawn at cover.top + 0.008, spanning
     // ±x*0.72) was a flat plate hanging over a knife edge. 0.72 is that 0.72:
     // it makes the crown exactly as wide as the decal that is painted on it,
     // and pulls every cover-mounted detail back to within ~0.06 m of the skin.
@@ -2145,7 +2145,7 @@ const Car3D = (function () {
     // 0.8-2.9 m from the eye over a big solid angle, so a near-white accent
     // (ferrari's c2 IS [1,1,1]) stops reading as a stripe and becomes a flat
     // pale slab: 75 of 6095 view rays landed on pure white before this
-    // (artifacts/pale-sweep.mjs). The darkest channel decides, so a SATURATED
+    // (tools/car/cockpit-pale-sweep.mjs). The darkest channel decides, so a SATURATED
     // accent keeps its identity and only white/silver comes down. External
     // cameras always get the full-strength livery.
     const _ckAcc = (c) => {
@@ -2228,7 +2228,7 @@ const Car3D = (function () {
     // rise ABOVE the chassis deck (monocoque tops out at 0.545 at z 1.05) or it
     // is dead geometry: at top 0.48 it rasterised 2631 px and lost every one,
     // sandwiched between coaming and nose — ZERO visible pixels
-    // (docs/OCCLUSION-PROBE.md §4). Narrow (w 0.36): a spine, not a wall.
+    // (docs/notes/OCCLUSION-PROBE.md §4). Narrow (w 0.36): a spine, not a wall.
     const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.50, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
     // Cockpit: the REAR station stops AHEAD of the wheel (game.js _rigT z 0.26)
@@ -2284,7 +2284,7 @@ const Car3D = (function () {
         // visible span is the dash side that wraps the wheel.
         // Crown heights beside the driver are REGULATION: the survival cell's
         // upper edge runs Z 610 (headrest fixing, C12.6) to Z 695 (halo rear
-        // faces, C12.4.2) — docs/COCKPIT-DATUMS.md. 0.56/0.58 sat below that
+        // faces, C12.4.2) — docs/notes/COCKPIT-DATUMS.md. 0.56/0.58 sat below that
         // band entirely; 0.66/0.68 sat high in it and swallowed the front wing
         // (0.62% -> 0.01% of frame). 0.62/0.64 is the band's lower end: still
         // compliant, still enclosing, wing tips back. Above ~0.70 eats mirrors.
@@ -2346,8 +2346,7 @@ const Car3D = (function () {
     // proud is BURIED inside the bodywork over most of the pod's length. That
     // is fine for the callers below — they are tall panels whose top or bottom
     // edge clears the surface — but a flank CREASE anchored this way renders
-    // identically to no change at all (two attempts:
-    // scratch/renders/car/pod2-pod-inlet.png, pod3-pod-inlet.png). Anything
+    // identically to no change at all (two rendered attempts). Anything
     // that has to sit ON the flank must sample the built surface instead.
     function addPodFlankSpan(zFront, zRear, yFrac, height, col, surface, proud, fracH) {
       // Never bridge a detail across a loft crease: each segment follows the
@@ -2424,7 +2423,7 @@ const Car3D = (function () {
                    { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, airboxC, INTAKE);
       // PRINCIPAL ROLL STRUCTURE. C12.4.1 requires structure at [XC 55, 0, 968]
       // — y 0.968 here, the tallest mandated point on the car
-      // (docs/COCKPIT-DATUMS.md). Nothing occupied it: the airbox crowned at
+      // (docs/notes/COCKPIT-DATUMS.md). Nothing occupied it: the airbox crowned at
       // 0.76 + 0.10*inScale (0.86 at the default tier), the rear wing peaked
       // ~0.97, and the car's silhouette therefore had its highest point at the
       // BACK — inverted from every real car, where the hoop leads and the wing
@@ -3113,7 +3112,7 @@ const Car3D = (function () {
 
     part("mirrors");
     const mSty = ckpt ? 0 : teamStyle.mirror;
-    // Placement is REGULATION (docs/COCKPIT-DATUMS.md): the body must lie inside
+    // Placement is REGULATION (docs/notes/COCKPIT-DATUMS.md): the body must lie inside
     // RV-MIRROR-BODY, Y 470..680 x Z 640..720. At x 0.44 / y 0.735 ours sat
     // inboard of that volume AND above its ceiling — reported as "floating".
     const mz = ckpt ? 0.92 : 0.24;
@@ -3742,8 +3741,8 @@ const Car3D = (function () {
         Math.max(0.72, Math.min(1.4, aeroStyle.diffuserRise));
       // THE DIFFUSER. This was one closed loft, and from directly behind — the
       // view a chase camera holds for most of a lap — it read as a featureless
-      // grey slab the full width of the car with the brake light floating on it
-      // (scratch/renders/car/rb4-diffuser.png). The diffuser is the most
+      // grey slab the full width of the car with the brake light floating on it.
+      // The diffuser is the most
       // recognisable thing about the back of an F1 car and none of it was there.
       //
       // Built as two tunnels either side of the crash structure: a ramped

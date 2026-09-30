@@ -62,13 +62,11 @@
         billboard, sponsorHoarding, gantry, groundPatch,
         place, ridge, circuitKit } = api;
 
-      // ---------------------------------------------------------------------
       // 1. PALETTE + LOCAL HELPERS
       //    Bright North American summer: warmer and more saturated than
       //    Donington's overcast English green, but still a green theme.
       //    Two tree families on purpose — broadleaf maple/oak and dark
       //    blue-green spruce — because §6 forbids a pine monoculture.
-      // ---------------------------------------------------------------------
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
       const LEAF      = [0.24, 0.42, 0.18];   // mature broadleaf, full summer
@@ -145,12 +143,10 @@
         specimen(K(s + 0.004), -1, 24, seed);
       };
 
-      // ---------------------------------------------------------------------
       // 2. s 0.005 +1 13 — PIT BLOCK, PADDOCK, BROADCAST, CAMERA TOWER
       //    §4: ONE long low flat-roofed garage run, club scale, NO tower
       //    stack. A short motorhome row behind it. Highest point of the lap.
       //    Wave-6: pit run is a required modelGroup (club-scale CTMP paddock).
-      // ---------------------------------------------------------------------
       {
         const a = anchor(K(0.0000), 1, 18);
         const foot = a.c.slice();
@@ -185,11 +181,9 @@
       fence(0.9500, 0.0540, 1, 30, 2.4, FENCE_C);
       marshalPost(K(0.0050), 1, 16);
 
-      // ---------------------------------------------------------------------
       // 3. s 0.010 -1 18 — START/FINISH: TWO MODEST STEEL BANKS
       //    grandstandEx(s, side, gap, len, shell, crowd) — shell/crowd are
       //    COLOUR ARRAYS; null lets the emitter pick a livery.
-      // ---------------------------------------------------------------------
       grandstandEx(0.0040, -1, 18, 68, null, null);
       grandstandEx(0.0300, -1, 18, 46, null, null);
       sponsorHoarding(0.9930, 0.0520, -1, 12.5);
@@ -197,45 +191,37 @@
       gantry(0.0020, 7.0, [0.80, 0.80, 0.78]);
       spectatorHill(0.9850, 0.0450, -1, 30, { h: 5.0, col: GRASS });
 
-      // ---------------------------------------------------------------------
       // 4. s 0.0183 -1 11 — TURN ONE: the straight tips into the descent
       //    Almost no run-off (§5): armco hard on the outside, tyres at the
       //    apex, and the wood tight behind the barrier so it reads enclosed.
-      // ---------------------------------------------------------------------
       guardrail(0.0120, 0.0560, -1, 11, ARMCO);
       tyreWall(0.0150, 0.0260, -1, 11.5, TYRE_R);
       marshalPost(K(0.0183), -1, 14);
       mixedWood(0.0130, 0.0650, -1, 16, 20, 11);
       groundPatch(K(0.0210), -1, 13, [7, 0.16, 46], SAND);
 
-      // ---------------------------------------------------------------------
       // 5. s 0.0467 +1 16 — TURN 1 INFIELD: KEEP IT OPEN
       //    §4/§6: open mown grass falling away, a ridge running WITH the
       //    slope, a scatter of specimen trees. This is where the drop first
       //    shows, so nothing tall goes near the track edge.
-      // ---------------------------------------------------------------------
       groundPatch(K(0.0467), 1, 22, [34, 0.16, 90], GRASS);
       slopeRidge(K(0.0480), 1, 74, 78, 22, 6.0, GRASS);
       slopeRidge(K(0.0900), 1, 96, 70, 18, 4.5, ROUGH);
       for (let i = 0; i < 7; i++) specimen(K(0.0300 + i * 0.0150), 1, 34 + (i % 3) * 13, 100 + i * 13);
       hedge(0.0650, 0.1150, 1, 52, 2.0, HEDGE_C);
 
-      // ---------------------------------------------------------------------
       // 6. s 0.1483 -1 10 — APPROACH TO CLAYTON: the steepest pitch (§3)
       //    Armco and a continuous mixed wood. Nothing built. A pedestrian
       //    crossing (real: footbridge at Turn 2).
-      // ---------------------------------------------------------------------
       guardrail(0.1050, 0.1750, -1, 10.5, ARMCO);
       mixedWood(0.1050, 0.1800, -1, 14, 22, 10);
       footbridge(0.1483, 11);
       groundPatch(K(0.1400), -1, 12, [6, 0.16, 60], SAND);
       marshalPost(K(0.1300), -1, 13);
 
-      // ---------------------------------------------------------------------
       // 7. s 0.1817 -1 14 — CLAYTON CORNER (T2)
       //    A dramatic plunging left, 20 m of drop through the corner. Tyres
       //    on the outside, a spectator bank behind them in the trees.
-      // ---------------------------------------------------------------------
       guardrail(0.1700, 0.2300, -1, 11, ARMCO);
       tyreWall(0.1740, 0.1930, -1, 12.0, TYRE_R);
       // Bank pushed well past the tyre wall (clip was 1.56–1.59 m @ 0.188).
@@ -244,11 +230,9 @@
       mixedWood(0.1780, 0.2450, -1, 28, 24, 11);
       fence(0.1680, 0.2150, -1, 20, 2.8, FENCE_C);
 
-      // ---------------------------------------------------------------------
       // 8. s 0.2800 +1 18 — CLAYTON -> QUEBEC: dark and enclosed
       //    Woodland BOTH sides here, a small bank on the inside, continuous
       //    armco. The only stretch where the infield is allowed to close in.
-      // ---------------------------------------------------------------------
       guardrail(0.2300, 0.3250, 1, 12, ARMCO);
       guardrail(0.2300, 0.3050, -1, 11, ARMCO);
       // Shorter bank, fewer rows — self-coplanar end-caps at gap 22 (flatCoplanar
@@ -258,11 +242,9 @@
       mixedWood(0.2250, 0.3050, -1, 15, 24, 11);
       marshalPost(K(0.2800), 1, 16);
 
-      // ---------------------------------------------------------------------
       // 9. s 0.3117 -1 12 — QUEBEC CORNER (T3)
       //    Armco then tyres, marshal post, wood hard behind, one billboard on
       //    the exit fence.
-      // ---------------------------------------------------------------------
       guardrail(0.2950, 0.3600, -1, 11, ARMCO);
       tyreWall(0.3050, 0.3220, -1, 12.0, TYRE_Y);
       marshalPost(K(0.3117), -1, 14);
@@ -271,11 +253,9 @@
       billboard(K(0.3350), -1, 16, 9, 3.2, [0.74, 0.73, 0.70]);
       groundPatch(K(0.3150), -1, 13, [7, 0.16, 40], SAND);
 
-      // ---------------------------------------------------------------------
       // 10. s 0.4200 -1 22 — THE RUN DOWN TO MOSS, still falling
       //     The lowest and most enclosed part of the lap. Continuous wood,
       //     sandy shoulder, one marshal post, nothing built.
-      // ---------------------------------------------------------------------
       guardrail(0.3600, 0.4700, -1, 11.5, ARMCO);
       mixedWood(0.3600, 0.4700, -1, 18, 26, 11);
       groundPatch(K(0.4050), -1, 14, [8, 0.16, 70], SAND);
@@ -288,14 +268,12 @@
       for (let i = 0; i < 4; i++) specimen(K(0.3750 + i * 0.0180), 1, 44 + (i % 2) * 16, 200 + i * 9);
       slopeRidge(K(0.4150), 1, 82, 72, 20, 5.0, ROUGH);
 
-      // ---------------------------------------------------------------------
       // 11. s 0.4817 +1 15 — MOSS CORNER (T5a/5b), THE SIGNATURE
       //     Double-apex complex Stirling Moss asked for (Wikipedia / IMSA).
       //     Repo turns[] names it T5a/5b — some maps say "T5" (UNCERTAIN label
       //     only; geometry follows the def). Tyres on both apexes; a required
       //     modelGroup bank on the inside replaces the old spectatorHill+terrace
       //     pair that coplanar-clipped for 1.8 m / 8 m².
-      // ---------------------------------------------------------------------
       tyreWall(0.4700, 0.4830, 1, 12.5, TYRE_R);
       tyreWall(0.4900, 0.5030, 1, 12.5, TYRE_R);
       // Book the Moss bank + hairpin fold so deferred plantTree crowns cannot
@@ -352,11 +330,9 @@
       forestEdge(0.4600, 0.5250, -1, 72, { col: LEAF_D, spacing: 22 });
       forestEdge(0.4700, 0.5150, -1, 92, { col: CONIF, spacing: 26 });
 
-      // ---------------------------------------------------------------------
       // 12. s 0.5400 -1 20 — MOSS EXIT: THE CLIMB STARTS
       //     Armco, a low ridge carrying the ground up, the wood set BACK as
       //     the trees open out (§4).
-      // ---------------------------------------------------------------------
       guardrail(0.5150, 0.6000, -1, 12, ARMCO);
       slopeRidge(K(0.5400), -1, 62, 76, 20, 6.0, GRASS);
       slopeRidge(K(0.5800), -1, 76, 68, 18, 4.5, ROUGH);
@@ -365,12 +341,10 @@
       marshalPost(K(0.5400), -1, 15);
       groundPatch(K(0.5500), -1, 15, [10, 0.16, 70], GRASS);
 
-      // ---------------------------------------------------------------------
       // 13. s 0.6600 -1 26 — MARIO ANDRETTI STRAIGHTAWAY
       //     The fastest part of the lap, and climbing. Trees set BACK on both
       //     sides, hoarding on the fence, two billboards. The one place the
       //     sky opens (§4) — so nothing tall inside gap 26.
-      // ---------------------------------------------------------------------
       guardrail(0.6000, 0.7400, -1, 12.5, ARMCO);
       guardrail(0.6000, 0.7400, 1, 13.5, ARMCO);
       fence(0.6100, 0.7300, -1, 17, 3.0, FENCE_C);
@@ -381,11 +355,9 @@
       forestEdge(0.6300, 0.7150, -1, 64, { col: CONIF, spacing: 20 });
       marshalPost(K(0.6600), -1, 18);
 
-      // ---------------------------------------------------------------------
       // 14. s 0.7400 +1 30 — BACK-STRAIGHT INFIELD: DRUMLIN FARMLAND
       //     Mown grass, a hedge field boundary, isolated trees, a shallow
       //     ridge. Rural and empty (§4) — the Ontario tell.
-      // ---------------------------------------------------------------------
       groundPatch(K(0.7000), 1, 34, [46, 0.16, 120], GRASS);
       groundPatch(K(0.7800), 1, 40, [40, 0.16, 90], ROUGH);
       hedge(0.6500, 0.7900, 1, 30, 2.1, HEDGE_C);
@@ -395,11 +367,9 @@
       for (let i = 0; i < 8; i++) specimen(K(0.6450 + i * 0.0190), 1, 44 + (i % 3) * 18, 300 + i * 11);
       marshalPost(K(0.7400), 1, 20);
 
-      // ---------------------------------------------------------------------
       // 15. s 0.8017 -1 12 — TURN 8, ENTRY TO THE ESSES
       //     Tyres at the apex, marshal post, wood tight. A pedestrian
       //     crossing (real: footbridge at Turn 7).
-      // ---------------------------------------------------------------------
       guardrail(0.7700, 0.8300, -1, 11, ARMCO);
       tyreWall(0.7940, 0.8110, -1, 12.0, TYRE_R);
       marshalPost(K(0.8017), -1, 14);
@@ -407,11 +377,9 @@
       footbridge(0.7930, 27);
       groundPatch(K(0.8050), -1, 13, [7, 0.16, 44], SAND);
 
-      // ---------------------------------------------------------------------
       // 16. s 0.8817 -1 10 — THE ESSES: the most claustrophobic stretch
       //     A downhill flick with the woods closed right in. Armco BOTH
       //     sides, tyres on the blind apex, nothing built.
-      // ---------------------------------------------------------------------
       guardrail(0.8350, 0.9100, -1, 10.5, ARMCO);
       guardrail(0.8350, 0.9100, 1, 11.5, ARMCO);
       tyreWall(0.8740, 0.8900, -1, 11.5, TYRE_Y);
@@ -419,13 +387,11 @@
       mixedWood(0.8400, 0.9050, 1, 16, 18, 11);
       marshalPost(K(0.8817), -1, 13);
 
-      // ---------------------------------------------------------------------
       // 17. s 0.9183 +1 16 — WHITES CORNER (T10) AND THE SPECTATOR TUNNEL
       //     The last corner onto the pit straight, still climbing. Tyres
       //     inside, a stand and hoarding on the exit, marshal post at the
       //     apex. A spectator tunnel passes under the track here — built as
       //     two portal headwalls and a sunken approach apron.
-      // ---------------------------------------------------------------------
       tyreWall(0.9100, 0.9270, 1, 12.5, TYRE_R);
       // Exit stand pushed past the tunnel portals (was clipping 1.65 m @ 0.922).
       grandstandEx(0.9480, 1, 32, 44, null, null);
@@ -464,12 +430,10 @@
       mixedWood(0.9300, 0.9650, -1, 36, 20, 12);
       forestEdge(0.9050, 0.9350, -1, 70, { col: CONIF, spacing: 24 });
 
-      // ---------------------------------------------------------------------
       // 18. s 0.9600 +1 34 — THE EVENT CENTRE
       //     Grand Prix Track Event Centre: ~23,000 sq ft multi-level hall with
       //     open-air rooftop overlooking the circuit (official CTMP facilities
       //     page; canadianracer: built 2013 outside turn 10 / front straight).
-      // ---------------------------------------------------------------------
       {
         const a = anchor(K(0.9600), 1, 38);
         const foot = a.c.slice();
@@ -506,13 +470,11 @@
       hedge(0.9440, 0.9860, 1, 20, 2.2, HEDGE_C);
       for (let i = 0; i < 4; i++) specimen(K(0.9500 + i * 0.0110), 1, 68, 400 + i * 7);
 
-      // ---------------------------------------------------------------------
       // 19. WHOLE LAP — mixed-woodland scatter, base armco, marshal posts
       //     §1/§6: mature mixed woodland on the OUTSIDE of almost every
       //     corner; the infield stays open where the drop shows. The hash
       //     gate drops roughly half the candidates and the distance jitter
       //     breaks any rank, so the wood never reads as a planted row.
-      // ---------------------------------------------------------------------
       every(23, (k) => {
         const s = k / n;
         const h = hash(k * 37 + 5);

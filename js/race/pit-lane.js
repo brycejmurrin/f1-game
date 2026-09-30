@@ -1025,7 +1025,7 @@ const PitLane = (function () {
       // at a crawl, where its steering authority is almost nothing, so asking
       // it for the box's CENTRE is asking for something it cannot do — and a
       // gate you cannot pass is a deadlock, not a standard. Measured both ways
-      // on a 6-lap Bahrain with the field stopping (scratch/pit-traffic.cjs):
+      // on a 6-lap Bahrain with the field stopping:
       // gating the latch on it stopped all twelve AI 4 m short of their own box
       // at x −15.5 against a centre of −18.25, stopped, and a stopped car
       // cannot steer; letting them CRAWL until square instead filled the lane
@@ -1276,7 +1276,7 @@ const PitLane = (function () {
       // WAIT YOUR TURN. Teammates SHARE a box — the row is one bay per team, by
       // design — so two cars of one team stopping on the same lap aim at the
       // same patch of tarmac, and the second drove into the first. Measured on
-      // a 6-lap Bahrain with the field stopping (scratch/pit-traffic.cjs):
+      // a 6-lap Bahrain with the field stopping:
       // Audi and Cadillac both had their pair in the complex at once. A busy
       // box is not a box: the car keeps its limiter and its lane, misses the
       // latch below, and takes the stop on the next pass of it — which is what

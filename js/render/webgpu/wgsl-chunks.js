@@ -1000,7 +1000,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // film levels the surface).
   if (detail > 0.001) {
     var mnFade = clamp(1.0 - (vDist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - wetness * 0.75);
-    // Footprint fade (GLX lit.js): grazing road pixels span metres; without this
+    // Footprint fade (GLX glsl-lit.js): grazing road pixels span metres; without this
     // the fixed 0.22 m noise gradient aliases into wavy "shadows" crawling under
     // the car. Distance fade alone misses a near-but-grazing patch.
     // Derived from fwWpos computed in top-level uniform control flow.
@@ -1026,7 +1026,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (carPaint > 0.001) {
     N = paintPeelN(N, in.objPos, vDist, carPaint);
   }
-  // Wall/MAT bump AFTER detail + peel, matching GLX lit.js. Lighting
+  // Wall/MAT bump AFTER detail + peel, matching GLX glsl-lit.js. Lighting
   // still uses the bumped N; SAA does not (Nsaa / geo+peel mix).
   applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn);
   let V = normalize(F.eye.xyz - in.wpos);
@@ -1131,7 +1131,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 
-  // SPECULAR ANTI-ALIASING BEFORE wet (GLX lit.js). Widen roughness by how
+  // SPECULAR ANTI-ALIASING BEFORE wet (GLX glsl-lit.js). Widen roughness by how
   // fast the normal is changing in SCREEN space, so a thin bright GGX lobe
   // on a geometry edge or peel sheens smoothly. Then wet recomputes a from
   // the polished roughness — doing SAA after wet extra-widened puddle edges.
@@ -1216,7 +1216,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       // driving, and a look-biased fade origin swept on yaw. UV border fade stays
       // as a safety clamp. shadowCtr.w = shadowRange (box half-size, m).
       let shRange = max(F.shadowCtr.w, 1.0);
-      // Yaw-invariant fade origin (eye XZ, look-target Y) — lit.js sampleShadow.
+      // Yaw-invariant fade origin (eye XZ, look-target Y) — glsl-lit.js sampleShadow.
       let fadeCtr = vec3<f32>(F.eye.x, F.shadowCtr.y, F.eye.z);
       var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(in.wpos, fadeCtr));
       let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
@@ -1230,7 +1230,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         // the knob contributes HALVED exactly like GLX (uShadowBias * 0.5).
         let cosT = clamp(dot(Ngeo, F.sunDir.xyz), 0.05, 1.0);
         let slopeB = F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT);
-        // STATIC map only: biasTerm × (shadowRange/80) — GLX lit.js sampleShadow.
+        // STATIC map only: biasTerm × (shadowRange/80) — GLX glsl-lit.js sampleShadow.
         // Unscaled, the same absolute push is ~25× too much at SHADOW DISTANCE 16
         // and barely covers acne at 200. Car map below uses biasTerm × params6.y
         // (carBoxScale when armed — GLX uCarBiasScale).
@@ -1295,14 +1295,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // Cloud dapple multiplies the cast shadow exactly like GLX (LIT_FS composite):
     // applied outside the depth-map gate, so broken cloud still shades the ground
     // even where/when the sun shadow map is off — but still inside the NoL gate,
-    // matching lit.js (cloudShadow is skipped on back-faces too).
+    // matching glsl-lit.js (cloudShadow is skipped on back-faces too).
     // CLOUD SHADOW DEPTH knob (F.params5.z; GLX parity). _writeFrame always packs
     // the resolved value (0.80 default), so 0 here means a real "no cloud shade".
     shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z);
   }
   let litNoL = NoL * keyMul * shadow;
   var color = albedo * (amb + F.sunColor.xyz * litNoL * (1.0 - metalness));
-  // SHADOW COOLNESS (GLX lit.js): bias sun-starved pixels toward cool blue.
+  // SHADOW COOLNESS (GLX glsl-lit.js): bias sun-starved pixels toward cool blue.
   let shadowTintAmt = max(F.params4.y, 0.0);
   if (shadowTintAmt > 0.001) {
     color = color * mix(vec3<f32>(1.0), vec3<f32>(0.90, 0.96, 1.12),
@@ -1344,7 +1344,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let Vc = V_SmithGGX(NoVg, NoLg, ccA);
     let Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3<f32>(0.05), 1.0).x;
     // keyMul: GLX includes uKeyMul so KEY LIGHT dims this lobe with the rest of
-    // the direct sun (lit.js). Without it a keyMul of 0 left every clearcoated
+    // the direct sun (glsl-lit.js). Without it a keyMul of 0 left every clearcoated
     // car with a full-brightness sun streak on WebGPU.
     var ccCol = vec3<f32>(Dc * Vc * Fc) * F.sunColor.xyz * NoLg * shadow * keyMul * clearcoat;
     ccCol = 2.6 * ccCol / (2.6 + ccCol);
@@ -1352,7 +1352,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
   }
 
-  // [Block 7] ENV lacquer mirror (GLX energy-conserving clearcoat env — lit.js).
+  // [Block 7] ENV lacquer mirror (GLX energy-conserving clearcoat env — glsl-lit.js).
   // Gate on envSurface + clearcoat (not carReflect — that slot drives composite
   // SSR). envProbeStr scales probeLive (baseRefl 0.14→0.72); probe 0 still gets
   // a gentle analytic sheen. Energy-conserving: darken base under envW, then add.
@@ -1614,7 +1614,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (mistK > 0.001) {
       let mh = max(F.params3.w, 0.05);
       let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
-      // GLX parity (lit.js): band = exp(-lowH * (0.09 / mh)). The old WGX form
+      // GLX parity (glsl-lit.js): band = exp(-lowH * (0.09 / mh)). The old WGX form
       // exp(-lowH/(mh*20)) == exp(-lowH*0.05/mh) fell off ~1.8× too slowly and
       // the extra *0.5 + 0.35 clamp stacked a denser low sheet than GLX's 0.45
       // ceiling — a washed translucent band over the road on misty day circuits.

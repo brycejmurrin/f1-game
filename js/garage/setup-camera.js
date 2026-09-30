@@ -64,7 +64,7 @@ const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.35;
 const SP_FIT_HALF_W = 3.10;
 // How far the AUTOMATIC turntable may back off. Deliberately under the MANUAL
 // zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
-// shot, whereas the auto fit reaching it means the fit diverged. garage-scene.js
+// shot, whereas the auto fit reaching it means the fit diverged. js/garage/scene.js
 // notes a camera at 15 m "is outside the bay on at least one axis nearly
 // always"; 11 keeps the swing inside the door/back walls (Z +/-6.4) at the
 // default elevation with real headroom over the 8.5 m default framing.

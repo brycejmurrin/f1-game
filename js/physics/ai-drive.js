@@ -6,7 +6,7 @@ const AiDrive = (function () {
   const lerp = M4.lerp;
   const damp = (c, t, l, dt) => lerp(c, t, 1 - Math.exp(-l * dt));
 
-  // ratings on the car (0..1), with the mid-grid default the old code used
+  // ratings on the car (0..1), with a mid-grid default
   // Reused scratch — same contract as game.js pairContact/_ct. Callers must
   // read fields before the next traits() call (updateCar does; tests do).
   const _traits = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75 };
@@ -92,8 +92,8 @@ const AiDrive = (function () {
     return street ? 8 : 6;
   }
 
-  // Slipstream vmax gain. Streets used to get none, so the 8 m train could
-  // never close; a half-size tow still fits inside the follow cap.
+  // Slipstream vmax gain. Streets get a half-size tow: with none, the 8 m train
+  // can never close, and half still fits inside the follow cap.
   function towGain(street) {
     return street ? 0.022 : 0.045;
   }
@@ -283,7 +283,7 @@ const AiDrive = (function () {
     const straight = clamp(1 - Math.abs(ctx.kAhead || 0) / 0.012, 0, 1);
     const situ = (0.34 * gapScore + 0.28 * roomScore + 0.22 * closeScore + 0.16 * straight)
       * (ctx.street ? streetOtScale(t) : 1);
-    // Mid-open window lands ~0.3–0.6 (unit-tested band), not the old fixed λ=0.7.
+    // Mid-open window lands ~0.3–0.6 (unit-tested band), not a fixed λ.
     const craftMul = lerp(0.45, 1.55, t.craft);
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
     const expMul = lerp(0.75, 1.15, t.experience);      // rookies hesitate
@@ -330,14 +330,12 @@ const AiDrive = (function () {
   // One feasible lateral envelope for the planner and the kinematic actuator.
   // speed is in world m/s; pace removes the ground-speed scale.
   //
-  // THE SAME WINGS AS THE PLAYER. This envelope used to FALL by 28 % from
-  // 20 m/s to the top speed (the old arcade taper) while the player's grip
-  // RISES by DOWNFORCE (65 %) over the same range (game.js aeroGrip), so at
-  // 60 m/s a player had roughly twice the lateral grip the AI credited itself
-  // with and every fast corner was a free second. The earlier fix gave only
-  // the PLANNER aero and was reverted because the actuator could not turn at
-  // the speeds it planned (docs/notes/AI-FIELD-RESEARCH.md, 2026-09-09); this
-  // is the shared-function route that note asked for: planner (cornerSpeed
+  // THE SAME WINGS AS THE PLAYER. The player's grip RISES by DOWNFORCE (65 %)
+  // from 20 m/s to the top speed (game.js aeroGrip); an AI envelope that does
+  // not gives a player roughly twice the lateral grip at 60 m/s and every fast
+  // corner a free second. Aero on the PLANNER alone fails too — the actuator
+  // cannot turn at the speeds it plans (docs/notes/AI-FIELD-RESEARCH.md) — so
+  // both share one function: planner (cornerSpeed
   // inverts this exactly) and actuator (game.js gripScale / yaw cap) read the
   // one curve, so they rise together. The player's PLAYER_GRIP forgiveness
   // headroom is NOT copied — the AI gets the car's aero, not the assist.
@@ -695,7 +693,7 @@ const AiDrive = (function () {
   // while the car is collected) — half a second to a second and a half lost,
   // and never while alongside another car.
   // TYRES AS STRATEGY. There are no pit stops (docs/PHYSICS.md), so the
-  // compound IS the strategy, and the field used to run one. Each AI car now
+  // compound IS the strategy, so the field must not run one. Each AI car
   // starts a race on a class drawn for the distance (sprints on softs, long
   // races mixed): a soft is up on pace and fades, a hard is down and lasts,
   // so soft-starters and hard-starters cross over mid-race — real F1 2026 deg
@@ -1204,10 +1202,10 @@ const AiDrive = (function () {
   // laps and is where the "AI welded to my bumper" pile-ups start. After a
   // patience window (awareness commits earlier) the AI moves toward its free
   // side and stops accelerating away — TORCS' OPP_LETPASS, minus the blue flag.
-  // LET PASS IS A BLUE FLAG (2026-09-29): a quicker car inside 9 m on our gearbox, closing,
-  // with nothing ahead of US holding it up — and LAPPING us. It used to wave a same-lap
-  // rival through too (the player included) after letPassDelay on the gearbox, which read
-  // as "the AI doesn't defend": a racer makes the faster car pass; a backmarker moves over.
+  // LET PASS IS A BLUE FLAG: a quicker car inside 9 m on our gearbox, closing, with
+  // nothing ahead of US holding it up — and LAPPING us. Never a same-lap rival (the
+  // player included), or it reads as "the AI doesn't defend": a racer makes the
+  // faster car pass; a backmarker moves over.
   // The closing rate rides the pace scale (vScale = vTop()/VMAX), like queueBrake's bands.
   function letPassCase(racing, blocker, chaser, chaserGap, chaserSpeed, speed, vScale, lapping) {
     if (!racing || blocker || !chaser || !lapping || !(chaserGap < 9)) return false;
