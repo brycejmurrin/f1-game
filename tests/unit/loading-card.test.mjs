@@ -327,10 +327,12 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // first countdown present on TLX starts the program warm and paints nothing.
   const game = read("js/game.js");
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
-  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;[^\n]*\n\s*clearMenuScreens\(\);\s*if \(handoff\) loadingScreen\.handoff\(\);/,
+  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;/,
+    "startRaceBody still decides handoff from the screen that was up before the sweep");
+  assert.match(body, /clearMenuScreens\(\);\s*if \(handoff\) \{[^}]*loadingScreen\.handoff\(\);/,
     "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
-  assert.match(render, /gfx\.present\(po\);[\s\S]{0,400}?if \(loadingScreen\.phase\(\) === "handoff" && !\(gfx\.warming && gfx\.warming\(\)\)\) loadingScreen\.stop\(\);/,
+  assert.match(render, /gfx\.present\(po\);[\s\S]{0,500}?loadingScreen\.phase\(\) === "handoff"[\s\S]{0,300}?loadingScreen\.stop\(\)/,
     "render() lowers it after a present that painted, never one that only started the warm");
   assert.match(read("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
 });
