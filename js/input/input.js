@@ -1769,9 +1769,11 @@ const Input = (function () {
   // gamepadconnected: a pad arriving later can make it true.
   function hapticsSupported() {
     const nav = typeof navigator !== "undefined" ? navigator : null;
-    if (nav && typeof nav.vibrate === "function") return true;
+    // navigator.vibrate exists in desktop Chrome too, where nothing buzzes: it
+    // only counts on a touch device (a phone or tablet has the motor).
+    if (nav && typeof nav.vibrate === "function" && (nav.maxTouchPoints || 0) > 0) return true;
     const pad = activePad();
-    return !!(pad && pad.vibrationActuator);
+    return !!(pad && (pad.vibrationActuator || (pad.hapticActuators && pad.hapticActuators.length)));   // the Firefox fallback rumble() uses too
   }
 
   // PRIME the vibrator from a real click. Chromium requires user activation for
