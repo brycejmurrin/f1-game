@@ -9444,7 +9444,7 @@ function phonePadDash() {
 }
 $("pm-phonepad").onclick = () => {
   const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "PHONE AS CONTROLLER"; return; }
+  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE"; return; }
   box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
   ensureNet().then((ok) => {
     if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
@@ -9465,7 +9465,7 @@ $("pm-phonepad").onclick = () => {
         if (VISOR_CAM >= 0 && camMode !== VISOR_CAM) { phonePadCam = camMode; setCamMode(VISOR_CAM); }
       },
       lost: () => {
-        btn.textContent = "PHONE AS CONTROLLER"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn");
+        btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn");
         if (phonePadCam >= 0 && camMode === VISOR_CAM) setCamMode(phonePadCam);
         phonePadCam = -1;
       },

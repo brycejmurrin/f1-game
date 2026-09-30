@@ -873,6 +873,18 @@ jobs:
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches the fleet build's inputs (track engine, circuit data, tools/track|lib, a TRACK_VM module) or a sweep suite"
+            # THE CIRCUIT LANE (2026-09-30): on a pull request whose every changed
+            # path is one circuit's own files, the sweeps run for that circuit
+            # (APEX_CIRCUITS, the contract the browser gate already uses) — 52
+            # builds became one on the scenery waves. Not on a push or the train
+            # (the tip is gated whole), and never when the scope cannot be read.
+            if [ "$EVENT" = pull_request ]; then
+              SCOPE_FILE="${RUNNER_TEMP:-.}/changed-files.txt"
+              printf '%s\n' "$CHANGED" > "$SCOPE_FILE"
+              IDS="$(node -e 'import("./tools/ci/select-specs.mjs").then((m) => { const fs = require("fs"); const ch = fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean); const c = m.circuitsTouched(ch, process.argv[2]); process.stdout.write(c.scoped ? c.ids.join(",") : ""); }).catch(() => process.stdout.write(""));' "$SCOPE_FILE" "$BEFORE")" || IDS=""
+              echo "circuits=$IDS" >> "$GITHUB_OUTPUT"
+              if [ -n "$IDS" ]; then echo "CIRCUIT-SCOPED SWEEPS: APEX_CIRCUITS=$IDS"; else echo "the whole fleet: this diff is not circuit-only"; fi
+            fi
           else
             # THE TARGETED TIER (2026-09-22). The suites of test:sweeps whose
             # inputs are NOT the fleet build — lighting, car, debris-world, the
@@ -893,6 +905,9 @@ jobs:
           fi
       - name: Geometry sweeps (rebuilds every circuit, per suite)
         if: steps.filter.outputs.geometry == 'true'
+        env:
+          # Empty = every circuit; a circuit-only PR's ids otherwise (the filter above).
+          APEX_CIRCUITS: ${{ steps.filter.outputs.circuits }}
         run: npm run test:sweeps
       # The cheap tier: only the suites that read this diff, from the same
       # table deploy.mjs uses locally. Never runs alongside the fleet (the
@@ -2014,6 +2029,49 @@ jobs:
   # zero eligible specs, the shipped WebGL2 path among them) needs a canvas
   # instrument with a per-test budget under the gate's 180 s. Do not route
   # renderer or lighting paths here expecting cover they cannot give.
+  # ONE CHECK THAT ALWAYS REPORTS FOR THE CHANGE-AWARE GATE (2026-09-30).
+  # Branch protection can only require a check by name, and `selected`'s
+  # names carry its matrix (`(selected, …)`, `(oversize-…)`), which change
+  # per run — so it could not be required, and #491 merged with its
+  # selected gate red on the merged tree, leaving the tip red and the train
+  # unpoked. This job has ONE fixed name and runs on every push, pull request
+  # and Pages call (`always()`, so a skipped `selected` is still judged):
+  # green when `select` passed and `selected` passed, or was skipped because
+  # the plan was empty for a genuine reason (`dropped == 0`); red otherwise.
+  # The same reading poke-train makes — poke-train stays as it is. On the
+  # train (a Pages call, its plan against LIVE) an unaffordable plan is a
+  # warning, not a red: the train's answer is the fixed gates plus the
+  # sweeps, and dropped specs there ran on the PRs that carried them.
+  selected-verdict:
+    name: Selected specs (verdict)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [select, selected]
+    if: ${{ always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '') }}
+    steps:
+      - name: One answer for the change-aware gate
+        env:
+          SELECT: ${{ needs.select.result }}
+          SELECTED: ${{ needs.selected.result }}
+          DROPPED: ${{ needs.select.outputs.dropped }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+        run: |
+          set -u
+          echo "select=$SELECT selected=$SELECTED dropped=${DROPPED:-?} called=$CALLED"
+          case "$SELECT" in
+            success) ;;
+            *) echo "::error::the selection itself did not pass ($SELECT)"; exit 1 ;;
+          esac
+          case "$SELECTED" in
+            success) echo "selected specs passed" ;;
+            skipped)
+              if [ "${DROPPED:-0}" = "0" ]; then echo "nothing this diff touches has a spec — an empty plan is a pass"
+              elif [ "$CALLED" = "true" ]; then echo "::warning::the train's plan dropped ${DROPPED} routed spec(s) as unaffordable; the fixed gates and the PRs that carried them are the answer here"
+              else echo "::error::the plan is empty because ${DROPPED} routed spec(s) were unaffordable — nothing booted a backend for this diff"; exit 1
+              fi ;;
+            *) echo "::error::selected specs $SELECTED"; exit 1 ;;
+          esac
+
   baseline-trial:
     name: Golden menus on a runner (trial, non-blocking)
     # Nightly and dispatches only (PRs until 2026-09-29, below): never a push,
