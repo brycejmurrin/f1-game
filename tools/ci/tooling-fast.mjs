@@ -69,6 +69,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
+  // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
+  // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
+  "tests/unit/ai-ratings-math.test.mjs",
   // ...and the field's strategy: the plan scales with the distance, a 20-car
   // grid does not converge on one plan, strategies mix, and the reactive
   // rules (free stop, weather, spent set) fire in the right order. ~0.1 s.
@@ -401,6 +404,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // enough to stop in, and the COMMITMENT that replaced the pit button tells
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
+  // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
+  "tests/unit/player-forces.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
   // answers the question that actually bites, "does the pre-push gate RUN it" —
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
