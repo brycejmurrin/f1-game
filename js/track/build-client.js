@@ -15,6 +15,22 @@ const TrackBuildClient = (function () {
   function enabled() {
     try { return localStorage.getItem(KEY) === "1"; } catch (_) { return false; }
   }
+  // BUILD IN BACKGROUND (pause > SETTINGS, with the renderer levers): the same key,
+  // raw lane, "1"/"0". It takes effect on the next build: loadTrackStepped reads it.
+  function set(on) {
+    try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) { /* private mode: the row still reads back what stuck */ }
+    if (on) spawn();   // parse the build modules now, not at the next RACE!
+  }
+  function initUI() {
+    if (typeof SettingRow === "undefined" || !document.getElementById("pm-buildworker")) return;
+    SettingRow.wire("pm-buildworker", { values: SettingRow.labels(["off", "on"]), read: () => (enabled() ? "on" : "off"), write: (v) => set(v === "on") });
+  }
+  // DOMContentLoaded, not "now": this file is a deferred tag that runs BEFORE
+  // js/ui/setting-row.js, while readyState already reads "interactive".
+  if (typeof document !== "undefined") {
+    if (document.readyState === "complete") initUI();
+    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+  }
   const url = (f) => new URL(f + "?v=" + (window.__APEX_BUILD || 0), location.href).href;
   // Every build module is a page <script>: import it by the page's OWN src (its
   // deploy-time content hash), so the worker's fetch is a cache hit, not a
@@ -138,6 +154,6 @@ const TrackBuildClient = (function () {
   // nothing may fill it with a synchronous build meanwhile (__apex's lazy ensure).
   const busy = () => _inflight > 0;
 
-  return { enabled, spawn, build, replay, busy, KEY };
+  return { enabled, set, spawn, build, replay, busy, KEY };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;
