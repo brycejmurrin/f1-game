@@ -229,14 +229,16 @@ test that builds one HANGS rather than fails (__apex.lobbyFake)
 
 ## Phone as controller (`js/input/phone-pad.js`, `controller.html`)
 
-The same wire, one seat, no race state: Settings › CONTROLS › PHONE AS
-CONTROLLER mints a room code, paints a QR for `controller.html#pad=CODE`, and
+The same wire, one seat, no race state: Settings › CONTROLS › STEER THIS
+GAME WITH A PHONE (`#pm-phonepad`, the feature called PHONE AS CONTROLLER in
+the code) mints a room code, paints a QR for `controller.html#pad=CODE`, and
 hosts the room exactly as VS FRIEND does (`NetTransport.rtc` → `NetHandshake.createInvite`
 → `NetRendezvous.hostRoom`). The phone page joins with `swap` + `acceptInvite`
 (2.5 s gather, like the lobby's room-code guest). The phone reaches that page
 by QR, by typing the URL, or by its own door: on a coarse pointer the title
-screen shows USE AS CONTROLLER and CONTROLS shows USE THIS PHONE AS THE
-CONTROLLER (`#mb-phonepad`, `#pm-phonepad-go`), a plain navigation to
+screen shows USE AS CONTROLLER and CONTROLS shows USE THIS PHONE TO STEER
+ANOTHER SCREEN (`#mb-phonepad`, `#pm-phonepad-go`; renamed 2026-09-29 from USE
+THIS PHONE AS THE CONTROLLER, which read as a duplicate of the host button), a plain navigation to
 `controller.html` where the code is typed — `syncPointerKind()` in js/game.js
 flips both live with `body.desktop`, so a mouse never sees them. The wheel is
 LANDSCAPE ONLY (portrait shows a TURN THE PHONE card; Android locks the
