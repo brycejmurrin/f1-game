@@ -405,7 +405,7 @@ const SceneryPits = (function () {
       // entrance, one on each WALL CORNER either side of it, with the middle
       // of the lane between them). That pair of corners exists at exactly one
       // arc, and it is the ENTRY LINE, not the mouth: measured down Abu
-      // Dhabi's entry road (scratch/pit-mouth-walls.cjs), the peel is a wedge
+      // Dhabi's entry road, the peel is a wedge
       // off the road edge with tarmac on its track side and only the OUTER
       // wall beside it, so a gate cannot stand at the mouth. At `sIn` the
       // platform wall's NOSE stands at 10.0 m and the outer wall at 22.0, the

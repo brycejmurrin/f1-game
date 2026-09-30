@@ -10,16 +10,17 @@ const { X_OPEN_RATE, X_CLOSE_RATE } = PhysicsConsts;
 /** @param {*} G the js/game.js ctx façade.
  *  @param {*} deps car-drawing helpers that stay in game.js (the garage and the
  *  race share them) — the same seam js/car/car-draw.js and
- *  js/render/shared/shadow-pass.js are handed. */
+ *  js/render/shared/shadow-pass.js are handed — plus game.js's render(), for
+ *  the one frame a paused race needs after the arrival preview (stopPreview). */
 function create(G, deps) {
 Log.info("game", "SetupCamera.create");
 // Stable bindings from the game.js closure.
 const { $, gfx, clamp, getTeamParts } = G;
 const { resolveLivery, partsVisualKey, drawAeroFlaps, teamDecalState, carDecalNum,
-        drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X } = deps;
+        drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render } = deps;
 
 const reducedMotion = () => G.store.get("motion", null) === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store));
+const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview }));
 // THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
 // played by js/game.js on every RACE! with no card up (LoadingScreen.garage) while
 // the circuit builds. Its pose stays "active" until stopDriveOut(), so the camera
@@ -46,6 +47,52 @@ function stepDriveOut() {
   driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
   return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg), { active: true });
 }
+// THE ARRIVAL PREVIEW (#garrival's PREVIEW IN / OUT): the tuner's saved settings
+// played once in this room, from the settings page — the title screen or a paused
+// race — so a speed, angle or lens is judged by eye. An explicit click, so it plays
+// with PLAY ARRIVAL off or reduced motion on. Its own clock on the render dt, as the
+// WORK ON CAR arrival runs; it never calls arrival.start()/chrome(), whose sheet is
+// not up. It ends by itself, on DONE or on Escape (the panel is hidden meanwhile,
+// so the layer stack cannot route Escape to DONE).
+let preview = null;
+function startArrivalPreview(dir, btn) {
+  if (!dir) return stopPreview();
+  const cs = $("carsetup");
+  if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
+  const cfg = Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
+  preview = { t: 0, cfg, dir: dir === "out" ? "out" : "in", was: G.setupPreviewOn, btn };
+  Log.info("game", "SetupCamera.preview " + preview.dir);
+  G.setupPreviewOn = true;
+  const inner = $("garrival-inner");
+  if (inner) inner.hidden = true;
+  return true;
+}
+function stepPreview(dt) {
+  preview.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * preview.cfg.speed;
+  const pose = (preview.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(preview.t, preview.cfg);
+  if (pose.active) return pose;
+  stopPreview();
+  return Object.assign(pose, { active: true });   // this frame still holds the last pose, not the turntable's
+}
+function stopPreview() {
+  if (!preview) return false;
+  const p = preview;
+  preview = null;
+  G.setupPreviewOn = p.was;
+  const inner = $("garrival-inner");
+  if (inner) inner.hidden = false;
+  if (p.btn && p.btn.focus) p.btn.focus();
+  // A PAUSED RACE renders nothing while no tuner is open, so the garage would
+  // stay on the canvas: one more frame, outside the render this may be called from.
+  if (!p.was && typeof requestAnimationFrame === "function") requestAnimationFrame(() => render(0));
+  return true;
+}
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !preview) return;
+  stopPreview();
+  e.preventDefault();
+  e.stopPropagation();   // not the settings page's door as well
+}, true);
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
@@ -69,7 +116,7 @@ const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.35;
 const SP_FIT_HALF_W = 3.10;
 // How far the AUTOMATIC turntable may back off. Deliberately under the MANUAL
 // zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
-// shot, whereas the auto fit reaching it means the fit diverged. garage-scene.js
+// shot, whereas the auto fit reaching it means the fit diverged. js/garage/scene.js
 // notes a camera at 15 m "is outside the bay on at least one axis nearly
 // always"; 11 keeps the swing inside the door/back walls (Z +/-6.4) at the
 // default elevation with real headroom over the 8.5 m default framing.
@@ -357,7 +404,7 @@ const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on stor
 const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
 function renderSetupPreview(dt) {
   gfx.resize();
-  const arriving = driveOut ? stepDriveOut() : arrival.step(dt);
+  const arriving = driveOut ? stepDriveOut() : preview ? stepPreview(dt) : arrival.step(dt);
   if (!arriving || !arriving.active) applyHeldSetupCam(dt);                               // held on-screen controls
   if (setupPreviewSpin && !(arriving && arriving.active)) setupPreviewAz += dt * 0.35;   // slow turntable
   stepSetupAero(dt);
@@ -573,7 +620,7 @@ function holdSetupCtl(id, rates, step) {
   if (!el) return;
   const release = () => { if (spHeld === rates) spHeld = null; };
   el.addEventListener("pointerdown", (e) => {
-    if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
+    if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
     e.preventDefault();
     // Capture so a finger sliding off the chip still releases here. NOT
     // pointerleave for the release: setPointerCapture fires a boundary event as
@@ -615,7 +662,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
   };
   if (canvas) {
     canvas.addEventListener("pointerdown", (e) => {
-      if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
+      if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
       spPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
       spPinch = pinchGap();
       // Taking hold of the car is itself the instruction to stop the turntable —
@@ -647,7 +694,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     window.addEventListener("pointerup", release);
     window.addEventListener("pointercancel", release);
     canvas.addEventListener("wheel", (e) => {
-      if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
+      if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
       e.preventDefault();
       setupZoom(e.deltaY > 0 ? 1.1 : 1 / 1.1);
     }, { passive: false });

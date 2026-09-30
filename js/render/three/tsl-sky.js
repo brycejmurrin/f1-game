@@ -10,7 +10,7 @@
  * horizon glow, corona + aureole + squashed HDR disc, the round-point star
  * field (spawn window, giants, twinkle, cloud occlusion), moon disc + halo,
  * the city light-pollution dome with cloud-belly pickup, and the 1/255
- * time-stepped IGN output dither. Constants verbatim from sky.js — the
+ * time-stepped IGN output dither. Constants verbatim from glsl-sky.js — the
  * structural gates included: nightSky = step(0.5, uStars) zeroes daytime/
  * twilight AND damps the corona (at night uSunDir is the MOON key pointing
  * high — without the gate a daytime sun disc paints among the stars).
@@ -83,7 +83,7 @@
       const c = hash2(i.add(vec2(0, 1))), d = hash2(i.add(vec2(1, 1)));
       return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
     }).setLayout({ name: "apexSkyVnoise", type: "float", inputs: [{ name: "pIn", type: "vec2" }] });
-    // 4-octave fbm (chunks.js: s += a*vnoise(p); p *= 2.02; a *= 0.5) unrolled.
+    // 4-octave fbm (glsl-chunks.js: s += a*vnoise(p); p *= 2.02; a *= 0.5) unrolled.
     const fbm = Fn(([pIn]) => {
       const p = vec2(pIn).toVar();
       const s = vnoise(p).mul(0.5).toVar();

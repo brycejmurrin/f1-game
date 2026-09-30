@@ -256,6 +256,9 @@ const Quali = (function () {
       if (G.netPlay && G.netPlay.active && G.netPlay.active()) return;
       if (typeof Career !== "undefined" && Career.conflicted && Career.conflicted()) return;
       if (typeof SeasonCal !== "undefined" && SeasonCal.conflicted && SeasonCal.conflicted()) return;
+      // A one-off GP runs on the standalone season's object: it must never
+      // overwrite the grid a season (or career) round is keeping for CONTINUE.
+      if (modeId() === "gp" && s.qualiOrder && s.qualiMode !== "gp") return;
       s.qualiOrder = classification.map((r) => ({
         id: r.driverId, t: r.t, human: !!r.human,
       }));

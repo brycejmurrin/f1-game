@@ -461,8 +461,13 @@ test("a same-circuit rebuild does not re-key the ghost (sameCircuit reads the id
   // leave the old id claiming a freed world), so comparing against it made
   // sameCircuit always false and a day<->dark TIME preview dropped the lap.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const a = src.indexOf("const prevTrackId = builtTrackId;");
-  const b = src.indexOf("track = null; builtTrackId = null;");
+  const body = src.slice(src.indexOf("function _loadTrackBody("));
+  const a = body.indexOf("const prevTrackId = built ? builtPrevId : builtTrackId;");
+  const b = body.indexOf("track = null; builtTrackId = null;");
   assert.ok(a > 0 && a < b, "prevTrackId is captured before the reset");
+  // ...and the stepped build (loadTrackStepped) captures it before ITS reset, for _loadTrackBody's builtPrevId.
+  const st = src.slice(src.indexOf("async function loadTrackStepped("), src.indexOf("function loadTrack(idx)"));
+  assert.ok(st.indexOf("prevId = builtTrackId;") > 0 && st.indexOf("prevId = builtTrackId;") < st.indexOf("track = null; builtTrackId = null;"), "the stepped build captures it before its own reset");
+  assert.match(st, /_loadTrackBody\(idx, def, built, prevId\);/);
   assert.match(src, /const sameCircuit = prevTrackId === def\.id;/);
 });

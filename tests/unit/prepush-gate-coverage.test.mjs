@@ -66,6 +66,7 @@ const SWEEPS_ONLY = new Map([
   ["pit-signs.test.mjs", "test:sweeps — per-circuit geometry"],
   ["prop-clipping.test.mjs", "test:sweeps — per-circuit geometry"],
   ["props-tri-ratchet.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["build-steps.test.mjs", "test:sweeps — per-circuit geometry (stepped build is byte-identical)"],
   ["props-over-road.test.mjs", "test:sweeps — per-circuit geometry"],
   ["road-under-floor.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-grounding.test.mjs", "test:sweeps — per-circuit geometry"],

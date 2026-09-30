@@ -34,10 +34,8 @@
       { kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 },
     ],
     pal: { zenith: [0.56, 0.72, 0.92], horizon: [0.68, 0.72, 0.78], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fog: [0.70, 0.74, 0.80], fogDensity: 0.0022, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
-    // Racing-lap arc fractions. These (and the elevations below) were re-keyed
-    // by the old sceneryStartFrac 0.635 shift (arc 0.72364) when it was removed,
-    // so the road and its banks sit exactly where they did; the banks land on
-    // the curated apexes above. The old labels ("Peraltada" etc.) were wrong.
+    // Racing-lap arc fractions, like the elevations below (no sceneryStartFrac
+    // shift); the banks land on the curated apexes above.
     bankZones: [
       { frac: 0.9102, angleDeg: 3.5, widthM: 200 },   // T15 (was 0.1866 + shift 0.7236)
       { frac: 0.5044, angleDeg: 3.0, widthM: 80 },    // T6
@@ -49,8 +47,8 @@
     // Source-coordinate undulations. Hermanos Rodríguez sits on a drained lakebed
     // and is gentle, but not flat: it climbs through the esses, crests before the
     // stadium and drops through Foro Sol.
-    // (The old ±7 m pair remapped across start/finish and invented a 12 m hill;
-    // these are authored in SOURCE space so that cannot happen.)
+    // Authored in SOURCE space, so no pair can remap across start/finish and
+    // invent a hill.
     //
     // MEASURED off the built spline, 240 samples: 6.64 m end to end, peaking at
     // 2.83 % grade on the flank of the s = 0.245 rise, with 6 samples over 2 %.

@@ -42,7 +42,7 @@ const UiScale = (() => {
     const SCALE_MIN = 40;
     const SCALE_MAX = 200;
     // BUTTON SIZE alone goes on to 300 %: at 200 % the dock was still small in the hand on a
-    // tall landscape phone (owner, 2026-09-28), and fitHud's --hud-z-dock cap already stops
+    // tall landscape phone, and fitHud's --hud-z-dock cap already stops
     // the columns at whatever the screen has room for — the slider is a wish, the cap the fit.
     const BTN_MAX = 300;
     const maxFor = (k) => (k === "hudBtnScale" ? BTN_MAX : SCALE_MAX);

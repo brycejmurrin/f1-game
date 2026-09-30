@@ -231,7 +231,10 @@ const Tracks = (function () {
   // (tools/track/verify-track.cjs) has to keep working, and a 1 ms clock is
   // plenty for phases measured in tens.
   const _now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
-  function build(def, opts) {
+  // THE BUILD AS STEPS: build() runs it straight through, buildPaced a few ms per frame
+  // (the garage drive-out keeps animating). Yields the track so far at every lap() and
+  // inside props and the strip: byte-identical by construction; suspended time is no lap's.
+  function* buildSteps(def, opts) {
     // A centerline-only consumer has buildCenterline(). A full build without
     // uploads silently skipped road, props, barriers and pit boundary opening,
     // yet returned a track that looked ready to physics and render callers.
@@ -240,15 +243,16 @@ const Tracks = (function () {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const _prof = []; let _t = _now();
     const lap = (n, k) => { const now = _now(); _prof.push({ n, k, ms: +(now - _t).toFixed(2) }); _t = now; };
+    function* inner(it) { for (;;) { const r = it.next(); if (r.done) return r.value; const p = _now(); yield; _t += _now() - p; } }
     const track = buildCenterline(def);
     track.buildProfile = _prof;
-    lap("centerline", "geo");
+    lap("centerline", "geo"); yield track; _t = _now();
     // The pit complex FIRST: the terrain profile flattens under it and the
     // scenery keeps out of it, so both need the model before they run.
     track.pit = TrackPit.build(track, def, curvature);
-    lap("pit", "geo");
+    lap("pit", "geo"); yield track; _t = _now();
     track.surface = TrackSurface.profile(def, track);
-    lap("surface", "geo");
+    lap("surface", "geo"); yield track; _t = _now();
     track._night = opts && opts.night != null ? !!opts.night : !!def.night;
     // How many grid boxes to paint. game.js passes the SIZE OF THE FIELD IT IS
     // ABOUT TO GRID, because that varies with the selected team; anything that
@@ -295,17 +299,18 @@ const Tracks = (function () {
         Log.warn("track", `${def.id}/${name} skipped: ${result.reason}`);
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
-      const floorGeo = safe("floor", buildFloor(track)); lap("floor", "geo");
-      track.meshes.floor = G.createMesh(floorGeo); lap("floor", "up");
+      const floorGeo = safe("floor", buildFloor(track)); lap("floor", "geo"); yield track; _t = _now();
+      track.meshes.floor = G.createMesh(floorGeo); lap("floor", "up"); yield track; _t = _now();
       const roadGeo = safe("road", buildRoad(track)); roadGeo._keepPositions = true; roadGeo._keepFullGeometry = keepGeometry;
-      lap("road", "geo");
-      track.roadGeo = roadGeo; buildRibbon(roadGeo, "road"); lap("road", "up");
+      lap("road", "geo"); yield track; _t = _now();
+      track.roadGeo = roadGeo; buildRibbon(roadGeo, "road"); lap("road", "up"); yield track; _t = _now();
       const terrainGeo = buildTerrain(track);
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
-      lap("terrain", "geo");
+      lap("terrain", "geo"); yield track; _t = _now();
       track.terrainGeo = terrainSafe; buildRibbon(terrainSafe, "terrain"); // raw geometry kept for groundY/debug
-      lap("terrain", "up");
-      const _props = TrackBuildProps.build(track); lap("props", "geo");
+      lap("terrain", "up"); yield track; _t = _now();
+      const _props = TrackBuildProps.buildSteps ? yield* inner(TrackBuildProps.buildSteps(track)) : TrackBuildProps.build(track);
+      lap("props", "geo"); yield track; _t = _now();
       // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
       // opening the driving boundary across it puts nothing in a car's path.
       TrackPit.openBoundary(track);
@@ -316,14 +321,15 @@ const Tracks = (function () {
       // the upload may drop the positions.
       track.propTop = propTop(track, propsGeo);
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
-      lap("propsSeal", "geo");
+      lap("propsSeal", "geo"); yield track; _t = _now();
       // Index-only strip of never-visible triangles (js/track/core/hidden-faces.js).
-      propsGeo._hidden = TrackHiddenFaces.strip(propsGeo,
-        { groundY: (x, z) => terrainY(track, x, z), terrain: track.terrainGeo });
+      const _stripOpts = { groundY: (x, z) => terrainY(track, x, z), terrain: track.terrainGeo };
+      propsGeo._hidden = TrackHiddenFaces.stripSteps ? yield* inner(TrackHiddenFaces.stripSteps(propsGeo, _stripOpts))
+        : TrackHiddenFaces.strip(propsGeo, _stripOpts);
       // ...then drop the vertices only stripped triangles used (28 B each in
       // the VBO). This one DOES move vertex ranges — see compactProps.
       if (compactProps) propsGeo._compact = TrackHiddenFaces.compact(propsGeo);
-      lap("propsHidden", "geo");
+      lap("propsHidden", "geo"); yield track; _t = _now();
       // THE DISCRIMINATOR (apex26.propsUnchunked, diagnostic only, default off).
       //
       // The census measured GPU time invariant to pixel count, which rules out
@@ -342,7 +348,7 @@ const Tracks = (function () {
       try { _unchunked = localStorage.getItem("apex26.propsUnchunked") === "1"; } catch (_) { /* no storage */ }
       track.meshes.props = (G.createChunkedMesh && !_unchunked)
         ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
-      lap("props", "up");
+      lap("props", "up"); yield track; _t = _now();
       track.meshes.propBatches = null;
       if (track.graph && G.createInstancedBatch) {
         const { batches } = track.graph.batches({ instancedOnly: true });   // uploading the plain (capability) set ships glassBuf's panes twice — graph.js batches()
@@ -355,7 +361,7 @@ const Tracks = (function () {
             G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
         }
       }
-      lap("batches", "up");
+      lap("batches", "up"); yield track; _t = _now();
       // The graph's placement nodes are build inputs, not race state. On a
       // production page they have already been fused/uploaded into meshes;
       // retaining tens of thousands of nodes keeps an entire build-local object
@@ -366,19 +372,53 @@ const Tracks = (function () {
       track.glassGeo = glassGeo;
       track.waterGeo = waterGeo;
       glassGeo._keepPositions = glassGeo._keepFullGeometry = keepGeometry;
-      lap("glassWater", "geo");
+      lap("glassWater", "geo"); yield track; _t = _now();
       track.meshes.glass = G.createChunkedMesh ? G.createChunkedMesh(glassGeo, 72) : G.createMesh(glassGeo);
       track.meshes.water = G.createMesh(waterGeo);
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
-      lap("trim", "up");
+      lap("trim", "up"); yield track; _t = _now();
       // The bay signs: one painted atlas + one texMesh, where a canvas and the
       // livery painter exist (feature-detected inside; the VM builds skip it).
       if (typeof PitSigns !== "undefined") PitSigns.upload(G, track);
-      lap("pitSigns", "up");
+      lap("pitSigns", "up"); yield track; _t = _now();
     }
     Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
+  }
+  let _buildGen = 0, _pacing = 0;   // bumped by every build (a newer one abandons a paced one); paced in flight
+  function build(def, opts) {
+    _buildGen++;
+    const it = buildSteps(def, opts);
+    for (;;) { const r = it.next(); if (r.done) return r.value; }
+  }
+  // ~budgetMs per frame, a paint between slices. Resolves the track, or null once alive() is
+  // false or a newer build started — after handing onAbandon the partial track to free.
+  async function buildPaced(def, opts, alive, onAbandon, budgetMs) {
+    const gen = ++_buildGen, it = buildSteps(def, opts), budget = budgetMs > 0 ? budgetMs : 8;
+    let partial = null, r;
+    _pacing++;
+    try {
+      for (;;) {
+        const t0 = _now();
+        do { r = it.next(); if (r.value) partial = r.value; } while (!r.done && _now() - t0 < budget);
+        if (r.done) return r.value;
+        await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 16)));
+        if (gen !== _buildGen || !alive()) { it.return(); if (onAbandon) onAbandon(partial); return null; }
+      }
+    } catch (e) { if (onAbandon) onAbandon(partial); throw e; }
+    finally { _pacing--; }
+  }
+  const building = () => _pacing > 0;   // a paced build is in flight (its caller's world is null till it lands)
+  function free(t, gfx) {   // every GPU resource build() uploaded; null-safe (a partial track too)
+    const m = t && t.meshes, ck = !!gfx.freeChunkedMesh;
+    if (!m) return;
+    for (const h of [m.floor, m.road, m.terrain, m.gate, m.startline]) gfx.freeMesh(h);
+    if (ck) { gfx.freeChunkedMesh(m.props); if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked); if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked); }
+    else gfx.freeMesh(m.props);
+    if (m.glass) { if (ck) gfx.freeChunkedMesh(m.glass); else gfx.freeMesh(m.glass); }
+    if (m.water) gfx.freeMesh(m.water);
+    if (m.propBatches && gfx.freeInstancedBatch) { for (const b of m.propBatches) gfx.freeInstancedBatch(b); m.propBatches = null; }
   }
 
   function buildMap(px, pz, n) {
@@ -677,7 +717,7 @@ const Tracks = (function () {
       // same silent way, since "no shift" is a legitimate value.
       sceneryStartFrac: d.sceneryStartFrac != null ? d.sceneryStartFrac : null,
       // The def's curated FIA markings (RACING-LAP fractions, never fmap'd; no
-      // sectors → thirds), real centreline and dressing rows (ex scenery-data.js
+      // sectors → thirds), real centreline and dressing rows (formerly the js/track/scenery/data.js
       // id tables) — all READ OFF THE BUILT DEF: the same trap as the seven above.
       sectors: d.sectors || null, turns: d.turns || null, path: d.path || null,
       lineHints: d.lineHints || null,   // authored racing-line hints per turn (TrackLine.bake)
@@ -887,5 +927,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
 })();

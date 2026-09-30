@@ -779,7 +779,7 @@ const NetLobby = (function () {
     // A guest yields to the host and to guests that joined EARLIER, never to
     // a later one. Yielding to every peer regardless of rank let two guests on
     // one seat both move, both re-announce, and both move again — a HELLO
-    // ping-pong that never settled (bug hunt 2026-09-02, scratch/seat-clash).
+    // ping-pong that never settled (bug hunt 2026-09-02).
     function blockingSeats() {
       return seatRank() === 0 ? [] : peerSeats((k) => peerRank(k) < seatRank());
     }

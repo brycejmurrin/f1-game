@@ -1,6 +1,6 @@
 "use strict";
 /* UI LAYERS — which screen is on top, and are we racing?
- * Canonical layer list (LAYER_IDS) for input.js, menunav.js, topmodal.js.
+ * Canonical layer list (LAYER_IDS) for input.js, menu-nav.js, modal.js.
  * showModal() dialogs outrank z-index (`:modal` beats parseInt(zIndex)). */
 window.UiLayers = (function () {
 
@@ -49,6 +49,9 @@ window.UiLayers = (function () {
     { id: "flyby" },
     { id: "freecam" },
     { id: "garrival" },
+    /* The TITLE LAYOUT editor's docked toolbar (js/ui/title-layout.js): over
+       #overlay while the title screen is being dragged about. */
+    { id: "tl-editor" },
     { id: "photo-controls" },
     { id: "datahub" },
   ];

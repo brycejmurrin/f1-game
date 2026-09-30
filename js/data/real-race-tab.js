@@ -444,12 +444,15 @@ const DataRealRace = (function () {
       for (const d of script.drivers) d.lapStart.forEach((ls, i) => { if (ls != null && d.laps[i] > 0 && ls + d.laps[i] > end) end = ls + d.laps[i]; });
       const startISO = new Date(t0 - TRACE_PAD_S * 1000).toISOString(), endISO = new Date(t0 + (end + TRACE_PAD_S) * 1000).toISOString();
       const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ, cars: {} };
-      let done = 0;
+      let done = 0, failed = 0;
       const total = script.drivers.length;
       return Promise.all(script.drivers.map((d) => F1API.locationData(script.sessionKey, d.num, startISO, endISO)
-        .then((rows) => { traces.cars[d.num] = packTrace(rows, t0); }, () => { traces.cars[d.num] = new Float32Array(0); })
+        .then((rows) => { traces.cars[d.num] = packTrace(rows, t0); }, () => { failed++; traces.cars[d.num] = new Float32Array(0); })
         .then(() => { done++; if (onProgress) onProgress(done, total); })))
-        .then(() => tracePut(traces).then(() => traces));
+        // A failed request is not "no positions": a hub closed mid-load (F1API.cancelAll) or a dropped
+        // connection. Such a set is NEVER cached (it would read as loaded, and every WATCH replay nothing).
+        .then(() => failed === total ? Promise.reject(new Error("the positions did not load"))
+          : failed ? traces : tracePut(traces).then(() => traces));
     });
   }
 
@@ -465,10 +468,11 @@ const DataRealRace = (function () {
   }
 
   function create(deps) {
-    const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker, teamChip, fmtDateTime, findTeam, close } = deps;
+    const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker, teamChip, fmtDateTime, findTeam, close, isOpen } = deps;
     let bodyGen = 0;
     let distance = 1;   // the fraction of the real distance the player races (DISTANCES)
     let startLap = 1;   // the REAL lap the player drops into (1 = the grid)
+    let lapSession = null;   // the race startLap belongs to
     let watchCamera = "side";   // WATCH has its own opening shot; driving preferences stay intact
     let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
     let traces = null;     // the real positions for the painted script, once loaded
@@ -608,6 +612,7 @@ const DataRealRace = (function () {
     function watch(script, slot, fromLap, reel) {
       const go = (tr) => {
         if (typeof RealRace === "undefined" || !RealRace.launch) return false;
+        if (isOpen && !isOpen()) return false;   // the positions landed after the hub closed (or a JUMP IN left it): nothing to watch from
         startLap = fromLap;
         Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seatCode);
         if (close) close();
@@ -721,7 +726,8 @@ const DataRealRace = (function () {
       const playable = !!script.trackId && tracks().some((t) => t.id === script.trackId);
       if (!playable) { slot.appendChild(emptyMsg(NO_TRACK_MSG)); return; }
       if (!script.complete) slot.appendChild(el("div", "dh-lr-meta", INCOMPLETE_MSG));
-      if (startLap > script.laps) startLap = 1;
+      if (startLap > script.laps || lapSession !== script.sessionKey) startLap = 1;   // a new race starts from its grid, not the last race's lap
+      lapSession = script.sessionKey;
       const seats = seatsFor(script);
 
       // Distance pills — the whole race, or a condensed one that keeps every stop and flag in proportion.

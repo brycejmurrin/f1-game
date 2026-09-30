@@ -333,10 +333,11 @@ test("a retirement scores nothing while the cars above keep their points", () =>
   assert.equal(season.pts.d2, 15, "P3 still earns what P3 earns");
 });
 
-test("cars still running at the flag are classified by position; FL needs a finish", () => {
+test("cars still running at the flag are classified by position, and may take the FL point", () => {
   // endRace ends the session 2.2 s after the human finishes and orders the
   // still-running cars by progress, so they are classified, as the results
-  // sheet shows. Only the fastest-lap point requires a completed race.
+  // sheet shows. The fastest-lap point follows: requiring c.finished paid it
+  // only to cars within ~2.2 s of the player.
   const { S } = load({ seasonCfg: { flPoint: true } });
   S.engage("season");
   const season = S.blank();
@@ -345,10 +346,10 @@ test("cars still running at the flag are classified by position; FL needs a fini
   cars[2].finished = false;
   S.award(season, cars, "d1");
   assert.equal(season.pts.d0, 25);
-  assert.equal(season.pts.d1, 18, "a running car scores its classified position");
+  assert.equal(season.pts.d1, 19, "a running car scores its classified position, plus the FL point");
   assert.equal(season.pts.d2, 15);
   assert.equal(season.pts.d3, 12);
-  assert.equal(season.lastFl, undefined, "no FL point for a car that never finished");
+  assert.equal(season.lastFl, "d1", "a car running at the flag earns the FL point");
   assert.equal(season.finishes.d1[1], 1, "countback counts the classified position");
   assert.equal(season.finishes.d0[0], 1);
 });
@@ -756,6 +757,8 @@ test("load() never persists a season this build could not read whole (an unknown
   a.S.engage("season");
   a.S.load();
   assert.equal(a.writes("season"), 0, "an in-progress season with an unknown round is not written back");
+  // Boot's migrate-and-save (game.js) reads this: it wrote the loss back anyway.
+  assert.equal(a.S.lastLoadLossy(), true, "the lossy verdict is readable after load()");
   const finished = { round: 3, pts: { d0: 75 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco", "nosuch"] } };
   const b = load({ season: finished });
   b.S.engage("season");
@@ -766,6 +769,24 @@ test("load() never persists a season this build could not read whole (an unknown
   whole.S.engage("season");
   whole.S.load();
   assert.equal(whole.writes("season"), 1, "a season read whole is still migrated and persisted");
+  assert.equal(whole.S.lastLoadLossy(), false);
+});
+
+test("boot's migrate-and-save never writes back a season load() refused (game.js)", () => {
+  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season\);/);
+});
+
+test("mid-weekend reads the season's own config: the title menu (flow gp) still says AFTER THE SPRINT", () => {
+  const { S } = load({ seasonCfg: { sprint: true } });
+  S.engage("season");
+  const season = S.blank();
+  assert.equal(S.award(season, field(10)), "sprint");
+  assert.equal(S.midWeekend(season), true);
+  S.engage("gp");   // quitToMenu / boot: STANDINGS opens from the title in flow gp
+  assert.equal(S.midWeekend(season), true, "a sprint scored, the Grand Prix not yet run");
+  season.stage = "sprint";
+  assert.equal(S.midWeekend(season), false);
 });
 
 test("title-menu STANDINGS ranks on counting points: the season's own drop rule applies outside season flow", () => {

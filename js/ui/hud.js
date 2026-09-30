@@ -2,7 +2,7 @@
 const GameHud = (function () {
   "use strict";
 
-const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins physics-consts.js first
+const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins js/physics/consts.js first
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
 function create(G) {
@@ -329,6 +329,32 @@ function syncComputedRootVars() {
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
+// THE RADIO CARD'S TOP-ROW SLOT: right of the timing tower, left of the cam /
+// pause buttons, in the tower's own row — off the road and clear of the mirror
+// under the tower (a phone report: the card beside the mirror still sat on the
+// view). The strip ends at whichever button shares the tower's rows. Published
+// in SCREEN px with body.hud-radio-top — css/hud.css divides by the card's own
+// zoom — and only where a shrunk card fits; otherwise the card keeps its slot
+// under the tower (beside the mirror, js/render/shared/mirror-pass.js, or
+// below it). Never in BROADCAST, whose tower is top-left and whose mirror
+// owns the top-centre.
+const RADIO_TOP_MIN = 120, RADIO_TOP_GAP = 8;
+function radioTopSlot(root, bcast) {
+  const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
+  let right = window.innerWidth - 10;
+  for (const el of [els.btnCam, els.pausebtn]) {
+    const r = t && el && !el.hidden ? el.getBoundingClientRect() : null;
+    if (r && r.width && r.left > t.right && r.top < t.bottom && r.bottom > t.top) right = Math.min(right, r.left);
+  }
+  const x = t ? t.right + RADIO_TOP_GAP : 0;
+  const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
+  hToggle(document.body, "hud-radio-top", fits);
+  if (!fits) return;
+  hStyle(root, "--radio-top-x", x.toFixed(1) + "px");
+  hStyle(root, "--radio-top-y", t.top.toFixed(1) + "px");
+  hStyle(root, "--radio-top-w", (right - RADIO_TOP_GAP - x).toFixed(1) + "px");
+  hStyle(root, "--radio-top-h", t.height.toFixed(1) + "px");
+}
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
   // Measuring then is a forced reflow on a 0×0 box (~10 Hz) that cannot
@@ -529,6 +555,7 @@ function fitHud() {
   // Written unconditionally: the CSS only consumes it under .hud-prof-broadcast,
   // and a var that is only sometimes present is a var that is sometimes 0.
   hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
+  radioTopSlot(root, bcast);
   // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
   // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
   // where the BOOST pedal is on a touch phone, so a track-limits warning painted
@@ -871,6 +898,10 @@ function updateHud(force, dtMs) {
     const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     if (pl && pl.state) els.tyre.dataset.plan = pl.state; else delete els.tyre.dataset.plan;
+  } else {
+    // Both are written only above: a pit cue or WORK ON CAR up when a wear race was quit stayed up through a no-wear session.
+    if (els.pitCue) els.pitCue.hidden = true;
+    if (els.workBtn) els.workBtn.hidden = true;
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);
@@ -1095,7 +1126,7 @@ function drawMinimap() {
   // The next visible draw re-measures (syncHudVisClasses clears _fitKey).
   if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) return;
   // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
-  // the same convention sheetshape.js relies on). Bitmap = local x effective
+  // the same convention js/ui/sheet-shape.js relies on). Bitmap = local x effective
   // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu
   // track preview (js/ui/select-screen.js), which solved this exact blur first.
   // currentCSSZoom, not the raw --hud-scale: the element rides the CAPPED

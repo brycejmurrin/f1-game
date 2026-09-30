@@ -424,7 +424,10 @@ const RaceSettings = (function () {
         // pays ~1.1 s of synchronous track build, which the screen covers.
         if ((isChampionship() && SeasonCal.qualiNext(season) && !qualiResults()) ||
             (!isChampionship() && gridFromQuali() && !qualiResults())) openQuali();
-        else if (raceIntro) raceIntro(startRace);
+        else if (raceIntro) {
+          // As every other raceIntro caller does: it hides the title first, so a throw here left no screen at all.
+          try { raceIntro(startRace); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); startRace(); }
+        }
         else startRace();
       };
     }

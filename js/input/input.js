@@ -1524,6 +1524,9 @@ const Input = (function () {
         padThrottle = padBrake = false;
         padThrottleVal = padBrakeVal = 0;
         padLookBack = false;
+        // …and the STEERING: a friend race keeps simulating under the pause menu, and the stick or d-pad
+        // that moves through it was also steering the car at up to full lock.
+        padSteer = 0; padSteerAnalog = false; padDpadVal = 0;
         padNavPoll(pad);
       } else {
         padNavDir = null;   // fresh hold-timer the next time a menu opens
@@ -2505,6 +2508,8 @@ const Input = (function () {
     vibrate,
     hapticsSupported,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
+    // Every race starts OFF: a latched GAS from the last race (finish, QUIT, RESTART) launched the car at lights-out untouched.
+    dropLatch() { if (throttleLatched) { throttleLatched = false; btnThrottle = false; paintLatch(); } },
     throttleLatched: () => throttleLatch && throttleLatched,
     primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,

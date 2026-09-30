@@ -98,6 +98,14 @@ const RaceControl = (function () {
     return (b.lap - a.lap) || ((a.finishT + a.penalty) - (b.finishT + b.penalty));
   }
 
+  // Classification comparator for cars STILL RUNNING at the flag: progress,
+  // with a time penalty served on the road — its seconds at `vRef` (the
+  // race's average speed, m/s) come off the car's metres. Without it a
+  // running car's +5 s was shown on the sheet and never applied.
+  function runOrder(vRef) {
+    return (a, b) => (b.prog - (b.penalty || 0) * vRef) - (a.prog - (a.penalty || 0) * vRef);
+  }
+
   const LABEL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
   const YELLOW_MIN = 3;    // settled hazards in ONE sector -> local yellow
   const VSC_MIN = 6;       // total settled hazards on the surface -> VSC
@@ -486,6 +494,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, flagOut, lineTransition, finishOrder, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, flagOut, lineTransition, finishOrder, runOrder, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

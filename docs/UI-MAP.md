@@ -31,7 +31,7 @@ generated row.
 ├─ SEASON ────────> #season-setup ──> customise ──> #race-settings ─> race
 ├─ DATA HUB ──────> #datahub
 ├─ GARAGE ────────> #carsetup / #customize
-├─ SETTINGS ──────> #pmsettings
+├─ SETTINGS ──────> #pmsettings (→ #tl-editor, #garrival)
 └─ HOW TO PLAY ───> #howtoplay
 
 race
@@ -56,6 +56,7 @@ branches remain source-backed rather than end-to-end walkthroughs.
 | Garage | `#mb-garage` | Car setup/customisation |
 | Settings | `#mb-settings` | Settings index |
 | How to Play | `#mb-help` | Anchored help sheet |
+| Use as Controller | `#mb-phonepad` | Phone only: opens `controller.html` to type another screen's room code. Hidden unless the pointer is coarse (`syncPointerKind()` in `js/game.js`) |
 
 The title also carries the sound toggle, Apex 26 branding, grid/circuit summary
 and unofficial disclaimer.
@@ -79,7 +80,11 @@ defaults contract.
 
 **Controls.** Throttle `HOLD`; Left-handed `OFF`; Gears `AUTO`; Active Aero
 `MANUAL`. Other actions are Reset Keys, Button Names `AUTO`, Calibrate Stick,
-Set Up a Wheel and Reset Controller.
+Set Up a Wheel and Reset Controller. STEER THIS GAME WITH A PHONE (`#pm-phonepad`)
+mints a room code and shows it with a QR for `controller.html#pad=CODE`
+(`#pm-phonepad-box`). On a touch device, `#pm-phonepad-go` is the phone's end of
+the same pairing (`js/input/phone-pad.js`; the protocol is in
+[MULTIPLAYER.md](MULTIPLAYER.md) §Phone as controller).
 
 | Device | Bindings shown |
 |---|---|
@@ -91,7 +96,7 @@ Set Up a Wheel and Reset Controller.
 
 **Display.**
 
-- UI Size `100%`; HUD `ON`; Style `STANDARD`; Layout `FULL`; Map `ON`;
+- HUD `ON`; Style `STANDARD`; Layout `FULL`; Map `ON`;
   Gaps `ON`; Line Colour `F1`; Line Opacity `NORMAL`; Brake Cue `OFF`.
 - HUD and touch size/opacity `100%`; Metrics Overlay `OFF`; Page `GOV`;
   Side `AUTO`; Size `S`.
@@ -100,6 +105,17 @@ Set Up a Wheel and Reset Controller.
 - Cockpit Halo `ON`; Turn Chasing `40%`.
 - `#pm-display-adv` holds Advanced Visuals. Lighting Tuner, Camera Tuner and
   Flyby Shot Editor are disabled outside a race and open separate docks.
+
+**Appearance.** A live preview, then:
+
+- COLOURS: Theme, Menu Accent (swatches, custom hex), HUD Accent.
+- READABILITY: UI Size `100%` (`#pm-uiscale`, moved here from Display), Text
+  Size, High Contrast, Speed Units.
+- MOTION: Motion `ON` (global: menus, camera shake, flyby).
+- `#pm-titlescreen`, a closed TITLE SCREEN fold whose summary reads `SHIPPED`
+  or `CUSTOM` (`js/ui/title-layout.js`): Title Intro `FULL`, Menu Wash `FULL`,
+  Title Art `ON`, the TITLE LAYOUT sub-fold (`#pm-titlelayout`, built at
+  runtime) and Replay Intro.
 
 **Steering & Assists.** Preset `STANDARD`; Overall Speed `84%`; Feel `NORMAL`;
 Tilt `8`; Aids `OFF`; Driving Help `LOW`; Racing Line `OFF`, plus an Advanced
@@ -135,9 +151,19 @@ Team Radio `OFF`; Engine Tone `TEAM` with pitch/roughness sliders; Spotify
 | Live | Weather, classification, refresh and auto-refresh |
 | Telemetry | Driver chips such as NOR and VER |
 | Export | Gather, then Download; download begins disabled |
+| Race It | One real Grand Prix, lap by lap, from OpenF1 timing (`js/data/real-race-tab.js`). Pick a DRIVE AS seat, then START or JUMP IN at any lap. LOAD pulls every car's real positions; then HIGHLIGHTS or WATCH FROM L*n* replays the race, with its own WATCH CAMERA pick. `js/race/real-race.js` stages it |
 
 Session filters include P1, P2, P3, Qualifying and Race. Close returns to the
 title.
+
+**The pre-race card for a real race.** JUMP IN, WATCH and HIGHLIGHTS close the
+hub and go through the same pre-race screen as RACE!: the `#loading` card with
+its flyby and the announcer. `RealRace.launch(…, { intro: true })` calls
+`G.raceIntro`, which hides the title (`#overlay`) behind the card. The card reads
+`RealRace.intro()`: the real event's title, the driver whose seat you take, the
+start lap and the race so far. A mid-race JUMP IN is a rolling start. The AI
+drives your car for a few seconds while a big countdown on the start lights
+(`G.handoverCount`) runs to GO, then hands it to you.
 
 ### Career modes (`#career`)
 
@@ -257,10 +283,29 @@ Other in-race roots are:
   editor, and resume/quit close it.
 - `#garrival` — the GARAGE ARRIVAL TUNER dock (`#pm-garrival` under Display →
   Advanced Visuals; `js/garage/arrival.js`). Opens outside a race too; DONE or
-  Escape returns to Settings.
+  Escape returns to Settings. PREVIEW IN / PREVIEW OUT (`#ga-preview-in` /
+  `#ga-preview-out`) play the saved arrival or RACE! drive-out once in the garage
+  room (`js/garage/setup-camera.js` startArrivalPreview) with `#garrival-inner`
+  hidden; it ends by itself, on DONE or on Escape, and a paused race redraws its
+  own frame after. Refused while the GARAGE or the drive-out owns the room.
+- `#tl-editor` — the TITLE LAYOUT editor's docked bar (`#pm-tl-edit`, EDIT ON
+  TITLE SCREEN…, under Appearance → TITLE SCREEN → TITLE LAYOUT;
+  `js/ui/title-layout.js`).
+  Title screen only (disabled while `#overlay` is hidden). Hides `#pmsettings`,
+  sets `html[data-tl-edit]` and makes `#menu-buttons`, `#menu-brand` and
+  `#tl-art` (a proxy over `#title-car`) draggable; `#tl-handle` sizes the
+  selected piece. DONE or Escape returns to the fold. It is left out of the
+  title's background isolation (`TopModal.syncMenuIsolation`) and MenuNav's
+  arrows (they move the piece).
 - `#photo-controls` — free-camera overlay.
 - `#quali`, `#standings` and `#results` — session flow.
 - `#rotate-device` — portrait race blocker.
+
+The camera cycle (CAM button, `C` key; `js/camera/mode-switch.js`) includes
+VISOR: the cockpit view without its steering wheel and dash (`js/camera/vantage.js`).
+When a phone links as the controller, the screen switches to VISOR, because the
+phone in your hand is the wheel. It switches back when the phone leaves, unless
+you picked another camera meanwhile (`VISOR_CAM` in `js/game.js`).
 
 ### Mapping on a weak box
 
@@ -294,7 +339,7 @@ no context.
 
 ### Layer model
 
-`UiLayers.DEFS` is the canonical list of 28 screen-sized roots. A layer gates
+`UiLayers.DEFS` is the canonical list of 30 screen-sized roots. A layer gates
 driving/menu input unless its definition explicitly sets `gate: false`.
 
 | Layer root | Gates? | Role |
@@ -325,6 +370,8 @@ driving/menu input unless its definition explicitly sets `gate: false`.
 | `#camtune` | yes | Camera tuner |
 | `#flyby` | yes | Flyby shot editor |
 | `#freecam` | yes | Free camera panel |
+| `#garrival` | yes | Garage arrival tuner (and its PREVIEW) |
+| `#tl-editor` | yes | Title layout editor bar (title screen) |
 | `#photo-controls` | yes | Free-camera controls |
 | `#datahub` | yes | Data and telemetry hub |
 
@@ -333,7 +380,7 @@ open. `#rotate-device` is non-gating so Escape and driving keys still reach the
 race beneath its opaque, media-query-controlled blocker.
 
 Most roots are real `<dialog>` elements and begin hidden. The non-dialog
-screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#garrival`, `#photo-controls`,
+screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#garrival`, `#tl-editor`, `#photo-controls`,
 `#carsetup`, `#career` and `#select`.
 
 ### Major shell and race IDs
