@@ -102,3 +102,12 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
   assert.match(read("js/race/daily-challenge.js"), /Log\.info\("game", "DailyChallenge\.select "/);
 });
+
+test("title scrollers never paint a ScrollFade thumb", () => {
+  // #472 hid the thumb on #overlay; the real title scroller is #menu-buttons
+  // (zoom rides `#overlay > *`). A 6px accent thumb with no sheet-body padding
+  // lane clipped CAREER / DAILY labels on a narrow landscape column.
+  const css = read("css/components.css");
+  assert.match(css, /#overlay\.sf-scroll::before,\s*#menu-buttons\.sf-scroll::before\s*\{\s*display:\s*none/,
+    "both title scrollers hide the thumb; fades still say there is more");
+});

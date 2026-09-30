@@ -102,7 +102,7 @@ if ($("save-export")) $("save-export").onclick = exportRecovery;
 // even the 60 ms direct-apply net below can't fire while the thread is held).
 // Under reduce the transition would contribute nothing visual anyway, so the
 // swap goes direct. The test suite pins reducedMotion:"reduce" and rides this.
-// So does MENU ANIMATIONS: REDUCED (html[data-motion], js/ui/title-fx.js).
+// So does MOTION: REDUCED (html[data-motion], js/ui/title-fx.js).
 const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
 const vt = (fn) => {
   if (!document.startViewTransition || vtReduce.matches

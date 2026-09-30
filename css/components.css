@@ -543,8 +543,16 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    tall), and at UI SIZE 130 % on a 320x568 phone scrollTop jittering 342/343
    every repaint, so HELP never held still long enough to tap. Hiding the thumb
    there for one read clamped the reader back to the top instead. The fades
-   (sf-t / sf-b) still say "there is more"; the doors are the position. */
-#overlay.sf-scroll::before { display: none; }
+   (sf-t / sf-b) still say "there is more"; the doors are the position.
+
+   #menu-buttons is the REAL title scroller (zoom rides `#overlay > *`, so
+   #overlay's own overflow-y is mostly a dead letter). Its children are also
+   grid items, and on a narrow landscape column (568×320, UI 130 %) the 6px
+   accent thumb had no .sheet-body padding lane to sit in — it painted a red
+   strip down the door edges and clipped CAREER / DAILY labels. Same hide,
+   same fades-still-say-more contract. */
+#overlay.sf-scroll::before,
+#menu-buttons.sf-scroll::before { display: none; }
 
 /* ---------- STATE HAS DURATION ----------
    Selection used to be instant everywhere: tap a chip and the ring simply

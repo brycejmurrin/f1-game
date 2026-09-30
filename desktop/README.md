@@ -12,10 +12,10 @@ stable until a deliberate bump.
 Forge shines when you have a bundler pipeline (Webpack/Vite) and want its
 plugin ecosystem. This game has **no bundler** — packaging only needs to
 (1) copy the staged site into `extraResources` and (2) emit unsigned
-Windows / macOS / Linux artifacts. electron-builder does that with a small
-`desktop/package.json` `build` block and a CI matrix, without introducing a
-game build step. Signing, notarization, and auto-update are deliberately
-out of scope for this spike (`identity: null`, `signAndEditExecutable: false`).
+Windows / macOS / Linux artifacts. electron-builder does that from
+`desktop/electron-builder.config.cjs`, without introducing a
+game build step. Signing, notarization, and auto-update stay out of
+scope (`identity: null`, `signAndEditExecutable: false`).
 
 Verified locally: Linux `--dir` pack + xvfb / Playwright `_electron` smoke.
 Forge config and the full Actions OS matrix are exercised by CI when the PR
@@ -47,12 +47,13 @@ npm run fuses:read
 
 `npm start` / `npm run smoke` both:
 
-1. Sync `package.json` version from `version.json` → `0.<build>.0`
+1. Sync `package.json` version from `version.json` → `1.0.<build>` (`apexVersion`)
 2. Stage via `node tools/desktop/stage.mjs --out desktop/dist-site --stamp`
 3. Launch Electron with `app://apex/` → staged `index.html`
 
-Release `npm run pack` / `dist:*` keep `EnableNodeCliInspectArguments` and
-`grantFileProtocolExtraPrivileges` **off**. Local / CI `_electron` uses
+Builder config lives in `desktop/electron-builder.config.cjs` (appId/productName
+from `desktop/lib/identity.cjs`). Release `npm run pack` / `dist:*` keep
+`EnableNodeCliInspectArguments` and `grantFileProtocolExtraPrivileges` **off**.
 `npm run pack:test` (inspect on). Soft-GL and `no-sandbox` are env opt-ins
 (`APEX_DESKTOP_SOFT_GL`, `APEX_DESKTOP_NO_SANDBOX`) — never implied by `CI=`.
 
