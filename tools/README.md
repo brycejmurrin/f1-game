@@ -324,6 +324,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
 | **ci/base-verdict.sh** | Whose red is it? One line naming the last deploy-branch CI verdict below this head, with its failed job names. |
+| **ci/behind-ship.mjs** | Print how many commits a PR head is behind the ship branch; warn over 10, never fail. |
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci/ci-pr-base.sh** | The base a pull_request checkout must diff against: the test commit's FIRST PARENT (the base tip GitHub actually… |
 | **ci/ci-resolve-before.sh** | Resolves the selected-specs CI base (`EVENT`/`PUSH_BEFORE`/`PR_BASE`); a Pages call with no base selects all. |
