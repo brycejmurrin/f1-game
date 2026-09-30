@@ -43,11 +43,18 @@ const SceneryStructures = (function () {
       // A run that ENDS on the lap boundary (s1 = 1.0) ends at 1, not 0: read as
       // `1 % 1`, montreal's [0.59, 1.0] wall looks contained in its [0.0, 0.05]
       // run and is skipped along with its barrier.
-      const a = s0 % 1, b = s1 > s0 && s1 % 1 === 0 ? 1 : s1 % 1;
-      const full = Math.abs(s1 - s0) >= 0.999;
+      // A span that WRAPS the line ([0.98, 0.06]) is the run 0.98..1.06, and a
+      // stored run may itself extend past 1, so containment is tested at a lap
+      // offset of 0 and ±1. Compared raw, a >= ra && b <= rb read madrid's
+      // [0.98, 0.06] guardrail as contained in its [0.48, 0.88] run and dropped
+      // it, barrier and all.
+      const a = s0 % 1, full = Math.abs(s1 - s0) >= 0.999;
+      let b = s1 > s0 && s1 % 1 === 0 ? 1 : s1 % 1;
+      if (!full && b < a) b += 1;
+      const within = (ra, rb) => [0, 1, -1].some((o) => a + o >= ra - 1e-6 && b + o <= rb + 1e-6);
       for (const [ra, rb] of runs) {
         const rFull = Math.abs(rb - ra) >= 0.999;
-        if (rFull || (!full && a >= ra - 1e-6 && b <= rb + 1e-6)) {
+        if (rFull || (!full && within(ra, rb))) {
           if (!reLaidWarned) {
             reLaidWarned = true;
             Log.warn("scenery", `${def && def.id}: ${kind} re-laid over ${ra.toFixed(3)}..${rb.toFixed(3)} ` +
