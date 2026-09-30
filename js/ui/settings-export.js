@@ -1,5 +1,5 @@
 /* Apex 26 — SettingsExport: SETTINGS › BACKUP & RESTORE,
-   which carries a player's state OUT of the browser and back IN. TWO files,
+   which carries a player's state OUT of the browser and back IN. THREE files,
    deliberately separate:
 
      SETTINGS  preferences, tuners and control bindings — how you like the game
@@ -10,10 +10,14 @@
      GARAGE    parts, liveries, setup sheets and an invented team — what you
                BUILT. A new phone wants the first file; a friend wants the
                second.
+     CAREER    the six save slots (driver.0..2, myteam.0..2) and the live
+               slot pointer — what a long championship is. Mounted from the
+               CAREER MODES screen the way GARAGE injects its row, so shell
+               node count does not grow.
 
-   Loading either one overwrites what is stored and reloads the page, so the
-   button asks twice. Neither file carries career or season saves, lap records,
-   ghosts, or anything account-shaped, in either direction.
+   Loading any one overwrites what is stored and reloads the page, so the
+   button asks twice. SETTINGS and GARAGE still never carry career or season
+   saves, lap records, ghosts, or anything account-shaped, in either direction.
 
    SPEC below is the allowlist — every player-facing preference, tuner and
    control binding under the `apex26.` prefix, grouped the way SETTINGS is.
@@ -467,6 +471,85 @@ function applyGarage(file) {
   return { ok: true, applied, skipped, failed, reason: null };
 }
 
+// THE CAREER FILE: the six championship slots and the live pointer. Same
+// allowlist discipline as the garage — only career.<flavour>.<i> and
+// careerSlot leave or enter the namespace. Every slot value runs through
+// migrateCareer on the way out and on the way in so a hand-edited or
+// older-build file cannot crash Career.load().
+const CAREER_FORMAT = "apex26-career-v1";
+const CAREER_FLAVOURS = ["driver", "myteam"];
+const CAREER_SLOT_N = 3;
+const CAREER_EXCLUDED = "settings, garage (parts, liveries, setups), standalone season, lap records, ghosts, daily challenge, accounts";
+const CAREER_SLOT_RE = /^career\.(driver|myteam)\.([0-2])$/;
+function isCareerKey(k) {
+  return k === "careerSlot" || CAREER_SLOT_RE.test(k);
+}
+function migrateSlot(raw) {
+  if (raw == null) return null;
+  // Clone before migrateCareer: it mutates in place, and export must not
+  // rewrite the live Career.data() object sitting in the store cache.
+  let copy = raw;
+  try { copy = JSON.parse(JSON.stringify(raw)); } catch (_) { return null; }
+  if (typeof GameStore !== "undefined" && GameStore.migrateCareer) return GameStore.migrateCareer(copy);
+  return copy && typeof copy === "object" && !Array.isArray(copy) ? copy : null;
+}
+function collectCareer() {
+  const out = {};
+  let n = 0;
+  const store = typeof GameStore !== "undefined" ? GameStore.store : null;
+  for (const f of CAREER_FLAVOURS) {
+    for (let i = 0; i < CAREER_SLOT_N; i++) {
+      const k = "career." + f + "." + i;
+      let raw = null;
+      if (store && store.get) raw = store.get(k, null);
+      else {
+        try {
+          const s = localStorage.getItem("apex26." + k);
+          if (s != null) raw = JSON.parse(s);
+        } catch (_) { raw = null; }
+      }
+      const c = migrateSlot(raw);
+      if (!c) continue;
+      out[k] = c;
+      n++;
+    }
+  }
+  let live = null;
+  if (store && store.get) live = store.get("careerSlot", null);
+  else {
+    try {
+      const s = localStorage.getItem("apex26.careerSlot");
+      if (s != null) live = JSON.parse(s);
+    } catch (_) { live = null; }
+  }
+  if (typeof live === "string" && /^((driver|myteam):[0-2])$/.test(live)) {
+    out.careerSlot = live;
+    n++;
+  }
+  let build = null;
+  try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) { /* no DOM */ }
+  return { format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
+           excluded: CAREER_EXCLUDED, count: n, careers: out };
+}
+function applyCareer(file) {
+  if (!file || file.format !== CAREER_FORMAT) return { ok: false, reason: `not an ${CAREER_FORMAT} file`, applied: 0, skipped: 0 };
+  const bag = file.careers || {};
+  let applied = 0, skipped = 0, failed = 0;
+  for (const k of Object.keys(bag)) {
+    if (!isCareerKey(k)) { skipped++; continue; }
+    if (k === "careerSlot") {
+      const v = bag[k];
+      if (typeof v !== "string" || !/^((driver|myteam):[0-2])$/.test(v)) { skipped++; continue; }
+      try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { failed++; }
+      continue;
+    }
+    const c = migrateSlot(bag[k]);
+    if (!c) { skipped++; continue; }
+    try { if (GameStore.store.set(k, c) !== false) applied++; else failed++; } catch (_) { failed++; }
+  }
+  return { ok: true, applied, skipped, failed, reason: null };
+}
+
 function download(obj, name) {
   const blob = new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" });
   const a = document.createElement("a");
@@ -635,15 +718,35 @@ function create(G) {
         applyGarage, "THE GARAGE"));
     return wrap;
   }
+  // CAREER MODES mounts this the same way GARAGE mounts garageRow: fresh
+  // nodes each call, no static shell tags, id-guard against a double append.
+  function careerRow() {
+    if (typeof document === "undefined") return null;
+    const wrap = document.createElement("div");
+    wrap.id = "cr-career-file";
+    wrap.className = "sel-edit-row";
+    wrap.append(
+      saveBtn("cr-career-save", "SAVE CAREER FILE",
+        "All six career slots and which one is live. Settings, garage builds and accounts stay out.",
+        collectCareer, () => `apex26-career-${stamp()}.json`),
+      loadBtn("cr-career-load", "LOAD CAREER FILE",
+        "Read an apex26-career file back in. Only career slots are written; settings and the garage are never touched.",
+        applyCareer, "CAREER SAVES"));
+    return wrap;
+  }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", mount, { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");
-  _ui = { collect: (mode) => collect(mode, G), collectGarage, applySettings: (o) => applySettings(o, G), applyGarage, garageRow, mount };
+  _ui = { collect: (mode) => collect(mode, G), collectGarage, collectCareer,
+          applySettings: (o) => applySettings(o, G), applyGarage, applyCareer,
+          garageRow, careerRow, mount };
   return _ui;
 }
 
-return { FORMAT, GARAGE_FORMAT, SPEC, collect, collectGarage, applySettings, applyGarage, isGarageKey, create,
-         garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null) };
+return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
+         applySettings, applyGarage, applyCareer, isGarageKey, isCareerKey, create,
+         garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
+         careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();
 Object.freeze(SettingsExport);
