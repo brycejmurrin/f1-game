@@ -306,6 +306,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/select-specs.test.mjs",
   "tests/unit/node-plan.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
+  "tests/unit/base-green.test.mjs",
   "tests/unit/circuit-scope.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
   // the bounded rolling record, the CI-bucket fallback and the growth flag.
