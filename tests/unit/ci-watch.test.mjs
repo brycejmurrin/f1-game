@@ -89,4 +89,10 @@ test("no run yet: none only without a PR; a conflicting PR is blocked, never gre
   // A PR's run can start minutes after the push while the merge ref builds.
   assert.equal(noneVerdict({ number: 321, mergeable_state: "clean" }, 4 * MIN), "wait");
   assert.equal(noneVerdict({ number: 321, mergeable_state: "unknown" }, 11 * MIN), "late");
+  // The runs search can lag a live run (PR #537, 2026-09-30: ten minutes of an
+  // empty list, `none-yet`, while CI was running). Check runs on the commit
+  // mean CI exists: keep waiting, whatever the clock or the PR says.
+  assert.equal(noneVerdict({ number: 537, mergeable_state: "blocked" }, 11 * MIN, 3), "indexing");
+  assert.equal(noneVerdict(null, 4 * MIN, 1), "indexing", "not `none` — a docs-only verdict needs the checks empty too");
+  assert.equal(noneVerdict({ number: 321, mergeable_state: "dirty" }, 4 * MIN, 2), "indexing");
 });

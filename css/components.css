@@ -535,6 +535,14 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    (the bare track/team lists) would push the thumb past its own scrollport and
    have it clipped away. */
 .sheet-body.sf-scroll::before { margin-right: calc(6px - var(--pad)); }
+/* EVERY SCROLLER GETS THE LANE, not only .sheet-body. The Data Hub's
+   .dh-content, the MUSIC & SOUND panel and every other padded region still
+   parked the thumb on the content edge, where it covered the right 8px of a
+   select, a row, a paragraph (390px phone, 2026-09-30). ScrollFade measures
+   each region's right padding into --sf-pr; the thumb moves into it and sits
+   a sixth of --gap (~2px) in from the padding edge. A region with no padding measures 0 and keeps
+   the old placement, so nothing is pushed past its own scrollport. */
+.sf-scroll:not(.sheet-body)::before { margin-right: calc(var(--gap) / 6 - var(--sf-pr)); }
 /* NO THUMB ON THE TITLE SCREEN. #overlay's children are all grid-PLACED, so the
    auto-placed pseudo-element lands in a trailing row below the content, where
    its cancelling margin cancels nothing: its box grows scrollHeight, and its

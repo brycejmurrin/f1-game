@@ -79,7 +79,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     store: { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; } },
   };
   const deps = {
-    drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj, frame.mirrorLite]); if (throwInWorld) throw new Error("boom"); },
+    drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj, frame.mirrorLite, Object.assign({}, frame.tune)]); if (throwInWorld) throw new Error("boom"); },
     teamMesh: (team) => "mesh:" + team,
     renderPosOf: (c) => ({ world: true, x: 0, z: c.s }),
     playerAnchor: (c) => ({ cS: c.s, cX: 0 }),
@@ -91,7 +91,8 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   };
   const mp = ctx.MirrorPass.create(G, deps);
   const mainVP = new Float32Array(16), mainInv = new Float32Array(16);
-  const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0 };
+  const tune = { carSunGlint: 12, carSparkle: 1.6, windowSunFlash: 1, shadowStr: 1.15, keyMul: 1.1 };
+  const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0, tune };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
   return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render,
@@ -366,4 +367,21 @@ test("a phone's governor cannot make the mirror flash: the target ignores render
   assert.equal(h.mp.state().quality, "low", "still inside the dwell");
   h.render();
   assert.equal(h.mp.state().quality, "min", "90 frames on: the rung follows");
+});
+
+test("the sun's view-dependent terms stay out of the mirror, and the main frame keeps its own tune", () => {
+  const h = boot({ mode: "on" });
+  const own = h.frame.tune;
+  h.render();
+  const seen = h.calls.find((c) => c[0] === "world")[3];
+  // Glint, sparkle, window flash and cast shadows alias / sweep in a small
+  // un-antialiased target — a phone report of a "flashy" mirror in the sun.
+  assert.deepEqual([seen.carSunGlint, seen.carSparkle, seen.windowSunFlash, seen.shadowStr], [0, 0, 0, 0]);
+  assert.equal(seen.keyMul, 1.1, "every other LIGHTING knob reaches the mirror unchanged");
+  assert.equal(h.frame.tune, own, "the main pass gets its own tune object back");
+  assert.equal(own.carSunGlint, 12, "and it is never written to");
+  // The tuner edits its object in place; the next mirror pass follows it.
+  own.keyMul = 0.9;
+  h.render();
+  assert.equal(h.calls.filter((c) => c[0] === "world").pop()[3].keyMul, 0.9);
 });

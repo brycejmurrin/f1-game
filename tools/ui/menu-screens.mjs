@@ -56,6 +56,15 @@ export const VIEWPORTS = [
     "a rotated monitor: portrait window, but the sheet is capped landscape"],
 ];
 
+/* The DUEL and GRID rows live inside RACE SETTINGS' collapsed FIELD fold
+   (<details id="rs-fold-field">), so a click or selectOption on them timed out
+   on a hidden control — duelpicker and quali were SKIPPED in every sweep
+   (2026-09-30). Open the fold the way a player does before reaching in. */
+async function openFieldFold(p) {
+  const shut = await p.evaluate(() => { const d = document.getElementById("rs-fold-field"); return !!d && !d.open; });
+  if (shut) { await p.click("#rs-fold-field-sum"); await p.waitForFunction(() => document.getElementById("rs-fold-field").open, null, { timeout: 5000, polling: 100 }); }
+}
+
 export const SCREENS = [
   { id: "title", name: "Title / main menu", root: "#overlay", open: async () => {} },
   { id: "select", name: "Circuit select", root: "#select", mapAxis: true, open: async (p, circuit) => {
@@ -119,6 +128,7 @@ export const SCREENS = [
   { id: "duelpicker", name: "Duel rival picker", root: "#duel-picker", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await p.click("#sel-go"); await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 });
+      await openFieldFold(p);
       await p.click("#rs-duel-open");
       await p.waitForSelector("#duel-picker:not([hidden])", { timeout: 15000 }); } },
   { id: "results", name: "Results", root: "#results", open: async (p) => {
@@ -162,6 +172,7 @@ export const SCREENS = [
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await p.click("#sel-go"); await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 });
       // GRID ships on PACE ORDER, so the row is set to QUALIFYING LAP before GO.
+      await openFieldFold(p);
       await p.selectOption("#rs-quali-sel", "quali");
       await p.click("#rs-go");
       await p.waitForSelector("#quali:not([hidden])", { timeout: 60000 }); } },
@@ -492,6 +503,10 @@ export const OVERLAY_IDS = [
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
   "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "track-detail", "vsfriend",
   "audioset", "spotifypanel", "lighting", "camtune", "flyby", "photo-controls",
+  // A modal <dialog> left open keeps the whole page inert: the next cell's
+  // click on #mb-race times out on a button that measures perfectly visible
+  // (quali SKIPPED behind duelpicker in every sweep, 2026-09-30).
+  "duel-picker",
 ];
 
 export function listScreenIds() {

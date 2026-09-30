@@ -173,7 +173,7 @@ function lazyFiles() {
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
-    ...(MANIFEST.LAZY_NET || [])];
+    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -217,7 +217,8 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
-                   ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || [])]) {
+                   ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
+                   ...(MANIFEST.LAZY_WORKER || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -236,7 +237,7 @@ test("sw.js stamps every injected asset it seeds", () => {
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
-    ...(MANIFEST.LAZY_NET || [])];
+    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
