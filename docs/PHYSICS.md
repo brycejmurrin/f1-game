@@ -611,13 +611,13 @@ the numbers):
   flag (it is not a pit window). `tools/check/ai-strategy-census.mjs` runs
   full races and reports stops, reasons, re-cuts and strategies.
 - **Mistakes, under pressure most of all** (`AiDrive.mistakeChance`). Once per
-  braking point a car may miss it: base **1.0%** × (1 + 2 × pressure) × (1.3 −
+  braking point a car may miss it: base **1.0%** × (1 + pressure) × (1.3 −
   consistency) × (1 + 0.35 × optimism) × `err`, pressure being the share of the
   last six seconds spent with a car within 0.6 s behind, `optimism` the signed
   style trait (−1..+1, zero-mean across the grid), and `err` the
   difficulty-ladder rate scale (`PhysicsConsts.DIFF[d].err`). A metronome
   unpressured errs once in ~30 laps on HARD; a rookie under sustained pressure
-  once in ~4. The error is a LATE phase (1.2 s: brakes 5% later, runs most of
+  once in ~6. The error is a LATE phase (1.2 s: brakes 5% later, runs most of
   the way to the outside edge, fronts locked for the render) then a GATHER
   phase (1.8 s at 85% pace) — half a second to a second and a half lost, never
   while alongside another car, and rolled from a hash of the seed, grid slot,
@@ -628,11 +628,12 @@ the numbers):
   2026-09-30 visibility raise: at base 0.4% the field made ~0.013 mistakes per
   car per lap (~0.8 field mistakes in a default 3-lap race) — personality and
   `DIFF.err` were invisible (`docs/notes/AI-PERSONALITY-PLAN-2026-09-16.md`
-  §10). Base raised to 1.0%; Optimism reshapes WHO errs without moving the
-  grid-mean (style is zero-mean). `DIFF.*.err` literals stay frozen
-  (easy 3.5 / normal 1.8 / hard 1.0). Target band: **≥1 mistake per 10 cars
-  per lap-equivalent on normal**, monotone easy > normal > hard; no pace-
-  spread move and no rise in settled/oscillating pass counts
+  §10). Base raised to 1.0%; pressure weight cut 2→1 so a looser easy field's
+  lower following-pressure cannot erase the err ladder; Optimism reshapes WHO
+  errs without moving the grid-mean (style is zero-mean). `DIFF.*.err` literals
+  stay frozen (easy 3.5 / normal 1.8 / hard 1.0). Target band: **≥1 mistake
+  per 10 cars per lap-equivalent on normal**, monotone easy > normal > hard;
+  no pace-spread move and no rise in settled/oscillating pass counts
   (`tools/check/ai-field.mjs`). A visible mistake near the player fires
   `eng.rivalErr` / `tv.mistake` via `race-facts` rising-edge on `errCount`
   (`js/race/radio-lines.js`). Unit pins:

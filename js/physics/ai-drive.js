@@ -1079,14 +1079,17 @@ const AiDrive = (function () {
   // so a default 3-lap race saw <1 field mistake — personality and DIFF.err
   // were invisible (docs/notes/AI-PERSONALITY-PLAN-2026-09-16.md §10).
   // Target band: ≥1 mistake per 10 cars per lap-equivalent on normal;
-  // DIFF.err keeps easy > normal > hard. Optimism (signed style, −1..+1)
-  // reshapes WHO errs (over-confidence → higher rate) without moving the
-  // grid-mean rate (style is zero-mean). Leave DIFF.*.err alone.
+  // DIFF.err keeps easy > normal > hard. Pressure weight is 1 (was 2) so a
+  // looser easy field's lower following-pressure cannot erase the err ladder
+  // (measured: with weight 2, easy and normal medians both landed 0.139 at
+  // n=5). Optimism (signed style, −1..+1) reshapes WHO errs (over-confidence
+  // → higher rate) without moving the grid-mean rate (style is zero-mean).
+  // Leave DIFF.*.err alone.
   const MISTAKE_BASE = 0.010;
   function mistakeChance(t, pressure, errMul) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
     const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
-    return MISTAKE_BASE * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons)
+    return MISTAKE_BASE * (1 + clamp(pressure || 0, 0, 1)) * (1.3 - cons)
          * (1 + 0.35 * opt) * (errMul > 0 ? errMul : 1);
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;

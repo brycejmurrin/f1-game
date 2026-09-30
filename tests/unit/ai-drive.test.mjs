@@ -800,9 +800,10 @@ test("attackOK: a straight is always a place to pass; a corner entry only at its
 
 test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
   const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
-  // Base 0.010: metronome unpressured 0.30 %/zone; rookie under pressure 2.4 %.
+  // Base 0.010, pressure weight 1: metronome unpressured 0.30 %/zone;
+  // rookie under pressure 1.6 %.
   assert.ok(Math.abs(A.mistakeChance(top, 0) - 0.003) < 1e-6, "a metronome unpressured: 0.30 % a zone");
-  assert.ok(Math.abs(A.mistakeChance(rookie, 1) - 0.024) < 1e-6, "a rookie under sustained pressure: 2.4 % a zone");
+  assert.ok(Math.abs(A.mistakeChance(rookie, 1) - 0.016) < 1e-6, "a rookie under sustained pressure: 1.6 % a zone");
   assert.ok(A.mistakeChance(rookie, 0) > A.mistakeChance(top, 0));
   assert.ok(A.mistakeChance(top, 1) > A.mistakeChance(top, 0));
   assert.ok(A.mistakeChance(top, 1) === A.mistakeChance(top, 2), "pressure saturates at 1");
