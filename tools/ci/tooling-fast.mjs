@@ -53,341 +53,57 @@ const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 /** @type {readonly string[]} */
 export const TOOLING_FAST_FILES = Object.freeze([
   // @gen-test-groups:begin — generated from tests/groups.json; do not hand-edit
-  // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
-  // when it shows, the pass order, and the main camera handed back. ~0.1 s.
-  "tests/unit/mirror-pass.test.mjs",
-  "tests/unit/ghost.test.mjs",
-  "tests/unit/ghost-share.test.mjs",
-  // The three suites the feature batches added. Each is pure rules over a
-  // store or a source string — no DOM, no rasteriser — so all three together
-  // cost under a second and belong where the rule they guard is edited.
-  "tests/unit/daily-challenge.test.mjs",
-  "tests/unit/setup-tune.test.mjs",
-  // The tyre model's rules (js/physics/tyre-model.js): OFF is a true no-op,
-  // life is a fraction of the SCHEDULED distance, the catalog's life ladder
-  // is a usable strategy range, the thermal layer warms/grains/blisters, and
-  // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
-  "tests/unit/tyre-model.test.mjs",
-  // ...and the pit lane's pure geometry: the window WRAPS the start/finish
-  // line, the lane is metres not a fraction of the lap, the box is long
-  // enough to stop in, and the COMMITMENT that replaced the pit button tells
-  // a driven pit entry from a car that ran wide there. ~0.2 s.
-  "tests/unit/pit-lane.test.mjs",
+  // The 2026-09-27 a11y/PWA pass: pad choice, landscape lock, CAM label in
+  // name, manifest display_override. VM-executed
+  // source, no browser, ~0.2 s.
+  "tests/unit/a11y-pwa-pass.test.mjs",
+  // Every AUTHORED activation-zone turn table resolves against the BUILT
+  // centreline. One unresolvable pair discards a circuit's whole table and
+  // falls through to ZONE_COUNT — silently, which is how monza shipped a
+  // table nobody read. Node-side via verify-track.cjs, so it is cheap.
+  "tests/unit/aero-zone-tables.test.mjs",
+  "tests/unit/aero-zones-turns.test.mjs",
+  // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
+  // asserted instead of described; under a second.
+  "tests/unit/agent-config.test.mjs",
+  "tests/unit/agent-surface.test.mjs",
+  "tests/unit/ai-corridor.test.mjs",
+  "tests/unit/ai-drive.test.mjs",
   // ...and the field's strategy: the plan scales with the distance, a 20-car
   // grid does not converge on one plan, strategies mix, and the reactive
   // rules (free stop, weather, spent set) fire in the right order. ~0.1 s.
   "tests/unit/ai-strategy.test.mjs",
-  // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
-  // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
-  // director lays it over a stub field — grid, plans, the pace loop, the
-  // flag windows. Pure rules in a VM, ~0.3 s together.
-  "tests/unit/real-race-script.test.mjs",
-  "tests/unit/real-race.test.mjs",
-  // ...and the race engineer's ladder: it ADVISES and never arms a stop,
-  // graining and blistering say different things (one heals, one does not),
-  // the axle call names an end of the car, and it does not nag. ~0.1 s.
-  "tests/unit/engineer.test.mjs",
-  // ...and the race radio: every phrasebook line fits its card when spoken,
-  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
-  // lines wait for the straight and die when stale, commentary only while
-  // the player is watching. ~0.1 s.
-  "tests/unit/race-radio.test.mjs",
-  "tests/unit/team-livery.test.mjs",
-  // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
-  // mesh, so a part that stops changing the car is caught where the catalog
-  // is edited rather than in a 2-hour render sweep nobody runs.
-  "tests/unit/parts-distinct-mesh.test.mjs",
-  "tests/unit/onboard.test.mjs",
-  "tests/unit/test-coverage-audit.test.mjs",
-  // test-coverage-audit answers "is this file in SOME topical group"; this one
-  // answers the question that actually bites, "does the pre-push gate RUN it" —
-  // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
-  // pre-push command executes. It must be IN the gate to guard the gate.
-  "tests/unit/prepush-gate-coverage.test.mjs",
-  "tests/unit/test-groups-generated.test.mjs",
-  "tests/unit/fixture-consumer-audit.test.mjs",
-  "tests/unit/quick-validate.test.mjs",
-  "tests/unit/track-accuracy-validator.test.mjs",
-  "tests/unit/track-foundation.test.mjs",
-  "tests/unit/track-maps-corners.test.mjs",
-  "tests/unit/track-preview-plan.test.mjs",
-  "tests/unit/circuit-axis.test.mjs",
-  "tests/unit/circuit-def-fields.test.mjs",
-  // ...and the same question one level down: a def may name a tree species or
-  // a grandstand livery the engine has no entry for, and every lookup has a
-  // fallback, so the circuit renders as something else in silence. ~0.2 s.
-  "tests/unit/circuit-vocab.test.mjs",
-  "tests/unit/backend-surface-parity.test.mjs",
-  "tests/unit/surface-id-parity.test.mjs",
-  "tests/unit/godray-keep-nearest.test.mjs",
-  "tests/unit/lamp-chunks.test.mjs",
-  "tests/unit/frustum-buckets.test.mjs",
-  "tests/unit/all-lights-fill.test.mjs",
-  "tests/unit/lamp-bake.test.mjs",
-  "tests/unit/frame-lights-shed.test.mjs",
-  // Sibling of cockpit-pale-surfaces, which moved to test:node-slow for costing
-  // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
-  // stays in the edit loop where a cockpit geometry change is actually made.
-  "tests/unit/cockpit-crest-stripe.test.mjs",
-  // Both node-only and both under half a second: the catalog LADDER (no paid
-  // option dominated by a cheaper one, no row that is never optimal) and the
-  // garage's per-vertex MATERIAL column. Neither was in the edit loop, which
-  // for the garage one defeats its whole purpose — a dropped material column
-  // looks exactly like the bug it guards against.
-  "tests/unit/parts-ladder.test.mjs",
-  "tests/unit/garage-mesh.test.mjs",
-  // GATE GAP (2026-09-10): these three garage files and the three steering
-  // files below sat in test:garage-unit / test:steering-unit, which ran in NO
-  // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
-  // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
-  // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
-  "tests/unit/livery-decal-surfaces.test.mjs",
-  "tests/unit/body-split.test.mjs",
-  "tests/unit/helmets.test.mjs",
-  "tests/unit/digital-steer.test.mjs",
-  // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
-  // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
-  // blur/reset belongs in the edit loop rather than in a browser group.
-  "tests/unit/throttle-latch.test.mjs",
-  // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
-  // phone sample reaching Input's tilt pipeline over the in-process loopback
-  // transport — same VM harness, no browser, ~0.3 s.
-  "tests/unit/phone-pad.test.mjs",
-  // ...and WebXR Phase 0: seated-rig compose, controller→remoteSample mapping,
-  // sessionInit feature flags, vendored XRButton/WebGLXRFallback presence. ~0.1 s.
-  "tests/unit/xr-phase0.test.mjs",
-  // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
-  // never writes apex26.gfxBackend. ~0.1 s.
-  "tests/unit/xr-plan.test.mjs",
-  "tests/unit/xr-opts.test.mjs",
-  // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
-  // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
-  // in comments and checked by nothing until it drifted for a week. ~0.05 s.
-  "tests/unit/steer-presets.test.mjs",
-  "tests/unit/key-binds.test.mjs",
-  "tests/unit/settings-export.test.mjs",
-  "tests/unit/settings-defaults.test.mjs",
-  // ...and the garage's SIGNS: no prop mounted within half a metre in front of
-  // a wall quad. Two shipped cut-off wordmarks and one never-visible live
-  // trace were each found by a screenshot; this puts them in the edit loop.
-  "tests/unit/garage-sign-occlusion.test.mjs",
-  // ...and the front-wing endplate decal, whose plate moves with every aero
-  // recipe: measured against the real built car, not against literals.
-  "tests/unit/front-wing-decal.test.mjs",
-  "tests/unit/curvature-channels.test.mjs",
-  "tests/unit/track-line.test.mjs",
-  "tests/unit/track-line-circuits.test.mjs",
-  "tests/unit/twin-drift.test.mjs",
-  "tests/unit/storage-key-prefix.test.mjs",
-  // ...and its sibling: the PREFIX is not the whole contract. Two features
-  // once owned apex26.brakeCue with incompatible types (fixed by renaming the
-  // ribbon flag to lineBrakeCue); this still asks that one key means one type.
-  "tests/unit/store-key-types.test.mjs",
-  "tests/unit/no-bare-console.test.mjs",
-  "tests/unit/log-namespaces.test.mjs",
-  "tests/unit/lexical-window-guard.test.mjs",
-  "tests/unit/light-store-cond-layer.test.mjs",
-  "tests/unit/scenery-kits.test.mjs",
   "tests/unit/albert-park-foundation.test.mjs",
-  "tests/unit/baku-migration.test.mjs",
-  "tests/unit/image-grade-shaders.test.mjs",
-  "tests/unit/chunked-index-ranges.test.mjs",
-  "tests/unit/glx-occlusion.test.mjs",
-  // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
-  "tests/unit/glx-output-target.test.mjs",
-  "tests/unit/tlx-chunked-lifecycle.test.mjs",
-  "tests/unit/glx-multidraw.test.mjs",
-  "tests/unit/vertex-pack.test.mjs",
-  "tests/unit/tex-census.test.mjs",
-  "tests/unit/livery-tier.test.mjs",
-  "tests/unit/span-kinds.test.mjs",
-  "tests/unit/load-order.test.mjs",
-  "tests/unit/global-registry.test.mjs",
-  "tests/unit/shell-ids.test.mjs",
-  "tests/unit/game-ctx-surface.test.mjs",
-  "tests/unit/vstd-invariant.test.mjs",
-  "tests/unit/deploy-staging.test.mjs",
-  // Electron desktop spike: stage allow-list + stamp, native SW/Spotify gates,
-  // app:// Range/MIME/traversal (Electron #38749), unpacked-bin helper,
-  // ship-filter staged path list (stage-files.mjs).
-  "tests/unit/desktop-stage.test.mjs",
-  "tests/unit/desktop-native.test.mjs",
-  "tests/unit/desktop-app-protocol.test.mjs",
-  "tests/unit/desktop-unpacked-bin.test.mjs",
-  "tests/unit/desktop-builder-config.test.mjs",
-  "tests/unit/desktop-version.test.mjs",
-  "tests/unit/desktop-notices.test.mjs",
-  "tests/unit/ship-filter-paths.test.mjs",
-  // Capacitor Android (task 45): frozen identity, config shape, manifest,
-  // Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.
-  "tests/unit/mobile-config.test.mjs",
-  "tests/unit/mobile-sync-web.test.mjs",
-  "tests/unit/mobile-native-download.test.mjs",
-  "tests/unit/perf-sentinel.test.mjs",
-  "tests/unit/telemetry-trace.test.mjs",
-  "tests/unit/meeting-picker-labels.test.mjs",
-  "tests/unit/data-api-status.test.mjs",
-  "tests/unit/scenery-api-contract.test.mjs",
-  "tests/unit/elevation-smoothness.test.mjs",
-  "tests/unit/scenery-guards.test.mjs",
-  "tests/unit/bahrain-grandstand-rake.test.mjs",
-  // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
-  "tests/unit/suzuka-crossover-span.test.mjs",
-  "tests/unit/track-build-vm-release.test.mjs",
-  "tests/unit/baked-model-road-guard.test.mjs",
-  "tests/unit/floodmast-lamp-register.test.mjs",
-  "tests/unit/cdmcp-measure.test.mjs",
-  "tests/unit/tools-runnable.test.mjs",
-  "tests/unit/css-play.test.mjs",
-  "tests/unit/menu-capture.test.mjs",
-  // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
-  // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
-  // runs only in ci.yml's non-blocking flicker-gate job.
-  "tests/unit/flicker-metric.test.mjs",
-  "tests/unit/report-server.test.mjs",
-  "tests/unit/mcp-cli.test.mjs",
-  "tests/unit/apex-tools-mcp.test.mjs",
-  "tests/unit/mcp-smoke.test.mjs",
-  "tests/unit/agent-surface.test.mjs",
-  "tests/unit/docs-integrity.test.mjs",
-  "tests/unit/generated-docs.test.mjs",
-  "tests/unit/gen-arch-table.test.mjs",
-  "tests/unit/skill-progressive.test.mjs",
-  // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
-  // asserted instead of described; under a second.
-  "tests/unit/agent-config.test.mjs",
-  "tests/unit/session-status.test.mjs",
-  "tests/unit/ci-watch.test.mjs",
-  "tests/unit/test-bg-outcome.test.mjs",
-  // Every freezable module surface stays frozen (pure file read; < 1 s).
-  "tests/unit/frozen-globals.test.mjs",
-  "tests/unit/component-inventory.test.mjs",
-  "tests/unit/sheet-per-screen.test.mjs",
-  "tests/unit/sheetshape-registry.test.mjs",
-  "tests/unit/sheetshape-keyboard.test.mjs",
-  "tests/unit/sheetshape-density-scale.test.mjs",
-  "tests/unit/nontext-contrast.test.mjs",
-  "tests/unit/scale-defaults.test.mjs",
-  "tests/unit/font-digits.test.mjs",
-  "tests/unit/css-faces.test.mjs",
-  "tests/unit/steel-role.test.mjs",
+  "tests/unit/all-lights-fill.test.mjs",
+  // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
+  // ladder on the platforms that do not have Daniel.
+  "tests/unit/announcer.test.mjs",
   "tests/unit/apca-timing.test.mjs",
-  "tests/unit/test-groups.test.mjs",
-  "tests/unit/pick-tests.test.mjs",
-  "tests/unit/pick-unit-slices.test.mjs",
-  "tests/unit/test-observed.test.mjs",
-  "tests/unit/evaluate-scope-lint.test.mjs",
+  "tests/unit/apex-tools-mcp.test.mjs",
+  "tests/unit/appearance-opts.test.mjs",
   "tests/unit/assert-audit.test.mjs",
-  "tests/unit/cross-file-paths.test.mjs",
-  "tests/unit/ci-coverage.test.mjs",
-  "tests/unit/ci-verdict.test.mjs",
-  "tests/unit/behind-ship.test.mjs",
-  "tests/unit/nightly-group.test.mjs",
-  "tests/unit/twin-fidelity.test.mjs",
-  "tests/unit/legends.test.mjs",
-  // The duel format's two behaviours (js/race/duel.js): the bump lifts
-  // racecraft harder than pace, and asLegend hands over the legend's OWN
-  // axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.
-  "tests/unit/duel.test.mjs",
-  // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
-  // named legend has to round-trip through two setters, and the inert VM DOM
-  // builds no SettingRow children, so painting the row would assert nothing.
-  "tests/unit/duel-row.test.mjs",
-  // The LEGENDS TEAM as a grid entry: its own id (not the custom slot), the
-  // whole roster in `drivers` so the driver picker is the legend picker, and
-  // the one-seat rule — drivers.length is 12, so anything counting seats by
-  // it puts twelve legends on the grid.
-  "tests/unit/legends-team.test.mjs",
-  // …and the PERIOD CAR reaching the garage SHEET, not just the team
-  // record. Twelve legends share one `legends` id, so the write policy is
-  // the behaviour: seed an empty sheet, reseed on a real switch, never on a
-  // boot or a same-seat re-sync (that would wipe a paid-for build).
-  "tests/unit/legend-parts-seed.test.mjs",
-  "tests/unit/select-budget.test.mjs",
-  "tests/unit/select-specs.test.mjs",
-  "tests/unit/node-plan.test.mjs",
-  "tests/unit/ci-pr-base.test.mjs",
+  "tests/unit/assets-pack.test.mjs",
+  "tests/unit/audio-recovery.test.mjs",
+  "tests/unit/audio-sample-upgrade.test.mjs",
+  "tests/unit/audio-tune.test.mjs",
+  "tests/unit/backend-surface-parity.test.mjs",
+  "tests/unit/badges.test.mjs",
+  "tests/unit/bahrain-grandstand-rake.test.mjs",
+  "tests/unit/baked-model-road-guard.test.mjs",
+  "tests/unit/baku-migration.test.mjs",
   "tests/unit/base-green.test.mjs",
-  "tests/unit/circuit-scope.test.mjs",
-  // The duration HISTORY behind the budget: junit/live-reporter merge,
-  // the bounded rolling record, the CI-bucket fallback and the growth flag.
-  // Pure fixtures plus one pass over the committed tests/data/spec-timings.json,
-  // ~1 s — and it belongs in the edit loop because the file it guards is
-  // rewritten by a tool, so drift shows up as a commit nobody meant to make.
-  "tests/unit/spec-timings.test.mjs",
-  // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
-  // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
-  "tests/unit/flaky-quarantine.test.mjs",
-  // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)
-  // and deploy --pr's REST fallback against a fake curl; both < 1 s, both
-  // guard the two tools a session reaches for at push time.
-  "tests/unit/who-is-on-it.test.mjs",
-  "tests/unit/deploy-pr-rest.test.mjs",
-  "tests/unit/twinned-specs.test.mjs",
-  // coverage-merge is the only consumer of the raw V8 lists a flagged run
-  // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
-  // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
-  "tests/unit/coverage-merge.test.mjs",
-  // The physics baseline's provenance stamp (_blessed): reason, data hash,
-  // blessing commit. One file read and one git call, well under a second, and
-  // it must fail where the baseline is edited, not on a nightly.
-  "tests/unit/physics-baseline-provenance.test.mjs",
+  "tests/unit/behind-ship.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
-  "tests/unit/save-migrate.test.mjs",
-  // js/race/reliability.js (random DNFs) had no unit test — only career.spec,
-  // over budget and nightly-only. Pure VM with a stub hash, well under a second.
-  "tests/unit/reliability.test.mjs",
-  // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
-  // well under a second; must run where the helper or a call-site is edited.
-  "tests/unit/clipboard.test.mjs",
-  // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
-  "tests/unit/lobby-codes.test.mjs",
-  "tests/unit/wait-polling.test.mjs",
-  // ...and its sibling over js/: a try/catch cannot swallow a promise
-  // REJECTION, and index.html turns an unhandled one into a full-screen
-  // overlay over the running race. Pure source scan, well under a second.
-  "tests/unit/reject-lint.test.mjs",
-  // ...and an HTML-sink audit over js/: every innerHTML/outerHTML/
-  // insertAdjacentHTML writes a constant or is in the reasoned allowlist
-  // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
-  "tests/unit/html-sink-lint.test.mjs",
-  // ...and a third of the same family: two widgets keyed on ONE sign convention
-  // were painted opposite colours. Neither half is wrong alone, so only a test
-  // comparing the PAIR can see it. Pure text, well under a second.
-  "tests/unit/delta-sign-colour.test.mjs",
-  // ...and the fourth: the component inventory only ever guarded DEFINED-
-  // but-unapplied. This is the mirror — a class the markup wears that no rule
-  // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
-  "tests/unit/class-usage.test.mjs",
+  "tests/unit/body-split.test.mjs",
   // ...and the DIFF[difficulty] family, one door further out: three readers
   // that took a stored index or object on trust. Executes the shipped source
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
   "tests/unit/boot-input-shape.test.mjs",
-  "tests/unit/gallery-capture-draws.test.mjs",
-  "tests/unit/track-graph.test.mjs",
-  "tests/unit/lighting-campaign.test.mjs",
-  "tests/unit/assets-pack.test.mjs",
-  "tests/unit/model-pack-format.test.mjs",
-  "tests/unit/import-models.test.mjs",
-  "tests/unit/import-models-workflow.test.mjs",
-  "tests/unit/css-layers.test.mjs",
-  "tests/unit/css-media-disjoint.test.mjs",
-  "tests/unit/uilayers-modal-order.test.mjs",
-  "tests/unit/ratchets.test.mjs",
-  "tests/unit/move-tree.test.mjs",
-  "tests/unit/gfx-backend-canary.test.mjs",
-  "tests/unit/start-race-latch.test.mjs",
-  "tests/unit/session-entry-vm.test.mjs",
-  "tests/unit/red-flag-fuel-vm.test.mjs",
-  // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
-  // centreline, the highlights list, the field as puppets (follow, speed, a car
-  // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
-  "tests/unit/real-replay-vm.test.mjs",
-  "tests/unit/gfx-debug-overlay.test.mjs",
-  "tests/unit/car-presentation-canary.test.mjs",
-  "tests/unit/car-wing-foil.test.mjs",
+  "tests/unit/brake-cue.test.mjs",
+  "tests/unit/camera-defaults.test.mjs",
+  "tests/unit/camera-ride.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
   // geometry, and a parts-mesh regression is exactly the kind that would then
@@ -396,175 +112,460 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // deploy tip through five consecutive green Pages runs because the browser
   // group that held it is not gated at all.
   "tests/unit/car-mesh-anchors.test.mjs",
-  // R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:
-  // each re-derives a fact the source depends on (which livery fields move a
-  // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are
-  // only useful if they run right after the edit that would break them.
-  "tests/unit/setup-preview-hull.test.mjs",
-  "tests/unit/garage-interior-gate.test.mjs",
-  "tests/unit/garage-arrival.test.mjs",
-  "tests/unit/car-multi-shot-tools.test.mjs",
-  "tests/unit/harness-display.test.mjs",
-  "tests/unit/track-night-override.test.mjs",
-  // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
-  // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
-  "tests/unit/road-lut-frame.test.mjs",
-  // The hitch instrument's own arithmetic (tools/gfx/frame-hitch.mjs), on
-  // synthetic series with known answers; gpu-census's driven window imports it.
-  "tests/unit/frame-hitch-analyse.test.mjs",
-  // TLX's material cache key is memoised on the opts object; the memo's
-  // failure mode is a STALE key, which returns the wrong material and shows
-  // up only on screen. Fuzzes the real lifted source over every field.
-  "tests/unit/tlx-mat-key-memo.test.mjs",
-  // TLX's instanced cull reuses its resident pack by surviving CELL SET
-  // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.
-  "tests/unit/tlx-inst-cells.test.mjs",
-  // TLX drops a createTexture() source canvas once three has uploaded it,
-  // and freeTexture retires the decal materials bound to it (lifted source
-  // against three r186's real Texture). The pit-crew mesh cache is capped.
-  "tests/unit/tlx-texture-release.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
-  // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
-  "tests/unit/cockpit-wheels.test.mjs",
-  // The sun shadow map's depth span holds a 250 m caster: drives the real
-  // ShadowPass.sunPass on a stub renderer and projects through its light VP.
-  "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/car-multi-shot-tools.test.mjs",
+  "tests/unit/car-presentation-canary.test.mjs",
+  "tests/unit/car-wing-foil.test.mjs",
+  "tests/unit/career-legends.test.mjs",
+  "tests/unit/career-regulations.test.mjs",
+  "tests/unit/career-seat-rollover.test.mjs",
+  "tests/unit/career-settle.test.mjs",
+  "tests/unit/cdmcp-measure.test.mjs",
+  "tests/unit/change-driver-tools.test.mjs",
+  "tests/unit/chunked-index-ranges.test.mjs",
+  "tests/unit/ci-coverage.test.mjs",
+  "tests/unit/ci-pr-base.test.mjs",
+  "tests/unit/ci-verdict.test.mjs",
+  "tests/unit/ci-watch.test.mjs",
+  "tests/unit/circuit-axis.test.mjs",
+  "tests/unit/circuit-def-fields.test.mjs",
+  "tests/unit/circuit-scope.test.mjs",
+  // ...and the same question one level down: a def may name a tree species or
+  // a grandstand livery the engine has no entry for, and every lookup has a
+  // fallback, so the circuit renders as something else in silence. ~0.2 s.
+  "tests/unit/circuit-vocab.test.mjs",
+  // ...and the fourth: the component inventory only ever guarded DEFINED-
+  // but-unapplied. This is the mirror — a class the markup wears that no rule
+  // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
+  "tests/unit/class-usage.test.mjs",
+  // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
+  // well under a second; must run where the helper or a call-site is edited.
+  "tests/unit/clipboard.test.mjs",
   // The coach's rewind clone replaced JSON.parse(JSON.stringify()); restore()
   // reads back what capture() wrote, so any drift from JSON semantics is a
   // rewind into a state the car was never in. Tested AGAINST the round trip.
   "tests/unit/coach-clone.test.mjs",
-  "tests/unit/webgpu-lifecycle.test.mjs",
-  "tests/unit/wgsl-bindings.test.mjs",
-  "tests/unit/renderer-soft-lifecycle.test.mjs",
-  // that touches the LUT rather than on every edit.
-  // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
-  // crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured
-  // 2026-09-01) run in test:node-slow: CI guards always, locally when
-  // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
-  "tests/unit/deploy-stamp.test.mjs",
-  "tests/unit/track-build-wait.test.mjs",
-  "tests/unit/deploy-tool.test.mjs",
-  "tests/unit/tooling-fast-runner.test.mjs",
-  // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in
-  // ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the
-  // driving-model gate runs here in seconds rather than in a browser job.
-  "tests/unit/game-vm.test.mjs",
-  "tests/unit/physics-characterization-vm.test.mjs",
-  "tests/unit/shared-math.test.mjs",
-  "tests/unit/store-cross-tab.test.mjs",
+  // Sibling of cockpit-pale-surfaces, which moved to test:node-slow for costing
+  // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
+  // stays in the edit loop where a cockpit geometry change is actually made.
+  "tests/unit/cockpit-crest-stripe.test.mjs",
+  // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
+  "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",
-  "tests/unit/race-control.test.mjs",
-  "tests/unit/overtake-mode.test.mjs",
-  "tests/unit/sporting-regs.test.mjs",
-  "tests/unit/ai-drive.test.mjs",
-  "tests/unit/brake-cue.test.mjs",
-  "tests/unit/factory-ai-setup.test.mjs",
-  "tests/unit/career-regulations.test.mjs",
-  "tests/unit/career-settle.test.mjs",
-  "tests/unit/career-legends.test.mjs",
-  "tests/unit/career-seat-rollover.test.mjs",
-  "tests/unit/season-cal.test.mjs",
-  "tests/unit/badges.test.mjs",
-  "tests/unit/setup-screens-state.test.mjs",
-  "tests/unit/incident-gate.test.mjs",
-  "tests/unit/debris-step-skip.test.mjs",
-  "tests/unit/camera-ride.test.mjs",
-  "tests/unit/flyby-shots.test.mjs",
-  "tests/unit/flyby-pose-inverse.test.mjs",
-  "tests/unit/free-cam.test.mjs",
-  // The FLYBY SHOT EDITOR's list algebra and the bake validator that stands
-  // between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it
-  // belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.
-  "tests/unit/flyby-panel.test.mjs",
-  // The FRAMING REPORT's math (tools/lib/frame-math.mjs): projection handedness,
-  // ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without
-  // a picture. Hand-built worlds, no game VM, ~0.1 s.
-  "tests/unit/frame-math.test.mjs",
-  // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
-  // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
-  "tests/unit/frame-fleet.test.mjs",
-  // The LOADING CARD's geometry: the three numbers the flyby editor authors,
-  // clamped out of localStorage before they reach a CSS custom property, where
-  // a NaN is not an error but a silently dropped declaration.
-  "tests/unit/loading-card.test.mjs",
-  // Every AUTHORED activation-zone turn table resolves against the BUILT
-  // centreline. One unresolvable pair discards a circuit's whole table and
-  // falls through to ZONE_COUNT — silently, which is how monza shipped a
-  // table nobody read. Node-side via verify-track.cjs, so it is cheap.
-  "tests/unit/aero-zone-tables.test.mjs",
-  // The ORDERING that lights the flyby: raceIntro() applies the race settings
-  // before the loading screen starts, so a dawn race stops showing a day sky.
-  "tests/unit/flyby-lighting.test.mjs",
-  "tests/unit/camera-defaults.test.mjs",
-  "tests/unit/hooks-documented.test.mjs",
-  "tests/unit/source-integrity.test.mjs",
-  "tests/unit/scroll-strips.test.mjs",
+  "tests/unit/component-inventory.test.mjs",
+  "tests/unit/contact-geometry.test.mjs",
+  // coverage-merge is the only consumer of the raw V8 lists a flagged run
+  // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
+  // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
+  "tests/unit/coverage-merge.test.mjs",
+  "tests/unit/cross-file-paths.test.mjs",
   "tests/unit/css-comments.test.mjs",
-  "tests/unit/css-tokens.test.mjs",
+  "tests/unit/css-faces.test.mjs",
+  "tests/unit/css-layers.test.mjs",
+  "tests/unit/css-media-disjoint.test.mjs",
+  "tests/unit/css-play.test.mjs",
   "tests/unit/css-token-adoption.test.mjs",
-  "tests/unit/light-presets.test.mjs",
-  "tests/unit/light-store-copy.test.mjs",
-  "tests/unit/light-grid.test.mjs",
-  "tests/unit/lighting-reapply.test.mjs",
-  "tests/unit/lamp-density.test.mjs",
-  "tests/unit/lighting-rebuild.test.mjs",
-  "tests/unit/lighting-tuner-sweep.test.mjs",
-  "tests/unit/perf-governor.test.mjs",
-  // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
-  // the ring buffer at three refresh rates, ~0.1 s.
-  "tests/unit/skidmarks-cadence.test.mjs",
-  "tests/unit/terrain-normals.test.mjs",
-  "tests/unit/aero-zones-turns.test.mjs",
-  "tests/unit/ui-improve-pass.test.mjs",
-  "tests/unit/appearance-opts.test.mjs",
-  "tests/unit/ui-sheets-audit.test.mjs",
-  "tests/unit/menu-nav-spatial.test.mjs",
-  "tests/unit/menu-a11y-audit.test.mjs",
-  // The 2026-09-27 a11y/PWA pass: pad choice, landscape lock, CAM label in
-  // name, manifest display_override. VM-executed
-  // source, no browser, ~0.2 s.
-  "tests/unit/a11y-pwa-pass.test.mjs",
-  "tests/unit/flags.test.mjs",
-  "tests/unit/ui-journey-career.test.mjs",
-  "tests/unit/ui-journey-session.test.mjs",
-  "tests/unit/ui-journey-race.test.mjs",
-  "tests/unit/pause-hud-layout.test.mjs",
-  "tests/unit/hud-feel.test.mjs",
-  "tests/unit/hud-metrics-layout.test.mjs",
-  "tests/unit/phone-touch-surface.test.mjs",
-  "tests/unit/audio-sample-upgrade.test.mjs",
-  "tests/unit/audio-recovery.test.mjs",
-  "tests/unit/audio-tune.test.mjs",
-  "tests/unit/rival-audio.test.mjs",
-  "tests/unit/voice-pack.test.mjs",
+  "tests/unit/css-tokens.test.mjs",
+  "tests/unit/curvature-channels.test.mjs",
+  // The three suites the feature batches added. Each is pure rules over a
+  // store or a source string — no DOM, no rasteriser — so all three together
+  // cost under a second and belong where the rule they guard is edited.
+  "tests/unit/daily-challenge.test.mjs",
+  "tests/unit/data-api-status.test.mjs",
+  "tests/unit/data-lazy-loader.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
   "tests/unit/data-results.test.mjs",
   // The SCHEDULE tab's date and start time from one instant in the viewer's
   // zone (TZ pinned to Los Angeles), and NEXT against the clock. ~0.1 s.
   "tests/unit/data-schedule-tz.test.mjs",
+  "tests/unit/debris-step-skip.test.mjs",
+  // ...and a third of the same family: two widgets keyed on ONE sign convention
+  // were painted opposite colours. Neither half is wrong alone, so only a test
+  // comparing the PAIR can see it. Pure text, well under a second.
+  "tests/unit/delta-sign-colour.test.mjs",
+  "tests/unit/deploy-pr-rest.test.mjs",
+  "tests/unit/deploy-staging.test.mjs",
+  // that touches the LUT rather than on every edit.
+  // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
+  // crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured
+  // 2026-09-01) run in test:node-slow: CI guards always, locally when
+  // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
+  "tests/unit/deploy-stamp.test.mjs",
+  "tests/unit/deploy-tool.test.mjs",
+  "tests/unit/desktop-app-protocol.test.mjs",
+  "tests/unit/desktop-builder-config.test.mjs",
+  "tests/unit/desktop-native.test.mjs",
+  "tests/unit/desktop-notices.test.mjs",
+  // Electron desktop spike: stage allow-list + stamp, native SW/Spotify gates,
+  // app:// Range/MIME/traversal (Electron #38749), unpacked-bin helper,
+  // ship-filter staged path list (stage-files.mjs).
+  "tests/unit/desktop-stage.test.mjs",
+  "tests/unit/desktop-unpacked-bin.test.mjs",
+  "tests/unit/desktop-version.test.mjs",
+  "tests/unit/digital-steer.test.mjs",
+  "tests/unit/docs-integrity.test.mjs",
+  "tests/unit/driving-coach.test.mjs",
+  // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
+  // named legend has to round-trip through two setters, and the inert VM DOM
+  // builds no SettingRow children, so painting the row would assert nothing.
+  "tests/unit/duel-row.test.mjs",
+  // The duel format's two behaviours (js/race/duel.js): the bump lifts
+  // racecraft harder than pace, and asLegend hands over the legend's OWN
+  // axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.
+  "tests/unit/duel.test.mjs",
+  "tests/unit/elevation-smoothness.test.mjs",
+  // ...and the race engineer's ladder: it ADVISES and never arms a stop,
+  // graining and blistering say different things (one heals, one does not),
+  // the axle call names an end of the car, and it does not nag. ~0.1 s.
+  "tests/unit/engineer.test.mjs",
+  "tests/unit/evaluate-scope-lint.test.mjs",
+  "tests/unit/factory-ai-setup.test.mjs",
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
-  "tests/unit/photomode-hold.test.mjs",
-  "tests/unit/title-menu-even.test.mjs",
-  "tests/unit/title-art.test.mjs",
-  "tests/unit/change-driver-tools.test.mjs",
-  "tests/unit/trim-comments.test.mjs",
-  "tests/unit/metrics.test.mjs",
-  "tests/unit/perf-try.test.mjs",
+  "tests/unit/fixture-consumer-audit.test.mjs",
+  "tests/unit/flags.test.mjs",
+  // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
+  // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
+  "tests/unit/flaky-quarantine.test.mjs",
+  // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
+  // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
+  // runs only in ci.yml's non-blocking flicker-gate job.
+  "tests/unit/flicker-metric.test.mjs",
+  "tests/unit/floodmast-lamp-register.test.mjs",
+  // The ORDERING that lights the flyby: raceIntro() applies the race settings
+  // before the loading screen starts, so a dawn race stops showing a day sky.
+  "tests/unit/flyby-lighting.test.mjs",
+  // The FLYBY SHOT EDITOR's list algebra and the bake validator that stands
+  // between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it
+  // belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.
+  "tests/unit/flyby-panel.test.mjs",
+  "tests/unit/flyby-pose-inverse.test.mjs",
+  "tests/unit/flyby-shots.test.mjs",
+  "tests/unit/font-digits.test.mjs",
+  // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
+  // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
+  "tests/unit/frame-fleet.test.mjs",
+  // The hitch instrument's own arithmetic (tools/gfx/frame-hitch.mjs), on
+  // synthetic series with known answers; gpu-census's driven window imports it.
+  "tests/unit/frame-hitch-analyse.test.mjs",
+  "tests/unit/frame-lights-shed.test.mjs",
+  // The FRAMING REPORT's math (tools/lib/frame-math.mjs): projection handedness,
+  // ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without
+  // a picture. Hand-built worlds, no game VM, ~0.1 s.
+  "tests/unit/frame-math.test.mjs",
+  "tests/unit/free-cam.test.mjs",
+  // ...and the front-wing endplate decal, whose plate moves with every aero
+  // recipe: measured against the real built car, not against literals.
+  "tests/unit/front-wing-decal.test.mjs",
+  // Every freezable module surface stays frozen (pure file read; < 1 s).
+  "tests/unit/frozen-globals.test.mjs",
+  "tests/unit/frustum-buckets.test.mjs",
+  "tests/unit/gallery-capture-draws.test.mjs",
+  "tests/unit/game-ctx-surface.test.mjs",
+  // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in
+  // ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the
+  // driving-model gate runs here in seconds rather than in a browser job.
+  "tests/unit/game-vm.test.mjs",
+  "tests/unit/garage-arrival.test.mjs",
+  "tests/unit/garage-interior-gate.test.mjs",
+  "tests/unit/garage-mesh.test.mjs",
+  // ...and the garage's SIGNS: no prop mounted within half a metre in front of
+  // a wall quad. Two shipped cut-off wordmarks and one never-visible live
+  // trace were each found by a screenshot; this puts them in the edit loop.
+  "tests/unit/garage-sign-occlusion.test.mjs",
+  "tests/unit/gen-arch-table.test.mjs",
+  "tests/unit/generated-docs.test.mjs",
+  "tests/unit/gfx-backend-canary.test.mjs",
+  "tests/unit/gfx-debug-overlay.test.mjs",
+  "tests/unit/ghost-share.test.mjs",
+  "tests/unit/ghost.test.mjs",
+  "tests/unit/global-registry.test.mjs",
+  "tests/unit/glx-multidraw.test.mjs",
+  "tests/unit/glx-occlusion.test.mjs",
+  // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
+  "tests/unit/glx-output-target.test.mjs",
+  "tests/unit/godray-keep-nearest.test.mjs",
+  "tests/unit/harness-display.test.mjs",
+  "tests/unit/helmets.test.mjs",
+  "tests/unit/hooks-documented.test.mjs",
+  // ...and an HTML-sink audit over js/: every innerHTML/outerHTML/
+  // insertAdjacentHTML writes a constant or is in the reasoned allowlist
+  // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
+  "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-feel.test.mjs",
+  "tests/unit/hud-metrics-layout.test.mjs",
+  "tests/unit/image-grade-shaders.test.mjs",
+  "tests/unit/import-models-workflow.test.mjs",
+  "tests/unit/import-models.test.mjs",
+  "tests/unit/incident-gate.test.mjs",
+  "tests/unit/key-binds.test.mjs",
+  "tests/unit/lamp-bake.test.mjs",
+  "tests/unit/lamp-chunks.test.mjs",
+  "tests/unit/lamp-density.test.mjs",
+  // …and the PERIOD CAR reaching the garage SHEET, not just the team
+  // record. Twelve legends share one `legends` id, so the write policy is
+  // the behaviour: seed an empty sheet, reseed on a real switch, never on a
+  // boot or a same-seat re-sync (that would wipe a paid-for build).
+  "tests/unit/legend-parts-seed.test.mjs",
+  // The LEGENDS TEAM as a grid entry: its own id (not the custom slot), the
+  // whole roster in `drivers` so the driver picker is the legend picker, and
+  // the one-seat rule — drivers.length is 12, so anything counting seats by
+  // it puts twelve legends on the grid.
+  "tests/unit/legends-team.test.mjs",
+  "tests/unit/legends.test.mjs",
+  "tests/unit/lexical-window-guard.test.mjs",
+  "tests/unit/light-grid.test.mjs",
+  "tests/unit/light-presets.test.mjs",
+  "tests/unit/light-store-cond-layer.test.mjs",
+  "tests/unit/light-store-copy.test.mjs",
+  "tests/unit/lighting-campaign.test.mjs",
+  "tests/unit/lighting-reapply.test.mjs",
+  "tests/unit/lighting-rebuild.test.mjs",
+  "tests/unit/lighting-tuner-sweep.test.mjs",
+  // GATE GAP (2026-09-10): these three garage files and the three steering
+  // files below sat in test:garage-unit / test:steering-unit, which ran in NO
+  // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
+  // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
+  // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
+  "tests/unit/livery-decal-surfaces.test.mjs",
+  "tests/unit/livery-tier.test.mjs",
+  "tests/unit/load-order.test.mjs",
+  // The LOADING CARD's geometry: the three numbers the flyby editor authors,
+  // clamped out of localStorage before they reach a CSS custom property, where
+  // a NaN is not an error but a silently dropped declaration.
+  "tests/unit/loading-card.test.mjs",
+  // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
+  "tests/unit/lobby-codes.test.mjs",
+  "tests/unit/log-namespaces.test.mjs",
+  "tests/unit/mcp-cli.test.mjs",
+  "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
-  "tests/unit/contact-geometry.test.mjs",
+  "tests/unit/meeting-picker-labels.test.mjs",
+  "tests/unit/menu-a11y-audit.test.mjs",
+  "tests/unit/menu-capture.test.mjs",
+  "tests/unit/menu-nav-spatial.test.mjs",
+  "tests/unit/merge-hygiene.test.mjs",
+  "tests/unit/metrics.test.mjs",
+  // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
+  // when it shows, the pass order, and the main camera handed back. ~0.1 s.
+  "tests/unit/mirror-pass.test.mjs",
+  // Capacitor Android (task 45): frozen identity, config shape, manifest,
+  // Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.
+  "tests/unit/mobile-config.test.mjs",
+  "tests/unit/mobile-native-download.test.mjs",
+  "tests/unit/mobile-sync-web.test.mjs",
+  "tests/unit/model-pack-format.test.mjs",
+  "tests/unit/move-tree.test.mjs",
+  "tests/unit/nightly-group.test.mjs",
+  "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/node-plan.test.mjs",
+  "tests/unit/nontext-contrast.test.mjs",
+  "tests/unit/onboard.test.mjs",
+  "tests/unit/overtake-mode.test.mjs",
+  // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
+  // mesh, so a part that stops changing the car is caught where the catalog
+  // is edited rather than in a 2-hour render sweep nobody runs.
+  "tests/unit/parts-distinct-mesh.test.mjs",
+  // Both node-only and both under half a second: the catalog LADDER (no paid
+  // option dominated by a cheaper one, no row that is never optimal) and the
+  // garage's per-vertex MATERIAL column. Neither was in the edit loop, which
+  // for the garage one defeats its whole purpose — a dropped material column
+  // looks exactly like the bug it guards against.
+  "tests/unit/parts-ladder.test.mjs",
+  "tests/unit/pause-hud-layout.test.mjs",
+  "tests/unit/perf-governor.test.mjs",
+  "tests/unit/perf-sentinel.test.mjs",
+  "tests/unit/perf-try.test.mjs",
+  // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
+  // phone sample reaching Input's tilt pipeline over the in-process loopback
+  // transport — same VM harness, no browser, ~0.3 s.
+  "tests/unit/phone-pad.test.mjs",
+  "tests/unit/phone-touch-surface.test.mjs",
+  "tests/unit/photomode-hold.test.mjs",
+  // The physics baseline's provenance stamp (_blessed): reason, data hash,
+  // blessing commit. One file read and one git call, well under a second, and
+  // it must fail where the baseline is edited, not on a nightly.
+  "tests/unit/physics-baseline-provenance.test.mjs",
+  "tests/unit/physics-characterization-vm.test.mjs",
+  "tests/unit/pick-tests.test.mjs",
+  "tests/unit/pick-unit-slices.test.mjs",
+  // ...and the pit lane's pure geometry: the window WRAPS the start/finish
+  // line, the lane is metres not a fraction of the lap, the box is long
+  // enough to stop in, and the COMMITMENT that replaced the pit button tells
+  // a driven pit entry from a car that ran wide there. ~0.2 s.
+  "tests/unit/pit-lane.test.mjs",
+  // test-coverage-audit answers "is this file in SOME topical group"; this one
+  // answers the question that actually bites, "does the pre-push gate RUN it" —
+  // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
+  // pre-push command executes. It must be IN the gate to guard the gate.
+  "tests/unit/prepush-gate-coverage.test.mjs",
+  "tests/unit/quick-validate.test.mjs",
+  "tests/unit/race-control.test.mjs",
   "tests/unit/race-insights.test.mjs",
-  "tests/unit/driving-coach.test.mjs",
-  "tests/unit/ai-corridor.test.mjs",
+  // ...and the race radio: every phrasebook line fits its card when spoken,
+  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
+  // lines wait for the straight and die when stale, commentary only while
+  // the player is watching. ~0.1 s.
+  "tests/unit/race-radio.test.mjs",
   "tests/unit/radio-voice.test.mjs",
-  // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
-  // ladder on the platforms that do not have Daniel.
-  "tests/unit/announcer.test.mjs",
-  "tests/unit/data-lazy-loader.test.mjs",
-  "tests/unit/track-retained-state.test.mjs",
+  "tests/unit/ratchets.test.mjs",
+  // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
+  // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
+  // director lays it over a stub field — grid, plans, the pace loop, the
+  // flag windows. Pure rules in a VM, ~0.3 s together.
+  "tests/unit/real-race-script.test.mjs",
+  "tests/unit/real-race.test.mjs",
+  // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
+  // centreline, the highlights list, the field as puppets (follow, speed, a car
+  // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
+  "tests/unit/real-replay-vm.test.mjs",
+  "tests/unit/red-flag-fuel-vm.test.mjs",
+  // ...and its sibling over js/: a try/catch cannot swallow a promise
+  // REJECTION, and index.html turns an unhandled one into a full-screen
+  // overlay over the running race. Pure source scan, well under a second.
+  "tests/unit/reject-lint.test.mjs",
+  // js/race/reliability.js (random DNFs) had no unit test — only career.spec,
+  // over budget and nightly-only. Pure VM with a stub hash, well under a second.
+  "tests/unit/reliability.test.mjs",
+  "tests/unit/renderer-soft-lifecycle.test.mjs",
+  "tests/unit/report-server.test.mjs",
+  "tests/unit/rival-audio.test.mjs",
+  // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
+  // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
+  "tests/unit/road-lut-frame.test.mjs",
+  "tests/unit/save-migrate.test.mjs",
+  "tests/unit/scale-defaults.test.mjs",
+  "tests/unit/scenery-api-contract.test.mjs",
+  "tests/unit/scenery-guards.test.mjs",
+  "tests/unit/scenery-kits.test.mjs",
+  "tests/unit/scroll-strips.test.mjs",
+  "tests/unit/season-cal.test.mjs",
+  "tests/unit/select-budget.test.mjs",
+  "tests/unit/select-specs.test.mjs",
+  "tests/unit/session-entry-vm.test.mjs",
+  "tests/unit/session-status.test.mjs",
+  "tests/unit/settings-defaults.test.mjs",
+  "tests/unit/settings-export.test.mjs",
+  // R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:
+  // each re-derives a fact the source depends on (which livery fields move a
+  // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are
+  // only useful if they run right after the edit that would break them.
+  "tests/unit/setup-preview-hull.test.mjs",
+  "tests/unit/setup-screens-state.test.mjs",
+  "tests/unit/setup-tune.test.mjs",
+  // The sun shadow map's depth span holds a 250 m caster: drives the real
+  // ShadowPass.sunPass on a stub renderer and projects through its light VP.
+  "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/shared-math.test.mjs",
+  "tests/unit/sheet-per-screen.test.mjs",
+  "tests/unit/sheetshape-density-scale.test.mjs",
+  "tests/unit/sheetshape-keyboard.test.mjs",
+  "tests/unit/sheetshape-registry.test.mjs",
+  "tests/unit/shell-ids.test.mjs",
+  "tests/unit/ship-filter-paths.test.mjs",
+  // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
+  // the ring buffer at three refresh rates, ~0.1 s.
+  "tests/unit/skidmarks-cadence.test.mjs",
+  "tests/unit/skill-progressive.test.mjs",
+  "tests/unit/source-integrity.test.mjs",
+  "tests/unit/span-kinds.test.mjs",
+  // The duration HISTORY behind the budget: junit/live-reporter merge,
+  // the bounded rolling record, the CI-bucket fallback and the growth flag.
+  // Pure fixtures plus one pass over the committed tests/data/spec-timings.json,
+  // ~1 s — and it belongs in the edit loop because the file it guards is
+  // rewritten by a tool, so drift shows up as a commit nobody meant to make.
+  "tests/unit/spec-timings.test.mjs",
+  "tests/unit/sporting-regs.test.mjs",
+  "tests/unit/start-race-latch.test.mjs",
+  "tests/unit/steel-role.test.mjs",
+  // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
+  // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
+  // in comments and checked by nothing until it drifted for a week. ~0.05 s.
+  "tests/unit/steer-presets.test.mjs",
+  "tests/unit/storage-key-prefix.test.mjs",
+  "tests/unit/store-cross-tab.test.mjs",
+  // ...and its sibling: the PREFIX is not the whole contract. Two features
+  // once owned apex26.brakeCue with incompatible types (fixed by renaming the
+  // ribbon flag to lineBrakeCue); this still asks that one key means one type.
+  "tests/unit/store-key-types.test.mjs",
+  "tests/unit/surface-id-parity.test.mjs",
+  // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
+  "tests/unit/suzuka-crossover-span.test.mjs",
+  "tests/unit/team-livery.test.mjs",
+  "tests/unit/telemetry-trace.test.mjs",
+  "tests/unit/terrain-normals.test.mjs",
+  "tests/unit/test-bg-outcome.test.mjs",
+  "tests/unit/test-coverage-audit.test.mjs",
+  "tests/unit/test-groups-generated.test.mjs",
+  "tests/unit/test-groups.test.mjs",
+  "tests/unit/test-observed.test.mjs",
+  "tests/unit/tex-census.test.mjs",
+  // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
+  // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
+  // blur/reset belongs in the edit loop rather than in a browser group.
+  "tests/unit/throttle-latch.test.mjs",
+  "tests/unit/title-art.test.mjs",
+  "tests/unit/title-menu-even.test.mjs",
+  "tests/unit/tlx-chunked-lifecycle.test.mjs",
+  // TLX's instanced cull reuses its resident pack by surviving CELL SET
+  // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.
+  "tests/unit/tlx-inst-cells.test.mjs",
+  // TLX's material cache key is memoised on the opts object; the memo's
+  // failure mode is a STALE key, which returns the wrong material and shows
+  // up only on screen. Fuzzes the real lifted source over every field.
+  "tests/unit/tlx-mat-key-memo.test.mjs",
+  // TLX drops a createTexture() source canvas once three has uploaded it,
+  // and freeTexture retires the decal materials bound to it (lifted source
+  // against three r186's real Texture). The pit-crew mesh cache is capped.
+  "tests/unit/tlx-texture-release.test.mjs",
+  "tests/unit/tooling-fast-runner.test.mjs",
+  "tests/unit/tools-runnable.test.mjs",
+  "tests/unit/track-accuracy-validator.test.mjs",
+  "tests/unit/track-build-vm-release.test.mjs",
+  "tests/unit/track-build-wait.test.mjs",
   "tests/unit/track-centerline-seam.test.mjs",
+  "tests/unit/track-foundation.test.mjs",
+  "tests/unit/track-graph.test.mjs",
+  "tests/unit/track-line-circuits.test.mjs",
+  "tests/unit/track-line.test.mjs",
+  "tests/unit/track-maps-corners.test.mjs",
+  "tests/unit/track-night-override.test.mjs",
+  "tests/unit/track-preview-plan.test.mjs",
+  "tests/unit/track-retained-state.test.mjs",
+  "tests/unit/trim-comments.test.mjs",
+  "tests/unit/twin-drift.test.mjs",
+  "tests/unit/twin-fidelity.test.mjs",
+  "tests/unit/twinned-specs.test.mjs",
+  // The tyre model's rules (js/physics/tyre-model.js): OFF is a true no-op,
+  // life is a fraction of the SCHEDULED distance, the catalog's life ladder
+  // is a usable strategy range, the thermal layer warms/grains/blisters, and
+  // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
+  "tests/unit/tyre-model.test.mjs",
+  "tests/unit/ui-improve-pass.test.mjs",
+  "tests/unit/ui-journey-career.test.mjs",
+  "tests/unit/ui-journey-race.test.mjs",
+  "tests/unit/ui-journey-session.test.mjs",
+  "tests/unit/ui-sheets-audit.test.mjs",
+  "tests/unit/uilayers-modal-order.test.mjs",
+  "tests/unit/vertex-pack.test.mjs",
+  "tests/unit/voice-pack.test.mjs",
+  "tests/unit/vstd-invariant.test.mjs",
+  "tests/unit/wait-polling.test.mjs",
+  "tests/unit/webgpu-lifecycle.test.mjs",
+  "tests/unit/wgsl-bindings.test.mjs",
+  // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)
+  // and deploy --pr's REST fallback against a fake curl; both < 1 s, both
+  // guard the two tools a session reaches for at push time.
+  "tests/unit/who-is-on-it.test.mjs",
+  "tests/unit/xr-opts.test.mjs",
+  // ...and WebXR Phase 0: seated-rig compose, controller→remoteSample mapping,
+  // sessionInit feature flags, vendored XRButton/WebGLXRFallback presence. ~0.1 s.
+  "tests/unit/xr-phase0.test.mjs",
+  // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
+  // never writes apex26.gfxBackend. ~0.1 s.
+  "tests/unit/xr-plan.test.mjs",
   // @gen-test-groups:end
 ]);
 

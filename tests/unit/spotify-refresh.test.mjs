@@ -70,7 +70,7 @@ function load(fetchImpl, opts = {}) {
       setItem: (k, v) => session.set(k, String(v)),
       removeItem: (k) => session.delete(k),
     },
-    Log: { info() {}, warn() {} },
+    Log: { info() {}, warn() {}, debug() {} },
   };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);

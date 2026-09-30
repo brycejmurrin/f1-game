@@ -169,7 +169,7 @@ const NetLobby = (function () {
       try { p = NetTransport.prefetchIce && NetTransport.prefetchIce(); } catch (e) { p = null; }
       if (!p || typeof p.then !== "function") return Promise.resolve();
       return Promise.race([
-        p.catch(() => null),
+        p.catch((e) => { Log.debug("net", "ICE prefetch rejected, joining without relay:", e && e.message); return null; }),
         new Promise((r) => setTimeout(r, ICE_WAIT_MS)),
       ]);
     }
@@ -415,7 +415,7 @@ const NetLobby = (function () {
         codeReopenTimer = setTimeout(() => {
           codeReopenTimer = null;
           if (!operationCurrent(gen)) return;
-          codeHost({ code: again, quiet: true }).catch(() => {});
+          codeHost({ code: again, quiet: true }).catch((e) => { Log.warn("net", "room reopen for the next guest failed:", e && e.message); });
         }, 250);
       } else {
         codeReopen = null;
@@ -1579,7 +1579,7 @@ const NetLobby = (function () {
     function releaseWake(lock) {
       try {
         const released = lock && lock.release();
-        if (released && typeof released.catch === "function") released.catch(() => {});
+        if (released && typeof released.catch === "function") released.catch((e) => { Log.debug("net", "wake lock release rejected:", e && e.message); });
       } catch (e) { /* missing/released wake locks degrade to the sleeping behavior */ }
     }
     function holdWake() {
@@ -1600,7 +1600,7 @@ const NetLobby = (function () {
           }
           wake = l;
           l.addEventListener("release", () => { if (wake === l) wake = null; });
-        }).catch(() => { if (wakeRequest === pending) wakeRequest = null; });
+        }).catch((e) => { if (wakeRequest === pending) wakeRequest = null; Log.debug("net", "screen wake lock refused:", e && e.message); });
         wakeRequest = pending;
       } catch (e) { /* no wake-lock API: degrade to the sleeping behaviour */ }
     }

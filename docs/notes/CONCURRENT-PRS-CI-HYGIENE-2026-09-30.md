@@ -49,11 +49,10 @@ Leaving quarantine: delete the row in the same commit as the fix.
 
 ## Normalize command (merge-hygiene #484)
 
-When #484 has merged, normalize the conflict-prone JSON lists (one entry per
-line, stably sorted) then regenerate the test-group scripts:
+#484 merged. Normalize then regenerate:
 
 ```sh
-# check / --fix live on the merge-hygiene branch as tools/check/merge-hygiene.*
-# until then, avoid unsorted appends that force same-line fights
+node tools/check/merge-hygiene.mjs            # check
+node tools/check/merge-hygiene.mjs --fix     # rewrite ratchets.json + groups.json
 node tools/gen/gen-test-groups.mjs
 ```
