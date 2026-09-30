@@ -36,6 +36,10 @@ case "$EVENT" in
   schedule) BEFORE="$(git rev-list -1 --first-parent --before='24 hours ago' HEAD 2>/dev/null || true)" ;;
   *) echo "::error::SELECTED GATE FAILED CLOSED: unsupported event '$EVENT'" >&2; exit 1 ;;
 esac
+# A PULL REQUEST'S BASE IS THE TEST COMMIT'S FIRST PARENT (2026-09-30): the
+# event's base.sha lags one sync behind the base refs/pull/N/merge was built
+# on, so the base's own recent commits read as this PR's diff (ci-pr-base.sh).
+[ "$EVENT" = pull_request ] && BEFORE="$(bash "$(dirname "$0")/ci-pr-base.sh" "$BEFORE")"
 case "${BEFORE:-}" in
   ""|0000000000000000000000000000000000000000)
     [ "$CALLED" = "true" ] && select_all "no live commit to diff against (before_sha empty)"

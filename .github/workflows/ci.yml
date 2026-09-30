@@ -478,9 +478,13 @@ jobs:
         run: |
           set -u
           PLAN="${RUNNER_TEMP:-.}/node-plan.sh"
-          if [ "$EVENT" = "pull_request" ] && [ -n "${PR_BASE:-}" ] && git cat-file -e "${PR_BASE}^{commit}" 2>/dev/null; then
-            node tools/ci/node-plan.mjs --since "$PR_BASE" --sh > "$PLAN"
-            node tools/ci/node-plan.mjs --since "$PR_BASE"
+          # The test commit's first parent, not the event's base.sha, which
+          # lags one sync behind it (tools/ci/ci-pr-base.sh).
+          BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
+          if [ "$EVENT" = "pull_request" ] && [ -n "${BASE:-}" ] && git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "plan base: $BASE (event base.sha ${PR_BASE:-none})"
+            node tools/ci/node-plan.mjs --since "$BASE" --sh > "$PLAN"
+            node tools/ci/node-plan.mjs --since "$BASE"
           else
             node tools/ci/node-plan.mjs --all --sh > "$PLAN"
             echo "not a pull request (or no base): every script runs"
@@ -605,6 +609,9 @@ jobs:
             pull_request) BEFORE="${PR_BASE:-}" ;;
             *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push, a PR or a Pages call" ;;
           esac
+          # A PR diffs against the test commit's first parent (ci-pr-base.sh):
+          # the event's base.sha lags one sync behind it.
+          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no comparison base (new branch, first push, or caller omitted input)" ;;
           esac
@@ -736,6 +743,10 @@ jobs:
             push|pull_request) ;;
             *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push, a pull request or a Pages call" ;;
           esac
+          # A PR diffs against the test commit's first parent (ci-pr-base.sh):
+          # the event's base.sha lags one sync behind it, and the fleet was
+          # rebuilding on any PR whose base had merged a circuit since its sync.
+          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push, or caller omitted input)" ;;
           esac
@@ -1422,6 +1433,9 @@ jobs:
             push|pull_request) ;;
             *) run_all "event is '$EVENT', not a push/pull_request" ;;
           esac
+          # A PR diffs against the test commit's first parent (ci-pr-base.sh):
+          # the event's base.sha lags one sync behind it.
+          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push)" ;;
           esac
