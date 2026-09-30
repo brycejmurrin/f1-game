@@ -620,8 +620,24 @@ body.hud-met-compact #hud-tyre { display: none !important; }
   width: var(--mir-w); height: calc(var(--mir-w) * 2 / 7);
   box-sizing: border-box;
   outline: 2px solid var(--carbon);
-  pointer-events: none;
+  /* A tap collapses it to #hud-mirror-chip (#hud itself is pointer-events: none). */
+  pointer-events: auto;
+  cursor: pointer;
 }
+/* The mirror tapped away: a small chip where it was, which brings it back. A
+   tap target, so it stays OUT of the zoom group (HUD SIZE must not shrink it
+   under --tap) and converts the mirror's zoomed top into screen pixels. */
+#hud-mirror-chip {
+  position: absolute;
+  top: calc(var(--sat) + (16px + var(--hud-top-h, 54px)) * var(--hud-z-top, var(--hud-scale)));
+  left: 50%; transform: translateX(-50%);
+  min-height: var(--tap); padding: 0 var(--gap);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+  pointer-events: auto;
+}
+body.hud-prof-broadcast #hud-mirror-chip { top: calc(8px + var(--sat)); }
 body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z)); }
 body.hud-mirror-on #announce {
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 18px
@@ -1064,7 +1080,8 @@ body:has(.screen.dim:not([hidden])) #campicker { display: none; }
    scrims still show POS/LAP/CHASE/BOOST through the wash. A HUD that is
    already hidden at menu time is a no-op under visibility. */
 body:has(.screen:not([hidden])) :is(
-  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #lights, #announce, #btn-cam, .dock, #pausebtn
+  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #lights, #announce, #btn-cam, .dock, #pausebtn,
+  #hud-mirror, #hud-mirror-chip
 ) {
   visibility: hidden;
 }
