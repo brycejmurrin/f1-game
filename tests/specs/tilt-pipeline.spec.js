@@ -34,11 +34,18 @@
 //
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console instead of a bare "expected 1, got 0".
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.waitForFunction(() => typeof Input !== "undefined" && !!Input.simTilt);
+  // Input.ready(), not Input.simTilt: the API exists as soon as input.js evaluates,
+  // which is before game.js reaches Input.init() and the boot setSteerMode that
+  // follows it. The live-path test set tilt, then boot stomped mode back to
+  // buttons mid-settle — CI #6199 (run 36638762096) saw |live-sim| = the default
+  // map at 12° (0.28358…) with live stuck at 0.
+  await page.waitForFunction(() => typeof Input !== "undefined" && Input.ready && Input.ready(), null, {
+    polling: 100, timeout: BOOT_MS,
+  });
   await page.evaluate(() => {
     Input.reset();
     Input.setSteerMode("tilt");
@@ -463,6 +470,12 @@ test.describe("live path vs harness", () => {
 
       Input.reset();                           // clears the slew + filter state
       Input.setSteerMode("tilt");
+      // Boot left the page in BUTTONS (detachGyro). Without this the live
+      // listener is not attached and the settle reads leftover sim state —
+      // which still matches when nothing stomps the mode, but is not the
+      // deviceorientation path this test exists to police.
+      await Input.requestGyro();
+      Input.simTiltReset();                    // drop harness leftovers; live events refill
       // input.js steers off a GRAVITY-VECTOR roll and remaps it by
       // screen.orientation.angle, so which euler angle carries a left/right
       // tilt depends on the rotation. Same switch it uses.
