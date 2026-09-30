@@ -977,14 +977,22 @@ const AiDrive = (function () {
   // THE RIVAL RULES, a pit wall reading the cars around it. Both only pull a
   // stop the plan already wants forward (within UNDERCUT_REACH laps, on a set
   // that has done some work), so neither can add a stop the race cannot pay for.
-  //   cover    — the car close BEHIND has boxed: it will come out on fresh
-  //              rubber and take the place (the undercut). An alert wall
-  //              (TEMPER.react) boxes to cover it.
+  //   cover    — the car directly BEHIND, within COVER_GAP_S, has boxed: it
+  //              will come out on fresh rubber and take the place (the
+  //              undercut). An alert wall (TEMPER.react) boxes to cover it.
   //   undercut — stuck within STUCK_GAP_S of the car AHEAD that has not
   //              stopped: an aggressive wall (TEMPER.attack) stops first.
   const UNDERCUT_REACH = 2;
   const UNDERCUT_MIN_WEAR = 0.4;
   const STUCK_GAP_S = 1.0;
+  // …and cover only the car DIRECTLY behind, in a real fight: a stop's worth
+  // of gap (the engineer's measure) chained — one stop pulled the car ahead
+  // in, which pulled the one ahead of it (10 of 20 stops "cover", measured).
+  const COVER_GAP_S = 3.0;
+  // An AI re-cuts at most once in REPLAN_GAP laps: the measured wear is noisy
+  // over a lap or two and a plan sitting on a boundary flipped every lap
+  // (up to 10 re-cuts in a 25-lap race, measured).
+  const REPLAN_GAP = 3;
   // STRATEGIC TEMPER from the ratings — who reacts, who attacks, who gambles.
   // react = 0.6·experience + 0.4·awareness; attack = craft; gamble = 1 − experience.
   const TEMPER = { REACT_MIN: 0.75, ATTACK_MIN: 0.85, GAMBLE_W: 0.8 };
@@ -1303,6 +1311,6 @@ const AiDrive = (function () {
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,
-    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, UNDERCUT_REACH, UNDERCUT_MIN_WEAR, STUCK_GAP_S, TEMPER, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, UNDERCUT_REACH, UNDERCUT_MIN_WEAR, STUCK_GAP_S, COVER_GAP_S, REPLAN_GAP, TEMPER, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
   };
 })();

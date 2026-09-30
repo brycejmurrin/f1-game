@@ -43,6 +43,10 @@ const g = await createGame({ track: TRACK, storage: { tyreWear: "real", difficul
 if (g.apex.seed) g.apex.seed(SEED);
 await g.race(TRACK, "day", WX, { laps: LAPS });
 const G = g.G;
+// The player's car is never driven here: parked on its grid slot it is a
+// wall the field has to find a way round, and one did not (SAI, 2026-09-30:
+// stuck behind it from lap 3, no stop, a one-compound DSQ). Out of the race.
+if (G.player) { G.player.retired = true; G.player.s = 0; G.player.x = 40; }
 const ai = G.cars.filter((c) => !c.human);
 const plan0 = new Map(ai.map((c) => [c, c.pitPlan ? { seq: c.pitPlan.seq.slice(), lapsAt: c.pitPlan.lapsAt.slice() } : null]));
 const stops = new Map(ai.map((c) => [c, []])), armed = new Map();

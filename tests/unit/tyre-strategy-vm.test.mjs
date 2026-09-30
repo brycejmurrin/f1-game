@@ -106,13 +106,19 @@ test("an alert AI covers a rival's stop from behind; a slow wall does not", asyn
     c.experience = react; c.awareness = react;
     c.lap = c.pitPlan.lapsAt[0] - 1; c.pitStops = 0; c.pitArmed = false; c.pitState = "none"; c.pitNext = null;
     c.tyreWear = 0.6; c.speed = 70; c.prog = 50000;
-    o.prog = c.prog - 70 * 3; o.pitState = "lane"; o.retired = false; o.finished = false;   // 3 s behind, in the lane
-    for (const x of G.cars) if (x !== c && x !== o) x.prog = 0;
+    o.prog = c.prog - 70 * 2; o.pitState = "lane"; o.retired = false; o.finished = false;   // 2 s behind, in the lane
+    for (const x of G.cars) if (x !== c && x !== o) x.prog = 0;   // (the rest far behind)
   };
   setup(0.3);
   assert.equal(G.pits.think(c), "", "a rookie wall does not react");
   setup(1);
   assert.equal(G.pits.think(c), "cover", "a veteran wall covers the undercut");
+  // Only the car DIRECTLY behind: with another car between us, its stop is
+  // that car's problem — covering it chained through the field.
+  const mid = ai[2];
+  c.pitArmed = false; c.pitNext = null; c.pitWhy = "";
+  mid.prog = c.prog - 70; mid.pitState = "none"; mid.retired = false; mid.finished = false;
+  assert.equal(G.pits.think(c), "", "a stop two cars back is not ours to cover");
   o.pitState = "none";
 });
 

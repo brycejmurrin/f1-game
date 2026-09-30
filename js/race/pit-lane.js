@@ -1589,7 +1589,8 @@ const PitLane = (function () {
       const ai = !c.human;
       if (ai && (c.pitArmed || (c.pitState && c.pitState !== "none") || (c.tyre.tread || 0) > 0
           || TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness()) > 0
-          || (G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0) < 2)) return false;
+          || (G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0) < 2
+          || (c.lap || 0) - (c._recutLap || -99) < AiDrive.STRAT.REPLAN_GAP)) return false;
       const done = c.pitStops || 0, lap = Math.max(1, c.lap || 1);
       const lapsLeft = G.lapsTarget - lap + 1;
       const oldNext = plan.lapsAt[done];
@@ -1643,7 +1644,7 @@ const PitLane = (function () {
       const at = [0].concat(plan.lapsAt, [G.lapsTarget]);
       plan.stints = at.slice(1).map((v, i) => Math.max(0, v - at[i]));
       plan.stops = done + rel.stops;
-      if (ai) { c.pitReplans = (c.pitReplans || 0) + 1; return true; }
+      if (ai) { c.pitReplans = (c.pitReplans || 0) + 1; c._recutLap = c.lap || 0; return true; }
       // PLAN B, with the reason — the measured wear is why it changed, and a
       // driver told "tyres wearing fast" knows what to do with the next lap.
       if (G.announce) G.announce(planBLine(oldNext, newNext), 2.2, "info");
@@ -1659,20 +1660,22 @@ const PitLane = (function () {
      *  unbounded that far out), so the hunt counts it as h_armedAtLine, not
      *  as a stop that failed to happen. */
     /** The two cars a pit wall watches, in seconds at OUR pace (the measure
-     *  engineer.js uses): `behind` — a car within a stop's loss behind that is
-     *  in the lane now (the undercut on us); `stuck` — a car within
-     *  STUCK_GAP_S ahead, not yet stopped, on no fresher rubber than ours. */
+     *  engineer.js uses): `behind` — the car DIRECTLY behind, within
+     *  COVER_GAP_S, is in the lane now (the undercut on us); `stuck` — a car
+     *  within STUCK_GAP_S ahead, not yet stopped, on no fresher rubber. */
     const _rivals = { behind: false, stuck: false };
     function rivalsOf(c) {
       _rivals.behind = false; _rivals.stuck = false;
-      const v = Math.max(1, c.speed || 1), reach = lossS() + 2, stuck = AiDrive.STRAT.STUCK_GAP_S;
+      const v = Math.max(1, c.speed || 1), S = AiDrive.STRAT;
+      let next = null, nextGap = Infinity;
       for (const o of G.cars) {
         if (o === c || o.retired || o.finished) continue;
         const gap = ((c.prog || 0) - (o.prog || 0)) / v;
         const inLane = !!(o.pitState && o.pitState !== "none");
-        if (gap > 0 && gap < reach && inLane) _rivals.behind = true;
-        else if (gap < 0 && -gap < stuck && !inLane && (o.pitStops || 0) <= (c.pitStops || 0)) _rivals.stuck = true;
+        if (gap > 0 && gap < nextGap) { next = o; nextGap = gap; }
+        else if (gap < 0 && -gap < S.STUCK_GAP_S && !inLane && (o.pitStops || 0) <= (c.pitStops || 0)) _rivals.stuck = true;
       }
+      _rivals.behind = !!next && nextGap < S.COVER_GAP_S && !!(next.pitState && next.pitState !== "none");
       return _rivals;
     }
     function think(c) {
@@ -1762,7 +1765,7 @@ const PitLane = (function () {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0; c.pitPos0 = 0;
-      c.pitFitted = false;
+      c.pitFitted = false; c.pitReplans = 0; c._recutLap = null; c._planLap = null;
       // The teach is per SESSION, not per page load — and over for good once
       // a stop has been completed (release).
       if (c.local) { for (const k in _said) delete _said[k]; _lastCue = null; }
