@@ -131,16 +131,24 @@ test("a spec that reserves more than the selected-gate timeout is EXCLUDED by na
   // The cost model's blind spot, measured on CI run 31233088772: the selector
   // billed every test at ~80 s while 8 of its 10 picks declared their own
   // test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout — and
-  // the "14-minute" selection failed the job. imola-foundation (420 s) is the
-  // worst standing example; if its budget ever drops below the selected-gate
-  // timeout this pin should move to whichever spec then holds the title.
-  const own = maxDeclaredTimeout("tests/specs/imola-foundation.spec.js");
+  // the "14-minute" selection failed the job. bahrain-foundation (300 s) is the
+  // standing over-budget example after imola-foundation moved to ADAPTED
+  // (fit() files ADAPTED specs as coveredByVmTwin before budgeting — same as
+  // projection.spec.js). If bahrain's budget ever drops below the selected-gate
+  // timeout this pin should move to whichever non-twinned spec then holds it.
+  const pin = "tests/specs/bahrain-foundation.spec.js";
+  const own = maxDeclaredTimeout(pin);
   assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
-    `imola-foundation now declares ${own} ms — find a new worst example for this pin`);
-  const r = fit(["tests/specs/imola-foundation.spec.js", "tests/specs/boot-guard.spec.js"], 15);
-  assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), ["tests/specs/imola-foundation.spec.js"]);
+    `bahrain-foundation now declares ${own} ms — find a new worst example for this pin`);
+  const r = fit([pin, "tests/specs/boot-guard.spec.js"], 15);
+  assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), [pin]);
   assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/boot-guard.spec.js"],
     "the spec that fits the selected-gate budget must still be selected");
+  // imola keeps its high declaration but is ADAPTED — never overBudgetSpecs.
+  const imola = fit(["tests/specs/imola-foundation.spec.js"], 15);
+  assert.deepEqual(imola.overBudgetSpecs, []);
+  assert.ok(imola.coveredByVmTwin.some((s) => s.file === "tests/specs/imola-foundation.spec.js"),
+    "ADAPTED imola-foundation must route through coveredByVmTwin, not overBudget");
 });
 
 test("fixed blocking specs can never run under the selected gate's timeout", () => {
