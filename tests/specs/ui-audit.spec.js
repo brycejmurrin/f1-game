@@ -62,7 +62,10 @@ async function parkHud(page, frac = 0.1) {
 
 for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
   test.describe(`UI audit — ${orient}`, () => {
-    test.use({ viewport: vp });
+    // hasTouch → (pointer: coarse). #rotate-device is gated on coarse+portrait
+    // (css/responsive.css); without it Playwright's fine pointer never shows
+    // the blocker and test 23 waits forever (CI #602 on b1bb3d364).
+    test.use({ viewport: vp, hasTouch: true, isMobile: true });
 
     test("01 main menu", async ({ page }) => {
       await page.goto("/");
@@ -335,10 +338,13 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.evaluate(() => window.__apex.race("bahrain"));
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       // Do NOT hide rotate-device — that is the whole point of this test.
-      // Was waitForTimeout(500). Overlay is CSS `body.in-race:not(.rotate-ok)`
-      // (display:flex) — wait for that computed style, not Playwright "visible"
-      // (CI #602 timed out 8 s on locator.waitFor while the sheet was already up).
-      await page.evaluate(() => window.__apex.go());
+      // Was waitForTimeout(500). Overlay needs (pointer: coarse) — see hasTouch
+      // on this describe — plus body.in-race and no rotate-ok.
+      await page.evaluate(() => {
+        try { localStorage.removeItem("apex26.portraitOk"); } catch (_) { /* harness */ }
+        document.body.classList.remove("rotate-ok");
+        window.__apex.go();
+      });
       await page.waitForFunction(() => {
         const el = document.getElementById("rotate-device");
         return !!(el && getComputedStyle(el).display !== "none");
