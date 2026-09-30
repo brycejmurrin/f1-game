@@ -227,7 +227,8 @@ test.describe("real race, watched", () => {
     const staged = await page.evaluate((script) => {
       const L = document.getElementById("loading");
       window.__ldSeen = [];
-      new MutationObserver(() => window.__ldSeen.push({ phase: L.dataset.phase || "", hidden: L.hidden, gp: (document.getElementById("ld-gp") || {}).textContent || "" }))
+      new MutationObserver(() => window.__ldSeen.push({ phase: L.dataset.phase || "", hidden: L.hidden, gp: (document.getElementById("ld-gp") || {}).textContent || "",
+        title: !document.getElementById("overlay").hidden }))   // the title screen must not show round the card
         .observe(L, { attributes: true, attributeFilter: ["data-phase", "hidden"] });
       // eslint-disable-next-line no-undef
       return RealRace.launch(script, { seat: "LEC", laps: 3, intro: true });
@@ -239,6 +240,7 @@ test.describe("real race, watched", () => {
     const card = seen.find((s) => s.phase === "card" && !s.hidden);
     expect(card, JSON.stringify(seen)).toBeTruthy();
     expect(card.gp).toBe("2026 Azerbaijan Grand Prix");
+    expect(seen.filter((s) => !s.hidden && s.title), "the title screen showed round the pre-race card: " + JSON.stringify(seen)).toEqual([]);
     // eslint-disable-next-line no-undef
     const rr = await page.evaluate(() => RealRace.status());
     expect(rr.active).toBe(true);

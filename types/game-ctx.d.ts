@@ -705,6 +705,8 @@ interface GameCtx {
   readonly followCar: (c: CarState) => void;
   /** A mid-race jump-in: the countdown becomes the race at once (no gantry, no launch model); false outside the countdown. */
   readonly goRolling: () => boolean;
+  /** A jump-in's rolling hand-over count, big on the gantry's plate: 4..1, "GO", or null to clear. */
+  readonly handoverCount: (v: number | string | null) => void;
   /** Live time-of-day (read with no arg, write with tod). Rebuilds track when day/night flips. */
   readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
   /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */

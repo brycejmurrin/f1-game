@@ -3006,6 +3006,7 @@ async function startRaceBody() {
   syncRotateBlocker(true);
   holdRaceWake();
   for (const l of els.lights.children) l.classList.remove("on");
+  els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
   dbgCam = null;              // fresh race — drop any leftover debug free-cam
   snapGameCam();              // frame the grid correctly on the very first render
@@ -3659,6 +3660,8 @@ const G = {
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   followCar: (c) => { cars.forEach((o) => setCarRole(o, false, o === c)); player = c; },   // a replay: the camera, HUD and audio move to this car; nobody drives (js/race/real-replay.js)
   goRolling: () => { if (state !== "count") return false; setState("race", "rolling-start"); launchT0 = raceT; els.lights.hidden = true; for (const l of els.lights.children) l.classList.remove("on"); lightsLit = COUNTDOWN_S; cars.forEach((c) => { c.launchOn = false; }); return true; },   // a mid-race jump-in: green at once, no gantry, no launch model — the field is already at speed (js/race/real-race.js)
+  // …and its hand-over counts on the gantry's plate (4, 3, 2, 1, GO; null clears): a big number where the lights are, not a queued radio card.
+  handoverCount: (v) => { const on = v != null; els.lights.classList.toggle("count", on); if (on) els.lights.dataset.count = String(v); else delete els.lights.dataset.count; els.lights.hidden = !on; },
   wireId,                               // stable cross-peer car identity
   setScale: (...a) => setScale(...a),   // const from UiScale.create(G) below — defer
   // Debug teleports can run while a headless/SwiftShader frame is starved.
@@ -4002,6 +4005,8 @@ function startRaceCovered() {
   return startRace();
 }
 function raceIntro(go) {
+  // The card is the whole screen: the Data Hub's JUMP IN closes a dialog that sat OVER the title, which then showed round the card.
+  els.overlay.hidden = true;
   const built = _introKey; _introKey = "";
   if (!built && !menuWorld() && introBuild(go)) return;
   if (!built && menuWorld() && introWarm(go)) return;

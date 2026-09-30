@@ -180,7 +180,7 @@ serializes the agent behind SwiftShader several times over.
 
 | When | Run |
 |---|---|
-| in the edit loop | `npm run test:tooling-fast` (structural, no browser; 307 of 397 unit files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16) |
+| in the edit loop | `npm run test:tooling-fast` (structural, no browser; 308 of 398 unit files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16) |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | `node tools/ci/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
@@ -416,8 +416,8 @@ tools directly.)
 
 | Group | What it runs |
 |---|---|
-| `guards` | the 26 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `log-namespaces`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
-| `tooling-fast` | the structural half — 307 files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
+| `guards` | the 27 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `log-namespaces`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
+| `tooling-fast` | the structural half — 308 files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `game-vm` | the Node VM game harness (`game-vm.test.mjs`), the friend-race quali handoff (`quali-handoff-vm`), physics parity (`physics-characterization-vm`) and the fourteen `*-vm.test.mjs` TWINS of the JSON-only browser specs — `headless-api`, `obs-act-edge`, `longitudinal`, `world-physics`, `drift`, `active-aero`, `aero-zones`, `offtrack`, `elevation-tracks`, `collisions`, `collisions-deep`, `collision-ai-fixes`, `new-hooks` — same assertions and thresholds, one boot per file, ~1 s a circuit build. ~3 min for the set (elevation-tracks builds 40 circuits and is the bulk of it, ~3 min through the worker pool; the rest are 2–30 s each), plus `game-vm-pool` — the pool's own parity suite; in CI's node suites, which the Pages gate runs unconditionally. **Twelve of those browser specs no longer run on the blocking gate** — `tools/ci/twinned-specs.mjs` lists the pairs and holds the drift check that keeps the substitution honest (equal declared test counts, and the twin's group must still be gated, derived from ci.yml). They still run in their own group on the nightly. `new-hooks` is NOT among them: its Madrid foundation test is deliberately unported |
 | `game-vm-a` | `elevation-tracks-vm.test.mjs` ALONE, on its own CI runner (`node-suites` matrix slice `vm-a`, 2026-09-16; since 2026-09-30 TWO runners, `vm-a1` / `vm-a2`, each building every other circuit through `APEX_CIRCUIT_SHARD=i/2` — `tools/lib/circuit-scope.cjs` `shard`, a partition of the roster, so the pair is exactly this file): it builds 40 circuits and was 399-400 s on this box, the floor of any split of `game-vm` — until the same day's `tools/lib/game-vm-pool.cjs` put the 42 per-circuit races in four worker VMs: 191-210 s, 47/47 green every run (`APEX_VM_POOL=0`, the serial path, still measures 400 s; this box was shared with other agents' suites throughout, the 210 s run at mean load 5.1 of four cores). As one slice the whole group measured 9.2-9.4 min and set the job's wall; with this file alone the slice was ~6.5 min on a runner and the pool should take it to ~2. Partition — `game-vm` is still the full list locally |
@@ -1032,6 +1032,63 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 <apex-sha>` against `<meta name="apex-sha">` in the live `index.html`
 (deploy-research); `version.json`'s build number says how far behind, not which commit.
 
+### Merge train (concurrent PRs)
+
+The ship branch is a **merge train**: merge **one large PR at a time**; batch
+small independent PRs so the tip does not thrash. Agents open DRAFT PRs and
+mark ready only when final; keep about six or fewer ready PRs open
+(AGENTS.md §Concurrent PRs). Sync with `node tools/ci/sync-pr.mjs <branch>`
+once before the final CI run — do **not** enable auto-update-branch bots or a
+require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (Structural
+guards, PR only) prints how far the head is behind ship and emits a
+`::warning::` over 10 commits; it never fails the job. Deploy / Pages runs
+keep their own concurrency groups with `cancel-in-progress: false` so a
+publish is never cancelled by a later tick.
+
+### CI aggregator and Selected specs (verdict) (#480 / #507)
+
+Branch protection requires checks by **fixed name**. Matrix job names change
+per run, and path-filtered jobs that skip would block merges if required
+directly. Two always-judged checks close that:
+
+- **`CI`** (`ci-verdict` job, #480): aggregates every sibling job via
+  `tools/ci/ci-verdict.mjs`. A needed job skipped by its `if:` is a pass; a
+  needed failure or cancel fails the aggregator. Advisory jobs
+  (`baseline-trial`) never fail it. This is the one stable required check for
+  the whole workflow.
+- **`Selected specs (verdict)`** (`selected-verdict` job, #507): one fixed
+  name for the change-aware gate. `select` must succeed; `selected` success
+  passes; `selected` skipped with nothing dropped is an empty-plan pass; a
+  Pages call with unaffordable dropped specs warns rather than fails. Uses
+  `!cancelled()` so a draft→ready cancel does not red the superseded run.
+
+### What runs on PRs versus nightly
+
+| Lane | When | What |
+|---|---|---|
+| **Draft PR** | `pull_request` + draft | Fast tier: guards (incl. behind-ship), unit-plan / node slices, parts census, driving-model, change-aware `select`/`selected`. Heavy jobs skipped: geometry sweeps, wide smoke shards, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. |
+| **Ready PR** | `ready_for_review` / non-draft | Full tier on the same head: smoke + sweeps + ship-filter, plus path-gated renderer-macos / xr when the diff reaches them. Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
+| **Ship push** | push to deploy branch | Fast tier only; green poke starts the Pages train. Concurrency group `ship-push` (cancel superseded tip pushes). |
+| **Pages train** | poke / dispatch / cron | Full gate against live `before_sha`; gate group never cancels. |
+| **Nightly** | `ci.yml` schedule `17 3 * * *` | Rotating browser group (`nightly-group.mjs`) instead of smoke-only; renderer / gfx on real GPU; coverage for the ~61 specs `select-specs` never picks. `gpu-census.yml` shares the cron for adapter identity. |
+
+Every `pull_request` workflow uses a per-PR concurrency group with
+`cancel-in-progress: true`. Deploy / Pages / import-models / spec-timings do
+**not** cancel in-progress runs.
+
+### Flaky tests
+
+Playwright retries default to **1 under `CI`** when unset
+(`playwright.config.js`); the change-aware `selected` gate sets `--retries=0`
+so a flake is news, not a doubled bill. Under `APEX_FAIL_ON_FLAKY=1` (every
+browser job in `ci.yml`) a pass-on-retry is a red unless the spec is listed in
+`tests/data/flaky-quarantine.json` — the one `@quarantine` ledger (owner,
+since, why). Quarantined specs still run; they are excluded from blocking
+required runs. Agents fix real failures; re-run a failed job at most once and
+only for timeout / infra errors; never skip a test or loosen a tolerance to
+get green. `tests/unit/flaky-quarantine.test.mjs` pins the ledger and the
+wiring.
+
 ## 4. Philosophy — debug-hooks first
 
 Prefer assertions driven by the `window.__apex` API and geometric/mesh probes
@@ -1623,7 +1680,8 @@ what it covers.
 | `ci-pr-base.test.mjs` | guards `tools/ci/ci-pr-base.sh`: a pull request diffs against the test commit's FIRST PARENT, because `pull_request.base.sha` lags one sync behind the base `refs/pull/N/merge` was built on and the base's own recent commits then read as every PR's diff (the first PR runs after #494 fail-safed into every node script for exactly that). Run in a throwaway repo (plain checkout echoes the fallback; a merge checkout answers its first parent), and pins the six callers: the node-suites plan step, the parts, sweeps and renderer filters, docs-guards and `ci-resolve-before.sh`. |
 | `circuit-scope.test.mjs` | guards `tools/lib/circuit-scope.cjs`, the one place `APEX_CIRCUITS` narrows the fleet sweeps: `scope()` semantics (unset = every id, set = the named ids in the caller's order, an unknown id = nothing), every audit CLI's `--all` resolving through it (float-audit's three entry points included), the seven roster-rebuilding sweep suites reading the scope AND holding their anti-vacuity floor to the SCOPED roster (a CLI narrowed while its suite still expects 52 would fail), their listing in `select-specs`' `CIRCUIT_FILTERED_TESTS`, and ci.yml's sweeps job computing the ids on a pull request only and handing them to `test:sweeps`. |
 | `coverage-merge.test.mjs` | guards `tools/ci/coverage-merge.mjs`, the only consumer of the raw V8 lists a flagged run writes. Every url shape a run produces must map to one repo-relative row (served `?v=…` query stripped, `file://` from an absolute vm filename, helpers and the vendored three.js island refused); a node entry must be measured against the text V8 saw — the VM's `const`→`var` rewrite, chosen by the top-level range length, never the raw file, which would shift every later line; a synthetic dump merges through monocart into an lcov row; an empty union is a reported reason and writes nothing; and `tests/helpers/js-coverage.js` is inert without `APEX_JS_COVERAGE=1` (no CDP call, no file) |
-| `flaky-quarantine.test.mjs` | guards `tests/helpers/flaky-policy.mjs` and `tests/data/flaky-quarantine.json`, the policy behind `APEX_FAIL_ON_FLAKY=1` (AGENTS.md §Verification 9: a pass that needed a retry is a red). The verdict is pure set membership on the reporter's `{spec, title}` key — an unlisted flake fails the run, a quarantined one is printed and spared — so it is pinned on fixtures; the quarantine file is a LEDGER, so every row must name a spec that exists and carry `since`, `owner` and `why`, and a row for a deleted spec fails the commit rather than lingering. Two structural cases keep the wiring honest: every `APEX_WORKERS: 1` env block in `ci.yml` also sets `APEX_FAIL_ON_FLAKY: 1`, and `run-playwright.mjs` never pushes Playwright's all-or-nothing `--fail-on-flaky-tests`, which cannot spare a named spec |
+| `flaky-quarantine.test.mjs` | guards `tests/helpers/flaky-policy.mjs` and `tests/data/flaky-quarantine.json`, the `@quarantine` ledger behind `APEX_FAIL_ON_FLAKY=1` (AGENTS.md §Concurrent PRs / §Verification 9: a pass that needed a retry is a red). The verdict is pure set membership on the reporter's `{spec, title}` key — an unlisted flake fails the run, a quarantined one is printed and spared — so it is pinned on fixtures; the quarantine file is a LEDGER, so every row must name a spec that exists and carry `since`, `owner` and `why`, and a row for a deleted spec fails the commit rather than lingering. Two structural cases keep the wiring honest: every `APEX_WORKERS: 1` env block in `ci.yml` also sets `APEX_FAIL_ON_FLAKY: 1`, and `run-playwright.mjs` never pushes Playwright's all-or-nothing `--fail-on-flaky-tests`, which cannot spare a named spec |
+| `behind-ship.test.mjs` | guards `tools/ci/behind-ship.mjs`, the non-blocking "how far behind ship?" advisory on Structural guards for pull_request events (AGENTS.md §Concurrent PRs). Pins the warn threshold (10), the `::warning::` annotation shape (never `::error::`), CLI exit 0 even when unresolved or over threshold, and that `ci.yml`'s guards job wires the step PR-only |
 | `test-bg-outcome.test.mjs` | guards `tools/ci/test-bg.mjs`'s `outcomeOf`, the verdict read out of a background run's log: a non-zero `= bg exit` wins over an earlier `= run passed` or `# fail 0` (a two-command group's red second half, or a Playwright half killed before its summary, used to read as passed and `--wait` exited 0); exit 0 keeps the richer summary, and the Playwright, TAP and plain-script formats still read |
 | `ci-watch.test.mjs` | guards `tools/ci/ci-watch.mjs`, the post-push CI/Pages watcher an agent arms instead of waiting (AGENTS.md rule 12). Pure parts pinned on fixtures: the NEWEST run per workflow wins, so the push run the PR run cancels on the same SHA (rule 8's designed dedupe) is never read as a red; a failed job is a red before its run ends while the watch keeps reporting; a run that concluded failure with no failed job (a setup error) is still a red; no run yet is not green; each finished job is exactly one event (Monitor turns every line into a message), skipped jobs are silent, and a red names its failing step and URL |
 | `session-status.test.mjs` | guards `tools/ci/session-status.mjs`, the GENERATED handoff block a session pastes into its draft PR body (AGENTS.md rule 12). The verdict parser takes the LAST terminal line (`= run …`, `[tooling-fast] = run …`) and never a heartbeat's `N/M done, K failed`, and names a run that died before its reporter's summary (`= bg exit N` only) instead of reading it as green; the Markdown must flag unpushed commits, uncommitted files and a live browser run whose verdict is unread; `collect()` runs against the real checkout |

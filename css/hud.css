@@ -798,6 +798,22 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
 }
 .light { width: 26px; height: 26px; border-radius: 50%; background: #2a2a32; }
 .light.on { background: #ff1a1a; box-shadow: 0 0 18px rgba(255, 26, 26, 0.9); }
+/* A JUMP IN's ROLLING HAND-OVER counts on the same plate, where the eye already
+   looks for the start: 4, 3, 2, 1, GO (js/race/real-race.js via G.handoverCount).
+   No node of its own (the shell is at its node ceiling): the lamps step aside and
+   the plate's ::after carries the number. */
+#lights.count .light { display: none; }
+#lights.count::after {
+  content: attr(data-count);
+  min-width: 1.6em;
+  text-align: center;
+  font-size: 60px;   /* the plate is HUD-zoomed (--hud-z), so this scales with HUD SIZE */
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  color: var(--look-hud-ink);   /* the plate is always dark, whatever the UI theme */
+}
+#lights.count[data-count="GO"]::after { color: var(--faster); }
 
 /* THE RADIO CARD. Every banner used to be a billboard — 64px italic across the
    middle of the screen, over the corner it was about, and a coach tip ran to
