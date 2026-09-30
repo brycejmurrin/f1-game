@@ -1,0 +1,10 @@
+[
+{"query":"I want to open the local Baku build in the live Chrome DevTools session, start a race, and poke __apex interactively while I watch the canvas. Then take a heap snapshot before and after three laps to see whether the retained size grows, and list any console errors that show up.","expect":"mcp-probe"},
+{"query":"can u hook up the chrome mcp and poke the game live? my car keeps jitterin when i hit the kerb at bahrain, wanna repro it in the actual browser and watch console + perf trace while i drive","expect":"mcp-probe"},
+{"query":"The canvas goes black for a second right after I switch camera to cockpit during a race in my working tree. I need to reproduce it in a real browser, keep the page alive between steps, and read console messages and network requests as it happens.","expect":"mcp-probe"},
+{"query":"Start the probe-mcp.py chrome daemon so one Chromium stays alive across calls, load js/circuits/albert_park.js as it is in my working tree, and evaluate __apex.physState() several times while I tweak things, checking for GC spikes in a performance trace.","expect":"mcp-probe"},
+{"query":"Run a Lighthouse audit and a performance trace against the local dev server on port 3456 with the game running, then dig into the slowest insight and tell me which script is blocking the main thread during an interactive repro.","expect":"mcp-probe"},
+{"query":"Fetch https://brycejmurrin.github.io/f1-game/version.json and check whether the live site's apex-sha matches my last push, and grep the deployed js for the marker string I just added to see if it shipped.","expect":"deploy-research"},
+{"query":"Take before and after screenshots of Monza and Spa from the chase camera in headless mode, batch them into one folder, and profile the game loop CPU for flame charts and GC spikes over a 60 second run.","expect":"playwright-probe"},
+{"query":"Without any screenshots, dump world() and field() for a headless lap at Bahrain, and report field order, gaps, sector timing and slip/grip telemetry as text so I can see what the car is doing.","expect":"agent-view"}
+]

@@ -472,9 +472,9 @@ test("file-family skills keep their file anchors in the body, and `paths` stays 
   // (auto-attach only when matching files are in play; the user can always
   // invoke it). Four file-family skills carried it until 2026-09, were read
   // as invisible to a chat-only ask, and dropped it; PR #172 (2026-09-22) put
-  // it back on four skills as an ADDITIVE file-access trigger and pins that in
-  // agent-surface.test.mjs. Either way a skill that sets it must give a real
-  // glob list, not a bare string the parser would treat as one pattern.
+  // it back as an "additive" trigger; the 2026-09-30 routing eval measured it
+  // as replacing description triggering (0 of 20 fires), so agent-surface.test.mjs
+  // now forbids it. If a skill ever sets it again it must be a real glob list.
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
   for (const d of dirs) {
     const file = path.join(SKILLS, d.name, "SKILL.md");

@@ -1,0 +1,10 @@
+[
+{"query":"In js/physics/ai-drive.js the overtake fire rate (otFireRate) looks too high for low-craft drivers, so back-markers dive into gaps that aren't there. Please trace how craft and awareness ratings feed the behaviour maps and propose a change that makes weak drivers more passive without breaking the seeded stream in makeCars().","expect":"ai-racecraft"},
+{"query":"ai cars keep gettin wedged behind each other in the pit lane at monza and just sit there, rescue teleport never kicks in?? whats wrong w the unstuck logic","expect":"ai-racecraft"},
+{"query":"The AI runs out of battery halfway down the straight and then gets passed by everyone on the next lap. They seem to burn all their ERS deploy at once instead of saving it. Can you figure out why?","expect":"ai-racecraft"},
+{"query":"AI cars brake way too late into the Turn 1 hairpin at Baku and overshoot into the wall. Check the multi-sample brake target and how far ahead it looks at curvature, and tell me what to adjust.","expect":"ai-racecraft"},
+{"query":"When traffic is dense the AI's preferred lane nudge seems to hold a car on the racing line even when a slower car is right in front of it. Look at the lane nudge toward the freer side and letPass behaviour, and tell me whether the pull is too weak.","expect":"ai-racecraft"},
+{"query":"The safety car never comes in after a pile-up at Spa and the field stays bunched under yellow forever. Debug why the caution doesn't end and the SC stays stuck out.","expect":"race-incidents-control"},
+{"query":"My car understeers on turn-in and the rivals feel faster in corners than me. Run a physics A/B on ROAD_FOLLOW and grip settings with the headless obs/act/reset loop to see if driving feel improved.","expect":"tune-physics"},
+{"query":"After a DNF inside my career save the AI teammate's reliability retirement doesn't pay out the contract bonus, and the sponsor money for the race is wrong. Debug the career DNF economy.","expect":"career-mode"}
+]

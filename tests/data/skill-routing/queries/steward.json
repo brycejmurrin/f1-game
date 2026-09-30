@@ -1,0 +1,10 @@
+[
+{"query":"My draft PR into the deploy branch just went red on the fast tier and a second run on the same head_sha shows cancelled. Work out which one is real, whether anyone else is already fixing it, and drive the PR back to green.","expect":"steward"},
+{"query":"pr keeps sayin theres a merge conflict w/ the base, ratchets.json and some generated files conflict. how do i catch my branch up w/o wrecking it? then get the pr green pls","expect":"steward"},
+{"query":"I marked the PR ready for review a few minutes ago and now the checks page shows the earlier run as cancelled with zero failures. Is that a problem? What should I do next to get this merged?","expect":"steward"},
+{"query":"Check-in on claude/tune-kerb-feel: I pushed the fix an hour ago, the ci-watch monitor has expired without a verdict, and Pages hasn't shown up. Pick the PR back up, re-arm the watching, and say when it's actually live.","expect":"steward"},
+{"query":"pages.yml failed on the shared deploy branch and three other sessions are probably looking at it too. Before I touch tools/ci/deploy.mjs or push a fix, check whether someone has already claimed it and stand down if so.","expect":"steward"},
+{"query":"Before I push, run whatever checks the deploy itself runs against my dirty tree, and tell me which test groups my edits to js/physics/ai-drive.js need. I haven't opened a PR yet.","expect":"check-changes"},
+{"query":"The tests/specs run for the track group exited 124 on --wait and the box loadavg looked high. Was that a real failure or just the machine timing out? Decide whether to re-run.","expect":"check-changes"},
+{"query":"The Pages deploy went green but the live site still serves the old version.json and the service worker keeps installing a stale shell. Diagnose why the cache isn't invalidating and what sw.js precaches for the DEFERRED backends.","expect":"pwa-cache-service-worker"}
+]

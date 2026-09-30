@@ -1,0 +1,10 @@
+[
+{"query":"js/game.js has hit its size ratchet and every metric in tests/data/ratchets.json shows zero slack. Find a self-contained block I can extract into its own module, check its free references, and lower the ratchet afterwards without changing behaviour.","expect":"slim-bloat"},
+{"query":"the skill files r getting huge, agents burn like half their context just loading them. can u find the fat ones and trim whats duplicated w/ the docs?","expect":"slim-bloat"},
+{"query":"Every session starts slow and the model keeps losing track because there is just too much to read across the repo. Figure out what is dead, duplicated or stale and cut it down safely.","expect":"slim-bloat"},
+{"query":"Look through js/circuits and js/render for comments that describe behaviour we removed months ago and helper functions nothing calls any more, then remove them without touching runtime output.","expect":"slim-bloat"},
+{"query":"AGENTS.md and docs/ have grown repetitive: the same twelve rules appear in three places with slightly different numbers. Consolidate to one canonical copy and point the others at it.","expect":"slim-bloat"},
+{"query":"The menu stylesheets in css/ have hundreds of near-identical panel and button rules. Collapse the duplicate component families into shared classes and restructure the screen DOM so new screens reuse them.","expect":"css-play"},
+{"query":"I edited a few files under js/physics and tools/ci. Before I push to the deploy branch, run the right tests and tell me whether I broke anything, including anything too large for the ratchets.","expect":"check-changes"},
+{"query":"The settings dialog is too big on a small phone: content is clipped and the Escape key does not close it. Fix the single cramped screen so it fits and back navigation works.","expect":"ui-menu-a11y"}
+]

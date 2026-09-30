@@ -300,12 +300,20 @@ test("every skill with agent: names an existing subagent or a builtin, and forks
   assert.deepEqual(forked.sort(), [...FORKED_SKILLS].sort(), "the forked set changed — update the list and its reason here");
 });
 
-test("the file-scoped skills declare paths:, so they load on file access and not only on prompt words", () => {
-  for (const [skill, glob] of [["webgl-debug", "js/render/glx/**"], ["webgpu-debug", "js/render/webgpu/**"],
-                               ["css-play", "css/**"], ["lighting-tuner", "js/lighting/**"]]) {
-    const text = fs.readFileSync(path.join(SKILLS, skill, "SKILL.md"), "utf8");
-    const fm = /^---\n([\s\S]*?)\n---/.exec(text)[1];
-    assert.match(fm, /^paths: \[.+\]$/m, `${skill}: paths: missing (inline list form, which both hosts' one-line frontmatter readers accept)`);
-    assert.ok(fm.includes(`"${glob}"`), `${skill}: paths must name ${glob}`);
+test("no skill declares paths: — it replaces description triggering instead of adding to it", () => {
+  // Measured 2026-09-30 (skill-routing eval, 216 realistic queries through the
+  // real skill set with claude -p): the four skills that carried `paths:`
+  // (webgl-debug, webgpu-debug, css-play, lighting-tuner) fired on 0 of 20
+  // should-fire queries and on 0 of their near-misses, while the 23 without it
+  // fired on 112 of 115. `/skill-doctor` listed 23 project skills, not 27. A
+  // chat-only symptom ("night looks washed out", "the GLX canvas is black")
+  // never has a matching file in play, so the field hides exactly the requests
+  // the description targets. PR #172 (2026-09-22) had re-added it as
+  // "additive"; docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md §Withdrawn.
+  for (const d of fs.readdirSync(SKILLS, { withFileTypes: true }).filter((e) => e.isDirectory())) {
+    const file = path.join(SKILLS, d.name, "SKILL.md");
+    if (!fs.existsSync(file)) continue;
+    const fm = /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(file, "utf8"))[1];
+    assert.doesNotMatch(fm, /^paths:/m, `${d.name}: paths: hides the skill from chat-only asks (measured 2026-09-30)`);
   }
 });

@@ -1,7 +1,6 @@
 ---
 name: webgl-debug
 description: Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/blown-out/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night → lighting-tuner; WebGPU → webgpu-debug; garbled PBR layer → asset-pack; shimmer while driving → playwright-probe.
-paths: ["js/render/glx/**"]
 
 ---
 

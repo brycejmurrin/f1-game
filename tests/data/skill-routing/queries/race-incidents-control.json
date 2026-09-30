@@ -1,0 +1,10 @@
+[
+{"query": "In js/physics/incident-sim.js the multi-car pile-up takeover (c1Pileup) never releases the cars after the window ends, so they stay frozen on track. Trace the takeover bounds, find why the release is skipped, and confirm tests/specs/race-control.spec.js covers it.", "expect": "race-incidents-control"},
+{"query": "safety car nevr deploys after a big crash at spa, field just keeps racing under yellow?? can u figure out why the caution never escalates", "expect": "race-incidents-control"},
+{"query": "Cars sometimes get launched into the air like they hit a ramp when they clip the debris after a shunt, and one flips over and lands way off the circuit. Something is off with the side-world. Can you investigate?", "expect": "race-incidents-control"},
+{"query": "Look at js/physics/debris-world.js and make the clippable cones and marbles settle faster without letting DebrisWorld ever move a car; update tests/specs/debris.spec.js accordingly.", "expect": "race-incidents-control"},
+{"query": "I want a virtual safety car to be called when a car retires with an engine failure from js/race/reliability.js, and overtake gating should be disabled while VSC is active. Wire the flag state through race control and add a test.", "expect": "race-incidents-control"},
+{"query": "The AI dives down the inside way too aggressively into the hairpin at Baku and keeps punting people on the brakes. Tone down the overtake decisions and the brake targets in js/physics/ai-drive.js.", "expect": "ai-racecraft"},
+{"query": "In my driver career save, when my car retires with a DNF the prize money and sponsor bonus are not being paid and the R&D points are lost. Debug the contract and payout after a reliability retirement.", "expect": "career-mode"},
+{"query": "Crashing into a wall or a kerb feels weak: add screen shake, hit-stop and stronger collision feedback, but it must not change the driving physics or determinism.", "expect": "tune-physics"}
+]
