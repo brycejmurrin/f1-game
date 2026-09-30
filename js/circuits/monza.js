@@ -14,6 +14,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.8,
+    tyreSeverity: 0.55,  // Pirelli: degradation 'rather limited', one-stop default — below Australia 0.61
     sceneryCoordinates: "racing",
     // Keep the royal-park terrain under the deep forest ranks and hero models.
     terrainOuter: 120,

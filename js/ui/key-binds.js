@@ -110,10 +110,26 @@ function create(G) {
          false mid-composition. The 229 check is what covers that gap, and is
          the pairing MDN recommends. */
       if (e.isComposing || e.keyCode === 229) return;
-      if (dev.keys || e.code === "Escape") { e.preventDefault(); e.stopPropagation(); }
+      const erase = e.code === "Backspace" || e.code === "Delete";
+      if (dev.keys || erase || e.code === "Escape") { e.preventDefault(); e.stopPropagation(); }
       if (e.repeat) return;
       if (e.code === "Escape") { disarm(); return; }
+      // BACKSPACE / DELETE UNBINDS the armed slot — on the pad table too, since a
+      // controller button cannot mean "none". Input.clear*Binding had no caller,
+      // so a slot could be moved but never emptied. The price: neither key can be
+      // CAPTURED as a binding any more (a saved map holding one still loads).
+      if (erase) { unbind(); return; }
       if (dev.keys) accept(e.code);
+    }
+    function unbind() {
+      const { id, slot } = armed;
+      const row = dev.list().find((a) => a.id === id);
+      dev.clear(id, slot);
+      const focus = clearArmed();
+      save();
+      tick();
+      render(focus);
+      setNote(`${row ? row.label : id}${slot ? " second" : ""} ${dev.noun} cleared — it is unset now.`);
     }
     function arm(id, slot, btn) {
       if (armed && armed.btn === btn) { disarm(); return; }
@@ -250,14 +266,14 @@ function create(G) {
   keys = section({
     keys: true, noun: "key", key: "keys",
     section: $("pm-keys-section"), host: $("pm-keys"), note: $("pm-keys-note"), reset: $("pm-keys-reset"), help: $("htp-keys"),
-    load: Input.setKeyMap, get: Input.getKeyMap, list: Input.keyBindings, set: Input.setKeyBinding,
+    load: Input.setKeyMap, get: Input.getKeyMap, list: Input.keyBindings, set: Input.setKeyBinding, clear: Input.clearKeyBinding,
     resetAll: Input.resetKeys, isDefault: Input.keysAreDefault, label: Input.keyLabel,
     // A desktop always shows it; a touch device once a physical key has been
     // pressed (a tablet with a Bluetooth keyboard), or when the map is already
     // customised — pointer: coarse says nothing about whether a keyboard exists.
     show: () => desktop() || Input.keyboardSeen() || !Input.keysAreDefault(),
-    idle: "Tap a key slot, then press the key you want. Esc cancels. A key already used by another action moves here.",
-    armedNote: "Press a key… (Esc cancels)", resetNote: "Keys reset to the defaults.",
+    idle: "Tap a key slot, then press the key you want. Esc cancels, Backspace clears the slot. A key already used by another action moves here.",
+    armedNote: "Press a key… (Esc cancels, Backspace clears)", resetNote: "Keys reset to the defaults.",
     groups: [
       ["Steer", ["left", "right"]], ["Gas", ["throttle"]], ["Brake", ["brake"]],
       ["Boost", ["boost"], "tap to toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
@@ -268,13 +284,13 @@ function create(G) {
   pad = section({
     keys: false, noun: "button", key: "pad",
     section: $("pm-pad-section"), host: $("pm-pad"), note: $("pm-pad-note"), reset: $("pm-pad-reset"), help: $("htp-pad"),
-    load: Input.setPadMap, get: Input.getPadMap, list: Input.padBindings, set: Input.setPadBinding,
+    load: Input.setPadMap, get: Input.getPadMap, list: Input.padBindings, set: Input.setPadBinding, clear: Input.clearPadBinding,
     resetAll: Input.resetPad, isDefault: Input.padsAreDefault, label: Input.padLabel,
     // A desktop always shows it (a pad may be plugged in later); a phone only
     // once a pad has been seen, or when the map is already customised.
     show: () => Input.padPresent() || desktop() || !Input.padsAreDefault(),
-    idle: "Tap a slot, then press a button on the controller. Esc cancels. The stick and D‑pad steer.",
-    armedNote: "Press a controller button… (Esc cancels)", resetNote: "Controller reset to the defaults.",
+    idle: "Tap a slot, then press a button on the controller. Esc cancels, Backspace clears the slot. The stick and D‑pad steer.",
+    armedNote: "Press a controller button… (Esc cancels, Backspace clears)", resetNote: "Controller reset to the defaults.",
     groups: [
       ["Steer", "left stick / D‑pad"], ["Gas", ["throttle"]], ["Brake", ["brake"], "(triggers are analog)"],
       ["Boost", ["boost"], "toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
@@ -345,6 +361,9 @@ function create(G) {
     say("Let go of the stick…");
     setTimeout(() => {
       if (Input.calibratePad()) {
+        // Stored: the hint promises the offset applies "from then on", and it
+        // used to be lost on the next reload (loaded back below).
+        store.set("padRest", Input.padRest());
         say(`Centre captured (offset ${(Input.padRest() * 100).toFixed(1)}%). If the car still pulls, raise DEAD ZONE a point or two.`);
         tick();
       } else {
@@ -380,6 +399,14 @@ function create(G) {
     };
     const finish = (map, msg) => {
       running = false;
+      // A captured rest offset belongs to the axis (and sign) it was measured
+      // on; carried onto a different steering axis it would steer the car on
+      // its own, and it is stored, so across reloads too. Drop it.
+      const was = Input.getPadAxisMap();
+      if (Input.setPadRest && (was.steer !== map.steer || was.steerInvert !== map.steerInvert)) {
+        Input.setPadRest(0);
+        store.set("padRest", 0);
+      }
       Input.setPadAxisMap(map);
       store.set("padAxes", Input.getPadAxisMap());
       wheelBtn.textContent = "SET UP A WHEEL";
@@ -418,6 +445,7 @@ function create(G) {
     };
   }
   if (Input.setPadAxisMap) Input.setPadAxisMap(store.get("padAxes", null));
+  if (Input.setPadRest) Input.setPadRest(store.get("padRest", 0));   // CALIBRATE STICK, persisted
 
   if (keys || pad) Log.info("ui", "KeyBinds.create");
   return {

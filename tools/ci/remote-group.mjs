@@ -14,6 +14,7 @@
 //
 //   node tools/ci/remote-group.mjs ui                  # dispatch on this branch, 4 shards, watch to the verdict
 //   node tools/ci/remote-group.mjs input --shards 2
+//   node tools/ci/remote-group.mjs render --workers 1  # override the group's --workers (hang vs contention)
 //   node tools/ci/remote-group.mjs ui --gl swiftshader  # reproduce a local-only (SwiftShader) red on CI
 //   node tools/ci/remote-group.mjs ui --no-wait         # dispatch, print the run URL, exit
 //   node tools/ci/remote-group.mjs --watch <run-id>     # watch a run already dispatched
@@ -48,6 +49,14 @@ export function browserGroups(scripts) {
 }
 
 /** Validate a dispatch and return its shard matrix, or {error}. Pure. */
+// browser-group.yml's `workers`: empty keeps the group script's own --workers.
+export function parseWorkers(w) {
+  if (w == null || w === "") return { workers: "" };
+  const n = Number(w);
+  if (!Number.isInteger(n) || n < 1 || n > 8) return { error: `workers must be an integer 1-8, not ${w}` };
+  return { workers: String(n) };
+}
+
 export function planMatrix(group, shards, scripts) {
   const g = String(group || "").trim();
   if (!/^[a-z0-9][a-z0-9-]*$/.test(g)) return { error: `not a group name: ${JSON.stringify(group)}` };
@@ -157,6 +166,8 @@ async function main() {
   if (argv.includes("--plan")) {   // the workflow's plan step: validate, print the matrix
     const p = planMatrix(process.env.GROUP, process.env.SHARDS, scripts());
     if (p.error) { console.error("remote-group --plan: " + p.error); return 3; }
+    const w = parseWorkers(process.env.WORKERS);
+    if (w.error) { console.error("remote-group --plan: " + w.error); return 3; }
     console.log(`matrix=${JSON.stringify(p.matrix)}`);
     return 0;
   }
@@ -165,11 +176,13 @@ async function main() {
   const deadline = tmin > 0 ? Date.now() + tmin * 60_000 : Infinity;
   if (argv.includes("--watch")) return watch(opt("--watch"), { interval, deadline });
 
-  const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout"].includes(argv[i - 1]));
+  const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout", "--workers"].includes(argv[i - 1]));
   const p = planMatrix(group, opt("--shards", "4"), scripts());
   if (p.error) { say("refused: " + p.error); return 3; }
   const gl = opt("--gl", "llvmpipe");
   if (!["llvmpipe", "swiftshader"].includes(gl)) { say(`refused: --gl is llvmpipe or swiftshader, not ${gl}`); return 3; }
+  const w = parseWorkers(opt("--workers", ""));
+  if (w.error) { say("refused: " + w.error); return 3; }
   const branch = opt("--ref", git("rev-parse", "--abbrev-ref", "HEAD"));
   if (!branch || branch === "HEAD") { say("refused: detached HEAD — pass --ref <pushed branch>"); return 3; }
   // The runner tests origin/<branch>: an unpushed commit would silently not be tested.
@@ -185,7 +198,11 @@ async function main() {
     return 3;
   }
   const since = Date.now();
-  const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, { ref: branch, inputs: { group: p.group, shards: String(p.shards), gl } });
+  const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
+    ref: branch,
+    // Sent only when set: a ref whose browser-group.yml predates `workers` would 422 on it.
+    inputs: { group: p.group, shards: String(p.shards), gl, ...(w.workers ? { workers: w.workers } : {}) },
+  });
   if (d.error) { say(`= group unknown — dispatch failed: ${d.error}`); return 3; }
   let runId = d.json?.workflow_run_id || null;
   for (let tries = 0; !runId && tries < 20; tries++) {   // a 204 (older API behaviour): find it
@@ -194,7 +211,7 @@ async function main() {
     runId = pickRun(r.json?.workflow_runs, { branch, group: p.group, sinceMs: since })?.id || null;
   }
   if (!runId) { say("= group unknown — dispatched, but no run appeared within 60 s; check the Actions tab"); return 3; }
-  say(`dispatched ${p.group} on ${branch} (${p.shards} shards, ${gl}) — run ${runId}`);
+  say(`dispatched ${p.group} on ${branch} (${p.shards} shards, ${gl}${w.workers ? `, ${w.workers} workers` : ""}) — run ${runId}`);
   if (argv.includes("--no-wait")) { say(`watch: node tools/ci/remote-group.mjs --watch ${runId}`); return 0; }
   return watch(runId, { interval, deadline });
 }
