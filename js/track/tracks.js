@@ -408,6 +408,7 @@ const Tracks = (function () {
   async function buildPaced(def, opts, alive, onAbandon, budgetMs) {
     const gen = ++_buildGen, it = buildSteps(def, opts), budget = budgetMs > 0 ? budgetMs : 8;
     let partial = null;
+    _pacing++;
     try {
       for (;;) {
         const t0 = _now();
@@ -418,7 +419,11 @@ const Tracks = (function () {
         if (gen !== _buildGen || !alive()) { it.return(); if (onAbandon) onAbandon(partial); return null; }
       }
     } catch (e) { if (onAbandon) onAbandon(partial); throw e; }
+    finally { _pacing--; }
   }
+  // A paced build is in flight (its caller's world is null by design until it lands).
+  let _pacing = 0;
+  const building = () => _pacing > 0;
 
   function buildMap(px, pz, n) {
     let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
@@ -926,5 +931,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
 })();

@@ -2571,7 +2571,9 @@ function reloadFlybyShots() {
 
 // Keep one prepared track, never a cache of whole circuits. A generation
 // prevents late scenery downloads (including A -> B -> A) from committing.
-const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
+// garageWarm/garageReady: the setup garage pre-built on race settings
+// (garagePrewarm), so the drive-out's first frame compiles nothing.
+const _menuGate = { warm: 0, generation: 0, ready: "", track: null, garageWarm: 0, garageReady: false };
 // The menu finished building THIS selection (circuit, time, weather): only then is
 // `track` the world the loading screen may fly, light and grid. A fast tap to RACE!
 // before the idle build ran left the OLD circuit in `track`.
@@ -2636,6 +2638,17 @@ async function menuFinish(current, key) {
   if (current()) _menuFly = fly;
   if (lit && await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
+// THE GARAGE, PRE-BUILT ON RACE SETTINGS. RACE! opens on the garage drive-out, and
+// a player who came straight from the picker has never drawn the garage: its first
+// frame built the room and the car and compiled their programs, synchronously —
+// measured 1.3-1.8 s of frozen screen under SwiftShader at the tap. Once the
+// circuit is done and the sheet is idle, request the backend's program warm (TLX
+// compiles it off the next present) and draw two garage frames hidden.
+async function garagePrewarm(current) {
+  if (_menuGate.garageReady || $("race-settings").hidden || !(await menuIdle(current))) return;
+  if (gfx.warm) gfx.warm();
+  _menuGate.garageWarm = 2;
+}
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
   const generation = ++_menuGate.generation;
@@ -2664,13 +2677,14 @@ function scheduleFlybyTrack(settle) {
       // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
       // that crosses dark rebuilds, and every tap then froze the sheet).
       if (!(await menuIdle(current))) return;
-      loadTrack(want);
+      if (!(await loadTrackStepped(want, current))) return;   // in steps: a tap on the sheet mid-build is answered
       _menuGate.ready = key; _menuGate.track = track;
       // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
       await menuSlice();
       if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
         gfx.uploadTexture(track.meshes.pitSignTex);
       await menuFinish(current, key);
+      await garagePrewarm(current);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
   // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build itself waits
@@ -7117,6 +7131,8 @@ function render(dt) {
   // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
   // owes them): shaders, textures and shadow maps warm up under the picker, not
   // in front of the player the instant race settings opens.
+  // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too.
+  if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { _menuGate.garageWarm--; _menuGate.garageReady = true; renderSetupPreview(dt); return; }
   if (menuBlank && !(track && _menuGate.warm > 0)) return;
   if (menuBlank) _menuGate.warm--;
   // RESULTS: physics and PerfGov already stop; the sheet is translucent over
@@ -7124,6 +7140,7 @@ function render(dt) {
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
   if (state === "results") return;
+  if (setupPreviewOn) _menuGate.garageReady = true;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see

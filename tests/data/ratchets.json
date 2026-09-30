@@ -6,15 +6,15 @@
     },
     "js/agent/apex.js": {
       "codeLines": 2268,
-      "lines": 3226
+      "lines": 3228
     },
     "js/car/car3d.js": {
       "lines": 4136
     },
     "js/game.js": {
-      "codeLines": 5266,
+      "codeLines": 5274,
       "gMembers": 278,
-      "lines": 9919,
+      "lines": 9936,
       "topLets": 159
     },
     "js/lighting/presets.js": {
@@ -27,7 +27,7 @@
       "lines": 2789
     },
     "js/track/tracks.js": {
-      "lines": 931
+      "lines": 936
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
