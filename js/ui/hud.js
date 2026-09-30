@@ -1116,10 +1116,10 @@ function updateHud(force, dtMs) {
 }
 
 // THE FLAG IS SPOKEN through #announce-live, the radio card's always-present
-// polite region (js/game.js showAnnounce), not by the chip alone. #hud-flag
-// is a role="alert" filled and unhidden in the same step — the pattern NVDA,
-// JAWS and macOS VoiceOver miss (index.html, above #announce-live) — so a
-// safety car reached a screen-reader user as nothing at all. Same beat as showAnnounce:
+// polite region (js/game.js showAnnounce), and ONLY there: #hud-flag carries no
+// live role. It used to be a role="alert" filled and unhidden in the same step
+// — the pattern NVDA, JAWS and macOS VoiceOver miss (index.html, above
+// #announce-live) — so a safety car reached a screen-reader user as nothing. Same beat as showAnnounce:
 // clear, then write a moment later, so a repeated flag is still a change. Once
 // per change of the chip's text, never per HUD tick; spelled out in full words
 // because "VSC" and "S2" are glyphs to the eye and noise to a voice.

@@ -604,8 +604,11 @@ test("the minimap's armed pit marker pulses — unless motion is reduced, by SET
 });
 
 test("a caution flag is SPOKEN through #announce-live, once per change", () => {
-  // #hud-flag is a role="alert" filled and unhidden in the same step, which
-  // NVDA, JAWS and VoiceOver do not announce (index.html, #announce-live).
+  // #hud-flag was a role="alert" filled and unhidden in the same step, which
+  // NVDA, JAWS and VoiceOver do not announce (index.html, #announce-live). It
+  // carries no live role now; #announce-live is the one voice.
+  assert.ok(/<div id="hud-flag" hidden><\/div>/.test(fs.readFileSync(path.join(ROOT, "index.html"), "utf8")),
+    "#hud-flag must not be a live region too, or a working reader says the flag twice");
   const { els, G, timers, tick } = boot();
   const live = els.announceLive;
   const flush = () => { while (timers.length) timers.shift()(); };
