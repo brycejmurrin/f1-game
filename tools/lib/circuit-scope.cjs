@@ -26,4 +26,27 @@ function scope(ids) {
 }
 const scoped = () => SCOPE.length > 0;
 
-module.exports = { SCOPE, scope, scoped };
+/** APEX_CIRCUIT_SHARD=i/n (2026-09-30): every n-th id starting at the i-th,
+ *  so n runners can each build a disjoint part of one script's roster
+ *  (ci.yml's vm-a1 / vm-a2 slices are 1/2 and 2/2 of test:game-vm-a).
+ *  Unset or malformed-empty keeps every id; a malformed value throws rather
+ *  than silently running the whole fleet twice. Applied AFTER scope(), so the
+ *  shards of a scoped list are still a partition of that list. */
+function shard(ids, spec = process.env.APEX_CIRCUIT_SHARD || "") {
+  return ids.filter(inShard(spec));
+}
+/** The `(id, index) => boolean` behind shard(), for a suite that must stay a
+ *  `.filter(...)` chain: tools/ci/select-budget.mjs counts a per-circuit
+ *  test loop STATICALLY and reads `.filter` as length-keeping, but an
+ *  unknown call as one test — `shard(list)` would count the elevation twin
+ *  as 7 declared tests against its spec's 47 and fail the twin drift check. */
+function inShard(spec = process.env.APEX_CIRCUIT_SHARD || "") {
+  const s = String(spec).trim();
+  if (!s) return () => true;
+  const m = /^(\d+)\/(\d+)$/.exec(s);
+  const i = m ? Number(m[1]) : NaN, n = m ? Number(m[2]) : NaN;
+  if (!(i >= 1 && n >= 1 && i <= n)) throw new Error(`APEX_CIRCUIT_SHARD=${s}: want i/n with 1 <= i <= n`);
+  return (_, k) => k % n === i - 1;
+}
+
+module.exports = { SCOPE, scope, scoped, shard, inShard };

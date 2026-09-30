@@ -171,7 +171,9 @@ export function gateNodeSuites() {
   const at = ci.indexOf("- name: Pure-node unit suites");
   if (at < 0) throw new Error("deploy: ci.yml has no 'Pure-node unit suites' step — the node half of the gate cannot be derived. Fix the step name or update gateNodeSuites().");
   const body = ci.slice(at).split(/\n      - name: /)[0];
-  const scripts = [...body.matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((m) => m[1]);
+  // Deduplicated: a script that two matrix arms run as shards of one roster
+  // (test:game-vm-a under vm-a1 / vm-a2) is one script here, run whole.
+  const scripts = [...new Set([...body.matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((m) => m[1]))];
   if (!scripts.length) throw new Error("deploy: the 'Pure-node unit suites' step parsed to ZERO scripts — refusing to push on a gate that measured nothing.");
   return scripts;
 }
