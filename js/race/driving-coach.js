@@ -630,10 +630,16 @@ const DrivingCoach = (function () {
       const compoundName = id => names.get(id) || id.replace(/_/g, " ");
       const selected = G.player && G.player.pitNext;
       const pitHelp = $("pm-pit-help");
-      if (pitHelp) pitHelp.textContent = (selected ? "Next stop: " + compoundName(selected.id) + " (" + selected.code + "). " : "AUTO lets the game choose your next tyres. ")
+      // AUTO NAMES ITS PICK: the set pickFor would fit right now (the plan's
+      // letter, never one that breaks the two-compound rule), so AUTO is a
+      // choice the player can read rather than a surprise in the box.
+      const auto = G.player && !selected && G.tyres.on() ? G.pits.pickFor(G.player) : null;
+      const autoLabel = auto ? "AUTO · " + auto.code : "AUTO";
+      if (pitHelp) pitHelp.textContent = (selected ? "Next stop: " + compoundName(selected.id) + " (" + selected.code + "). "
+        : auto ? "AUTO will fit " + compoundName(auto.id) + " (" + auto.code + ") at your next stop. " : "AUTO lets the game choose your next tyres. ")
         + "Drive into the pit entry to stop. Choosing tyres does not call you into the pits. Requires tyre wear to be enabled.";
       SettingRow.paint($("pm-pit-choice"), G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
-        [["auto", "AUTO"], ...G.pits.choices(G.player).map(r => [r.id, r.code + " · " + compoundName(r.id)])]);
+        [["auto", autoLabel], ...G.pits.choices(G.player).map(r => [r.id, r.code + " · " + compoundName(r.id)])]);
       SettingRow.disable($("pm-pit-choice"), !(G.player && G.tyres.on() && G.state === "race") || G.player.pitState === "box");
       if (note) {
         const e = G.player && G.tyres.on() && G.pits.estimate(G.player);
