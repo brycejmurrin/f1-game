@@ -38,6 +38,11 @@ on:
         default: llvmpipe
         type: choice
         options: [llvmpipe, swiftshader]
+      workers:
+        description: "Playwright workers per shard; empty keeps the group's own --workers (render uses 4). 1 separates a real hang from runner contention"
+        required: false
+        default: ""
+        type: string
 
 # The group and branch are in the run's name, so the CLI (and a human in the
 # Actions tab) can tell dispatches apart.
@@ -70,6 +75,7 @@ jobs:
         env:
           GROUP: ${{ inputs.group }}
           SHARDS: ${{ inputs.shards }}
+          WORKERS: ${{ inputs.workers }}
         run: node tools/ci/remote-group.mjs --plan >> "$GITHUB_OUTPUT"
 
   group:
@@ -102,7 +108,9 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: 1
           GROUP: ${{ inputs.group }}
           SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
-        run: npm run "test:${GROUP}" -- --timeout=900000 "--shard=${SHARD}"
+          WORKERS: ${{ inputs.workers }}
+        # A later --workers overrides the group script's own (last flag wins).
+        run: npm run "test:${GROUP}" -- --timeout=900000 "--shard=${SHARD}" ${WORKERS:+"--workers=$WORKERS"}
       - name: Run the group's shard (SwiftShader)
         if: inputs.gl == 'swiftshader'
         env:
@@ -111,7 +119,9 @@ jobs:
           APEX_WITH_TWINNED: 1
           GROUP: ${{ inputs.group }}
           SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
-        run: npm run "test:${GROUP}" -- --timeout=900000 "--shard=${SHARD}"
+          WORKERS: ${{ inputs.workers }}
+        # A later --workers overrides the group script's own (last flag wins).
+        run: npm run "test:${GROUP}" -- --timeout=900000 "--shard=${SHARD}" ${WORKERS:+"--workers=$WORKERS"}
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -112,6 +112,18 @@ SwiftShader. Details: [TESTING.md](TESTING.md).
 | Renderer bug | path-scoped rules in `.claude/rules/render-*.md` |
 | New JS file | IIFE + `tools/manifest.cjs` + `npm run gen` |
 
+### Where new code goes (ratchet headroom)
+
+Every size ratchet in `tests/data/ratchets.json` is saturated (`slack: 0`),
+especially `js/game.js` (lines / codeLines / gMembers / topLets). **Do not grow
+`game.js` to land a feature.** Put new logic in the domain directory that owns
+it (`js/physics/`, `js/ui/`, `js/race/`, `js/camera/`, …) as a hyphenated IIFE
+with `Module.create(G)` only when session state is required; prefer explicit
+args over new `G` façade members. Extract cohesive blocks with
+`tools/check/extract-module.mjs`, then
+`node tools/check/ratchets.mjs --update` (**lower only**). Headroom carve queue:
+[plans/2026-09-30-carve-headroom.md](plans/2026-09-30-carve-headroom.md).
+
 ## Related reading
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — full module contracts + generated index
