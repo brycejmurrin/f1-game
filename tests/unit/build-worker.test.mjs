@@ -124,3 +124,21 @@ test("a worker error answers an error message, never a throw", () => {
   assert.equal(worker.posted[0].type, "error");
   assert.equal(worker.posted[0].seq, 3);
 });
+
+test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the worker reads, OFF by default", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.match(html, /<div id="pm-buildworker" class="set-row"[\s\S]*?<select id="pm-buildworker-sel"/, "a static SettingRow in the renderer levers");
+  const client = fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8");
+  assert.match(client, /SettingRow\.wire\("pm-buildworker", \{ values: SettingRow\.labels\(\["off", "on"\]\)/);
+  const reg = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
+  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "0",/, "exported and imported with the other settings, default OFF");
+  // The write flips exactly what enabled() (and loadTrackStepped) reads.
+  const mem = new Map();
+  main.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) };
+  const C = main.TrackBuildClient;
+  assert.equal(C.enabled(), false, "unset reads OFF");
+  C.set(false); assert.equal(mem.get("apex26.buildWorker"), "0"); assert.equal(C.enabled(), false);
+  mem.set("apex26.buildWorker", "1"); assert.equal(C.enabled(), true, "\"1\" is on");
+  mem.set("apex26.buildWorker", "0"); assert.equal(C.enabled(), false);
+  delete main.localStorage;
+});
