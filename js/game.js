@@ -5436,6 +5436,7 @@ function updateCar(c, dt, ranked) {
     c.passFailT = Math.max(0, (c.passFailT || 0) - dt);
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
+    // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking
     // point, from a hash (never simRnd), and never while alongside a car.
     c.pressT = clamp((c.pressT || 0) + (chaser && chaserGap < 0.6 * Math.max(c.speed, 10) ? dt : -dt * 0.5), 0, 6);
