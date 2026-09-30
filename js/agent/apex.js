@@ -1720,6 +1720,14 @@ const api = {
     if (typeof G.invalidateFactoryMeshCaches === "function") G.invalidateFactoryMeshCaches();
     return true;
   },
+  // paintFrame(dt?) — one synchronous render/present. Use when a probe must
+  // sample GLX.draw and the window rAF/tick chain is starved or _windowPending
+  // (XrBoot.chainWindowRaf is then a no-op). Clears headless so render() runs.
+  paintFrame(dt) {
+    G.headlessMode = false;
+    if (typeof G.paintFrame !== "function") return false;
+    return G.paintFrame(dt);
+  },
 
   // The HUD rear-view mirror (js/render/shared/mirror-pass.js): mirror() reads
   // {mode, shown, rect, cars, drawn, cam, backend: gfx.mirrorState()};
