@@ -762,6 +762,18 @@ const api = {
     // The AI's strategy, when it has one: what it plans to do and why it last
     // deviated. Null for the player, who plans their own race.
     if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
+    // THE STOP, SEEN — crew mesh facts + how many frames submitted it since
+    // the last read (pitCrewDrawn clears). A browser spec asserts both the
+    // people count and a positive draw while the car is in its box.
+    if (out) {
+      const col = (c && c.team && c.team.color) || [0.30, 0.32, 0.36];
+      const mesh = (typeof CarMesh !== "undefined" && CarMesh.getCrewMesh)
+        ? CarMesh.getCrewMesh(col) : null;
+      out.crew = mesh
+        ? { people: mesh._crewPeople || 0, verts: mesh._crewVerts || mesh.count || 0 }
+        : null;
+      out.crewDrawn = typeof G.pitCrewDrawn === "function" ? G.pitCrewDrawn() : 0;
+    }
     return out;
   },
   // The bay signs (js/garage/pit-signs.js): cells laid out on the row, whether
