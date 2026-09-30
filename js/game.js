@@ -5832,7 +5832,7 @@ function updateCar(c, dt, ranked) {
       const Ld = clamp(Math.abs(c.speed) * 1.2, 22, 70);
       lineDelta = raceLineAssist * LINE_PURSUIT * WHEELBASE * 2 * (lineX - c.x) / (Ld * Ld) * offAssistFade;
     }
-    const delta = clamp(driverDelta + assistDelta + lineDelta, -0.7, 0.7);
+    let delta = 0;   // filled after muF — GripSteer.forPlayer then + assist/line
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
     // power (a touch of throttle-on looseness) — emergent, not a special case.
@@ -5947,6 +5947,11 @@ function updateCar(c, dt, ranked) {
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * marbleMu * tyreMu;
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
     const muF = Math.max(0.5, muBase * bbSlipF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
+    // Grip steer: own-state driverDelta cap (js/physics/grip-steer.js). Identity at OFF.
+    const gripped = (typeof GripSteer !== "undefined" && GripSteer.forPlayer)
+      ? GripSteer.forPlayer(driverDelta, c, { muF, csFront: CS_FRONT, af, ar, braking, shaped: steer, dt })
+      : driverDelta;
+    delta = clamp(gripped + assistDelta + lineDelta, -0.7, 0.7);
     const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
