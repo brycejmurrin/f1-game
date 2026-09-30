@@ -3416,7 +3416,14 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
   assert.ok(par.statuses.length >= 8, "every program's LINK_STATUS is still read (failures still surface)");
   assert.ok(par.statuses[0] > par.links[7],
     `parallel: the first LINK_STATUS read (call #${par.statuses[0]}) must come after the eighth linkProgram (call #${par.links[7]})`);
+  // Serial pairs: a LINK_STATUS read between one linkProgram and the next. The
+  // post chain's eight (glx/post.js setup) are a second batch: in parallel mode
+  // only the single lazy links (depth, SGSR, mirror) and the batch ends stay serial.
+  const serial = (o) => o.links.slice(0, -1).filter((l, i) => o.statuses.some((st) => st > l && st < o.links[i + 1])).length;
   const seq = order(bootGlx());
+  assert.ok(par.links.length >= 16, "core + post links both issued (got " + par.links.length + ")");
+  assert.ok(serial(par) <= serial(seq) - 12,
+    `parallel: the core and post batches issue their links back to back (serial pairs ${serial(par)} vs ${serial(seq)} without the extension)`);
   assert.ok(seq.statuses[0] < seq.links[1],
     "without the extension each link is checked before the next is issued (unchanged contract)");
   const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
