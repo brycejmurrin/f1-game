@@ -86,6 +86,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0        # the parents' trees and the live commit are the whole question
+          filter: blob:none
       - name: Refuse to run off the deploy branch
         run: |
           if [ "$GITHUB_REF_NAME" != "$DEPLOY_BRANCH" ]; then
@@ -196,6 +197,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0        # merge-base needs the history, not just the tip
+          filter: blob:none
       - name: Is this commit still worth publishing?
         id: pub
         run: |
