@@ -460,7 +460,7 @@ test("TLX decal programs share a material map reference, not the first car's tex
   assert.match(fx, /m\.map = tex/);
   // One graph PER GLOW VALUE, not one shared graph: a TSL uniform node lives in
   // the shared graph, so a single per-draw uniform would retroactively restyle
-  // every decal material already built from it (2026-09 survey, tsl-fx.js:212).
+  // every decal material already built from it (2026-09 survey, `_decalGraph` in tsl-fx.js).
   // decalCache and the program key are already keyed per glow; the graph now is too.
   assert.match(fx, /const _decalGraph = new Map\(\)/);
   assert.match(fx, /_decalGraph\.get\(glow\)/);
@@ -1983,7 +1983,7 @@ test("TLX WebGPU remaps the RASTER projection with Z01, but hands post the GL in
   // roughly half depth. The WGSL port is the control: its ssaoViewPosFromD
   // feeds raw `d` ("depth already 0..1") and therefore DOES want inv(Z01·P).
   // Same depth texture on both (0.5*z_gl+0.5), different shader entry point.
-  // Fixed 2026-09 survey (tlx.js:2937); Z01INV/_invProjGpu had no other reader.
+  // Fixed 2026-09 survey (`_postF.invProj` in tlx.js); Z01INV/_invProjGpu had no other reader.
   assert.match(tlx, /_postF\.invProj = \(frame && frame\.invProj\) \|\| null/);
   assert.doesNotMatch(tlx, /Z01INV/,
     "inv(Z01·P) is the WGSL partner; feeding it to tsl-post double-remaps the depth");
