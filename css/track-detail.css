@@ -255,15 +255,15 @@ body[data-density="compact"] #track-detail-header {
   #btn-cam {
     /* DERIVED from --tap, not 55: on touch --tap is 52, so a 55 constant put
        CHASE 5px under PAUSE. 8 + tap + 4 = 56 on desktop, 64 on touch. */
-    top: calc(8px + var(--tap) + 4px + var(--sat));
+    top: calc(8px + var(--tap-hud) + 4px + var(--sat));
     right: calc(10px + var(--sar));
   }
   /* Sectors below the repositioned CHASE: 8 + 2*tap + 8. The WHOLE offset
      divides by --hud-z (css/hud.css: #hud-sectors rides zoom). */
-  #hud-sectors { top: calc((8px + 2 * var(--tap) + 8px + var(--sat)) / var(--hud-z)); }
+  #hud-sectors { top: calc((8px + 2 * var(--tap-hud) + 8px + var(--sat)) / var(--hud-z)); }
   /* …and the LIMITS chip with it. Without this it kept the LANDSCAPE anchor
      while the sectors box dropped ~56px, so the chip started INSIDE it. */
-  #hud-limits { top: calc((8px + 2 * var(--tap) + 8px + var(--sat)) / var(--hud-z) + 4.8em + 15px); }
+  #hud-limits { top: calc((8px + 2 * var(--tap-hud) + 8px + var(--sat)) / var(--hud-z) + 4.8em + 15px); }
 }
 
 /* Cockpit cam: gear + speed live on the steering-wheel LCD — hide the floating

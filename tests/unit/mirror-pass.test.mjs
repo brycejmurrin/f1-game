@@ -24,12 +24,14 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   if (mode) stored.hudMirror = mode;
   let mirrorPressed = false;
   const classes = new Set();
-  const frameEl = { hidden: true, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114 }) };
+  const on = (o) => Object.assign(o, { handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } });
+  const frameEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114 }) });
+  const chipEl = on({ hidden: true });
   const canvasEl = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }) };
   const ctx = vm.createContext({
     Math, Float32Array, Array, Object, Number, Infinity,
     document: {
-      getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "game" ? canvasEl : null),
+      getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl : null),
       body: { classList: { contains: (c) => classes.has(c), toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) } },
     },
     Input: { consumeMirror: () => { const v = mirrorPressed; mirrorPressed = false; return v; }, lookingBack: () => false },
@@ -80,7 +82,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0 };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
-  return { mp, G, gfx, calls, stored, classes, frameEl, frame, frameSky, mainVP, mainInv, render,
+  return { mp, G, gfx, calls, stored, classes, frameEl, chipEl, frame, frameSky, mainVP, mainInv, render,
     press: () => { mirrorPressed = true; } };
 }
 
@@ -232,4 +234,33 @@ test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a
   for (let i = 0; i < 6; i++) min.render();
   // Frame 1 always draws; then frames 3 and 6.
   assert.equal(min.calls.filter((c) => c[0] === "begin").length, 3);
+});
+
+test("a tap collapses the mirror to a chip for the session; a tap on the chip brings it back", () => {
+  const h = boot({ mode: "on", mobile: true });
+  h.render();
+  assert.equal(h.mp.state().shown, true);
+  h.frameEl.handlers.click();
+  h.render();
+  assert.equal(h.mp.state().shown, false);
+  assert.equal(h.mp.state().collapsed, true);
+  assert.equal(h.frameEl.hidden, true);
+  assert.equal(h.chipEl.hidden, false, "the chip stands in its place");
+  assert.equal(h.stored.hudMirror, "on", "the setting is untouched — the next load shows it again");
+  const n = h.calls.filter((c) => c[0] === "begin").length;
+  h.render();
+  assert.equal(h.calls.filter((c) => c[0] === "begin").length, n, "no pass while collapsed");
+  h.chipEl.handlers.click();
+  h.render();
+  assert.equal(h.mp.state().shown, true);
+  assert.equal(h.chipEl.hidden, true);
+  // Collapsed, the MIRROR key means ON (and clears the collapse).
+  h.frameEl.handlers.click(); h.render();
+  h.press(); h.render();
+  assert.equal(h.mp.state().shown, true);
+  assert.equal(h.mp.state().collapsed, false);
+  // No chip where no mirror would show at all.
+  const off = boot({ mode: "off" });
+  off.render();
+  assert.equal(off.chipEl.hidden, true);
 });

@@ -54,6 +54,18 @@
    element is actually zoomed by, or a capped band double-counts its notch. */
 .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-mirror,
 #lights, #announce { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
+/* THE CAM AND PAUSE BUTTONS FOLLOW HUD SIZE TOO — by size, not by `zoom`,
+   because they are tap targets: --hud-btn-z is the top band's zoom floored at
+   1, so HUD SIZE can grow them beside the timing tower but never shrink them
+   under --tap. Every offset derived from their box (#btn-cam beside #pausebtn,
+   #campicker under them, #hud-sectors / #hud-limits below them, the portrait
+   stack in css/track-detail.css) reads --tap-hud, not --tap. They used to stay
+   at --tap while the tower beside them scaled — small buttons next to a big
+   HUD. Declared on :root, where fitHud writes --hud-z-top. */
+:root {
+  --hud-btn-z: max(1, var(--hud-z-top, var(--hud-scale)));
+  --tap-hud: calc(var(--tap) * var(--hud-btn-z));
+}
 .hud-bottom { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
 /* Re-derive the compensated vw against the band's EFFECTIVE zoom: the :root
    token divides by the raw slider, but these subtrees paint at the fitHud-
@@ -608,8 +620,24 @@ body.hud-met-compact #hud-tyre { display: none !important; }
   width: var(--mir-w); height: calc(var(--mir-w) * 2 / 7);
   box-sizing: border-box;
   outline: 2px solid var(--carbon);
-  pointer-events: none;
+  /* A tap collapses it to #hud-mirror-chip (#hud itself is pointer-events: none). */
+  pointer-events: auto;
+  cursor: pointer;
 }
+/* The mirror tapped away: a small chip where it was, which brings it back. A
+   tap target, so it stays OUT of the zoom group (HUD SIZE must not shrink it
+   under --tap) and converts the mirror's zoomed top into screen pixels. */
+#hud-mirror-chip {
+  position: absolute;
+  top: calc(var(--sat) + (16px + var(--hud-top-h, 54px)) * var(--hud-z-top, var(--hud-scale)));
+  left: 50%; transform: translateX(-50%);
+  min-height: var(--tap); padding: 0 var(--gap);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+  pointer-events: auto;
+}
+body.hud-prof-broadcast #hud-mirror-chip { top: calc(8px + var(--sat)); }
 body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z)); }
 body.hud-mirror-on #announce {
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 18px
@@ -657,7 +685,7 @@ body.hud-mirror-on #hud-flag {
      does NOT, so clearing an unscaled box means converting the unscaled sum into
      this element's own units. Dividing only --sat left the two drifting apart at
      any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
-  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z));
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z));
   right: calc(10px + var(--sar) / var(--hud-z));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);
@@ -692,7 +720,7 @@ body.hud-mirror-on #hud-flag {
      outside the broadcast profile — left this chip hanging 77px below an empty
      corner. The var is 0 exactly when the box is gone, so the chip rides up
      into the slot the sectors vacated. The em keeps the pre-fit paint honest. */
-  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px);
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px);
   /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
      that row is the BOOST pedal — so a track-limits warning painted straight
      over a tap target (reported from a phone). --dock-r-w is the right dock's
@@ -1052,7 +1080,8 @@ body:has(.screen.dim:not([hidden])) #campicker { display: none; }
    scrims still show POS/LAP/CHASE/BOOST through the wash. A HUD that is
    already hidden at menu time is a no-op under visibility. */
 body:has(.screen:not([hidden])) :is(
-  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #lights, #announce, #btn-cam, .dock, #pausebtn
+  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #lights, #announce, #btn-cam, .dock, #pausebtn,
+  #hud-mirror, #hud-mirror-chip
 ) {
   visibility: hidden;
 }
