@@ -835,7 +835,6 @@ declare const RaceControl: GameModuleFactory;
 declare const WeatherArc: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
-declare const DriveOut: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
