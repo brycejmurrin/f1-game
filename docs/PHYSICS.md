@@ -822,7 +822,9 @@ it on. `js/race/reliability.js` ships off for the same reason.
   so a literal port of real rates means no stop is ever worth making at any
   distance the lap ladder offers (3 / 5 / 10 / 25 / FULL). A 0.5-life compound
   is spent halfway through a 5-lap race and halfway through a 50-lap race alike,
-  and `MIN_LIFE_LAPS` keeps a 3-lap blast off the cliff.
+  and `MIN_LIFE_LAPS` keeps a 3-lap blast off the cliff — applied AFTER the
+  circuit's `tyreSeverity` (`effLifeLaps`, read by both the wear and the plan),
+  so a severe circuit cannot divide the floor away.
 - **Wear reads the forces the car made, never the arc.** Lateral and
   longitudinal friction-circle use, body slip, kerbs, off-track — no curvature
   read anywhere, which is both the rule above and the correct physics (sliding

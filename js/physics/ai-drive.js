@@ -761,12 +761,19 @@ const AiDrive = (function () {
   const DEG_LIN = 0.05;      // lateral grip lost across a full stint (TyreModel.DROP_LIN)
   const DEG_CLIFF = 0.50;    // ...and per unit of wear past it (TyreModel.DROP_CLIFF)
   const GRIP_TO_LAP = 0.55;  // a fraction of grip is worth this much of a lap — sub-linear
+  // THE STRATEGY TASTE (stintPlan): how far one driver's roll moves the plan.
+  // At 0.66 / 0.006 a race split into two plans; the field needs a spread.
+  const TASTE_BIAS = 0.8;      // x pitLossLaps: +/- 0.4 of a stop's cost (1.0 planned a lap-1 stop in a 5-lap race)
+  const TASTE_SOFTEN = 0.010;  // grip-per-lap preference for softer rubber
   function degCost(n, life) {
     const L = Math.max(0.5, life);
     const over = Math.max(0, n - L);
     const inLife = Math.min(n, L);
-    // Mean drop over the in-life part, plus the cliff over whatever ran past it.
-    const mean = DEG_LIN * (inLife / (2 * L)) * inLife + DEG_CLIFF * (over * over) / (2 * L);
+    // The drop summed over the stint, as TyreModel.gripFor charges it: the
+    // linear slope inside the life, then EVERY lap past it carries the full
+    // DEG_LIN plus the cliff. Leaving out that DEG_LIN·over priced a 50 %
+    // overrun ~29 % light, and the planner ran sets long for it.
+    const mean = DEG_LIN * (inLife / (2 * L)) * inLife + DEG_LIN * over + DEG_CLIFF * (over * over) / (2 * L);
     return mean * GRIP_TO_LAP;
   }
 
@@ -832,15 +839,15 @@ const AiDrive = (function () {
     // the same rubber, which measured as a 20-car field on one plan — the
     // procession the TYRE table above exists to avoid.
     //
-    //   `bias`   — a taste for stopping, +/- a third of a stop's cost. A
+    //   `bias`   — a taste for stopping, +/- 0.4 of a stop's cost. A
     //              cautious driver stops early and often, an aggressive one
     //              runs the set long.
     //   `soften` — a taste for grip over durability, worth up to about half a
     //              compound step per lap. A low roll shops for hards, a high
     //              one for softs, and the field arrives at the first stop on
     //              different tyres.
-    const bias = (roll - 0.5) * 0.66 * pitLossLaps;
-    const soften = (roll - 0.5) * 0.006;
+    const bias = (roll - 0.5) * TASTE_BIAS * pitLossLaps;
+    const soften = (roll - 0.5) * TASTE_SOFTEN;
     const taste = { soft: soften, medium: 0, hard: -soften };
     // THE PINS, for the PLAYER's reference plan (js/race/pit-lane.js): `stops`
     // holds the stop count the STRATEGY row chose, `start` the compound
@@ -960,16 +967,16 @@ const AiDrive = (function () {
   // back: measured on an 8-lap Bahrain, TWELVE of 22 cars pitted on LAP 8 —
   // the last lap — every one of them for "worn".
   //
-  // Fresh rubber pays back the cliff it replaces, so the laps left have to
-  // cover the stop: gain per lap is the cliff rate over how far past life the
-  // set is, and the stop costs `pitLossLaps`. Below the break-even the flag
+  // Fresh rubber pays back the drop it replaces, so the laps left have to
+  // cover the stop: gain per lap is the whole drop of a set past its life
+  // (DEG_LIN plus the cliff over how far past it is), and the stop costs `pitLossLaps`. Below the break-even the flag
   // comes first and the car drives it home, which is what a real team does.
   // The 0.1 floor keeps a set only just over its life from claiming an
   // enormous payback window and pitting on lap one past it.
   function wornPays(ctx) {
     if (ctx.lapsLeft == null) return true;            // caller has not said; behave as before
     const over = Math.max(0.1, (ctx.wear || 0) - 1);
-    const gainPerLap = DEG_CLIFF * GRIP_TO_LAP * over;
+    const gainPerLap = (DEG_LIN + DEG_CLIFF * over) * GRIP_TO_LAP;   // the drop a fresh set gives back
     const payback = (ctx.pitLossLaps > 0 ? ctx.pitLossLaps : PIT_LOSS_FALLBACK) / Math.max(1e-3, gainPerLap);
     return ctx.lapsLeft >= payback;
   }
@@ -987,7 +994,8 @@ const AiDrive = (function () {
     if (ctx.scripted) return ctx.stopsLeft > 0 && ctx.lapsToStop <= 0 ? "plan" : "";
     if (ctx.wear >= 1 && wornPays(ctx)) return "worn";
     if (ctx.stopsLeft <= 0) return "";
-    if (ctx.cautionLevel >= 2 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
+    // VSC and SC (2, 3) are the free stop; a red flag (4) is not a pit window.
+    if (ctx.cautionLevel >= 2 && ctx.cautionLevel < 4 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
     if (ctx.lapsToStop <= 0) return "plan";
     return "";
   }
@@ -1254,6 +1262,6 @@ const AiDrive = (function () {
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor,
-    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK },
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN },
   };
 })();

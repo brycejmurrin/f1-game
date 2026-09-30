@@ -2261,16 +2261,16 @@ function gridUp(preOrder) {
     // stream nothing, exactly as Reliability's retirement draw does.
     c.tyreStints = 0; c.tyreLog = null;   // a new race is a new strip, not an appended one
     pits.reset(c); engineer.reset(c);
-    // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here, from the
-    // same per-car race hash the launch plan and the pace phase come from, so
-    // arming a race consumes nothing from the sim RNG stream — the contract
+    // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here from its own
+    // hash of seed, round and DRIVER (not grid slot + skill: tier-adjacent cars
+    // drew alike), so it consumes nothing from the sim RNG stream — the contract
     // js/race/reliability.js holds for retirements, held for strategy too.
     // An AI car's STARTING compound is the plan's, not the class draw's, when
     // wear is on; the class draw still stands in for the legacy fudge when it
     // is off. The player plans their own race.
     // The PLAYER gets a plan too — a REFERENCE, the one the pit wall would run
     // (PitLane.think never executes a human's; the HUD and the engineer read it).
-    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human, 0, c) : null;
+    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : DriverRatings.hash32(hSeed + ":" + hRound + ":" + (c.driverId || c.code || i) + ":strategy") / 4294967296, !!c.human, 0, c) : null;
     if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
     tyres.fit(c, tyres.startRecord(c, TyreModel.treadFor(raceWeather, roadWetness())));
   });

@@ -1124,6 +1124,21 @@ test("a human's plan never arms a stop: think() is the AI's, whatever the plan s
   assert.notEqual(pits.think(c), "", "the same car as an AI does fire its plan");
 });
 
+test("a red flag arms no AI stop: think() stands down while the field is held", () => {
+  // Race control keeps state "race" under a red, so think() ran and every AI
+  // inside the caution reach armed a "caution" stop for ~14 s of it.
+  const { pits, zone, car, G } = commitSession();
+  const c = car(0);
+  c.human = false; c.local = false;
+  c.s = zone.sIn - 300; c.lap = 12; c.pitStops = 0; c.tyreWear = 0.3;
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] };
+  G.cautionLevel = () => 4;
+  assert.equal(pits.think(c), "", "a red flag: no stop");
+  assert.equal(!!c.pitArmed, false, "…and nothing armed");
+  G.cautionLevel = () => 3;
+  assert.notEqual(pits.think(c), "", "the same plan under a safety car still fires");
+});
+
 test("planInfo reads the plan for the HUD: the stops, the next box lap, and the lap's state", () => {
   const { pits, zone, car } = commitSession();
   const c = car(0);

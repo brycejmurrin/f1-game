@@ -30,8 +30,9 @@ test("the plan prices the circuit: Austria's sets last half what a neutral circu
   assert.equal(G.tyres.level(), "real");
   const sev = G.tyres.severity();
   assert.ok(sev > 1.9, `Austria's severity reaches the model: ${sev}`);
-  const planned = G.tyres.planLaps(T.AI_CLASS.medium.life, 10);
-  assert.ok(Math.abs(planned - T.lifeLaps(T.AI_CLASS.medium.life, 10) / sev) < 1e-9,
+  // The hard: a 10-lap medium (3.8) sits under the MIN_LIFE_LAPS floor here.
+  const planned = G.tyres.planLaps(T.AI_CLASS.hard.life, 10);
+  assert.ok(Math.abs(planned - T.lifeLaps(T.AI_CLASS.hard.life, 10) / sev) < 1e-9,
     `planLaps is the life the wear actually allows: ${planned}`);
   // …and the player's reference plan starts on the set the player is on.
   const p = G.player;
@@ -56,6 +57,25 @@ test("a NO STOP plan becomes a stop when the set is going faster than planned �
   g.step(3);
   assert.ok(p.pitPlan.stops >= 1, `the live re-cut adds a stop: ${JSON.stringify(p.pitPlan)}`);
   assert.match(G.pits.planInfo(p).text, /BOX|1-STOP|2-STOP/, `the HUD line: ${G.pits.planInfo(p).text}`);
+});
+
+test("a 5-lap race at Austria is a no-stop race: the minimum life holds after severity", async () => {
+  // Severity 1.97 divided the 4-lap floor to ~2, and the whole field planned a
+  // stop into a 5-lap sprint.
+  await g.race("redbull", "day", "dry", { laps: 5 });
+  const { G } = g;
+  const ai = G.cars.filter((c) => !c.human && c.pitPlan);
+  assert.ok(ai.length > 5, "a planned field");
+  const stopping = ai.filter((c) => c.pitPlan.stops > 0);
+  assert.equal(stopping.length, 0, "planned stops: " + stopping.map((c) => c.code + ":" + c.pitPlan.seq).join(" "));
+});
+
+test("the grid runs several strategies: the roll is the driver's, not the grid slot's", async () => {
+  // Keyed by slot + skill, tier-adjacent cars drew alike and a 25-lap Bahrain
+  // split into two plans (HM / MS, 11 and 10 cars).
+  await g.race("bahrain", "day", "dry", { laps: 25 });
+  const seqs = new Set(g.G.cars.filter((c) => !c.human && c.pitPlan).map((c) => c.pitPlan.seq.join("-")));
+  assert.ok(seqs.size >= 3, "strategies on the grid: " + [...seqs].join(" | "));
 });
 
 test("AUTO never fits the letter a car owing its second dry compound has run", async () => {
@@ -107,9 +127,10 @@ test("every AI plan covers the race, meets the two-compound rule, and no stint o
       let from = 0;
       for (let i = 0; i < p.stints.length - 1; i++) {
         const len = p.stints[i];
-        // The life the WEAR gives (update(): lifeLaps / severity at REAL), not
-        // planLaps — the planner's own number cannot audit the planner.
-        const life = T.lifeLaps(T.AI_CLASS[p.seq[i]].life, LAPS) / G.tyres.severity()
+        // The life the WEAR gives (update(): life·laps / severity, floored at
+        // MIN_LIFE_LAPS, at REAL), not planLaps — the planner's own number
+        // cannot audit the planner.
+        const life = Math.max(T.MIN_LIFE_LAPS, T.AI_CLASS[p.seq[i]].life * LAPS / G.tyres.severity())
           / (1 + A.STRAT.FUEL_WEAR * (1 - (from + len / 2) / LAPS));
         assert.ok(len <= life + 1, `${id} ${c.code}: stint ${i + 1} (${p.seq[i]}) is ${len} laps on a ${life.toFixed(2)}-lap set`);
         from += len;
