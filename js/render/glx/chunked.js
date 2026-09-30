@@ -441,8 +441,8 @@ const GLXChunked = (function () {
         // RUN-MERGE, the per-chunk twin of the plain branch below. This drew
         // once per visible chunk — 128 of the frame's 129 drawElements — and
         // re-uploaded a light set per chunk even when the neighbour's set was
-        // identical. MEASURED before writing it (scratch/r11/chunk-merge.mjs,
-        // vegas night, full field): of 152.6 chunk draws a frame, 91.2
+        // identical. MEASURED before writing it (vegas night,
+        // full field): of 152.6 chunk draws a frame, 91.2
         // consecutive pairs are contiguous in the index buffer, 114.8 share a
         // light set, and 74.2 are BOTH — so about half the draws, and their
         // uploads, can be one call.

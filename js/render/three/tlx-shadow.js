@@ -471,7 +471,7 @@
       S.castCullVP = S.carLightVP;
       // GLX parity: SHADOW DISTANCE widens the car box, and the depth bias
       // must scale with the box/texel ratio or the widened map self-shadows
-      // (glx/shadow.js carShadowBegin, lit.js uCarBiasScale).
+      // (glx/shadow.js carShadowBegin, glsl-lit.js uCarBiasScale).
       S.carBoxScale = boxScale || 1;
       S.carArmed = true;
       S.carArms++;

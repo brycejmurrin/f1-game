@@ -88,25 +88,31 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   // The backend composites where the frame is.
   expect(on.m.backend.rect, diag).toEqual(on.m.rect);
 
-  // The radio card shares the centre column: it sits BESIDE the frame where
-  // the row has room (1280 wide: it does) and never on it — the first cut
-  // stacked it under the mirror with a rule the compact/caution tops beat,
-  // so on a phone the card covered the mirror.
+  // The radio card never covers the mirror. Where the top row has room
+  // (1280 wide: it does) it goes UP, into the timing tower's row between the
+  // tower and the cam button (js/ui/hud.js radioTopSlot); the first cut
+  // stacked it under the mirror with a rule the compact/caution tops beat, so
+  // on a phone the card covered the mirror, and beside the mirror it still
+  // sat on the view. hud.js fits at 10 Hz and re-measures a same-key layout
+  // every 3 s, so the slot is waited for, not assumed.
+  await page.waitForFunction(() => document.body.classList.contains("hud-radio-top"), null, { polling: 100, timeout: FRAME_MS });
   const card = await page.evaluate(() => {
     document.getElementById("announce-who").textContent = "RUSSELL · RADIO";
     document.getElementById("announce-text").textContent = "Box this lap, box this lap.";
     const a = document.getElementById("announce");
     a.hidden = false;
     const r = (e) => { const b = e.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]; };
-    const out = { side: document.body.classList.contains("hud-mirror-side"), card: r(a), mirror: r(document.getElementById("hud-mirror")) };
+    const out = { card: r(a), mirror: r(document.getElementById("hud-mirror")),
+      tower: r(document.querySelector(".hud-top")), cam: r(document.getElementById("btn-cam")) };
     a.hidden = true;
     return out;
   });
   const cd = JSON.stringify(card);
-  expect(card.side, cd).toBe(true);
   const [al, at, ar, ab] = card.card, [ml, mt, mr, mb] = card.mirror;
-  expect(ar <= ml || al >= mr || ab <= mt || at >= mb, cd).toBe(true);
-  expect(Math.abs(at - mt), cd + " shares the mirror's row").toBeLessThan(2);
+  expect(ar <= ml || al >= mr || ab <= mt || at >= mb, cd + " clear of the mirror").toBe(true);
+  expect(al, cd + " right of the tower").toBeGreaterThanOrEqual(card.tower[2]);
+  expect(ar, cd + " left of the cam button").toBeLessThanOrEqual(card.cam[0]);
+  expect(Math.abs(at - card.tower[1]), cd + " in the tower's row").toBeLessThan(2);
 
   await awaitPresentedFrame(page, 12000);
   const withMirror = await mirrorPatch(page, on.m.rect);

@@ -71,15 +71,14 @@ function _vAheadPt(d, h, lat) {
 // sightline, so the car's own nose occupied 0.7% of the frame and an onboard
 // looked like a floating dash. A real F1 eye sits ~0.30 m over the chassis top.
 // 0.82 gives 0.27 m and the nose reads as a nose. Anything moved here must be
-// re-checked with docs/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
+// re-checked with docs/notes/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
 // ckpt monocoque cap and the coaming are all positioned against this number.
 const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
 // NEAR-EYE CULL for a RIVAL: hidden only when the camera eye sits INSIDE its body
 // (the drawn car, a little over the 4.8 x 2.0 m collider, grown by `pad` = the near
-// plane plus a margin). The old test was a 3.4 m RADIUS from the car's origin, sized
-// for the chase cam (an eye inside a tailgating car). From the cockpit, visor or hood
-// a rival ALONGSIDE is 2-3 m from the eye, so it vanished just as the player drew
-// level ("as I get almost fully ahead they disappear"). along / lat / up are the eye
+// plane plus a margin), never a RADIUS from the car's origin: from the cockpit, visor
+// or hood a rival ALONGSIDE is 2-3 m from the eye, so a 3.4 m radius sized for the
+// chase cam hid it just as the player drew level. along / lat / up are the eye
 // MINUS the car in the car's own frame (tangent, right, up), metres.
 const CAR_BOX_HALF_L = 2.9, CAR_BOX_HALF_W = 1.0, CAR_BOX_H = 1.2;
 function eyeInsideCar(along, lat, up, pad) {
@@ -89,8 +88,7 @@ function eyeInsideCar(along, lat, up, pad) {
 // VISOR: the COCKPIT WITHOUT ITS STEERING WHEEL, for a phone wheel in the hand
 // (a linked phone switches to it). game.js draws the same cockpit rig — tub,
 // halo, mirrors, front wheels, the nose ahead — with the wheel and its dash
-// left out. The eye is the cockpit's own for now (the owner, 2026-09-29: "start
-// with exact cockpit bodywork, just remove the wheel first"); its own pair of
+// left out. The eye is the cockpit's own for now; its own pair of
 // offsets exists so it can move closer/lower later without dragging the tub
 // with it (cockpitViewmodelAxes anchors the rig with these).
 const VISOR_EYE_FWD = COCKPIT_EYE_FWD, VISOR_EYE_UP = COCKPIT_EYE_UP;
@@ -128,8 +126,8 @@ function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up) 
 }
 
 const CHASE_SIDE_FRAC = 0.3;
-// Shipped CHASE eye-in, metres along the view direction (the owner's CAMERA
-// TUNER DISTANCE of -0.725, baked 2026-09-08). Applied after the rig solves so
+// Shipped CHASE eye-in, metres along the view direction (a baked CAMERA
+// TUNER DISTANCE of -0.725). Applied after the rig solves so
 // it moves ONLY the eye, never the arc `back` samples the ride height over.
 const CHASE_EYE_IN = 0.725;
 // Shipped chase/far corner lead — blends toward road-frame aim so the rig swings
@@ -265,7 +263,7 @@ function rideGrade(track, s) {
 //
 // KERB RUMBLE IS SPATIAL, not temporal: a rumble strip is a row of physical
 // ribs, so the shake is driven off arc position `s`, not a clock. That makes it
-// deterministic (no Date.now — the same rule bodyattitude.js keeps), and it
+// deterministic (no Date.now — the same rule js/physics/body-attitude.js keeps), and it
 // scales itself with speed for free, because s advances faster when you do.
 const KERB_RIB_M = 3.4;      // metres per rumble cycle as the view feels it
 const KERB_AMP = 0.011;      // m of eye travel at full scaling — a shiver, not a bounce
@@ -339,14 +337,11 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const eyeUp  = driver ? seatUp(mode) : 0.95;
     if (extra.carPos) {
       // FREE-WORLD ONBOARD. These are bolted to the CAR, so they must sit at the
-      // car and look down the CAR's nose. They used to be built from the road:
-      // the eye was placed along the ROAD tangent from a road-frame point, and
-      // the aim ran 30 m down the centreline — hood was 100 % curved look-ahead,
-      // cockpit 85 % road tangent + 15 % curve. (The old cockpit comment claimed
-      // it faced "the car's own heading"; `t` is the road tangent at the car, not
-      // c.head, so it never did.) Driving straight through a bend swung the view
-      // round the corner while the nose slid across the frame — the arc reaching
-      // the driver through the most immersive camera in the game.
+      // car and look down the CAR's nose. Built from the road (eye along the
+      // ROAD tangent, aim 30 m down the centreline), driving straight through a
+      // bend swings the view round the corner while the nose slides across the
+      // frame — the arc reaching the driver through the most immersive camera
+      // in the game.
       // The road still supplies eye HEIGHT and the gradient the view pitches
       // with (t[1]) — surface, not line.
       const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
@@ -355,7 +350,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       // TURN CHASING (SETTINGS > COCKPIT slider, js/camera/cockpit-opts.js).
       // 0 = the car's heading and NOTHING else — AGENTS.md's "the arc must not
       // reach the driver" state. The player opts in with the slider (shipped
-      // 0.35, the old ON blend). This moves where the camera looks, never the car.
+      // default: CockpitOpts LEAD_DEFAULT). This moves where the camera looks, never the car.
       const tcL = driver && typeof CockpitOpts !== "undefined"
         ? CockpitOpts.turnChaseLead() : 0;
       let aimX = extra.carPos[0] + hx * 30, aimZ = extra.carPos[1] + hz * 30;
@@ -389,8 +384,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   } else if (mode === "heli") {
     // Broadcast helicopter — corner-aware: hovers on the OUTSIDE of the
     // upcoming bend so it looks across the apex. +kA is a LEFT bend (measured —
-    // agentview.js corner-table note) whose outside is +r; this read -1 for
-    // kA>0 while the old "+k = right" comment lived, hovering on the INSIDE.
+    // agentview.js corner-table note) whose outside is +r.
     Tracks.sample(track, wrapS(s - 26), cvB);
     const sgn = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const hl = Math.min(18, corr);              // stay inside the street canyon
@@ -452,9 +446,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     fov = lerp(55, 70, spN) + dep * 3;
   } else {
     const far = mode === "far";
-    // CHASE's eye moved in and down on 2026-09-08: the owner's CAMERA TUNER
-    // profile (height -0.75, dist -0.725) became the shipped framing, so the
-    // tuner goes back to meaning "offset from shipped" with every def at 0.
+    // CHASE's shipped framing bakes a CAMERA TUNER profile (height -0.75,
+    // dist -0.725), so the tuner means "offset from shipped" with every def at 0.
     // HEIGHT lands here, on eyeUp, which is what CamTune.apply does with it.
     // DISTANCE does NOT land on `back`: `back` is also the arc the ride height
     // and gradient are sampled over (rideEye) and the arm the three-quarter

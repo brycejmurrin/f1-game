@@ -156,3 +156,25 @@ test("fire-and-forget start survives a delayed script failure without hiding awa
     h.restore();
   }
 });
+
+test("a rival's quali time that lands during the scenery load survives to the sheet, under a card", async () => {
+  // Hunt 2026-09-30: openQualiBody cleared the peer times AFTER the scenery
+  // await, erasing the host's one-shot QUALI that arrived mid-load, and the
+  // guest's sheet sat on WAITING FOR THEIR LAP for good. The load was also
+  // uncovered: a blank screen between the lobby and the sheet.
+  g.G.quitToMenu(); select("suzuka"); g.G.session = "race";
+  const np = g.G.netPlay, wasRivals = np.rivalDriverIds;
+  np.rivalDriverIds = () => ["rival:0"];
+  const h = holdScenery("suzuka");
+  const doc = g.sandbox.document;
+  try {
+    const p = g.G.openQualiForNet(() => {});
+    await tick(); assert.ok(h.held);
+    assert.equal(doc.getElementById("loading").hidden, false, "the load is covered by the card");
+    g.G.onPeerQuali({ driverId: "rival:0", t: 80 });
+    h.release();
+    await p;
+    assert.equal(doc.getElementById("q-go").disabled, false, "the rival's time is still there: the gate opens");
+    assert.equal(doc.getElementById("loading").hidden, true, "the card comes down for the sheet");
+  } finally { np.rivalDriverIds = wasRivals; h.restore(); g.G.quitToMenu(); }
+});

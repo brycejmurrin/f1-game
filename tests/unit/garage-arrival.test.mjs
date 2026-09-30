@@ -106,7 +106,7 @@ test('game.js plays the studio drive-out AT ONCE on every RACE!, with no card, a
   assert.match(game, /if \(gfx\.warming && gfx\.warming\(\)\) return;\n  if \(_studio\) studioShown\(\);/, 'the garage replaces a pending warm\'s card on its first frame');
   assert.match(game, /\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, 'the studio shows through the build card');
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
-  assert.match(cam, /const arriving = driveOut \? stepDriveOut\(\) : arrival\.step\(dt\);/, 'the wall clock, not the 1\/20 s capped render dt');
+  assert.match(cam, /const arriving = driveOut \? stepDriveOut\(\) : preview \? stepPreview\(dt\) : arrival\.step\(dt\);/, 'the wall clock, not the 1\/20 s capped render dt; the PREVIEW between the two');
   assert.match(cam, /if \(!cfg\.enabled \|\| reducedMotion\(\)\) return 0;/, 'the arrival tuner and reduced motion gate it');
   assert.match(game, /!_studio\.skip && live\(\) && setupCam\.driveOutLeft\(\) > 0 && performance\.now\(\) - _studio\.at < _studio\.ms \* 3\)/, 'a build stall delays the car, never cuts it off in the doorway');
   assert.match(game, /function studioClose\(n\) \{\n  if \(!_studio \|\| _studio\.n !== n\) return;/, 'only the intro run that opened it closes it');
@@ -180,4 +180,78 @@ test('race settings pre-builds the garage, hidden, so the drive-out\'s first fra
   const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');
   assert.ok(gate > 0 && hidden > gate, 'drawn after the visibility gate: the canvas stays hidden under race settings');
   assert.match(render, /if \(setupPreviewOn\) _menuGate\.garageReady = true;/, 'the real garage screen counts as pre-built');
+});
+
+// ── #garrival's PREVIEW IN / OUT (js/garage/setup-camera.js startArrivalPreview) ──
+// The block runs for real in a VM: the room's own clock, never the WORK ON CAR
+// chrome, and the settings page gets the canvas back when it ends.
+function previewHarness({ saved = null, carsetupOpen = false, was = false } = {}) {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('// THE ARRIVAL PREVIEW'), cam.indexOf('const arrivalCar'));
+  const { $ } = harness();
+  $('carsetup').hidden = !carsetupOpen; $('garrival-inner').hidden = false;
+  const frames = [], keys = [];
+  const G = { setupPreviewOn: was, store: { get: (k, d) => (k === 'garageArrival' ? saved : d) } };
+  const c = vm.createContext({ $, G, GarageArrival: Arrival, driveOut: null, Log: { info() {} },
+    requestAnimationFrame: (fn) => frames.push(fn), render: (dt) => frames.push('render:' + dt),
+    window: { addEventListener: (t, fn) => { if (t === 'keydown') keys.push(fn); } } });
+  vm.runInContext(src, c);
+  const fn = (n) => vm.runInContext(n, c);
+  return { $, G, c, frames, keys, start: fn('startArrivalPreview'), step: fn('stepPreview'), playing: () => fn('preview') };
+}
+test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canvas back', () => {
+  for (const dir of ['in', 'out']) {
+    const h = previewHarness({ saved: { enabled: false, speed: 2, angle: 'right', fov: 66 } });
+    const btn = { focus() { this.focused = true; } };
+    assert.equal(h.start(dir, btn), true, dir + ': starts');
+    assert.equal(h.G.setupPreviewOn, true, 'the garage renders meanwhile');
+    assert.equal(h.$('garrival-inner').hidden, true, 'the panel stands aside for the playback');
+    const first = h.step(0.05);
+    assert.equal(first.active, true);
+    assert.equal(first.fov, 66, 'the saved lens');
+    assert.ok(first.eye[0] > 0, 'the saved angle (RIGHT)');
+    assert.equal(h.$('cs-inner').inert, false, 'the WORK ON CAR sheet is never locked');
+    assert.equal(h.$('cs-arrival').hidden, true, 'nor its arrival overlay shown');
+    const dur = dir === 'in' ? Arrival.DURATION : Arrival.OUT_DURATION;
+    let n = 0, last = first;
+    while (h.playing() && n < 1000) { last = h.step(0.1); n++; }
+    assert.ok(Math.abs(n - dur / 0.2) <= 2, `${dir}: SPEED 2 plays it in half the time (${n} steps)`);
+    assert.equal(last.active, true, 'the last frame holds the final pose');
+    assert.equal(last.z, dir === 'in' ? 0 : Arrival.poseOut(dur).z, 'parked, or out of the door');
+    assert.equal(h.G.setupPreviewOn, false, 'setupPreviewOn restored');
+    assert.equal(h.$('garrival-inner').hidden, false, 'the panel is back');
+    assert.equal(btn.focused, true, 'focus returns to the PREVIEW button');
+    assert.equal(h.frames.length, 1, 'one more frame is asked for');
+    h.frames[0]();
+    assert.equal(h.frames[1], 'render:0', 'a paused race redraws its own frame over the garage');
+  }
+});
+test('PREVIEW: Escape and DONE stop it; refused while the garage or the drive-out owns the room', () => {
+  const h = previewHarness({ was: true });
+  assert.equal(h.start('in'), true, 'plays with the enabled flag off and reduced motion ignored');
+  assert.equal(h.start('out'), false, 'one at a time');
+  const ev = { key: 'Escape', preventDefault() { this.dp = true; }, stopPropagation() { this.sp = true; } };
+  for (const k of h.keys) k(ev);
+  assert.equal(h.playing(), null, 'Escape stops it');
+  assert.ok(ev.dp && ev.sp, 'and Escape goes no further');
+  assert.equal(h.G.setupPreviewOn, true, 'a garage preview that was already on stays on');
+  assert.equal(h.frames.length, 0, 'and needs no hand-back frame');
+  assert.equal(h.start(null), false, 'stop with nothing playing is a no-op');
+  assert.equal(previewHarness({ carsetupOpen: true }).start('in'), false, 'refused under the open GARAGE');
+  const busy = previewHarness(); busy.c.driveOut = { t: 0 };
+  assert.equal(busy.start('in'), false, 'refused during the RACE! drive-out');
+  // DONE routes through bindSettings: mid-playback it stops the preview and keeps the panel.
+  const { $ } = harness();
+  let playing = true;
+  const calls = [];
+  Arrival.bindSettings($, { get: () => null, set() {} }, { preview: (dir, b) => { calls.push(dir); if (dir) return true; const was = playing; playing = false; return was; } });
+  $('garrival').hidden = false;
+  $('ga-preview-in').onclick(); $('ga-preview-out').onclick();
+  assert.deepEqual(calls, ['in', 'out']);
+  $('ga-close').onclick();
+  assert.equal($('garrival').hidden, false, 'DONE mid-playback stops it, the panel stays');
+  $('ga-close').onclick();
+  assert.equal($('garrival').hidden, true, 'the next DONE closes the tool');
+  const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.match(shell, /<button id="ga-preview-in" type="button">PREVIEW IN<\/button>\s*<button id="ga-preview-out" type="button">PREVIEW OUT<\/button>/);
 });

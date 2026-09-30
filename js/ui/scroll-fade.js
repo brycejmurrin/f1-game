@@ -45,7 +45,7 @@ window.ScrollFade = (function () {
   // data hub (#datahub) and track detail (#track-detail) are toggled by the
   // hidden attribute like the rest.
   const SCREENS = "#select,#season-setup,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#pmsettings," +
-    "#lighting,#camtune,#flyby,#freecam,#garrival,#results,#quali,#standings,#race-settings,#duel-picker,#customize,#pausemenu," +
+    "#lighting,#camtune,#flyby,#freecam,#garrival,#tl-editor,#results,#quali,#standings,#race-settings,#duel-picker,#customize,#pausemenu," +
     "#datahub,#track-detail,#vsfriend,#spotifypanel," +
     // The title screen hides for a race and returns with it; its #menu-buttons
     // column is a region (SEL above), so its own flip must trigger a settle
@@ -144,7 +144,7 @@ window.ScrollFade = (function () {
     for (const m of measured) write(m);
   }
 
-  // Coalesce with a TIMER, not requestAnimationFrame: menus.js swaps screens
+  // Coalesce with a TIMER, not requestAnimationFrame: js/ui/select-screen.js swaps screens
   // inside document.startViewTransition, during which a queued frame callback
   // can be deferred past the next mutation — the "already queued" flag stays
   // set and the repaint never lands (that bug is why the first version of this

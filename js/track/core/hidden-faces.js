@@ -3,7 +3,7 @@
 // that no camera can ever see, and leaves pos/nrm/col/mat exactly as they were,
 // so every audit that reads a primitive's vertex range [s, e) (coplanar, clip,
 // float — tools/lib/track-build-vm.cjs) sees the same data as before. Measured
-// by scratch/perf/unseen.cjs (docs/notes/SCENERY-QA-PLAN.md §2b "P1").
+// per docs/notes/SCENERY-QA-PLAN.md §2b "P1".
 //
 // Three classes, each CONSERVATIVE (a doubt keeps the triangle):
 //   enclosed  all 3 corners strictly (1 cm) inside another closed box — found

@@ -5,7 +5,7 @@ dependencies**; every `devDependency` is test- or tooling-only (Playwright the
 harness, jsQR to verify the QR encoder in tests, espree/eslint-scope for the
 source audits, sharp and typescript for tooling — never shipped). Four vendored
 libraries DO ship, under `vendor/`, each loaded only by the feature that needs
-it: three.js r186 (TLX backend), Rapier (`debrisworld.js`), Trystero (the
+it: three.js r186 (TLX backend), Rapier (`js/physics/debris-world.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
 static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 
@@ -34,7 +34,7 @@ by `tools/gen/gen-shell.mjs`; `tests/unit/load-order.test.mjs` (run via
 `npm run test:tooling-fast`) asserts every generated block is byte-identical
 to a fresh run. Adding a file means a `FULL` entry, a `DEFERRED` backend entry, a `LAZY_AGENT` entry
 (`apex.js` / `agentview*` — injected when tests / localhost / `?apex=1`), a
-`LAZY_RACE` entry (`light-presets.js`, fetched before the first race) or a
+`LAZY_RACE` entry (`js/lighting/presets.js`, fetched before the first race) or a
 `LAZY_SCENERY` entry (`js/circuits/scenery/<id>.js`, fetched per build). The abbreviated sketch below is a subset;
 consult the manifest for the full, current order:
 
@@ -178,7 +178,7 @@ _237 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences. |
-| `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE LAYOUT. |
+| `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -468,7 +468,7 @@ _237 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 
 The July 2026 architecture reorg moved every module into a domain directory
 (old→new map in the git history) and split the three giants (`game.js` 8,955 →
-~4,700 lines as measured then; `glx-shaders.js` → chunked shader files;
+~4,700 lines as measured then; the old `glx-shaders.js` → chunked shader files;
 `buildProps` → four scenery modules).
 
 **That 4,700 is a historical measurement, not a current one.** `game.js` grew
@@ -501,89 +501,64 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   repo (exit 2). The tag blocks themselves are written by
   `tools/gen/gen-shell.mjs`, never by hand.
 
-### Deferred follow-ups (known debt, in rough priority order)
+### Deferred follow-ups
 
-- **game.js pass 2** — promote the remaining closure `let`s to a shared state
-  object. The early extractions were `js/physics/aero-zones.js`, `js/fx/skidmarks.js`,
-  `js/lighting/profiles.js`, `js/race/race-control.js`, and from the 2026-08
-  cleanup `js/physics/consts.js` and `js/camera/mode-switch.js` — more have
-  landed since (e.g. `js/physics/ai-drive.js`); `tools/manifest.cjs` is the roster
-  truth and `tests/data/ratchets.json` the tally. The current
-  count and its ratcheted ceiling live there (`node tools/check/ratchets.mjs`), and the
-  remaining extraction candidates are ranked in notes/ARCHITECTURE-REVIEW.md §8.
+Open reorg debt (game.js pass 2 — promote the remaining closure `let`s to a shared
+state object; the `TUNE_DEFS` hand-mirrors in `glx.js`/`gfx.js`) is tracked in
+[notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) §8 Backlog; the done items were removed 2026-09-30.
 
-  **The payoff is testability, not tidiness.** Race control is the clearest
-  case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
-  in the suite, because the only way to reach the machine was to stage real
-  settled debris in a browser. As a module taking its hazard picture through a
-  seam, it gets `tests/unit/race-control.test.mjs` — sixteen tests in milliseconds
-  covering the hysteresis, the time caps and the storage-format migration. None
-  of that was reachable before, and nobody had chosen for it not to be.
+### Extraction lessons
 
-  **Check for leftovers after every extraction.** Three for three so far:
-  aerozones COPIED two constants instead of moving them; race control left the
-  settings panel reading a deleted `_cautionOn` (a `ReferenceError` on opening
-  race settings, which no test opens). `grep` the removed symbol names — the
-  suite will not do it for you.
+**The payoff is testability, not tidiness.** Race control is the clearest
+case: 118 lines in the middle of `game.js` had exactly one assertion anywhere
+in the suite, because the only way to reach the machine was to stage real
+settled debris in a browser. As a module taking its hazard picture through a
+seam, it gets `tests/unit/race-control.test.mjs` — sixteen tests in milliseconds
+covering the hysteresis, the time caps and the storage-format migration. None
+of that was reachable before, and nobody had chosen for it not to be.
 
-  **Sort candidates by boundary crossings, not by line count.** The two measured
-  in the 2026-08 pass came out at opposite ends and the difference decided which
-  was taken:
+**Check for leftovers after every extraction.** Three for three so far:
+aerozones COPIED two constants instead of moving them; race control left the
+settings panel reading a deleted `_cautionOn` (a `ReferenceError` on opening
+race settings, which no test opens). `grep` the removed symbol names — the
+suite will not do it for you.
 
-  | candidate | lines | crossings | verdict |
-  |---|---:|---:|---|
-  | lighting profile store | ~94 | 0 new | taken — the whole surface was ALREADY on `G` for four other files |
-  | garage live preview | ~415 (notes/ARCHITECTURE-REVIEW.md's measurement) | ~15 new | taken 2026-09-22 as `js/garage/setup-camera.js` — on the car-drawing seam below, not on fifteen new accessors |
+**Sort candidates by boundary crossings, not by line count.** The two measured
+in the 2026-08 pass came out at opposite ends and the difference decided which
+was taken:
 
-  The garage preview is the bigger block and the more obvious target — its
-  natural partner `js/garage/setup-sheet.js` already exists — and taking it on
-  `G` alone would have widened the façade by half again for one screen:
-  `teamDecalState`, `drawAeroFlaps`, `drawCarDecals`, `carDecalNum`,
-  `carPaintMat`, `partsVisualKey`, `resolveLivery`, `MAT_REFLECT_X` … none of
-  which `G` carries. That is precisely the review's warning about `G` being a
-  *migration* device used as an *architecture*: an extraction that adds fifteen
-  accessors has moved the coupling, not removed it. So it went the way this
-  section said to take it — on the CAR-DRAWING SEAM `js/car/car-draw.js` and
-  `js/render/shared/shadow-pass.js` already use, `Module.create(G, deps)`, with
-  `G` unchanged at 265 members. `setupPreviewOn` itself stays in game.js:
-  `render()`'s gate is game.js's own.
+| candidate | lines | crossings | verdict |
+|---|---:|---:|---|
+| lighting profile store | ~94 | 0 new | taken — the whole surface was ALREADY on `G` for four other files |
+| garage live preview | ~415 (notes/ARCHITECTURE-REVIEW.md's measurement) | ~15 new | taken 2026-09-22 as `js/garage/setup-camera.js` — on the car-drawing seam below, not on fifteen new accessors |
 
-  **Splitting the two megafunctions is NOT recommended.** `render()` and
-  `updateCar()` are ~1,370 and ~1,130 lines (2026-08 measurement), and `updateCar`'s tyre model is one
-  continuous integration over ~40 interdependent locals — extracting it means
-  inventing a state struct and risking the determinism that
-  `tests/specs/physics-characterization.spec.js` now pins, for no functional gain.
-  Take the cohesive blocks around them instead.
+The garage preview is the bigger block and the more obvious target — its
+natural partner `js/garage/setup-sheet.js` already exists — and taking it on
+`G` alone would have widened the façade by half again for one screen:
+`teamDecalState`, `drawAeroFlaps`, `drawCarDecals`, `carDecalNum`,
+`carPaintMat`, `partsVisualKey`, `resolveLivery`, `MAT_REFLECT_X` … none of
+which `G` carries. That is precisely the review's warning about `G` being a
+*migration* device used as an *architecture*: an extraction that adds fifteen
+accessors has moved the coupling, not removed it. So it went the way this
+section said to take it — on the CAR-DRAWING SEAM `js/car/car-draw.js` and
+`js/render/shared/shadow-pass.js` already use, `Module.create(G, deps)`, with
+`G` unchanged at 265 members. `setupPreviewOn` itself stays in game.js:
+`render()`'s gate is game.js's own.
 
-  `tests/data/ratchets.json` (`tools/check/ratchets.mjs`, `tests/unit/ratchets.test.mjs`) is the guard that makes this stick: a per-file
-  line ceiling you LOWER when you extract. It exists because this file's own
-  note above — that extraction happened once and nothing stopped the file
-  growing back — was demonstrated again in miniature during the 2026-08 cleanup,
-  when two extractions removed 91 lines from game.js and a concurrent branch
-  added 130 over the same period. Nobody did anything wrong; nothing was
-  watching.
-- **~~tracks.js → GLX direct calls~~ (done, TLX M10)** — `Tracks.build` now
-  takes the active backend via `opts.gfx` and routes every `createMesh` /
-  `createChunkedMesh` / `mobileTier` read through that injected handle (falling
-  back to the `GLX` global only for the Node-VM build guard / VM tests that
-  install a stub `GLX`). game.js's descriptor-copy install onto the `GLX` object
-  is retained solely as the object-identity contract for the ~8 spec files that
-  monkey-patch `GLX.*`.
-- **~~`liverytex.js` duplicates GLX's mobile-tier detection~~ (done)** —
-  `liverytex.js` reads `GLX.mobileTier` (a manifest `HARD_EDGES` pair); the one
-  detection lives in `glx.js`.
-- **`TUNE_DEFS` mirror-comment invariants** in `glx.js`/`gfx.js` — comments that
-  must track the registry by hand; replace with a checked mapping.
-- **~~WebGPU lazy-load~~ (done; the 2026-09 spike-out was reversed)** — the
-  backends (GLX, WGX, TLX) are DEFERRED (no `<script>` tag, injected by
-  `js/game.js` on the pick). Phase 2b briefly moved WGX/TLX to `spike/backends/`;
-  they are back in `js/render/webgpu/` and `js/render/three/`.
-  See `tools/manifest.cjs`'s `DEFERRED` map;
-  `tests/unit/load-order.test.mjs` pins the manifest, game.js's loader table and
-  `sw.js`'s optional precache seed to each other.
-- **~~`css/*.css` split~~ (done)** — eleven sheets under a declared `@layer`
-  order (`tools/manifest.cjs` `CSS`); the visual suite still has no tracked
-  golden images, so further CSS restructuring stays ungated by pixels.
+**Splitting the two megafunctions is NOT recommended.** `render()` and
+`updateCar()` are ~1,370 and ~1,130 lines (2026-08 measurement), and `updateCar`'s tyre model is one
+continuous integration over ~40 interdependent locals — extracting it means
+inventing a state struct and risking the determinism that
+`tests/specs/physics-characterization.spec.js` now pins, for no functional gain.
+Take the cohesive blocks around them instead.
+
+`tests/data/ratchets.json` (`tools/check/ratchets.mjs`, `tests/unit/ratchets.test.mjs`) is the guard that makes this stick: a per-file
+line ceiling you LOWER when you extract. It exists because this file's own
+note above — that extraction happened once and nothing stopped the file
+growing back — was demonstrated again in miniature during the 2026-08 cleanup,
+when two extractions removed 91 lines from game.js and a concurrent branch
+added 130 over the same period. Nobody did anything wrong; nothing was
+watching.
 
 ---
 
@@ -846,7 +821,7 @@ anything PER-CIRCUIT is a key of the def (below), never an id-keyed table here.
 
 ## js/track/ — the rest of the engine
 
-One concern per file, all loaded before `tracks.js`, under `js/track/core/` (`pit`, `spline`, `mesh`, `space`, `surface`, plus `line` and `hidden-faces`) and `js/track/scenery/` (the rest; `maps.js` is `js/ui/track-maps.js`):
+One concern per file, all loaded before `tracks.js`, under `js/track/core/` (`pit`, `spline`, `mesh`, `space`, `surface`, plus `line` and `hidden-faces`) and `js/track/scenery/` (the rest; the corner maps live in `js/ui/track-maps.js`):
 
 | File | Global | Owns |
 |---|---|---|
@@ -1142,7 +1117,7 @@ The lighting-tuner core, split by lifecycle (Phase 2a of
 - `js/lighting/knobs.js` — `LightKnobs`: `TUNE_DEFS` (the slider
   registry — the `def` values ARE the shipped tuning; min/max/step are the
   clamps) and the live `LT` value object (a plain object mutated in place by
-  `light-store.js`'s profile resolution and `__apex.lightTune`).
+  `js/lighting/profiles.js`'s profile resolution and `__apex.lightTune`).
 - `js/lighting/track-lights.js` — `TrackLights`: `buildTrackLights(track)` bakes
   the per-track light records ONCE per track (colour and fixture character from
   the internal `floodColor` + `LAMP_KINDS` tables, the LAMP DENSITY and

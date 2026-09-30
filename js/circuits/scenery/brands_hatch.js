@@ -81,11 +81,9 @@
       const WOODS_A = 0.378, WOODS_B = 0.845;
       const inWoods = (s) => s >= WOODS_A && s <= WOODS_B;
 
-      /* ---------------------------------------------------------------- */
       /* 0. SHARED HELPERS — the three things the bowl needs a lot of:      */
       /*    parked cars, boundary planting, and a guarded set-back test.    */
       /*    Function declarations so blocks 1..7 can all reach them.        */
-      /* ---------------------------------------------------------------- */
 
       // True when a set-back at (k, side, d) is clear of the circuit. The bowl
       // is only ~400 m across, so anything past 40 m has to be asked.
@@ -136,11 +134,9 @@
         }
       }
 
-      /* ---------------------------------------------------------------- */
       /* 1. THE BOWL — open grass banking, no woodland. The amphitheatre    */
       /*    reads from the rim at the start line all the way round Clark.   */
       /*    Rows 0.025/-1, 0.076/-1, 0.190/-1, 0.378/-1, 0.832/-1, 0.914/-1 */
-      /* ---------------------------------------------------------------- */
 
       // Paddock Hill: the bank falls with the track into the bottom of the dip.
       // Trimmed clear of Hailwoods stand footprint (sl-frame hero below).
@@ -274,12 +270,10 @@
       wall(0.176, 0.272, -1, 68, 1.3, RENDER);
       wall(0.850, 0.948, -1, 74, 1.3, RENDER);
 
-      /* ---------------------------------------------------------------- */
       /* 2. BRABHAM STRAIGHT FRONTAGE (-1) — a CONTINUOUS built frontage:   */
       /*    main grandstand, retail units behind it, then the Paddock Hill  */
       /*    Grandstand right on the lip of the drop.                        */
       /*    Rows 0.005/-1 (18 m) and 0.014/-1 (12 m).                       */
-      /* ---------------------------------------------------------------- */
 
       // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
       // startFrac) because the grid had been laid through a 136 m corner, and
@@ -489,12 +483,10 @@
         place(K(sl(s)), -1, 24, [3.0, 3.0, 3.0], CHALK);
       }
 
-      /* ---------------------------------------------------------------- */
       /* 3. THE INFIELD (+1) — pits, Kentagon, paddock, Cooper Straight and  */
       /*    race control. This all sits INSIDE the loop and blocks the view  */
       /*    across to Cooper Straight from the main banks: that is correct.  */
       /*    Rows 0.005/+1, 0.014/+1, 0.040/+1, 0.260/+1, 0.960/+1.           */
-      /* ---------------------------------------------------------------- */
 
       // Pit garages — a continuous run of bays down the inside of the straight.
       for (let s = 0.938; s < 1.032; s += 0.0068) {
@@ -633,10 +625,8 @@
         groundPatch(K(0.918), 1, 46, [14, 0.22, 22], ASPH);
       }
 
-      /* ---------------------------------------------------------------- */
       /* 4. DRUIDS + PILGRIMS — the two spectator footbridges.              */
       /*    Rows 0.070/+1 (climb to Druids) and 0.430/-1 (Pilgrims Drop).    */
-      /* ---------------------------------------------------------------- */
 
       function footbridge(s, deckCol) {
         const k = K(s);
@@ -666,13 +656,11 @@
       footbridge(0.070, RENDER);   // public crossing to the infield at Druids
       footbridge(0.430, DKGREY);   // over Pilgrims Drop, on the way into the woods
 
-      /* ---------------------------------------------------------------- */
       /* 5. THE WOODS — Surtees (0.378) through Hawthorns, Westfield,        */
       /*    Dingle Dell and Sheene, until the bowl reopens at Stirlings.     */
       /*    Mature broadleaf tight to the edge, armco and catch fence,       */
       /*    NOTHING built and no spectator terracing (rows 0.430, 0.461,     */
       /*    0.532, 0.636, 0.760).                                            */
-      /* ---------------------------------------------------------------- */
 
       // Closed canopy either side, right up to the verge.
       forestEdge(0.382, WOODS_B, -1, 13, {});
@@ -805,11 +793,9 @@
       groundPatch(K(0.386), -1, 18, [18, 0.3, 24], GRAVEL);
       groundPatch(K(0.772), -1, 18, [16, 0.3, 22], GRAVEL);
 
-      /* ---------------------------------------------------------------- */
       /* 6. CIRCUIT FURNITURE — armco everywhere, catch fence through the    */
       /*    woods, debris fence in front of the public banks, tyre walls at   */
       /*    the corners that need them, marshal posts and camera positions.   */
-      /* ---------------------------------------------------------------- */
 
       for (const side of [-1, 1]) guardrail(0.0, 1.0, side, 11, ARMCO);
 
@@ -863,10 +849,8 @@
       billboard(K(0.268),  1, 34, 12, 5, CHALK);
       billboard(K(0.922), -1, 32, 14, 6, CHALK);
 
-      /* ---------------------------------------------------------------- */
       /* 7. KENT BACKDROP — low chalk downland shoulders beyond the circuit. */
       /*    §1/§2: a natural amphitheatre, green with chalk showing through. */
-      /* ---------------------------------------------------------------- */
 
       for (const [s, side, dist, len, wid, hgt] of [
         [0.130, -1, 620, 420, 130, 34],

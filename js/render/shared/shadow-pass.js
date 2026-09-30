@@ -53,7 +53,7 @@ const ShadowPass = (function () {
     // the ±box footprint, sits at most hypot(h, box) up the sun axis from the
     // anchor, so sunSpan() sizes the near side from the circuit's tallest prop
     // (Tracks: track.propTop, above its own ground) + 10 m: every circuit that
-    // fits keeps exactly the old 150/320 (and its shadows); Singapore, Shanghai,
+    // fits keeps 150/320 (and its shadows); Singapore, Shanghai,
     // Vegas, Jeddah… get what they need, up to 400. Unknown propTop = the max.
     const SUN_BACK_MIN = 150, SUN_BACK_MAX = 400, SUN_RECV = 170;
     let SUN_BACK = SUN_BACK_MAX, SUN_FAR = SUN_BACK_MAX + SUN_RECV;
@@ -68,8 +68,8 @@ const ShadowPass = (function () {
     // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
     // Props dominate the cost; freezing the map for a 12 m eye cell is the night twin
     // of the sun snap cache (cars already one-frame lag on AI mats).
-    // LAMP SHADOW SNAP KEY — the map's CONTENT, not a proxy for it. The old key was
-    // (slot into frame.lights, 12 m eye cell) and both halves were wrong: the slot
+    // LAMP SHADOW SNAP KEY — the map's CONTENT, not a proxy for it. A key of
+    // (slot into frame.lights, 12 m eye cell) is wrong in both halves: the slot
     // cannot see a lamp handover (lighting.js re-sorts that array every frame), and
     // the eye cell is not what the map depends on at all — the props cast is culled
     // to the LAMP's frustum, so the static half of this map is a pure function of
@@ -118,7 +118,7 @@ const ShadowPass = (function () {
       }
     }
     // Shadow-ribbon cast — hoisted so a sun recentre does not allocate a closure
-    // (PERF-FINDINGS §2y). Same body the rebuild used to close over each snap.
+    // (PERF-FINDINGS §2y).
     function _castRibbonSh(geo, key, plain, allow = true) {
       if (G.track.meshes[key] === undefined) {
         G.track.meshes[key] = null;
@@ -182,10 +182,9 @@ const ShadowPass = (function () {
       // (20 m at the default 80 m box) so the map only re-renders when the camera
       // moves a cell — and so each recentre shifts the box by an exact whole number
       // of shadow texels (sBox/4 is SHADOW_SIZE/8 texels for any pow-2 map size).
-      // The old snap was on a world-XZ grid with an unsnapped camera HEIGHT: those
-      // axes don't match the sun-rotated texel grid, so every recentre re-rasterised
-      // all shadow edges at a new sub-texel phase — a visible shimmer/jump of every
-      // shadow edge each 16 m of driving.
+      // A world-XZ grid with an unsnapped camera HEIGHT does not match the
+      // sun-rotated texel grid, so every recentre would re-rasterise all shadow
+      // edges at a new sub-texel phase — a visible shimmer/jump each 16 m.
       if (G.track) {
         const sd = frame.sunDir;
         const up = Math.abs(sd[1]) > 0.98 ? _upX : _upY;
@@ -234,7 +233,7 @@ const ShadowPass = (function () {
         // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
         // sliders, a time-of-day flip) previously left the map STALE until the next
         // cell crossing — shadows looked dead while dragging, then all jumped at once.
-        // PRODUCER/CONSUMER GATE. lit.js's sampleShadow opens with
+        // PRODUCER/CONSUMER GATE. glsl-lit.js's sampleShadow opens with
         // `if (uShadowStr <= 0.0) return 1.0;` — so when the key has faded out
         // (overcast, wet or foggy night) NOTHING reads this map: the god-ray march
         // is the only other reader and it is gated on uStr > 0.0, which is 0 below
@@ -303,9 +302,9 @@ const ShadowPass = (function () {
           // at night and the whole city rasterised into the shadow map every recentre.
           // Cutoff 0.28 = the BOTTOM of the renderer's key-luminance strength fade
           // (uShadowStr ramps over key 0.28→0.42): props only leave the map once the
-          // whole shadow pass has faded to zero strength. The old 0.35 cutoff sat in
-          // the MIDDLE of that band, so prop shadows popped out at ~50% strength on
-          // a dusk→night flip / SUN ELEVATION drag while terrain shadows lingered.
+          // whole shadow pass has faded to zero strength. A cutoff in the MIDDLE of
+          // that band pops prop shadows out at ~50% strength on a dusk→night flip /
+          // SUN ELEVATION drag while terrain shadows linger.
           const _shKey = _shKeyG;   // hoisted above; same expression, one source
           // Clear-night moon shadows re-open the gate: props must be in the map for
           // the moonlight floor to have anything to cast (snap-cached, so the night
@@ -362,11 +361,11 @@ const ShadowPass = (function () {
             const cBox = 42 * Math.max(1, sBox / 80);
             M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, 320);
             M4.mulTo(_mCVP, _mCProj, _mCView);
-            // The depth-comparison bias baked into lit.js's biasTerm was tuned for the
+            // The depth-comparison bias baked into glsl-lit.js's biasTerm was tuned for the
             // map's texel size at the DEFAULT ±42m box; cBox growing with SHADOW DISTANCE
             // grows the car map's real-world texel size at the same fixed 1024² resolution,
             // so the bias needs to grow proportionally or the car self-shadows into acne
-            // (uCarBiasScale, applied in lit.js). cBox/42 == 1 at the default, matching the
+            // (uCarBiasScale, applied in glsl-lit.js). cBox/42 == 1 at the default, matching the
             // originally-tuned bias exactly.
             G.gfx.carShadowBegin(_mCVP, cBox / 42);
             if (_hasLivePlayerShadow) G.gfx.castShadow(deps.teamMesh(G.player.team, G.player, true), _livePlayerShadowMat);
@@ -457,15 +456,14 @@ const ShadowPass = (function () {
             // function of exactly two things — WHICH LAMP, and WHERE THOSE CARS ARE.
             // Key on both and the map is always either provably current (keep it,
             // and SAY so, or the lit pass reads a false 0) or provably stale
-            // (rebuild). The key it replaces was (slot, 12 m eye cell) and neither
-            // term was the content: the slot indexes an array lighting.js re-sorts
-            // every frame, so a lamp handover onto the same slot read as "no
-            // change" and bound one lamp's depth under another's VP; and the eye
-            // cell is not an input to this map at all — the props cull uses the
-            // lamp frustum, not the camera's. The old pair let the flag sit false on
-            // every frame but the rebuild, which is the floodlight strobe (~1 armed
-            // frame in 14 once the car is moving) and the shadow that never came
-            // back at all for a player parked under a flood.
+            // (rebuild). A (slot, 12 m eye cell) key is not the content: the slot
+            // indexes an array lighting.js re-sorts every frame, so a lamp handover
+            // onto the same slot reads as "no change" and binds one lamp's depth
+            // under another's VP; and the eye cell is not an input to this map at
+            // all — the props cull uses the lamp frustum, not the camera's. That
+            // pair lets the flag sit false on every frame but the rebuild: the
+            // floodlight strobe (~1 armed frame in 14 once the car is moving) and a
+            // shadow that never comes back for a player parked under a flood.
             const _lx = L[o], _ly = L[o + 1], _lz = L[o + 2];
             // Lamp fixtures are STATIC and their coordinates are copied, not
             // recomputed, so exact equality is the identity test — no epsilon, and
@@ -508,7 +506,7 @@ const ShadowPass = (function () {
             }
             // The player is cast into this map whenever it is within reach, so while
             // driving under a lamp the car half of the key changes every frame and a pure content key would
-            // rebuild at 60 Hz where the old cell key rebuilt at ~5. Bound it: a
+            // rebuild at 60 Hz where a cell key rebuilds at ~5. Bound it: a
             // CAR-ONLY change may be deferred one frame at tier >= 1, which is the
             // one-frame lag this file already takes for AI casters in the sun pass
             // and is invisible at any speed a shadow is legible at. A LAMP change

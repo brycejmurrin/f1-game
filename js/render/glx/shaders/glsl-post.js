@@ -1034,7 +1034,7 @@ void main() {
       // ratio only set how obvious it was.
       //
       // The lit shader already carries the coherent base — envBlend is floored
-      // at wetSheen*0.55 (lit.js) expressly so the analytic sky mirror gives the
+      // at wetSheen*0.55 (glsl-lit.js) expressly so the analytic sky mirror gives the
       // wet look wherever the march misses. So hold the road's cover CONSTANT and
       // let only reflCol vary: hits show the marched scene, misses the sky, both
       // through the same amount of mirror. Car paint keeps its confidence-scaled

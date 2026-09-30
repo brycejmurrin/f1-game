@@ -132,7 +132,7 @@ function photoKeyHandler(e) {
   if (down && e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
   const fc = freeCam ? freeCam.key(e.code, down, document.activeElement) : 0;
   if (fc < 0 && down) return;                // an arrow key over the free-cam panel belongs to its focused control
-  if (fc > 0) { e.preventDefault(); e.stopPropagation(); return; }
+  if (fc > 0) { e.preventDefault(); if (down) e.stopPropagation(); return; }
   let hit = true;
   switch (e.code) {
     case "KeyW": photoKeys.w = down; break;
@@ -148,7 +148,8 @@ function photoKeyHandler(e) {
     case "ShiftLeft": case "ShiftRight": photoKeys.boost = down; break;
     default: hit = false;
   }
-  if (hit) { e.preventDefault(); e.stopPropagation(); }
+  // A key-UP still reaches Input: W held from driving, released in here, stayed held after RESUME.
+  if (hit) { e.preventDefault(); if (down) e.stopPropagation(); }
 }
 // Virtual thumbstick: pointer offset from centre → normalised (−1..1) vector.
 function wirePhotoStick(id, vec) {

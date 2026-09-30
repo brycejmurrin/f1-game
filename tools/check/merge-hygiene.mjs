@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Keep conflict-prone JSON lists one-entry-per-line and stably sorted: ratchets.json + groups.json; `--check` (default) / `--fix`.
+// @doc Keep ratchets.json + groups.json one-entry-per-line and stably sorted; `--check` (default) / `--fix`.
 // @skill check-changes
 /**
  * merge-hygiene.mjs — stop concurrent PRs from rewriting the same blob line.

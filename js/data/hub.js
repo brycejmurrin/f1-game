@@ -578,7 +578,7 @@ const DataHub = (function () {
   // Prix's timing as a script, and every real driver's seat as a JUMP IN.
   const { loadRealRace } = DataRealRace.create({
     el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
-    teamChip, fmtDateTime, findTeam, close
+    teamChip, fmtDateTime, findTeam, close, isOpen
   });
   // Implementation: js/data/export.js.
   const { loadExport } = DataExport.create({ el, clear, isOpen });
