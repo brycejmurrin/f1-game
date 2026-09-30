@@ -593,8 +593,7 @@ the numbers):
   (`AiDrive.strategyTemper`, from the ratings): `gamble` (1 − experience) lets
   a rookie's roll reach the extra stop or the marathon stint while a veteran
   runs the book; `react` (experience + awareness) and `attack` (craft) gate
-  the rival rules below. An AI plan is priced at the AI's own measured wear
-  rate (`AI_LOAD_K`), not the clean-lap 1.0.
+  the rival rules below.
   Strategies MIX because a full tank wears tyres (`FUEL_WEAR`), which is what
   puts harder rubber early and softer late.
   Three rules override the plan: the **free stop** under a caution (worth
