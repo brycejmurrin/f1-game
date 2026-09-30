@@ -829,6 +829,7 @@ declare const NetLobby: GameModuleFactory;
 declare const NetPlay: GameModuleFactory;
 declare const Photomode: GameModuleFactory;
 declare const FreeCam: GameModuleFactory;
+declare const ReplayBuf: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;

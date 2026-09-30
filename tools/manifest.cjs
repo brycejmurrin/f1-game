@@ -278,6 +278,7 @@ const FULL = [
   "js/race/weather-arc.js",
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
+  "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
   "js/lighting/tuner-panel.js",
   "js/camera/tuner-panel.js",
   "js/physics/brake-cue.js",
@@ -529,6 +530,7 @@ const HARD_EDGES = [
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
   ["js/physics/consts.js", "js/ui/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
   ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
+  ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval

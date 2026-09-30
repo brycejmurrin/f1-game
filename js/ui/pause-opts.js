@@ -144,9 +144,21 @@ const PauseOpts = (function () {
     arm(btn);
   }
 
+  // Pause-card build stamp (was an IIFE in game.js). Reads apex-build meta —
+  // the assets that actually loaded — so a stale shell cannot lie.
+  function paintBuild() {
+    if (!hasDoc) return;
+    const tag = document.getElementById("pm-build");
+    if (!tag) return;
+    const meta = document.querySelector('meta[name="apex-build"]');
+    const build = meta && meta.content;
+    tag.textContent = build ? ("build " + build) : "build unknown";
+  }
+
   function initUI() {
     wireRows();
     paintSummary();
+    paintBuild();
     const pm = hasDoc ? document.getElementById("pausemenu") : null;
     if (!pm || pm._pauseOptsWired) return;
     pm._pauseOptsWired = true;

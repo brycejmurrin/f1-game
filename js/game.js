@@ -3032,6 +3032,7 @@ async function startRaceBody() {
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
   dbgCam = null;              // fresh race — drop any leftover debug free-cam
+  replayBuf.onRaceStart(cars); // solo instant-replay ring (js/camera/replay-buf.js)
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
@@ -3200,6 +3201,7 @@ function netOrder(order) {
 }
 
 function endRace(forcedOrder) {
+  if (replayBuf.isScrubbing()) return;   // scrub must not settle career / open results
   Ghost.flush();
   try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
@@ -3776,6 +3778,7 @@ const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
+const replayBuf = ReplayBuf.create(G);    // solo 20 s instant-replay ring (js/camera/replay-buf.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -4334,6 +4337,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 
 function quitToMenu() {
   Ghost.flush();
+  replayBuf.clear();   // drop the live ring — next race reallocates
   cancelIntro();
   sessionEntry.cancel();
   qualiSheet.close();
@@ -8694,17 +8698,19 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
-    if (setupPreviewOn || ((state === "race" || state === "count") &&
+    if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
         (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode))) {   // photoMode: the FREE CAMERA panel docks with no tuner open
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20));   // fly-cam integrates before the held frame
+      replayBuf.tickScrub(Math.min(dt, 1 / 20));             // no-op unless scrubbing
       render(Math.min(dt, 1 / 20));
     }
     return;
   }
+  replayBuf.onTick(raceT, cars, state);   // 30 Hz solo ring — never under netplay / scrub
   if (announceT > 0) {
     announceT -= dt;
     if (_annFloor > 0) _annFloor -= dt;
@@ -9374,6 +9380,7 @@ function setPaused(p, why) {
   if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   paused = p;
+  replayBuf.onPause(!!p);   // show REPLAY when paused; restore live field on resume
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
     // closeSettings disarms key/pad slots AND the wheel wizard (beginAxisCapture
@@ -9432,23 +9439,8 @@ $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) r
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
-// BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
-// own, so a stale shell (or a service worker serving a cached generation) can run
-// old JS with nothing on screen to say so — during one camera-bug hunt a fix was
-// deployed three times while the reporter kept testing the previous build, and
-// neither side could tell. Read from the stylesheet's ?v=, which is the build
-// whose assets ACTUALLY loaded, rather than a constant compiled into the markup:
-// a string in the HTML would go stale with the HTML and confirm the wrong thing.
-{
-  const tag = $("pm-build");
-  if (tag) {
-    const meta = document.querySelector('meta[name="apex-build"]');
-    const build = meta && meta.content;
-    tag.textContent = build ? `build ${build}` : "build unknown";
-  }
-}
-
 // STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
+// (pause-card build stamp lives in PauseOpts.paintBuild — extracted with ReplayBuf.)
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
   if (STEER_MODES.indexOf(mode) < 0) mode = "buttons";

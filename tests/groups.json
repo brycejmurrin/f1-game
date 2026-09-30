@@ -393,6 +393,8 @@
     "// that stands between a dispatch input and a shell, and the run pick. Pure, instant.",
     "tests/unit/remote-group.test.mjs",
     "tests/unit/renderer-soft-lifecycle.test.mjs",
+    "// Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.",
+    "tests/unit/replay-buf.test.mjs",
     "tests/unit/report-server.test.mjs",
     "tests/unit/rival-audio.test.mjs",
     "// The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit",
