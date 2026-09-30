@@ -132,7 +132,20 @@ test("--github-output writes any_node / driving / slices", () => {
   const text = fs.readFileSync(ghOut, "utf8");
   assert.match(text, /^any_node=true$/m);
   assert.match(text, /^driving=false$/m);
-  assert.match(text, /^slices=\[\{"slice":"vm-a1"\},\{"slice":"vm-a2"\}\]$/m);
+  // Every NODE_SLICE is listed so branch-protection check names always report;
+  // scenery needs only vm-a1/vm-a2 (needed=true), the rest needed=false.
+  const slicesLine = text.split("\n").find((l) => l.startsWith("slices="));
+  assert.ok(slicesLine, "slices= line");
+  const matrix = JSON.parse(slicesLine.slice("slices=".length));
+  assert.deepEqual(matrix.map((x) => x.slice), NODE_SLICES);
+  assert.deepEqual(
+    Object.fromEntries(matrix.map((x) => [x.slice, x.needed])),
+    {
+      "vm-a1": "true", "vm-a2": "true",
+      "vm-b1": "false", "vm-b2": "false",
+      page: "false", slow: "false",
+    },
+  );
 
   // Unset-env path: stdout carries the same lines.
   const local = execFileSync(
@@ -143,5 +156,10 @@ test("--github-output writes any_node / driving / slices", () => {
     ],
     { encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: "" } },
   );
-  assert.match(local, /^slices=\[\{"slice":"vm-a1"\},\{"slice":"vm-a2"\}\]$/m);
+  const localSlices = local.split("\n").find((l) => l.startsWith("slices="));
+  assert.ok(localSlices);
+  assert.deepEqual(
+    JSON.parse(localSlices.slice("slices=".length)).map((x) => x.slice),
+    NODE_SLICES,
+  );
 });

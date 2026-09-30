@@ -261,15 +261,26 @@ export function costs(selected) {
   };
 }
 
-/** Matrix rows + flags for ci.yml GITHUB_OUTPUT. */
+/** Matrix rows + flags for ci.yml GITHUB_OUTPUT.
+ *
+ * The matrix ALWAYS lists every NODE_SLICE. Branch protection requires the
+ * fixed check names `Pure-node unit suites (<slice>)` (ci.yml comment on the
+ * matrix); emitting a subset leaves those names unreported and every such PR
+ * stays BLOCKED even when the aggregator `CI` is green (measured on #454
+ * 35e66e231: vm-b1/b2/page/slow ran, vm-a1/a2 never appeared). Unneeded rows
+ * carry `needed:"false"` so the job exits 0 without work.
+ */
 export function ciOutputs(result) {
   const selected = [...result.slices.keys()];
-  const node = NODE_SLICES.filter((s) => result.slices.has(s));
+  const nodeNeeded = NODE_SLICES.filter((s) => result.slices.has(s));
   return {
     reason: result.reason,
-    any_node: node.length > 0 ? "true" : "false",
+    any_node: nodeNeeded.length > 0 ? "true" : "false",
     driving: result.slices.has("driving-model") ? "true" : "false",
-    slices: node.map((slice) => ({ slice })),
+    slices: NODE_SLICES.map((slice) => ({
+      slice,
+      needed: result.slices.has(slice) ? "true" : "false",
+    })),
     selected,
     skipped: SLICES.filter((s) => !result.slices.has(s)),
   };

@@ -164,7 +164,7 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // failure and land on the menu rather than raise the global error overlay.
   assert.match(open, /\(e\) => \{[^}]*qualiSheet\.close\(\); quitToMenu\(\); \}\)/,
     "entry recovery must close the sheet and return to the menu");
-  assert.match(open, /\.catch\(\(\) => \{\}\)/,
+  assert.match(open, /\.catch\(\(e\) => Log\.debug\("game", "openQuali rejected/,
     "menu callers fire and forget, so the wrapper must observe rejection");
   assert.match(commit, /if \(fresh\) quali\.simulate\(0\); else quali\.begin\(\)/);
   assert.match(QUALI_NET, /openQuali\(true, done \|\| null\)/);   // fresh sim, and the gate handed in
@@ -215,8 +215,8 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // Scoped to the function each line is about: over all of game.js the lazy
   // match ran 244k characters into quitToMenu's copy, so deleting the closers
   // from setPaused(false) still passed (testing-gap audit 2026-09-29).
-  assert.match(fnSource(GAME, "function setPaused(p)"), /if \(!p\) \{\s*closeLightTuner\(false\); closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
-  assert.match(fnSource(GAME, "function setPaused(p)"), /closeSettings\(\)/,
+  assert.match(fnSource(GAME, "function setPaused(p, why)"), /if \(!p\) \{\s*closeLightTuner\(false\); closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
+  assert.match(fnSource(GAME, "function setPaused(p, why)"), /closeSettings\(\)/,
     "setPaused(false) must closeSettings so pad axis capture cannot survive resume");
   assert.match(fnSource(GAME, "function quitToMenu()"), /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);

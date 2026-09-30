@@ -165,3 +165,25 @@ test("a stored display code is never overwritten from the shipped roster on load
     season: { round: 1, pts: { AAA: 25 }, teamPts: {}, driverCodes: {} } });
   assert.equal(fresh.season.driverCodes["haas:0"], "AAA", "a missing code is still filled from the roster");
 });
+
+test("each rung climbed is logged once; a newer-build or junk save warns; a missing one is silent", () => {
+  const lines = [];
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, Number, String, isFinite, console,
+    Teams: { LIST: [{ id: "haas", drivers: [{ code: "AAA" }, { code: "BBB" }] }] },
+    Log: { info: (ns, m) => lines.push(["info", ns, m]), warn: (ns, m) => lines.push(["warn", ns, m]) },
+  });
+  seedSaveMigrate(ctx);
+  const SM = vm.runInContext("SaveMigrate", ctx);
+  SM.migrateCareer(RUNG_INPUTS.v0());
+  assert.deepEqual(lines.map((l) => l[2]),
+    Array.from({ length: SM.CAREER_V }, (_, v) => `Career save migrated v${v}->v${v + 1}`));
+  lines.length = 0;
+  SM.migrateCareer({ v: SM.CAREER_V, flavour: "driver" });
+  assert.deepEqual(lines, [], "an up-to-date save climbs nothing and says nothing");
+  SM.migrateCareer({ v: SM.CAREER_V + 5 });
+  SM.migrateCareer([1]);
+  SM.migrateCareer(null);
+  assert.deepEqual(lines.map((l) => l[0]), ["warn", "warn"], "newer build + array warn; a missing save (null) is silent");
+  assert.ok(lines.every((l) => l[1] === "game"));
+});
