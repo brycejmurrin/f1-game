@@ -23,6 +23,7 @@ const RealRace = (function () {
   const RAIN_ARC_S = 60;    // s the sky takes to turn when the real race's rain starts or stops
   const FEED_PER_LAP = 4;   // narration lines a lap at most (lap 1 at Baku held 18 passes)
   const HANDOVER_S = 4;     // a mid-race jump-in: the car is driven for you this long at racing speed before the wheel is yours
+  const GO_HOLD_S = 1;      // …and the on-screen GO stays up this long once it is
   const V_DROP_MIN = 0.3;   // of vTop(): the least a car is ever dropped in at (a hairpin), the most is vTop() itself
   const REAL_VMAX = 95;     // m/s: a real top speed; the real trace's speed scales onto vTop() through it
 
@@ -372,6 +373,7 @@ const RealRace = (function () {
     let rainWant = null;  // the weather the script last asked for (mid-race rain)
     let fed = null;       // the narration lines already said (feed keys)
     let handover = null;  // {c, t, said}: the seat car driven by the AI until t runs out, then the player's
+    let goHold = 0, plateUp = false;   // the hand-over's on-screen count: GO's remaining seconds, and whether the plate is up at all
     const replay = typeof RealReplay !== "undefined" ? RealReplay.create(G) : null;   // WATCH / HIGHLIGHTS: the field posed from real positions
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // a reusable Tracks.sample slot
 
@@ -466,6 +468,8 @@ const RealRace = (function () {
     function disarm() {
       if (heldLevel && G.holdCaution) G.holdCaution(0);
       heldLevel = 0; armed = false; placed = false; raceT0 = 0; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null; handover = null;
+      if (plateUp) count(null);
+      goHold = 0;
       if (replay) replay.stop();
     }
 
@@ -554,7 +558,7 @@ const RealRace = (function () {
         else placed = true;
       }
       if (G.announce) G.announce((active.watch ? (active.reel ? "HIGHLIGHTS · " : "REAL REPLAY · ") : "REAL RACE · ") + String(script.name || script.circuit || "").toUpperCase() + (active.startLap > 1 && !active.reel ? " · LAP " + active.startLap : ""), 2.5, "info");
-      if (handover && G.announce) G.announce("ROLLING · YOU HAVE CONTROL IN " + HANDOVER_S, 1.2, "race");
+      if (handover) count(HANDOVER_S);   // the count is ON SCREEN from the first frame (tickHandover)
       Log.info("game", "RealRace.arm field=" + field.size + " mapped=" + byId.size + " ref=" + refNum + " from=" + active.startLap);
     }
 
@@ -739,16 +743,21 @@ const RealRace = (function () {
       for (const l of lines.slice(0, FEED_PER_LAP)) G.announce("L" + rl + " · " + l.text, 2.5, "race");
     }
 
-    /** The rolling hand-over: the seat car is the AI's for HANDOVER_S, with a spoken count, then the player's. */
+    function count(v) { plateUp = v != null; if (G.handoverCount) G.handoverCount(v); }
+
+    /** The rolling hand-over: the seat car is the AI's for HANDOVER_S, counted down big on screen
+     *  (G.handoverCount — the queued radio cards ran late behind the REAL RACE banner), then the player's. */
     function tickHandover(dt) {
+      if (goHold > 0 && (goHold -= dt) <= 0) count(null);   // GO stays up a beat, then the plate goes
       if (!handover) return;
       handover.t -= dt;
       const left = Math.ceil(handover.t);
-      if (left < handover.said && left > 0 && G.announce) { handover.said = left; G.announce("YOU HAVE CONTROL IN " + left, 0.9, "race"); }
+      if (left < handover.said && left > 0) { handover.said = left; count(left); }
       if (handover.t > 0) return;
       const c = handover.c;
       G.setCarRole(c, true, true);
       c.launch = null; c.launchOn = false;
+      count("GO"); goHold = GO_HOLD_S;
       if (G.announce) G.announce("YOU HAVE CONTROL", 1.5, "race");
       Log.info("game", "RealRace.handover " + c.code + " lap=" + c.lap + " speed=" + (c.speed || 0).toFixed(1));
       handover = null;
