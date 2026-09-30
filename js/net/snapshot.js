@@ -77,12 +77,21 @@ const NetSnapshot = (function () {
     return new Uint8Array(buf);
   }
 
+  // Packets arrive at the publish rate, so a bad peer would flood: log the
+  // first drop per reason, then every 256th.
+  const dropCounts = Object.create(null);
+  function dropped(reason) {
+    const n = (dropCounts[reason] = (dropCounts[reason] || 0) + 1);
+    if (n === 1 || n % 256 === 0) Log.debug("net", "snapshot dropped (" + reason + "), count " + n);
+    return null;
+  }
+
   function decodeSnapshot(bytes) {
     const dv = toView(bytes);
-    if (!dv || dv.byteLength < SNAP_HEADER) return null;
-    if (dv.getUint8(0) !== TYPE_SNAPSHOT) return null;
+    if (!dv || dv.byteLength < SNAP_HEADER) return dropped("short or non-binary");
+    if (dv.getUint8(0) !== TYPE_SNAPSHOT) return dropped("type " + dv.getUint8(0));
     const n = dv.getUint8(5);
-    if (dv.byteLength < SNAP_HEADER + n * CAR_BYTES) return null;
+    if (dv.byteLength < SNAP_HEADER + n * CAR_BYTES) return dropped("truncated car list");
     const cars = [];
     let off = SNAP_HEADER;
     for (let i = 0; i < n; i++) { cars.push(readCar(dv, off)); off += CAR_BYTES; }
@@ -132,7 +141,7 @@ const NetSnapshot = (function () {
 
     function push(t, st, arrivalMs) {
       if (!Number.isFinite(t)) return false;
-      if (Number.isFinite(arrivalMs) && t - arrivalMs > maxAheadMs) return false;
+      if (Number.isFinite(arrivalMs) && t - arrivalMs > maxAheadMs) { dropped("tick ahead of clock"); return false; }
       if (opts.adaptive && Number.isFinite(arrivalMs) && (lastTick == null || t > lastTick)) {
         // LAG IS LATENCY, NOT ONLY JITTER. sample() aims at `now − delayMs` on
         // the synced clock, so a packet interpolates only if it arrived at

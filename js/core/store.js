@@ -174,7 +174,7 @@ const GameStore = (function () {
           const k = localStorage.key(i);
           if (k && k.indexOf("apex26.api.") === 0) { localStorage.removeItem(k); freed++; }
         }
-      } catch (_) { /* storage unreadable: nothing to free */ }
+      } catch (err) { Log.warn("game", "quota recovery could not scan storage:", err && err.message); }
       if (!freed) throw e;
       localStorage.setItem(key, str);
     }

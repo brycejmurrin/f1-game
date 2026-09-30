@@ -86,6 +86,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |
 | **check/extract-module.mjs** | Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`). | slim-bloat |
 | **check/font-digits.py** | Measure every shipped font's DIGIT ADVANCES and OpenType figure features | — |
+| **check/merge-hygiene.mjs** | Keep conflict-prone JSON lists one-entry-per-line and stably sorted: ratchets.json + groups.json; `--check` (default)… | check-changes |
 | **check/occlusion-estimate.mjs** | How much would occlusion culling save? Exact software visibility per 72 m cell, no GPU. | webgl-debug |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
@@ -323,6 +324,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **check/reject-lint.mjs** | An unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
+| **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha: a completed, successful ci.yml or pages.yml… |
 | **ci/base-verdict.sh** | Whose red is it? One line naming the last deploy-branch CI verdict below this head, with its failed job names. |
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci/ci-pr-base.sh** | The base a pull_request checkout must diff against: the test commit's FIRST PARENT (the base tip GitHub actually… |
