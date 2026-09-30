@@ -143,7 +143,7 @@ export function assertFlapSig(src) {
   if (missing.length)
     throw new Error("flapSig does not hash " + missing.join(",") +
       " — two aero recipes can share a cached flap solve, which this sweep " +
-      "would report as a false INVISIBLE. Add them to flapSig (js/car/car3d.js:1003).");
+      "would report as a false INVISIBLE. Add them to `flapSig` in js/car/car3d.js.");
   return { hashed: [...hashed].sort(), read: [...read].sort() };
 }
 
