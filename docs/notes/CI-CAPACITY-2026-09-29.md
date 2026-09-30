@@ -90,6 +90,11 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   `circuitsTouched()`. Measured: the six suites scoped to one circuit run in
   42 s; unscoped they are unchanged (pit-complex stays whole — its mouth test
   counts circuits across the roster).
+- **The selected gate could not be a required check** (its matrix names vary
+  per run), which is how #491 merged with that gate red on the merged tree
+  and left the tip red. `selected-verdict` — `Selected specs (verdict)`, one
+  fixed name, `always()` — reads `select`/`selected` the way poke-train does,
+  so branch protection can require it. Add it to the rule's required checks.
 - ~~**`vm-a` is not narrowed on PRs.**~~ Done 2026-09-30: `tools/ci/node-plan.mjs`
   runs inside the node-suites job on PULL REQUESTS only (its own `git diff`
   against the PR base, no `needs:`), skips `game-vm-a`, `game-vm-b`, `vm-page`
