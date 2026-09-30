@@ -433,6 +433,12 @@ jobs:
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
     if: ${{ inputs.fast_tier_run == '' }}
+    # actions:read for base-green.sh (the plan step asks whether the previous
+    # tip was gated green). A job that names permissions gets ONLY what it
+    # names, hence contents too.
+    permissions:
+      contents: read
+      actions: read
     # THREE RUNNERS, NOT ONE (2026-09-16). This job ran its scripts one after
     # another and measured 11.3 min on 40 of 40 runs — the floor of the fast
     # tier, hence of every deploy push, and never shortened by anything. The
@@ -503,23 +509,47 @@ jobs:
       # EVERYTHING, exactly as before: a merge is gated whole before the train
       # ships it, so the `fast_tier_run` reuse contract is unchanged. Anything
       # the planner cannot route runs everything (tools/ci/node-plan.mjs).
+      # THE DELTA GATE ON A DEPLOY PUSH AND THE TRAIN (2026-09-30). The push
+      # that merges a circuit-only PR rebuilt the whole fleet the PR had just
+      # scoped. The tip is gated whole INDUCTIVELY: the previous tip passed
+      # its gate (tools/ci/base-green.sh asks GitHub — `green` only, never
+      # `unknown`) and this push's diff against it is gated for what it
+      # touched. A Pages call's before_sha is the LIVE commit, which passed
+      # the full gate by definition, so the train needs no lookup. A red or
+      # unknown previous tip, a first push, a force push or a nightly run
+      # everything, as before.
       - name: Plan the slices for this diff
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+          LIVE_BEFORE: ${{ inputs.before_sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -u
           PLAN="${RUNNER_TEMP:-.}/node-plan.sh"
-          # The test commit's first parent, not the event's base.sha, which
-          # lags one sync behind it (tools/ci/ci-pr-base.sh).
-          BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
-          if [ "$EVENT" = "pull_request" ] && [ -n "${BASE:-}" ] && git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-            echo "plan base: $BASE (event base.sha ${PR_BASE:-none})"
+          BASE=""; WHY=""
+          if [ "$CALLED" = "true" ]; then
+            BASE="${LIVE_BEFORE:-}"; WHY="a Pages call: the live commit is the base"
+          elif [ "$EVENT" = "pull_request" ]; then
+            # The test commit's first parent, not the event's base.sha, which
+            # lags one sync behind it (tools/ci/ci-pr-base.sh).
+            BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"; WHY="a pull request (event base.sha ${PR_BASE:-none})"
+          elif [ "$EVENT" = "push" ]; then
+            if [ "$(bash tools/ci/base-green.sh "${PUSH_BEFORE:-}")" = green ]; then
+              BASE="${PUSH_BEFORE:-}"; WHY="a deploy push whose previous tip was gated green"
+            else
+              echo "the previous tip ${PUSH_BEFORE:-?} is not known green: every script runs"
+            fi
+          fi
+          if [ -n "${BASE:-}" ] && git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "plan base: $BASE ($WHY)"
             node tools/ci/node-plan.mjs --since "$BASE" --sh > "$PLAN"
             node tools/ci/node-plan.mjs --since "$BASE"
           else
             node tools/ci/node-plan.mjs --all --sh > "$PLAN"
-            echo "not a pull request (or no base): every script runs"
+            echo "no gated base for this $EVENT: every script runs"
           fi
       - name: Pure-node unit suites
         run: |
@@ -835,12 +865,18 @@ jobs:
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches the fleet build's inputs (track engine, circuit data, tools/track|lib, a TRACK_VM module) or a sweep suite"
-            # THE CIRCUIT LANE (2026-09-30): on a pull request whose every changed
-            # path is one circuit's own files, the sweeps run for that circuit
+            # THE CIRCUIT LANE (2026-09-30): when every changed path is one
+            # circuit's own files, the sweeps run for that circuit
             # (APEX_CIRCUITS, the contract the browser gate already uses) — 52
-            # builds became one on the scenery waves. Not on a push or the train
-            # (the tip is gated whole), and never when the scope cannot be read.
-            if [ "$EVENT" = pull_request ]; then
+            # builds became one on the scenery waves. On a pull request, and on
+            # the train (before_sha is the LIVE commit, which passed the full
+            # gate, so live..tip is exactly the delta to gate — the same
+            # argument the node plan makes with base-green.sh on a deploy
+            # push; this job sits out that push, see `if:`). Never when the
+            # scope cannot be read.
+            SCOPE_OK=false
+            if [ "$CALLED" = true ] || [ "$EVENT" = pull_request ]; then SCOPE_OK=true; fi
+            if [ "$SCOPE_OK" = true ]; then
               SCOPE_FILE="${RUNNER_TEMP:-.}/changed-files.txt"
               printf '%s\n' "$CHANGED" > "$SCOPE_FILE"
               IDS="$(node -e 'import("./tools/ci/select-specs.mjs").then((m) => { const fs = require("fs"); const ch = fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean); const c = m.circuitsTouched(ch, process.argv[2]); process.stdout.write(c.scoped ? c.ids.join(",") : ""); }).catch(() => process.stdout.write(""));' "$SCOPE_FILE" "$BEFORE")" || IDS=""
