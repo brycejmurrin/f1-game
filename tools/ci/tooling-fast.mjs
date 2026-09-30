@@ -126,6 +126,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ci-watch.test.mjs",
   "tests/unit/circuit-axis.test.mjs",
   "tests/unit/circuit-def-fields.test.mjs",
+  "tests/unit/circuit-scope.test.mjs",
   // ...and the same question one level down: a def may name a tree species or
   // a grandstand livery the engine has no entry for, and every lookup has a
   // fallback, so the circuit renders as something else in silence. ~0.2 s.
