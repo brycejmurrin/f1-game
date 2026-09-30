@@ -62,7 +62,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
    wall clock here); kill a busy Chrome of yours by a listed PID, never `pkill -f`
    (it matches your own shell; blocked). The MCP servers at 0 % are the harness's.
 8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3) and for a live `playwright test` first; re-run alone only when the verdict matters. On CI, `cancelled` with zero failures is a timeout until proven otherwise — EXCEPT the designed one: a draft PR's run and its `ready_for_review` run share a group on purpose, so marking it ready cancels the fast run on the same `head_sha` seconds in (before 2026-09-24 a branch push and its PR run did). A live sibling on that SHA means dedupe, not a red.
-9. Stopping is allowed: a pushed change that names its unverified groups beats an hour of SwiftShader. Never widen a tolerance to make a spec pass; a `waitForFunction` on a rendering page needs `{ polling: 100 }` (`tools/check/wait-polling-lint.mjs`). A pass that needed a retry is a red: name the flaky test in the PR like a not-run group and fix or quarantine it by name in `tests/data/flaky-quarantine.json` (the `@quarantine` ledger — see §Flaky tests); `APEX_FAIL_ON_FLAKY=1` makes the runner fail it. Never skip a test to get green.
+9. Stopping is allowed: a pushed change that names its unverified groups beats an hour of SwiftShader. Never widen a tolerance to make a spec pass; a `waitForFunction` on a rendering page needs `{ polling: 100 }` (`tools/check/wait-polling-lint.mjs`). A pass that needed a retry is a red: name the flaky test in the PR like a not-run group and fix or quarantine it by name in `tests/data/flaky-quarantine.json` (see §Concurrent PRs); `APEX_FAIL_ON_FLAKY=1` makes the runner fail it. Never skip a test to get green.
 10. Never hand a subagent a browser run ("report it unverified"; the Bash hook
     blocks it inside one). A worktree starts STALE unless `.claude/settings.json`
     sets `worktree.baseRef: "head"`: `git checkout -B <branch> <session SHA>` first.
@@ -171,7 +171,7 @@ Work happens on a `claude/<topic>` branch. The deploy branch is
 (https://brycejmurrin.github.io/f1-game/). Other sessions develop directly on
 it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
 force-push; they also all see one red at once, so before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (recent pushes per branch, who touched the failing paths, live claims; `--claim "<text>"` before you start, `--release` after) and list the host's live sessions when it can: a fix already pushed, a claim, or a session already on it means stand down (`docs/notes/SHARED-BRANCH-COORDINATION.md` — three sessions fixed one bug on 2026-09-18, one revert). SYNC ONLY WHEN YOU MUST (2026-09-30): branch protection does not require an up-to-date branch, and every re-sync buys a full PR run (they were ~80 % of the deploy branch's commits on 2026-09-29) — catch a branch up only when GitHub reports a conflict or a required check is red on the tip. Then catch it up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
-merge (ratchets + generated files conflict; it cures both, but leaves you ON `sync-pr-<branch>` and pushes nothing without `--push` — recovery in check-changes). Do **not** add auto-update-branch bots or a require-up-to-date protection rule. `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
+merge (ratchets + generated files conflict; it cures both, but leaves you ON `sync-pr-<branch>` and pushes nothing without `--push` — recovery in check-changes). No auto-update-branch bots and no require-up-to-date protection rule. `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
 `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push; `--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
 minutes (your verdict) and, if green, pokes `pages.yml`, which gates the tip
@@ -179,37 +179,16 @@ once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
 "Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).
 
 ### Concurrent PRs
-Several agents open PRs into the ship branch at once. Keep the merge train
-honest (`docs/TESTING.md` §Merge train) and avoid thrashing shared files:
-
-- Agents open **DRAFT** PRs and mark ready only when the change is final.
-  Keep about **six or fewer ready** PRs open at a time; batch small ones.
-- Own notes file per PR: `docs/notes/<topic>.md` (session log stays in the
-  PR body — this file holds durable design evidence for the topic).
-- Sync once with `node tools/ci/sync-pr.mjs <branch>` then `--push` **before
-  the final CI run** (in addition to SYNC ONLY WHEN YOU MUST for conflicts /
-  tip reds). `tools/ci/behind-ship.mjs` warns when a PR head is >10 commits
-  behind ship; it never fails the job.
-- Sorted shared files (`tests/data/ratchets.json`, `tests/groups.json`): use
-  the normalize command from the merge-hygiene PR (#484) when merged —
-  `--fix` on those JSON lists, then `node tools/gen/gen-test-groups.mjs`.
-  Do not hand-reshape those lists into conflict hunks.
-- No ratchet raises without the sanctioned route (`tools/check/ratchets.mjs
-  --update` / the commit hook's ≤40-line absorb). Never loosen ratchets or
-  tests to get green.
-- Report the **head SHA** and check counts; **do not merge** the PR from the
-  agent. On an expired / failed token, **stop and report** — do not invent a
-  workaround.
-
-### Flaky tests
-Playwright retries default to **1 in CI** when unset (`playwright.config.js`;
-a job may set `--retries=0`, as the change-aware `selected` gate does). A pass
-that needed a retry is still a red under `APEX_FAIL_ON_FLAKY=1` unless the
-spec is listed in `tests/data/flaky-quarantine.json` — the one `@quarantine`
-ledger. Quarantined specs still run and print flakes; they are excluded from
-blocking required runs. Agents fix real failures; re-run a failed CI job at
-most once and only for timeout / infra errors; never skip a test to get green.
-Leaving quarantine: delete the row in the same commit as the fix.
+Open DRAFT PRs; mark ready only when final; keep ~6 or fewer ready. Own notes
+at `docs/notes/<topic>.md`. Sync once with `sync-pr.mjs` before the final CI
+run (`behind-ship.mjs` warns over 10 commits behind; never fails). Normalize
+sorted shared JSON via merge-hygiene #484 when merged. No unsanctioned ratchet
+raises. Report the head SHA; do not merge; on token failure stop and report.
+Full protocol: `docs/TESTING.md` §Merge train / §Flaky tests and
+`docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md`. Flakes: CI retries
+default to 1; quarantine lives in `tests/data/flaky-quarantine.json` only;
+fix real failures; re-run a failed job at most once for timeout/infra; never
+skip a test to get green.
 
 ### Watching CI and Pages
-`node tools/ci/ci-watch.mjs [--sha S] [--pages] [--once]` is the watcher (rule 12): it polls by `head_sha`, reads the newest run per workflow (so rule 8's dedupe is not a red), and says `= ci none` for a push that starts no run — docs-only, or a topic branch with no PR yet (ci.yml runs on push for the deploy branch only; a DRAFT PR gets the fast tier, a ready one the full tier). Do not conflate PR CI, ship-push CI, and Pages (`pages.yml` `295002043`). Poll by `head_sha`; a green PR does not prove Pages. On red, name the exact test, assertion and lane. After every push, list **all** check runs on the head (including ready-state jobs), read the log of every failed job, fix at the root, and never report done with a red or pending check. Procedure and diagnosis notes: `docs/notes/` (SHARED-BRANCH-COORDINATION, deploy-research). Claim live only after Pages and `version.json` confirm. `deploy.mjs --train` prints the branch's last ci/pages conclusions AND the nightly rota BY JOB (a `cancelled` run hides a FAILED one — that is how a red sat unread for five days); the rota is the only scheduled coverage for the 61 specs `select-specs` never picks.
+`node tools/ci/ci-watch.mjs [--sha S] [--pages] [--once]` is the watcher (rule 12): it polls by `head_sha`, reads the newest run per workflow (so rule 8's dedupe is not a red), and says `= ci none` for a push that starts no run — docs-only, or a topic branch with no PR yet (ci.yml runs on push for the deploy branch only; a DRAFT PR gets the fast tier, a ready one the full tier). Do not conflate PR CI, ship-push CI, and Pages (`pages.yml` `295002043`). Poll by `head_sha`; a green PR does not prove Pages. On red, name the exact test, assertion and lane. After every push list all check runs on the head (incl. ready-state jobs), read every failed log, fix at the root; never report done with a red or pending check. Procedure and diagnosis notes: `docs/notes/` (SHARED-BRANCH-COORDINATION, deploy-research). Claim live only after Pages and `version.json` confirm. `deploy.mjs --train` prints the branch's last ci/pages conclusions AND the nightly rota BY JOB (a `cancelled` run hides a FAILED one — that is how a red sat unread for five days); the rota is the only scheduled coverage for the 61 specs `select-specs` never picks.
