@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
-  LADDER_DOCS, figureOnlyConflict, takeOurs, REGEN_MESSAGE,
+  REGEN_MESSAGE,
   sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
@@ -172,45 +172,28 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.deepEqual(parts.ratchetF, ["tests/data/ratchets.json"]);
 });
 
-test("gate-ladder docs cure only when every conflict hunk differs in digits alone", async () => {
-  // Every unit file anyone adds rewrites "N of M" in these docs, so every open
-  // PR conflicted there within the hour (hand-resolved twice on 2026-09-24,
-  // identically, by regenerating). The rule must still refuse prose.
-  const hunk = (a, b) => `<<<<<<< HEAD\n${a}\n=======\n${b}\n>>>>>>> origin/x\n`;
-  const figures = "intro\n" + hunk("`tooling-fast` (242 of 321 unit files)", "`tooling-fast` (244 of 323 unit files)") + "tail\n";
-  const prose = "intro\n" + hunk("`tooling-fast` (242 of 321 unit files)", "`tooling-fast` (244 of 323 files, see note)") + "tail\n";
-  const mixed = figures + hunk("rule 4 says wait", "rule 4 says poll");
-  assert.equal(figureOnlyConflict(figures), true);
-  assert.equal(figureOnlyConflict(prose), false, "a hunk that differs in a word is a real disagreement");
-  assert.equal(figureOnlyConflict(mixed), false, "one prose hunk makes the whole file a real conflict");
-  assert.equal(figureOnlyConflict("no markers"), false, "nothing conflicted is not a cure");
-  assert.equal(takeOurs(figures), "intro\n`tooling-fast` (242 of 321 unit files)\ntail\n");
-
-  const text = { "AGENTS.md": figures, "docs/TESTING.md": prose, "js/game.js": figures };
-  const cure = (list) => cureableConflicts(list, (f) => text[f]).cureable;
-  assert.equal(cure(["AGENTS.md"]), true);
-  assert.equal(cure(["AGENTS.md", "package.json"]), true, "with another derived file");
-  assert.equal(cure(["AGENTS.md", "docs/TESTING.md"]), false, "one prose hunk stops the merge");
-  assert.equal(cure(["js/game.js"]), false, "digits-only is not enough outside the ladder docs");
-  assert.equal(cureableConflicts(["AGENTS.md"]).cureable, false, "no reader, no cure: old callers unchanged");
-
-  const { TARGET, SECONDARY } = await import("../../tools/gen/gen-ladder-figures.mjs");
-  assert.deepEqual([...LADDER_DOCS].sort(), [TARGET, ...SECONDARY].sort(),
-    "LADDER_DOCS must name exactly the docs gen-ladder-figures rewrites");
+test("prose docs are never cured: no doc carries generated ladder digits any more", () => {
+  // Until 2026-09-30 a conflict in AGENTS.md / TESTING.md / the ladder note was
+  // cured when every hunk differed in digits alone (the "N of M unit files"
+  // figures). Those figures left the tree (gen-ladder-figures.mjs only reports),
+  // so a conflict in any of these docs is prose someone wrote, and stops.
+  for (const doc of ["AGENTS.md", "docs/TESTING.md", "docs/notes/PREPUSH-GATE-LADDER.md", ".claude/agents/verify-agent.md", "README.md"])
+    assert.equal(cureableConflicts([doc]).cureable, false, `${doc} is a real conflict`);
+  assert.equal(cureableConflicts(["AGENTS.md", "package.json"]).cureable, false, "one prose doc stops the merge");
 });
 
-/* THE CLEAN MERGE THAT IS STILL STALE (2026-09-24: four red PRs in a day).
- * Both sides add one unit file and regenerate, so both rewrite the ladder to
- * the SAME "N of M+1"; git merges the identical hunks without a conflict, the
- * union holds M+2 files, and nothing above ever ran because nothing conflicted.
- * This builds exactly that history in a throwaway copy of the tree (text files
- * only — no assets, no vendor) and runs the REAL mergeDeployTip() from the
- * copy's own deploy.mjs, so ROOT, `npm run gen` and git all act on the copy. */
-test("a CLEAN merge whose base added a unit file ends with the ladder figures regenerated", () => {
+/* TWO PRs THAT EACH ADD A UNIT FILE (2026-09-30). This used to be the
+ * clean-but-stale merge: both sides rewrote the committed ladder figures to the
+ * same "N of M+1", git merged the identical hunks, and the union was a file
+ * short until mergeDeployTip() re-ran the generators. The figures are not
+ * committed any more, so the same history merges clean AND consistent: nothing
+ * to regenerate, `npm run gen:check` green on the bare merge. Built in a
+ * throwaway copy of the tree (text files only) and merged with the REAL
+ * mergeDeployTip() from the copy's own deploy.mjs. */
+test("two sides that each add a unit file merge clean and leave nothing stale", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-regen-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
-  const ladderCheck = () => spawnSync(process.execPath, ["tools/gen/gen-ladder-figures.mjs", "--check"],
-    { cwd: dir, encoding: "utf8" });
+  const genCheck = () => spawnSync("npm", ["run", "-s", "gen:check"], { cwd: dir, encoding: "utf8" });
   try {
     const listed = execFileSync("git", ["ls-files", "-co", "--exclude-standard"], { cwd: ROOT, encoding: "utf8" })
       .split("\n").filter(Boolean)
@@ -227,18 +210,10 @@ test("a CLEAN merge whose base added a unit file ends with the ladder figures re
     fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"));
     g("init", "-q", "-b", "base");
     g("config", "user.email", "t@t"); g("config", "user.name", "t");
-    // Regenerate in the COPY before the base commit (2026-09-30): this test is
-    // about the merge, and it went red on the deploy tip whenever the tip's own
-    // committed figures were a file behind — the exact state the merge cure
-    // exists to fix — because the copied tree "must start fresh". It starts
-    // fresh by construction now; docs-integrity owns the repo's own figures.
-    execFileSync(process.execPath, ["tools/gen/gen-ladder-figures.mjs"], { cwd: dir, stdio: "pipe" });
     g("add", "-A"); g("commit", "-qm", "base");
-    assert.equal(ladderCheck().status, 0, "the copied tree must start with fresh figures: " + ladderCheck().stdout);
 
     const addUnit = (name) => {
       fs.writeFileSync(path.join(dir, "tests/unit", name), "// placeholder\n");
-      execFileSync(process.execPath, ["tools/gen/gen-ladder-figures.mjs"], { cwd: dir, stdio: "pipe" });
       g("add", "-A"); g("commit", "-qm", `add ${name}`);
     };
     g("checkout", "-q", "-b", "tip"); addUnit("zz-regen-theirs.test.mjs");
@@ -248,18 +223,12 @@ test("a CLEAN merge whose base added a unit file ends with the ladder figures re
     const out = execFileSync(process.execPath, ["--input-type=module", "-e",
       `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); console.log(m.mergeDeployTip());`],
       { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    assert.match(out, /merged \(clean; regenerated .*AGENTS\.md/, "the clean merge must say what it re-derived");
-
-    const check = ladderCheck();
-    assert.equal(check.status, 0, "figures on the synced branch must match gen-ladder-figures --check:\n" + check.stdout + check.stderr);
-    assert.equal(g("status", "--porcelain"), "", "the regeneration is committed, not left in the tree");
-    assert.equal(g("log", "-1", "--format=%s"), REGEN_MESSAGE);
-    assert.equal(g("log", "-1", "--format=%P", "HEAD~1").split(" ").length, 2, "HEAD~1 is the merge itself");
-
-    // The history really is the clean-but-stale case: the bare merge had no
-    // conflict and its figures were one file short.
-    g("checkout", "-q", "HEAD~1");
-    assert.notEqual(ladderCheck().status, 0, "without the regeneration the clean merge is stale — the case under test");
+    assert.doesNotMatch(out, /AGENTS\.md|TESTING\.md|PREPUSH-GATE-LADDER/, "no ladder doc needed re-deriving: " + out);
+    assert.notEqual(g("log", "-1", "--format=%s"), REGEN_MESSAGE, "nothing to regenerate, so no follow-up commit");
+    assert.equal(g("log", "-1", "--format=%P").split(" ").length, 2, "HEAD is the merge itself");
+    const check = genCheck();
+    assert.equal(check.status, 0, "every generated file is fresh on the bare merge:\n" + check.stdout + check.stderr);
+    assert.equal(g("status", "--porcelain"), "");
   } finally {
     rmTemp(dir);
   }

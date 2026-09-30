@@ -1,44 +1,27 @@
 #!/usr/bin/env node
-// @doc Rewrites the gate-ladder figures (N of M unit files) in three docs from tests/groups.json; --check.
+// @doc Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing.
 // @skill check-changes
 //
-// AGENTS.md rule 3, docs/notes/PREPUSH-GATE-LADDER.md and docs/TESTING.md all
-// quote the ladder as "N of M unit files". tests/unit/docs-integrity.test.mjs
-// pins that phrasing to the generated tooling-fast list and the files on disk,
-// so every added unit file went red until three docs were hand-edited — PR
-// #171 (+6 files) and PR #172 (the pin) were each green alone and the deploy
-// tip was red for half an hour on their union (2026-09-22). The derived
-// figures around the pin ("the other 73", "281 of 296", "the remaining 15")
-// were not pinned at all and drifted on their own. Merge #476 (2026-09-30)
-// did the same on the ship tip: a unit file landed, the figures stayed at
-// 300 of 388 / gate 371, and Structural guards failed until this generator
-// rewrote them to 301 of 389 / gate 372.
+// THE LADDER IS MEASURED, NOT COMMITTED. The rung sizes ("N of M unit files")
+// used to be written into five docs (AGENTS.md, docs/TESTING.md,
+// docs/notes/PREPUSH-GATE-LADDER.md, .claude/agents/verify-agent.md,
+// README.md). Every PR that added a test file changed the same digits on the
+// same lines, so two open PRs ALWAYS conflicted: measured ~100 % same-line
+// conflicts on the ladder docs (docs/notes/MERGE-HYGIENE-2026-09-29.md), and
+// PRs #487 / #519 each needed several base syncs for nothing but those lines.
+// Moving the digits into one file would still conflict; the cure is to keep
+// them out of the tree. The docs now point here, session-start prints the
+// line, and tests/unit/docs-integrity.test.mjs checks the SHAPE (guards <
+// fast < gate <= disk) instead of pinning digits.
 //
-// One generator owns every one of those numbers now:
-//   TARGET     docs/notes/PREPUSH-GATE-LADDER.md — the ladder table lives in a
-//              `<!-- GENERATED: ladder -->` block; registered in targets.mjs.
-//   SECONDARY  AGENTS.md and docs/TESTING.md — the digits inside their prose
-//              are rewritten IN PLACE (no markers, no added lines: AGENTS.md is
-//              held at 200 lines by agent-config.test.mjs) and the files stay
-//              prose for the commit hook's docs-only fast path, which is why
-//              they are not registered as generated targets.
-// Every rewrite must match exactly once and keep the line count, else this
-// throws and writes nothing. `--check` reports each stale doc; `--json` prints
-// the figures. Reads tests/groups.json (not the generated tooling-fast.mjs) so
-// docs-integrity's pin, which reads the other copy, stays an independent check.
-//
-//   node tools/gen/gen-ladder-figures.mjs            # write
-//   node tools/gen/gen-ladder-figures.mjs --check    # exit 1 + STALE lines when a doc drifted
+//   node tools/gen/gen-ladder-figures.mjs            # one line: guards / fast / gate / disk
+//   node tools/gen/gen-ladder-figures.mjs --table    # the markdown table the ladder note used to hold
 //   node tools/gen/gen-ladder-figures.mjs --json
 import fs from "node:fs";
 import path from "node:path";
-import { ROOT, emit, isMain, readRepo, replaceBlock } from "./gen-lib.mjs";
+import { ROOT, isMain } from "./gen-lib.mjs";
 import { loadGroups, filesOnly } from "./gen-test-groups.mjs";
 import { gateNodeSuites } from "../ci/deploy.mjs";
-
-export const TARGET = "docs/notes/PREPUSH-GATE-LADDER.md";
-export const SECONDARY = ["AGENTS.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"];
-export const BLOCK = "ladder";
 
 const UNIT = /\.test\.(mjs|cjs)$/;
 const base = (f) => path.basename(f);
@@ -61,21 +44,19 @@ export function figures(groups = loadGroups()) {
   for (const f of gate) if (!onDisk.has(f)) throw new Error(`the gate names ${f}, which is not under tests/unit/`);
   const guards = ((groups.groups || {})["test:guards"] || {}).files;
   const sweeps = ((groups.groups || {})["test:sweeps"] || {}).files;
-  // ROOT PLAYWRIGHT SPECS. Hand-written in two docs and drifted three times in
-  // one day (119 while the tree held 120), each time caught by a guard AFTER
-  // the edit rather than prevented. It is a directory listing; generate it.
+  // ROOT PLAYWRIGHT SPECS: a directory listing, reported with the rest.
   const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => /\.spec\.js$/.test(f)).length;
   const f = { guards: guards ? guards.length : 0, fast: fastFiles.length, disk: disk.length, gate: gate.size,
               sweeps: sweeps ? sweeps.length : 0, specs };
-  if (!f.specs) throw new Error("tests/specs holds no .spec.js files — refusing to write a zero into the docs");
+  if (!f.specs) throw new Error("tests/specs holds no .spec.js files — refusing to report a zero");
   if (!f.guards) throw new Error("tests/groups.json has no test:guards files");
   if (!f.fast) throw new Error("tests/groups.json toolingFast lists no files");
-  if (f.fast > f.gate || f.gate > f.disk) throw new Error(`ladder is not a ladder: fast ${f.fast}, gate ${f.gate}, disk ${f.disk}`);
+  if (f.guards >= f.fast || f.fast > f.gate || f.gate > f.disk) throw new Error(`ladder is not a ladder: guards ${f.guards}, fast ${f.fast}, gate ${f.gate}, disk ${f.disk}`);
   return { ...f, fastLeft: f.disk - f.fast, gateLeft: f.disk - f.gate };
 }
 
-/** The generated table. No dates: the block must be a pure function of the tree. */
-export function renderBlock(f) {
+/** The ladder as a markdown table (`--table`). */
+export function renderTable(f) {
   const left = f.gateLeft === f.sweeps ? `${f.gateLeft} (\`test:sweeps\`)` : `${f.gateLeft}`;
   return [
     "| command | unit files it runs | leaves out | when |",
@@ -83,76 +64,20 @@ export function renderBlock(f) {
     `| \`npm run test:guards\` | ${f.guards} (curated) | — | hook-enforced, every \`git commit\` |`,
     `| \`npm run test:tooling-fast\` | ${f.fast} of ${f.disk} | ${f.fastLeft} | the documented edit-loop check |`,
     `| \`node tools/ci/deploy.mjs --gate-only\` | ${f.gate} of ${f.disk} | ${left} | the whole gate; what a deploy runs |`,
-    "",
-    "_Derived from `tests/groups.json`, `tests/unit/` and ci.yml's \"Pure-node unit suites\" step by `node tools/gen/gen-ladder-figures.mjs`; `--check` runs in `test:guards`._",
   ].join("\n");
 }
 
-/** In-place rewrites: each regex captures the prose around the digits and
- *  must match EXACTLY once in its doc. `value` returns the digits (one number,
- *  or [a, b] for an "a of b" pair). */
-export const REWRITES = {
-  "AGENTS.md": [
-    { re: /(`test:tooling-fast` \()(\d+) of (\d+)( unit files\))/, value: (f) => [f.fast, f.disk] },
-    { re: /(\bThe other )(\d+)( have taken deploys red)/, value: (f) => f.fastLeft },
-  ],
-  // verify-agent quotes the pair to its parent on EVERY run, and drifted to
-  // "208 of 278" unnoticed while the three prose docs were pinned (2026-09-22).
-  // Its copy wraps the line, so the pair straddles a newline + indent.
-  ".claude/agents/verify-agent.md": [
-    { re: /(`test:tooling-fast` \()(\d+) of (\d+)( unit\n   files\))/, value: (f) => [f.fast, f.disk] },
-  ],
-  "docs/TESTING.md": [
-    { re: /(`npm run test:tooling-fast` \(structural, no browser; )(\d+) of (\d+)( unit files)/, value: (f) => [f.fast, f.disk] },
-    { re: /(\| `tooling-fast` \| the structural half — )(\d+)( files,)/, value: (f) => f.fast },
-    // The sweeps row enumerated its suites by hand and had drifted four files
-    // behind package.json. The roster is gone (the script is the list); the
-    // count stays, generated.
-    { re: /(\| `sweeps` \| the full-fleet geometry audits \()(\d+)( files —)/, value: (f) => f.sweeps },
-    // NOT anchored with `^`: rewrite() rebuilds each rule as `new RegExp(source,
-    // "g")` and drops the `m` flag with it, so `^` would mean start-of-FILE and
-    // match nothing. Anchor on the blank line above the sentence instead.
-    { re: /(\n\n)(\d+)( root Playwright spec files)/, value: (f) => f.specs },
-  ],
-  // README.md quotes the spec count to newcomers; it drifted with the others.
-  "README.md": [
-    { re: /(suite\*\* — )(\d+)( Playwright specs)/, value: (f) => f.specs },
-  ],
-  [TARGET]: [
-    { re: /(\bThe remaining )(\d+)( are the per-circuit geometry)/, value: (f) => f.gateLeft },
-    { re: /(\bthe )(\d+)( files it leaves out cost)/, value: (f) => f.fastLeft },
-    { re: /(A pin in one of those )(\d+)( files)/, value: (f) => f.gateLeft },
-  ],
-};
-
-export function rewrite(doc, rel, f) {
-  const before = doc.split("\n").length;
-  for (const { re, value } of REWRITES[rel] || []) {
-    const n = (doc.match(new RegExp(re.source, "g")) || []).length;
-    if (n !== 1) throw new Error(`${rel}: expected exactly one match for ${re}, found ${n} — the prose moved; fix the rule or the doc`);
-    const v = value(f);
-    doc = Array.isArray(v)
-      ? doc.replace(re, (_, a, _x, _y, d) => `${a}${v[0]} of ${v[1]}${d}`)
-      : doc.replace(re, (_, a, _x, c) => `${a}${v}${c}`);
-  }
-  if (doc.split("\n").length !== before) throw new Error(`${rel}: a rewrite changed the line count`);
-  return doc;
-}
-
-export function render(rel, f = figures(), doc = readRepo(rel)) {
-  if (rel === TARGET) doc = replaceBlock(doc, BLOCK, renderBlock(f));
-  return rewrite(doc, rel, f);
-}
-
-export function renderAll(f = figures()) {
-  return [TARGET, ...SECONDARY].map((rel) => [rel, render(rel, f)]);
+/** The one-line summary session-start prints. */
+export function renderLine(f) {
+  return `ladder: guards ${f.guards} ⊂ tooling-fast ${f.fast} ⊂ gate ${f.gate} of ${f.disk} unit files; ${f.specs} specs`;
 }
 
 if (isMain(import.meta.url)) {
   try {
     const f = figures();
-    if (process.argv.includes("--json")) process.stdout.write(JSON.stringify(f) + "\n");
-    else process.exitCode = Math.max(...renderAll(f).map(([rel, text]) => emit(rel, text)));
+    const out = process.argv.includes("--json") ? JSON.stringify(f)
+      : process.argv.includes("--table") ? renderTable(f) : renderLine(f);
+    process.stdout.write(out + "\n");
   } catch (e) {
     process.stderr.write(`gen-ladder-figures: ${e.message}\n`);
     process.exitCode = 2;

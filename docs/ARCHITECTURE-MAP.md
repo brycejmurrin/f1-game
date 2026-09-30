@@ -82,7 +82,7 @@ Career is a championship that also applies economy / R&D rules. See
 ## Build / test / deploy
 
 There is **no compile step**. Generated artifacts (`index.html` script blocks,
-`js/roster.js`, ladder figures, …) come from `npm run gen` / `tools/gen/*` —
+`js/roster.js`, `tools/README.md`, …) come from `npm run gen` / `tools/gen/*` —
 never hand-edit those (see `AGENTS.md` rule 11).
 
 | Command | When |

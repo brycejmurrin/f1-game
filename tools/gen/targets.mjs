@@ -22,7 +22,6 @@ export const GENERATORS = [
   "./gen-slider-doc.mjs",
   "./gen-hooks-table.mjs",
   "./gen-arch-table.mjs",
-  "./gen-ladder-figures.mjs",
 ];
 
 export async function targets() {
