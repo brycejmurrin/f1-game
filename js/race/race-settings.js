@@ -301,8 +301,7 @@ const RaceSettings = (function () {
     function openDuelPicker() {
       buildDuelPicker();
       $("duel-picker").hidden = false;
-      // FOCUS THE CURRENT PICK, which is what the search field used to take.
-      // Fourteen options is a list you read, not one you filter, and landing on
+      // FOCUS THE CURRENT PICK, not a search field. Fourteen options is a list you read, not one you filter, and landing on
       // the active row means the keyboard starts where the player already is.
       queueMicrotask(() => {
         const list = $("duel-list");

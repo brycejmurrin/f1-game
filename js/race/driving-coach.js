@@ -170,10 +170,10 @@ const DrivingCoach = (function () {
     }
     function clearCandidate() { candidate = ""; held = 0; }
     // ONE SAMPLE: the per-tick channels only. The trace keeps 600 of these
-    // (60 s at 10 Hz) and used to store full status() rows — a fresh feedback()
-    // ranking, insights summary and deep-copied lap report in every one, ~1 MB
-    // held per race and all of it promoted to the old generation, for a trace
-    // only the DRIVING TRACE button ever reads. Those are session totals; the
+    // (60 s at 10 Hz); full status() rows (a feedback() ranking, insights
+    // summary and deep-copied lap report in every one) would hold ~1 MB per
+    // race, promoted to the old GC generation, for a trace only the DRIVING
+    // TRACE button ever reads. Those are session totals; the
     // download adds them once.
     function sample(c) {
       const ghostSpeed = Ghost.speedAt ? Ghost.speedAt(c.lapTime) : null;

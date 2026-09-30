@@ -273,8 +273,8 @@ window.SheetShape = (function () {
     const box = (window.CssZoom && CssZoom.localBox(el)) || { w: 0, h: 0 };
     const wOwn = box.w || w;
     const hOwn = box.h || h;
-    /* DENSITY BEFORE PAIR. `--pair-compact: off` (and the old per-sheet
-       `--pair-at: 2000px` raise) is a function of `data-density`, so the pair
+    /* DENSITY BEFORE PAIR. `--pair-compact: off` is a function of
+       `data-density`, so the pair
        answer must be read AFTER density is written — otherwise the first paint
        of a short sheet keeps the wide threshold, stays `pair=on`, and clips
        the stacked content the compact rule was meant to make scrollable.

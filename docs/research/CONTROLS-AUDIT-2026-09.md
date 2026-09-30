@@ -131,7 +131,7 @@ The gamepad brief asserted "no rumble/haptics at all" and the agent built a
 punch-list item on it. Wrong. `Input.rumble()` calls
 `playEffect("dual-rumble", …)` with a `weakMagnitude` at 0.7 of strong, and it is
 wired alongside `navigator.vibrate` at four sites: crash impact
-(`js/game.js:3535`), kerb strike (`:4137`, on a 0.12 s re-arm), front-axle
+(`js/game.js:3520`), kerb strike (`:4137`, on a 0.12 s re-arm), front-axle
 saturation (`:4678`, scaled by bite), car contact (`:4861`), and the brake cue
 (`js/physics/brake-cue.js:76`).
 
@@ -168,7 +168,7 @@ the function first.
 ### 2.2 We already have a steering gamma — that is the problem
 
 The gamepad agent's #3 was "no steering linearity/gamma at all". We have one:
-`js/game.js:4433` applies `shaped = sign(s)·|s|^STEER_EXPO` with `STEER_EXPO`
+`js/game.js:4417` applies `shaped = sign(s)·|s|^STEER_EXPO` with `STEER_EXPO`
 defaulting to **2.4**, exposed as the `pm-expo` LINEARITY slider.
 
 At 2.4 that sits at the top of ACC's recommended pad band (gamma 2–3) and well
@@ -205,7 +205,7 @@ tilt axis across all four rotations are all shipped.
 **Gaps, in order:**
 
 1. **TOUCH mode has no sensitivity setting**, and `touchRangeFrac`
-   (`js/input/input.js:665`) is dead — declared, read, never assigned. The 12 %
+   (`js/input/input.js:657`) is dead — declared, read, never assigned. The 12 %
    long-edge default is ~80 px of thumb travel for full lock on an iPhone SE in
    landscape, which RR3 player feedback puts on the sensitive side ("anything
    beyond 0–3 sensitivity is making micro turns impossible"). A community survey
@@ -607,7 +607,7 @@ not chased again: `pollGamepad()` returns early behind a 60-frame reprobe gate
 when `padConnected` is false, and each `poll()` helper calls `Input.poll()`
 exactly once — which would produce "pad absent" precisely. It cannot fire here:
 the helper dispatches `gamepadconnected` first, and that listener
-(`js/input/input.js:2036`) sets `padConnected = true`.
+(`js/input/input.js:2019`) sets `padConnected = true`.
 
 **A guard came out of this.** `#ios-install` shipped with `display: flex`, which
 outranks the UA's `[hidden] { display: none }` — an author rule always beats a

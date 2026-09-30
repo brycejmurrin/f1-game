@@ -30,7 +30,7 @@ the expensive mistake is rebuilding something we have.
   as "the category's real gap… what destroys car control", with GRID's Throttle
   Slider as the only full answer. We already have it: `wireHold("btn-throttle")`
   captures real travel into `btnThrottleVal`, `throttleLevel()` returns it, and
-  `js/game.js:3903` drives `throttleLvl` from it. Verified end-to-end. The
+  `js/game.js:3888` drives `throttleLvl` from it. Verified end-to-end. The
   remaining half of that idea — COAST / one-pedal lift-off — is genuinely open.
 - **Presets + granular sliders is the endorsed shape.** XAG 108 asks for "four or
   more" presets AND separate per-mechanic assists. ROOKIE/RELAX/STANDARD/PRO plus
@@ -43,7 +43,7 @@ the expensive mistake is rebuilding something we have.
   single item named INDEPENDENTLY by both the competitive and accessibility
   passes, i.e. the strongest signal in the whole document — and we had it.
 - **AUTO-THROTTLE is already independent of ROOKIE.** `pm-throttlemode` is its
-  own HOLD/AUTO setting row (js/game.js:8425) backed by `store "autoThrottle"`.
+  own HOLD/AUTO setting row (js/game.js:8386) backed by `store "autoThrottle"`.
   **This one is my fault:** I briefed the accessibility pass with "we ship
   auto-throttle only in ROOKIE", which was false, and it built a well-sourced
   recommendation on my bad context. The genuine gap that survives is the THIRD
@@ -68,7 +68,7 @@ the expensive mistake is rebuilding something we have.
   `vibrate(1)` from the GO/START click.**
 - ~~**Tilt is our DEFAULT.**~~ **WRONG — CORRECTED 2026-09-15. We already default
   to BUTTONS and already satisfy WCAG 2.5.4.** `js/game.js:429` is the line that
-  decides — `store.get("steerMode", "buttons")` — and `js/game.js:8668` pushes it
+  decides — `store.get("steerMode", "buttons")` — and `js/game.js:8627` pushes it
   into Input at boot, unconditionally, at module top level. The `"tilt"` I read
   was `js/input/input.js`'s pre-boot initialiser, overwritten before any player
   sees anything. I checked the module initialiser and never checked whether the

@@ -193,7 +193,7 @@ the sole caller).
   (`js/game.js:44-82,219-286,7796-7807,8951-8968`) since a backend that can
   never bind needs no crash-canary, and delete `RendererPicker`'s WEBGPU/THREE
   stops (see below) so a player can no longer even select a dead pick.
-- `js/game.js:7796-7807` and `:8951-8968` — the re-arm-around-first-present
+- `js/game.js:7757-7768` and `:8951-8968` — the re-arm-around-first-present
   and the visibility/pagehide disarm handlers, both gated on
   `_backendBound`, which can only become true inside the dead-code path
   above. Deletable in the same pass.
@@ -392,7 +392,7 @@ grep (excludes the docs archive directory, excludes files already covered above)
 | `js/lighting/tuner-panel.js:24-27` | delete (dead branch) | `if (g && g.hasPerChunkLights === false) return " · not supported by the three.js renderer…"` — this branch can only fire when `g` (the bound backend) is TLX, which can never bind again. Delete the branch; `hasPerChunkLights` on GLX is always defined so the guard is unreachable already once TLX is gone, not just cosmetically stale. |
 | `js/perf/quality-preset.js:1` | shrink | Header comment; no functional WGX/TLX coupling found beyond the pref key already covered under renderer-picker. |
 | `js/track/tracks.js:146,694,732` | shrink | Comments naming "the WebGL2/TLX/WGX backend" and "GLX/WGX/TLX" batch drawing, and a WGX-specific scenery skip note. No functional code depends on a WGX/TLX identity check here (confirmed no `pref ===`/backend-name branch in these lines) — comment-only. |
-| `js/physics/debris-world.js:1127,1130` | shrink | Comment: "updateInstances since 2026-09-02 (glx.js, wgx.js, tlx.js)…which is still GLX + WGX only." Stale once WGX is gone; rewrite to "GLX only." |
+| `js/physics/debris-world.js:1123,1130` | shrink | Comment: "updateInstances since 2026-09-02 (glx.js, wgx.js, tlx.js)…which is still GLX + WGX only." Stale once WGX is gone; rewrite to "GLX only." |
 | `js/perf/governor.js:63,209` | shrink | Comments about WebGPU/three.js perf tiers in PerfGov's own reasoning; no functional coupling. |
 | `js/car/car3d.js:12,196` | shrink | Comments citing the WGX/TSL shading id-chain and "GLX/WGX paint" — no functional coupling. |
 | `js/render/shared/lamp-chunks.js` | shrink (see above, own section) | |

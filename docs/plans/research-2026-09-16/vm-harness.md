@@ -167,7 +167,7 @@ reach it: `?boot=bare` ⇒ (a) `scheduleFlybyTrack()` returns immediately, (b)
 `G.headlessMode = true` at boot so the rAF loop composites nothing until a spec
 clears it, (c) skip `prepareMenuCarAssets()` and the asset-pack fetch.
 
-**Evidence I have.** `js/game.js:2159` — the menu flyby does a full
+**Evidence I have.** `js/game.js:2150` — the menu flyby does a full
 `loadTrack(want)` 120 ms after the picker settles, *and* the rAF loop renders it
 every frame; `docs/notes/CI-RENDERING-PERFORMANCE.md` is why that is expensive
 under SwiftShader/llvmpipe. **UNVERIFIED**: I could not run a browser to measure
@@ -220,7 +220,7 @@ content hash, not mtime.
 - **`headless(true)` earlier in the VM**: measured no saving (probe2).
 - **Shrinking the field to 1 car** to drop the ~37 % AI share of a step: this is
   the biggest single lever left, but `__apex.tt()` (`js/agent/apex.js:1181`) sets
-  `cars=[player]` and therefore removes dirty-air (`dirtyAirMul`, game.js:865)
+  `cars=[player]` and therefore removes dirty-air (`dirtyAirMul`, game.js:863)
   and car-car contact from the traces. That is a physics change in a twin whose
   whole claim is "the same assertions and thresholds as the browser spec". Do not
   do it for the twins. (Note: setting `G.cars=[player]` from outside has **no

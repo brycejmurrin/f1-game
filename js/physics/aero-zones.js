@@ -8,8 +8,8 @@ const AeroZones = (function () {
 // if it is longer than three seconds at racing speed — the rule that leaves
 // MONACO with no zones at all, and therefore no active aero.
 //
-// That distinction is the whole feel of the mechanic. A rolling look-ahead (what
-// this used to be) has no start and no end: the window opens and closes under
+// That distinction is the whole feel of the mechanic. A rolling look-ahead has
+// no start and no end: the window opens and closes under
 // you as the road bends, so there is nothing to learn and nothing to see coming.
 // Fixed zones are a place on the track. You can be shown the boards, you can
 // know the next one is 400 m away, and pressing the button becomes a thing you
@@ -64,14 +64,13 @@ const ZONE_COUNT = {
 };
 
 // WHICH straights, expressed as the turns that bound them — the half of the
-// research ZONE_COUNT's own comment calls "not encoded" and says why: def.turns
-// used to number corners as "the N strongest curvature peaks in lap order",
-// which was not reliable FIA-equivalent numbering, so a hard-coded (fromTurn,
-// toTurn) pair could name the wrong straight outright (35 of 68 resolved spans
-// came out short or curved — catalunya T3->T4 as 26 m, abudhabi T5->T6 as 45 m).
+// research ZONE_COUNT's own comment calls "not encoded". Turn numbers from
+// "the N strongest curvature peaks in lap order" are not FIA-equivalent, so a
+// hard-coded (fromTurn, toTurn) pair could name the wrong straight (35 of 68
+// spans came out short or curved — catalunya T3->T4 as 26 m, abudhabi T5->T6
+// as 45 m).
 //
-// `docs/tracks/START-LINES.md` fixed the root cause: every circuit below now has
-// a verified start line (line on a straight, first apex hand-checked), so
+// Per `docs/tracks/START-LINES.md` every circuit below has a verified start line (line on a straight, first apex hand-checked), so
 // `def.turns[0]` really is Turn 1 and the array runs in physical order. That
 // makes turn-pair authoring safe again — with one deliberate omission: BAHRAIN
 // and JEDDAH stay on the length-only fallback below, because their start lines

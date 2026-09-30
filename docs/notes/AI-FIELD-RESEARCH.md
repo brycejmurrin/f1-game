@@ -91,7 +91,7 @@ project does not have.
 
 ## Open, with citations, from the code audit
 
-- ~~`js/game.js:4823` starts the corner look **12 m ahead**~~ — FIXED
+- ~~`js/game.js:4804` starts the corner look **12 m ahead**~~ — FIXED
   2026-09-16 (`const ss0 = Math.ceil(c.s / dsN) * dsN`). The floor put the
   nearest sample 12 m in front of the car and `brakeTarget` admits a sample at
   `sqrt(vC² + 2·brake·0.85·d)`, so every AI carried a standing `sqrt(vC² + 449)`
@@ -118,7 +118,7 @@ project does not have.
   within ~3 %. The asymmetry was one-sided and lived entirely in the FAST
   corners, where the player had up to 65 % more grip than the AI credited
   itself with.)
-- ~~`js/physics/ai-drive.js:609` returns 0 whenever there is no curvature
+- ~~`js/physics/ai-drive.js:604` returns 0 whenever there is no curvature
   18–70 m ahead, so **the AI cannot defend on a straight**~~ — ALREADY FIXED
   when this row was re-checked on 2026-09-16; the line number had gone stale
   and the row with it. `defendPull` has carried a straight branch since the

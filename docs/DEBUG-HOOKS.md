@@ -4155,7 +4155,7 @@ but the warning lives in the docs, not in the error. An agent gets nothing.
 
 `camState()` gives `{eye, tgt, fov, roll}`. There is no projection helper and
 no visibility query. But the ingredients are all retained: `frame.viewProj`
-(`js/game.js:3363`), `frame.cullDist`, and per-chunk AABBs. The frustum math
+(`js/game.js:3348`), `frame.cullDist`, and per-chunk AABBs. The frustum math
 already exists at `js/render/glx/chunked.js:26-55` — it just isn't exported
 (`GLXChunked` returns only four draw-path functions, `:202`).
 

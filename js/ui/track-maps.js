@@ -121,8 +121,8 @@ const TrackMaps = (function () {
     const mp = tr.map[idx];
     const mes = measureApex(tr, f);
     // `f` is the apex's LAP FRACTION, and it is the only field here expressed in
-    // track space rather than minimap space — measureApex already computes it and
-    // the record used to drop it on the floor. The flyby sequencer anchors shots
+    // track space rather than minimap space — measureApex already computes it.
+    // The flyby sequencer anchors shots
     // on corners (`s = f * track.total`), which it cannot do from x/y minimap px.
     return { n: n, x: mp[0], y: mp[1], f: mes.fPeak, v: mes.v, r: mes.r, ang: mes.ang, cls: mes.cls };
   }

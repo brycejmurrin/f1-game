@@ -274,9 +274,8 @@ function buildResults(order, race) {
     els.resultsTable.appendChild(row);
   });
   // THE ROUND'S EARNINGS. Career only, and only for a round that just settled.
-  // Every figure here comes straight off Career.settleRound()'s return, which
-  // used to be computed and discarded — so the balance moved and the player was
-  // never told by how much or for what.
+  // Every figure here comes straight off Career.settleRound()'s return, so the
+  // player is told by how much the balance moved and for what.
   const st = G.careerSettlement;
   if (st) {
     const box = document.createElement("div");
@@ -546,9 +545,8 @@ function buildStandings() {
   const body = G.$("standings-body");
   body.textContent = "";
   // A ONE-OFF RACE HAS NO CHAMPIONSHIP. The pause menu still offers STANDINGS,
-  // and this used to return with the body empty — a title, a CLOSE button and
-  // nothing between them, which reads as a broken screen rather than as "there
-  // is nothing to stand on". `.dh-empty` is the house empty state (css/data.css)
+  // and an empty body (a title, a CLOSE button, nothing between) reads as a
+  // broken screen rather than as "there is nothing to stand on". `.dh-empty` is the house empty state (css/data.css)
   // so this costs no new class.
   if (!season) {
     const note = document.createElement("div");

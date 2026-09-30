@@ -1,8 +1,6 @@
 /* Apex 26 — TYRE MODEL: wear, the grip it costs, and the fuel burn that argues
- * with it. `docs/PHYSICS.md` used to end "There are no pit stops. The compound
- * is a pre-race commitment"; this module is the half of that sentence that
- * makes a compound choice mean something over a race distance; the pit lane
- * that lets you do anything about it is the other half.
+ * with it. This module makes a compound choice mean something over a race
+ * distance; the pit lane that lets you do anything about it is the other half.
  *
  * WHY A MODULE AND NOT LINES IN game.js: tests/data/ratchets.json ratchets
  * game.js at its current size, and the grip seam there already takes external
@@ -39,11 +37,8 @@ const TyreModel = (function () {
   // and it lives in js/data/settings-defaults.js, NOT at the call site:
   // store.get's _def() makes SettingsDefaults outrank the fallback argument, so
   // the `store.get("tyreWear", ...)` literal in js/game.js decides nothing.
-  // This comment claimed "light" for four days after the owner file moved to
-  // "real" — 1/0.55 = 1.82x the wear it documented — because the two landed 75
-  // minutes apart from parallel sessions on the shared deploy branch. The
-  // assertion at the foot of tests/unit/tyre-model.test.mjs does NOT guard this:
-  // it checks that the setter calls tyres.setLevel, not what ships. The browser
+  // The assertion at the foot of tests/unit/tyre-model.test.mjs does NOT guard
+  // the shipped default: it checks that the setter calls tyres.setLevel. The browser
   // fixtures still pin OFF so a physics baseline measures the driving model
   // rather than this month's default, which is why no spec would notice.
   // A set's life is nominal / LEVELS[level] laps — see planLaps().
@@ -56,17 +51,15 @@ const TyreModel = (function () {
   // angle over the axle's friction limit), output the normalised force in
   // [-1, 1], multiplied back by mu at the call site.
   //
-  // It used to be tanh(x): slope 1 at the origin, saturating at 1 and NEVER
-  // falling — so the front could be driven to 16° of slip with the force still
-  // at 100 %, a flick at full lock turned the car 2.4× as far as a moderate
-  // input at no cost, and nothing the driver overdid ever came back to bite.
+  // Not tanh(x): that saturates at 1 and NEVER falls, so the front could be
+  // driven to 16° of slip with the force still at 100 % and a flick at full
+  // lock turned the car 2.4× as far as a moderate input at no cost.
   // Every developer account of tyre feel (docs/notes/PLAYER-PHYSICS-RESEARCH-
   // 2026-09.md §4) says the same thing: the linear range and the peak are the
   // easy part; the WIDTH of the plateau past the peak and the STEEPNESS of the
   // fall after it are what make a tyre feel real and drivable.
   //
-  // Three regions, same units as before so every CS_* constant keeps its
-  // meaning: sin(x) up to the peak at x = π/2 (slope 1 at 0, peak force exactly
+  // Three regions, in units where every CS_* constant keeps its meaning: sin(x) up to the peak at x = π/2 (slope 1 at 0, peak force exactly
   // mu), then a Gaussian fall from 1 to CURVE_FLOOR of width CURVE_FALL_W:
   // ≥ 0.97 of peak out to x ≈ 2.1 (the "limit zone" a driver leans on), 0.85 at
   // x = 3, the floor by x ≈ 5. Never oscillates, never negative, C¹ at the peak
@@ -598,17 +591,14 @@ const TyreModel = (function () {
     // How many laps a set ACTUALLY lasts at the setting in force — the number a
     // STRATEGY has to plan against. lifeLaps() is the nominal, level-free life,
     // and wear then accrues at LEVELS[level]/lifeLaps per lap, so a set survives
-    // lifeLaps / LEVELS[level] laps. The planner used to ask lifeLaps() direct,
-    // which is only right at `real` (1.0); at `light` (0.55, one click away)
-    // a set lasts 1.82x longer and the AI pitted for tyres it had not used —
-    // measured identical first stops (lap 7) and stop counts at light and real,
-    // because the plan could not see the setting. At `off` nothing wears, so the
+    // lifeLaps / LEVELS[level] laps. lifeLaps() direct is only right at `real`
+    // (1.0); at `light` (0.55) a set lasts 1.82x longer, and a plan blind to the
+    // setting measured identical first stops (lap 7) at light and real. At `off` nothing wears, so the
     // honest answer is "the whole race".
     // …AND BY THE CIRCUIT. update() charges wear at load·severity()·level /
-    // lifeLaps, so a set lasts lifeLaps / (level·severity) laps. This divided by
-    // the level alone, so at Austria (1.97) every plan believed its tyres lasted
-    // twice as long as they did: a medium planned for 7.4 laps of a 10-lap race
-    // was gone in 3.8, and the plan said NO STOP.
+    // lifeLaps, so a set lasts lifeLaps / (level·severity) laps. Dividing by the
+    // level alone, at Austria (1.97) a medium planned for 7.4 laps of a 10-lap
+    // race is gone in 3.8 and the plan says NO STOP.
     // …AND THE FLOOR COMES AFTER THE CIRCUIT. Dividing a floored lifeLaps by
     // severity took Austria's (1.97) sets in a 5-lap race to ~2 laps — the very
     // race MIN_LIFE_LAPS exists to cover. effLifeLaps is the one number both the
@@ -741,8 +731,8 @@ const TyreModel = (function () {
       const life = c.tyre ? c.tyre.life : null;
       return gripFor(c.tyreWear) * tempGrip(c.tyreTs, life) * defectGrip(c.tyreGrain, c.tyreBlister);
     }
-    // Traction and braking take the same SHARE of the whole drop that wear alone
-    // used to take — a cold set is down on traction too, not only on cornering.
+    // Traction and braking take a fixed SHARE (LONG_SHARE) of the whole grip
+    // drop — a cold set is down on traction too, not only on cornering.
     function tractionMul(c) {
       if (!on() || !c) return 1;
       return 1 - (1 - gripMul(c)) * LONG_SHARE;

@@ -179,7 +179,7 @@ const RaceRadio = (function () {
     function engineerEvent(e, f, p) {
       // A driver who has taken the flag or retired is off the radio: only their
       // own result is still to come. (Solo that is 2.2 s; in VS FRIEND it is
-      // the rest of the race, which used to hear safety cars and "UP TO P5".)
+      // the rest of the race, which must not hear safety cars and "UP TO P5".)
       if ((f.finished || f.retired) && e.type !== "finish" && !(e.type === "retire" && e.car === p)) return;
       const pos = f.rawPos || f.pos;
       switch (e.type) {

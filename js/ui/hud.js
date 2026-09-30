@@ -43,7 +43,7 @@ let _lastRank = 0, _posFlashT = 0;   // POS box flash state, ms left (see the ti
 // Team colours are static — compute once per team, the minimap's idiom.
 // Keyed on the store revision, exactly as _livResolveCache is (js/game.js):
 // a CUSTOM team's colours are editable in the garage, and an unkeyed memo on
-// the shared Teams.LIST entry kept painting the old rail for the page's life.
+// the shared Teams.LIST entry would paint a stale rail for the page's life.
 const teamCss = (c) => {
   const t = c.team;
   if (!t) return "";
@@ -121,11 +121,8 @@ function syncHudCamClasses() {
   if (key !== _hudCamKey) {
     _hudCamKey = key;
     const body = document.body;
-    // No hud-onboard class here. It shipped on 2026-09-04 with a rule that
-    // stripped the minimap and the gap strip in any onboard view; the SAME DAY
-    // the per-widget MAP/GAPS settings replaced that rule and the write was
-    // left behind, toggling a name nothing read for eighteen days. ONBOARD_IDS
-    // is still live — syncHudVisClasses() reads it for the MAP-AUTO default.
+    // No hud-onboard class here: the per-widget MAP/GAPS settings own that.
+    // ONBOARD_IDS is still live — syncHudVisClasses() reads it for MAP-AUTO.
     body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
     body.classList.toggle("hud-prof-minimal", prof === "minimal");
     body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
@@ -140,13 +137,10 @@ function buildSecRows() {
   // ~4.2:1 on pure black and less over a bright scene (css/tokens.css records
   // ~2.6:1 on the page) — under the 4.5:1 AA floor for text this size. The
   // lighter red keeps the hue and clears ~5.9:1; the minimap stroke matches.
-  // The sector-identity array that used to sit here was DEAD: nothing applied
-  // it to a label, and .sec-lbl sets no colour, so the labels have always
-  // inherited the row's ink. Removed rather than left to imply otherwise —
-  // and it matters now, because two of its three colours are byte-identical to
-  // the value palette beside them (--sec-best #c084fc, --faster #a3e635).
-  // Should the labels ever be coloured, they must NOT use those two, or purple
-  // would mean both "sector 1" and "session best". The minimap keeps its own
+  // Sector labels carry no identity colour: .sec-lbl inherits the row's ink.
+  // Should they ever be coloured, they must NOT use the value palette's
+  // --sec-best #c084fc or --faster #a3e635, or purple would mean both
+  // "sector 1" and "session best". The minimap keeps its own
   // copy (drawMinimap), where identity is the only thing distinguishing arcs.
   const labels = ["S1", "S2", "S3"];
   els.hudSectors.textContent = "";
@@ -351,7 +345,7 @@ function fitHud() {
   const scale = +root.style.getPropertyValue("--hud-scale") || _cssScale;
   // body.className is part of the key: cycling STEERING MODE re-parents the
   // dock groups (layoutDocks), so the tallest column's height changes while
-  // viewport and scale do not — and the old key held the stale dock cap for
+  // viewport and scale do not — without it the key holds the stale dock cap for
   // the whole 3 s backoff (measured: the steer-cycling audit cells clipped at
   // 150% while the plain hud cell, same everything, was clean). Every mode
   // flip toggles a body class (manual / steer-buttons / steer-touch), so the
@@ -376,8 +370,8 @@ function fitHud() {
   // pointer, and calc() in a custom property is not reduced at computed-value
   // time — the token reads back as the literal string and coerces to NaN — so
   // resolve it from its factors instead of parsing it. Falling through to
-  // `scale` alone (which is what the old `|| scale` did) silently sized the dock
-  // cap 25% small on every touch device the moment the ratio stopped being 1.
+  // `scale` alone (`|| scale`) silently sizes the dock cap 25% small on every
+  // touch device the moment the ratio stops being 1.
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
   // which has no getComputedStyle — the same guard metrics-overlay.js carries.
   const mult = _cssMult;
@@ -438,8 +432,7 @@ function fitHud() {
   // ever need less room. Guarded on the rect having a WIDTH (laid out)
   // rather than on the class, so any future hide rule is covered too; the
   // fallback is the other side's measurement, which is right on every phone
-  // whose notch is symmetric in landscape and never worse than the 0 this
-  // used to fall back to on the left.
+  // whose notch is symmetric in landscape and never worse than 0.
   const mmR = els.minimap ? els.minimap.getBoundingClientRect() : null;
   const scR = els.hudSectors ? els.hudSectors.getBoundingClientRect() : null;
   const mz = (els.minimap && els.minimap.currentCSSZoom) || 1;
@@ -475,22 +468,18 @@ function fitHud() {
                (half - sar) / Math.max(right + top / 2, 1)));
   // EACH RUNG IS JUDGED AGAINST THE SPELLING IT DECIDES, NOT THE ONE ON SCREEN.
   //
-  // Both used to read the RENDERED width, and that is a feedback loop with no
-  // fixed point wherever the true fit lands between the two spellings: long
-  // does not fit -> shorten -> the short strip DOES fit -> lengthen -> it does
-  // not fit -> ... every 10 Hz tick, with `drop` (which is gated on the short
-  // state) flickering along with it. A strip that alternates between beside the
-  // band and below it is a candidate for the "sometimes the gap doesn't slide
-  // all the way up" report, though the loop was found by reading this code
-  // rather than by catching it in the act — what IS measured is the state
-  // after: 40 consecutive ticks at 640x360, both rungs held (2026-09-04).
+  // Reading the RENDERED width is a feedback loop with no fixed point wherever
+  // the true fit lands between the two spellings: long does not fit -> shorten
+  // -> the short strip DOES fit -> lengthen -> ... every 10 Hz tick, with
+  // `drop` flickering along. Measured stable: 40 consecutive ticks at 640x360,
+  // both rungs held (2026-09-04).
   //
-  // Fixed by asking each question about a FIXED width: shorten iff the LONG
+  // So each question is asked about a FIXED width: shorten iff the LONG
   // spelling does not fit, drop iff the SHORT one does not fit inline either.
   // Neither answer depends on the current state, so there is nothing to
   // oscillate. Only the rendered spelling can be measured, so each is
-  // remembered as it is seen; until both have been, they share one number and
-  // this behaves exactly as it did before — one tick, then it converges.
+  // remembered as it is seen; until both have been, they share one number —
+  // one tick, then it converges.
   if (gaps) _gapW["gapShort" in root.dataset ? 0 : 1] = gaps;
   const wShort = _gapW[0] || gaps, wLong = _gapW[1] || gaps;
   const leftFor = (w) => (map ? 10 + map + 8 + w : 0) + FIT_AIR;
@@ -1001,7 +990,7 @@ function updateHud(force, dtMs) {
     // Divisor floor as a fraction of the speed envelope, not a raw m/s
     // literal: PACE scales real speeds, so an absolute floor swallowed most
     // of the envelope at low OVERALL SPEED and understated slow-corner gaps.
-    // 0.26 × vTop ≈ the old 25 m/s at default pace.
+    // 0.26 × vTop ≈ 25 m/s at default pace.
     const vFloor = Math.max(player.speed, G.vTop() * 0.26);
     hText(els.gapA, a ? gap("▲", a.code, gapSec(0, a, (a.prog - player.prog) / vFloor)) : "");
     hText(els.gapB, b ? gap("▼", b.code, gapSec(1, b, (player.prog - b.prog) / vFloor)) : "");
@@ -1157,8 +1146,8 @@ function drawMinimap() {
       mc.stroke();
     }
     // Activation-zone highlight, slightly thicker, in the AERO chip's own blue
-    // (#hud-aero.ax-armed / #btn-aero.armed): it used to be cyan, so the map
-    // and the chip named the same zone in two colours.
+    // (#hud-aero.ax-armed / #btn-aero.armed), so the map and the chip name the
+    // zone in one colour.
     const zones = TrackMaps.drsZones(track.def);
     if (zones && zones.length) {
       mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
@@ -1174,10 +1163,9 @@ function drawMinimap() {
     }
     // THE PIT LANE: a light dashed run from where the entry road peels off
     // to where the exit road rejoins, a "P" where it PEELS OFF and a tick
-    // across the run at the entry line — the map used to say nothing about
-    // where the pits were, and then it put the "P" on the line, 70 m past the
-    // peel-off, so a driver who steered at it was already on the road the
-    // boards had named 100 m earlier.
+    // across the run at the entry line. The "P" marks the peel-off, not the
+    // line 70 m past it, where a driver steering at it is already on the road
+    // the boards named 100 m earlier.
     const pit = track.pit;
     _mmPitP = null;
     if (pit && pit.entryRoadM != null) {
