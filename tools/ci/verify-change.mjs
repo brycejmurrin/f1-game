@@ -81,7 +81,7 @@ const files = changedFiles();
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 const groupSel = pick(files);
 const groups = [...groupSel.keys()].filter((g) => pkg.scripts[`test:${g}`]).sort();
-// THE THREE-WAY CONTRACT THIS FILE USED TO THROW AWAY. pick-tests.mjs:243
+// THE THREE-WAY CONTRACT THIS FILE USED TO THROW AWAY. pick-tests.mjs --json
 // computes exactly this — its `named` is derived identically to `groups` above —
 // and its comment is the whole point: "unmatched" means files changed but no
 // rule claimed them, so the selection is NOT trustworthy and the caller must

@@ -53,11 +53,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // off a straight onto a real corner, which moves the ground the scenery beside
 // it is anchored to). Attributed with `clip-audit <id> --why`, diffed against
 // the pre-fix tree:
-//   estoril      one NEW pairing, scenery-nature.js:857 x itself — two terrace
+//   estoril      one NEW pairing, scenery-nature.js's crowdMound x itself — two terrace
 //                treads of ONE crowdMound run, same call site, same CONCRETE
 //                material, shared volume interior. The limitation above, exactly.
 //   indianapolis NO new pairing at all; three existing city-row pairings
-//                (build-props.js:1591 x neonTower) each gained one hit — the
+//                (js/track/scenery/build-props.js x neonTower) each gained one hit — the
 //                arc-length row compression named above.
 // Neither is a new defect class and neither is visible. Raised rather than
 // chased: the alternative is re-authoring two circuits' scenery to suit a
@@ -77,7 +77,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // indianapolis 94 → 100 (2026-08-18): same oval-stand remesh as the
 // coplanar 8→9 raise. clip-audit --why: 100 severe / 107 total from
 // 305 pairs. Dominant pairings stay the documented neonTower × city-row
-// / tree class (build-props.js:1669); grandstandEx × neonTower appears at
+// / tree class (js/track/scenery/build-props.js); grandstandEx × neonTower appears at
 // 6 hits (max 1.80 m). More shorter bays, more existing-class contacts.
 // No new defect class. Locked to the measured count.
 //

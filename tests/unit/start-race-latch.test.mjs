@@ -1,12 +1,12 @@
 /* start-race-latch.test.mjs — startRace() re-entrancy latch.
  *
- * startRace() has six fire-and-forget callers (js/game.js:8799, :8805, :9157,
- * :9209, js/race/daily-challenge.js:76, js/race/race-settings.js:393 — the
+ * startRace() has fire-and-forget callers (js/game.js's pm-restart and
+ * startRaceCovered, js/race/daily-challenge.js, js/race/race-settings.js — the
  * DEFECT-LEDGER un-awaited-startRace family) and no re-entry guard of its
  * own: a second trigger (double-click, a pm-restart while a start was still
  * building) could re-enter startRaceBody() mid-build. The fix renames the
  * body to startRaceBody() and wraps it in a startRace() that latches
- * concurrent callers onto the one in-flight promise (js/game.js ~2758).
+ * concurrent callers onto the one in-flight promise (`startRace` in js/game.js).
  *
  * This boots the REAL game.js in the Node VM harness (tools/lib/game-vm.cjs)
  * — one boot, shared by both tests below (~15 s, the same cost as

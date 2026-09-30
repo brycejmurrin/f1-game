@@ -519,7 +519,7 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       "car " + JSON.stringify(probe.player) + " · wheels above the tarmac under each: " + JSON.stringify(probe.detail))
       .toBeLessThan(0.005);
     // AGAINST THE ROAD UNDER THE CAR, not against sea level. This compared the
-    // WORLD y to a bare 0.34 — AXLES.wheelY (js/car/car3d.js:47), which is the
+    // WORLD y to a bare 0.34 — AXLES.wheelY (js/car/car3d.js), which is the
     // wheel centre height ABOVE THE ROAD — and so silently assumed monza's
     // surface sits at y = 0. It does not: over the ~35 m the car covers while
     // braking here the centreline runs -0.044, -0.012, -0.006, +0.110, -0.111,
