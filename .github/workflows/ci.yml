@@ -370,7 +370,9 @@ jobs:
       - name: Structural guards
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=3
+        # --jobs=4 (2026-09-30): the job measured 209 s at --jobs=3 on #499's
+        # run; a public runner has 4 vCPU and the files are independent.
+        run: node tools/ci/tooling-fast.mjs --jobs=4
       # RATCHET RAISES, SAID OUT LOUD (2026-09-22). The commit hook absorbs a
       # ceiling raise of up to 40 lines by rewriting tests/data/ratchets.json
       # into the same commit, so a raise reaches CI as one changed number in a
@@ -1473,7 +1475,12 @@ jobs:
           # The two playwright configs carry the launch flags this job depends
           # on, tests/helpers/ is what every spec boots through, and the
           # workflow file is here so an edit to THIS job runs it.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/lighting/|playwright(\.gpu)?\.config\.js$|\.github/workflows/ci\.yml$|tests/helpers/)' \
+          # NOT .github/workflows/ci.yml (2026-09-30): every CI-tooling PR was
+          # buying 13-14 min of macOS (821 s measured on #499, 10x Linux
+          # billing) to re-prove six gfx specs its diff could not touch. A
+          # change to THIS job's steps is tested by `renderer_macos: true` on
+          # a dispatch, or by the nightly.
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/lighting/|playwright(\.gpu)?\.config\.js$|tests/helpers/)' \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SPECS_FILE"; then
             echo "renderer=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING RENDERER SPECS: the diff touches the renderer, its lighting modules, a gfx spec or the launch config"

@@ -95,6 +95,18 @@ function eyeInsideCar(along, lat, up, pad) {
 // with it (cockpitViewmodelAxes anchors the rig with these).
 const VISOR_EYE_FWD = COCKPIT_EYE_FWD, VISOR_EYE_UP = COCKPIT_EYE_UP;
 
+// The driver's eye (fwd, up) for a first-person mode: VISOR's own pair, or the
+// chosen cockpit INTERIOR's seat (CockpitOpts.layout). vantage() places the
+// camera with it and game.js anchors the rig with it, so the two cannot disagree.
+function seatFwd(mode) {
+  if (mode === "visor") return VISOR_EYE_FWD;
+  return typeof CockpitOpts !== "undefined" ? CockpitOpts.layout().eyeF : COCKPIT_EYE_FWD;
+}
+function seatUp(mode) {
+  if (mode === "visor") return VISOR_EYE_UP;
+  return typeof CockpitOpts !== "undefined" ? CockpitOpts.layout().eyeU : COCKPIT_EYE_UP;
+}
+
 // Cockpit viewmodel basis: same yawVis as the drawn body (heading vs road
 // tangent), origin subtracted along those axes so the eye stays at
 // (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in rig space — or at (fwd, up) when a mode
@@ -323,8 +335,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
   let eye = _vantEyeW, tgt = _vantTgtW, fov;   // pooled; every branch below writes IN PLACE
   if (mode === "cockpit" || mode === "hood" || mode === "visor") {
     const driver = mode === "cockpit" || mode === "visor";   // a driver's eye (visor = cockpit, further forward)
-    const eyeFwd = mode === "cockpit" ? COCKPIT_EYE_FWD : mode === "visor" ? VISOR_EYE_FWD : 0.55;
-    const eyeUp  = mode === "visor" ? VISOR_EYE_UP : driver ? COCKPIT_EYE_UP : 0.95;
+    const eyeFwd = driver ? seatFwd(mode) : 0.55;   // the cockpit INTERIOR's seat (CockpitOpts.layout)
+    const eyeUp  = driver ? seatUp(mode) : 0.95;
     if (extra.carPos) {
       // FREE-WORLD ONBOARD. These are bolted to the CAR, so they must sit at the
       // car and look down the CAR's nose. They used to be built from the road:
@@ -617,5 +629,5 @@ function vantage(track, mode, s, x, spd, now, extra) {
   return _vantOut;
 }
 
-return { init, vantage, cockpitViewmodelAxes, eyeInsideCar, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
+return { init, vantage, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
 })();
