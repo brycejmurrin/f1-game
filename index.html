@@ -1083,6 +1083,15 @@
                 </div>
               </div>
               <p class="adv-help">Carbon fragments, tyre marbles and knocked-over trackside furniture. OFF saves work on a phone and never changes lap time, penalties or damage.</p>
+              <div id="pm-buildworker" class="set-row" role="group" aria-labelledby="pm-buildworker-label">
+                <span class="tune-label" id="pm-buildworker-label">BUILD IN BACKGROUND</span>
+                <div>
+                  <button id="pm-buildworker-prev" type="button" data-step="-1" aria-label="Previous background build setting">&lsaquo;</button>
+                  <select id="pm-buildworker-sel" aria-labelledby="pm-buildworker-label"></select>
+                  <button id="pm-buildworker-next" type="button" data-step="1" aria-label="Next background build setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Experimental. Builds the circuit on a second thread while the loading screen plays, so fewer frames stall. Takes effect on the next circuit you load.</p>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
               <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to ULTRA. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
