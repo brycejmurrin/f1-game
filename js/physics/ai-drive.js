@@ -765,6 +765,11 @@ const AiDrive = (function () {
   // At 0.66 / 0.006 a race split into two plans; the field needs a spread.
   const TASTE_BIAS = 0.8;      // x pitLossLaps: +/- 0.4 of a stop's cost (1.0 planned a lap-1 stop in a 5-lap race)
   const TASTE_SOFTEN = 0.010;  // grip-per-lap preference for softer rubber
+  // A stop leaves at least MIN_STINT laps either side (a lap-1 stop is not a
+  // strategy), and a race of ONE_SET_LAPS or fewer is run on one set: the
+  // tyre model's MIN_LIFE_LAPS floor exists so that it can be.
+  const MIN_STINT = 2;
+  const ONE_SET_LAPS = 5;
   function degCost(n, life) {
     const L = Math.max(0.5, life);
     const over = Math.max(0, n - L);
@@ -870,6 +875,9 @@ const AiDrive = (function () {
       if (pinStops != null && stops !== pinStops) return;
       if (twoCompound && new Set(used.concat(seq)).size < 2) return;
       if (pinStart && seq[0] !== pinStart) return;
+      // No pin, no set already on the car: a sprint this short plans no stop
+      // (measured: 2 low rolls of 21 planned hard-hard with a stop after lap 1).
+      if (stops > 0 && laps <= ONE_SET_LAPS && pinStops == null && !pinStart && !(ctx.firstLife > 0)) return;
       const lives = seq.map((cls, i) => (i === 0 && ctx.firstLife > 0 ? ctx.firstLife : lifeLaps(cls)));
       const stints = splitStints(laps, lives, FUEL_WEAR);
       let cost = stops * pitLossLaps + stops * bias;
@@ -919,16 +927,21 @@ const AiDrive = (function () {
     const lapsAt = [];
     const stints = best.stints.slice();
     let acc = 0, prev = 0;
-    // …but never LATER past the set's life. At a severe circuit the lives are
-    // short and the optimum already sits on the cliff: a +1 shift ran a third
-    // of the field a lap past it (Austria, 10 laps, measured: 8 of 21 cars
-    // over 100 % wear before their stop, 3 of them forced in by the worn rule).
-    // Earlier is always safe; later only while the stint still fits its life.
+    // …but never past a set's life IN EITHER DIRECTION. At a severe circuit the
+    // lives are short and the optimum already sits on the cliff. A +1 shift ran
+    // a third of the field a lap past it (Austria, 10 laps, measured: 8 of 21
+    // cars over 100 % wear before their stop); and a -1 shift is not "always
+    // safe" — it lengthens the NEXT stint, and the early third finished on
+    // 1.17-1.25 wear. A shift stands only while the stint it lengthens fits.
     const effLife = (i, from, len) => best.lives[i] / (1 + FUEL_WEAR * (1 - (from + len / 2) / laps));
+    const minStint = Math.max(1, Math.min(MIN_STINT, Math.floor(laps / Math.max(1, stints.length))));
     for (let i = 0; i < stints.length - 1; i++) {
       acc += best.stints[i];
-      const late = shift > 0 && acc + shift - prev > effLife(i, prev, acc + shift - prev);
-      const at = clamp(acc + (late ? 0 : shift), prev + 1, laps - (stints.length - 1 - i));
+      const to = acc + shift, last = i + 1 === stints.length - 1;
+      const nextEnd = last ? laps : acc + best.stints[i + 1];   // unshifted: the longer, safer bound
+      const over = (shift > 0 && to - prev > effLife(i, prev, to - prev))
+        || (shift < 0 && nextEnd - to > effLife(i + 1, to, nextEnd - to));
+      const at = clamp(over ? acc : to, prev + minStint, laps - minStint * (stints.length - 1 - i));
       lapsAt.push(at); stints[i] = at - prev; prev = at;
     }
     if (stints.length) stints[stints.length - 1] = laps - prev;
@@ -1262,6 +1275,6 @@ const AiDrive = (function () {
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor,
-    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN },
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
   };
 })();

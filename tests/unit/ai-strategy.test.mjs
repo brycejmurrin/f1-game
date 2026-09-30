@@ -238,13 +238,41 @@ test("the stop stagger never shifts a stop LATER past the set's life", () => {
   const mid = at(0.5), late = at(1), early = at(0);
   assert.equal(late.seq.join(), mid.seq.join(), "same plan, only the stagger differs");
   assert.ok(late.lapsAt[0] <= mid.lapsAt[0], `a late roll must not stop after the optimum here: L${late.lapsAt[0]} vs L${mid.lapsAt[0]}`);
-  assert.ok(early.lapsAt[0] < mid.lapsAt[0], "the early third still stops a lap sooner");
-  assert.equal(late.stints.reduce((a, v) => a + v, 0), 10);
+  // …and EARLY is capped the same way: a -1 shift lengthens the next stint,
+  // and the early third finished on 1.17-1.25 wear (the census, round 5).
+  assert.ok(early.lapsAt[0] <= mid.lapsAt[0], "early never stops later than the optimum");
+  // The optimum may itself run a set a little past its life (degCost prices
+  // that); what the stagger must never do is add a lap to a stint that
+  // already does not fit.
+  for (const p of [early, late]) {
+    let from = 0;
+    p.stints.forEach((len, i) => {
+      const fit = life(p.seq[i]) / (1 + A.STRAT.FUEL_WEAR * (1 - (from + len / 2) / 10));
+      if (len > mid.stints[i]) assert.ok(len <= fit, `${p.seq}@${p.lapsAt}: the stagger stretched stint ${i + 1} to ${len} laps on a ${fit.toFixed(2)}-lap set`);
+      from += len;
+    });
+    assert.equal(p.stints.reduce((a, v) => a + v, 0), 10);
+  }
   // …and where the life allows it, the late shift is untouched.
   const roomy = (c) => ({ soft: 12, medium: 18, hard: 26 })[c];
   const r5 = A.stintPlan({ laps: 25, lifeLaps: roomy, pitLossLaps: 0.2, roll: 0.5, twoCompound: true });
   const r1 = A.stintPlan({ laps: 25, lifeLaps: roomy, pitLossLaps: 0.2, roll: 1, twoCompound: true });
   if (r1.seq.join() === r5.seq.join()) assert.ok(r1.lapsAt[0] >= r5.lapsAt[0], "a set with laps to spare still staggers late");
+});
+
+test("no stint is shorter than MIN_STINT, and a 5-lap race is run on one set", () => {
+  // Two low rolls of 21 planned hard-hard with the stop after lap 1 of 5
+  // (Austria, the census): the fuel-adjusted life dipped under the floor and
+  // the -1 stagger cut the [2, 3] split to [1, 4].
+  const floorLife = (laps, sev) => (c) => Math.max(T.MIN_LIFE_LAPS, T.AI_CLASS[c].life * laps / sev);
+  for (const laps of [5, 10, 25]) for (let i = 0; i <= 20; i++) {
+    const p = A.stintPlan({ laps, lifeLaps: floorLife(laps, 1.97), pitLossLaps: 0.2, roll: i / 20, twoCompound: laps >= 8 });
+    assert.ok(p.stints.every((n) => n >= A.STRAT.MIN_STINT), `${laps} laps, roll ${i / 20}: stints ${p.stints}`);
+    if (laps <= A.STRAT.ONE_SET_LAPS) assert.equal(p.stops, 0, `${laps} laps, roll ${i / 20}: ${p.seq} @${p.lapsAt}`);
+  }
+  // The player's STRATEGY row still wins: a pinned stop is a stop.
+  const pinned = A.stintPlan({ laps: 5, lifeLaps: floorLife(5, 1.97), pitLossLaps: 0.2, roll: 0.5, stops: 1 });
+  assert.equal(pinned.stops, 1);
 });
 
 test("the planner's cliff IS the sim's cliff", () => {

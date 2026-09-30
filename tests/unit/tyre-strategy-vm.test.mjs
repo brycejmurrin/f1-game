@@ -110,11 +110,10 @@ test("a wet race puts the AI field on the tread the weather wants, and nobody pi
 // (tools/check/ai-strategy-census.mjs measures that); the plan audit is the
 // cheap half and catches what broke before: the severity-blind planner
 // (#403) planned Austria's mediums for 7.4 laps against a real 3.8.
-test("every AI plan covers the race, meets the two-compound rule, and no stint outlives its set by more than a lap", async () => {
+async function auditPlans(g, ids, LAPS) {
   const T = vm.runInContext("TyreModel", g.ctx);
   const A = vm.runInContext("AiDrive", g.ctx);
-  const LAPS = 10;
-  for (const id of ["bahrain", "redbull", "monaco"]) {
+  for (const id of ids) {
     await g.race(id, "day", "dry", { laps: LAPS });
     const { G } = g;
     const rule = G.pits.twoCompoundApplies();
@@ -125,16 +124,36 @@ test("every AI plan covers the race, meets the two-compound rule, and no stint o
       assert.equal(p.stints.reduce((a, v) => a + v, 0), LAPS, `${id} ${c.code}: stints ${p.stints} cover the race`);
       if (rule) assert.ok(new Set(p.seq).size >= 2, `${id} ${c.code}: ${p.seq} runs one dry compound (DSQ)`);
       let from = 0;
-      for (let i = 0; i < p.stints.length - 1; i++) {
+      for (let i = 0; i < p.stints.length; i++) {   // the FINAL stint too: an early stop lengthens it
         const len = p.stints[i];
         // The life the WEAR gives (update(): life·laps / severity, floored at
         // MIN_LIFE_LAPS, at REAL), not planLaps — the planner's own number
         // cannot audit the planner.
         const life = Math.max(T.MIN_LIFE_LAPS, T.AI_CLASS[p.seq[i]].life * LAPS / G.tyres.severity())
           / (1 + A.STRAT.FUEL_WEAR * (1 - (from + len / 2) / LAPS));
-        assert.ok(len <= life + 1, `${id} ${c.code}: stint ${i + 1} (${p.seq[i]}) is ${len} laps on a ${life.toFixed(2)}-lap set`);
+        // Whole laps against a fractional life: the optimum can end a lap and
+        // a bit past it (measured at the flag: 0.96-1.07 wear); an early
+        // stagger on top of that ran 7 laps on a 5.3-lap hard (1.17-1.25).
+        assert.ok(len <= life + 1.5, `${id} ${c.code}: stint ${i + 1} (${p.seq[i]}) is ${len} laps on a ${life.toFixed(2)}-lap set`);
         from += len;
       }
     }
   }
+}
+
+test("every AI plan covers the race, meets the two-compound rule, and no stint outlives its set by more than a lap", async () => {
+  await auditPlans(g, ["bahrain", "redbull", "monaco"], 10);
+});
+
+// The census grid (difficulty normal, tools/check/ai-strategy-census.mjs): its
+// rolls reach the ends of the range the default grid does not, which is where
+// an early stagger overran Austria's final stint (1.17-1.25 wear at the flag).
+test("the census grid's plans pass the same audit at Austria, 10 and 5 laps", async () => {
+  const g2 = await createGame({ storage: { tyreWear: "real", difficulty: "normal" } });
+  try {
+    await auditPlans(g2, ["redbull"], 10);
+    await g2.race("redbull", "day", "dry", { laps: 5 });
+    const stopping = g2.G.cars.filter((c) => !c.human && c.pitPlan && c.pitPlan.stops > 0);
+    assert.equal(stopping.length, 0, "a 5-lap race is one set: " + stopping.map((c) => c.code + ":" + c.pitPlan.seq + "@" + c.pitPlan.lapsAt).join(" "));
+  } finally { g2.close(); }
 });
