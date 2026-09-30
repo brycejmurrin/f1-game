@@ -6,11 +6,7 @@
     "run that generator. `--check` is on the fast gate, so drift fails at once.",
     "Adding a group used to mean three coordinated edits (package.json, the",
     "tooling-fast list, docs/TESTING.md); it is one edit here now.",
-    "In `toolingFast`, an entry beginning `//` is a comment line emitted verbatim into the generated block — the notes explaining why a given file earns a place in the edit loop live here, not in the generated file.",
-    "Entries are one-per-line and stably sorted (toolingFast notes glue to the",
-    "next path, then sort by path; group keys and files/flags are alpha-sorted).",
-    "Run `node tools/check/merge-hygiene.mjs --fix` after hand edits; the",
-    "guards suite fails on unsorted or one-line-blob formatting."
+    "In `toolingFast`, an entry beginning `//` is a comment line emitted verbatim into the generated block — the notes explaining why a given file earns a place in the edit loop live here, not in the generated file."
   ],
   "toolingFast": [
     "// The 2026-09-27 a11y/PWA pass: pad choice, landscape lock, CAM label in",
@@ -303,7 +299,6 @@
     "tests/unit/menu-a11y-audit.test.mjs",
     "tests/unit/menu-capture.test.mjs",
     "tests/unit/menu-nav-spatial.test.mjs",
-    "// Conflict-prone JSON lists stay one-entry-per-line + sorted.",
     "tests/unit/merge-hygiene.test.mjs",
     "tests/unit/metrics.test.mjs",
     "// The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:",
@@ -739,6 +734,56 @@
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
+      ],
+      "kind": "node"
+    },
+    "test:game-vm-b1": {
+      "files": [
+        "tests/unit/active-aero-vm.test.mjs",
+        "tests/unit/aero-zones-vm.test.mjs",
+        "tests/unit/agent-anchors-vm.test.mjs",
+        "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/classification-vm.test.mjs",
+        "tests/unit/collision-ai-fixes-vm.test.mjs",
+        "tests/unit/collisions-deep-vm.test.mjs",
+        "tests/unit/determinism-replay-vm.test.mjs",
+        "tests/unit/drift-vm.test.mjs",
+        "tests/unit/game-vm.test.mjs",
+        "tests/unit/longitudinal-vm.test.mjs",
+        "tests/unit/obs-act-edge-vm.test.mjs",
+        "tests/unit/physics-characterization-vm.test.mjs",
+        "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/race-flow-fixes-vm.test.mjs",
+        "tests/unit/real-replay-vm.test.mjs",
+        "tests/unit/red-flag-fuel-vm.test.mjs",
+        "tests/unit/red-flag-vm.test.mjs",
+        "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/world-physics-vm.test.mjs"
+      ],
+      "kind": "node"
+    },
+    "test:game-vm-b2": {
+      "files": [
+        "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-stuck-vm.test.mjs",
+        "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/collisions-vm.test.mjs",
+        "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-vm-pool.test.mjs",
+        "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/new-hooks-vm.test.mjs",
+        "tests/unit/offtrack-vm.test.mjs",
+        "tests/unit/phone-pad-netplay-vm.test.mjs",
+        "tests/unit/physics-rows-vm.test.mjs",
+        "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-handoff-vm.test.mjs",
+        "tests/unit/race-settings-vm.test.mjs",
+        "tests/unit/red-flag-pit-vm.test.mjs",
+        "tests/unit/session-entry-vm.test.mjs",
+        "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tyre-strategy-vm.test.mjs",
+        "tests/unit/wake-lock-vm.test.mjs"
       ],
       "kind": "node"
     },

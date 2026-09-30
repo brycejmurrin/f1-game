@@ -343,7 +343,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
-  // Conflict-prone JSON lists stay one-entry-per-line + sorted.
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
