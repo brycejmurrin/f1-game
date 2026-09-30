@@ -588,8 +588,10 @@ per camera mode (which also switches the live camera) plus a slider per knob,
 with RESET CAM / RESET ALL.
 
 ### `freeCam(opts) → {open, eye, target, fov, roll, lens, speed, corner, anchor, poseErr} | false`
-Drives the player-facing **FREE CAMERA** panel (PAUSE → SETTINGS → DISPLAY →
-ADVANCED VISUALS → FREE CAMERA; `js/camera/free-cam.js`), which is photo mode's
+Drives the player-facing **FREE CAMERA** panel (the flyby editor's sub-mode:
+PAUSE → SETTINGS → DISPLAY → ADVANCED VISUALS → FLYBY SHOT EDITOR → FREE CAMERA,
+where SET SHOT START / END write the view into the selected shot and DONE returns
+to the editor; `js/camera/free-cam.js`), which is photo mode's
 fly-cam in its own dock. Any placement opens the panel and publishes `dbgCam` at
 once, so it shows on the next rendered frame even with nothing flying. It returns
 `false` with no track built, and for a snap that cannot happen (no car, no

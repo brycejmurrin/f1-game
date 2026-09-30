@@ -28,7 +28,26 @@ const GarageArrival = (function () {
       store.set("garageArrival", settings(value)); refresh();
     };
     $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); };
-    $("ga-settings").ontoggle = refresh;
+    // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
+    // it takes the settings page's place while open and gives it back on DONE.
+    const page = (on) => {
+      const ps = $("pmsettings"), dp = $("pm-panel-display");
+      if (ps) ps.hidden = !on;
+      if (dp) dp.hidden = !on;
+    };
+    const panel = $("garrival"), openBtn = $("pm-garrival"), done = $("ga-close");
+    if (panel && openBtn) openBtn.onclick = () => {
+      refresh(); page(false); panel.hidden = false;
+      if (typeof document !== "undefined" && document.body) document.body.classList.add("lt-open");
+      if (done && done.focus) done.focus();
+    };
+    if (panel && done) done.onclick = () => {
+      panel.hidden = true; page(true);
+      if (typeof document !== "undefined" && document.body) document.body.classList.remove("lt-open");
+      // After the settings dialog's own re-show handling, which focuses its
+      // CLOSE door; a tool's DONE hands focus back to the tool's button.
+      if (openBtn && openBtn.focus) { if (typeof setTimeout === "function") setTimeout(() => openBtn.focus(), 0); else openBtn.focus(); }
+    };
     refresh();
     return read;
   }

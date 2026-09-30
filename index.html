@@ -415,6 +415,24 @@
     try {
       if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
+    // Title layout: apex26.titleLayout (object | unset). Stored only when
+    // custom, already clamped (js/ui/title-layout.js set()); the same arithmetic
+    // as TitleLayout.vars, held equal by tests/unit/title-layout.test.mjs.
+    try {
+      var tl = JSON.parse(localStorage.getItem("apex26.titleLayout")), de = document.documentElement;
+      if (tl && typeof tl === "object") {
+        ["btns", "title", "art"].forEach(function (k) {
+          var o = tl[k] || {};
+          de.style.setProperty("--tl-" + k + "-x", (+o.x || 0) + "vw");
+          de.style.setProperty("--tl-" + k + "-y", (+o.y || 0) + "vh");
+          de.style.setProperty("--tl-" + k + "-size", String((+o.size || 100) / 100));
+        });
+        if (tl.btns && +tl.btns.width > 0) { de.style.setProperty("--tl-btns-w", String(+tl.btns.width)); de.dataset.titleBtnw = "on"; }
+        if (tl.side === "swap") de.dataset.titleSide = "swap";
+        if (tl.layout === "stack" || tl.layout === "row") de.dataset.titleBtns = tl.layout;
+        de.dataset.titleLayout = "on";
+      }
+    } catch (e) { /* TitleLayout answers at eval */ }
     var b = document.body;
     if (!b || !window.getComputedStyle) return;
     try {
@@ -1048,28 +1066,13 @@
             </div>
           </details>
           <details id="pm-visual-tuners" class="pm-renderer-sub">
-            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 5 TOOLS</summary>
+            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 4 TOOLS</summary>
             <div id="pm-visual-tuners-body" role="group" aria-label="Advanced visual tools">
-              <p id="pm-visual-tuners-help" class="adv-help">Creative tools for the look of the game: lighting, camera angles, the pre-race flyby, a free-roaming camera and the pit-garage arrival. Start a race, then pause to preview changes on track.</p>
+              <p id="pm-visual-tuners-help" class="adv-help">Creative tools for the look of the game: lighting, camera angles, the pre-race flyby (its FREE CAMERA flies anywhere and sets shots) and the pit-garage arrival. Start a race, then pause to preview changes on track.</p>
               <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
               <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
               <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
-              <button id="pm-freecam" aria-describedby="pm-visual-tuners-help">FREE CAMERA&hellip;</button>
-              <details id="ga-settings" class="pm-renderer-sub">
-                <summary class="adv-more-btn">GARAGE ARRIVAL TUNER</summary>
-                <p class="adv-help">Plays as your car leaves the garage when a race starts, and on WORK ON CAR pit visits. Reduced motion skips it.</p>
-                <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ARRIVAL</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
-                <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
-                  <select id="ga-speed"><option value="0.5">SLOW · HALF SPEED</option><option value="1" selected>NORMAL</option><option value="2">FAST · DOUBLE SPEED</option></select>
-                </div></div>
-                <div class="set-row"><label class="tune-label" for="ga-angle">GARAGE ANGLE</label><div>
-                  <select id="ga-angle"><option value="cut">TWO CAMERA CUT</option><option value="left">LEFT BAY</option><option value="right">RIGHT BAY</option></select>
-                </div></div>
-                <div class="set-row"><label class="tune-label" for="ga-fov">FIELD OF VIEW</label><div>
-                  <input id="ga-fov" type="number" min="40" max="75" step="1" value="54">
-                </div></div>
-                <button id="ga-reset" type="button">RESET ARRIVAL DEFAULTS</button>
-              </details>
+              <button id="pm-garrival" aria-describedby="pm-visual-tuners-help">GARAGE ARRIVAL TUNER&hellip;</button>
             </div>
           </details>
         </section>
@@ -3025,6 +3028,10 @@
     <div id="fb-rail">
       <div id="fb-head">
         <h2>FLYBY SHOT EDITOR</h2>
+        <!-- The editor's sub-mode, as #pc-toggle is the lighting tuner's: flies
+             from the previewed frame on the flyby lens, sets the selected shot's
+             start or end from the view, and DONE returns here (js/camera/flyby-panel.js). -->
+        <button id="fb-freecam" type="button">&#128247; FREE CAMERA</button>
       </div>
       <div id="fb-profile"></div>
       <!-- The one readout that answers "is this shot any good": which shot the
@@ -3062,6 +3069,32 @@
      js/camera/free-cam.js, which adopts fc-close into its footer. -->
 <div id="freecam" role="region" aria-label="Free camera" data-esc-close="fc-close" hidden>
   <button id="fc-close" class="bigbtn" type="button">DONE</button>
+</div>
+
+<!-- garage arrival tuner: the WORK ON CAR pit-visit animation's settings, as an
+     ADVANCED VISUALS tool docked right like the others. Wired by
+     GarageArrival.bindSettings (js/garage/arrival.js). -->
+<div id="garrival" role="region" aria-label="Garage arrival tuner" data-esc-close="ga-close" hidden>
+  <div id="garrival-inner" class="sheet">
+    <div id="ga-head"><h2>GARAGE ARRIVAL TUNER</h2></div>
+    <div id="ga-rows" class="pane">
+      <p class="adv-help">Saved for WORK ON CAR pit visits. Reduced motion skips the animation.</p>
+      <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ARRIVAL</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
+      <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
+        <select id="ga-speed"><option value="0.5">SLOW · 12.8s</option><option value="1" selected>NORMAL · 6.4s</option><option value="2">FAST · 3.2s</option></select>
+      </div></div>
+      <div class="set-row"><label class="tune-label" for="ga-angle">GARAGE ANGLE</label><div>
+        <select id="ga-angle"><option value="cut">TWO CAMERA CUT</option><option value="left">LEFT BAY</option><option value="right">RIGHT BAY</option></select>
+      </div></div>
+      <div class="set-row"><label class="tune-label" for="ga-fov">FIELD OF VIEW</label><div>
+        <input id="ga-fov" type="number" min="40" max="75" step="1" value="54">
+      </div></div>
+    </div>
+    <div class="sheet-foot balanced-row">
+      <button id="ga-reset" type="button">RESET</button>
+      <button id="ga-close" class="bigbtn" type="button">DONE</button>
+    </div>
+  </div>
 </div>
 
 <!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).
@@ -3339,6 +3372,7 @@
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>

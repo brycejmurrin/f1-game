@@ -107,7 +107,11 @@ let live = null;   // the one created instance, for __apex.freeCam (js/agent/ape
 function create(G, photo) {
 Log.info("game", "FreeCam.create");
 const { $, photoCam } = G;
-const st = { open: false, speed: SPD_DEF, roll: 0, lens: "race", corner: 0, anchor: "—", poseErr: null, statusT: 0 };
+// back / actions: set only when a tool opened this as its SUB-MODE (the flyby
+// editor's FREE CAMERA button, enterFrom below). DONE then returns to that tool
+// rather than to the pause menu, and the tool's pose actions show in #fc-shot.
+const st = { open: false, speed: SPD_DEF, roll: 0, lens: "race", corner: 0, anchor: "—", poseErr: null, statusT: 0,
+  back: null, actions: null };
 const rk = { q: false, e: false };
 
 // ---- DOM (built here: index.html holds only the layer, its door and the
@@ -136,6 +140,7 @@ if (root) {
     mk("div", { id: "fc-head" }, [mk("h2", { textContent: "FREE CAMERA" })]),
     mk("div", { id: "fc-status" }),
     mk("div", { id: "fc-rows", className: "pane" }, [
+      mk("div", { id: "fc-shot", className: "balanced-row", hidden: true, attrs: { role: "group", "aria-label": "Use this view in the flyby" } }),
       slider("fc-speed", "SPEED", 0, SLIDER_MAX, 1, "fc-speed-val"),
       slider("fc-roll", "ROLL", -ROLL_MAX, ROLL_MAX, 1, "fc-roll-val"),
       slider("fc-fov", "FOV", FOV_MIN, FOV_MAX, 1, "fc-fov-val"),
@@ -185,6 +190,23 @@ function refreshAnchor() {
   try { st.anchor = anchorText(FlybySeq.poseFromWorld(G.track, photoCam.pos).pose); } catch (_) { st.anchor = "—"; }
 }
 function say(msg) { const m = E["fc-msg"]; if (m) m.textContent = msg; }
+/** The opener's pose actions (SET SHOT START / END from the flyby editor): each
+ *  hands the view, as a flyby pose, to the tool that opened this panel. */
+function paintActions() {
+  const box = E["fc-shot"]; if (!box) return;
+  box.replaceChildren();
+  const list = st.actions || [];
+  for (const a of list) {
+    const b = btn("", a.label, a.title);
+    b.addEventListener("click", () => {
+      tick();
+      const r = flybyPose();
+      say(r ? (a.run(r) || "Could not use this view.") : "No circuit to anchor a pose to.");
+    });
+    box.appendChild(b);
+  }
+  box.hidden = !list.length;
+}
 
 // ---- placing the camera ----
 function place(eye, target, fov) {
@@ -287,7 +309,9 @@ function open() {
 function close(showPauseMenu) {
   if (!st.open) return;
   Log.info("game", "FreeCam.close");
-  st.open = false; st.roll = 0; st.lens = "race";
+  const back = st.back;
+  st.open = false; st.roll = 0; st.lens = "race"; st.back = null; st.actions = null;
+  paintActions();
   releaseKeys();
   if (root) root.hidden = true;
   if (inner) inner.hidden = false;           // HIDE PANEL tucks this; do not carry it over
@@ -297,11 +321,24 @@ function close(showPauseMenu) {
     window.removeEventListener("blur", releaseKeys);
   }
   if (G.photoMode && photo && photo.exit) photo.exit();
+  // Opened as a tool's sub-mode: DONE goes back to that tool, not the menu.
+  if (showPauseMenu && back) { back(); return; }
   if (showPauseMenu && G.paused) {
     const ps = $("pmsettings"); if (ps) ps.hidden = false;
     const dp = $("pm-panel-display"); if (dp) dp.hidden = false;
-    const b = $("pm-freecam"); if (b && b.focus) b.focus();
+    const b = $("pm-visual-tuners-sum"); if (b && b.focus) b.focus();
   }
+}
+/** Open as ANOTHER TOOL'S SUB-MODE. opts is __apex.freeCam's (eye/target/fov,
+ *  lens, ...) plus back (DONE returns there) and actions ([{label, title, run}],
+ *  run(flybyPose) -> message or falsy). */
+function enterFrom(opts) {
+  opts = opts || {};
+  if (!cmd(opts)) return false;
+  st.back = typeof opts.back === "function" ? opts.back : null;
+  st.actions = Array.isArray(opts.actions) ? opts.actions : null;
+  paintActions();
+  return true;
 }
 /** Photo mode left by some other door (resume, quit, the lighting tuner). */
 function onPhotoExit() { if (st.open) close(false); }
@@ -361,7 +398,6 @@ function cmd(opts) {
 // ---- wiring ----
 const on = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
 const tick = () => { if (G.soundOn && typeof GameAudio !== "undefined") GameAudio.uiTick(); };
-on($("pm-freecam"), "click", () => { if (G.soundOn && typeof GameAudio !== "undefined") GameAudio.uiSelect(); open(); });
 on($("fc-close"), "click", () => { tick(); close(true); });
 on(E["fc-speed"], "input", (e) => { st.speed = speedFromSlider(e.target.value); paint(); });
 on(E["fc-roll"], "input", (e) => { st.roll = clampRoll(e.target.value); paint(); publish(); });
@@ -376,7 +412,7 @@ on(E["fc-copy-view"], "click", copyView);
 on(E["fc-copy-pose"], "click", copyPose);
 paint();
 
-const api = { open, close, isOpen, onPhotoExit, speed, decorate, key, releaseKeys, cmd, state,
+const api = { open, close, isOpen, onPhotoExit, enterFrom, speed, decorate, key, releaseKeys, cmd, state,
   place, snapCar, snapCorner, copyView, copyPose, flybyPose, panel: () => inner };
 live = api;
 return api;
@@ -386,6 +422,8 @@ return Object.freeze({
   create,
   /** __apex.freeCam(opts) — see docs/DEBUG-HOOKS.md. */
   cmd: (opts) => (live ? live.cmd(opts) : false),
+  /** The flyby editor's FREE CAMERA button — see enterFrom. */
+  enterFrom: (opts) => (live ? live.enterFrom(opts) : false),
   speedFromSlider, sliderFromSpeed, clampSpeed, wheelSpeed, clampRoll, clampFov,
   viewSnippet, aim, carPose, cornerPose, anchorText,
   SPD_MIN, SPD_MAX, SPD_DEF, ROLL_MAX, BOOST,
