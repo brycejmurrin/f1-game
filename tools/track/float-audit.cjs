@@ -612,7 +612,7 @@ function foliageAudit(id) {
 
 if (args.includes("--foliage")) {
   const why = args.includes("--why");
-  const ids = args[0] === "--all" ? buildContext().Tracks.LIST.map((d) => d.id) : [args[0]];
+  const ids = args[0] === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [args[0]];
   for (const id of ids) {
     const r = foliageAudit(id);
     console.log(`\n${r.id.padEnd(13)} ${String(r.hits.length).padStart(4)} prim-pair hit(s) ` +
@@ -674,7 +674,7 @@ function emitJson(obj) {
 }
 
 if (args.includes("--clip")) {
-  const ids = args[0] === "--all" ? buildContext().Tracks.LIST.map((d) => d.id) : [args[0]];
+  const ids = args[0] === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [args[0]];
   let total = 0;
   for (const id of ids) {
     const r = clipAudit(id);
@@ -696,7 +696,7 @@ this ranked list as a lead at most.`);
 
 if (args[0] === "--all") {
   const { Tracks } = buildContext();
-  const ids = Tracks.LIST.map((d) => d.id);
+  const ids = require("../lib/circuit-scope.cjs").scope(Tracks.LIST.map((d) => d.id));   // APEX_CIRCUITS narrows --all
   const out = [];
   let bad = 0;
   for (const id of ids) {

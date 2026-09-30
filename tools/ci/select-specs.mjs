@@ -461,6 +461,16 @@ export const PER_CIRCUIT_DATA = new Set([
 export const CIRCUIT_FILTERED_TESTS = new Set([
   "tests/specs/tracks-walls.spec.js",
   "tests/unit/elevation-tracks-vm.test.mjs",
+  // The fleet sweeps (2026-09-30): each narrows its roster loop, or the roster
+  // floor it holds a scoped audit CLI to (tools/lib/circuit-scope.cjs).
+  "tests/unit/prop-clipping.test.mjs",
+  "tests/unit/scenery-grounding.test.mjs",
+  "tests/unit/coplanar-faces.test.mjs",
+  "tests/unit/props-tri-ratchet.test.mjs",
+  "tests/unit/road-under-floor.test.mjs",
+  // pit-complex is NOT scoped: its mouth test counts qualifying circuits
+  // across the roster and its other tests build fixed circuits regardless.
+  "tests/unit/shared-track-foundation-characterization.test.cjs",
 ]);
 // Paths that cannot change what a browser spec or a per-circuit loop sees, so
 // they do not break a circuit scope: prose, and node unit files other than
