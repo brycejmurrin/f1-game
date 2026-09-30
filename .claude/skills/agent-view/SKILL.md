@@ -1,6 +1,6 @@
 ---
 name: agent-view
-description: Use when the user wants to see or drive Apex 26 without screenshots: world()/field()/rollout(), headless laps, deterministic runs, what the car or agent is doing, telemetry, slip/grip, field order and gaps, sector timing, lightState, the headless obs/act/reset loop; and the TRACK GEOMETRY hooks — corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits. Read-only observation: editing a circuit is new-track, AI overtake behaviour ai-racecraft, handling feel tune-physics.
+description: Use when the user wants to see or drive Apex 26 without screenshots: world()/field()/rollout(), headless laps, deterministic runs, what the car or agent is doing, telemetry, slip/grip, field order and gaps, sector timing, lightState, the headless obs/act/reset loop; and the TRACK GEOMETRY hooks — corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits. Read-only: circuit edits are new-track, AI behaviour ai-racecraft, handling tune-physics.
 ---
 
 # Agent view — perceive and drive the game as text

@@ -2,7 +2,7 @@
 name: playwright-probe
 context: fork
 agent: general-purpose
-description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after frames, flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes (profile-gameloop), the CAR STUDIO (livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated shots via carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, camState/viewState, framing a corner, camera lag). Not for editing the parts catalog / livery definitions (garage-parts-livery), UI-layout or HUD-fit screenshots (survey-ui-matrix), or a live canvas (mcp-probe).
+description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after frames, flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes (profile-gameloop), the CAR STUDIO (livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated shots via carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, camState/viewState, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit screenshots (survey-ui-matrix) or a live canvas (mcp-probe).
 ---
 
 # Headless Playwright probing (parallel)
