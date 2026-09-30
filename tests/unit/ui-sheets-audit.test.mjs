@@ -539,3 +539,26 @@ test("a CLASSIFIED late retirement shows the points award() paid, with its reaso
   un.api.buildResults([cars[0], cars[1]]);
   assert.equal(rowsOf(un.els.resultsTable)[1].children.find((c) => c.classList.contains("res-pts")).textContent, "DNF", "an unclassified retirement still reads DNF");
 });
+
+test("an UNFINISHED car on the lead lap reads no \"+1 LAP\"; a genuinely lapped car still does", () => {
+  // Bug hunt 2026-09-26 (16217f3c1): the results sheet read "+1 LAP" on every
+  // lead-lap car still running. `lap` counts line crossings and a running car
+  // is flagged at its NEXT crossing (RaceControl.flagOut), so one still on
+  // its final lap sits one crossing behind the winner without being lapped.
+  const team = (id, color) => ({ id, name: id.toUpperCase(), color });
+  const cars = [
+    { driverId: "w", code: "WIN", name: "Winner", team: team("red", [1, 0, 0]), lap: 5, finished: true, finishT: 100, penalty: 0 },
+    { driverId: "r", code: "RUN", name: "Running", team: team("blue", [0, 0, 1]), lap: 4, finished: false, penalty: 0 },
+    { driverId: "f", code: "FLG", name: "Flagged", team: team("red", [1, 0, 0]), lap: 4, finished: true, finishT: 104, penalty: 0 },
+    { driverId: "l", code: "LAP", name: "Lapped", team: team("blue", [0, 0, 1]), lap: 3, finished: false, penalty: 0 },
+    { driverId: "t", code: "TWO", name: "Twice", team: team("red", [1, 0, 0]), lap: 3, finished: true, finishT: 110, penalty: 0 },
+  ];
+  const h = bootResults({ season: null, cars, seasonMode: false });
+  h.api.buildResults(cars.slice());
+  const names = rowsOf(h.els.resultsTable).map(nameOf);
+  assert.equal(names[0], "WIN  Winner");
+  assert.equal(names[1], "RUN  Running", "a running car on the lead lap is not a lap down");
+  assert.equal(names[2], "FLG  Flagged  (+1 LAP)", "a car flagged one crossing behind the winner is a lap down");
+  assert.equal(names[3], "LAP  Lapped  (+1 LAP)", "a running car two crossings behind is still a lap down");
+  assert.equal(names[4], "TWO  Twice  (+2 LAPS)", "and the plural holds");
+});

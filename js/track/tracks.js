@@ -11,7 +11,7 @@ const Tracks = (function () {
   const WORLD_UP = [0, 1, 0];
 
   const { cross, norm, addBox } = TrackGeom;
-  const { cr, sample, curvatureRaw, curvature, project, wallAt } = TrackSpline;
+  const { cr, sample, curvatureRaw, curvature, project, wallAt, postLimits } = TrackSpline;
   const { upOf, bankingProfile, onKerb, bankAngle, banking,
           buildRoad, buildTerrain, buildFloor } = TrackMesh;
   const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;
@@ -887,5 +887,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
+  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
 })();

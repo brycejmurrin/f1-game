@@ -1047,7 +1047,13 @@ let _pitCrewDrawn = () => 0;   // filled after CarDraw.create — __apex.pit() d
 // at the flag (js/race/sporting-regs.js; FIA 2026 SR B5.12.2(c), B5.13.2(c)).
 // A car slowed by an obvious problem may be passed under a caution
 // mid-incident, being rescued as stuck, or beached in the run-off.
-const scWatch = SportingRegs.createPassWatch(0, (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.offroad && (o.offT || 0) > 0.5));
+const postLim = { r: 0, l: 0, minOut: 0, side: 0 };   // Tracks.postLimits' reused out-param
+// …or all but stopped on the track (a first-lap jam: passing a car at walking
+// pace is passing a car with an obvious problem).
+const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.offroad && (o.offT || 0) > 0.5)
+  || (!(o.pitState && o.pitState !== "none") && (o.speed || 0) < vTop() * 0.05);
+const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
+const scWatch = SportingRegs.createPassWatch(0, stricken);
 function scPassCall(ev) {
   if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") return;
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
@@ -4693,6 +4699,12 @@ function updateCar(c, dt, ranked) {
     // the one ahead close up at a higher cap; the leader runs the SC pace.
     if (lvl >= 2) cautionV = vmax = Math.min(vmax, vTop() * (lvl >= 4 ? 0.02
       : lvl === 3 ? RaceControl.scQueueFrac(c, cars, track.total, ranked[0], vTop(), pits.inLane) : 0.6));
+    // …and an AI car holds its place behind the car ahead (RaceControl.holdCap):
+    // the cap alone let cars on different lines drive past each other.
+    if ((lvl === 2 || lvl === 3) && !c.human && !(c.pitState && c.pitState !== "none")) {
+      const h = RaceControl.holdCap(c, ranked, cautionFair);
+      if (h < cautionV) cautionV = vmax = h;
+    }
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -6076,6 +6088,15 @@ function updateCar(c, dt, ranked) {
         else laneMin = wallLat + 0.30 + 1.0;
       }
     }
+  }
+  // GANTRY LEGS (Tracks.postLimits): a footprint on each side of the leg,
+  // never a wall line — a car on the run-off stays out there, one on the road
+  // stops at the leg's face. The outside case rides the pit wall's lane clamp.
+  if (track.posts && track.posts.length) {
+    Tracks.postLimits(track, c.s, c.x, postLim);
+    if (postLim.r < wallR) wallR = postLim.r;
+    if (postLim.l < wallL) wallL = postLim.l;
+    if (postLim.minOut > laneMin) { laneMin = postLim.minOut; pitSd = postLim.side; }
   }
   let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
   if (c.x > wallR || c.x < -wallL) {

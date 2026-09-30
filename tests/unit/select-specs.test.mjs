@@ -82,14 +82,49 @@ test("a spec bigger than the whole pack runs as OVERSIZE shards, not unreachable
   assert.ok(!r.skipped.some((s) => s.file === big), "oversize is not double-counted as skipped");
   assert.deepEqual(r.selected.map((s) => s.file), [small],
     "a spec that does fit is still selected alongside the oversize plan");
-  // A spec that fits the budget ON ITS OWN but not beside another is ordinary
-  // skipping, never oversize — a later change with fewer candidates picks it up.
+  // A spec that fits the budget ON ITS OWN but not beside another is never
+  // oversize. It rides as OVERFLOW (2026-09-29): it used to be skipped, and a
+  // routed spec that always loses the packing was run by nothing but the
+  // 11-night rota. With no overflow allowance it is skipped by name, as before.
   const a = "tests/specs/multiplayer-seats.spec.js", b = "tests/specs/multiplayer-npeer.spec.js";
-  const both = fit([a, b], budgetFor(Math.max(declaredTests(a), declaredTests(b)) * fb), { db: EMPTY });
-  assert.deepEqual(both.oversize.map((s) => s.file), [], "a spec smaller than the budget is skipped, not oversize");
+  const bud = budgetFor(Math.max(declaredTests(a), declaredTests(b)) * fb);
+  const both = fit([a, b], bud, { db: EMPTY });
+  assert.deepEqual(both.oversize.map((s) => s.file), [], "a spec smaller than the budget is not oversize");
   assert.deepEqual(both.unreachable.map((s) => s.file), [], "…and never unreachable");
-  assert.equal(both.selected.length + both.skipped.length, 2, "each lands in exactly one bucket");
-  assert.equal(both.skipped.length, 1, "one of the two is skipped by name");
+  assert.equal(both.selected.length + both.overflow.length, 2, "each lands in exactly one bucket");
+  assert.equal(both.overflow.length, 1, "the one that lost the packing runs as overflow");
+  assert.deepEqual(both.skipped, []);
+  const planned = shards(both, EMPTY).flatMap((r) => r.specs.split(" "));
+  assert.ok(planned.includes(both.overflow[0].file), "shards() packs the overflow spec into a job");
+  const none = fit([a, b], bud, { db: EMPTY, overflowShards: 0 });
+  assert.equal(none.skipped.length, 1, "no overflow allowance: skipped by name");
+  assert.deepEqual(none.overflow, []);
+});
+
+test("overflow is bounded, and every spec lands in exactly one bucket at any allowance", () => {
+  const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"))
+    .map((f) => "tests/specs/" + f);
+  const r = fit(specs, 10, { overflowShards: 2 });
+  const sec = r.overflow.reduce((n, x) => n + (x.sec || 0), 0);
+  assert.ok(sec <= 2 * TARGET_SHARD_SEC, `overflow ${sec} s within two jobs' worth`);
+  assert.ok(r.skipped.length > 0, "a whole-suite plan still leaves specs to name");
+  const wide = fit(specs, 60, { overflowShards: 12, staleFirst: true });
+  assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
+  const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + x.oversize.length
+    + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length + x.coveredByVmTwin.length + x.unreadable.length;
+  assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
+});
+
+test("the nightly diffs from the deploy branch as it stood a day ago, with a wider allowance", () => {
+  const sh = fs.readFileSync(path.join(ROOT, "tools/ci/ci-resolve-before.sh"), "utf8");
+  assert.match(sh, /schedule\) BEFORE="\$\(git rev-list -1 --first-parent --before='24 hours ago' HEAD/);
+  const step = fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8");
+  assert.match(step, /--overflow-shards "\$OVERFLOW_SHARDS" --stale-first/);
+  assert.match(step, /--budget-min "\$BUDGET_MIN"/);
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| '' \}\}/);
+  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| '' \}\}/,
+    "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan");
 });
 
 test("a spec that reserves more than the selected-gate timeout is EXCLUDED by name", () => {
