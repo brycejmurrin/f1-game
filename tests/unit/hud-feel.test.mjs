@@ -57,21 +57,30 @@ const hex01 = (h) => {
   return [0, 2, 4].map((i) => parseInt(d.slice(i, i + 2), 16) / 255);
 };
 
-// A 2D context that accepts every call and every property write.
-function ctx2d() {
+// A 2D context that accepts every call and every property write — and, given
+// a log, records each write as [prop, value] so a test can read the paint.
+function ctx2d(log) {
   const store = {};
   return new Proxy({}, {
     get: (_, k) => (k in store ? store[k] : () => {}),
-    set: (_, k, v) => { store[k] = v; return true; },
+    set: (_, k, v) => { store[k] = v; if (log) log.push([k, v]); return true; },
   });
 }
+// Every custom property css/tokens.css declares at the top of a line — the
+// values a browser's getComputedStyle(root) would hand back unskinned.
+const ALL_TOKENS = (() => {
+  const t = {};
+  for (const [, k, v] of read("css/tokens.css").matchAll(/^\s*(--[\w-]+):\s*([^;]+);/gm)) if (!(k in t)) t[k] = v.trim();
+  return t;
+})();
 
 function boot(opts = {}) {
   const dom = makeDom();
   const rawCreate = dom.document.createElement;
+  const bgLog = [], mapLog = [], timers = [];
   dom.document.createElement = (tag) => {
     const el = rawCreate(tag);
-    if (String(tag).toLowerCase() === "canvas") el.getContext = () => ctx2d();
+    if (String(tag).toLowerCase() === "canvas") el.getContext = () => ctx2d(bgLog);
     return el;
   };
   const sb = {
@@ -83,13 +92,18 @@ function boot(opts = {}) {
     PhysicsConsts: { IDLE_RPM, MAX_RPM },
     Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
     GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
-    TrackMaps: { drsZones: () => [] },
+    TrackMaps: opts.trackMaps || { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
+    // #announce-live's delayed write (sayFlag) queues here; a test runs them.
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout: () => {},
+    performance: { now: () => 1000 },
+    matchMedia: opts.matchMedia,
     // The three globals the TEAM ACCENT path reads (skinAccent in hud.js). They
     // are absent from the other tests' boot on purpose — without Teams the
     // function must leave the cascade alone, which is what lets hud.js run in a
     // node harness at all.
     Teams: opts.teams || undefined,
-    getComputedStyle: opts.teams ? () => ({ getPropertyValue: (k) => TOKEN[k] || "" }) : undefined,
+    getComputedStyle: opts.teams ? () => ({ getPropertyValue: (k) => TOKEN[k] || "" })
+      : opts.tokens ? () => ({ getPropertyValue: (k) => ALL_TOKENS[k] || "" }) : undefined,
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
@@ -98,13 +112,14 @@ function boot(opts = {}) {
 
   const $ = (id) => dom.byId(id);
   const minimap = $("minimap");
-  minimap.getContext = () => ctx2d();
+  minimap.getContext = () => ctx2d(mapLog);
   const els = {
     pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
     speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
     btnOT: $("btn-ot"), btnAero: $("btn-aero"),
     gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
     flag: $("hud-flag"), minimap, gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
+    announceLive: $("announce-live"),
   };
   const player = {
     team: { id: "t1", color: [1, 0, 0] }, code: "YOU", rank: 1, lap: 1, lapTime: 12, best: Infinity,
@@ -121,7 +136,7 @@ function boot(opts = {}) {
     cssCol: () => "#f00",
   };
   const hud = sb.GameHud.create(G);
-  return { dom, els, player, G, tick: () => hud.updateHud(true) };
+  return { dom, els, player, G, sb, bgLog, mapLog, timers, tick: () => hud.updateHud(true) };
 }
 
 test("the tach redline latches with hysteresis instead of flickering on the 92 % line", () => {
@@ -501,4 +516,152 @@ test("lap clocks carry the minute: never 1:60.00 or 1:010.00 (round first, then 
   }
   const rs = fs.readFileSync(new URL("../../js/ui/results-sheet.js", import.meta.url), "utf8");
   assert.match(rs, /const cs = Math\.round\(seconds \* 100\)/, "the results sheet's fallback clock rounds first too");
+});
+
+/* ── MOTION: REDUCED, the spoken flag, and sector identity (2026-09-30) ──── */
+
+// The ids inside one element of the shell, by <div> depth from its open tag
+// (comments stripped first, so prose mentioning a tag cannot unbalance it).
+function shellSubtreeIds(html, id) {
+  const src = html.replace(/<!--[\s\S]*?-->/g, "");
+  const start = src.indexOf(`<div id="${id}"`);
+  assert.ok(start >= 0, `index.html has <div id="${id}">`);
+  const re = /<div\b|<\/div>/g;
+  re.lastIndex = start;
+  let depth = 0, end = src.length, m;
+  while ((m = re.exec(src))) {
+    depth += m[0] === "</div>" ? -1 : 1;
+    if (depth === 0) { end = m.index; break; }
+  }
+  return new Set([...src.slice(start, end).matchAll(/\sid="([\w-]+)"/g)].map((x) => x[1]));
+}
+
+test("MOTION: REDUCED stops every HUD pulse, not only the OS query", () => {
+  // The bug: css/responsive.css scoped the data-motion backstop to
+  // :is(#overlay, .screen), so a player who picked MOTION: REDUCED in SETTINGS
+  // still got the redline, OVERTAKE, pit-arrow, limits and VSC-flag pulses —
+  // every one of them stopped only for an OS that asked.
+  const hud = cssRules(read("css/hud.css"));
+  const back = hud.find((r) => r.selector.includes(':root[data-motion="reduce"] :is(#hud, #announce) *')
+    && !r.context.some((c) => c.startsWith("@media")));
+  assert.ok(back, "css/hud.css carries a data-motion backstop over #hud and #announce, outside any @media");
+  assert.match(back.selector, /:root\[data-motion="reduce"\] :is\(#hud, #announce, \.touchbtn\)/,
+    "…and over the elements themselves, the touch buttons included (the dock groups start outside #hud)");
+  assert.match(back.selector, /\*::before/); assert.match(back.selector, /\*::after/);
+  assert.equal(back.decls.get("animation-iteration-count"), "1 !important", "nothing repeats");
+  assert.match(back.decls.get("animation-duration") || "", /^0\.0\d*ms !important$/, "one-shots land at once");
+
+  // Every live HUD animation must sit where that backstop reaches: an id in the
+  // #hud / #announce subtree of the shell, or a node hud.js builds inside one
+  // (.sec-row -> #hud-sectors). A new pulse on an element outside both is red here.
+  const html = read("index.html");
+  const covered = new Set([...shellSubtreeIds(html, "hud"), ...shellSubtreeIds(html, "announce"), "hud", "announce"]);
+  const BUILT_INSIDE = [".sec-row"];
+  const animated = hud.filter((r) => !r.context.some((c) => /prefers-reduced-motion: reduce/.test(c))
+    && !r.selector.includes("data-motion")
+    && [...r.decls].some(([k, v]) => (k === "animation" || k === "animation-name") && !/^none\b/.test(v)));
+  assert.ok(animated.length >= 8, `found ${animated.length} animated HUD rules — the scan broke, not the sheet`);
+  for (const r of animated) {
+    for (const part of r.selector.split(",")) {
+      const ids = [...part.matchAll(/#([\w-]+)/g)].map((x) => x[1]);
+      const ok = ids.some((i) => covered.has(i)) || BUILT_INSIDE.some((c) => part.includes(c));
+      assert.ok(ok, `"${part.trim()}" animates outside #hud/#announce, where MOTION: REDUCED cannot reach it`);
+    }
+  }
+  // The touch OVERTAKE pulse lives in css/overlays.css on #btn-ot: covered
+  // because the shell gives it .touchbtn.
+  assert.match(read("css/overlays.css"), /#btn-ot\.armed \{[^}]*animation: pulse/);
+  assert.match(html, /<button id="btn-ot" class="touchbtn"/);
+  // The HUD-HIDDEN hint's fade has the same twin as its OS rule, so it stays put.
+  assert.match(read("css/overlays.css"), /:root\[data-motion="reduce"\] #hud-restore::after \{ animation: none; \}/);
+});
+
+function pitBoot(opts) {
+  const b = boot(opts);
+  b.G.track.pit = { entryRoadM: 1, sA: 10, sB: 30, sIn: 15 };
+  b.G.pits = { worthStopping: () => true, toEntry: () => 5, cueM: 100 };
+  b.player.pitArmed = true;
+  return b;
+}
+const alphas = (log) => log.filter(([k]) => k === "globalAlpha").map(([, v]) => v);
+
+test("the minimap's armed pit marker pulses — unless motion is reduced, by SETTINGS or by the OS", () => {
+  const live = pitBoot();
+  live.tick();
+  assert.ok(alphas(live.mapLog).some((a) => a !== 1), "an armed stop pulses the P when motion is on");
+
+  // SETTINGS › MOTION: REDUCED (html[data-motion], js/ui/title-fx.js).
+  const set = pitBoot();
+  set.dom.documentElement.dataset.motion = "reduce";
+  set.tick();
+  assert.ok(alphas(set.mapLog).length > 0, "the marker was drawn");
+  assert.deepEqual([...new Set(alphas(set.mapLog))], [1], "MOTION: REDUCED holds the P solid — it pulsed at 6 Hz regardless");
+
+  // The OS flag, read through matchMedia.
+  const os = pitBoot({ matchMedia: (q) => ({ matches: /prefers-reduced-motion: reduce/.test(q) }) });
+  os.tick();
+  assert.deepEqual([...new Set(alphas(os.mapLog))], [1], "an OS asking for reduced motion holds it solid too");
+});
+
+test("a caution flag is SPOKEN through #announce-live, once per change", () => {
+  // #hud-flag is a role="alert" filled and unhidden in the same step, which
+  // NVDA, JAWS and VoiceOver do not announce (index.html, #announce-live).
+  const { els, G, timers, tick } = boot();
+  const live = els.announceLive;
+  const flush = () => { while (timers.length) timers.shift()(); };
+  G.cautionInfo = () => ({ level: 2 }); tick();
+  assert.equal(els.flag.textContent, "VSC", "the chip still reads VSC");
+  assert.equal(els.flag.hidden, false, "…and still shows");
+  assert.equal(live.textContent, "", "cleared first, so a repeat is still a change");
+  assert.equal(timers.length, 1);
+  flush();
+  assert.equal(live.textContent, "RACE CONTROL: VIRTUAL SAFETY CAR", "spoken in words, on the radio's channel label");
+  tick(); tick();
+  assert.equal(timers.length, 0, "a steady flag is not re-spoken every HUD tick");
+  G.cautionInfo = () => ({ level: 1, sector: 1 }); tick(); flush();
+  assert.equal(live.textContent, "RACE CONTROL: YELLOW FLAG, SECTOR 2");
+  G.cautionInfo = () => ({ level: 0 }); tick();
+  assert.equal(els.flag.hidden, true);
+  G.cautionInfo = () => ({ level: 1, sector: 1 }); tick(); flush();
+  assert.equal(live.textContent, "RACE CONTROL: YELLOW FLAG, SECTOR 2", "the same flag after a green is news again");
+  G.cautionInfo = () => ({ level: 4 }); tick(); flush();
+  assert.equal(live.textContent, "RACE CONTROL: RED FLAG");
+  G.cautionInfo = () => ({ level: 3 }); tick(); flush();
+  assert.equal(live.textContent, "RACE CONTROL: SAFETY CAR");
+});
+
+test("minimap sector arcs are the podium metals from tokens — no purple, no red/green pair", () => {
+  // Load the REAL TrackMaps.sectorColors against the sheet's own tokens, so the
+  // map and CIRCUIT DETAIL are proven to read the same three.
+  const tmCtx = { document: { documentElement: {} }, getComputedStyle: () => ({ getPropertyValue: (k) => ALL_TOKENS[k] || "" }) };
+  vm.runInNewContext(src("js/ui/track-maps.js"), tmCtx, { filename: "js/ui/track-maps.js" });
+  const TM = tmCtx.TrackMaps;
+  assert.deepEqual([...TM.SECTOR_TOKENS], ["--gold", "--silver", "--bronze"]);
+  const want = [...TM.SECTOR_TOKENS].map((k) => ALL_TOKENS[k]);   // spread first: a VM-realm .map() fails deepStrictEqual
+  assert.deepEqual([...TM.sectorColors()], want, "sectorColors reads the tokens");
+  assert.deepEqual([...TM.SECTOR_COLORS], want, "and its fallback literals are those tokens' values");
+
+  const { bgLog, tick } = boot({ trackMaps: { drsZones: () => [], sectorColors: TM.sectorColors } });
+  tick();
+  const strokes = bgLog.filter(([k]) => k === "strokeStyle").map(([, v]) => v);
+  assert.deepEqual(strokes.slice(0, 3), want, "S1/S2/S3 are gold, silver, bronze on the minimap");
+  const a = alphas(bgLog);
+  assert.equal(a[0], 0.8, "the arcs keep their 0.8 alpha"); assert.equal(a[a.length - 1], 1, "and the alpha is restored");
+
+  // Not a timing colour: purple is session best, green personal best, red slower.
+  for (const k of ["--sec-best", "--faster", "--slower", "--you"])
+    assert.ok(!want.includes(ALL_TOKENS[k]), `a sector arc wears ${k}`);
+  // Separated by LIGHTNESS, the channel every colour-vision type keeps: each
+  // pair differs by at least 1.25:1 in WCAG luminance ratio.
+  const L = want.map((h) => lum(hex01(h)));
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) {
+    const r = (Math.max(L[i], L[j]) + 0.05) / (Math.min(L[i], L[j]) + 0.05);
+    assert.ok(r >= 1.25, `S${i + 1} vs S${j + 1}: ${r.toFixed(2)}:1`);
+  }
+  // Both drawers read the helper; the stale "= the sector labels" claim is gone.
+  const hudSrc = read("js/ui/hud.js"), tmSrc = read("js/ui/track-maps.js");
+  assert.match(hudSrc, /const SC = TrackMaps\.sectorColors\(\);/);
+  assert.match(tmSrc, /SC = sectorColors\(\)/); assert.match(tmSrc, /g\.strokeStyle = SC\[s\];/);
+  assert.doesNotMatch(hudSrc, /= the sector labels/);
+  assert.doesNotMatch(hudSrc + tmSrc, /192,\s*132,\s*252|#c084fc/i, "the purple literal is gone from both drawers");
 });
