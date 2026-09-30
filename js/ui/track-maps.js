@@ -482,6 +482,30 @@ const TrackMaps = (function () {
       g.beginPath(); g.arc(PX(s[0]), PY(s[1]), width + 1.5, 0, Math.PI * 2); g.fill(); g.stroke();
     }
 
+    // ONE CORNER, CALLED OUT: `mark` is a turn number (the loading card's
+    // flyby is filming it). A ring on the apex and a "T4" tag pushed away from
+    // the circuit's middle. `markFont` is the tag's size in BUFFER px (the
+    // caller knows its oversample); without it, sized off the line weight.
+    // An unknown number draws nothing.
+    const mk = opts.mark > 0 ? data.corners[(opts.mark | 0) - 1] : null;
+    if (mk) {
+      const x = PX(mk.x), y = PY(mk.y), col = opts.markColor || "#e10600";
+      const fpx = opts.markFont > 0 ? opts.markFont : Math.max(10, Math.round(width * 2.6)), txt = "T" + (opts.mark | 0);
+      g.lineWidth = Math.max(1.5, width * 0.6);
+      g.strokeStyle = col; g.fillStyle = "rgba(10,10,16,0.85)";
+      g.beginPath(); g.arc(x, y, width * 1.8, 0, Math.PI * 2); g.fill(); g.stroke();
+      const dx = x - cx, dy = y - cy, len = Math.hypot(dx, dy) || 1, off = width * 1.8 + fpx * 1.1;
+      g.font = "800 " + fpx + "px system-ui, sans-serif";
+      const hw = g.measureText(txt).width / 2 + fpx * 0.4, hh = fpx * 0.7;
+      const lx = Math.min(W - hw, Math.max(hw, x + dx / len * off));
+      const ly = Math.min(H - hh, Math.max(hh, y + dy / len * off));
+      g.fillStyle = col;
+      g.beginPath(); g.rect(lx - hw, ly - hh, hw * 2, hh * 2); g.fill();
+      g.fillStyle = "#ffffff"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText(txt, lx, ly + 0.5);
+      g.textAlign = "left";
+    }
+
     if (opts.corners) {
       const cs = data.corners;
       const rDot = opts.cornerR || 7;

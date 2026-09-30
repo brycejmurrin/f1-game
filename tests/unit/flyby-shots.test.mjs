@@ -175,6 +175,27 @@ test("each shot is continuous, and only a shot BOUNDARY is a cut", async () => {
   });
 });
 
+test("airCorner names the turn a corner shot films, and 0 for every other shot", async () => {
+  await withTrack("monza", (track, g) => {
+    const FlybySeq = g.sandbox.FlybySeq;
+    FlybySeq.reset();
+    const turns = g.sandbox.TrackMaps.corners(track.def).length;
+    const seen = {};
+    for (let i = 0; i <= SAMPLES; i++) {
+      const v = FlybySeq.solve(track, i / SAMPLES);
+      assert.equal(FlybySeq.airCorner(), v.corner, "the accessor reports what solve() returned");
+      const films = /^turn-/.test(v.id);
+      if (!films) assert.equal(v.corner, 0, `shot ${v.id} films no corner`);
+      else assert.ok(v.corner >= 1 && v.corner <= turns, `shot ${v.id}: turn ${v.corner} of ${turns}`);
+      seen[v.id] = v.corner;
+    }
+    assert.ok(Object.values(seen).some((k) => k > 0), "the shipped flyby films at least one corner");
+    FlybySeq.reset();
+    assert.equal(FlybySeq.airCorner(), 0, "reset() clears it for the next run");
+    return null;
+  });
+});
+
 test("the grid anchor matches the grid the race actually forms on", () => {
   // gridSlot() in js/track/core/mesh.js is the ONE definition of where the grid
   // is; flyby-seq.js restates its numbers so the sequencer can resolve anchors

@@ -1041,7 +1041,7 @@ const FlybySeq = (function () {
   // ---- solve ---------------------------------------------------------------
 
   const _eye = [0, 0, 0], _tgt = [0, 0, 0];
-  const _out = { eye: _eye, tgt: _tgt, fov: 50, index: 0, id: "", cut: false, lift: 0 };
+  const _out = { eye: _eye, tgt: _tgt, fov: 50, index: 0, id: "", cut: false, lift: 0, corner: 0 };
 
   /** The camera at `u` (0..1) through the whole sequence. Returns a POOLED
    *  object — read it, do not keep it. `cut` is true on the frame a new shot
@@ -1140,9 +1140,18 @@ const FlybySeq = (function () {
     _lastIdx = idx;
     _out.index = idx;
     _out.id = shot.id || String(idx);
+    // The corner this shot films, as the lap's turn number (bound: a role is a
+    // number by now), or 0. The loading card marks it on its map (airCorner).
+    const k = shotCorner(shot);
+    _out.corner = _airCorner = typeof k === "number" && k > 0 ? k : 0;
     return _out;
   }
-  let _lastIdx = -1;
+  let _lastIdx = -1, _airCorner = 0;
+  /** The turn number the last solve() filmed, 0 for none (a grid, landmark or
+   *  whole-circuit shot). Read by js/ui/loading-screen.js: shotAt() knows the
+   *  shot's name but not its corner, which only exists once bindCorners() has
+   *  resolved "first"/"slowest" against the built world. */
+  function airCorner() { return _airCorner; }
 
   /* THE LIFT IS PLANNED PER SHOT, NOT DISCOVERED PER FRAME. clearEye() alone
      runs on the frame the eye enters a box, so the camera popped straight up
@@ -1534,10 +1543,10 @@ const FlybySeq = (function () {
 
   /** Called when a run begins, so the first frame of the first shot reads as a
    *  cut and the camera does not glide in from wherever it last was. */
-  function reset() { _lastIdx = -1; }
+  function reset() { _lastIdx = -1; _airCorner = 0; }
 
   return {
-    solve, shotAt, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
+    solve, shotAt, airCorner, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
     poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
