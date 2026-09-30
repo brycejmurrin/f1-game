@@ -126,6 +126,37 @@ const MirrorPass = (function () {
       if (!(er.width > 4 && er.height > 4 && cr.width > 0 && cr.height > 0)) { _rect = null; return; }
       _rect = [(er.left - cr.left) / cr.width, (er.top - cr.top) / cr.height,
         er.width / cr.width, er.height / cr.height];
+      side(er);
+    }
+    // THE RADIO CARD BESIDE THE MIRROR, not under it. Right of the frame is the
+    // widest free strip at that height on a landscape screen (the map and gap
+    // readouts own the left, 844x390: ~280px right vs ~230px left). The strip
+    // ends at the right column: the pause button's column always (the sector
+    // box that hangs under it comes and goes, and is ~10px wider), the cam
+    // button only where it shares the card's rows (BROADCAST, mirror at the
+    // very top). Published in SCREEN px — css/hud.css divides by the card's
+    // own zoom — and only when a card fits; otherwise the card stacks under
+    // the mirror (--mir-bot).
+    const SIDE_MIN = 190, SIDE_GAP = 8;
+    function side(er) {
+      const b = document.body;
+      let right = typeof innerWidth === "number" ? innerWidth - 10 : 0;
+      const pause = document.getElementById("pausebtn"), cam = document.getElementById("btn-cam");
+      const sec = document.getElementById("hud-sectors");
+      const box = (n) => (n && !n.hidden && n.getBoundingClientRect ? n.getBoundingClientRect() : null);
+      const p = box(pause), c = box(cam), s = box(sec);
+      // Only what is RIGHT of the frame: the sector box can cross to the left column.
+      const past = (r) => r && r.width > 0 && r.left > er.right;
+      if (past(p)) right = Math.min(right, p.left - 12);
+      if (past(s)) right = Math.min(right, s.left);
+      if (past(c) && c.bottom > er.top) right = Math.min(right, c.left);
+      const x = er.right + SIDE_GAP, w = right - SIDE_GAP - x;
+      const fits = w >= SIDE_MIN;
+      b.classList.toggle("hud-mirror-side", fits);
+      if (fits && b.style) {
+        b.style.setProperty("--mir-side-x", x.toFixed(1) + "px");
+        b.style.setProperty("--mir-side-w", w.toFixed(1) + "px");
+      }
     }
 
     // The player's (or a rival's) grounded basis: interpolated world position,
@@ -202,7 +233,8 @@ const MirrorPass = (function () {
         _shown = want;
         const e = el();
         if (e) e.hidden = !want;
-        document.body.classList.toggle("hud-mirror-on", want);   // the radio card and flag step down (css/hud.css)
+        document.body.classList.toggle("hud-mirror-on", want);   // the radio card and flag clear it (css/hud.css)
+        if (!want) document.body.classList.toggle("hud-mirror-side", false);
         _measureIn = 0;
       }
       if (!want) { if (g && g.mirrorRect) g.mirrorRect(null); return; }

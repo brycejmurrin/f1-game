@@ -342,7 +342,7 @@ body.hud-prof-broadcast .hud-gaps {
 }
 /* Cinematic/broadcast cam + broadcast HUD: clean frame — tower carries timing. */
 body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
-body.hud-prof-broadcast #announce { top: calc(14svh / var(--hud-z)); }
+body.hud-prof-broadcast #announce { top: max(calc(14svh / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)); }
 
 /* THE CHIP CROSSES TO THE LEFT COLUMN when the right one has no room below the
    sector box — see js/ui/hud.js. --hud-left-h is that column's measured
@@ -607,8 +607,9 @@ body.hud-met-compact #hud-tyre { display: none !important; }
    published by fitHud in this zoom group's units); at the very top in
    BROADCAST, whose tower lives top-left. Square corners on purpose: the image
    is a rectangle, and a rounded frame would leave its corners showing. The
-   radio card and the flag banner, which share the centre column, step down
-   by the mirror's height while it shows (body.hud-mirror-on).
+   radio card sits BESIDE it when the row has room (body.hud-mirror-side),
+   else under it; the flag banner clears its bottom edge (--mir-bot, below
+   the chip rules).
    SIZE: 18% of the width, capped at 36% of the HEIGHT — the first cut (24vw,
    no height term) filled a quarter of a landscape phone under a HUD SIZE
    zoom. ~140x40 CSS px on an 844x390 phone, ~230x66 on 1280x720. */
@@ -639,20 +640,48 @@ body.hud-met-compact #hud-tyre { display: none !important; }
 }
 body.hud-prof-broadcast #hud-mirror-chip { top: calc(8px + var(--sat)); }
 body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z)); }
-body.hud-mirror-on #announce {
-  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 18px
-    + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7);
+/* THE CENTRE COLUMN CLEARS THE MIRROR. --mir-bot is the bottom edge of
+   whatever the mirror leaves at the top (the frame, or its chip), in the
+   zoom units of the element that reads it — #announce and #hud-flag share the
+   mirror's zoom group, so the frame's own size expression evaluates to the
+   same number here. Every `top` those two carry (base, compact, under a
+   caution, broadcast, dropped strip) is max(own slot, --mir-bot + gap): a
+   separate "step down" rule lost to them — the compact and caution rules come
+   later or weigh more, so on a phone the radio card sat on the mirror. */
+body.hud-mirror-on :is(#announce, #hud-flag) {
+  --mir-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
+  --mir-bot: calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7);
+}
+body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: calc(8px + var(--sat) / var(--hud-z)); }
+/* BESIDE THE MIRROR where there is room — the card shares the mirror's row
+   instead of stacking under it. js/render/shared/mirror-pass.js measures the
+   strip right of the frame (up to the cam/pause column) and sets the class
+   and --mir-side-x / -w in SCREEN px only when a card fits, so they divide
+   by this element's zoom; the row is the mirror's own CSS top (--mir-top),
+   never a half-second-old measurement. Outweighs the density/broadcast tops; the
+   caution rules below step aside (:not(.hud-mirror-side)) — the flag stays
+   under the mirror, the card beside it. Portrait / a big HUD SIZE: no room,
+   no class, the --mir-bot stack above. */
+body.hud-mirror-on.hud-mirror-side #announce {
+  top: var(--mir-top);
+  left: calc(var(--mir-side-x) / var(--hud-z));
+  transform: none;
+  min-width: 0;
+  max-width: min(440px, calc(var(--mir-side-w) / var(--hud-z)));
+}
+/* The chip is unzoomed (screen px): its bottom edge divided into this zoom. */
+body:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
+  --mir-bot: calc((var(--sat) + (16px + var(--hud-top-h, 54px)) * var(--hud-z-top, var(--hud-scale)) + var(--tap)) / var(--hud-z));
+}
+body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
+  --mir-bot: calc((8px + var(--sat) + var(--tap)) / var(--hud-z));
 }
 #hud-flag {
-  position: absolute; top: calc(100px + var(--sat) / var(--hud-z)); left: 50%; transform: translateX(-50%);
+  position: absolute; top: max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)); left: 50%; transform: translateX(-50%);
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 4 / 3); border-radius: var(--r-sm); font-weight: 800;
   background: #ffd600; color: #000;
   letter-spacing: 0.06em; white-space: nowrap;
   box-shadow: 0 2px 10px rgba(0,0,0,0.55);
-}
-body.hud-mirror-on #hud-flag {
-  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 18px
-    + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7);
 }
 /* B1 caution flag variants (debris cautions): local yellow, VSC, safety car. */
 #hud-flag.flag-yellow { background: #ffd600; color: #000; }
@@ -669,7 +698,7 @@ body.hud-mirror-on #hud-flag {
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
    below it is the clearance the old pair of literals (62 / 132) encoded. */
 :root[data-gap-drop] #hud-flag {
-  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px);
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px));
 }
 #hud-sectors {
   position: fixed;
@@ -760,7 +789,7 @@ body[data-density="compact"] .hud-gaps { left: calc(114px + var(--sal) / var(--h
 body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 body[data-density="compact"] #hud-flag {
-  top: calc(72px + var(--sat) / var(--hud-z));
+  top: max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px));
   font-size: var(--fs-micro);
   padding: calc(var(--gap) * 0.35) var(--gap);
 }
@@ -768,15 +797,15 @@ body[data-density="compact"] #hud-flag {
    row — with smaller type. It used to keep the billboard's 36svh, which put
    the card in the middle of the road on a phone (reported with screenshots). */
 body[data-density="compact"] #announce {
-  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px);
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px));
   font-size: var(--fs-2);
   --radio-num: 22px;   /* the plate steps down with the card, so it never outgrows two lines of type */
 }
 /* UNDER A CAUTION the flag chip owns the slot under the timing row (#hud-flag,
    100px / 72px compact), so the card steps below it — the two are read
    together on a broadcast, never one over the other. */
-body:has(#hud-flag:not([hidden])) #announce { top: calc(100px + var(--sat) / var(--hud-z) + 38px); }
-body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(72px + var(--sat) / var(--hud-z) + 34px); }
+body:not(.hud-mirror-side):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-side):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -851,7 +880,7 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
 }
 #announce {
   position: fixed;
-  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px);
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px), calc(var(--mir-bot, 0px) + 8px));
   left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: row; align-items: stretch;
   min-width: 200px;
