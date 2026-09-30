@@ -54,3 +54,24 @@ test("overall() still ranks VER above LIN and keeps elites high", () => {
   const top8 = all.slice(0, 8).map((x) => x.c);
   for (const code of ["VER", "HAM", "ALO"]) assert.ok(top8.includes(code), `${code} in top8 ${top8}`);
 });
+
+// Tip pace column (instruments / ship tip 2026-09-30). skill() is pace-only, so a
+// frozen pace column is the speed-product invariant for a data-only reshuffle.
+const TIP_PACE = {
+  VER: 96, LEC: 94, NOR: 93, PIA: 91, RUS: 90, HAM: 89, SAI: 88, ALO: 86,
+  GAS: 84, ALB: 84, ANT: 84, HUL: 82, OCO: 82, HAD: 82, PER: 80, BEA: 80,
+  LAW: 79, BOT: 79, COL: 78, BOR: 77, LIN: 76, STR: 74,
+};
+
+test("pace column frozen vs tip — skill() at roll 0.5 is pace-only and tip-identical", () => {
+  const DR = loadDR();
+  const roll = 0.5;
+  for (const code of Object.keys(TIP_PACE)) {
+    assert.equal(DR.BASE[code][0], TIP_PACE[code], `${code} pace`);
+  }
+  // At roll 0.5 the consistency jitter term is zero, so skill is a pure pace map.
+  const ver = DR.skill(DR.get("VER"), roll);
+  const lin = DR.skill(DR.get("LIN"), roll);
+  assert.ok(ver > lin);
+  assert.equal(ver, DR.skill({ pace: 96, craft: 0, awareness: 0, consistency: 0, experience: 0 }, roll));
+});
