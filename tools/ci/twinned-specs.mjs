@@ -103,6 +103,8 @@ export const TWINNED = {
  *  was reverted; move one only when its browser copy has been re-run green
  *  under the fixtures, in the same change that adapts it. */
 export const ADAPTED = {
+  "tests/specs/albert-park-foundation.spec.js":
+    "Albert Park runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter in 4.5 s; m-albert-hero-fountain proves the required fountain count is watched",
   "tests/specs/physics-fixes.spec.js":
     "pure __apex physics reads (wall scrub, lap-distance continuity); 2/2 under the adapter in 27 s vs 110 s of browser; mutant m-wall-scrub-flat proves it bites",
   "tests/specs/logging.spec.js":
