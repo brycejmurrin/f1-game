@@ -32,8 +32,18 @@ node tools/ui/css-play.mjs garage --sel "#cs-tabs" --css css/carsetup.css
 `no-store`). `--inject ".sheet{…}"` is an overlay. Output:
 `artifacts/css-play/<screen>-<stamp>/{shot.png,dom.json,meta.json}`.
 
-Unknown screen: `--click "#mb-foo" --root "#id"`. Catalog ids are a subset of
-`SCREENS` in `tools/ui/layout-audit.mjs`.
+Unknown screen or a sub-panel: `--click "#mb-foo" --root "#id"`. `--click`
+REPLACES the catalog path, so give the whole route: settings DISPLAY panel =
+`--click "#mb-settings,#pm-open-display" --root "#pm-panel-display" --sel ".tune-row"`
+(door ids: `pm-open-{controls,driving,display,appearance,files}`, `pm-advanced`,
+`pm-audio`). Catalog ids are a subset of `SCREENS` in `tools/ui/layout-audit.mjs`.
+Every step here needs a browser (Chromium via harness.mjs); `--help`/`--list` do not.
+
+Who owns a row: find the class in `index.html`, then `grep -n 'tune-row' css/*.css`.
+Settings sliders (`label.tune-row` > `.tune-label` + `input[type=range]`): base
+`css/tuner.css`, sheet override `.pm-group .tune-row` in `css/components.css`,
+DISPLAY panel `#pm-panel-display .tune-row`; sizes are tokens `--slider`/`--tap`
+(`css/tokens.css`). Enumerated rows are `.set-row` (components.css).
 
 ## Hard don'ts
 

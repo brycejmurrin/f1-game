@@ -36,8 +36,8 @@ Compute min/max/mean of `hw` from the profile array; compare against `w.minOverH
 ## Parallel multi-track sweep (compare all circuits fast)
 
 Validated pattern — 4 tracks profiled concurrently in ~10 s using parallel
-Chromium workers (see the **playwright-probe** skill for the harness). Example output of a
-profile sweep:
+Chromium workers (see the **playwright-probe** skill for the harness). Illustrative output of a
+profile sweep (the elev figures are stale: `max y − min y` over `trackProfile(1000)` now measures spa 102 m, monza 6 m; recompute, do not quote):
 
 ```
 suzuka  18 official / 37 peaks  elev 12.0 m   maxk 0.042

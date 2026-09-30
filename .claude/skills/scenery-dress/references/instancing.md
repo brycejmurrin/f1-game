@@ -66,7 +66,7 @@ judging a `graph-parity` mismatch.
    node tools/track/graph-parity.cjs <id>
    BASE=<pre-migration-ref> node tools/track/graph-parity.cjs --all
    ```
-   Default `BASE=HEAD` only checks working-tree drift; on a clean `js/track`+`js/circuits` it refuses (exit 2).
+   Default `BASE=HEAD` only checks working-tree drift; on a clean `js/track`+`js/circuits` it refuses (exit 2, verified: prints "nothing to compare"; the MCP tool requires `base`).
    Tolerance is 1e-6 m on positions; indices and `mat` must match exactly.
 
    Re-parameterising `pine` so geometry is linear (not affine) in scale is a

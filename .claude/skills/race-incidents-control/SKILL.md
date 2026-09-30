@@ -1,6 +1,6 @@
 ---
 name: race-incidents-control
-description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, VSC, safety car, overtake gating, reliability retirements, or race-control tests are being changed or debugged. AI that merely races badly and causes contact is ai-racecraft, not this skill."
+description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, yellow/red flags, VSC, safety car (never deploys / stuck out), overtake gating, reliability retirements, or race-control tests are being changed or debugged. AI that merely races badly and causes contact is ai-racecraft, not this skill."
 ---
 
 ## Overview
@@ -65,7 +65,7 @@ Commands:
 
 ```sh
 npm run test:tooling-fast
-node --test tests/unit/race-control.test.mjs
+node --test tests/unit/race-control.test.mjs   # 35 tests, <1 s; also incident-gate, reliability, debris-*.test.mjs
 node tools/ci/test-bg.mjs physics-core   # race-control.spec rides here; background
 ```
 

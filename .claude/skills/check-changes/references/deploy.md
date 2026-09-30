@@ -8,7 +8,7 @@ Never force-push. Never rebase published history. Never push without review.
 
 ```sh
 node tools/ci/deploy.mjs --plan   # fetch, show their commits / ours / conflicts / touched circuits — runs nothing
-node tools/ci/deploy.mjs          # fetch → merge → test:tooling-fast → ci.yml's node suites → sweeps (if the union moves geometry) → verify-track (touched circuits) → push HEAD:<deploy> (retry ×3)
+node tools/ci/deploy.mjs          # fetch → merge → test:tooling-fast → ci.yml's node suites → sweeps (if the union moves geometry) → verify-track (touched circuits) → push HEAD:<deploy> — REFUSED since 2026-09-30 (branch protection, GH006): use --pr
 node tools/ci/deploy.mjs --gate-only  # the same gate, pushes nothing (the pre-push check)
 node tools/ci/deploy.mjs --pr     # same checks, then push the session branch and open/update a PR into the deploy branch
 ```
@@ -34,11 +34,12 @@ What changed underneath it, and why the old steps are gone:
    run in the Actions tab. From a session, the host's fetch tool can read
    `version.json`, and `curl` reaches github.io too (see below) — never the
    in-repo wrapper.
-4. **`--pr` is the path that never pushes to the deploy branch** (the agent
-   permission classifier blocks that push). GitHub creates the merge commit,
-   so the PR is a real record — a local fast-forward auto-closes the PR
-   instead (#67). Auto-merge is attempted but never arms here (the deploy
-   branch has no protection rules): merge the PR yourself once CI is green.
+4. **`--pr` is the path that lands work** — since 2026-09-30 the deploy
+   branch is protected (a PR with the eight fast-tier checks green, no
+   bypass), so the default mode's direct push fails with GH006. GitHub
+   creates the merge commit, so the PR is a real record — a local
+   fast-forward auto-closes the PR instead (#67). Auto-merge is attempted;
+   if it does not arm, merge the PR yourself once CI is green.
 
 `deploy.mjs` refuses a dirty tree, loadavg ≥ 3, a live Playwright run, and any
 conflict outside the generated files it can re-derive (`index.html`, `version.json`, ratchets, …). Everything below is the manual
@@ -72,7 +73,7 @@ back to 15.
 ### Push and live check
 
 ```sh
-git push origin HEAD:claude/f1-game-project-26h3ng
+git push origin HEAD:claude/f1-game-project-26h3ng   # REFUSED since 2026-09-30 (GH006): land through `deploy.mjs --pr`
 ```
 
 Live `version.json`: subagent **deploy-research**, or

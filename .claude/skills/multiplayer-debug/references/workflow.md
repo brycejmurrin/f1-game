@@ -88,6 +88,14 @@ Load from the SKILL.md index when the task needs this detail.
    - Use real RTC scripts only for browser/ICE behavior that loopback cannot
      exercise.
 
+## Rival never moves (connected, remote car frozen)
+
+Trace the path in order, stop at the first broken link:
+1. `__apex.net()` — `active`, `role`, `remotes[]` (one per rival, keyed `wire`/`driverId`), `buffered` = first remote's interpolation buffer (`remotes[i].buffered` per rival), `net` = session stats (clock sync). `remotes: []` = no grid slot bound (`slotFallback`), see `netplay.js` `status()`.
+2. `buffered` 0 while the session is alive = packets held before clock sync (session `synced()` false; see the `autoPong` comment in `apex.js` `netLoopback`) or dropped by wire id mismatch; >0 but car still = interpolation/pose (`snapshot.js`, `netplay.js`), not transport.
+3. Game side: `netPlay.owns(c)` must be true for the rival so `updateCar` early-outs (`js/game.js`, grep `netPlay.owns(c)`).
+Offline (no browser), single files: `node --test tests/unit/net-session.test.mjs` (sync/routing), `net-snapshot.test.mjs` (interp), `net-authority.test.mjs` (who owns which car). Green = fault is browser/ICE side, go to step 6 above. The whole `npm run test:net-unit` (17 files) is the pre-browser gate (step 8), not needed to localise this.
+
 ## Three-player (star topology)
 
 Three peers use a **star topology**: guest B and guest C each connect to the

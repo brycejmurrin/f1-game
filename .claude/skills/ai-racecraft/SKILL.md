@@ -29,14 +29,28 @@ for the economy; this skill for how those axes drive the field).
 - Touch `PACE` / grip / `ROAD_FOLLOW` → **tune-physics**
 - Change caution / VSC / SC / debris → **race-incidents-control**
 
+## Brake target (AI brakes too early / late)
+
+`AiDrive.brakeTarget(ctx)` (ai-drive.js) = min over look-ahead samples of
+`sqrt(vC² + 2·brake·0.85·d)`, `vC = cornerSpeed(k, latMax·bank·grip)·skill·diffCorner`;
+`brakeDecision` turns `speed - vLim` into a pedal (soft/full band from `consistency`).
+Samples and ctx are built in `game.js` (`_aiBr`, grep `AiDrive.brakeDecision`): node-aligned
+`pushLook` from the car out to `look`, on-line uses `TrackLine.pathK`. Early braking = too
+low `vC` (k, grip, `diffCorner`, `skill`), too small `0.85`, or `errMul`/`hold`. Unit pins:
+`ai-drive.test.mjs` (brake* tests) and `ai-racecraft-vm.test.mjs`. No CLI prints the brake
+point itself: `ai-race.mjs pace` (lap time) and `line` (approach/apex) are the closest VM
+proxies; for the exact point probe `__apex` live (browser, `mcp-probe`).
+
 ```sh
-node --test tests/unit/ai-drive.test.mjs
-node tools/ci/test-bg.mjs collisions   # racecraft lives in the contact specs
+node --test tests/unit/ai-drive.test.mjs      # 75 tests, ~1 s
+node --test tests/unit/ai-racecraft-vm.test.mjs   # VM shape gate (jitter/approach/line); read its header first
+node tools/ci/test-bg.mjs collisions   # BROWSER group (background, AGENTS rule 4/5); racecraft lives in the contact specs
 
 # Field instruments (VM, no browser) — one dispatcher, three measurements:
 node tools/check/ai-race.mjs pace  [--track monza] [--diff normal]
 node tools/check/ai-race.mjs field [--track monza] [--seconds 240] [--runs 5]
 node tools/check/ai-race.mjs line  [--track monza]
 node tools/check/ai-race.mjs human [--track monza] [--runs 3]   # vs a PLAYER, not itself
-# Direct: ai-pace.mjs / ai-field.mjs / ai-line.mjs (same @skill).
+# All take --wear off|light|real (default off: no pits/deg). Direct: ai-pace/ai-field/ai-line/ai-human.mjs;
+# tyre strategy over a race: node tools/check/ai-strategy-census.mjs (wear real).
 ```

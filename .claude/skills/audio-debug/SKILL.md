@@ -42,4 +42,4 @@ user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
 ## Load on demand
 
 - Layer table, in-race `#audioset`, pitch curve, silence diagnosis →
-  [references/diagnose.md](references/diagnose.md).
+  [references/diagnose.md](references/diagnose.md) (incl. gear-shift cue silent).

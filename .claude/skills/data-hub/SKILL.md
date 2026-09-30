@@ -1,6 +1,6 @@
 ---
 name: data-hub
-description: Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare tests are being changed or a tab is empty/stale/wrong year. Not for menu layout of the hub (ui-menu-a11y) or in-race physState telemetry (agent-view).
+description: Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs are being changed or a tab is empty/stale/wrong season or year. Not for menu layout of the hub (ui-menu-a11y) or in-race physState telemetry (agent-view).
 ---
 
 # Data Hub / F1API
@@ -43,11 +43,22 @@ that kills DataHub.
 - Tests mock the hub (`tests/helpers/f1-api-mock.js`); a missed path
   rewrite fails **open** (empty hub, green UI).
 
-```sh
-node tools/ci/test-bg.mjs hooks
-```
+Season/year: standings, schedule and results take NO year argument. `F1API`
+derives the Jolpica season from the clock per call (`season()`, `js/data/api.js`
+~L18; URL = `/<year>/driverstandings.json`). Only the OpenF1 pickers carry a year
+(`hub.js` `apiYears()` / `sel.year`; `export.js` its own). "Last year's
+standings" = wrong system clock, a stale `apex26.api.*` cache entry, or a mock
+still answering 2026 (`tests/helpers/f1-api-mock.js` pins `season: "2026"`).
 
-`js/data/` routes to `hooks` + `lifecycle-unit` (there is no `api` group).
-An empty tab with no error is usually `NO_RESULT_MSG` / `NO_LIVE_MSG` /
-`NO_TELEM_MSG`, not a fetch failure. Layout of the hub chrome →
-**ui-menu-a11y** / **survey-ui-matrix**.
+Tests: `tests/specs/data-lifecycle.spec.js` and `telemetry-compare.spec.js` are
+BROWSER specs (group `hooks`, background only — AGENTS.md rule 5):
+`node tools/ci/test-bg.mjs hooks`. Node-only, seconds, run first:
+`node --test tests/unit/data-api-status.test.mjs` (also `data-results`,
+`data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The group
+`lifecycle-unit` is `async-lifecycle` + `tlx-chunked-lifecycle` (the first
+does read `api.js`/`live.js`), not the hub spec.
+
+`pick-tests` for `js/data/` names `hooks`, `lifecycle-unit`, `tiny`,
+`tooling-fast` (there is no `api` group). An empty tab with no error is usually
+`NO_RESULT_MSG` / `NO_LIVE_MSG` / `NO_TELEM_MSG`, not a fetch failure. Layout of
+the hub chrome → **ui-menu-a11y** / **survey-ui-matrix**.

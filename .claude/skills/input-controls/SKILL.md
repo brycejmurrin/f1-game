@@ -1,6 +1,6 @@
 ---
 name: input-controls
-description: Use when steering, gamepad, touch steer, tilt/gyro, keyboard leaks into menus, on-screen steer buttons, driving-help/racing-line assists, or input.js / steer-tuning.js are being changed or debugged. For handling forces (understeer/grip/pace) use tune-physics; for menu Escape/focus use ui-menu-a11y.
+description: Use when steering, gamepad (stick dead zone, saturation, drift, calibrate centre, axis map), touch steer, tilt/gyro, keyboard leaks into menus, on-screen steer buttons, driving-help/racing-line assists, or input.js / steer-tuning.js are being changed or debugged. For handling forces (understeer/grip/pace) use tune-physics; for menu Escape/focus use ui-menu-a11y.
 ---
 
 # Driving input — devices, not forces
@@ -35,6 +35,20 @@ Changing an assist **default** does not reach existing players
 (`store.get` keeps the stored value). A new default and a stored-value
 migration are different acts — both are usually needed. See
 `docs/PHYSICS.md` (road-follow) and `tests/specs/steer-migration.spec.js`.
+
+## Gamepad stick (dead zone / saturation / drift)
+
+Player knobs, all in `js/input/steer-tuning.js` (`applySteerTuning` + `wireTune`),
+applied through `Input.setPadDeadzone` / `setPadSaturation` (`js/input/input.js`,
+`padAxisShape`): store `padDeadzone` (slider `pm-paddz`, 0-30 %,
+**default 5**, was a fixed 0.14), `padSaturation` (`pm-padsat`, default 0),
+per-pad centre via `calibratePad()` / `padRest()`. `padCurve` (`pm-padcurve`) is
+the separate response curve. Menu sticks use fixed `PAD_NAV_DEADZONE` 0.22 — do
+not conflate. Tilt dead zone is a different, fixed 2.5 deg. Pins: node,
+`tests/unit/ui-improve-pass.test.mjs` "stick dead zone and saturation are
+adjustable" (`node --test` on that file); browser, `tests/specs/gamepad.spec.js`
+"centre dead zone" (0.03 -> 0, 0.07 ramps) and `sliders.spec.js`. A new default
+reaches fresh installs only; a stored `padDeadzone` needs a STEER_SCHEMA step.
 
 ## Sharp edges
 

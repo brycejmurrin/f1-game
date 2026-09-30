@@ -61,6 +61,7 @@ rebuild, `orbit(0.15, 45, 20, 60)`, then screenshot `canvas#game`.
 | Floodlight masts invisible | `floodEmit === 0` | Night emissive in `buildProps`; `lightTune({floodEmitMul})` |
 | Dawn sun too high | `sunY` close to 1.0 | `lightTune({sunElev: -N})`; structural default in `applyRaceSettings` |
 | Washed out / bloom too strong | `exposure` / bloom knobs hot | `lightTune({exposureMul, bloomMul, threshOff, bloomKnee})`; check shipped presets |
+| Night washed out (milky, lifted blacks) | `ambientSky/Ground` high, `exposure` up | Read the shipped `LightPresets["<track>|night|<wx>"]` first: Singapore ships `nightAmbLift` 2.26, `glowAmp` 2.2, `mistDensity` 1.28, `bloomMul` 1.4. Pull `nightAmbLift` ("how dark is night" master, def 1), then `mistDensity`/`fogDensityMul`, `bloomMul`/`bloomKnee`, `cityGlowMul`/`cityGlowTint`, `exposureMul`. `node tools/lighting/slider-effect.mjs --gate night` lists the night knobs (no browser) |
 | Ambient wash | `ambientGround` too bright | `lightTune({ambientMul})`; night branch caps ambient |
 | Lamps too bright / dim | pool blow-out or dark valleys | `lightTune({lampLevel, poolEnergy, bleedMul})` |
 | Sun/moon too warm/cold | `sunColor` skew | `lightTune({sunTemp: ±N})` — key light only, `-2..2` |

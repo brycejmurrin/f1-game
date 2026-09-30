@@ -95,6 +95,21 @@ Load from the SKILL.md index when the task needs this detail.
    triangles rendering above the racing line — re-run it if you changed elevation
    or a street/terrain flag.
 
+## Editing an existing circuit (no browser; verified on monza)
+
+Before an edit, read `docs/tracks/<id>.md` (and `docs/tracks/START-LINES.md`), then:
+```sh
+node tools/track/verify-track.cjs <id>                 # ~6 s; OK line + guard drops (monza: suppressed 2 is the baseline, not a fail)
+node tools/track/clip-audit.cjs <id>                   # severe-spot count vs tools/track/clip-baseline.json
+node tools/track/coplanar-audit.cjs <id>               # z-fight count vs coplanar-baseline.json
+node tools/track/float-audit.cjs <id>                  # floating props vs float-baseline.json (absent id = 0)
+node tools/track/props-tris.cjs <id>                   # tris vs props-tris-baseline.json (ratchet: tests/unit/props-tri-ratchet.test.mjs)
+node tools/track/rotate-markings.cjs --check           # read-only; lists circuits whose turns are stale vs startFrac (15 listed, none is monza)
+```
+Green = the counts equal the baseline rows (monza: clip 17, coplanar 5, float 0, props-tris 315326). Re-run after the edit;
+a geometry/scenery edit that moves a count means updating that baseline row to the measured value, in the same commit.
+`import-circuit-path.mjs --self-check` ends "1 over the 2 m bar" today (worst 3.79 m) - that is the standing state, not yours.
+
 ## Gotchas
 
 - **`path` is the geometry, full stop.** There is no hand-authored segment

@@ -17,6 +17,13 @@ cache-first for immutable `?v=<sha256>` assets.
 The GLX files in it are promoted to REQUIRED at install (the fallback renderer:
 offline without it is "graphics unavailable"); TLX/WGX stay best-effort.
 
+**Shell version guard.** Inline script at the top of `index.html` ("SHELL VERSION GUARD"):
+reads `<meta name="apex-build">`, fetches `version.json` no-store, and if the
+deployed build is newer reloads once with `?b=<build>` (hash and query kept;
+`sessionStorage` `apex26.shellReloadedTo` stops loops). It also registers
+`sw.js?v=<build>` after load+idle, so a new build is a new registration URL.
+Stale installed shell = this guard did not fire or `version.json` did not move.
+
 **Cache name.** `apex26-{build}` from `version.json`. `activate` deletes older
 `apex26-*` keys. Essential 404 aborts install; optional failures are
 swallowed.

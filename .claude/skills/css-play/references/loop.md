@@ -37,7 +37,8 @@ Catalog (`node tools/ui/css-play.mjs --list`):
 Aliases: `overlay`/`menu` → title, `pmsettings` → settings, `carsetup` →
 garage, `help` → howtoplay, `vs` → vsfriend.
 
-Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`.
+Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`
+(`--click` replaces the catalog path, so include `#mb-settings`).
 Reach through the player's door. The authoritative inventory is `SCREENS`
 in `tools/ui/layout-audit.mjs`.
 

@@ -15,7 +15,7 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 | Turbo whine + wastegate | Sine ~1500 Hz tracking rev; a falling hiss once per lift after ≥0.5 s under load (`wastegateState()`) |
 | MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / triangle whine while deploying + the deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
 | Brakes | Bandpass noise, gain = deceleration × speed; `brakeLevel()` |
-| Gear shift | Saw crack + click, scaled by the SHIFT trim (`shiftState()`); the rev-cut duck is the engine's own |
+| Gear shift | Saw crack + click, scaled by the SHIFT trim (`shiftState()`; silent-cue path below); the rev-cut duck is the engine's own |
 | Overrun | Irregular crackle one-shots on a trailing throttle (`overrunState()`) |
 | Wind / tyre screech / sub | Speed² bandpass noise / slip-driven bandpass noise / sine an octave under `f0` |
 | Collision thud | White-noise burst scaled to impact `dv` |
@@ -78,3 +78,24 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
 
 The AudioContext itself is a private var — not exposed. Use
 `GameAudio.debug().samplesReady` and `centroidHz()`.
+
+## Gear-shift cue silent
+
+Trigger path (all `GameAudio.shift(up)`; none in physics):
+`js/game.js` ~5084/5085 (manual gears: `c.gear` changes, `c.shiftT <= 0`) and
+~5198 (auto: `naturalGear(speed)` differs from `c.gear`). Each needs
+`soundOn && c.local` (+ `state === "race"` on the auto path), so a VS FRIEND
+rival's shift is deliberately mute. In `engine.js` `shift()` returns at once
+unless `sfxOk()` (ctx exists, master AND sfx bus on); there is no layer switch
+for it. The remaining gate is the SHIFT trim (`#as-t-shift`, range 0–3, `0` =
+silent gearbox; the rev-cut duck is separate and survives it).
+
+Read it: `GameAudio.shiftState()` → `{ fired, peak }` (not in `__apex.audio()`;
+call it via `apex_eval`/DevTools). `fired` not rising on an upshift = the
+trigger never reached `shift()` (check `soundOn`, `c.local`, gear mode);
+`fired` rising with `peak: 0` = SHIFT trim at 0; both fine = bus/mute, see
+above. No browser needed for the unit check:
+`node --test --test-name-pattern="SHIFT trim" tests/unit/audio-tune.test.mjs`
+(fake AudioContext; asserts one crack per `shift(true)`, peak scales with the
+trim, 0 is silent, duck survives). Green means `shift()` itself is sound, so
+look at the callers.

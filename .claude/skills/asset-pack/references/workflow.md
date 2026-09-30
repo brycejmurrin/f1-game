@@ -29,7 +29,10 @@ WGX is a device/feature miss, not "WGX has no arrays."
    __apex.lightTune({ matTexMix: 0.5 })
    ```
 
-2. **Regenerate synthetic pack** (no network):
+2. **Check the pack offline** (Node only, ~2 s, writes nothing; expect
+   `verify: OK`, ~3.7 MB of 8 MB; `tests/unit/assets-pack.test.mjs` is the
+   26-test guard incl. MAT-id lockstep) — or **regenerate synthetic pack**
+   (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes):
    ```sh
    node tools/gen/assets.mjs bake-synthetic
    node tools/gen/assets.mjs verify
@@ -37,7 +40,11 @@ WGX is a device/feature miss, not "WGX has no arrays."
    `verify` enforces CC0 / **Apex26-Procedural** licence allow-list, per-asset
    md5, manifest consistency, and **8 MB** total budget.
 
-3. **A/B the blend** without reloading JS:
+3. **A/B the blend** without reloading JS (BROWSER-ONLY: `__apex` needs a live
+   page — `mcp-probe`, or `apex_eval`; no Node-VM route). Tarmac is MAT 16, so
+   `matTex(0)` vs `matTex(1)` on any track is the textured-vs-procedural tarmac
+   A/B; confirm `__apex.assets()` reads `supported:true, uploaded:true` first,
+   else both arms are procedural and the A/B proves nothing:
    ```js
    __apex.matTex(0)   // procedural-only
    __apex.matTex(1)   // full baked detail (triggers load if needed)
@@ -45,8 +52,10 @@ WGX is a device/feature miss, not "WGX has no arrays."
    Blend is **multiplicative** — per-track tarmac tint and racing-line wear
    survive.
 
-4. **Slice a generated 4×4 atlas** onto scenery MAT slots (keeps the
-   Poly Haven ASPHALT racing-surface layer; every other slot is generated):
+4. **Slice a generated 4×4 atlas** onto scenery MAT slots (`bake-atlas`
+   leaves ASPHALT unmapped; NB the committed manifest currently lists all 14
+   layers, ASPHALT included, as `Apex26-Procedural` — no Poly Haven layer is
+   in the pack today, whatever the `assets.mjs` header comment says):
    ```sh
    node tools/gen/assets.mjs bake-atlas --preset generated
    node tools/gen/assets.mjs verify
@@ -76,7 +85,8 @@ WGX is a device/feature miss, not "WGX has no arrays."
 ## Common mistakes
 
 - Assuming upload alone changes the render — `matTexMix` must be > 0
-  (shipped default 1.0). At 0 the pack may not download.
+  (shipped default 1.0). The pack is fetched at boot regardless (game.js
+  `Assets.load()`); at 0 it is uploaded but blends nothing.
 - Treating WGX `supported: false` as "WGX has no arrays" — check
   `createTextureArray` on the live device and `__apex.assets()`.
 - MAT id drift — grep `TrackGeom.MAT`, `tools/gen/assets.mjs` `MAT`, and

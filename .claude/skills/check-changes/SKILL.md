@@ -17,7 +17,7 @@ The suite is slow software rendering. **One command composes the rest**
 group per batch**):
 
 ```sh
-node tools/ci/verify-change.mjs --plan       # what this change needs (JSON)
+node tools/ci/verify-change.mjs --plan       # what this change needs (JSON); explicit paths override the diff: --plan js/circuits/monza.js .claude/skills/x/SKILL.md
 node tools/ci/verify-change.mjs --fast       # no browsers — default for verify-agent
 node tools/ci/verify-change.mjs              # fast gate + start batch 1 (background)
 node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked

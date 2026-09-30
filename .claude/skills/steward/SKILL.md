@@ -35,6 +35,18 @@ The other two look identical from the conclusion alone:
 So: list the run's jobs and look for a failed one and for a job at its cap
 before you decide. `ci-red-triage` does exactly this and returns the status line.
 
+A PR that ends `cancelled` twice, zero failures — the recipe:
+
+    node tools/ci/ci-watch.mjs --sha <head sha> --once   # exit 2 / `= ci cancelled` = newest run per workflow, no failed job, no live sibling
+
+1. Is the head SHA the same both times? Then it is the draft/ready dedupe or a
+   push over a live run (a newer push to the same `head.ref` cancels the older
+   run too): wait for the newest run, do not re-run. 2. Newest run itself
+   `cancelled`: open its jobs (`ci-red-triage`) for one at its `timeout-minutes`
+   cap — a real red — and check `/proc/loadavg`. 3. Neither: re-dispatch
+   `ci.yml` once (`group: <name>`), do NOT sync the branch to "refresh" it
+   (section 2: a sync is a new full PR run and can cancel again).
+
 ## 2. A base merge is `sync-pr.mjs`, never a hand merge — and only when you must
 
     node tools/ci/sync-pr.mjs <branch>          # …then --push when it is clean

@@ -58,6 +58,17 @@ Load from the SKILL.md index when the task needs this detail.
    - Career often touches `js/career/career*.js`, `js/race/quali-model.js`,
      `js/race/reliability.js`, or `css/career.css`; run `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
+9. **Sprint / quali format inside a career.** The weekend FORMAT is season-only:
+   `js/career/season-cal.js` gates it on `fmtActive()` (`flow === "season"`), the
+   calendar on `calCustom()` (`flow !== "career"`). Trace: `js/game.js` `setFlow()`
+   calls `SeasonCal.engage(flow)`; `SeasonCal.sprintOn/stage/quali/formatLaps/pointsTable`
+   all return the neutral value in a career. Pins: `tests/unit/season-cal.test.mjs`
+   (`the calendar is the player's in season AND in gp, but never in career`,
+   `format accessors are neutral outside a season, whatever the config holds`,
+   `a retired fastest-lap setter earns nothing, and a career never pays the point`).
+   A sprint appearing in a career means a gate was widened; do not "fix" it by
+   giving career a format (that is a feature, and the file header explains why not).
+
 ## Common Mistakes
 
 - Confusing **research facility** with **fitted budget cap**: facility =

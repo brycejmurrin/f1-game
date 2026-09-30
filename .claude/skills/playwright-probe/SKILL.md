@@ -69,8 +69,19 @@ node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JP
 
 ```sh
 node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png] \
-  [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud]
+  [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud] \
+  [--team <id>] [--wait <s>]      # BROWSER (boots Chromium; no --help)
 ```
+
+`cam` = `park` (the in-game **chase** rig: snapCam, no free-cam) | `eye` | `orbit`
+(default) | `cinematic` | `trackside`. Default out
+`scratch/captures/playwright-probe/<track>-<pct>-<cam>.png`; it warns on
+`<5KB` (blank) and `free-cam inactive`. Find `frac` first (no browser: `turns:`
+in `js/circuits/<id>.js`; Spa Eau Rouge compression ~0.075).
+
+**Before/after:** the tools serve the working tree, so shoot A to `artifacts/…/before.png`,
+apply the edit (or `git stash`), shoot B to `…/after.png` with the SAME args, then
+compare. Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
 
 ## Motion and profiling (still this harness)
 

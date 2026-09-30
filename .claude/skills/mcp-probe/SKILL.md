@@ -15,12 +15,22 @@ reachable from a container browser — that is the **deploy-research** subagent
 ## Entry
 
 ```sh
+python3 tools/mcp/probe-mcp.py status                # no browser: clone/bin/Chrome path + daemon UP/DOWN. Run FIRST
+#   "Bin: missing" -> tools/mcp/chrome-devtools-mcp.sh clone  (needs egress; else use the attached chrome_* tools)
+# Everything below launches Chromium (browser-only) except help/status/mcp-cli --dry-run:
 python3 tools/mcp/probe-mcp.py list-tools
 python3 tools/mcp/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome
 python3 tools/mcp/probe-mcp.py call chrome_...
 python3 tools/mcp/probe-mcp.py chrome-stop           # ALWAYS before test-bg.mjs
 node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
+
+HUD/menu glitch repro: serve `python3 -m http.server 3456`, `chrome-start`, navigate
+`http://127.0.0.1:3456/`, `__apex.race(id); go()` (recipes.md § Setup), then
+`take_snapshot` (DOM/a11y text, cheap) before any screenshot; the HUD is DOM, so
+`awaitPresent()` matters only if the 3D behind it must be current. Done = the
+glitch reproduced as a snapshot/`evaluate_script` value (element text/rect), then
+`navigate_page about:blank` + `chrome-stop`. Flags: `node tools/lib/webgpu-chrome-args.cjs [mcp|json]`.
 
 A bare `call` without `chrome-start` spawns a **fresh** Chromium each time —
 navigate → evaluate → screenshot across separate calls is broken. Prefer the

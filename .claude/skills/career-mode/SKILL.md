@@ -44,6 +44,7 @@ Do **not** use this for:
 | Sponsors | **MY TEAM only** — `sponsorAt()`/`sponsor()` return `null` whenever `career.flavour !== "myteam"`; a DRIVER career never has one, by design (a driver is paid a salary, an owner is paid by sponsors) |
 | Regulation eras | `Regulations.ERAS` — the dearest `BAN_TOP` options in three categories go illegal for `ERA_SEASONS`. Applied via `Parts.setLegality()` so the AI's FACTORY builds re-resolve too; `career.owned` is never touched. Only a career installs one, so GP/Season stay unregulated |
 | Season target | `deal.ambition` indexes `AMBITION` (0 modest / 1 expected / 2 ambitious). **Rung 1 is the pre-existing behaviour**, so an absent field resolves byte-identically. `career.amb` is the PENDING pick, `deal.ambition` what was signed — `rollover()` prices by the signed one |
+| Weekend format in a career | NONE: `SeasonCal` has two gates (`calCustom = flow !== "career"`, `fmtActive = flow === "season"`), so in a career `sprintOn()` is false, `stage()` is `"race"`, quali/laps/points are the defaults, and the calendar is `Tracks.SEASON`. A "wrong sprint format in my career save" is either format leaking through `fmtActive()`, or a stale `sprintOrder`/`qualiOrder`/`stage` on `career.season` |
 | Randomness | Use `Career.rnd(...parts)`; do not consume `simRnd` or `Math.random` |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |
 
@@ -86,7 +87,13 @@ node tools/car/career-economy.mjs            # launches Playwright/Chromium
 node tools/car/career-economy.mjs --years 3
 node tools/ci/test-bg.mjs modes              # career + quali + season + TT — there is no test:career
 npm run test:tooling-fast
+node --test tests/unit/season-cal.test.mjs     # ~1 s, VM: the calendar/format gates (career neutral)
+node --test tests/unit/career-settle.test.mjs  # ~VM: settleRound, mid-weekend `stage`
 ```
+
+Node-VM unit tests (no browser; also in `test:tooling-fast`): `season-cal`,
+`career-settle`, `career-regulations`, `career-legends`, `career-seat-rollover`,
+`career-cross-tab`.
 
 Deep references:
 

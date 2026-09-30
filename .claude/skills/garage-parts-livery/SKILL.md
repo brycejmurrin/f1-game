@@ -97,6 +97,6 @@ Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **
 ## Load on demand
 
 - Fin/spine/cover/draft field catalog + paint-sheet lockstep → [references/livery-fields.md](references/livery-fields.md).
-- ERS ids, ownership gate, edit loop, mistakes → [references/workflow.md](references/workflow.md).
+- ERS ids, ownership gate, edit loop, node catalog gates (`parts-distinct-mesh`, `parts-ladder`), where a wing part goes (`aero`), mistakes → [references/workflow.md](references/workflow.md).
 - Which surface answers a PLACEMENT question, and what each is blind to → [references/placement.md](references/placement.md).
 - Garage multi-angle shots: axes (`--az/--el/--dist`, `--target`, `--lamp`, `--driver`), STATIONS keyed to a part (`--station=spineTop`, auto-picked from design fields), the free camera (`--clamp=0`, `--eye/--look`, `--path` dollies), comparisons (`--pair`, overlays, `--flat`), the `--serve`/`--watch` session and `apex_garage`, `--fast` (+`--sheet=1` for the matrix), `--plan`, settle tuning, WebGL/`DISPLAY` setup → [references/garage-angles.md](references/garage-angles.md).

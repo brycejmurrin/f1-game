@@ -28,8 +28,14 @@ season sprint distance and its points table. Persist at `apex26.seasonCfg`
 - Recommend `test:career` — there is no such group
 
 ```sh
-node tools/ci/test-bg.mjs modes
+node --test tests/unit/season-cal.test.mjs   # 46 tests, <1 s, VM, no browser: gates, award(), sprint table
+node tools/ci/test-bg.mjs modes              # BROWSER group (season.spec.js, season-format.spec.js, ...): background it, AGENTS.md rule 4
 ```
+
+Sprint points are scored in `SeasonCal.award()` (`SPRINT_POINTS`, `stage()`); the
+results sheet reads `race.sprint` in `js/ui/results-sheet.js` `buildResults`.
+"Sprint points missing" is a scoring bug only if the unit test's `a sprint scores
+its own table` fails; otherwise look at the sheet/standings, not the SETUP screen.
 
 `modes` is real-race + season + career + quali + TT. `season-(cal|ui).js` also
 routes to `ui` (the SETUP screen) and `state-unit`.
