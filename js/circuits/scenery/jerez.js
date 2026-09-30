@@ -49,9 +49,7 @@
         motorhome, groundPatch, runoffApron, place, ridge,
         modelGroup, vadd, addBox, addCyl, addFrustum, MAT } = api;
 
-      // ---------------------------------------------------------------
       // 1. PALETTE + HELPERS  (§2 bleached, §6 sparse olive / pale concrete)
-      // ---------------------------------------------------------------
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
       const OCHRE      = [0.74, 0.64, 0.45];   // bare pale earth
@@ -135,7 +133,6 @@
         }
       };
 
-      // ---------------------------------------------------------------
       // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
       // startFrac) because the grid had been laid through a 43 m corner, and
       // sceneryStartFrac holds the rest of this file on its real corners —
@@ -154,7 +151,6 @@
       //    its length with one covered centre bay over the line; hoarding
       //    along the full base, armco at the track edge, a camera mast at
       //    each end.
-      // ---------------------------------------------------------------
       grandstandEx(sl(0.0000), -1, 20, 130, null, null,
         { roof: "flat", roofCol: CONC, fasciaCol: CONC_ALT, tiers: 2, h: 14 });
       grandstandEx(sl(0.9600), -1, 20, 110, null, null,
@@ -184,12 +180,10 @@
         { wall: WHITEWASH, roof: [0.55, 0.34, 0.24] }); // road returns at ~60
       carPark(sl(0.9620), -1, 82, 16, 2, 3);
 
-      // ---------------------------------------------------------------
       // 3. PIT + PADDOCK BLOCK  (0.010, +1, 8)
       //    The only dense built mass on the circuit: a low flat-roofed garage
       //    row, the taller control tower above the grid, motorhome rows
       //    behind, armco on the pit-wall line.
-      // ---------------------------------------------------------------
       guardrail(sl(0.9300), sl(0.0720), 1, 8, ARMCO);
       groundPatch(K(sl(0.0050)), 1, 10, slab(44, 200), TARMAC);
       for (let i = 0; i < 10; i++) {                        // garage row
@@ -234,12 +228,10 @@
       palm(K(sl(0.0180)), 1, 22, 11, OLIVE);
       groundPatch(K(sl(0.0050)), 1, 28, slab(46, 190), DUST);
 
-      // ---------------------------------------------------------------
       // 4. EXPO '92 BRAKING ZONE  (0.045, -1, 32)
       //    Open terrace steps cut into the natural rise with the hill
       //    continuing behind them, one camera mast. Bare pale ochre ground —
       //    groundPatch, not grass.
-      // ---------------------------------------------------------------
       terrace(0.0280, 0.0620, -1, 30, TERR_LO);
       spectatorHill(0.0240, 0.0680, -1, 52, HILL);
       cameraTower(K(0.0475), -1, 26);
@@ -252,12 +244,10 @@
       carPark(0.0300, -1, 82, 10, 2, 7);
       groundPatch(K(0.0420), -1, 84, slab(52, 150), DUST);
 
-      // ---------------------------------------------------------------
       // 5. T1 — CURVA EXPO '92, INFIELD APEX  (0.0663, +1, 14)
       //    Tyre wall against the barrier, marshal post, one billboard angled
       //    at the braking zone. NOTHING TALL: the horizon must stay visible
       //    over the infield.
-      // ---------------------------------------------------------------
       tyreWall(0.0580, 0.0790, 1, 12, TYRE_CAP);
       marshalPost(K(0.0663), 1, 16);
       billboard(K(0.0600), 1, 17, 12, 4.5, [0.88, 0.82, 0.32]);
@@ -265,11 +255,9 @@
       for (let i = 0; i < 8; i++)
         scrub(K(0.0600 + i * 0.0048), 1, 24 + hash(i * 23) * 22, SCRUB);
 
-      // ---------------------------------------------------------------
       // 6. OPEN COUNTRY, T1 -> MICHELIN  (0.110, -1, 45)
       //    Scattered bush and a LOOSE scatter of olive-grey tree, never a
       //    continuous rank, on flat ochre. Empty to the horizon behind it.
-      // ---------------------------------------------------------------
       for (let i = 0; i < 20; i++) {
         const s = 0.0840 + i * 0.0032;
         const h = hash(i * 17 + 3);
@@ -285,11 +273,9 @@
       for (let i = 0; i < 10; i++)
         scrub(K(0.0880 + i * 0.0058), -1, 26 + hash(i * 41) * 14, SCRUB);
 
-      // ---------------------------------------------------------------
       // 7. CURVA MICHELIN -> SITO PONS STAND COMPLEX  (0.1447, -1, 24)
       //    The larger permanent stand complex, terrace filling between the
       //    bays, hoarding at the base, armco and tyre wall at the edge.
-      // ---------------------------------------------------------------
       // Lead Michelin bay. Was 0.1447/23/150: crowdBank hit the neighbouring
       // leg fold → hollow suppress. s=0.130 gap=28 len=90 clears with positive
       // rake (probe HIT 600 prims, slope ~1.73).
@@ -329,11 +315,9 @@
       carPark(0.1560, -1, 110, 18, 2, 17);
       groundPatch(K(0.2000), -1, 114, slab(70, 260), OCHRE_PALE);
 
-      // ---------------------------------------------------------------
       // 8. T4, START OF THE CLIMB  (0.3043, -1, 38)
       //    Natural banking with NO built seating — earth and scrub, a thin
       //    guardrail line, one marshal post.
-      // ---------------------------------------------------------------
       spectatorHill(0.2860, 0.3260, -1, 36, HILL_BARE);
       guardrail(0.2740, 0.3400, -1, 11, ARMCO);
       marshalPost(K(0.3043), -1, 15);
@@ -347,11 +331,9 @@
         if (!onTrack(a.c[0], a.c[2], 10)) olive(K(s), -1, d, 5.0 + hash(i * 5) * 2);
       }
 
-      // ---------------------------------------------------------------
       // 9. CURVA SITO PONS, INFIELD  (0.3563, +1, 18)
       //    Broadcast compound with a camera tower beside it, serving the
       //    whole upper loop; tyre wall on the apex side.
-      // ---------------------------------------------------------------
       broadcastCompound(K(0.3563), 1, 20);
       cameraTower(K(0.3470), 1, 18);
       tyreWall(0.3460, 0.3700, 1, 12, TYRE_CAP);
@@ -360,12 +342,10 @@
       for (let i = 0; i < 5; i++)
         scrub(K(0.3480 + i * 0.0055), 1, 44 + hash(i * 31) * 16, SCRUB);
 
-      // ---------------------------------------------------------------
       // 10. CURVA DRY SACK  (0.3842, -1, 22) — the slow right at the top of
       //     the climb, HIGHEST POINT OF THE LAP and the best-attended corner
       //     outside the stadium. Stepped terrace plus a grandstand block,
       //     deep tyre wall, marshal post, billboard at the braking zone.
-      // ---------------------------------------------------------------
       terrace(0.3640, 0.3800, -1, 21, TERR);
       terrace(0.3880, 0.4020, -1, 21, TERR);
       grandstandEx(0.3842, -1, 30, 125, null, null,
@@ -395,14 +375,12 @@
           62, 26, 6 + hash(i * 17) * 4, DUST);
       }
 
-      // ---------------------------------------------------------------
       // 11. DESCENT AWAY FROM DRY SACK  (0.460, +1, 50)
       //     Bare ridge running parallel to the track with sparse bush — the
       //     FALL OF THE LAND is the landmark, not any prop. ridge() takes
       //     world x/z and a scalar heading; the long axis is +ang, so take it
       //     from the node tangent and set the ridge well back (its footprint
       //     half-extent is tested against the tarmac).
-      // ---------------------------------------------------------------
       for (let i = 0; i < 7; i++) {
         const s = 0.4240 + i * 0.0165;
         const a = anchor(K(s), 1, 62);
@@ -419,11 +397,9 @@
       groundPatch(K(0.4600), 1, 50, slab(46, 140), OCHRE);
       guardrail(0.4180, 0.5020, 1, 12, ARMCO);
 
-      // ---------------------------------------------------------------
       // 12. TURN 7 LEFT  (0.5228, -1, 28)
       //     Guardrail and tyre wall, a LOW spectator hill with standing room
       //     only, one marshal post.
-      // ---------------------------------------------------------------
       guardrail(0.5040, 0.5460, -1, 10, ARMCO);
       tyreWall(0.5100, 0.5360, -1, 11, TYRE_CAP);
       spectatorHill(0.5060, 0.5420, -1, 26,
@@ -439,11 +415,9 @@
       for (let i = 0; i < 8; i++)
         scrub(K(0.5060 + i * 0.0048), -1, 44 + hash(i * 37) * 18, SCRUB);
 
-      // ---------------------------------------------------------------
       // 13. FAR OUTFIELD, THE QUIETEST STRETCH  (0.6300, -1, 65)
       //     Widely spaced olive in FIELD ROWS and a single white farm set
       //     well back. Horizon unbroken above it: nothing here is tall.
-      // ---------------------------------------------------------------
       for (let row = 0; row < 4; row++) {
         const d = 66 + row * 19;
         for (let i = 0; i < 9; i++) {
@@ -506,11 +480,9 @@
       for (let i = 0; i < 12; i++)
         scrub(K(0.6020 + i * 0.0048), -1, 32 + hash(i * 31) * 20, SCRUB);
 
-      // ---------------------------------------------------------------
       // 14. CURVA ANGEL NIETO  (0.7123, -1, 26)
       //     Terrace returns as the stadium section opens up, with hoarding
       //     and a camera tower; guardrail and tyre wall at the edge.
-      // ---------------------------------------------------------------
       // Terrace returns as the stadium opens. Was gap 25 with a 3.2 m
       // unsupported span over a dip — spectatorHill only here (no terrace
       // flight) keeps the bank without a floating slab.
@@ -524,11 +496,9 @@
       kiosks(0.6980, -1, 58, 6, 31);
       carPark(0.7000, -1, 84, 14, 2, 37);
 
-      // ---------------------------------------------------------------
       // 15. PELUQUI, INTO THE STADIUM BOWL  (0.8417, -1, 22)
       //     Continuous permanent terrace wrapping the outside, a grandstand
       //     on the highest bank, billboard above the run-off.
-      // ---------------------------------------------------------------
       terrace(0.7520, 0.8080, -1, 26, TERR_LO);   // bowl wrap from Angel Nieto
       // Leave a wide gap under the Peluqui grandstand (0.8417) so terrace
       // steps do not share faces with the stand's crowdBank (coplanar /
@@ -555,11 +525,9 @@
         { wall: WHITEWASH, roof: [0.57, 0.36, 0.25] });
       carPark(0.7660, -1, 90, 16, 2, 43);
 
-      // ---------------------------------------------------------------
       // 16. CURVA FERRARI  (0.9177, -1, 20)
       //     Terracing UNBROKEN from Peluqui — terrace and grandstand,
       //     hoarding at the base, tyre wall and marshal post at the edge.
-      // ---------------------------------------------------------------
       terrace(0.8740, 0.9260, -1, 20, TERR);
       grandstandEx(0.9177, -1, 34, 135, null, null,
         { roof: "none", fasciaCol: CONC_ALT, tiers: 2, h: 13 });
@@ -574,11 +542,9 @@
       carPark(0.8820, -1, 86, 12, 2, 53);
       tower(K(0.9280), -1, 56, 1.1, 15);
 
-      // ---------------------------------------------------------------
       // 17. FINAL RIGHT ONTO THE PIT STRAIGHT  (0.9517, +1, 12)
       //     Pit-exit guardrail merging in, paddock building mass and
       //     motorhome rows immediately behind it, marshal post on the apex.
-      // ---------------------------------------------------------------
       guardrail(0.9420, 0.9740, 1, 12, ARMCO);
       marshalPost(K(0.9517), 1, 14);
       building(K(0.9450), 1, 32, 22, 9, 15,
@@ -587,12 +553,10 @@
       // grade, and survivors floated / buried against the Ferrari terrace.
       groundPatch(K(0.9517), 1, 20, slab(20, 56), TARMAC);
 
-      // ---------------------------------------------------------------
       // 18. CIRCUIT-WIDE — continuous armco, marshal posts and a very sparse
       //     scrub scatter. Deliberately NO tree line anywhere (§6): the lone
       //     olives below are hash-gated hard so they never rank up, and the
       //     outfield stays open with the horizon visible.
-      // ---------------------------------------------------------------
       for (const side of [-1, 1]) guardrail(0.0, 1.0, side, 13, ARMCO);
 
       for (let i = 0; i < 12; i++) marshalPost(Math.round((i / 12) * n) % n, 1, 17);

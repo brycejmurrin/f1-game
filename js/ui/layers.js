@@ -1,6 +1,6 @@
 "use strict";
 /* UI LAYERS — which screen is on top, and are we racing?
- * Canonical layer list (LAYER_IDS) for input.js, menunav.js, topmodal.js.
+ * Canonical layer list (LAYER_IDS) for input.js, menu-nav.js, modal.js.
  * showModal() dialogs outrank z-index (`:modal` beats parseInt(zIndex)). */
 window.UiLayers = (function () {
 

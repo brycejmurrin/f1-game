@@ -246,7 +246,7 @@ const TyreModel = (function () {
   // landed; nothing absorbed it here, so the field quietly ran a fifth hot and
   // `lifeLaps` stopped meaning what its name says on the AI side only.
   //
-  // MEASURED (scratch/tyre-load-check.cjs, 20-lap races, life-laps actually
+  // MEASURED (20-lap races, life-laps actually
   // consumed per racing lap, ~200 lap samples each):
   //
   //   monza 1.216      bahrain 1.231      monaco 1.248

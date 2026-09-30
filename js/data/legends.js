@@ -124,7 +124,7 @@ const Legends = (function () {
       trait: "The Professor: tyres and brakes saved early, the race taken late.",
       // NAVY-DOMINANT on purpose. Rendered white-on-blue it was a near twin of
       // Mansell's Williams below — a real collision no colour assertion caught,
-      // only looking at the two cars side by side did (scratch/renders/legends).
+      // only looking at the two cars side by side did.
       livery: { name: "Professor '93", c1: [0.09, 0.12, 0.30], c2: [0.93, 0.94, 0.96],
                 stripe: [0.93, 0.94, 0.96], accent: [0.96, 0.74, 0.12],
                 finShape: "swept", spineHeight: "dorsal", spineLogo: "fade" } },

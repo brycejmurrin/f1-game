@@ -114,8 +114,8 @@ window.DrivingLine = (function () {
      entry and exit wide (a corner appearing ahead / disappearing behind) and
      the apex inside for however long the corner lasts. */
   function lateral(api, s, hw) {
-    // The baked RACING LINE (js/track/core/line.js, 2026-09-08) when the
-    // circuit has one: outside-inside-outside, the line the AI now drives, so
+    // The baked RACING LINE (js/track/core/line.js) when the
+    // circuit has one: outside-inside-outside, the line the AI drives, so
     // the picture and the field are one truth. `w` eases to 0 on a straight
     // ("no opinion"), which brings the ribbon back to the centre there.
     if (api.lineAt) {
@@ -160,10 +160,9 @@ window.DrivingLine = (function () {
       }
     }
     // 4. zones: braking (speed still falling ahead) or a real corner. The
-    //    braking sweep already gives every corner a long lead-IN; the exit had
-    //    none — the zone ended the metre the curvature dropped, and with a
-    //    30 m blend the line looked cut off at track-out (Monza T1 shot,
-    //    2026-09-08). So: hold the zone LEAD_OUT metres past a corner, then a
+    //    braking sweep already gives every corner a long lead-IN, but a zone
+    //    that ends the metre the curvature drops, with a 30 m blend, looks cut
+    //    off at track-out. So: hold the zone LEAD_OUT metres past a corner, then a
     //    ±FADE box smooth so CORNERS mode fades over ~2·FADE m rather than pops.
     const raw = new Float32Array(n), held = new Float32Array(n);
     for (let i = 0; i < n; i++) {

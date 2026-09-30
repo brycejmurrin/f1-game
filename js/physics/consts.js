@@ -24,11 +24,11 @@ window.PhysicsConsts = {
   CS_FRONT: 130,       // front cornering stiffness (accel per rad of slip)
   CS_REAR: 175,       // rear stiffer than front → understeer in the linear range too
   WT_LONG: 0.22,       // longitudinal load transfer (braking loads the front axle)
-  // BRAKE STABILITY (the rear brake-by-wire of a real F1 car). At the pedal both
-  // axles used to pay the same share of their grip circle, so braking at the
-  // cornering limit took the rear's grip twice (the pedal's share AND the load
-  // moving forward) and the car spun toward the apex. Owner report 2026-09-29:
-  // "if I slam the brake while in a turn it pulls me towards the apex". Once the
+  // BRAKE STABILITY (the rear brake-by-wire of a real F1 car). If both axles pay
+  // the same pedal share of their grip circle, braking at the cornering limit
+  // takes the rear's grip twice (the pedal's share AND the load moving forward)
+  // and the car spins toward the apex ("if I slam the brake while in a turn it
+  // pulls me towards the apex"). Once the
   // rear is loaded past _LO of its tyre peak (last step's rearUtil), its pedal
   // share falls toward (1 - BRAKE_STAB) by _HI, and the front takes on
   // BRAKE_STAB_SHIFT of that relief (all of it = the same total braking, load
@@ -46,20 +46,19 @@ window.PhysicsConsts = {
   BRAKE_STAB_SHIFT: 0.5,
   // TYRE PEAK: the lateral curve (peak, plateau, floor) lives in
   // js/physics/tyre-model.js as TyreModel.lateralCurve — see there.
-  // LOAD SENSITIVITY. Axle friction used to scale linearly with axle load, so
-  // weight transfer moved balance without ever costing total grip. A real tyre's
+  // LOAD SENSITIVITY. Friction linear in axle load would let weight transfer
+  // move balance without ever costing total grip. A real tyre's
   // friction coefficient falls as its load rises: the loaded axle gains less
   // than its share, the unloaded one loses less, and the pair under full braking
   // has ~1.3 % less lateral grip than at rest. Static balance is untouched (the
   // factor is 1 at each axle's static load).
   LOAD_SENS: 0.10,
 
-  // AERODYNAMIC DOWNFORCE. Grip used to FALL with speed (gripScale: 1.00 at 10 m/s
-  // down to 0.72 at VMAX) — an arcade understeer taper, and backwards for a car
-  // with wings. Aero load rises with v², so a real F1 car pulls roughly 2 g in a
-  // slow corner and 5 g in a fast one; this model did the opposite, which is why
-  // quick corners felt vague and slow ones felt sharp. Lateral grip is now
-  // 1 + DOWNFORCE·(v/VMAX)², so high-speed cornering firms up the way it should.
+  // AERODYNAMIC DOWNFORCE. Aero load rises with v², so a real F1 car pulls
+  // roughly 2 g in a slow corner and 5 g in a fast one; a grip taper that FALLS
+  // with speed (an arcade understeer model) makes quick corners vague and slow
+  // ones sharp. Lateral grip is 1 + DOWNFORCE·(v/VMAX)², so high-speed
+  // cornering firms up the way it should.
   DOWNFORCE: 0.65,     // extra grip fraction at VMAX (0 = no wings)
 
   X_VMAX_GAIN_LO: 0.055,  // top-speed gain at full X-mode, smallest wing
@@ -99,8 +98,7 @@ window.PhysicsConsts = {
   // vStd ≤ THR_VK / THR_CAP ≈ 23 m/s: 78 % of rear lateral grip left with the
   // pedal planted), power-limited above it (THR_VK / vStd, an engine's P/v),
   // never below THR_FLOOR so planting the throttle mid-corner spends grip even
-  // when speed-limited (the old flat THR_ELLIPSE charge was 0.38 of LONG_GRIP
-  // at every speed, on BOTH axles). Full brake is still the bigger bill
+  // when speed-limited. Full brake is still the bigger bill
   // (BRAKE / LONG_GRIP ≈ 0.65, both axles by bias).
   THR_FLOOR: 0.34,
   THR_CAP: 0.62,
@@ -182,43 +180,30 @@ window.PhysicsConsts = {
   // multiplier on TIER_V) and the rubber-band tolerance (`band`). Keyed by the
   // settings value; read by game.js (makeCars), js/race/quali-model.js (the modelled
   // field's lap) and js/career/career-ui.js (the guide lists the keys).
-  // 2026-09-08: the AI now reads the racing line's own curvature for its corner
-  // speed when it is ON the line (js/track/core/line.js pathK), which measured
-  // 1.2-1.3 % off a solo lap (monza 124.97 -> 123.30 s, monaco 86.05 -> 85.03).
-  // The three scales come down 1 % so each difficulty's lap time holds; what
-  // changed is WHERE the pace is — a car on the line gains in the corners and
-  // pays on the straights, a car fighting off-line the reverse.
-  // 2026-09-08 (later): re-measured after the relaxed racing line and the
-  // heading-state lateral controller, solo flying laps per level, deterministic
-  // (a repeat run reproduced to 0.01 s). NOT re-scaled, and the reason is that
-  // the drift is CIRCUIT-DEPENDENT and a global multiplier cannot express it:
-  //   monza  normal 123.67 -> 124.18 s (+0.4 %)   spa normal 149.70 -> 149.55 (-0.1 %)
-  //   monaco normal  85.25 ->  84.10 s (-1.35 %)  — the controller, not the line
-  // Monaco gained because a car that no longer overshoots its target carries
-  // more speed through 22 corners; monza and spa are flat. Pulling `ai` down
-  // 1.2 % to hold monaco would put monza and spa 1.2 % off the pace they are
-  // calibrated to — one circuit fixed, two broken. The spread is also well
-  // inside the separation between levels (1.8-3.5 % per step), so each level
-  // still means what it meant. Evidence: docs/notes/RACING-LINE-RESEARCH.md §8.
-  // 2026-09-09: adding the player's DOWNFORCE term to the AI's corner model was
-  // tried and REVERTED — the AI's lateral actuator has no aero and its grip
-  // FALLS with speed (game.js gripScale), so an aero planner outran it and cost
-  // 0.60 m of apex depth at a short monza corner. Details and the lap-time
-  // table it produced: docs/notes/AI-FIELD-RESEARCH.md. DIFF is unchanged.
-  // 2026-09-24: done properly — AiDrive.lateralScale (planner AND actuator)
-  // now carries DOWNFORCE, so the aero rise no longer outruns the car.
-  // game.js's BAND_CEIL caps a rubber-banded AI at this table's top scale:
-  // easy's 0.851 x 1.18 = 1.004 used to beat hard's own 0.980.
-  // `corner` is the SECOND dimension of difficulty, added 2026-09-15 with the
-  // brake-look fix. Until then difficulty was one number: every level braked,
-  // defended, deployed and erred identically and differed only in top speed,
-  // which is the one lever players can catch a same-spec car using. `corner`
+  // The AI reads the racing line's own curvature for its corner speed when it
+  // is ON the line (js/track/core/line.js pathK); the scales sit 1 % lower so
+  // each level's lap time holds (solo lap: monza 124.97 -> 123.30 s, monaco
+  // 86.05 -> 85.03). A car on the line gains in the corners and pays on the
+  // straights, a car fighting off-line the reverse.
+  // NOT re-scaled for the relaxed line and the heading-state controller: that
+  // drift is CIRCUIT-DEPENDENT (normal: monza +0.4 %, spa -0.1 %, monaco
+  // -1.35 %), so a global multiplier would fix one circuit and break two, and
+  // it sits well inside the 1.8-3.5 % per-level separation.
+  // Evidence: docs/notes/RACING-LINE-RESEARCH.md §8.
+  // AiDrive.lateralScale (planner AND actuator) carries DOWNFORCE: an aero
+  // planner over an aero-less actuator outran the car and cost 0.60 m of apex
+  // depth at a short monza corner (docs/notes/AI-FIELD-RESEARCH.md).
+  // game.js's BAND_CEIL caps a rubber-banded AI at this table's top scale,
+  // or easy's 0.851 x 1.18 = 1.004 would beat hard's own 0.980.
+  // `corner` is the SECOND dimension of difficulty. As one number, every level
+  // braked, defended, deployed and erred identically and differed only in top
+  // speed, the one lever players can catch a same-spec car using. `corner`
   // scales the AI's corner-speed target, so an easier field genuinely drives
   // further from the limit instead of just being slower down the straight.
   // At or below 1.0 by policy: the AI never corners faster than its own grip
   // model says it can.
-  // `err` scales AiDrive.mistakeChance (2026-09-22, by request): the shipped
-  // rate was under one mistake for the WHOLE FIELD over a default 3-lap race
+  // `err` scales AiDrive.mistakeChance: the base rate is under one mistake for
+  // the WHOLE FIELD over a default 3-lap race
   // (docs/notes/AI-FIELD-RESEARCH.md), which reads as "the AI never messes
   // up" — true at every level including hard, where that low rate is
   // deliberate (docs/PHYSICS.md "F1 22's two or three lock-ups a race was
@@ -262,10 +247,7 @@ window.PhysicsConsts = {
 window.PhysicsConsts.FIXED_DT = 1 / 60;
 window.PhysicsConsts.BAND_CEIL = (() => {
   const top = Object.values(window.PhysicsConsts.DIFF).reduce((a, d) => (d.ai > a.ai ? d : a));
-  // …and never above the player's own scale. The ladder's top used to sit at
-  // 0.9996 by arithmetic accident, so the clamp was invisible; once `ai` rose
-  // past 1.0 with the brake-look fix, the derived value would have licensed a
-  // rubber-banded easy car to out-run the player outright. The cap is the
-  // property that was always intended, now written down.
+  // …and never above the player's own scale: with `ai` past 1.0 the derived
+  // value would license a rubber-banded easy car to out-run the player outright.
   return Math.min(1, top.ai * (1 + top.band));
 })();

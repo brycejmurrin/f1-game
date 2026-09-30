@@ -903,7 +903,7 @@ window.SpotifyMusic = (function () {
   };
 
   // Guarded on the global AND the method: this file must survive being loaded
-  // next to an older audio.js that has no backend hook at all.
+  // next to an older js/audio/engine.js that has no backend hook at all.
   function setBackend(b) {
     if (typeof GameAudio === "undefined" || !GameAudio.setMusicBackend) return;
     try { GameAudio.setMusicBackend(b); } catch (e) { /* a broken GameAudio must not take Spotify down */ }

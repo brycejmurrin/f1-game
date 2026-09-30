@@ -144,7 +144,7 @@ window.ScrollFade = (function () {
     for (const m of measured) write(m);
   }
 
-  // Coalesce with a TIMER, not requestAnimationFrame: menus.js swaps screens
+  // Coalesce with a TIMER, not requestAnimationFrame: js/ui/select-screen.js swaps screens
   // inside document.startViewTransition, during which a queued frame callback
   // can be deferred past the next mutation — the "already queued" flag stays
   // set and the repaint never lands (that bug is why the first version of this
