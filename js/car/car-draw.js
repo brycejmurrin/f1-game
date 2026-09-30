@@ -791,6 +791,22 @@ const CarDraw = (function () {
       invalidateCustomMeshCache(playerBodies, playerBodyOrder);
       invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
     }
+    // Drop EVERY procedural body/wheel GPU cache (same wipe loadCarModel does
+    // before adopting a GLB). A sharedTest worker that already raced leaves
+    // teamBodies warm; a Car3D.build probe installed later never fires. Specs
+    // that instrument builds call this after the hook so the next warm rebuilds.
+    function invalidateFactoryMeshCaches() {
+      for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }
+      for (const k in teamBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamBodies[k]); delete teamBodies[k]; }
+      for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
+      for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
+      playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = cockpitBodyOrder.length = 0;
+      for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
+      wheelMeshOrder.length = 0;
+      for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
+      fieldWheelOrder.length = 0;
+      _teamMeshKeyCache.clear();
+    }
 
     return {
       teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh,
@@ -798,7 +814,7 @@ const CarDraw = (function () {
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
       warmCarAssets, prepareMenuCarAssets, loadCarModel, buildCarData,
-      setPlayerParts, invalidateCustomMeshCaches,
+      setPlayerParts, invalidateCustomMeshCaches, invalidateFactoryMeshCaches,
       WHEELS,
       get modelBuf() { return carModelBuf; },
       get playerVisualKey() { return playerVisualKey; },

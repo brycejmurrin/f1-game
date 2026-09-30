@@ -3566,6 +3566,10 @@ const G = {
   arrToHex, hexToArr, getTeamParts, saveTeamParts, recomputePlayerMods, getLiveryId, saveLiveryId,
   getCustomLiveries, setCustomLiveries, getLiveries,
   invalidateDecalTextures: (id) => carDraw.invalidateDecalTextures(id),   // const from CarDraw.create(G) below — defer
+  // Drop every procedural body/wheel GPU cache (CarDraw). Specs that hook
+  // Car3D.build call this via __apex.clearCarMeshCaches so a warm sharedTest
+  // worker rebuilds through the probe.
+  invalidateFactoryMeshCaches: () => carDraw.invalidateFactoryMeshCaches(),
   armConfirm,
   // Mutable state + helpers consumed by js/ui/select-screen.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { setDriverIdxAt(v); },
