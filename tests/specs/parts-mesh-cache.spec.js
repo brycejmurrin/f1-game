@@ -446,8 +446,17 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       window.__apex.freeze(true);
       window.__wheelGroundProbe.length = 0;
     });
-    await page.waitForFunction(() => window.__wheelGroundProbe.length >= 4,
-      null, { polling: 100, timeout: 20_000 });
+    // Kick a soft blit each poll: under a loaded selected shard SwiftShader can
+    // starve the rAF loop for tens of seconds after freeze(), so the probe saw
+    // zero draws and timed out at 20 s (CI #564). snapCam arms an on-demand
+    // soft present without raising the bound; alone the test already passes.
+    await page.waitForFunction(() => {
+      try {
+        window.__apex.headless(false);
+        window.__apex.snapCam();
+      } catch (_) { /* harness */ }
+      return window.__wheelGroundProbe.length >= 4;
+    }, null, { polling: 100, timeout: 20_000 });
 
     const probe = await page.evaluate(() => {
       const st = window.__apex.physState();
