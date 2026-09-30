@@ -250,7 +250,7 @@ function main() {
   const why = argv.includes("--why"), asJson = argv.includes("--json");
   const gate = argv.includes("--gate"), update = argv.includes("--update");
   const env = buildContext();
-  const ids = argv.includes("--all") ? env.Tracks.LIST.map((d) => d.id)
+  const ids = argv.includes("--all") ? require("../lib/circuit-scope.cjs").scope(env.Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
     : argv.filter((a) => !a.startsWith("--"));
   if (!ids.length) { console.error("usage: ground-audit.cjs <id>... | --all [--gate|--update] [--why] [--json]"); process.exit(2); }
 
