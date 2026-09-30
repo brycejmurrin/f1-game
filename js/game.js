@@ -4644,7 +4644,7 @@ const AI_YAW_LAT = 0.6;        // share of LAT_MAX·grip the heading change may 
 const AI_YAW_MAX = 1.2;        // rad/s: yaw-rate cap at crawl speeds
 const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separation bias may move the target
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
-const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
+const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5, queueT: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, x: 0 };
@@ -5405,6 +5405,7 @@ function updateCar(c, dt, ranked) {
     // freer side so midfield trains fan out instead of locking one line forever.
     _aiLane.traits = aiT; _aiLane.nearby = nearbyN; _aiLane.roomL = roomL; _aiLane.roomR = roomR;
     _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
+    _aiLane.queueT = c.queueT || 0;
     c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // THE LINE (TrackLine, baked at build): outside-inside-outside through every
@@ -5546,7 +5547,8 @@ function updateCar(c, dt, ranked) {
       }
       // Not on: FOLLOW, do not hang half alongside — the bias without the
       // commitment is what parked pairs side by side at monaco (standoffs
-      // 0 -> 6 in the bench with the zone gate alone).
+      // 0 -> 6 in the bench with the zone gate alone). Impatient equal-pace
+      // passes go through otWant + the latch above once corridor finds a side.
       if (!c.passOf) overtake = moveOn && (!c.passPlan || c.passPlan.side) ? AiDrive.otPull(_aiOtPull) : 0;
     }
     if (c.passOf && raceCtl.level >= 2) c.passOf = null;   // a move under way when the SC/VSC comes out is abandoned
@@ -5572,11 +5574,13 @@ function updateCar(c, dt, ranked) {
     if (braking) c.defendSide = 0;
     else { AiDrive.defendOnce(defend, c.defendSide || 0, _aiDefOnce); defend = _aiDefOnce.defend; c.defendSide = _aiDefOnce.side; }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
-    // clearly-freer side, but when both sides are similar fall back to the car's
-    // own lane sign so a piled-up group fans out BOTH ways instead of all diving
-    // the same direction (and off the track). Experience softens the panic pull.
+    // clearly-freer side; when both sides are gone (a wall pile), pull TOWARD the
+    // centre of the road so a stacked group fans off the barrier instead of all
+    // diving the same lane-sign way into each other; only when centred fall back
+    // to the car's own lane so a mid-road pile still splits both ways.
     const freer = roomR - roomL;
-    const unstuckSide = Math.abs(freer) > 1 ? (freer > 0 ? 1 : -1) : (c.lane >= 0 ? 1 : -1);
+    const unstuckSide = Math.abs(freer) > 1 ? (freer > 0 ? 1 : -1)
+      : (Math.abs(c.x) > 1.5 ? (c.x > 0 ? -1 : 1) : (c.lane >= 0 ? 1 : -1));
     const unstuck = unstuckActive ? unstuckSide * AiDrive.unstuckPull(aiT, !!track.street) : 0;
     // Proactive lateral separation, accumulated in the traffic scan above: push
     // toward a minimum side-by-side gap, proportional to the deficit, fading to
@@ -6597,13 +6601,21 @@ function updateCar(c, dt, ranked) {
     // leaves a car wedged against another — the commonest real stuck — never
     // rescued, while a pack shuffle clears in well under a second and never
     // reaches the longer contact timer.
+    // Dig-out is the first recovery; when it fails (wall both sides, sandwich),
+    // unstuckActive used to permanently veto rescue — cars crawled at 0 m/s
+    // with stuckT climbing forever (monaco field: 7.6 s, rescueT = 0). Past
+    // AiDrive.digOutBudget, rescue may arm even while dig-out is still on.
     // A car HELD in its box is parked on purpose, not stuck (every AI stop was
     // being rescued onto the racing line 1.5-2 s after the tyres went on).
     // A car QUEUED in the lane behind a stop (capBlocks, the crawl floor) is
     // held by a car, not stuck: rescuing it fired it at 8 m/s into the parked
-    // car it was waiting for.
+    // car it was waiting for — unless dig-out has already failed (laneX
+    // overwrite makes lateral dig-out useless in the pit), in which case the
+    // escalate path still fires onto laneX below.
+    const digEsc = AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street);
+    const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
     const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
-      (c.speed < 5 && raceT > 2 && !unstuckActive && !(queued && pits.inLane(c))));
+      (c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
     // RED FLAG: the field is held under that low-speed gate on purpose — only a
     // car genuinely beached in the run-off still counts as stuck (as the player's).
     const aiRedHeld = raceCtl.level >= 4 && !beachedAt(c);
@@ -6612,7 +6624,9 @@ function updateCar(c, dt, ranked) {
     if (c.pitState === "box") c.rescueT = 0;
     else if (aiStuck && !aiRedHeld) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
-    if (c.rescueT > AiDrive.aiRescueDelay((c.contactT || 0) > 0)) {
+    // Once dig-out has failed, contact patience already ran during the dig-out
+    // window — do not stack another 7 s on top (that left monaco crawls at 10 s).
+    if (c.rescueT > AiDrive.aiRescueDelay((c.contactT || 0) > 0, digEsc)) {
       Tracks.sample(track, c.s, smp);
       // Break the weld SIDEWAYS first: a car pinned against another is stuck
       // laterally, and a bare speed restore re-loads the same contact next frame.

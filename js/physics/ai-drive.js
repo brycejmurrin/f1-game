@@ -430,9 +430,12 @@ const AiDrive = (function () {
 
   // Nudge the preferred lane toward the freer side when traffic is dense, so
   // midfield trains slowly fan out. Slow on purpose — must not fight overtake.
+  // On streets, a one-car nose-to-tail also fans once queue pressure builds —
+  // wall-lined packs otherwise lock on the racing line (monaco T1). Permanents
+  // keep the dens≥2 gate: queue-pressure fan there thrashed monza oscillation.
   function adaptLane(lane, ctx, dt) {
     const dens = ctx.nearby || 0;
-    if (dens < 2) return lane;
+    if (dens < 2 && !(ctx.street && queuePress(ctx) >= 0.5)) return lane;
     const freer = (ctx.roomR || 0) - (ctx.roomL || 0);
     const minFree = ctx.street ? 1.35 : 0.9;
     if (Math.abs(freer) < minFree) return lane;
@@ -497,7 +500,13 @@ const AiDrive = (function () {
     const crawling = (ctx.blockerSpeed || 0) < 0.12 * ref && (ctx.blockerAccel || 0) < 0.016 * ref;
     const closing = (ctx.speed || 0) >= (ctx.blockerSpeed || 0) + margin;
     const held = (ctx.freeSpeed || 0) >= bv + margin;
-    return crawling || closing || held;
+    // Impatient equal-pace: full queue pressure AND a clear side to go into.
+    // Without the room gate every held car lunged and aborted (monza osc↑).
+    // With it, packs that would sit forever behind an equal-pace car can split.
+    const press = queuePress(ctx);
+    const clear = Math.max(ctx.roomL || 0, ctx.roomR || 0) >= (street ? 2.2 : 2.8);
+    const impatient = press >= 1 && clear && (ctx.freeSpeed || 0) + 0.005 * ref >= bv;
+    return crawling || closing || held || impatient;
   }
 
   // THE LAUNCH. Real lights-out is a reaction (a driver-dependent fraction of a
@@ -1223,12 +1232,29 @@ const AiDrive = (function () {
     return true;
   }
 
+  // Dig-out is the FIRST recovery (cancel brakes, yank sideways). When it fails
+  // — wall both sides, sandwich, pit laneX overwrite — unstuckActive used to
+  // permanently veto the rescue (`!unstuckActive` in aiStuck), so a car crawled
+  // at 0 m/s with stuckT climbing forever (monaco: 7.6 s, rescueT = 0). Past
+  // this budget, rescue may arm even while dig-out is still on. Streets escalate
+  // sooner: the walls leave less room for dig-out to succeed.
+  function digOutBudget(t, street) {
+    const base = lerp(3.5, 2.0, t && t.awareness != null ? t.awareness : 0.75);
+    return street ? base * 0.6 : base;
+  }
+  function digOutEscalated(stuckT, t, street) {
+    return (stuckT || 0) > stuckThreshold(t) + digOutBudget(t, street);
+  }
+
   // How long an AI must sit slow before the rescue unwedges it. Contact used to
   // VETO the rescue outright (`contactT === 0` in the aiStuck conjunction), so
   // the commonest way to be genuinely stuck — welded to another car — was the
   // one case that could never recover. It is a patience knob now, not a veto:
-  // a pack shuffle clears long before the contact timer elapses.
-  function aiRescueDelay(contacting) {
+  // a pack shuffle clears long before the contact timer elapses. Once dig-out
+  // has already failed (`escalated`), contact patience ran during that window
+  // — use the short arm so a street wall-pile is not another 7 s of crawl.
+  function aiRescueDelay(contacting, escalated) {
+    if (escalated) return contacting ? 2.0 : 1.25;
     return contacting ? 7 : 4;
   }
 
@@ -1299,6 +1325,7 @@ const AiDrive = (function () {
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
+    digOutBudget, digOutEscalated,
     otWant, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,

@@ -219,8 +219,17 @@ test("adaptLane nudges toward the freer side under density", () => {
   }, 0.5);
   assert.ok(a > 0, `expected rightward nudge, got ${a}`);
   assert.ok(b < 0, `expected leftward nudge, got ${b}`);
-  // Sparse traffic: no move
+  // Sparse traffic: no move on permanents
   assert.equal(A.adaptLane(0.2, { traits: mid, nearby: 1, roomL: 0.5, roomR: 4, baseLane: 0.2 }, 0.5), 0.2);
+  // Streets: held in a train behind ONE car still fans once queue pressure builds.
+  const pressed = A.adaptLane(0, {
+    traits: mid, nearby: 1, queueT: 60, street: true, roomL: 0.5, roomR: 3.5, baseLane: 0,
+  }, 0.5);
+  assert.ok(pressed > 0,
+    `street queue pressure must fan a one-car train toward the freer side, got ${pressed}`);
+  assert.equal(A.adaptLane(0.2, {
+    traits: mid, nearby: 1, queueT: 60, street: false, roomL: 0.5, roomR: 4, baseLane: 0.2,
+  }, 0.5), 0.2, "permanents keep the dens≥2 gate");
   // Dense traffic must not accumulate forever — damp toward home±step, not lane+step.
   let lane = 0;
   for (let i = 0; i < 120; i++) {
@@ -268,6 +277,27 @@ test("aiRescueDelay: contact is patience, never a veto", () => {
   assert.ok(Number.isFinite(held), "a contacting car must still be rescuable");
   assert.ok(held > free, `contact should wait longer, got ${held} vs ${free}`);
   assert.equal(free, 4, "the no-contact delay is the one that shipped");
+  // Escalated dig-out: short arm — contact patience already ran while digging.
+  assert.ok(A.aiRescueDelay(false, true) < free);
+  assert.ok(A.aiRescueDelay(true, true) < held);
+});
+
+test("dig-out has a budget — past it, rescue must be allowed to arm", () => {
+  // THE DEFECT: unstuckActive permanently vetoed aiStuck (`!unstuckActive`), so
+  // a car boxed at 0 m/s on monaco climbed stuckT to 7.6 s with rescueT = 0
+  // forever. Dig-out is the first recovery; when it fails, rescue is the second.
+  const budget = A.digOutBudget(mid);
+  assert.ok(budget > 1.5 && budget < 5,
+    `dig-out budget must be a few seconds, got ${budget}`);
+  assert.ok(A.digOutBudget(ace) < A.digOutBudget(rook),
+    "aware drivers escalate to rescue sooner");
+  assert.ok(A.digOutBudget(mid, true) < A.digOutBudget(mid, false),
+    "streets escalate sooner — walls leave less room for dig-out");
+  const thresh = A.stuckThreshold(mid);
+  assert.equal(A.digOutEscalated(thresh, mid), false, "just armed: still digging");
+  assert.equal(A.digOutEscalated(thresh + budget - 0.05, mid), false);
+  assert.equal(A.digOutEscalated(thresh + budget + 0.05, mid), true,
+    "past dig-out budget: escalate to rescue");
 });
 
 test("otSide: a tie does not send the whole queue one way", () => {
@@ -1016,7 +1046,14 @@ test("queue pressure: time held behind one car lowers the pass bar, craft spends
   const tow = { street: false, speed: 60, blockerSpeed: 60, vTop: 72, freeSpeed: 66 * 1.045, blockerVmax: 66, traits: mid };
   assert.equal(A.otWant({ ...tow, queueT: 0 }), false, "not the moment a car arrives behind another");
   assert.equal(A.otWant({ ...tow, queueT: A.queuePatience(mid) }), true, "held long enough: the tow is enough");
-  assert.equal(A.otWant({ ...tow, freeSpeed: 66, queueT: 60 }), false, "no pace edge at all: still no pass");
+  // Equal pace alone still refuses (the 30 % margin floor) — but with a CLEAR
+  // side open, full pressure takes the move so packs can split without tow.
+  assert.equal(A.otWant({ ...tow, freeSpeed: 66, queueT: 60, roomL: 1, roomR: 1 }), false,
+    "equal pace, no room: still no pass");
+  assert.equal(A.otWant({ ...tow, freeSpeed: 66, queueT: 60, roomL: 1, roomR: 4 }), true,
+    "full pressure + clear side: equal pace splits the train");
+  assert.equal(A.otWant({ ...tow, freeSpeed: 65, speed: 55, queueT: 60, roomL: 1, roomR: 4 }), false,
+    "slower free pace with no closing still refuses");
   // attackOK: a queued car shows no closing rate; pressure stands in for it on a straight.
   const st = { traits: mid, speed: 40, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 1e9, attackQ: 0 };
   assert.equal(A.attackOK({ ...st, queueT: 0 }), false);

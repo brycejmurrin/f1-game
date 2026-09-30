@@ -46,12 +46,18 @@ proxies; for the exact point probe `__apex` live (browser, `mcp-probe`).
 Two timers, both in `updateCar` (`game.js`, grep `stuckT` / `rescueT`): `stuckT` grows while
 `speed < 7 && AiDrive.isBoxed` (no room both sides, or a blocker < 6 m); past
 `AiDrive.stuckThreshold(awareness)` (0.45-1.15 s) `unstuckActive` cancels braking and adds
-`unstuckPull` sideways (+ `unstuckLatFloor` steering floor, `queueFloor` crawl). If that fails,
-`rescueT` (`aiStuck`: offroad > 0.5 s, or `speed < 5` past `raceT > 2`) passes
-`AiDrive.aiRescueDelay` (4 s, 7 s in contact) and TELEPORTS the car to `x` inside `hw - 1.5`
-at `14·PACE` speed. Exempt: `pitState === "box"`, queued in the lane, red-held. A pit-lane car is
-rescued onto `pits.laneX`, so a wall/pit-boundary case is `pits.inLane(c)` (`game.js` ~6023
-"THE PIT WALL"), not the road branch. Unit pins: `ai-drive.test.mjs` (isBoxed/stuckThreshold).
+`unstuckPull` sideways (+ `unstuckLatFloor` steering floor, `queueFloor` crawl). If dig-out
+fails past `AiDrive.digOutBudget` (2–3.5 s permanent, 60 % of that on streets),
+`digOutEscalated` lets rescue arm EVEN WHILE dig-out is still on — dig-out used to
+permanently veto rescue (`!unstuckActive`), leaving monaco wall-piles at 0 m/s with
+`stuckT` at 7.6 s and `rescueT` at 0. Escalated rescue uses the short delay
+(`aiRescueDelay(_, true)` ≈ 1.25–2 s). Otherwise `rescueT` (`aiStuck`: offroad > 0.5 s,
+or `speed < 5` past `raceT > 2`) passes `AiDrive.aiRescueDelay` (4 s, 7 s in contact) and
+TELEPORTS the car to `x` inside `hw - 1.5` at `14·PACE` speed. Exempt: `pitState === "box"`,
+queued in the lane (unless dig-out escalated — laneX overwrite makes dig-out useless there),
+red-held. A pit-lane car is rescued onto `pits.laneX`. Unit pins: `ai-drive.test.mjs`
+(isBoxed/stuckThreshold/digOutBudget); VM: `ai-stuck-vm.test.mjs` (stopped-player weld),
+`ai-pack-stuck-vm.test.mjs` (monaco dig-out→rescue + pack freeze).
 No CLI counts stuck/rescue: `ai-field.mjs` reports dwell/contact only (`--seconds` floor 60;
 `--track baku --seconds 60` ~1 min VM, dwellMax is the nearest proxy); for a per-car
 `stuckS` use `__apex.field()` live (agent-view, browser).
