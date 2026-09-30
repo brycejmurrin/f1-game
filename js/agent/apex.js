@@ -190,9 +190,10 @@ function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
     if (typeof fn !== "function") continue;   // tiltSim (namespace), f1api (module)
-    // Not over a stepped build in flight (loadTrackStepped): `track` is null by design
-    // until it lands, and a synchronous build here would supersede it.
-    o[k] = function (...a) { if (!G.track && !Tracks.building()) loadTrack(G.trackIdx); return fn.apply(this, a); };
+    // Never under the loading screen, nor over a stepped or worker build in flight:
+    // RACE!'s intro owns the build and `track` is null by design until it lands.
+    const entering = () => { const l = typeof document !== "undefined" && document.getElementById("loading"); return !!(l && !l.hidden); };
+    o[k] = function (...a) { if (!G.track && !entering() && !Tracks.building() && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy())) loadTrack(G.trackIdx); return fn.apply(this, a); };
   }
   return o;
 }

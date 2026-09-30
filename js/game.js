@@ -2413,7 +2413,13 @@ async function loadTrackStepped(idx, live) {
     shadowPass.reset(); freeTrackMeshes(track);
     track = null; builtTrackId = null;
     if (typeof LampBake !== "undefined") LampBake.reset();
-    built = await Tracks.buildPaced(def, trackBuildOpts(sessionDark, wantSlots), live, freeTrackMeshes);
+    // apex26.buildWorker (PROTOTYPE, default OFF): built off the main thread and
+    // replayed here; null (off, failed) falls back to the stepped build.
+    const opts = trackBuildOpts(sessionDark, wantSlots);
+    const msg = typeof TrackBuildClient !== "undefined" && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
+    if (track !== null || !live()) return false;   // a sync loadTrack, or the player backed out, meanwhile
+    built = msg ? await TrackBuildClient.replay(msg, def, gfx) : await Tracks.buildPaced(def, opts, live, freeTrackMeshes);
+    if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
   } finally {
     try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }

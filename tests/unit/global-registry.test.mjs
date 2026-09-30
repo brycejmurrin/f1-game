@@ -101,6 +101,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
+  "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
   "js/render/three/tlx.js": ["__apexReportError", "XRWebGLLayer"], // shell error card; WebXR immersive layer (browser API)
   "js/xr/xr-session.js": ["XRRigidTransform"], // WebXR recenter offset (browser API)
