@@ -324,7 +324,16 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       document.documentElement.style.setProperty("--kb", "120px");
       window.SheetShape.reclassify();
     });
-    await page.waitForTimeout(100);
+    // WAIT FOR THE LAYOUT TO SETTLE, NOT 100 ms (2026-09-30). A fixed wait read
+    // the zoom mid-reflow on a loaded runner: the deploy tip's push run after
+    // #491 measured 1.363 where the settled value is 1, while the same test
+    // passed on the PR's run and locally. Poll for the property the assertion
+    // needs (the pad landed, the cap tightened); the assertions below still
+    // decide, and a cap that never tightens still fails, on the timeout.
+    await page.waitForFunction((was) => {
+      const screen = document.getElementById("carsetup"), sheet = document.getElementById("cs-inner");
+      return parseFloat(getComputedStyle(screen).paddingBottom) === 120 && Number(getComputedStyle(sheet).zoom) < was;
+    }, before.effective, { polling: 100, timeout: 5000 }).catch(() => {});
     const withKb = await read();
     expect(withKb.padBottom, "--kb reaches .screen as bottom padding").toBe(120);
     expect(withKb.effective, "the fit cap tightens for the space the keyboard took")
@@ -337,7 +346,13 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       document.documentElement.style.removeProperty("--kb");
       window.SheetShape.reclassify();
     });
-    await page.waitForTimeout(100);
+    // Same: wait until the cap is back where it started (a settled value),
+    // rather than reading whatever the reflow holds 100 ms in.
+    await page.waitForFunction((was) => {
+      const screen = document.getElementById("carsetup"), sheet = document.getElementById("cs-inner");
+      return parseFloat(getComputedStyle(screen).paddingBottom) === was.pad
+        && Math.abs(Number(getComputedStyle(sheet).zoom) - was.zoom) < 1e-3;
+    }, { pad: before.padBottom, zoom: before.effective }, { polling: 100, timeout: 5000 }).catch(() => {});
     const after = await read();
     expect(after.padBottom, "keyboard gone: pad returns").toBe(before.padBottom);
     expect(after.effective, "keyboard gone: fit cap returns").toBeCloseTo(before.effective, 3);
