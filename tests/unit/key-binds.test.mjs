@@ -329,13 +329,14 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 
 // A DOM just deep enough for KeyBinds.create: elements by id with hidden,
 // textContent and children; createElement for the rows.
-function bootUi(desktop, helpSlots = {}) {
+// `disk`, when given, backs the store (reads and writes land in it).
+function bootUi(desktop, helpSlots = {}, disk = null) {
   const { Input, key, sb, fire } = boot();
   const nodes = {};
   const mk = (tag = "div") => {
     let text = "";
-    const n = { tagName: tag.toUpperCase(), hidden: false, dataset: {}, disabled: false, style: {}, kids: [], clears: 0,
-      setAttribute() {}, append(...a) { this.kids.push(...a); }, appendChild(a) { this.kids.push(a); },
+    const n = { tagName: tag.toUpperCase(), hidden: false, dataset: {}, disabled: false, style: {}, kids: [], clears: 0, attrs: {},
+      setAttribute(k, v) { this.attrs[k] = String(v); }, append(...a) { this.kids.push(...a); }, appendChild(a) { this.kids.push(a); },
       addEventListener() {}, removeEventListener() {},
       focus() { sb.document.activeElement = this; } };
     Object.defineProperty(n, "textContent", { get: () => text, set(v) {
@@ -356,7 +357,9 @@ function bootUi(desktop, helpSlots = {}) {
   sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
-  const store = { get: () => null, set() {} };
+  const store = disk
+    ? { get: (k, d) => (Object.prototype.hasOwnProperty.call(disk, k) ? disk[k] : d), set: (k, v) => { disk[k] = v; } }
+    : { get: () => null, set() {} };
   const G = { $: sb.document.getElementById, store, soundOn: false };
   const kb = KeyBinds.create(G);
   // A physical key: Input's window listener sets the latch, then the module's.
@@ -423,6 +426,88 @@ test("disarmAll aborts the wheel wizard so the pad drives again", () => {
   assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "button label restored");
   Input.poll();
   assert.equal(Input.debugState().pad.throttle, true, "disarmAll cleared axis capture");
+});
+
+// The slot chip for (action, slot) anywhere under a rendered table.
+function slotOf(node, action, slot) {
+  if (node.dataset && node.dataset.action === action && node.dataset.slot === String(slot)) return node;
+  for (const child of node.kids || []) { const hit = slotOf(child, action, slot); if (hit) return hit; }
+  return null;
+}
+
+test("Backspace on an armed KEY slot unbinds it, and the chip says so", () => {
+  // Bug hunt 2026-09-30: Input.clearKeyBinding had no caller — a slot could be
+  // moved but never emptied.
+  const disk = {};
+  const { Input, press, $ } = bootUi(true, {}, disk);
+  slotOf($("pm-keys"), "boost", 0).onclick();
+  press("Backspace");
+  assert.deepEqual(plain(Input.getKeyMap().boost), [null, null], "BOOST has no key now");
+  const chip = slotOf($("pm-keys"), "boost", 0);
+  assert.equal(chip.textContent, "—");
+  assert.match(chip.attrs["aria-label"], /unset/);
+  assert.deepEqual(plain(disk.keys.boost), [null, null], "the cleared map was saved");
+  assert.match($("pm-keys-note").textContent, /BOOST key cleared/);
+  press("Space");
+  assert.equal(Input.consumeBoostToggle(), false, "Space no longer boosts");
+  // Delete clears the SECOND slot alone.
+  slotOf($("pm-keys"), "left", 1).onclick();
+  press("Delete");
+  assert.deepEqual(plain(Input.getKeyMap().left), ["ArrowLeft", null]);
+  // Nothing is left armed: the next key is not captured.
+  press("KeyG");
+  assert.deepEqual(plain(Input.getKeyMap().left), ["ArrowLeft", null]);
+});
+
+test("Backspace from the keyboard unbinds an armed CONTROLLER slot and disarms the capture", () => {
+  const disk = {};
+  const { Input, $, press, fire, sb } = bootUi(true, {}, disk);
+  const pad = fakePad(sb, fire);
+  slotOf($("pm-pad"), "throttle", 1).onclick();
+  press("Backspace");
+  assert.deepEqual(plain(Input.getPadMap().throttle), [7, null], "A no longer means gas");
+  assert.deepEqual(plain(disk.pad.throttle), [7, null]);
+  assert.equal(slotOf($("pm-pad"), "throttle", 1).textContent, "—");
+  pad.press(0); Input.poll();
+  assert.deepEqual(plain(Input.getPadMap().throttle), [7, null], "the capture was disarmed, A was not bound");
+  assert.equal(Input.debugState().pad.throttle, false, "and A does not drive");
+});
+
+test("CALIBRATE STICK is stored and applied on the next boot; a garbage value is ignored", () => {
+  // Bug hunt 2026-09-30: the hint promised the offset applies "from then on",
+  // and it was lost on reload.
+  const disk = {};
+  const a = bootUi(true, {}, disk);
+  const pa = fakePad(a.sb, a.fire);
+  pa.pad.axes[0] = 0.08;
+  a.$("pm-pad-calib").onclick();
+  assert.ok(Math.abs(disk.padRest - 0.08) < 1e-9, "the offset was stored: " + disk.padRest);
+  const b = bootUi(true, {}, { padRest: disk.padRest });
+  assert.ok(Math.abs(b.Input.padRest() - 0.08) < 1e-9, "a fresh boot loads it");
+  const pb = fakePad(b.sb, b.fire);
+  pb.pad.axes[0] = 0.08; b.Input.poll();
+  assert.equal(b.Input.debugState().pad.steer, 0, "a stick resting at 0.08 steers nothing");
+  const c = bootUi(true, {}, {});
+  const pc = fakePad(c.sb, c.fire);
+  pc.pad.axes[0] = 0.08; c.Input.poll();
+  assert.ok(c.Input.debugState().pad.steer > 0, "control: uncalibrated, the same rest steers");
+  for (const junk of ["x", 0.9, -3, [0.1], { v: 0.1 }, Infinity, true]) {
+    assert.equal(bootUi(true, {}, { padRest: junk }).Input.padRest(), 0, "ignored: " + JSON.stringify(junk));
+  }
+});
+
+test("the wheel wizard drops a stored rest offset when the steering axis moves", () => {
+  const disk = { padRest: 0.08 };
+  const { Input, $, fire, sb } = bootUi(true, {}, disk);
+  const { pad } = fakePad(sb, fire);
+  pad.axes = [0.08, 0, 0, 0];
+  $("pm-pad-wheel").onclick();
+  pad.axes[1] = -0.9; Input.poll();     // steer -> axis 1
+  pad.axes[2] = 0.9; Input.poll();      // throttle -> axis 2
+  pad.axes[3] = 0.9; Input.poll();      // brake -> axis 3, finish
+  assert.equal(disk.padAxes.steer, 1, "the wizard finished");
+  assert.equal(Input.padRest(), 0, "the old axis's offset is not carried over");
+  assert.equal(disk.padRest, 0, "…and not stored");
 });
 
 test("a desktop shows both tables and never the hint", () => {

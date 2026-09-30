@@ -143,6 +143,7 @@ const SPEC = [
   { k: "padSaturation", lane: "json", group: "driving", def: 0, src: "js/input/steer-tuning.js (percent short of the rim that is full lock)" },
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
   { k: "padAxes", lane: "json", group: "driving", def: null, src: "js/ui/key-binds.js wheel wizard (axis indices + signs)" },
+  { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset, |v| <= 0.5; 0 = uncalibrated)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
   // DRIVING LINE prefs (js/ui/driving-line-opts.js) — separate from the mode
