@@ -1,8 +1,8 @@
 /* Apex 26 — INDIANAPOLIS scenery (data only), split out of js/circuits/indianapolis.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["indianapolis"] =
   function (api) {
@@ -22,13 +22,13 @@
 
       // Outer oval wall — skip the SF stretch where indy-main-stands owns the
       // continuous Paddock / Tower Terrace face (IMS facility map; front stretch
-      // grandstands). Fabric seat overlays that used to ride the crowdBank
-      // risers are gone: they were the flatCoplanar hotspots (38 m²).
+      // grandstands). No fabric seat overlays on the crowdBank risers: they
+      // are flatCoplanar hotspots (38 m²).
       const OUTER_BAYS = 28, OUTER_SPAN = 0.28;
       const OUTER_RUN = 1100;
       const OUTER_BAY_LEN = OUTER_RUN / OUTER_BAYS;
       for (let i = 0; i < OUTER_BAYS; i++) {
-        // Span 0.78..1.06(=0.06) was the old oval; keep mid-straight + T4 only.
+        // Span 0.78..1.06 (=0.06): mid-straight + T4 only.
         const s = 0.78 + i * (OUTER_SPAN / OUTER_BAYS);
         const g = Math.floor(i * 10 / OUTER_BAYS);
         const s01 = ((s % 1) + 1) % 1;
@@ -116,9 +116,9 @@
           for (let t = 0; t < 5; t++) {
             const w = 15 - t * 2.0, d = 18 - t * 2.2;
             const y = 12 + t * 6.85;
-            // Glass sits on the storey face (halfW + 0.2): the old w*0.48
-            // offset opened a >5 cm XZ gap on the upper, narrower storeys and
-            // left two glass bands unsupported by 31–38 m (ground-audit).
+            // Glass sits on the storey face (halfW + 0.2): a w*0.48 offset
+            // opens a >5 cm XZ gap on the upper, narrower storeys and leaves
+            // two glass bands unsupported by 31–38 m (ground-audit).
             const halfW = (w - 1.2) * 0.5;
             addBox(stage, vadd(a.c, a.u, y + 0.175), [w - 1.2, 5.95, d - 1.2],
               [0.76, 0.77, 0.79], b);
@@ -298,9 +298,9 @@
         if (s < 0.28 || s > 0.72) return;
         const h = hash(k * 31);
         if (h < 0.55) return;
-        // After the sparseness guard h is in [0.55, 1), so the old h<0.5
-        // selectors were dead: every clump planted right, always LEAF, and
-        // LEAF_D never rendered. 0.775 is the live range's midpoint.
+        // After the sparseness guard h is in [0.55, 1), so an h<0.5 selector
+        // is dead (every clump right, always LEAF, LEAF_D never rendered).
+        // 0.775 is the live range's midpoint.
         tree(k, h < 0.775 ? -1 : 1, 34 + h * 20, 10 + h * 6, h < 0.775 ? LEAF_D : LEAF);
       });
 

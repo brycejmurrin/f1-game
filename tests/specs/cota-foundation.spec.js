@@ -32,7 +32,11 @@ test.describe("COTA shared-foundation migration", () => {
       const probes = [];
       for (const frac of [0, 0.05, 0.108, 0.18, 0.30, 0.50, 0.63, 0.78, 0.84, 0.95]) {
         for (const lat of [-48, -32, -16, 16, 32, 48]) {
-          probes.push({ frac, lat, gap: window.__apex.groundY(frac, lat).gap });
+          // overRoad, not gap: frac 0.78 is inside the 4° bankZone at 0.78296
+          // (widthM 160), so terrain tucked under the raised edge reads gap
+          // +0.328 against the centreline while overRoad is −0.185. Same trap
+          // monza-foundation already documents for Lesmo 1.
+          probes.push({ frac, lat, ...window.__apex.groundY(frac, lat) });
         }
       }
 
@@ -105,8 +109,8 @@ test.describe("COTA shared-foundation migration", () => {
     expect(result.peakFrac).toBeLessThan(0.12);
     expect(result.propMax).toBeLessThanOrEqual(0.20);
     for (const probe of result.probes) {
-      expect(probe.gap == null || probe.gap <= 0.18,
-        `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);
+      expect(probe.overRoad == null || probe.overRoad <= 0.18,
+        `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: overRoad ${probe.overRoad} (gap ${probe.gap})`).toBe(true);
     }
   });
 

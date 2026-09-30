@@ -446,13 +446,11 @@
       for (let k = 0; k < cat.length; k++) it[k] = cat[k];
       const gt = LGRID.gridTex.image.data;
       gt.fill(0);
-      // ROW BY ROW, through the shared helper. This used to be a linear copy
-      // with a comment claiming the strides matched: they do not. The bake's row
-      // stride is g.gw (the occupied extent, a few dozen cells); the texture's
-      // is LGRID.G (256, fixed). The shader below reads ivec2(cx, cz), so every
-      // row but the first read a zero pair — count 0, `use` false — and the
-      // per-chunk lamp path fell back to the global lamp set over almost the
-      // whole grid, silently. See LampChunks.blitGrid for why this lives there.
+      // ROW BY ROW, through the shared helper, never a linear copy: the bake's
+      // row stride is g.gw (the occupied extent, a few dozen cells); the
+      // texture's is LGRID.G (256, fixed). The shader below reads ivec2(cx, cz),
+      // so a linear copy leaves every row but the first a zero pair and the
+      // per-chunk lamp path silently falls back to the global lamp set. See LampChunks.blitGrid for why this lives there.
       // typeof: this file is evaluated standalone by the node tests, where the
       // shared island is not loaded. Refusing the path is the documented
       // fallback (see this function's header); throwing would take the frame.
@@ -746,9 +744,9 @@
       const wp = vec3(wpIn).toVar();
       const bumpFade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
       // 1..14 plus ASPHALT(16); GLASS(3) and FLAG(15) are excluded, matching
-      // GLX's `mid == 0 || mid == 3 || mid == 15` early-out. ASPHALT was
-      // outside the old < 14.5 bound, so the road — the surface on screen for
-      // the whole race — got NO procedural relief on this backend at all.
+      // GLX's `mid == 0 || mid == 3 || mid == 15` early-out. The bound must
+      // include ASPHALT(16), or the road — the surface on screen for the whole
+      // race — gets NO procedural relief on this backend at all.
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
         .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
       // DERIVATIVES UNCONDITIONAL (roadMarkings / WGX fs_main pattern): fwidth
@@ -814,9 +812,8 @@
      * ENV_CUBE uses above, and it is required here for the same reason: the
      * material variants are compiled once at init, the pack arrives
      * asynchronously, and a rebuild after init is not possible. U.matTexMix
-     * (TUNE_DEFS `matTexMix`, shipped at 1.0 — ON, matching GLX; this comment
-     * said "shipped at 0", which was true of the old TLX-only uniform default
-     * and never of the knob) gates the whole thing.
+     * (TUNE_DEFS `matTexMix`, shipped at 1.0 — ON, matching GLX) gates the
+     * whole thing.
      *
      * ctx.matMaps absent (an older tlx.js, or a boot where the arrays could not
      * be created) means NONE of this is compiled in and TLX renders exactly the
@@ -913,10 +910,9 @@
     //
     // Pack layers are MAT 1..16. Car surfaces are 20-27 (car3d.js SURFACES).
     // GLX matTexUV and WGX matTexUV both refuse mid>16 BEFORE indexing the
-    // 17-layer array. TLX used to sample `.depth(int(mid))` and
-    // `uMatTexScale[mid]` raw — OOB on every painted/tyre/carbon fragment.
-    // SwiftShader/WebGL then returns black (or discards), so the whole car
-    // vanishes while the road (MAT 16) still draws. Clamp the layer for the
+    // 17-layer array. Sampling `.depth(int(mid))` and `uMatTexScale[mid]` raw
+    // is OOB on every painted/tyre/carbon fragment: SwiftShader/WebGL then
+    // returns black (or discards), so the whole car vanishes. Clamp the layer for the
     // hoisted sample (derivative_uniformity forbids an early-out around it)
     // and keep the apply-gate on the REAL id so cars stay procedural.
     const matTexLayer = (mid) => clamp(mid, float(0.0), float(16.0));
@@ -1589,7 +1585,7 @@
          * below is the plain uniform-array read this loop has always done.
          *
          * On, the fragment finds its OWN grid cell from world XZ — the same
-         * floor(x / cell) + 1024 binning tlx-chunked.js used to bucket the
+         * floor(x / cell) + 1024 binning tlx-chunked.js uses to bucket the
          * triangles — reads that cell's (offset, count) out of gridTex, and
          * walks its slice of idxTex into lampTex. A cell outside the baked
          * extent, or an empty one, yields count 0, and `pcN` then falls back to

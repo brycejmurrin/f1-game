@@ -304,8 +304,8 @@ const TrackMesh = (function () {
       for (let i = 0; i <= k1 - k0; i++) { const k = (k0 + i + n) % n; if (side > 0) track.kerbR[k] = 1; else track.kerbL[k] = 1; }
     };
     const KW = 0.9, KH = 0.06;
-    // Real kerb stripes are ~1.6 m. The old `Math.round(1.6/ds)` node count
-    // COLLAPSED to 1 at the ~4 m node grid, so an intended 1.6 m stripe rendered
+    // Real kerb stripes are ~1.6 m. A `Math.round(1.6/ds)` node count
+    // COLLAPSES to 1 at the ~4 m node grid, so a 1.6 m stripe would render
     // at one node ≈ 4 m (an 8 m red/white period). Colour is per-vertex, so the
     // only way below node resolution is finer geometry — SUB sub-rings per node
     // span, coloured by TRUE ARC LENGTH so the stripe is ~STRIPE_M whatever the
@@ -359,13 +359,13 @@ const TrackMesh = (function () {
     }
     // findCorners returns EVERY local curvature peak, and a long corner has
     // several whose spans overlap (one corner's exit kerb also lies on the next
-    // corner's inside). One ribbon per span stacked up to 9 bit-identical copies
-    // of the same kerb quads — 55 % of all kerb triangles fleet-wide. Instead
-    // mark the covered QUADS per side and emit one ribbon per contiguous run:
-    // the union of the old quads, each exactly once. A quad remembers the lap
-    // (wrap) of the first span that covered it, because the stripe phase is the
-    // UNWRAPPED arc k·ds — a span from k = -3 and one from k = n-3 stripe
-    // differently unless the lap is a whole number of stripe periods.
+    // corner's inside). One ribbon per span would stack up to 9 bit-identical
+    // copies of the same kerb quads — 55 % of all kerb triangles fleet-wide.
+    // Instead mark the covered QUADS per side and emit one ribbon per
+    // contiguous run: the union of the spans' quads, each exactly once. A quad
+    // remembers the lap (wrap) of the first span that covered it, because the
+    // stripe phase is the UNWRAPPED arc k·ds — a span from k = -3 and one from
+    // k = n-3 stripe differently unless the lap is a whole number of stripe periods.
     const quad = { "-1": new Int8Array(n), "1": new Int8Array(n) };   // 0 = bare, else wrap + 2
     const cover = (k0, k1, side) => {   // ribbon(k0, k1) lays quads k0..k1-1
       const q = quad[side];
@@ -463,25 +463,22 @@ const TrackMesh = (function () {
 
   // Coarse XZ bucket of road-centreline node indices, built once per track and
   // shared by buildRoad's shoulder clip, buildTerrain's over-track clip and
-  // buildProps' onRoadHit/onTrack guards. Each of those used to scan ALL n nodes
-  // per emitted vertex/primitive (O(prims·n) — tens of millions of checks on the
-  // city meshes); with the grid a query visits only the handful of nodes whose
-  // footprint can reach the query point. The accept/reject maths in each caller
-  // is unchanged — the grid only narrows the candidate SET to a superset of every
-  // node that could pass, so the resulting geometry is identical.
+  // buildProps' onRoadHit/onTrack guards. Scanning ALL n nodes per emitted
+  // vertex/primitive is O(prims·n) — tens of millions of checks on the city
+  // meshes; with the grid a query visits only the handful of nodes whose
+  // footprint can reach the query point. The grid only narrows the candidate
+  // SET to a superset of every node that could pass, so each caller's
+  // accept/reject maths and the resulting geometry are identical.
   //
   // CELL=10 IS NOT WORTH SPLITTING. buildTerrain's over-track clip is the one
-  // wide query (R = maxHw + 27 ~ 33 m) and at this cell it sweeps ~64 buckets to
-  // find ~8 candidates, which looks like an obvious win for a second, coarser
-  // grid. It was tried: a CELL=24 grid used for that query alone, verified
-  // bit-identical on monza/spa/suzuka/zandvoort/vegas/silverstone (all five
-  // buffers, element by element). Measured with both grids pre-warmed so the
-  // timer covered query cost only, isolated buildTerrain moved 6 / 6 / 2 / 7 /
-  // 0 percent — and buildTerrain is 5-15% of a build, so under 1% of load, for
-  // a second grid and a per-cell cache. Reverted. A first pass that left grid
-  // CONSTRUCTION inside the timer for the coarse arm only reported 4 / -1 / -2
-  // / 5 / 3, i.e. the bias was worth more than the effect. If you revisit this,
-  // pre-warm both arms or you will measure the wrong thing.
+  // wide query (R = maxHw + 27 ~ 33 m): ~64 buckets swept for ~8 candidates.
+  // A CELL=24 grid for that query alone (bit-identical on monza/spa/suzuka/
+  // zandvoort/vegas/silverstone, all five buffers) moved isolated
+  // buildTerrain 6 / 6 / 2 / 7 / 0 percent with both grids pre-warmed — and
+  // buildTerrain is 5-15% of a build, so under 1% of load for a second grid
+  // and a per-cell cache. If you revisit this, pre-warm both arms: timing grid
+  // CONSTRUCTION in one arm only (4 / -1 / -2 / 5 / 3) biases more than the
+  // effect.
   function nodeGrid(track) {
     if (track._nodeGrid) return track._nodeGrid;
     const n = track.n, px = track.px, pz = track.pz, hw = track.hw;
@@ -708,10 +705,6 @@ const TrackMesh = (function () {
     const ds = total / n;
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const _cand = new Array(n);                // reusable candidate scratch for the over-track clip
-    // (A per-node run-off-apron field was computed here for years — curvature
-    // term, brake-zone look-ahead, four blur passes — and read by nothing:
-    // the verge colour below grades on lateral fraction alone. It described a
-    // feature that never shipped; deleted, geometry bit-identical.)
     // The terrain baseline (the level distant verts settle toward) is owned by
     // TrackSurface.profile — ribbon() reads surface.heightAt, which derives from
     // the profile's own pyMin/floorY (surface.js).
@@ -723,8 +716,8 @@ const TrackMesh = (function () {
     // re-derive it here from a raw `b.s * total`: that lands the window two thirds
     // of a lap away — `TrackSurface.profile` in js/track/core/surface.js carries the fix.
     // Adaptive lateral verts per side: a gravel/runoff verge at the road edge graded
-    // out to grass. The old bright concrete apron has been removed — it read as a
-    // glaring light slab flanking the track — so the verge is gravel, not tarmac.
+    // out to grass. The verge is gravel, not a concrete apron, which reads as a
+    // glaring light slab flanking the track.
     // Street circuits push the ribbon further from the road edge so barriers
     // fully hide it and it cannot visually bleed onto the road surface.
     const surface = track.surface || TrackSurface.profile(track.def, track);
@@ -964,8 +957,7 @@ const TrackMesh = (function () {
   // gridSlot() is the ONE definition of where slot `i` sits. js/game.js's
   // gridUp() places the cars from it and buildGridBoxes() paints the boxes from
   // it, so the paint cannot drift away from the cars — which it silently would
-  // if each file carried its own copy of these constants, as game.js alone did
-  // before the boxes existed.
+  // if each file carried its own copy of these constants.
   //
   // 8 m between slots is the real FIA pitch. Pole sits 14 m before the line.
   // The lateral stagger is symmetric here, unlike a real grid: 40% of the local
@@ -973,11 +965,10 @@ const TrackMesh = (function () {
   // The DEFAULT box count — 11 fixed teams x 2 seats. It is a default and not a
   // constant because the field is not always 22: selecting MY TEAM adds a car
   // (and a MY TEAM career adds two), so the painted grid has to follow the
-  // field or the last car lines up on bare tarmac. It did exactly that until
-  // 2026-09-16 — measured, 23 cars against 22 boxes — and nobody noticed,
-  // because the box is behind you on the formation lap. buildGridBoxes() takes
-  // the count; callers that do not know the field (tools, the VM builds, the
-  // circuit sweeps) get this.
+  // field or the last car lines up on bare tarmac — easy to miss, because the
+  // box is behind you on the formation lap. buildGridBoxes() takes the count;
+  // callers that do not know the field (tools, the VM builds, the circuit
+  // sweeps) get this.
   const GRID_SLOTS = 22;
   const _gsSmp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
   function gridSlot(track, i) {

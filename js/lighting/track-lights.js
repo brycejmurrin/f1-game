@@ -417,13 +417,12 @@ function buildTrackLights(track, onlyAlways) {
     // (and the player's first impression of the night lighting) begins.
     const ge = intensity * 0.55 * (8 * 8) * LT.poolEnergy;
     // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
-    // here too — the gantry bar previously ignored them ("every floodlight" per
-    // help text; the energy factor was a 0.55 literal = poolEnergy's default).
+    // here too, as the help text promises ("every floodlight").
     // volW 0 / glareW 0: this bar is NOT parented to the scenery gantry (see the
     // note in js/track/scenery/structures.js), so there is no fixture at its
     // position — and drawGlow paints a lens halo for any record with glareW > 0.
-    // Shipped at glareW 0.3 it put three glowing orbs 8 m over the start line
-    // with nothing holding them up, each with a volumetric shaft under it; on
+    // At glareW 0.3 it puts three glowing orbs 8 m over the start line with
+    // nothing holding them up, each with a volumetric shaft under it; on
     // Bahrain the nearest real fixture is 42 m away. Same rule the synth fill
     // lights follow above ("A fill light has no fixture, so it must not draw a
     // lens halo hanging in mid-air"). The downward pool on the grid is unchanged.

@@ -32,7 +32,7 @@ const CAM_TUNE_DEFS = [
   // branch and blends the rig toward the classic road-frame chase (eye back
   // along the road, aim at the curved centreline ahead), so the camera leads
   // and swings INTO turns. 0 = locked to the car (the shipped free-world rig);
-  // 1 = the old corner-following chase. Only chase/far read it — `modes` gates
+  // 1 = the full corner-following chase. Only chase/far read it — `modes` gates
   // which cameras show the slider.
   // def MUST equal CHASE_CORNER_LEAD_DEFAULT in js/camera/vantage.js (0.54), and
   // tests/unit/camera-defaults.test.mjs holds the two together. This is not cosmetic:

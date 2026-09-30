@@ -132,11 +132,10 @@ const TrackSpline = (function () {
   // debris sweep hit it.
   //
   // Passing wy adds a height term to the cost, which separates them. Omitting
-  // it keeps the old behaviour exactly, so every existing caller is unchanged;
-  // this is a capability, not a policy change. The player's physics path does
-  // not come through here at all (see js/game.js — progress is integrated, not
-  // re-projected, precisely so it cannot snap onto the wrong leg), so this
-  // serves the agent view and the debris fallback.
+  // it gives the pure XZ search, so every existing caller is unchanged. The
+  // player's physics path does not come through here at all (see js/game.js
+  // — progress is integrated, not re-projected, precisely so it cannot snap
+  // onto the wrong leg), so this serves the agent view and the debris fallback.
   function project(track, wx, wz, hint, wy) {
     const n = track.n, L = track.total, ds = L / n;
     const px = track.px, pz = track.pz, rx = track.rx, rz = track.rz, tx = track.tx, tz = track.tz;

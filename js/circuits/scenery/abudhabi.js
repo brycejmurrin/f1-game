@@ -1,8 +1,8 @@
 /* Apex 26 — ABUDHABI scenery (data only), split out of js/circuits/abudhabi.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["abudhabi"] =
   function (api) {
@@ -425,13 +425,12 @@
         const shellLegH = shellClearances[0] + shellThick / 2;
         // The rear PIT-SIDE leg stands at 0.884, one node short of the shell's
         // last arch (0.888): it sits 23 m off the pit straight, and at the
-        // arch's own node the engine's garage row (pit.keep 30 m, since the
-        // 2026-09-16 shorter exit slid the row back) supersedes anything
-        // inside 38 m. One node earlier the complex is the 14 m platform band,
+        // arch's own node the engine's garage row (pit.keep 30 m) supersedes
+        // anything inside 38 m. One node earlier the complex is the 14 m platform band,
         // which the leg clears by the same half-metre the front pair does.
         // The rear LEFT leg stays under the last arch: float-audit grounds an
         // overhead span through the prop cells beneath it, and with both rear
-        // legs moved the last arch read as a floating cluster (Pages #2349).
+        // legs moved the last arch reads as a floating cluster (Pages #2349).
         for (const [label, frac, fracPit] of [["front", 0.872, 0.872], ["rear", 0.888, 0.884]]) {
           for (const side of [-1, 1])
             hotelSupport(`yas-hotel-gridshell-${label}-${side < 0 ? "left" : "right"}-support`,

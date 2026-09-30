@@ -19,8 +19,8 @@ const LobbyCodes = (function () {
   const FRAGMENT_MIN = 20;
   // A LINK gets the same treatment as a bare code: its code is lifted out of
   // the token that carries it (inviteFromUrl drops the "." or ")" a sentence
-  // puts after it) and the wrap re-join below runs on what follows — a link a
-  // plain-text mail client folded used to stop at the fold and read "corrupt".
+  // puts after it) and the wrap re-join below runs on what follows, so a link
+  // a plain-text mail client folded does not stop at the fold and read "corrupt".
   const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;   // \s matches none of these
   function codeFrom(text) {
     const raw = String(text || "").replace(INVISIBLE, "").trim();

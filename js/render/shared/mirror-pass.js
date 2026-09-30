@@ -16,6 +16,11 @@
    chip for the rest of the session (phones have no M key), and a tap on the
    chip brings it back; the stored setting is untouched. Performance never HIDES it — a slower device gets a
    cheaper mirror instead (QUALITY below).
+   BROADCAST PICTURE-IN-PICTURE: in a REAL RACE WATCH (body.bc-on, js/race/
+   broadcast.js) the mirror stands down and its one target is re-aimed — a
+   SECOND car on a TV shot (setSubject), unflipped, into the #bc-pip frame.
+   Setting apex26.bcPip: AUTO (off on a software renderer, like the mirror),
+   ON, OFF. The two are never up together, so one target serves both.
    One MirrorPass.create(G, deps) at boot; the render loop calls render().
    Reads G.gfx / G.state / G.player / G.cars / G.track / G.camMode / G.dbgCam /
    G.hideMeshes / G.store; the world draw and the car pose helpers come
@@ -79,10 +84,18 @@ const MirrorPass = (function () {
     // the render buffer, which the governor's dynamic resolution rescales every
     // few seconds on a phone — each rescale reallocated the mirror target.
     let _cssW = 0, _cssH = 0;
+    // THE PiP: the subject car and its TV shot (broadcast.js via G.setPip), the frame, its rect and CSS box.
+    let _sub = null, _subMode = "tcam", _pipEl = null, _pipShown = false, _pipRect = null, _pipMeasureIn = 0;
+    let _pipCssW = 0, _pipCssH = 0;
+    let pipMode = G.store.get("bcPip", "auto");
+    if (MODES.indexOf(pipMode) < 0) pipMode = "auto";
+    const _pipExtra = { bankDy: 0 };
     // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
     const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null };
 
     function el() { return _el || (_el = document.getElementById("hud-mirror")); }
+    function pipEl() { return _pipEl || (_pipEl = document.getElementById("bc-pip")); }
+    function bcOn() { return document.body.classList.contains("bc-on"); }
     function chip() { return _chip || (_chip = document.getElementById("hud-mirror-chip")); }
     // Tap the mirror: collapse it; tap the chip: bring it back. Wired once, on
     // the first frame the elements exist (index.html owns both).
@@ -113,6 +126,7 @@ const MirrorPass = (function () {
     // seconds a frame (and every CI run would pay it in the cockpit default).
     function wanted() {
       if (mode === "off") return false;
+      if (bcOn()) return false;   // a WATCH: the TV picture has no mirror (T-CAM is one of the director's shots); the PiP owns the target
       const g = G.gfx;
       if (!g || typeof g.mirrorBegin !== "function") return false;
       if (G.state !== "race") return false;
@@ -124,19 +138,34 @@ const MirrorPass = (function () {
       return !!ONBOARD[camId()] && !softGpu();
     }
 
-    // The frame's rect as canvas fractions. Both rects are getBoundingClientRect,
+    // The PiP is wanted: a WATCH with a subject still running, the race, no debug
+    // camera, the HUD up; AUTO skips a software renderer (a second world pass).
+    function pipWanted() {
+      if (pipMode === "off" || !_sub || _sub.retired || !bcOn()) return false;
+      const g = G.gfx;
+      if (!g || typeof g.mirrorBegin !== "function" || _dead) return false;
+      if (G.state !== "race" || !G.track || G.dbgCam) return false;
+      if (document.body.classList.contains("hud-hidden")) return false;
+      return pipMode === "on" || !softGpu();
+    }
+
+    // A frame's rect as canvas fractions. Both rects are getBoundingClientRect,
     // so the HUD's CSS zoom is in both or neither (js/ui/css-zoom.js).
-    function measure() {
+    function rectOf(e) {
+      const c = canvasEl();
+      if (!e || !c) return null;
+      const er = e.getBoundingClientRect(), cr = c.getBoundingClientRect();
+      if (!(er.width > 4 && er.height > 4 && cr.width > 0 && cr.height > 0)) return null;
+      return [(er.left - cr.left) / cr.width, (er.top - cr.top) / cr.height, er.width / cr.width, er.height / cr.height];
+    }
+    function checkDead() {
       const st = G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null;
       _dead = !!(st && st.dead);   // a backend that failed its target latches off
-      const e = el(), c = canvasEl();
-      if (!e || !c) { _rect = null; return; }
-      const er = e.getBoundingClientRect(), cr = c.getBoundingClientRect();
-      if (!(er.width > 4 && er.height > 4 && cr.width > 0 && cr.height > 0)) { _rect = null; return; }
-      _rect = [(er.left - cr.left) / cr.width, (er.top - cr.top) / cr.height,
-        er.width / cr.width, er.height / cr.height];
-      _cssW = er.width; _cssH = er.height;
-      side(er);
+    }
+    function measure() {
+      checkDead();
+      _rect = rectOf(el());
+      if (_rect) { const er = el().getBoundingClientRect(); _cssW = er.width; _cssH = er.height; side(er); }
     }
     // THE RADIO CARD BESIDE THE MIRROR, not under it. Right of the frame is the
     // widest free strip at that height on a landscape screen (the map and gap
@@ -208,15 +237,17 @@ const MirrorPass = (function () {
     // Rivals within `reach` (QUALITY) of track arc and not ahead of the mirror eye:
     // the factory whole-car mesh, one draw each (no decals, rings or lamps —
     // the mirror is ~120 px tall).
-    function drawCars(wet, night, reach) {
-      const player = G.player, track = G.track, hide = G.hideMeshes;
+    // `centre`: whose arc `reach` is measured from; `skip`: the car not drawn (the
+    // mirror's own; the PiP draws its subject and skips nobody).
+    function drawCars(wet, night, reach, centre, skip) {
+      const track = G.track, hide = G.hideMeshes;
       _cars = 0;
       if (hide && hide.cars) return;
       const ex = _eye[0], ez = _eye[2];
       const paint = carPaint(wet, night);
       for (const c of G.cars) {
-        if (c === player || c.isPlayer) continue;
-        const ds = Math.abs(c.s - player.s);
+        if (skip && (c === skip || c.isPlayer)) continue;
+        const ds = Math.abs(c.s - centre.s);
         if (Math.min(ds, track.total - ds) > reach) continue;
         pose(c);
         const dx = _P[0] - ex, dz = _P[2] - ez;
@@ -247,7 +278,18 @@ const MirrorPass = (function () {
         if (!want) document.body.classList.toggle("hud-mirror-side", false);
         _measureIn = 0;
       }
-      if (!want) { if (g && g.mirrorRect) g.mirrorRect(null); return; }
+      const pip = pipWanted();
+      if (pip !== _pipShown) {
+        _pipShown = pip;
+        const e = pipEl();
+        if (e) e.hidden = !pip;
+        _pipMeasureIn = 0;
+      }
+      if (!want) {
+        if (pip) { renderPip(frame, frameSky, night, wet, floodEmit); return; }
+        if (g && g.mirrorRect) g.mirrorRect(null);
+        return;
+      }
       if (--_measureIn <= 0) { measure(); _measureIn = MEASURE_EVERY; }
       if (!_rect) { g.mirrorRect(null); return; }
       g.mirrorRect(_rect);
@@ -275,8 +317,50 @@ const MirrorPass = (function () {
       // U is up in world terms (R × F with the track's +x-right convention).
       _eye[0] = _P[0] + _U[0] * EYE_UP; _eye[1] = _P[1] + _U[1] * EYE_UP; _eye[2] = _P[2] + _U[2] * EYE_UP;
       _tgt[0] = _eye[0] + _bx * LOOK_M; _tgt[1] = _eye[1] - LOOK_DROP; _tgt[2] = _eye[2] + _bz * LOOK_M;
+      pass(frame, frameSky, night, wet, floodEmit, w, h, 2 * Math.atan(Math.tan(H_FOV / 2) / (w / h)), G.player, G.player);
+    }
+
+    // THE PiP FRAME: the subject on its TV shot — GameCams.vantage, the very rig
+    // the main camera uses, its POOLED answer copied at once (the main camera
+    // holds the same arrays) — at the cheapest tier, into #bc-pip, unflipped.
+    function renderPip(frame, frameSky, night, wet, floodEmit) {
+      const g = G.gfx;
+      if (--_pipMeasureIn <= 0) {
+        checkDead();
+        const e = pipEl();
+        _pipRect = rectOf(e);
+        if (_pipRect) { const er = e.getBoundingClientRect(); _pipCssW = er.width; _pipCssH = er.height; }
+        _pipMeasureIn = MEASURE_EVERY;
+      }
+      if (!_pipRect) { g.mirrorRect(null); return; }
+      g.mirrorRect(_pipRect, false);
+      _frame++;
+      _q = QUALITY[3];   // its own pass only: the mirror's rung dwell (_qi) is left alone
+      // Sized like the mirror: the frame's CSS box in device pixels (DPR capped at 2),
+      // not the render buffer the governor rescales.
+      const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
+      const w = Math.round(_pipCssW * dpr * _q.res), h = Math.round(_pipCssH * dpr * _q.res);
+      if (w < 16 || h < 8) return;
+      const same = w === _lastW && h === _lastH;
+      _lastW = w; _lastH = h;
+      if (_frame % _q.every !== 0 && !G.frozen && same && _drawn > 0) return;
+      const pa = playerAnchor(_sub);
+      const bank = Tracks.banking(G.track, pa.cS, pa.cX, _bank);
+      _pipExtra.bankDy = bank ? bank.dy : 0;
+      const v = GameCams.vantage(G.track, _subMode, pa.cS, pa.cX, Math.abs(_sub.speed || 0), performance.now(), _pipExtra);
+      for (let i = 0; i < 3; i++) { _eye[i] = v.eye[i]; _tgt[i] = v.tgt[i]; }
+      const fovY = (v.fov > 0 ? v.fov : 50) * Math.PI / 180;
+      const dx = _tgt[0] - _eye[0], dz = _tgt[2] - _eye[2], dl = Math.hypot(dx, dz) || 1;
+      _bx = dx / dl; _bz = dz / dl;   // the look direction: drawCars drops what is behind the eye
+      pass(frame, frameSky, night, wet, floodEmit, w, h, fovY, _sub, null);
+    }
+
+    // One second-camera pass: the view from _eye to _tgt, the world, the cars
+    // around `centre`, the sky — into the backend's mirror target.
+    function pass(frame, frameSky, night, wet, floodEmit, w, h, fovY, centre, skip) {
+      const g = G.gfx;
       const aspect = w / h;
-      M4.perspectiveTo(_proj, 2 * Math.atan(Math.tan(H_FOV / 2) / aspect), aspect, NEAR, FAR);
+      M4.perspectiveTo(_proj, fovY, aspect, NEAR, FAR);
       M4.lookAtTo(_view, _eye, _tgt, _up);
       M4.mulTo(_vp, _proj, _view);
       M4.invertTo(_invVP, _vp);
@@ -300,7 +384,7 @@ const MirrorPass = (function () {
         began = g.mirrorBegin(frame, w, h);
         if (began) {
           drawWorldMeshes(frame, night, wet, floodEmit, false);
-          drawCars(wet, night, _q.reach);
+          drawCars(wet, night, _q.reach, centre, skip);
           g.drawSky(frameSky);   // opaque first, then sky (gfx.js)
           _drawn++;
         }
@@ -323,15 +407,25 @@ const MirrorPass = (function () {
     }
     // The MIRROR key: whatever is showing now goes off, anything else goes ON.
     function toggle() { const on = _shown; _collapsed = false; setMode(on ? "off" : "on"); }
+    /** The PiP subject (broadcast.js via G.setPip): a car and a CamModes id, or null. */
+    function setSubject(c, camMode) {
+      _sub = c || null;
+      if (camMode) _subMode = camMode;
+      _lastW = 0;   // a new subject draws on its first frame, whatever the cadence
+    }
+    function setPipMode(v) { if (MODES.indexOf(v) < 0) v = "auto"; pipMode = v; G.store.set("bcPip", pipMode); }
 
     return (_instance = {
       MODES,
       render,
       toggle,
       setMode,
+      setSubject,
+      setPipMode,
       mode: () => mode,
       // __apex.mirror(): the setting, what this frame resolved, and the backend's own count.
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
+        pip: { mode: pipMode, shown: _pipShown, code: _sub ? _sub.code : null, cam: _subMode, rect: _pipRect },
         backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null }),
     });
   }

@@ -518,7 +518,7 @@ document):
 
 **Base: Bedrock — the IIFE+globals runtime is unchanged; every remaining prose invariant becomes a generator or a guard.** Three grafts from the runners-up, all named "best idea" by at least one judge:
 
-1. **From Typed Apex (graft into Phase 1, done first and most precisely): authored `.d.ts` contracts.** `types/globals.d.ts` (~30 core globals), `interface GameCtx` transcribed from the G region at `js/game.js:2540–2772`, `interface RendererBackend` (~40 members from gfx.js's header), `interface SceneryApi` (the 107 members `tests/unit/scenery-api-contract.test.mjs` freezes). `tsc --noEmit --checkJs` in ci.yml; files opt in per-file with `// @ts-check`; an adoption ratchet test (same idiom as `tests/unit/module-size.test.mjs`) keeps coverage monotonic. This retires the façade-drift defect class (the dead `countT` accessor, dead duplicate `setLightTune` key) in the session that creates it.
+1. **From Typed Apex (graft into Phase 1, done first and most precisely): authored `.d.ts` contracts.** `types/globals.d.ts` (~30 core globals), `interface GameCtx` transcribed from the G region at `js/game.js:2530–2772`, `interface RendererBackend` (~40 members from gfx.js's header), `interface SceneryApi` (the 107 members `tests/unit/scenery-api-contract.test.mjs` freezes). `tsc --noEmit --checkJs` in ci.yml; files opt in per-file with `// @ts-check`; an adoption ratchet test (same idiom as `tests/unit/module-size.test.mjs`) keeps coverage monotonic. This retires the façade-drift defect class (the dead `countT` accessor, dead duplicate `setLightTune` key) in the session that creates it.
 2. **From Graphline (graft into Phase 0): the dependency-truth check.** `tools/check/scan-globals.mjs` (espree/eslint-scope — both already devDeps at package.json:60–61) derives the real eval-time global graph and **asserts `tools/manifest.cjs` order is a valid topological sort and derived edges ⊇ the 5 hand-recorded HARD_EDGES entries** before anything moves. Zero product edits; surfaces every undeclared edge; keeps the door open for Graphline's proven in-place `defer`/`type=module` tag-swap strangler later.
 3. **Bedrock's own sharpest mechanisms, kept exactly as designed:** generated manifest with byte-identical-first-run bootstrap (three outputs: manifest.cjs, index.html tag block, sw.js precache seed); `Object.seal()`ed single-owner state objects (S.cam/S.tuning/S.race/S.world/S.garage/S.debug) with side effects as named verbs, never property setters; the `g-contract` snapshot making façade widening a loud merge conflict between parallel sessions; and mechanized explicit-`undefined` backfill inside a centralized `Gfx.install()`, preserving `gfx === GLX` identity for the ~8 monkey-patching specs.
 
@@ -582,7 +582,7 @@ with no count cap — because a frozen count would fail on the next circuit adde
 while a rogue writer outside `js/circuits/` still fails.
 
 **Phase 1, first half, landed 2026-08-13**: `types/game-ctx.d.ts` (the `GameCtx`
-interface — all **210** members of `const G` at `js/game.js:2562-2812`, plus the
+interface — all **210** members of `const G` at `js/game.js:2552-2801`, plus the
 `GameModuleFactory` roster), `tools/check/check-gctx.mjs` and
 `tests/unit/game-ctx-surface.test.mjs`. ~5 s, zero runtime bytes, no cache bump.
 Two deviations from the plan as written, both forced by the constraints:

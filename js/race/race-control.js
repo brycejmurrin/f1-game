@@ -235,8 +235,8 @@ const RaceControl = (function () {
 
     function update(dt) {
       // State reset BEFORE the ownership gate: a guest's caution mirror comes
-      // from host apply(), and returning early here left the last flag flown
-      // on its HUD after the race ended (reset() is local-only, safe for all).
+      // from host apply(), and returning early here would leave the last flag
+      // flown on its HUD after the race ended (reset() is local-only, safe for all).
       if (G.state !== "race") {
         if (caution.level !== 0 || capHoldT) reset();
         lowGripNoted = false;
@@ -359,7 +359,7 @@ const RaceControl = (function () {
 
     // The host's word, off the wire: every field is coerced, because info()
     // runs sinceT.toFixed() for the HUD every frame and a single CAUTION with
-    // `sinceT: "x"` used to throw there until LoopHealth killed the loop.
+    // `sinceT: "x"` would throw there until LoopHealth killed the loop.
     const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
     function apply(d) {
       if (!d || typeof d !== "object") return false;
@@ -451,9 +451,9 @@ const RaceControl = (function () {
     };
   }
   // SAFETY CAR QUEUE (B5.13: every car queues up behind the Safety Car, no
-  // more than ten car lengths apart). The cap used to be one flat 0.45 × vTop
-  // for all, which FROZE the gaps — so a stop under the SC saved nothing. Now
-  // the LEADER runs the SC pace, and a car more than SC_QUEUE_GAP s (measured
+  // more than ten car lengths apart). One flat 0.45 × vTop cap for all would
+  // FREEZE the gaps, so a stop under the SC would save nothing. The LEADER runs
+  // the SC pace, and a car more than SC_QUEUE_GAP s (measured
   // at that pace) behind the car ahead ON THE ROAD may run up to SC_CATCH until
   // it has closed, blended over the next second so the cap never chatters.
   // Returns a FRACTION of vTop() — the caller multiplies, so it rides PACE.
@@ -472,9 +472,9 @@ const RaceControl = (function () {
     return SC_PACE + (SC_CATCH - SC_PACE) * t;
   }
 
-  // NO PASSING UNDER A CAUTION — FOR THE AI TOO (2026-09-29). The VSC/SC cap is
-  // a TOP speed, not an order: cars on different lines through a corner simply
-  // drove past each other (monza, measured in the Node VM: ~12 clean passes a
+  // NO PASSING UNDER A CAUTION — FOR THE AI TOO. The VSC/SC cap is a TOP speed,
+  // not an order: cars on different lines through a corner simply drive past
+  // each other (monza, measured in the Node VM: ~12 clean passes a
   // minute under VSC, up to 12 under the SC, the pass latch never engaged). So
   // the car ahead IN THE RUNNING ORDER — `ranked` is by cumulative prog, so a
   // lapped car is never "ahead" — is a speed ceiling once it is within HOLD_M:

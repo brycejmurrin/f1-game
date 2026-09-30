@@ -1,8 +1,8 @@
 /* Apex 26 — MEXICO scenery (data only), split out of js/circuits/mexico.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mexico"] =
   function (api) {
@@ -146,12 +146,9 @@
       const BOWL_POP  = [0.92, 0.55, 0.16];   // sparse marigold-orange pop only
       const crowdCols = [BOWL_BLUE, BOWL_GREY, BOWL_BLUE, BOWL_GREY,
                          BOWL_BLUE, BOWL_GREY, BOWL_POP];
-      // The local crowd-terrace model that used to live here emitted ONE BOX PER
-      // SEAT off a straight `len` chord. Both halves of that were wrong: the
-      // chord cut across the winding stadium route, and a stand is not worth a
-      // box per spectator. The shared terrace()/tieredBowl() range emitters walk
-      // the arc and carry crowdBand's banded-run-plus-speckle budget, so the
-      // Foro Sol rim below is both cheaper and actually follows the road.
+      // The shared terrace()/tieredBowl() range emitters walk the arc and carry
+      // crowdBand's banded-run-plus-speckle budget, so the Foro Sol rim below
+      // follows the winding stadium route and never costs a box per seat.
       // Short, atomic upper-deck segments follow the winding stadium route.
       // Their roofs remain legitimate architecture but never chord across tarmac.
       const boundedStand = (s, side, gap, len, col, crowd, required) => {

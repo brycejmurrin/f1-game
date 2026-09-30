@@ -10,9 +10,9 @@
 // however many options it has, Left/Right on a pad changes it, and the label
 // and the value truncate independently instead of fighting for the line.
 //
-// WHY NOT CHIPS HERE. A labelled chip row (the first pass, earlier the same
-// day, 2026-09-05) lit every option and needed one tap, but each setting cost a
-// label, one to three chip lines and a help line: measured with
+// WHY NOT CHIPS HERE. A labelled chip row lights every option and needs one
+// tap, but each setting costs a label, one to three chip lines and a help line:
+// measured (2026-09-05) with
 // tools/ui/layout-audit.mjs the CONTROLS page ran 3.8 screens deep at landscape
 // 150% for THREE settings, and LAYOUT's five chips wrapped to three lines at
 // 200%. Chips stay where comparing options IS the task (the garage, team and

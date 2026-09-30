@@ -33,9 +33,8 @@ const GLXShadow = (function () {
       // its depth FBO + program and the matching End. castShadow/castShadowChunked
       // gate on THIS, not enabled: on the mobile tier the car/lamp maps are
       // never created, so their Begins no-op — but game.js still issues the caster
-      // draws, which previously ran under whatever program/framebuffer was left
-      // bound (per-draw GL errors + stray fills every frame = the "standard tier
-      // is buggy and laggy" report). Mirrors WGX, whose casts no-op when no pass
+      // draws, which would otherwise run under whatever program/framebuffer was
+      // left bound (per-draw GL errors + stray fills every frame). Mirrors WGX, whose casts no-op when no pass
       // is open.
       depthPassOn: false,      // was _depthPassOn
       castCullVP: null,        // was _castCullVP

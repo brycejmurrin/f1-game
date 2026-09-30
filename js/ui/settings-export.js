@@ -165,11 +165,8 @@ const SPEC = [
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
   { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js", oneOf: ["easy", "normal", "hard"] },
-  // Four keys real UI writes that this registry did not carry, so a settings
-  // file round-tripped everything EXCEPT them (found 2026-09-16 by reading the
-  // registry against every store.set call site). They are player preferences by
-  // the file's own definition — a toggle, a slider and two race rules that sit
-  // beside difficulty/raceGrid/caution, which were already here.
+  // Keys real UI writes (checked against every store.set call site): player
+  // preferences by the file's own definition, beside difficulty/raceGrid/caution.
   { k: "drivingCoach", lane: "json", group: "driving", def: true, src: "js/race/driving-coach.js" },
   { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
@@ -245,7 +242,7 @@ function readStored(row) {
 }
 // The SHIPPED default, which is what makes CHANGED honest. js/data/settings-defaults.js
 // outranks the row's own `def` for any key it names — otherwise moving a default
-// into that file would leave this reporting the old value, and every exported
+// into that file would leave this reporting a stale value, and every exported
 // file would list a key as "changed" that the player never touched.
 function defaultOf(row, G) {
   if (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(row.k)) return SettingsDefaults.get(row.k);

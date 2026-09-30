@@ -829,8 +829,8 @@ const DataTelemetry = (function () {
             if (mainW <= 0) return;
 
             // Mirror buildTelemetryView's cap and css .dh-canvas's 600 max-width:
-            // the old 800 cap allocated buffers the stylesheet then downscaled,
-            // softening the DPR-crisp charts, and the formula mismatch made the
+            // an 800 cap allocates buffers the stylesheet then downscales,
+            // softening the DPR-crisp charts, and a formula mismatch makes the
             // observer's first fire rebuild every layer a second time per open.
             const newCW = Math.min(600, Math.max(260, mainW));
             const newCH = chartH(newCW, !!view.compare);

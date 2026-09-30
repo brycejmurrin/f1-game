@@ -8,8 +8,8 @@ const OvertakeMode = (function () {
   // a car LESS THAN ONE SECOND behind the car ahead AT THE DETECTION LINE (one
   // per circuit, nominally out of the final corner) is given Overtake at the
   // Activation Line (the timing line), and may then deploy an extra 0.5 MJ at
-  // will during that following lap. It replaced the old model here — arm
-  // anywhere within 1 s, a fixed 3–5 s push, then a 9–14 s lockout.
+  // will during that following lap — not "arm anywhere within 1 s, a fixed
+  // 3–5 s push, then a 9–14 s lockout".
   //
   // ENERGY UNITS. `c.energy` is the battery as 0..1 of the Energy Store's 4 MJ
   // deployable window (4 MJ ≈ 11.5 s at the MGU-K's 350 kW), so the allowance

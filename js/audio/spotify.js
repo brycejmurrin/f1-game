@@ -784,7 +784,7 @@ window.SpotifyMusic = (function () {
         (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(() => afterCommand(gen));
   }
   // Volume is DRAGGED, not clicked: both sliders fire per `oninput`, so one
-  // sweep across the track used to send one PUT /me/player/volume per pixel —
+  // sweep across the track would send one PUT /me/player/volume per pixel —
   // dozens of requests into a rate-limited endpoint that answers out of order,
   // which can leave the device on a level the slider only passed through.
   // Coalesce on the trailing edge: the last value inside the window is the one

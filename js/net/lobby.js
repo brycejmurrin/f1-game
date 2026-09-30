@@ -289,7 +289,7 @@ const NetLobby = (function () {
       const c = (st && st.candidates) || {};
       const last = st ? " (" + st.ice + "/" + st.connection + ")" : "";
       // Kept below CONNECT_TIMEOUT_MS (60 s) or this branch is unreachable:
-      // the watcher gives up at ~60, so the old `> 90` could only fire from a
+      // the watcher gives up at ~60, so a `> 90` could only fire from a
       // suspended tab. Running most of the clock WITHOUT a definite ICE
       // `failed` is the stale signature — expired addresses grind through
       // pair timeouts, while a live-but-blocked path fails outright sooner.
@@ -356,8 +356,8 @@ const NetLobby = (function () {
           if (!watched) {
             // Still being built — but the deadline must apply HERE too: a
             // transport that never materialises (factory failure, host()
-            // bailing) used to escape the timeout check below and this poll
-            // spun at 4 Hz forever with no message and no failure text.
+            // bailing) would escape the timeout check below and spin this poll
+            // at 4 Hz forever with no message and no failure text.
             if (Date.now() - started > CONNECT_TIMEOUT_MS) {
               clearInterval(pollTimer);
               say(failureMsg(null, Math.round((Date.now() - started) / 1000)), true);
@@ -404,12 +404,12 @@ const NetLobby = (function () {
       if (codeReopen && transports.size < MAX_GUESTS) {
         const again = codeReopen;
         codeReopen = null;
-        // OWNED timer + generation guard: the handle used to be discarded, so
-        // cancel()/sealRoom() could not stop it — and the late codeHost()
-        // begins its OWN generation, so invalidateOperations() could not
-        // stale it either. 250 ms after leaving the lobby it minted a fresh
+        // OWNED timer + generation guard: with a discarded handle
+        // cancel()/sealRoom() cannot stop it — and the late codeHost() begins
+        // its OWN generation, so invalidateOperations() cannot stale it
+        // either. 250 ms after leaving the lobby it would mint a fresh
         // RTCPeerConnection and six relay sockets — the exact zombie
-        // sealRoom()'s comment says it exists to kill.
+        // sealRoom() exists to kill.
         const gen = operationGeneration;
         clearTimeout(codeReopenTimer);
         codeReopenTimer = setTimeout(() => {
@@ -777,9 +777,9 @@ const NetLobby = (function () {
     }
 
     // A guest yields to the host and to guests that joined EARLIER, never to
-    // a later one. Yielding to every peer regardless of rank let two guests on
+    // a later one. Yielding to every peer regardless of rank lets two guests on
     // one seat both move, both re-announce, and both move again — a HELLO
-    // ping-pong that never settled (bug hunt 2026-09-02).
+    // ping-pong that never settles.
     function blockingSeats() {
       return seatRank() === 0 ? [] : peerSeats((k) => peerRank(k) < seatRank());
     }
@@ -916,9 +916,9 @@ const NetLobby = (function () {
     function grace(id) {
       const now = performance.now();
       if (!clashSince.has(id)) {
-        // Owned re-render timer (was the only timer in this file with no
-        // owner): clashDrop/clashClear clear the handle on every teardown
-        // path, so a lobby closed into a race cannot fire renderRoom later.
+        // Owned re-render timer: clashDrop/clashClear clear the handle on
+        // every teardown path, so a lobby closed into a race cannot fire
+        // renderRoom later.
         const timer = setTimeout(() => {
           const rec = clashSince.get(id);
           if (rec) { rec.timer = null; renderRoom(); }
@@ -1189,9 +1189,9 @@ const NetLobby = (function () {
     // THE JOIN IN FLIGHT, so makeAnswer() can wait for its transport. join()
     // builds nothing until readyIce() settles (up to ICE_WAIT_MS), and a guest
     // who opened an invite link has the code pre-filled — one tap on MAKE
-    // ANSWER inside that window found `transport` null and was told "That
-    // attempt has ended" with nothing wrong (rtc-e2e / rtc-e2e-3p, 2026-09-27:
-    // __apex.lobbyJoin fires the two back to back and failed every run).
+    // ANSWER inside that window would find `transport` null and report "That
+    // attempt has ended" with nothing wrong (rtc-e2e / rtc-e2e-3p fire the two
+    // back to back through __apex.lobbyJoin).
     let joinP = null;
     async function join() {
       const gen = beginOperation();
@@ -1228,8 +1228,8 @@ const NetLobby = (function () {
       if (!code.trim()) { say("Paste their invite code first.", true); return { ok: false, error: "empty" }; }
       // Shape first, connection second: a typo is refused as a typo even while
       // join() is still waiting on the ICE prefetch (the transport arrives up
-      // to ICE_WAIT_MS after the tap). The old order reported "That attempt
-      // has ended" for junk and raced every slow network.
+      // to ICE_WAIT_MS after the tap). Transport-first reports "That attempt
+      // has ended" for junk and races every slow network.
       const peek = NetHandshake.peekCode ? NetHandshake.peekCode(code) : { ok: true };
       if (!peek.ok) { say(peek.message, true); return { ok: false, error: peek.error, message: peek.message }; }
       // A join still waiting on the relay credentials is not "no connection":
@@ -1558,8 +1558,8 @@ const NetLobby = (function () {
     // than no branch. Real relay failures surface from exchange() as typed
     // errors (all_rejected, timeout) and are reported where they happen.
 
-    // A PHONE THAT HOSTS FALLS ASLEEP, and that is the whole reason "desktop
-    // hosts → phone joins" worked while the reverse did not (reported from a
+    // A PHONE THAT HOSTS FALLS ASLEEP, which is why "desktop hosts → phone
+    // joins" works while the reverse, unguarded, does not (reported from a
     // real pair of devices). Hosting means WAITING — you tap NEW CODE, put the
     // phone down, and spend half a minute getting the other machine into the
     // lobby. In that time the screen locks, the mobile browser suspends the
@@ -1570,8 +1570,7 @@ const NetLobby = (function () {
     // So the lobby holds a SCREEN WAKE LOCK while it is open. Browsers
     // release the lock on every hide (that is spec), so it is re-acquired on
     // return; close() and cancel() drop it. Where the API is missing (older
-    // iOS) this is a silent no-op — the fix degrades to the old behaviour,
-    // never to an error.
+    // iOS) this is a silent no-op — it degrades to no lock, never to an error.
     let wake = null;
     let wakeWanted = false;
     let wakeRequest = null;
@@ -1801,9 +1800,9 @@ const NetLobby = (function () {
       const racing = typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace();
       // A HOST with an offer out (or a room code posted) is "in a room" too: a
       // link tapped into the running app (Android link capture, or the host
-      // checking their own copied link) used to join() through it, and
-      // newTransport dropped the pending offer — the friend's answer then
-      // failed as "too late".
+      // checking their own copied link) must not join() through it:
+      // newTransport would drop the pending offer and the friend's answer
+      // would fail as "too late".
       const hosting = role === "host" && (!!transport || !!codeRoom);
       if (racing || session || transports.size > 0 || hosting) {
         Log.info("net", "lobby invite link ignored: " + (racing ? "racing" : "in a room"));

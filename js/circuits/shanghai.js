@@ -4,10 +4,9 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "shanghai",
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: v0; the researched coord snaps 2 nodes earlier but lands IN A CORNER (mean |k| 0.0057), and its sources disagree by 175 m.
-    // Was 0.1525, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     sceneryStartFrac: 0.1525,
     name: "SHANGHAI",

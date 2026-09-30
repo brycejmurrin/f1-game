@@ -23,10 +23,10 @@ const RaceInsights = (function () {
     backmarkers: "Clear three slower cars without contact" });
   // A drill judges what the CAR did, never the stick. Lateral acceleration says
   // the car changed direction: a pad deflection of 0.35 reads 0.11 after the
-  // steer expo, so the old stick thresholds silently failed every analog driver
+  // steer expo, so stick thresholds silently fail every analog driver
   // (measured on monza: 7.2 m/s² of lateral accel at 0.11 of command). A stop
   // counts only when the brake did the slowing: a tap followed by a 10 s coast
-  // used to pass as a controlled stop and bank mastery.
+  // must not pass as a controlled stop and bank mastery.
   const TURN_ACCEL = 3;        // m/s² (~0.3 g): the car is cornering, not twitching
   const FIRM_BRAKE = 0.5;      // pedal travel that counts as firm braking
   const HELD_FRACTION = 0.8;   // share of the slowing samples that must carry a firm brake

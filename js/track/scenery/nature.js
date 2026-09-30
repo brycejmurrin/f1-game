@@ -86,11 +86,11 @@ const SceneryNature = (function () {
     // hit this by walking two treelines that overlap, or by an `every()` step
     // landing on a node a hand-placed tree already took (okayama 2026-09-22:
     // 243 coincident primitives after the barrier guard, all of them trees).
-    // A RADIUS, not a cell: the 25 cm cell this used to be let two trunks 0.3-
-    // 0.7 m apart through (mont_tremblant, 2026-09-22: 15 same-facing coplanar
-    // trunk/cone pairs from overlapping forest ranks, --why --raw), and no two
-    // real trunks stand closer than TREE_GAP. Still far below any deliberate
-    // copse spacing.
+    // A RADIUS, not a cell: a 25 cm cell lets two trunks 0.3-0.7 m apart
+    // through (mont_tremblant, 2026-09-22: 15 same-facing coplanar trunk/cone
+    // pairs from overlapping forest ranks, --why --raw), and no two real
+    // trunks stand closer than TREE_GAP. Still far below any deliberate copse
+    // spacing.
     const TREE_GAP = 1.0;
     const planted = new Map();   // 1 m cell -> [[x, z], …]
     // LAYERED-BANK SLOT. spectatorHill is called in layered pairs (a tall pale
@@ -333,9 +333,9 @@ const SceneryNature = (function () {
       const seg = h / 3;
       out._mat = MAT.WOOD;
       // The first trunk segment starts 0.6 m BELOW the anchor, which keeps the
-      // slim trunk grounded on sloped/uneven terrain. (This used to be a
-      // separate 0.75 m root stub whose top sat 0.15 m under the ground at
-      // every palm — ground-audit: 2760 invisible prims across 10 circuits.)
+      // slim trunk grounded on sloped/uneven terrain. (A separate 0.75 m root
+      // stub would sit 0.15 m under the ground at every palm — ground-audit:
+      // 2760 invisible prims across 10 circuits.)
       const joint = (t) => vadd(vadd(a.c, a.u, t * seg), a.r, lean * t * t * 0.4 * side);
       for (let t = 0; t < 3; t++) {
         const p0 = t ? joint(t) : vadd(a.c, a.u, -0.6), p1 = joint(t + 1);
@@ -469,12 +469,12 @@ const SceneryNature = (function () {
       const layers = Math.max(1, Math.min(3, Math.round(opts.layers || 2)));
       const c2 = [col[0] * 0.82, col[1] * 0.86, col[2] * 0.80];
       // ONE CONNECTED STACK: trunk -> fork -> slab 0 -> slab 1 … each part
-      // starts where the one below ends. The old fixed fractions (fork at
-      // h*0.68, slabs h*0.14 / 1 m apart) left a 0.2-0.6 m air gap at every
-      // joint of a tall tree, so the crown hung detached from the tree
-      // carrying it (ground-audit: 215 prims on cota/kyalami). The slab TOPS
-      // stay where they were (they are what reads from above, and what the
-      // flat-coplanar audit compares); the parts under them grow DOWN:
+      // starts where the one below ends. Fixed fractions (fork at h*0.68,
+      // slabs h*0.14 / 1 m apart) leave a 0.2-0.6 m air gap at every joint of
+      // a tall tree, so the crown hangs detached from the tree carrying it
+      // (ground-audit: 215 prims on cota/kyalami). The slab TOPS stay at those
+      // fractions (they are what reads from above, and what the flat-coplanar
+      // audit compares); the parts under them grow DOWN:
       //   - an upper slab's underside reaches 2 cm into the slab below it;
       //   - the fork rises until its top meets slab 0's underside;
       //   - the trunk rises until it meets the fork;
@@ -543,8 +543,8 @@ const SceneryNature = (function () {
     const ROAD_SKIRT = 2.6;
     const peak = (x, z, baseY, w, h, col) => {
       // The foot pyramid's base is a SQUARE of side w*1.5, so its CORNERS reach
-      // w*0.75*sqrt(2) ~= w*1.061. The old w*0.75 guard measured to an edge
-      // midpoint and let the four corners overhang it by 41 %.
+      // w*0.75*sqrt(2) ~= w*1.061. A w*0.75 guard measures to an edge
+      // midpoint and lets the four corners overhang it by 41 %.
       if (onTrack(x, z, w * 1.061 + ROAD_SKIRT)) {
         ctx.noteSuppressed("peak", `peak SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
         return;
@@ -626,10 +626,10 @@ const SceneryNature = (function () {
         // dark step riser behind each seating row (blocks sky/ground show-through).
         // Guarded (unlike the tiny spectator boxes): the riser is a wide flat slab,
         // so a mis-placed bank whose front row creeps toward the tarmac would
-        // otherwise overhang the road here — the exact bypass the old unguarded
-        // raw-addBox path used to leave open. rejBox drops only a riser actually
-        // over the road; a bank
-        // safely behind the shell never trips it, so intended crowds are unchanged.
+        // otherwise overhang the road here — the bypass an unguarded raw
+        // addBox leaves open. rejBox drops only a riser actually over the
+        // road; a bank safely behind the shell never trips it, so intended
+        // crowds are unchanged.
         out._mat = MAT.CONCRETE;
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
         if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
@@ -711,15 +711,15 @@ const SceneryNature = (function () {
       gap += (standSeq++ & 1) * TrackGeom.MIN_SEP;
       // Back shell + upper tiers. The crowd bank below runs from gap+1.5 back
       // 4.2 m (+ half a 1.3 m riser): its last row's back edge is at gap+5.93,
-      // so the single-tier shell sits BEHIND it, gap+6 .. gap+12.5 (it used to
-      // be 10 m deep from gap+2.5 and swallowed four of five rows — P2,
+      // so the single-tier shell sits BEHIND it, gap+6 .. gap+12.5 (a 10 m
+      // shell from gap+2.5 swallows four of five rows — P2,
       // docs/notes/SCENERY-QA-PLAN.md). Same back face, same footprint.
       //
       // A MULTI-TIER stand stacks each upper rake 4.6 m further back and 7.6 m
       // up, which puts tier 1 (gap+5.87 .. gap+10.53, from lift-0.05 up)
       // straight over that shell: a full-height shell (top ~11.2 m, 16.7 m on
-      // fuji's 17.5 m walls) swallowed the upper tier's lower rows, and the
-      // 5.2 m concourse band (gap+3.5 .. 8.7, 5.8-7.6 m up) enclosed the ground
+      // fuji's 17.5 m walls) swallows the upper tier's lower rows, and the
+      // 5.2 m concourse band (gap+3.5 .. 8.7, 5.8-7.6 m up) encloses the ground
       // tier's top two rows (2026-09-24, measured as enclosed FABRIC triangles
       // fleet-wide). So the shell is STEPPED: under each built upper rake it is
       // a section capped just below that rake's lowest riser, and only behind
@@ -787,7 +787,7 @@ const SceneryNature = (function () {
           prevBack = rakeBack(ti);
           shellFront = prevBack + 2.5 * SEP;
           // Only a tier that actually BUILT raises the roof — a culled tier
-          // used to lift the slab a full rake above the surviving stand.
+          // must not lift the slab a full rake above the surviving stand.
           tierLift.push(lift);
         }
       }
@@ -909,15 +909,9 @@ const SceneryNature = (function () {
       // 0.614/0.616). Wherever the two row ladders line up the treads come out
       // BYTE-IDENTICAL: same centre, same size, same basis — 340 coincident
       // pairs on okayama alone (2026-09-22), the purest z-fight there is.
-      // A deterministic nudge derived from the call's own height separates
-      // them: stable across builds (no hash of position, no RNG), strictly
-      // OUTWARD so it can only increase clearance from the tarmac, and at most
-      // 12 mm — past 1 cm of plane gap the fight starts beyond 220 m, which is
-      // past this tool's 150 m horizon (coplanar-audit's own depth model).
-      // The spread is 4 cm, not 1 cm, because what has to clear the horizon is
-      // the DIFFERENCE between two layered calls, not each nudge: a 1 cm spread
-      // put okayama's pair 5.4 mm apart, which fights from 165 m and sat right
-      // on the gate. 4 cm outward at a 9 m clearance is invisible.
+      // A deterministic per-call slot separates them: stable across builds
+      // (no hash of position, no RNG) and strictly OUTWARD, so it can only
+      // increase clearance from the tarmac.
       // Both axes have to move. `steps` and `h` do NOT reach the ladder
       // (rows/rise/depth are the defaults for every caller), so two layered
       // calls emit the SAME ladder: nudging only the gap leaves their treads'
@@ -925,20 +919,17 @@ const SceneryNature = (function () {
       // the same planes, 400 coincident pairs on okayama's three clayCut()
       // pairs alone (2026-09-22, coplanar-audit --why). The slot moves the
       // frame OUTWARD (never toward the tarmac) and ALONG the road, on two
-      // different permutations of the same five positions, so consecutive
-      // calls are 10 mm apart across the gap and 20 mm apart along it. 10 mm
-      // of plane gap fights from 224 m, past the 150 m horizon the audit's
-      // depth model covers. The along-shift moves the tread and its crowd
+      // different permutations of the same five positions: TrackGeom.MIN_SEP
+      // apart across the gap (at the 300 m window, fights beyond 388 m) and
+      // 2 x MIN_SEP along it. The along-shift moves the tread and its crowd
       // together, so a call's ladder still tiles exactly — the only seam is
       // between two layers, where the whole point is that they differ.
-      // The 3 mm / 7 mm bases are not decoration: authored props sit at whole
-      // metres and half metres, so a ladder offset by an exact multiple of
-      // 10 mm can still land flush on one (monza gained a 12 m2 pair against a
-      // tracks.js place() prop at exactly that). An odd base breaks the tie
-      // with the authored grid without changing any separation BETWEEN slots.
-      // Stepped by TrackGeom.MIN_SEP (2026-09-24): at the 300 m window the
-      // 10 mm slots fought from 224 m, so the slots are now MIN_SEP apart
-      // across the gap (fights beyond 388 m) and 2 x MIN_SEP along it.
+      // The odd bases (0.017 across, 0.007 along) are not decoration: authored
+      // props sit at whole metres and half metres, so a ladder offset by an
+      // exact multiple of the slot step can still land flush on one (monza
+      // gained a 12 m2 pair against a tracks.js place() prop that way). An odd
+      // base breaks the tie with the authored grid without changing any
+      // separation BETWEEN slots.
       const slot = hillSeq++ % 5, SEP = TrackGeom.MIN_SEP;
       gap += 0.017 + slot * SEP;
       const sShift = 0.007 + ((slot * 2) % 5) * SEP;

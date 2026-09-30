@@ -33,8 +33,8 @@ const DriverRatings = (function () {
     STR: [74, 72, 70, 72,  80],
   };
 
-  // makeCars() used to roll Math.min(1.0, 0.92 + simRnd() * 0.1): ~20% of draws
-  // sat on the clamp and the true mean was ~0.968. SKILL_BASE/SKILL_SPAN put the
+  // The unrated roll, Math.min(1.0, 0.92 + simRnd() * 0.1), puts ~20% of draws
+  // on the clamp for a true mean of ~0.968. SKILL_BASE/SKILL_SPAN put the
   // GRID-MEAN pace (84) back on that 0.968 — otherwise handing every driver a
   // rating would quietly make the whole field faster at every difficulty.
   // Compressed alongside TIER_V (js/data/teams.js) by the same factor (0.174)

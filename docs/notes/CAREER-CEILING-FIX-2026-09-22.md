@@ -81,7 +81,7 @@ build" — came from a greedy optimiser maximising one objective I chose, and
 overstated both the count and the sameness. The count is exactly checkable and
 was wrong; the sameness is real but has a specific cause, recorded above.
 
-**AI cars never leave their factory build.** `js/game.js:1871` resolves every AI
+**AI cars never leave their factory build.** `js/game.js:1863` resolves every AI
 from `Parts.getFactorySetup(team)`; only the player and the MY TEAM mate read
 `getTeamParts()`. `rolloverTeams()` moves nothing but `tdev`, ±8 stat points at
 `TDEV_TO_PACE = 0.0025` (±2 % pace), halved every winter toward the tier

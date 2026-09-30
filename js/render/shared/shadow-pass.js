@@ -146,7 +146,7 @@ const ShadowPass = (function () {
     }
 
     // Sun-shadow snap caches — loadTrack invalidates them so a new track whose
-    // first snapped cell + sunDir happen to match the old track's last values
+    // first snapped cell + sunDir happen to match the previous track's last values
     // does not keep the PREVIOUS track's silhouette until the camera moves a cell.
     function reset() {
       _shadowSnapX = _shadowSnapZ = _shadowBox = null;
@@ -231,8 +231,8 @@ const ShadowPass = (function () {
         const lu = Math.round((xx * cx + xy * cy + xz * cz) / step) * step;
         const lv = Math.round((yx * cx + yy * cy + yz * cz) / step) * step;
         // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
-        // sliders, a time-of-day flip) previously left the map STALE until the next
-        // cell crossing — shadows looked dead while dragging, then all jumped at once.
+        // sliders, a time-of-day flip) would otherwise leave the map STALE until the
+        // next cell crossing — shadows look dead while dragging, then all jump at once.
         // PRODUCER/CONSUMER GATE. glsl-lit.js's sampleShadow opens with
         // `if (uShadowStr <= 0.0) return 1.0;` — so when the key has faded out
         // (overcast, wet or foggy night) NOTHING reads this map: the god-ray march

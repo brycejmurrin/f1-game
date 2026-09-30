@@ -3,7 +3,7 @@
    cannot drift: the LENS DIRT canvas generator, the god-ray nearest-K partial
    select, the neutral-HDR-grade test, the sun screen projection + flare/shaft
    gate, and the tune-knob default lookup (LightKnobs.TUNE_DEFS is the registry
-   the sliders read — the backends used to restate every default literal).
+   the sliders read — no backend restates a default literal).
    Loads before js/render/glx/post.js; the deferred backends call it at
    present()/init time only. */
 "use strict";

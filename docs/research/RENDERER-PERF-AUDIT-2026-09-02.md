@@ -30,7 +30,7 @@ estimates are per frame unless stated.
 **1 — `cullInstances` (wgx.js ~4848).** Only memo was exact plane equality,
 which never holds while driving, so the 20-float copy loop and
 `queue.writeBuffer(instBuf, n×80 B)` ran for every visible instance of every
-batch every frame; shadow frames packed twice (`game.js:5894` passes
+batch every frame; shadow frames packed twice (`game.js:5871` passes
 `{upload:false}`, which GLX/WGX ignore). GLX measured the same shape at
 427–948 KiB/frame before its cell-set key (PERF-FINDINGS 2c). Landed: the
 GLX block ported (`_cellKeyScratch`/`_cellKey`/`_cellKeyN`), `_cellKeyN = -1`
@@ -149,7 +149,7 @@ full pack), 914 prop chunks; monza 38 / 11,385; spa 33 / 6,017; singapore
    bilinear AO fetch when `msaaSamples == 0`. 1–2 ms on a mid-range phone.
 6. **Mobile scene target is RGBA16F with no alpha consumer** — glx/post.js:
    284-296; on a phone at MEDIUM/LOW `po.carReflect = 0`, `po.reflect = 0`
-   (game.js:7586) and `_hazeStr = 0` (game.js:7285), so 8 B/px is written and
+   (game.js:7548) and `_hazeStr = 0` (game.js:7249), so 8 B/px is written and
    read back for 4 B/px of information. Patch: `R11F_G11F_B10F` when
    `MOBILE_TIER && PerfGov.userTier() >= 2`, with `createTargets()` re-run on a
    preset change. ~25–30 % of scene-pass bandwidth on the phone.
@@ -176,7 +176,7 @@ full pack), 914 prop chunks; monza 38 / 11,385; spa 33 / 6,017; singapore
     `pow(N.y*0.5+0.5, 0.35)`. Patch: `s2 = sunAmt*sunAmt, s4 = s2*s2, s16 =
     s4*s4*s4*s4` (exact); leave :1456 (not bit-identical otherwise).
 11. **Residual per-frame allocations** — glx.js:516 `getSize` object,
-    game.js:6507-6509 lookAt literal, game.js:5894 `{upload:false}` per batch,
+    game.js:6475-6477 lookAt literal, game.js:5871 `{upload:false}` per batch,
     carmesh.js:524/:367 `for (const s of [-1, 1])`, glx/chunked.js:254 `flush`
     closure, glx.js:1146-1149 fallback literals. Individually unmeasurable.
 12. **Constant sampler-unit and slow-changing mat4 uniforms re-uploaded every
@@ -327,7 +327,7 @@ The tell that the flyby row was an oversight and not a choice: the car and lamp
 **shadow** producers a few hundred lines above it already gate on `state !==
 "menu"` in four places, and a FIRST boot renders the same screen with `cars ===
 []` — an asymmetry no design would ask for. The setup/garage preview is
-unaffected: `renderSetupPreview()` returns out of `render()` at `game.js:6116`,
+unaffected: `renderSetupPreview()` returns out of `render()` at `game.js:6090`,
 well before the loop.
 
 ## The sky, settled three ways — NOT landed, and now fully de-risked
@@ -415,7 +415,7 @@ The value of a second read is mostly in what it takes AWAY.
 2. **GLX: `drawChunked` silently drops `opts.depthBias` and `opts.doubleSided`.**
    `glx/chunked.js:195` declares only `setDepthMask`/`setBlend`, and `core` does
    not even export `setCull`/`setPolyOffset`. The ROAD carries both
-   (`game.js:5933`, `depthBias: [-8,-16], doubleSided: true`) and takes the
+   (`game.js:5910`, `depthBias: [-8,-16], doubleSided: true`) and takes the
    chunked path whenever `PerfGov.tier() < 3` — the default on desktop HIGH and
    on the phone default MEDIUM. Only GRAPHICS: LOW falls back to `gfx.draw` and
    gets the offset. WGX honours both. Expected artefact: stipple/z-fight where
@@ -425,7 +425,7 @@ The value of a second read is mostly in what it takes AWAY.
    `core.frame` getter for it and `begin()` never reads it, so
    `glx/chunked.js:211`'s `!F.roadChunkLamps` is always true and PER-CHUNK ROAD
    is a dead knob on the default backend — while 24 shipped presets set it to 1
-   and `game.js:6038` still builds the second GPU copy of the road for it. WGX
+   and `game.js:6012` still builds the second GPU copy of the road for it. WGX
    does the plumbing. `tools/lighting/slider-effect-live.mjs:124` already records the
    verdict "inert"; this names why.
 4. **TLX: `tlx-shadow.castInstanced` has no update range at all** — pool slots
@@ -446,7 +446,7 @@ The value of a second read is mostly in what it takes AWAY.
    stricter folklore rule, so **`wgx-validate` must be the gate, not the
    argument**. Four tests pin the exact `textureSample(` string for aniso
    parity; a macOS census is the sign-off.
-7. **CPU: a THIRD Δprog scan with no pre-reject** (`game.js:4211`), the same
+7. **CPU: a THIRD Δprog scan with no pre-reject** (`game.js:4196`), the same
    shape `../notes/PERF-FINDINGS.md` §3 records fixing twice at **5.01% of physics
    CPU** — and worse than either, because it runs for every car, not just AI.
    462 pairs × 2 `fmod` per physics step. Every consumer is gated on `gapAhead <
@@ -460,7 +460,7 @@ The value of a second read is mostly in what it takes AWAY.
    mints 3 arrays + 4 closures + 9 `toFixed` every cockpit frame for the same
    reason. `getFieldWheelMeshes` and `getCarDecalTexture`/`getLiveryId` are the
    same shape. None is individually large; together they are the GC floor.
-9. **CPU: `_hazeStr` is a latch with no invalidation** (`game.js:7413`). Its
+9. **CPU: `_hazeStr` is a latch with no invalidation** (`game.js:7377`). Its
    only writer sits after the cockpit `continue`, so entering cockpit view
    freezes it and pins a heat-haze warp to a stale world point; nothing resets
    it on camera change, `quitToMenu` or `loadTrack`.
@@ -471,7 +471,7 @@ The value of a second read is mostly in what it takes AWAY.
     so the contents cannot be cached. Key the gate on the tuple
     `(tw, th, threshold, spread)`, never a hand-maintained flag.
 11. **CPU: `makeFrustumPlanes` runs twice per frame** from the identical VP into
-    the same pool (`game.js:6074` and `:7133`).
+    the same pool (`game.js:6048` and `:7133`).
 12. **CPU: `putBoundedMesh` allocates its `create` closure on every call**,
     including the ~66 cache hits a night frame takes. `js/track/core/mesh.js:398`
     hoisted the identical arrow for exactly this reason.

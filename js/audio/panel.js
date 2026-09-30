@@ -9,7 +9,7 @@
    audio unlock — those belong to race flow, not to this panel.
 
    create(G) wires the DOM immediately (netLobby.wire() pattern) and returns
-   { init } — game.js calls init() at the old boot-restore position, AFTER
+   { init } — game.js calls init() at the boot-restore position, AFTER
    the saved settings are loaded but before the first frame. setSound at
    create time would run ~2800 lines early, ahead of CamModes/DataHub. */
 const AudioPanel = (() => {
@@ -81,8 +81,7 @@ const AudioPanel = (() => {
     function setMusic(b, fromGesture = true) {
       // The master gates both buses and its only button lives on the title
       // screen, so asking for music mid-race has to lift it — otherwise the
-      // switch reads ON and nothing plays, which is exactly the confusion the
-      // duplicated pause-menu toggle used to cause.
+      // switch reads ON and nothing plays.
       // During boot, MUSIC ON is only the saved state of that bus; it must not
       // override a separately saved master SOUND OFF. A real user click still
       // lifts the master and unlocks WebAudio synchronously.
@@ -201,7 +200,7 @@ const AudioPanel = (() => {
       const note = $("as-src-note");
       if (note) {
         // The SELECTED source first: with DEFAULT lit and nothing uploaded the
-        // note used to describe the disabled MY TRACKS button instead.
+        // note must describe DEFAULT, not the disabled MY TRACKS button.
         note.textContent = on === "spotify"
             ? "Spotify is driving the music. The controls above drive it too."
           : on === "user" ? "Playing your " + counts.user + " uploaded track" + (counts.user === 1 ? "" : "s") + " only."

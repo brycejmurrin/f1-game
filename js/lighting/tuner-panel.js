@@ -331,9 +331,9 @@ $("lt-reset").onclick = () => {
   refreshLightTunePanel();
   $("lt-json").hidden = true;
 };
-/* COPY VALUES HANDS OVER THE EDITS, NOT THE WHOLE FILE. This used to export the
-   file+local MERGE — every shipped preset plus the local overrides — which
-   measured 805 conditions, 7071 knobs and 182,569 characters against the
+/* COPY VALUES HANDS OVER THE EDITS, NOT THE WHOLE FILE. The file+local MERGE —
+   every shipped preset plus the local overrides — measures 805 conditions,
+   7071 knobs and 182,569 characters against the
    shipped light-presets.js. That is the right input for bake.mjs (a full
    REPLACE needs a full snapshot) and the wrong thing entirely for the person
    holding the phone: it cannot be pasted into a message, and #lt-json is a

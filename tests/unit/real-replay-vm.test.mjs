@@ -323,3 +323,49 @@ test("BROADCAST in WATCH (camera AUTO): the tower goes up, the director cuts to 
     assert.ok(!doc.body.classList.contains("bc-on"));
   } finally { g.close(); }
 });
+
+test("BROADCAST PiP pick: the followed car's battle partner (the car BEHIND when sandwiched), else the car in the next event, never the followed car", async () => {
+  const g = await createGame({ track: "baku" });
+  try {
+    const B = vm.runInContext("Broadcast", g.ctx);
+    const pick = (fights, follow, ev, kind) => host(B.pipPick(fights, follow, ev, kind));
+    const fights = [{ key: "b", ahead: "a", gapS: 0.4 }, { key: "c", ahead: "b", gapS: 0.6 }];
+    assert.deepEqual(pick(fights, "a", null), { key: "b", cam: "tcam", kind: "battle" }, "the leader: the car on its tail");
+    assert.deepEqual(pick(fights, "b", null), { key: "c", cam: "tcam", kind: "battle" }, "sandwiched: the car BEHIND, the threat");
+    assert.deepEqual(pick(fights, "c", null), { key: "b", cam: "tcam", kind: "battle" }, "the chaser: the car it is hunting");
+    assert.deepEqual(pick([], "a", "h", "pit"), { key: "h", cam: "chase", kind: "pit" }, "no battle: the car in the next event");
+    assert.equal(pick([], "a", "a", "pass"), null, "never the followed car");
+    assert.equal(pick([], "a", null), null);
+  } finally { g.close(); }
+});
+
+test("BROADCAST PiP in WATCH: two cars 8 m apart put the partner in the inset (labelled, through the mirror pass); the results clear it", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g;
+    const RR = vm.runInContext("RealRace", g.ctx), MP = vm.runInContext("MirrorPass", g.ctx);
+    const { script } = scriptIn(g);
+    const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 400), 16: line(-22, 50, 1, -5, 400) } };   // Leclerc 8 m behind Russell, same pace
+    RR.launch(script, { seat: "RUS", watch: true, camera: "side", traces, startLap: 1 });
+    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2);
+    g.apex.go();
+    g.step(60);
+    const bc = RR.status().replay.broadcast;
+    assert.ok(bc && bc.pip, "a PiP: " + JSON.stringify(bc));
+    assert.equal(bc.pip.code, "LEC", "the car on Russell's tail");
+    assert.equal(bc.pip.label, "ONBOARD · LEC");
+    const mp = MP.instance().state().pip;
+    assert.equal(mp.code, "LEC", "the mirror pass has the subject");
+    assert.equal(mp.cam, "tcam");
+    // Follow Leclerc: the inset turns to the car he is hunting.
+    RR.replay().follow("LEC");
+    g.step(20);
+    assert.equal(RR.status().replay.broadcast.pip.code, "RUS");
+    RR.replay().seek(405);
+    g.step(60 * 8);
+    assert.equal(G.state, "results");
+    g.step(1);
+    assert.equal(MP.instance().state().pip.code, null, "the results clear the subject");
+  } finally { g.close(); }
+});

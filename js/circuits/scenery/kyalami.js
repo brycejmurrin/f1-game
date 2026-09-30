@@ -1,8 +1,8 @@
 /* Apex 26 — KYALAMI scenery (data only), split out of js/circuits/kyalami.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["kyalami"] =
   function (api) {
@@ -33,7 +33,7 @@
       //    golden grass, plus the ranks of imported blue-gum along the
       //    boundary. Sparse and low: the veld reads as open, never wooded.
       //    Crown / fork AABBs must overlap the trunk (ground-audit BFS) — a
-      //    0.15 m Y gap on a slope used to leave the umbrella unsupported.
+      //    0.15 m Y gap on a slope leaves the umbrella unsupported.
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.48);
       every(30, (k) => {
         const s = k / n;

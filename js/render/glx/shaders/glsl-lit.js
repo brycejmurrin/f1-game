@@ -16,7 +16,7 @@ layout(location=0) in vec3 aPos;
 // PACKED world vertex format — 28 bytes/vertex (40 with aTrk), written by
 // createMesh/createChunkedMesh in js/render/glx/. Position keeps full float32
 // (world coordinates run to ~7 km and quantising them would crack the ribbon);
-// normals and colours do not need 32 bits and were 24 of the old 40 bytes.
+// normals and colours do not need 32 bits.
 //
 //   loc 1  SHORT x4  normalized  xyz = unit normal (1/32767), w = pad
 //   loc 2  USHORT x4 normalized  rgb = colour / COL_SCALE, a = material / MAT_SCALE
@@ -102,8 +102,8 @@ void main() {
 
   // Lit shader: hemisphere ambient + lambert sun (the original, tuned look) PLUS
   // a Cook-Torrance (GGX) specular highlight on top. The diffuse + ambient base is
-  // identical to the old shader when uMetalness==0, so the hand-tuned vertex-colour
-  // palette is preserved; the spec term is soft-clipped so it sheens rather than
+  // the plain hemisphere+lambert look when uMetalness==0, so the hand-tuned
+  // vertex-colour palette is preserved; the spec term is soft-clipped so it sheens rather than
   // blooms. Per-draw material: uRoughness / uMetalness / uSpecular.
   const LIT_FS = `#version 300 es
 precision highp float;
@@ -579,12 +579,9 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
   }
 }
 // Road markings, evaluated analytically in TRACK space (s, lateral x, half-width)
-// rather than carried as geometry. The road used to spend four of its fourteen
-// cross-section columns purely on making a hard paint edge — two verts at line
-// colour, then a 5 cm step into asphalt — and the dashed centre line was a
-// per-NODE boolean, floor(s/7) mod 2, evaluated on the ~4 m node grid: a 7 m
-// period point-sampled every 4 m, so the dash lengths beat irregularly against
-// the sampling grid instead of reading as an even 3.5 m on / 3.5 m off.
+// rather than carried as geometry: geometric paint edges cost cross-section
+// columns, and a per-NODE dash boolean on the ~4 m node grid point-samples a 7 m
+// period, so dash lengths beat irregularly instead of an even 3.5 m on / off.
 //
 // Here the marking is a signed-distance band filtered by fwidth(), so it stays
 // a crisp edge at any distance and any viewing angle, costs no vertices, and
@@ -960,19 +957,16 @@ void main() {
       : (matteSurface ? 0.0
       : ((glassSurface || visorSurface) ? uClearcoat * 0.45 : 0.0))))))
     : uClearcoat;
-  // PAINT gets uMetalness. It used to fall through to a literal 0.0, which made
-  // CAR METALLIC a 100% dead slider: every car pixel is classified (car3d.js
-  // surfaceOf() falls back to paint), metal/mirror are pinned by the max() floors
-  // below, carbon is a constant — so uMetalness reached NOTHING. The knob would
-  // have needed 6.5 against a max of 2.5 to move even the metal parts.
-  // This is restoring intent, not inventing a look: js/game.js's PAINT_* set
+  // PAINT gets uMetalness — the only surface through which CAR METALLIC can act:
+  // every car pixel is classified (car3d.js surfaceOf() falls back to paint),
+  // metal/mirror are pinned by the max() floors below, carbon is a constant.
+  // js/game.js's PAINT_* set
   // metalness 0.12 on all four PAINT_* constants and its comment says the mild
   // metalness "tints specular + reflections toward the team colour like real
   // metallic flake, and scales the sky env down so the paint stays saturated" —
   // which is precisely what metalness does here (f0 mix toward albedo, and the
-  // (1.0 - metalness) factors on diffuse and on envAdd). The shader was throwing
-  // that data away. Scoped to paintSurface: rubber, glass, emissive and panel
-  // stay dielectric on the same 0.0 they had.
+  // (1.0 - metalness) factors on diffuse and on envAdd). Scoped to paintSurface:
+  // rubber, glass, emissive and panel stay dielectric at 0.0.
   float metalness = classifiedCar
     ? (metalSurface ? max(uMetalness, 0.78)
       : (mirrorSurface ? max(uMetalness, 0.55)
@@ -1031,13 +1025,10 @@ void main() {
   float VoH = max(dot(V, H), 0.0);
 
   vec3 albedo = vCol;
-  // NOTE: the old "car deck mirror" (a sky mirror weighted by N.y that only hit
-  // up-facing panels) was removed — on the dead-flat floor plank / front-wing
-  // planes (N.y≈1) it peaked at full strength and read as a chrome "silver plane"
-  // under the car, brighter than the actual bodywork. The whole car is now
-  // reflected uniformly by the VIEW-driven env mirror below (base reflectance on
-  // every panel + grazing rim) plus SSR, so the reflection is consistent across
-  // the body instead of a flat-panel standout.
+  // NO N.y-weighted "car deck mirror": on the dead-flat floor plank / front-wing
+  // planes (N.y≈1) it peaks at full strength and reads as a chrome "silver plane"
+  // under the car. The whole car is reflected uniformly by the VIEW-driven env
+  // mirror below (base reflectance on every panel + grazing rim) plus SSR.
   // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
   // world position, so flat asphalt/concrete/grass read as a surface rather than
   // a solid slab. Multiplicative, so it darkens as much as it lightens.
@@ -1249,7 +1240,7 @@ void main() {
   // inner/outer angles — masts tilt their beams over the road), and the SAME
   // Cook-Torrance GGX specular the sun uses. Diffuse paints the pool; the GGX
   // lobe gives physical highlights — elongated wet-road speculars, glass glints,
-  // car-paint sparkle — replacing all the old hand-tuned lobe/glint hacks.
+  // car-paint sparkle — no hand-tuned lobe/glint hacks.
   // No per-light shadows (cost); the cone shapes the light instead.
   vec3 lampFog = vec3(0.0);
   // BAKED LAMP POOLS: an upward-facing fragment takes EVERY lamp's diffuse pool
@@ -1479,8 +1470,7 @@ void main() {
   // panel + a grazing Fresnel rim, so the entire body reads reflective (not just
   // the silhouette). VIEW-driven (Fresnel on Ngeo), NOT N.y-driven, so it stays
   // uniform across panel orientations instead of hot-spotting flat up-facing
-  // panels the way the old deck mirror did (that was the "silver plane" under the
-  // car). Energy-conserving: the base is DARKENED under the mirror weight first,
+  // panels (the "silver plane" under the car). Energy-conserving: the base is DARKENED under the mirror weight first,
   // then the reflected sky is added over it (a mirror on gloss, not a milky wash),
   // so the livery still reads through it face-on while the car goes mirror-bright.
   if (envSurface) {

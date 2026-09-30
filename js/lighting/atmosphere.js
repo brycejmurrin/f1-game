@@ -66,11 +66,10 @@ function applyRaceSettings() {
       G.frameSky.horizon = [0.04, 0.03, 0.06];
       G.frame.sunColor = [0.12, 0.14, 0.22];   // faint cool moonlight key (unified w/ default-night)
       // MOON key-light direction: reset from the shipped palette (or a fixed
-      // high default) EVERY call. This branch previously never set sunDir, so it
-      // inherited whatever direction the previous time-of-day left behind — and
-      // the sunElev/sunAzim tuner offsets applied further down COMPOUNDED on
-      // each re-run (applyRaceSettings fires on every slider tick) instead of
-      // offsetting a stable baseline, so the moon ran away while dragging.
+      // high default) EVERY call: inheriting the previous time-of-day's
+      // direction makes the sunElev/sunAzim tuner offsets applied further down
+      // COMPOUND on each re-run (applyRaceSettings fires on every slider tick)
+      // instead of offsetting a stable baseline, so the moon runs away while dragging.
       const _npal = G.track && G.track.def && G.track.def.palette;
       G.frame.sunDir = V3.norm(_npal && _npal.sunDir ? _npal.sunDir.slice() : [0.42, 0.66, 0.36]);
       G.frameSky.sunDir = G.frame.sunDir;
@@ -182,9 +181,9 @@ function applyRaceSettings() {
     }
     G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
     // "default" — driven by the track palette; set moon + stars for night tracks.
-    // stars must be reset here symmetrically with moon: only the explicit-TOD
-    // branch used to write it, so a live explicit-night → default flip (any
-    // applyRaceSettings re-run without a track reload) kept stars in a day sky.
+    // stars must be reset here symmetrically with moon: otherwise a live
+    // explicit-night → default flip (any applyRaceSettings re-run without a
+    // track reload) keeps stars in a day sky.
     G.frameSky.moon = isNightSession ? 0.85 : 0;
     G.frameSky.stars = isNightSession ? 1 : 0;
     if (isNightSession) G.frame.sunColor = [0.12, 0.14, 0.22];   // unified moonlight key (matches explicit-night)
@@ -259,10 +258,9 @@ function applyRaceSettings() {
   // as 1−(1−f)·knob so 0 = weather never mutes the sun, 1 = as-shipped, >1 = deeper
   // murk (floored at 0). No-op in clear/dry weather (branches skipped).
   // CLEAR-CONDITION HAZE PULL-BACK. Applied HERE, after every time-of-day branch
-  // has set its base and before the weather branches add their own haze — an
-  // earlier attempt sat inside the "default mode only" per-track block and so
-  // never ran for an explicit time of day at all, which is the kind of dead edit
-  // that measures as "no change" and looks like the idea was wrong.
+  // has set its base and before the weather branches add their own haze —
+  // inside the "default mode only" per-track block it would never run for an
+  // explicit time of day, a dead edit that measures as "no change".
   //
   // Why: the exp² falloff at the shipped densities erases the mid-distance.
   // MEASURED on Spa day/dry (no fogDensityMul preset, so this is the base), a
@@ -274,8 +272,8 @@ function applyRaceSettings() {
   //
   // CLEAR WEATHER ONLY. Rain, wet, overcast and fog each set their own haze
   // below and are authored to be murky; they keep exactly what they were given.
-  // The FOG DENSITY tuner still multiplies on top, so the old wash is one slider
-  // away.
+  // The FOG DENSITY tuner still multiplies on top, so the full wash is one
+  // slider away.
   if (!isWetRoad() && G.raceWeather !== "overcast" && G.raceWeather !== "fog") {
     G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * CLEAR_FOG_SCALE;
   }
@@ -421,18 +419,15 @@ function applyRaceSettings() {
 // Per-track sun AZIMUTH bias
 // Apply a per-track azimuth (compass) bias to an authored sun direction as a TRUE
 // XZ ROTATION — the same idiom the default-mode block below uses on _pal.sunDir.
-// The three explicit-TOD branches used to fold the bias straight into x and then
-// V3.norm the result; adding a scalar to x changes |v|, so normalising rescaled y
-// as well and a knob documented as HORIZONTAL silently moved the sun's ELEVATION.
-// Measured on the shipped bias tables: Spa's DAY sun sank 42.96° -> 30.28° while
-// Bahrain's rose to 53.34° — a 23° elevation spread across the roster — and
-// Qatar's DUSK sun climbed 10.37° -> 18.36°, right out of the "close to the deck"
-// golden hour its branch is written for.
-// WHAT MOVED: nothing horizontal. `xBias` is still consumed exactly as it was, so
-// the compass angle every circuit gets is the shipped one to the last digit; only
-// the elevation is restored to the branch's authored base (dawn 6.71°, dusk
-// 10.37°, day 42.96°), which is the entire point of the fix. Holding y AND the
-// horizontal length |xz| fixed is what makes a rotation a rotation.
+// Folding the bias straight into x and then V3.norm-ing the result is NOT that:
+// adding a scalar to x changes |v|, so normalising rescales y as well and a knob
+// documented as HORIZONTAL silently moves the sun's ELEVATION. Measured on the
+// shipped bias tables: Spa's DAY sun sinks 42.96° -> 30.28° while Bahrain's
+// rises to 53.34° — a 23° elevation spread across the roster — and Qatar's DUSK
+// sun climbs 10.37° -> 18.36°, right out of the "close to the deck" golden hour
+// its branch is written for. `xBias` sets the compass angle; the elevation stays
+// at the branch's authored base (dawn 6.71°, dusk 10.37°, day 42.96°). Holding
+// y AND the horizontal length |xz| fixed is what makes a rotation a rotation.
 function _sunDirAz(base, xBias) {
   const az = Math.atan2(base[0] + xBias, base[2]);   // the compass angle, as shipped
   const h  = Math.hypot(base[0], base[2]);           // authored horizontal length — preserved

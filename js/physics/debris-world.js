@@ -121,11 +121,10 @@ const PANEL_LAT = 0.12, PANEL_HY = 0.5, PANEL_LEN = 0.75;
 const PANEL_MASS = 12;         // kg-ish — heavy enough to look solid, light enough to scatter
 const PANEL_BREAK = 1400;      // N — solved contact force on a panel that snaps its joint
 const PANEL_REST_DESPAWN_S = 6;// broken panel asleep this long → freed back
-// An UNBROKEN panel is untouched for this long → freed back. It has to exist,
-// because a promoted panel that never breaks used to be freed by NOTHING: the
-// only `live = false` sat inside `if (p.broken)`, so every hard hit that failed
-// to clear PANEL_BREAK leaked a body pair permanently, and ten of those retired
-// breakable barriers for the rest of the session. Longer than the broken timer
+// An UNBROKEN panel is untouched for this long → freed back. Without it a
+// promoted panel that never breaks is freed by NOTHING (the broken path is the
+// only other `live = false`), so every hard hit short of PANEL_BREAK leaks a
+// body pair and ten of those retire breakable barriers for the session. Longer than the broken timer
 // because this one is armed and waiting for a second hit, not litter — but it
 // still has to expire, since `far` alone never fires for a car that stays put.
 // Freeing one is invisible: it is joint-pinned at its home, geometrically the
@@ -201,17 +200,14 @@ function create(ctx) {
   //
   // Both directions stay one call wide: apex26.debris = "1" (or
   // __apex.debris(true)) to opt IN, "0" / __apex.debris(false) to opt back out.
-  // This comment used to say only the "0" half, which was left over from the
-  // build-893 era when this shipped ON; ab1a334b7 made "0" the SettingsDefaults
-  // value and the opt-IN is now the interesting direction.
+  // "0" is the SettingsDefaults value, so opt-IN is the interesting direction.
   const opt = GameStore.store.raw("debris");
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
   try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
-  // The 2.2 MB Rapier import + WASM compile used to start HERE, inside the
-  // boot burst (shader compiles, the asset pack, the first track build), for a
-  // side-world nothing needs before a race is primed. It now waits for the
-  // first idle slice (Safari has no requestIdleCallback: a plain timer there);
+  // The 2.2 MB Rapier import + WASM compile stays out of the boot burst (shader
+  // compiles, the asset pack, the first track build): nothing needs the
+  // side-world before a race is primed. It waits for the first idle slice (Safari has no requestIdleCallback: a plain timer there);
   // prime() starts it at once if a race arrives first, and step() builds the
   // world lazily when the load lands after prime. Nothing below runs at all
   // unless the player has opted in — the shipped default is "0".
@@ -302,8 +298,8 @@ function active() { return _active; }
 // fixed before the countdown starts. step()'s own prologue re-checks both and
 // rebuilds if either moved, so priming can only ever move WHEN the same world
 // is built, never WHICH. If the wasm has not landed yet (_active false) this
-// is a no-op and step() lazy-builds exactly as before — a pure optimisation
-// with the old path intact as its fallback.
+// is a no-op and step() lazy-builds — a pure optimisation with the lazy path
+// as its fallback.
 function prime() {
   const track = G.track, cars = G.cars;
   if (_enabled && _loadState === 0) _load();   // a race beat the deferred boot kick
@@ -775,8 +771,8 @@ function step(dt) {
   if (world.timestep !== dt) world.timestep = dt;
   // Queue or dynamic cars → straight to the solve, no pool scans at all.
   // Otherwise scan pools/furniture ONCE and share the verdicts with
-  // _needSolve — the old pre-gate + _needSolve pair walked _anyLive×3 and
-  // _carNearFurn twice on every frame of a debris window.
+  // _needSolve, rather than walking _anyLive×3 and _carNearFurn twice on every
+  // frame of a debris window.
   if (_queue.length === 0 && _dynCars.size === 0) {
     const live = _anyLive(_panels) || _anyLive(_slots) || _anyLive(_marbles);
     const furnNear = _furn.length > 0 && _carNearFurn(track, cars);
@@ -918,7 +914,7 @@ function updatePanels(dt, px, pz) {
 // WHY A HINT. Tracks.project with no hint evaluates EVERY centreline segment,
 // and n = round(total/4) (js/track/tracks.js): 824 segments on monaco, 1444 on
 // monza, 1543 on vegas, 1737 on spa. With a hint it evaluates ±16 nodes = 33
-// (js/track/core/spline.js). This ran unhinted for every live shard (cap 48), every
+// (js/track/core/spline.js). Unhinted, that runs for every live shard (cap 48), every
 // disturbed cone and every broken panel at the caution machine's 4 Hz
 // (QUERY_EVERY in js/race/race-control.js) — while every one of those records
 // already carries the arc it was placed at.
@@ -930,7 +926,7 @@ function updatePanels(dt, px, pz) {
 //
 // WHY THIS TRUST TEST. It is consider()'s OWN pair of tests, applied to the
 // hinted answer: within the road half-width, and at this road's height. Trusting
-// less is always safe — the fallback IS the old code path — so the guard only has
+// less is always safe — the fallback is the full scan — so the guard only has
 // to be strict enough, never exact. Both halves are load-bearing:
 //   · `dist`, not `lat`: `lat` is only the component along the local `right`, so
 //     a body far past the window still reports a near-zero `lat` when the window
@@ -1069,8 +1065,8 @@ function drainForces(cars) {
   // B2: zero every panel's per-tick solved force before re-accumulating.
   for (const p of _panels) p.force = 0;
   if (!_events) { _forceBuf.length = 0; _lastForce = 0; return; }
-  // Pool the {h1,h2,f} entries: contact storms used to alloc one object per
-  // event every tick. Grow _forcePool to the high-water mark; never shrink it.
+  // Pool the {h1,h2,f} entries: contact storms would otherwise alloc one object
+  // per event every tick. Grow _forcePool to the high-water mark; never shrink it.
   let n = 0;
   _events.drainContactForceEvents((e) => {
     let ent = _forcePool[n];
@@ -1180,8 +1176,8 @@ function drawBody(body, sc, mesh, opts, gfx) {
 // side-world is four draws whatever happens.
 //
 // Capability read, not a hard dependency: all three backends ship
-// updateInstances since 2026-09-02 (glx.js, wgx.js, tlx.js), so the per-body
-// fallback below is now dead on the shipped backends and stays only for a
+// updateInstances (glx.js, wgx.js, tlx.js), so the per-body fallback below is
+// dead on the shipped backends and stays only for a
 // backend that honestly lacks the name. Same shape as gfx.hasPerChunkLights
 // (docs/RENDERERS.md), which is still GLX + WGX only.
 // null = not tried yet, false = unavailable on this backend.

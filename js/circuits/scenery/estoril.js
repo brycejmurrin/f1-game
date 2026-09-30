@@ -1,8 +1,8 @@
 /* Apex 26 — ESTORIL scenery (data only), split out of js/circuits/estoril.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["estoril"] =
   function (api) {
@@ -56,15 +56,15 @@
       });
 
       // ── SCENERY FRACS ARE ENGINE FRACS HERE ───────────────────────────────
-      // `sceneryStartFrac: 0.96` was removed 2026-09-22 (the Estoril lesson —
-      // docs/BUGS.md). Do not reintroduce a frame key here. Fracs below are
-      // engine fracs, same space as `def.turns`.
+      // No `sceneryStartFrac` (a 0.96 frame key misplaces the dressing —
+      // docs/BUGS.md); do not reintroduce one. Fracs below are engine fracs,
+      // same space as `def.turns`.
       //
       // 2. PIT TERRACE — official Autódromo Fernanda Pires da Silva pit
       //    building: 30 boxes 17×6.70 m with a terrace roof (three stair
       //    accesses). Limewash + pantile + azulejo band; no glazed modern
       //    paddock. Dist 34 seats the mass behind the engine pit complex so
-      //    a required modelGroup actually emits (dist 18 was superseded).
+      //    a required modelGroup actually emits.
       //    https://www.circuito-estoril.pt/en/technical-data/
       {
         const BAYS = 30, PITCH = 6.7, LEN = BAYS * PITCH;
@@ -239,17 +239,11 @@
 
       const { cx, cz, radius: rad } = lapBounds();
       // ── NO ATLANTIC. THE CIRCUIT IS INLAND. ──────────────────────────────
-      // There used to be a waterBand here, 210 m off the back section, with a
-      // matching `seaward` wedge that punched a hole in the hill ring so you
-      // could see it. Both are gone. Estoril sits on the Alcabideche plateau
-      // at 38.7506 N 9.3942 W; the nearest water is Guincho at 7.2 km on
-      // bearing 254° and Cascais bay at 7.1 km on 198°, and the Malveira
-      // ridge stands between. A sheet of sea two hundred metres from the
-      // Parabolica is not a stylisation of that, it is a different place —
-      // and the hole it cut in the ring removed the one thing you really can
-      // see from the track, which is hills in every direction.
-      //
-      // The lighthouse that stood next to it went the same way; see
+      // No waterBand and no `seaward` gap in the hill ring: Estoril sits on the
+      // Alcabideche plateau at 38.7506 N 9.3942 W; the nearest water is
+      // Guincho at 7.2 km on bearing 254° and Cascais bay at 7.1 km on 198°,
+      // with the Malveira ridge between. What you really can see from the
+      // track is hills in every direction. No lighthouse either; see
       // `estoril-deposito` below.
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [120, 42, 130, 42, 14, 8, [0.24, 0.34, 0.19]],
@@ -323,13 +317,10 @@
         }, { required: true });
       }
       {
-        // A DEPÓSITO DE ÁGUA, not the lighthouse that used to stand here.
-        // The farol was the other half of the coastal fiction removed above:
-        // Cabo Raso and Santa Marta are 7 km away on the actual coast, and one
-        // 150 m off the back section put a navigation light on an inland
-        // plateau. What does stand over every Portuguese town of this size is
-        // the elevated water tank — same tall pale cylinder the author wanted
-        // as an outfield accent, and it is really there.
+        // A DEPÓSITO DE ÁGUA, not a lighthouse: Cabo Raso and Santa Marta are
+        // 7 km away on the actual coast. What does stand over every Portuguese
+        // town of this size is the elevated water tank — a tall pale cylinder
+        // outfield accent that is really there.
         const a = anchor(K(0.62), -1, 150), b = [a.r, a.u, a.t];
         modelGroup("estoril-deposito", {
           center: vadd(a.c, a.u, 13), size: [20, 32, 40], basis: b,

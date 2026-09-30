@@ -311,13 +311,11 @@
       // (row 0.020), runs the whole downhill sweep with nothing built at all
       // (row 0.330), walks up to both Bridge abutments (row 0.776), and holds
       // the outfield to the line past Paddock Bend (row 0.897).
-      // GAP 15-19 m, not 4.0-5.5. A 2026-09-15 visual pass found the circuit
-      // completely invisible behind these belts: a 4.5 m gap puts the trunks
-      // inside the runoff, so the canopy fills the camera from every roadside
-      // view. Mont-Tremblant is carved through forest, but the treeline stands
-      // beyond the verge, not on it. `spacing` thins them from the 4 m default
-      // (which was silently ignored before the forestEdge fix) to a woodland
-      // that you can see the track through.
+      // GAP 15-19 m, not 4.0-5.5: a 4.5 m gap puts the trunks inside the
+      // runoff, so the canopy fills the camera from every roadside view and
+      // hides the circuit. Mont-Tremblant is carved through forest, but the
+      // treeline stands beyond the verge, not on it. `spacing` thins them from
+      // the 4 m default to a woodland you can see the track through.
       forestEdge(0.036, 0.088, -1, 17, { spacing: 13 });
       forestEdge(0.290, 0.398, -1, 16, { spacing: 13 });
       forestEdge(0.430, 0.500, -1, 15, { spacing: 12 });
@@ -357,10 +355,8 @@
                  h < 0.5 ? ROCK : ROCK2, [a.r, a.u, a.t]);
         }
       }
-      // every(13) and 16 m out. The original comment below said these sat
-      // "right on top of the rail" at 4.6 m — accurate, and that is the defect:
-      // the 2026-09-15 pass showed nothing of the circuit but trunks. The forest
-      // stays; it stands back from the barrier now.
+      // every(13) and 16 m out: at 4.6 m, right on top of the rail, the
+      // circuit shows nothing but trunks. The forest stands back from the barrier.
       every(13, (k) => {
         if (!within(k, ES0, ES1)) return;
         for (const side of [-1, 1]) {
@@ -442,16 +438,16 @@
       }
 
       // ---------------------------------------------------------------- 8.
-      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
-      // startFrac) because the grid had been laid through a 104 m corner, and
+      // RE-KEYED THROUGH sl(). The start line sits on a straight (def
+      // startFrac; v0 is in a 104 m corner), and
       // sceneryStartFrac holds the rest of this file on its real corners —
       // Namerow, the Esses and the ski-mountain framing must not travel with
       // the line. The paddock and the start-line stand belong AT the line, so
       // these two blocks alone are shifted.
       // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
-      // the 4 dp the props were placed against (a literal 0.7166 until 2026-09-22:
-      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
-      // keeps today's geometry while a retuned startFrac still moves the props).
+      // the 4 dp the props were placed against (the unrounded value flips a few
+      // K() nodes, so rounding keeps the geometry while a retuned startFrac still
+      // moves the props).
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
@@ -522,14 +518,12 @@
       });
 
       // ---------------------------------------------------------------- 9.
-      // START LINE OUTSIDE (row 0.020). Was grandstandEx(sl(0.020), −1, 7, 110)
-      // with terrain slope −0.006 under the rake (stands probe BACKWARDS /
-      // hollow reading). Real Tremblant seats spectators on natural banks
-      // (circuit sale notes / racingcircuits.info), so this is a spectatorHill
-      // with an explicit positive rise away from the ribbon.
-      // Timber bleacher was +tris and left crowdBand unsupported on the grade.
-      // Modest grandstandEx: crowdBank rows rise away from the ribbon (stands
-      // probe slope > 0). Shorter than the old 110 m BACKWARDS shell.
+      // START LINE OUTSIDE (row 0.020). Real Tremblant seats spectators on
+      // natural banks (circuit sale notes / racingcircuits.info). Modest
+      // grandstandEx: crowdBank rows rise away from the ribbon (stands probe
+      // slope > 0); a 110 m shell at gap 7 sits on a −0.006 slope and reads
+      // BACKWARDS, and a timber bleacher costs tris and leaves crowdBand
+      // unsupported on the grade.
       grandstandEx(sl(0.018), -1, 12, 72, null, null,
         { livery: "concrete", roof: "none", endWalls: true });
       guardrail(sl(0.008), sl(0.040), -1, 2.6, ARMCO);

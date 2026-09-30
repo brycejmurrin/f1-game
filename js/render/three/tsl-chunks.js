@@ -12,7 +12,7 @@
     // node variables for one fragment (1,256 of them the floor/fract pairs
     // below). r185 emits those as module-scope var<private> and WebKit caps
     // that space at 8,192 bytes per module — every lit pipeline was refused on
-    // the owner's iPhone and only the sky drew (2026-09-03). Dawn never checks
+    // an iPhone and only the sky drew. Dawn never checks
     // the sum, so no Chromium run can see it. With a layout each helper
     // compiles once as a real function (vendor PATCHES.md §4 moves the rest to
     // function scope), which also keeps the ANGLE-Metal first-frame compile short.

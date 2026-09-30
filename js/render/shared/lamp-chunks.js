@@ -92,17 +92,16 @@ const LampChunks = (function () {
   // tuner knobs null track._lights, the next build mints a new array, and the
   // stale table falls out for free.
   //
-  // The knob is NOT part of that key, and used to be. The PER-CHUNK LAMPS
+  // The knob is deliberately NOT part of that key. The PER-CHUNK LAMPS
   // slider is `step: 0.001` over 0..1 (js/lighting/knobs.js), so it has 1000
   // distinct values — but capFor() maps all of them onto at most 17 distinct
   // caps, and the bake depends on the knob ONLY through that cap. Keying on the
-  // raw float meant dragging 0.300 -> 0.301 re-ran the whole
+  // raw float would make dragging 0.300 -> 0.301 re-run the whole
   // O(chunks x lamps) bake — object literal per hit, Array.sort per chunk — to
   // produce a byte-identical table, once per input event, on the render thread
   // with the pass open. Measured first-on bake: 37.3 ms vegas / 25.9 ms
-  // singapore (docs/PERF-FINDINGS.md); a drag paid that per frame. The
-  // slider's own help text already promises the table is "baked once per
-  // track", which is now true again.
+  // singapore (docs/PERF-FINDINGS.md), paid per frame during a drag. The
+  // slider's help text promises the table is "baked once per track".
   const _cache = new WeakMap();
   function resolve(lights, chunks, knob) {
     const cap = capFor(knob);
@@ -150,10 +149,10 @@ const LampChunks = (function () {
   // SHARED CELLS ARE MERGED, NOT OVERWRITTEN. TLX hands in the road, terrain
   // AND props chunk sets together, and all three bin onto the same world grid,
   // so one cell routinely holds two or three chunks. The grid has ONE slot per
-  // cell, and the last writer used to win: every prop in a cell shared with
-  // terrain lit from the TERRAIN chunk's lamp list (and lost the lamps that
+  // cell; if the last writer won, every prop in a cell shared with terrain
+  // would light from the TERRAIN chunk's lamp list (and lose the lamps that
   // reach only the prop's box — a floodlight mast's own lamps on a hillside
-  // cell). A shared cell now gets the UNION of its chunks' lists — round-robin
+  // cell). A shared cell gets the UNION of its chunks' lists — round-robin
   // over the nearest-first lists so each chunk's nearest lamps come first,
   // de-duplicated, capped at the table's cap — appended to a copy of the
   // table's concat. `concat` is the table's own array when nothing collides.

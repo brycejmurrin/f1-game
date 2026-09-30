@@ -1475,4 +1475,26 @@ body.bc-on #hud-tyre, body.bc-on #hud-pit { display: none !important; }   /* the
 #bc-tower .bc-row[data-delta="down"] .bc-pos { color: var(--slower); }
 /* A short phone screen: the top ten and the car on camera. */
 body[data-density="compact"] #bc-tower .bc-row:nth-child(n+11):not(.on) { display: none; }
+/* THE PICTURE-IN-PICTURE (js/render/shared/mirror-pass.js paints the second
+   camera into exactly this box; js/race/broadcast.js writes the label). Under
+   the pause / camera column, where the sector box and limits strip stood —
+   neither means anything for a replayed car, so they stand down with it. */
+body.bc-on #hud-sectors, body.bc-on #hud-limits { display: none !important; }
+#bc-pip {
+  --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z);
+  position: absolute;
+  right: calc(8px + var(--sar) / var(--hud-z));
+  top: calc(16px + (var(--sat) + var(--tap-hud)) / var(--hud-z));
+  width: clamp(160px, calc(28 * var(--vwzh, 1vw)), 420px);
+  aspect-ratio: 16 / 9;
+  outline: 2px solid rgba(8, 8, 14, 0.9);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+#bc-pip .bc-pip-label {
+  position: absolute; left: 0; bottom: 0;
+  padding: 2px 6px; font-family: var(--font-hud); font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
+  color: var(--text); background: rgba(8, 8, 14, 0.82);
+}
+#bc-pip .bc-pip-label:empty { display: none; }
 } /* @layer hud */

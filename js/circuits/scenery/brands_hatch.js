@@ -275,17 +275,17 @@
       /*    Grandstand right on the lip of the drop.                        */
       /*    Rows 0.005/-1 (18 m) and 0.014/-1 (12 m).                       */
 
-      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
-      // startFrac) because the grid had been laid through a 136 m corner, and
+      // RE-KEYED THROUGH sl(). The start line sits on a straight (def
+      // startFrac; v0 is in a 136 m corner), and
       // sceneryStartFrac holds the rest of this file on its real corners —
       // Druids, Westfield, Dingle Dell and the woods must not travel with the
       // line. At THIS circuit the frontage, the pits and the Paddock Hill
       // structures are one complex around the line, so they move together;
       // block 1's open grass banking stays in the authoring frame.
       // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
-      // the 4 dp the props were placed against (a literal 0.1635 until 2026-09-22:
-      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
-      // keeps today's geometry while a retuned startFrac still moves the props).
+      // the 4 dp the props were placed against (the unrounded value flips a few
+      // K() nodes, so rounding keeps the geometry while a retuned startFrac still
+      // moves the props).
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
@@ -515,7 +515,7 @@
       // (docs/tracks brief; historical fan name). MSV 2022 venue doc lists
       // "Hailwoods Restaurant" separately — see PR UNCERTAIN note.
       // Gap 38 (not 20): modelGroup preflight treats the pit-complex band as
-      // superseded, so a required group at the old building gap is dropped.
+      // superseded, so a required group at gap 20 is dropped.
       {
         const a = anchor(K(sl(0.018)), 1, 38);
         const b = [a.r, a.u, a.t];
@@ -554,11 +554,10 @@
       for (let s = 0.030; s < 0.072; s += 0.0075) {
         const k = K(s);
         const h = hash(k * 61);
-        // Laterally CLEAR of one another: the old 30+6h / 35+4h / 41 offsets
-        // stood the tractor inside the awning (and the trailer), and on this
-        // hill their tops met on one plane — brands_hatch's worst coplanar
-        // pairs (2026-09-22, coplanar-audit --why --raw). One shared shift
-        // keeps a >= 0.3 m gap between each for every h.
+        // Laterally CLEAR of one another: offsets of 30+6h / 35+4h / 41 stand
+        // the tractor inside the awning (and the trailer), and on this hill
+        // their tops meet on one plane (coplanar-audit --why --raw). One
+        // shared shift keeps a >= 0.3 m gap between each for every h.
         place(k, 1, 30 + h * 2.5, [3.6, 4.1, 15], h > 0.5 ? CHALK : STEEL);   // transporter
         place(k, 1, 33.4 + h * 2.5, [2.6, 3.0, 7], DKGREY);                   // tractor unit
         if (h > 0.45) building(k, 1, 48, 12, 5.5, 11, {});
@@ -880,11 +879,10 @@
       }
         // ---------------------------------------------------------------- FAR HORIZON
       // Brands Hatch is a NATURAL AMPHITHEATRE cut into the Kent North Downs —
-      // the bowl is the venue, and a 2026-09-15 visual pass found it opening
-      // onto a flat green plane with a hard edge at the sky. Of the four
-      // circuits given a horizon this is the one where its absence was the
-      // biggest lie: wooded chalk downland, close in and higher than the others,
-      // so the lap reads as sunk into ground rather than laid on it.
+      // the bowl is the venue; without a horizon it opens onto a flat green
+      // plane with a hard edge at the sky. Wooded chalk downland, close in and
+      // higher than the other three horizons, so the lap reads as sunk into
+      // ground rather than laid on it.
       const farHill = (frac, side, dist, w, h, dy) => {
         const a = anchor(K(frac), side, dist).c;
         const y = terrainYAt(a[0], a[2]);

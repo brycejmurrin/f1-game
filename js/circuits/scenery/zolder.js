@@ -185,10 +185,9 @@
 
       // 0b. The pine mass. Dark and dense, set back past the sand, thicker on
       //     the outer ring (-1) than on the infield (+1) where the paddock is.
-      // every(13) and four ranks, not every(7) and seven. Same 2026-09-15 pass:
-      // Zolder's forest closed over the track completely. It IS a forest circuit
-      // in the Bosbergen woods, but you can see the Belgian trees from the
-      // Belgian track.
+      // every(13) and four ranks, not every(7) and seven, which close over the
+      // track completely. It IS a forest circuit in the Bosbergen woods, but
+      // you can see the Belgian trees from the Belgian track.
       every(13, (k) => {
         const h = hash(k * 29 + 7);
         const h2 = hash(k * 53 + 11);
@@ -364,16 +363,16 @@
         if (t && !onTrack(t.c[0], t.c[2], 10)) tree(k, side, 78, 9 + hash(k * 3) * 5, BIRCH);
       }
 
-      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
-      // startFrac) because the grid had been laid through a 176 m corner, and
+      // RE-KEYED THROUGH sl(). The start line sits on a straight (def
+      // startFrac; v0 is in a 176 m corner), and
       // sceneryStartFrac holds the rest of this file on its real corners — the
       // chicanes, the Villeneuve memorial and the pine sections must not travel
       // with the line. The pit block and main stand belong AT the line, so
       // these two blocks alone are shifted.
       // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
-      // the 4 dp the props were placed against (a literal 0.1562 until 2026-09-22:
-      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
-      // keeps today's geometry while a retuned startFrac still moves the props).
+      // the 4 dp the props were placed against (the unrounded value flips a few
+      // K() nodes, so rounding keeps the geometry while a retuned startFrac still
+      // moves the props).
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
@@ -439,8 +438,8 @@
         }
       }
       cameraTower(K(sl(0.0)), -1, 22);
-      // Billboards spaced and set back — place×place at frac 0.02 was a 6 m
-      // severe when panels sat 11 m apart behind the old stand.
+      // Billboards spaced and set back — panels 11 m apart at frac 0.02 are
+      // a 6 m severe place×place clip.
       for (let i = 0; i < 4; i++) {
         billboard(K(sl(0.965 + i * 0.014)), -1, 52, 10, 3.8,
           i % 2 ? [0.82, 0.24, 0.20] : [0.16, 0.28, 0.55]);

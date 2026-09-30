@@ -5,10 +5,9 @@
   {
     id: "qatar",
     pit: { side: -1 },   // the pit complex (TrackPit): this circuit's own garages stand on the left of the main straight
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.3 m off centreline; = trace vertex 0.
-    // Was 0.8000, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     sceneryStartFrac: 0.8000,
     name: "QATAR",

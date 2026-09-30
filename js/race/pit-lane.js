@@ -70,17 +70,15 @@ const PitLane = (function () {
   // (racing coordinates put the line at s = 0; see TrackSpace).
   const ENTRY_M = 260;     // the LONGEST the lane may open before the line (TrackPit.ENTRY_MAX; was 400)
   const ENTRY_MIN = 150;   // ...and the shortest that is still a lane
-  const EXIT_M = 110;      // where it closes, after the line (TrackPit.EXIT_M; was 130)
+  const EXIT_M = 110;      // where it closes, after the line (TrackPit.EXIT_M)
   const BOX_M = 40;        // the stop, this far before the line
 
   // ── WHERE THE LANE OPENS IS A PROPERTY OF THE CIRCUIT ─────────────────────
-  // It used to be a flat 320 m on all 52, which is circuit-blind and measurably
-  // wrong: at Monza that lands the entry INSIDE PARABOLICA. The gesture that
-  // calls a stop is "hold the car on the pit side and keep it there", and a car
-  // holding any lateral line through a corner is doing the hard part of driving
-  // — traced, a car entering the old window and steering zero drifted 6.4 m to
-  // 0.74 m and missed its box. Asking for the pit side mid-corner asks the
-  // wrong thing.
+  // A flat distance (320 m on all 52) is circuit-blind: at Monza it lands the
+  // entry INSIDE PARABOLICA. The gesture that calls a stop is "hold the car on
+  // the pit side and keep it there", and holding a lateral line through a
+  // corner is the hard part of driving — traced, a car entering that window
+  // and steering zero drifted 6.4 m to 0.74 m and missed its box.
   //
   // So walk BACK from the start/finish line and open the window where the last
   // corner lets go. Real pit entries are on the pit straight for this exact
@@ -174,7 +172,7 @@ const PitLane = (function () {
   // buildProps places the grandstand at -1 and the pit building at +1), so that
   // is the default side. A circuit may say otherwise via `def.pitZone.side`.
   const PIT_SIDE = 1;
-  // SINCE THE 2026-09 REDESIGN the lane on every circuit is the COMPLEX
+  // The lane on every circuit is the COMPLEX
   // (TrackPit, js/track/core/pit.js): a ribbon beside the road behind a real
   // pit wall, bays on the row — the FULL set on permanent circuits, the
   // STREET set between a street circuit's walls (docs/research/
@@ -246,11 +244,8 @@ const PitLane = (function () {
   const BOX_SQUARE_RAD = 0.22;  // rad off the lane's tangent — 12.6°, a crooked car, not a parked one
   const SQUARE_BY_M = 6;        // …and the AI's lateral move is COMPLETE this far before the box
   // ── A ROW OF BOXES, NOT ONE POINT ────────────────────────────────────────
-  // Every car used to stop at the SAME arc position, and since the lane became
-  // a place, at the same lateral position too — so two cars pitting on the same
-  // lap occupied the same patch of tarmac. A pit lane is a row of garages, and
-  // modelling it as one is the kind of thing you only notice when two cars do
-  // it at once.
+  // One stop point would put two cars pitting on the same lap on the same patch
+  // of tarmac. A pit lane is a row of garages.
   //
   // 14 m is a real garage pitch (an F1 box is ~12-15 m of lane frontage), and
   // with the 12 rows in Teams.LIST that is 154 m of boxes — which fits the
@@ -275,10 +270,8 @@ const PitLane = (function () {
   const GRID_POLE_M = 14;
   const COMMIT_M = 120;       // the entry road, for the cue's "PIT ENTRY" phase
   // The pit CUE's two thresholds. Module scope because they are EXPORTED and
-  // the session below is the only other reader: the export list carried its
-  // own copies of both literals, so tuning the cue here would have left
-  // PitLane.CUE_M/CUE_WEAR quietly describing the old behaviour to every
-  // caller that reads them.
+  // the session below is the only other reader: one definition, so tuning the
+  // cue here cannot leave PitLane.CUE_M/CUE_WEAR describing stale values.
   const CUE_M = 550;          // start the cue counting down this far out
   const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
   // How much lane a car needs in front of it for a commitment to mean anything:
@@ -482,12 +475,11 @@ const PitLane = (function () {
       const poleS = ((-GRID_POLE_M % L) + L) % L;
       const wantFirst = throughM(zz, poleS, L) + GRID_CLEAR;
       // THE ROW IS LAID OUT INSIDE THE LANE, not inside the window, wherever a
-      // separate ribbon exists. The two used to be the same stretch of road, so
-      // the window served; once the ribbon could be trimmed short of a pinch it
-      // stopped serving, and the last teams' boxes sat past the end of the
-      // tarmac on five circuits. The floor also drops to the ribbon's own start
-      // rather than COMMIT_M: that constant was the old entry-road commit cap,
-      // and boxes nearer the entry are strictly better for reaching one on lap 1.
+      // separate ribbon exists: the ribbon can be trimmed short of a pinch, and
+      // laid out in the window the last teams' boxes sit past the end of the
+      // tarmac (five circuits). The floor is the ribbon's own start rather than
+      // COMMIT_M (the entry-road commit cap): boxes nearer the entry are
+      // strictly better for reaching one on lap 1.
       const rib = ribbonRange(zz, L);
       const lo = rib ? rib.a + 20 : COMMIT_M + 20;
       const hi = Math.max(lo, (rib ? rib.b : zz.lenM) - 30 - span);
@@ -694,8 +686,8 @@ const PitLane = (function () {
         return { phase: "lane", text: "STAY IN LANE · " + Math.round(limitKphShown()) + " LIMIT", dist: 0, frac: 0 };
       }
       if (st === "out") {
-        // THE EXIT ROAD used to be silence — and it is where a serviced car
-        // rejoins at the limit into traffic at racing speed. GO for a moment
+        // THE EXIT ROAD is not silent: it is where a serviced car rejoins at
+        // the limit into traffic at racing speed. GO for a moment
         // after the release; MERGE, naming the car, while one is closing on
         // the track side; otherwise the metres to the end of the road.
         if ((c.pitOutT || 0) > 0) return { phase: "served", text: "GO GO GO", dist: 0, frac: 1 };
@@ -737,10 +729,10 @@ const PitLane = (function () {
      *  stopped by the time it arrives. AI-ONLY by contract — game.js applies it
      *  only to `!c.human`, because braking onto the mark is the player's job. */
     function approachV(c) {
-      // Serviced (or being serviced): the envelope is spent. It used to hold a
-      // car that had stopped short of the box's centre — inside the tolerance,
-      // the stop latched — at ZERO after the tyres went on, until a rescue
-      // pulsed it past the mark (every stop, both circuits measured).
+      // Serviced (or being serviced): the envelope is spent. Otherwise a car
+      // that stopped short of the box's centre (inside the tolerance, the stop
+      // latched) is held at ZERO after the tyres go on, until a rescue pulses it
+      // past the mark (every stop, both circuits measured).
       if (c.pitState === "out" || c.pitState === "box") return Infinity;
       const togo = toBox(c);
       if (togo < 0) return Infinity;                 // not in the window, or past the box
@@ -1081,11 +1073,10 @@ const PitLane = (function () {
       const fast = laneDrive(hw, zz.side, c.s, road === "entry");
       if (c.pitState === "out" || !(togo > -BOX_TOL && togo < WORK_IN_M)) return fast;
       // The diagonal: the fast lane WORK_IN_M out, the working lane's centre
-      // SQUARE_BY_M BEFORE the box — not at it. The move used to finish at the
-      // box itself, and since the AI halts BOX_TOL/2 short, it parked four
-      // fifths of the way across: inside `inBoxLat`'s line, which was all the
-      // latch asked, but not in its bay. Now the car is on the centre before it
-      // arrives and stops square, which is what `boxSquare` requires of it.
+      // SQUARE_BY_M BEFORE the box — not at it: the AI halts BOX_TOL/2 short, so
+      // a move finishing at the box parks it four fifths of the way across,
+      // inside `inBoxLat`'s line but not in its bay. On the centre before it
+      // arrives, it stops square, which is what `boxSquare` requires of it.
       const span = Math.max(1, WORK_IN_M - SQUARE_BY_M);
       const u = Math.min(1, Math.max(0, (WORK_IN_M - togo) / span));
       return fast + (laneCentre(hw, zz.side, c.s) - fast) * u;
@@ -1093,14 +1084,11 @@ const PitLane = (function () {
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
       if (!((c.speed || 0) > G.vTop() * COMMIT_V)) return false;
-      // ANYWHERE FROM THE WINDOW OPENING UP TO YOUR OWN BOX. It used to be the
-      // first COMMIT_M metres only — "past this you have gone by the entry road
-      // and are racing the straight" — and that made a stop at the START of a
-      // lap impossible on half the calendar: the GRID SITS INSIDE THE WINDOW
-      // (pole 14 m before the line), so on a long-entry circuit every car begins
-      // past the entry road. Measured: at Monza and Hungaroring pole starts at
-      // through 386 and the back of the grid at 218, against a 0-120 commit
-      // zone. Nobody could call a stop from the grid at all.
+      // ANYWHERE FROM THE WINDOW OPENING UP TO YOUR OWN BOX, not the first
+      // COMMIT_M metres only: the GRID SITS INSIDE THE WINDOW (pole 14 m before
+      // the line), so on a long-entry circuit every car begins past the entry
+      // road. Measured: at Monza and Hungaroring pole starts at through 386 and
+      // the back of the grid at 218, against a 0-120 commit zone.
       //
       // Committing after your own box is still refused, because there is
       // nothing left to commit TO. What stops a car that merely ran wide from
@@ -1168,8 +1156,8 @@ const PitLane = (function () {
     function update(c, dt) {
       // A FINISHED car still runs the machine: one held in its box at the
       // flag is serviced and released, one on the lane keeps its state to the
-      // exit (game.js coasts it down the lane). They used to freeze in
-      // whatever state the flag found them and pile up in the lane.
+      // exit (game.js coasts it down the lane), rather than freezing in
+      // whatever state the flag found it and piling up in the lane.
       if (!c || c.retired) return;
       // Disabling tyre wear closes the pit feature, but a car already owned by
       // its state machine must first be released. Returning with `box`/`lane`
@@ -1199,8 +1187,8 @@ const PitLane = (function () {
         // car's commitment is per pass: a stop it did not make is not carried
         // to the next lap, where the limiter would meet it at the line. An
         // AI's plan (pitArmed) is, by design — it comes in next time round.
-        // THE `st !== "none"` GUARD IS LOAD-BEARING, and a 2026-09-20 survey
-        // finding that called the local clear "wrongly conditional" is wrong.
+        // THE `st !== "none"` GUARD IS LOAD-BEARING; the local clear is not
+        // "wrongly conditional".
         // THE ENTRY ROAD IS OUTSIDE THE WINDOW — that is why the commit logic
         // below lives in this branch — so this runs every tick while a car
         // approaches. Clearing pitArmed/pitCommitted unconditionally here wipes
@@ -1258,14 +1246,14 @@ const PitLane = (function () {
       // Armed but already PAST its own box — an AI's plan fires at the lap
       // tick, and the line sits inside the window, past the row on most
       // circuits: nothing to stop for this pass. Stay armed and unlimited, and
-      // come in next time round. (It used to take the limiter for the rest of
-      // the window, leave still armed, and stop a lap later.)
+      // come in next time round (not take the limiter for the rest of the
+      // window, leave still armed, and stop a lap later).
       if (st === "none" && at > boxAt + BOX_TOL * 2) return;
       // …and, on the complex, armed but NOT ON THE LANE: the wall stands past
       // the entry line, so a car still on the racing surface here cannot get
       // in this time round — it races on and takes the entry road next lap.
       // An AI whose plan fired at the line (the grid sits inside the window,
-      // Bahrain: at 151 m, box ahead) used to turn in through the wall: on the
+      // Bahrain: at 151 m, box ahead) would turn in through the wall: on the
       // limiter on the racing line, clamped to the wall's track face, off-road
       // on the verge, and rescued into the lane (11 stops of 21, measured).
       if (st === "none" && ribbonAt(c.s)) {
@@ -1414,11 +1402,10 @@ const PitLane = (function () {
      *  which is the whole reason pit loss was kept emergent. */
     /** The lap the pit loss is measured against. `G.referencePole()` is the
      *  curvature-integrated lap (Quali.lapTime), so it knows Monaco from Monza;
-     *  the old `total / (0.55·vTop)` was a flat fraction of TOP speed and could
-     *  not — it ran 2 % long at Monaco and 16 % at Spa, always in the direction
-     *  that made a stop look cheap. Race pace is a few per cent off a pole lap
+     *  a flat `total / (0.55·vTop)` fraction of TOP speed cannot — it runs 2 %
+     *  long at Monaco and 16 % at Spa, always making a stop look cheap. Race pace is a few per cent off a pole lap
      *  (fuel, tyres, no tow): 1.03 puts Bahrain at 123.9 s against a measured
-     *  124.1. Falls back to the old estimate where no pole model is wired. */
+     *  124.1. Falls back to that flat estimate where no pole model is wired. */
     const RACE_PACE = 1.03;
     function referenceLapS() {
       const pole = G.referencePole ? G.referencePole() : 0;
@@ -1435,10 +1422,9 @@ const PitLane = (function () {
     function planFor(roll, player, laps, car) {
       const zz = z();
       if (!zz) return null;
-      // ONE loss, the same one the STRATEGY row shows. This used to carry its
-      // own second formula (a 0.55·vTop reference against the HUD's 0.75), so
-      // the planner priced a stop at 7.3 s, the player was told 9.0, and the
-      // race charged 15.0 — measured, docs/research/PIT-NEXT-STEPS-2026-09.md §4f.
+      // ONE loss, the same one the STRATEGY row shows. A second formula here
+      // priced a stop at 7.3 s while the player was told 9.0 and the race
+      // charged 15.0 — measured, docs/research/PIT-NEXT-STEPS-2026-09.md §4f.
       const loss = lossS();
       const n = laps > 0 ? laps : G.lapsTarget;
       const lapRefS = referenceLapS();
@@ -1807,8 +1793,8 @@ const PitLane = (function () {
      *  limiter and laneDrive steers it onto the lane offset: the player leaves
      *  a standing start unable to exceed ~20 m/s at full throttle until the arc
      *  walks them out of the window, measured at ~750 ticks (12 s) on Monza.
-     *  The one place that used to clear these is update()'s left-the-window
-     *  branch, which by construction cannot fire while the car is inside it. */
+     *  update()'s left-the-window branch, the only other place that clears
+     *  these, by construction cannot fire while the car is inside it. */
     function clearArm(c) {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0;

@@ -227,7 +227,7 @@ authored .1526–.2570 descending):
 5. **Singapore**, 6. **Vegas**, 7. **Baku**, 8. **Jeddah** — same shape, each
    its own commit with its baselines.
 9. **Flip the default**: `pit.js` `street ? "street" : "full"`; keep `"narrow"`
-   as an explicit opt-out; `pit-lane.js:707-717` comment ("A STREET circuit's
+   as an explicit opt-out; `pit-lane.js:699-709` comment ("A STREET circuit's
    model is painted") and `:172-195` header, `docs/SCENERY-API.md:69` ("street
    circuits, which build no ribbon"), `PIT-LANE-REDESIGN §4.2/§6.4`, `docs/DEBUG-HOOKS.md`
    `pit()` row → update. (+20 lines of docs.)

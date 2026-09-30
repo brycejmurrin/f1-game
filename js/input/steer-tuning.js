@@ -180,18 +180,11 @@ const PRESETS = {
   rookie:   { tiltDeg: 4, steerSmooth: 9, steerRate: 2,
               steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 9, raceLine: 4,
               adaptiveButtons: 9, brakeCue: 9 },
-  /* RELAX WAS THE STRAGGLER OF THE 2026-09-08 RE-CENTRING. That pass moved
-     STANDARD and PRO onto the owner's profile and re-centred STEER_LEVELS with
-     them — but left RELAX at the old steerRate 4 / steerSpeed 4, which matches
-     no named FEEL level any more. Two visible consequences:
-       - clicking RELAX left the STEERING row reading CUSTOM, i.e. a preset that
-         does not light up its own simplified control (sliders.spec.js);
-       - the ladder stopped being monotonic — RELAX's rack (3.80 m) became
-         QUICKER than STANDARD's (4.20 m), so "STANDARD sits between RELAX and
-         PRO" was false by construction (presets.spec.js).
-     Aligned with STEER_LEVELS.easy exactly, which is what "the easiest bundle"
-     was always meant to be: the same calm rack STANDARD uses, with less lock
-     and an earlier speed taper. */
+  /* RELAX IS STEER_LEVELS.easy EXACTLY: the same calm rack STANDARD uses, with
+     less lock and an earlier speed taper. Off a named FEEL level, clicking RELAX
+     leaves the STEERING row reading CUSTOM (sliders.spec.js), and a quicker
+     rack than STANDARD's breaks the RELAX < STANDARD < PRO ladder
+     (presets.spec.js). */
   relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 2,
               steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 8, raceLine: 2,
               adaptiveButtons: 8, brakeCue: 8 },
@@ -313,9 +306,8 @@ function refreshMacros() {
 // that already has the key. Two different acts, and doing only one of them
 // reaches either nobody who has played or nobody at all.
 //
-// The guard used to be a single `store.get("steerSchema", 1) >= STEER_SCHEMA`
-// gate. That is correct with exactly one version to migrate to and becomes DATA
-// LOSS with two: a store already at 2 falls straight through it on the way to 3
+// A single `store.get("steerSchema", 1) >= STEER_SCHEMA` gate is correct with
+// exactly one version to migrate to and becomes DATA LOSS with two: a store already at 2 falls straight through it on the way to 3
 // and receives V2'S RESET A SECOND TIME, silently discarding a drivingHelp or
 // raceLine the player deliberately set AFTER v2 ran. Hence the ladder — each step
 // declares the schema it brings the store UP TO, and a store at N runs only the

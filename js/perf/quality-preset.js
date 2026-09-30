@@ -42,10 +42,9 @@ function presetById(id) { return PRESETS.find((p) => p.id === id) || null; }
 
 function current() { return presetById(curId) || PRESETS[2]; }
 
-// The shipped default must match what each device ALREADY did before this
-// control existed, so adding the button changed nobody's picture: desktop ran
-// the full stack (HIGH); a phone ran the memory-safe STANDARD tier unless it
-// had opted into apex26.gfxHigh (the old mobile-only toggle, still
+// The shipped default matches each device's picture without this control:
+// desktop runs the full stack (HIGH); a phone the memory-safe STANDARD tier
+// unless it has opted into apex26.gfxHigh (the legacy mobile-only toggle,
 // authoritative as ULTRA). A fresh phone stays MEDIUM: HIGH removes the tier-2
 // floor and enables the env probe plus lamp shadows/SSR before the governor
 // has measured the device

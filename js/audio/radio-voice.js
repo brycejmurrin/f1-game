@@ -235,9 +235,9 @@ const RadioVoice = (function () {
      * speech service, and on real desktops they can stall the main thread —
      * cancel() and getVoices() especially, a network ("Google") voice worse
      * (crbug 374263394, 40720649). say() runs inside the game tick (it hangs
-     * off showAnnounce), so every one of them used to land in a frame: a
-     * cancel() on EVERY line, speaking or not, and a resume() after it. Now
-     * the synth is only touched from its own task (`synthTask`), cancel()
+     * off showAnnounce), so none of them may land in a frame (a cancel() on
+     * EVERY line plus a resume() after it would). The synth is only touched
+     * from its own task (`synthTask`), cancel()
      * only when something is actually queued, resume() only straight after a
      * cancel (the Bugzilla 1522074 case it exists for), and each call is timed
      * so a player can see what their platform costs (debug().synth). */
@@ -445,21 +445,20 @@ const RadioVoice = (function () {
       if (current === u) deadline = setTimeout(stop, p.budgetMs);
       return true;
     }
-    /* THE ONE GESTURE iOS GIVES US, AND IT WAS BEING THROWN AWAY.
+    /* THE ONE GESTURE iOS GIVES US — DO NOT THROW IT AWAY.
      *
      * Chrome (M71+) needs sticky activation, which the game's own first-gesture
      * listener already provides. iOS is stricter: WebKit refuses speak() from
      * anywhere but a user gesture until the engine has been primed by a speak()
      * inside one, and this function is the only place that ever happens.
      *
-     * It used to read `u.volume = 0; synth.speak(u); synth.cancel();`, which
-     * primes nothing on iPhone or iPad. CANCELLING IN THE SAME TURN DISCARDS THE
+     * `u.volume = 0; synth.speak(u); synth.cancel();` primes nothing on
+     * iPhone or iPad. CANCELLING IN THE SAME TURN DISCARDS THE
      * UTTERANCE BEFORE IT IS PROCESSED — the gesture is spent and the engine is
      * no more unlocked than before — and a MUTED utterance is not reliably
      * counted as the audible speak WebKit is looking for. Every later say()
-     * happens in the race loop, outside any gesture, so every one was refused:
-     * on the platform that needs this most, nothing was EVER spoken, which is
-     * exactly how it was reported.
+     * happens in the race loop, outside any gesture, so every one would be
+     * refused: on the platform that needs this most, nothing is EVER spoken.
      *
      * A single space carries no phonemes, so it is inaudible whatever its
      * volume; the volume only has to be non-zero to count. Nothing is cancelled

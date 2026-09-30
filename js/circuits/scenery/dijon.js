@@ -757,10 +757,9 @@
       outcrop(0.700,  1,  74, 0.40, 52, 12, 4.2, LIME2);
  
         // ---------------------------------------------------------------- FAR HORIZON
-      // A 2026-09-15 visual pass found this circuit's road rising and falling
-      // through a pancake-flat green plane that met the sky at a hard edge —
-      // the lap had relief and the WORLD had none, which is part of why the
-      // elevation read as exaggerated: the road moved and nothing behind it did.
+      // Without a horizon the road rises and falls through a pancake-flat plane
+      // that meets the sky at a hard edge: the road moves and nothing behind it
+      // does, so the elevation reads as exaggerated.
       // These are the Burgundy plateau. Prenois is cut into the escarpment above the
       // Ouche: the tallest horizon of the four, and the one with a defined
       // shoulder rather than a smooth swell.

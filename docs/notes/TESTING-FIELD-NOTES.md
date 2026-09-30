@@ -649,7 +649,7 @@ different axes, and every round of the TLX mirror-sweep work set the first and
 not the second. `forceMobileTier` forces `GLX.isMobile` — the renderer's own
 downgrades — and `GfxQuality.init()` then defaults a mobile device to MEDIUM,
 so it lands on `PerfGov.tier() === 2`. LOW is tier 4, and tier 4 is where
-`js/game.js:2444` stops chunking road ribbons and the road becomes a plain
+`js/game.js:2434` stops chunking road ribbons and the road becomes a plain
 mesh. A defect that only touches plain geometry is invisible at tier 0 and
 tier 2, and the software probe reports a confident 4.8 % road coverage with
 zero GPU errors in every arm. Set BOTH:
@@ -2019,7 +2019,7 @@ Recording the sweep so nobody pays for it twice, and the safe pattern it found.
 
 2. *A getter returning null meaning "use the shipped default", with the consumer
    holding that constant.* `!= null ? x : CONSTANT` hits exactly two places:
-   `vantage.js:452` (CORNER LEAD, now consistent) and `lobby.js:343` (a peer id,
+   `vantage.js:445` (CORNER LEAD, now consistent) and `lobby.js:343` (a peer id,
    not a knob). Nothing else in the tree splits a default across two files.
 
 3. *The falsy-zero parse trap*, `parseFloat(x) || FALLBACK`, which turns a stored

@@ -1,11 +1,11 @@
 /* Apex 26 — TrackLine: the baked RACING LINE, a lateral offset per centreline
  * node, computed once at track build beside track.curv.
  *
- * The AI used to aim at `-k * 130 * hw` — a lateral target proportional to the
- * curvature 18-70 m ahead. That is an inside-hugging line: it enters every
- * corner already on the inside, apexes wherever the mix left it (measured on
- * monza: entry +1..+3.6 m INSIDE, apex only +1.2 m inside on a 7 m half-width)
- * and only drifts wide on exit. A racing line is outside-inside-outside: the
+ * Aiming at `-k * 130 * hw` — a lateral target proportional to the curvature
+ * 18-70 m ahead — is an inside-hugging line: it enters every corner already on
+ * the inside, apexes wherever the mix leaves it (measured on monza: entry
+ * +1..+3.6 m INSIDE, apex only +1.2 m inside on a 7 m half-width) and only
+ * drifts wide on exit. A racing line is outside-inside-outside: the
  * turn-in from the outside edge, the apex on the inside edge, the exit released
  * back to the outside — the largest radius the road allows, which is why it is
  * faster and why everybody drives it (Game AI Pro ch. 39's "representing a race
@@ -37,9 +37,9 @@
  * corners converge — every 4th node, then every 2nd, then all: 120 / 40 / 30
  * passes, measured to give the same line as 250 / 60 / 60) toward
  * the minimum of  Σ κ_line²  +  RELAX_LAM · Σ κ_road · x  +  SLOPE_NU · Σ x'²
- * over the lap, κ_line the offset curve's EXACT curvature (relaxLine; until
- * 2026-09-16 the first-order κ/(1+κx) − x'', which taxed a 0.45 m/m road
- * crossing 1.3× — docs/notes/RACING-LINE-RESEARCH.md §11).
+ * over the lap, κ_line the offset curve's EXACT curvature (relaxLine; the
+ * first-order κ/(1+κx) − x'' taxes a 0.45 m/m road crossing 1.3× —
+ * docs/notes/RACING-LINE-RESEARCH.md §11).
  * The first term is the minimum-curvature line (K1999, Coulom 2002; TUMFTM's
  * mincurv); the second is the path-length (shortest-path) term, and it is
  * what keeps a long constant-radius corner on the INSIDE — pure minimum
@@ -51,7 +51,7 @@
  * 0.45 m/m), and the apexes sit on the inside clamp. `pathK` (below) is
  * unchanged: it is the AI's calibrated brake model, not the line's geometry.
  *
- * FAMILIES and HINTS (the same evening). Beside `track.line` the bake keeps
+ * FAMILIES and HINTS. Beside `track.line` the bake keeps
  * `lineIn` and `lineOut` — the racing line shifted FAM_SHIFT_M toward and
  * away from the inside of each corner, weighted by `lineW` so they ARE the
  * racing line on a straight; `at(track, s, fam)` blends toward one.
@@ -91,8 +91,8 @@ const TrackLine = (function () {
   const TRIM_ROUNDS = 6;    // rounds of {TRIM_RELAX relaxation passes, TRIM_PASSES projected trims}
   const TRIM_RELAX = 5;     // AFTER the relaxation has converged: projected relaxation, so a crossing
   const TRIM_PASSES = 10;   // the trim lengthens is re-smoothed rather than left with a kink.
-                            // The exact curvature no longer overstates a steep crossing's cost the way
-                            // the first-order form did (its dropped (1+x'²)^{3/2} was a 1.3× tax at
+                            // The exact curvature does not overstate a steep crossing's cost the way
+                            // the first-order form does (its dropped (1+x'²)^{3/2} is a 1.3× tax at
                             // 0.45 m/m), and the honest optimum at a hairpin or chicane EXIT is
                             // 0.54–0.64 m/m (Monza's first chicane, Spa's La Source) — followable at
                             // those corners' 15–25 m/s (lateral speed v·x' under STEER_VMAX) but
@@ -343,12 +343,11 @@ const TrackLine = (function () {
   // THE OFFSET CURVE'S CURVATURE, exactly. The line is p = c + x·n (n the
   // right normal, +κ a left turn), so p' = (1+κx)·t − x'·n_L and
   //   κ_line = [(1+κx)²κ − (1+κx)x'' + x'(κ'x + 2κx')] / ((1+κx)² + x'²)^{3/2}.
-  // The relaxation minimised the first-order form κ/(1+κx) − x'' until
-  // 2026-09-16 — the linearisation every min-curvature QP makes (TUMFTM's
-  // opt_min_curv re-linearises iteratively for the same reason). At a 0.45 m/m
-  // crossing the dropped (1+x'²)^{3/2} alone is a 1.3× overstatement, so the
-  // objective taxed every road crossing about a third more than the geometry
-  // does. This solver is already a nonlinear sweep, so the exact expression
+  // The first-order form κ/(1+κx) − x'' is the linearisation every
+  // min-curvature QP makes (TUMFTM's opt_min_curv re-linearises iteratively
+  // for the same reason); at a 0.45 m/m crossing its dropped (1+x'²)^{3/2}
+  // alone is a 1.3× overstatement, taxing every road crossing about a third
+  // more than the geometry does. This solver
   // costs three square roots per node and nothing else. `lineCurvature`
   // (exported) is the same expression for the audits and tests, so what they
   // measure is what the bake minimises.
@@ -530,8 +529,8 @@ const TrackLine = (function () {
       // the last one on the lap and the gap wraps the seam: += L is right.
       // Anywhere else it means prev's exit window OVERLAPS this corner's
       // entry — a chicane or an esses, fed by no straight at all — and += L
-      // turned that into a near-lap-length straight, so qc saturated and the
-      // AI graded the exit of a chicane as the best passing place on the
+      // would turn that into a near-lap-length straight, so qc saturates and
+      // the AI grades the exit of a chicane as the best passing place on the
       // circuit. Measured 2026-09-22: 233 such pairs across 52 circuits,
       // Monaco 15 of 22 corners, a -60.8 m overlap read as 3234 m of straight
       // on a 3295 m lap.

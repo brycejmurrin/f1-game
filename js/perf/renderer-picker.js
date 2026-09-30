@@ -13,10 +13,8 @@ const BACKENDS = ["webgl2", "three", "webgpu"];
 // A stop is UNAVAILABLE when the device cannot run it OR its files are not in
 // the tree — both reach the same affordance the header describes, so the label
 // stays visible and says so instead of writing a pref boot silently ignores.
-// Derived, not hardcoded — and that derivation is why this file needed NO edit
-// when the backends came back on 2026-09-04: the stops greyed out because
-// DEFERRED was {} after the spike-out, and went live again the moment it was
-// repopulated. A hardcoded list would have had to be found and changed twice.
+// Derived from DEFERRED, not hardcoded, so a backend leaving or rejoining the
+// roster greys out or restores its stop with no edit here.
 const hasBackendFiles = (b) => b === "webgl2" ||
   !!(typeof ApexRoster !== "undefined" && ApexRoster.DEFERRED &&
      (ApexRoster.DEFERRED[b] || []).length);
@@ -117,13 +115,12 @@ function markReloading(rb, next) {
 // game.js armConfirm) and only the second tap proceeds. Called BEFORE any
 // preference is written, so an unconfirmed tap changes nothing.
 //
-// An arm EXPIRES (ARM_MS) and `repaint` puts the real label back: a tap that
-// was never confirmed used to leave "END THIS RACE & RELOAD?" on the row for
-// the rest of the session, and the flag it set outlived the race — the first
-// tap of the NEXT race then reloaded with no question asked (2026-09-02
-// audit). On a <select> the question goes on the option in view: setting
-// textContent on a select replaces its options with a text node and the
-// picker painted empty for as long as it stayed armed.
+// An arm EXPIRES (ARM_MS) and `repaint` puts the real label back: otherwise an
+// unconfirmed tap leaves "END THIS RACE & RELOAD?" on the row for the rest of
+// the session, and its flag outlives the race — the first tap of the NEXT race
+// would reload with no question asked. On a <select> the question goes on the
+// option in view: setting textContent on a select replaces its options with a
+// text node and the picker paints empty while armed.
 const ARM_MS = 6000;
 function disarm(btn, repaint) {
   try {
@@ -661,11 +658,11 @@ function initPresentControls() {
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.") : null;
   const saveBtn = addBtn("pm-save-shot",
     "Download the visible frame as a PNG. Waits for the 2D blit first, then reads #game-soft when that overlay exists (GLX HeadlessChrome / WGX / TLX).");
-  // The label was only ever written by saveScreenshot()'s done() — the button
-  // painted as an EMPTY plate until its first click (screenshot, 2026-09-02).
+  // Paint the label now: saveScreenshot()'s done() alone would leave the
+  // button an EMPTY plate until its first click.
   saveBtn.textContent = "SAVE SCREENSHOT";
-  // COPY DIAG: __apex.diag() as JSON on the clipboard. A phone report used to
-  // be a screenshot of the GOV panel, whose right edge clips the one number
+  // COPY DIAG: __apex.diag() as JSON on the clipboard, rather than a
+  // screenshot of the GOV panel, whose right edge clips the one number
   // that matters; env.backendState carries api, gpuErrors, the first GPU/WGSL
   // error, the soft-present counters, the pack state and the debug switches.
   const diagBtn = addBtn("pm-copy-diag",

@@ -696,8 +696,8 @@ its `throw e`. Verified: `node --test tests/unit/gfx-backend-canary.test.mjs`
 `armBackendProbe(` before rethrowing) and `tests/unit/source-integrity.test.mjs`.
 
 **2026-09-22 — `startRace()` had no re-entrancy guard. FIXED.** Six
-fire-and-forget callers (`js/game.js:8799`, `:8805`, `:9157`, the pm-restart
-handler, `js/race/daily-challenge.js:76`, `js/race/race-settings.js:393` —
+fire-and-forget callers (`js/game.js:8758`, `:8805`, `:9157`, the pm-restart
+handler, `js/race/daily-challenge.js:76`, `js/race/race-settings.js:392` —
 the same un-awaited-`startRace` family the `career.spec.js` and
 `quick-validate.mjs` entries above already describe from the OTHER side, a
 caller that does not wait for it) could re-enter the function mid-build: a
@@ -2416,7 +2416,7 @@ It left the circuit inside the measurement.
 
 The failing state says so, and says it identically on two machines:
 `x = -8.100000381469727` against `hw 6.6`, `speed 0.0005 m/s`, `rescueT` climbing
-past 0.68 — `js/game.js:6047`'s beached-and-stuck arm. Being a property of where
+past 0.68 — `js/game.js:6022`'s beached-and-stuck arm. Being a property of where
 the car stopped rather than of the physics, the reported number wandered while
 the code did not: **0.227** (dev box 09-18), **0.262** (dev box 09-22), **1.738**
 (CI llvmpipe 09-22), on a deterministic fixed-timestep sim.
@@ -2761,7 +2761,7 @@ Deferred with reasoning, none lost:
   `padConnected` is false, and the spec's `poll()` helper calls `Input.poll()`
   exactly once — which would look exactly like an absent pad. It cannot fire:
   the helper dispatches `gamepadconnected` first, and that listener
-  (`js/input/input.js:2036`) sets `padConnected = true`.
+  (`js/input/input.js:2019`) sets `padConnected = true`.
 
   Still genuinely OPEN from that entry, and untouched here: `sliders › OVERALL
   SPEED`, where the car tops out in gear 5 of 8 and its sibling measures

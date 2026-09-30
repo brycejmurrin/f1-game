@@ -9,7 +9,10 @@
  *   - the pass runs mirrorBegin → world → cars → sky → mirrorEnd with the
  *     mirror camera ON `frame`, and every swapped field is back afterwards —
  *     including when a draw throws (a stuck mirror camera is the main view lost);
- *   - the camera looks BACK along the car, and a rival ahead of the eye is not drawn.
+ *   - the camera looks BACK along the car, and a rival ahead of the eye is not drawn;
+ *   - in a REAL RACE WATCH (body.bc-on) the mirror stands down and the same target
+ *     is the broadcast PICTURE-IN-PICTURE: the subject on its TV shot, UNFLIPPED,
+ *     into #bc-pip, its neighbours drawn wherever it is (js/race/broadcast.js).
  * No browser (~0.1 s). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -19,25 +22,32 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {} } = {}) {
+function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {}, bc = false, pipMode } = {}) {
   const stored = {};
   if (mode) stored.hudMirror = mode;
+  if (pipMode) stored.bcPip = pipMode;
   let mirrorPressed = false;
-  const classes = new Set(), props = {};
+  const classes = new Set(bc ? ["bc-on"] : []), props = {};
   const on = (o) => Object.assign(o, { handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } });
   const frameEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114, right: 840, bottom: 184 }) });
   const chipEl = on({ hidden: true });
+  const pipEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 900, top: 60, width: 360, height: 202, right: 1260, bottom: 262 }) });
+  // The TV rig: a POOLED answer, as js/camera/vantage.js returns — the pass must copy it.
+  const vant = [], pooled = { eye: [0, 0, 0], tgt: [0, 0, 0], fov: 40 };
   const canvasEl = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }) };
   const ctx = vm.createContext({
     Math, Float32Array, Array, Object, Number, Infinity, innerWidth: 1280,
     document: {
-      getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl
+      getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl : id === "bc-pip" ? pipEl
         : boxes[id] ? { hidden: false, getBoundingClientRect: () => boxes[id] } : null),
       body: { classList: { contains: (c) => classes.has(c), toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) },
         style: { setProperty: (k, v) => { props[k] = v; } } },
     },
     Input: { consumeMirror: () => { const v = mirrorPressed; mirrorPressed = false; return v; }, lookingBack: () => false },
     PerfGov: { tier: () => tier },
+    performance: { now: () => 0 },
+    GameCams: { vantage: (_t, m, s, x, spd) => { vant.push({ m, s, x, spd }); pooled.eye[0] = 0; pooled.eye[1] = 4; pooled.eye[2] = s - 12;
+      pooled.tgt[0] = 0; pooled.tgt[1] = 1; pooled.tgt[2] = s + 20; return pooled; } },
     CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }] },
     // A straight road along +Z; the track's +x-right is world −X (AGENTS.md).
     Tracks: {
@@ -56,7 +66,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     softPresent: () => soft,
     mirrorBegin: (frame, w, h) => { calls.push(["begin", w, h, frame.viewProj, frame.eye.slice(), frame.cullDist]); return true; },
     mirrorEnd: () => { calls.push(["end"]); st = { dead: false, ready: true }; },
-    mirrorRect: (r) => { calls.push(["rect", r]); },
+    mirrorRect: (r, flip) => { calls.push(["rect", r, flip]); },
     mirrorState: () => st,
     draw: (mesh, m) => { calls.push(["draw", mesh, Float32Array.from(m)]); },
     drawSky: (sky) => { calls.push(["sky", sky.invViewProj]); },
@@ -84,7 +94,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0 };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
-  return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, frame, frameSky, mainVP, mainInv, render,
+  return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render,
     press: () => { mirrorPressed = true; }, setTier: (t) => { tier = t; } };
 }
 
@@ -287,6 +297,51 @@ test("the radio card goes BESIDE the mirror when the row has room, and stacks un
   wide.press(); wide.render();
   assert.equal(wide.mp.state().shown, false);
   assert.ok(!wide.classes.has("hud-mirror-side"));
+});
+
+test("a WATCH: the mirror stands down; the PiP draws its subject on the TV shot, unflipped, into #bc-pip, with ITS neighbours", () => {
+  const b = boot({ cam: "cockpit", bc: true });
+  const sub = { s: 1000, team: "s", code: "VER" }, near = { s: 1012, team: "n" };   // 900 m from the followed car
+  b.G.cars.push(sub, near);
+  b.mp.setSubject(sub, "tcam");
+  b.render();
+  const st = b.mp.state();
+  assert.equal(st.shown, false, "no rear-view mirror on the TV picture (T-CAM is one of the director's shots)");
+  assert.equal(b.frameEl.hidden, true);
+  assert.equal(st.pip.shown, true); assert.equal(st.pip.code, "VER"); assert.equal(b.pipEl.hidden, false);
+  const rect = b.calls.filter((c) => c[0] === "rect").pop();
+  assert.deepEqual(Array.from(rect[1], (v) => +v.toFixed(4)), [900 / 1280, 60 / 720, 360 / 1280, 202 / 720].map((v) => +v.toFixed(4)));
+  assert.equal(rect[2], false, "UNFLIPPED: a picture, not glass");
+  assert.equal(b.vant.length, 1); assert.equal(b.vant[0].m, "tcam"); assert.equal(b.vant[0].s, 1000);
+  const draws = b.calls.filter((c) => c[0] === "draw").map((c) => c[1]);
+  assert.deepEqual(Array.from(draws), ["mesh:s", "mesh:n"], "the subject and the car beside it; the followed car 900 m away is not in reach");
+  assert.ok(b.calls.some((c) => c[0] === "begin") && b.calls.some((c) => c[0] === "end"));
+  assert.equal(b.frame.viewProj, b.mainVP, "the main camera is handed back");
+  assert.equal(b.frameSky.invViewProj, b.mainInv);
+  b.pooled.eye[2] = -1;   // the main camera re-solving next frame must not move the PiP's eye after the fact
+  const beg = b.calls.find((c) => c[0] === "begin");
+  assert.equal(beg[4][2], 988, "the eye was COPIED from the pooled rig (subject 1000 − 12)");
+});
+
+test("the PiP: AUTO skips a software renderer and ON draws it; no subject, no PiP; after the WATCH the mirror is back, flipped", () => {
+  const sub = { s: 400, team: "s", code: "HAM" };
+  const soft = boot({ bc: true, soft: true });
+  soft.G.cars.push(sub); soft.mp.setSubject(sub, "chase"); soft.render();
+  assert.equal(soft.mp.state().pip.shown, false, "AUTO + software: a second world pass is seconds a frame");
+  assert.equal(soft.calls.filter((c) => c[0] === "begin").length, 0);
+  const forced = boot({ bc: true, soft: true, pipMode: "on" });
+  forced.G.cars.push(sub); forced.mp.setSubject(sub, "chase"); forced.render();
+  assert.equal(forced.mp.state().pip.shown, true, "ON: any renderer");
+  const none = boot({ bc: true });
+  none.render();
+  assert.equal(none.mp.state().pip.shown, false); assert.equal(none.mp.state().shown, false, "and no mirror either in a WATCH");
+  assert.equal(none.calls.filter((c) => c[0] === "begin").length, 0);
+  // The WATCH ends (broadcast.js clears bc-on): the cockpit mirror comes back, flipped.
+  none.classes.delete("bc-on");
+  none.render();
+  assert.equal(none.mp.state().shown, true);
+  const rect = none.calls.filter((c) => c[0] === "rect").pop();
+  assert.ok(rect[1] && rect[2] === undefined, "the mirror's composite: the default (flipped) path");
 });
 
 test("a phone's governor cannot make the mirror flash: the target ignores render scale, a rung holds ~1.5 s", () => {
