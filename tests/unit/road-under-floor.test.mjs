@@ -50,7 +50,10 @@ function lowestVisibleRoadY(track) {
 test("the world floor slab never covers the road surface", () => {
   const env = buildContext();
   const covered = [];
-  for (const def of env.Tracks.LIST) {
+  // APEX_CIRCUITS (ci.yml's circuit lane, a circuit-only PR) narrows the loop;
+  // unset = every circuit (tools/lib/circuit-scope.cjs).
+  const SCOPE = (process.env.APEX_CIRCUITS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  for (const def of env.Tracks.LIST.filter((d) => !SCOPE.length || SCOPE.includes(d.id))) {
     const from = env.mark();
     const track = env.Tracks.build(def);
     // See the comment on trim() in track-build-vm.cjs. This suite never reads

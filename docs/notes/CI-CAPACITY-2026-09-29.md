@@ -80,9 +80,14 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
 
 ## Not done here
 
-- **Geometry sweeps are not circuit-filtered.** The 19 `test:sweeps` files
-  each enumerate circuits their own way; a shared `APEX_CIRCUITS` helper is
-  the next step for circuit waves.
+- ~~**Geometry sweeps are not circuit-filtered.**~~ Done 2026-09-30:
+  `tools/lib/circuit-scope.cjs` is the shared `APEX_CIRCUITS` helper; the
+  five audit CLIs' `--all` and the six roster-rebuilding sweep suites read it
+  (their anti-vacuity floors and baseline walks compare against the SCOPED
+  roster), and ci.yml's sweeps job sets it on a circuit-only pull request from
+  `circuitsTouched()`. Measured: the six suites scoped to one circuit run in
+  42 s; unscoped they are unchanged (pit-complex stays whole — its mouth test
+  counts circuits across the roster).
 - ~~**`vm-a` is not narrowed on PRs.**~~ Done 2026-09-30: `tools/ci/node-plan.mjs`
   runs inside the node-suites job on PULL REQUESTS only (its own `git diff`
   against the PR base, no `needs:`), skips `game-vm-a`, `game-vm-b`, `vm-page`
