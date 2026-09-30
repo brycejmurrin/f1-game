@@ -66,8 +66,15 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
     const models = window.__apex.modelDiagnostics();
     const geometry = window.__apex.geometryDiagnostics();
     const def = window.TrackDefs.find((track) => track.id === "mexico");
+    // overRoad, not gap: 0.735 sits inside the 5-degree T11-T12 bankZone, where
+    // the tarmac is the banked plane and `gap` (terrain vs the raw centreline)
+    // is the trap js/agent/apex.js groundY() documents — terrain correctly under
+    // the raised outer edge reads as proud of it. Since the run-off shelf
+    // (b3acbb088, 2026-09-24) the probe at lat 18 m reads gap 0.429 but
+    // overRoad -0.192: below the road surface, which is what this asserts.
+    // Off a bankZone the two are identical.
     const grounds = [0.735, 0.78, 0.84, 0.855].flatMap((frac) =>
-      [-18, -10, 0, 10, 18].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).gap }))
+      [-18, -10, 0, 10, 18].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).overRoad }))
     );
     return {
       elevationRange: Math.max(...profile.map((point) => point.y)) -
@@ -140,15 +147,25 @@ test("Madrid terrain drops away from the road instead of forming a raised floor"
     const track = Tracks.buildCenterline(def);
     const surface = TrackSurface.profile(def, track);
     const k = Math.round(0.75 * track.n) % track.n;
-    return {
-      flatTerrain: def.flatTerrain,
-      drop20: track.py[k] - surface.heightAt(k, 20),
-      drop40: track.py[k] - surface.heightAt(k, 40),
-    };
+    const drop = (lat) => track.py[k] - surface.heightAt(k, lat);
+    return { flatTerrain: def.flatTerrain, drop8: drop(8), drop12: drop(12), drop20: drop(20), drop30: drop(30), drop40: drop(40) };
   });
 
+  // THE RUN-OFF SHELF MOVED WHERE THE FALL-OFF STARTS, not whether it happens.
+  // b3acbb088 (2026-09-24) made the ground meet the verge just under its edge,
+  // hold flat to 12 m, and smoothstep back into the old fall-off by 30 m, so a
+  // car off the tarmac is not left hanging over the gravel. That put the old
+  // 20 m probe mid-blend: 2.828 -> 1.267 m (nightly 36702685304 went red on
+  // `> 2`). Measured before/after in the track-build VM: 30 m 4.856 = 4.856 and
+  // 40 m 6.692 = 6.692, unchanged. So the contract is pinned where it holds:
+  // never a raised floor anywhere (every drop positive), a near-flat shelf, and
+  // the full fall-off back by 30 m.
   expect(terrain.flatTerrain).toBe(false);
-  expect(terrain.drop20).toBeGreaterThan(2);
+  for (const k of ["drop8", "drop12", "drop20", "drop30", "drop40"]) {
+    expect(terrain[k], `${k}: terrain below the road, not a raised floor`).toBeGreaterThan(0);
+  }
+  expect(terrain.drop12, "the run-off shelf stays near-flat").toBeLessThan(0.5);
+  expect(terrain.drop30, "the old fall-off is back by 30 m (measured 4.856)").toBeGreaterThan(4);
   expect(terrain.drop40).toBeGreaterThan(5);
 });
 
