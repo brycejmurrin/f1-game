@@ -4680,7 +4680,7 @@ function collideFx(a, b, impact) {
   // Never read by physics — headless runs are unaffected.
   pc.fxSparkI = Math.max(pc.fxSparkI || 0, impact);
   Input.vibrate(18 + impact * 50);
-  Input.rumble(0.4 + impact * 0.6, 120);
+  Input.rumble(0.4 + impact * 0.6, 120, "handles");
 }
 
 function updateCar(c, dt, ranked) {
@@ -5392,7 +5392,7 @@ function updateCar(c, dt, ranked) {
     shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90, "handles"); c.kerbHapT = 0.12; }
   }
 
   // Signed observed acceleration, including braking/grass, for AI lane
@@ -5902,6 +5902,9 @@ function updateCar(c, dt, ranked) {
     // model above is untouched — this is what the wheels SHOW.
     c.wheelLock = braking && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code
     c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
+    // LOCK-UP HAPTIC: left-trigger rumble when the pad supports trigger-rumble
+    // (falls back to dual-rumble). Cadence matches the slide cues below.
+    if (c.isPlayer && c.wheelLock > 0.25 && (c.lockHapT = (c.lockHapT || 0) - dt) <= 0) { Input.rumble(0.25 + c.wheelLock * 0.45, 90, "brake"); c.lockHapT = 0.14; }
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
     // Aero load (rises with v²) sets the speed dependence, and the surface the
@@ -6032,7 +6035,7 @@ function updateCar(c, dt, ranked) {
       if (pastR > 1 && pastR > pastF && (c.oslipHapT = (c.oslipHapT || 0) - dt) <= 0) {
         const bite = clamp(pastR - 1, 0, 1);
         Input.vibrate(18 + (bite * 22) | 0);
-        Input.rumble(0.30 + bite * 0.40, 110);
+        Input.rumble(0.30 + bite * 0.40, 110, "throttle");
         c.oslipHapT = 0.24 - bite * 0.08;
       }
     }
@@ -6255,7 +6258,7 @@ function updateCar(c, dt, ranked) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
           Input.vibrate(15 + incidence * 35);
-          if (c.isPlayer) Input.rumble(0.35 + incidence * 0.5, 100);
+          if (c.isPlayer) Input.rumble(0.35 + incidence * 0.5, 100, "handles");
         }
       }
       // Steering held INTO the barrier while pinned = the wall denies that turn,

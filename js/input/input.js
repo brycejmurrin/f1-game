@@ -1743,6 +1743,16 @@ const Input = (function () {
   function setHaptics(v) {
     if (typeof v === "number" && isFinite(v)) hapticScale = clamp(v, 0, 1);
   }
+  // TRIGGER HAPTICS (L2/R2 motors via "trigger-rumble"): a separate on/off from
+  // the strength slider. Off forces every channel back to dual-rumble grips.
+  // Adaptive-trigger RESISTANCE is NOT this — Gamepad API cannot set it (needs
+  // WebHID, Chromium only); that path is out of scope. See PLATFORM-INPUT-NOTES.
+  let triggerHapticsOn = true;
+  function setTriggerHaptics(on) { triggerHapticsOn = !!on; }
+  function triggerHapticsEnabled() { return triggerHapticsOn; }
+  function actuatorHas(a, effect) {
+    return !!(a && a.effects && typeof a.effects.includes === "function" && a.effects.includes(effect));
+  }
   // Device vibration, scaled. The try/catch is not optional: Chrome throws if
   // the page has never been interacted with, and iOS Safari has no vibrate at
   // all (WebKit has never shipped it and formally opposes it), so every caller
@@ -1760,6 +1770,13 @@ const Input = (function () {
     if (nav && typeof nav.vibrate === "function" && (nav.maxTouchPoints || 0) > 0) return true;
     const pad = activePad();
     return !!(pad && (pad.vibrationActuator || (pad.hapticActuators && pad.hapticActuators.length)));   // the Firefox fallback rumble() uses too
+  }
+  // L2/R2 trigger motors: Chrome/Edge 126+, Opera, Samsung Internet on Win/macOS
+  // and Bluetooth Linux/ChromeOS. Not USB-on-Linux, not Android-native, not
+  // Safari, not Firefox. Gate the TRIGGER HAPTICS row on this.
+  function triggerRumbleSupported() {
+    const pad = activePad();
+    return !!(pad && pad.vibrationActuator && actuatorHas(pad.vibrationActuator, "trigger-rumble"));
   }
 
   // PRIME the vibrator from a real click. Chromium requires user activation for
@@ -1785,18 +1802,24 @@ const Input = (function () {
     if (typeof navigator === "undefined" || !navigator.vibrate) return;
     try { navigator.vibrate(d); } catch (_) { /* advisory only */ }
   }
-  // Best-effort rumble on the active pad (dual-rumble or generic actuator).
+  // Best-effort rumble on the active pad. channel:
+  //   "brake"    → left trigger (lock-up) when trigger-rumble is available
+  //   "throttle" → right trigger (wheelspin / rear slide)
+  //   "handles" / omitted → dual-rumble grip motors (kerbs, contact, wall)
+  // Unsupported trigger-rumble, or TRIGGER HAPTICS off, falls back to dual-rumble.
   // Silently no-ops where unsupported — note this is EVERY iOS browser:
   // Gamepad.vibrationActuator is false on Safari iOS, so a paired DualSense
   // cannot rumble from a web page and never will. Callers fire vibrate()
   // alongside, so haptics degrade to nothing rather than to an error.
-  function rumble(intensity, ms) {
+  function rumble(intensity, ms, channel) {
     if (hapticScale <= 0) return;
     if (!padConnected) return;
     const pad = activePad();
     if (!pad) return;
     const a = pad.vibrationActuator;
     const mag = clamp(intensity, 0, 1) * hapticScale;
+    const dur = Math.max(0, ms | 0);
+    const wantTrig = triggerHapticsOn && (channel === "brake" || channel === "throttle");
     if (a && typeof a.playEffect === "function") {
       // playEffect() returns a Promise, so this catch only ever saw a
       // SYNCHRONOUS throw — and every failure the Gamepad spec defines is a
@@ -1812,11 +1835,20 @@ const Input = (function () {
       // RESOLVES the older promise with "preempted"), so the arm below only
       // ever swallows a real failure.
       try {
-        const p = a.playEffect("dual-rumble", {
-          duration: Math.max(0, ms | 0),
-          strongMagnitude: mag,
-          weakMagnitude: mag * 0.7,
-        });
+        let p;
+        if (wantTrig && actuatorHas(a, "trigger-rumble")) {
+          p = a.playEffect("trigger-rumble", {
+            duration: dur,
+            leftTrigger: channel === "brake" ? mag : 0,
+            rightTrigger: channel === "throttle" ? mag : 0,
+          });
+        } else {
+          p = a.playEffect("dual-rumble", {
+            duration: dur,
+            strongMagnitude: mag,
+            weakMagnitude: mag * 0.7,
+          });
+        }
         if (p && p.catch) p.catch(() => {});
       } catch (e) { /* actuator busy or unsupported effect type */ }
       return;
@@ -1826,7 +1858,7 @@ const Input = (function () {
     // player had silent controllers while the code looked like it supported them.
     const legacy = pad.hapticActuators && pad.hapticActuators[0];
     if (legacy && typeof legacy.pulse === "function") {
-      try { legacy.pulse(mag, Math.max(0, ms | 0)); } catch (e) { /* same */ }
+      try { legacy.pulse(mag, dur); } catch (e) { /* same */ }
     }
   }
 
@@ -2482,6 +2514,9 @@ const Input = (function () {
     setPadSaturation,
     setKeyRampIn,
     setHaptics,
+    setTriggerHaptics,
+    triggerHapticsEnabled,
+    triggerRumbleSupported,
     vibrate,
     hapticsSupported,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
