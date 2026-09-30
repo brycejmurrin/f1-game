@@ -490,8 +490,8 @@ function safeStr(x) { try { return typeof x === "object" ? JSON.stringify(x) : S
 // real-Chromium baseline number for number, must never set it.
 //
 // A wrong opt-in fails LOUDLY rather than reporting a 0-vertex car: the one
-// caller that reads geometry back (`measure: true` — __apex.carMesh via
-// js/agent/agentview.js:982) throws.
+// caller that reads geometry back (`measure: true` — `carView` in
+// js/agent/agentview.js) throws.
 // ---------------------------------------------------------------------------
 function stubCarMeshes(ctx, record) {
   const C = ctx.Car3D;
