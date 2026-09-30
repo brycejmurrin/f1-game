@@ -28,6 +28,27 @@ test("scope(): unset keeps every id in order; set keeps the named ids only", () 
   assert.deepEqual(run("nowhere", ["monza"]), [[], true], "an unknown id scopes to nothing — the floor then expects 0, never the fleet");
 });
 
+test("shard(): i/n shards are a disjoint, order-preserving partition; unset keeps all; malformed throws", async () => {
+  const { shard } = require("../../tools/lib/circuit-scope.cjs");
+  const ids = ["a", "b", "c", "d", "e"];
+  assert.deepEqual(shard(ids, ""), ids);
+  assert.deepEqual(shard(ids, "1/2"), ["a", "c", "e"]);
+  assert.deepEqual(shard(ids, "2/2"), ["b", "d"]);
+  assert.deepEqual([...shard(ids, "1/3"), ...shard(ids, "2/3"), ...shard(ids, "3/3")].sort(), ids, "the n shards cover every id once");
+  assert.deepEqual(shard(ids, "1/1"), ids);
+  for (const bad of ["0/2", "3/2", "2", "a/b", "1/0"]) assert.throws(() => shard(ids, bad), /APEX_CIRCUIT_SHARD/, bad);
+  const { inShard } = require("../../tools/lib/circuit-scope.cjs");
+  assert.deepEqual(ids.filter(inShard("2/2")), ["b", "d"], "inShard is the predicate shard() applies");
+  // The elevation twin reads the shard through this helper, after APEX_CIRCUITS.
+  const twin = read("tests/unit/elevation-tracks-vm.test.mjs");
+  assert.match(twin, /require\("\.\.\/\.\.\/tools\/lib\/circuit-scope\.cjs"\)/);
+  assert.match(twin, /const GRADE_RUNS = ELEVATION_TRACKS\.filter\(inScope\)\.filter\(inShard\(\)\)/,
+    "shard after scope, as a .filter chain (select-budget counts the loop statically)");
+  const { declaredTests } = await import("../../tools/ci/select-budget.mjs");
+  assert.equal(declaredTests("tests/unit/elevation-tracks-vm.test.mjs"), declaredTests("tests/specs/elevation-tracks.spec.js"),
+    "the sharded twin must still count every per-circuit test its spec declares");
+});
+
 test("every audit CLI's --all resolves its roster through scope()", () => {
   for (const cli of ["clip-audit", "coplanar-audit", "ground-audit", "float-audit", "props-tris"]) {
     const src = read(`tools/track/${cli}.cjs`);

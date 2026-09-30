@@ -121,6 +121,14 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   the merged tip (`APEX_DOCS_FIGURES_ADVISORY`), which retires the
   merge-ordering red class above; sync a PR only on a conflict or a red tip;
   nine history checkouts use `filter: blob:none`.
+- **Six node slices** (2026-09-30, after the Pro upgrade made the wall the
+  cost again): `vm-a1` / `vm-a2` each build every other circuit of
+  `elevation-tracks-vm` (`APEX_CIRCUIT_SHARD=i/2`, `tools/lib/circuit-scope.cjs`
+  `shard`, applied after `APEX_CIRCUITS`), `vm-b1` / `vm-b2` are two
+  time-balanced `tests/groups.json` partitions of `game-vm-b` (367 s each,
+  measured locally at `--jobs=4`), and `page` / `slow` stand alone. Expected
+  wall ≈ 3 min against 5.6. The slice names are required checks: the rule
+  must carry the six new names before the old three are dropped.
 - **49 unit files run twice per PR** (in tooling-fast under guards, and in
   the `vm-b` slice's topical groups). The rebalanced slices keep that off the
   wall clock. Removing it means changing what the topical groups mean.
