@@ -27,6 +27,7 @@
 
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
+import { awaitSoftCapture } from "../helpers/soft-capture.js";
 
 const FRAMES = 6;           // consecutive frames per condition
 const STEP = 1 / 60;        // physics step between captures
@@ -37,48 +38,54 @@ const START = 0.62;         // a straight on monza (no corner geometry in shot)
 // the view in the chase camera. Sampling the whole frame would drown the signal
 // in sky, crowd and trackside motion.
 async function roadFrames(page, mix) {
-  return page.evaluate(async ({ mix, FRAMES, STEP, SPEED, START }) => {
+  await page.evaluate(async ({ mix, SPEED, START }) => {
     window.__apex.matTex(mix);
     window.__apex.jump(START, SPEED, 0);
     window.__apex.snapCam();
     // Let the camera settle and the texture upload land before sampling.
     await new Promise((r) => setTimeout(r, 600));
+  }, { mix, SPEED, START });
 
-    const cv = document.querySelector("canvas");
-    const W = 96, H = 48;                       // downsample target
-    const off = document.createElement("canvas");
-    off.width = W; off.height = H;
-    const ctx = off.getContext("2d", { willReadFrequently: true });
-    const shots = [];
-    for (let f = 0; f < FRAMES; f++) {
-      window.__apex.step(STEP, 1);
-      // Two rAFs: one to submit the frame, one to be sure it composited.
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      // Crop the lower-middle band (the road) out of the live canvas. Drawing
-      // the canvas into a 2D context works even without preserveDrawingBuffer,
-      // because drawImage samples the composited surface.
+  const shots = [];
+  for (let f = 0; f < FRAMES; f++) {
+    await page.evaluate((STEP) => window.__apex.step(STEP, 1), STEP);
+    // Headless Chrome hides #game and presents ON DEMAND onto #game-soft, so
+    // a frame exists to read only after a blit is armed and lands; drawing
+    // #game read an uncomposited, blank buffer (remote shimmer group, run
+    // 36752762251). awaitSoftCapture arms the blit and polls from Node; it is
+    // a no-op where the canvas composites for real.
+    await awaitSoftCapture(page, 60_000);
+    shots.push(await page.evaluate(() => {
+      const soft = document.getElementById("game-soft");
+      const cv = soft && soft.width > 0 ? soft : document.getElementById("game");
+      const W = 96, H = 48;                     // downsample target
+      const off = document.createElement("canvas");
+      off.width = W; off.height = H;
+      const ctx = off.getContext("2d", { willReadFrequently: true });
+      // Crop the lower-middle band (the road) out of the presented canvas.
       const sx = cv.width * 0.25, sw = cv.width * 0.5;
       const sy = cv.height * 0.62, sh = cv.height * 0.28;
       ctx.drawImage(cv, sx, sy, sw, sh, 0, 0, W, H);
-      shots.push(Array.from(ctx.getImageData(0, 0, W, H).data));
+      return Array.from(ctx.getImageData(0, 0, W, H).data);
+    }));
+  }
+  // Mean absolute luminance delta between consecutive frames.
+  let total = 0, n = 0;
+  for (let f = 1; f < shots.length; f++) {
+    const a = shots[f - 1], b = shots[f];
+    for (let i = 0; i < a.length; i += 4) {
+      const la = a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114;
+      const lb = b[i] * 0.299 + b[i + 1] * 0.587 + b[i + 2] * 0.114;
+      total += Math.abs(la - lb); n++;
     }
-    // Mean absolute luminance delta between consecutive frames.
-    let total = 0, n = 0;
-    for (let f = 1; f < shots.length; f++) {
-      const a = shots[f - 1], b = shots[f];
-      for (let i = 0; i < a.length; i += 4) {
-        const la = a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114;
-        const lb = b[i] * 0.299 + b[i + 1] * 0.587 + b[i + 2] * 0.114;
-        total += Math.abs(la - lb); n++;
-      }
-    }
-    const blank = shots[0].every((v, i) => i % 4 === 3 || v === shots[0][i % 4]);
-    return { delta: n ? total / n : 0, frames: shots.length, blank };
-  }, { mix, FRAMES, STEP, SPEED, START });
+  }
+  const blank = shots[0].every((v, i) => i % 4 === 3 || v === shots[0][i % 4]);
+  return { delta: n ? total / n : 0, frames: shots.length, blank };
 }
 
 test.describe("baked materials — temporal stability", () => {
-  test.setTimeout(180_000);
+  // Twelve on-demand soft blits; an llvmpipe readback can take seconds each.
+  test.setTimeout(600_000);
   // OPT-IN: APEX_SHIMMER=1 npm run test:shimmer
   //
   // Off by default for two honest reasons. It has never been run to completion,
@@ -90,6 +97,11 @@ test.describe("baked materials — temporal stability", () => {
   test.skip(!process.env.APEX_SHIMMER, "opt-in: set APEX_SHIMMER=1 (unverified, SwiftShader-sensitive)");
 
   test("baked tarmac does not crawl relative to procedural", async ({ page }) => {
+    // image-grade-visual's size, for the same reason: an llvmpipe readback of
+    // a full-size lit frame takes tens of seconds (js/render/three/tlx.js
+    // SOFT_READ_STALE_MS note), and this test needs twelve of them. The ratio
+    // it asserts compares two runs at one size, so the size does not bias it.
+    await page.setViewportSize({ width: 640, height: 360 });
     await page.goto("/");
     // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
     await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });

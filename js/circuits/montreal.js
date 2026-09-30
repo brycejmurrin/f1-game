@@ -16,6 +16,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.4,
+    tyreSeverity: 0.40,  // Canada evolution-dominated; measured slope ≈ flat (F1 Chronicle) — model floor
     baseHW: 7,
     sceneryCoordinates: "racing",
     dressingExclusions: [

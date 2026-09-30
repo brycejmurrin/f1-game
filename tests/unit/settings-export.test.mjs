@@ -838,3 +838,14 @@ test("careerRow injects two buttons without a static shell id in index.html", ()
     "career file controls are injected — they must not add shellNodes");
   assert.match(read("js/career/career-ui.js"), /SettingsExport\.careerRow/);
 });
+
+test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, OFF by default", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(html, /<div id="pm-buildworker" class="set-row"[\s\S]*?<select id="pm-buildworker-sel"/, "a static SettingRow in the renderer levers");
+  const client = fs.readFileSync(path.join(root, "js/track/build-client.js"), "utf8");
+  assert.match(client, /SettingRow\.wire\("pm-buildworker", \{ values: SettingRow\.labels\(\["off", "on"\]\)/);
+  assert.match(client, /else document\.addEventListener\("DOMContentLoaded", initUI/, "wired after js/ui/setting-row.js has loaded");
+  const reg = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
+  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "0",/, "exported and imported with the other settings, default OFF");
+});
