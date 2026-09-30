@@ -16,7 +16,6 @@
 import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { setupApiMocks } from "../helpers/f1-api-mock.js";
 import { galleryPath } from "../helpers/output-paths.js";
-import { awaitSoftCapture } from "../helpers/soft-capture.js";
 
 const PORTRAIT  = { width: 390, height: 844 };   // iPhone 14
 const LANDSCAPE = { width: 844, height: 390 };   // same rotated
@@ -40,23 +39,15 @@ async function qualiToGrid(page) {
   await page.locator("#q-go").click();
 }
 
-/** Settled capture then screenshot.
- *  Soft blit only advances while GLX is painting. Playwright's headless UA arms
- *  softPresent globally, but menu screens never blit — awaitSoftCapture then
- *  hangs 20 s (CI #602 portrait 01–03). Wait for a soft frame when a track is
- *  loaded; otherwise settle on a double-rAF paint (same pattern as hud-mirror /
- *  ui-redesign) instead of a fixed sleep. */
+/** Paint-settle then screenshot.
+ *  Replaces waitForTimeout(300). Do NOT use awaitSoftCapture here: menus never
+ *  blit under softPresent (CI #602 portrait 01–03), and race HUD shots call
+ *  headless(true) first which stops present() entirely (landscape 07/18).
+ *  Double-rAF matches hud-mirror / ui-redesign. */
 async function shot(page, name) {
-  const hasTrack = await page.evaluate(() => {
-    try { return window.__apex?.info?.()?.track != null; } catch (_) { return false; }
-  });
-  if (hasTrack) {
-    await awaitSoftCapture(page);
-  } else {
-    await page.evaluate(() => new Promise((r) => {
-      requestAnimationFrame(() => requestAnimationFrame(r));
-    }));
-  }
+  await page.evaluate(() => new Promise((r) => {
+    requestAnimationFrame(() => requestAnimationFrame(r));
+  }));
   await page.screenshot({ path: galleryPath("ui-audit", `${name}.png`), fullPage: false });
 }
 
@@ -343,9 +334,15 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-      // Do NOT hide rotate-device — that is the whole point of this test
+      // Do NOT hide rotate-device — that is the whole point of this test.
+      // Was waitForTimeout(500). Overlay is CSS `body.in-race:not(.rotate-ok)`
+      // (display:flex) — wait for that computed style, not Playwright "visible"
+      // (CI #602 timed out 8 s on locator.waitFor while the sheet was already up).
       await page.evaluate(() => window.__apex.go());
-      await page.locator("#rotate-device").waitFor({ state: "visible", timeout: 8_000 });
+      await page.waitForFunction(() => {
+        const el = document.getElementById("rotate-device");
+        return !!(el && getComputedStyle(el).display !== "none");
+      }, null, { polling: 100, timeout: 8_000 });
       await shot(page, `${orient}-23-rotate-device`);
     });
 
