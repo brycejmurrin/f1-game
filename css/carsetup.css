@@ -1513,7 +1513,16 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
      option rows; the car band takes whatever is left, which on a short phone
      is little, and that is the trade this rule already says it makes. */
   #cs-inner { width: 100%; height: 70%; min-height: min(540px, 100%); }
-  /* The two-column stat block, by orientation as well as by shape: a 70%
+  /* THE LIST WINS, THE CAMERA ROW YIELDS. On an iPhone 15 Pro with Safari's
+     bars up (393x659, notch and home-bar insets) that 540 floor takes the whole
+     content box, and #cs-stack — parked --gap above the safe bottom, z-index 2
+     — painted CAMERA / ACTIVE AERO over BACK and CLOSE GARAGE (layout audit,
+     2026-09-30). Capping the floor to leave the row its band was measured too:
+     it emptied #cs-options to 0px, the defect the 540 exists to prevent. So in
+     portrait the sheet stacks ABOVE the row: where the band holds the row (any
+     taller phone) nothing changes; where it does not, the row tucks under the
+     sheet instead of covering the sheet's own buttons. */
+  #cs-inner { position: relative; z-index: 3; }  /* The two-column stat block, by orientation as well as by shape: a 70%
      sheet on a phone is WIDER than it is tall, so data-shape reads "wide" and
      the four bars stacked one per row cost ~110px the list needed. */
   #cs-inner #cs-stats-inner { grid-template-columns: 1fr 1fr; column-gap: calc(var(--gap) * 0.8); }
