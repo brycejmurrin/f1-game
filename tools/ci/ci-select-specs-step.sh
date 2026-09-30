@@ -42,7 +42,8 @@ if git fetch -q origin +refs/heads/bot/spec-timings:refs/remotes/origin/bot/spec
 else
   echo "timings: bot/spec-timings unavailable; committed record only"
 fi
-node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json \
+node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt \
+  ${BUDGET_MIN:+--budget-min "$BUDGET_MIN"} ${OVERFLOW_SHARDS:+--overflow-shards "$OVERFLOW_SHARDS" --stale-first} --json > sel.json \
   || fail "selector failed"
 node -e '
   const r = require("./sel.json");
@@ -63,6 +64,8 @@ node -e '
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
+  for (const s of (r.overflow || []))
+    console.log(`OVERFLOW (routed; packed into the plan past the budget): ${s.file} (${s.tests} tests)`);
   for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of (r.oversize || []))
     console.log(`OVERSIZE (outside the budget, packed by expected time, ~${s.sec} s): ${s.file} (${s.tests} tests)`);

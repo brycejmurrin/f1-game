@@ -1,12 +1,16 @@
 /* race-settings-vm.test.mjs — RACE SETTINGS lap ladder as BEHAVIOUR in the
  * game-vm harness (tools/lib/game-vm.cjs runs the real game.js on an inert DOM).
  *
- * FULL moves with the circuit (def.gpLaps: Monaco 78, Spa 44, Silverstone 52),
- * so a lap count picked on one circuit can sit OFF the ladder on the next —
- * above full (78 at Spa) or BELOW it (52 (FULL) at Monaco). The old clamp only
- * handled "above": a Silverstone full race opened Monaco's sheet with no LAPS
- * chip lit (setup-screens audit 2026-09-02, finding 11). Any off-ladder value
- * now snaps to this circuit's FULL — a full race stays a full race.
+ * FULL moves with the circuit (def.gpLaps, derived from the GP distance: Monaco
+ * 79, Spa 44, Silverstone 52), so a lap count picked on one circuit can sit OFF
+ * the ladder on the next — above full (79 at Spa) or BELOW it (52 (FULL) at
+ * Monaco). The old clamp only handled "above": a Silverstone full race opened
+ * Monaco's sheet with no LAPS chip lit (setup-screens audit 2026-09-02, finding
+ * 11). Outside a championship an off-ladder value snaps to this circuit's FULL —
+ * a full race stays a full race. A CHAMPIONSHIP's format distance (SEASON SETUP's
+ * 57 LAPS) is the exception: it is CLAMPED to a shorter circuit's FULL and keeps
+ * its own chip below FULL, never raised (ed11e6108, 74fe2d599 — it became 79 at
+ * Monaco).
  *
  * Run: node --test tests/unit/race-settings-vm.test.mjs   (npm run test:game-vm)
  */
@@ -77,6 +81,30 @@ test("solo setup initializes once per track and preserves a draft on re-entry", 
   assert.equal(g.G.raceWeather, "rain");
   assert.equal(g.G.raceTimeOfDay, "night");
   assert.equal(open("monza", false), 3, "changing circuit starts a new draft");
+});
+
+test("a championship's 57 LAPS is clamped to a shorter FULL, never raised to a longer one (ed11e6108)", () => {
+  // SEASON SETUP ▸ RACE DISTANCE 57 is a flat distance preselected at every
+  // round (SeasonCal.formatLaps). Off the ladder below FULL it used to snap UP:
+  // 57 LAPS became 79 at Monaco on every circuit shorter than ~5.35 km.
+  const S = g.sandbox.SeasonCal, G = g.G;
+  const cfg0 = JSON.parse(JSON.stringify(S.config())), season0 = G.season;
+  try {
+    G.timeTrial = false; G.seasonMode = true;
+    const ap = S.applyConfig(Object.assign({}, cfg0, { laps: 57 }));
+    assert.ok(ap.ok && ap.season, "the 57-lap season setup applies");
+    G.season = ap.season;
+    assert.equal(S.formatLaps(3), 57, "anti-vacuity: the round opens on the format distance");
+    assert.ok(full("monaco") > 57 && full("spa") < 57, `the two sides of 57: monaco ${full("monaco")}, spa ${full("spa")}`);
+    const monaco = open("monaco", false);
+    assert.equal(monaco, 57, `57 LAPS at Monaco stays 57 — not raised to FULL (${full("monaco")})`);
+    assert.ok(monaco <= full("monaco"));
+    assert.equal(open("spa", false), full("spa"), "…and is clamped DOWN to a shorter circuit's FULL");
+  } finally {
+    G.seasonMode = false;
+    S.setConfig(cfg0);
+    G.season = season0;
+  }
 });
 
 // ── the GRID RULE ─────────────────────────────────────────────────────────────

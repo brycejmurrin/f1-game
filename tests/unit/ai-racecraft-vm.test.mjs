@@ -281,3 +281,67 @@ test("the rubber band never fires off the start line, and never for a lapped car
   a.step(1 / 60, 1);
   assert.ok((victim._bandNow || 0) > 0, "the band must still work for a car the player is actually racing");
 });
+
+// NO OVERTAKING UNDER VSC OR SAFETY CAR (FIA 2026 Sporting Regs). 16217f3c1: the
+// pass latch kept firing under a caution (17-24 places gained per minute of SC,
+// measured then) — it now drops and cannot engage at level >= 2, and queue
+// pressure (queueT) does not build there. 64610bfee added a second guard on the
+// same latch (moveOn / the end-of-step drop), so reverting 16217f3c1 alone keeps
+// the latch shut and this test fails on queueT instead (38 s); revert the latch
+// guards of both and it fails on the latch (7333 car-steps).
+// AND THE RUNNING ORDER HOLDS (RaceControl.holdCap, 2026-09-29). With only the
+// latch fixes, clean passes in one minute of VSC were 5-30 and of SC 0-12 —
+// cars on different lines drove past each other, no latch involved. Counted
+// here: a car moving ahead of one that is running normally (not near-stopped,
+// off the road, pitting or being rescued — the cars the regs let you pass),
+// after 2 s for any move already alongside when the flag came out to finish.
+test("under VSC and safety car no pass latch engages and no queue pressure builds", async () => {
+  const A = g.apex;
+  const GREEN_S = 25, FLAG_S = 60;
+  for (const level of [2, 3]) {
+    await g.race("monza", "day", "dry");
+    A.headless(true);
+    const cars = g.G.cars;
+    A.carRole(cars.findIndex((c) => c.isPlayer), { human: false });
+    restorePace(cars.findIndex((c) => c.isPlayer));
+    A.go();
+    let greenLatched = 0, greenQ = 0;
+    for (let i = 0; i < Math.round(GREEN_S / DT); i++) {
+      A.step(DT, 1);
+      for (const c of cars) { if (c.passOf) greenLatched++; greenQ = Math.max(greenQ, c.queueT || 0); }
+    }
+    g.G.holdCaution(level, "test");
+    A.step(DT, 1);
+    try {
+      assert.equal(A.caution().level, level, "the held flag is flying");
+      let latched = 0, maxQ = 0;
+      const passes = [];
+      const healthy = (o) => !(o.retired || o.finished || o.offroad || (o.speed || 0) < 5 || (o.rescueT || 0) > 0.25
+        || (o.pitState && o.pitState !== "none"));
+      let order = cars.slice().sort((a, b) => b.prog - a.prog);
+      for (let i = 0; i < Math.round(FLAG_S / DT); i++) {
+        A.step(DT, 1);
+        for (const c of cars) {
+          if (c.passOf) latched++;
+          if (i * DT > 10) maxQ = Math.max(maxQ, c.queueT || 0);   // green-phase queueT has bled out by then (2 s per s)
+        }
+        const now = cars.slice().sort((a, b) => b.prog - a.prog);
+        if (i * DT > 2) now.forEach((c, k) => {
+          const was = order.indexOf(c);
+          if (was > k && healthy(order[k])) passes.push(`${(i * DT).toFixed(1)}s ${c.code}>${order[k].code}`);
+        });
+        order = now;
+      }
+      assert.equal(A.caution().level, level, "the flag flew the whole window");
+      // Anti-vacuity: the same field DOES latch passes and queue under green.
+      assert.ok(greenLatched > 0, "no pass latch engaged in the green phase either — the check below proves nothing");
+      assert.ok(greenQ > 0, "no queue pressure built in the green phase either — the check below proves nothing");
+      assert.equal(latched, 0, `level ${level}: a pass latch was held for ${latched} car-steps under the caution`);
+      assert.equal(maxQ, 0, `level ${level}: queue pressure built to ${maxQ.toFixed(2)} s under the caution`);
+      assert.deepEqual(passes, [], `level ${level}: cars overtook under the caution`);
+    } finally {
+      g.G.holdCaution(0);
+      A.headless(false);
+    }
+  }
+});

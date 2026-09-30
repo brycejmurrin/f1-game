@@ -130,6 +130,14 @@ export function specsOf(scriptNames, scripts) {
 // so a helper edit that touches 59 specs cannot fan out into 59 runners — the
 // rest are named as skipped, which is the honesty contract this file has always had.
 export const MAX_OVERSIZE_SHARDS = 3;
+// A ROUTED spec that loses the budget to smaller ones is not dropped either: up
+// to this many TARGET_SHARD_SEC jobs' worth of them ride as OVERFLOW, which
+// shards() packs with everything else. Before this, "SKIPPED (over budget)"
+// was the verdict for a routed spec on every diff that also routed smaller
+// ones, so menu-traversal and ui-redesign broke on the deploy branch after two
+// menu PRs and only the 11-night rota would ever have run them (2026-09-29).
+// Leftovers are still skipped BY NAME.
+export const MAX_OVERFLOW_SHARDS = 2;
 
 // THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
 // OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job
@@ -186,7 +194,7 @@ export function measuredCheap(file, db = timings()) {
  *  is exactly `cap.tests` x the fallback's boundary — an UNMEASURED selection
  *  cuts where the fallback says (7.5 s/test since 2026-09-29, the llvmpipe
  *  p75). `db` pins the timing history (tests pass an empty one). */
-export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
+export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS, staleFirst = false } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
@@ -262,7 +270,15 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
   // the 10-test cap — the one spec the change most needed was the one dropped.
   // A budget that cannot afford the spec you just edited is not "change-aware".
   for (const r of counted) { r.rank = rank(r.file); r.sec = Math.round(expectedSec(r, db)); }
-  counted.sort((a, b) => a.rank - b.rank || a.tests - b.tests);
+  // STALE FIRST (the nightly lane): among equals, the spec whose last recorded
+  // CI run is OLDEST goes first — never-run before everything — so a day's
+  // union diff, which routes nearly every spec, spends its jobs on the specs
+  // nothing has run lately rather than on the smallest ones.
+  const lastRun = (f) => { const x = db && db.specs && db.specs[f]; const arr = (x && x.s) || []; return arr.length ? arr[arr.length - 1][0] : ""; };
+  const order = staleFirst
+    ? (a, b) => a.rank - b.rank || (lastRun(a.file) < lastRun(b.file) ? -1 : lastRun(a.file) > lastRun(b.file) ? 1 : 0) || a.tests - b.tests
+    : (a, b) => a.rank - b.rank || a.tests - b.tests;
+  counted.sort(order);
   const selected = [], skipped = [], unreachable = [], oversize = [];
   let used = 0, usedSec = 0;
   for (const r of counted) {
@@ -309,7 +325,21 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
   oversize.sort((a, b) => a.rank - b.rank || expectedSec(b, db) - expectedSec(a, db));
   const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
   for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) skipped.push(r);
-  return { selected, skipped, unreachable, oversize: oversizeRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
+  // OVERFLOW: skipped specs that fit one job each, up to `overflowShards` jobs'
+  // worth of expected seconds, in the same order as the budgeted cut.
+  const overflow = [];
+  {
+    let room = overflowShards * TARGET_SHARD_SEC;
+    const left = [];
+    skipped.sort(order);
+    for (const r of skipped) {
+      const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
+      if (sec <= TARGET_SHARD_SEC && sec <= room) { overflow.push(r); room -= sec; } else left.push(r);
+    }
+    skipped.length = 0;
+    skipped.push(...left);
+  }
+  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
     unreadable,
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
@@ -333,7 +363,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings() } = {}) {
 export function shards(r, db = timings()) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
-  for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || [])]) {
+  for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || [])]) {
     const sec = cost(s);
     const perTest = Math.max(SELECTED_GATE.perTestTimeoutSec, s.ownTimeoutSec || 0);
     const base = path.basename(s.file, ".spec.js");
@@ -640,7 +670,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     : (g.size || candidates.length ? "matched" : "unmatched");
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
     : (imported.includes(f) || ownFoundations.includes(f)) ? 2 : 3;
-  const cut = fit(candidates, budgetMin, { rank });
+  const cut = fit(candidates, budgetMin, { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst });
   // "infra" no longer EMPTIES the selection. A tracked-path change (the shell,
   // a fixture every spec imports, this selector) can affect any spec, which is
   // a reason to distrust the routing, not a reason to run nothing: the specs
@@ -662,7 +692,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
   if (si < 0 || !argv[si + 1]) {
-    console.error("usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--json]");
+    console.error("usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--stale-first] [--json]");
     process.exit(2);
   }
   const bi = argv.indexOf("--budget-min");
@@ -674,7 +704,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     try { failed = fs.readFileSync(argv[fi + 1], "utf8").split("\n").map((s) => s.trim()).filter(Boolean); }
     catch { /* absent on the first run, and on any run after a cache miss */ }
   }
-  const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed });
+  const oi = argv.indexOf("--overflow-shards");
+  const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
+  const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first") });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra") console.error(

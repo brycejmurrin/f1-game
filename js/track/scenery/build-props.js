@@ -615,6 +615,7 @@ const TrackBuildProps = (function () {
 
     const WALL_CLEAR = 1.1;
     const RUNOFF_DEFAULT = 9;   // loose default; tightened wherever a barrier sits
+    const POST_HALF_LEN = 2.4;  // a car's half-length: it cannot slip beside a post's end
     track.barL = new Float32Array(n);
     track.barR = new Float32Array(n);
     for (let k = 0; k < n; k++) { track.barL[k] = hw[k] + RUNOFF_DEFAULT; track.barR[k] = hw[k] + RUNOFF_DEFAULT; }
@@ -627,6 +628,20 @@ const TrackBuildProps = (function () {
     const blockAt = (k, side, innerGap, halfM) => {
       const half = Math.max(0, Math.round((halfM || 0) / ds));
       for (let d = -half; d <= half; d++) markBarrier(((k + d) % n + n) % n, side, innerGap);
+    };
+    // A POST is a thin solid beside the road — a gantry leg — and NOT a barrier
+    // line. blockAt() tightens the one lateral limit a node has, which walls off
+    // the whole run-off BEHIND the leg: that was tried and reverted (e39c2c2e5,
+    // cars on the grass at Monza's start gantry snapped onto the tarmac). A post
+    // is a footprint instead; Tracks.postLimits keeps a car on whichever side of
+    // it the car is. `dist` is from the road edge (anchor()'s convention); the
+    // pit window on the pit side is the pit wall's ground, never a post's.
+    track.posts = [];
+    const post = (k, side, dist, halfX, halfM) => {
+      const kk = ((Math.round(k) % n) + n) % n, pit = track.pit;
+      if (pit && !pit.painted && side === pit.side && pit.keep[kk] > 0) return;
+      track.posts.push({ s: kk / n * track.total, side: side > 0 ? 1 : -1,
+        lat: hw[kk] + dist, halfX, halfS: halfM + POST_HALF_LEN });
     };
     let pyMin = Infinity;
     for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
@@ -1378,7 +1393,7 @@ const TrackBuildProps = (function () {
       emit, RAW, rejBox, rejRad,
       graph, instance,
       // guard / grounding / boundary core
-      markBarrier, blockAt, recordBarrier, indexBarrier, clearTreeDist,
+      markBarrier, blockAt, post, recordBarrier, indexBarrier, clearTreeDist,
       indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, bankOffsetAt,
       seat, foundation, cantilever, groundYAt, terrainYAt, onTrack,
       frameAt, overheadSpan, models,

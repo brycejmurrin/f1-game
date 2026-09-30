@@ -186,10 +186,12 @@ test("a stricken car that came past the player may be re-passed, and it cannot o
 
 test("game.js hands the pass watch its stricken-car predicate", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const line = src.split("\n").find((l) => /const scWatch = SportingRegs\.createPassWatch\(/.test(l)) || "";
-  assert.match(line, /incidentSim\.owns\(o\)/, "a car mid-incident may be passed");
-  assert.match(line, /rescueT/, "a car being rescued as stuck may be passed");
-  assert.match(line, /offroad/, "a beached car may be passed");
+  assert.match(src, /const scWatch = SportingRegs\.createPassWatch\(0, stricken\);/, "the watch reads the shared predicate");
+  const def = (/const stricken = \(o\) => [\s\S]*?;\n/.exec(src) || [""])[0];
+  assert.match(def, /incidentSim\.owns\(o\)/, "a car mid-incident may be passed");
+  assert.match(def, /rescueT/, "a car being rescued as stuck may be passed");
+  assert.match(def, /offroad/, "a beached car may be passed");
+  assert.match(def, /vTop\(\) \* 0\.05/, "a car all but stopped on track may be passed");
 });
 
 test("the player in the pit lane, or already flagged, gains nothing it must give back", () => {

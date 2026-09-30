@@ -462,6 +462,28 @@ const RaceControl = (function () {
     return SC_PACE + (SC_CATCH - SC_PACE) * t;
   }
 
-  return { create, finishDelay, flagOut, lineTransition, finishOrder, scQueueFrac, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  // NO PASSING UNDER A CAUTION — FOR THE AI TOO (2026-09-29). The VSC/SC cap is
+  // a TOP speed, not an order: cars on different lines through a corner simply
+  // drove past each other (monza, measured in the Node VM: ~12 clean passes a
+  // minute under VSC, up to 12 under the SC, the pass latch never engaged). So
+  // the car ahead IN THE RUNNING ORDER — `ranked` is by cumulative prog, so a
+  // lapped car is never "ahead" — is a speed ceiling once it is within HOLD_M:
+  // never faster than it, easing off inside half that. A car the regs let you
+  // pass (`fair`: finished, retired, pitting, stricken) is looked past to the
+  // next one. Infinity = no car to hold behind.
+  const HOLD_M = 12;
+  function holdCap(c, ranked, fair) {
+    const i = ranked ? ranked.indexOf(c) : -1;
+    for (let j = i - 1; j >= 0; j--) {
+      const o = ranked[j];
+      if (o.finished || o.retired || (fair && fair(o))) continue;
+      const gap = o.prog - c.prog;
+      if (!(gap < HOLD_M)) return Infinity;
+      return Math.max(0, (o.speed || 0) * (gap < HOLD_M / 2 ? 0.9 : 1));
+    }
+    return Infinity;
+  }
+
+  return { create, finishDelay, flagOut, lineTransition, finishOrder, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

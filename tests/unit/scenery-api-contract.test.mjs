@@ -108,268 +108,28 @@ const requiredLandmark = (body, id) => {
 };
 
 test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
-  const expected = {
-    monaco: ["monaco-tabac-shop", "monaco-mirabeau-apartments", "monaco-rascasse-bar"],
-    singapore: ["singapore-parliament-house", "singapore-fullerton-hotel", "singapore-anderson-bridge"],
-    suzuka: ["suzuka-crossover-portal", "suzuka-spoon-terrace", "suzuka-130r-bank"],
-    // Wave 4 — Interlagos / COTA / Mexico / Yas Marina
-    interlagos: ["interlagos-senna-s", "interlagos-main-tribuna", "interlagos-sp-skyline"],
-    // Wave 6 — Imola (Partenza opposite pits + Racetrack Tower over Tilke pit)
-    imola: ["imola-partenza-stands", "imola-racetrack-tower"],
-    cota: ["cota-amphitheater", "cota-turn1-big-red", "cota-main-grandstand"],
-    // Wave 6 — Portimão / Algarve: six independent paddock blocks (Dimeconsult
-    // A–F) + Grandstand Norte at the T1 downhill; race-control + moinho kept.
-    portimao: [
-      "portimao-pit-blocks",
-      "portimao-t1-stands",
-      "portimao-race-control",
-      "portimao-moinho",
-    ],
-    mexico: ["mexico-foro-sol-entry", "mexico-peraltada-stand", "foro-scoreboard"],
-    // Wave 6 — Sochi Olympic Park venues + Ice Cube + Olympic Park station
-    sochi: [
-      "sochi-fisht-stadium",
-      "sochi-bolshoy-dome",
-      "sochi-adler-arena",
-      "sochi-flame-tower",
-      "sochi-iceberg-palace",
-      "sochi-olympic-rings",
-      "sochi-race-control",
-      "sochi-shayba-arena",
-      "sochi-ice-cube",
-      "sochi-olympic-park-station",
-    ],
-    abudhabi: ["abudhabi-ferrari-world", "abudhabi-marina", "abudhabi:pit-exit-tunnel-portal"],
-    // Wave 6 — Albert Park (Piastri stand 2026, MSAC, Lakeside Stadium)
-    albert_park: ["albert-piastri-stand", "albert-msac", "albert-lakeside-stadium"],
-    // Nürburgring GP-Strecke — Burg + Coca-Cola Kurve + race control
-    nurburgring: ["nurburgring-burg-nurburg", "nurburgring-coca-cola-kurve", "nurburgring-race-control"],
-    // Wave 6 — Indianapolis Motor Speedway road course (Pagoda / pylon /
-    // pit stalls already required; continuous Paddock–Tower Terrace wall)
-    indianapolis: [
-      "indy-pagoda",
-      "indy-scoring-pylon",
-      "indy-pit-stalls",
-      "indy-main-stands",
-    ],
-    // Wave 5 — Shanghai International Circuit (wing piers are literal
-    // modelGroups; decks stay on overheadSpan. pudong/boardwalk stay required
-    // at runtime but their emit bodies exceed the 2200-char BATCH-01 window).
-    shanghai: [
-      "shanghai-wing-east", "shanghai-wing-west",
-      "shanghai-circles-stand", "shanghai-yu-pavilions",
-    ],
-    // Wave 5 — Lusail (Qatar): record pit slab, Lusail Hill GA mound, T1 VVIP,
-    // paddock media, city backdrops (no mosque / Aspire / oasis — deliberate).
-    qatar: [
-      "qatar-pit-slab",
-      "qatar-paddock-media-centre",
-      "qatar-t1-vvip-canopy",
-      "qatar-lusail-hill",
-      "qatar-katara-towers",
-      "qatar-lusail-stadium",
-    ],
-    // Wave 5 — Hungaroring 2024–25 paddock / main tribune
-    hungaroring: ["hungaroring-pit-complex", "hungaroring-main-tribune"],
-    // Wave 5 — Catalunya landmarks (Tilke main stand + pit-end scoreboard)
-    catalunya: ["catalunya-main-grandstand", "catalunya-pit-end-scoreboard", "catalunya-race-control"],
-    // Bahrain hollow-stand fix — T1 naming marker (Michael Schumacher Corner, 2014)
-    bahrain: ["bahrain-sakhir-tower", "bahrain-university-grandstand", "bahrain-schumacher-corner"],
-    // Wave 6 — Baku Old City (Shirvanshah palace + İçerişəhər wall)
-    baku: ["baku-shirvanshah-palace", "baku-icheri-sheher-wall"],
-    // Wave 6 — Red Bull Ring (Steiermark / Niki Lauda Kurve stand at T1)
-    redbull: ["redbull-lauda-kurve-stand"],
-    // Wave 6 — Madring / La Monumental inside rake + masts
-    madrid: ["madrid-monumental-stands"],
-    // Wave 6 — Istanbul Park (T8 hospitality + race control + stone portal)
-    istanbul: ["istanbul-turn8-hospitality", "istanbul-race-control", "istanbul-stone-portal"],
-    // Wave 6 — Zandvoort F1 Fanzone Ferris wheel (festival landmark)
-    zandvoort: ["zandvoort-ferris-wheel"],
-    // Wave 6 — Montreal hairpin / Wall of Champions / Biosphère
-    montreal: [
-      "montreal-hairpin-grandstands",
-      "montreal-wall-of-champions-stand",
-      "montreal-biosphere",
-    ],
-    // Wave 6 — Mugello Centrale + Poggio Secco + Materassi (hillside GA at
-    // Arrabbiata / San Donato is spectatorHill, not a required modelGroup).
-    mugello: [
-      "mugello-centrale-stand",
-      "mugello-poggio-secco-stand",
-      "mugello-materassi-stand",
-    ],
-    // Wave 6 — Kyalami Highveld landmarks (pit/race-control already required;
-    // main GS + headgear/windpump/clubhouse made explicit this wave).
-    kyalami: [
-      "kyalami-pit-block",
-      "kyalami-race-control",
-      "kyalami-main-grandstand",
-      "kyalami-headgear",
-      "kyalami-windpump",
-      "kyalami-clubhouse",
-    ],
-    // Wave 6 — Hockenheim Motodrom ring (Süd + Nord permanent stands)
-    hockenheim: [
-      "hockenheim-motodrom-screen",
-      "hockenheim-mercedes-tribune",
-      "hockenheim-sued-tribune",
-      "hockenheim-nord-tribune",
-      "hockenheim-race-control",
-      "hockenheim-infield-compound",
-    ],
-    // Wave 6 — Paul Ricard F1-era landmarks (Blue Zone already draped;
-    // main stand / Beausset hill / 2019 pit entry / aerodrome / Provençal hut)
-    paul_ricard: [
-      "paul-ricard-main-grandstand",
-      "paul-ricard-beausset-hill",
-      "paul-ricard-pit-entry-2019",
-      "paul-ricard-race-control",
-      "paul-ricard-aerodrome",
-      "paul-ricard-airfield-tower",
-      "paul-ricard-cabanon",
-      "paul-ricard-drywall",
-    ],
-    // Wave 6 — Buenos Aires (Gálvez): classic pit/tower/portico + Curvón
-    // terrace, Confitería café, 27 de Febrero talud gate. Flag avenue is
-    // UNCERTAIN — generic poles only, no required modelGroup.
-    buenos_aires: [
-      "baires-pit-block",
-      "baires-control-tower",
-      "baires-portico",
-      "baires-terrace-curvon",
-      "baires-confiteria",
-      "baires-talud-gate",
-    ],
-    // Wave 6 — Fuji Speedway Hotel + Motorsports Museum (west side, 2022)
-    fuji: ["fuji-speedway-hotel"],
-    // Wave 6 — Donington Park: 2017–18 MSV Hollywood grandstand (grandstandEx
-    // suppressed on the Craner fold; bespoke positive-rake modelGroup).
-    donington: ["donington-hollywood-stand"],
-    // Wave 6 — Sepang hibiscus main canopy + K1/F corner stands
-    sepang: ["sepang-main-grandstand-canopy", "sepang-t1-grandstand", "sepang-t7-grandstand"],
-    // Wave 6 — Mosport / CTMP: club pit run, Moss Corner bank, Whites tunnel,
-    // Grand Prix Event Centre (rooftop). Speedway oval NOT built — closed /
-    // outside the road course (Wikipedia).
-    mosport: [
-      "mosport-pit-garages",
-      "mosport-moss-corner-bank",
-      "mosport-whites-tunnel",
-      "mosport-event-centre",
-    ],
-    // Wave 6 — Estoril: 30-bay pit terrace (official boxes 17×6.70 m) +
-    // existing timing tower / aldeia / depósito / moinho made required.
-    // Moinho kept but UNCERTAIN as an on-site feature (leave, do not extend).
-    estoril: [
-      "estoril-pit-terrace",
-      "estoril-timing-tower",
-      "estoril-aldeia",
-      "estoril-deposito",
-      "estoril-moinho",
-    ],
-    // Wave 6 — Brands Hatch Indy amphitheatre stands + Kentagon
-    brands_hatch: [
-      "brands-pit-straight-stand",
-      "brands-desire-wilson-stand",
-      "brands-paddock-hill-stand",
-      "brands-hailwoods-stand",
-      "brands-kentagon",
-    ],
-    // Wave 6 — Mont-Tremblant (Laurentians): control tower, The Hump crest,
-    // service bridge, Namerow bank, Paddock Bend fascia. Devil's Elbow /
-    // Casino / Le Nordique are Montreal names — deliberately omitted.
-    mont_tremblant: [
-      "tremblant-control-tower",
-      "tremblant-hump-crest",
-      "tremblant-bridge",
-      "tremblant-namerow-bank",
-      "tremblant-paddock-bend-stand",
-    ],
-    // Wave 6 — Jerez: El Ovni VIP deck on the finish line, Tío Pepe control
-    // tower, Dani Pedrosa (Dry Sack) + Jorge Lorenzo corner markers.
-    jerez: [
-      "jerez-ovni",
-      "jerez-control-tower",
-      "jerez-lorenzo-corner",
-      "jerez-dani-pedrosa",
-    ],
-    // Wave 6 — Watkins Glen: 2006 control-tower booths, Nazareth pit terrace,
-    // Sahlen Esses hillside (positive-slope GA bank + timber stand)
-    watkins_glen: ["glen-pit-terrace", "glen-esses-hill", "glen-timing-tower"],
-    // Wave 6 — Magny-Cours: pit control + conference wing, Conservatoire at the
-    // main entrance, Château d'Eau water tower (T14), Nivernais ferme + bourg.
-    // Grandstand names UNCERTAIN (operator lists 14 tribunes; not scraped).
-    magny_cours: [
-      "magny-cours-control-block",
-      "magny-cours-conservatoire",
-      "magny-cours-chateau-deau",
-      "magny-cours-ferme",
-      "magny-cours-bourg",
-    ],
-    // Wave 6 — Okayama / TI Circuit Aida: 4-storey control tower (OIRC),
-    // pit garage run (superseded by engine pit complex — same as mosport/
-    // estoril), A/B paddock club block. Dunlop bridge is overheadSpan
-    // (required at runtime; not a modelGroup so not listed here).
-    okayama: [
-      "okayama-pit-garages",
-      "okayama-control-tower",
-      "okayama-paddock-block",
-    ],
-    // Wave 6 — Dijon-Prenois: pit garages + race-control (official 2015–16
-    // pitbuilding), Combe limestone cut (Virage de la Combe), Parabolique
-    // spectator bank (1976 extension; 14% max slope), Burgundy ferme.
-    // Modern grandstand map UNCERTAIN — keep docs §4 grandstandEx only.
-    dijon: [
-      "dijon-pit-garages",
-      "dijon-race-control",
-      "dijon-combe-cut",
-      "dijon-parabolique-bank",
-      "dijon-prenois-ferme",
-    ],
-    // Wave 6 — Korea International Circuit (Yeongam): permanent pit complex +
-    // main grandstand, unfinished marina shells (hotels/yachts NOT named —
-    // UNCERTAIN), Tilke final-turn footbridge (RacingCircuits.info).
-    korea: [
-      "korea-pit-complex",
-      "korea-main-grandstand",
-      "korea-marina-shells",
-      "korea-final-footbridge",
-    ],
-    // Wave 6 — Jacarepaguá / Autódromo Nelson Piquet (demolished 2012):
-    // pit grandstand + timing box already authored; Tijuca ridge + lagoon
-    // shore hardscape added this wave. Exact peak/pier layout UNCERTAIN.
-    jacarepagua: [
-      "jacarepagua-pit-grandstand",
-      "jacarepagua-timing-box",
-      "jacarepagua-tijuca-ridge",
-      "jacarepagua-lagoon-shore",
-    ],
-    // Wave 6 — Buddh International Circuit: sea-wave aluminium cantilever
-    // main grandstand opposite the pits (ENR 2011; slideshare dims UNCERTAIN).
-    buddh: ["buddh-main-grandstand"],
-    // Wave 6 — Anderstorp / Scandinavian Raceway: concrete pressläktare,
-    // original speakertorn, 1968 stationsbyggnad, Flight Straight hangars.
-    // Historical F1 pits halfway round NOT built (game startFrac 0 + modern
-    // pit straight; see docs/tracks/anderstorp.md UNCERTAIN).
-    anderstorp: [
-      "anderstorp-press-stand",
-      "anderstorp-speaker-tower",
-      "anderstorp-stations-1968",
-      "anderstorp-flight-hangars",
-    ],
-    // Wave 6 — Zolder (Limburg): permanent S/F tribune + museum behind it
-    // (circuit-zolder.be), Bongaerts paddock poles (not the chicane plaque),
-    // Sterrenwacht corner building. Frame debt — startFrac untouched.
-    zolder: [
-      "zolder-main-grandstand",
-      "zolder-sf-museum",
-      "zolder-villeneuve-poles",
-      "zolder-sterrenwacht",
-    ],
-  };
-
-  for (const [track, ids] of Object.entries(expected)) {
+  // ONE FILE PER CIRCUIT: tests/data/landmarks/<id>.json = { why?, ids }.
+  // This was one object literal here, and every scenery PR appended its circuit
+  // to the end of it — so each merge conflicted with every other open scenery
+  // PR (a dozen hand syncs in one wave-6 afternoon, 2026-09-29). A new circuit
+  // is a new file now; two PRs collide only if they edit the same circuit.
+  const dir = path.resolve("tests/data/landmarks");
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json")).sort();
+  assert.ok(files.length >= 40, `landmark files present (${files.length})`);
+  const seen = new Map();
+  for (const f of files) {
+    const track = f.slice(0, -5);
+    const rec = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
+    assert.deepEqual(Object.keys(rec).filter((k) => k !== "why" && k !== "ids"), [], `${f}: only "why" and "ids"`);
+    assert.ok(Array.isArray(rec.ids) && rec.ids.length > 0, `${f}: ids is a non-empty list`);
+    assert.ok(fs.existsSync(path.resolve(`js/circuits/scenery/${track}.js`)), `${f}: names a circuit with a scenery module`);
     const body = landmarkSource(track);
-    for (const id of ids) requiredLandmark(body, id);
+    for (const id of rec.ids) {
+      assert.equal(typeof id, "string", `${f}: ids are strings`);
+      assert.ok(!seen.has(id), `${id} is listed by both ${seen.get(id)} and ${f}`);
+      seen.set(id, f);
+      requiredLandmark(body, id);
+    }
   }
 
   const monaco = landmarkSource("monaco");
