@@ -101,14 +101,15 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   // a43691c8 unified lamps/floodlights into the "lighting" fixture kind, which
   // collapsed montreal's seven pre-unification exclusion entries into three.
   // Assert the semantic content, not the count: the island-wide foliage span
-  // plus the two lighting clearance windows (measured on the def: 0.19-0.23
-  // and 0.69-0.73).
+  // plus the two lighting clearance windows. 1389215d2 dropped the bogus
+  // sceneryStartFrac 0.915 and re-keyed those windows into the racing frame
+  // (was 0.19-0.23 / 0.69-0.73 under the 0.86 shift).
   expect(result.def.dressingExclusions).toHaveLength(3);
   expect(result.def.dressingExclusions).toContainEqual({ kind: "foliage", s0: 0, s1: 1 });
   const lightingSpans = result.def.dressingExclusions
     .filter((entry) => entry.kinds?.includes("lighting"))
     .map((entry) => [entry.s0, entry.s1]);
-  expect(lightingSpans).toEqual([[0.19, 0.23], [0.69, 0.73]]);
+  expect(lightingSpans).toEqual([[0.05, 0.09], [0.55, 0.59]]);
 
   for (const session of Object.values(result.sessions)) {
     expect(session.geometry.every((entry) => entry.ok)).toBe(true);
