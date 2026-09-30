@@ -518,7 +518,11 @@ jobs:
           node tools/ci/pick-unit-slices.mjs --since "$BASE" --github-output
 
   node-suites:
-    name: Pure-node unit suites
+    # Name MUST be exactly `Pure-node unit suites (<slice>)` — those six
+    # strings are the deploy branch's required checks. Do not interpolate
+    # matrix.needed (or any other matrix key) into the name, or branch
+    # protection never sees the expected check (#454 a9a805839).
+    name: Pure-node unit suites (${{ matrix.slice }})
     needs: unit-plan
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
