@@ -104,7 +104,11 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   exit, and every PR diff resolves its base through `tools/ci/ci-pr-base.sh`
   (`pull_request.base.sha` lags one sync behind the merge under test, which
   had the plan — and the sweeps, parts and renderer filters — reading the
-  base's own recent commits as the PR's diff).
+  base's own recent commits as the PR's diff). Then: the derived doc figures
+  (spec/unit counts, the gate ladder) fail only on a pull request and warn on
+  the merged tip (`APEX_DOCS_FIGURES_ADVISORY`), which retires the
+  merge-ordering red class above; sync a PR only on a conflict or a red tip;
+  nine history checkouts use `filter: blob:none`.
 - **49 unit files run twice per PR** (in tooling-fast under guards, and in
   the `vm-b` slice's topical groups). The rebalanced slices keep that off the
   wall clock. Removing it means changing what the topical groups mean.

@@ -357,7 +357,19 @@ jobs:
       # measured 3.1-4.9 min one at a time on this job and 122 s at --jobs=3 on
       # a 4-core box, which is what a public runner is (4 vCPU). Same tool, same
       # START/PASS/FAIL lines; the npm script stays serial for a loaded dev box.
+      # DERIVED DOC FIGURES ARE ADVISORY OFF A PULL REQUEST (2026-09-30). The
+      # spec/unit counts and the "N of M" ladder are generated; two PRs that
+      # each add a test regenerate them identically against their own base,
+      # merge cleanly, and leave the tip one file short — 14 of 15 deploy-branch
+      # reds on 2026-09-29, a red no push can clear but a regeneration commit,
+      # read by every session as "the tip is broken". Same answer as the
+      # ratchet step's `--advisory` on push: a pull request still FAILS on a
+      # stale figure (it must regenerate); the merged tip and the train WARN,
+      # and the next PR regenerates. tests/unit/docs-integrity.test.mjs reads
+      # the env and pins this expression.
       - name: Structural guards
+        env:
+          APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
         run: node tools/ci/tooling-fast.mjs --jobs=3
       # RATCHET RAISES, SAID OUT LOUD (2026-09-22). The commit hook absorbs a
       # ceiling raise of up to 40 lines by rewriting tests/data/ratchets.json
