@@ -1396,3 +1396,58 @@ body.lt-open .touchbtn { display: none !important; }
   outline: 1px solid var(--hc-hud-line);   /* outline, not border: the team stripe is border-left */
 }
 } /* @layer hud */
+
+/* ── BROADCAST TIMING TOWER (js/race/broadcast.js) ──────────────────────────
+   A REAL RACE WATCH / HIGHLIGHTS run only (body.bc-on): the whole field down
+   the left edge, as the TV graphics show it. It takes the top-left corner, so
+   the minimap, the gap strip and the top band (the followed car's POS/LAP,
+   which the tower already says) stand down while it is up. The rows are
+   buttons: a tap follows that car. The head flips GAP / INTERVAL. */
+body.bc-on #minimap, body.bc-on .hud-gaps, body.bc-on .hud-top { display: none !important; }
+#bc-tower {
+  --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z);
+  position: absolute;
+  left: calc(8px + var(--sal) / var(--hud-z));
+  top: calc(8px + var(--sat) / var(--hud-z));
+  width: 150px;
+  max-height: calc((100svh - 16px - var(--sat) - var(--sab)) / var(--hud-z));
+  overflow: hidden;
+  pointer-events: auto;
+  font-family: var(--font-hud);
+  font-variant-numeric: tabular-nums;
+  background: rgba(8, 8, 14, 0.78);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-xs);
+}
+#bc-tower .bc-head {
+  padding: 3px 6px; font-size: 12px; font-weight: 800; letter-spacing: 0.12em;
+  color: var(--text); border-bottom: 1px solid rgba(255, 255, 255, 0.12); cursor: pointer;
+}
+#bc-tower .bc-rows { list-style: none; margin: 0; padding: 0; }
+#bc-tower .bc-row button {
+  display: grid; grid-template-columns: 18px 3px 34px 1fr 12px; align-items: center; gap: 4px;
+  width: 100%; min-height: 17px; padding: 0 5px 0 4px; border: 0; background: none;
+  color: inherit; font: inherit; font-size: 12px; line-height: 17px; text-align: left; cursor: pointer;
+}
+#bc-tower .bc-row:nth-child(odd) button { background: rgba(255, 255, 255, 0.04); }
+#bc-tower .bc-pos { text-align: right; font-weight: 700; color: var(--dim); }
+#bc-tower .bc-team { height: 12px; border-radius: 1px; }
+#bc-tower .bc-code { font-weight: 800; letter-spacing: 0.04em; }
+#bc-tower .bc-gap { text-align: right; font-size: 11px; color: var(--dim); white-space: nowrap; }
+#bc-tower .bc-tyre { font-size: 10px; font-weight: 800; text-align: center; }
+#bc-tower .bc-tyre[data-c="S"] { color: #ff3b3b; }
+#bc-tower .bc-tyre[data-c="M"] { color: #ffd12e; }
+#bc-tower .bc-tyre[data-c="H"] { color: #f2f2f2; }
+#bc-tower .bc-tyre[data-c="I"] { color: #3ccf4e; }
+#bc-tower .bc-tyre[data-c="W"] { color: #3a8dff; }
+/* The car on camera; a fastest lap in purple; a stop; a retirement greyed. */
+#bc-tower .bc-row.on button { background: rgba(255, 255, 255, 0.18); }
+#bc-tower .bc-row.fl .bc-code { color: var(--sec-best); }
+#bc-tower .bc-row.pit .bc-gap { color: var(--text); font-weight: 700; }
+#bc-tower .bc-row.out { opacity: 0.5; }
+/* A place won or lost in the last few seconds: the colour is state (kept under reduced motion). */
+#bc-tower .bc-row[data-delta="up"] .bc-pos { color: var(--faster); }
+#bc-tower .bc-row[data-delta="down"] .bc-pos { color: var(--slower); }
+/* A short phone screen: the top ten and the car on camera. */
+body[data-density="compact"] #bc-tower .bc-row:nth-child(n+11):not(.on) { display: none; }
