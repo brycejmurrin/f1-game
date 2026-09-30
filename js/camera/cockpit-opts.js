@@ -185,21 +185,32 @@ function initUI() {
   const host = panel || (document.getElementById("pm-res") && document.getElementById("pm-res").parentNode);
   if (!host || document.getElementById("pm-halo")) return;
 
-  const head = document.createElement("h3");
-  head.className = "pm-group-h";
-  head.textContent = "COCKPIT";
-  // Player cockpit controls sit after the RENDERER fold, not inside it.
-  const adv = document.getElementById("pm-display-adv");
-  let insertAfter = (adv && adv.parentNode === host) ? adv : null;
-  function place(el) {
-    if (insertAfter && insertAfter.parentNode === host && typeof host.insertBefore === "function") {
-      host.insertBefore(el, insertAfter.nextSibling);
-      insertAfter = el;
-    } else {
-      host.appendChild(el);
-    }
-  }
-  place(head);
+  // A FOLD like METRICS / RENDERER / ADVANCED VISUALS beside it: five rows of
+  // cockpit dressing are a page of their own, and a player who never drives
+  // from the cockpit should not have to scroll past them. The closed summary
+  // carries the wheel, so the fold reads without opening.
+  const fold = document.createElement("details");
+  fold.id = "pm-cockpit";
+  fold.className = "pm-renderer-sub";
+  const sum = document.createElement("summary");
+  sum.className = "adv-more-btn";
+  sum.id = "pm-cockpit-sum";
+  const paintSum = () => { sum.textContent = "COCKPIT · " + (CHOICES.wheel.labels[wheel()] || wheel()); };
+  paintSum();
+  onWheel(paintSum);
+  const body = document.createElement("div");
+  body.id = "pm-cockpit-body";
+  body.setAttribute("role", "group");
+  body.setAttribute("aria-label", "Cockpit");
+  fold.appendChild(sum);
+  fold.appendChild(body);
+  // Just above ADVANCED VISUALS, the one fold here that is static shell DOM —
+  // RENDERER is rebuilt at runtime (js/perf/renderer-picker.js), so "after
+  // RENDERER" landed wherever the two inits happened to finish.
+  const tools = document.getElementById("pm-visual-tuners");
+  if (tools && tools.parentNode === host && typeof host.insertBefore === "function") host.insertBefore(fold, tools);
+  else host.appendChild(fold);
+  const place = (el) => body.appendChild(el);
   // The row titles are hover-only, which a phone never shows: each row also
   // gets the same sentence as a visible help line under it.
   const help = (text) => {

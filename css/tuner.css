@@ -31,7 +31,8 @@
 body:has(#lighting:not([hidden])),
 body:has(#camtune:not([hidden])),
 body:has(#flyby:not([hidden])),
-body:has(#freecam:not([hidden])) {
+body:has(#freecam:not([hidden])),
+body:has(#garrival:not([hidden])) {
   /* `88 * --vwz`, NOT `88vw`. This value is in the panel's own ZOOMED local
      space (see --dock-px below), and a bare viewport unit resolves against the
      UNZOOMED viewport and is then multiplied by the zoom — so 88vw paints as
@@ -69,7 +70,7 @@ body:has(#freecam:not([hidden])) {
      repeating this formula. */
   --dock-px: calc((var(--dock-w) + 8px + var(--sar)) * var(--ui-scale));
 }
-#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner { --fit-at: 200px; }
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner { --fit-at: 200px; }
 /* FLYING: the dock gives width back to the controls, at every size.
    `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
    ID-level — a plain `body.photo-mode` override loses to it no matter how many
@@ -165,8 +166,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
-#lighting, #camtune, #flyby, #freecam { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
-#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner {
+#lighting, #camtune, #flyby, #freecam, #garrival { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner {
   /* Docked, not centred: .sheet gives the head/body/foot shape and the query
      container, and these override the sheet's centred sizing. */
   pointer-events: auto;
@@ -315,14 +316,15 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    rule as a gradient ::before (css/components.css) — re-adding a solid border
    painted BOTH, so these two panels were the only feet in the app with a
    hairline and a solid line stacked at the same edge. */
-#lighting-inner .sheet-foot, #camtune-inner .sheet-foot, #flyby-inner .sheet-foot, #freecam-inner .sheet-foot {
+#lighting-inner .sheet-foot, #camtune-inner .sheet-foot, #flyby-inner .sheet-foot, #freecam-inner .sheet-foot, #garrival-inner .sheet-foot {
   display: flex; gap: calc(var(--gap) * 2 / 3); flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
 }
 #lighting-inner .sheet-foot button,
 #camtune-inner .sheet-foot button,
 #flyby-inner .sheet-foot button,
-#freecam-inner .sheet-foot button {
+#freecam-inner .sheet-foot button,
+#garrival-inner .sheet-foot button {
   margin: 0;
   /* Same WCAG floor the compact rung already carries (see its note further
      down): these are padding-driven (~45 local px), which is 19 painted px
@@ -632,8 +634,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    `--rail-at` is 640, above the 560px the rail-on dock grows to, so a compact
    wide dock keeps the horizontal chip strip and the sliders keep the full
    dock width. Rail-on only when the sheet is already wider than that dock. */
-#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner { --compact-at: 620px; --rail-at: 640px; }
-#lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot, #flyby-inner > .sheet-foot, #freecam-inner > .sheet-foot {
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner { --compact-at: 620px; --rail-at: 640px; }
+#lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot, #flyby-inner > .sheet-foot, #freecam-inner > .sheet-foot, #garrival-inner > .sheet-foot {
   position: sticky; bottom: 0; z-index: 2;
 }
 
@@ -1071,6 +1073,18 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   -webkit-user-select: text; user-select: text; cursor: text;
 }
 #as-sp-wrap .opt-row { margin-top: calc(var(--gap) * 2 / 3); }
+/* THE GARAGE ARRIVAL TUNER is a short form, not a slider list: its rows are
+   the settings page's own .set-row, and #ga-rows is the scroller between the
+   fixed head and the RESET / DONE foot like #fb-rows in the flyby editor. */
+#ga-rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* Room for TWO CAMERA CUT: the settings page's fixed 8rem select clipped it. */
+#ga-rows .set-row > div > select { flex: 0 1 12rem; width: 12rem; }
+/* Opened from the TITLE screen there is no race behind to preview, only the
+   menu's own buttons showing through the docked panel: fade the menu out the
+   way css/components.css does under any open dialog. */
+body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
+#ga-head h2 { margin: 0 0 calc(var(--gap) * 0.5); }
+
 } /* @layer components */
 
 /* #pc-toggle narrow/compact overrides, OUTSIDE @layer components on purpose:
@@ -1093,3 +1107,4 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
     :is(#lighting-inner, #camtune-inner) #pc-toggle { width: 100%; min-width: 0; }
   }
 }
+

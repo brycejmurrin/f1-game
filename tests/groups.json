@@ -1037,7 +1037,8 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
-        "tests/unit/title-fx.test.mjs"
+        "tests/unit/title-fx.test.mjs",
+        "tests/unit/title-layout.test.mjs"
       ],
       "kind": "node"
     },

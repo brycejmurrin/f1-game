@@ -1124,12 +1124,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "ADVANCED VISUALS joins the same compact Display fold family as RENDERER");
   const componentsSrc = read("css/components.css");
   assert.match(componentsSrc,
-    /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
+    /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
     "ADVANCED VISUALS shares the borderless transparent summary rule");
   assert.match(componentsSrc,
-    /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::after,\s*\n#rs-body details > summary::after \{ content: none; \}/);
+    /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after,\s*\n#rs-body details > summary::after \{ content: none; \}/);
   assert.match(componentsSrc,
-    /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::before,\s*\n#rs-body details > summary::before \{ content: "\\25BE";/,
+    /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::before,\s*\n#rs-body details > summary::before \{ content: "\\25BE";/,
     "all four Display folds put the chevron before the label");
   assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
@@ -1205,13 +1205,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "page titles are not duplicated by hidden headings");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
     ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary/, "background-color"), "transparent",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "background-color"), "transparent",
     "fold summaries drop the plate so they do not copy HALO / TURN CHASING");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
-  assert.match(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::before/, "content") || "",
+  assert.match(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::before/, "content") || "",
     /25BE/,
     "disclosure chevron sits on the left, like a tree, not a select");
   const settingsHtml = read("index.html");
@@ -1236,9 +1236,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");
@@ -1248,8 +1248,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "closed MUSIC summary carries ON and source");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
     "COCKPIT is a section break after the renderer row");
-  assert.match(code("js/camera/cockpit-opts.js"), /pm-display-adv/,
-    "COCKPIT inserts after the RENDERER fold so player switches stay off the backend list");
+  assert.match(code("js/camera/cockpit-opts.js"), /fold\.id = "pm-cockpit"[\s\S]*?getElementById\("pm-visual-tuners"\)[\s\S]*?insertBefore\(fold, tools\)/,
+    "COCKPIT is its own fold, just above ADVANCED VISUALS — never inside the RENDERER backend list");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit', "grid-area"), "cockpit",
+    "and on a wide sheet it has its own named row above the tools");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
     "METRICS submenu no longer keys packing on viewport height");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),

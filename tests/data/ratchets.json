@@ -39,7 +39,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 592,
+      "ceiling": 593,
       "slack": 5
     },
     "dynamicIdReads": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 1985,
+      "ceiling": 1991,
       "slack": 25
     },
     "subFloorFontSize": {

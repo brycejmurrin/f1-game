@@ -8971,7 +8971,7 @@ function syncSettingsAvailability() {
   SettingRow.disable($("pm-hidehud"), !inRace);
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
-  $("pm-flyby").disabled = !inRace; $("pm-freecam").disabled = !inRace;
+  $("pm-flyby").disabled = !inRace;
 }
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here
