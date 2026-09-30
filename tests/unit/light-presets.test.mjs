@@ -87,3 +87,21 @@ test("the global baseline profile, if present, is a plain knob map", () => {
   assert.deepEqual(wrong, [],
     'the "*" baseline holds a non-numeric value — a profile pasted one level too deep is skipped in silence');
 });
+
+/** Full tod×weather grid: 4 times of day × 5 weathers. Fallthrough-only tracks
+ *  have zero `track|…` keys and resolve to `"*"` alone — B batches fill them. */
+const TOD = ["dawn", "day", "dusk", "night"];
+const WX = ["dry", "wet", "rain", "fog", "overcast"];
+
+test("B1b fallthrough circuits ship a full tod×weather grid with no wetness pins", () => {
+  // Would fail before the B1b bake: korea/jerez had zero track| keys.
+  const P = presets();
+  for (const track of ["korea", "jerez"]) {
+    const keys = TOD.flatMap((tod) => WX.map((wx) => `${track}|${tod}|${wx}`));
+    const missing = keys.filter((k) => !P[k] || typeof P[k] !== "object");
+    assert.deepEqual(missing, [], `${track} must ship all 20 tod×weather keys (not "*" fallthrough)`);
+    const wetPins = keys.filter((k) => Object.prototype.hasOwnProperty.call(P[k], "wetness"));
+    assert.deepEqual(wetPins, [],
+      `${track} must not pin LT.wetness (look=drive — road wetness follows physics)`);
+  }
+});
