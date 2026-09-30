@@ -228,19 +228,22 @@ function create(G) {
   }
 
   function refreshTitle() {
+    // The title door is <svg/><span>SEASON<span class="mb-sub">…</span></span>
+    // (index.html): the label is the INNER span's own text node — the button
+    // itself has none, so a direct-child search returned before writing anything.
     const btn = $("mb-season");
-    if (!btn || !btn.childNodes) return;
-    let textNode = null;
-    for (let i = 0; i < btn.childNodes.length; i++) {
-      const n = btn.childNodes[i];
-      if (n.nodeType === 3) { textNode = n; break; }
-    }
+    const lab = btn && btn.querySelector && btn.querySelector("span");
+    const textNode = lab && lab.childNodes ? Array.prototype.find.call(lab.childNodes, (x) => x.nodeType === 3) : null;
     if (!textNode) return;
     const season = G.season;
     const n = SeasonCal.rounds();
-    textNode.nodeValue = (SeasonCal.hasProgress(season) && n)
-      ? `SEASON · R${Math.min((season.round || 0) + 1, n)} OF ${n}`
-      : "SEASON";
+    const r = (SeasonCal.hasProgress(season) && n) ? Math.min((season.round || 0) + 1, n) : 0;
+    textNode.nodeValue = r ? `SEASON · R${r} OF ${n}` : "SEASON";
+    // The accessible name overrides the text, so it carries the progress too;
+    // with none it is the shell's own "Season — A championship, your rules".
+    const sub = btn.querySelector(".mb-sub"), tag = sub ? String(sub.textContent || "") : "";
+    btn.setAttribute("aria-label", (r ? `Season · R${r} of ${n}` : "Season")
+      + (tag ? " — " + tag.charAt(0) + tag.slice(1).toLowerCase() : ""));
   }
 
   $("ss-back").onclick = () => { close(); if (G.soundOn) GameAudio.uiSelect(); };
