@@ -36,6 +36,7 @@ faster when Mesa is installed (no `navigator.gpu`; `docs/notes/CI-RENDERING-PERF
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
 | `js/render/webgpu/` or `js/render/three/` | the path-scoped rule in `.claude/rules/` says what to run; software probes are not evidence about a player's GPU, so dispatch `gpu-census.yml` on `macos-latest` and read its Verdict step |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, capped at two browser groups: run the two most specific, name the rest as not-run in the PR |
+| a whole browser group (not one spec) | `node tools/ci/remote-group.mjs <group>` on the PUSHED branch: `.github/workflows/browser-group.yml`, four llvmpipe shards, a verdict in ~5 min instead of 30–45 of local SwiftShader (`ui`, 2026-09-30); `test-bg.mjs` stays for one spec, or when Actions is jammed |
 | geometry pushed to the deploy branch, or a group this box cannot time | `npm run test:sweeps` when the diff reaches the FLEET build (`tools/ci/geometry-paths.mjs` derives that from `tools/manifest.cjs`'s `TRACK_VM`); a lighting, car, debris-world or driving-line edit needs only its TARGETED suite, which that module names (`--targeted`) and ci.yml and `deploy.mjs` both run for you. Dispatch `ci.yml` with `group: <name>` (one per change) and read the four Smoke jobs. Docs-only pushes start no CI |
 
 Session shape — twelve rules that control wall time, waiting and handoff:
