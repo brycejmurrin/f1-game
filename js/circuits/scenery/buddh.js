@@ -7,7 +7,7 @@
    double-apex sits at the bottom of a constructed drop) and dust haze on every
    horizon. The main grandstand is the only substantial structure; everything
    else on the lap reads as smaller than it, so the outfield is scrub and low
-   sheds rather than the generic tree ranks this file used to carry.
+   sheds, not generic tree ranks.
 
    Blocks implement docs/tracks/buddh.md §4, one row per block:
      0  lap spine (barrier chain + marshal chain; carries the `guardrail`
@@ -157,13 +157,11 @@
       // 0. LAP SPINE — a barrier line all the way round each side plus the
       //    marshal chain. Rows 0.235 / 0.565 / 0.870 ask for `guardrail`; it is
       //    this run, not a second rail stacked on top of it.
-      //    The infield rail used to be a single 12 m run and lost EIGHT
-      //    segments to the guard: the infield pinches at s0.12 and again
-      //    through s0.86-0.88, where 12 m of offset puts the rail on the
-      //    neighbouring stretch of road. It is now a chain that tucks to 6 m
-      //    through both pinches, with a one-segment marshal gate at
-      //    s0.869-0.872 where no offset from 2 m to 12 m survives. Guard drops
-      //    from this file: zero.
+      //    The infield rail is a chain that tucks to 6 m through the pinches
+      //    at s0.12 and s0.86-0.88 (a single 12 m run lands on the
+      //    neighbouring road there and loses eight segments to the guard),
+      //    with a one-segment marshal gate at s0.869-0.872 where no offset
+      //    from 2 m to 12 m survives. Guard drops from this file: zero.
       guardrail(0.0, 0.116, 1, 12, ARMCO);
       guardrail(0.116, 0.134, 1, 6, ARMCO);
       guardrail(0.134, 0.858, 1, 12, ARMCO);
@@ -478,9 +476,8 @@
       // 17. FARMLAND SCATTER — flat farmland and scrub, outfield only and
       //     deliberately thin: dry bushes with the occasional stunted tree.
       //     NOT a rank of trees; the outfield has to stay low and open all the
-      //     way round. Thinned from every(52)/h<0.45 to pay for block 18: the
-      //     five generic far sheds that used to sit here are now the village
-      //     and the brickfields, which say the same thing with an accent.
+      //     way round. Kept thin to pay for block 18, whose village and
+      //     brickfields stand in for generic far sheds.
       every(58, (k) => {
         const h = hash(k * 37);
         if (h < 0.52) return;

@@ -151,19 +151,19 @@
       // 2. s 0.005 +1 14 — PITS, PADDOCK, BROADCAST, CAMERA TOWER
       //    Club-circuit pit block: one long, low, flat-roofed run. No towers.
       //
-      //    RE-KEYED THROUGH sl(). The start line moved onto a straight
-      //    (def startFrac) because the grid had been laid through a 28 m
-      //    hairpin, and sceneryStartFrac holds the rest of this file on its
-      //    real corners — Redgate, Craner and the Old Hairpin must not travel
-      //    with the line. But the PIT COMPLEX belongs AT the line wherever the
-      //    line is, so these rows alone are shifted: sl(f) is the authored
-      //    frac that lands at the corrected line. Everything below block 3
+      //    RE-KEYED THROUGH sl(). The start line sits on a straight
+      //    (def startFrac; v0 is in a 28 m hairpin), and sceneryStartFrac holds
+      //    the rest of this file on its real corners — Redgate, Craner and the
+      //    Old Hairpin must not travel with the line. But the PIT COMPLEX
+      //    belongs AT the line wherever the line is, so these rows alone are
+      //    shifted: sl(f) is the authored frac that lands at the line.
+      //    Everything below block 3
       //    stays in the authoring frame on purpose.
       //    sl() wraps past 1 above f = 0.097, so keep every argument below it.
       // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
-      // the 4 dp the props were placed against (a literal 0.9027 until 2026-09-22:
-      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
-      // keeps today's geometry while a retuned startFrac still moves the props).
+      // the 4 dp the props were placed against (the unrounded value flips a few
+      // K() nodes, so rounding keeps the geometry while a retuned startFrac still
+      // moves the props).
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
       building(K(sl(0.968)), 1, 15, 14, 6.5, 108, { col: WALL, roof: ROOF });
@@ -585,10 +585,9 @@
         marshalPost(K(s), 1, 17);
       }
         // ---------------------------------------------------------------- FAR HORIZON
-      // A 2026-09-15 visual pass found this circuit's road rising and falling
-      // through a pancake-flat green plane that met the sky at a hard edge —
-      // the lap had relief and the WORLD had none, which is part of why the
-      // elevation read as exaggerated: the road moved and nothing behind it did.
+      // Without a horizon the road rises and falls through a pancake-flat plane
+      // that meets the sky at a hard edge: the road moves and nothing behind it
+      // does, so the elevation reads as exaggerated.
       // These are gentle Leicestershire farmland. The park sits in the Trent valley's
       // shallow rise — the horizon is hedgerow and low ridge, deliberately the
       // softest of the four, because that is what is actually there.

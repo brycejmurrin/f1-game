@@ -1,8 +1,8 @@
 /* Apex 26 — Helmets: one painted helmet design per driver.
 
-   The helmet used to be the team's own paint — a papaya dome inside a papaya
-   car, invisible in every view but the closest (measured 2026-09-08, McLaren
-   from above: the only thing that read was a 10 cm accent stripe). A helmet is
+   A helmet in the team's own paint — a papaya dome inside a papaya car — is
+   invisible in every view but the closest (measured 2026-09-08, McLaren from
+   above: the only thing that read was a 10 cm accent stripe). A helmet is
    the one part of a racing car that belongs to the PERSON, and at the distances
    this game is played at — the car ahead, the mirror, a replay — it is the only
    way to tell two team-mates apart.
@@ -84,12 +84,11 @@ const Helmets = (function () {
       const f = (t - z.t0) / Math.max(1e-3, z.t1 - z.t0);
       return dAz(az, z.az + z.sweep * f) <= z.w0 + (z.w1 - z.w0) * f;
     },
-    // A DOODLE, NOT A SPECKLE. This was a hash per (ring, slice) cell — which
-    // matched the DENSITY of a mottled helmet and none of its STRUCTURE, so it
-    // came out as a scatter of axis-aligned rectangles. The macos-latest GPU
-    // render of 2026-09-09 (car-shot.yml run 34293766619) showed the result
-    // reading as static rather than as a design, and raising the mesh
-    // resolution made it WORSE, not better: the speckle was the subject.
+    // A DOODLE, NOT A SPECKLE. A hash per (ring, slice) cell matches the
+    // DENSITY of a mottled helmet and none of its STRUCTURE: a scatter of
+    // axis-aligned rectangles that reads as static rather than as a design
+    // (macos-latest GPU render, car-shot.yml run 34293766619), and more mesh
+    // resolution makes it WORSE — the speckle is the subject.
     //
     // Norris's real lid is a black squiggle over
     // fluoro — connected, curved strokes of roughly even width. That is a LEVEL
@@ -98,11 +97,11 @@ const Helmets = (function () {
     // sinusoids at INTEGER azimuthal frequencies keep it seamless round the
     // shell (a noise lattice would show the join), and it is a closed-form
     // function of (t, az), so it stays resolution-free — the same doodle at any
-    // tessellation, and deterministic across machines the way the hash was.
+    // tessellation, and deterministic across machines.
     // The t coefficients are DELIBERATELY low. At their natural size the field
-    // turned over about every two rings, and ring-to-ring agreement measured
-    // 66% against 60% at chance — barely a stroke at all, and the render still
-    // read as speckle. Scaled to 0.6 it measures 78%, and against
+    // turns over about every two rings, and ring-to-ring agreement measures
+    // 66% against 60% at chance — barely a stroke at all, and the render
+    // reads as speckle. Scaled to 0.6 it measures 78%, and against
     // the reference photo that is where the loops match the real doodle;
     // slower again (0.3, 87%) smears them into vertical streaks.
     //   sc  wavelengths round the shell (feature size)
@@ -379,10 +378,10 @@ const Helmets = (function () {
     };
   }
 
-  /* THE VISOR IS PART OF THE PAINTED SHELL, not a box bolted to it. It used to
-     be a slab 0.41 m wide across a 0.29 m helmet — wider than the head, buried
-     in the shell at its middle and sticking out either side, which is most of
-     why the old helmet read as a lump. As a region of the shell it takes the
+  /* THE VISOR IS PART OF THE PAINTED SHELL, not a box bolted to it. A slab
+     (0.41 m wide across a 0.29 m helmet) is wider than the head, buried in the
+     shell at its middle and sticking out either side, and reads as a lump.
+     As a region of the shell it takes the
      aperture's real shape, every design paints around it, and the vertices it
      covers are handed the glass surface so it catches the sky like a visor.
 
@@ -440,22 +439,20 @@ const Helmets = (function () {
      mirrored to a common facing, scaled by their own height, and reduced to a
      median. W, F and B are that median. What the trace settled —
 
-       THE PROFILE IS SMOOTH. The old table stepped the silhouette: a brow
-       standing proud, the aperture recessed under it, a chin bar jutting out
-       below. None of that is in the photographs. The outline runs as one clean
-       curve from crown to rim, and the face reads entirely from the PAINT —
-       the visor aperture — not from bumps in the outline. Those steps are what
-       "shape weird" was looking at.
+       THE PROFILE IS SMOOTH. No stepped silhouette (a brow standing proud,
+       the aperture recessed under it, a chin bar jutting out below): none of
+       that is in the photographs. The outline runs as one clean curve from
+       crown to rim, and the face reads entirely from the PAINT — the visor
+       aperture — not from bumps in the outline.
 
        AND IT IS FATTEST LOW, NOT AT THE BROW. The furthest-forward and
        furthest-back points both sit at about 60% of the height, level with the
-       jaw, not up at the eyes. The old table put the maximum reach at 80% and
-       92%, which pushed the mass into a chin block.
+       jaw, not up at the eyes. Maximum reach at 80% and 92% pushes the mass
+       into a chin block.
 
        NEAR-SYMMETRIC FRONT TO BACK. Measured, the two reaches differ by under
        a centimetre over most of the height — the front leads slightly through
-       the brow, the back leads slightly through the temples. The old table had
-       the front out 5 cm ahead at the jaw.
+       the brow, the back leads slightly through the temples.
 
        PROPORTION. Median length:height across the eleven is 1.21 — a lid is a
        fifth longer front-to-back than it is tall. The rim is still two thirds
@@ -550,17 +547,16 @@ const Helmets = (function () {
      by a twentieth of the way down, so the first ring has to land inside that
      twentieth or the dome tessellates as a flat cap. f^1.25 puts it at 0.024
      and keeps the lower half near enough uniform for the bands. */
-  /* FLAT PAINT, SMOOTH LIGHT. The shell used to share one vertex between the
-     triangles that meet at it, which is right for the normal and wrong for the
-     colour: a vertex sits on ONE side of a band edge but its colour is then
-     interpolated across every triangle it touches, so every edge on the helmet
-     was a 12.9-degree smear and a keyline thinner than that vanished into the
-     blend. Vertex count, not triangle count, was the ceiling on the design.
+  /* FLAT PAINT, SMOOTH LIGHT. One vertex shared between the triangles that
+     meet at it is right for the normal and wrong for the colour: a vertex sits
+     on ONE side of a band edge but its colour is then interpolated across
+     every triangle it touches, so every edge on the helmet becomes a
+     12.9-degree smear and a keyline thinner than that vanishes into the blend.
 
-     Each triangle gets its own three vertices now, all three carrying the
-     colour sampled at the triangle's CENTROID, so the paint is flat and its
-     edges are exactly the mesh's edges — crisp, at 1120 triangles, the same
-     1120 it drew before. The NORMALS stay the smooth per-corner ones, so the
+     Each triangle gets its own three vertices, all three carrying the colour
+     sampled at the triangle's CENTROID, so the paint is flat and its edges are
+     exactly the mesh's edges — crisp, at 1120 triangles, the same count as a
+     shared-vertex shell. The NORMALS stay the smooth per-corner ones, so the
      lighting is unchanged and the shell still reads as a curved surface: this
      buys sharp graphics, not a faceted lid.
 

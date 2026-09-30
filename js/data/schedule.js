@@ -1,12 +1,12 @@
 const DataSchedule = (function () {
   "use strict";
 
-  /* ONE INSTANT, ONE ZONE. A row shows a date and a start time; the time was
-     always the viewer's local clock, and the date was formatted in UTC — so a
-     Las Vegas GP (2026-11-22 04:00Z) read "22 Nov · 20:00 PST", a day adrift.
-     When the entry has a time, both come from the same instant in the viewer's
-     zone. A DATE-ONLY entry is a calendar day, not an instant: it stays in UTC,
-     or UTC+13/+14 (NZ summer, Kiribati) showed every race a day late. */
+  /* ONE INSTANT, ONE ZONE. A row shows a date and a start time; with the time
+     on the viewer's local clock and the date formatted in UTC, a Las Vegas GP
+     (2026-11-22 04:00Z) reads "22 Nov · 20:00 PST", a day adrift. When the
+     entry has a time, both come from the same instant in the viewer's zone. A
+     DATE-ONLY entry is a calendar day, not an instant: it stays in UTC, or
+     UTC+13/+14 (NZ summer, Kiribati) shows every race a day late. */
   function raceInstant(r) {
     if (!r || !r.date || !r.time) return NaN;
     return Date.parse(`${r.date}T${r.time}`);

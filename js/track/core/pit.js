@@ -132,7 +132,7 @@ const TrackPit = (function () {
     // out of a complex that is not there. A street circuit builds the STREET
     // complex — a lane beside the road behind a real pit wall — unless its
     // def opts out; 80 km/h (F1 SR 2026 B1.6.3(a)) unless authored (Monaco
-    // runs 60; Singapore has run 80 since 2025), the painted lane keeps the old street 60.
+    // runs 60; Singapore has run 80 since 2025); the painted lane keeps 60.
     const painted = mode === "narrow";
     return {
       side: p.side === -1 ? -1 : 1,
@@ -163,11 +163,11 @@ const TrackPit = (function () {
     const L = track.total;
     if (!(L > 0)) return { entryM: ENTRY_MAX, exitM: EXIT_M };
     const cap = L / 3;
-    // THE ENTRY ROAD MUST FIT ON THE STRAIGHT TOO. The window opened as far
-    // back as the straight ran, and the 70 m road before it then had no
-    // straight left: on 21 of 52 circuits the mouth sat INSIDE the last
-    // corner, the road at its 30 m floor (Abu Dhabi's on a 23 m radius, Sochi's
-    // on 20 m; surveyed 2026-09-16, docs/research/PIT-NEXT-STEPS-2026-09.md §4).
+    // THE ENTRY ROAD MUST FIT ON THE STRAIGHT TOO. Opening the window as far
+    // back as the straight runs leaves the 70 m road before it no straight:
+    // on 21 of 52 circuits the mouth sits INSIDE the last corner, the road at
+    // its 30 m floor (Abu Dhabi's on a 23 m radius, Sochi's on 20 m; surveyed
+    // 2026-09-16, docs/research/PIT-NEXT-STEPS-2026-09.md §4).
     // Leave the road and MOUTH_RUN of run-out after the corner on the straight
     // wherever the straight allows; the floor still stands where it does not.
     const back = straightRun(track, curvature, 0, -1, ENTRY_MAX + ENTRY_ROAD + MOUTH_RUN);
@@ -248,10 +248,9 @@ const TrackPit = (function () {
     // `legends` entry to Teams.LIST beside `custom`, but it is the PLAYER's
     // entry wearing a historic livery — gridTeams() lets only one of the two
     // race — so a bay for it is a bay for a car that cannot be on the grid.
-    // Giving it one rebuilt the 13-bay row the note below records, 11 m longer
-    // than the twelve every VM-side test measures: measured 2026-09-18, it
-    // moved Monza's whole complex and left a car entering the lane wedged
-    // against the wall (tests/specs/pit-lane.spec.js, bisected to 7b2d56b).
+    // A 13th bay makes the row 11 m longer than the twelve every VM-side test
+    // measures, moving Monza's whole complex and wedging a car entering the
+    // lane against the wall (tests/specs/pit-lane.spec.js, bisected to 7b2d56b).
     for (const t of list) { if (t.legends) continue; out.push({ team: t.id, name: t.name || t.id, short: t.short || t.id.slice(0, 3).toUpperCase(),
                                      col: t.color || [0.6, 0.6, 0.65], col2: t.color2 || [0.9, 0.9, 0.9],
                                      logo3: (t.livery && t.livery.logo3) || null }); }

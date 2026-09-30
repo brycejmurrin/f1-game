@@ -1,8 +1,8 @@
 /* Apex 26 — MONACO scenery (data only), split out of js/circuits/monaco.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monaco"] =
   function (api) {
@@ -86,28 +86,20 @@
 
       // ── WHY THE SIX NAMED LANDMARKS ARE `required` MODEL GROUPS ───────────
       // The Casino, the Hôtel de Paris, the Café de Paris, the Massenet, the
-      // Casino Square fountain and the Rocher palace used to emit raw
-      // primitives straight into `out` behind an `if (!onTrack(...))` guard.
-      // That guard is all-or-nothing and it is SILENT: when it trips, the
-      // landmark draws nothing, the build succeeds, and verify-track prints a
-      // cheerful OK. This file already carries two comments from the two times
-      // that happened and had to be caught by diffing vertex counts by hand
-      // (the Café at dist 11.5; the whole floating-decoration episode).
+      // Casino Square fountain and the Rocher palace sit behind an
+      // `if (!onTrack(...))` guard, which is all-or-nothing and SILENT: when it
+      // trips, the landmark draws nothing, the build succeeds, and verify-track
+      // prints OK (the Café at dist 11.5 was lost that way). A `required`
+      // modelGroup turns that silence into a thrown build: the footprint test
+      // runs, and a rejection is reported by id instead of leaving a hole in
+      // Monte-Carlo. The onTrack guards stay in front — cheaper, and they still
+      // express the author's intent.
       //
-      // A `required` modelGroup turns that silence into a thrown build: the
-      // footprint test runs, and a rejection is reported by id instead of
-      // leaving a hole in Monte-Carlo. The onTrack guards are kept in front of
-      // it — they are cheaper and they still express the author's intent — so
-      // this only changes what happens when something DOES go wrong.
-      //
-      // One switch, so the next person can find them all at once. Five of the
-      // six take it; the Casino Square fountain is documented at its own site.
+      // One switch for all of them. Five of the six take it; the Casino Square
+      // fountain is documented at its own site.
       const LANDMARK_REQUIRED = true;
 
       // ── MEASURED, NOT FIXED: CASINO SQUARE SPANS TWO ORIGIN FRAMES ───────
-      // Written down because the numbers cost an afternoon and the next person
-      // should not have to re-derive them.
-      //
       // The square's five landmarks do not share a frame. The Casino reads raw
       // px/rx/tx and therefore goes through KOLD (+800 nodes); the Hôtel de
       // Paris, the Café, the Massenet and the fountain all go through
@@ -128,7 +120,7 @@
       // on the plateau — but it would also pull it 60 m off the Café that
       // currently stands beside it, and all five were hand-tuned against the
       // onTrack guards where they are. That is a rendered-lap call, not a
-      // headless one, so nothing was moved. Re-seating the whole square on ONE
+      // headless one, so it stays. Re-seating the whole square on ONE
       // node with metre offsets is the right shape of fix when someone can
       // actually look at it.
 

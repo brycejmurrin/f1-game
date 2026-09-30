@@ -356,8 +356,8 @@ const CarDraw = (function () {
     const _wq = [], _wqMesh = [], _rq = [], _rqEmis = [], _rqAlpha = [];
     let _wqN = 0, _rqN = 0;
     // ── decal-queue ─────────────────────────────────────────────────
-    // Deferred car-decal batch (same pattern as the blob shadows above): the car
-    // loop used to interleave G.gfx.draw(body) with G.gfx.drawDecal per car — ~2
+    // Deferred car-decal batch (same pattern as the blob shadows above):
+    // interleaving G.gfx.draw(body) with G.gfx.drawDecal per car costs ~2
     // program+state flips per car, ~44/frame with a full field. Record each drawn
     // car's decal params here and flush them in ONE decal-program block right
     // after the loop. Decals are depth-tested but write neither depth nor alpha,
@@ -557,8 +557,8 @@ const CarDraw = (function () {
     // Spin each wheel about its axle ∝ speed and steer the fronts by the smoothed
     // driver input. local = translate(corner) ∘ rotY(steer) ∘ rotX(spin), composed
     // straight into a scratch matrix (no per-frame allocation), then into world.
-    // Factory tyre/brake/rim per team — the old baked AI wheel look — but as a
-    // planted spinning pair, not glued to the chassis. Own cache so garage swaps
+    // Factory tyre/brake/rim per team, as a planted spinning pair, not glued
+    // to the chassis. Own cache so garage swaps
     // cannot evict the field (WHEEL_MESH_CACHE_MAX is a player-parts bound).
     const fieldWheelCache = {};
     // putBoundedMesh + freeWheelPair: hit promotion so a still-drawn combo is not

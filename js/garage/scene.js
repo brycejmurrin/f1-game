@@ -39,17 +39,14 @@ function buildShell(out, liv) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
   const dado = scale(c1, 0.45), stripe = scale(c2, 0.8);
-  // Wall colour by ABSOLUTE height. This used to take a 0..1 v and multiply by
-  // the wall height, which was fine — the bug was that no vertex row ever
-  // landed in the accent band: nv was 6 over a 5 m wall, so the rows sat at
-  // 0, 0.833, 1.667, 2.5, 3.333, 4.167, 5.0 and the 1.50-1.62 band fell
-  // between two of them. `stripe` was computed on every rebuild and thrown
-  // away, which is why the team dado read as an 83 cm wash instead of a line.
-  // The walls are now built as three stacked grids whose seams ARE the band
-  // edges, so the row exists by construction.
+  // Wall colour by ABSOLUTE height. The walls are three stacked grids whose
+  // seams ARE the band edges, so a vertex row exists at each by construction:
+  // one uniform grid (nv 6 over a 5 m wall, rows at 0, 0.833, 1.667, 2.5,
+  // 3.333, 4.167, 5.0) puts no row in the 1.50-1.62 accent band, and the team
+  // dado reads as an 83 cm wash instead of a line.
   // The upper band is the LARGEST surface in the room — 3.38 m of every wall,
-  // ~143 m2 across four — and it was one frozen grey for all eleven teams while
-  // the 1.5 m of dado below it carried the livery. A bay should read as the
+  // ~143 m2 across four — so it takes the team tint too, not one frozen grey
+  // above a livery dado. A bay should read as the
   // team's from any camera, not only below waist height. Held to 12% of c1 over
   // the grey: it has to stay a BACKDROP for a car that is itself team-coloured,
   // and a saturated wall would fight the thing it is behind.
@@ -99,10 +96,10 @@ function buildShell(out, liv) {
     if (i === 1) continue;                       // the door wall, below
     wallBands(w[0], w[1], w[4] * 2, w[3], 0, CEIL_Y);
   }
-  // THE DOOR IS A HOLE. The roller shutter is modelled parked half open, but
-  // this wall used to be a full-height opaque grid, so the "opening" under the
-  // slats was interior wall paint — on the REAR preset, whose entire backdrop
-  // is this wall, that painted band is 23% of the frame.
+  // THE DOOR IS A HOLE. The roller shutter is modelled parked half open; as a
+  // full-height opaque grid the "opening" under the slats would be interior
+  // wall paint — on the REAR preset, whose entire backdrop is this wall, 23%
+  // of the frame.
   //
   // The aperture edges sit on COLUMN BOUNDARIES (pitch 10.8/16 = 0.675 m) and
   // each jamb is an EVEN number of columns, so the batten alternation keeps its
@@ -249,9 +246,9 @@ function buildProps(g, liv) {
   // The upper side walls carry 2.2 m2 of wordmark over 29 m2 of wall, and that
   // band is 22% of the SIDE preset — the one view that looks straight at them.
   // A service gantry per side: a shelf, its brackets, and a rail. ABOVE the
-  // wordmark band (y 3.10-3.60): the shelf used to run at 3.42 with its clips
-  // at z 0, so the SIDE preset saw every wordmark with its top third behind
-  // the shelf and the middle one notched by a clip. Brackets from 3.62, shelf
+  // wordmark band (y 3.10-3.60): a shelf at 3.42 with clips at z 0 hides every
+  // wordmark's top third from the SIDE preset and notches the middle one with
+  // a clip. Brackets from 3.62, shelf
   // at 3.84, rail and clips to 4.24 — under the fill fixtures' 4.32 housings.
   for (const sd of [-1, 1]) {
     const w = sd < 0 ? g.nx : g.px, x = sd * 5.20;
@@ -413,9 +410,9 @@ const LED_DROP = 0.06;   // light record sits under its panel so the halo clears
 const ledMesh = {};
 // PER SIDE, like the props and the dress, and for the same reason: a wall the
 // eye is outside of is not drawn, and anything mounted ON that wall must go
-// with it. This mesh used to be one unculled blob, so stepping the camera
-// outside a side wall left its dado strip hanging in mid-air across the frame,
-// in front of the car — a glowing bar attached to nothing. Ceiling fixtures
+// with it: as one unculled blob, stepping the camera outside a side wall would
+// leave its dado strip hanging in mid-air across the frame, in front of the
+// car — a glowing bar attached to nothing. Ceiling fixtures
 // stay in `mid`: they hang from the truss, not from a wall.
 function buildLed(g, liv) {
   const out = g.mid;
@@ -675,10 +672,10 @@ function buildPitLane(out, liv, night) {
   const WALL = [0.30, 0.31, 0.34], WALL_TOP = [0.46, 0.47, 0.50];
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   // 21 x 5.45 m — 114 m2, the entire backdrop of the REAR preset, seen through
-  // a 5.4 x 4.8 m aperture — used to be ONE `tile()`: two triangles and one
-  // flat colour, so ten spot lights had nothing to fall on and the lane read as
-  // a painted backdrop rather than a surface. Subdivided 12 x 4 with a little
-  // vertex-colour mottle, it costs 96 triangles and starts taking light.
+  // a 5.4 x 4.8 m aperture. As ONE `tile()` (two triangles, one flat colour)
+  // ten spot lights have nothing to fall on and the lane reads as a painted
+  // backdrop rather than a surface. Subdivided 12 x 4 with a little
+  // vertex-colour mottle, it costs 96 triangles and takes light.
   panelGrid(out, [-PIT_HW, APRON_Y + 0.004, PIT_Z0], [PIT_HW * 2, 0, 0],
     [0, 0, PIT_Z1 - PIT_Z0], 12, 4, [0, 1, 0], (u, v) => {
       // Deterministic per-vertex wear: darker in the working lane against the
@@ -1051,11 +1048,11 @@ function paintDress(team, liv, info) {
 // paint nothing rather than showing a board full of zeroes.
 //
 // A SEPARATE PASS over the SAME canvas, because these four regions are the only
-// part of the atlas a part pick changes. paintDress used to be one function
-// keyed on everything, so fitting a brake duct repainted the crest lightbox,
-// the wordmarks, the pit board, six telemetry screens and the strategy strip
-// to arrive at the same pixels — and rebuild() threw the whole bay's geometry
-// away with it. The boards repaint over their own opaque panels, so no clear
+// part of the atlas a part pick changes. One paintDress keyed on everything
+// would repaint the crest lightbox, the wordmarks, the pit board, six
+// telemetry screens and the strategy strip on every brake-duct fit to arrive
+// at the same pixels — and rebuild() would throw the whole bay's geometry away
+// with it. The boards repaint over their own opaque panels, so no clear
 // is needed between passes.
 function paintBoards(cv, team, liv, info) {
   if (!info) return;
@@ -1188,9 +1185,8 @@ function buildDress() {
   // Side walls: the wordmark repeated. Corner order is built per side so the
   // text reads the right way round from inside each wall.
   // Side-wall wordmarks, in the y 3.10-3.60 band that both walls have free.
-  // They used to sit at y 2.42-2.92, which put the -X one behind the monitor
-  // bank (0.19 m proud) and made the +X one COPLANAR with the spec board. The
-  // +X wall now carries the three data boards over z -5.40..-2.40, so its
+  // At y 2.42-2.92 the -X one would sit behind the monitor bank (0.19 m
+  // proud). The deep bay (z -5.40..-2.40) is left to the data boards, so the
   // wordmarks only take the two bays forward of that.
   const wordZ = [[-4.6, -2.4], [-1.1, 1.1], [2.4, 4.6]];
   for (let i = 0; i < wordZ.length; i++) {
@@ -1199,35 +1195,30 @@ function buildDress() {
     if (i > 0) dquad(g.nx, [[-xw, 3.10, z1], [-xw, 3.10, z0], [-xw, 3.60, z0], [-xw, 3.60, z1]], [1, 0, 0], D_WORD);
     if (i > 0) dquad(g.px, [[xw, 3.10, z0], [xw, 3.10, z1], [xw, 3.60, z1], [xw, 3.60, z0]], [-1, 0, 0], D_WORD);
   }
-  // The information boards. STATS, BUDGET and DRIVER go on the BACK wall
-  // because that is the wall the default and FRONT framings look straight at,
-  // and they sit in the SAME y 1.3-3.8 band as the crest for the same reason it
-  // does: the preview's vertical half-FOV is 18 deg about an aim point at
-  // y 0.45 and the back wall is ~14 m out, so a board above ~y 4 is already
-  // cropped by the top of the frame. (Placed higher first, and duly cut off.)
-  // The shelving and pit board that used to stand here moved for them.
-  // SPEC goes on the +X wall, above the trolleys, which top out around y 1.4.
-  // PERFORMANCE DATA ON THE SIDE WALL, IDENTITY ON THE BACK WALL. These two
-  // boards used to flank the crest, which left the mark ~100 px tall on a
-  // 1000 px canvas with a board hard against each side of it. Stacked above the
-  // spec sheet on +X they read just as well and the back wall becomes the team's.
+  // The information boards. Back-wall boards sit in the SAME y 1.3-3.8 band as
+  // the crest for the same reason it does: the preview's vertical half-FOV is
+  // 18 deg about an aim point at y 0.45 and the back wall is ~14 m out, so a
+  // board above ~y 4 is already cropped by the top of the frame.
+  // PERFORMANCE DATA ON THE SIDE WALL, IDENTITY ON THE BACK WALL: boards
+  // flanking the crest leave the mark ~100 px tall on a 1000 px canvas with a
+  // board hard against each side of it.
   // STATS goes on the -X wall, not stacked above SPEC on +X. Solving the FRONT
   // preset's frustum on the plane x = HALF_W puts NDC.y = 1 at about y 3.2
-  // there, so a board at y 3.28..4.78 showed nothing but its bottom edge; and
+  // there, so a board at y 3.28..4.78 shows nothing but its bottom edge; and
   // the two walls are not symmetric in this framing either, because the docked
   // sheet shifts the visible centre to the LEFT, which pulls -X content toward
   // the middle of the frame and pushes +X content off its right edge. The SIDE
   // preset also looks straight at this wall (the eye is outside +X, which culls
   // it), so the live stats get the one dead-on reading in the whole set.
   dquad(g.nx, [[-xw, 1.60, -2.40], [-xw, 1.60, -5.40], [-xw, 3.10, -5.40], [-xw, 3.10, -2.40]], [1, 0, 0], D_STATS);
-  // BUDGET and FITTED SPEC used to live on +X, which NO camera preset frames:
-  // `side` puts the eye at x +11.1 and back-face culls +X entirely, `front`
-  // projects that wall to NDC.x ~ +0.43 which is behind the docked setup
-  // sheet, and `hero` is ~84 deg off axis. Two boards a player is meant to
-  // read while spending money were reachable only by manually spinning the
-  // turntable. BUDGET goes under STATS on -X (the wall `side` looks straight
-  // at), FITTED SPEC onto the bare left half of the back wall, which is 41%
-  // of the `front` frame and already carries the crest and driver boards.
+  // BUDGET and FITTED SPEC stay off +X, which NO camera preset frames: `side`
+  // puts the eye at x +11.1 and back-face culls +X entirely, `front` projects
+  // that wall to NDC.x ~ +0.43 which is behind the docked setup sheet, and
+  // `hero` is ~84 deg off axis — boards a player reads while spending money
+  // would be reachable only by spinning the turntable. BUDGET goes under STATS
+  // on -X (the wall `side` looks straight at), FITTED SPEC onto the bare left
+  // half of the back wall, which is 41% of the `front` frame and already
+  // carries the crest and driver boards.
   dquad(g.nx, [[-xw, 0.69, -2.40], [-xw, 0.69, -5.40], [-xw, 1.44, -5.40], [-xw, 1.44, -2.40]], [1, 0, 0], D_BUDGET);
   // Square, because D_DRIVER is a square atlas region and a stretched quad would
   // squash the number.
@@ -1287,25 +1278,23 @@ const DRESS_OPTS = { glow: 0.62 };
 // chip click or a livery edit rebuilds and the old GL buffers are freed on the
 // spot. One slot cannot leak more than one generation.
 //
-// The key used to carry liv.c1 ALONE (and this comment used to claim a "store
-// revision" term that was never there). The correct colours reached rebuild()
-// on every frame — resolveLivery returns a fresh object including the unsaved
-// draft — and were thrown away by the key compare, so editing ACCENT, BODY
-// STRIPE, DETAIL or TEAM LOGO left the whole bay on its old paint: shell,
-// props, floor band and the dress atlas with the crest and boards. The car
-// repainted (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
-// preview mesh key) and the bay did not, which is exactly how it was reported.
-// A slot that any future dressing reads MUST be added here too.
+// The correct colours reach rebuild() on every frame — resolveLivery returns a
+// fresh object including the unsaved draft — so a key on liv.c1 ALONE would
+// throw them away and leave the whole bay (shell, props, floor band and the
+// dress atlas with the crest and boards) on its old paint after an ACCENT,
+// BODY STRIPE, DETAIL or TEAM LOGO edit, while the car repaints
+// (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
+// preview mesh key). A slot that any future dressing reads MUST be added here too.
 let floorMesh = null, cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
 // its colours; the dress atlas additionally carries boardKey(info), which
-// changes on every part pick. One combined key made a brake-duct choice
+// changes on every part pick. One combined key would make a brake-duct choice
 // rebuild the shell, the LED strips, the floor, every prop AND repaint the
-// full 1024² atlas — measured 12 ms here on top of the car's own rebuild, and
-// the owner's "the turntable stops when I pick a part". Geometry now survives a
-// part pick; only the four boards repaint and re-upload.
+// full 1024² atlas — measured 12 ms on top of the car's own rebuild, enough to
+// stall the turntable on a pick. Geometry survives a part pick; only the four
+// boards repaint and re-upload.
 let geomKey = "", dressCanvas = null;
 const propMesh = {};
 // `mat` is a PER-VERTEX MATERIAL ID, and its absence is why this whole room was
@@ -1450,7 +1439,7 @@ function rebuild(team, liv, info, ctx) {
 
 // Squeegeed resin: matte enough to read as concrete, glossy enough that ten
 // real spot lights streak across it. The sheen is emergent from the lamp
-// energies above — it does not appear at the old rig's levels.
+// energies above — it does not appear at a dimmer rig's levels.
 const FLOOR_OPTS = { roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0 };
 const SHELL_OPTS = { roughness: 0.86, metalness: 0.05, specular: 0.16, clearcoat: 0 };
 

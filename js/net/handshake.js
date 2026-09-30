@@ -88,9 +88,9 @@ const NetHandshake = (function () {
   // text shaped like one of our codes at all? The lobby asks this BEFORE it
   // needs a transport, so a pasted "not-a-real-code" is refused as "not an
   // Apex invite code" even while join() is still waiting on the TURN
-  // credential fetch — the transport check used to come first and reported
-  // "That attempt has ended" for a typo, and the answer-step spec raced the
-  // fetch on every slow network (the sandbox proxy fails it after ~2 s).
+  // credential fetch — checking the transport first reports "That attempt has
+  // ended" for a typo and races the fetch on every slow network (the sandbox
+  // proxy fails it after ~2 s).
   // Whitespace AND the invisible characters mail and chat clients slip into a
   // long unbroken string (zero-width space/joiners, word joiner, soft hyphen,
   // BOM): `\s` matches none of those, and one of them turns a good code into
@@ -157,8 +157,8 @@ const NetHandshake = (function () {
   // carries its own generation in <meta name="apex-build"> (stamped by the
   // deploy alongside version.json), and that is the JS actually loaded. A
   // fetch of version.json answers a different question: a tab left open
-  // across a deploy read the NEW number while running the OLD scripts, so two
-  // such tabs matched each other's builds — and a fresh tab's — while racing
+  // across a deploy reads the NEW number while running the OLD scripts, so two
+  // such tabs would match each other's builds — and a fresh tab's — while racing
   // on different splines. The meta is authoritative when present; the fetch
   // is the fallback for a shell with no stamp (a local checkout serves the
   // committed meta, which is the same generation version.json holds).

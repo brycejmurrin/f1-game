@@ -138,18 +138,14 @@
       };
 
       // ---------------------------------------------------------------- 1.
-      // FOREST + ARMCO SHELL. Dense ranks of tall bare-trunked Scots pine set
-      // only a few metres back, canopy high enough that the trunks read as a
-      // colonnade. SEVEN ranks now — the far ones cool towards the sky so the
-      // wall of green has depth instead of being a flat curtain. The runway
-      // corridor is cut out of every one of them.
-      // every(11), not every(5), and the near rank at 26 m rather than 13 m.
-      // A 2026-09-15 visual pass found the circuit INVISIBLE from every roadside
-      // view: a pine every 20 m on both sides, up to five ranks deep starting
-      // 13 m off the edge, is not a treeline, it is a fence. Anderstorp is built
-      // on an AIRFIELD — the defining feature is open ground, a runway used as a
-      // straight, and forest at the perimeter. The depth ranks below are kept;
-      // it is the pitch and the near band that were wrong.
+      // FOREST + ARMCO SHELL. Ranks of tall bare-trunked Scots pine, canopy
+      // high enough that the trunks read as a colonnade. SEVEN ranks — the far
+      // ones cool towards the sky so the wall of green has depth instead of
+      // being a flat curtain. The runway corridor is cut out of every one.
+      // every(11), not every(5), and the near rank at 26 m rather than 13 m:
+      // a pine every 20 m from 13 m off the edge is a fence that hides the
+      // circuit from every roadside view. Anderstorp is built on an AIRFIELD —
+      // open ground, a runway used as a straight, forest at the perimeter.
       every(11, (k) => {
         const s = k / n;
         const h = hash(k * 37);

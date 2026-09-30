@@ -317,10 +317,9 @@ const SceneryPits = (function () {
       // driving boundary (TrackPit.openBoundary) stops a car's side at it.
       // …at the LANE's own outer edge (TrackPit.outerAt), which is the garage
       // line where the bays are and the fast lane's far side on the entry and
-      // exit roads. The wall used to stand at the full width for the whole
-      // window, so an entrance with no garage beside it for 100-238 m was as
-      // wide as the service area. What it walls off now is the APRON, which is
-      // paved (TrackMesh.buildPitLane) rather than the grass it was.
+      // exit roads — at full width for the whole window, an entrance with no
+      // garage beside it for 100-238 m would be as wide as the service area.
+      // What it walls off is the APRON, paved (TrackMesh.buildPitLane).
       const outerShift = (k) => (typeof TrackPit !== "undefined" && TrackPit.outerAt
         ? TrackPit.outerAt(p, k) : o.workOut * p.w[k]);
       const outerWall = (ks2) => {
@@ -354,8 +353,7 @@ const SceneryPits = (function () {
       // "PIT ENTRY" with an arrow, twice on the approach before the entry
       // road (TrackPit.SIGN.boardM back from where it peels off), just off
       // the road's pit-side edge and short of whatever barrier stands
-      // there; "PIT LANE <limit> km/h" on the platform at the entry line. A
-      // blank white square used to be the whole of it.
+      // there; "PIT LANE <limit> km/h" on the platform at the entry line.
       const kIn = kOf(p.sIn), kOut = kOf(p.sOut);
       if (S && S.boards) {
         // On the verge, its inner edge 0.3 m off the road, and only where the
@@ -367,8 +365,7 @@ const SceneryPits = (function () {
         // writes what it placed to track.props at placement, so the registry
         // is complete here. A board that would share the verge with one walks
         // a further 24 m back, 4 m at a time, and gives up rather than stand
-        // through it (Nürburgring's far board at 110 m did exactly that, and
-        // was moved to 95 m by hand before this walk existed). Multi-part
+        // through it (as Nürburgring's far board at 110 m would). Multi-part
         // records (a grandstand, a building, a backdrop) are skipped: their
         // box is the assembly's bounding box — at Bahrain a stand 5 m out
         // reaches the road with it and no board could stand anywhere — and
@@ -536,8 +533,8 @@ const SceneryPits = (function () {
         // hospitality storey and its roof — one slice per bay so the building
         // follows a gently curving pit straight instead of chording it. Every
         // other slice sits MIN_SEP (3 cm) higher: two slices on ONE plane are
-        // what the coplanar sweep ratchets, and the old 6 mm still fought from
-        // 174 m. 3 cm is invisible from the lane.
+        // what the coplanar sweep ratchets, and 6 mm still fights from 174 m.
+        // 3 cm is invisible from the lane.
         // …and the VERTICAL faces get the same step sideways: on a gently
         // curving row two back walls stand end to end on one plane too.
         const lift = (i & 1) ? TrackGeom.MIN_SEP : 0, bump = sd * lift;
@@ -603,7 +600,7 @@ const SceneryPits = (function () {
       // (docs/research/PIT-LIGHTING-PLAN-2026-09.md). A pass of its own, after
       // the bays, so a bay stays the eight prims the clip audit reads as one
       // model (its ADJ window) and two neighbours on a bending row are judged
-      // as they were before the canopy existed.
+      // as they would be without the canopy.
       for (let i = 0; i < count; i++) {
         const box = boxes[i], k = box.k;
         const f = frameAtS(box.s), bs = f.basis, h = f.hw;

@@ -5,12 +5,11 @@ const ApexApi = (function () {
 function create(G) {
 // race()/tt() hand back a descriptor that is ALSO awaitable. startRace() awaits
 // ensureScenery() — the scenery closure is LAZY_SCENERY and Tracks.build is
-// synchronous — so firing it unawaited made the hook claim success while the
-// PREVIOUS track was still built. Measured 2026-09-14: booted on bahrain,
-// `race("monaco")` returned {track:"monaco"} and wallStats() then reported
-// n=1346 / street=false, bahrain's numbers, and waiting did not help because
-// nothing re-read it. Five tracks-walls street assertions failed on this, on
-// the deploy branch too. Thenable, not a Promise, so the ~70 existing call
+// synchronous — so an unawaited start lets the hook claim success while the
+// PREVIOUS track is still built (measured: booted on bahrain, `race("monaco")`
+// returned {track:"monaco"} and wallStats() then reported n=1346 /
+// street=false, bahrain's numbers; waiting does not help because nothing
+// re-reads it). Thenable, not a Promise, so the ~70 existing call
 // sites are unchanged (`r.track` still reads synchronously); a caller needing
 // the track BUILT writes `await __apex.race(id)`. The resolved value drops
 // `then` so a second await cannot recurse.
@@ -38,37 +37,33 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT",
-  // 2026-09-15: five the guard had been red on. The last three need a STREET
-  // circuit with real contact to appear — sweep tracks, not just monza.
+  // The last three appear only on a STREET circuit with real contact — sweep
+  // tracks, not just monza.
   "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI",
-  // 2026-09-15 (second pass): the tyre-force model (js/physics/tyre-model.js)
-  // and the smoothed control-demand fields (game.js "--- lateral ---") joined
-  // the sim after this list was last extended, every one already read with a
+  // The tyre-force model (js/physics/tyre-model.js) and the smoothed
+  // control-demand fields (game.js "--- lateral ---"), every one read with a
   // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js's
   // telemetry getter, collide.js's pre-collision speed read, and this file's
-  // own tyres() hook) — undefined was always a tolerated input, just never
-  // actually reached because nothing cleared it between episodes.
+  // own tyres() hook), so undefined is a tolerated input.
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
-  // 2026-09-16: `errCount` was written by the AI mistake model and read by
-  // nothing, so it leaked here silently — a short rollout rarely trips a
-  // mistake, which is why the guard above never caught it. It counts mistakes
-  // within ONE race, so a cold car has none.
+  // `errCount` counts AI mistakes within ONE race, so a cold car has none (a
+  // short rollout rarely trips a mistake, so a leak goes unnoticed).
   "errCount", "pitWorked",
-  // 2026-09-16: found by tools/check/episode-diff.mjs, not a live repro — the
-  // lazy `c.passPlan || (c.passPlan = {})` cache in game.js's overtake-attempt
-  // block survives reset() untouched, and `!c.passPlan || c.passPlan.side`
-  // (same file) reads `.side` straight off it without AiCorridor.choose()
-  // having run yet this tick whenever the attempt gate above it is closed. A
-  // cold car has no passPlan, so that read is always true; a warm one carries
-  // last episode's `.side`, which can be 0 (a previous "no lane" verdict) and
-  // flip the same read to false — an AI overtake decision that depends on
-  // which episode number it is.
+  // The lazy `c.passPlan || (c.passPlan = {})` cache in game.js's
+  // overtake-attempt block survives reset() untouched, and
+  // `!c.passPlan || c.passPlan.side` (same file) reads `.side` straight off it
+  // without AiCorridor.choose() having run yet this tick whenever the attempt
+  // gate above it is closed. A cold car has no passPlan, so that read is
+  // always true; a warm one carries last episode's `.side`, which can be 0 (a
+  // previous "no lane" verdict) and flip the same read to false — an AI
+  // overtake decision that depends on which episode number it is
+  // (tools/check/episode-diff.mjs finds these).
   "passPlan",
-  // 2026-09-27: the race-END state. `_coastHeld` (coast() after the flag) and
-  // `lastLap` (the lap-line write) are absent on a cold car; a car classified
-  // in episode 1 started episode 2 with both. finPos/retired/dnf* are DECLARED
+  // The race-END state. `_coastHeld` (coast() after the flag) and `lastLap`
+  // (the lap-line write) are absent on a cold car; a car classified in one
+  // episode would start the next with both. finPos/retired/dnf* are DECLARED
   // by makeCars, so gridUp() restores their declared values instead.
   "_coastHeld", "lastLap"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
@@ -154,12 +149,11 @@ function simCareerRound() {
     season.pts[car.driverId] = (season.pts[car.driverId] || 0) + pts;
     season.driverCodes[car.driverId] = car.code;
     season.teamPts[car.team.id] = (season.teamPts[car.team.id] || 0) + pts;
-    // AND THE COUNTBACK HISTOGRAM, which this inline award used to omit.
-    // Career.driverStandings() ranks through SeasonCal.rank, whose tie-break
-    // reads season.finishes; with it empty a points tie fell through to a
-    // STRING compare on driver id, so a season closed out through careerSim
-    // could crown a different champion than the same season raced. Dev surface
-    // only, but it is precisely the defect the histogram was added to fix.
+    // AND THE COUNTBACK HISTOGRAM. Career.driverStandings() ranks through
+    // SeasonCal.rank, whose tie-break reads season.finishes; with it empty a
+    // points tie falls through to a STRING compare on driver id, so a season
+    // closed out through careerSim could crown a different champion than the
+    // same season raced.
     if (!car.retired) {
       const f = season.finishes || (season.finishes = {});
       const row = f[car.driverId] || (f[car.driverId] = []);
@@ -173,19 +167,19 @@ function simCareerRound() {
 }
 
 // LAZY TRACK ENSURE — the one place the deferred boot build is forced.
-// js/game.js no longer builds the 3D track synchronously at boot (it schedules
+// js/game.js does not build the 3D track synchronously at boot (it schedules
 // the menu flyby build instead), so window.__apex can exist for a beat with
 // G.track === null — while every hook below, and every spec that stages a
-// camera before racing (park/jump/snapCam/probe/world/…), was written against
-// the synchronous world boot used to guarantee. Force the build ONCE here at
-// the API boundary rather than guard ~180 call sites: the first __apex call
-// pays exactly what boot used to pay, and a player who never opens the dev API
-// never pays it at all. Placement is load-bearing in BOTH directions —
+// camera before racing (park/jump/snapCam/probe/world/…), assumes a built
+// world. Force the build ONCE here at the API boundary rather than guard ~180
+// call sites: the first __apex call pays the synchronous build, and a player
+// who never opens the dev API never pays it at all. Placement is
+// load-bearing in BOTH directions —
 // tests/unit/hooks-documented.test.mjs slices this file at the first occurrence
 // of the api literal's opening text and reads every 2-space-indented name after
 // it as a hook, so the loop must sit above the literal AND this comment must
-// not quote that text (it did, which moved the slice and invented a hook called
-// `for` — measured, the guard went red).
+// not quote that text (quoting it moves the slice and invents a hook called
+// `for`).
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
@@ -228,8 +222,8 @@ const api = {
     placeFromTrack(G.player, smp);
     G.player.vLat = 0; G.player.yawRateCur = 0;
     // Teleport hygiene: the wall/rescue accumulators describe the OLD location.
-    // Left alone, a wedge-then-jump sequence carried ~3 s of rescueT into the
-    // new spot and fired a surprise auto-rescue mid-drive (measured).
+    // Left alone, a wedge-then-jump sequence carries ~3 s of rescueT into the
+    // new spot and fires a surprise auto-rescue mid-drive (measured).
     G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
     G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
     // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of
@@ -812,23 +806,14 @@ const api = {
     // Sides the PIT COMPLEX owns (TrackPit.openBoundary widens them to the garages after the scenery)
     // count as `pitSides`, not as loose: Montreal's lap-long walls read 92.8 % with them in, floor 95 %.
     //
-    // `maxB` NOW EXCLUDES THEM TOO, and that is a bug fix, not a loosened test.
-    // The line above has always said a pit-owned side is not a loose barrier —
-    // it just applied that to `tightFrac` and not to its neighbour, so the
-    // widest-limit statistic went on reporting the garage line as though a wall
-    // had run away. Once the complex shipped, 44 of the 52 circuits read
-    // maxB > 20 and EVERY ONE of them was over solely because of the pit side;
-    // drop it and the whole fleet sits at 17.0 or less.
-    //
-    // Three specs written at different times encode the old meaning and were
-    // left failing or accidentally passing by the change: monaco asserts
-    // maxB < 6 against a pit-opened 14.7 (5.9 without it), bahrain <= 20 and
-    // hungaroring < 20 against 20.1 (17.0 without it). They were right about
-    // their circuits; the quantity moved underneath them.
+    // `maxB` EXCLUDES THEM TOO: a pit-owned side is not a loose barrier for the
+    // widest-limit statistic either. With it in, 44 of the 52 circuits read
+    // maxB > 20 solely because of the garage line (monaco 14.7 against 5.9
+    // without it, hungaroring 20.1 against 17.0); without it the whole fleet
+    // sits at 17.0 or less.
     //
     // The pit extent is not hidden, just named: `maxPitB` reports it so it can
-    // still be bounded, which is what the specs below now do. null when the
-    // track has no pit-owned side at all.
+    // still be bounded. null when the track has no pit-owned side at all.
     const pit = G.track.pit, keep = pit && pit.keep;
     let minB = Infinity, maxB = -Infinity, maxPitB = -Infinity;
     let minOverHw = Infinity, anyNaN = false, tightSides = 0, pitSides = 0;
@@ -1025,8 +1010,7 @@ const api = {
     // +k is a LEFT-hand bend (measured — agentview.js corner-table note), whose
     // outside is the RIGHT side of the road; orbit()'s az>0 is the right side.
     // So az = +sign(k)·mag puts the camera on the outside, shooting across the
-    // apex. (This read -sign(k) for as long as the old "+k = right" comment
-    // lived: the cinematic cam sat on the INSIDE of every corner.)
+    // apex. (-sign(k) puts the cinematic cam on the INSIDE of every corner.)
     // Strength scales with |k| up to a tight-hairpin cap so the angle doesn't over-rotate.
     const kAbs = Math.min(Math.abs(k), 0.05);
     const baseAz = k === 0 ? 35 : Math.sign(k) * (70 + 40 * kAbs / 0.05);
@@ -1527,10 +1511,9 @@ const api = {
   },
   // texCensus() — RESIDENT texture bytes, by kind, from the active backend.
   //
-  // The hook the 2026-09-14 texture-memory plan turns on. Its whole reason for
-  // existing is that the biggest texture number in the game was arithmetic:
-  // ~147 MB of livery atlases, about ten times the packed world geometry, with
-  // nothing able to confirm or refute it. Read it on a full grid before
+  // It exists because the biggest texture number in the game — ~147 MB of
+  // livery atlases, about ten times the packed world geometry — is otherwise
+  // arithmetic nothing can confirm or refute. Read it on a full grid before
   // touching any resolution policy.
   //
   // `excludes` is not decoration — it names what the census does NOT count
@@ -1755,10 +1738,9 @@ const api = {
       numLights: L ? L.length / 15 : 0,
       meanLampRGB,
       // The per-chunk twin of meanLampRGB: the mean colour of the lamp set the
-      // CHUNKED meshes are lit from. It used to be the raw baked list — no LAMP
-      // LEVEL, TEMPERATURE, FLICKER, WARM-UP or twilight ramp — which is what
-      // made those sliders look broken on everything chunked. Now it tracks
-      // them, and the two means should move together.
+      // CHUNKED meshes are lit from. It tracks LAMP LEVEL, TEMPERATURE,
+      // FLICKER, WARM-UP and the twilight ramp (the raw baked list does not),
+      // so the two means should move together.
       meanPerChunkRGB: (() => {
         const A = G.frame.allLights;
         if (!A || A.length < 15) return null;
@@ -1771,8 +1753,8 @@ const api = {
       // RESOLVED per-chunk lamp state, not the raw knobs. Three gates can zero
       // these independently (backend capability, the live graphics tier the
       // governor can shed mid-race, and the persisted post-context-loss latch),
-      // and nothing used to report which one fired — so "per-chunk lamps do
-      // nothing on my machine" was undiagnosable from outside. perChunkHeld
+      // and without a report of which one fired "per-chunk lamps do nothing
+      // on my machine" is undiagnosable from outside. perChunkHeld
       // names the gate when the knob is up but the frame resolved to 0.
       perChunkLights: G.frame.perChunkLights || 0,
       // TLX only (null elsewhere): three resolves lamps per FRAGMENT from baked
@@ -2018,7 +2000,7 @@ const api = {
 
     const inp = G._testInput || {};
     // A rescue teleport resets rescueT to 0 the instant it fires (threshold >3), so
-    // the old rescueT>8 test could never trip. Signal "done" briefly after a rescue.
+    // a rescueT>8 test could never trip. Signal "done" briefly after a rescue.
     const done = !!G.player.wrongWay ||
       (G.player.rescueLastT != null && (G.raceT - G.player.rescueLastT) < 0.5);
 
@@ -2617,8 +2599,7 @@ const api = {
     // THE SAME TELEPORT HYGIENE jump() carries, and for the same measured
     // reason: the wall/rescue accumulators describe the OLD location, so a car
     // placed after a wedge brings ~3 s of rescueT with it and auto-rescues
-    // itself somewhere it was never stuck. jump() gained this block after that
-    // was measured; aiPlace() never did, so every AI placement kept the bug.
+    // itself somewhere it was never stuck.
     c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
     c.wrongT = 0; c.wrongWay = false; c.offT = 0;
     // rPrevHead with the rest: without it the yaw interpolator tweens from the
@@ -2799,12 +2780,10 @@ const api = {
       c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.corridorAccel = 0; c.slipDeg = 0;
       // The heading-state controller's own per-episode state (game.js
-      // "--- lateral ---", 2026-09-08). Missed when that controller landed, and
-      // it broke replay determinism outright rather than by a metre: `aiBias`
-      // SNAPS to its target when null and slews when it is a number, so the
-      // first episode ended with a number and every later one started from it.
-      // agent-determinism caught it; the block above is the reason this file
-      // has such a block at all.
+      // "--- lateral ---"). Left alone it breaks replay determinism outright
+      // rather than by a metre: `aiBias` SNAPS to its target when null and
+      // slews when it is a number, so the first episode ends with a number and
+      // every later one starts from it (agent-determinism catches it).
       c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
       c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; OvertakeMode.reset(c);
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
@@ -2821,22 +2800,20 @@ const api = {
       // is the blocker's pace AiDrive.otWant decides passes on, `accSm` its
       // acceleration, `towing` its slipstream, `rank` its position. On the first
       // frame a fresh session sees undefined and falls back where a replayed one
-      // sees last episode's value; that moved finishing order between replays of
-      // one seed while the player's own trace stayed byte-identical, which is
+      // sees last episode's value; that moves finishing order between replays of
+      // one seed while the player's own trace stays byte-identical, which is
       // what agent-determinism catches. kCur, _aeroGrip, slipFactor, offroad,
       // onKerb, contactT and _pushD feed the next tick's physics the same way,
-      // and five (accSm, kCur, _vmaxNow, passBest, kerbHapT) drifted on EVERY
-      // episode, not just the first, so no amount of warm-up settled it.
+      // and five (accSm, kCur, _vmaxNow, passBest, kerbHapT) drift on EVERY
+      // episode, not just the first, so no amount of warm-up settles it.
       // `lane` is the odd one out: not absent before the first episode but
       // ALREADY ADAPTED, so it re-seeds from lanePref (the grid home line
       // makeCars stored) rather than being deleted.
       // KEEP THE LIST IN STEP BY MEASURING, NOT BY GUESSWORK —
       // `node tools/check/episode-diff.mjs` dumps every primitive on all 22 cars
-      // across consecutive post-reset snapshots and names what leaked. Two
-      // sessions fixed this defect in parallel on 2026-09-08 and left THREE
-      // mechanisms here: an inline copy of this list, and a block that zeroed
-      // seven of its fields. Both were dead — this loop runs last, and a delete
-      // beats the 0 they wrote. Add to EPISODE_TRANSIENTS; never a second list.
+      // across consecutive post-reset snapshots and names what leaked. This
+      // loop runs last, so a second list or a zeroing block ahead of it is
+      // dead code. Add to EPISODE_TRANSIENTS; never a second list.
       c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
       for (const k of EPISODE_TRANSIENTS) delete c[k];

@@ -84,9 +84,8 @@ const CustomLiveries = (function () {
       const liv = resolveLivery(team);
       // The moveable elements ARE the wing's own top flaps, so they take the wing's
       // own colour — Car3D paints the baked cascade with exactly this fallback
-      // chain (`wingC`). Tinting them to stand out (an earlier attempt, back when
-      // they were extra parts laid over the wing) would now make the car two-tone
-      // at rest, which is a regression against a wing that used to be one colour.
+      // chain (`wingC`). Tinting them to stand out would make the car two-tone
+      // at rest.
       return liv.wing || liv.c2 || team.color2;
     }
 

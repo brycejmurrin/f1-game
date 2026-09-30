@@ -41,14 +41,14 @@ const LampBake = (function () {
   // each in a (TILE+2)^2 atlas slot with a one-texel gutter (no bilinear bleed
   // between slots), found through a tilesX x tilesY indirection texture.
   // Default ATLAS budget PER LAYER (x2 layers at RGBA16F = 8 bytes/texel, ~4.8
-  // MB, half the old 600 k full-bbox map); the cell grows from MIN_CELL until
+  // MB, half a 600 k full-bbox map); the cell grows from MIN_CELL until
   // the kept tiles fit. A caller may pass another budget (bake / forTrack
-  // `maxTexels`). Measured, old bbox map -> 300 k atlas:
+  // `maxTexels`). Measured, full-bbox map -> 300 k atlas:
   // cell Monza 2.27 -> 1.92 m, Vegas 2.05 -> 1.71, Singapore 1.63 -> 1.74; worst
   // bake/truth 2.49x -> 2.10x, 1.39x -> 1.31x, 1.30x -> 1.27x. 600 k buys
-  // 1.15-1.27 m cells (worst 1.50x / 1.16x / 1.15x) at the old 9.6 MB.
+  // 1.15-1.27 m cells (worst 1.50x / 1.16x / 1.15x) at the full map's 9.6 MB.
   const MAX_TEXELS = 300000;
-  // Desktop spends the old full-bbox memory on resolution instead: 600 k atlas
+  // Desktop spends the full-bbox map's memory on resolution instead: 600 k atlas
   // texels per layer (~9.3 MB, 1.15-1.27 m cells, worst 1.50x / 1.16x / 1.15x
   // on Monza / Vegas / Singapore). Phones keep the 300 k default (~4.7 MB).
   const DESKTOP_TEXELS = 600000;
@@ -402,8 +402,8 @@ const LampBake = (function () {
     };
   }
   // A REBAKE while a bake is already drawing (weather change mid-race, a lamp
-  // knob) runs as a background job: SLICE_MS of steps per frame, the old bake
-  // keeps drawing, and the new one swaps in whole. The first bake of a track
+  // knob) runs as a background job: SLICE_MS of steps per frame, the current
+  // bake keeps drawing, and the new one swaps in whole. The first bake of a track
   // (race start, pre-baked by atmosphere.js) runs synchronously.
   const SLICE_MS = 3;
   let _job = null, _jobSrc = null, _jobClamp = NaN, _jobTrk = null, _jobBudget = 0;
@@ -452,7 +452,7 @@ const LampBake = (function () {
       return _bake;
     }
     // Same track, bake in hand: a new light set (a rebuild:true lamp knob) or a
-    // new clamp keeps the old bake until the input has held still, then rebakes
+    // new clamp keeps the current bake until the input has held still, then rebakes
     // in slices — a whole bake is 0.3-2 s of main thread.
     if (_trk === track && _bake && !sync) {
       const t = now != null ? now : _now();

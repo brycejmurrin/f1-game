@@ -202,7 +202,7 @@ const Teams = (function () {
 
      Calibrated to the FASTEST era (all twenty cars inside one second in 2023
      Brazilian qualifying, ~1.4% of a lap): ~0.26% a step, 1.05% across the
-     field, ~1.5% with the driver span — the old [1.0 .. 0.942] ladder put the
+     field, ~1.5% with the driver span — a [1.0 .. 0.942] ladder puts the
      field 8.64% apart, five times any real season. Compressed about the
      MEASURED FIELD MEAN (0.9631), not the table mean, so average pace is
      unchanged to the digit and the DIFF ladder in js/physics/consts.js still

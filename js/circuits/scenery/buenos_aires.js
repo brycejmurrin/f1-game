@@ -1,8 +1,8 @@
 /* Apex 26 — BUENOS_AIRES scenery (data only), split out of js/circuits/buenos_aires.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["buenos_aires"] =
   function (api) {
@@ -147,7 +147,7 @@
       });
       broadcastCompound(K(0.908), 1, 72, { vans: 2, dishes: 2, mastH: 9 });
       // Low panel boards (kit default is arched — its crown prism floated
-      // ~7.7 m above the posts, ground-audit unsupported at the old :135).
+      // ~7.7 m above the posts, ground-audit unsupported).
       // Gap 14 clears grandstandEx crowd banks (coplanar face fights).
       for (const s of [0.978, 0.015])
         billboard(K(s), -1, 14, 9, 2.4, CELESTE, { style: "panel" });

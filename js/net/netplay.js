@@ -32,9 +32,9 @@ const NetPlay = (function () {
   // the same s also indexes Tracks.sample(). head/x/speed reach two unbounded
   // angle wraps (`while (psi > Math.PI)`) — head: Infinity hung the tab, and
   // head: 1e9 cost ~1.6e8 iterations PER FRAME. ONE helper for the posed
-  // sample AND the predicted one: predict() used to hand its output to the
-  // contact solver (c._nProg/_nX/_nSpd) unclamped, so the same packet that
-  // was refused as a pose was accepted as a collision partner.
+  // sample AND the predicted one: predict() hands its output to the contact
+  // solver (c._nProg/_nX/_nSpd), and unclamped there the same packet refused
+  // as a pose would be accepted as a collision partner.
   const X_LIMIT = 200, SPEED_LIMIT = 200;
   function clampWire(st, total, lapsTarget, out) {
     out = out || {};
@@ -90,7 +90,7 @@ const NetPlay = (function () {
   // wire's own speed ceiling, no slower than the qualifying bound.
   // The lap an owner reports at its finishing crossing, bounded to the race:
   // lapsTarget + 1 for a full-distance finish, lower for a lapped car flagged
-  // out. Absent or malformed, the full distance (the pre-2026-09-28 rule).
+  // out. Absent or malformed, the full distance (what older builds assume).
   function finishLap(lap) {
     const n = Number(lap), top = (G_lapsTarget() || 0) + 1;
     return Number.isFinite(n) && n >= 1 ? Math.min(top, Math.floor(n)) : top;
@@ -102,9 +102,9 @@ const NetPlay = (function () {
 
   // ONE VALIDATION SITE for a peer's qualifying time. Both receivers — the
   // lobby's (qualifying runs while the LOBBY still holds the connection) and
-  // this file's bindSession — used to gate on a bare `d.t > 0`, which "70"
-  // and `true` both pass; the value was stored as-is and quali-model.js then
-  // threw on `.toFixed`. Coerced here, bounded to a lap a human can drive
+  // this file's bindSession — share it: a bare `d.t > 0` passes "70" and
+  // `true`, and quali-model.js throws on `.toFixed` of the stored value.
+  // Coerced here, bounded to a lap a human can drive
   // (20 s .. 1 h), and handed on as a NUMBER.
   const QUALI_MIN_S = 20, QUALI_MAX_S = 3600;
   // NO TIME (every lap deleted for track limits) crosses as {noTime: true}
@@ -352,12 +352,12 @@ const NetPlay = (function () {
       // ran the full rubber-band boost against a phantom lap.
       c.prog = (c.lap - 1) * total + c.s;
       // Nothing local ever marks a remote car finished (the lap-line code
-      // early-outs for net-owned cars), so allHumansDone stayed false on
-      // both peers and results waited for the 360 s/lap hard cap. The wire
+      // early-outs for net-owned cars); without this allHumansDone stays false
+      // on both peers and results wait for the 360 s/lap hard cap. The wire
       // lap is clamped to lapsTarget+1, so "past the target" is representable.
       // NEVER from an EXTRAPOLATED sample: after a lost packet advance() wraps
-      // s and bumps lap on its own, and that latched `finished` on a car whose
-      // next real packet said it was still short of the line. This stamp is
+      // s and bumps lap on its own, which would latch `finished` on a car whose
+      // next real packet says it is still short of the line. This stamp is
       // the FALLBACK (~100 ms of interp delay late); the owner's own finishT
       // arrives in its LAP event (`fin`, bindSession) and overrides it.
       // The crossing that finishes THIS car: the owner's reported lap when a
@@ -393,11 +393,10 @@ const NetPlay = (function () {
       const clock = from || session;
       if (!clock) return;
       const t = clock.peerToLocal(pkt.tick);
-      // EVERY entry, routed by the id on the wire. This used to take cars[0]
-      // and ignore the id, because the id was the sender's own cars[] index and
-      // the two grids do not agree on those. It is G.wireId() now — the same
-      // number on every screen — so a packet carrying several cars (which is
-      // what a relaying host sends) lands each one on the right rival.
+      // EVERY entry, routed by the id on the wire: G.wireId(), the same number
+      // on every screen (a sender's own cars[] index is not — the two grids
+      // disagree), so a packet carrying several cars (which is what a relaying
+      // host sends) lands each one on the right rival.
       //
       // An id we have no slot for is dropped, not guessed at: that is a car
       // this peer does not know about, and posing it over somebody else would
@@ -412,10 +411,10 @@ const NetPlay = (function () {
       //
       // AUTHORITY: a peer owns its OWN car and nothing else, so the host checks
       // the id on the wire against the id it filed for the connection the
-      // packet arrived on. Routing on entry.id alone let a guest pose any car
-      // on the grid — including another player's — simply by naming its
-      // wireId. The host then RELAYED that, so it landed on every screen under
-      // the host's own name, which every other guest trusts by construction.
+      // packet arrived on. Routing on entry.id alone would let a guest pose any
+      // car on the grid — including another player's — simply by naming its
+      // wireId, and the host would RELAY that onto every screen under its own
+      // name, which every other guest trusts by construction.
       // A peer we hold no car for speaks for nobody and is dropped outright.
       //
       // Guest side there is nothing to narrow to: packets come from the host,
@@ -450,11 +449,11 @@ const NetPlay = (function () {
         sessions.delete(id);
         const carFor = remoteFor(id);
         armedPeers.delete(id);
-        /* A PEER WITH NO GRID SLOT MUST NOT END THE RACE FOR EVERYONE. The
-           `carFor != null` term used to gate this whole branch, so a session
-           that dropped before it was seated — a spectator, a joiner still
-           negotiating, a peer that left the lobby — fell through to the
-           `stop()` below and tore the session down for every remaining player.
+        /* A PEER WITH NO GRID SLOT MUST NOT END THE RACE FOR EVERYONE. With a
+           `carFor != null` gate on this whole branch, a session that dropped
+           before it was seated — a spectator, a joiner still negotiating, a
+           peer that left the lobby — would fall through to the `stop()` below
+           and tear the session down for every remaining player.
            Whether we keep running is a question about the HOST still having
            peers; what we do about a car is a separate question inside it. */
         if (sessions.size && role === "host") {
@@ -536,9 +535,9 @@ const NetPlay = (function () {
             // armedPeers counts session ids while allArmed() compares against
             // remotes (wireId-keyed), and a joiner that got no grid slot
             // (start()'s `if (!car) continue`) still has a bound session — its
-            // ARMED alone used to satisfy allArmed() while the seated peer
-            // was still building its circuit, re-creating the skipped-
-            // countdown bug the comment below nameTheMoment() records.
+            // ARMED alone would satisfy allArmed() while the seated peer is
+            // still building its circuit: the skipped-countdown bug the
+            // comment below nameTheMoment() records.
             if (!peerCar.has(id)) return;
             armedPeers.add(id);
             if (armDeadline && allArmed()) nameTheMoment();
@@ -580,16 +579,16 @@ const NetPlay = (function () {
               // finish; earlier (the pose trails the crossing by the interp
               // delay) it waits. The crossing is the LAP the owner reports,
               // NOT lapsTarget + 1: a LAPPED car is flagged out at a lower lap
-              // (RaceControl.lineTransition), and gating on the target parked
-              // its `fin` in _nFin for good — the other peer then waited out
-              // the 360 s/lap hard cap for a rival that had already finished.
+              // (RaceControl.lineTransition), and gating on the target parks
+              // its `fin` in _nFin for good — the other peer then waits out
+              // the 360 s/lap hard cap for a rival that has already finished.
               const finLap = finishLap(d.lap);
               if (fr.car.lap >= finLap) { fr.car.finished = true; fr.car.finishT = fin; fr.car._nFin = null; fr.car._nFinLap = null; }
               else { fr.car._nFin = fin; fr.car._nFinLap = finLap; }
             }
-            // A RETIREMENT is the owner's word too. Nothing carried it: the
-            // 13 B snapshot has no flag, so the retired rival stood parked as
-            // "still running" and finishDelay held the other screen to the
+            // A RETIREMENT is the owner's word too. The 13 B snapshot has no
+            // flag for it, so without this the retired rival stands parked as
+            // "still running" and finishDelay holds the other screen to the
             // hard cap (reliability on). Relayed by the host like the rest.
             const ret = typeof d.retired === "string" && d.retired ? d.retired.slice(0, 32) : null;
             if (fr && ret && !fr.car.finished && !fr.car.retired) {
@@ -649,7 +648,7 @@ const NetPlay = (function () {
     function start(opts) {
       opts = opts || {};
       // start() ADOPTS the supplied sessions. Calling it again while a race is
-      // live cannot silently replace that ownership: sessions.clear() used to
+      // live cannot silently replace that ownership: a sessions.clear() would
       // orphan the first race's sockets and remotes without closing them or
       // handing their cars back to AI. The caller still owns the new sessions
       // when adoption is refused, exactly as for no_transport / no_track.
@@ -791,15 +790,15 @@ const NetPlay = (function () {
     let armDeadline = 0;                  // host: when to stop waiting for ARMED
     let armedSentAt = -Infinity;          // guest: when ARMED last went out (re-sent until START lands)
     const ARMED_RESEND_MS = 1000;
-    // Guest: a START has been ACCEPTED this race. The re-send below keyed on
-    // `!G.netStart` alone — but the countdown CONSUMES netStart at lights-out
-    // (game.js: "consumed; never carry it into the next race"), so from green
-    // onward the guest said ARMED every second for the whole race, the host
-    // answered each with the named moment (the late-ARMED rule), and the guest
-    // held a past-dated netStart all race (rtc-e2e 2026-09-27: startPending
-    // true on the guest at lap 1, false on the host). A red-flag restart then
-    // read that stale instant: countT already past the lamps, the guest's
-    // restart began at once and its raceT re-based to the ORIGINAL green.
+    // Guest: a START has been ACCEPTED this race. Keying the re-send below on
+    // `!G.netStart` alone is not enough: the countdown CONSUMES netStart at
+    // lights-out (game.js: "consumed; never carry it into the next race"), so
+    // from green onward the guest would say ARMED every second for the whole
+    // race, the host would answer each with the named moment (the late-ARMED
+    // rule), and the guest would hold a past-dated netStart all race. A
+    // red-flag restart then reads that stale instant: countT already past the
+    // lamps, the guest's restart begins at once and its raceT re-bases to the
+    // ORIGINAL green.
     let startSeen = false;
     let named = null;                     // host: the START already sent ({at, hold}), for late ARMEDs
     const armedPeers = new Set();
@@ -826,18 +825,17 @@ const NetPlay = (function () {
 
     // The moment cannot be named until BOTH sides can act on it.
     //
-    // hostStart() used to fire the instant the host's own race was up, two and
-    // a half seconds ahead. But the guest only arms when it PUMPS the event,
+    // Firing hostStart() the instant the host's own race is up, two and a half
+    // seconds ahead, is too early: the guest only arms when it PUMPS the event,
     // and pump() runs on the game loop — which on the guest is blocked solid
     // building the circuit. On a phone that build outlasts the lead, so the
-    // named instant was already in the past when it finally arrived: countT
-    // began past the end of the sequence, the guest skipped the whole
-    // countdown, and only the host ever saw the lights. Reported from a real
-    // desktop-hosts-iPhone-joins race.
+    // named instant is already past when it arrives: countT begins past the
+    // end of the sequence, the guest skips the whole countdown, and only the
+    // host sees the lights (reported from a real desktop-hosts-iPhone-joins race).
     //
     // So the guest reports when its circuit is built (start() is called after
     // startRace(), which is exactly that moment) and the host names the
-    // instant only then. The lead is now measured from a point both sides have
+    // instant only then. The lead is measured from a point both sides have
     // reached, instead of from one side's optimism.
     function hostStart() {
       if (role !== "host" || !session) return false;
@@ -851,13 +849,13 @@ const NetPlay = (function () {
       const hold = 0.2 + Math.random() * 1.8;
       const at = nowMs() + (G.COUNTDOWN_S + hold) * 1000 + SETTLE_MS;
       // `at` goes out in THE HOST'S OWN CLOCK, as every snapshot tick does, and
-      // the guest converts ONCE (armStart -> peerToLocal). It used to go out
-      // pre-converted (localToPeer) AND be converted again on arrival: the
-      // guest's instant was off by the whole page-age difference — measured
-      // 3.3 s early with a page opened 3.3 s later (rtc-sync-probe, 2026-09-28)
-      // — and past HOLD_MAX_MS (a friend opening the link a minute after the
-      // host) armStart refused it and the guest counted down alone, 55 s late.
-      // Loopback peers share a clock, so no spec could see it.
+      // the guest converts ONCE (armStart -> peerToLocal). Converting on BOTH
+      // sides (localToPeer out, peerToLocal in) puts the guest's instant off by
+      // the whole page-age difference — measured 3.3 s early with a page
+      // opened 3.3 s later (rtc-sync-probe, 2026-09-28) — and past HOLD_MAX_MS
+      // (a friend opening the link a minute after the host) armStart refuses
+      // it and the guest counts down alone. Loopback peers share a clock, so
+      // no spec can see it.
       for (const s of sessionList()) {
         try { s.sendEvent(EV.START, { at, hold }); } catch (e) { /* a dead session must not stop naming it for the rest */ }
       }
@@ -959,11 +957,11 @@ const NetPlay = (function () {
         armSaidAt = now;
         G.announce("WAITING FOR RIVAL — " + Math.ceil((armDeadline - now) / 1000) + " s", 2, "info");
       }
-      // A guest whose circuit built FIRST sent its one ARMED while the host was
-      // still inside `await G.startRace()`: the host's LOBBY session pumped it,
-      // had no ARMED handler, and dropped it — a 20 s ARM_WAIT stall every
-      // time, and a split start once the guest's HOLD_MAX_MS ran out (bug hunt
-      // 2026-09-22). Say it again each second until the moment is named;
+      // A guest whose circuit builds FIRST sends its ARMED while the host is
+      // still inside `await G.startRace()`: the host's LOBBY session pumps it,
+      // has no ARMED handler, and drops it — a 20 s ARM_WAIT stall, and a
+      // split start once the guest's HOLD_MAX_MS runs out. Say it again each
+      // second until the moment is named;
       // armedPeers.add is idempotent and a late one just re-sends START.
       if (role === "guest" && !G.netStart && !startSeen && now - armedSentAt >= ARMED_RESEND_MS) {
         armedSentAt = now;
@@ -987,14 +985,14 @@ const NetPlay = (function () {
       // on what arrived. That pose is interp.sample(now), i.e. delayMs OLD, so
       // it is stamped with the time it was posed at (presentedAt), one packet
       // per relayed car: stamped `now` in the host's own packet, a guest's
-      // predict() extrapolated from a pose ~100-180 ms older than its label and
-      // put the other guest 8-14 m behind where it was at 80 m/s (bug hunt
-      // 2026-09-22) — exactly the contact error predict() exists to remove.
+      // predict() would extrapolate from a pose ~100-180 ms older than its
+      // label and put the other guest 8-14 m behind where it is at 80 m/s —
+      // exactly the contact error predict() exists to remove.
       // That is the price of star over mesh, and it buys not opening N²
       // connections through N NATs.
-      // Pose remotes FIRST. Host relay encodes r.car; if that write ran after
-      // the snapshot, guests received last tick's parked pose (or the grid
-      // spawn) while this tick's interp sample sat unused.
+      // Pose remotes FIRST. Host relay encodes r.car; if that write runs after
+      // the snapshot, guests receive last tick's parked pose (or the grid
+      // spawn) while this tick's interp sample sits unused.
       for (const r of remotes.values()) {
         // Per-remote scratch (the ._smp precedent): poseRemote copies fields
         // out and pred is consumed below, so neither object escapes the tick.

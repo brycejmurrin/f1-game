@@ -1,8 +1,8 @@
 /* Apex 26 — MADRID scenery (data only), split out of js/circuits/madrid.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["madrid"] =
   function (api) {
@@ -598,8 +598,8 @@
         supportGap: 2.0,
         color: STEEL,
         required: true,
-        // Legs of its own: it used to rest on the pit building the engine's
-        // pit complex has since replaced, and hung in the air without them.
+        // Legs of its own: the engine's pit complex has no building under it
+        // to rest on.
       });
       overheadSpan({
         id: "madrid-ifema-access-bridge",
@@ -680,18 +680,15 @@
       }
 
       // ── CUATRO TORRES, ON THE HORIZON WHERE THEY ACTUALLY ARE ────────────
-      // These used to be four 54-68 m towers strung along s 0.30-0.40 at 38 m
-      // from the road edge, which put Madrid's tallest buildings closer to the
-      // circuit than its own grandstands and contradicted this brief's own
-      // rule — docs/tracks/madrid.md rejects the Estadio Metropolitano at 3 km
-      // as "too far to belong on this skyline", and the CTBA is twice that.
+      // Not trackside: docs/tracks/madrid.md rejects the Estadio Metropolitano
+      // at 3 km as "too far to belong on this skyline", and the CTBA is twice
+      // that — so the towers stand on the horizon, not beside the grandstands.
       //
       // Measured, not guessed: IFEMA 40.4653 N 3.6156 W to the CTBA
       // 40.4760 N 3.6890 W is 6.33 km on bearing 280.8°. The outboard normal
-      // at s 0.40 runs 279.6° (tools: scratch bearing probe over track.rx/rz,
-      // +X west / +Z north), so ONE anchor there carries the whole cluster on
-      // a true sightline — the old spread across s 0.30-0.40 smeared it over
-      // 25° of bearing as well as standing it on the track.
+      // at s 0.40 runs 279.6° (bearing probe over track.rx/rz, +X west /
+      // +Z north), so ONE anchor there carries the whole cluster on a true
+      // sightline; spreading it across s 0.30-0.40 smears it over 25°.
       //
       // Real heights at the real distance, so the apparent size is right by
       // construction rather than by taste: Torre de Cristal 249 m subtends
@@ -741,7 +738,7 @@
           const b = basis(a);
           // Each tier is half a metre shorter than the one in front, and the
           // spine wall longer than all of them. At one shared length every
-          // tier's END CAP sat on the same two planes, same-facing, overlapping
+          // tier's END CAP sits on the same two planes, same-facing, overlapping
           // wherever two tiers overlap in section — 15 coplanar pairs, the
           // worst 13.3 m2 (2026-09-22). A stand that narrows as it rises is
           // also what the real one does.

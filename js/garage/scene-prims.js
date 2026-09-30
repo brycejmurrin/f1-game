@@ -1,4 +1,4 @@
-/* Apex 26 — GaragePrims: the garage bay's mesh primitives and shared constants. The room's dimensions and wall colours, and the block / cylinder / tube / hose / panel-grid builders every part of the bay is made of. Split out of scene.js on 2026-09-08; the bay reads TrackGeom.MAT at eval here. */
+/* Apex 26 — GaragePrims: the garage bay's mesh primitives and shared constants. The room's dimensions and wall colours, and the block / cylinder / tube / hose / panel-grid builders every part of the bay is made of. Split out of scene.js; the bay reads TrackGeom.MAT at eval here. */
 const GaragePrims = (function () {
   "use strict";
 

@@ -411,8 +411,8 @@ const SceneryCity = (function () {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const reach = Math.max(w, d);   // used below for cylinder/dome/drum radii
       // Footprint guard: test the tower's FULL oriented w×d footprint against the
-      // tarmac, not just its inner-face centre point. The old single-point test
-      // missed a tower that, on a CURVING street where the track doubles back,
+      // tarmac, not just its inner-face centre point. A single-point test
+      // misses a tower that, on a CURVING street where the track doubles back,
       // sweeps its body over a NEARBY stretch of road the point never sampled —
       // the dominant "building over the racing line" bug on Baku/Miami/Jeddah/etc.
       // rejBox runs the same Minkowski (footprint ⊕ road half-width) test the
@@ -691,18 +691,14 @@ const SceneryCity = (function () {
           _kit: true,   // kit-internal: skip building()'s swapped-dimensions heuristic
           wall: col, floor: opts.floor || (4 + s * 3),
           lit: lit, windowCol: opts.windowCol || wcol,
-          // NO `setback:` KEY HERE. This used to pass `setback: <bool>`, which
-          // building() has never read — its massing knob is `arch` ("setback"
-          // among others), so the option was inert for the life of the file and
-          // every city circuit was tuned and shipped with the hash-picked
-          // archetypes you see now. Wiring it up (arch: "setback" for the tall
-          // third) is a real CHANGE OF LOOK on every street circuit, not a
-          // cleanup: measured, it also drives one more severe interpenetration
-          // on Baku (clip-audit 31 -> 32) where a stepped mass meets a
-          // neighbour. Five circuit call sites (suzuka, monaco x3, bahrain)
-          // still pass the same dead `setback: true`, so honouring it here
-          // alone would also be inconsistent. If the setback look is wanted,
-          // do it deliberately across all six sites with the clip baselines
+          // NO `setback:` KEY HERE: building() never reads it (its massing knob
+          // is `arch`), so every city circuit is tuned with the hash-picked
+          // archetypes you see now. Honouring it (arch: "setback" for the tall
+          // third) is a CHANGE OF LOOK on every street circuit and, measured,
+          // one more severe interpenetration on Baku (clip-audit 31 -> 32).
+          // Five circuit call sites (suzuka, monaco x3, bahrain) still pass a
+          // dead `setback: true`; if the setback look is wanted, do it
+          // deliberately across all six sites with the clip baselines
           // re-measured — see docs/archive/research/CAMPAIGN-2026-08.md.
         });
         idx++;

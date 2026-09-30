@@ -61,10 +61,9 @@ function renderStatBars(container, team) {
 }
 
 // Persisted like the settings tab and the circuit filter (the other two
-// tab-strips), and defaulting to TEAM: the garage used to open on the first
-// PARTS category, so a player coming to change their team saw FRONT WING
-// options and had to notice the rail's selected tab was not the first one —
-// while LIVERY sat 14th behind a horizontal scroll.
+// tab-strips), and defaulting to TEAM: opening on the first PARTS category
+// shows a player coming to change their team FRONT WING options, with the
+// rail's selected tab not the first one and LIVERY 14th behind a horizontal scroll.
 let csActiveCat = null;   // id of the tab currently open in the GARAGE
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
@@ -74,15 +73,14 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 const SECONDARY_CATS = new Set(["floor", "cockpit", "wheels", "tune", "livery"]);
 
 // ONE DRAFT SHAPE, THREE DOORS INTO THE EDITOR. New, edit-in-place and
-// "customize a copy" each used to spell the whole field list out by hand, and
-// the copies had drifted: the DUPLICATE list was missing all eight structural
-// fields (finStyle, finBadge, spineLogo, finShape, tcam, coverVents,
-// spineHeight, spineSide). Nothing failed — pillRow falls back to `dflt` when a
-// key is absent, so the editor showed STANDARD/NONE, and the save writes a
-// field only when it differs from that default. Copying a team's own paint job
-// therefore handed back a car with a shark fin and a flat spine (every team
-// sets finShape "none" + spineHeight "dorsal" in js/data/teams.js), with the
-// editor agreeing. A copy is now a copy because there is only one list.
+// "customize a copy" share one field list, because hand-spelled copies drift
+// silently: a copy missing the eight structural fields (finStyle, finBadge,
+// spineLogo, finShape, tcam, coverVents, spineHeight, spineSide) fails
+// nothing — pillRow falls back to `dflt` when a key is absent, so the editor
+// shows STANDARD/NONE, and the save writes a field only when it differs from
+// that default — yet hands back a team's own paint job with a shark fin and a
+// flat spine (every team sets finShape "none" + spineHeight "dorsal" in
+// js/data/teams.js), with the editor agreeing.
 // The save's own `if (d.x && d.x !== <default>)` chain and Liveries.forTeam's
 // copy list are the other two spellings of these keys; team-livery.test.mjs
 // holds all three together.
@@ -157,11 +155,9 @@ function livDraftFrom(liv, name) {
   return d;
 }
 
-// THE REVERSE, and the ONLY one. Two more hand-written copies of the same field
-// list used to live downstream — the SAVE's `if (d.x && d.x !== <default>)`
-// chain and livePreviewDraft's object literal — so the car you were LOOKING at
-// while dragging a colour and the livery you got when you pressed SAVE & FIT
-// were assembled by different code. They agreed only by hand.
+// THE REVERSE, and the ONLY one: the SAVE and livePreviewDraft both build
+// through it, so the car you are LOOKING at while dragging a colour and the
+// livery you get on SAVE & FIT cannot be assembled by different code.
 //
 // One rule, two callers. A colour is written when it is set; a pill when it
 // differs from its own default — which is what keeps a saved livery sparse
@@ -184,10 +180,9 @@ function livDraftTo(d, keepNull) {
 function csTabId(id) { return `cs-tab-${String(id).replace(/[^a-z0-9_-]/gi, "-")}`; }
 
 // SHOW THE PART YOU JUST FITTED. Every catalog category changes the mesh
-// (js/car/parts.js: each option carries a `visual` recipe), but the turntable
-// kept whatever angle it was on, so an airbox swapped on a car facing away and
-// a caliper changed behind a sidepod read as "nothing happened" — the owner's
-// ask, in their words: "I want them to show the new part". One preset per
+// (js/car/parts.js: each option carries a `visual` recipe), but a turntable
+// left at whatever angle it is on makes an airbox swapped on a car facing away,
+// or a caliper changed behind a sidepod, read as "nothing happened". One preset per
 // category, chosen for where its parts live on the car; the existing camera
 // bar presets, so a pick lands on exactly what SIDE or REAR would. Same idiom
 // as the LIVERY tab framing FRONT: the preset stops the turntable, and SPIN or
@@ -213,8 +208,7 @@ function framePreset(name) {
   if (!b) return;
   // But click() replays that button's WHOLE handler, its uiTick included — so
   // fitting a part sounded twice: uiSelect for the fit, then uiTick for the
-  // camera that followed it (the second half of the double blip reported
-  // 2026-09-10). The camera move is a CONSEQUENCE of the click, not a second
+  // camera that followed it. The camera move is a CONSEQUENCE of the click, not a second
   // click, so it gets no voice of its own. Muting across the synthetic click
   // beats deleting the handler's uiTick: a REAL press of that button still has
   // to sound. click() dispatches synchronously, so the window is one statement.
@@ -281,11 +275,11 @@ function csLabel(text) {
 
 // TEAM & DRIVER — who the car belongs to.
 //
-// The garage owns this now. It used to exist only on the select screen, so the
-// title-screen GARAGE route could fit parts and choose a paint job but never say
-// whose car it was, while "who you are" sat buried inside a track picker. Both
-// controls write straight to the store on click, exactly as the select screen
-// did — picking here IS picking your entry for the next race.
+// The garage owns this, so the title-screen GARAGE route can say whose car it
+// is, not only fit parts and choose a paint job, and "who you are" is not
+// buried inside a track picker. Both controls write straight to the store on
+// click, as the select screen does — picking here IS picking your entry for
+// the next race.
 function buildTeamOptions(optsEl, team) {
   const careerLocked = typeof Career !== "undefined" && Career.inCareer && Career.inCareer();
   optsEl.appendChild(csLabel("TEAM"));
@@ -504,8 +498,8 @@ function buildSetup() {
     main.appendChild(nameRow);
     const deltas = statDeltaChips(opt);
     if (deltas) main.appendChild(deltas);
-    // The description used to appear only once the part was FITTED, which is
-    // the one moment the player no longer needs it to decide.
+    // The description shows before the part is FITTED: once fitted is the one
+    // moment the player no longer needs it to decide.
     if (opt.desc) { const d = document.createElement("div"); d.className = "cs-opt-desc"; d.textContent = opt.desc; main.appendChild(d); }
     row.appendChild(main);
 
@@ -518,17 +512,17 @@ function buildSetup() {
     const reject = () => {
       row.classList.add("budget-reject");
       row.addEventListener("animationend", () => row.classList.remove("budget-reject"), { once: true });
-      // uiReject, not uiTick: a refused purchase used to play the exact blip
-      // a successful fit plays — only the shake distinguished them, and only
-      // if you were looking at that row.
+      // uiReject, not uiTick: with the blip a successful fit plays, only the
+      // shake distinguishes a refused purchase, and only if you are looking
+      // at that row.
       if (G.soundOn) GameAudio.uiReject();
     };
 
     row.onclick = () => {
       if (active) return;
       // ONE CLICK, ONE SOUND. Researching a locked part then fitting it is two
-      // steps of one action, and both used to play uiSelect — an audible double
-      // blip on every locked row (reported 2026-09-10). Deleting the first is
+      // steps of one action, and uiSelect on both is an audible double blip on
+      // every locked row. Deleting the first is
       // wrong: the unlock can succeed and the fit still refuse on budget below,
       // which returns early, and that blip is the only feedback that path has.
       let _blipped = false;
@@ -711,11 +705,10 @@ function buildLiveryOptions(container, team) {
       // A blank canvas is blank PAINT, not a different car. Every pill defaults
       // to the plain 2020s shape — a standard shark fin on a standard spine —
       // and no 2026 team runs that: teams.js puts every one of them on
-      // finShape "none" + spineHeight "dorsal". So NEW used to hand back a
-      // car whose silhouette the player never chose and could only discover by
-      // comparing it with the grid. It now starts on the TEAM'S OWN shape (its
-      // livery pills) with none of its detail paint, so the only thing a new
-      // paint job changes is the paint.
+      // finShape "none" + spineHeight "dorsal". So NEW starts on the TEAM'S
+      // OWN shape (its livery pills) with none of its detail paint, not a
+      // silhouette the player never chose and could only discover by comparing
+      // it with the grid: the only thing a new paint job changes is the paint.
       const shape = {};
       if (team.livery) for (const k in LIV_DRAFT_PILLS) if (team.livery[k]) shape[k] = team.livery[k];
       csLivDraft = livDraftFrom(Object.assign({ c1: team.color, c2: team.color2 }, shape), "");
@@ -991,8 +984,8 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(section("TEAM MARK"));
   for (const slot of mSlots) wrap.appendChild(colorRow(slot.label, slot.key, true));
   // ADVISE, NEVER OVERRIDE. The colour you pick for the mark is painted as
-  // picked; what used to happen instead — a hidden re-pick to a readable
-  // colour — is gone, so this note is the only thing between a pale pick on a
+  // picked, with no hidden re-pick to a readable colour, so this note is the
+  // only thing between a pale pick on a
   // pale cover and a car with no visible mark. It names the surface, the ratio
   // and the fix (an OUTLINE, the same row team data uses for the same job).
   const markNote = document.createElement("div");

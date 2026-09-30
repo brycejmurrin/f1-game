@@ -89,9 +89,9 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
       return r.map(([x, y]) => [-x, y]).concat(r.slice().reverse());
     };
     // Car3D.COVER_STACK.decal, not a literal: the crown carries the heat shield
-    // and the spine vent under this wrap, and at the old 0.008 the shield's top
-    // face (top+0.017) swallowed 300 mm of the tail strip while the vent's tied
-    // the plane exactly. car3d owns the order; this reads it.
+    // and the spine vent under this wrap, and at a literal 0.008 the shield's
+    // top face (top+0.017) swallows 300 mm of the tail strip while the vent's
+    // ties the plane exactly. car3d owns the order; this reads it.
     const PROUD = (Car3D.COVER_STACK && Car3D.COVER_STACK.decal) || 0.022;
     // Drape one region over the crown between two stations, shoulder to shoulder.
     const drape = (region, zF, zR, pF, pR) => {
@@ -136,8 +136,8 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // mapped: an unpicked spineSide is an unpainted region, like the fin panel.
   if (R.spineSide) {
     // Car3D.COVER_STACK.flankDecal — the pinstripe and the service hatches are
-    // bodywork UNDER this wrap, and at the old 0.010 the pinstripe was coplanar
-    // with it (0.9 mm) and the hatches stood 9 mm proud of it.
+    // bodywork UNDER this wrap, and at a literal 0.010 the pinstripe is
+    // coplanar with it (0.9 mm) and the hatches stand 9 mm proud of it.
     const sZ = [-0.66, -1.90], V_TOP = 0.96, V_BOT = 0.06;
     const PROUD = (Car3D.COVER_STACK && Car3D.COVER_STACK.flankDecal) || 0.014;
     const flank = (z) => {
@@ -166,10 +166,10 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // so no panel and no badge either: a graphic hanging in the air behind the
   // airbox is exactly what this branch exists to prevent.
   const fShape = finShape || "standard";
-  // The blade's ROOT, from the same Car3D function build() cuts it with — the
-  // decal used to be placed off the FROZEN base while the mesh rooted itself
-  // into the engine cover, so a raised crown (every shipped team ships
-  // spineHeight "dorsal") swallowed most of the panel and all of the badge.
+  // The blade's ROOT, from the same Car3D function build() cuts it with: a
+  // decal placed off the FROZEN base while the mesh roots itself into the
+  // engine cover lets a raised crown (every shipped team ships spineHeight
+  // "dorsal") swallow most of the panel and all of the badge.
   // A cover taller than the regulation fin top leaves no blade at all; painting
   // a graphic onto one is worse than leaving the region unmapped, so `clear`
   // gates it the same way finShape "none" does.
@@ -203,12 +203,12 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // TRACKS the wing: Car3D.numberBoard(aLvl) is the SAME function the car mesh
   // uses to place the physical board, so the digit lands on it at every downforce
   // level (mesh is cached per aLvl — see getCarDecalMesh).
-  // Defensive: fall back to the old fixed board if a stale car3d.js bundle lacks
+  // Defensive: fall back to a fixed board if a stale car3d.js bundle lacks
   // numberBoard (never white-screen the race over a decal position).
   // Rear-wing UPPER FLAP → the sponsor band. Car3D.wingBand is the SAME solver
-  // that POSES the flap, not the recipe that designs it: the design chord the
-  // band used to be drawn from is 19.5 degrees off where drawAeroFlaps actually
-  // hangs the element, so the band floated ~90 mm over a parked car's wing. The
+  // that POSES the flap, not the recipe that designs it: the design chord is
+  // 19.5 degrees off where drawAeroFlaps actually hangs the element, so a band
+  // drawn from it floats ~90 mm over a parked car's wing. The
   // whole placement — rest attitude, skin, proud offset, surface normal — lives
   // in car3d beside the pose solve, for the reason frontPlate does.
   if (Car3D.wingBand) {
@@ -1017,8 +1017,8 @@ function drawRearLights(mat, emissive) {
     _gfx.draw(getEndplateLight(), W, _RL_FX);
   }
 }
-// TAIL-LIGHT EMIT 0: the red spill a tail-light used to cast on the road as a
-// real point light, painted instead — a flat decal behind the car, drawn through
+// TAIL-LIGHT EMIT 0: the red spill a tail-light casts on the road, painted
+// instead of lit by a point light — a flat decal behind the car, drawn through
 // the decal path every backend already has (createTexMesh + createTexture +
 // drawDecal: lit colour + tex * glow, alpha-blended, depth-write off). No light
 // slot, so the lamps keep it (frame-lights.js appendCarTailLights). Built once;
@@ -1075,8 +1075,8 @@ function drawTailGlow(groundMat, amt, track, s) {
     Tracks.sample(track, s, _tgS0); Tracks.sample(track, s - dc, _tgS1);
     rise = Math.max(-1.5, Math.min(1.5, (_tgS1.p[1] - _tgS0.p[1]) + groundMat[9] * dc));
   }
-  // Centred where the old point light's pool landed (the light sat 2.4 m back,
-  // aimed down-rear): ~1.5 m past the rear wing, 8 cm up so the road cannot
+  // Centred where a point light's pool lands (2.4 m back, aimed down-rear):
+  // ~1.5 m past the rear wing, 8 cm up so the road cannot
   // z-fight it. The front half tucks under the car's own rear.
   for (let i = 0; i < 3; i++) {
     const up = i === 1 ? 1 : 0;

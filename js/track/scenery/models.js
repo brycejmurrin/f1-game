@@ -313,7 +313,7 @@ const TrackModels = (function () {
       // truthful: the PLATE's bottom sits at it, the deck is raised by `inset`,
       // and the plate is thicker than the inset so its top is buried in the
       // deck. Span/depth are scaled < 1 so the plate's end faces never meet
-      // the deck's — two hand-rolled spans at one frac used to share planes.
+      // the deck's (two spans at one frac would share planes).
       const soffitSpec = spec.soffit || (spec.soffitColor ? { color: spec.soffitColor } : null);
       let soffit = null;
       if (soffitSpec) {

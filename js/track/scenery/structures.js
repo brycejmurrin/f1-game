@@ -16,8 +16,8 @@ const SceneryStructures = (function () {
     // so the real gap between consecutive k's is `step*ds`, not the requested
     // stepM) — callers that emit a full solid box per node MUST size its
     // tangent-axis length to this, not a padded constant. A fixed constant
-    // larger than the true spacing (the old pattern: box length > stepM "to
-    // avoid gaps on curves") makes adjacent full-solid boxes share real 3D
+    // larger than the true spacing (e.g. box length > stepM "to avoid gaps on
+    // curves") makes adjacent full-solid boxes share real 3D
     // volume — on straights that's near-coincident z-fighting, on curves
     // (worst on tight hairpins) the boxes are rotated relative to each other so
     // the shared volume shows as visible interpenetration/clipping.
@@ -41,9 +41,8 @@ const SceneryStructures = (function () {
       const runs = laid.get(key) || [];
       // Compare on the unwrapped lap fraction; a full-lap run covers everything.
       // A run that ENDS on the lap boundary (s1 = 1.0) ends at 1, not 0: read as
-      // `1 % 1`, montreal's [0.59, 1.0] wall looked contained in its [0.0, 0.05]
-      // run and was skipped along with its barrier, once the scenery shift that
-      // used to keep these numbers off the seam was removed (tightFrac 1 -> 0.645).
+      // `1 % 1`, montreal's [0.59, 1.0] wall looks contained in its [0.0, 0.05]
+      // run and is skipped along with its barrier.
       const a = s0 % 1, b = s1 > s0 && s1 % 1 === 0 ? 1 : s1 % 1;
       const full = Math.abs(s1 - s0) >= 0.999;
       for (const [ra, rb] of runs) {
@@ -77,11 +76,10 @@ const SceneryStructures = (function () {
       const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
       const wrapped = ((k1 - k0) + n) % n;
       // Full lap = endpoints ~a whole lap apart that round to one node. Walk
-      // n-1, not n: the old `|| n` walked i===n back onto k0 and emitted a
-      // second byte-identical panel there — two coincident boxes, the purest
-      // z-fight (see the qatar tyre-pair note in tracks.js). It also promoted
-      // a genuinely sub-node authored span to a surprise full lap of geometry;
-      // that now stays a single emission at its own node.
+      // n-1, not n: i===n lands back on k0 and emits a second byte-identical
+      // panel there — two coincident boxes, the purest z-fight (see the qatar
+      // tyre-pair note in tracks.js) — and promotes a genuinely sub-node
+      // authored span to a surprise full lap of geometry.
       const span = wrapped === 0 && Math.abs(s1 - s0) > 0.5 ? n - 1 : wrapped;
       const step = Math.max(1, Math.round(stepM / ds));
       let seen = null, i0 = 0;
@@ -665,8 +663,8 @@ const SceneryStructures = (function () {
           out._mat = timber ? MAT.WOOD : MAT.METAL;
           addBox(out, rc, [setback * 1.05, 0.16, seg], plankCol, b);                     // tread plank
           // Foot board: its nose MIN_SEP behind the plank's, its top at the
-          // plank's mid-plane — both faces used to sit 12-22 mm off the plank's
-          // (a fight from ~240 m), and flush outright at rise 1.0.
+          // plank's mid-plane — at 12-22 mm off the plank's both faces fight
+          // from ~240 m, and are flush outright at rise 1.0.
           addBox(out, vadd(vadd(rc, a.r, -side * (setback * 0.525 - 0.08 - TrackGeom.MIN_SEP)), a.u, -rise * 0.5),
                  [0.16, rise, seg], riserCol, b);                                        // foot board
           crowdBand(vadd(rc, a.u, 0.68), b, side, 0.58, 0.78, seg - 0.6,

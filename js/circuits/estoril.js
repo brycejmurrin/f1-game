@@ -12,10 +12,9 @@
     // The pit straight is Estoril's long one, famous for the slipstreaming drag
     // to the line, and the trace's first vertex opens it.
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches the real T1.
-    // Was 0.96, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // sceneryStartFrac removed 2026-09-22 — see the banner in js/circuits/scenery/estoril.js
+    // No sceneryStartFrac — see the note above the pit block in js/circuits/scenery/estoril.js.
     name: "ESTORIL",
     gp: "Portuguese GP",
     country: "Portugal",
