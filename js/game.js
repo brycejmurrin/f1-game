@@ -3032,6 +3032,7 @@ async function startRaceBody() {
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
   dbgCam = null;              // fresh race — drop any leftover debug free-cam
+  director.reset();           // drop TV-director wall clock / owned dbgCam
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
@@ -3776,6 +3777,7 @@ const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
+const director = Director.create(G);      // live TV director cam (js/camera/director.js) — CAM_MODES "tv"
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -8673,6 +8675,7 @@ function tickBody(now) {
   if (!paused && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
   onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
+  director.tick(dt);               // TV director: dbgCam only, never car forces (solo / finished)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.

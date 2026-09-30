@@ -20,6 +20,7 @@ window.CamModes = (function () {
     { id: "tcam",      label: "T-CAM",     cut: 0 },
     { id: "rear",      label: "REAR CAM",  cut: 0.15 },
     { id: "visor",     label: "VISOR",     cut: 0 },        // the cockpit without its steering wheel (a linked phone is the wheel)
+    { id: "tv",        label: "TV",        cut: 0.5 },      // live TV director (js/camera/director.js) — append only; index is apex26.camMode
   ];
   const HOLD_MS = 340;   // CAM button hold before the picker opens
 

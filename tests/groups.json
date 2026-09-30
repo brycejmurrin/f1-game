@@ -163,6 +163,8 @@
     "tests/unit/desktop-unpacked-bin.test.mjs",
     "tests/unit/desktop-version.test.mjs",
     "tests/unit/digital-steer.test.mjs",
+    "// Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.",
+    "tests/unit/director.test.mjs",
     "tests/unit/docs-integrity.test.mjs",
     "tests/unit/driving-coach.test.mjs",
     "// …and the DUEL ROW that reaches it: one control carrying OFF / ON / a",
