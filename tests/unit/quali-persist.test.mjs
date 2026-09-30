@@ -158,8 +158,16 @@ test("a driven simulate persists; an active netPlay session does not", () => {
 test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race uses fresh", () => {
   const open = fnSource(GAME, "function openQuali(fresh, netDone)");
   const commit = fnSource(GAME, "function openQualiBody(fresh, netDone)");
-  assert.match(open, /sessionEntry\.begin\("quali", key, \(\) => ensureScenery\(idx\),\s*\(\) => openQualiBody\(fresh, netDone\)/,
-    "scenery must finish before the synchronous qualifying commit");
+  assert.match(open, /sessionEntry\.begin\("quali", key, \(\) => \{ qualiNet\.clearPeers\(\); return ensureScenery\(idx\); \},\s*\(\) => openQualiBody\(fresh, netDone\)/,
+    "scenery must finish before the synchronous qualifying commit; peer times clear in prepare");
+  // Not after the load: a rival's one-shot QUALI that lands during the scenery
+  // download was wiped there, and the guest's sheet waited for it forever.
+  assert.doesNotMatch(commit, /clearPeers/, "the commit must not wipe a rival time that arrived mid-load");
+  // The load is covered (a blank screen before), and the card comes down
+  // before the sheet opens.
+  assert.match(open, /if \(!loadingScreen\.phase\(\)\) loadingScreen\.building\(loadingInfo\(\)\);\s*(\/\/[^\n]*\s*)*return sessionEntry\.begin/);
+  assert.ok(commit.indexOf("loadingScreen.stop();") >= 0 && commit.indexOf("loadingScreen.stop();") < commit.indexOf("qualiSheet.open("),
+    "the loading card must come down before the qualifying sheet opens");
   // openQuali is the latched wrapper: nobody awaits it, so it must catch its own
   // failure and land on the menu rather than raise the global error overlay.
   assert.match(open, /\(e\) => \{[^}]*qualiSheet\.close\(\); quitToMenu\(\); \}\)/,
@@ -438,6 +446,25 @@ test("a one-off GP's driven order persists for the one-off GP but not season rou
   assert.equal(q.order(G.cars), null, "and must not grid off it either");
   G.seasonMode = false;
   assert.ok(q.order(G.cars), "back in the one-off: still its own order");
+});
+
+test("a one-off GP's qualifying never overwrites the grid a season round is keeping", () => {
+  // Hunt 2026-09-30: quit a season round after qualifying (the grid is kept for
+  // CONTINUE), play a one-off GP and drive its qualifying: persistOrder wrote the
+  // GP's order over the season's on the shared object, and the round had to be
+  // qualified again.
+  const { q, G } = loadQuali({ season: { round: 0 } });
+  G.seasonMode = true;
+  q.simulate(new Map([["p1", 70.25]]));
+  assert.equal(G.season.qualiMode, "season");
+  q.clear();
+  G.seasonMode = false;                              // a one-off GP, driven
+  q.simulate(new Map([["p1", 68.5]]));
+  assert.equal(G.season.qualiMode, "season", "the season's stamp stands");
+  assert.equal(G.season.qualiOrder.find((r) => r.human).t, 70.25, "and its driven order");
+  q.clear();
+  G.seasonMode = true;
+  assert.equal(q.results().find((r) => r.human).t, 70.25, "CONTINUE still grids off the season's lap");
 });
 
 test("a career slot's order is refused by another slot, the championship and the one-off GP", () => {

@@ -2826,7 +2826,8 @@ const GameAudio = (function () {
     if (i < musicIndex) musicIndex--;
     if (!PLAYLIST.length) { stopInternal(); musicIndex = 0; return true; }
     musicIndex = ((musicIndex % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
-    if (wasPlaying) playIndex(musicIndex);
+    // The next track the SOURCE allows (MY TRACKS stays MY TRACKS); none left: stop.
+    if (wasPlaying) { const j = eligible(musicIndex) ? musicIndex : seekEligible(musicIndex, 1); if (j < 0) stopInternal(); else playIndex(j); }
     return true;
   }
   function playTrackId(id) {

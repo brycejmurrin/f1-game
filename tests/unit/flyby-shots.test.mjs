@@ -806,7 +806,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
     const events = [];
     const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _menuFly: null,
       _menuGate: { generation: 0, warm: 0 }, flybyBuildTimer: 0, settings: "one",
-      entrySettings: () => c.settings, menuKey: () => "world", motionReduced: () => false,
+      entrySettings: () => c.settings, menuKey: () => "world", motionReduced: () => false, titleIfBare: () => {},
       clearTimeout() {}, setTimeout: f => f(), requestAnimationFrame: f => f(),
       performance: { now: () => now }, loadingInfo: () => ({}),
       loadingScreen: { building: () => { c._ph = "build"; events.push("build"); }, garage: () => { c._ph = "garage"; events.push("garage"); },

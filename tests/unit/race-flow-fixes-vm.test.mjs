@@ -8,6 +8,10 @@
  *   - FINISHERS: coast() held its floor for one step and then scrubbed to 0, so
  *     every finisher parked ~160 m past the line on one shared line and the
  *     next car home rear-ended it at 14-29 m/s.
+ *   - AI RESCUE (hunt 2026-09-30): the AI's off-track gate read `offT > 0.5`,
+ *     the track-limits counter that resets to -2 every 1.2 s, so rescueT
+ *     peaked at ~0.7 s and decayed — a beached AI was never rescued. It now
+ *     shares the player's beachedAt() test.
  *   - HUMAN DNF: the only human retiring ends the race 2.2 s later
  *     (RaceControl.finishDelay, by design); an AI whose reliability failure was
  *     already drawn used to be classified — and scored — from that snapshot.
@@ -99,5 +103,25 @@ test("the only human retiring retires every AI whose failure was already drawn",
     assert.equal(G.state, "results", "the race ends once its only human is out");
     assert.equal(doomed.retired, true, "a drawn failure is met, not scored past");
     assert.equal(doomed.dnf, "gearbox");
+  } finally { g.close(); }
+});
+
+test("AI auto-rescue: a car crawling in the run-off builds its rescue timer; one at race pace does not", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    await g.race("monza", "day", "dry");
+    const a = g.apex;
+    a.setPhysics({ pace: 1 });
+    for (let i = 0; i < 180; i++) a.step(1 / 60, 1);   // raceT > 2
+    const c = g.G.cars[3];
+    a.aiPlace(3, 0.3, 11, 16);                           // deep in the grass, at the floor
+    let peak = 0;
+    for (let i = 0; i < 60 * 8; i++) { a.step(1 / 60, 1); peak = Math.max(peak, c.rescueT || 0); }
+    assert.ok(peak > 1.0, `a beached AI's rescue timer accumulates (peak ${peak.toFixed(2)} s; ~0.7 s was the ceiling)`);
+    assert.ok(Math.abs(c.x) < 9, "and the car is back on the road");
+    a.aiPlace(3, 0.3, 45, 9);                            // just off the edge, at race pace
+    let fast = 0;
+    for (let i = 0; i < 60 * 2; i++) { a.step(1 / 60, 1); fast = Math.max(fast, c.rescueT || 0); }
+    assert.ok(fast < 0.5, `a car rejoining at pace is not beached (peak ${fast.toFixed(2)} s)`);
   } finally { g.close(); }
 });

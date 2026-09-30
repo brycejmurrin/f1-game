@@ -12,9 +12,9 @@
       "lines": 4135
     },
     "js/game.js": {
-      "codeLines": 5242,
+      "codeLines": 5254,
       "gMembers": 278,
-      "lines": 9867,
+      "lines": 9895,
       "topLets": 159
     },
     "js/lighting/presets.js": {
@@ -39,7 +39,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 596,
+      "ceiling": 597,
       "slack": 5
     },
     "dynamicIdReads": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2027,
+      "ceiling": 2034,
       "slack": 25
     },
     "subFloorFontSize": {

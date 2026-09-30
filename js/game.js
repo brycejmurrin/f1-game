@@ -657,6 +657,10 @@ let PACE = 1.0;
 // changes what each of those speeds MEANS on the ground, not the range.
 // PACE is floored so a setPhysics({pace:0}) can't divide by zero.
 function vTop()  { return VMAX * Math.max(PACE, 0.05); }
+// BEACHED: off the road and crawling at the grass-drag floor — the rescue gate
+// for the player AND the AI (the AI's own `offT > 0.5` read the track-limits
+// counter, which resets to -2 every 1.2 s, so its rescue could never fire).
+function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5 * Math.max(PACE, 0.05); }
 function vStd(v) { return v * VMAX / vTop(); }
 function dashKph(v) { return vStd(v) * 3.6; }
 // The ACCELERATION curve carries the SAME PACE factor as the ground speed —
@@ -3008,6 +3012,7 @@ async function startRaceBody() {
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
   // mashed on the title (navOpen() false) would fire at lights-out.
   Input.clearEdges();
+  if (Input.dropLatch) Input.dropLatch();
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.setVenue(track.def); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
@@ -3177,6 +3182,9 @@ function endRace(forcedOrder) {
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
   const suspended = raceCtl.level === 4;   // ended under a red flag, never resumed: B6.3.6's 30 s, not a DSQ
+  // Judged on the weather AT THE FLAG: endSession() below puts the starting weather back, and a MIXED race that
+  // turned wet then disqualified every car on one slick for "one dry compound" (B6.3.6 is off in a wet race).
+  const cmpApplies = pits.twoCompoundApplies();
   raceCtl.reset(); wxArc.endSession();   // an arc that outlives the race would override the next race's weather
   // Close every car's open stint so the results strip has an end lap. Done here
   // rather than in the sheet: a retired car stopped laps ago and its last stint
@@ -3235,11 +3243,15 @@ function endRace(forcedOrder) {
   // TWO DRY COMPOUNDS (FIA 2026 SR B6.3.6), every car: a finished Grand Prix the
   // rule covers (PitLane.twoCompoundApplies — the AI planner's own test). Not in
   // a room: a remote car's compound is not replicated.
-  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && pits.twoCompoundApplies();
+  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && cmpApplies;
   const dsq = SportingRegs.applyCompoundRule(cars, { applies: cmpOn, suspended });
   for (const c of dsq) Log.info("game", "DSQ car=" + c.code + " why=" + c.dsq);   // B6.3.6: a suspended race pays +30 s instead, carried in c.penalty
   const fin = cars.filter((c) => c.finished && !c.retired && !c.dsq).sort(RaceControl.finishOrder);   // laps, then the clock
-  const run = cars.filter((c) => !c.finished && !c.retired && !c.dsq).sort((a, b) => b.prog - a.prog);
+  // A running car's time penalty is served on the road: its seconds, at the
+  // race's average speed, come off its progress (RaceControl.runOrder).
+  const run = cars.filter((c) => !c.finished && !c.retired && !c.dsq);
+  const leadProg = Math.max(0, ...fin.concat(run).map((c) => c.prog || 0));
+  run.sort(RaceControl.runOrder(Math.max(0.25 * vTop(), leadProg / Math.max(1, raceT))));
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
   // LAPS FIRST (FIA 2026 SR B2.5.5(a)): a car still running when the race
   // ends takes the flag on its next crossing, so it counts one more lap. A
@@ -3267,10 +3279,12 @@ function endRace(forcedOrder) {
     // A standalone season may sprint before the Grand Prix. A career scores
     // through its save owner, which checks the active slot revision before the
     // aliased championship is changed and settles its economy in the same call.
-    // The fastest lap among the CLASSIFIED finishers — award() pays the
-    // 2019–2024 point only when the season format asks for it.
+    // The fastest lap among the cars still in the race — finished OR running
+    // at the flag (a retired car's quick lap is not the race's, as the
+    // announcer and badges read it). award() pays the 2019–2024 point only
+    // inside the top ten, and only when the season format asks for it.
     let fastest = null, fastestT = Infinity;
-    for (const c of fin) if (c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
+    for (const c of cars) if (!c.retired && !c.dsq && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const careerScoring = isCareer();
     const scored = careerScoring
       ? Career.scoreRound(order, player, fastest)
@@ -3758,7 +3772,7 @@ _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove th
 // panels further down: CustomTeam.create() takes spMeshBust as a value, so
 // the module has to exist by then.
 const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps,
-  teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X });
+  teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render });
 const { renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust } = setupCam;
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
@@ -4002,7 +4016,7 @@ function introBuild(go) {
       // Only this request may hand over; a quit or newer request owns its own screen.
       studioClose(n);
       if (n === _introRun) {
-        if (!live()) loadingScreen.stop();
+        if (!live()) { loadingScreen.stop(); titleIfBare(); }
         else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }   // "build" has no timer or skip: never leave it up
       }
     }
@@ -4032,7 +4046,7 @@ function introWarm(go) {
       if (!(await awaitIntroWarm(live)) || !live()) return;
       try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
-    finally { studioClose(n); }
+    finally { studioClose(n); if (n === _introRun && !live()) { loadingScreen.stop(); titleIfBare(); } }   // abandoned: "build" has no timer or skip, so never leave it up
   })();
   return true;
 }
@@ -4044,6 +4058,8 @@ function startRaceCovered() {
   if (!loadingScreen.phase()) loadingScreen.building(loadingInfo());
   return startRace();
 }
+// An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
+function titleIfBare() { if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
 function raceIntro(go) {
   // The card is the whole screen: the Data Hub's JUMP IN closes a dialog that sat OVER the title, which then showed round the card.
   els.overlay.hidden = true;
@@ -6544,7 +6560,7 @@ function updateCar(c, dt, ranked) {
     // ordinary run-off speeds and a driver in full control is teleported to
     // x = 0 after 3 s. Both are precisely the bugs this comment says were
     // fixed, reintroduced through the OVERALL SPEED slider.
-    const beached = c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5 * Math.max(PACE, 0.05);
+    const beached = beachedAt(c);
     // A car serving a stop is not stuck: it is held in its box at 0 with the
     // throttle down (touch auto-gas holds it for you), and creep-in plus the
     // 2.4 s hold crossed the 3 s gate — the rescue teleported it to x = 0
@@ -6578,11 +6594,11 @@ function updateCar(c, dt, ranked) {
     // A car QUEUED in the lane behind a stop (capBlocks, the crawl floor) is
     // held by a car, not stuck: rescuing it fired it at 8 m/s into the parked
     // car it was waiting for.
-    const aiStuck = c.pitState !== "box" && ((c.offroad && c.offT > 0.5) ||
+    const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
       (c.speed < 5 && raceT > 2 && !unstuckActive && !(queued && pits.inLane(c))));
     // RED FLAG: the field is held under that low-speed gate on purpose — only a
     // car genuinely beached in the run-off still counts as stuck (as the player's).
-    const aiRedHeld = raceCtl.level >= 4 && !(c.offroad && c.offT > 0.5);
+    const aiRedHeld = raceCtl.level >= 4 && !beachedAt(c);
     // Parked on purpose: a timer that crossed the line in the queue must not
     // fire the moment the stop begins (it did, 0.2 s into a Monaco stop).
     if (c.pitState === "box") c.rescueT = 0;
@@ -9049,7 +9065,12 @@ $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings()
 // screen already hidden and NO menu under it. The menu is where it lands.
 function openQuali(fresh, netDone) {
   const key = entrySettings() + "|" + !!fresh, idx = trackIdx;
-  return sessionEntry.begin("quali", key, () => ensureScenery(idx),
+  // The scenery may download first: cover it as startRaceCovered does, or the
+  // screen sits blank between RACE settings and the sheet.
+  if (!loadingScreen.phase()) loadingScreen.building(loadingInfo());
+  // Peer times clear in prepare (a NEW request only): a rival's one-shot QUALI
+  // that lands during the scenery load must survive to the sheet.
+  return sessionEntry.begin("quali", key, () => { qualiNet.clearPeers(); return ensureScenery(idx); },
     () => openQualiBody(fresh, netDone), () => key === entrySettings() + "|" + !!fresh,
     (e) => { if (e) Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
     .catch((e) => Log.debug("game", "openQuali rejected (handled by onFail): " + (e && e.message || e))); // menu callers fire and forget; recovery above already landed the failure
@@ -9061,12 +9082,12 @@ function openQualiBody(fresh, netDone) {
   // up, so both paths say the same thing.
   setState("menu", "quali-sheet");
   quali.clear();
-  qualiNet.clearPeers();
   qualiNet.arm(netDone);   // armed from the ARG: a caller's write lands before this line
   loadTrack(trackIdx);
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
+  loadingScreen.stop();
   qualiSheet.open(quali.rows());
   qualiNet.refreshQualiGate();   // the gate's state is only knowable once netDone is armed
 }
@@ -9535,7 +9556,12 @@ function phonePadDash() {
 }
 $("pm-phonepad").onclick = () => {
   const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad) { phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE"; return; }
+  if (phonePad) {
+    phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
+    if (phonePadCam >= 0 && camMode === VISOR_CAM) setCamMode(phonePadCam);   // what lost() does: cancel() closes the link without calling it
+    phonePadCam = -1;
+    return;
+  }
   box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
   ensureNet().then((ok) => {
     if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
@@ -9553,7 +9579,7 @@ $("pm-phonepad").onclick = () => {
       },
       linked: () => {
         btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
-        if (VISOR_CAM >= 0 && camMode !== VISOR_CAM) { phonePadCam = camMode; setCamMode(VISOR_CAM); }
+        if (VISOR_CAM >= 0 && camMode !== VISOR_CAM) { phonePadCam = camMode; setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
       },
       lost: () => {
         btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn");
@@ -9687,7 +9713,9 @@ customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips
 // roster entry). 6091fb859 dropped this call with the move to SeasonCal.load,
 // whose comment still promised it; from then on an old save's points stayed
 // under the display code and a custom-code edit split the player in two.
-if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); SeasonCal.save(season); }
+// Not over a season load() refused to write back (lossy: a circuit this build
+// does not know) — saving it here erased that circuit, or blanked a finished season.
+if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); if (!SeasonCal.lastLoadLossy()) SeasonCal.save(season); }
 teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.

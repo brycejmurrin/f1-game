@@ -70,7 +70,7 @@ function awardBadges(order, duel) {
   const p = G.player;
   if (typeof Badges === "undefined" || !p || G.practice || G.timeTrial || duel || order.length < 3) return [];
   let best = Infinity;
-  for (const c of order) if (c.finished && !c.retired && c.best < best) best = c.best;
+  for (const c of order) if (!c.retired && !c.dsq && c.best < best) best = c.best;   // finished or running at the flag, as endRace finds it
   return Badges.onRace({
     pos: order.indexOf(p) + 1, retired: !!p.retired || !!p.dsq, finished: !!p.finished,
     cuts: p.cuts | 0, penalty: p.penalty || 0, trackId: G.track && G.track.def && G.track.def.id,

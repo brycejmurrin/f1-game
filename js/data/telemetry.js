@@ -416,8 +416,12 @@ const DataTelemetry = (function () {
       }).join(" vs ");
       titleEl.appendChild(el("span", null, label));
       const oneSession = tels.every(function (t) { return !t.sessionLabel || t.sessionLabel === tels[0].sessionLabel; });
+      // The LANES' session, not the one picked now: the tray keeps a
+      // meeting's lanes across a session switch.
+      const laneSes = tels[0] && tels[0].sessionName;
       if (sel.meta && oneSession) {
-        const sub = [sel.meta.name || sel.meta.type, sel.meta.circuit || sel.meta.country].filter(Boolean).join(" · ");
+        const same = !laneSes || laneSes === (sel.meta.name || sel.meta.type);
+        const sub = [laneSes || sel.meta.name || sel.meta.type, same ? sel.meta.circuit || sel.meta.country : null].filter(Boolean).join(" · ");
         if (sub) titleEl.appendChild(el("span", "dh-tpopup-sub", sub));
       } else if (sel.meta) {
         const sub = [sel.meta.circuit || sel.meta.country].filter(Boolean).join(" · ");

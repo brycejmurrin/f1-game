@@ -662,12 +662,37 @@ body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: cal
    caution rules below step aside (:not(.hud-mirror-side)) — the flag stays
    under the mirror, the card beside it. Portrait / a big HUD SIZE: no room,
    no class, the --mir-bot stack above. */
-body.hud-mirror-on.hud-mirror-side #announce {
+body.hud-mirror-on.hud-mirror-side:not(.hud-radio-top) #announce {
   top: var(--mir-top);
   left: calc(var(--mir-side-x) / var(--hud-z));
   transform: none;
   min-width: 0;
   max-width: min(440px, calc(var(--mir-side-w) / var(--hud-z)));
+}
+/* THE TOP ROW, FIRST CHOICE: right of the timing tower, left of the cam
+   button, in the tower's own row — smaller, off the road, and clear of the
+   mirror under the tower (a phone report: beside the mirror it still sat on
+   the view). js/ui/hud.js radioTopSlot() sets body.hud-radio-top and the
+   --radio-top-* box in SCREEN px only when a shrunk card fits, so they divide
+   by this element's zoom. Outweighs the density and broadcast tops; the
+   beside-the-mirror and caution rules step aside (:not(.hud-radio-top)),
+   since the flag chip under the tower no longer shares the card's column. The
+   type floor is --fs-micro, so the shrink is the plate, the padding and the
+   message dropping to the name line's size. */
+body.hud-radio-top #announce:not([hidden]) {
+  top: calc(var(--radio-top-y) / var(--hud-z));
+  left: calc(var(--radio-top-x) / var(--hud-z));
+  transform: none;
+  min-width: 0;
+  max-width: calc(var(--radio-top-w) / var(--hud-z));
+  min-height: calc(var(--radio-top-h) / var(--hud-z));
+  font-size: var(--fs-micro);
+  line-height: 1.15;
+  --radio-num: 18px;
+}
+body.hud-radio-top #announce-body {
+  justify-content: center; gap: 0;
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.6);
 }
 /* The chip is unzoomed (screen px): its bottom edge divided into this zoom. */
 body:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
@@ -804,8 +829,8 @@ body[data-density="compact"] #announce {
 /* UNDER A CAUTION the flag chip owns the slot under the timing row (#hud-flag,
    100px / 72px compact), so the card steps below it — the two are read
    together on a broadcast, never one over the other. */
-body:not(.hud-mirror-side):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-side):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+body:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
