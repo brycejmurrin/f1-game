@@ -123,6 +123,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
+  "tests/unit/ci-verdict.test.mjs",
   "tests/unit/ci-watch.test.mjs",
   "tests/unit/circuit-axis.test.mjs",
   "tests/unit/circuit-def-fields.test.mjs",
@@ -387,6 +388,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/physics-baseline-provenance.test.mjs",
   "tests/unit/physics-characterization-vm.test.mjs",
   "tests/unit/pick-tests.test.mjs",
+  "tests/unit/pick-unit-slices.test.mjs",
   // ...and the pit lane's pure geometry: the window WRAPS the start/finish
   // line, the lane is metres not a fraction of the lap, the box is long
   // enough to stop in, and the COMMITMENT that replaced the pit button tells
