@@ -37,6 +37,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -129,4 +130,88 @@ test("--hud-scale carries no blanket touch bump, and the old size stays reachabl
   const max = Number(scaleJs.match(/const SCALE_MAX = (\d+);/)[1]);
   assert.ok(max >= 180, `SCALE_MAX is ${max}; the pre-2026-09-14 default of 180 must stay reachable`);
   assert.ok(min <= 100, `SCALE_MIN is ${min}; players must be able to go below the default too`);
+});
+
+// ── PANEL OPACITY (DISPLAY › HUD), BUTTON OPACITY's twin ──────────────────────
+// UiScale.create(G) run for real in node:vm over stub elements: the slider
+// writes --hud-panel-a on <html> only once moved, clamps to 20-100, and its
+// revert clears it — the same contract as BUTTON OPACITY beside it.
+function bootScale(stored = {}) {
+  const rootStyle = new Map();
+  const els = new Map();
+  const el = (id) => {
+    if (!els.has(id)) {
+      const cls = new Set();
+      els.set(id, {
+        id, value: "", textContent: "", hidden: true, oninput: null, onclick: null,
+        classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), contains: (c) => cls.has(c) },
+        closest() { return this._row || null; },
+      });
+    }
+    return els.get(id);
+  };
+  for (const id of ["pm-panelopacity", "pm-btnopacity"]) el(id)._row = el(id + "-row");
+  const store = {
+    get: (k, d) => (k in stored ? stored[k] : d),
+    set: (k, v) => { if (v === null) delete stored[k]; else stored[k] = v; },
+    raw: () => null, rawSet: () => {},
+  };
+  const ctx = vm.createContext({
+    Math, Number, String, JSON, isFinite, Object, Array,
+    Log: { info() {} },
+    SettingRow: { wire() {}, paint() {}, labels: (v) => v.map((x) => [x, x]) },
+    PerfGov: { setAutoRes() {} },
+    requestAnimationFrame: () => 0,
+    window: { matchMedia: () => ({ matches: false }) },
+    document: { documentElement: { style: {
+      setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k),
+    } } },
+  });
+  vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: "js/ui/scale.js" });
+  const api = vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: {}, updateTrackPreview() {} });
+  return { api, el, rootStyle, stored };
+}
+
+test("PANEL OPACITY: unset writes nothing; the slider clamps to 20-100 and reverts", () => {
+  const { el, rootStyle, stored } = bootScale();
+  assert.equal(rootStyle.has("--hud-panel-a"), false, "nothing stored => no inline property");
+  assert.equal(el("pm-panelopacity").value, "100");
+  assert.equal(el("pm-panelopacity-v").textContent, "100%");
+  assert.equal(el("pm-panelopacity-r").hidden, true);
+  el("pm-panelopacity").oninput({ target: { value: "40" } });
+  assert.equal(stored.hudPanelOpacity, 40);
+  assert.equal(rootStyle.get("--hud-panel-a"), "0.4");
+  assert.equal(el("pm-panelopacity-v").textContent, "40%");
+  assert.equal(el("pm-panelopacity-r").hidden, false);
+  assert.ok(el("pm-panelopacity-row").classList.contains("tune-over"));
+  el("pm-panelopacity").oninput({ target: { value: "3" } });
+  assert.equal(stored.hudPanelOpacity, 20, "20% is the floor");
+  el("pm-panelopacity-r").onclick();
+  assert.equal("hudPanelOpacity" in stored, false);
+  assert.equal(rootStyle.has("--hud-panel-a"), false);
+  assert.equal(rootStyle.has("--hud-btn-opacity"), false, "BUTTON OPACITY is a separate axis");
+  // A stored out-of-range number is clamped on boot.
+  assert.equal(bootScale({ hudPanelOpacity: 250 }).rootStyle.get("--hud-panel-a"), "1");
+});
+
+test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST pins it at 1", () => {
+  const hud = read("css/hud.css");
+  assert.match(tokens, /--hud-panel-a-eff:\s*var\(--hud-panel-a, 1\);/, "unset is exactly 1: shipped alphas unchanged");
+  const hc = tokens.match(/:root\[data-ui-contrast="high"\] \{([^}]*)\}/);
+  assert.ok(hc && /--hud-panel-a-eff:\s*1;/.test(hc[1]), "HIGH CONTRAST must pin --hud-panel-a-eff at 1");
+  // Every listed plate multiplies its shipped alpha by the effective token.
+  for (const [sel, a] of [[".hud-box {", "0.78"], ["#hud-gearbox {", "0.6"], ["#hud-tach {", "0.72"],
+    ["#minimap {", "0.55"], ["#hud-sectors {", "0.72"], ["#hud-limits {", "0.72"], ["#announce {", "0.82"]]) {
+    const at = hud.indexOf("\n" + sel);
+    assert.ok(at >= 0, sel);
+    const block = hud.slice(at, hud.indexOf("\n}", at + 1));
+    assert.ok(block.includes(`rgb(8 8 14 / calc(${a} * var(--hud-panel-a-eff)))`), sel + " plate");
+  }
+  assert.match(hud, /background: rgb\(8 8 14 \/ calc\(0\.55 \* var\(--hud-panel-a-eff\)\)\); padding: 1px 7px;/, ".hud-gaps plate");
+  // Lights, flags and the OT/AERO fills are signals, not plates.
+  const lights = hud.indexOf("\n#lights {");
+  assert.ok(lights >= 0, "#lights block");
+  assert.doesNotMatch(hud.slice(lights, hud.indexOf("\n}", lights + 1)), /hud-panel-a/);
+  assert.doesNotMatch(hud, /#hud-(ot|aero)[^{]*\{[^}]*hud-panel-a/);
+  assert.match(read("js/ui/settings-export.js"), /k: "hudPanelOpacity", lane: "json", group: "display", def: null/);
 });
