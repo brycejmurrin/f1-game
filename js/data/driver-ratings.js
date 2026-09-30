@@ -9,28 +9,28 @@ const DriverRatings = (function () {
   // [pace, craft, awareness, consistency, experience]. Compact on purpose — 22 rows
   // of five numbers stay readable as a table, where 22 objects would not.
   const BASE = {
-    VER: [96, 96, 88, 94,  92],   // fastest on the grid, and knows it
-    LEC: [94, 89, 84, 86,  84],
-    NOR: [93, 90, 86, 90,  72],   // 2025 champion
-    PIA: [91, 88, 88, 90,  62],
-    RUS: [90, 88, 88, 90,  78],
-    HAM: [89, 95, 92, 88, 100],   // pace has ebbed; racecraft has not
-    SAI: [88, 88, 86, 88,  90],
-    ALO: [86, 96, 88, 88, 100],   // the reason ratings cannot be derived from car tier
-    GAS: [84, 84, 82, 82,  86],
-    ALB: [84, 84, 84, 84,  78],
-    ANT: [84, 78, 72, 74,  32],   // quick, raw
-    HUL: [82, 84, 86, 86,  94],
-    OCO: [82, 82, 76, 80,  84],
-    HAD: [82, 78, 76, 78,  30],
-    PER: [80, 82, 78, 74,  92],
-    BEA: [80, 76, 74, 76,  34],
-    LAW: [79, 76, 74, 74,  38],
-    BOT: [79, 82, 84, 84,  96],
-    COL: [78, 74, 68, 70,  30],
-    BOR: [77, 72, 70, 72,  24],
-    LIN: [76, 70, 66, 68,  12],   // rookie
-    STR: [74, 72, 70, 72,  80],
+    VER: [96, 94, 88, 73,  92], // still the pace king; consistency is the tax
+    LEC: [94, 95, 75, 73,  84], // craft high, awareness the soft spot
+    NOR: [93, 94, 81, 73,  72], // 2025 champion
+    PIA: [91, 93, 77, 75,  62],
+    RUS: [90, 93, 75, 96,  78], // metronome
+    HAM: [89, 95, 75, 83, 100], // pace has ebbed; racecraft has not
+    SAI: [88, 89, 73, 86,  90],
+    ALO: [86, 97, 73, 89, 100], // the reason ratings cannot be derived from car tier
+    GAS: [84, 82, 72, 91,  86],
+    ALB: [84, 79, 72, 92,  78],
+    ANT: [84, 70, 67, 71,  32], // quick, raw
+    HUL: [82, 75, 93, 93,  94], // safe hands
+    OCO: [82, 76, 80, 94,  84],
+    HAD: [82, 69, 79, 89,  30],
+    PER: [80, 74, 87, 69,  92], // experienced, inconsistent
+    BEA: [80, 74, 85, 84,  34],
+    LAW: [79, 74, 87, 81,  38],
+    BOT: [79, 81, 91, 96,  96], // reliable veteran
+    COL: [78, 79, 89, 75,  30],
+    BOR: [77, 81, 88, 70,  24],
+    LIN: [76, 66, 63, 69,  12], // rookie
+    STR: [74, 91, 90, 73,  80], // pay seat with real craft
   };
 
   // The unrated roll, Math.min(1.0, 0.92 + simRnd() * 0.1), puts ~20% of draws
