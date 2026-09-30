@@ -4124,7 +4124,10 @@ function raceIntro(go) {
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
   const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
-  const flyMs = loadingScreen.nextFlyMs(info.readMs);
+  // Habitual short flyby only after the backend's warm is done — shortening into
+  // a still-compiling first frame was a freeze under a shorter card.
+  info.warmReady = !(gfx && gfx.warming && gfx.warming());
+  const flyMs = loadingScreen.nextFlyMs(info.readMs, info.warmReady);
   FlybySeq.setDuration(flyMs);   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was

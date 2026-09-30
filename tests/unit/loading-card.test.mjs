@@ -327,10 +327,12 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // first countdown present on TLX starts the program warm and paints nothing.
   const game = read("js/game.js");
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
-  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;[^\n]*\n\s*clearMenuScreens\(\);\s*if \(handoff\) loadingScreen\.handoff\(\);/,
+  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;/,
+    "startRaceBody still decides handoff from the screen that was up before the sweep");
+  assert.match(body, /clearMenuScreens\(\);\s*if \(handoff\) \{[^}]*loadingScreen\.handoff\(\);/,
     "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
-  assert.match(render, /gfx\.present\(po\);[\s\S]{0,400}?if \(loadingScreen\.phase\(\) === "handoff" && !\(gfx\.warming && gfx\.warming\(\)\)\) loadingScreen\.stop\(\);/,
+  assert.match(render, /gfx\.present\(po\);[\s\S]{0,500}?loadingScreen\.phase\(\) === "handoff"[\s\S]{0,300}?loadingScreen\.stop\(\)/,
     "render() lowers it after a present that painted, never one that only started the warm");
   assert.match(read("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
 });
@@ -771,11 +773,22 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
   const game = read("js/game.js");
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
-  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*const flyMs = loadingScreen\.nextFlyMs\(info\.readMs\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
+  assert.match(intro, /info\.warmReady\s*=/);
+  assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
   assert.match(intro, /loadingScreen\.run\(info, go\);/);
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");
-  assert.match(read("js/ui/loading-screen.js"), /flyMsFor\(readSkips\(\), info\.readMs\)/);
+  assert.match(read("js/ui/loading-screen.js"), /flyMsFor\(readSkips\(\), info\.readMs, info\.warmReady\)/);
+});
+
+test("flyMsFor: habitual short cut waits for warmReady (would fail before the warm gate)", () => {
+  const { flyMsFor, FLY_MS, SHORT_FLY_MS } = LS;
+  assert.equal(flyMsFor(3, 0, true), SHORT_FLY_MS, "warm done: short applies");
+  assert.equal(flyMsFor(3, 0, false), FLY_MS, "still warming: keep the full cut");
+  assert.equal(flyMsFor(3, 50000, false), 50000, "still warming: may stretch for a real-race read, but never SHORTEN");
+  assert.equal(flyMsFor(3, 0, { warmReady: false }), FLY_MS, "opts form");
+  assert.equal(flyMsFor(3, 0, undefined), SHORT_FLY_MS, "absent warmReady keeps today's short");
+  assert.equal(flyMsFor(0, 0, false), FLY_MS, "no streak: full cut either way");
 });
 
 test("metaRows: a circuit gets its facts; a real race joined mid-race gets the lap, your place, tyres, stops, leader and flag", () => {

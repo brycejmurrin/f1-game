@@ -46,10 +46,16 @@ const LoadingScreen = (function () {
    * flyby stretches to it, up to FLY_MAX_MS. Still skippable, and a habitual
    * skipper keeps the short cut: they have told us what they think of waiting. */
   const FLY_MAX_MS = 60000;   // the Baku lap-40 read needs 54 s for its flags and retirements (announcer.test.mjs); still skippable
-  /** The flyby's budget for a stored streak (and a read that wants longer). Pure; hostile input is no streak. */
-  function flyMsFor(skips, wantMs) {
+  /** The flyby's budget for a stored streak (and a read that wants longer). Pure; hostile input is no streak.
+   *  `warmReady` (3rd arg / opts.warmReady): the habitual short cut only applies once the
+   *  backend's race-entry warm is done. Shortening into a still-compiling first frame
+   *  was the freeze under a shorter card (PERF-OPTIONS / load-download-weight plan).
+   *  Absent / true keeps today's behaviour; false forces at least FLY_MS. */
+  function flyMsFor(skips, wantMs, warmReady) {
+    const ready = warmReady === undefined || warmReady === null ? true
+      : !!(typeof warmReady === "object" ? warmReady.warmReady !== false : warmReady);
     const n = Number.isFinite(+skips) ? +skips : 0;
-    if (n >= SKIP_STREAK) return SHORT_FLY_MS;
+    if (n >= SKIP_STREAK && ready) return SHORT_FLY_MS;
     const want = Number.isFinite(+wantMs) ? +wantMs : 0;
     return Math.min(FLY_MAX_MS, Math.max(FLY_MS, Math.round(want)));
   }
@@ -647,7 +653,7 @@ const LoadingScreen = (function () {
       // Both show the card, so the stylesheet reveals it for either.
       setPhase(info.hasWorld && !reduced ? "run" : "card");
       // readMs: a real race's read, which may need longer.
-      const life = info.hasWorld && !reduced ? flyMsFor(readSkips(), info.readMs) : CARD_MS;
+      const life = info.hasWorld && !reduced ? flyMsFor(readSkips(), info.readMs, info.warmReady) : CARD_MS;
       flyMs = info.hasWorld && !reduced ? life : FLY_MS;
       // The letterbox (css/overlays.css) opens on the flyby's last beat, so it
       // needs the budget this run actually has, not the 24 s it usually is.
@@ -778,8 +784,9 @@ const LoadingScreen = (function () {
     return {
       run, stop, hold, building, garage, handoff,
       /** The next flyby's length (the short cut for a habitual skipper), so its
-       *  shots are planned for the seconds they will actually have. */
-      nextFlyMs: (wantMs) => flyMsFor(readSkips(), wantMs),
+       *  shots are planned for the seconds they will actually have. Pass
+       *  warmReady=false to keep FLY_MS while the backend is still compiling. */
+      nextFlyMs: (wantMs, warmReady) => flyMsFor(readSkips(), wantMs, warmReady),
       /** The flyby editor's three sliders. setCard() PATCHES — it merges onto
        *  what is there, so a size slider does not reset the position. RESET is
        *  resetCard(), which drops the geometry first: clampCard(null) is every
