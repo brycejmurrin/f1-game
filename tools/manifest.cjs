@@ -232,6 +232,7 @@ const FULL = [
   "js/fx/particles.js",
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
+  "js/career/ai-dev.js",
   "js/career/career.js",
   "js/career/season-cal.js",
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
@@ -534,6 +535,9 @@ const HARD_EDGES = [
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
+  ["js/car/parts.js", "js/career/ai-dev.js"],       // AI winter develops catalog options through Parts
+  ["js/data/teams.js", "js/career/ai-dev.js"],
+  ["js/career/ai-dev.js", "js/career/career.js"],     // rolloverTeams calls CareerAiDev.developWinter
   ["js/career/save-migrate.js", "js/core/store.js"],
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
