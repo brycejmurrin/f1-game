@@ -664,8 +664,8 @@
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
         <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice, strategy &amp; badges</small></button>
-        <button id="pm-open-display" type="button">DISPLAY&hellip;<small>UI, HUD &amp; graphics</small></button>
-        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Theme, menu &amp; HUD colours</small></button>
+        <button id="pm-open-display" type="button">DISPLAY&hellip;<small>HUD &amp; graphics</small></button>
+        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Colours, UI size &amp; title screen</small></button>
         <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Music, radio, spotter &amp; voices</small></button>
         <button id="pm-open-files" type="button">BACKUP &amp; RESTORE&hellip;<small>Save or load your preferences</small></button>
@@ -889,17 +889,6 @@
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
-               SheetShape) sit INSIDE this range, so a notch can flip arrangement
-               not just size. MEASURED garage portrait: two columns at 80%,
-               stacked at 100%; compact head engages between 105 and 110. Step 5
-               overshot those edges; step 1 still jumped past a threshold while
-               dragging on a short phone track. Half-percent keeps the hunt tight.
-               applyScale() clamps to SCALE_MIN/MAX and snaps to 0.5. -->
-          <h3 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h3>
-          <label class="tune-row">
-            <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size" aria-describedby="pm-uiscale-help"></label>
-          <p id="pm-uiscale-help" class="adv-help">Scales every menu and settings screen. The race HUD and the touch buttons have their own sizes in the HUD fold below.</p>
           <details id="pm-hud-details" class="pm-hud-sub">
             <summary class="adv-more-btn" id="pm-hud-details-sum">HUD · ON · STANDARD</summary>
             <div role="group" aria-label="HUD layout">
@@ -1140,6 +1129,18 @@
             </div>
           </div>
           <h4 class="pm-look-h">READABILITY</h4>
+          <!-- UI SIZE sits under READABILITY (moved from DISPLAY: it sizes every
+               menu, like TEXT SIZE). step 0.5 — layout tiers (`--pair-at` /
+               `--compact-at` via SheetShape) sit INSIDE this range, so a notch
+               can flip arrangement not just size. MEASURED garage portrait: two columns at 80%,
+               stacked at 100%; compact head engages between 105 and 110. Step 5
+               overshot those edges; step 1 still jumped past a threshold while
+               dragging on a short phone track. Half-percent keeps the hunt tight.
+               applyScale() clamps to SCALE_MIN/MAX and snaps to 0.5. -->
+          <h5 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h5>
+          <label class="tune-row">
+            <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size" aria-describedby="pm-uiscale-help"></label>
+          <p id="pm-uiscale-help" class="adv-help">Scales every menu and settings screen. The race HUD and the touch buttons have their own sizes under DISPLAY › HUD.</p>
           <div id="pm-textsize" class="set-row" role="group" aria-labelledby="pm-textsize-label">
             <span class="tune-label" id="pm-textsize-label">TEXT SIZE</span>
             <div>
@@ -1167,7 +1168,7 @@
             </div>
           </div>
           <p class="adv-help">KM/H or MPH for the speedometer and every other speed shown in the game.</p>
-          <h4 class="pm-look-h">TITLE SCREEN &amp; MOTION</h4>
+          <h4 class="pm-look-h">MOTION</h4>
           <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
             <span class="tune-label" id="pm-motion-label">MOTION</span>
             <div>
@@ -1177,34 +1178,44 @@
             </div>
           </div>
           <p class="adv-help" id="pm-motion-help">REDUCED turns off sliding and fading between screens, camera shake in the race and the pre-race flyby. If your phone is set to reduce motion, that always wins.</p>
-          <div id="pm-titleintro" class="set-row" role="group" aria-labelledby="pm-titleintro-label">
-            <span class="tune-label" id="pm-titleintro-label">TITLE INTRO</span>
-            <div>
-              <button id="pm-titleintro-prev" type="button" data-step="-1" aria-label="Previous title intro" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-titleintro-sel" aria-labelledby="pm-titleintro-label" aria-describedby="pm-titleintro-help"></select>
-              <button id="pm-titleintro-next" type="button" data-step="1" aria-label="Next title intro" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+          <!-- TITLE SCREEN: every knob that only touches the title screen, in one
+               fold. js/ui/title-fx.js wires the rows; js/ui/title-layout.js
+               mounts its TITLE LAYOUT sub-fold before REPLAY INTRO and paints
+               this summary (SHIPPED / CUSTOM across all of them). MOTION stays
+               outside: it reaches every screen and the race. -->
+          <details id="pm-titlescreen" class="pm-renderer-sub">
+            <summary class="adv-more-btn" id="pm-titlescreen-sum">TITLE SCREEN · SHIPPED</summary>
+            <div id="pm-titlescreen-body" role="group" aria-label="Title screen">
+              <div id="pm-titleintro" class="set-row" role="group" aria-labelledby="pm-titleintro-label">
+                <span class="tune-label" id="pm-titleintro-label">TITLE INTRO</span>
+                <div>
+                  <button id="pm-titleintro-prev" type="button" data-step="-1" aria-label="Previous title intro" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+                  <select id="pm-titleintro-sel" aria-labelledby="pm-titleintro-label" aria-describedby="pm-titleintro-help"></select>
+                  <button id="pm-titleintro-next" type="button" data-step="1" aria-label="Next title intro" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help" id="pm-titleintro-help">The animation when the game opens. QUICK is half as long; OFF goes straight to the menu.</p>
+              <div id="pm-menuwash" class="set-row" role="group" aria-labelledby="pm-menuwash-label">
+                <span class="tune-label" id="pm-menuwash-label">MENU WASH</span>
+                <div>
+                  <button id="pm-menuwash-prev" type="button" data-step="-1" aria-label="Previous menu wash" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+                  <select id="pm-menuwash-sel" aria-labelledby="pm-menuwash-label" aria-describedby="pm-menuwash-help"></select>
+                  <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help" id="pm-menuwash-help">The coloured glow behind the main menu. SOFT tones it down; OFF leaves a plain dark background.</p>
+              <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
+                <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
+                <div>
+                  <button id="pm-titleart-prev" type="button" data-step="-1" aria-label="Previous title art" aria-hidden="true" tabindex="-1">&lsaquo;</button>
+                  <select id="pm-titleart-sel" aria-labelledby="pm-titleart-label" aria-describedby="pm-titleart-help"></select>
+                  <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help" id="pm-titleart-help">The car drawing behind the main menu. SOFT fades it; OFF removes it.</p>
+              <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
             </div>
-          </div>
-          <p class="adv-help" id="pm-titleintro-help">The animation when the game opens. QUICK is half as long; OFF goes straight to the menu.</p>
-          <div id="pm-menuwash" class="set-row" role="group" aria-labelledby="pm-menuwash-label">
-            <span class="tune-label" id="pm-menuwash-label">MENU WASH</span>
-            <div>
-              <button id="pm-menuwash-prev" type="button" data-step="-1" aria-label="Previous menu wash" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-menuwash-sel" aria-labelledby="pm-menuwash-label" aria-describedby="pm-menuwash-help"></select>
-              <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help" id="pm-menuwash-help">The coloured glow behind the main menu. SOFT tones it down; OFF leaves a plain dark background.</p>
-          <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
-            <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
-            <div>
-              <button id="pm-titleart-prev" type="button" data-step="-1" aria-label="Previous title art" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-titleart-sel" aria-labelledby="pm-titleart-label" aria-describedby="pm-titleart-help"></select>
-              <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help" id="pm-titleart-help">The car drawing behind the main menu. SOFT fades it; OFF removes it.</p>
-          <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
+          </details>
         </section>
         <section id="advanced" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -2855,7 +2866,7 @@
         <dt>STEERING &amp; ASSISTS</dt>
         <dd>Choose response presets and steering aids here. LINE STEERING ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING. Expand ADVANCED for detailed steering adjustments.</dd>
         <dt>DISPLAY</dt>
-        <dd>Adjust UI, HUD and button sizes separately. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.</dd>
+        <dd>Adjust HUD and button sizes separately (UI SIZE, for the menus, is in APPEARANCE). HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.</dd>
         <dt>MUSIC &amp; SOUND</dt>
         <dd>Choose music and effects, their volumes and playback controls in SETTINGS › MUSIC &amp; SOUND. SOURCE picks which songs play; with your own Spotify connected there, OPEN PLAYER shows what is playing and lets you change it.</dd>
         <dt id="htp-modes">RACE</dt>

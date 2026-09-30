@@ -702,3 +702,30 @@ test("steerMode / hudProfile / drivingLine rows carry oneOf allowlists", () => {
   assert.deepEqual(Array.from(byK.hudProfile.oneOf), ["minimal", "standard", "broadcast"]);
   assert.deepEqual(Array.from(byK.drivingLine.oneOf), ["off", "corner", "full"]);
 });
+
+// BACKUP & RESTORE dropped TEXT SIZE, HIGH CONTRAST and SPEED UNITS (and the
+// flyby shots / loading card) because nobody added their SPEC rows. Every
+// store key APPEARANCE owns must be allowlisted, and a changed one must
+// survive the round trip.
+test("every APPEARANCE store key is in SPEC and round-trips", () => {
+  const src = read("js/ui/appearance-opts.js");
+  const keys = [...src.matchAll(/const K_[A-Z_]+ = "([A-Za-z]+)"/g)].map((m) => m[1]);
+  assert.ok(keys.length >= 8, "found appearance-opts.js's K_* keys: " + keys.join(", "));
+  const { SettingsExport, collect } = boot({ disk: {
+    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("high"),
+    "apex26.speedUnits": JSON.stringify("mph"), "apex26.ldCard": JSON.stringify({ scale: 1.2, x: 4, y: -3 }),
+    "apex26.flybyShots": JSON.stringify([{ id: "a" }]),
+  } });
+  const inSpec = new Set(SettingsExport.SPEC.map((r) => r.k));
+  for (const k of keys) assert.ok(inSpec.has(k), k + " (js/ui/appearance-opts.js) needs a SPEC row");
+  const f = collect("changes");
+  assert.equal(f.settings.appearance.textSize, "larger");
+  assert.equal(f.settings.appearance.uiContrast, "high");
+  assert.equal(f.settings.appearance.speedUnits, "mph");
+  assert.deepEqual(f.settings.camera.ldCard, { scale: 1.2, x: 4, y: -3 });
+  assert.equal(f.settings.camera.flybyShots.length, 1);
+  const b = boot();
+  const res = b.loadSettings(f);
+  assert.equal(res.ok, true);
+  assert.equal(res.skipped, 0, "every row passes its oneOf / type check");
+});

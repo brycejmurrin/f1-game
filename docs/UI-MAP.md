@@ -96,7 +96,7 @@ the same pairing (`js/input/phone-pad.js`; the protocol is in
 
 **Display.**
 
-- UI Size `100%`; HUD `ON`; Style `STANDARD`; Layout `FULL`; Map `ON`;
+- HUD `ON`; Style `STANDARD`; Layout `FULL`; Map `ON`;
   Gaps `ON`; Line Colour `F1`; Line Opacity `NORMAL`; Brake Cue `OFF`.
 - HUD and touch size/opacity `100%`; Metrics Overlay `OFF`; Page `GOV`;
   Side `AUTO`; Size `S`.
@@ -105,6 +105,17 @@ the same pairing (`js/input/phone-pad.js`; the protocol is in
 - Cockpit Halo `ON`; Turn Chasing `40%`.
 - `#pm-display-adv` holds Advanced Visuals. Lighting Tuner, Camera Tuner and
   Flyby Shot Editor are disabled outside a race and open separate docks.
+
+**Appearance.** A live preview, then:
+
+- COLOURS: Theme, Menu Accent (swatches, custom hex), HUD Accent.
+- READABILITY: UI Size `100%` (`#pm-uiscale`, moved here from Display), Text
+  Size, High Contrast, Speed Units.
+- MOTION: Motion `ON` (global: menus, camera shake, flyby).
+- `#pm-titlescreen`, a closed TITLE SCREEN fold whose summary reads `SHIPPED`
+  or `CUSTOM` (`js/ui/title-layout.js`): Title Intro `FULL`, Menu Wash `FULL`,
+  Title Art `ON`, the TITLE LAYOUT sub-fold (`#pm-titlelayout`, built at
+  runtime) and Replay Intro.
 
 **Steering & Assists.** Preset `STANDARD`; Overall Speed `84%`; Feel `NORMAL`;
 Tilt `8`; Aids `OFF`; Driving Help `LOW`; Racing Line `OFF`, plus an Advanced
@@ -278,7 +289,8 @@ Other in-race roots are:
   hidden; it ends by itself, on DONE or on Escape, and a paused race redraws its
   own frame after. Refused while the GARAGE or the drive-out owns the room.
 - `#tl-editor` — the TITLE LAYOUT editor's docked bar (`#pm-tl-edit`, EDIT ON
-  TITLE SCREEN…, under Appearance → TITLE LAYOUT; `js/ui/title-layout.js`).
+  TITLE SCREEN…, under Appearance → TITLE SCREEN → TITLE LAYOUT;
+  `js/ui/title-layout.js`).
   Title screen only (disabled while `#overlay` is hidden). Hides `#pmsettings`,
   sets `html[data-tl-edit]` and makes `#menu-buttons`, `#menu-brand` and
   `#tl-art` (a proxy over `#title-car`) draggable; `#tl-handle` sizes the

@@ -1,7 +1,7 @@
 // @ts-check
 // UI SCALE — every main screen still fits at every size the player can pick.
 //
-// SETTINGS ▸ DISPLAY runs UI SIZE and HUD SIZE from 50 % to 150 %, which means
+// SETTINGS ▸ APPEARANCE (UI SIZE) and ▸ DISPLAY (HUD SIZE) run 50 % to 150 %, so
 // "does this screen fit?" stopped being one question. A sheet that sits
 // comfortably at the default can push its primary button off the edge two
 // notches up, and nothing in the suite would have noticed: the six pixel

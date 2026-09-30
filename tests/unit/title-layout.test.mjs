@@ -1,4 +1,4 @@
-/* title-layout — APPEARANCE › TITLE LAYOUT: move and size the title screen's
+/* title-layout — APPEARANCE › TITLE SCREEN › TITLE LAYOUT: move and size the title screen's
  * buttons, title and car drawing, plus button width / layout / side — one
  * layout per screen shape, and the drag-to-place editor on the title screen.
  * Runs the REAL module (and SettingRow) in node:vm over the mini DOM, and holds
@@ -19,11 +19,17 @@ const SHELL = read("index.html");
 const CSS = read("css/responsive.css");
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
-function boot(stored = {}, { shape = "wide", editor = false } = {}) {
+function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
   const dom = makeDom();
   const panel = dom.byId("pm-panel-appearance");
+  // The shell's TITLE SCREEN fold: summary + body, REPLAY INTRO last in the body.
+  const titleFold = dom.byId("pm-titlescreen");
+  const titleBody = dom.byId("pm-titlescreen-body");
+  titleFold.appendChild(dom.byId("pm-titlescreen-sum"));
+  titleFold.appendChild(titleBody);
+  panel.appendChild(titleFold);
   const replay = dom.byId("pm-replay-intro");
-  panel.appendChild(replay);
+  titleBody.appendChild(replay);
   dom.body.setAttribute("data-shape", shape);
   // The title screen and the editor's shell layer, as index.html ships them.
   if (editor) {
@@ -51,6 +57,7 @@ function boot(stored = {}, { shape = "wide", editor = false } = {}) {
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     innerWidth: 1000, innerHeight: 500,
   };
+  if (fx) sb.TitleFx = fx;   // js/ui/title-fx.js's three title looks (loads first in the shell)
   sb.window = sb;
   const ctx = vm.createContext(sb);
   for (const f of ["js/ui/setting-row.js", "js/ui/title-layout.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
@@ -61,7 +68,7 @@ function boot(stored = {}, { shape = "wide", editor = false } = {}) {
     for (const o of observers) if (o.target === dom.body && o.opts.attributeFilter.includes("data-shape")) o.fn();
   };
   const mutated = (el) => { for (const o of observers) if (o.target === el) o.fn(); };
-  return { dom, M, data, panel, html: dom.documentElement, timers, rotate, mutated };
+  return { dom, M, data, panel, titleBody, html: dom.documentElement, timers, rotate, mutated };
 }
 
 test("normalize clamps every field and reads junk as shipped", () => {
@@ -298,6 +305,7 @@ test("editor: DONE gives the settings page back, opens the fold and focuses its 
   assert.equal(dom.byId("pmsettings").hidden, false, "settings back");
   assert.equal(dom.byId("pm-panel-appearance").hidden, false);
   assert.equal(dom.byId("pm-titlelayout").open, true, "the fold open");
+  assert.equal(dom.byId("pm-titlescreen").open, true, "and the TITLE SCREEN fold around it");
   assert.equal(dom.byId("pm-tl-btns-x").value, "1", "its sliders repainted");
   timers.at(-1).fn();
   assert.equal(dom.document.activeElement, dom.byId("pm-tl-edit"), "focus back on EDIT ON TITLE SCREEN");
@@ -312,11 +320,12 @@ test("editor: DONE gives the settings page back, opens the fold and focuses its 
   assert.match(SHELL, /<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>\s*<button id="tl-done" type="button">DONE<\/button>\s*<\/div>/);
 });
 
-test("the APPEARANCE fold: built before REPLAY INTRO, sliders store and PEEK, choices wire, RESET clears", () => {
-  const { dom, M, data, panel, html, timers } = boot();
+test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, sliders store and PEEK, choices wire, RESET clears", () => {
+  const { dom, M, data, titleBody, html, timers } = boot();
   const fold = dom.byId("pm-titlelayout");
   assert.ok(fold, "built");
-  assert.equal(panel.children.indexOf(fold) + 1, panel.children.indexOf(dom.byId("pm-replay-intro")), "just before REPLAY INTRO");
+  assert.equal(fold.parentNode, titleBody, "inside the TITLE SCREEN fold's body");
+  assert.equal(titleBody.children.indexOf(fold) + 1, titleBody.children.indexOf(dom.byId("pm-replay-intro")), "just before REPLAY INTRO");
   const sum = dom.byId("pm-titlelayout-sum");
   assert.equal(sum.textContent, "TITLE LAYOUT · SHIPPED");
   for (const id of ["pm-tl-btns-size", "pm-tl-btns-width", "pm-tl-btns-x", "pm-tl-btns-y", "pm-tl-title-size", "pm-tl-title-x", "pm-tl-title-y", "pm-tl-art-size", "pm-tl-art-x", "pm-tl-art-y", "pm-tl-layout", "pm-tl-side", "pm-tl-reset", "pm-tl-reset-shape", "pm-tl-copy", "pm-tl-edit", "pm-tl-shape"])
@@ -341,7 +350,7 @@ test("the APPEARANCE fold: built before REPLAY INTRO, sliders store and PEEK, ch
   assert.equal(sum.textContent, "TITLE LAYOUT · SHIPPED");
   assert.equal(x.value, "0", "sliders repaint to shipped");
   M.build();
-  assert.equal(panel.children.filter((c) => c === fold).length, 1, "mount once");
+  assert.equal(titleBody.children.filter((c) => c === fold).length, 1, "mount once");
 });
 
 test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and lives in the overlays layer", () => {
@@ -357,6 +366,74 @@ test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and
   assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*translate: var\(--tl-btns-x, 0\) var\(--tl-btns-y, 0\)/);
   assert.match(block, /zoom: calc\(var\(--ui-scale\) \* var\(--tl-btns-size, 1\)\)/);
   assert.match(block, /#title-car \{[^}]*scale: var\(--tl-art-size, 1\)/);
+});
+
+/* ── APPEARANCE: one TITLE SCREEN fold, UI SIZE under READABILITY ────────── */
+const section = (id) => {
+  const a = SHELL.indexOf(`<section id="${id}"`);
+  assert.ok(a > 0, id);
+  return SHELL.slice(a, SHELL.indexOf("</section>", a));
+};
+
+test("shell: UI SIZE lives in APPEARANCE › READABILITY, before TEXT SIZE, and left DISPLAY", () => {
+  const disp = section("pm-panel-display"), look = section("pm-panel-appearance");
+  for (const id of ["pm-uiscale", "pm-uiscale-h", "pm-uiscale-v", "pm-uiscale-r", "pm-uiscale-help"]) {
+    assert.ok(!disp.includes(`id="${id}"`), `${id} left DISPLAY`);
+    assert.ok(look.includes(`id="${id}"`), `${id} in APPEARANCE`);
+  }
+  const at = (s) => { const i = look.indexOf(s); assert.ok(i >= 0, s); return i; };
+  assert.ok(at('<h4 class="pm-look-h">READABILITY</h4>') < at('id="pm-uiscale-h"'), "under READABILITY");
+  assert.ok(at('id="pm-uiscale-help"') < at('id="pm-textsize"'), "just before TEXT SIZE");
+  assert.ok(at("applyScale() clamps to SCALE_MIN/MAX") < at('id="pm-uiscale-h"'), "the step comment moved with it");
+  assert.match(look, /<h5 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">/, "a sub-heading of READABILITY");
+  const help = look.match(/<p id="pm-uiscale-help"[^>]*>([^<]*)<\/p>/)[1];
+  assert.ok(!/below/.test(help), "no 'HUD fold below': the HUD fold is on another page now");
+  assert.match(help, /DISPLAY › HUD/);
+  assert.match(SHELL, /id="pm-open-appearance"[^>]*>APPEARANCE&hellip;<small>[^<]*UI size/, "the door names it");
+});
+
+test("shell: every title-screen knob sits in ONE TITLE SCREEN fold; MOTION stays outside", () => {
+  const look = section("pm-panel-appearance");
+  assert.ok(!look.includes("TITLE SCREEN &amp; MOTION"), "the old mixed heading is gone");
+  const a = look.indexOf('<details id="pm-titlescreen"');
+  assert.ok(a > 0, "the fold");
+  const fold = look.slice(a, look.indexOf("</details>", a));
+  assert.match(fold, /^<details id="pm-titlescreen" class="pm-renderer-sub">\s*<summary class="adv-more-btn" id="pm-titlescreen-sum">TITLE SCREEN · SHIPPED<\/summary>\s*<div id="pm-titlescreen-body" role="group" aria-label="Title screen">/);
+  const order = ["pm-titleintro", "pm-menuwash", "pm-titleart", "pm-replay-intro"].map((id) => fold.indexOf(`id="${id}"`));
+  assert.ok(order.every((i) => i > 0), "TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO inside");
+  assert.deepEqual([...order].sort((x, y) => x - y), order, "in that order");
+  const motion = look.indexOf('id="pm-motion"');
+  assert.ok(motion > 0 && motion < a, "MOTION is global: outside the fold, above it");
+  assert.ok(look.lastIndexOf('<h4 class="pm-look-h">MOTION</h4>', motion) > look.indexOf("READABILITY"), "under its own MOTION heading");
+  assert.match(read("css/components.css"), /#pm-titlescreen-body,\s*#pm-titlelayout-body \{[^}]*flex-direction: column/, "the body is a column like the sub-fold's");
+});
+
+test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's three looks are shipped", () => {
+  const looks = { intro: "full", wash: "full", art: "on" };
+  const subs = [];
+  const fx = { introMode: () => looks.intro, washMode: () => looks.wash, artMode: () => looks.art, onChange: (fn) => subs.push(fn) };
+  const { dom, M } = boot({}, { fx });
+  const sum = dom.byId("pm-titlescreen-sum");
+  assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED");
+  assert.equal(subs.length, 1, "subscribed to TitleFx");
+  const x = dom.byId("pm-tl-btns-x");
+  x.value = "5"; dom.dispatch(x, { type: "input" });
+  assert.equal(sum.textContent, "TITLE SCREEN · CUSTOM", "a layout slider");
+  dom.byId("pm-tl-reset").click();
+  assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED", "RESET ALL");
+  for (const [k, v] of [["intro", "quick"], ["wash", "off"], ["art", "soft"]]) {
+    looks[k] = v; subs[0]();
+    assert.equal(sum.textContent, "TITLE SCREEN · CUSTOM", `${k} ${v}`);
+    assert.equal(M.screenShipped(), false);
+    looks[k] = { intro: "full", wash: "full", art: "on" }[k]; subs[0]();
+    assert.equal(sum.textContent, "TITLE SCREEN · SHIPPED");
+  }
+  const custom = boot({ titleLayout: { v: 2, tall: { side: "swap" } } }, { fx });
+  assert.equal(custom.dom.byId("pm-titlescreen-sum").textContent, "TITLE SCREEN · CUSTOM", "painted at build, either shape counts");
+  const tfx = read("js/ui/title-fx.js");
+  for (const f of ["setIntro", "setWash", "setArt"])
+    assert.match(tfx, new RegExp(`function ${f}\\(v\\) \\{[^}]*changed\\(\\);`), `${f} tells the listeners`);
+  assert.doesNotMatch(tfx.match(/function set\(v\) \{[^}]*\}/)[0], /changed\(\)/, "MOTION is not a title-screen knob");
 });
 
 test("registered: manifest, export key, and the shell loads it", () => {

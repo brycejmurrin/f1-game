@@ -1,5 +1,11 @@
 /* Apex 26 — TitleLayout: where the title screen's three pieces sit and how big
-   they are, as a player setting under SETTINGS › APPEARANCE › TITLE LAYOUT.
+   they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN ›
+   TITLE LAYOUT.
+
+   TITLE LAYOUT is a sub-fold this file builds inside the shell's TITLE SCREEN
+   fold (#pm-titlescreen), whose summary it also paints: SHIPPED while this
+   layout and js/ui/title-fx.js's TITLE INTRO / MENU WASH / TITLE ART are all
+   shipped, CUSTOM otherwise.
 
    The three pieces are the BUTTONS (#menu-buttons), the TITLE (#menu-brand:
    wordmark, sound toggle, small print) and the CAR DRAWING (#title-car). Each
@@ -77,6 +83,8 @@ const TitleLayout = (function () {
     return out;
   }
   function isDefault(v) { return JSON.stringify(normalize(v)) === JSON.stringify(normalize(null)); }
+  /** Both shapes shipped — what the TITLE LAYOUT summary calls SHIPPED. */
+  function layoutShipped() { const a = all(); return isDefault(a.wide) && isDefault(a.tall); }
 
   /** The tokens a layout writes — the SAME arithmetic index.html's inline boot
    *  does. X is vw, Y is vh, SIZE and WIDTH are plain numbers. */
@@ -169,6 +177,18 @@ const TitleLayout = (function () {
   };
   const NAMES = { size: "SIZE", width: "WIDTH", x: "LEFT / RIGHT", y: "UP / DOWN" };
 
+  /** The whole title screen shipped: this layout AND TitleFx's three looks
+   *  (TitleFx loads first; MOTION is global, so it does not count here). */
+  function screenShipped() {
+    const fx = typeof TitleFx !== "undefined" ? TitleFx : null;
+    return layoutShipped() && (!fx || (fx.introMode() === "full" && fx.washMode() === "full" && fx.artMode() === "on"));
+  }
+  /** APPEARANCE › TITLE SCREEN's closed summary (the shell's #pm-titlescreen-sum). */
+  function paintScreenSum() {
+    const sum = doc && doc.getElementById("pm-titlescreen-sum");
+    if (sum) sum.textContent = "TITLE SCREEN · " + (screenShipped() ? "SHIPPED" : "CUSTOM");
+  }
+
   function build() {
     const panel = document.getElementById("pm-panel-appearance");
     if (!panel || document.getElementById("pm-titlelayout")) return;
@@ -187,8 +207,8 @@ const TitleLayout = (function () {
     const fold = el("details", { className: "pm-renderer-sub" }, [sum, body]);
     fold.id = "pm-titlelayout";   // a plain assignment, so tools/check/shell-ids.mjs sees the mount-once guard's target
     const paintSum = () => {
-      const a = all();
-      sum.textContent = "TITLE LAYOUT · " + (isDefault(a.wide) && isDefault(a.tall) ? "SHIPPED" : "CUSTOM");
+      sum.textContent = "TITLE LAYOUT · " + (layoutShipped() ? "SHIPPED" : "CUSTOM");
+      paintScreenSum();
     };
 
     body.appendChild(el("p", { className: "adv-help", textContent:
@@ -278,12 +298,15 @@ const TitleLayout = (function () {
     }
     paintAll();
     onShape.push(paintAll);
+    if (typeof TitleFx !== "undefined" && TitleFx.onChange) TitleFx.onChange(paintScreenSum);
     ui = { fold, edit, paintAll };
 
-    // After TITLE ART's help line, before REPLAY INTRO: the other title-screen knobs.
+    // Inside the TITLE SCREEN fold, after TITLE ART's help line and before
+    // REPLAY INTRO: the other title-screen knobs.
     const anchor = document.getElementById("pm-replay-intro");
-    if (anchor && anchor.parentNode === panel) panel.insertBefore(fold, anchor);
-    else panel.appendChild(fold);
+    const host = document.getElementById("pm-titlescreen-body") || panel;
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(fold, anchor);
+    else host.appendChild(fold);
   }
 
   // ---- EDIT ON TITLE SCREEN: drag the pieces themselves ---------------------
@@ -391,6 +414,8 @@ const TitleLayout = (function () {
     for (const p of Object.keys(PIECES)) { const e = pieceEl(p); if (e) e.removeAttribute("data-tl-sel"); }
     page(true);
     if (ui) {
+      const outer = byId("pm-titlescreen");
+      if (outer) outer.open = true;   // the sub-fold lives inside TITLE SCREEN
       ui.fold.open = true;
       ui.paintAll();
       // After the settings dialog's own re-show handling, which focuses its
@@ -513,5 +538,5 @@ const TitleLayout = (function () {
   }
 
   return Object.freeze({ KEY, DEFAULT, LIM, LAYOUTS, SIDES, SHAPES, normalize, isDefault, vars, shape, all, current, apply,
-    set, reset, resetShape, copyTo, build, enter, exit, get editing() { return ed.on; } });
+    set, reset, resetShape, copyTo, build, enter, exit, screenShipped, get editing() { return ed.on; } });
 })();
