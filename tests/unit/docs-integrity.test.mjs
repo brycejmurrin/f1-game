@@ -23,6 +23,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const ls = (dir, re) => fs.readdirSync(path.join(ROOT, dir)).filter((f) => re.test(f));
 
+/* DERIVED FIGURES ARE ADVISORY OFF A PULL REQUEST (2026-09-30). The spec and
+ * unit counts and the "N of M" ladder are GENERATED from the tree, and every
+ * PR that adds a test regenerates them — correctly, against ITS base. Two such
+ * PRs merge cleanly (identical textual edits) and leave the union one file
+ * short: 14 of 15 deploy-branch reds on 2026-09-29 were exactly that, a red no
+ * push can clear except a regeneration commit, while every session read it as
+ * "the tip is broken". The same class the ratchet step already answers with
+ * `--advisory` on push. So: on a pull request these pins FAIL (the PR must
+ * regenerate); on the merged tip (a deploy-branch push, or the train) they
+ * WARN, and the next PR that touches the tree regenerates. ci.yml's guards
+ * step sets the env off pull requests only; the pin below holds it to that. */
+const FIGURES_ADVISORY = process.env.APEX_DOCS_FIGURES_ADVISORY === "1";
+const figureEqual = (actual, expected, msg) => {
+  if (FIGURES_ADVISORY && actual !== expected) {
+    console.warn(`::warning::${msg} — advisory off a pull request; the next PR regenerates it (npm run gen:docs)`);
+    return;
+  }
+  assert.equal(actual, expected, msg);
+};
+
 // A doc link resolves only if its target is IN GIT — not merely on this disk.
 // docs/README.md pointed at ../spike/backends/docs/wgx-gallery/ for a day: the
 // re-attach moved the gallery back under docs/research/ and left the SOURCE
@@ -350,7 +370,7 @@ test("the test-suite counts in the agent docs and README.md match the files on d
     const claimed = [...text.matchAll(/(\d+)\s+Playwright specs?/gi)].map((m) => Number(m[1]));
     if (claimed.length) sawSpecCount = true;
     for (const n of claimed)
-      assert.equal(n, specs, `${doc} claims ${n} Playwright specs; tests/ holds ${specs}`);
+      figureEqual(n, specs, `${doc} claims ${n} Playwright specs; tests/ holds ${specs}`);
 
     // A FLOOR ("200+ unit suites") is allowed, and is what the prose should
     // use. An exact count is one integer that every agent adding a test has to
@@ -364,7 +384,7 @@ test("the test-suite counts in the agent docs and README.md match the files on d
     const unitClaims = [...text.matchAll(/(\d+)(\+?)\s+`?node --test`? unit suites/gi)]
       .map((m) => ({ n: Number(m[1]), floor: m[2] === "+" }));
     for (const { n, floor } of unitClaims) {
-      if (!floor) { assert.equal(n, units, `${doc} claims ${n} unit suites; tests/ holds ${units}`); continue; }
+      if (!floor) { figureEqual(n, units, `${doc} claims ${n} unit suites; tests/ holds ${units}`); continue; }
       assert.ok(n <= units, `${doc} claims ${n}+ unit suites; tests/ holds only ${units}`);
       assert.ok(units - n < SLACK,
         `${doc} claims ${n}+ unit suites and tests/ holds ${units} — ${units - n} behind, raise the floor`);
@@ -393,8 +413,8 @@ test("the `N of M unit files` ladder figures match tooling-fast's list and the f
   for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md", ".claude/agents/verify-agent.md"]) {
     for (const m of read(doc).matchAll(/test:tooling-fast`?[^\n]*?(\d+) of (\d+)/g)) {
       seen++;
-      assert.equal(Number(m[1]), fast, `${doc} says tooling-fast runs ${m[1]} unit files; the generated list holds ${fast}`);
-      assert.equal(Number(m[2]), disk, `${doc} says there are ${m[2]} unit files; tests/unit holds ${disk}`);
+      figureEqual(Number(m[1]), fast, `${doc} says tooling-fast runs ${m[1]} unit files; the generated list holds ${fast}`);
+      figureEqual(Number(m[2]), disk, `${doc} says there are ${m[2]} unit files; tests/unit holds ${disk}`);
     }
   }
   assert.ok(seen >= 4, `expected the ladder figure in all three docs and verify-agent.md, found ${seen}`);
@@ -418,11 +438,23 @@ test("the derived ladder figures (whole gate, 'the other N') match the gate's re
   const ladder = read("docs/notes/PREPUSH-GATE-LADDER.md");
   const whole = ladder.match(/--gate-only`[^\n]*?(\d+) of (\d+)/);
   assert.ok(whole, "the ladder doc no longer states the whole gate as N of M");
-  assert.equal(Number(whole[1]), gate.size, `the ladder doc says the whole gate runs ${whole[1]} unit files; the union of tooling-fast and the gate's node groups holds ${gate.size}`);
-  assert.equal(Number(whole[2]), disk, `the ladder doc says ${whole[2]} unit files; tests/unit holds ${disk} — run \`npm run gen:docs\``);
+  figureEqual(Number(whole[1]), gate.size, `the ladder doc says the whole gate runs ${whole[1]} unit files; the union of tooling-fast and the gate's node groups holds ${gate.size}`);
+  figureEqual(Number(whole[2]), disk, `the ladder doc says ${whole[2]} unit files; tests/unit holds ${disk} — run \`npm run gen:docs\``);
   const other = read("AGENTS.md").match(/The other (\d+) have taken deploys red/);
   assert.ok(other, "AGENTS.md rule 3 no longer says how many files tooling-fast leaves out");
-  assert.equal(Number(other[1]), disk - fast.length, `AGENTS.md says tooling-fast leaves out ${other[1]}; ${disk} on disk minus ${fast.length} in the list is ${disk - fast.length}`);
+  figureEqual(Number(other[1]), disk - fast.length, `AGENTS.md says tooling-fast leaves out ${other[1]}; ${disk} on disk minus ${fast.length} in the list is ${disk - fast.length}`);
+});
+
+test("ci.yml makes the derived figures advisory off pull requests, and only there", () => {
+  // The env this file reads must be set by the guards step for every event
+  // but pull_request — the merged tip cannot regenerate itself — and must not
+  // leak onto pull requests, where the PR is the one that regenerates.
+  const ci = read(".github/workflows/ci.yml");
+  const step = ci.slice(ci.indexOf("- name: Structural guards\n"), ci.indexOf("- name: Ratchet ceilings vs the base"));
+  assert.match(step, /APEX_DOCS_FIGURES_ADVISORY: \$\{\{ github\.event_name != 'pull_request' && '1' \|\| '' \}\}/,
+    "the guards step must set APEX_DOCS_FIGURES_ADVISORY=1 off pull requests only");
+  assert.doesNotMatch(read("package.json"), /APEX_DOCS_FIGURES_ADVISORY/, "no npm script may bake the advisory in: locally the pins fail");
+  assert.doesNotMatch(read("tools/ci/tooling-fast.mjs"), /APEX_DOCS_FIGURES_ADVISORY/, "tooling-fast must not set it either");
 });
 
 test("README's retired-classics count matches the circuits flagged classic", () => {

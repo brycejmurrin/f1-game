@@ -35,9 +35,16 @@ The other two look identical from the conclusion alone:
 So: list the run's jobs and look for a failed one and for a job at its cap
 before you decide. `ci-red-triage` does exactly this and returns the status line.
 
-## 2. A base merge is `sync-pr.mjs`, never a hand merge
+## 2. A base merge is `sync-pr.mjs`, never a hand merge — and only when you must
 
     node tools/ci/sync-pr.mjs <branch>          # …then --push when it is clean
+
+**Do not sync on every tip move.** Branch protection (2026-09-30) requires
+the eight fast-tier checks green on the PR's own head, NOT an up-to-date
+branch, and every re-sync is a fresh PR run on a 20-slot account — re-syncs
+were ~80 % of the deploy branch's commits on 2026-09-29. Sync when GitHub
+reports a conflict, or when a required check is red on the tip and the fix
+is already there. A green PR merges as it stands.
 
 Every base merge conflicts on `tests/data/ratchets.json` and the generated
 files; `sync-pr` cures both and a hand merge does not. It leaves you ON

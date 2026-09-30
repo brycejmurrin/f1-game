@@ -76,6 +76,18 @@ assertion about the fourth closer rather than to loosen it.
 is a different question, and a file can pass it while nothing runs the file
 before a push. This asks the second question.
 
+## The figures on a merged tip (2026-09-30)
+
+Two PRs that each add a unit file regenerate this table identically against
+their own base, merge cleanly, and leave the union one file short: 14 of 15
+deploy-branch reds on 2026-09-29 were that, and every session read them as a
+broken tip. `docs-integrity`'s figure pins therefore FAIL on a pull request
+(the PR regenerates) and WARN on the merged tip and the train
+(`APEX_DOCS_FIGURES_ADVISORY`, set by ci.yml's guards step off pull requests
+only); the next PR that touches the tree regenerates. The figures here can
+lag the tip by a file or two between PRs; `node tools/gen/gen-ladder-figures.mjs --json`
+is always current.
+
 ## The open edge
 
 `SWEEPS_ONLY` is not a free pass. Those CI jobs are **conditional** — on the
