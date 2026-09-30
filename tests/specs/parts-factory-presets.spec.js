@@ -46,6 +46,12 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
       return build(c1, c2, opts);
     };
     window.__factoryMeshCaptures = captures;
+    // sharedTest is worker-scoped across files: a prior race leaves teamBodies
+    // warm, so pinFreePlay's menu prep and race warm are all cache hits and
+    // Car3D.build never runs (CI #541 run 36744383982 on c6750d598 — still
+    // timed out after the hook-before-pinFreePlay ordering fix). Drop the
+    // caches so the next warm rebuilds through the hooked build.
+    if (window.__apex.clearCarMeshCaches) window.__apex.clearCarMeshCaches();
   });
   await pinFreePlay(page, {
     team: "mclaren",
