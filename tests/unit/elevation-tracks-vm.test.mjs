@@ -62,13 +62,22 @@ const ELEVATION_TRACKS = [
 const BANKED_TRACKS = ["zandvoort", "madrid"];
 // APEX_CIRCUITS (comma list) narrows the per-circuit launches below — this file
 // is the node gate's slowest (~5.6 min, 40 circuit builds). Unset = every
-// circuit, which is what CI runs today: the node-suites job has no plan to
-// read (docs/notes/CI-CAPACITY-2026-09-29.md §Not done). Set it locally to
-// check one circuit. The fixed zandvoort/madrid geometry tests always run.
+// circuit. ci.yml's node-suites job sets it on a circuit-only pull request
+// (tools/ci/node-plan.mjs); set it locally to check one circuit.
+// APEX_CIRCUIT_SHARD=i/n (2026-09-30) takes every n-th circuit of the scoped
+// list starting at the i-th, so two runners can each build half: ci.yml's
+// vm-a1 / vm-a2 slices are 1/2 and 2/2 of the same script. The shards are a
+// partition of the launches (tools/lib/circuit-scope.cjs `shard`, pinned in
+// tests/unit/circuit-scope.test.mjs); the fixed zandvoort/madrid geometry
+// tests run in every shard — seconds.
+// (A `.filter` chain on purpose: select-budget.mjs counts the per-circuit
+// loops statically and reads `.filter` as length-keeping; a bare call would
+// count as one test and fail the twin drift check.)
+const { inShard } = require("../../tools/lib/circuit-scope.cjs");
 const SCOPE = (process.env.APEX_CIRCUITS || "").split(",").map((s) => s.trim()).filter(Boolean);
 const inScope = (id) => !SCOPE.length || SCOPE.includes(id);
-const GRADE_RUNS = ELEVATION_TRACKS.filter(inScope);
-const BANK_RUNS = BANKED_TRACKS.filter(inScope);
+const GRADE_RUNS = ELEVATION_TRACKS.filter(inScope).filter(inShard());
+const BANK_RUNS = BANKED_TRACKS.filter(inScope).filter(inShard());
 const FLAT_LAUNCH = 40;    // m/s, flat-out reference run on the straightest stretch
 const CLIMB_LAUNCH = 10;   // m/s, low-speed run at the steepest climb
 const LAUNCHES = { FLAT_LAUNCH, CLIMB_LAUNCH };

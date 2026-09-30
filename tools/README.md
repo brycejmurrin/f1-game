@@ -364,7 +364,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **track/coplanar-baseline.json** | `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/scenery-grounding.test.mjs` |
 | **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/specs/f1-track-accuracy.spec.js`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |
-| **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/pick-unit-slices.test.mjs`, `tests/unit/props-tri-ratchet.test.mjs` |
+| **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/props-tri-ratchet.test.mjs` |
 
 ## Conventions
 

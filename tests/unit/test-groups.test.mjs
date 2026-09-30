@@ -123,7 +123,7 @@ function section(doc, heading) {
 test("docs/TESTING.md documents every test group, and no group that is gone", () => {
   const doc = section(read("docs/TESTING.md"), "2. Test groups");
   // The group tables' first column is `| \`<name>\` |`.
-  const listed = new Set([...doc.matchAll(/^\|\s*`([a-z-]+)`\s*\|/gm)].map((m) => m[1]));
+  const listed = new Set([...doc.matchAll(/^\|\s*`([a-z0-9-]+)`\s*\|/gm)].map((m) => m[1]));
   const undocumented = GROUPS.filter((g) => !META.has(g) && !listed.has(g));
   const stale = [...listed].filter((g) => !GROUPS.includes(g));
   assert.deepEqual(undocumented, [], "an npm test:* group is missing from the docs/TESTING.md group table");

@@ -3,8 +3,10 @@
  * @doc Which Pure-node CI matrix slices a diff needs (fail-safe → all).
  * @section runner
  *
- * pick-unit-slices.mjs — path → {guards, vm-a, vm-b, page-slow, driving-model}
- * for the packed ci.yml node matrix (3 slices since 2026-09-29) + driving-model.
+ * pick-unit-slices.mjs — path → {guards, vm-a1, vm-a2, vm-b1, vm-b2, page, slow,
+ * driving-model} for the ci.yml node matrix (six slices since 2026-09-30) +
+ * driving-model. Complements tools/ci/node-plan.mjs: this tool picks WHICH
+ * runners to spin; node-plan skips scripts inside a spun runner.
  *
  * FAIL SAFE, NEVER FAIL OPEN: a path no rule claims selects EVERY slice.
  * A test-file edit selects the slice that owns that file (from groups.json).
@@ -27,39 +29,58 @@ import { DEPLOY_BRANCH } from "./pick-tests.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** Ordered slice ids — match ci.yml matrix.slice + driving-model job. */
-export const SLICES = ["guards", "vm-a", "vm-b", "page-slow", "driving-model"];
+export const SLICES = [
+  "guards",
+  "vm-a1", "vm-a2",
+  "vm-b1", "vm-b2",
+  "page", "slow",
+  "driving-model",
+];
 
-/** Node matrix ids only (ci.yml strategy.matrix.slice). */
-export const NODE_SLICES = ["vm-a", "vm-b", "page-slow"];
+/** Node matrix ids only (ci.yml strategy.matrix via unit-plan). */
+export const NODE_SLICES = ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"];
 
 /**
- * Measured p50 job durations on the last 50 completed PR CI runs
- * (2026-09-29 sample), packed to the three-slice matrix. Seconds.
- * Used only for --costs / savings estimates — never for selection.
+ * Measured / expected p50 job durations (seconds). Used only for --costs /
+ * savings estimates — never for selection. Six-slice split from #508
+ * (2026-09-30); times are half of the prior packed three-slice p50s where
+ * a shard replaced a packed row.
  */
 export const SLICE_COST_P50_SEC = {
   guards: 279,
-  "vm-a": 346,
-  // Former vm-b (257) + fast (112), packed 2026-09-29.
-  "vm-b": 369,
-  // Former vm-page (168) + slow (146), packed 2026-09-29.
-  "page-slow": 314,
+  "vm-a1": 168,
+  "vm-a2": 168,
+  "vm-b1": 185,
+  "vm-b2": 185,
+  page: 168,
+  slow: 146,
   "driving-model": 100,
 };
 
 /** Which npm scripts / groups.json keys feed each slice. */
 export const SLICE_SCRIPTS = {
   guards: ["test:guards"],
-  "vm-a": ["test:game-vm-a"],
-  "vm-b": [
-    "test:game-vm-b",
+  // Both shards run the same script with APEX_CIRCUIT_SHARD=i/2.
+  "vm-a1": ["test:game-vm-a"],
+  "vm-a2": ["test:game-vm-a"],
+  "vm-b1": ["test:game-vm-b1"],
+  "vm-b2": [
+    "test:game-vm-b2",
     "test:net-unit", "test:service-worker", "test:lifecycle-unit",
     "test:state-unit", "test:agent-contract", "test:audio-unit",
-    "test:garage-unit", "test:steering-unit", "test:mcp",
+    "test:garage-unit", "test:steering-unit", "test:desktop-unit", "test:mcp",
   ],
-  "page-slow": ["test:vm-page", "test:node-slow"],
+  page: ["test:vm-page"],
+  slow: ["test:node-slow"],
   "driving-model": [], // browser job: tests/specs/physics-characterization.spec.js
 };
+
+/** Elevation twin → both circuit shards. */
+const VM_A = ["vm-a1", "vm-a2"];
+/** game-vm-b partitions + fast riders. */
+const VM_B = ["vm-b1", "vm-b2"];
+/** Former page-slow packed pair. */
+const PAGE_SLOW = ["page", "slow"];
 
 /** Build test-file → slice ownership from groups.json (source of truth). */
 export function testFileOwners(groupsJson = null) {
@@ -86,37 +107,37 @@ export const RULES = [
   [/^\.github\/workflows\//, SLICES, "workflow edit: run the whole node gate"],
   [/^\.github\/actions\//, SLICES, "reusable action edit: run the whole node gate"],
 
-  [/^js\/circuits\//, ["guards", "vm-a"], "circuit/scenery data: structural + elevation twin"],
-  [/^js\/track\//, ["guards", "vm-a"], "track engine: structural + elevation twin"],
-  [/^tools\/track\/.*\.json$/, ["guards", "vm-a"], "sweep baselines: structural + elevation twin"],
-  [/^tools\/track\/.*\.(mjs|cjs|js|sh)$/, ["guards", "vm-a", "vm-b"], "track CLI / builders: both VM slices"],
-  [/^tools\/track\//, ["guards", "vm-a"], "other tools/track/ paths: structural + elevation"],
-  [/^tools\/lib\//, ["guards", "vm-a", "vm-b"], "build/harness: both VM slices"],
-  [/^tools\/manifest\.cjs$/, ["guards", "vm-a", "vm-b"], "TRACK_VM load list"],
+  [/^js\/circuits\//, ["guards", ...VM_A], "circuit/scenery data: structural + elevation twin"],
+  [/^js\/track\//, ["guards", ...VM_A], "track engine: structural + elevation twin"],
+  [/^tools\/track\/.*\.json$/, ["guards", ...VM_A], "sweep baselines: structural + elevation twin"],
+  [/^tools\/track\/.*\.(mjs|cjs|js|sh)$/, ["guards", ...VM_A, ...VM_B], "track CLI / builders: both VM slices"],
+  [/^tools\/track\//, ["guards", ...VM_A], "other tools/track/ paths: structural + elevation"],
+  [/^tools\/lib\//, ["guards", ...VM_A, ...VM_B], "build/harness: both VM slices"],
+  [/^tools\/manifest\.cjs$/, ["guards", ...VM_A, ...VM_B], "TRACK_VM load list"],
 
-  [/^js\/game\.js$/, ["guards", "vm-b", "page-slow", "driving-model"], "the loop"],
-  [/^js\/physics\//, ["guards", "vm-b", "driving-model"], "driving model numbers"],
-  [/^js\/race\//, ["guards", "vm-b"], "session / pit / race-control"],
+  [/^js\/game\.js$/, ["guards", ...VM_B, ...PAGE_SLOW, "driving-model"], "the loop"],
+  [/^js\/physics\//, ["guards", ...VM_B, "driving-model"], "driving model numbers"],
+  [/^js\/race\//, ["guards", ...VM_B], "session / pit / race-control"],
 
-  [/^js\/car\//, ["guards", "page-slow", "vm-b"], "car mesh + garage-unit rasters"],
-  [/^js\/garage\//, ["guards", "vm-b", "vm-a"], "garage unit + pit complex in fleet"],
-  [/^js\/audio\//, ["guards", "vm-b"], "audio-unit"],
-  [/^js\/input\//, ["guards", "vm-b"], "steering-unit + phone-pad twin"],
-  [/^js\/net\//, ["guards", "vm-b"], "net-unit + netplay twin"],
-  [/^sw\.js$|^manifest\.json$/, ["guards", "vm-b"], "service-worker"],
-  [/^worker\//, ["guards", "vm-b"], "rendezvous Durable Object"],
+  [/^js\/car\//, ["guards", ...PAGE_SLOW, ...VM_B], "car mesh + garage-unit rasters"],
+  [/^js\/garage\//, ["guards", ...VM_B, ...VM_A], "garage unit + pit complex in fleet"],
+  [/^js\/audio\//, ["guards", ...VM_B], "audio-unit"],
+  [/^js\/input\//, ["guards", ...VM_B], "steering-unit + phone-pad twin"],
+  [/^js\/net\//, ["guards", ...VM_B], "net-unit + netplay twin"],
+  [/^sw\.js$|^manifest\.json$/, ["guards", ...VM_B], "service-worker"],
+  [/^worker\//, ["guards", ...VM_B], "rendezvous Durable Object"],
 
   [/^js\/render\//, ["guards"], "renderer: node gate is structural; gfx is macos"],
   [/^js\/lighting\//, ["guards"], "lighting: structural + targeted sweeps (elsewhere)"],
-  [/^js\/ui\//, ["guards", "vm-b"], "state-unit / steering opts live in vm-b"],
-  [/^js\/camera\//, ["guards", "page-slow", "vm-b"], "flyby fleet in node-slow"],
-  [/^js\/agent\//, ["guards", "vm-b"], "agent-contract + agent-view-vm"],
-  [/^js\/core\//, ["guards", "vm-a", "vm-b"], "shared floor every VM boots"],
-  [/^js\/data\//, ["guards", "vm-b"], "hub / legends / settings-defaults"],
-  [/^js\/perf\//, ["guards", "vm-b"], "quality / overlays"],
+  [/^js\/ui\//, ["guards", ...VM_B], "state-unit / steering opts live in vm-b"],
+  [/^js\/camera\//, ["guards", ...PAGE_SLOW, ...VM_B], "flyby fleet in node-slow"],
+  [/^js\/agent\//, ["guards", ...VM_B], "agent-contract + agent-view-vm"],
+  [/^js\/core\//, ["guards", ...VM_A, ...VM_B], "shared floor every VM boots"],
+  [/^js\/data\//, ["guards", ...VM_B], "hub / legends / settings-defaults"],
+  [/^js\/perf\//, ["guards", ...VM_B], "quality / overlays"],
   [/^js\/fx\//, ["guards"], "visual-only"],
-  [/^js\/career\//, ["guards", "vm-b"], "career state + session twins"],
-  [/^js\/xr\//, ["guards", "vm-b"], "xr-phase0 in steering-unit"],
+  [/^js\/career\//, ["guards", ...VM_B], "career state + session twins"],
+  [/^js\/xr\//, ["guards", ...VM_B], "xr-phase0 in steering-unit"],
 
   [/^css\//, ["guards"], "layout lint lives in guards/tooling-fast"],
   [/^index\.html$/, ["guards"], "shell ids / load order"],
@@ -128,7 +149,7 @@ export const RULES = [
   [/^tools\/gen\//, ["guards"], "generators"],
   [/^tools\//, ["guards"], "other tools: structural"],
   [/^docs\/|^\.claude\/|^\.cursor\/|^\.codex\/|\.md$/, ["guards"], "prose: docs-guards / structural"],
-  [/^tests\/helpers\//, ["guards", "vm-a", "vm-b", "page-slow"], "helpers feed many twins"],
+  [/^tests\/helpers\//, ["guards", ...VM_A, ...VM_B, ...PAGE_SLOW], "helpers feed many twins"],
   [/^tests\/specs\/physics-characterization\.spec\.js$/, ["driving-model"], "the characterization job"],
   [/^tests\/specs\//, ["guards"], "browser specs: selected job covers them; guards for taxonomy"],
   [/^tests\/data\//, ["guards"], "ratchets / timings / baselines"],
@@ -205,7 +226,7 @@ export function pick(files, opts = {}) {
     if (GEOMETRY_PATHS.test(f)) {
       hit = true;
       add("guards", "geometry-paths fleet input");
-      add("vm-a", "geometry-paths fleet input");
+      for (const s of VM_A) add(s, "geometry-paths fleet input");
     }
 
     if (!hit) unmatched.push(f);
