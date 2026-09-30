@@ -37,7 +37,9 @@ async function poll(page, { axisX = 0, axisY = 0, axisRX = 0, axisRY = 0, button
 /* THE DRIVING LATCHES ARE NAV-GATED. Since the menus rounds made the TITLE
    overlay a nav layer, UiLayers.navOpen() is true on a freshly loaded page and
    Input.poll() routes the pad to menu navigation — which deliberately zeroes
-   the pedals, so a pad cannot throttle the car through an open menu. Any test
+   the pedals AND the steering (7d96bce4d: a friend race keeps simulating under
+   the pause menu, and the stick navigating it was steering the car), so a pad
+   cannot drive the car through an open menu. Any test
    that wants the DRIVING surface has to leave the title screen first.
    One test already carried this boilerplate inline; the two trigger tests did
    not, and had been failing ever since the gate landed — reading 0 throttle and
@@ -86,6 +88,7 @@ test("an idle pad does not steer and is reported connected", async ({ page }) =>
 });
 
 test("left-stick deflection steers, with a centre dead zone", async ({ page }) => {
+  await startRaceForPad(page);   // steering is nav-gated too (see startRaceForPad)
   const full = await poll(page, { axisX: -1 }, () => Input.steer());
   expect(full).toBeLessThan(-0.9);
 
@@ -109,6 +112,7 @@ test("the d-pad ramps to full lock instead of teleporting there", async ({ page 
   // other digital source goes through - so a d-pad tap at 300 km/h was an
   // instant full-lock input. One frame of hold is a small angle now; holding
   // it still reaches the rail.
+  await startRaceForPad(page);
   const oneFrame = await poll(page, { buttons: { 15: 1 } }, () => Input.steer());
   expect(oneFrame).toBeLessThan(0.5);
   const held = await page.evaluate(() => {
@@ -197,6 +201,7 @@ test("a transient getGamepads() hole recovers WITHOUT a gamepadconnected event",
   // a second pad's unplug, a stale slot) therefore used to latch padConnected
   // false for the rest of the session. The poll now re-probes on a ~1 s
   // throttle while disconnected.
+  await startRaceForPad(page);   // the steer read below is nav-gated
   await poll(page, { axisX: -1 }, () => Input.steer());          // pad live
   const r = await page.evaluate(() => {
     navigator.getGamepads = () => [null, null, null, null];      // transient hole
@@ -524,9 +529,8 @@ test.describe("Gamepad menu navigation", () => {
 
   test("menu stick nav uses a larger deadzone than driving; right stick still falls back", async ({ page }) => {
     // 0.18 is past PAD_DEADZONE (0.14) but inside PAD_NAV_DEADZONE (0.22).
-    const drive = await poll(page, { axisX: 0.18 }, () => Input.steer());
-    expect(Math.abs(drive)).toBeGreaterThan(0.001);
-
+    // MENU half first, from the title: the DRIVING half needs a race (pad
+    // steering is nav-gated), and a race cannot reopen the circuit select.
     await openSelectForPad(page);
     await poll(page, { buttons: {} }, () => true);   // seed once
     const seeded = await page.evaluate(() => document.activeElement && document.activeElement.textContent);
@@ -539,5 +543,10 @@ test.describe("Gamepad menu navigation", () => {
     await poll(page, { axisX: 0.18, axisY: 0, axisRY: 1 }, () => true);
     expect(await page.evaluate(() =>
       document.getElementById("select").contains(document.activeElement))).toBe(true);
+
+    // ...and the same 0.18 DOES steer once the car is the thing being driven.
+    await startRaceForPad(page);
+    const drive = await poll(page, { axisX: 0.18 }, () => Input.steer());
+    expect(Math.abs(drive)).toBeGreaterThan(0.001);
   });
 });
