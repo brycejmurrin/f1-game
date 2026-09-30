@@ -905,6 +905,21 @@ function simSeed(v) {
   }
   return _simSeed;
 }
+// A PLAYER'S SESSION starts from a fresh seed: at a fixed 1 the first race after
+// every page load was the same race (retirements, weather arc, mistakes,
+// strategies). Kept at 1 under automation (navigator.webdriver: Playwright, the
+// Chrome MCP), pinned by ?seed=N (the game-vm harness passes ?seed=1); daily,
+// career and net play set their own. It resets the stream and draws nothing.
+(function bootSeed() {
+  try {
+    const q = typeof location !== "undefined" ? new URLSearchParams(location.search || "").get("seed") : null;
+    if (q) { simSeed(+q); return; }
+    if (typeof navigator !== "undefined" && navigator.webdriver) return;
+    const a = new Uint32Array(1);
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(a); else a[0] = Math.random() * 4294967296;
+    simSeed(a[0]);
+  } catch (_) { /* keep 1 */ }
+})();
 // uniform [0,1) — the drop-in for Math.random() on sim paths
 function simRnd() {
   _simRngState = (Math.imul(_simRngState, 1103515245) + 12345) >>> 0;
