@@ -97,8 +97,25 @@ test("a race started in a HIDDEN tab never wakes the context the hide path suspe
 test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume restores music + rain", () => {
   const g = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   // keydown is activation-triggering (html.spec.whatwg.org/multipage/interaction.html#activation-triggering-input-event); Escape is not.
-  assert.match(g, /const GESTURE_EVTS = \["pointerdown", "keydown", "click"\];/);
-  assert.match(g, /if \(gestured \|\| \(e\.type === "keydown" && e\.key === "Escape"\)\) return;/);
+  assert.match(g, /const GESTURE_EVTS = \["pointerdown", "pointerup", "touchend", "keydown", "click"\];/);
+  assert.match(g, /if \(gestured \|\| !isActivation\(e\)\) return;/);
+  // The one-shot fires only on an ACTIVATION-triggering event (same spec link): a
+  // finger's pointerdown is not one, and spending the gesture on it left WebKit's
+  // speech engine unprimed — every phone flyby / radio / race-control line silent.
+  const src = g.slice(g.indexOf("function isActivation(e) {"), g.indexOf("function onFirstGesture(e) {"));
+  const isActivation = new Function(src + "; return isActivation;")();
+  const cases = [
+    [{ type: "pointerdown", pointerType: "touch" }, false, "a finger's pointerdown is NOT activation"],
+    [{ type: "pointerdown", pointerType: "pen" }, false, "nor a pen's"],
+    [{ type: "pointerdown", pointerType: "mouse" }, true, "a mouse's is"],
+    [{ type: "pointerup", pointerType: "touch" }, true, "touch activates on pointerup"],
+    [{ type: "pointerup", pointerType: "mouse" }, false, "a mouse already activated on pointerdown"],
+    [{ type: "touchend" }, true, "touchend"],
+    [{ type: "click" }, true, "click"],
+    [{ type: "keydown", key: "a" }, true, "a key"],
+    [{ type: "keydown", key: "Escape" }, false, "but not Escape"],
+  ];
+  for (const [e, want, why] of cases) assert.equal(isActivation(e), want, why);
   assert.match(g, /for \(const t of GESTURE_EVTS\) document\.addEventListener\(t, onFirstGesture, true\);/);
   const body = g.slice(g.indexOf("async function startRaceBody()"), g.indexOf("const sessionEntry = SessionEntry.create();"));
   assert.match(body, /if \(document\.hidden\) setPaused\(true, "hidden-tab"\);\n\}\s*$/, "the hidden check is the LAST thing, after the audio starts it stops");
