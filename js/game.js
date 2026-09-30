@@ -6064,11 +6064,11 @@ function updateCar(c, dt, ranked) {
                         * clamp(Math.abs(c.speed) / 8, 0, 1);
         c.head -= rel * wallAlign;
         if (c.isPlayer && !c.wasOnWall && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
-        if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
+        if (c.isPlayer && track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {   // THIS screen's car only: a VS FRIEND is c.human too (setCarRole)
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
           Input.vibrate(15 + incidence * 35);
-          if (c.isPlayer) Input.rumble(0.35 + incidence * 0.5, 100);
+          Input.rumble(0.35 + incidence * 0.5, 100);
         }
       }
       // Steering held INTO the barrier while pinned = the wall denies that turn,
