@@ -126,7 +126,10 @@ not.
 The long tail (`fb-`, `sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
-`season-`, `pair-`, `build-`, `mb-`, `mirror-`, `duel-`, `session-`) is one file each and needs no map.
+`season-`, `pair-`, `build-`, `mb-`, `mirror-`, `duel-`, `session-`, `pad-`) is one file each and needs no map.
+`.pad-ring` (`responsive.css`) is the PHONE CONTROLLER's focus ring: `PhonePad.link()` puts it on the
+element the phone's D-pad focused, because a browser need not draw `:focus-visible` for a scripted
+focus (Safari after a touch) or any focus while its window is not the focused one.
 `.session-summary` lives in `menus.css`: it keeps the circuit count and race setup
 summary readable in their sheet headers, truncating when the header narrows.
 
