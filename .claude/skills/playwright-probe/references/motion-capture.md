@@ -25,7 +25,8 @@ cannot dwell on a later kerb.
 
 1. No browser first: `node tools/track/coplanar-audit.cjs monaco --why`
    (same-facing coplanar faces = z-fight candidates; ~2 s, VM; needs load < 4).
-   Kerb geometry: `buildKerbs` in `js/track/core/mesh.js`.
+   Measured 2026-09-30: monaco = 4 pairs, none on kerbs (superyacht, crowd
+   band, panel); ~36 s wall under load. Kerb geometry: `buildKerbs` in `js/track/core/mesh.js`.
 2. BROWSER, still camera: `node tools/shot/flicker-gate.mjs --list` (no
    browser) prints the fixed SITES (monaco has only the tunnel ones; a kerb
    site means adding an entry to `SITES` in that file, then

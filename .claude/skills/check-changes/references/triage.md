@@ -57,7 +57,7 @@ assertion tolerance to make a spec pass.
 
 **5. Passes loaded but fails solo?** (The inversion.) One worker serializes
 the whole file onto one machine-state; look for shared-page state leaks and
-order dependence — `docs/TESTING.md` §Field notes has the worked example.
+order dependence — `docs/notes/TESTING-FIELD-NOTES.md` has the worked example.
 
 ## Rules that prevent the class
 

@@ -55,7 +55,7 @@ judging a `graph-parity` mismatch.
 2. **Migrate one emitter** in `js/track/scenery/*.js` (`structures`, `city`,
    `nature`, `build-props`). `ctx.instance` is engine-internal, NOT on the
    circuit `api` (`docs/SCENERY-API.md` §Scene graph): a circuit's inline
-   `addBox`/`addCyl` runs (Monaco's `js/circuits/scenery/monaco.js` has 30+, zero `instance(`) cannot migrate
+   `addBox`/`addCyl` runs (Monaco's `js/circuits/scenery/monaco.js` has 100+ `addBox`/`addCyl` calls, zero `instance(`) cannot migrate
    in place — lift them into an engine emitter first:
    - Record ops in `build(rec)` (`rec.box`, `rec.cyl`, …).
    - Call `ctx.instance(key, place, build, meta)` — the buildProps wrapper,

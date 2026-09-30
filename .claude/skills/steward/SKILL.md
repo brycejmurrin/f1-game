@@ -1,6 +1,6 @@
 ---
 name: steward
-description: Use when driving a PR to green here — CI or Pages red, a PR event or check-in, a base merge conflict, a fix push to validate. Only what Apex 26 does differently: the draft/ready dedupe that makes `cancelled` normal, sync-pr.mjs over a hand merge, who-is-on-it.mjs before a red on the shared deploy branch, the gate a fix push clears, what live means. Rest is AGENTS.md. Which test failed is ci-red-triage; pre-push is check-changes.
+description: Use when driving a PR to green here — after a CI or Pages red (naming the failed test/assertion is ci-red-triage), a PR event or check-in, a base merge conflict, a fix push to validate. Only what Apex 26 does differently: the draft/ready dedupe that makes `cancelled` normal, sync-pr.mjs over a hand merge, who-is-on-it.mjs before a red on the shared deploy branch, the gate a fix push clears, what live means. Rest is AGENTS.md. Which test failed is ci-red-triage; pre-push is check-changes.
 ---
 
 # Driving a PR to green in Apex 26
@@ -28,7 +28,7 @@ The other two look identical from the conclusion alone:
 
 - **A job that hit `timeout-minutes` reports `cancelled`** with zero failures
   and every test green right up to the kill — that is a real red. It blocked
-  two deploys on Pages #1959/#1961 and is why `node-suites` is its own job.
+  two deploys on Pages #1959/#1961 and is why `node-suites` is its own job (six slices now, `vm-a1 vm-a2 vm-b1 vm-b2 page slow`, 25 min cap each; the slice names are required checks).
 - Anywhere else, `cancelled` with zero failures is a timeout until proven
   otherwise (AGENTS.md rule 8).
 

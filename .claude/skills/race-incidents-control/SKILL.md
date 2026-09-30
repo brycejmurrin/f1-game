@@ -1,6 +1,6 @@
 ---
 name: race-incidents-control
-description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, yellow/red flags, VSC, safety car (never deploys / stuck out), overtake gating, reliability retirements, or race-control tests are being changed or debugged. AI that merely races badly and causes contact is ai-racecraft, not this skill."
+description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, yellow/red flags, VSC, safety car (never deploys / stuck out), overtake gating, reliability retirements, or race-control tests are being changed or debugged. AI that merely races badly, dives too aggressively or misuses ERS/overtake deploy is ai-racecraft; DNF money/contracts/R&D inside a career save is career-mode."
 ---
 
 ## Overview

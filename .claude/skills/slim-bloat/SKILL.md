@@ -25,7 +25,7 @@ Done = ratchet `--update` lowers the ceiling; `ratchets.mjs` ends `all at or und
 Fat skill: the `skill` rows of `bloat-scan` (no `--json` = tab table) are the
 evidence; caps in `skill-progressive.test.mjs` are 500 for every SKILL.md,
 120 `mcp-probe`, 180 the thin-index skills. Under cap = nothing to carve; say
-so, name the largest (`steward`, 132) and stop. Over: carves.md §2.
+so, name the largest (the first `skill` row) and stop. Over: carves.md §2.
 
 The line range must bracket WHOLE statements — it is parsed, not sliced, so a
 range that opens mid-function exits 1 on a bare `SyntaxError` that reads like a

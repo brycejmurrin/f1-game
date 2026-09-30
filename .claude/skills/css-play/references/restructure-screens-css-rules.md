@@ -67,7 +67,7 @@ in this repo, `css/components.css`:
 
 One class, fourteen contexts, zero variant classes. *Prevents:* class-family
 growth. **Measured:** Pico CSS ships a complete design system in **2,835 lines /
-16 classes / 251 custom properties**. This repo measures **13,421 lines /
+16 classes / 251 custom properties**. This repo measures **13,426 lines /
 592 classes / 188 custom properties** (2026-09-30; `node tools/check/tree-counts.mjs`
 and restructure.md's commands refresh them) — 37x the classes on 4.7x the lines with 0.75x the
 tokens. The ratio is inverted, and that is the whole finding.
