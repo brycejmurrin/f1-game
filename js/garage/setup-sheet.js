@@ -248,7 +248,20 @@ function csTabKey(id, e) {
   activateCsCat(tabs[next].dataset.csCat, true);
 }
 
-function pseudoTab(id, label, sub, flagged) {
+/* A SIGNATURE part's name is its works (a place) and then the part:
+   "Enstone Aero Kit", "Neuburg Brake Pack". Under a tab that already says AERO
+   or BRAKES the place is the one word the rail can spare, and a width that
+   ellipsises the subtitle kept exactly that word: a full signature build read
+   "Kannapolis…" under every tab (layout audit, desktop-narrow / iPad
+   landscape, 2026-09-30). The rail shows the part; the tab's aria-label and
+   the option list keep the full name. */
+function tabSub(opt) {
+  if (!opt) return "";
+  const words = String(opt.label || "").split(" ");
+  return opt.tag === "SIGNATURE" && words.length > 1 ? words.slice(1).join(" ") : opt.label;
+}
+
+function pseudoTab(id, label, sub, flagged, spoken) {
   const tab = document.createElement("button");
   tab.className = "cs-tab" + (csActiveCat === id ? " active" : "") + (flagged ? " upgraded" : "");
   tab.dataset.csCat = id;
@@ -260,7 +273,7 @@ function pseudoTab(id, label, sub, flagged) {
   const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = label;
   const cur = document.createElement("span"); cur.className = "cs-tab-cur"; cur.textContent = sub || "";
   tab.append(lbl, cur);
-  tab.setAttribute("aria-label", sub ? label + " — " + sub : label);
+  tab.setAttribute("aria-label", (spoken || sub) ? label + " — " + (spoken || sub) : label);
   tab.onclick = () => activateCsCat(id, false);
   tab.onkeydown = (e) => csTabKey(id, e);
   return tab;
@@ -428,8 +441,8 @@ function buildSetup() {
   }
   for (const cat of Parts.CATALOG) {
     const cur = resolveOpt(cat);
-    appendTab(cat.id, pseudoTab(cat.id, cat.tab || cat.label, cur ? cur.label : "",
-                                cur && cur.id !== Parts.DEFAULTS[cat.id]));
+    appendTab(cat.id, pseudoTab(cat.id, cat.tab || cat.label, tabSub(cur),
+                                cur && cur.id !== Parts.DEFAULTS[cat.id], cur ? cur.label : ""));
   }
   appendTab("tune", pseudoTab("tune", "SETUP", SetupTune.isDefault(team.id) ? "WORKS" : "TUNED",
                               !SetupTune.isDefault(team.id)));
