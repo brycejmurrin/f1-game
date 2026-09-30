@@ -16,6 +16,7 @@
 import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { setupApiMocks } from "../helpers/f1-api-mock.js";
 import { galleryPath } from "../helpers/output-paths.js";
+import { awaitSoftCapture } from "../helpers/soft-capture.js";
 
 const PORTRAIT  = { width: 390, height: 844 };   // iPhone 14
 const LANDSCAPE = { width: 844, height: 390 };   // same rotated
@@ -28,7 +29,6 @@ async function waitReady(page) {
 async function waitTabLoaded(page) {
   // Wait until the data hub spinner is gone (API resolved or failed), cap at 8s
   await page.waitForFunction(() => !document.querySelector(".dh-spinner"), null, { polling: 100, timeout: 8_000 }).catch(() => {});
-  await page.waitForTimeout(300);
 }
 
 // A championship weekend opens with QUALIFYING, so #rs-go lands on the sheet
@@ -40,9 +40,19 @@ async function qualiToGrid(page) {
   await page.locator("#q-go").click();
 }
 
+/** Settled soft blit (or a no-op when GLX soft-present is off), then screenshot. */
 async function shot(page, name) {
-  await page.waitForTimeout(300);
+  await awaitSoftCapture(page);
   await page.screenshot({ path: galleryPath("ui-audit", `${name}.png`), fullPage: false });
+}
+
+/** park() then wait until the race HUD is up — replaces fixed post-park sleeps. */
+async function parkHud(page, frac = 0.1) {
+  await page.evaluate((f) => window.__apex.park(f), frac);
+  await page.waitForFunction(() => {
+    const hud = document.getElementById("hud");
+    return !!(hud && !hud.hidden && hud.offsetParent !== null);
+  }, null, { polling: 100, timeout: 8_000 }).catch(() => {});
 }
 
 for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
@@ -110,8 +120,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.park(0.1));
-      await page.waitForTimeout(1000);
+      await parkHud(page, 0.1);
       await page.evaluate(() => window.__apex.headless(true));   // freeze the settled frame: page.screenshot waits on frames a live SwiftShader race starves
       await shot(page, `${orient}-07-hud`);
     });
@@ -136,11 +145,9 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain"));
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.park(0.1));
-      await page.waitForTimeout(300);
+      await parkHud(page, 0.1);
       await page.evaluate(() => window.__apex.finishRace());
       await page.locator("#results").waitFor({ state: "visible" });
-      await page.waitForTimeout(200);
       await shot(page, `${orient}-09-results`);
     });
 
@@ -173,7 +180,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
         window.__apex.jump(0.1, 50, 0);
         window.__apex.snapCam();
       });
-      await page.waitForTimeout(600);
+      await page.waitForFunction(() => window.__apex.camera().mode === "hood", null, { polling: 100, timeout: 5_000 });
       await shot(page, `${orient}-12-hood-cam`);
     });
 
@@ -185,7 +192,6 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       // Click the circuit preview map — triggers openTrackDetail() with real canvas/elevation
       await page.locator("#sel-preview-map").click();
       await page.locator("#track-detail").waitFor({ state: "visible" });
-      await page.waitForTimeout(300);
       await shot(page, `${orient}-13-track-detail`);
     });
 
@@ -218,12 +224,10 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#rs-go").click();
       await qualiToGrid(page);
       await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.park(0));
-      await page.waitForTimeout(200);
+      await parkHud(page, 0);
       await page.evaluate(() => window.__apex.finishRace());
       await page.locator("#results").waitFor({ state: "visible" });
       await page.locator("#res-menu").click();
-      await page.waitForTimeout(300);
       await page.locator("#mb-standings").waitFor({ state: "visible" });
       await page.locator("#mb-standings").click();
       await page.locator("#standings").waitFor({ state: "visible" });
@@ -236,7 +240,6 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       // Start a season and go to standings
       await page.locator("#mb-season").click();
       await page.locator("#select").waitFor({ state: "visible" });
-      await page.waitForTimeout(300);
       await shot(page, `${orient}-16-season-select`);
     });
 
@@ -245,8 +248,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("bahrain", "day", "wet"));
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.park(0.1));
-      await page.waitForTimeout(1000);
+      await parkHud(page, 0.1);
       await shot(page, `${orient}-17-hud-wet`);
     });
 
@@ -255,8 +257,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.evaluate(() => window.__apex.race("singapore", "night", "dry"));
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.park(0.1));
-      await page.waitForTimeout(1000);
+      await parkHud(page, 0.1);
       await page.evaluate(() => window.__apex.headless(true));   // freeze the settled frame: page.screenshot waits on frames a live SwiftShader race starves
       await shot(page, `${orient}-18-hud-night`);
     });
@@ -272,7 +273,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
         window.__apex.jump(0.1, 50, 0);
         window.__apex.snapCam();
       });
-      await page.waitForTimeout(600);
+      await page.waitForFunction(() => window.__apex.camera().mode === "cockpit", null, { polling: 100, timeout: 5_000 });
       await shot(page, `${orient}-19-cockpit-cam`);
     });
 
@@ -281,11 +282,9 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.evaluate(() => window.__apex.tt("monza"));
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.park(0));
-      await page.waitForTimeout(200);
+      await parkHud(page, 0);
       await page.evaluate(() => window.__apex.finishRace());
       await page.locator("#results").waitFor({ state: "visible" });
-      await page.waitForTimeout(200);
       await shot(page, `${orient}-20-results-tt`);
     });
 
@@ -299,11 +298,9 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#rs-go").click();
       await qualiToGrid(page);
       await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.park(0));
-      await page.waitForTimeout(200);
+      await parkHud(page, 0);
       await page.evaluate(() => window.__apex.finishRace());
       await page.locator("#results").waitFor({ state: "visible" });
-      await page.waitForTimeout(200);
       await shot(page, `${orient}-21-results-season`);
     });
 
@@ -323,7 +320,6 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator("#advanced").waitFor({ state: "visible" });
       await clickLive(page, "adv-more");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#adv-extra").waitFor({ state: "visible" });
-      await page.waitForTimeout(300);
       await shot(page, `${orient}-22-advanced-expanded`);
     });
 
@@ -335,7 +331,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       // Do NOT hide rotate-device — that is the whole point of this test
       await page.evaluate(() => window.__apex.go());
-      await page.waitForTimeout(500);
+      await page.locator("#rotate-device").waitFor({ state: "visible", timeout: 8_000 });
       await shot(page, `${orient}-23-rotate-device`);
     });
 
@@ -381,7 +377,8 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitTabLoaded(page);
       // Wait for the live classification to populate (refresh fires automatically)
       await page.waitForFunction(() => !document.querySelector(".dh-spinner"), null, { polling: 100, timeout: 8_000 }).catch(() => {});
-      await page.waitForTimeout(400);
+      await page.waitForFunction(() => !!document.querySelector("#datahub .dh-live, #datahub table, #datahub .dh-row"),
+        null, { polling: 100, timeout: 8_000 }).catch(() => {});
       await shot(page, `${orient}-27-datahub-live`);
     });
 
@@ -397,7 +394,8 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await page.locator(".dh-dchip").first().click();
       // Wait for telemetry chart to finish loading
       await page.waitForFunction(() => !document.querySelector(".dh-spinner"), null, { polling: 100, timeout: 10_000 }).catch(() => {});
-      await page.waitForTimeout(600);
+      await page.waitForFunction(() => !!document.querySelector("#datahub canvas, #datahub svg, #datahub .dh-telem"),
+        null, { polling: 100, timeout: 10_000 }).catch(() => {});
       await shot(page, `${orient}-28-datahub-telemetry`);
     });
 
@@ -486,13 +484,12 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
 const IPAD    = { width: 1024, height: 768 };
 const DESKTOP = { width: 1280, height: 800 };
 
-// The shared prologue for the in-race shots. park() freezes physics but the
-// render loop keeps running, so give it time to present a settled frame.
+// The shared prologue for the in-race shots. park() freezes physics; wait for
+// the HUD then soft-capture before headless freeze (no fixed sleep).
 async function raceParked(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.park(0.1));
-  await page.waitForTimeout(800);
+  await parkHud(page, 0.1);
   // Freeze the settled frame. With the loop live, page.screenshot and a
   // locator click wait on animation frames SwiftShader starves (60 s timeouts,
   // 2026-09-25; tests/helpers/fixtures.js clickLive has the measurements).
