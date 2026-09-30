@@ -28,7 +28,26 @@ const GarageArrival = (function () {
       store.set("garageArrival", settings(value)); refresh();
     };
     $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); };
-    $("ga-settings").ontoggle = refresh;
+    // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
+    // it takes the settings page's place while open and gives it back on DONE.
+    const page = (on) => {
+      const ps = $("pmsettings"), dp = $("pm-panel-display");
+      if (ps) ps.hidden = !on;
+      if (dp) dp.hidden = !on;
+    };
+    const panel = $("garrival"), openBtn = $("pm-garrival"), done = $("ga-close");
+    if (panel && openBtn) openBtn.onclick = () => {
+      refresh(); page(false); panel.hidden = false;
+      if (typeof document !== "undefined" && document.body) document.body.classList.add("lt-open");
+      if (done && done.focus) done.focus();
+    };
+    if (panel && done) done.onclick = () => {
+      panel.hidden = true; page(true);
+      if (typeof document !== "undefined" && document.body) document.body.classList.remove("lt-open");
+      // After the settings dialog's own re-show handling, which focuses its
+      // CLOSE door; a tool's DONE hands focus back to the tool's button.
+      if (openBtn && openBtn.focus) { if (typeof setTimeout === "function") setTimeout(() => openBtn.focus(), 0); else openBtn.focus(); }
+    };
     refresh();
     return read;
   }
@@ -45,8 +64,8 @@ const GarageArrival = (function () {
       eye: left ? [-3.8, 2.1, -4.8] : [4.1, 2.25, -4.9],
       aim: [0, 0.8, t < DOOR_S ? 6.2 : z * 0.48 + 0.8] };
   }
-  /* THE DRIVE-OUT: the arrival in reverse, for the pre-race screen when RACE!
-   * beats the circuit's build (js/game.js introBuild/introWarm). The shutter is
+  /* THE DRIVE-OUT: the arrival in reverse, opening every RACE! while the circuit
+   * builds (js/game.js studioOpen). The shutter is
    * already up; the car sits a beat, then rolls out nose first and on out of the
    * door while the camera, at the arrival's interior three-quarter, follows it.
    * No circuit is needed — this is the setup screen's own room — so it plays the

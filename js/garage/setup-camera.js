@@ -21,9 +21,9 @@ const { resolveLivery, partsVisualKey, drawAeroFlaps, teamDecalState, carDecalNu
 const reducedMotion = () => G.store.get("motion", null) === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store));
 // THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
-// played by js/game.js under the loading card while the circuit builds. Its pose
-// stays "active" until stopDriveOut(), so the camera never falls back to the
-// turntable framing on the held last frame.
+// played by js/game.js on every RACE! with no card up (LoadingScreen.garage) while
+// the circuit builds. Its pose stays "active" until stopDriveOut(), so the camera
+// never falls back to the turntable framing on the held last frame.
 let driveOut = null;
 function startDriveOut() {
   const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
@@ -37,8 +37,13 @@ function startDriveOut() {
 function driveOutLeft() {
   return driveOut ? Math.max(0, (GarageArrival.OUT_DURATION - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
 }
-function stepDriveOut(dt) {
-  driveOut.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * driveOut.cfg.speed;
+// Stepped on the WALL clock, not the render dt the menu loop caps at 1/20 s: under
+// 20 fps that cap played the car in slow motion. A gap over 0.1 s (a synchronous
+// build) still only advances it 0.1 s, so a stall delays the car, never skips it.
+function stepDriveOut() {
+  const now = performance.now(), gap = driveOut.last ? (now - driveOut.last) / 1000 : 0;
+  driveOut.last = now;
+  driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
   return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg), { active: true });
 }
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
@@ -352,7 +357,7 @@ const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on stor
 const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
 function renderSetupPreview(dt) {
   gfx.resize();
-  const arriving = driveOut ? stepDriveOut(dt) : arrival.step(dt);
+  const arriving = driveOut ? stepDriveOut() : arrival.step(dt);
   if (!arriving || !arriving.active) applyHeldSetupCam(dt);                               // held on-screen controls
   if (setupPreviewSpin && !(arriving && arriving.active)) setupPreviewAz += dt * 0.35;   // slow turntable
   stepSetupAero(dt);

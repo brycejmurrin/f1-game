@@ -260,7 +260,7 @@ const LoadingScreen = (function () {
       return r && typeof r.sayPreRace === "function" ? r : null;
     };
 
-    let timer = 0, phase = "", build = null, el = null, flyT0 = 0, flyMs = FLY_MS;
+    let timer = 0, phase = "", build = null, el = null, flyT0 = 0, flyMs = FLY_MS, skipCb = null;
     // This run's flyby: `cur` is its info (shot list, field), `view` what the
     // map slot shows ("map" | "grid"), `mapBox` the map's CSS box, and
     // `radioState` the radio check ("" not yet, "done" tried, "live" on air;
@@ -273,7 +273,7 @@ const LoadingScreen = (function () {
     /** Record how the flyby ended. Only a FLYBY counts — the no-world card is
      *  700 ms and nobody is choosing anything by letting it run. */
     function noteFlyby(skipped) {
-      if (phase !== "run") return;
+      if (phase !== "run" && phase !== "garage") return;   // a skip of the garage drive-out is a skip of the cinematic
       try { if (store && store.set) store.set("flySkips", nextSkips(readSkips(), skipped)); }
       catch (_) { /* storage refused: the streak just does not build */ }
     }
@@ -545,6 +545,16 @@ const LoadingScreen = (function () {
     // bubbled on into the race and paused it (or latched a boost) on frame one.
     function onSkip(e) {
       if (e && e.type === "keydown" && e.repeat) return;
+      // THE GARAGE PHASE skips too, straight to the race: the drive-out and the
+      // flyby are one cinematic, and a skip is a verdict on it (the streak counts it).
+      if (phase === "garage") {
+        if (!skipCb || Date.now() - flyT0 < SKIP_GRACE_MS) return;
+        if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
+        const cb = skipCb; skipCb = null;
+        noteFlyby(true);
+        cb();
+        return;
+      }
       if (!(phase && build) || Date.now() - flyT0 < SKIP_GRACE_MS) return;
       if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
       noteFlyby(true); cutRadio();
@@ -601,9 +611,8 @@ const LoadingScreen = (function () {
       // "run" is the flyby WITH the card up; "card" is the no-world fallback.
       // Both show the card, so the stylesheet reveals it for either.
       setPhase(info.hasWorld && !reduced ? "run" : "card");
-      // readMs: a real race's read, which may need longer; leadMs: an opening shot
-      // prepended to the flyby (the garage drive-out, js/camera/drive-out.js) adds its own seconds.
-      const life = info.hasWorld && !reduced ? flyMsFor(readSkips(), info.readMs) + Math.max(0, +info.leadMs || 0) : CARD_MS;
+      // readMs: a real race's read, which may need longer.
+      const life = info.hasWorld && !reduced ? flyMsFor(readSkips(), info.readMs) : CARD_MS;
       flyMs = info.hasWorld && !reduced ? life : FLY_MS;
       // The letterbox (css/overlays.css) opens on the flyby's last beat, so it
       // needs the budget this run actually has, not the 24 s it usually is.
@@ -628,7 +637,7 @@ const LoadingScreen = (function () {
     function stop() {
       clearTimeout(timer);
       timer = 0;
-      build = null;
+      build = null; skipCb = null;
       phase = "";
       // The voice outlives the screen unless something cancels it: the screen's
       // own budget timer is cleared above, and speechSynthesis has no owner.
@@ -680,6 +689,33 @@ const LoadingScreen = (function () {
       return true;
     }
 
+    /* THE GARAGE. RACE! opens on the car driving out of the setup screen's
+     * garage (js/garage/setup-camera.js startDriveOut), and that shot is the
+     * car's alone: no card, no scrim, no letterbox — the card arrives with the
+     * flyby and the announcer. Up only to own the screen while game.js draws
+     * the garage (and builds the circuit behind it); no timer, and not active().
+     * A tap, key or pad press calls `onSkip` (the race, not the flyby, is next).
+     * Painted now, so building() or run() only has to fade it in. */
+    function garage(info, onSkipCb) {
+      stop();
+      const r = root();
+      if (!r || !info || !info.track) return false;
+      cur = info; paint(info);
+      applyCard();
+      r.hidden = false;
+      setPhase("garage");
+      skipCb = typeof onSkipCb === "function" ? onSkipCb : null;
+      if (skipCb) {
+        flyT0 = Date.now();   // SKIP_GRACE_MS: the second click of a double-click on START is not a skip
+        addEventListener("pointerdown", onSkip, true);
+        addEventListener("keydown", onSkip, true);
+        padHeld.clear();
+        padButtons((k, down) => { if (down) padHeld.add(k); });   // held from the menu: not a skip
+        if (typeof setInterval === "function") padTimer = setInterval(pollPad, 100);
+      }
+      return true;
+    }
+
     /* THE HANDOFF. run() fires `go` (startRace) and the race owns the screen
      * from then on — but not yet the CANVAS. The backend compiles the race's
      * programs on the first countdown frame (gfx.warm(), spent inside present())
@@ -705,7 +741,7 @@ const LoadingScreen = (function () {
     }
 
     return {
-      run, stop, hold, building, handoff,
+      run, stop, hold, building, garage, handoff,
       /** The next flyby's length (the short cut for a habitual skipper), so its
        *  shots are planned for the seconds they will actually have. */
       nextFlyMs: (wantMs) => flyMsFor(readSkips(), wantMs),

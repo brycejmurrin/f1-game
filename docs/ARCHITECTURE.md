@@ -178,6 +178,7 @@ _237 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences. |
+| `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE LAYOUT. |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -351,7 +352,6 @@ _237 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.c… |
 | `flyby-seq.js` | `FlybySeq` | tag | FLYBY SHOT SEQUENCER: the pre-race loading screen's camera. |
-| `drive-out.js` | `DriveOut` | tag | THE GARAGE DRIVE-OUT (DriveOut.create(G)): the pre-race flyby's opening shot, and the reverse of the pit-work arrival (js/garage/arrival.js). |
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |

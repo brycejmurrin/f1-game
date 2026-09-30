@@ -1268,8 +1268,8 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
 #pc-panel, #pc-hud { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
-/* the FREE CAMERA launch button in the tuner actions */
-#pc-toggle {
+/* the FREE CAMERA launch buttons in the lighting tuner and the flyby editor */
+#pc-toggle, #fb-freecam {
   width: auto; margin: 0; padding: calc(var(--gap) * 0.75) calc(var(--gap) * 7 / 6); border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.04em;
   background: rgba(0,140,200,0.2); color: #6cf; border: 1px solid rgba(0,160,220,0.45);
