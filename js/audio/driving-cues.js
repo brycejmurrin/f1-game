@@ -12,9 +12,7 @@ const DrivingCues = (function () {
   const CALL_COOLDOWN_M = 80;    // metres of arc between calls
   const BRAKE_GATE = 0.14;
   const PERIOD_LO = 0.50, PERIOD_HI = 0.11;
-  const clamp = (typeof M4 !== "undefined" && M4.clamp)
-    ? M4.clamp
-    : (v, a, b) => (v < a ? a : v > b ? b : v);
+  const clamp = M4.clamp;   // shared scalar helper (js/core/mat4.js)
 
   // v1 = OFF. v2..10 = cues on; lookahead grows with the notch.
   function fromSlider(v) {
