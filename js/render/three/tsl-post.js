@@ -1010,12 +1010,12 @@
      *    backends. Exposure and the ACES curve are the composite's own uniforms
      *    (C), so the TONE CURVE knobs reach the mirror; the grade does not. */
     const mirrorTex = texture(ctx.blackTex);
-    const mirrorU = { rect: uniform(new THREE.Vector4(0, 0, 1, 1)), hdr: uniform(1) };
+    const mirrorU = { rect: uniform(new THREE.Vector4(0, 0, 1, 1)), hdr: uniform(1), flip: uniform(1) };   // flip 0: the broadcast PiP
     const mirror = {
       tex: mirrorTex, U: mirrorU,
       mat: passMaterial(Fn(() => {
         const p = vec2(screenCoordinate).sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
-        const c = vec3(mirrorTex.sample(vec2(p.x.oneMinus(), p.y)).rgb).toVar();
+        const c = vec3(mirrorTex.sample(vec2(mix(p.x, p.x.oneMinus(), mirrorU.flip), p.y)).rgb).toVar();
         const t = acesTonemap(c.mul(C.exposure).div(C.whitePoint));
         return vec4(select(mirrorU.hdr.greaterThan(0.5), t, c), 1.0);
       })(), "tlx-post-mirror"),

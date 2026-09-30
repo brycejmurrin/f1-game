@@ -3871,7 +3871,7 @@ const WGX = (function () {
     // variants, the FX ones do not, and the mirror draws world + car bodies only.
     // _mirrorComposite draws it, flipped (BLIT params.y), into the HUD rect.
     let mirTex = null, mirView = null, mirDepthTex = null, mirDepthView = null, mirW = 0, mirH = 0;
-    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0;
+    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
     let _mirUBO = null, _mirBG = null;
     const _mirData = new Float32Array(4);
     function _mirrorFree() {
@@ -3936,7 +3936,7 @@ const WGX = (function () {
       if (!_mirUBO) _mirUBO = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       if (!_mirBG) _mirBG = device.createBindGroup({ layout: blitPipeline.getBindGroupLayout(0), entries: [
         { binding: 0, resource: mirView }, { binding: 1, resource: linearSampler }, { binding: 2, resource: { buffer: _mirUBO } }] });
-      _mirData[0] = exposure; _mirData[1] = 1; _mirData[2] = 0; _mirData[3] = 0;   // y = flip left-right
+      _mirData[0] = exposure; _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = 0; _mirData[3] = 0;   // y = flip left-right (0: the broadcast PiP)
       device.queue.writeBuffer(_mirUBO, 0, _mirData);
       const mp = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "load", storeOp: "store" }] });
       mp.setViewport(x, y, w, h, 0, 1);
@@ -5479,9 +5479,9 @@ const WGX = (function () {
       envFaceEnd,
       mirrorBegin,
       mirrorEnd,
-      mirrorRect(r) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; },
+      mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
       mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
-        renders: _mirRenders, composites: _mirComposites, rect: _mirRect }),
+        renders: _mirRenders, composites: _mirComposites, rect: _mirRect, flip: _mirFlip }),
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 

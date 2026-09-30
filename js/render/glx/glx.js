@@ -2727,7 +2727,7 @@ const GLXBackend = (function () {
     envFaceEnd,
     mirrorBegin,
     mirrorEnd,
-    mirrorRect: (r) => { if (PST) PST.mirror.rect(r); },
+    mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
     mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }),
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the

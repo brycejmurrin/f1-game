@@ -1733,10 +1733,16 @@ const api = {
   // The HUD rear-view mirror (js/render/shared/mirror-pass.js): mirror() reads
   // {mode, shown, rect, cars, drawn, cam, backend: gfx.mirrorState()};
   // mirror("auto"|"on"|"off") sets HUD > MIRROR first. shown/rect settle on the next frame.
-  mirror: (mode) => {
+  // mirror(undefined, {car, cam, mode}) aims the broadcast PiP (state().pip; drawn only
+  // under body.bc-on): car = a G.cars index or null, cam a CamModes id, mode its setting.
+  mirror: (mode, pip) => {
     const mp = typeof MirrorPass !== "undefined" ? MirrorPass.instance() : null;
     if (!mp) return null;
     if (mode !== undefined) mp.setMode(mode);
+    if (pip) {
+      if (pip.mode) mp.setPipMode(pip.mode);
+      if ("car" in pip) mp.setSubject(pip.car == null ? null : G.cars[pip.car | 0] || null, pip.cam || "tcam");
+    }
     return mp.state();
   },
   lightState: () => {
