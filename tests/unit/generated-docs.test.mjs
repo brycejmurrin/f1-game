@@ -33,20 +33,13 @@ const GENERATORS = [
   { tool: "tools/gen/gen-tools-readme.mjs", target: "tools/README.md" },
   { tool: "tools/gen/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
   { tool: "tools/gen/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
-  // One --check covers its registered TARGET and the two docs it rewrites in place.
-  // `figures`: derived from the tree, so two PRs that each add a unit file
-  // regenerate it identically against their own base, merge cleanly, and leave
-  // the merged tip a file short. On a pull request that is a red (the PR must
-  // regenerate); on the merged tip it is a warning under
-  // APEX_DOCS_FIGURES_ADVISORY, which ci.yml's guards step sets off pull
-  // requests only — the same rule docs-integrity applies to the counts in prose.
-  { tool: "tools/gen/gen-ladder-figures.mjs", target: "docs/notes/PREPUSH-GATE-LADDER.md", figures: true },
+  // No gen-ladder-figures here: since 2026-09-30 it only REPORTS (the ladder
+  // sizes are not committed — they made every two test-adding PRs conflict).
 ];
 
 function check(tool) {
   return spawnSync(process.execPath, [path.join(ROOT, tool), "--check"], { encoding: "utf8", cwd: ROOT, timeout: 60000 });
 }
-const FIGURES_ADVISORY = process.env.APEX_DOCS_FIGURES_ADVISORY === "1";
 
 function block(doc, name) {
   const open = `<!-- GENERATED: ${name} -->`, close = "<!-- /GENERATED -->";
@@ -58,10 +51,6 @@ function block(doc, name) {
 for (const g of GENERATORS) {
   test(`${g.target} matches a fresh \`${g.tool} --check\``, () => {
     const r = check(g.tool);
-    if (g.figures && FIGURES_ADVISORY && r.status === 1) {
-      console.warn(`::warning::${g.target} is a file behind the tree — advisory off a pull request; the next PR regenerates it (npm run gen:docs)`);
-      return;
-    }
     assert.equal(r.status, 0,
       `${g.target} is stale or the generator failed (exit ${r.status}).\n${r.stdout}${r.stderr}\n` +
       `Regenerate with: node ${g.tool}`);
@@ -211,21 +200,24 @@ test("a slider's help text states ITS OWN ceiling, not a bound it no longer has"
     "a slider's stated ceiling must equal its max — re-derive the help when you re-derive the bound");
 });
 
-/* THE LADDER FIGURES (2026-09-22). "N of M unit files" sat in three docs and
- * went red on every added unit file until all three were hand-edited; two
- * green PRs made the deploy tip red on their union. The generator owns every
- * figure now; this guards the generator (an empty table would pass --check). */
-test("gen-ladder-figures: the ladder block is three real rows and the figures form a ladder", async () => {
-  const { figures, renderBlock, TARGET, SECONDARY, BLOCK } = await import("../../tools/gen/gen-ladder-figures.mjs");
+/* THE LADDER FIGURES are measured, not committed (2026-09-30): committed
+ * digits made every two test-adding PRs conflict. The report tool is what
+ * session-start prints and what the docs point at; this guards it (an empty
+ * table would read as "nothing is gated"). */
+test("gen-ladder-figures: the report is three real rows and the figures form a ladder", async () => {
+  const { figures, renderTable, renderLine } = await import("../../tools/gen/gen-ladder-figures.mjs");
   const f = figures();
   const groups = JSON.parse(read("tests/groups.json"));
   assert.equal(f.guards, groups.groups["test:guards"].files.length);
-  assert.ok(f.fast < f.gate && f.gate <= f.disk, `not a ladder: ${JSON.stringify(f)}`);
+  assert.ok(f.guards < f.fast && f.fast < f.gate && f.gate <= f.disk, `not a ladder: ${JSON.stringify(f)}`);
   assert.equal(f.fastLeft, f.disk - f.fast); assert.equal(f.gateLeft, f.disk - f.gate);
-  const table = block(read(TARGET), BLOCK);
+  const table = renderTable(f);
   const rows = table.split("\n").filter((l) => /^\| `/.test(l));
   assert.equal(rows.length, 3, "guards, tooling-fast, whole gate");
-  assert.doesNotMatch(table, /undefined|NaN/);
-  assert.ok(table.includes(renderBlock(f).split("\n")[2]), "the committed block is the generator's");
-  for (const rel of SECONDARY) assert.doesNotMatch(read(rel), /GENERATED: ladder/, `${rel} is patched in place, never a marker block`);
+  assert.doesNotMatch(table + renderLine(f), /undefined|NaN/);
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/gen/gen-ladder-figures.mjs")], { encoding: "utf8", cwd: ROOT, timeout: 60000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ladder: guards \d+ ⊂ tooling-fast \d+ ⊂ gate \d+ of \d+ unit files; \d+ specs\n$/);
+  assert.equal(fs.existsSync(path.join(ROOT, "docs/notes/PREPUSH-GATE-LADDER.md")) && read("docs/notes/PREPUSH-GATE-LADDER.md").includes("GENERATED: ladder"), false,
+    "the ladder note holds no generated block any more");
 });

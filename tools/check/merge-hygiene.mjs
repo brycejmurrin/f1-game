@@ -170,7 +170,7 @@ function main() {
     else {
       for (const f of wrote) console.log(`merge-hygiene: wrote ${f}`);
       if (wrote.includes("tests/groups.json")) {
-        console.log("merge-hygiene: next → node tools/gen/gen-test-groups.mjs  (and npm run gen if ladder figures drift)");
+        console.log("merge-hygiene: next → node tools/gen/gen-test-groups.mjs  (then npm run gen)");
       }
     }
     return;

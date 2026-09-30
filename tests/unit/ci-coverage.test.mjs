@@ -328,7 +328,17 @@ test("unit-plan feeds the node-suites matrix and can skip unused slices", () => 
   assert.match(plan, /driving:/);
   const node = (ciWorkflow.split("\n  node-suites:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(node, /needs: unit-plan/);
-  assert.match(node, /needs\.unit-plan\.outputs\.any_node == 'true'/);
+  // The six "Pure-node unit suites (<slice>)" names are REQUIRED checks: a
+  // job-level skip on any_node=false never expands the matrix, so they never
+  // report and the PR sits BLOCKED green (#522). The job always runs; an
+  // unneeded row skips its setup via matrix.needed and exits 0.
+  const nodeIf = (node.match(/^    if: (.*)$/m) || [])[1] || "";
+  assert.doesNotMatch(nodeIf, /any_node/, "node-suites must not be skipped at the job level for any_node=false");
+  const steps = node.split(/\n      - /).slice(1);
+  const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff/.test(st));
+  assert.equal(setup.length, 3, "checkout, setup-apex and the plan step");
+  for (const st of setup) assert.match(st, /\n        if: matrix\.needed != 'false'/, "an unneeded row skips: " + st.split("\n")[0]);
+  assert.match(node, /if \[ "\$\{\{ matrix\.needed \}\}" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
   assert.match(node, /include: \$\{\{ fromJSON\(needs\.unit-plan\.outputs\.slices\) \}\}/);
   const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(driving, /needs: unit-plan/);

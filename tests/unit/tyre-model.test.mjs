@@ -295,6 +295,19 @@ test("planLaps plans against the circuit's severity, as the wear does", () => {
   assert.ok(Math.abs(a / n - 1) < 0.05, `planned life must mean the same wear: austria ${a.toFixed(3)} vs neutral ${n.toFixed(3)}`);
 });
 
+test("the minimum life holds AFTER severity: a 5-lap race at Austria is one set", () => {
+  // planLaps and update divided a floored lifeLaps by severity, so at 1.97 a
+  // 5-lap race's soft lasted ~1.2 laps — the race MIN_LIFE_LAPS exists to cover.
+  const s = ctxFor({ laps: 5, severity: 1.97 }); s.setLevel("real");
+  assert.equal(s.planLaps(0.48, 5), T.MIN_LIFE_LAPS, `planLaps: ${s.planLaps(0.48, 5)}`);
+  // …and the wear agrees with the plan: the floor's laps at load ~1 spend the set.
+  const c = freshCar(s, 0.48);
+  run(s, c, T.MIN_LIFE_LAPS);
+  assert.ok(c.tyreWear > 0.7 && c.tyreWear < 1.3, `wear after the floor's laps: ${c.tyreWear.toFixed(3)}`);
+  const half = freshCar(s, 0.48); run(s, half, 2);
+  assert.ok(half.tyreWear < 0.65, `two laps are half a set, not all of it: ${half.tyreWear.toFixed(3)}`);
+});
+
 // ── 3. The grip curve ───────────────────────────────────────────────────────
 
 test("grip falls linearly across the stint, then falls off a cliff", () => {

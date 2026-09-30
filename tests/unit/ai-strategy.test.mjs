@@ -155,6 +155,42 @@ test("degCost rises across a stint, and a lap past life costs more than one befo
     "over-running a set by half must more than double the stint's cost — that is what the planner avoids");
 });
 
+test("degCost charges every lap past life the baseline drop as well as the cliff", () => {
+  // The sim's gripFor carries the full DEG_LIN on every over-life lap; the
+  // planner dropped it and priced a 50 % overrun ~29 % light, so sets ran long.
+  // n = 15 on L = 10: 0.05·10/2 + 0.05·5 + 0.50·25/20 = 1.125 of grip-laps.
+  const want = (0.05 * 10 / 2 + 0.05 * 5 + 0.5 * 25 / 20) * A.STRAT.GRIP_TO_LAP;
+  assert.ok(Math.abs(A.degCost(15, 10) - want) < 1e-12, `degCost(15, 10) = ${A.degCost(15, 10)}, want ${want}`);
+  // Inside the life nothing changed.
+  assert.ok(Math.abs(A.degCost(10, 10) - 0.05 * 10 / 2 * A.STRAT.GRIP_TO_LAP) < 1e-12);
+});
+
+test("the field's plans spread: several strategies at 25 laps, two-stops at a full distance", () => {
+  // The roll's taste moved the plan so little that a race split into two plans
+  // (TASTE_BIAS 0.66, TASTE_SOFTEN 0.006: at 25 laps HM or MS, nothing else).
+  // 21 evenly spread rolls stand in for a grid.
+  const lives = (laps) => (cls) => T.lifeLaps(T.AI_CLASS[cls].life, laps);
+  const spread = (laps) => {
+    const out = new Map();
+    for (let i = 0; i <= 20; i++) {
+      const p = A.stintPlan({ laps, lifeLaps: lives(laps), pitLossLaps: 0.2, roll: i / 20, twoCompound: true });
+      const k = p.seq.join("-");            // a STRATEGY is the tyres run, not the lap of the stop
+      out.set(k, (out.get(k) || 0) + 1);
+    }
+    return out;
+  };
+  const r25 = spread(25), r57 = spread(57);
+  assert.ok(r25.size >= 3, `25 laps: ${[...r25.keys()].join(" | ")}`);
+  assert.ok(r57.size >= 3, `57 laps: ${[...r57.keys()].join(" | ")}`);
+  assert.ok([...r57.keys()].some((k) => k.split("-").length === 3), `57 laps: some two-stop plan — ${[...r57.keys()].join(" | ")}`);
+  // A short race stays short: nobody plans a stop into a 5-lap sprint on sets the floor covers.
+  const five = (cls) => Math.max(T.MIN_LIFE_LAPS, T.AI_CLASS[cls].life * 5 / 1.97);
+  for (let i = 0; i <= 20; i++) {
+    const p = A.stintPlan({ laps: 5, lifeLaps: five, pitLossLaps: 0.2, roll: i / 20 });
+    assert.equal(p.stops, 0, `roll ${i / 20}: ${p.seq} @${p.lapsAt}`);
+  }
+});
+
 test("splitStints shares the distance in proportion to life", () => {
   const even = A.splitStints(30, [10, 10, 10]);
   assert.deepEqual([...even], [10, 10, 10]);
@@ -202,13 +238,41 @@ test("the stop stagger never shifts a stop LATER past the set's life", () => {
   const mid = at(0.5), late = at(1), early = at(0);
   assert.equal(late.seq.join(), mid.seq.join(), "same plan, only the stagger differs");
   assert.ok(late.lapsAt[0] <= mid.lapsAt[0], `a late roll must not stop after the optimum here: L${late.lapsAt[0]} vs L${mid.lapsAt[0]}`);
-  assert.ok(early.lapsAt[0] < mid.lapsAt[0], "the early third still stops a lap sooner");
-  assert.equal(late.stints.reduce((a, v) => a + v, 0), 10);
+  // …and EARLY is capped the same way: a -1 shift lengthens the next stint,
+  // and the early third finished on 1.17-1.25 wear (the census, round 5).
+  assert.ok(early.lapsAt[0] <= mid.lapsAt[0], "early never stops later than the optimum");
+  // The optimum may itself run a set a little past its life (degCost prices
+  // that); what the stagger must never do is add a lap to a stint that
+  // already does not fit.
+  for (const p of [early, late]) {
+    let from = 0;
+    p.stints.forEach((len, i) => {
+      const fit = life(p.seq[i]) / (1 + A.STRAT.FUEL_WEAR * (1 - (from + len / 2) / 10));
+      if (len > mid.stints[i]) assert.ok(len <= fit, `${p.seq}@${p.lapsAt}: the stagger stretched stint ${i + 1} to ${len} laps on a ${fit.toFixed(2)}-lap set`);
+      from += len;
+    });
+    assert.equal(p.stints.reduce((a, v) => a + v, 0), 10);
+  }
   // …and where the life allows it, the late shift is untouched.
   const roomy = (c) => ({ soft: 12, medium: 18, hard: 26 })[c];
   const r5 = A.stintPlan({ laps: 25, lifeLaps: roomy, pitLossLaps: 0.2, roll: 0.5, twoCompound: true });
   const r1 = A.stintPlan({ laps: 25, lifeLaps: roomy, pitLossLaps: 0.2, roll: 1, twoCompound: true });
   if (r1.seq.join() === r5.seq.join()) assert.ok(r1.lapsAt[0] >= r5.lapsAt[0], "a set with laps to spare still staggers late");
+});
+
+test("no stint is shorter than MIN_STINT, and a 5-lap race is run on one set", () => {
+  // Two low rolls of 21 planned hard-hard with the stop after lap 1 of 5
+  // (Austria, the census): the fuel-adjusted life dipped under the floor and
+  // the -1 stagger cut the [2, 3] split to [1, 4].
+  const floorLife = (laps, sev) => (c) => Math.max(T.MIN_LIFE_LAPS, T.AI_CLASS[c].life * laps / sev);
+  for (const laps of [5, 10, 25]) for (let i = 0; i <= 20; i++) {
+    const p = A.stintPlan({ laps, lifeLaps: floorLife(laps, 1.97), pitLossLaps: 0.2, roll: i / 20, twoCompound: laps >= 8 });
+    assert.ok(p.stints.every((n) => n >= A.STRAT.MIN_STINT), `${laps} laps, roll ${i / 20}: stints ${p.stints}`);
+    if (laps <= A.STRAT.ONE_SET_LAPS) assert.equal(p.stops, 0, `${laps} laps, roll ${i / 20}: ${p.seq} @${p.lapsAt}`);
+  }
+  // The player's STRATEGY row still wins: a pinned stop is a stop.
+  const pinned = A.stintPlan({ laps: 5, lifeLaps: floorLife(5, 1.97), pitLossLaps: 0.2, roll: 0.5, stops: 1 });
+  assert.equal(pinned.stops, 1);
 });
 
 test("the planner's cliff IS the sim's cliff", () => {
@@ -230,10 +294,12 @@ test("a worn stop needs laps left to pay for itself", () => {
   // The deeper past its life the set is, the sooner the stop pays back — a
   // rag is worth changing with fewer laps left than a set just over the line.
   const rag = (left) => now({ wear: 2.0, pitLossLaps: 0.13, lapsLeft: left });
-  // (Four to go: with the cliff at DEG_CLIFF 0.50 a set 0.1 over its life
-  // pays back in ~4.7 laps, a destroyed one in under one.)
-  assert.equal(rag(4), "worn", "a destroyed set is worth it with four to go");
-  assert.ok(worn({ lapsLeft: 4 }) === "", "…where one barely over its life is not");
+  // (A set 0.1 over its life gives back DEG_LIN + 0.1·DEG_CLIFF = 0.10 of grip
+  // a lap on fresh rubber, so the 0.13-lap stop pays back in ~2.4 laps; a
+  // destroyed one, 0.55 a lap, in under half of one.)
+  assert.equal(rag(2), "worn", "a destroyed set is worth it with two to go");
+  assert.ok(worn({ lapsLeft: 2 }) === "", "…where one barely over its life is not");
+  assert.equal(worn({ lapsLeft: 3 }), "worn", "…until three: the baseline drop counts too");
   // A caller that does not say how many laps are left behaves exactly as before,
   // so nothing that never knew about this rule silently changes.
   assert.equal(now({ wear: 1.4 }), "worn", "no lapsLeft, no new gate");
@@ -248,7 +314,9 @@ test("the free stop under a caution pulls a planned stop forward", () => {
   // it is a wasted set.
   assert.equal(now({ cautionLevel: 3, lapsToStop: A.STRAT.CAUTION_REACH + 1 }), "");
   // A local yellow (level 1) does not neutralise the field, so it is not free.
-  assert.equal(now({ cautionLevel: 1, lapsToStop: 1 }), "");
+  assert.equal(now({ cautionLevel: 1, lapsToStop: 1 }), "");  // …and a RED FLAG (4) is not a pit window at all: the field is held, and
+  // arms made under it leaked into green when the restart was refused.
+  assert.equal(now({ cautionLevel: 4, lapsToStop: 2 }), "");
 });
 
 test("the wrong tyre for the weather outranks everything", () => {

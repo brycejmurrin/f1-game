@@ -364,7 +364,7 @@ jobs:
       # a 4-core box, which is what a public runner is (4 vCPU). Same tool, same
       # START/PASS/FAIL lines; the npm script stays serial for a loaded dev box.
       # DERIVED DOC FIGURES ARE ADVISORY OFF A PULL REQUEST (2026-09-30). The
-      # spec/unit counts and the "N of M" ladder are generated; two PRs that
+      # exact spec/unit counts a doc may still carry are derived; two PRs that
       # each add a test regenerate them identically against their own base,
       # merge cleanly, and leave the tip one file short — 14 of 15 deploy-branch
       # reds on 2026-09-29, a red no push can clear but a regeneration commit,
@@ -455,10 +455,10 @@ jobs:
   # paths → runners with FAIL-SAFE → all; node-plan.mjs skips scripts inside a
   # spun runner. A scenery-only diff keeps guards + vm-a1/vm-a2 and skips the
   # rest; editing a file owned by a skipped slice still selects that slice.
-  # Schedule and dispatch run --all. Empty matrix is never emitted:
-  # any_node=false skips the job via `if:`, so fromJSON always sees at least
-  # one row when the job runs. Landed AFTER ci-verdict so skipped slices do
-  # not block branch protection.
+  # Schedule and dispatch run --all. Every slice row is always emitted
+  # (needed true|false), so fromJSON never sees an empty matrix and
+  # node-suites always runs: branch protection requires all six check names,
+  # and an unneeded row reports green in seconds (see node-suites' `if:`).
   unit-plan:
     name: Plan node unit slices
     runs-on: ubuntu-latest
@@ -539,9 +539,13 @@ jobs:
     needs: unit-plan
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
-    # Also skipped when the unit-plan says this diff needs no node matrix slice
-    # (ci-verdict treats that skip as a pass).
-    if: ${{ inputs.fast_tier_run == '' && needs.unit-plan.outputs.any_node == 'true' }}
+    # NEVER skipped for any_node=false (2026-09-30, PR #522): a job skipped at
+    # the job level never expands its matrix, so the one check it reports is
+    # "Pure-node unit suites (${{ matrix.slice }})" and the six REQUIRED names
+    # never appear — the PR sat BLOCKED with every check green. The job always
+    # runs; an unneeded row (matrix.needed=false) skips checkout / npm ci /
+    # plan below and reports green in seconds.
+    if: ${{ inputs.fast_tier_run == '' }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -596,6 +600,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: matrix.needed != 'false'   # an unneeded row reports green with no setup (the job's `if:`)
         with:
           persist-credentials: false
           # The plan step below diffs a pull request against its base sha,
@@ -603,6 +608,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+        if: matrix.needed != 'false'
       # WHICH SCRIPTS DOES THIS PR NEED? (2026-09-30) On a pull request the
       # four multi-minute scripts (game-vm-a, game-vm-b, vm-page, node-slow)
       # run only when tools/ci/pick-tests.mjs routes the PR's diff to a group
@@ -622,6 +628,7 @@ jobs:
       # unknown previous tip, a first push, a force push or a nightly run
       # everything, as before.
       - name: Plan the slices for this diff
+        if: matrix.needed != 'false'
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}

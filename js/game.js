@@ -2265,16 +2265,16 @@ function gridUp(preOrder) {
     // stream nothing, exactly as Reliability's retirement draw does.
     c.tyreStints = 0; c.tyreLog = null;   // a new race is a new strip, not an appended one
     pits.reset(c); engineer.reset(c);
-    // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here, from the
-    // same per-car race hash the launch plan and the pace phase come from, so
-    // arming a race consumes nothing from the sim RNG stream — the contract
+    // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here from its own
+    // hash of seed, round and DRIVER (not grid slot + skill: tier-adjacent cars
+    // drew alike), so it consumes nothing from the sim RNG stream — the contract
     // js/race/reliability.js holds for retirements, held for strategy too.
     // An AI car's STARTING compound is the plan's, not the class draw's, when
     // wear is on; the class draw still stands in for the legacy fudge when it
     // is off. The player plans their own race.
     // The PLAYER gets a plan too — a REFERENCE, the one the pit wall would run
     // (PitLane.think never executes a human's; the HUD and the engineer read it).
-    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human, 0, c) : null;
+    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : DriverRatings.hash32(hSeed + ":" + hRound + ":" + (c.driverId || c.code || i) + ":strategy") / 4294967296, !!c.human, 0, c) : null;
     if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
     tyres.fit(c, tyres.startRecord(c, TyreModel.treadFor(raceWeather, roadWetness())));
   });
@@ -3935,10 +3935,11 @@ function studioOpen(n, info) {
   if (_studio) studioClose(_studio.n);
   const real = info && info.real;
   // None for: a race joined mid-way or watched (not your car leaving the garage), a
-  // habitual skipper (the flyby's short cut), a hidden tab or a headless run (no
-  // frames, so its clock would not run).
-  const off = (real && (real.watch || real.startLap > 1)) || loadingScreen.nextFlyMs() === LoadingScreen.SHORT_FLY_MS ||
-    headlessMode || document.hidden;
+  // hidden tab or a headless run (no frames, so its clock would not run). EVERY
+  // other RACE! plays it — a habitual skipper included: the skip streak shortens
+  // the FLYBY, and a tap skips this too (it was dropped at 3 skips, which hid it
+  // from exactly the players testing it).
+  const off = (real && (real.watch || real.startLap > 1)) || headlessMode || document.hidden;
   const ms = off ? 0 : setupCam.startDriveOut();
   if (ms > 0) { _studio = { at: performance.now(), ms, n, info, cardUp: !!(gfx.warming && gfx.warming()) }; setupPreviewOn = true; }
   if (_studio && !_studio.cardUp) loadingScreen.garage(info, () => studioSkip(n));

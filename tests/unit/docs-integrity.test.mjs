@@ -23,8 +23,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const ls = (dir, re) => fs.readdirSync(path.join(ROOT, dir)).filter((f) => re.test(f));
 
-/* DERIVED FIGURES ARE ADVISORY OFF A PULL REQUEST (2026-09-30). The spec and
- * unit counts and the "N of M" ladder are GENERATED from the tree, and every
+/* DERIVED FIGURES ARE ADVISORY OFF A PULL REQUEST (2026-09-30). The exact
+ * spec and unit counts the docs may still carry are derived from the tree, and every
  * PR that adds a test regenerates them — correctly, against ITS base. Two such
  * PRs merge cleanly (identical textual edits) and leave the union one file
  * short: 14 of 15 deploy-branch reds on 2026-09-29 were exactly that, a red no
@@ -367,10 +367,16 @@ test("the test-suite counts in the agent docs and README.md match the files on d
   let sawSpecCount = false;
   for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md", ...SKILL_DOCS]) {
     const text = read(doc);
-    const claimed = [...text.matchAll(/(\d+)\s+Playwright specs?/gi)].map((m) => Number(m[1]));
-    if (claimed.length) sawSpecCount = true;
-    for (const n of claimed)
-      figureEqual(n, specs, `${doc} claims ${n} Playwright specs; tests/ holds ${specs}`);
+    // Floors here too ("120+ Playwright specs"), for the reason the unit
+    // suites below spell out; an exact count anywhere is still pinned exactly.
+    const specClaims = [...text.matchAll(/(\d+)(\+?)\s+Playwright specs?/gi)]
+      .map((m) => ({ n: Number(m[1]), floor: m[2] === "+" }));
+    if (specClaims.length) sawSpecCount = true;
+    for (const { n, floor } of specClaims) {
+      if (!floor) { figureEqual(n, specs, `${doc} claims ${n} Playwright specs; tests/ holds ${specs}`); continue; }
+      assert.ok(n <= specs, `${doc} claims ${n}+ Playwright specs; tests/ holds only ${specs}`);
+      assert.ok(specs - n < 50, `${doc} claims ${n}+ Playwright specs and tests/ holds ${specs} — raise the floor`);
+    }
 
     // A FLOOR ("200+ unit suites") is allowed, and is what the prose should
     // use. An exact count is one integer that every agent adding a test has to
@@ -393,39 +399,15 @@ test("the test-suite counts in the agent docs and README.md match the files on d
   assert.ok(sawSpecCount, "neither CLAUDE.md nor README.md states a Playwright spec count any more");
 });
 
-test("the `N of M unit files` ladder figures match tooling-fast's list and the files on disk", async () => {
-  // AGENTS.md §Verification 3, docs/notes/PREPUSH-GATE-LADDER.md and
-  // docs/TESTING.md all quote the ladder as "208 of 278 unit files" — and all
-  // three sat there while the list grew to 218 of 290 (2026-09-22). The
-  // phrasing is one integer pair that every added test file moves. Since
-  // 2026-09-22 tools/gen/gen-ladder-figures.mjs WRITES the figures (from
-  // tests/groups.json); this stays as the independent cross-check, reading the
-  // OTHER generated copy — tools/ci/tooling-fast.mjs's list — and the unit
-  // files under tests/unit/ (.test.mjs and .test.cjs both; the ladder counts
-  // what the gate runs, and the gate runs both kinds).
-  const { TOOLING_FAST_FILES } = await import("../../tools/ci/tooling-fast.mjs");
-  const fast = TOOLING_FAST_FILES.filter((e) => !e.startsWith("//")).length;
-  const disk = ls("tests/unit", /\.test\.(mjs|cjs)$/).length;
-  let seen = 0;
-  // .claude/agents/verify-agent.md quotes the same pair to the parent on every
-  // run and drifted to 208 of 278 unnoticed (2026-09-22): the three prose docs
-  // were pinned, the agent surface was not.
-  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md", ".claude/agents/verify-agent.md"]) {
-    for (const m of read(doc).matchAll(/test:tooling-fast`?[^\n]*?(\d+) of (\d+)/g)) {
-      seen++;
-      figureEqual(Number(m[1]), fast, `${doc} says tooling-fast runs ${m[1]} unit files; the generated list holds ${fast}`);
-      figureEqual(Number(m[2]), disk, `${doc} says there are ${m[2]} unit files; tests/unit holds ${disk}`);
-    }
-  }
-  assert.ok(seen >= 4, `expected the ladder figure in all three docs and verify-agent.md, found ${seen}`);
-});
-
-test("the derived ladder figures (whole gate, 'the other N') match the gate's real union", async () => {
-  // The figures the pin above does not reach: "281 of 296" and "the remaining 15"
-  // were wrong the day they were written (test:sweeps-parts had joined the gate
-  // that morning) and "the other 70" drifted to 73 unnoticed. Computed the way
-  // prepush-gate-coverage.test.mjs measures the gate — without importing the
-  // generator, so a generator bug cannot agree with itself here.
+test("the gate ladder is a ladder, and no doc commits its sizes", async () => {
+  // The rung sizes ("N of M unit files", "the other N", the ladder table) were
+  // committed into five docs until 2026-09-30. Every PR that added a test file
+  // changed the same digits on the same lines, so any two such PRs conflicted
+  // (~100 % of both-parent merges on those docs, docs/notes/MERGE-HYGIENE-
+  // 2026-09-29.md). They are measured now — `node tools/gen/gen-ladder-figures.mjs`
+  // — and this checks the SHAPE the docs describe, computed the way
+  // prepush-gate-coverage.test.mjs measures the gate (without importing the
+  // generator, so a generator bug cannot agree with itself here).
   const { TOOLING_FAST_FILES } = await import("../../tools/ci/tooling-fast.mjs");
   const { gateNodeSuites } = await import("../../tools/ci/deploy.mjs");
   const groups = JSON.parse(read("tests/groups.json"));
@@ -434,15 +416,20 @@ test("the derived ladder figures (whole gate, 'the other N') match the gate's re
   for (const script of [...gateNodeSuites(), "test:sweeps-parts"]) {
     for (const f of (groups.groups[script] || { files: [] }).files) if (f.startsWith("tests/unit/")) gate.add(path.basename(f));
   }
+  const guards = groups.groups["test:guards"].files.length;
   const disk = ls("tests/unit", /\.test\.(mjs|cjs)$/).length;
-  const ladder = read("docs/notes/PREPUSH-GATE-LADDER.md");
-  const whole = ladder.match(/--gate-only`[^\n]*?(\d+) of (\d+)/);
-  assert.ok(whole, "the ladder doc no longer states the whole gate as N of M");
-  figureEqual(Number(whole[1]), gate.size, `the ladder doc says the whole gate runs ${whole[1]} unit files; the union of tooling-fast and the gate's node groups holds ${gate.size}`);
-  figureEqual(Number(whole[2]), disk, `the ladder doc says ${whole[2]} unit files; tests/unit holds ${disk} — run \`npm run gen:docs\``);
-  const other = read("AGENTS.md").match(/The other (\d+) have taken deploys red/);
-  assert.ok(other, "AGENTS.md rule 3 no longer says how many files tooling-fast leaves out");
-  figureEqual(Number(other[1]), disk - fast.length, `AGENTS.md says tooling-fast leaves out ${other[1]}; ${disk} on disk minus ${fast.length} in the list is ${disk - fast.length}`);
+  assert.ok(guards < fast.length, `test:guards (${guards}) must be a strict subset of tooling-fast (${fast.length})`);
+  assert.ok(fast.length < gate.size, `tooling-fast (${fast.length}) must be a strict subset of the gate (${gate.size})`);
+  assert.ok(gate.size <= disk, `the gate names ${gate.size} unit files; tests/unit holds ${disk}`);
+  const { figures } = await import("../../tools/gen/gen-ladder-figures.mjs");
+  const f = figures();
+  assert.deepEqual([f.fast, f.gate, f.disk], [fast.length, gate.size, disk], "the report tool measures the same ladder");
+  const SIZES = [/\d+ of \d+ unit\s+files/, /The other \d+ have taken deploys red/, /<!-- GENERATED: ladder -->/,
+    /\| `npm run test:tooling-fast` \| \d+ of \d+/];
+  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"]) {
+    const text = read(doc);
+    for (const re of SIZES) assert.doesNotMatch(text, re, `${doc} commits a ladder size (${re}) — every PR adding a test file would conflict on it; point at gen-ladder-figures.mjs instead`);
+  }
 });
 
 test("ci.yml makes the derived figures advisory off pull requests, and only there", () => {

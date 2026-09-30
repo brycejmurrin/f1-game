@@ -1349,11 +1349,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "TODAY is a chip on the pan-x toolbar, first in the row");
   assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"] #sel-daily > span', "display"), "none",
     "compact TODAY drops its weather/tod/best span so the filters stay on screen");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px)",
+  // Each top is max(own slot, the mirror's bottom edge + 8px): --mir-bot is
+  // unset (0px) with no mirror, so the own slot is what shows.
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px))",
     "compact radio cards sit right under the timing row, like every other density");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce', "top"), "calc(72px + var(--sat) / var(--hud-z) + 34px)",
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-side):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
     "…and step below the flag chip while a caution shows, never on top of it");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "calc(72px + var(--sat) / var(--hud-z))");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px))");
   assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
   assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
   const selectJs = code("js/ui/select-screen.js");
