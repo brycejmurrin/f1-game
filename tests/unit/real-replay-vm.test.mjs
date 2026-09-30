@@ -336,6 +336,72 @@ test("BROADCAST PiP pick: the followed car's battle partner (the car BEHIND when
     assert.deepEqual(pick([], "a", "h", "pit"), { key: "h", cam: "chase", kind: "pit" }, "no battle: the car in the next event");
     assert.equal(pick([], "a", "a", "pass"), null, "never the followed car");
     assert.equal(pick([], "a", null), null);
+    // With the running order: the inset is never empty while another car runs.
+    const run = [{ key: "a" }, { key: "b" }, { key: "c" }];
+    const pickR = (follow, ev, kind) => host(B.pipPick([], follow, ev, kind, run));
+    assert.deepEqual(pickR("a", null), { key: "b", cam: "tcam", kind: "behind" }, "the leader: the car behind");
+    assert.deepEqual(pickR("b", null), { key: "c", cam: "tcam", kind: "behind" });
+    assert.deepEqual(pickR("c", null), { key: "b", cam: "chase", kind: "ahead" }, "last: the car ahead");
+    assert.deepEqual(pickR("z", null), { key: "a", cam: "chase", kind: "leader" }, "the followed car is out: the leader");
+    assert.deepEqual(pickR("a", "c", "pit"), { key: "c", cam: "chase", kind: "pit" }, "an event still outranks the fallback");
+    assert.equal(host(B.pipPick([], "a", null, null, [{ key: "a" }])), null, "alone on track: no inset");
+  } finally { g.close(); }
+});
+
+test("BROADCAST PiP in WATCH with no battle (3 s apart): the inset is still up, on the car behind", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g;
+    const RR = vm.runInContext("RealRace", g.ctx);
+    const { script } = scriptIn(g);
+    const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 400), 16: line(-164, 50, 1, -5, 400) } };   // Leclerc 150 m = 3 s back
+    RR.launch(script, { seat: "RUS", watch: true, camera: "side", traces, startLap: 1 });
+    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2);
+    g.apex.go();
+    g.step(60);
+    const bc = RR.status().replay.broadcast;
+    assert.ok(bc && bc.pip, "a PiP: " + JSON.stringify(bc));
+    assert.equal(bc.pip.code, "LEC");
+    assert.equal(bc.pip.label, "BEHIND · LEC");
+    RR.replay().stop();
+  } finally { g.close(); }
+});
+
+test("WATCH in-game AUTO: a picked shot hands the viewer the picture, AUTO hands it back at once; the commentary hears the replay", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g;
+    const RR = vm.runInContext("RealRace", g.ctx), R = vm.runInContext("RealReplay", g.ctx);
+    const { script } = scriptIn(g);
+    const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 400), 16: line(-22, 48, 1, -5, 400) } };
+    const heard = [];
+    const rr = G.raceRadio, real = rr.replayEvent;
+    rr.replayEvent = (h, a, b) => { heard.push({ kind: h.kind, a: a && a.code, b: b && b.code }); return real(h, a, b); };
+    RR.launch(script, { seat: "RUS", watch: true, camera: "side", traces, startLap: 1 });
+    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2);
+    const rp = RR.replay();
+    assert.equal(rp.autoOn(), false, "a hub shot other than AUTO: the viewer's camera");
+    assert.equal(rr.debug().watch, true, "the commentator is in WATCH mode");
+    assert.equal(rp.setAuto(true), true);
+    assert.equal(rp.autoOn(), true);
+    g.apex.go();
+    g.step(5);
+    assert.equal(RR.status().replay.broadcast.manual, false, "AUTO is not read as a viewer change");
+    rp.takePicture();
+    assert.equal(rp.autoOn(), false, "a picked shot: the viewer has the picture");
+    rp.setAuto(true);
+    assert.equal(rp.autoOn(), true, "AUTO: the director at once, no 20 s wait");
+    // A traced car's highlight at 1x: handed to the commentator, not captioned.
+    const h = R.highlightsFor(script).find((x) => (x.num === 63 || x.num === 16) && ["pass", "pit", "out", "fastest"].includes(x.kind) && x.t > 20 && x.t < 380);
+    assert.ok(h, "an event for Russell or Leclerc");
+    rp.seek(h.t - 1);
+    g.step(60 * 2);
+    assert.ok(heard.some((e) => e.kind === h.kind && e.a === script.drivers.find((d) => d.num === h.num).code), JSON.stringify({ h, heard }));
+    rp.stop();
+    assert.equal(rr.debug().watch, false, "the WATCH is over for the commentator");
+    assert.equal(rp.autoOn(), false);
   } finally { g.close(); }
 });
 

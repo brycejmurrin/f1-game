@@ -806,3 +806,69 @@ test('local yellow instructions use the protected race channel', () => {
   const flag = r.said.find(row => /YELLOW/.test(row.msg));
   assert.ok(flag); assert.equal(flag.kind, 'warning');
 });
+
+// ── REAL RACE WATCH (js/race/real-replay.js setWatching / replayEvent) ─────
+
+function watch(opts = {}) {
+  const r = race(Object.assign({ cam: 1 }, opts));   // a driving camera: WATCH talks anyway
+  const hooks = { busy: false, nameOf: (c) => "REAL" + c.code, radioBusy: () => hooks.busy };
+  r.radio.setWatching(hooks);
+  return Object.assign(r, { hooks });
+}
+const comm = (r) => r.said.filter((s) => s.kind === "comm");
+
+test("a WATCH speaks the replay's highlights through the commentator, on any camera, by the REAL names", () => {
+  const r = watch();
+  r.step(0.05, 20);
+  const [a, b] = r.cars;
+  assert.equal(r.radio.replayEvent({ kind: "pass", pos: 3 }, b, a), true);
+  r.step(0.05, 80);
+  assert.ok(comm(r).some((s) => /REALBBB/.test(s.msg) && /REALAAA/.test(s.msg)), JSON.stringify(r.said));
+  assert.equal(r.radio.debug().watch, true);
+  for (const [h, re] of [[{ kind: "pit", pos: 2 }, /REALAAA/], [{ kind: "out", pos: 5 }, /REALAAA/],
+    [{ kind: "fastest", pos: 1, dur: 92.44 }, /1:32\.4/], [{ kind: "sc", level: 3 }, /SAFETY CAR/]]) {
+    const w = watch();
+    w.step(0.05, 20);   // before the battle talk (SETTLE_S): the highlight is the first line
+    assert.equal(w.radio.replayEvent(h, w.cars[0], null), true, h.kind);
+    w.step(0.05, 20);
+    const all = comm(w).map((s) => s.msg).join(" | ");
+    assert.match(all, re, h.kind + ": " + all);
+    assert.equal(w.said.filter((s) => s.kind !== "comm").length, 0, "no engineer in a replay: " + JSON.stringify(w.said));
+  }
+});
+
+test("a WATCH that starts mid-race (or rewinds) never calls LIGHTS OUT, and says no engineer line", () => {
+  const r = watch({ cam: 2 });
+  r.step(0.05, 200);
+  r.G.raceT = 1;   // a HIGHLIGHTS cut: the clock goes back
+  r.step(0.05, 200);
+  assert.equal(r.said.filter((s) => /LIGHTS OUT|AWAY/.test(s.msg)).length, 0, JSON.stringify(r.said));
+  assert.equal(r.said.filter((s) => s.kind !== "comm").length, 0, JSON.stringify(r.said));
+});
+
+test("a WATCH holds its commentary while a real team radio clip plays, and says it after", () => {
+  const r = watch();
+  r.step(0.05, 20);
+  r.hooks.busy = true;
+  r.radio.replayEvent({ kind: "pass", pos: 1 }, r.cars[1], r.cars[0]);
+  r.step(0.05, 60);
+  assert.equal(comm(r).length, 0, "talked over the team radio");
+  r.hooks.busy = false;
+  r.step(0.05, 60);
+  assert.equal(comm(r).length, 1, JSON.stringify(r.said));
+});
+
+test("replayEvent outside a WATCH, with commentary OFF, or after the WATCH ends is a no-op", () => {
+  const r = race({ cam: 2 });
+  r.step(0.05, 20);
+  assert.equal(r.radio.replayEvent({ kind: "out", pos: 3 }, r.cars[0], null), false);
+  const off = watch({ store: { commentary: "off" } });
+  off.step(0.05, 20);
+  assert.equal(off.radio.commentates(), false);
+  assert.equal(off.radio.replayEvent({ kind: "out", pos: 3 }, off.cars[0], null), false);
+  const w = watch();
+  w.step(0.05, 20);
+  w.radio.setWatching(null);
+  assert.equal(w.radio.replayEvent({ kind: "out", pos: 3 }, w.cars[0], null), false);
+  assert.equal(w.radio.debug().watch, false);
+});

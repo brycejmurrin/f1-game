@@ -27,13 +27,26 @@ window.CamModes = (function () {
     Log.info("game", "CamModes.create");
     const $ = G.$;
 
+    // A REAL RACE WATCH (js/race/real-replay.js): its TV director is one more
+    // "camera" — AUTO — in the picker and the C / CAM cycle. Never a CAM_MODES
+    // entry: that list is the saved apex26.camMode index and GameCams.vantage's
+    // mode ids, and AUTO is neither.
+    function watchReplay() {
+      const r = typeof RealRace !== "undefined" && RealRace.replay ? RealRace.replay() : null;
+      return r && r.isRunning && r.isRunning() && r.setAuto ? r : null;
+    }
     function refreshCamBtn() {
       const b = $("btn-cam");
+      const r = watchReplay();
       // The NAME starts with the visible word (WCAG 2.5.3 Label in Name): a
       // fixed "Camera" left a voice-control user saying "click CHASE" to a
       // button whose name had no CHASE in it.
       // https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html
-      if (b) { b.textContent = CAM_MODES[G.camMode].label; b.setAttribute("aria-label", `${CAM_MODES[G.camMode].label} camera`); }
+      // In a WATCH with the director on the picture, the word is AUTO.
+      if (b && r && r.autoOn()) {
+        b.textContent = "AUTO · " + CAM_MODES[G.camMode].label;
+        b.setAttribute("aria-label", `AUTO camera, ${CAM_MODES[G.camMode].label}`);
+      } else if (b) { b.textContent = CAM_MODES[G.camMode].label; b.setAttribute("aria-label", `${CAM_MODES[G.camMode].label} camera`); }
       // cockpit-cam hides the HUD readouts the wheel's LCD carries — only while
       // the chosen wheel HAS one (js/camera/cockpit-opts.js WHEEL).
       document.body.classList.toggle("cockpit-cam", CAM_MODES[G.camMode].id === "cockpit"
@@ -58,7 +71,21 @@ window.CamModes = (function () {
       CamTunerPanel.refresh();
       return CAM_MODES[G.camMode].id;
     }
-    function cycleCam() { return setCamMode(G.camMode + 1); }
+    // The viewer picks a shot: in a WATCH that takes the picture from the director.
+    function pickCam(m) {
+      const id = setCamMode(m);
+      const r = watchReplay();
+      if (r) { r.takePicture(); refreshCamBtn(); }
+      return id;
+    }
+    function toAuto() { const r = watchReplay(); if (r) { r.setAuto(true); refreshCamBtn(); } return "auto"; }
+    // In a WATCH the cycle runs the shots and then AUTO (where it would wrap);
+    // from AUTO the next press is the next shot, the viewer's.
+    function cycleCam() {
+      const r = watchReplay();
+      if (r && !r.autoOn() && G.camMode === CAM_MODES.length - 1) return toAuto();
+      return r ? pickCam(G.camMode + 1) : setCamMode(G.camMode + 1);
+    }
 
     const camTrigger = $("btn-cam");
     const camPicker = (() => {
@@ -77,7 +104,7 @@ window.CamModes = (function () {
           b.setAttribute("role", "menuitemradio");
           b.tabIndex = -1;
           b.onclick = (e) => {
-            e.stopPropagation(); setCamMode(+b.dataset.idx); hide(); camTrigger?.focus();
+            e.stopPropagation(); pickCam(+b.dataset.idx); hide(); camTrigger?.focus();
           };
           el.appendChild(b);
         }
@@ -97,9 +124,26 @@ window.CamModes = (function () {
         });
         document.body.appendChild(el);
       };
+      // AUTO is an item only while a WATCH runs (added here, not in build(): the
+      // picker is built once, and outside a WATCH it keeps its shape exactly).
+      let autoBtn = null;
+      const syncAuto = (r) => {
+        if (r && !autoBtn) {
+          autoBtn = document.createElement("button");
+          autoBtn.textContent = "AUTO · TV DIRECTOR";
+          autoBtn.dataset.idx = "auto";
+          autoBtn.setAttribute("role", "menuitemradio");
+          autoBtn.tabIndex = -1;
+          autoBtn.onclick = (e) => { e.stopPropagation(); toAuto(); hide(); camTrigger?.focus(); };
+          el.insertBefore(autoBtn, el.children[0] || null);
+        } else if (!r && autoBtn) { autoBtn.remove(); autoBtn = null; }
+      };
       const sync = () => {
+        const r = watchReplay();
+        syncAuto(r);
+        const auto = !!(r && r.autoOn());
         for (const b of el.children) {
-          const on = +b.dataset.idx === G.camMode;
+          const on = b === autoBtn ? auto : !auto && +b.dataset.idx === G.camMode;
           b.classList.toggle("active", on);
           b.setAttribute("aria-checked", on ? "true" : "false");
         }

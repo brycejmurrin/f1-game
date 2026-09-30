@@ -75,6 +75,12 @@ const RaceRadio = (function () {
     let comm = readSetting("commentary", COMM, "tv");
 
     let live = false, evalT = 0, t = 0, lastCars = null, last = null;
+    // A REAL RACE WATCH (js/race/real-replay.js setWatching): every car is a
+    // puppet, so the replay's own highlights are the news (replayEvent) and the
+    // facts only colour it (battles, the lead gap). Hooks: nameOf(car) — the
+    // REAL driver's name (a seat car can wear another roster name) — and
+    // radioBusy() — a team radio clip is playing.
+    let watch = null;
     let m = null;
     const queue = { eng: new Map(), tv: new Map() };
     const log = [];
@@ -105,7 +111,8 @@ const RaceRadio = (function () {
     }
     reset();
 
-    const S = RadioLines.surname, gapT = RadioLines.gapText, timeT = RadioLines.timeText;
+    const gapT = RadioLines.gapText, timeT = RadioLines.timeText;
+    const S = (c) => (watch && watch.nameOf && c ? watch.nameOf(c) || RadioLines.surname(c) : RadioLines.surname(c));
     const lvl = () => CHAT.indexOf(chat);
     const inPits = (c) => !!(c && c.pitState && c.pitState !== "none");
     const cool = (key, cd) => !(m.said.has(key) && t - m.said.get(key) < cd);
@@ -166,7 +173,7 @@ const RaceRadio = (function () {
     }
     function tvLive(f) {
       if (comm === "off") return false;
-      if (comm === "on") return true;
+      if (comm === "on" || watch) return true;   // a WATCH is a broadcast, whatever the director's shot
       return TV_CAMS.indexOf(camId()) >= 0 || G.hudProfile === "broadcast" || !!(f && (f.finished || f.retired));
     }
 
@@ -365,7 +372,11 @@ const RaceRadio = (function () {
     }
 
     // ── COMMENTARY: events ──────────────────────────────────────────────────
+    // In a WATCH the replay reports what happened (replayEvent); the facts' own
+    // start / passes / stops / laps / flag are the puppets', not the race's.
+    const WATCH_SKIP = { start: 1, pass: 1, fastest: 1, retire: 1, pitIn: 1, finish: 1 };
     function tvEvent(e, f) {
+      if (watch && WATCH_SKIP[e.type]) return;
       switch (e.type) {
         case "start":
           offer({ id: "start", ch: "tv", tier: 4, once: "tvStart", key: "tv.start", vars: { leader: S(e.leader) }, ttl: 6 });
@@ -474,7 +485,13 @@ const RaceRadio = (function () {
       // NOT on `!live`: a red flag's restart countdown is "not racing" too, and
       // resetting there forgot the grid, every once-only line and the told
       // place — and read the re-grid as a lap of passes.
-      if (G.cars !== lastCars || now + 1 < t) { reset(); lastCars = G.cars; }
+      if (G.cars !== lastCars) { reset(); lastCars = G.cars; }
+      else if (now + 1 < t) {
+        // A WATCH seeks and cuts (HIGHLIGHTS): the clock going back is the same
+        // race, so the memory stays; only the stale lines and the facts go.
+        if (watch) { facts.reset(); queue.tv.clear(); t = now; }
+        else reset();
+      }
       live = true;
       t = now;
       const { f, ev } = facts.observe(G, dt);
@@ -493,17 +510,17 @@ const RaceRadio = (function () {
       if (f.caution > 0) m.cautionLap = f.lap;
       const tv = tvLive(f);
       for (const e of ev) {
-        engineerEvent(e, f, p);
+        if (!watch) engineerEvent(e, f, p);   // a replay has no engineer
         if (tv) tvEvent(e, f);
       }
       evalT -= dt;
       if (evalT <= 0) {
         evalT = EVAL_S;
-        engineerState(f, p);
+        if (!watch) engineerState(f, p);
         if (tv) tvState(f);
       }
       if (!tv) queue.tv.clear();
-      if (lvl() === 0) queue.eng.clear();
+      if (lvl() === 0 || watch) queue.eng.clear();
       pump(f, p, tv);
     }
 
@@ -512,6 +529,7 @@ const RaceRadio = (function () {
     function pump(f, p, tv) {
       // A VS FRIEND race keeps running under the pause menu; the radio waits.
       if (G.paused) return;
+      if (watch && watch.radioBusy && watch.radioBusy()) return;   // never over a real team radio clip
       const traffic = spotter && spotter.occupied();
       const e = best("eng");
       if (e) {
@@ -545,6 +563,49 @@ const RaceRadio = (function () {
       return G.announce(text, durFor(text), "race") ? text : "";
     }
 
+    /** A replay highlight as commentary (js/race/real-replay.js fire): h = {kind,
+     *  pos, dur, level}, a / b the cars in it (b: the car passed). The same lines,
+     *  tiers and cooldowns as a live race's. True when a line was offered. */
+    function replayEvent(h, a, b) {
+      if (!watch || !live || comm === "off" || !h) return false;
+      // The flags: the same "flag" slot the caution edge uses, so a WATCH whose
+      // own caution follows the script says it once.
+      if (h.kind === "sc") {
+        const key = h.level >= 4 ? "tv.red" : h.level === 2 ? "tv.vsc" : "tv.sc";
+        offer({ id: "flag", ch: "tv", tier: 4, key, vars: {}, ttl: 8 });
+        return true;
+      }
+      if (h.kind === "green") { offer({ id: "flag", ch: "tv", tier: 4, key: "tv.green", vars: {}, ttl: 6 }); return true; }
+      if (!a) return false;
+      switch (h.kind) {
+        case "pass": {
+          if (!b) return false;
+          const vars = { a: S(a), b: S(b), pos: h.pos || 0 };
+          if (h.pos === 1) offer({ id: "lead", ch: "tv", tier: 4, cd: 30, key: "tv.leadChange", vars, ttl: 7 });
+          else offer({ id: "pass", ch: "tv", tier: 3, cd: 40, cdKey: "pass:" + [vars.a, vars.b].sort().join("|"), key: "tv.pass", vars, ttl: 5 });
+          return true;
+        }
+        case "pit": {
+          const pos = facts.order().indexOf(a) + 1 || h.pos || 0;
+          offer({ id: "pit", ch: "tv", tier: 2, key: "tv.pit", vars: { a: S(a), pos }, ttl: 8 });
+          return true;
+        }
+        case "out":
+          offer({ id: "retire", ch: "tv", tier: 3, key: "tv.retire", vars: { a: S(a), why: RadioLines.WHY.mechanical }, ttl: 12 });
+          return true;
+        case "fastest":
+          if (!(h.dur > 0)) return false;
+          offer({ id: "fastest", ch: "tv", tier: 2, cd: 40, key: "tv.fastest", vars: { a: S(a), time: timeT(h.dur) }, ttl: 10 });
+          return true;
+      }
+      return false;
+    }
+    /** A WATCH starts (hooks {nameOf, radioBusy}) or ends (null). */
+    function setWatching(hooks) {
+      watch = hooks || null;
+      queue.tv.clear(); queue.eng.clear();
+    }
+
     function setChat(v) {
       if (CHAT.indexOf(v) < 0) return chat;
       chat = v; if (store && store.set) store.set("radioChat", v);
@@ -557,7 +618,9 @@ const RaceRadio = (function () {
     }
 
     return {
-      update, request, reset, setChat, setComm,
+      update, request, reset, setChat, setComm, replayEvent, setWatching,
+      /** Commentary will speak in a WATCH (not OFF): the replay's captions stand down for it. */
+      commentates: () => comm !== "off",
       chat: () => chat, comm: () => comm,
       /** The engineer will call the player's last lap (any chat level but OFF,
        *  in a race): game.js's plain FINAL LAP card stands down for it. */
@@ -571,7 +634,7 @@ const RaceRadio = (function () {
       setSpotter(b) { if (store && store.set) store.set("spotter", !!b); return !!b; },
       trafficBusy: () => !!(spotter && spotter.occupied()),
       spotterDebug: () => (spotter ? spotter.debug() : null),
-      debug: () => ({ live, chat, comm, tv: live && tvLive(last), t: +t.toFixed(1),
+      debug: () => ({ live, chat, comm, tv: live && tvLive(last), watch: !!watch, t: +t.toFixed(1),
         pending: { eng: Array.from(queue.eng.keys()), tv: Array.from(queue.tv.keys()) },
         facts: last && { pos: last.pos, n: last.n, lap: last.lap, toGo: last.toGo,
           ahead: S(last.ahead), gapA: last.gapA, rateA: last.rateA, behind: S(last.behind), gapB: last.gapB, rateB: last.rateB,

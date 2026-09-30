@@ -18,7 +18,8 @@ const Broadcast = (function () {
   // js/render/shared/mirror-pass.js). Held at least SHOT_MIN_S; dropped once
   // nothing has asked for it for PIP_DROP_S.
   const PIP_DROP_S = 2;
-  const PIP_LABEL = { battle: "ONBOARD · ", pass: "OVERTAKE · ", pit: "PIT · ", out: "OUT · ", fastest: "FASTEST LAP · " };
+  const PIP_LABEL = { battle: "ONBOARD · ", pass: "OVERTAKE · ", pit: "PIT · ", out: "OUT · ", fastest: "FASTEST LAP · ",
+                      behind: "BEHIND · ", ahead: "AHEAD · ", leader: "LEADER · " };
 
   // ── Timing (pure): the tower at race time T ───────────────────────────────
   /** Seconds from lights out at which driver d crossed the line for the k-th time (k >= 1), or null. */
@@ -113,10 +114,12 @@ const Broadcast = (function () {
     return out.sort((x, y) => x.score - y.score);
   }
   /** The PiP's car (pure): the followed car's battle partner — the car BEHIND when
-   *  it is sandwiched, the threat — on an onboard shot; else the other car in the
-   *  next event; else null. Never the followed car. fights: battles(); evKey/evKind:
-   *  the next event's car and kind. */
-  function pipPick(fights, followKey, evKey, evKind) {
+   *  it is sandwiched, the threat — on an onboard shot; else the car in the next
+   *  event; else (with `running`, [{key}] by progress) the car right behind the
+   *  followed one, or ahead of it, or the leader — so a WATCH always has an
+   *  inset. Never the followed car. fights: battles(); evKey/evKind: the event's
+   *  car (its OTHER car when the director is already on the first) and kind. */
+  function pipPick(fights, followKey, evKey, evKind, running) {
     let behind = null, ahead = null;
     for (const f of fights) {
       if (f.ahead === followKey && behind == null) behind = f.key;
@@ -125,6 +128,12 @@ const Broadcast = (function () {
     const partner = behind != null ? behind : ahead;
     if (partner != null && partner !== followKey) return { key: partner, cam: "tcam", kind: "battle" };
     if (evKey != null && evKey !== followKey) return { key: evKey, cam: "chase", kind: evKind || "pass" };
+    if (running && running.length > 1) {
+      const i = running.findIndex((r) => r.key === followKey);
+      if (i < 0) return { key: running[0].key, cam: "chase", kind: "leader" };
+      if (running[i + 1]) return { key: running[i + 1].key, cam: "tcam", kind: "behind" };
+      if (running[i - 1]) return { key: running[i - 1].key, cam: "chase", kind: "ahead" };
+    }
     return null;
   }
 
@@ -177,8 +186,12 @@ const Broadcast = (function () {
     }
 
     /** The viewer took the picture (a follow key, the camera button, a tower row): the director waits. */
-    function manual() { if (on) manualUntil = wall + MANUAL_S; }
-    function setAuto(v) { auto = !!v; if (auto) { manualUntil = 0; lastCut = -1e9; } return auto; }
+    function manual() { if (on) { manualUntil = wall + MANUAL_S; setCam = G.camMode; } }   // the shot on air is now the viewer's baseline
+    // Back to the director: it cuts at once, and the shot on air now is its
+    // baseline — not a "viewer change" that would hand the picture back for 20 s.
+    function setAuto(v) { auto = !!v; if (auto) { manualUntil = 0; lastCut = -1e9; setCam = G.camMode; } return auto; }
+    /** The director has the picture: AUTO and not waiting out a viewer's choice. */
+    function autoOn() { return on && auto && wall >= manualUntil; }
 
     function buildTower(want) {
       const el = typeof document !== "undefined" ? document.getElementById("bc-tower") : null;
@@ -294,13 +307,21 @@ const Broadcast = (function () {
       const follow = st.follow;
       const running = st.running();
       const ev = nextEvent(st.list, st.T, new Set(), EVENT_LEAD_S * Math.max(1, st.speed), (num) => !st.isOut(num));
-      const evCar = ev ? st.carOf(ev.h.num) : null;
-      const pick = pipPick(battles(running), follow, evCar, ev && ev.h.kind);
+      let evCar = ev ? st.carOf(ev.h.num) : null;
+      // The director is already on the event's car: the inset takes the other one
+      // (the car being passed).
+      if (evCar && evCar === follow && ev.h.over != null) evCar = st.carOf(ev.h.over);
+      const pick = pipPick(battles(running), follow, evCar, ev && ev.h.kind, running);
       if (pip && (pip.key === follow || pip.key.retired)) { setPip(null); }   // the viewer followed it, or it stopped
       if (!pick) { if (pip && wall - pip.seen > PIP_DROP_S) setPip(null); return; }
-      if (pip && pip.key === pick.key) { pip.seen = wall; return; }
+      const label = (PIP_LABEL[pick.kind] || "") + ((st.codeOf && st.codeOf(pick.key)) || pick.key.code || "");
+      if (pip && pip.key === pick.key) {
+        pip.seen = wall;
+        if (pip.label !== label) { pip.label = label; const l = pipLabelEl(); if (l) l.textContent = label; }   // same car, new role
+        return;
+      }
       if (pip && wall - pip.at < SHOT_MIN_S) return;   // hold the shot on air
-      setPip({ key: pick.key, cam: pick.cam, label: (PIP_LABEL[pick.kind] || "") + (pick.key.code || ""), at: wall, seen: wall });
+      setPip({ key: pick.key, cam: pick.cam, label, at: wall, seen: wall });
     }
 
     function tick(dt, st) {
@@ -313,7 +334,7 @@ const Broadcast = (function () {
     function status() { return on ? { auto, manual: wall < manualUntil, shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,
                                       pip: pip ? { code: pip.key.code || null, label: pip.label } : null } : null; }
 
-    return { start, stop, tick, onCut, manual, setAuto, status, isOn: () => on };
+    return { start, stop, tick, onCut, manual, setAuto, autoOn, status, isOn: () => on };
   }
 
   return { create, towerAt, crossAt, doneBy, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };
