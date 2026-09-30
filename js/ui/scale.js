@@ -132,30 +132,43 @@ const UiScale = (() => {
     // Reusing a helper whose bounds are wrong for the new use is how a control
     // ends up unable to reach one end of its own range.
     const OPACITY_MIN = 20, OPACITY_MAX = 100;   // floor: a dock you cannot see is a dock you cannot aim at
-    const opacityPct = () => {
-      const v = store.get("hudBtnOpacity", null);
+    const opacityPct = (key) => {
+      const v = store.get(key, null);
       return typeof v === "number" ? Math.max(OPACITY_MIN, Math.min(OPACITY_MAX, Math.round(v))) : 100;
     };
-    function applyBtnOpacity() {
-      const stored = store.get("hudBtnOpacity", null);
-      const pct = opacityPct();
-      if (typeof stored === "number") document.documentElement.style.setProperty("--hud-btn-opacity", pct / 100);
-      else document.documentElement.style.removeProperty("--hud-btn-opacity");
-      const input = $("pm-btnopacity"); if (input) input.value = String(pct);
-      const out = $("pm-btnopacity-v"); if (out) out.textContent = pct + "%";
+    const opacityIn = (n) => Math.max(OPACITY_MIN, Math.min(OPACITY_MAX, Math.round(isFinite(n) ? n : 100)));
+    // Both 20-100 % sliders share this body; the ids stay string literals at
+    // each call site so tools/check/shell-ids.mjs can still see every read.
+    function paintOpacity(key, prop, input, out, rev) {
+      const stored = store.get(key, null);
+      const pct = opacityPct(key);
+      if (typeof stored === "number") document.documentElement.style.setProperty(prop, pct / 100);
+      else document.documentElement.style.removeProperty(prop);
+      if (input) input.value = String(pct);
+      if (out) out.textContent = pct + "%";
       const row = input && input.closest && input.closest(".tune-row, .pm-group");
       if (row) row.classList.toggle("tune-over", typeof stored === "number");
-      const rev = $("pm-btnopacity-r"); if (rev) rev.hidden = typeof stored !== "number";
+      if (rev) rev.hidden = typeof stored !== "number";
+    }
+    function applyBtnOpacity() {
+      paintOpacity("hudBtnOpacity", "--hud-btn-opacity", $("pm-btnopacity"), $("pm-btnopacity-v"), $("pm-btnopacity-r"));
+    }
+    // PANEL OPACITY: the dark plates behind the race readouts (.hud-box, the
+    // gaps chip, gearbox, tach, minimap, sectors, limits, #announce). Written as
+    // --hud-panel-a; css/tokens.css folds it into --hud-panel-a-eff, which HIGH
+    // CONTRAST pins at 1 so its solid plates win whatever this slider says.
+    function applyPanelOpacity() {
+      paintOpacity("hudPanelOpacity", "--hud-panel-a", $("pm-panelopacity"), $("pm-panelopacity-v"), $("pm-panelopacity-r"));
     }
     {
       const el = $("pm-btnopacity");
-      if (el) el.oninput = (e) => {
-        const n = +e.target.value;
-        store.set("hudBtnOpacity", Math.max(OPACITY_MIN, Math.min(OPACITY_MAX, Math.round(isFinite(n) ? n : 100))));
-        applyBtnOpacity();
-      };
+      if (el) el.oninput = (e) => { store.set("hudBtnOpacity", opacityIn(+e.target.value)); applyBtnOpacity(); };
       const rev = $("pm-btnopacity-r");
       if (rev) rev.onclick = () => { store.set("hudBtnOpacity", null); applyBtnOpacity(); };
+      const pel = $("pm-panelopacity");
+      if (pel) pel.oninput = (e) => { store.set("hudPanelOpacity", opacityIn(+e.target.value)); applyPanelOpacity(); };
+      const prev = $("pm-panelopacity-r");
+      if (prev) prev.onclick = () => { store.set("hudPanelOpacity", null); applyPanelOpacity(); };
     }
     const uiEl = $("pm-uiscale");
     if (uiEl) uiEl.oninput = (e) => {
@@ -168,6 +181,7 @@ const UiScale = (() => {
       applyHudScale();
     };
     applyBtnOpacity();
+    applyPanelOpacity();
     const btnEl = $("pm-btnscale");
     if (btnEl) btnEl.oninput = (e) => {
       store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale"), "hudBtnScale"));
@@ -294,7 +308,7 @@ const UiScale = (() => {
       },
     });
 
-    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyBtnOpacity, applyUpscale, upscaleOn,
+    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyBtnOpacity, applyPanelOpacity, applyUpscale, upscaleOn,
              applyOcclusion, occlusionOn, occlusionSupported };
   }
   return { create };

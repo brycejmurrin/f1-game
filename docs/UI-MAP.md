@@ -98,7 +98,8 @@ the same pairing (`js/input/phone-pad.js`; the protocol is in
 
 - HUD `ON`; Style `STANDARD`; Layout `FULL`; Map `ON`;
   Gaps `ON`; Line Colour `F1`; Line Opacity `NORMAL`; Brake Cue `OFF`.
-- HUD and touch size/opacity `100%`; Metrics Overlay `OFF`; Page `GOV`;
+- HUD and touch size/opacity `100%`, Panel Opacity `100%` (`#pm-panelopacity`,
+  the plates behind the readouts; HIGH CONTRAST keeps them solid); Metrics Overlay `OFF`; Page `GOV`;
   Side `AUTO`; Size `S`.
 - Renderer `THREE.JS`; Resolution `AUTO`; Fullscreen `OFF`; Upscale `OFF`;
   Occlusion `OFF`; Debris `ON`; Graphics `HIGH`.
@@ -110,8 +111,13 @@ the same pairing (`js/input/phone-pad.js`; the protocol is in
 
 - COLOURS: Theme, Menu Accent (swatches, custom hex), HUD Accent.
 - READABILITY: UI Size `100%` (`#pm-uiscale`, moved here from Display), Text
-  Size, High Contrast, Speed Units.
+  Size, High Contrast, Speed Units, Help Text `SHOW` (`#pm-helptext`; HIDE drops
+  the grey `.adv-help` lines in Settings and race setup, keeping status lines,
+  live regions and `data-help="keep"` warnings/readouts).
 - MOTION: Motion `ON` (global: menus, camera shake, flyby).
+- `#pm-pausemenu`, a closed PAUSE MENU fold whose summary reads `SHIPPED` or
+  `CUSTOM` (`js/ui/pause-opts.js`): Layout `GRID`, Side `CENTRE`, Background
+  `FULL`, Confirm Quit `ON`.
 - `#pm-titlescreen`, a closed TITLE SCREEN fold whose summary reads `SHIPPED`
   or `CUSTOM` (`js/ui/title-layout.js`): Title Intro `FULL`, Menu Wash `FULL`,
   Title Art `ON`, the TITLE LAYOUT sub-fold (`#pm-titlelayout`, built at
@@ -263,11 +269,11 @@ After `await __apex.race("monza")`, `#pausebtn` opens `#pausemenu`.
 | Control | ID | Result |
 |---|---|---|
 | Resume | `#pm-resume` | Return to the race |
-| Restart Race | `#pm-restart` | Restart the current race |
+| Restart Race | `#pm-restart` | Restart the current race (with Confirm Quit ON, the first press arms: "RESTART — TAP AGAIN") |
 | Settings… | `#pm-settings` | Open the same Settings index used from title |
 | How to Play… | `#pm-howto` | Open the help sheet |
 | Standings | `#pm-standings` | Open championship standings; hidden outside a championship |
-| Quit to Menu | `#pm-quit` | Leave the race for the title |
+| Quit to Menu | `#pm-quit` | Leave the race for the title (with Confirm Quit ON, the first press arms: "QUIT TO MENU — TAP AGAIN") |
 
 The pause card also has Previous, Pause and Next track controls in its music
 strip. Pause Settings exposes the same Controls, Driving, Display, Steering &

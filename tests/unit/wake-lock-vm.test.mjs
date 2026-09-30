@@ -56,9 +56,19 @@ const errorsSince = (m) => [
 const visListeners = [];
 const onVisibility = (fn) => { visListeners.push(fn); doc().addEventListener("visibilitychange", fn); };
 
+// PAUSE > QUIT as a player presses it: CONFIRM QUIT (js/ui/pause-opts.js, ON
+// by default) makes the first press an arm and the second the quit. The VM's
+// dispatch has no capture phase, so here the first press already quits and
+// the button is never armed — pressing again only while armed covers both.
+function quit() {
+  const q = doc().getElementById("pm-quit");
+  q.click();
+  if (q.classList.contains("armed")) q.click();
+}
+
 async function fresh() {
   // PAUSE > QUIT: quitToMenu() drops any held lock (its own dropRaceWake).
-  doc().getElementById("pm-quit").click();
+  quit();
   await tick();
   for (const fn of visListeners.splice(0)) doc().removeEventListener("visibilitychange", fn);
   doc().hidden = false;
@@ -119,7 +129,7 @@ test("quitting mid-race (no results screen) also releases it", async () => {
   await race();
   await waitFor(() => log().includes("request:screen"), "request:screen");
   doc().getElementById("pausebtn").click();
-  doc().getElementById("pm-quit").click();
+  quit();
   await waitFor(() => log().includes("release"), "release");
   assert.deepEqual(log(), ["request:screen", "release"]);
 });
