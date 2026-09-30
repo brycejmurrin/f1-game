@@ -307,7 +307,10 @@ test("with a canvas and the livery painter it paints twelve cells and uploads on
 test("every circuit with a pit wall builds one", () => {
   const T = ctxOnce().Tracks;
   const missing = [];
-  for (const def of T.LIST) {
+  // process.env.APEX_CIRCUITS narrows the walk to the circuits a circuit-only
+  // pull request touched (tools/lib/circuit-scope.cjs); unset = every circuit.
+  const { scope } = require(path.join(ROOT, "tools", "lib", "circuit-scope.cjs"));
+  for (const def of T.LIST.filter((d) => scope([d.id]).length)) {
     const t = built(def);
     if (!t.pit || !t.pit.hasWall) continue;
     if (!t.pitBuilt || t.pitBuilt.wall !== true) missing.push(def.id);

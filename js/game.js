@@ -1040,6 +1040,7 @@ let wxArc = null;     // WeatherArc.create(G, deps), same deferral — live weat
                       // and the dynamic arc (js/race/weather-arc.js)
 let tyres = null;     // TyreModel.create(G), same deferral
 let pits = null;      // PitLane.create(G), same deferral
+let _pitCrewDrawn = () => 0;   // filled after CarDraw.create — __apex.pit() drains it
 // NO PASSING UNDER THE SC / VSC, for the player (the AI holds station by
 // construction): a place gained must go back inside the window, or it is priced
 // at the flag (js/race/sporting-regs.js; FIA 2026 SR B5.12.2(c), B5.13.2(c)).
@@ -3378,6 +3379,7 @@ const G = {
   },
   get tyres() { return tyres; },
   get pits() { return pits; },
+  pitCrewDrawn: () => _pitCrewDrawn(),
   retireCar: (c, reason) => retireCar(c, reason),
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
@@ -3745,8 +3747,9 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 // stay here (the garage and the setup preview share them via deps).
 const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, teamDecalState, carDecalNum,
-        drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, drawCockpitRig,
+        drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
         warmCarAssets, prepareMenuCarAssets } = carDraw;
+_pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove the crew mesh submitted
 
 // The garage setup-preview camera and its #cs-view controls
 // (js/garage/setup-camera.js). Constructed HERE rather than with the other
@@ -3893,13 +3896,31 @@ async function awaitIntroWarm(current) {
   }
   return current();
 }
+// THE STUDIO DRIVE-OUT (GarageArrival.poseOut in js/garage/setup-camera.js): RACE!
+// before the circuit is ready plays the car out of the setup screen's garage AT
+// ONCE, under the card, while the circuit builds behind it. The circuit's warm
+// waits for it (render() draws nothing while a warm is pending), and the montage
+// then opens without the pit-lane drive-out it would repeat. Tagged with its intro
+// run: only that run closes it, so a stale run backing out never closes a newer one's.
+let _studio = null, _studioPlayed = false;
+function studioOpen(n) {
+  if (_studio) studioClose(_studio.n);
+  const ms = setupCam.startDriveOut();
+  if (ms > 0) { _studio = { at: performance.now(), ms, n }; _studioPlayed = true; setupPreviewOn = true; }
+}
+function studioClose(n) { if (_studio && _studio.n === n) { setupCam.stopDriveOut(); setupPreviewOn = false; _studio = null; } }
+async function studioDone(live, n) {
+  // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length).
+  while (_studio && _studio.n === n && live() && setupCam.driveOutLeft() > 0 && performance.now() - _studio.at < _studio.ms * 3) await menuSlice();
+  studioClose(n);
+}
 function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0) || motionReduced()) return false;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
-  loadingScreen.building(info0);
+  loadingScreen.building(info0); studioOpen(n);
   (async () => {
     try {
       await ensureScenery(idx);
@@ -3911,6 +3932,7 @@ function introBuild(go) {
       // the flyby's first frame is not the one that compiles every shader.
       const t1 = performance.now();
       await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
+      await studioDone(live, n);   // the warm would freeze the drive-out: it waits for the car to be out
       if (!live()) return;
       FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
@@ -3926,6 +3948,7 @@ function introBuild(go) {
     }
     finally {
       // Only this request may hand over; a quit or newer request owns its own screen.
+      studioClose(n);
       if (n === _introRun) {
         if (!live()) loadingScreen.stop();
         else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }   // "build" has no timer or skip: never leave it up
@@ -3947,8 +3970,9 @@ function introWarm(go) {
   if (!gfx.warm || (_warmKey === key && !(gfx.warming && gfx.warming()))) return false;
   const n = ++_introRun, settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
-  loadingScreen.building(loadingInfo());
+  loadingScreen.building(loadingInfo()); studioOpen(n);
   (async () => { try {
+      await studioDone(live, n);   // the drive-out first: a warm now would freeze it
       if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
         warmPrograms(); _menuGate.warm = 2;
         for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
@@ -3956,6 +3980,7 @@ function introWarm(go) {
       if (!(await awaitIntroWarm(live)) || !live()) return;
       try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
+    finally { studioClose(n); }
   })();
   return true;
 }
@@ -3998,7 +4023,8 @@ function raceIntro(go) {
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
   // THE GARAGE DRIVE-OUT opens it (js/camera/drive-out.js): not over a race joined
   // mid-way or watched, and not in a habitual skipper's short cut.
-  const lead = world && flybyShots && !(real && (real.watch || real.startLap > 1)) && loadingScreen.nextFlyMs() !== LoadingScreen.SHORT_FLY_MS ? driveOut.lead() : null;
+  const studio = !!built && _studioPlayed; _studioPlayed = false;   // the studio drive-out already opened this run
+  const lead = world && flybyShots && !studio && !(real && (real.watch || real.startLap > 1)) && loadingScreen.nextFlyMs() !== LoadingScreen.SHORT_FLY_MS ? driveOut.lead() : null;
   if (lead) flybyPlay = [lead].concat(flybyShots);
   const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
   const flyMs = loadingScreen.nextFlyMs(info.readMs);
@@ -6976,7 +7002,7 @@ function render(dt) {
   // still built — it is just not SHOWN until the player commits to the race, where
   // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
   const menuBlank = (state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld()))
-    || loadingScreen.phase() === "build";   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
+    || (loadingScreen.phase() === "build" && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
@@ -8104,6 +8130,14 @@ function render(dt) {
         GameCams.seatFwd(visorEye ? "visor" : "cockpit"), GameCams.seatUp(visorEye ? "visor" : "cockpit"));
       basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
       drawCockpitRig(c, _cockMat, dt, paint, visorEye);   // VISOR: no steering wheel
+      // THE STOP'S CREW still: cockpit/visor continue before the exterior path,
+      // so without this the player's own stop drew no crew at all. Kit stands
+      // on the grounded basis (not the camera-anchored viewmodel). The
+      // viewmodel fronts already take stopAnim's axle slide inside drawCockpitRig.
+      if (c.pitState === "box") {
+        _wheelOpts.emissive = night ? 0.12 : 0;
+        drawPitCrew(c, _groundMat, _wheelOpts);
+      }
       continue;
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
@@ -8114,11 +8148,14 @@ function render(dt) {
       queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
-      if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // the jacks and guns, on the ground beside it
+      if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // crew + kit, on the ground beside it
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
       queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
+      // A loaded glb is one piece (no separate wheels), but the crew still
+      // stands in the box — and without this a glb stop was an empty bay.
+      if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);
     }
     // ACTIVE AERO: the moveable upper wing elements, FRONT and REAR, swung
     // between their Z-mode and X-mode angles by this car's live `aeroX`. The

@@ -91,6 +91,29 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   await awaitPresentedFrame(page, 12000);
   const withMirror = await mirrorPatch(page, on.m.rect);
 
+  // A TAP collapses it to the chip (the phone toggle — no M key there), and a
+  // tap on the chip brings it back; the stored setting is untouched.
+  // Hit-tested, not page.click(): Playwright's "stable" check waits on
+  // animation frames, and a SwiftShader GLX frame is seconds long here. What a
+  // finger gets is the TOP element at the point, so that is what is asserted.
+  const tapAt = async (sel) => {
+    const pt = await page.evaluate((s) => {
+      const r = document.querySelector(s).getBoundingClientRect();
+      const x = r.left + r.width / 2, y = r.top + r.height / 2;
+      const top = document.elementFromPoint(x, y);
+      return { x, y, top: top && top.id };
+    }, sel);
+    expect(pt.top, `${sel} is the element under its own centre`).toBe(sel.slice(1));
+    await page.mouse.click(pt.x, pt.y);
+  };
+  await tapAt("#hud-mirror");
+  await page.waitForFunction(() => { const m = window.__apex.mirror(); return m.collapsed && !m.shown; }, null, { polling: 100, timeout: FRAME_MS });
+  expect(await page.isVisible("#hud-mirror-chip")).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem("apex26.hudMirror"))).toBe('"on"');
+  await tapAt("#hud-mirror-chip");
+  await page.waitForFunction(() => { const m = window.__apex.mirror(); return !m.collapsed && m.shown; }, null, { polling: 100, timeout: FRAME_MS });
+  expect(await page.isVisible("#hud-mirror-chip")).toBe(false);
+
   // The MIRROR key: what shows goes off, and the backend stops compositing.
   await page.keyboard.press("KeyM");
   await page.waitForFunction(() => {

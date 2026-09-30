@@ -27,10 +27,12 @@ name: GPU census
 #
 # Dispatch, and NIGHTLY (2026-09-01) — never on push. It costs runner minutes on
 # images the normal gate never uses (macOS bills at a multiplier), so it runs
-# when someone asks a question and once a night beside ci.yml's boot group
-# (same cron, PROCESS-SPEEDUP-2026-09 §4.5): the two real-GPU defects the
-# Verdict step has caught were found only when someone happened to dispatch
-# this, and a gate that fires on request catches a regression exactly once.
+# when someone asks a question and once a night STAGGERED from ci.yml's boot
+# group (ci.yml at 04:17 UTC, this at 05:47 — not the shared 03:17 that stacked
+# both on the same 20 slots; PROCESS-SPEEDUP-2026-09 §4.5). The two real-GPU
+# defects the Verdict step has caught were found only when someone happened to
+# dispatch this, and a gate that fires on request catches a regression exactly
+# once.
 #
 # A scheduled run has NO inputs — every `inputs.*` reads as the empty string —
 # so each input used below carries its dispatch default inline (`|| 'x'`), and
@@ -46,7 +48,7 @@ name: GPU census
 
 on:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "47 5 * * *"
   workflow_dispatch:
     inputs:
       track:

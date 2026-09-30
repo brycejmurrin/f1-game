@@ -129,6 +129,34 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   measured locally at `--jobs=4`), and `page` / `slow` stand alone. Expected
   wall ≈ 3 min against 5.6. The slice names are required checks: the rule
   must carry the six new names before the old three are dropped.
+- **A circuit-only diff runs only the node scripts that build that circuit**
+  (2026-09-30, `node-plan.mjs` `circuitsOf`/`scriptBuilds`): every
+  `game-vm-b` twin races a fixed circuit (monza for 30 of 40), so an imola
+  scenery wave ran both `vm-b` halves for nothing. The planner reads each
+  script's files for the circuit ids they name (string literals, one hop
+  into `tests/helpers/`, the foundation glob), and skips a script whose
+  files never build the touched circuit; a file that walks the roster keeps
+  its script. imola → `game-vm-a` (scoped) + `node-slow` (foundation-core
+  builds it); portimao → `game-vm-a` alone; monza → everything.
+- **Sweeps, second pass** (2026-09-30, measured on #510, an imola comment-only
+  PR — the first circuit-only run through the lane): the sweeps step took
+  344 s scoped, of which `lamp-fixture-anchor` 54 s, `pit-signs` 69 s,
+  `props-over-road` 68 s and `pit-complex` 75 s still walked all 52 circuits,
+  and `verify-track --all` another 70 s. The first three and `verify-track`
+  now read `APEX_CIRCUITS` (their anti-vacuity tests build fixtures or named
+  circuits, so they hold at any scope); `pit-complex` stays whole. Expected
+  on a circuit-only PR: sweeps step ≈ 2.5 min, verify-track ≈ 2 s.
+- **The deploy push and the train scope too** (2026-09-30): the push that
+  merged a circuit-only PR rebuilt the whole fleet the PR had just scoped
+  (two elevation shards, the sweeps, verify-track: ~6 runner-minutes per
+  merge). The tip is gated whole inductively — the previous tip passed its
+  gate and this push's diff against it is gated for what it touched — so the
+  node plan and the sweeps filter now diff a deploy push against its `before`
+  when `tools/ci/base-green.sh` finds a completed, successful ci.yml or
+  pages.yml run on that exact sha (`green` only: a red or unknown previous
+  tip, a first push and a force push run everything). A Pages call's
+  before_sha is the live commit, gated whole by definition, so the train
+  scopes without a lookup. The selected gate already diffed a push this way.
 - **49 unit files run twice per PR** (in tooling-fast under guards, and in
   the `vm-b` slice's topical groups). The rebalanced slices keep that off the
   wall clock. Removing it means changing what the topical groups mean.

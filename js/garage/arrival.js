@@ -45,6 +45,21 @@ const GarageArrival = (function () {
       eye: left ? [-3.8, 2.1, -4.8] : [4.1, 2.25, -4.9],
       aim: [0, 0.8, t < DOOR_S ? 6.2 : z * 0.48 + 0.8] };
   }
+  /* THE DRIVE-OUT: the arrival in reverse, for the pre-race screen when RACE!
+   * beats the circuit's build (js/game.js introBuild/introWarm). The shutter is
+   * already up; the car sits a beat, then rolls out nose first and on out of the
+   * door while the camera, at the arrival's interior three-quarter, follows it.
+   * No circuit is needed — this is the setup screen's own room — so it plays the
+   * moment START is pressed, while the circuit builds behind it. */
+  const OUT_HOLD = 1.1, OUT_RUN = 3.9, OUT_DURATION = OUT_HOLD + OUT_RUN + 0.3;
+  function poseOut(seconds, config = DEFAULT) {
+    const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
+    const z = 13 * ease((t - OUT_HOLD) / OUT_RUN);   // out of the door (z 6.4) and clear of it
+    const right = config.angle === "right";
+    return { active: t < OUT_DURATION, fov: config.fov, door: 1, z, label: "LEAVING THE GARAGE",
+      eye: right ? [4.1, 2.25, -4.9] : [-3.8, 2.1, -4.8],
+      aim: [0, 0.8, Math.min(9, 1.2 + z * 0.62)] };
+  }
   function create($, reducedMotion, readSettings = () => DEFAULT) {
     let state = null, time = 0, config = DEFAULT;
     const root = $("carsetup"), panel = $("cs-inner"), controls = $("cs-stack");
@@ -82,5 +97,5 @@ const GarageArrival = (function () {
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }
-  return Object.freeze({ create, pose, DURATION, DEFAULT, settings, bindSettings });
+  return Object.freeze({ create, pose, poseOut, DURATION, OUT_DURATION, DEFAULT, settings, bindSettings });
 })();

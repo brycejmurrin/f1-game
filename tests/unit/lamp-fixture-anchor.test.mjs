@@ -122,7 +122,10 @@ const survey = (() => {
   return () => {
     if (out) return out;
     out = { orphans: [], shortPools: [], darkRuns: [] };
-    for (const def of Tracks().LIST) {
+    // process.env.APEX_CIRCUITS narrows the pass to the circuits a circuit-only
+    // pull request touched (tools/lib/circuit-scope.cjs); unset = every circuit.
+    const { scope } = require("../../tools/lib/circuit-scope.cjs");
+    for (const def of Tracks().LIST.filter((d) => scope([d.id]).length)) {
       const { track, L } = nightLights(def.id);
       const posts = track.lampPosts || [];
       const n = (L.length / STRIDE) | 0;

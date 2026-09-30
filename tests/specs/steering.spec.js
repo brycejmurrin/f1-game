@@ -42,11 +42,27 @@ import { forgetStored } from "../helpers/shared-page.js";
    camera and freeze between tests, which is all the isolation a spec that
    re-places the car with jump() on every run actually needs. */
 async function startLiveRace(page) {
+  // Empty the AI field: these cases measure the player's line alone. A packed
+  // grid turns a held-lock slide into contact/rescue noise (CI 36649674195).
+  const clearField = () => page.evaluate(() => {
+    window.__apex.go();
+    try { window.__apex.rivals([]); } catch (_) { /* older builds */ }
+  });
   const live = await page.evaluate(() => {
     try { return !!(window.__apex && window.__apex.info().track != null); } catch (_) { return false; }
   });
-  if (live) { await page.evaluate(() => window.__apex.go()); return; }
+  if (live) { await clearField(); return; }
   await page.goto("/");
+  // Wait for boot BEFORE #mb-race: the click is a bare evaluate with no
+  // actionability poll, so firing it before the title handlers attach leaves
+  // the page on title and show("select") times out. CI #36646165077 on
+  // 70b848ce9 failed three steering cases that way once select-specs pulled
+  // this file in (Input.ready latch harden). Smoke / gamepad prove the same
+  // #mb-race → #select path when they wait for __apex first.
+  await page.waitForFunction(
+    () => window.__apex != null && !!document.getElementById("mb-race"),
+    null, { polling: 100, timeout: BOOT_MS }
+  );
   const show = (id) => page.waitForFunction(
     (n) => { const el = document.getElementById(n); return !!el && !el.hidden; },
     id, { polling: 100, timeout: 30_000 }
@@ -61,7 +77,7 @@ async function startLiveRace(page) {
     () => window.__apex && window.__apex.info().track != null,
     null, { polling: 100, timeout: BOOT_MS }
   );
-  await page.evaluate(() => window.__apex.go());
+  await clearField();
 }
 
 /* THIS FILE COSTS MORE THAN THE PROJECT DEFAULT ALLOWS, and says so here
@@ -227,12 +243,38 @@ test.describe("Apex 26 — steering", () => {
     // never cared which side — it measures authority relative to coasting.)
     await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     const lockDir = Math.sign(k0);
-    const zero = await run(page, { frac, speed: 22, steer: 0, throttle: false, ticks: 75 });
-    const held = await run(page, { frac, speed: 22, steer: lockDir, throttle: false, ticks: 75 });
-    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0.7 }));
+    // ON-TRACK WINDOW. At the old 22 m/s × 75 ticks the held run saturates on
+    // the wall (x ≈ ±hw) while coasting is still free — so as zero.dx keeps
+    // growing, (dxHeld − dxZero) shrinks or flips and the >2 m gate flakes
+    // (CI 36649674195: −16 … +0.2). 18 m/s × 55 ticks keeps BOTH runs inside
+    // |x| < hw − 0.5 on bahrain's first real corner (measured) while still
+    // clearing the same 2 m authority bar. Assertion unchanged.
+    //
+    // FROZEN WHILE MEASURED (2026-09-30). `run()` steps the sim by hand, but
+    // the page's own frame loop was stepping it too, between the evaluates:
+    // every wall-clock frame from jump() to the last step() added ticks the
+    // recipe never counted, so a slow runner held lock for LONGER and the
+    // car left the window — train 36656970688 on 8a5fe2d5: held.after.x
+    // 7.446 against hw − 0.5 = 6.3, on a tree with no physics change since
+    // this recipe passed (#488). docs/notes/DEFECT-LEDGER.md (2026-09-22,
+    // item 2) had already named the cure: freeze + field clear. The field
+    // clear landed; this is the freeze. With G.frozen the loop skips
+    // update() and step() still calls it directly (js/agent/apex.js), so
+    // exactly 3 + 55 ticks run per recipe, on every machine. The shared page
+    // resets freeze between tests; the finally covers a failed expect.
+    await page.evaluate(() => window.__apex.freeze(true));
+    let zero, held;
+    try {
+      zero = await run(page, { frac, speed: 18, steer: 0, throttle: false, ticks: 55 });
+      held = await run(page, { frac, speed: 18, steer: lockDir, throttle: false, ticks: 55 });
+    } finally {
+      await page.evaluate(() => { window.__apex.freeze(false); window.__apex.setPhysics({ roadFollow: 0 }); });
+    }
 
     const dxZero = zero.after.x - zero.before.x;
     const dxHeld = held.after.x - held.before.x;   // should be far more toward lockDir
+    expect(Math.abs(held.after.x)).toBeLessThan(held.before.hw - 0.5); // still on track
+    expect(Math.abs(zero.after.x)).toBeLessThan(zero.before.hw - 0.5);
     // Held lock must move the car at least 2 m further toward the steered side
     // than coasting does — i.e. the driver genuinely controls the line.
     expect((dxHeld - dxZero) * lockDir).toBeGreaterThan(2);
@@ -362,7 +404,11 @@ test.describe("Apex 26 — steering", () => {
 test.describe("Apex 26 — keyboard latch", () => {
   test("keyup clears throttle even when focus moved to a non-HUD control", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    // Input.ready(), not bare Input: the façade exists at input.js eval, before
+    // init() wires onKey. Same boot-race class as CI #6199 / touch-pedals.
+    await page.waitForFunction(
+      () => window.__apex != null && typeof Input !== "undefined" && Input.ready && Input.ready(),
+      null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const el = document.createElement("input");   // interactive, NOT a HUD control
       el.type = "text";
@@ -401,7 +447,10 @@ test.describe("Apex 26 — keyboard latch", () => {
   // off-track auto-rescue. Verify lostpointercapture releases the hold.
   test("on-screen GAS releases when pointer capture is lost mid-hold", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    // wireHold attaches in init(); Input.ready() is the gate (CI #6199 class).
+    await page.waitForFunction(
+      () => window.__apex != null && typeof Input !== "undefined" && Input.ready && Input.ready(),
+      null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const el = document.getElementById("btn-throttle");   // wired via wireHold at init
       const pe = (type) => el.dispatchEvent(new PointerEvent(type, { pointerId: 1, bubbles: true, cancelable: true }));
@@ -434,7 +483,9 @@ test.describe("Apex 26 — keyboard latch", () => {
   // then endlessly re-trips the off-track auto-rescue.
   test("hold survives an OS interruption without latching (ghost pointerId)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(
+      () => window.__apex != null && typeof Input !== "undefined" && Input.ready && Input.ready(),
+      null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const el = document.getElementById("btn-throttle");
       const pe = (type, id, target) => (target || el).dispatchEvent(
@@ -463,7 +514,9 @@ test.describe("Apex 26 — keyboard latch", () => {
   // pointer that lifted ANYWHERE as no longer holding any button.
   test("a pointerup landing on another element still releases the pedal", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null && typeof Input !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(
+      () => window.__apex != null && typeof Input !== "undefined" && Input.ready && Input.ready(),
+      null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const el = document.getElementById("btn-throttle");
       el.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 5, bubbles: true, cancelable: true }));

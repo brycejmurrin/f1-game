@@ -32,6 +32,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { pick } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, dropBootFallback, specsOf } from "./select-specs.mjs";
 import { ADAPTED } from "./twinned-specs.mjs";
@@ -79,6 +80,54 @@ export function adaptedGroups(scripts = pkgScripts()) {
 
 const pkgScripts = () => JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
 
+/* WHICH CIRCUITS DOES A SCRIPT BUILD? (2026-09-30) Every game-vm-b twin races
+ * a fixed circuit — monza for 30 of 40, a handful on spa, baku, monaco,
+ * bahrain, zandvoort, jeddah, shanghai, singapore, redbull — so a circuit-only
+ * diff to imola ran both halves (4 min of runner) for nothing. Read from the
+ * files, never listed: the circuit ids a file (or a tests/helpers module it
+ * imports) names as a string literal, plus every foundation circuit for a file
+ * that globs the `*-foundation.spec.js` twins. A file that walks the whole
+ * roster (the manifest's CIRCUITS, a loop over Tracks.LIST) builds EVERY
+ * circuit and keeps its script in the plan — fail safe, as everything here. */
+const CIRCUIT_IDS = () => require_cjs("../manifest.cjs").CIRCUITS;
+const require_cjs = (rel) => createRequire(import.meta.url)(rel);
+const WHOLE_ROSTER = [/manifest\.cjs"\)\.CIRCUITS/, /for\s*\([^)]*\bof\s+[\w.]*Tracks\.LIST\b/, /Tracks\.LIST\.(map|forEach|filter|some|every|reduce|flatMap)\(/,
+  /readdirSync\([^)]*circuits/];
+const FOUNDATION_GLOB = /-foundation\.spec\.js/;
+const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith("-foundation.spec.js"))
+  .map((f) => f.replace("-foundation.spec.js", "").replace(/-/g, "_"));
+
+/** The circuit ids one test file can build: a Set, or `null` for the whole roster. */
+export function circuitsOf(file, seen = new Set()) {
+  if (seen.has(file)) return new Set();
+  seen.add(file);
+  let text;
+  try { text = fs.readFileSync(path.join(ROOT, file), "utf8"); } catch { return null; }   // unreadable: assume everything
+  if (WHOLE_ROSTER.some((re) => re.test(text))) return null;
+  const ids = new Set();
+  if (FOUNDATION_GLOB.test(text) && /readdirSync\(/.test(text)) for (const id of foundationIds()) ids.add(id);
+  for (const id of CIRCUIT_IDS()) if (new RegExp(`["'\`]${id}["'\`]`).test(text)) ids.add(id);
+  for (const m of text.matchAll(/(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+)["']/g)) {
+    const sub = circuitsOf(path.posix.join(path.posix.dirname(file), m[1]), seen);
+    if (sub === null) return null;
+    for (const id of sub) ids.add(id);
+  }
+  return ids;
+}
+
+/** Does any file of `script` build one of `circuits`? Unknown script or an
+ *  unreadable file reads as yes. */
+export function scriptBuilds(script, circuits, groups = groupsJson()) {
+  const files = groups[script]?.files;
+  if (!files) return true;
+  for (const f of files) {
+    const ids = circuitsOf(f);
+    if (ids === null || circuits.some((c) => ids.has(c))) return true;
+  }
+  return false;
+}
+const groupsJson = () => JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups;
+
 /** The plan for a changed-file list. `ref` is the diff base (for the
  *  per-circuit data files); empty keeps those files TRACKED. */
 export function plan(changed, ref = "", scripts = pkgScripts()) {
@@ -100,10 +149,16 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
   dropBootFallback(g);
   const groups = [...g.keys()].sort();
   if (!groups.length) return all("no pick-tests rule matched this diff");
-  const run = [], skip = [];
-  for (const [script, needs] of Object.entries(scoped))
-    (needs.some((n) => g.has(n)) ? run : skip).push(script);
-  return { reason: "matched", all: false, groups, circuits: circ.scoped ? circ.ids : [], run, skip };
+  const run = [], skip = [], why = {};
+  const circuits = circ.scoped ? circ.ids : [];
+  for (const [script, needs] of Object.entries(scoped)) {
+    if (!needs.some((n) => g.has(n))) { skip.push(script); why[script] = "no routed group"; continue; }
+    // A circuit-only diff: a script whose files never build the touched
+    // circuit cannot see the change (circuitsOf reads the files).
+    if (circuits.length && !scriptBuilds(script, circuits)) { skip.push(script); why[script] = `no file builds ${circuits.join(",")}`; continue; }
+    run.push(script);
+  }
+  return { reason: "matched", all: false, groups, circuits, run, skip, why };
 }
 
 export function changedSince(ref) {
@@ -136,6 +191,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   else {
     console.log(`plan: ${p.reason}${p.all ? " -> every script runs" : ""}; groups: ${p.groups.join(", ") || "none"}`);
     for (const s of p.run) console.log(`RUN  ${s}${p.circuits.length && s === "test:game-vm-a" ? ` (APEX_CIRCUITS=${p.circuits.join(",")})` : ""}`);
-    for (const s of p.skip) console.log(`SKIP ${s}`);
+    for (const s of p.skip) console.log(`SKIP ${s}${p.why?.[s] ? ` (${p.why[s]})` : ""}`);
   }
 }
