@@ -40,9 +40,23 @@ async function qualiToGrid(page) {
   await page.locator("#q-go").click();
 }
 
-/** Settled soft blit (or a no-op when GLX soft-present is off), then screenshot. */
+/** Settled capture then screenshot.
+ *  Soft blit only advances while GLX is painting. Playwright's headless UA arms
+ *  softPresent globally, but menu screens never blit — awaitSoftCapture then
+ *  hangs 20 s (CI #602 portrait 01–03). Wait for a soft frame when a track is
+ *  loaded; otherwise settle on a double-rAF paint (same pattern as hud-mirror /
+ *  ui-redesign) instead of a fixed sleep. */
 async function shot(page, name) {
-  await awaitSoftCapture(page);
+  const hasTrack = await page.evaluate(() => {
+    try { return window.__apex?.info?.()?.track != null; } catch (_) { return false; }
+  });
+  if (hasTrack) {
+    await awaitSoftCapture(page);
+  } else {
+    await page.evaluate(() => new Promise((r) => {
+      requestAnimationFrame(() => requestAnimationFrame(r));
+    }));
+  }
   await page.screenshot({ path: galleryPath("ui-audit", `${name}.png`), fullPage: false });
 }
 
