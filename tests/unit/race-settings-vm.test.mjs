@@ -19,6 +19,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -81,6 +83,129 @@ test("solo setup initializes once per track and preserves a draft on re-entry", 
   assert.equal(g.G.raceWeather, "rain");
   assert.equal(g.G.raceTimeOfDay, "night");
   assert.equal(open("monza", false), 3, "changing circuit starts a new draft");
+});
+
+test("REMEMBER LAST RACE SETUP: a stored raceDraft opens the next solo circuit in the live game", () => {
+  const G = g.G;
+  G.timeTrial = false; G.seasonMode = false;
+  try {
+    G.store.set("raceDraft", { laps: "10", weather: "rain", tod: "night", mixed: true });
+    assert.equal(open("spa", false), 10, "the remembered rung, not GAME_LAPS");
+    assert.equal(G.raceWeather, "rain");
+    assert.equal(G.raceTimeOfDay, "night");
+    assert.equal(G.raceChangeable, true, "MIXED is carried to G.raceChangeable");
+    G.store.set("raceDraft", { laps: "FULL", weather: "fog", tod: "dusk", mixed: false });
+    assert.equal(open("monaco", false), full("monaco"), "FULL is this circuit's own FULL");
+    assert.equal(G.raceWeather, "fog");
+    assert.equal(G.raceChangeable, false);
+  } finally {
+    G.store.rawDel("raceDraft");
+    G.raceChangeable = false; G.wxArcPlan = null;
+  }
+  assert.equal(open("monza", false), 3, "no draft stored: the default 3 again");
+});
+
+function RaceSettingsPure() {
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL("../../js/race/race-settings.js", import.meta.url), "utf8").replace(/^const RaceSettings\b/m, "var RaceSettings"), ctx);
+  return ctx.RaceSettings;
+}
+
+// ── REMEMBER LAST RACE SETUP through the real START handler ─────────────────
+// A RaceSettings instance of its own on a mini DOM, so rs-go can be pressed
+// without starting a race: startRace/raceIntro are counters. What is asserted is
+// the store and G, which is what the next open reads.
+function sheet(o = {}) {
+  const dom = makeDom();
+  const ctx = vm.createContext({ document: dom.document, Log: { info() {}, warn() {} }, queueMicrotask });
+  vm.runInContext(readFileSync(new URL("../../js/race/race-settings.js", import.meta.url), "utf8").replace(/^const RaceSettings\b/m, "var RaceSettings"), ctx);
+  const disk = new Map();
+  const store = { get: (k, d) => (disk.has(k) ? JSON.parse(disk.get(k)) : d), set: (k, v) => { disk.set(k, JSON.stringify(v)); return true; } };
+  const LIST = [{ id: "spa", gpLaps: 44 }, { id: "monaco", gpLaps: 79 }, { id: "zandvoort", gpLaps: 72 }];
+  let starts = 0;
+  const G = {
+    flow: "gp", session: "race", trackIdx: 0, season: null, daily: null, netLobby: { roomChanged() {} },
+    raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "default", raceChangeable: false, wxArcPlan: null,
+    difficulty: "hard", raceGrid: "tier", champGrid: "champ", raceReliability: "off", raceTyreWear: "off",
+    raceQuali: false, duel: false, duelLegend: "", soundOn: false, teamIdx: 0, pits: null,
+    cautionInfo: () => ({ enabled: false }),
+    $: (id) => dom.byId(id), store, GAME_LAPS: 3, TT_LAPS: 4,
+    scheduleFlybyTrack() {}, setCautionEnabled() {}, startRace() { starts++; }, buildSelect() {},
+    els: { selGo: dom.byId("sel-go") }, openGarage() {},
+  };
+  Object.assign(G, o);
+  const rs = ctx.RaceSettings.create(G, {
+    GameAudio: {}, Tracks: { LIST }, SettingRow: { paint() {}, disable() {}, wire() {} },
+    DrivingLine: { mode: () => "off" }, SeasonCal: { formatLaps: (n) => n, quali: () => false, qualiNext: () => false },
+    qualiResults: () => null, openQuali() {}, enableTilt() {}, getSteerMode: () => "buttons", buildStandings() {},
+    raceIntro: (go) => go(),
+  });
+  rs.wireButtons();
+  const at = (id) => { G.trackIdx = LIST.findIndex((t) => t.id === id); rs.openRaceSettings("select"); return G.raceLaps; };
+  const start = () => dom.byId("rs-go").onclick();
+  return { G, rs, disk, at, start, starts: () => starts };
+}
+
+test("REMEMBER LAST RACE SETUP: START with 10 / rain / night opens the next circuit the same way", () => {
+  const h = sheet();
+  assert.equal(h.at("spa"), 3, "nothing stored: the default");
+  assert.equal(h.disk.has("raceDraft"), false, "opening the sheet writes nothing");
+  Object.assign(h.G, { raceLaps: 10, raceWeather: "rain", raceTimeOfDay: "night", raceChangeable: true });
+  h.start();
+  assert.equal(h.starts(), 1, "START still starts the race");
+  assert.deepEqual(JSON.parse(h.disk.get("raceDraft")), { weather: "rain", tod: "night", mixed: true, laps: "10" });
+  Object.assign(h.G, { raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "default", raceChangeable: false });
+  assert.equal(h.at("monaco"), 10, "10 LAPS carried to a different circuit");
+  assert.equal(h.G.raceWeather, "rain");
+  assert.equal(h.G.raceTimeOfDay, "night");
+  assert.equal(h.G.raceChangeable, true);
+});
+
+test("REMEMBER LAST RACE SETUP: FULL is a rung, so it maps to the new circuit's FULL", () => {
+  const h = sheet();
+  h.at("spa");
+  h.G.raceLaps = 44;          // FULL at Spa
+  h.start();
+  assert.equal(JSON.parse(h.disk.get("raceDraft")).laps, "FULL");
+  assert.equal(h.at("monaco"), 79, "FULL at Spa is FULL (79) at Monaco, not 44");
+  h.at("spa"); h.G.raceLaps = 25; h.start();
+  assert.equal(h.at("zandvoort"), 25);
+  // Pure halves: a rung at or past a shorter FULL is that FULL; junk is dropped.
+  const RS = RaceSettingsPure();
+  assert.deepEqual(JSON.parse(JSON.stringify(RS.draftFor({ laps: "25", weather: "rain" }, 20))), { laps: 20, weather: "rain" });
+  assert.equal(RS.draftFor({ laps: "7", weather: "snow", tod: "noon", mixed: "yes" }, 50), null);
+  assert.equal(RS.draftFor([1, 2], 50), null);
+  assert.equal(RS.draftOf(79, 79, "dry", "day", false).laps, "FULL");
+});
+
+test("REMEMBER LAST RACE SETUP: championship, time trial, the Daily and a VS FRIEND room neither save nor restore", () => {
+  const stored = { laps: "10", weather: "rain", tod: "night", mixed: true };
+  for (const [name, o] of [
+    ["season", { flow: "season" }], ["career", { flow: "career" }],
+    ["time trial", { session: "tt" }],
+    ["daily", { session: "tt", daily: { current: () => ({ day: "2026-09-30", weather: "overcast", tod: "dawn" }) } }],
+  ]) {
+    const h = sheet(o);
+    h.disk.set("raceDraft", JSON.stringify(stored));
+    h.at("monaco");
+    assert.notEqual(h.G.raceWeather, "rain", name + ": the draft is not restored");
+    assert.notEqual(h.G.raceTimeOfDay, "night", name);
+    assert.equal(h.G.raceChangeable, false, name);
+    h.disk.delete("raceDraft");
+    Object.assign(h.G, { raceLaps: 3, raceWeather: "wet", raceTimeOfDay: "dusk" });
+    h.start();
+    assert.equal(h.disk.has("raceDraft"), false, name + ": START does not save");
+  }
+  const room = sheet();
+  room.rs.setNetRoom(true);
+  room.disk.set("raceDraft", JSON.stringify(stored));
+  room.at("monaco");
+  assert.equal(room.G.raceWeather, "dry", "a room: the host's staging, never the draft");
+  room.disk.delete("raceDraft");
+  room.G.raceWeather = "wet";
+  room.start();
+  assert.equal(room.disk.has("raceDraft"), false, "a room's CONFIRM FOR LOBBY does not save");
+  assert.equal(room.starts(), 0);
 });
 
 test("a championship's 57 LAPS is clamped to a shorter FULL, never raised to a longer one (ed11e6108)", () => {

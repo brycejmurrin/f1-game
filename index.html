@@ -397,11 +397,19 @@
     // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
     // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
     // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
-    var mv = null, ti = null, mw = null, ta = null;
+    // Pause menu (js/ui/pause-opts.js): apex26.pauseLayout ("list"),
+    // apex26.pauseSide ("left" | "right"), apex26.pauseDim ("soft" | "off").
+    // Help text (js/ui/appearance-opts.js): apex26.menuHelp ("off").
+    // Unset, or the shipped answer, writes nothing.
+    var mv = null, ti = null, mw = null, ta = null, pl = null, ps = null, pd = null, mh = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
     try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
     try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
     try { ta = JSON.parse(localStorage.getItem("apex26.titleArt")); } catch (e) { /* unset */ }
+    try { pl = JSON.parse(localStorage.getItem("apex26.pauseLayout")); } catch (e) { /* unset */ }
+    try { ps = JSON.parse(localStorage.getItem("apex26.pauseSide")); } catch (e) { /* unset */ }
+    try { pd = JSON.parse(localStorage.getItem("apex26.pauseDim")); } catch (e) { /* unset */ }
+    try { mh = JSON.parse(localStorage.getItem("apex26.menuHelp")); } catch (e) { /* unset */ }
     try {
       if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
         document.documentElement.dataset.motion = "reduce";
@@ -415,6 +423,13 @@
     try {
       if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      var de = document.documentElement.dataset;
+      if (pl === "list") de.pauseLayout = pl;
+      if (ps === "left" || ps === "right") de.pauseSide = ps;
+      if (pd === "soft" || pd === "off") de.pauseDim = pd;
+      if (mh === "off") de.menuHelp = mh;
+    } catch (e) { /* PauseOpts / AppearanceOpts answer at eval */ }
     var b = document.body;
     if (!b || !window.getComputedStyle) return;
     try {
@@ -739,9 +754,9 @@
             <p id="pm-phonepad-status" class="adv-help" role="status"></p>
             <div id="pm-phonepad-pair" hidden>
               <div id="pm-phonepad-text">
-                <p class="adv-help">ROOM CODE</p>
+                <p class="adv-help" data-help="keep">ROOM CODE</p>
                 <output id="pm-phonepad-code" aria-live="polite"></output>
-                <p class="adv-help">On the phone: scan the code with the camera, or open <span id="pm-phonepad-url"></span> and type the room code. Both devices need internet to pair; the same Wi&#8209;Fi gives the quickest steering.</p>
+                <p class="adv-help" data-help="keep">On the phone: scan the code with the camera, or open <span id="pm-phonepad-url"></span> and type the room code. Both devices need internet to pair; the same Wi&#8209;Fi gives the quickest steering.</p>
               </div>
               <figure class="vs-qr-wrap" id="pm-phonepad-qr-wrap" hidden>
                 <canvas id="pm-phonepad-qr" width="320" height="320" role="img"
@@ -825,7 +840,7 @@
           <p id="pm-coach-help" class="adv-help">Short text tips while you drive. You stay in control.</p>
           <p id="pm-coach-status" class="adv-help" role="status">Turn on the coach to get driving tips.</p>
           <p id="pm-coach-tip">Your next tip will appear here after you drive.</p>
-          <p id="pm-lap-report" class="adv-help">Drive a lap with a saved best on this circuit to see where the time went.</p>
+          <p id="pm-lap-report" class="adv-help" data-help="keep">Drive a lap with a saved best on this circuit to see where the time went.</p>
           <details id="pm-braking-cues">
             <summary class="adv-more-btn">BRAKING CUES</summary>
             <div role="group" aria-label="Braking cues">
@@ -855,11 +870,11 @@
                 <button id="pm-drill-next" type="button" data-step="1" aria-label="Next practice goal">&rsaquo;</button>
               </div>
             </div>
-            <p id="pm-drill-status" class="adv-help"></p>
+            <p id="pm-drill-status" class="adv-help" data-help="keep"></p>
             <button id="pm-practice-set" type="button" aria-describedby="pm-practice-state">SAVE STARTING POINT</button>
             <button id="pm-practice-retry" type="button" aria-describedby="pm-practice-state" disabled>TRY AGAIN</button>
             <button id="pm-practice-rewind" type="button" aria-describedby="pm-practice-state" disabled>REWIND 10s</button>
-            <p id="pm-practice-state" class="adv-help">Practising makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again. Rewind restores the full grid and race clock.</p>
+            <p id="pm-practice-state" class="adv-help" data-help="keep">Practising makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again. Rewind restores the full grid and race clock.</p>
           </details>
           <details id="pm-pit-panel">
             <summary class="adv-more-btn">PIT STRATEGY</summary>
@@ -871,15 +886,15 @@
                 <button id="pm-pit-choice-next" type="button" data-step="1" aria-label="Next next tyres">&rsaquo;</button>
               </div>
             </div>
-            <p id="pm-pit-help" class="adv-help">Choose the tyres to fit at your next stop. AUTO lets the game choose. Drive into the pit entry to stop; this choice does not call you into the pits. Requires tyre wear to be enabled.</p>
-            <p id="pm-pit-estimate" class="adv-help"></p>
-            <p id="pm-stint-forecast" class="adv-help"></p>
-            <p id="pm-energy-forecast" class="adv-help"></p>
+            <p id="pm-pit-help" class="adv-help" data-help="keep">Choose the tyres to fit at your next stop. AUTO lets the game choose. Drive into the pit entry to stop; this choice does not call you into the pits. Requires tyre wear to be enabled.</p>
+            <p id="pm-pit-estimate" class="adv-help" data-help="keep"></p>
+            <p id="pm-stint-forecast" class="adv-help" data-help="keep"></p>
+            <p id="pm-energy-forecast" class="adv-help" data-help="keep"></p>
           </details>
           <details id="pm-session-review">
             <summary class="adv-more-btn">SESSION REVIEW</summary>
-            <p id="pm-coach-summary" class="adv-help">No coaching tips recorded this session.</p>
-            <p id="pm-connection" class="adv-help" hidden></p>
+            <p id="pm-coach-summary" class="adv-help" data-help="keep">No coaching tips recorded this session.</p>
+            <p id="pm-connection" class="adv-help" data-help="keep" hidden></p>
             <ol id="pm-incident-log"></ol>
             <details id="pm-technical-data">
               <summary class="adv-more-btn">TECHNICAL DATA</summary>
@@ -892,7 +907,7 @@
           <!-- LICENCE BADGES: local achievements (js/career/badges.js fills both on open). -->
           <details id="pm-badges-panel">
             <summary class="adv-more-btn">LICENCE BADGES</summary>
-            <p id="pm-badges-summary" class="adv-help">No badges yet.</p>
+            <p id="pm-badges-summary" class="adv-help" data-help="keep">No badges yet.</p>
             <ol id="pm-badges-list"></ol>
           </details>
         </section>
@@ -994,7 +1009,14 @@
                    see is a dock you cannot aim at. -->
               <label class="tune-row"><span class="tune-label">BUTTON OPACITY <b id="pm-btnopacity-v">100%</b><button type="button" id="pm-btnopacity-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-btnopacity" type="range" min="20" max="100" step="5" value="100" aria-label="Touch button opacity"></label>
-              <p class="adv-help">How solid the on-screen buttons are over the track. Lower shows more of the scene; 20% is the floor so they stay easy to find.</p>
+              <!-- PANEL OPACITY: the dark plates behind the race readouts, with
+                   the same 20-100 range and revert as BUTTON OPACITY
+                   (js/ui/scale.js). Written as --hud-panel-a on the root
+                   element; css/tokens.css folds it into --hud-panel-a-eff,
+                   which HIGH CONTRAST pins at 1 so solid plates always win. -->
+              <label class="tune-row"><span class="tune-label">PANEL OPACITY <b id="pm-panelopacity-v">100%</b><button type="button" id="pm-panelopacity-r" class="tune-revert" hidden>reset</button></span>
+                <input id="pm-panelopacity" type="range" min="20" max="100" step="5" value="100" aria-label="HUD panel opacity"></label>
+              <p class="adv-help">BUTTON OPACITY: how solid the on-screen buttons are (20% is the floor, so they stay easy to find). PANEL OPACITY: how dark the plates behind the speed, timing and map are; HIGH CONTRAST keeps them solid.</p>
               <!-- The slider's effect was invisible: css/hud.css hides every real
                    HUD cluster while a .dim screen is open, and from the title
                    there is no HUD at all — players dragged, saw nothing, and
@@ -1047,7 +1069,7 @@
                   <button id="pm-occlusion-next" type="button" data-step="1" aria-label="Next occlusion setting">&rsaquo;</button>
                 </div>
               </div>
-              <p id="pm-occlusion-note" class="adv-help">Skips scenery the track itself is hiding, using depth queries on the graphics card. Costs nothing visually when it works; turn it off if anything flickers or disappears.</p>
+              <p id="pm-occlusion-note" class="adv-help" data-help="keep">Skips scenery the track itself is hiding, using depth queries on the graphics card. Costs nothing visually when it works; turn it off if anything flickers or disappears.</p>
               <!-- DEBRIS sits with the renderer levers because that is what it is
                    on a handset: a Rapier side-world stepping every frame for
                    spall, marbles and trackside furniture. OFF costs no lap
@@ -1186,6 +1208,19 @@
             </div>
           </div>
           <p class="adv-help">KM/H or MPH for the speedometer and every other speed shown in the game.</p>
+          <!-- HELP TEXT: HIDE drops the grey explanation lines under settings
+               rows (html[data-menu-help="off"], css/components.css). Live
+               readouts, warnings and status lines stay: [role=status],
+               [aria-live] and [data-help="keep"] are exempt. The row itself is a
+               .set-row, never an .adv-help, so the way back always shows. -->
+          <div id="pm-helptext" class="set-row" role="group" aria-labelledby="pm-helptext-label">
+            <span class="tune-label" id="pm-helptext-label">HELP TEXT</span>
+            <div>
+              <button id="pm-helptext-prev" type="button" data-step="-1" aria-label="Previous help text setting">&lsaquo;</button>
+              <select id="pm-helptext-sel" aria-labelledby="pm-helptext-label"></select>
+              <button id="pm-helptext-next" type="button" data-step="1" aria-label="Next help text setting">&rsaquo;</button>
+            </div>
+          </div>
           <h4 class="pm-look-h">MOTION</h4>
           <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
             <span class="tune-label" id="pm-motion-label">MOTION</span>
@@ -1196,6 +1231,15 @@
             </div>
           </div>
           <p class="adv-help" id="pm-motion-help">REDUCED turns off sliding and fading between screens, camera shake in the race and the pre-race flyby. If your phone is set to reduce motion, that always wins.</p>
+          <!-- PAUSE MENU: how the in-race pause card looks and behaves, in one
+               fold. js/ui/pause-opts.js builds the four SettingRows into the
+               body (SettingRow.build — same pattern as TITLE LAYOUT) and paints
+               the summary (SHIPPED / CUSTOM). Empty body keeps shellNodes under
+               the absorb; the rows are not static shell. -->
+          <details id="pm-pausemenu" class="pm-renderer-sub">
+            <summary class="adv-more-btn" id="pm-pausemenu-sum">PAUSE MENU · SHIPPED</summary>
+            <div id="pm-pausemenu-body" role="group" aria-label="Pause menu"></div>
+          </details>
           <!-- TITLE SCREEN: every knob that only touches the title screen, in one
                fold. js/ui/title-fx.js wires the rows; js/ui/title-layout.js
                mounts its TITLE LAYOUT sub-fold before REPLAY INTRO and paints
@@ -2892,11 +2936,11 @@
           <br><b>AIDS:</b> DRIVING HELP (LOW is off, MEDIUM, HIGH) steers part of each corner for you. LINE STEERING ASSIST (OFF, CORNERS, FULL) pulls the steering toward the ideal line. HAPTICS sets vibration strength; iPhone and iPad cannot vibrate from a web page.
           <details><summary class="adv-more-btn">ADVANCED SLIDERS</summary><p>TILT and TOUCH: how far you tilt or drag for full lock, smoothing, and the curve near centre. CONTROLLER: STICK CURVE, DEAD ZONE (raise it only for a drifting stick, after CALIBRATE STICK) and SATURATION (for a worn stick that cannot reach full lock). STEER RATE: how fast a held key or arrow winds on lock. CAR HANDLING, for every input: DRIVING HELP, RESPONSE (turn-in), LINEARITY (gentle or direct near centre), STEER LOCK, SPEED STEER (steering kept at high speed), STEADY AT SPEED (softens tilt, drag and stick as speed rises) and WEIGHT. RACING LINE biases you toward the apex (PULL) or wider (PUSH) and never overrides your steering.</p></details></dd>
         <dt>DISPLAY</dt>
-        <dd>Adjust HUD and button sizes separately (UI SIZE, for the menus, is in APPEARANCE). HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.
+        <dd>Adjust HUD and button sizes separately (UI SIZE, for the menus, is in APPEARANCE); PANEL OPACITY lightens the plates behind the readouts. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.
           <br>In the HUD fold: STYLE (MINIMAL, STANDARD, or BROADCAST with a TV timing tower); LAYOUT (AUTO shows every readout scaled to fit, TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither); MAP; GAPS to the cars ahead and behind; MIRROR (AUTO in the onboard cameras, ON in every camera; tap it mid-race to tuck it away); LINE COLOUR (COLOUR-BLIND uses blue, orange and magenta); LINE OPACITY; BUTTON OPACITY.
           <br>In the RENDERER fold: RESOLUTION (LOW or MED runs smoother and cooler on a phone; AUTO lowers it only when the frame rate drops), FULLSCREEN, UPSCALE, OCCLUSION (turn it off if scenery flickers or vanishes) and DEBRIS (looks only; OFF never changes lap time, penalties or damage). RENDERER and GRAPHICS may reload the game; RESET RENDERER fixes a broken picture. COCKPIT picks the wheel, seat, halo and interior of the cockpit view.</dd>
         <dt>APPEARANCE</dt>
-        <dd>Changes apply at once, with a preview. UI SIZE (under READABILITY) scales every menu and settings screen. THEME: DARK, LIGHT (easier in bright sun) or SYSTEM. MENU ACCENT and HUD ACCENT recolour highlights and HUD stripes; TEAM uses your team&rsquo;s colour and CUSTOM any colour. TEXT SIZE enlarges menu text, HIGH CONTRAST adds solid panels and stronger outlines, and SPEED UNITS switches KM/H and MPH. MOTION: REDUCED turns off screen slides, camera shake and the pre-race flyby. TITLE INTRO, MENU WASH and TITLE ART tone down the title screen; REPLAY INTRO plays it again.</dd>
+        <dd>Changes apply at once, with a preview. UI SIZE (under READABILITY) scales every menu and settings screen. THEME: DARK, LIGHT (easier in bright sun) or SYSTEM. MENU ACCENT and HUD ACCENT recolour highlights and HUD stripes; TEAM uses your team&rsquo;s colour and CUSTOM any colour. TEXT SIZE enlarges menu text, HIGH CONTRAST adds solid panels and stronger outlines, SPEED UNITS switches KM/H and MPH, and HELP TEXT: HIDE shortens the settings by dropping the grey explanations. MOTION: REDUCED turns off screen slides, camera shake and the pre-race flyby. PAUSE MENU sets the pause card&rsquo;s layout, side and background, and whether QUIT and RESTART need a second tap. TITLE INTRO, MENU WASH and TITLE ART tone down the title screen; REPLAY INTRO plays it again.</dd>
         <dt>BACKUP &amp; RESTORE</dt>
         <dd>SAVE ALL SETTINGS writes your preferences, tuners and control bindings to a file; SAVE CHANGED SETTINGS writes only what differs from the defaults. LOAD SETTINGS FILE asks twice, then reloads. Career progress is not included; cars, setups and liveries have their own file buttons in GARAGE › TEAM.</dd>
         <dt>MUSIC &amp; SOUND</dt>
@@ -3446,6 +3490,7 @@
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/pause-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>

@@ -298,7 +298,7 @@ test("bad store values at load fall to shipped defaults", () => {
 
 test("DOM ready wires SettingRows and builds both swatch rows", () => {
   const { rows, byId } = load({ readyState: "complete" });
-  assert.deepEqual([...rows.keys()].sort(), ["pm-contrast", "pm-hudaccent", "pm-menuaccent", "pm-textsize", "pm-uitheme", "pm-units"]);
+  assert.deepEqual([...rows.keys()].sort(), ["pm-contrast", "pm-helptext", "pm-hudaccent", "pm-menuaccent", "pm-textsize", "pm-uitheme", "pm-units"]);
   const menuChips = byId("pm-menuaccent-swatches").children;
   const hudChips = byId("pm-hudaccent-swatches").children;
   assert.equal(menuChips.length, 8);
@@ -391,4 +391,59 @@ test("tokens.css defines both text sizes and the high-contrast block", () => {
   for (const sel of ['[data-text-size="large"]', '[data-text-size="larger"]', '[data-ui-contrast="high"]'])
     assert.ok(TOKENS.includes(":root" + sel), sel);
   for (const id of ["pm-textsize", "pm-contrast", "pm-units"]) assert.ok(SHELL.includes(`id="${id}-sel"`), id);
+});
+
+// ── HELP TEXT (READABILITY) ──────────────────────────────────────────────────
+
+test("HELP TEXT: SHOW by default, HIDE stamps data-menu-help=off, garbage reads as SHOW", () => {
+  const { M, dataset, written, rows } = load();
+  assert.equal(M.help(), "on");
+  assert.equal(dataset.menuHelp, undefined, "SHOW writes no attribute");
+  assert.deepEqual(JSON.parse(JSON.stringify(rows.get("pm-helptext").values)), [["on", "SHOW"], ["off", "HIDE"]]);
+  rows.get("pm-helptext").write("off");
+  assert.equal(written.menuHelp, "off");
+  assert.equal(dataset.menuHelp, "off");
+  assert.equal(rows.get("pm-helptext")._painted, "off");
+  M.setHelp("on");
+  assert.equal(dataset.menuHelp, undefined);
+  assert.equal(M.setHelp("maybe"), "on");
+  assert.equal(load({ stored: { menuHelp: "off" } }).dataset.menuHelp, "off", "applied at eval");
+  assert.equal(load({ stored: { menuHelp: 0 } }).M.help(), "on");
+});
+
+test("HELP TEXT: the inline boot stamp agrees with the module", () => {
+  const m = SHELL.match(/<script>\s*\(function \(\) \{\s*\/\/ html\[data-motion\][\s\S]*?<\/script>/);
+  assert.ok(m, "the inline first-paint script is in the shell");
+  const body = m[0].replace(/^<script>/, "").replace(/<\/script>$/, "");
+  for (const v of [undefined, "on", "off", "hide", 1]) {
+    const ds = {};
+    const ls = new Map(v === undefined ? [] : [["apex26.menuHelp", JSON.stringify(v)]]);
+    vm.runInNewContext(body, {
+      JSON, localStorage: { getItem: (k) => (ls.has(k) ? ls.get(k) : null) },
+      window: { matchMedia: () => ({ matches: false }) }, matchMedia: () => ({ matches: false }),
+      document: { documentElement: { dataset: ds }, body: null },
+    });
+    const mod = load(v === undefined ? {} : { stored: { menuHelp: v } }).dataset.menuHelp;
+    assert.equal(ds.menuHelp, mod, "menuHelp=" + JSON.stringify(v));
+  }
+});
+
+test("HELP TEXT: CSS hides explanations in settings + race setup, never status lines or kept readouts", () => {
+  assert.match(COMPONENTS, /:root\[data-menu-help="off"\] :is\(#pmsettings, #rs-body\) \.adv-help:not\(\[role="status"\]\):not\(\[aria-live\]\):not\(\[data-help="keep"\]\) \{ display: none; \}/);
+  // The row is a .set-row, never an .adv-help, so HIDE can never hide the way back.
+  for (const part of ["", "-label", "-prev", "-sel", "-next"]) assert.ok(SHELL.includes(`id="pm-helptext${part}"`), part);
+  assert.match(SHELL, /<div id="pm-helptext" class="set-row"/);
+  // Warnings, forecasts and readouts in the shell stay visible under HIDE.
+  for (const id of ["pm-practice-state", "pm-pit-help", "pm-occlusion-note", "pm-drill-status", "pm-pit-estimate",
+    "pm-stint-forecast", "pm-energy-forecast", "pm-coach-summary", "pm-connection", "pm-badges-summary", "pm-lap-report"]) {
+    assert.match(SHELL, new RegExp(`<p id="${id}" class="adv-help" data-help="keep"`), id);
+  }
+  const pad = SHELL.slice(SHELL.indexOf('id="pm-phonepad-text"'), SHELL.indexOf('id="pm-phonepad-qr-wrap"'));
+  assert.equal((pad.match(/class="adv-help" data-help="keep"/g) || []).length, 2, "#pm-phonepad-text's room-code lines");
+  // JS-built ones.
+  const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
+  assert.match(read("js/ui/settings-export.js"), /note\.className = "adv-help";\s*note\.setAttribute\("data-help", "keep"\)/);
+  assert.match(read("js/garage/setup-sheet.js"), /rakeOut\.id = "cs-rake-readout";[^\n]*setAttribute\("data-help", "keep"\)/);
+  assert.match(read("js/ui/title-layout.js"), /id: "pm-tl-shape"[^\n]*"data-help": "keep"/);
+  assert.match(EXPORT, /k:\s*"menuHelp"[^\n]*group:\s*"appearance"[^\n]*oneOf: \["on", "off"\]/);
 });

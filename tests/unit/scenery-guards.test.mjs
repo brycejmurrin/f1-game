@@ -149,6 +149,37 @@ test("a linear run is not re-laid over a span it already covers", () => {
   ]) assert.match(src, needle, `${fn}() must return early on a re-laid span`);
 });
 
+test("a run that wraps the start line is not read as contained in an earlier run", () => {
+  // alreadyLaid compared a wrapping [0.98, 0.06] span raw against [0.48, 0.88]:
+  // 0.98 >= 0.48 and 0.06 <= 0.88, so it was "contained" and dropped with its
+  // barrier. Madrid lays scenery in racing fractions, so k / n is the span.
+  const Tracks = buildContext(null, { quiet: true });
+  const base = Tracks.LIST.find((d) => d.id === "madrid");
+  const def = Object.assign({}, base, {
+    scenery(api) {
+      for (const side of [-1, 1]) {
+        api.guardrail(0.48, 0.88, side, 4.8);
+        api.guardrail(0.98, 0.06, side, 4.8);
+      }
+    },
+  });
+  const t = Tracks.build(def), pit = t.pit;
+  let checked = 0;
+  const open = [];
+  for (let k = 0; k < t.n; k++) {
+    const f = k / t.n;
+    if (!(f > 0.985 || f < 0.055)) continue;
+    for (const side of [1, -1]) {
+      if (pit && pit.keep && pit.keep[k] > 0 && pit.side === side) continue;   // the pit wall owns it
+      checked++;
+      const bar = side > 0 ? t.barR[k] : t.barL[k];
+      if (!(bar < t.hw[k] + 8.99)) open.push(`k${k} side ${side}`);
+    }
+  }
+  assert.ok(checked > 50, `only ${checked} node sides checked`);
+  assert.deepEqual(open, [], "every non-pit node side inside the wrapping guardrail has a barrier");
+});
+
 test("one tree per spot", () => {
   const src = read("js/track/scenery/nature.js");
   assert.match(src, /const spotTaken = \(x, z\)/, "nature.js must carry the planting guard");

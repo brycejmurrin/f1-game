@@ -1,4 +1,5 @@
-/* Apex 26 — AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences.
+/* Apex 26 — AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences,
+   and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT).
    Self-contained like DrivingLineOpts: GameStore + SettingRow, no G façade.
    Applies on :root via data-ui-theme / data-menu-accent / data-hud-accent and
    (for CUSTOM only) inline --red / --accent / --accent-ink. Named presets live
@@ -18,6 +19,7 @@ const AppearanceOpts = (function () {
   const K_TEXT = "textSize";
   const K_CONTRAST = "uiContrast";
   const K_UNITS = "speedUnits";
+  const K_HELP = "menuHelp";
 
   const THEMES = [["dark", "DARK"], ["light", "LIGHT"], ["system", "SYSTEM"]];
   // READABILITY. Text size scales the --fs-* type ladder (tokens.css); the HUD
@@ -27,6 +29,11 @@ const AppearanceOpts = (function () {
   const TEXT_SIZES = [["normal", "NORMAL"], ["large", "LARGE"], ["larger", "LARGER"]];
   const CONTRASTS = [["off", "OFF"], ["high", "HIGH"]];
   const UNITS = [["kmh", "KM/H"], ["mph", "MPH"]];
+  // HELP TEXT: HIDE drops the grey .adv-help explanations inside the settings
+  // sheet and the race setup (css/components.css keys off <html
+  // data-menu-help="off">, written only when hidden). Status lines, live
+  // regions and anything marked data-help="keep" (warnings, readouts) stay.
+  const HELPS = [["on", "SHOW"], ["off", "HIDE"]];
   const KPH_PER_MPH = 1.609344;
   const ACCENTS = [
     ["brand", "BRAND"],
@@ -71,6 +78,7 @@ const AppearanceOpts = (function () {
   let textSize = oneOf(store.get(K_TEXT, "normal"), TEXT_SIZES, "normal");
   let contrast = oneOf(store.get(K_CONTRAST, "off"), CONTRASTS, "off");
   let units = oneOf(store.get(K_UNITS, "kmh"), UNITS, "kmh");
+  let help = oneOf(store.get(K_HELP, "on"), HELPS, "on");
 
   /** A km/h reading in the player's unit, rounded for display. */
   function speed(kph) {
@@ -251,6 +259,7 @@ const AppearanceOpts = (function () {
     if (!el) return;
     if (textSize === "normal") delete el.dataset.textSize; else el.dataset.textSize = textSize;
     if (contrast === "high") el.dataset.uiContrast = "high"; else delete el.dataset.uiContrast;
+    if (help === "off") el.dataset.menuHelp = "off"; else delete el.dataset.menuHelp;
     // The speedo's unit label and the preview's; the number follows on the next HUD tick.
     if (typeof document !== "undefined" && document.querySelectorAll) {
       for (const u of document.querySelectorAll("#hud-speed .hud-unit, .pm-look-unit")) u.textContent = unitLabel();
@@ -338,6 +347,14 @@ const AppearanceOpts = (function () {
     return units;
   }
 
+  function setHelp(v) {
+    help = oneOf(v, HELPS, "on");
+    store.set(K_HELP, help);
+    applyAll();
+    paintRow("pm-helptext", help);
+    return help;
+  }
+
   function wireHexPair(colorId, textId, write) {
     const color = byId(colorId);
     const text = byId(textId);
@@ -380,6 +397,7 @@ const AppearanceOpts = (function () {
     SettingRow.wire("pm-textsize", { values: TEXT_SIZES, read: () => textSize, write: (v) => setTextSize(v) });
     SettingRow.wire("pm-contrast", { values: CONTRASTS, read: () => contrast, write: (v) => setContrast(v) });
     SettingRow.wire("pm-units", { values: UNITS, read: () => units, write: (v) => setUnits(v) });
+    SettingRow.wire("pm-helptext", { values: HELPS, read: () => help, write: (v) => setHelp(v) });
     buildSwatches("pm-menuaccent-swatches", "menu");
     buildSwatches("pm-hudaccent-swatches", "hud");
     wireHexPair("pm-menuaccent-hex", "pm-menuaccent-hextext", setMenuHex);
@@ -403,12 +421,13 @@ const AppearanceOpts = (function () {
   }
 
   return {
-    K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX, K_TEXT, K_CONTRAST, K_UNITS,
-    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS, TEXT_SIZES, CONTRASTS, UNITS,
+    K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX, K_TEXT, K_CONTRAST, K_UNITS, K_HELP,
+    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS, TEXT_SIZES, CONTRASTS, UNITS, HELPS,
     textSize: () => textSize,
     contrast: () => contrast,
     units: () => units,
-    speed, unitLabel, setTextSize, setContrast, setUnits,
+    help: () => help,
+    speed, unitLabel, setTextSize, setContrast, setUnits, setHelp,
     theme: () => theme,
     menuAccent: () => menuAccent,
     hudAccent: () => hudAccent,
