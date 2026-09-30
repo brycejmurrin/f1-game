@@ -45,8 +45,8 @@ const GarageArrival = (function () {
       eye: left ? [-3.8, 2.1, -4.8] : [4.1, 2.25, -4.9],
       aim: [0, 0.8, t < DOOR_S ? 6.2 : z * 0.48 + 0.8] };
   }
-  /* THE DRIVE-OUT: the arrival in reverse, for the pre-race screen when RACE!
-   * beats the circuit's build (js/game.js introBuild/introWarm). The shutter is
+  /* THE DRIVE-OUT: the arrival in reverse, opening every RACE! while the circuit
+   * builds (js/game.js studioOpen). The shutter is
    * already up; the car sits a beat, then rolls out nose first and on out of the
    * door while the camera, at the arrival's interior three-quarter, follows it.
    * No circuit is needed — this is the setup screen's own room — so it plays the
