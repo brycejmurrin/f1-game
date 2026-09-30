@@ -86,6 +86,7 @@ function makeG(Teams, cars) {
     gridUp: (order) => { calls.push(["gridUp", order.map((c) => c.code)]); order.forEach((c, i) => { c.gridPos = i + 1; }); },
     snapGameCam: () => calls.push(["snapGameCam"]),
     goRolling: () => { if (G.state !== "count") return false; G.state = "race"; calls.push(["goRolling"]); return true; },
+    handoverCount: (v) => calls.push(["count", v]),
     setCarRole: (c, human, local) => { c.human = !!human; c.local = !!local; c.isPlayer = !!local; calls.push(["setCarRole", c.code, !!human, !!local]); },
     tyres: { on: () => true, classRecord: (cls) => ({ cls }), fit: (c, rec) => { c.tyre = rec; c.tyreWear = 0; c.tyreLap0 = c.lap || 0; c.tyreStints = (c.tyreStints || 0) + 1; },
              planLaps: (life, n) => life * n },
@@ -594,7 +595,7 @@ test("a RESTART from the results puts the start lap's weather back before the gr
   assert.deepEqual(calls.filter((c) => c[0] === "live").map((c) => c[1]), ["dry"]);
 });
 
-test("a mid-race jump-in is a ROLLING start: the seat car is driven for four seconds at speed, the count is spoken, then control passes", () => {
+test("a mid-race jump-in is a ROLLING start: the seat car is driven for four seconds at speed, counted down ON SCREEN, then control passes", () => {
   const { R, script, Teams } = load();
   const cars = makeCars(Teams, "ferrari:0");
   const { G, calls } = makeG(Teams, cars);
@@ -606,18 +607,21 @@ test("a mid-race jump-in is a ROLLING start: the seat car is driven for four sec
   assert.equal(G.state, "race");
   assert.equal(me.human, false, "the AI has the wheel"); assert.equal(me.local, true, "the camera, HUD and audio stay on the seat");
   assert.ok(me.speed > 0, "at speed, not on the grid: " + me.speed);
-  assert.ok(calls.some((c) => c[0] === "announce" && /ROLLING · YOU HAVE CONTROL IN 4/.test(c[1])));
+  assert.deepEqual(calls.filter((c) => c[0] === "count").map((c) => c[1]), [4], "the count is up from the drop-in frame");
   assert.ok(rr.status().handover > 3.9);
   const names = calls.map((c) => c[0]);
   assert.ok(names.indexOf("setCarRole") < names.lastIndexOf("snapGameCam"), "the seat is the AI's before the drop, and the camera is re-framed on the dropped-in car after it");
   for (let i = 0; i < 60 * 3.5; i++) rr.update(1 / 60);
   assert.equal(me.human, false, "still the AI's inside the hand-over");
-  const said = calls.filter((c) => c[0] === "announce" && /^YOU HAVE CONTROL IN \d$/.test(c[1])).map((c) => c[1]);
-  assert.deepEqual(said, ["YOU HAVE CONTROL IN 3", "YOU HAVE CONTROL IN 2", "YOU HAVE CONTROL IN 1"], "one call a second, no repeats");
+  assert.deepEqual(calls.filter((c) => c[0] === "count").map((c) => c[1]), [4, 3, 2, 1], "one number a second, no repeats");
+  assert.ok(!calls.some((c) => c[0] === "announce" && /CONTROL IN/.test(c[1])), "the count is not queued as radio cards (they ran late behind the REAL RACE banner)");
   for (let i = 0; i < 60 * 0.6; i++) rr.update(1 / 60);
   assert.equal(me.human, true, "the wheel is the player's"); assert.equal(me.local, true);
   assert.ok(calls.some((c) => c[0] === "announce" && c[1] === "YOU HAVE CONTROL"));
   assert.equal(rr.status().handover, 0);
+  assert.deepEqual(calls.filter((c) => c[0] === "count").map((c) => c[1]), [4, 3, 2, 1, "GO"], "GO when the wheel passes");
+  for (let i = 0; i < 60 * 1.1; i++) rr.update(1 / 60);
+  assert.deepEqual(calls.filter((c) => c[0] === "count").slice(-1)[0], ["count", null], "…and the plate clears a beat later");
   assert.equal(calls.filter((c) => c[0] === "setCarRole").length, 2, "one hand-over: AI, then the player");
   // From the grid (lap 1) the start is the real standing start: no hand-over, no rolling green.
   const cars2 = makeCars(Teams, "ferrari:0");
@@ -628,6 +632,7 @@ test("a mid-race jump-in is a ROLLING start: the seat car is driven for four sec
   assert.equal(g2.G.state, "count", "the lights run");
   assert.equal(rr2.status().handover, 0);
   assert.ok(!g2.calls.some((c) => c[0] === "goRolling"));
+  assert.ok(!g2.calls.some((c) => c[0] === "count"), "a standing start runs the gantry, not the hand-over count");
 });
 
 test("dropSpeed: FULL speed for the road ahead — vTop on a straight, the AI's entry budget before a hairpin, never below the floor", () => {
