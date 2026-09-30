@@ -565,12 +565,11 @@
   <div id="bc-pip" aria-hidden="true" hidden><span class="bc-pip-label"></span></div>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
-  <!-- role="alert", not role="status" + aria-live="assertive": status carries an
-       implicit POLITE live region, so the pair was a mismatch the explicit
-       aria-live had to override. alert is the canonical interrupting role and
-       needs no override. A flag change is the one HUD event that earns an
-       interruption; #vs-status stays status+polite. -->
-  <div id="hud-flag" role="alert" hidden></div>
+  <!-- No live role: a live region filled and unhidden in the same step is the
+       pattern NVDA, JAWS and VoiceOver miss (see #announce-live below), so
+       js/ui/hud.js sayFlag() speaks each flag change through #announce-live
+       instead. A role here as well would read the flag twice where it works. -->
+  <div id="hud-flag" hidden></div>
 </div>
 
 <div id="lights" hidden>
@@ -1083,6 +1082,15 @@
                 </div>
               </div>
               <p class="adv-help">Carbon fragments, tyre marbles and knocked-over trackside furniture. OFF saves work on a phone and never changes lap time, penalties or damage.</p>
+              <div id="pm-buildworker" class="set-row" role="group" aria-labelledby="pm-buildworker-label">
+                <span class="tune-label" id="pm-buildworker-label">BUILD IN BACKGROUND</span>
+                <div>
+                  <button id="pm-buildworker-prev" type="button" data-step="-1" aria-label="Previous background build setting">&lsaquo;</button>
+                  <select id="pm-buildworker-sel" aria-labelledby="pm-buildworker-label"></select>
+                  <button id="pm-buildworker-next" type="button" data-step="1" aria-label="Next background build setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Experimental. Builds the circuit on a second thread while the loading screen plays, so fewer frames stall. Takes effect on the next circuit you load.</p>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
               <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to ULTRA. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
@@ -3439,6 +3447,7 @@
 <script defer crossorigin="anonymous" src="js/career/badges.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>

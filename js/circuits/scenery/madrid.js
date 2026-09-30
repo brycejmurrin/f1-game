@@ -13,7 +13,7 @@
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
         grandstandEx, cameraTower, broadcastCompound, sponsorHoarding,
-        runoffApron,
+        runoffApron, recordBarrier,
       } = api;
 
       const WHITE = [0.92, 0.93, 0.94];
@@ -778,6 +778,15 @@
         wall(0.22, 0.48, side, 2.6, 1.25, CONCRETE, 0.48);
         guardrail(0.54, 0.86, side, 4.8, [0.80, 0.81, 0.83]);
         fence(0.02, 0.50, side, 3.2, 2.7, [0.58, 0.60, 0.63]);
+        // DRIVING LIMIT, NOT GEOMETRY. The city dressingExclusions that cut the
+        // prop budget (CI-4) also dropped the city-front blockAt tightenings
+        // that kept wallStats().tightFrac above 0.9 (0.901 → 0.872). The wall
+        // gaps above stay (coplanar with tyre-caps); pin the limit across them
+        // so the foundation contract still holds — same rule as city.js: drop
+        // the mass, keep the boundary.
+        recordBarrier(0.48, 0.54, side, 2.6);
+        recordBarrier(0.86, 0.88, side, 2.6);
+        recordBarrier(0.98, 0.06, side, 2.6);
       }
       tyreWall(0.075, 0.105, 1, 3.2, [0.88, 0.25, 0.18]);
       tyreWall(0.13, 0.16, -1, 3.2, [0.18, 0.38, 0.82]);

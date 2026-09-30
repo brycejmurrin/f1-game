@@ -820,6 +820,13 @@ const Input = (function () {
     return true;
   }
   function padRest() { return padRestOffset; }
+  // The persisted half: KeyBinds stores the offset as apex26.padRest and hands
+  // it back here at boot. Anything but a finite number inside calibratePad's own
+  // ±0.5 refusal bound is not a rest position, so it is ignored (0).
+  function setPadRest(v) {
+    padRestOffset = (typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 0.5) ? v : 0;
+    return padRestOffset;
+  }
   /* AXIS MAP — the wheel story. A G29/G923/T300/Fanatec enumerates as a
      Gamepad with `mapping: ""`, because the only standard layout the spec
      defines is the Xbox-style pad. Its steering axis IS usually axis 0, which
@@ -2525,7 +2532,7 @@ const Input = (function () {
     throttleLatched: () => throttleLatch && throttleLatched,
     primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,
-    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest,
+    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest, setPadRest,
     touchControlsNeeded,
     pickPad,
     onPointerKindChange,
