@@ -46,9 +46,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
  *  the car (livery, crest, cockpit) and builds the foundation circuits;
  *  vm-page runs the ADAPTED browser specs as themselves, so its groups are
  *  derived from where those specs live (twinned-specs.mjs). */
+const VM_B_GROUPS = ["game-vm", "physics-core", "collisions", "aero", "hooks", "circuits", "modes"];
 export const SCOPED = {
   "test:game-vm-a": ["circuits", "game-vm"],
-  "test:game-vm-b": ["game-vm", "physics-core", "collisions", "aero", "hooks", "circuits", "modes"],
+  // Two time-balanced partitions of test:game-vm-b (tests/groups.json), one
+  // runner each (ci.yml vm-b1 / vm-b2); the same trigger, since a routed
+  // change cannot know which half its twin sits in.
+  "test:game-vm-b1": VM_B_GROUPS,
+  "test:game-vm-b2": VM_B_GROUPS,
   "test:node-slow": ["node-slow", "car", "circuits", "gfx", "input"],
   "test:vm-page": null,   // derived: adaptedGroups()
 };
