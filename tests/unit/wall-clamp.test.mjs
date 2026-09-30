@@ -8,6 +8,9 @@
  *   - HUMAN WRITEBACK. When xPinned, px/pz are rebuilt from (s, x) via
  *     worldFromTrack — the sacred conditional inverse of trackFrom.
  *   - OFF-WALL DECAY. Inside the limits, human wallT decays by dt.
+ *   - isPlayer FX GATE. Street shake/SFX/vibrate/rumble fire only for the
+ *     local player — a VS FRIEND is c.human too (setCarRole), so gating on
+ *     human alone shakes the wrong screen (ship fix ad915f8ea).
  *
  * Run: node --test tests/unit/wall-clamp.test.mjs
  */
@@ -22,7 +25,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
 
-function load() {
+function load(hooks = {}) {
   const ctx = vm.createContext({
     Math, JSON, Object, Array, Number, isNaN, isFinite, console,
   });
@@ -39,8 +42,11 @@ function load() {
     wallAiScrub: () => 4,
   };
   ctx.TrackPit = { EXIT_WALL_W: 0.35 };
-  ctx.GameAudio = { collision: () => {} };
-  ctx.Input = { vibrate: () => {}, rumble: () => {} };
+  ctx.GameAudio = { collision: hooks.onCollision || (() => {}) };
+  ctx.Input = {
+    vibrate: hooks.onVibrate || (() => {}),
+    rumble: hooks.onRumble || (() => {}),
+  };
   // Minimal Tracks: constant walls at ±5 m, sample fills a tangent/right frame.
   ctx.Tracks = {
     wallAt(_track, _s, side) { return 5; },
@@ -127,4 +133,46 @@ test("inside limits: human wallT decays, wasOnWall clears", () => {
   assert.equal(c.px, 1);
   assert.equal(c.pz, 10);
   assert.equal(ctx.smp.t[2], 1);
+});
+
+test("street wall FX gates on isPlayer (VS FRIEND is human, not local)", () => {
+  // Ship fix ad915f8ea: a remote friend's scrape must not shake/vibrate THIS screen.
+  const shakes = [];
+  const vibes = [];
+  const rumbles = [];
+  let audioHits = 0;
+  const { WallClamp } = load({
+    onCollision: () => { audioHits++; },
+    onVibrate: (n) => vibes.push(n),
+    onRumble: (a, b) => rumbles.push([a, b]),
+  });
+  const street = {
+    track: { total: 1000, n: 100, hw: new Float64Array(100).fill(5), pit: null, posts: null, street: true },
+    soundOn: true,
+    addShake: (d) => shakes.push(d),
+  };
+  // Nose into the +x wall: head negative relative to tangent (rel < 0 → noseIn).
+  const friend = {
+    s: 10, x: 8, human: true, isPlayer: false, speed: 40,
+    vLat: 0, head: -0.4, wasOnWall: false, wallT: 0, wallHits: 0, collideT: 0,
+    px: 0, pz: 0,
+  };
+  WallClamp.apply(friend, baseCtx(street));
+  assert.equal(friend.wasOnWall, true);
+  assert.equal(shakes.length, 0, "remote friend must not shake local camera");
+  assert.equal(vibes.length, 0, "remote friend must not vibrate local device");
+  assert.equal(rumbles.length, 0, "remote friend must not rumble local pad");
+  assert.equal(audioHits, 0, "remote friend must not play local collision SFX");
+
+  const local = {
+    s: 10, x: 8, human: true, isPlayer: true, speed: 40,
+    vLat: 0, head: -0.4, wasOnWall: false, wallT: 0, wallHits: 0, collideT: 0,
+    px: 0, pz: 0,
+  };
+  WallClamp.apply(local, baseCtx(street));
+  assert.equal(local.wasOnWall, true);
+  assert.ok(shakes.length >= 1, "local player street scrape shakes");
+  assert.ok(vibes.length >= 1, "local player street scrape vibrates");
+  assert.ok(rumbles.length >= 1, "local player street scrape rumbles");
+  assert.ok(audioHits >= 1, "local player street scrape plays collision");
 });

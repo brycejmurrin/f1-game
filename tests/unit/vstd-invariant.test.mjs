@@ -104,12 +104,11 @@ const ALLOWED = [
     why: "sign test — uphill slope bleed applies only while moving forwards",
   },
   {
-    file: "js/game.js", expr: "c.speed < 0",
-    code: "const vx = Math.max(Math.abs(c.speed), 4), dirS = c.speed < 0 ? -1 : 1;",
+    file: "js/physics/player-forces.js", expr: "c.speed < 0",
+    code: "const vx = Math.max(vAbs, 4), dirS = c.speed < 0 ? -1 : 1;",
     // The `, 4)` on the same line is the well-conditioning floor the slip angle
     // needs (slip is undefined at zero speed); the comparison itself is a sign.
-    // Re-keyed 2026-09-02: slip is measured against |vx| in both directions now
-    // (the reverse-crawl plateau bug); the sign only flips the steer term.
+    // Moved with the PlayerForces carve (2026-09-30); was js/game.js.
     why: "sign test — the direction of travel, which flips the steer term of the front slip angle",
   },
   {
