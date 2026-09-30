@@ -84,10 +84,15 @@ const SPEC = [
   { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
+  { k: "hudPanelOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js PANEL OPACITY (null = 100%; HIGH CONTRAST keeps plates solid)" },
   { k: "motion", lane: "json", group: "appearance", def: null, src: "js/ui/title-fx.js (null = follows the OS prefers-reduced-motion)", oneOf: ["on", "reduce"] },
   { k: "titleIntro", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js TITLE INTRO (full | quick | off)", oneOf: ["full", "quick", "off"] },
   { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | soft | off)", oneOf: ["full", "soft", "off"] },
   { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | soft | off)", oneOf: ["on", "soft", "off"] },
+  { k: "pauseLayout", lane: "json", group: "appearance", def: "grid", src: "js/ui/pause-opts.js PAUSE MENU › LAYOUT (grid | list)", oneOf: ["grid", "list"] },
+  { k: "pauseSide", lane: "json", group: "appearance", def: "centre", src: "js/ui/pause-opts.js PAUSE MENU › SIDE (centre | left | right)", oneOf: ["centre", "left", "right"] },
+  { k: "pauseDim", lane: "json", group: "appearance", def: "full", src: "js/ui/pause-opts.js PAUSE MENU › BACKGROUND (full | soft | off)", oneOf: ["full", "soft", "off"] },
+  { k: "pauseConfirm", lane: "json", group: "appearance", def: "on", src: "js/ui/pause-opts.js PAUSE MENU › CONFIRM QUIT (on | off; two presses on QUIT / RESTART)", oneOf: ["on", "off"] },
   { k: "titleLayout", lane: "json", group: "appearance", def: null, src: "js/ui/title-layout.js TITLE LAYOUT (null = shipped; else {v:2, wide, tall}, one {btns,title,art,layout,side} per shape — a missing shape is shipped; a v1 object is both)" },
   { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
@@ -156,6 +161,7 @@ const SPEC = [
   { k: "textSize", lane: "json", group: "appearance", def: "normal", src: "js/ui/appearance-opts.js TEXT SIZE", oneOf: ["normal", "large", "larger"] },
   { k: "uiContrast", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js HIGH CONTRAST", oneOf: ["off", "high"] },
   { k: "speedUnits", lane: "json", group: "appearance", def: "kmh", src: "js/ui/appearance-opts.js SPEED UNITS", oneOf: ["kmh", "mph"] },
+  { k: "menuHelp", lane: "json", group: "appearance", def: "on", src: "js/ui/appearance-opts.js HELP TEXT (on = SHOW | off = HIDE)", oneOf: ["on", "off"] },
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
   { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js", oneOf: ["easy", "normal", "hard"] },
@@ -171,6 +177,11 @@ const SPEC = [
   { k: "unlimitedBudget", lane: "json", group: "driving", def: false, src: "js/game.js",
     subsystem: "removes the career economy constraint for everyone — a design change, not a preference" },
   { k: "bodyAttitude", lane: "raw", group: "driving", def: null, src: "js/physics/body-attitude.js (null = on)" },
+  // PRE-RACE MEMORY. Both unset until used: the race sheet saves a draft only
+  // when a solo one-off GP STARTs, and the list exists only once a circuit is
+  // starred. Their readers validate every field, so a file cannot poison them.
+  { k: "raceDraft", lane: "json", group: "driving", def: null, src: "js/race/race-settings.js REMEMBER LAST RACE SETUP (null = 3 laps / dry / default; else {laps: \"3\"|\"5\"|\"10\"|\"25\"|\"FULL\", weather, tod, mixed})" },
+  { k: "favTracks", lane: "json", group: "driving", def: null, src: "js/ui/select-screen.js FAVOURITE CIRCUITS (null = none; else an array of track ids)" },
   // STEERING (js/input/steer-tuning.js applySteerTuning)
   { k: "preset", lane: "json", group: "steering", def: "standard", src: "js/input/steer-tuning.js",
     subsystem: "selects a whole steering sheet, i.e. the driving model — see pace below" },
@@ -588,6 +599,7 @@ function create(G) {
     h.textContent = "SETTINGS FILE";
     const note = document.createElement("p");
     note.className = "adv-help";
+    note.setAttribute("data-help", "keep");   // HELP TEXT: HIDE keeps it — it is the only word on what LOAD does
     note.textContent = "Back up preferences, tuners and control bindings with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads. Career progress and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
 
     host.append(h,

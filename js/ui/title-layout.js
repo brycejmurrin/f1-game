@@ -214,7 +214,7 @@ const TitleLayout = (function () {
     body.appendChild(el("p", { className: "adv-help", textContent:
       "Move and size the title screen's buttons, title and car drawing. Landscape and portrait keep a layout each; " +
       "these controls edit the shape the screen is in now. Hold a slider to see the title screen through this page." }));
-    const shapeLine = el("p", { id: "pm-tl-shape", className: "adv-help", attrs: { "aria-live": "polite" } });
+    const shapeLine = el("p", { id: "pm-tl-shape", className: "adv-help", attrs: { "aria-live": "polite", "data-help": "keep" } });
     body.appendChild(shapeLine);
 
     const sliders = [];

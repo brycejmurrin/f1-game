@@ -531,6 +531,8 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
     center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
   dom.buttons.overtake = [fakeEl(), fakeEl()];   // OT lives on the grip AND the face
+  dom.stick = fakeEl(); dom.nub = fakeEl();
+  dom.arrows = { navUp: fakeEl(), navDown: fakeEl(), navLeft: fakeEl(), navRight: fakeEl() };
   const seen = [];
   const timers = fakeTimers();
   const ctl = PhonePad.pad(dom, { now: () => clock.t, timers, deps: {
@@ -580,6 +582,35 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   dom.buttons.navSelect.dispatch("pointerdown", {}); dom.buttons.navSelect.dispatch("pointerup", {});
   for (let i = 0; i < 3; i++) frame();
   assert.equal(link.stats().events, e0 + 4, "SELECT is one edge"); assert.equal(timers.pending(), 0, "and never repeats");
+  // THE MENU STICK: one disc (fakeEl's box: centre 50,200, radius 50). A tap
+  // on an edge is that arrow at once; a drag turns to another; the middle is
+  // dead; the arrow under the live direction lights; release stops the repeat.
+  const s0 = link.stats().events;
+  dom.stick.dispatch("pointerdown", { clientX: 50, clientY: 205 });
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, s0, "a thumb in the middle fires nothing");
+  dom.stick.dispatch("pointermove", { clientX: 50, clientY: 110 });
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, s0 + 1, "dragged up: one navUp");
+  assert.ok(dom.arrows.navUp.classes.has("on") && dom.stick.classes.has("on"), "the up arrow lights");
+  assert.match(dom.nub.style.transform, /^translate\(0\.0px,-27\.5px\)$/, "the nub follows, clamped to 55 % of the radius");
+  dom.stick.dispatch("pointermove", { clientX: 60, clientY: 150 });   // still mostly up: no flicker
+  dom.stick.dispatch("pointermove", { clientX: 95, clientY: 195 });
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, s0 + 2, "turned right: one navRight, and no second navUp");
+  assert.ok(dom.arrows.navRight.classes.has("on") && !dom.arrows.navUp.classes.has("on"));
+  timers.advance(380); timers.advance(110); for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, s0 + 3, "held right repeats like a key");
+  dom.stick.dispatch("pointerup", {});
+  timers.advance(1000); for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, s0 + 3, "released: nothing more");
+  assert.equal(timers.pending(), 0, "and no timer left behind");
+  assert.equal(dom.nub.style.transform, "", "the nub springs home");
+  assert.ok(!dom.arrows.navRight.classes.has("on") && !dom.stick.classes.has("on"));
+  dom.stick.dispatch("pointerdown", { clientX: 5, clientY: 200 });
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(link.stats().events, s0 + 4, "a tap on the left edge is navLeft at once");
+  dom.stick.dispatch("pointerup", {});
   // Tilt: setRoll() stands in for the sensor; the rim turns, the desktop steers.
   ctl.setRoll(30);
   for (let i = 0; i < 60; i++) { frame(); ctl.setRoll(30); }
@@ -703,6 +734,76 @@ test("a phone with no motion sensor is pedals and buttons only: it never blocks 
   phone.roll = 20;
   for (let i = 0; i < 60; i++) frame();
   assert.ok(Input.remoteSteers() && Input.steer() > 0.3, "a roll appearing later takes the wheel");
+});
+
+test("pad(): SCAN reads the game's QR in the page, fills the code and connects; a refused camera says so", async () => {
+  const [padEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(9) });
+  let onCode = null, started = 0, stopped = 0, cam = { ok: true };
+  const Scan = { supported: () => true, create: () => ({
+    start: async (video, cb) => { started++; onCode = cb; return cam; },
+    stop: () => { stopped++; onCode = null; }, active: () => !!onCode }) };
+  const swaps = [];
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), scan: fakeEl(), scanBox: fakeEl(), video: fakeEl(),
+    buttons: {}, hud: lcd() };
+  dom.scanBox.hidden = true;
+  const ctl = PhonePad.pad(dom, { deps: { scan: () => Scan, rtc: () => padEnd, prefetchIce: async () => null,
+    normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+    swap: async (o) => { swaps.push(o.code); return { ok: false, error: "expired" }; }, acceptInvite: async () => ({ ok: false }) } });
+  assert.match(dom.status.textContent, /Scan the game's QR code/, "the prompt offers the camera first");
+  const r = await ctl.scan();
+  assert.ok(r.ok && started === 1 && !dom.scanBox.hidden, "the camera view opens");
+  assert.equal(dom.scan.textContent, "CANCEL SCAN");
+  const deliver = onCode; onCode = null;   // NetScan stops itself before it hands the code over
+  deliver("https://example.test/f1-game/controller.html#pad=xyz789");
+  await settle();
+  assert.equal(dom.codeIn.value, "xyz789", "the code is lifted from the game's pairing URL");
+  assert.deepEqual(swaps, ["XYZ789"], "and CONNECT runs on it without another tap");
+  assert.ok(dom.scanBox.hidden && dom.scan.textContent === "SCAN QR CODE", "the camera view closes");
+  cam = { ok: false, error: "denied", message: "Camera access was refused. Allow it, or paste the code instead." };
+  const r2 = await ctl.scan();
+  assert.equal(r2.error, "denied");
+  assert.match(dom.status.textContent, /or type the code instead/, "the page's own words: there is no paste box here");
+  assert.ok(dom.status.classes.has("bad") && dom.scanBox.hidden);
+  // A browser with no camera API never shows the button.
+  const dom2 = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), scan: fakeEl(), buttons: {}, hud: lcd() };
+  PhonePad.pad(dom2, { deps: { scan: () => ({ supported: () => false }) } });
+  assert.equal(dom2.scan.hidden, true);
+});
+
+test("link(): the phone's focus wears .pad-ring (a browser may not draw it), until a real key or pointer takes over", () => {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(4) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const L = {};
+  const mk = (id) => { const n = { id, classes: new Set() };
+    n.classList = { add: (c) => n.classes.add(c), remove: (c) => n.classes.delete(c) }; return n; };
+  const a = mk("a"), b = mk("b");
+  const doc = { body: mk("body"), documentElement: mk("html"), activeElement: null,
+    addEventListener: (t, f) => { (L[t] ||= []).push(f); }, removeEventListener: (t, f) => { L[t] = (L[t] || []).filter((g) => g !== f); } };
+  const fire = (t, ev) => { for (const f of L[t] || []) f(ev); };
+  // The desktop's Input stands in: a nav moves focus the way MenuNav would.
+  const input = Object.assign(Object.create(desk.Input), {
+    remoteEvent: (k) => { if (k === "navDown") { doc.activeElement = doc.activeElement === a ? b : a; fire("focusin", { target: doc.activeElement }); } return true; } });
+  const clock = desk.clock;
+  const link = PhonePad.link(hostEnd, { input, pump: false, now: () => clock.t, doc });
+  const sess = PhonePad.padSession(padEnd, { roll: () => null, thr: () => 0, brk: () => 0, held: () => 0 }, { now: () => clock.t, heartbeat: false });
+  const step = () => { for (let i = 0; i < 4; i++) { clock.t += STEP; sess.pump(); link.pump(); } };
+  step();
+  // Focus moved by the page itself (a screen opening) is not the phone's.
+  doc.activeElement = b; fire("focusin", { target: b });
+  assert.ok(!b.classes.has("pad-ring"), "no ring before the phone navigates");
+  sess.event("navDown"); step();
+  assert.ok(a.classes.has("pad-ring") && !b.classes.has("pad-ring"), "the phone's focus is ringed");
+  sess.event("navDown"); step();
+  assert.ok(b.classes.has("pad-ring") && !a.classes.has("pad-ring"), "and the ring moves with it");
+  fire("keydown", { isTrusted: false });
+  assert.ok(b.classes.has("pad-ring"), "the pad's own synthetic keys do not count as the desktop's");
+  fire("pointerdown", { isTrusted: true });
+  assert.ok(!b.classes.has("pad-ring"), "a real click on the desktop takes over");
+  sess.event("navDown"); step();
+  assert.ok(a.classes.has("pad-ring"));
+  link.close();
+  assert.ok(!a.classes.has("pad-ring") && !(L.focusin || []).length, "closing the link clears the ring and its listeners");
 });
 
 // ---------------------------------------------------------------------------

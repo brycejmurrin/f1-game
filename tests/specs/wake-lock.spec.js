@@ -99,6 +99,9 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     // clickLive, not locator.click(): the render loop is live, so Playwright's
     // actionability poll never sees a stable box (fixtures.js has the measurement).
     await clickLive(page, "pausebtn");
+    // CONFIRM QUIT (js/ui/pause-opts.js) is ON by default: the first press
+    // arms #pm-quit, the second quits.
+    await clickLive(page, "pm-quit");
     await clickLive(page, "pm-quit");
     await page.waitForFunction(() => window.__wakeLog.includes("release"), null, WAIT);
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);

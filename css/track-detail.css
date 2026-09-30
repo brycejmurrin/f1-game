@@ -157,6 +157,9 @@ body[data-density="compact"] #track-detail-header {
 .tdc-medium { color: #facc15; font-size: var(--fs-micro); }
 .tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
 .tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
+/* ☆ FAVOURITE (js/ui/select-screen.js openTrackDetail builds it): a chip, not a
+   full-width bar, in the panel's column. */
+#track-detail-fav { align-self: flex-start; margin-top: calc(var(--gap) * 0.5); }
 #track-detail-flags { display: flex; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; margin: calc(var(--gap) * 0.5) 0 2px; }
 /* READOUTS, not controls: the base flag wore the button recipe verbatim
    (plate fill + plate-line border), so NIGHT read as a tappable chip. The

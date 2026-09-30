@@ -171,7 +171,13 @@ function enterGarage(page, team) {
     const vis = (id) => { const el = $(id); return !!el && !el.hidden; };
     const peel = () => {
       const a = window.__apex;
-      if (a?.info?.().state !== "menu") { $("pm-quit")?.click(); return true; }
+      if (a?.info?.().state !== "menu") {
+        // CONFIRM QUIT (js/ui/pause-opts.js): the first press arms, the second quits.
+        const q = $("pm-quit");
+        q?.click();
+        if (q?.classList.contains("armed")) q.click();
+        return true;
+      }
       if (vis("carsetup")) { $("cs-back").click(); return true; }
       if (vis("select")) { $("sel-back").click(); return true; }
       const stray = [...document.querySelectorAll(".screen")].filter((el) => !el.hidden && el.id !== "overlay");
