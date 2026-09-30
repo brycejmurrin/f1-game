@@ -1225,8 +1225,19 @@ const PitLane = (function () {
         return;
       }
       if (st === "box") {
+        // Fit the fresh set once the wheels are OFF (stopAnim mid-hold), not
+        // at latch: fitting at latch made the compound stripe change before
+        // anything moved, so the axle slide read as "no tyre swap". Ensure a
+        // fit still lands before release if the hold is cut short.
+        if (!c.pitFitted) {
+          const a = stopAnim(c);
+          if (a.u >= 0.50) { serviceCar(c); c.pitFitted = true; }
+        }
         c.pitT = (c.pitT || 0) - dt;
-        if (c.pitT <= 0) { c.pitState = "out"; c.pitT = 0; release(c, zz); }
+        if (c.pitT <= 0) {
+          if (!c.pitFitted) { serviceCar(c); c.pitFitted = true; }
+          c.pitState = "out"; c.pitT = 0; release(c, zz);
+        }
         return;
       }
       if (st === "out") return;                       // serviced; drive away
@@ -1284,7 +1295,9 @@ const PitLane = (function () {
         c.pitT = zz.boxS;
         c.pitArmed = false;
         c.pitStops = (c.pitStops || 0) + 1;
-        serviceCar(c);
+        // The set is fitted mid-hold (see the box branch above) so the wheels
+        // leave with the old compound and come back with the new one.
+        c.pitFitted = false;
       }
     }
 
@@ -1668,16 +1681,21 @@ const PitLane = (function () {
     // Render-only numbers for a car HELD in its box, read off the hold's own
     // clock (pitT counts boxS down): up on the jacks in the first 12 %, the
     // four wheels off outward along their axles from 15 % to 27 %, the new
-    // set on from 68 % to 80 %, down in the last 12 %. Nothing here moves
-    // the physics; js/car/car-draw.js lifts and slides the wheels by these,
-    // js/game.js lifts the body. One shared record, no per-frame allocation.
+    // set fitted at 50 % (while they are fully off), the new set on from
+    // 68 % to 80 %, down in the last 12 %. Nothing here moves the physics;
+    // js/car/car-draw.js lifts and slides the wheels by these, js/game.js
+    // lifts the body. One shared record, no per-frame allocation.
     const _anim = { lift: 0, off: 0, u: -1 };
     const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
     function stopAnim(c) {
       const zz = z();
       _anim.lift = 0; _anim.off = 0; _anim.u = -1;
       if (!c || c.pitState !== "box" || !zz || !(zz.boxS > 0)) return _anim;
-      const u = Math.min(1, Math.max(0, 1 - (c.pitT || 0) / zz.boxS));
+      // pitWorked extends the hold past boxS; the visual is keyed on the
+      // service half only so a garage visit does not freeze the jacks mid-air.
+      const span = zz.boxS;
+      const remain = Math.min(span, Math.max(0, (c.pitT || 0) - (c.pitWorked || 0)));
+      const u = Math.min(1, Math.max(0, 1 - remain / span));
       _anim.u = u;
       _anim.lift = 0.22 * (u < 0.5 ? ease(u / 0.12) : ease((1 - u) / 0.12));
       _anim.off = 0.55 * (u < 0.5 ? ease((u - 0.15) / 0.12) : ease((0.80 - u) / 0.12));
@@ -1688,6 +1706,7 @@ const PitLane = (function () {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0; c.pitPos0 = 0;
+      c.pitFitted = false;
       // The teach is per SESSION, not per page load — and over for good once
       // a stop has been completed (release).
       if (c.local) { for (const k in _said) delete _said[k]; _lastCue = null; }
@@ -1711,6 +1730,7 @@ const PitLane = (function () {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0;
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0;
+      c.pitFitted = false;
       // ...and the three the SUMMARY is computed from. release() clears these,
       // but only for a stop that COMPLETED; an attempt the flag interrupted
       // left the rank it was called from and the work already done on the car,
@@ -1775,6 +1795,14 @@ const PitLane = (function () {
         // thing to check when the lane is invisible.
         lane: laneUniform(),
         laneEdgeX: +laneEdge(7, zz.side).toFixed(2),   // at a nominal 7 m half-width
+        // THE STOP, SEEN — lift/off/u for a car in its box (null otherwise),
+        // and whether the fresh set has been fitted yet. The browser pit-lane
+        // spec asserts crew draws and the axle slide against these.
+        anim: (car && car.pitState === "box") ? (function () {
+          const a = stopAnim(car);
+          return { lift: +a.lift.toFixed(3), off: +a.off.toFixed(3), u: +a.u.toFixed(3),
+                   fitted: !!car.pitFitted };
+        })() : null,
       };
     }
 
