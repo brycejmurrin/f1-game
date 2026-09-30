@@ -97,6 +97,27 @@ test("an AI re-cuts its own plan from the wear it measures, quietly", async () =
   } finally { G.announce = ann; }
 });
 
+test("an AI set wearing at the planned, fuel-adjusted rate is not re-cut", async () => {
+  // loadK used to fold the fuel in: high on a full tank, sinking as it
+  // emptied, so the stop crept a lap later every re-cut (9 a car in 50 laps).
+  await g.race("bahrain", "day", "dry", { laps: 50 });
+  const { G } = g;
+  const T = vm.runInContext("TyreModel", g.ctx);
+  const A = vm.runInContext("AiDrive", g.ctx);
+  const c = G.cars.find((o) => !o.human && o.pitPlan && o.pitPlan.stops >= 1);
+  const before = c.pitPlan.lapsAt.slice();
+  const nominal = G.tyres.planLaps(c.tyre.life, 50);
+  const lap = 9, onSet = 8;
+  const fuel = 1 - (lap - onSet / 2) / 50;
+  const w = onSet / nominal * (1 + A.STRAT.FUEL_WEAR * fuel);   // exactly the plan's rate, with its fuel
+  c.lap = lap; c.tyreLap0 = 1; c.fuelLap = lap; c.tyreWear = w; c.tyreWearF = w; c.tyreWearR = w;
+  c.pitArmed = false; c.pitState = "none"; c._planLap = lap - 1; c._recutLap = null;
+  G.pits.update(c, 1 / 60);
+  assert.ok(Math.abs(c.pitPlan.loadK - 1) < 0.08, `loadK at the planned rate: ${c.pitPlan.loadK}`);
+  assert.equal(c.pitPlan.lapsAt.join(), before.join(), "the plan stands");
+  assert.ok(T);
+});
+
 test("an alert AI covers a rival's stop from behind; a slow wall does not", async () => {
   await g.race("bahrain", "day", "dry", { laps: 25 });
   const { G } = g;
@@ -106,7 +127,8 @@ test("an alert AI covers a rival's stop from behind; a slow wall does not", asyn
     c.experience = react; c.awareness = react;
     c.lap = c.pitPlan.lapsAt[0] - 1; c.pitStops = 0; c.pitArmed = false; c.pitState = "none"; c.pitNext = null;
     c.tyreWear = 0.6; c.speed = 70; c.prog = 50000;
-    o.prog = c.prog - 70 * 2; o.pitState = "lane"; o.retired = false; o.finished = false;   // 2 s behind, in the lane
+    o.prog = c.prog - 70 * 1.5; o.pitState = "lane"; o.retired = false; o.finished = false;   // 1.5 s behind, in the lane
+    c._rivalStop = false;
     for (const x of G.cars) if (x !== c && x !== o) x.prog = 0;   // (the rest far behind)
   };
   setup(0.3);
@@ -117,8 +139,11 @@ test("an alert AI covers a rival's stop from behind; a slow wall does not", asyn
   // that car's problem — covering it chained through the field.
   const mid = ai[2];
   c.pitArmed = false; c.pitNext = null; c.pitWhy = "";
-  mid.prog = c.prog - 70; mid.pitState = "none"; mid.retired = false; mid.finished = false;
+  mid.prog = c.prog - 35; mid.pitState = "none"; mid.retired = false; mid.finished = false;
   assert.equal(G.pits.think(c), "", "a stop two cars back is not ours to cover");
+  // …and a wall that has made its rival call this race does not make another.
+  mid.prog = 0; setup(1); c._rivalStop = true;
+  assert.equal(G.pits.think(c), "", "one rival call a race");
   o.pitState = "none";
 });
 

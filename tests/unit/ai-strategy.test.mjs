@@ -312,9 +312,15 @@ test("the rival rules: an alert wall covers the undercut, an aggressive one make
   // The car behind has boxed: a wall that reacts covers, one that does not waits.
   assert.equal(at({ rivalBehindBoxed: true, react: T0.REACT_MIN }), "cover");
   assert.equal(at({ rivalBehindBoxed: true, react: T0.REACT_MIN - 0.01 }), "");
-  // Stuck behind a car that has not stopped: the attacker goes first.
-  assert.equal(at({ stuckBehind: true, attack: T0.ATTACK_MIN }), "undercut");
-  assert.equal(at({ stuckBehind: true, attack: T0.ATTACK_MIN - 0.01 }), "");
+  // Stuck behind a car that has not stopped: the attacker goes first — on the
+  // lap before its stop, not two out.
+  assert.equal(at({ stuckBehind: true, attack: T0.ATTACK_MIN, lapsToStop: S.UNDERCUT_LAPS }), "undercut");
+  assert.equal(at({ stuckBehind: true, attack: T0.ATTACK_MIN - 0.01, lapsToStop: S.UNDERCUT_LAPS }), "");
+  assert.equal(at({ stuckBehind: true, attack: 1, lapsToStop: S.UNDERCUT_LAPS + 1 }), "", "two laps out is not the undercut lap");
+  // ONE rival call a race, and never one the next set cannot carry.
+  assert.equal(at({ rivalBehindBoxed: true, react: 1, rivalUsed: true }), "");
+  assert.equal(at({ stuckBehind: true, attack: 1, lapsToStop: 1, rivalUsed: true }), "");
+  assert.equal(at({ rivalBehindBoxed: true, react: 1, fits: false }), "");
   // Neither pulls a stop the plan does not want soon, or onto a fresh set,
   // or spends a stop the plan does not have.
   assert.equal(at({ rivalBehindBoxed: true, react: 1, lapsToStop: S.UNDERCUT_REACH + 1 }), "");

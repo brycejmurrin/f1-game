@@ -1609,7 +1609,14 @@ const PitLane = (function () {
       const nominal = G.tyres.planLaps(fittedLife, G.lapsTarget);
       const spent = G.tyres.spent(c);
       const onSet = G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0;
-      if (onSet >= 1 && spent > 0) plan.loadK = clamp(nominal * spent / onSet, 0.6, 2.5);
+      // …against the FUEL the set has carried: wear runs (1 + FUEL_WEAR·fuel)
+      // faster on a full tank, and the planner re-applies that to every stint,
+      // so a load factor that kept it read high early and sank as the tank
+      // emptied — the stop crept a lap later every re-cut (9 AI re-cuts a car
+      // in a 50-lap race, measured). The mean fuel over the laps on this set.
+      const midFuel = clamp(1 - (lap - onSet / 2) / Math.max(1, G.lapsTarget), 0, 1);
+      const fuelMul = 1 + AiDrive.STRAT.FUEL_WEAR * midFuel;
+      if (onSet >= 1 && spent > 0) plan.loadK = clamp(nominal * spent / (onSet * fuelMul), 0.6, 2.5);
       const loadK = plan.loadK || 1;
       const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget) / loadK;
       // `start` must be one of the planner's THREE classes — the alphabet
@@ -1631,7 +1638,9 @@ const PitLane = (function () {
                                       twoCompound: twoCompoundRule(G.lapsTarget) && owes, used });
       if (!rel) return false;
       const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
-      const minMove = ai && AiDrive.strategyTemper(c).react >= AiDrive.STRAT.TEMPER.REACT_MIN ? 1 : 2;
+      // A re-cut is for a real surprise: two laps for the player and an alert
+      // AI wall, three for the rest.
+      const minMove = !ai ? 2 : AiDrive.strategyTemper(c).react >= AiDrive.STRAT.TEMPER.REACT_MIN ? 2 : 3;
       if (newNext != null && oldNext != null && Math.abs(newNext - oldNext) < minMove) return false;
       if (newNext == null && oldNext == null) return false;
       plan.seq = plan.seq.slice(0, done).concat(cls ? [cls] : plan.seq.slice(done, done + 1)).concat(rel.seq.slice(1));
@@ -1662,7 +1671,8 @@ const PitLane = (function () {
     /** The two cars a pit wall watches, in seconds at OUR pace (the measure
      *  engineer.js uses): `behind` — the car DIRECTLY behind, within
      *  COVER_GAP_S, is in the lane now (the undercut on us); `stuck` — a car
-     *  within STUCK_GAP_S ahead, not yet stopped, on no fresher rubber. */
+     *  within STUCK_GAP_S ahead, not yet stopped, on no fresher rubber
+     *  (think() latches it: STUCK_LAPS of it before the undercut). */
     const _rivals = { behind: false, stuck: false };
     function rivalsOf(c) {
       _rivals.behind = false; _rivals.stuck = false;
@@ -1701,10 +1711,23 @@ const PitLane = (function () {
       const near = stopsLeft > 0 && lapsToStop <= AiDrive.STRAT.UNDERCUT_REACH && wear >= AiDrive.STRAT.UNDERCUT_MIN_WEAR
         ? rivalsOf(c) : null;
       const temper = near ? AiDrive.strategyTemper(c) : null;
+      // STUCK for a lap, not a corner: latched on the progress it started at.
+      if (near && near.stuck) { if (c._stuckFrom == null) c._stuckFrom = c.prog || 0; }
+      else c._stuckFrom = null;
+      const stuckLong = c._stuckFrom != null && (c.prog || 0) - c._stuckFrom >= AiDrive.STRAT.STUCK_LAPS * G.track.total;
+      // Would the NEXT set carry the car from a stop now to its own planned
+      // stop (or the flag)? A rival call that answers no is not taken.
+      let fits = true;
+      if (near) {
+        const nextCls = plan.seq[(c.pitStops || 0) + 1], nextStop = plan.lapsAt[(c.pitStops || 0) + 1];
+        const life = nextCls && TyreModel.AI_CLASS[nextCls] ? G.tyres.planLaps(TyreModel.AI_CLASS[nextCls].life, G.lapsTarget) / (plan.loadK || 1) : Infinity;
+        fits = (nextStop != null ? nextStop : G.lapsTarget) - (c.lap || 0) <= life * 1.1;
+      }
       const why = AiDrive.pitNow({
         stopsLeft,
         lapsToStop,
-        rivalBehindBoxed: !!(near && near.behind), stuckBehind: !!(near && near.stuck),
+        rivalBehindBoxed: !!(near && near.behind), stuckBehind: !!(near && near.stuck && stuckLong),
+        rivalUsed: !!c._rivalStop, fits,
         react: temper ? temper.react : 0, attack: temper ? temper.attack : 0,
         cautionLevel: cautionLevel(),   // per AI per tick: the allocation-free read
         wear,
@@ -1732,6 +1755,7 @@ const PitLane = (function () {
       arm(c, true);
       setNext(c, G.tyres.classRecord(want));
       c.pitWhy = why;
+      if (why === "cover" || why === "undercut") c._rivalStop = true;
       return why;
     }
 
@@ -1765,7 +1789,7 @@ const PitLane = (function () {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0; c.pitPos0 = 0;
-      c.pitFitted = false; c.pitReplans = 0; c._recutLap = null; c._planLap = null;
+      c.pitFitted = false; c.pitReplans = 0; c._recutLap = null; c._planLap = null; c._rivalStop = false; c._stuckFrom = null;
       // The teach is per SESSION, not per page load — and over for good once
       // a stop has been completed (release).
       if (c.local) { for (const k in _said) delete _said[k]; _lastCue = null; }

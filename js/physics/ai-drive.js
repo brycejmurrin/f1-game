@@ -981,18 +981,27 @@ const AiDrive = (function () {
   //              will come out on fresh rubber and take the place (the
   //              undercut). An alert wall (TEMPER.react) boxes to cover it.
   //   undercut — stuck within STUCK_GAP_S of the car AHEAD that has not
-  //              stopped: an aggressive wall (TEMPER.attack) stops first.
-  const UNDERCUT_REACH = 2;
+  //              stopped, for STUCK_LAPS, with the stop due next lap: an
+  //              aggressive wall (TEMPER.attack) stops first.
+  const UNDERCUT_REACH = 2;   // the cover's reach; the undercut itself only on the stop's own lap-before
+  const UNDERCUT_LAPS = 1;
+  // …and only after STUCK_LAPS stuck: a car a second behind for a corner is racing, not stuck.
   const UNDERCUT_MIN_WEAR = 0.4;
   const STUCK_GAP_S = 1.0;
   // …and cover only the car DIRECTLY behind, in a real fight: a stop's worth
   // of gap (the engineer's measure) chained — one stop pulled the car ahead
   // in, which pulled the one ahead of it (10 of 20 stops "cover", measured).
-  const COVER_GAP_S = 3.0;
+  const COVER_GAP_S = 2.0;
+  const STUCK_LAPS = 1;
   // An AI re-cuts at most once in REPLAN_GAP laps: the measured wear is noisy
   // over a lap or two and a plan sitting on a boundary flipped every lap
   // (up to 10 re-cuts in a 25-lap race, measured).
-  const REPLAN_GAP = 3;
+  const REPLAN_GAP = 4;
+  // ONE rival call a race. With the field nose to tail (Austria, 10 laps) the
+  // rules fired for 18 of 31 stops and half the grid two-stopped; an undercut
+  // or a cover is a call a pit wall makes once, not a habit. And never one the
+  // next set cannot carry to its own stop (ctx.fits): pulling a stop forward
+  // onto a stint too long for its set bought the extra stop it was meant to save.
   // STRATEGIC TEMPER from the ratings — who reacts, who attacks, who gambles.
   // react = 0.6·experience + 0.4·awareness; attack = craft; gamble = 1 − experience.
   const TEMPER = { REACT_MIN: 0.75, ATTACK_MIN: 0.85, GAMBLE_W: 0.8 };
@@ -1041,9 +1050,9 @@ const AiDrive = (function () {
     if (ctx.stopsLeft <= 0) return "";
     // VSC and SC (2, 3) are the free stop; a red flag (4) is not a pit window.
     if (ctx.cautionLevel >= 2 && ctx.cautionLevel < 4 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
-    if (ctx.lapsToStop <= UNDERCUT_REACH && (ctx.wear || 0) >= UNDERCUT_MIN_WEAR) {
+    if (!ctx.rivalUsed && ctx.fits !== false && ctx.lapsToStop <= UNDERCUT_REACH && (ctx.wear || 0) >= UNDERCUT_MIN_WEAR) {
       if (ctx.rivalBehindBoxed && (ctx.react || 0) >= TEMPER.REACT_MIN) return "cover";
-      if (ctx.stuckBehind && (ctx.attack || 0) >= TEMPER.ATTACK_MIN) return "undercut";
+      if (ctx.stuckBehind && ctx.lapsToStop <= UNDERCUT_LAPS && (ctx.attack || 0) >= TEMPER.ATTACK_MIN) return "undercut";
     }
     if (ctx.lapsToStop <= 0) return "plan";
     return "";
@@ -1311,6 +1320,6 @@ const AiDrive = (function () {
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,
-    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, UNDERCUT_REACH, UNDERCUT_MIN_WEAR, STUCK_GAP_S, COVER_GAP_S, REPLAN_GAP, TEMPER, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, UNDERCUT_REACH, UNDERCUT_LAPS, UNDERCUT_MIN_WEAR, STUCK_GAP_S, STUCK_LAPS, COVER_GAP_S, REPLAN_GAP, TEMPER, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK, TASTE_BIAS, TASTE_SOFTEN, MIN_STINT, ONE_SET_LAPS },
   };
 })();
