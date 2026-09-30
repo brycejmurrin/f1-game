@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { plan, toShell, SCOPED, RUN_ALL_PATHS, adaptedGroups } from "../../tools/ci/node-plan.mjs";
+import { plan, toShell, SCOPED, RUN_ALL_PATHS, adaptedGroups, circuitsOf, scriptBuilds } from "../../tools/ci/node-plan.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -45,6 +45,30 @@ test("a circuit-only diff runs the elevation twin narrowed to that circuit", () 
   assert.ok(p.run.includes("test:game-vm-a"));
   assert.deepEqual(p.circuits, ["imola"]);
   assert.match(toShell(p), /export APEX_CIRCUITS='imola'/);
+});
+
+test("a circuit-only diff skips the scripts whose files never build that circuit (read, not listed)", () => {
+  // imola: raced by no game-vm-b twin (they sit on monza and a handful of
+  // others), but it has a foundation spec, which foundation-core-vm (node-slow)
+  // globs — so node-slow stays, the two vm-b halves go.
+  const imola = plan(["js/circuits/imola.js"]);
+  assert.deepEqual(imola.circuits, ["imola"]);
+  assert.ok(imola.run.includes("test:game-vm-a") && imola.run.includes("test:node-slow"), JSON.stringify(imola));
+  assert.ok(imola.skip.includes("test:game-vm-b1") && imola.skip.includes("test:game-vm-b2"), JSON.stringify(imola));
+  assert.match(imola.why["test:game-vm-b1"], /no file builds imola/);
+  // portimao: in the elevation roster only — vm-a alone, scoped.
+  const portimao = plan(["js/circuits/portimao.js"]);
+  assert.deepEqual(portimao.run, ["test:game-vm-a"], JSON.stringify(portimao));
+  // monza: raced by nearly every twin — every VM script runs, scoped to monza.
+  const monza = plan(["js/circuits/monza.js"]);
+  for (const s of ["test:game-vm-a", "test:game-vm-b1", "test:game-vm-b2", "test:node-slow"]) assert.ok(monza.run.includes(s), s);
+  assert.deepEqual(monza.circuits, ["monza"]);
+  // circuitsOf: literals, helper imports one hop, the foundation glob, and null for a roster walk.
+  assert.ok(circuitsOf("tests/unit/flyby-fleet.test.mjs").has("sochi"), "FLEET comes through the helper import");
+  assert.ok(circuitsOf("tests/unit/foundation-core-vm.test.mjs").has("imola") && circuitsOf("tests/unit/foundation-core-vm.test.mjs").has("albert_park"));
+  assert.equal(circuitsOf("tests/unit/prop-clipping.test.mjs"), null, "a fleet sweep walks the roster");
+  assert.equal(circuitsOf("tests/unit/" + "nowhere-" + Date.now() + ".mjs"), null, "unreadable reads as everything");
+  assert.equal(scriptBuilds("test:no-such-script", ["imola"]), true, "an unknown script runs");
 });
 
 test("a game.js diff runs every VM slice, unscoped", () => {
