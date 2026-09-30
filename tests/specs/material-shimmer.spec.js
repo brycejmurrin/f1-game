@@ -54,7 +54,7 @@ async function roadFrames(page, mix) {
     // #game read an uncomposited, blank buffer (remote shimmer group, run
     // 36752762251). awaitSoftCapture arms the blit and polls from Node; it is
     // a no-op where the canvas composites for real.
-    await awaitSoftCapture(page, 30_000);
+    await awaitSoftCapture(page, 60_000);
     shots.push(await page.evaluate(() => {
       const soft = document.getElementById("game-soft");
       const cv = soft && soft.width > 0 ? soft : document.getElementById("game");
@@ -97,6 +97,11 @@ test.describe("baked materials — temporal stability", () => {
   test.skip(!process.env.APEX_SHIMMER, "opt-in: set APEX_SHIMMER=1 (unverified, SwiftShader-sensitive)");
 
   test("baked tarmac does not crawl relative to procedural", async ({ page }) => {
+    // image-grade-visual's size, for the same reason: an llvmpipe readback of
+    // a full-size lit frame takes tens of seconds (js/render/three/tlx.js
+    // SOFT_READ_STALE_MS note), and this test needs twelve of them. The ratio
+    // it asserts compares two runs at one size, so the size does not bias it.
+    await page.setViewportSize({ width: 640, height: 360 });
     await page.goto("/");
     // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
     await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
