@@ -430,9 +430,9 @@ test("HELP TEXT: the inline boot stamp agrees with the module", () => {
 
 test("HELP TEXT: CSS hides explanations in settings + race setup, never status lines or kept readouts", () => {
   assert.match(COMPONENTS, /:root\[data-menu-help="off"\] :is\(#pmsettings, #rs-body\) \.adv-help:not\(\[role="status"\]\):not\(\[aria-live\]\):not\(\[data-help="keep"\]\) \{ display: none; \}/);
-  // The row, and its own line kept so the way back never vanishes.
+  // The row is a .set-row, never an .adv-help, so HIDE can never hide the way back.
   for (const part of ["", "-label", "-prev", "-sel", "-next"]) assert.ok(SHELL.includes(`id="pm-helptext${part}"`), part);
-  assert.match(SHELL, /<p class="adv-help" id="pm-helptext-help" data-help="keep">/);
+  assert.match(SHELL, /<div id="pm-helptext" class="set-row"/);
   // Warnings, forecasts and readouts in the shell stay visible under HIDE.
   for (const id of ["pm-practice-state", "pm-pit-help", "pm-occlusion-note", "pm-drill-status", "pm-pit-estimate",
     "pm-stint-forecast", "pm-energy-forecast", "pm-coach-summary", "pm-connection", "pm-badges-summary", "pm-lap-report"]) {

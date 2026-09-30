@@ -127,8 +127,11 @@ test("shell declares the PAUSE MENU fold with four SettingRows and its summary",
   assert.match(SHELL, /<details id="pm-pausemenu" class="pm-renderer-sub">/);
   assert.match(SHELL, /id="pm-pausemenu-sum">PAUSE MENU · SHIPPED</);
   for (const id of ["pm-pauselayout", "pm-pauseside", "pm-pausedim", "pm-pauseconfirm"]) {
-    for (const part of ["", "-label", "-prev", "-sel", "-next", "-help"]) assert.ok(SHELL.includes(`id="${id}${part}"`), id + part);
+    for (const part of ["", "-label", "-prev", "-sel", "-next"]) assert.ok(SHELL.includes(`id="${id}${part}"`), id + part);
+    // One help line for the fold, not one per row: shellNodes sits at its ceiling.
+    assert.ok(SHELL.includes(`id="${id}-sel" aria-labelledby="${id}-label" aria-describedby="pm-pausemenu-help"`), id + " describedby");
   }
+  assert.match(SHELL, /<p class="adv-help" id="pm-pausemenu-help">/);
   // Placed after MOTION and before the TITLE SCREEN fold, inside APPEARANCE.
   const at = (s) => SHELL.indexOf(s);
   assert.ok(at('id="pm-motion-help"') < at('id="pm-pausemenu"'));
