@@ -3421,6 +3421,11 @@ const TLX = (function () {
         },
         invalidateSoftPresent() { _cancelSoftBlits(); },
         softPresent() { return !!_softBlit; },
+        // GLX output-target API (task 30). Real TLX impl is task 45.
+        setOutputTarget: undefined,
+        clearOutputTarget: undefined,
+        outputTargetState: undefined,
+        setRenderSizeOverride: undefined,
         // Same name as WGX/GLX so descriptor-copy onto GLX does not keep a
         // dead GLX softPresentState closure (backend-surface-parity).
         softPresentState() {
