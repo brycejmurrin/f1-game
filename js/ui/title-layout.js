@@ -260,7 +260,7 @@ const TitleLayout = (function () {
     edit.addEventListener("click", () => enter());
     body.appendChild(edit);
     body.appendChild(el("p", { className: "adv-help", textContent:
-      "EDIT ON TITLE SCREEN: drag a piece to move it, drag its corner dot to size it. Keys: arrows move, + and − size, Tab picks the next piece." }));
+      "EDIT ON TITLE SCREEN: drag a piece to move it, drag its corner dot to size it. Keys: arrows move, + and − size, [ and ] pick a piece; Tab moves through the bar." }));
 
     const overlay = document.getElementById("overlay");
     // Only from the title screen: mid-race (#overlay hidden) there is nothing to drag.
@@ -500,7 +500,9 @@ const TitleLayout = (function () {
     else if (k === "ArrowUp" || k === "ArrowDown") nudge("y", k === "ArrowUp" ? -1 : 1);
     else if (k === "+" || k === "=") nudge("size", STEP.size);
     else if (k === "-" || k === "_") nudge("size", -STEP.size);
-    else if (k === "Tab") cycle(e.shiftKey ? -1 : 1);
+    // [ / ] pick the piece; Tab is left alone so the bar's buttons (WIDTH,
+    // RESET PIECE, DONE) stay reachable from the keyboard.
+    else if (k === "]" || k === "[") cycle(k === "[" ? -1 : 1);
     else return;
     e.preventDefault(); e.stopPropagation();
   }

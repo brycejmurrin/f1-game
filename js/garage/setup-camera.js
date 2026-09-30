@@ -620,7 +620,7 @@ function holdSetupCtl(id, rates, step) {
   if (!el) return;
   const release = () => { if (spHeld === rates) spHeld = null; };
   el.addEventListener("pointerdown", (e) => {
-    if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
+    if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
     e.preventDefault();
     // Capture so a finger sliding off the chip still releases here. NOT
     // pointerleave for the release: setPointerCapture fires a boundary event as
@@ -662,7 +662,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
   };
   if (canvas) {
     canvas.addEventListener("pointerdown", (e) => {
-      if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
+      if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
       spPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
       spPinch = pinchGap();
       // Taking hold of the car is itself the instruction to stop the turntable —
@@ -694,7 +694,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     window.addEventListener("pointerup", release);
     window.addEventListener("pointercancel", release);
     canvas.addEventListener("wheel", (e) => {
-      if (!G.setupPreviewOn || (arrival.state && arrival.state.active)) return;
+      if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
       e.preventDefault();
       setupZoom(e.deltaY > 0 ? 1.1 : 1 / 1.1);
     }, { passive: false });
