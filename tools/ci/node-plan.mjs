@@ -36,6 +36,7 @@ import { createRequire } from "node:module";
 import { pick } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, dropBootFallback, specsOf } from "./select-specs.mjs";
 import { ADAPTED } from "./twinned-specs.mjs";
+import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -61,11 +62,41 @@ export const SCOPED = {
   "test:vm-page": null,   // derived: adaptedGroups()
 };
 
+/** Always-on riders on the vm-b1 arm (ci.yml). Not guarded by `planned()` —
+ *  seconds each — but ~55 of their files also sit in tooling-fast (guards),
+ *  so a PR billed them twice (docs/notes/CI-CAPACITY-2026-09-29.md). On a
+ *  matched PR plan those tooling-fast files are dropped via run-group.mjs
+ *  `--skip-tf`; onlyHere files and every deploy/Pages/nightly run stay. */
+export const ALWAYS_ON_TOPICAL = Object.freeze([
+  "test:net-unit",
+  "test:service-worker",
+  "test:lifecycle-unit",
+  "test:state-unit",
+  "test:agent-contract",
+  "test:audio-unit",
+  "test:garage-unit",
+  "test:steering-unit",
+  "test:desktop-unit",
+  "test:mcp",
+]);
+
+/** Files ALWAYS_ON_TOPICAL would re-run that tooling-fast already covers. */
+export function topicalTfOverlap(groups = groupsJson()) {
+  const tf = new Set(TOOLING_FAST_FILES);
+  const out = [];
+  for (const script of ALWAYS_ON_TOPICAL) {
+    for (const f of groups[script]?.files || []) if (tf.has(f)) out.push(f);
+  }
+  return [...new Set(out)].sort();
+}
+
 /** Paths a slice cannot be scoped around: the file may be the very suite a
  *  slice runs, or the harness every VM script boots through. */
 export const RUN_ALL_PATHS = [
   /^tests\/unit\//, /^tests\/helpers\//, /^tools\/lib\//, /^\.github\/workflows\/ci\.yml$/,
   /^tools\/ci\/node-plan\.mjs$/,
+  /^tools\/ci\/run-group\.mjs$/,
+  /^tools\/ci\/tooling-fast\.mjs$/,
 ];
 
 /** The browser groups the ADAPTED specs belong to, read from package.json's
@@ -132,8 +163,11 @@ const groupsJson = () => JSON.parse(fs.readFileSync(path.join(ROOT, "tests/group
  *  per-circuit data files); empty keeps those files TRACKED. */
 export function plan(changed, ref = "", scripts = pkgScripts()) {
   const scoped = { ...SCOPED, "test:vm-page": adaptedGroups(scripts) };
+  // skipTf / skipTfFiles: PR matched plans drop tooling-fast overlap from the
+  // always-on topical riders (see ALWAYS_ON_TOPICAL). Fail-safe `all` plans
+  // and --all keep every file — deploy / Pages / nightly must not thin out.
   const all = (reason) => ({ reason, all: true, groups: [], circuits: [],
-    run: Object.keys(scoped), skip: [] });
+    run: Object.keys(scoped), skip: [], skipTf: false, skipTfFiles: [] });
   if (!changed.length) return all("no diff — no base to plan against");
   const circ = circuitsTouched(changed, ref);
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
@@ -158,7 +192,9 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
     if (circuits.length && !scriptBuilds(script, circuits)) { skip.push(script); why[script] = `no file builds ${circuits.join(",")}`; continue; }
     run.push(script);
   }
-  return { reason: "matched", all: false, groups, circuits, run, skip, why };
+  const skipTfFiles = topicalTfOverlap();
+  return { reason: "matched", all: false, groups, circuits, run, skip, why,
+    skipTf: true, skipTfFiles };
 }
 
 export function changedSince(ref) {
@@ -173,6 +209,9 @@ export function toShell(p) {
     `NODE_PLAN_REASON=${q(p.reason)}`,
     `NODE_PLAN_RUN=${q(" " + p.run.join(" ") + " ")}`,
     `NODE_PLAN_SKIP=${q(p.skip.join(" "))}`,
+    // Matched PR plans set this so ci.yml's always-on riders call run-group
+    // --skip-tf; --all / fail-safe leave it unset so npm run stays whole.
+    p.skipTf ? "export NODE_PLAN_SKIP_TF=1" : "unset NODE_PLAN_SKIP_TF",
     `planned() { case "$NODE_PLAN_RUN" in *" $1 "*) return 0 ;; esac; echo "SKIPPED $1 ($NODE_PLAN_REASON; groups: ${p.groups.join(", ") || "none"})"; return 1; }`,
     p.circuits.length ? `export APEX_CIRCUITS=${q(p.circuits.join(","))}` : "unset APEX_CIRCUITS",
     "",
