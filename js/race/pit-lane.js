@@ -1466,7 +1466,9 @@ const PitLane = (function () {
       return !!G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.stage(G.season) === "sprint";
     }
     function twoCompoundRule(laps) {
-      return laps >= TWO_COMPOUND_MIN_LAPS && TyreModel.treadFor(G.raceWeather) === 0 && !sprintLeg();
+      return laps >= TWO_COMPOUND_MIN_LAPS
+        && TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness()) === 0
+        && !sprintLeg();
     }
     const COMPOUND_WARN_LAPS = 5;
     function twoCompoundApplies() { return enabled() && twoCompoundRule(G.lapsTarget); }

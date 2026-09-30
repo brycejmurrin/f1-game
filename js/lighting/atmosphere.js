@@ -12,9 +12,13 @@ const Atmosphere = (function () {
 
 function create(G) {
 Log.info("game", "Atmosphere.create");
-// Stable helpers from the game.js closure.
-const { clamp, satAdjust, isRaining, isWetRoad, isFloodActiveSession,
+// Stable helpers from the game.js closure. Wet/rain atmosphere branches stay on
+// the discrete raceWeather enum so a mid-arc stage flip updates sky/fog with
+// the chip; road look / FX / grip use G.isWetRoad (wetness) elsewhere.
+const { clamp, satAdjust, isFloodActiveSession,
         _nightAmbientBand, applyLightTune } = G;
+const wxWet = () => G.raceWeather === "wet" || G.raceWeather === "rain";
+const wxRain = () => G.raceWeather === "rain";
 const { LT, buildTrackLights } = LightTune;
 
 const CLEAR_FOG_SCALE = 0.45;
@@ -274,13 +278,13 @@ function applyRaceSettings() {
   // below and are authored to be murky; they keep exactly what they were given.
   // The FOG DENSITY tuner still multiplies on top, so the full wash is one
   // slider away.
-  if (!isWetRoad() && G.raceWeather !== "overcast" && G.raceWeather !== "fog") {
+  if (!wxWet() && G.raceWeather !== "overcast" && G.raceWeather !== "fog") {
     G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * CLEAR_FOG_SCALE;
   }
   const _wsm = LT.weatherSunMute != null ? LT.weatherSunMute : 1;
   const _mute = (f) => Math.max(0, 1 - (1 - f) * _wsm);
-  if (isWetRoad()) {
-    const _storm = isRaining();
+  if (wxWet()) {
+    const _storm = wxRain();
     // Heavier cloud cover in the rain; cap at 0.96 to let the shader still vary
     G._cloudBase = Math.min(0.96, G._cloudBase + (_storm ? 0.52 : 0.32));
     G.frameSky.cloud = G._cloudBase;
@@ -345,7 +349,7 @@ function applyRaceSettings() {
     if (G.raceTimeOfDay === "dawn") gm = 0.40;
     else if (G.raceTimeOfDay === "dusk") gm = 0.22;
     else if (isNightSession) gm = 0.16;
-    if (isWetRoad()) gm = Math.max(gm, isRaining() ? 0.18 : 0.12);
+    if (wxWet()) gm = Math.max(gm, wxRain() ? 0.18 : 0.12);
     else if (G.raceWeather === "overcast") gm = Math.max(gm, 0.34);
     else if (G.raceWeather === "fog") gm = Math.max(gm, 0.58);
     const _mb = G.track && G.track.def ? _trackAtmoBias(G.track.def) : 0;   // +overcast/humid, -arid

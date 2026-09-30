@@ -940,10 +940,10 @@ function rpmFor(gear, speed) {
 }
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
-// Weather predicates. "wet" = damp/wet track (wet road, no falling rain);
-// "rain" = active storm (wet road + falling rain + lightning). Both wet the road.
-function isWetRoad() { return raceWeather === "wet" || raceWeather === "rain"; }
-function isRaining() { return raceWeather === "rain"; }
+// Weather predicates from continuous trackWetness (same 0.25 / 0.72 ladder as
+// TyreModel.treadFor). Atmosphere profiles keep reading raceWeather enum.
+function isWetRoad() { return trackWetness() >= 0.25; }
+function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return TyreModel.wetness(raceWeather, wxArc && wxArc.arc); }
