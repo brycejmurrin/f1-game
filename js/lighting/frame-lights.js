@@ -142,10 +142,10 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
 const _lightCullBuf = [];
 const _lightScaleBuf = [];
 // FULL-SET twin of _lightScaleBuf, for the per-chunk lamp path. Per-chunk
-// consumers used to read the RAW baked list, so none of the LAMPS controls
-// (LAMP LEVEL / TEMPERATURE / FLICKER / WARM-UP / the twilight ramp) reached a
-// chunked mesh — drag LAMP LEVEL to 0 and the cars went dark while the city
-// stayed lit. This carries the same per-lamp transform the culled set gets.
+// consumers read this, not the RAW baked list, so the LAMPS controls (LAMP
+// LEVEL / TEMPERATURE / FLICKER / WARM-UP / the twilight ramp) reach a chunked
+// mesh too (otherwise LAMP LEVEL 0 darkens the cars while the city stays lit).
+// This carries the same per-lamp transform the culled set gets.
 // REUSED AND MUTATED IN PLACE, never reallocated: LampChunks.resolve memoises
 // its per-chunk tables on this array's IDENTITY, and positions/radii never
 // change here, so a fresh array frame would re-bake every table every frame.
@@ -223,10 +223,10 @@ let _rankGRef = 1, _rankDEdge = 1, _rankTrunc = false;
 let _rankReach = NaN, _rankBias = NaN, _rankFade = NaN;
 // How many lights this frame may end up carrying. Named because BOTH movers need
 // the same answer — setFrameLights culls down to it, and appendCarTailLights has
-// to evict against it to make room. appendCarTailLights used to measure its room
-// against the shader's literal 32 instead, so on the mobile tier (CAP 24) it saw
-// 8 free slots that did not exist, evicted nothing, and left the phone running 29
-// lights through the per-fragment loop the 24 was chosen to protect.
+// to evict against it to make room. Measuring against the shader's literal 32
+// instead sees 8 free slots on the mobile tier (CAP 24) that do not exist,
+// evicts nothing, and runs 29 lights through the per-fragment loop the 24 was
+// chosen to protect.
 function lampCap(carCount, mobileTier) {
   // With traffic, CAP defaults to lampCull (40) so ~8 of the 48 shader slots stay
   // free for tail-lights; solo runs use the full 48. Mobile tier clamps both
@@ -249,14 +249,13 @@ function lampCap(carCount, mobileTier) {
 }
 // The PerfGov half of the budget, alone. lampCap's OTHER term (lampCull with
 // traffic) is a TAIL-LIGHT RESERVE and must never reach the slot budget below —
-// measuring against it evicted lamps into slots that were sitting empty, which
-// is the bug the appendCarTailLights comment describes. The tier shed is not a
-// reserve: it is a total per-fragment fill budget, so both the lamps AND the
+// measuring against it evicts lamps into slots that are sitting empty. The
+// tier shed is not a reserve: it is a total per-fragment fill budget, so both the lamps AND the
 // tail-lights appended on top have to fit inside it.
-// GOVERNOR STEPS DO NOT POP THE LAMPS. The shed used to follow PerfGov.tier()
-// the frame it changed: 48 -> 32 -> 24 slots at once, and a device on the edge
-// (step down, verify, revert) flickered a dozen lamps off and on. Lighting now
-// follows a HELD tier (the tier must stand SHED_HOLD_MS before the lamps react;
+// GOVERNOR STEPS DO NOT POP THE LAMPS. Following PerfGov.tier() the frame it
+// changes drops 48 -> 32 -> 24 slots at once, and a device on the edge (step
+// down, verify, revert) flickers a dozen lamps off and on. Lighting follows a
+// HELD tier (the tier must stand SHED_HOLD_MS before the lamps react;
 // the governor itself is untouched) and the slot limit slides toward the held
 // tier's budget at SHED_DOWN / SHED_UP slots a second, so lamps leave the set
 // one at a time through the guard band and return through the entry ramp.
@@ -372,11 +371,11 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   _flFlick = flick; _flWarmK = warmK; _flTNow = tNow;
   const fl = skipFl ? _flSteadyFn : _flLive;
   // Cheap unsorted copy ONLY when every lamp fits with the full 5-slot tail-light
-  // reserve to spare. It used to run for any count ≤ 32, which broke two promises
+  // reserve to spare. Running it for any count ≤ 32 breaks two promises
   // downstream: appendCarTailLights evicts overflow from the array TAIL on the
-  // assumption the set is sorted farthest-last (it wasn't — on a 29-32-lamp track
-  // it could snap off the nearest floods instead), and the CAP reservation was
-  // silently ignored. 24+-lamp tracks now take the sorted heap path below.
+  // assumption the set is sorted farthest-last (unsorted, a 29-32-lamp track
+  // can lose its nearest floods instead), and the CAP reservation is ignored.
+  // 24+-lamp tracks take the sorted heap path below.
   if (count + LightBudget.TAIL_RESERVE <= CAP) {
     _rankSrc = null;   // dense path doesn't use the ranked cache
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
@@ -486,24 +485,24 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     // membership changes are invisible.
     dEdge = heap[heap.length - 1].d || 1;
     // The boundary fade only makes sense when lamps were actually culled — if the
-    // whole baked set fit inside CAP (the 24-32-lamp tracks that now take this
+    // whole baked set fit inside CAP (the 24-32-lamp tracks that take this
     // path for its sorting), there is no set boundary, and fading "the farthest
-    // of the set" would black out a real lamp that used to be lit.
+    // of the set" would black out a real lamp.
     truncated = count > CAP;
     // ── THE FADE MUST NOT KNOW WHICH WAY THE CAMERA POINTS ────────────────────
-    // This was `(dEdge - e.d) / (dEdge * 0.35)`, and BOTH terms carry camera yaw:
-    // e.d is the behind-biased rank distance, and dEdge is the biased edge of a set
-    // whose composition changes as the camera turns. So a lamp that never moved
-    // changed brightness when the player merely looked somewhere else. Measured on
-    // bahrain/night with the eye pinned and only the aim yawing ±60°
-    // (scratch harness, cap forced to 12 so the cull engages): a lamp 81 m ahead
-    // swung 2.35× — DIMMEST looking straight down the road, because that is when
-    // the most lamps compete and dEdge shrinks — and one at 208 m swung 23.5×.
-    // That is the reported "road section in front of me gets darker when I turn".
+    // In `(dEdge - e.d) / (dEdge * 0.35)` BOTH terms carry camera yaw: e.d is
+    // the behind-biased rank distance, and dEdge is the biased edge of a set
+    // whose composition changes as the camera turns. So a lamp that never moves
+    // changes brightness when the player merely looks somewhere else. Measured
+    // on bahrain/night with the eye pinned and only the aim yawing ±60° (cap
+    // forced to 12 so the cull engages): a lamp 81 m ahead swings 2.35× —
+    // DIMMEST looking straight down the road, when the most lamps compete and
+    // dEdge shrinks — and one at 208 m swings 23.5× ("road section in front of
+    // me gets darker when I turn").
     //
     // Fade on the lamp's own GEOMETRIC distance g against gRef, a radius built from
     // the CAP-th nearest lamp by TRUE distance. capRadius2 has no camera direction
-    // in it at all, so the steady-state brightness of every lamp is now a function
+    // in it at all, so the steady-state brightness of every lamp is a function
     // of where the camera IS and nothing else. (Temporal smoothing was considered
     // and rejected: a yaw that is held converges to the same wrong value, so it
     // turns the step into a ramp without removing the artifact.)
@@ -514,16 +513,16 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     // and an ahead lamp under REACH ABOVE 1 has d ≥ g/reach², so no member of the
     // set can sit beyond gRef.
     //
-    // edgeGuard keeps the one property the old form did have — a lamp must be at
+    // edgeGuard keeps the one property the 0.35 form did have — a lamp must be at
     // zero by the time it is dropped, or membership churn pops. It still measures
-    // against the true boundary, but over a NARROWER shell than the old 35%, so the
+    // against the true boundary, but over a NARROWER shell than 35%, so the
     // residual yaw dependence is confined to lamps near the set boundary.
     //
     // THIS WIDTH IS THE YAW-COUPLING DIAL — DO NOT WIDEN IT. dEdge is the one term
     // left that moves with the camera, so every lamp inside the shell inherits that
     // movement. Measured on bahrain/night, eye pinned, aim swept ±60°, worst
-    // stationary-lamp brightness swing (scratch harness, wrapping setFrameLights):
-    //   old 0.35 form  5.01x / 2.99x / 2.86x / 2.77x / 2.55x
+    // stationary-lamp brightness swing (harness wrapping setFrameLights):
+    //   0.35 form      5.01x / 2.99x / 2.86x / 2.77x / 2.55x
     //   0.20           5.01x / 2.67x / 2.52x / 2.39x / 2.13x   <- gives the fix back
     //   0.08           2.07x / 1.07x / 1.01x / 1.00x / 1.00x
     // 0.20 was tried specifically to give appendCarTailLights' eviction more cover

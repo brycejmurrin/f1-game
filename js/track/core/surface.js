@@ -124,12 +124,12 @@ const TrackSurface = (function () {
         const ease = t * t * (3 - 2 * t);
         const localFloor = Math.max(base - 10, Math.min(ground[i], pyMin));
         let slope = lerp(base - 0.3 - dist * 0.018, localFloor, ease);
-        // RUN-OFF SHELF. The ground used to start 0.3 m under the verge's outer
-        // edge (the grass verge is road mesh to hw + 2.2) behind a vertical skirt,
-        // and a car off the tarmac rides the ROAD PLANE (render-only), so it hung
-        // 0.35 m over the gravel at 2 m and 0.6 m at 12 m. Meet the verge 5 cm
-        // under its edge, hold nearly flat to SHELF_END, then ease into the old
-        // fall-off by SHELF_BLEND so the far landscape is unchanged.
+        // RUN-OFF SHELF. A car off the tarmac rides the ROAD PLANE (render-
+        // only; the grass verge is road mesh to hw + 2.2), so ground starting
+        // 0.3 m under the verge's outer edge behind a vertical skirt leaves it
+        // hanging 0.35 m over the gravel at 2 m and 0.6 m at 12 m. Meet the
+        // verge 5 cm under its edge, hold nearly flat to SHELF_END, then ease
+        // into the base fall-off by SHELF_BLEND so the far landscape is unchanged.
         if (dist < SHELF_BLEND) {
           const shelf = base - 0.08 - Math.max(0, dist - 2.2) * 0.004;
           const u = clamp01((dist - SHELF_END) / (SHELF_BLEND - SHELF_END));

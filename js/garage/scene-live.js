@@ -1,4 +1,4 @@
-/* Apex 26 — GarageLive: the garage's LIVE atlas. The timing screen's track map, the telemetry traces, the next-race sign and its flag, the sponsor banners, the contact shadow and the lamp pools — everything that follows the game rather than the team, repainted per circuit or career round. Split out of scene.js on 2026-09-08. */
+/* Apex 26 — GarageLive: the garage's LIVE atlas. The timing screen's track map, the telemetry traces, the next-race sign and its flag, the sponsor banners, the contact shadow and the lamp pools — everything that follows the game rather than the team, repainted per circuit or career round. Split out of scene.js. */
 const GarageLive = (function () {
   "use strict";
   const { HALF_W, Z_DOOR, scale, rgb, css } = GaragePrims;

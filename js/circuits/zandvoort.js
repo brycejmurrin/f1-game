@@ -10,19 +10,16 @@
     // The exit wall otherwise clips Tarzan's widened road envelope at 3.5% lap.
     pit: { side: -1, bands: { verge: 4 } },
     classic: true,
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.4 m off centreline; = trace vertex 0 (timing line).
-    // Was 0.3275. That already measured straight (mean |k| 0.00356 over
-    // 120 m) — it was on the wrong PART of the lap, not in a corner.
-    // See docs/tracks/START-LINES.md.
+    // 0.3275 also measures straight (mean |k| 0.00356 over 120 m) but
+    // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     // Scenery / exclusions / boards are racing-from-THIS line (pits at 0,
     // Tarzan runoff ~0.04, Hugenholtz stand 0.135, Luyendyk 0.915 — T14
-    // apex is 0.9105). The old start was 0.3275. Naming that as
-    // sceneryStartFrac added _sceneryShift and parked the pit complex on
-    // the Hunserug/Scheivlak stretch — same class as the bankZones bug
-    // that put 19° on those sweeps while Hugenholtz ran flat. Do not
-    // re-add it.
+    // apex is 0.9105). Do not add sceneryStartFrac: 0.3275 there adds
+    // _sceneryShift and parks the pit complex on the Hunserug/Scheivlak
+    // stretch (the same shift once put 19° of bank on those sweeps).
     name: "ZANDVOORT",
     gp: "Dutch GP",
     country: "Netherlands",

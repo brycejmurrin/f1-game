@@ -197,18 +197,13 @@
       //    distant snow-capped cone on the WESTERN skyline, dominating the
       //    view back down the straight.
       //
-      //    A TRUE COMPASS BEARING, not the straight's outboard normal. The
-      //    normal was the old idiom ("walk it out rather than guess a
-      //    bearing") and it is not a guess that went wrong — it is the wrong
-      //    quantity: it tracks the ROAD's heading, and at K(0.120) that
-      //    points 321.2° (north-west, measured). The circuit is at
-      //    35.3714 N 138.9267 E and the summit at 35.3581 N 138.7311 E, so
-      //    the real mountain sits at 266.1° — 18.2 km almost due west, which
-      //    is why this file's own header says "eastern foothills". 55° out is
-      //    a whole quadrant of sky, and it put the cone off the shoulder of
-      //    the view back down the straight instead of down the middle of it.
-      //    docs/tracks/fuji.md said "due north" and was wrong too; fixed with
-      //    this commit.
+      //    A TRUE COMPASS BEARING, not the straight's outboard normal: the
+      //    normal tracks the ROAD's heading, which at K(0.120) points 321.2°
+      //    (north-west, measured). The circuit is at 35.3714 N 138.9267 E and
+      //    the summit at 35.3581 N 138.7311 E, so the real mountain sits at
+      //    266.1° — 18.2 km almost due west (hence "eastern foothills" in this
+      //    file's header). 55° out puts the cone off the shoulder of the view
+      //    back down the straight instead of down the middle of it.
       //
       //    +X is WEST and +Z is NORTH (tools/track/import-circuit-path.mjs),
       //    so a bearing θ clockwise from north is (x, z) = (-sin θ, cos θ).

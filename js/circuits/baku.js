@@ -4,7 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "baku",
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // startFrac defaults to 0 — Already correct per docs/tracks/START-LINES.md
     name: "BAKU",
     gp: "Azerbaijan GP",

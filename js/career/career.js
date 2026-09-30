@@ -88,8 +88,8 @@ function rnd(...parts) {
 }
 // The seed for draws keyed only by (seed, round, driver) — qualifying luck and
 // reliability. season.round resets at rollover and career.seed never changes,
-// so without the year every season replayed the same retirements at the same
-// rounds (bug hunt 2026-09-22). The first season (2026) keeps the bare seed.
+// so without the year every season would replay the same retirements at the
+// same rounds. The first season (2026) keeps the bare seed.
 function seasonSeed() {
   if (!career) return 0;
   const k = (career.year | 0) - 2026;
@@ -325,18 +325,18 @@ function start(opts) {
   armRevision();
   const teamId = o.teamId || (flavour === "myteam" ? "custom" : "haas");
   // LIST's tail is whatever booted last — custom-team.js appends MY TEAM and
-  // then LEGENDS, so an unknown id used to hand a career Legends' factory setup.
+  // then LEGENDS, so falling back to the tail would hand an unknown id Legends'
+  // factory setup.
   const team = teamOf(teamId) || teamOf("custom") || Teams.LIST[0];
   // CLEAR THE RULESET BEFORE RESOLVING THE FACTORY. getFactorySetup() runs the
   // whole legality chain, and at this point `career` is still the career being
-  // LEFT — so starting a new one while another sat in a restricted era resolved
-  // the new team's works build against the old save's bans, and wrote the
-  // DEFAULTS fallback into `owned`/`fitted` for every banned category. A new
+  // LEFT — so starting a new one while another sits in a restricted era would
+  // resolve the new team's works build against the old save's bans, and write
+  // the DEFAULTS fallback into `owned`/`fitted` for every banned category. A new
   // career is always season 0, which is the unrestricted opening era, so
   // clearing is not merely safe here: it is the correct ruleset.
   //
-  // The menu path never hit this (useSlot() on an empty slot clears it first),
-  // which is exactly why it needed finding by reading rather than by playing:
+  // The menu path clears it first (useSlot() on an empty slot), but
   // __apex.career() calls start() directly.
   if (typeof Parts !== "undefined" && Parts.setLegality) Parts.setLegality(null, "");
   const factory = Parts.getFactorySetup(team);
@@ -390,20 +390,20 @@ function start(opts) {
 function salaryFor(team, rep) {
   return Math.round(20 + rep * 1.2 + team.tier * 15);
 }
-// THE PROMISE YOU MAKE WHEN YOU SIGN. A contract's season goal used to be one
-// number the game chose for you — expectedFinish(team) — so the only lever on a
-// career that felt too easy or too hard was the AI difficulty race setting,
-// which is per-race and blunt. Ambition is the same dial taken from the other
+// THE PROMISE YOU MAKE WHEN YOU SIGN. Without it a contract's season goal is
+// one number the game chooses for you — expectedFinish(team) — and the only
+// lever on a career that feels too easy or too hard is the AI difficulty race
+// setting, which is per-race and blunt. Ambition is the same dial taken from the other
 // end: you tell the team where you will finish, and the paddock prices it.
 //
-// THE MIDDLE RUNG IS WHAT EVERY CONTRACT ALREADY WAS — delta 0, rep 5, mv 12,
-// the old GOAL_REP/GOAL_MV exactly — so a deal signed before this existed
+// THE MIDDLE RUNG IS THE LEGACY CONTRACT — delta 0, rep 5, mv 12, the legacy
+// GOAL_REP/GOAL_MV exactly — so a deal signed before this existed
 // carries no `ambition`, reads as index 1 through ambIdx(), and resolves
 // byte-identically. That is why this table is ordered and indexed rather than
 // keyed, and why no CAREER_V rung is owed for the new field.
 //
 // PAID IN REPUTATION, NOT CREDITS, and deliberately. The settlement comment in
-// rollover() has always said a per-season cash bonus would go stale against
+// rollover() says a per-season cash bonus would go stale against
 // tools/car/career-economy.mjs and every figure in docs/CAREER.md. Reputation
 // and market value are the better currency anyway: they are what decides which
 // seats offerBar() opens next winter, so promising more buys a better car
@@ -430,9 +430,9 @@ function goalValueFor(team, amb) {
   return clamp(expectedFinish(team) + AMBITION[ambIdx(amb)].delta, 1, 22);
 }
 
-// THE GOAL IS A KIND, NOT ONE RULE. A contract used to promise exactly one
-// thing — a championship position — so the ambition rungs above had a single
-// sentence to scale and five seasons at a team read identically. Each kind
+// THE GOAL IS A KIND, NOT ONE RULE. A single promise — a championship
+// position — gives the ambition rungs above one sentence to scale and makes
+// five seasons at a team read identically. Each kind
 // derives its target from an expectation THAT ALREADY EXISTS, and the ambition
 // delta shifts it the same way it shifts champPos: no invented balance numbers.
 //
@@ -875,7 +875,7 @@ function sponsorAt(round) {
   }
   if (!kind) return null;
   // The LAST window of a season is cut at the finale (rollover clears the
-  // books): it used to run past it in ~78 % of seasons and could never pay.
+  // books): uncut it runs past it in ~78 % of seasons and can never pay.
   // A cut window asks — and pays — pro rata to the rounds it actually has.
   const rounds = Tracks.SEASON ? Tracks.SEASON.length : 0;   // 0: no calendar known, leave the window whole
   const window = rounds > 0 ? Math.max(1, Math.min(kind.window, rounds - start)) : kind.window;
@@ -914,8 +914,8 @@ function settleSponsor() {
   return sp.pay;
 }
 
-// Ownership only grows and the budget ladder stops at three, so a career used to
-// converge on owning everything with no end game. FACILITY is the open-ended
+// Ownership only grows and the budget ladder stops at three, so without a sink
+// a career converges on owning everything with no end game. FACILITY is the open-ended
 // sink: each level is a permanent slice off research cost. Geometric price,
 // linear capped discount — always affordable in principle, never trivialising.
 const FACILITY_MAX = 8;
@@ -977,8 +977,8 @@ function objectiveLabel(o) {
 // settlement can never disagree with what the hub showed, and it still cannot
 // be rerolled by reloading.
 //
-// INDEX 0 IS THE OLD DRAW. The choices start at the kind `objectiveFor` used to
-// return and walk forward through OBJ_KINDS, so a save with no pick — every save
+// INDEX 0 IS THE LEGACY DRAW. The choices start at the kind a single-brief save
+// was dealt and walk forward through OBJ_KINDS, so a save with no pick — every save
 // written before this existed — keeps precisely the brief it already had.
 const OBJ_CHOICES = 3;
 function objectiveAt(r, i) {
@@ -1072,7 +1072,7 @@ function settleRound(order, player) {
   if (!inCareer() || !player || careerConflict) return null;
   // The calendar has already moved on, so the brief that was live for this race is
   // the PREVIOUS round's. Idempotent: a second call for the same raced round must
-  // not re-pay prize/salary/wages (half-written saves + re-entry used to double it).
+  // not re-pay prize/salary/wages (half-written saves + re-entry would double it).
   const raced = career.season.round - 1;
   if (career.results.some((row) => row.r === raced)) return null;
   const pos = order.indexOf(player) + 1;
@@ -1411,8 +1411,8 @@ function acceptOffer(i) {
     career.team = team.id;
     career.seat = weakerSeat(team);
     // DEVELOPMENT FOLLOWS THE DRIVER (docs/CAREER.md), as swapSeats() does: it is
-    // keyed by seat, and a move left the player's growth in the old seat for
-    // the AI who took it — and handed the player the displaced driver's.
+    // keyed by seat, and a move must not leave the player's growth in the old
+    // seat for the AI who takes it — nor hand the player the displaced driver's.
     // Unlike swapSeats() the seats do NOT trade: the displaced driver leaves
     // the grid and the old seat falls to whoever career.seats / the roster
     // names, so that AI starts clean rather than inheriting the displaced
@@ -1540,8 +1540,8 @@ function rollover() {
   if (career.flavour !== "myteam" && career.deal && career.deal.left > 0) career.deal.left--;
   rolloverHire(dStand);
   // A CONTRACT THAT RUNS IS A CONTRACT: offers are drawn only in the winter the
-  // term expires. makeOffers used to run every winter beside `left--`, so a
-  // re-signing reset the term and "3 seasons" could never become 2. Until then
+  // term expires. Running makeOffers every winter beside `left--` would reset
+  // the term on re-signing, so "3 seasons" could never become 2. Until then
   // the hub goes straight to NEXT RACE (the empty-list path MY TEAM always took).
   career.offers = career.deal && career.deal.left > 0 ? [] : makeOffers(mv);
 

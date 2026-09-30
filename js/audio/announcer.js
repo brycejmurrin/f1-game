@@ -714,13 +714,13 @@ const Announcer = (function () {
      * every "speech synthesis stops on long text" workaround exists for. MEASURED
      * against the real scripts at this channel's own rate: Silverstone 15.4 s,
      * Monaco 18.1 s, Spa at night 22.2 s, a classic circuit in the rain 26.3 s.
-     * Not one of them fits, so on Chrome the welcome was being cut off mid-read.
+     * Not one of them fits, so as one blob Chrome cuts the welcome off mid-read.
      *
      * The second is that it simply sounds better. Phrasing — where the pauses
      * fall — is the main thing separating a read from a recital, and script()
      * already returns one SENTENCE per entry (its own comment says the array is
-     * so a caller can drop the tail). The old join(" ") threw that structure
-     * away and asked the engine to re-derive it from punctuation.
+     * so a caller can drop the tail). A join(" ") throws that structure away
+     * and asks the engine to re-derive it from punctuation.
      */
     /* THE CUE LANDS ON THE CUT. "…Let's go racing" is the line the player is
      * waiting for, and read straight through it arrived eight seconds into a

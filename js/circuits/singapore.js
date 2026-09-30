@@ -7,8 +7,7 @@
     pit: { mode: "street", side: -1 },   // the pit complex (TrackPit): the STREET one, left of the main straight by the permanent Pit Building; 80 km/h since 2025 (lane widened 1 m, FIA raised it from 60 — autosport.com/f1/news/how-faster-pitlane-speeds-could-spice-up-f1-singapore-gp/10763990/), the default
     name: "SINGAPORE",
     // Start/finish line. Snapped to the real one: coord 6.8 m off centreline; = trace vertex 0.
-    // Was 0.5075, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     sceneryStartFrac: 0.5075,
     // Marina Bay races ANTI-CLOCKWISE — Pirelli ("cars are driving

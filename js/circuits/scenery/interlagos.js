@@ -1,8 +1,8 @@
 /* Apex 26 — INTERLAGOS scenery (data only), split out of js/circuits/interlagos.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["interlagos"] =
   function (api) {
@@ -460,11 +460,9 @@
       forestEdge(0.10, 0.32, -1, 34, { density: 0.42, hMin: 6, hMax: 11,
                                         col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0.15 });
 
-      // Three dense climbing communities (was five shorter/farther ones). Measured
-      // baseDist is actually 68-90 m (the "~36-40 m" this comment used to claim was
-      // stale — never matched the call args below), rows 8-9; each patch grounds
-      // per-row against the real terrain now (see favelaPatch), so the old `slope`
-      // arg that used to fake the climb is gone.
+      // Three dense climbing communities: baseDist 68-90 m, rows 8-9. Each
+      // patch grounds per-row against the real terrain (see favelaPatch), so
+      // no `slope` arg fakes the climb.
       favelaPatch(0.13, -1, 72, 8, 7);
       favelaPatch(0.17, -1, 68, 9, 7);
       favelaPatch(0.22, -1, 72, 8, 6);
@@ -498,11 +496,9 @@
       }
 
       // DESCIDA DO LAGO / FERRADURA (bankZones frac 0.4547, both mid): the
-      // downhill run into the horseshoe. Ferradura's own dressing used to be
-      // chorded onto s=0.70/0.71 — a leftover from before bankZones carried
-      // GPS-referenced apex fractions — displaced by ~0.25 of a lap from its
-      // real apex. Moved here to match; see also Bico de Pato/Mergulho/
-      // Junção/Arquibancadas below, which had the same problem.
+      // downhill run into the horseshoe, dressed at the GPS-referenced apex
+      // fraction bankZones carries (as are Bico de Pato/Mergulho/Junção/
+      // Arquibancadas below).
       groundPatch(K(0.45), 1, 6, [40, 1.2, 30], [0.62, 0.56, 0.40],
                   { id: "interlagos-descida-gravel", samples: 6 });
       hedge(0.42, 0.50, -1, 14, 2.0, GREEN);
@@ -600,8 +596,7 @@
       marshalPost(K(0.625), 1, 8);
       marshalPost(K(0.665), -1, 8);
       // Treeline framing Bico de Pato through Junção — one continuous run
-      // over the corrected corner cluster (this span used to be labelled
-      // "Ferradura/infield esses" while actually dressing the wrong apexes)
+      // over the corner cluster.
       // gap 7, not 18: this run is on the INSIDE of the Bico de Pato/Mergulho
       // loop and the lap folds back on itself, so a canopy pushed 18 m into the
       // infield reaches the frac~0.85 leg on the far side. forestEdge clears

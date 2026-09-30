@@ -1,8 +1,8 @@
 /* Apex 26 — SHANGHAI scenery (data only), split out of js/circuits/shanghai.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["shanghai"] =
   function (api) {
@@ -295,12 +295,12 @@
 
       wall(0.965, 0.05, 1, 6, 1.1, WHITE);
       place(K(0.99), 1, 10, [5, 2.4, 12], CONC);
-      // place() sinks every box 0.8 m, so the 0.6 m red band this was stood
-      // wholly underground, flush with the block's faces (a same-facing
-      // coplanar pair, 2026-09-22). Sized to show 0.6 m and stand proud of the
+      // place() sinks every box 0.8 m, so a 0.6 m red band stands wholly
+      // underground, flush with the block's faces (a same-facing coplanar
+      // pair). Sized to show 0.6 m and stand proud of the
       // block: 10 cm along the road, 20 cm across it, where place()'s size-
       // hashed lateral jitter (≤ 9 cm) would otherwise eat the standoff.
-      // `deeper` 0.05: both boxes' sunk undersides shared one plane.
+      // `deeper` 0.05: otherwise both boxes' sunk undersides share one plane.
       place(K(0.99), 1, 10, [5.4, 1.4, 12.2], RED, 0.05);
 
       broadcastCompound(K(0.975), 1, 30, { vans: 3, dishes: 2, mastH: 10 });

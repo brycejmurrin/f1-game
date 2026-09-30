@@ -34,17 +34,13 @@
         marshal posts (§5, §6)
 
    Substitutions the emitter set forced (reported, not hidden):
-   - CORRECTED 2026-09-17: the claim that "there is no `bridge` emitter in the
-     scenery(api) contract" was FALSE, and it cost this circuit both of its
-     bridges. `circuitKit.pedestrianBridge` is on the frozen 112-member
-     contract and silverstone.js was already using `overheadSpan` directly.
-     The two crossings (§4, 0.1483 and 0.7930) had abutment towers either side
-     and open sky between them. They now span.
+   - Bridges: `circuitKit.pedestrianBridge` is on the frozen 112-member
+     scenery(api) contract (silverstone.js uses `overheadSpan` directly), so
+     the two crossings (§4, 0.1483 and 0.7930) span between their abutments.
    - The Whites spectator TUNNEL is a required Whites-tunnel modelGroup of
      portal headwalls plus a sunken `groundPatch` approach; nothing bores terrain.
    - Moss Corner's crowd bank is a required Moss-corner-bank modelGroup with
-     positive-rake seat tiers (wave 6) — the old spectatorHill+terrace pair
-     coplanar-clipped.
+     positive-rake seat tiers — a spectatorHill+terrace pair coplanar-clips.
 
    Emitter note (measured on this tree, not assumed): forestEdge's opts
    `spacing` is INERT — changing it 20 -> 200 moved the vertex count by zero.
@@ -259,8 +255,8 @@
       guardrail(0.3600, 0.4700, -1, 11.5, ARMCO);
       mixedWood(0.3600, 0.4700, -1, 18, 26, 11);
       groundPatch(K(0.4050), -1, 14, [8, 0.16, 70], SAND);
-      // 12..22 m (was 14..22): it now also covers the 0.44 sandy shoulder the
-      // loop near the end of this file used to lay under it on one plane.
+      // 12..22 m: it also covers the 0.44 sandy shoulder, so nothing else lays
+      // one under it on the same plane.
       groundPatch(K(0.4400), -1, 12, [10, 0.16, 56], SAND);
       marshalPost(K(0.4200), -1, 16);
       // Infield stays OPEN here too — §6: the drop must read. Specimens stop
@@ -272,8 +268,8 @@
       //     Double-apex complex Stirling Moss asked for (Wikipedia / IMSA).
       //     Repo turns[] names it T5a/5b — some maps say "T5" (UNCERTAIN label
       //     only; geometry follows the def). Tyres on both apexes; a required
-      //     modelGroup bank on the inside replaces the old spectatorHill+terrace
-      //     pair that coplanar-clipped for 1.8 m / 8 m².
+      //     modelGroup bank on the inside (a spectatorHill+terrace pair
+      //     coplanar-clips for 1.8 m / 8 m²).
       tyreWall(0.4700, 0.4830, 1, 12.5, TYRE_R);
       tyreWall(0.4900, 0.5030, 1, 12.5, TYRE_R);
       // Book the Moss bank + hairpin fold so deferred plantTree crowns cannot
@@ -533,10 +529,9 @@
         marshalPost(K(s), 1, 18);
       }
         // ---------------------------------------------------------------- FAR HORIZON
-      // A 2026-09-15 visual pass found this circuit's road rising and falling
-      // through a pancake-flat green plane that met the sky at a hard edge —
-      // the lap had relief and the WORLD had none, which is part of why the
-      // elevation read as exaggerated: the road moved and nothing behind it did.
+      // Without a horizon the road rises and falls through a pancake-flat plane
+      // that meets the sky at a hard edge: the road moves and nothing behind it
+      // does, so the elevation reads as exaggerated.
       // These are the Oak Ridges moraine — low WOODED RIDGES, not peaks. Mosport sits in
       // rolling Durham-County drumlin country: nothing sharp, nothing alpine,
       // just a soft horizon a few hundred feet up.

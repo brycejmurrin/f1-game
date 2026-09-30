@@ -4,7 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "interlagos",
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     sceneryCoordinates: "racing",
     // startFrac defaults to 0 — Already correct per docs/tracks/START-LINES.md
     name: "INTERLAGOS",

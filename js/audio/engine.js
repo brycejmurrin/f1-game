@@ -79,26 +79,22 @@ const GameAudio = (function () {
   const _irCache = new Map();     // keyed by venue name; ctx-bound, cleared on rebuild
 
   /* EVERY other pool in this tree is mobile-tiered — debris 48/16, marbles
-   * 16/6, furniture 24/12, the livery atlas 1024/512/256, even MUSIC_CACHE 2/1.
-   * The audio added on 2026-09-04 was the one subsystem that handed a phone
-   * exactly what it handed a desktop, and it is not a small hand: a ~1.5 s
-   * stereo ConvolverNode is among the most expensive nodes WebAudio has, and it
-   * was fed the engine PLUS four rival voices, each of which is a looping
-   * BufferSource + biquad + gain + StereoPanner running whether or not a rival
-   * is near enough to hear. Reported as the game crashing on an iPhone that had
-   * been fine that morning; the audio thread starving a phone already at 27.6
-   * fps is CPU contention, which is why it left no OOM strike and no
-   * context-loss marker to find.
+   * 16/6, furniture 24/12, the livery atlas 1024/512/256, even MUSIC_CACHE 2/1
+   * — and audio must be too: a ~1.5 s stereo ConvolverNode is among the most
+   * expensive nodes WebAudio has, and it is fed the engine PLUS four rival
+   * voices, each a looping BufferSource + biquad + gain + StereoPanner running
+   * whether or not a rival is near enough to hear. On an iPhone already at
+   * 27.6 fps the full graph starves the device into a crash that is CPU
+   * contention, so it leaves no OOM strike and no context-loss marker to find.
    *
    * READ LAZILY, not at module eval: glx.js is tagged ahead of this file so GLX
    * exists, but `mobileTier` is decided at ITS init, which has not run yet.
    * startEngine() is late enough to get the real answer.
    *
    * Device, not GRAPHICS: HIGH. `mobileTier` is `IS_MOBILE && !gfxHigh`, so
-   * HIGH on a phone rebuilt the desktop graph (convolver + 4 rivals) and
-   * undid the 2026-09-05 phone cut — the setting people reach for when fps
-   * is already bad. Audio follows the device; the renderer keeps its own
-   * HIGH path. */
+   * following it would rebuild the desktop graph (convolver + 4 rivals) on a
+   * phone set to HIGH — the setting people reach for when fps is already
+   * bad. Audio follows the device; the renderer keeps its own HIGH path. */
   function lowPower() {
     try {
       if (typeof GLX === "undefined" || !GLX) return false;
@@ -295,8 +291,8 @@ const GameAudio = (function () {
   let engineOn = false;
   // Node batches from stopEngine() that still sit on sfxBus until their
   // 0.35 s fade ends — ONE ENTRY PER STOP. A resume that starts a new graph
-  // BEFORE that timeout used to leave both graphs rendering (~450 ms of
-  // doubled CPU, stacked on every pause/hide). startEngine() buries them first.
+  // BEFORE that timeout would leave both graphs rendering (~450 ms of doubled
+  // CPU, stacked on every pause/hide), so startEngine() buries them first.
   let _dying = [];
   function killNodes(nodes) {
     for (let i = 0; i < nodes.length; i++) {
@@ -538,14 +534,11 @@ const GameAudio = (function () {
     const grab = (url) => fetch(url)
       .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
       .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
-    // ONE sample. f1_rev.mp3 used to be fetched, decoded, loop-scanned and given
-    // a running BufferSourceNode beside this one — all behind a gain written to
-    // 0 at creation and never to anything else, ever since the rev-crossfade was
-    // removed for measuring DARKER under load. Dead weight is the small half:
-    // the fetch was inside a Promise.all and `usingSamples` gated on it, so a
-    // 404 or a corrupt byte in the layer nobody could hear dropped every player
-    // to the oscillator fallback while the file the voice actually uses sat
-    // decoded beside it. The asset stays on disk; nothing loads it.
+    // ONE sample. f1_rev.mp3 stays on disk and nothing loads it: the
+    // rev-crossfade measures DARKER under load (see the note in the tick), and
+    // an inaudible layer fetched inside the Promise.all that gates
+    // `usingSamples` would let a 404 or a corrupt byte in it drop every player
+    // to the oscillator fallback.
     grab(SFX_ENGINE)
       .then((e) => {
         engBuf = e; samplesReady = true;
@@ -633,7 +626,7 @@ const GameAudio = (function () {
     // on any rejection that reaches it. Worse, this is the one path where it is
     // LIKELY: rebuildCtx() is only ever reached after a resume already failed,
     // i.e. with the context in exactly the state close() refuses. Same shape as
-    // the resume() sites below, which have always chained .catch.
+    // the resume() sites below, which chain .catch.
     try { const p = ctx.close(); if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); }); } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
@@ -961,11 +954,10 @@ const GameAudio = (function () {
     // Rival voices. Cheap on purpose — one looping source through a lowpass,
     // a gain and a panner each. They share engBuf with the player's own voice,
     // so they cost no extra fetch, decode or memory.
-    // Rival voices, on WHICHEVER core is running. They used to be built only
-    // `if (usingSamples)`, so the one situation where you most need to know a
-    // car is beside you — the recording failed to load and the whole mix is the
-    // fallback — was the one where the field went silent. Every other layer
-    // degrades to the synth; these now do too.
+    // Rival voices, on WHICHEVER core is running, not only `if (usingSamples)`:
+    // the one situation where you most need to know a car is beside you — the
+    // recording failed to load and the whole mix is the fallback — must not be
+    // the one where the field goes silent. Every layer degrades to the synth.
     //
     // The tail (lowpass -> gain -> panner -> bus, plus the reverb send) is the
     // same either way; only the HEAD and how you pitch it differ, so each voice
@@ -1260,15 +1252,13 @@ const GameAudio = (function () {
     // Tear the whole faded chain out of the graph once the 0.35 s source stops
     // complete: stopped sources GC on their own, but Gain/Biquad nodes routed
     // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
-    // tab-hide/show cycle used to strand ~8 nodes each time, forever.
-    // engGainIdle and limGain were NULLED but never DISCONNECTED, so every
-    // pause/resume cycle stranded two GainNodes that keep RENDERING — the Web
-    // Audio contract this list's own comment states. Measured with a fake
-    // context that drops a node only on disconnect(): +2 non-source nodes per
-    // cycle on the sample core, at EVERY point in this file's history, so it
-    // predates the rival voices rather than arriving with them. setPaused() in
-    // js/game.js stops the engine on pause and starts it on resume, so a long
-    // session pays it again and again. limGain feeds engGain.gain — an
+    // tab-hide/show cycle would strand ~8 nodes each time, forever.
+    // engGainIdle and limGain (deadIdleGain / deadLimGain) must be
+    // DISCONNECTED, not just NULLED, or every pause/resume cycle strands two
+    // GainNodes that keep RENDERING (measured with a fake context that drops a
+    // node only on disconnect(): +2 non-source nodes per cycle on the sample
+    // core). setPaused() in js/game.js stops the engine on pause and starts it
+    // on resume, so a long session would pay it again and again. limGain feeds engGain.gain — an
     // AudioParam, not a node — which is why it is invisible when you read the
     // graph for outputs.
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
@@ -1355,26 +1345,14 @@ const GameAudio = (function () {
       aimParam(engSrcIdle.playbackRate, rate, t, 0.035, 1e-4);
       f0 = enginePeriod > 1 ? (ctx.sampleRate * rate) / enginePeriod : 0;
       // NOT a crossfade to the second recording: measured 2026-09-03 with
-      // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load read
-      // DARKER (centroid 1489 -> 1389 Hz at the same rev), the same defect
-      // that got the rev-driven fade removed. Load is expressed on the one
-      // voice instead — see loadLift below, which the check pins.
-      // Single coherent voice: run only the steady idle loop, pitched. Crossfading
-      // in the second (different) recording made the output incoherent — its
-      // brightness FELL as revs rose (measured via the audio test) instead of
-      // rising. Brightness/"load" now comes from the lowpass opening with revs.
-      //
-      // Which makes three of the calls that used to live here provably dead, on
-      // a function the game loop runs EVERY FRAME:
-      //   engGainAcc.gain -> 0   was already 0 from createGain (startEngine) and
-      //                          is set nowhere else, so it scheduled 0 onto 0;
-      //   engSrcAcc.playbackRate pitched a source sitting behind that zero gain;
-      //   engGainIdle.gain -> 0.9 is a constant, so only the FIRST call does
-      //                          anything — but it must still be a ramp, not a
-      //                          direct .value, or the voice snaps in instead of
-      //                          fading over the 0.05 s tau.
-      // Each was a main-thread call plus a cross-thread timeline insertion, 60
-      // times a second, for the whole race.
+      // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load reads
+      // DARKER (centroid 1489 -> 1389 Hz at the same rev) — its brightness
+      // FALLS as revs rise. Single coherent voice: run only the steady idle
+      // loop, pitched; brightness/"load" comes from the lowpass opening with
+      // revs and from loadLift below, which the check pins.
+      // engGainIdle.gain -> 0.9 is a constant, so only the FIRST call does
+      // anything (this runs EVERY FRAME) — but it must still be a ramp, not a
+      // direct .value, or the voice snaps in instead of fading over the 0.05 s tau.
       if (!idleGainRamped && engGainIdle) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
@@ -1400,10 +1378,10 @@ const GameAudio = (function () {
     const loadLift  = clamp01((ph.ax || 0) / 12);
 
     // The shape caps (11 k / 7.2 k) bound the REV-DRIVEN part; the trims then
-    // scale it, and the FINAL value is what has to stay in range. It used to be
-    // the other way round, so once BRIGHTNESS was widened past 1 the product ran
-    // off past Nyquist, where a BiquadFilter silently pins it — the top of the
-    // slider moved a number that no longer moved the sound. Ceiling is just
+    // scale it, and the FINAL value is what has to stay in range. The other way
+    // round, BRIGHTNESS past 1 runs the product off past Nyquist, where a
+    // BiquadFilter silently pins it — the top of the slider moves a number that
+    // no longer moves the sound. Ceiling is just
     // under Nyquist so the pin is ours and audible, not the node's and silent.
     const ceil = ctx.sampleRate * 0.45;
     const cut = Math.min(ceil, (usingSamples
@@ -1414,7 +1392,7 @@ const GameAudio = (function () {
     // Compensate the tape-speed tilt. lastRate is the pitch ratio the core was
     // just handed, ~0.25 idle to ~0.70 redline; resampling costs roughly
     // -20*log10(rate) dB of perceived top end, so put a fraction of that back.
-    // Scaled by the BRIGHTNESS trim, so a player who wants the old muffled idle
+    // Scaled by the BRIGHTNESS trim, so a player who wants a muffled idle
     // can still have it, and capped so it cannot turn into a treble boost.
     if (tiltEq && lastRate > 0.02) {
       const want = Math.min(12, Math.max(0, -12 * Math.log10(lastRate)) * 0.75 * tune.brightness);
@@ -1688,11 +1666,11 @@ const GameAudio = (function () {
     rainWanted = true;
     if (rainSrc) { if (rainGain) rainGain.gain.setTargetAtTime(g, now(), 0.8); return; }
     if (!sfxOk()) return;
-    // A start landing inside stopRain's 1.2 s teardown used to be dropped on the
-    // floor — and the callers only fire on discrete weather FLIPS (race start,
-    // setWeatherLive), so a rain→dry→rain inside that window left the loop silent
-    // for the whole wet session with nothing to retry it. Queue it for the
-    // teardown callback instead of returning empty-handed.
+    // A start landing inside stopRain's 1.2 s teardown must not be dropped: the
+    // callers only fire on discrete weather FLIPS (race start, setWeatherLive),
+    // so a rain→dry→rain inside that window would leave the loop silent for the
+    // whole wet session with nothing to retry it. Queue it for the teardown
+    // callback instead of returning empty-handed.
     if (rainStopping) { rainPending = g; return; }
     const dur = 4;
     const buf = noiseBuf(dur);
@@ -1960,11 +1938,11 @@ const GameAudio = (function () {
     if (subGain) subGain.gain.setTargetAtTime(voice.subLvl * tune.sub, t, 0.05);
 
     // CHOP RATE. Its own knob now: 5.2 Hz at the bottom, the stock 13 Hz at 1,
-    // 39 Hz wide open, which is past a stutter and into a buzz. (It used to be
-    // the top half of the DEPTH trim, because depth saturates at a full
-    // ignition cut and had nothing left to buy above ~1.1 — but a slow deep
-    // cut and a fast shallow one are different limiters, and one slider could
-    // not express either.) Set once per tune change, not per frame.
+    // 39 Hz wide open, which is past a stutter and into a buzz. (Not the top
+    // half of the DEPTH trim, even though depth saturates at a full ignition
+    // cut and has nothing left to buy above ~1.1: a slow deep cut and a fast
+    // shallow one are different limiters, and one slider cannot express
+    // either.) Set once per tune change, not per frame.
     if (limOsc) limOsc.frequency.setTargetAtTime(13 * tune.limRate, t, 0.05);
     applyVenue();   // the REVERB trim and its layer switch both land here
   }
@@ -2207,10 +2185,9 @@ const GameAudio = (function () {
   }
 
   // BRAKE CUE: same click every time — the SIGNAL is the pulse rate, not pitch
-  // (docs/research/DRIVING-CONTROLS-RESEARCH.md, Forza BDA). `urgency` was
-  // unused on purpose so a future LIGHT/FULL level could share the voice; as of
-  // 2026-09-08 it drives the RATE, which is the half of that design the cue was
-  // always for. The voice is untouched: one 520 Hz click, whatever the urgency.
+  // (docs/research/DRIVING-CONTROLS-RESEARCH.md, Forza BDA). `urgency` drives
+  // the RATE, so every level shares the voice: one 520 Hz click, whatever the
+  // urgency.
   //
   // Forza's wording is the spec — "at its fastest speed, players may need to
   // fully engage the brakes, while a slower rate may mean you only need to let
@@ -2241,8 +2218,8 @@ const GameAudio = (function () {
     blip(880, "square", 0.13, 0.005, 0.09);
   }
 
-  // "No" — a rejected purchase used to play the SAME 660 Hz uiTick as a
-  // successful tab switch, so an over-budget part sounded exactly like a
+  // "No" — a rejected purchase must not play the SAME 660 Hz uiTick as a
+  // successful tab switch, or an over-budget part sounds exactly like a
   // fitted one. A short low sawtooth (the penalty() family's timbre, UI-
   // sized) is unmistakably not a confirmation.
   function uiReject() {
@@ -2255,9 +2232,9 @@ const GameAudio = (function () {
   }
 
   /*
-   * Music is now real, downloaded CC0 tracks (see assets/music/CREDITS.txt),
-   * streamed and looped through the AudioContext. The old synth sequencer was
-   * removed. startMusic(trackIdx) -> a race loop; startMusic(-1) -> menu loop.
+   * Music is real, downloaded CC0 tracks (see assets/music/CREDITS.txt),
+   * streamed and looped through the AudioContext. startMusic(trackIdx) -> a
+   * race loop; startMusic(-1) -> menu loop.
    */
   function ensureMusicGain() {
     if (!musicGain && ctx && master) {
@@ -2387,9 +2364,9 @@ const GameAudio = (function () {
       .then((ab) => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
       .then((buf) => {
         // Every track, builtin or uploaded, is cached under the same bound
-        // (MUSIC_CACHE): builtins used to be held for the life of the context
-        // — five decoded songs — and a single uploaded MP3 used to re-fetch
-        // and re-decode on EVERY repeat.
+        // (MUSIC_CACHE), rather than holding builtins for the life of the
+        // context (five decoded songs) and re-fetching and re-decoding an
+        // uploaded MP3 on EVERY repeat.
         musicBuffers[url] = buf;
         _bufKeys.push(url);
         while (_bufKeys.length > MUSIC_CACHE) delete musicBuffers[_bufKeys.shift()];
@@ -2492,10 +2469,8 @@ const GameAudio = (function () {
 
   /* THE COURTESY TONE — the beep before the message.
    *
-   * THIS CODE USED TO ARGUE ITSELF OUT OF EXISTING. The key-up below carried a
-   * comment saying a tone "reads as a beep, and a beep is a walkie-talkie
-   * convention F1 does not have". That is simply wrong: F1 team radio has one,
-   * it is called a COURTESY TONE, and to anyone who watches the sport it is the
+   * A beep is NOT only a walkie-talkie convention F1 does not have: F1 team
+   * radio has one, it is called a COURTESY TONE, and to anyone who watches the sport it is the
    * most recognisable thing about team radio — you hear the beep, then the
    * driver.
    *
@@ -2507,7 +2482,7 @@ const GameAudio = (function () {
    * So this is a tone in the documented tradition rather than a reproduction.
    *
    * THE TRADITION IS WELL SPECIFIED even where F1's instance is not — but only
-   * half of it transfers, and the first cut of this shipped the wrong half.
+   * half of it transfers.
    *
    * NASA's Quindar tones marked the start and end of a transmission at 2525 Hz
    * and 2475 Hz for 250 ms. Those are the numbers everyone quotes, and they are
@@ -2524,14 +2499,12 @@ const GameAudio = (function () {
    * of their own — they are already inside the band the hiss is shaped to, so
    * filtering would add three nodes and change nothing you can hear.
    *
-   * IT IS FOUR NOTES, NOT ONE, AND MEASURING IT BADLY SAID OTHERWISE. The one
-   * CC0 recreation of the F1 beep on Freesound (a synthesiser imitation by its
-   * author's own description, never a broadcast rip) was first FFT'd in its
-   * single loudest window, which reported "a near-pure 786 Hz, 22 dB clear of
-   * anything else" — and that is what this table shipped as one tone. The
-   * method was the bug: one window of a melody can only ever see one note of
-   * it. A spectrogram across the whole file (2048-point frames, 512 hop) shows
-   * a four-note figure:
+   * IT IS FOUR NOTES, NOT ONE. The one CC0 recreation of the F1 beep on
+   * Freesound (a synthesiser imitation by its author's own description, never
+   * a broadcast rip) FFT'd in its single loudest window reads "a near-pure
+   * 786 Hz, 22 dB clear of anything else" — but one window of a melody can
+   * only ever see one note of it. A spectrogram across the whole file
+   * (2048-point frames, 512 hop) shows a four-note figure:
    *
    *     t≈232 ms  1055 Hz  ~105 ms      C6      +14 cents
    *     t≈348 ms   775 Hz  ~ 90 ms      G5      -20 cents
@@ -2874,7 +2847,7 @@ const GameAudio = (function () {
     if (backend) { try { backend.start(); } catch (e) { /* a broken backend must not take the audio down */ } return; }
     if (!ctx) return;                    // remember the track but stay silent if music is off
     // The menu and the race share one playlist, so a state change must NOT
-    // interrupt it — going to the grid used to restart the track from zero.
+    // interrupt it — going to the grid must not restart the track from zero.
     // Whatever is playing keeps playing; we only start something if silent.
     if (musicOn && musicSrc) return;
     playIndex(musicIndex);
@@ -3027,8 +3000,7 @@ const GameAudio = (function () {
     // The chop RATE, which is where the top half of the LIMITER trim goes once
     // the depth has saturated at a full ignition cut.
     limiterHz() { return limOsc ? +limOsc.frequency.value.toFixed(2) : 0; },
-    // The cut's pitch sag, in cents of swing, and the levels behind the trims
-    // that used to be switch-only.
+    // The cut's pitch sag, in cents of swing, and the levels behind the trims.
     limiterCents() { return limPitch ? +limPitch.gain.value.toFixed(3) : 0; },
     ersLevel() { return ersGain ? +ersGain.gain.value : 0; },
     harvestLevel() { return harvGain ? +harvGain.gain.value : 0; },

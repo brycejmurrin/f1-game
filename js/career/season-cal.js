@@ -348,8 +348,8 @@ function midWeekend(season) { return sprintOn(season) && !!season && season.stag
 
 function quali() { return !fmtActive() || rulesConfig().quali; }
 // SEPARATE SPRINT QUALIFYING (FIA 2026 SR B2.2.1, B2.4.1(b)): a sprint weekend
-// qualifies for the sprint, then again for the Grand Prix. It used to run once
-// and grid both. Every racing session now qualifies (callers still pass `season`).
+// qualifies for the sprint, then again for the Grand Prix, so every racing
+// session qualifies (callers still pass `season`).
 function qualiNext() { return quali(); }
 /** The session's name on the sheet and the GO button. */
 function qualiLabel(season) { return stage(season) === "sprint" ? "SPRINT QUALIFYING" : "QUALIFYING"; }
@@ -423,15 +423,15 @@ function award(season, order, fastestId) {
 function scored() { return lastScored; }
 
 // Standings order for two driver ids: points, then countback (more wins, then
-// more seconds, …), then the id so the order is total and stable. Equal points
-// used to fall to Object.entries insertion order — whoever scored first.
+// more seconds, …), then the id so the order is total and stable (not
+// Object.entries insertion order — whoever scored first).
 // A driver's COUNTING points. With dropped scores only the best
 // (rounds − drop) results count, and only once a driver has more scoring
 // rounds than that — early in the season the gross total stands, as it did
 // in the dropped-score years. Gross for a save with no per-round record.
 // The season's OWN frozen rules when it carries them: the title-menu STANDINGS
 // reads a saved championship in flow "gp", where fmtActive() is false, and so
-// ranked by GROSS points — a driver ahead on counting points shown behind.
+// would rank by GROSS points — a driver ahead on counting points shown behind.
 function sprintMid(c, season) {
   if (!c || !season || season.stage !== "race") return false;
   if (c.sprint === true) return true;

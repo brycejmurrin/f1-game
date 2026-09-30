@@ -9,9 +9,9 @@ const Parts = (function () {
     {
       id: "engine", label: "ENGINE",
       // Every universal rung owns a distinct (chimney, servicePanel, heatShield)
-      // cooling package that does not track price — the ladder used to be one
-      // body at thirteen scales (`performance` vs `evo_kit` scored 0.332 on a
-      // key distance whose category median was 1.6). Costs and stats untouched.
+      // cooling package that does not track price, not one body at thirteen
+      // scales (which scores `performance` vs `evo_kit` 0.332 on a key
+      // distance whose category median is 1.6). Costs and stats untouched.
       options: [
         { id: "stock",        label: "Stock",          cost:   0, desc: "Factory spec power unit",                                           visual: { in: 0.85, inlet: 1, outlet: 1, podWidth: 1, shoulderHeight: 1, undercut: 1, coke: 1, tailWidth: 1, coverHeight: 1, servicePanel: 1, heatShield: 1 }, visualTier: 1 },
         { id: "lean_burn",    label: "Lean Burn",      cost:  35, desc: "Efficiency-tuned mapping — fuel saving with surprising torque",     accel: 1.05, braking: 1.02, visual: {"in": 0.72, "inlet": 0, "outlet": 0, podWidth: 0.88, shoulderHeight: 0.92, undercut: 1.18, coke: 1.15, tailWidth: 0.88, coverHeight: 0.90, chimney: 0, servicePanel: 0, heatShield: 0}, visualTier: 1 },
@@ -159,7 +159,7 @@ const Parts = (function () {
       id: "brakes", label: "BRAKES",
       // Each rung owns a HARDWARE SIGNATURE (caliper clock position, cover
       // solid / one-in-three / one-in-two, disc diameter and face) rather than
-      // just a duct size — all twelve tier-2 brakes used to render an identical
+      // just a duct size, which renders all twelve tier-2 brakes with one
       // wheel face. 0.5 rad of caliperPos is ~130 mm at r*0.78, the loudest
       // single knob here. Costs and stats untouched.
       options: [
@@ -229,8 +229,8 @@ const Parts = (function () {
         { id: "compound_c4",  label: "Compound C4",   cost:  55, desc: "Pirelli's track-ready soft — reliable grip upgrade over Hard/Medium",         speed: 0.98, accel: 1.02, cornering: 1.08, braking: 1.06, life: 0.76, visual: {band: [0.95, 0.42, 0.1], grooves: 0, bandWidth: 0.085, coverVanes: 7}, visualTier: 2 },
         { id: "soft",         label: "Soft",          cost:  80, desc: "+12% cornering, +4% accel — some top speed drag",                            speed: 0.97, accel: 1.04, cornering: 1.12, braking: 1.06, life: 0.67, visual: {band: [0.92, 0.12, 0.1], grooves: 0, bandWidth: 0.1, coverVanes: 6, shoulder: 1}, visualTier: 2 },
         // The softest dry compound wears the widest band, the squared shoulder
-        // and a magenta wall nobody else has — it used to be a 20 cr reskin of
-        // `soft` (band colours 5 % apart, under the sweep's 0.06 floor).
+        // and a magenta wall nobody else has, not a 20 cr reskin of `soft`
+        // (band colours 5 % apart fall under the sweep's 0.06 floor).
         { id: "compound_c5",  label: "Compound C5",   cost: 100, desc: "High-spec soft — aggressive grip over one stint, strong accel",               speed: 0.96, accel: 1.05, cornering: 1.15, braking: 1.08, life: 0.52, visual: {band: [1.00, 0.34, 0.62], grooves: 0, bandWidth: 0.132, coverVanes: 4, shoulder: 2}, visualTier: 2 },
         { id: "supersoft",    label: "Super Soft",    cost: 125, desc: "High grip compound — aggressive tyre load",                                   speed: 0.94, accel: 1.06, cornering: 1.20, braking: 1.10, life: 0.50, visual: {band: [0.88, 0.1, 0.3], grooves: 0, bandWidth: 0.12, coverVanes: 8, shoulder: 2}, visualTier: 2 },
         { id: "p_zero_red",   label: "P Zero Red",    cost: 145, desc: "Custom Pirelli high-performance compound — between Super Soft and Quali",     speed: 0.92, accel: 1.07, cornering: 1.24, braking: 1.13, life: 0.56, visual: {sidewall: 1, band: [0.97, 0.07, 0.07], grooves: 0, bandWidth: 0.13, coverVanes: 9}, visualTier: 2 },
@@ -269,9 +269,8 @@ const Parts = (function () {
       id: "ers", label: "ERS",
       // Every universal option owns a distinct (pack, cells, blister, conduit,
       // coolerIntake) tuple and `cells` (1-8 glowing boxes per pod flank) follows
-      // the story — the dear half used to inherit one six-cell default and
-      // `overtake_focus` / `race_mode` resolved byte-identical. Costs and stats
-      // untouched.
+      // the story — one inherited six-cell default makes `overtake_focus` /
+      // `race_mode` byte-identical. Costs and stats untouched.
       options: [
         { id: "standard",       label: "Standard",      cost:   0, desc: "Balanced energy recovery and deployment",                                    visual: { led: [0.15, 0.55, 1.6], pack: 1.0, cells: 3 }, visualTier: 1 },
         { id: "regen_plus",     label: "Regen+",        cost:  90, desc: "Enhanced braking recovery — harvests extra energy under braking",            accel: 1.05, braking: 1.05, visual: {led: [0.12, 1.5, 0.55], pack: 1.05, blister: 1, cells: 4}, visualTier: 1 },
@@ -357,7 +356,7 @@ const Parts = (function () {
       // Fuel is MASS: energy density buys speed and accel, the charge carried
       // costs cornering and braking. The SIGNATURE-free rows sit at the ends of
       // that axis (quali_mix heavy, quick_fill / hydro_synth light) so the
-      // category has a trade — every row used to sit at or above 1.00 on all
+      // category has a trade rather than every row at or above 1.00 on all
       // four stats. The six rows with SIGNATUREs are untouched.
       options: [
         { id: "standard",      label: "Standard",       cost:   0, desc: "Baseline pump-spec fuel — meets FIA minimum grade",                          visual: { cap: [0.55, 0.52, 0.6], flame: [1.15, 0.42, 0.14], fxFlame: [2.6, 1.05, 0.25], line: 1 }, visualTier: 1 },
@@ -399,8 +398,7 @@ const Parts = (function () {
       id: "exhaust", label: "EXHAUST",
       // The blown floor is the cornering column: flared exits buy cornering
       // with top end (megaphone 1.02, flared_gate 1.05) and the shielded exit is
-      // the opposite rung (no blowing, 1.06 speed). Exhaust used to move
-      // cornering by 0.01 across the whole ladder. `sig_williams_exh` clones
+      // the opposite rung (no blowing, 1.06 speed). `sig_williams_exh` clones
       // megaphone and was propagated with it.
       options: [
         { id: "stock",      label: "Stock",          cost:   0, desc: "Factory tailpipe, sized to the power unit's own plumbing",                    visual: { pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0 , shield: 1}, visualTier: 1 },

@@ -4,16 +4,14 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "silverstone",
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.2 m off centreline at the Wing; vertex 0 is the OLD National pit straight, 1.3 km away.
-    // Was 0.6400, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.5224,
-    // Scenery frame: the dressing predates startFrac (authored on the old `segs`
-    // layout, origin on the National straight). 0.02 is the best single fit over
-    // 11 landmarks (shift 0.5233; Copse/Wing/Abbey/Loop/Brooklands on their
-    // corners). Was 0.64, an OpenF1 guess, which put the paddock on Maggotts.
-    // bankZones/elevations were re-keyed with it so the road did not move.
+    // Scenery frame: the dressing is authored from the National-straight origin
+    // (the retired `segs` layout). 0.02 is the best single fit over 11 landmarks
+    // (shift 0.5233; Copse/Wing/Abbey/Loop/Brooklands on their corners); 0.64
+    // puts the paddock on Maggotts. bankZones/elevations are keyed to match.
     sceneryStartFrac: 0.0200,
     name: "SILVERSTONE",
     gp: "British GP",

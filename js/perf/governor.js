@@ -198,16 +198,16 @@ let _floorMs = 16.7;
 const FLOOR_DOWN_A = 0.3;
 const FLOOR_UP_A = 0.02;
 // DEGRADE_OVER sits ABOVE the floor; RESTORE_WITHIN also sits above it, just
-// barely. That asymmetry is the fix for a governor that could only ever go one
-// way. RESTORE_UNDER used to be 4.2 ms BELOW the floor, and `_frameEMA <
-// _floorMs - 4.2` is UNSATISFIABLE: `_floorMs` chases dt down at alpha 0.3 and
+// barely. That asymmetry is what lets the governor go both ways: a restore
+// threshold 4.2 ms BELOW the floor, `_frameEMA < _floorMs - 4.2`, is
+// UNSATISFIABLE: `_floorMs` chases dt down at alpha 0.3 and
 // up at 0.02 while `_frameEMA` moves at 0.1 in both directions, so from their
 // shared 16.7 start `_floorMs <= _frameEMA` is an invariant and the EMA can
 // never get 4.2 ms below a floor that is already at or under it. Simulated
 // over 60 million frames across constant 8.3/16.7/33.3, bimodal, uniform
 // 1-96 ms and load-then-recover sequences: the predicate fired ZERO times and
-// its closest approach was exactly 4.2000 ms — i.e. RESTORE_UNDER itself, at
-// every steady state. So any device that degraded once stayed degraded for the
+// its closest approach was exactly 4.2000 ms — the threshold itself, at every
+// steady state. Any device that degraded once would stay degraded for the
 // whole session, and the crash sentinel's pre-drop at js/game.js could never
 // climb back either.
 //
@@ -388,13 +388,12 @@ function init(gfx) {
       // New code, clean slate for the LADDER: a strike is evidence about code
       // that no longer exists, so the safe-mode floor must not outlive it.
       //
-      // But the EVIDENCE is recorded first. This branch used to drop SENT_ACTIVE
-      // on the floor, and SENT_ACTIVE is the only trace a jetsam kill leaves —
-      // so on a day with 188 commits (a fresh build roughly every 8 minutes, and
-      // the shell version guard pushes returning players straight onto it) the
-      // record was wiped between essentially every crash and the next launch.
-      // `crashStrikes: 0` was then read as "no OOM kill has happened", which the
-      // field could not have said either way. This counter is DIAGNOSTIC ONLY —
+      // But the EVIDENCE is recorded first. SENT_ACTIVE is the only trace a
+      // jetsam kill leaves, and a busy day ships a fresh build every ~8 minutes
+      // (the shell version guard pushes returning players straight onto it), so
+      // dropping it here wipes the record between a crash and the next launch
+      // and `crashStrikes: 0` reads as "no OOM kill has happened", which the
+      // field cannot say either way. This counter is DIAGNOSTIC ONLY —
       // it feeds no tier, no floor, nothing the player can feel — so it can
       // survive a deploy without the safe-mode one-way door the comment on
       // SENT_BUILD warns about.
@@ -456,7 +455,7 @@ function sentinelArm(on) {
             // change late in the previous race can leave a five-second
             // cooldown behind; carrying it across the menu spends the next
             // race's only opening window while the derived floor catches the
-            // slow frame cost. A provisional verdict from the old circuit is
+            // slow frame cost. A provisional verdict from the previous circuit is
             // equally invalid against the new race's reset averages.
             _govT = 0; _govCool = 0; _govCoolMs = 0; _pendingVerify = null;
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
@@ -469,19 +468,18 @@ function cleanRace() {
   if (_crashStrikes > 0) {
     _crashStrikes--;
     GameStore.store.rawSet(SENT_STRIKES, String(_crashStrikes));
-    // RECOMPUTE THE FLOOR. Paying a strike down used to move the counter and
-    // nothing else, so _perfTierFloor stayed at whatever init() derived for the
+    // RECOMPUTE THE FLOOR. Paying a strike down must move the floor, not just
+    // the counter, or _perfTierFloor stays at whatever init() derived for the
     // WHOLE session. One strike floors the tier at 2, and tier() >= 2 is exactly
     // the gate that sheds SSR (WET MIRROR / the dry sheens) and lamp shadows,
-    // while tier() >= 1 sheds PER-CHUNK LAMPS and the env probe. So a single
-    // crash — or one sentinel trip that was never a crash — silently pinned
-    // those features off until the page happened to reload, no matter what the
-    // player set GRAPHICS to. On mobile the one preset switch that DOES force a
-    // reload is ULTRA (it flips the mobileHigh bit, see js/perf/quality-preset.js
-    // syncBootTier), which is why the symptom reads as "wet sheen and per-chunk
-    // only work on ULTRA" rather than as a stuck floor.
+    // while tier() >= 1 sheds PER-CHUNK LAMPS and the env probe — so a single
+    // crash (or one sentinel trip that was never a crash) would pin those
+    // features off until a reload, whatever GRAPHICS says. On mobile only ULTRA
+    // forces that reload (it flips the mobileHigh bit, see
+    // js/perf/quality-preset.js syncBootTier), so the symptom reads as "wet
+    // sheen and per-chunk only work on ULTRA" rather than as a stuck floor.
     // clearStrikes() recomputes the floor the same way; both paths then release
-    // `_perfTier` to the new floor so they cannot drift apart again.
+    // `_perfTier` to the new floor so they cannot drift apart.
     _perfTierFloor = _floorFromStrikes(_crashStrikes);
     // The floor just dropped. _perfTier may be sitting on the OLD one (the
     // degrade branch steps from _floorTier(), so it absorbs whatever floor was
@@ -511,16 +509,14 @@ function tick(dtMs) {
     frameHistory[frameCursor] = dtMs; frameCursor = (frameCursor + 1) % frameHistory.length;
     frameCount = Math.min(frameHistory.length, frameCount + 1);
   }
-  // `_autoRes` gates the RESOLUTION stage ONLY — it must not return early here.
-  // It used to, and that made a user-facing control silently disable a safety
-  // system: RESOLUTION: LOW/MED/HIGH (js/game.js, applyResMode) calls
-  // setAutoRes(false) to stop the governor fighting the pinned scale, and this
-  // early return then took stage 2 down with it. A player who pinned the
-  // resolution — a control shown to EVERYONE, desktop included, not just the
-  // phones this file's crash sentinel is written for — got no feature shedding
-  // at all for the session: `_perfTier` froze at whatever init() left it, and
-  // on a device with crash strikes the pre-degraded floor could never be paid
-  // back down either, because cleanRace() alone does not move `_perfTier`.
+  // `_autoRes` gates the RESOLUTION stage ONLY — it must not return early here,
+  // or a user-facing control silently disables a safety system: RESOLUTION:
+  // LOW/MED/HIGH (js/game.js, applyResMode) calls setAutoRes(false) to stop
+  // the governor fighting the pinned scale, and an early return takes stage 2
+  // down with it. A player who pins the resolution — a control shown to
+  // EVERYONE, desktop included — would get no feature shedding at all for the
+  // session: `_perfTier` frozen at whatever init() left it, and a pre-degraded
+  // crash floor never paid back down (cleanRace() alone does not move `_perfTier`).
   // Pinning the resolution is a statement about SHARPNESS, not a request to
   // stop adapting; it makes stage 2 MORE important, not less, because the
   // cheaper lever is now unavailable. So the EMA and the derived floor are
@@ -528,16 +524,14 @@ function tick(dtMs) {
   // the data), and `_autoRes` is consulted only at the two places that actually
   // move the scale.
   // Ignore huge spikes (tab resume, GC): they'd yank the scale. But a SPIKE is
-  // one frame, and this used to be a bare `if (dtMs < SPIKE_MS)` that dropped
-  // every sample above the cap — which made the governor BLIND ON EXACTLY THE
-  // DEVICES IT EXISTS FOR. Below ~10 fps every frame is over the cap, nothing
-  // ever reaches the EMA, and `_frameEMA` sits at the 16.7 that sentinelArm()
-  // left it: the governor reads 59.9 fps, `degradeAt` is never crossed, and the
-  // whole ladder stays parked at tier 0 while the player watches a slideshow.
-  // Measured 2026-09-02 in a live browser (chrome-devtools MCP, bahrain, GLX):
-  // 2 rAF frames in 17.5 s — 0.11 fps real — and `__apex.perf()` in that same
-  // page reported `{fps: 59.9, floorMs: 16.7, tier: 0, scale: 1}`. Nothing had
-  // stepped, because nothing had been seen.
+  // one frame: a bare `if (dtMs < SPIKE_MS)` that drops every sample above the
+  // cap makes the governor BLIND ON EXACTLY THE DEVICES IT EXISTS FOR. Below
+  // ~10 fps every frame is over the cap, nothing reaches the EMA, and
+  // `_frameEMA` sits at the 16.7 that sentinelArm() left it: the governor reads
+  // 59.9 fps, `degradeAt` is never crossed, and the whole ladder stays parked
+  // at tier 0 during a slideshow. Measured 2026-09-02 in a live browser
+  // (bahrain, GLX): 2 rAF frames in 17.5 s — 0.11 fps real — while
+  // `__apex.perf()` reported `{fps: 59.9, floorMs: 16.7, tier: 0, scale: 1}`.
   //
   // A backgrounded tab cannot fake a run: js/game.js hides -> setPaused(true),
   // and the tick call site is gated on `!paused`, so Chrome's ~1 Hz background
@@ -802,9 +796,9 @@ function tick(dtMs) {
 function clearStrikes() {
   _crashStrikes = 0;
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
-  // Same latch release as cleanRace(): lifting the floor alone left `_perfTier`
-  // sitting on evidence earned under the old floor, so tier() stayed high after
-  // __apex.safeMode(false) until a reload. Drop to the new floor so the device
+  // Same latch release as cleanRace(): lifting the floor alone leaves
+  // `_perfTier` on evidence earned under the old floor, so tier() stays high
+  // after __apex.safeMode(false) until a reload. Drop to the new floor so the device
   // can prove itself again (governor may re-shed if frames still miss).
   if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
   GameStore.store.rawSet(SENT_STRIKES, "0"); GameStore.store.rawDel(SENT_ACTIVE);
@@ -851,14 +845,15 @@ return {
     _scaleCap = Infinity; _armCapProbe();   // ...and what the frame costs, so the measured ceiling expires with it
     // RAISING QUALITY MUST RELEASE WHAT THE OLD PRESET CAUSED. The degrade
     // branch steps from _floorTier(), which folds in _userTier, so a shed taken
-    // while the player sat on MEDIUM wrote _perfTier = 3 — the governor adopted
-    // the preset as its own evidence, exactly what the note below forbids. On a
-    // phone (default MEDIUM) that made GRAPHICS one-way: raising to HIGH left
-    // tier() at 3, so SSR, per-chunk lamps and both shadow maps stayed off until
-    // a reload, and ULTRA only appeared to fix it because it flips the mobileHigh
-    // bit and forces one. Dropping to the new floor on a RAISE gives the device a
-    // clean chance to prove itself; if it still cannot hold the budget the
-    // governor re-sheds within a couple of evaluations, on its own measurements.
+    // while the player sits on MEDIUM writes _perfTier = 3 — the governor
+    // adopting the preset as its own evidence, exactly what the note below
+    // forbids. Without this, GRAPHICS is one-way on a phone (default MEDIUM):
+    // raising to HIGH leaves tier() at 3, so SSR, per-chunk lamps and both
+    // shadow maps stay off until a reload (ULTRA only seems to work because it
+    // flips the mobileHigh bit and forces one). Dropping to the new floor on a
+    // RAISE gives the device a clean chance to prove itself; if it still cannot
+    // hold the budget the governor re-sheds within a couple of evaluations, on
+    // its own measurements.
     if (t < prev && _perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
     // _perfTier is deliberately NOT touched here. It is the governor's OWN
     // evidence-based tier; the floors are applied at READ time in tier(). An
@@ -887,14 +882,13 @@ return {
   openWindow: () => ({ frames: _openN, maxMs: +_openMax.toFixed(1), slow: _openSlow }),
   fpsEMA: () => _frameEMA,
   floorMs: () => _floorMs,
-  // THE TWO LATCHES THAT CAN DISABLE A LEVER FOR THE REST OF THE SESSION, and
-  // the reason they are exported rather than left private: neither was
-  // observable from any hook, so "why did this device shed nothing?" could only
-  // be answered by re-deriving this file's state by hand against a diagnostic
-  // payload — which is exactly what a 2026-09-10 iPhone capture cost
-  // (docs/notes/PERF-FINDINGS.md §2u). A latch is not a fault on its own: the
-  // restore branch clears both the moment headroom returns, so reading them
-  // TRUE means a lever is currently parked, not that it is broken. Read them
+  // THE TWO LATCHES THAT CAN DISABLE A LEVER FOR THE REST OF THE SESSION,
+  // exported rather than left private so "why did this device shed nothing?"
+  // is answerable from a hook, not by re-deriving this file's state by hand
+  // against a diagnostic payload (docs/notes/PERF-FINDINGS.md §2u). A latch is
+  // not a fault on its own: the restore branch clears both the moment headroom
+  // returns, so reading them TRUE means a lever is currently parked, not that
+  // it is broken. Read them
   // beside floorMs and autoShed — floorMs says what budget the device is being
   // judged against, and autoShed (not tier, which folds in the crash floor and
   // the player's GRAPHICS preset) says what the governor shed on its own

@@ -42,9 +42,9 @@ const NetNostr = (function () {
   /*
    * Meet in a room named by the code and trade one string for another.
    *
-   * The two sides are NOT symmetric, and pretending they were is what made the
-   * first attempt at this wrong: the host can post its invite immediately, but
-   * the guest cannot produce an answer until it has seen that invite. So:
+   * The two sides are NOT symmetric: the host can post its invite
+   * immediately, but the guest cannot produce an answer until it has seen that
+   * invite. So:
    *
    *   host   send: <invite>              resolves when the answer arrives
    *   guest  reply: offer => <answer>    resolves once its answer is posted,
@@ -61,17 +61,12 @@ const NetNostr = (function () {
   //
   // Its getRelays() picks a subset of its defaults DETERMINISTICALLY, from a
   // hash of the appId — so every player of this game draws the same handful,
-  // for ever. A bad draw is not intermittent, it is permanent, and ours was
-  // bad: measured from a real browser, two of the four had dead DNS
-  // (koru.bitcointxoko.org, relay02.lnfi.network), one timed out
-  // (communities.nos.social) and the last answered 503 (relay.damus.io). The
-  // room-code path could not work for anybody, and no amount of retrying was
-  // going to change which relays it asked.
+  // for ever, and a bad draw is permanent. Ours was bad: measured from a real
+  // browser, two of the four had dead DNS (koru.bitcointxoko.org,
+  // relay02.lnfi.network), one timed out (communities.nos.social) and the
+  // last answered 503 (relay.damus.io); no amount of retrying changes which
+  // relays it asks.
   //
-  // These are picked for being long-lived and widely used. They will also rot
-  // — that is the nature of free infrastructure — which is why the list is
-  // overridable at runtime and why room codes are the BACKUP path: the invite
-  // link and QR need no third party at all and must stay the way in.
   // THE CRITERION IS NOT POPULARITY, it is whether a relay accepts events from
   // an UNKNOWN pubkey. Trystero signs with an ephemeral key generated per
   // session, so any relay gating on a web of trust, a paid account or a
@@ -81,21 +76,17 @@ const NetNostr = (function () {
   // take anonymous traffic, which is increasingly how the good ones survive
   // spam.
   //
-  // Everything here was measured from a real browser, not chosen by
-  // reputation. Removed after failing: relay.damus.io (503 repeatedly),
-  // relay.nostr.band (handshake timeout), offchain.pub (web-of-trust gate),
-  // and Trystero's own draw for this appId, two of which had dead DNS.
+  // Everything here is measured from a real browser, not chosen by
+  // reputation; relay.nostr.band (handshake timeout) and offchain.pub
+  // (web-of-trust gate) fail. Re-measured 2026-09-27 with
+  // tools/net/nostr-probe.mjs (the only criterion that decides this: does the
+  // relay OK an ephemeral kind-22222 event from an unknown pubkey?): nos.lol
+  // (502) and relay.mostr.pub (301 on the WebSocket upgrade) fail;
+  // relay.damus.io is back after its 503s.
   //
   // They will all rot eventually — free infrastructure does — which is why the
   // list is overridable at runtime and why room codes are the BACKUP way in.
-  // The invite link and QR need no third party and have worked throughout.
-  //
-  // Re-measured 2026-09-27 with tools/net/nostr-probe.mjs (the only criterion
-  // that decides this: does the relay OK an ephemeral kind-22222 event from an
-  // unknown pubkey?): nos.lol answered 502 and relay.mostr.pub a 301 on the
-  // WebSocket upgrade — two of the six shipped relays were dead, so a room
-  // code's publish and subscribe ran on four. Both dropped; the three others
-  // that said OK that day are added (relay.damus.io is back after its 503s).
+  // The invite link and QR need no third party and must stay the way in.
   const RELAYS = [
     "wss://relay.primal.net",
     "wss://nostr.mom",
@@ -109,16 +100,14 @@ const NetNostr = (function () {
   // localStorage apex26.nostrRelays = ["wss://…", …] overrides the list above,
   // used verbatim — no wss:// is prefixed, so a ws://127.0.0.1 fixture works
   // through here and nowhere else.
-  // A STORED OVERRIDE MUST NOT BE ABLE TO BRICK THE FEATURE, and until now it
-  // could: the list was used verbatim if it merely PARSED as a non-empty
-  // array. `new WebSocket(url)` on a malformed entry throws SyntaxError — "The
-  // string did not match the expected pattern" — which the old catch reported
-  // as "could not reach the room service". A device could be left permanently
-  // unable to use room codes by one bad localStorage write, while the invite
-  // link (which touches no relay) kept working and hid it.
-  //
-  // Not hypothetical: it happened here, from a copy-pasted debugging line whose
-  // ellipsis placeholders — "wss://…" — are valid JSON and an invalid URL.
+  // A STORED OVERRIDE MUST NOT BE ABLE TO BRICK THE FEATURE. A list that
+  // merely PARSES as a non-empty array can still hold a malformed entry, and
+  // `new WebSocket(url)` on one throws SyntaxError — "The string did not match
+  // the expected pattern" — which reads as "could not reach the room service".
+  // One bad localStorage write (a copy-pasted debugging line's "wss://…"
+  // placeholder is valid JSON and an invalid URL) would leave a device
+  // permanently unable to use room codes, while the invite link (which
+  // touches no relay) keeps working and hides it.
   //
   // So each entry is checked, bad ones are dropped rather than poisoning the
   // batch, and an override with nothing usable left falls back to the shipped
@@ -484,13 +473,11 @@ const NetNostr = (function () {
     });
   }
 
-  // exchange() IS directExchange(). The full Trystero room join (joinRoom /
-  // makeAction / onPeerJoin, behind localStorage apex26.nostrTrystero) was
-  // deleted 2026-09-10: it carried the answer over Trystero's OWN
-  // RTCPeerConnection, which died exactly when ours started (measured, see
-  // the directExchange header), and its only diagnostic seam was a
-  // console.warn interception. Nothing in the vendored tree beyond
-  // createEvent/subscribe is reached any more.
+  // exchange() IS directExchange(), not a full Trystero room join (joinRoom /
+  // makeAction / onPeerJoin): that carries the answer over Trystero's OWN
+  // RTCPeerConnection, which dies exactly when ours starts (measured, see the
+  // directExchange header). Nothing in the vendored tree beyond
+  // createEvent/subscribe is reached.
   const exchange = directExchange;
 
   return { JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, exchange, directExchange, load,

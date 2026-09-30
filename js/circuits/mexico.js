@@ -4,11 +4,10 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "mexico",
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.6 m off centreline; = trace vertex 0.
-    // Was 0.6350. That already measured straight (mean |k| 0.00211 over
-    // 120 m) — it was on the wrong PART of the lap, not in a corner.
-    // See docs/tracks/START-LINES.md.
+    // 0.6350 also measures straight (mean |k| 0.00211 over 120 m) but
+    // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     // No sceneryStartFrac: the dressing is authored against startFrac 0 (pit
     // garages 0.005-0.05, S/F gantry 0.00, Peraltada terrace 0.892-0.952). The

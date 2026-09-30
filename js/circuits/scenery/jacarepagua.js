@@ -1,8 +1,8 @@
 /* Apex 26 — JACAREPAGUA scenery (data only), split out of js/circuits/jacarepagua.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["jacarepagua"] =
   function (api) {
@@ -143,8 +143,8 @@
         if (s < 0.36 || s > 0.60) return;
         const h = hash(k * 17);
         // Rows at 28-40 / 44-48 m, not 46-76 / 74-100: on this side the lap folds
-        // back 60-90 m out (the 0.00-0.06 and 0.92-0.93 legs), so the old rows
-        // stood on the back straight and 32 of them were dropped every build.
+        // back 60-90 m out (the 0.00-0.06 and 0.92-0.93 legs), so rows that far
+        // out stand on the back straight (32 dropped every build).
         palm(k, -1, 28 + h * 12, 13 + h * 5, h < 0.5 ? PALM : PALM_D);
         if (h > 0.5) palm(k, -1, 40 + h * 8, 12 + h * 5, PALM_D);
       });

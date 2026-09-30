@@ -53,15 +53,13 @@ const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // on player.px/track. This is the same ring-of-lamps energy math, anchored at
 // the world origin instead of the player's track position.
 let setupPreviewAz = 0.6;
-// Preview CAMERA state. The turntable used to be the only way to see the car:
-// one fixed height, one fixed distance, spinning left whether you wanted it to
-// or not, so inspecting the part you just bought meant waiting for it to come
-// back around. az/el/dist are now a real orbit the player drives (drag on the
-// canvas, wheel/pinch to zoom, preset chips in #cs-view), and SPIN is a toggle
-// over the top of it rather than the whole interaction.
-// Defaults reproduce the previous framing: eye y 2.0 at dist 8.35 over a
-// target at y 0.35 is an elevation of atan2(1.65, 8.5) — el unchanged, a hair
-// closer after the WGX garage fix shipped.
+// Preview CAMERA state. az/el/dist are a real orbit the player drives (drag on
+// the canvas, wheel/pinch to zoom, preset chips in #cs-view), and SPIN is a
+// toggle over the top of it rather than the whole interaction — a fixed
+// turntable makes inspecting the part you just bought a wait for it to come
+// back around.
+// Defaults: eye y 2.0 at dist 8.35 over a target at y 0.35 is an elevation of
+// atan2(1.65, 8.5).
 const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.35;
 // Half the car's BROADSIDE footprint (~5.95 m drawn) plus ~5% margin.
 // Was 3.35 (~12%), then 3.15 after honest WGX off-axis projection. 3.10 is a
@@ -194,10 +192,9 @@ function setSetupSpin(on) {
 // Ease the garage flaps at the SAME asymmetric rates the car uses on track (see
 // X_OPEN_RATE / X_CLOSE_RATE) — the snap-shut is half the character of the
 // system, and a garage that opened and closed at one speed would missell it.
-// Its own function so the frame loop and __apex.garageStep() cannot drift: the
-// preview animation was previously reachable ONLY from inside the rAF render,
-// which made it untestable, and an untested animation is one you find out about
-// from a player.
+// Its own function so the frame loop and __apex.garageStep() cannot drift:
+// reachable only from inside the rAF render, the preview animation would be
+// untestable, and an untested animation is one you find out about from a player.
 function stepSetupAero(dt) {
   const want = setupPreviewXOn ? 1 : 0;
   const rate = want > setupPreviewAeroX ? X_OPEN_RATE : X_CLOSE_RATE;
@@ -362,7 +359,7 @@ function renderSetupPreview(dt) {
   if (setupPreviewSpin && !(arriving && arriving.active)) setupPreviewAz += dt * 0.35;   // slow turntable
   stepSetupAero(dt);
   // The orbit radius is horizontal, so raising the camera does not walk it away
-  // from the car: at el 0 this is the old fixed ring, at el 1.2 it is overhead.
+  // from the car: at el 0 this is the turntable ring, at el 1.2 it is overhead.
   const spCe = Math.cos(setupPreviewEl), spSe = Math.sin(setupPreviewEl);
   // The docked #cs-inner panel covers the right portion of the canvas, so the
   // car only ever gets (1 - panelFrac) of the frustum. Read the panel's live
@@ -389,25 +386,24 @@ function renderSetupPreview(dt) {
       panelFracY = clamp((pr.bottom + Math.min(camTop, ch) - ch) / ch, 0, 0.85);
     }
   }
-  // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF was chosen so the
-  // car cleared the full frustum — but a third of that frustum is behind the
-  // panel, so the turntable put the front wing off the left edge and the rear
-  // wing under the panel every time it swung broadside (measured at 1440x900).
-  // Two numbers in the old note were wrong: the drawn car is ~5.95 m across at
-  // broadside, not 5.4 m (the wings are the wide part), and the margin has to
-  // come out of the VISIBLE half-width. Hold the turntable at whatever distance
+  // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF clears the full
+  // frustum — but a third of that frustum is behind the panel, so there the
+  // turntable puts the front wing off the left edge and the rear wing under
+  // the panel every time it swings broadside (measured at 1440x900). The drawn
+  // car is ~5.95 m across at broadside (the wings are the wide part), and the
+  // margin has to come out of the VISIBLE half-width. Hold the turntable at whatever distance
   // keeps that inside it. Only the AUTOMATIC view self-frames — picking a preset
   // or zooming clears setupPreviewSpin, and from there the distance is theirs.
   // THIS BACKS OFF WITHOUT BOUND. The visible half-angle is
   // atan(tan18 * aspect * (1 - panelFrac)), so as the region narrows the
-  // distance diverges, and the only thing stopping it was the MANUAL zoom's
-  // SP_DIST_MAX. Measured at 900x820 with the panel over half the width: the
+  // distance diverges, and otherwise only the MANUAL zoom's SP_DIST_MAX stops
+  // it. Measured at 900x820 with the panel over half the width: the
   // fit asks for 17.6 m and pins on 15 — outside the bay's 5.4 m side wall, the
   // near wall culled away, the car a small object in a dollhouse of the whole
-  // garage. That is the reported "the camera is further back and rotates around
-  // the outside of the room". Cap the AUTO fit; past it, crop the wings at
-  // broadside rather than leave the room. Only the viewports that were PINNED
-  // move (1440x900, 1280x800 and 844x390 are unchanged to 2 dp).
+  // garage ("the camera is further back and rotates around the outside of the
+  // room"). Cap the AUTO fit; past it, crop the wings at broadside rather than
+  // leave the room. Only viewports that pin are affected (1440x900, 1280x800
+  // and 844x390 are unchanged to 2 dp).
   //
   // panelFracY is NOT a term here and that is not the oversight it looks like:
   // it constrains the car's on-screen HEIGHT (~1.8 m projected against 6.7 m

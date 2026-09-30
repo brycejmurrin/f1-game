@@ -301,11 +301,11 @@ const DataHub = (function () {
     }, function (err) {
       if (gen[id] !== myGen) return;
       Log.warn("data", "tab " + id + " fail");
-      // KEEP the stale node. It used to be dropped on the floor (state[id] =
-      // null), so a tab that had loaded a minute ago and then lost the network
-      // showed nothing but an error — the hub threw away the only copy of the
-      // data it had. A schedule from an hour ago is still the schedule; the
-      // footnote already says how old a view is, and errorBlock now says the
+      // KEEP the stale node. Dropping it (state[id] = null) leaves a tab that
+      // loaded a minute ago and then lost the network with nothing but an
+      // error — throwing away the only copy of the data it has. A schedule
+      // from an hour ago is still the schedule; the footnote already says how
+      // old a view is, and errorBlock says the
       // refresh failed rather than pretending there is nothing to show.
       const st = state[id];
       state[id] = st && st.node
@@ -396,9 +396,9 @@ const DataHub = (function () {
     const have = sel.sessionKey !== null;
     const fresh = have && sel.selAt && (Date.now() - sel.selAt) < SESSION_STALE_MS;
     // A pin is an explicit user pick (buildPicker) — it outranks force, which
-    // only means "my cached view went stale". LIVE re-entry used to trample a
-    // pinned historic session with whatever latestSession() returned, nuking
-    // the telemetry tab with it. Only an explicit unpin (year/meeting change)
+    // only means "my cached view went stale": LIVE re-entry must not trample a
+    // pinned historic session (and the telemetry tab with it) with whatever
+    // latestSession() returns. Only an explicit unpin (year/meeting change)
     // releases it.
     if (have && sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);

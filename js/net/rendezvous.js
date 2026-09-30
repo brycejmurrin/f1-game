@@ -56,9 +56,7 @@ const NetRendezvous = (function () {
 
   // ALPHABET has no 0/O/1/I/L at all, so no typed confusable can ever be
   // valid — the collapse below just gives each confusable family ONE
-  // representative so valid() answers consistently. The old second chain
-  // (0→O, 1→I) mapped them back to characters equally outside the alphabet;
-  // dead in both directions, deleted.
+  // representative so valid() answers consistently.
   function normalise(code) {
     return String(code || "").toUpperCase().replace(/[^0-9A-Z]/g, "")
       .replace(/O/g, "0").replace(/[IL]/g, "1");
@@ -152,10 +150,10 @@ const NetRendezvous = (function () {
   }
 
   // THE PUBLIC TOPIC comes from the STRETCHED key, never from the code. The
-  // Nostr `x` tag is plaintext on every relay (NIP-01), and it used to be a
-  // bare SHA-256 of the code: one guess = one hash over ~30 bits, so a reader
-  // of public traffic recovered a live code in minutes and could then open its
-  // envelopes. Now each guess pays the 120 000-round PBKDF2 in keyFor().
+  // Nostr `x` tag is plaintext on every relay (NIP-01): as a bare SHA-256 of
+  // the code (one guess = one hash over ~30 bits) a reader of public traffic
+  // could recover a live code in minutes and open its envelopes. Each guess
+  // pays the 120 000-round PBKDF2 in keyFor().
   // PROTOCOL rides in the info string: a build on another protocol meets on a
   // different topic and never half-talks to this one (the handshake's build
   // check is the loud refusal once a link is up).
@@ -201,9 +199,9 @@ const NetRendezvous = (function () {
     return ENVELOPE_TAG + NetBytes.bytesToB64url(await seal(code, payload, slot));
   }
 
-  // v2 only. The Worker used to be allowed to hand back unversioned plaintext
-  // "during a rolling deployment"; that branch let a relay operator (or anyone
-  // who could answer for one) substitute an SDP of their choosing. Gone.
+  // v2 only: accepting unversioned plaintext from the Worker would let a relay
+  // operator (or anyone who could answer for one) substitute an SDP of their
+  // choosing.
   async function openPrivate(code, slot, payload) {
     if (typeof payload !== "string" || !payload.startsWith(ENVELOPE_TAG)) return null;
     try { return await open(code, NetBytes.b64urlToBytes(payload.slice(ENVELOPE_TAG.length)), slot); }
@@ -315,8 +313,8 @@ const NetRendezvous = (function () {
   }
 
   // Errors a poll may see for a moment without the room being gone: a 429,
-  // a 5xx, a timed-out or offline request. One of these used to abort the
-  // whole two-minute wait; now it takes WAIT_TRANSIENT_MAX in a row.
+  // a 5xx, a timed-out or offline request. Aborting the two-minute wait takes
+  // WAIT_TRANSIENT_MAX of these in a row, not one.
   const TRANSIENT = new Set(["rate_limited", "relay", "timeout", "offline"]);
   const WAIT_TRANSIENT_MAX = 5;
   async function waitFor(code, slot, token, onTick) {

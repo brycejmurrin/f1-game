@@ -1,8 +1,8 @@
 /* Apex 26 — MONTREAL scenery (data only), split out of js/circuits/montreal.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["montreal"] =
   function (api) {
@@ -415,17 +415,15 @@
             // Waist and body as round members, and ONE disc rather than three.
             // Three overlapping 14-segment disc rims share facet normals, and
             // together with the flat body plates they kept montreal at +1 on
-            // coplanar-audit through seven attempts (thickness offsets, depth
-            // offsets, splay desync, relocating the whole sculpture). Rounding
-            // the body and reducing to a single disc removes the last cluster
-            // of parallel flat faces. It is a simplification of Calder's real
-            // plate-steel form, and it is the honest trade: the ratchet exists
-            // to stop exactly this kind of drift, and a decorative landmark is
-            // not worth spending the budget it protects.
+            // coplanar-audit whatever the offsets (thickness, depth, splay,
+            // placement). Rounding the body and reducing to a single disc
+            // removes the last cluster of parallel flat faces — a
+            // simplification of Calder's plate-steel form, but a decorative
+            // landmark is not worth spending the ratchet budget it protects.
             // The four diagonal leg centres reach ~2.57 m from the waist axis
-            // at their top segment. Their 0.85 m caps therefore stopped just
-            // outside the old 1.5 m waist radius (2.35 m combined): visually
-            // close, but a disconnected floating cluster to the support graph.
+            // at their top segment, so their 0.85 m caps stop just outside a
+            // 1.5 m waist radius (2.35 m combined): visually close, but a
+            // disconnected floating cluster to the support graph.
             // A 1.8 m lower waist overlaps those caps without moving the body
             // or changing its upper silhouette.
             addFrustum(stage, vadd(foot, a.u, 11.0), 1.8, 1.1, 2.4, STEEL, 9, b);
@@ -651,12 +649,11 @@
             size: [1.1, h, 3.4],
             basis,
           }, (stage) => {
-            // The legs used to be plain boxes standing on anchor().c, which is
-            // deliberately sunk 0.3 m BELOW the sampled surface (see the embed
-            // note in js/track/scenery/nature.js) so a flat-based prop cannot
-            // float off the downhill edge of a slope. That embed is right for a
-            // tree or a sign and wrong for a BRIDGE PIER: the feet ended up
-            // buried, 0.3 m clear of the grass they are supposed to bear on.
+            // Not plain boxes on anchor().c: that is deliberately sunk 0.3 m
+            // BELOW the sampled surface (see the embed note in
+            // js/track/scenery/nature.js) so a flat-based prop cannot float off
+            // the downhill edge of a slope — right for a tree or a sign, wrong
+            // for a BRIDGE PIER, whose feet would be buried.
             // foundation() is the engine's terrain-anchoring mechanism — it
             // samples the REAL terrain ribbon at the corners and centre of the
             // leg's own footprint and fills from `top` down to the lowest of
@@ -793,10 +790,9 @@
       grandstandEx(0.65, -1, 18, 80, null, null,
         { livery: "teal", tiers: 2, roof: "cantilever", endWalls: true });
 
-      // Temporary tube stand that used to sit over the −1 m elevation dip at
-      // s≈0.72 (elevations[2]) — awning + sparse legs produced the fleet's
-      // worst-but-one unsupported cluster (18 / 10.5 m). Replace with a short
-      // grounded open bank whose bottom row meets the island shelf.
+      // Short grounded open bank over the −1 m elevation dip at s≈0.72
+      // (elevations[2]); its bottom row meets the island shelf. A tube stand
+      // (awning + sparse legs) here is an 18 / 10.5 m unsupported cluster.
       {
         const a = anchor(K(0.74), -1, 16);
         if (!onTrack(a.c[0], a.c[2], 6)) {
