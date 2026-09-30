@@ -16,7 +16,7 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { sharedTest as test, expect, BOOT_MS, resetSharedPage } from "../helpers/fixtures.js";
 import { forgetStored } from "../helpers/shared-page.js";
 
 /* DOM CLICKS, NOT locator.click(), AND THE REASON IS THE FRAME CLOCK.
@@ -154,6 +154,23 @@ async function findStraight(page) {
 }
 
 test.describe("Apex 26 — steering", () => {
+  // SHARED-PAGE ISOLATION (2026-09-30). sharedTest keeps ONE page per worker;
+  // a test that leaves ROAD_FOLLOW or the racing-line slider non-zero used to
+  // poison every later case on that worker (DEFECT-LEDGER 2026-09-22: wrong
+  // restore of roadFollow to 0.7). resetSharedPage is what the fixture runs
+  // between tests — this case calls it after a deliberate leak so the assert
+  // would fail if the helper stopped restoring the shipped defaults.
+  test("shared-page reset restores shipped assist defaults after a deliberate leak", async ({ page }) => {
+    await startLiveRace(page);
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0.7 }));
+    await setRaceLine(page, 5);
+    expect(await page.evaluate(() => window.__apex.tuning().roadFollow)).toBe(0.7);
+    expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBeGreaterThan(0);
+    await resetSharedPage(page);
+    expect(await page.evaluate(() => window.__apex.tuning().roadFollow)).toBe(0);
+    expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBe(0);
+  });
+
   // NOTE: the DRIVING HELP assist is OPT-IN — it ships at 0 (see the default
   // contract test below), so this exercises the assist MECHANISM at an explicit
   // gain rather than "whatever ships". It used to read tuning().roadFollow and
