@@ -317,6 +317,19 @@ body.rotate-help-open #rotate-device { display: none !important; }
   #disclaimer { color: var(--text); border-color: var(--text); }
 }
 
+/* THE PHONE'S FOCUS. The phone's D-pad moves focus with synthetic keys, and a
+   browser may not draw :focus-visible for that (Safari after a touch or a
+   click) or any focus at all while its window is not the focused one — the
+   player is holding the phone, not using this screen. PhonePad.link() marks
+   the phone's focus .pad-ring; overlays layer, so no component's own
+   `outline: none` hides it. Same inset geometry as the base ring, one step
+   heavier, plus a halo, because it is read from the sofa. */
+.pad-ring {
+  outline: max(3px, calc(3px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(3px, calc(3px / var(--ui-scale, 1))));
+  box-shadow: 0 0 0 max(2px, calc(2px / var(--ui-scale, 1))) color-mix(in srgb, var(--focus) 35%, transparent);
+}
+
 /* ---------- TITLE LAYOUT player setting (js/ui/title-layout.js) ----------
    Every rule keys on html[data-title-layout], which only a CUSTOM layout sets —
    untouched, none of this matches and the title screen is the shipped one.
@@ -405,19 +418,6 @@ body[data-tl-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
   position: fixed; width: 22px; height: 22px; translate: -50% -50%;
   border-radius: 50%; background: var(--red); border: 2px solid var(--text);
   cursor: nwse-resize; touch-action: none;
-}
-
-/* THE PHONE'S FOCUS. The phone's D-pad moves focus with synthetic keys, and a
-   browser may not draw :focus-visible for that (Safari after a touch or a
-   click) or any focus at all while its window is not the focused one — the
-   player is holding the phone, not using this screen. PhonePad.link() marks
-   the phone's focus .pad-ring; overlays layer, so no component's own
-   `outline: none` hides it. Same inset geometry as the base ring, one step
-   heavier, plus a halo, because it is read from the sofa. */
-.pad-ring {
-  outline: max(3px, calc(3px / var(--ui-scale, 1))) solid var(--focus);
-  outline-offset: calc(-1 * max(3px, calc(3px / var(--ui-scale, 1))));
-  box-shadow: 0 0 0 max(2px, calc(2px / var(--ui-scale, 1))) color-mix(in srgb, var(--focus) 35%, transparent);
 }
 
 } /* @layer overlays */
