@@ -250,7 +250,7 @@ const GLXPost = (function () {
       drop(godrayBlurFBO, godrayBlurTex); godrayBlurTex = null;
       drop(ldrFBO, ldrTex); ldrTex = null;
       drop(aaFBO, aaTex); aaTex = null;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
     }
 
     // (Re)allocate the scene + bloom render targets at the current size.
@@ -425,7 +425,7 @@ const GLXPost = (function () {
       // ldrTex directly — no aa target. Freed when the flag is off / scale≈1.
       const wantUp = !!(sgsrProg && fxaaProg && core.wantSpatialUpscale && core.wantSpatialUpscale());
       if (wantUp) {
-        if (aaTex && aaW === width && aaH === height) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); return; }
+        if (aaTex && aaW === width && aaH === height) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */ return; }
         if (!aaFBO) aaFBO = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
         if (aaTex) gl.deleteTexture(aaTex);
@@ -452,7 +452,7 @@ const GLXPost = (function () {
         abandonTargets();
         postEnabled = false;     // unsupported combo: fall back to direct rendering
       }
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
     }
 
     // Tile GPUs (every phone; Apple desktop through ANGLE-Metal) open a render
@@ -469,16 +469,26 @@ const GLXPost = (function () {
     const _canInvalidate = typeof gl.invalidateFramebuffer === "function";
     function bindOverwrite(fbo) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      if (_canInvalidate) gl.invalidateFramebuffer(gl.FRAMEBUFFER, fbo ? _INV_COLOR : _INV_DEFAULT);
+      // A clipped output viewport is a SUBSET of a shared target (XR layer).
+      // DontCare on the whole attachment would wipe the sibling eye.
+      if (_canInvalidate && !(core.outputClipped && core.outputClipped())) {
+        gl.invalidateFramebuffer(gl.FRAMEBUFFER, fbo ? _INV_COLOR : _INV_DEFAULT);
+      }
     }
 
     // Bind the frame's scene render target (the MSAA or HDR offscreen target when
     // post is enabled, else the default framebuffer) and restore the full-size
     // viewport. Used by GLX.begin() and by the shadow passes' End rebind.
     function bindSceneTarget() {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, postEnabled ? (msaaSamples > 1 ? msFBO : sceneFBO) : null);
       const { width, height } = core.getSize();
-      gl.viewport(0, 0, width, height);
+      if (postEnabled) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, msaaSamples > 1 ? msFBO : sceneFBO);
+        gl.viewport(0, 0, width, height);
+      } else {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, core.outputFBO());
+        const v = core.outputViewport(width, height);
+        gl.viewport(v[0], v[1], v[2], v[3]);
+      }
     }
 
     // Resolve the HDR scene to the screen: extract bright areas, blur them into a
@@ -531,7 +541,7 @@ const GLXPost = (function () {
         // GPU never writes them back to memory (MDN WebGL best-practice; big
         // bandwidth/tile-store win, esp. for the multisampled DEPTH).
         if (gl.invalidateFramebuffer) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
       } else if (!needDepth && _canInvalidate && sceneFBO) {
         // Direct path (no MSAA — every phone): nothing below samples sceneDepth
         // this frame (auto-tier 4 night sheds AO, contact, godray, SSR and
@@ -761,8 +771,13 @@ const GLXPost = (function () {
       // When the flag asks for a present-size canvas but SGSR did not link,
       // wantSpatialUpscale() is false (spatialOk gate) and this stays legacy.
       const toLdr = (useFxaa || useUpscale) && ldrFBO && ldrTex;
-      bindOverwrite(toLdr ? ldrFBO : null);
-      gl.viewport(0, 0, width, height);
+      bindOverwrite(toLdr ? ldrFBO : core.outputFBO());
+      if (toLdr) {
+        gl.viewport(0, 0, width, height);
+      } else {
+        const _compVP = core.outputViewport(width, height);
+        gl.viewport(_compVP[0], _compVP[1], _compVP[2], _compVP[3]);
+      }
       useProg(compProg);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, sceneTex);
@@ -936,8 +951,13 @@ const GLXPost = (function () {
       // 4) FXAA resolve: edge-AA the tonemapped LDR. Writes aaFBO at render
       //    size when SGSR will stretch to present; otherwise the default FB.
       if (useFxaa) {
-        bindOverwrite(useUpscale ? aaFBO : null);
-        gl.viewport(0, 0, width, height);
+        bindOverwrite(useUpscale ? aaFBO : core.outputFBO());
+        if (useUpscale) {
+          gl.viewport(0, 0, width, height);
+        } else {
+          const _fxaaVP = core.outputViewport(width, height);
+          gl.viewport(_fxaaVP[0], _fxaaVP[1], _fxaaVP[2], _fxaaVP[3]);
+        }
         useProg(fxaaProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ldrTex);
@@ -952,8 +972,9 @@ const GLXPost = (function () {
       if (useUpscale) {
         const src = useFxaa ? aaTex : ldrTex;
         const ps = core.getPresentSize();
-        bindOverwrite(null);
-        gl.viewport(0, 0, ps.width, ps.height);
+        bindOverwrite(core.outputFBO());
+        const _sgsrVP = core.outputViewport(ps.width, ps.height);
+        gl.viewport(_sgsrVP[0], _sgsrVP[1], _sgsrVP[2], _sgsrVP[3]);
         useProg(sgsrProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, src);
@@ -987,8 +1008,8 @@ const GLXPost = (function () {
       if (gl.invalidateFramebuffer) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
         gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH_ATTACHMENT]);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, core.outputFBO());
+        if (core.outputFBO() === null) gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
       }
 
       core.gpuTimerEnd();
@@ -1007,7 +1028,7 @@ const GLXPost = (function () {
       } catch (_) {
         return false;
       } finally {
-        try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch (_) { /* ctx lost */ }
+        try { gl.bindFramebuffer(gl.FRAMEBUFFER, core.outputFBO()); } catch (_) { /* ctx lost */ }
       }
     }
 
@@ -1050,7 +1071,7 @@ const GLXPost = (function () {
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, mirTex, 0);
       gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, mirDepthRB);
       const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
       if (st !== gl.FRAMEBUFFER_COMPLETE) {
         Log.warn("gfx", "GLX mirror framebuffer incomplete (0x" + st.toString(16) + ") — mirror off");
         mirrorFree(); mirDead = true;
@@ -1078,11 +1099,13 @@ const GLXPost = (function () {
       // landed at twice its coordinates, mostly off the canvas (counted as
       // composited all the same — hud-mirror.spec.js reads the pixels).
       const cw = gl.drawingBufferWidth, ch = gl.drawingBufferHeight;
-      const x = Math.round(mirRect[0] * cw), w = Math.round(mirRect[2] * cw);
-      const h = Math.round(mirRect[3] * ch), y = ch - Math.round(mirRect[1] * ch) - h;   // GL is bottom-up
+      const ov = core.outputViewport(cw, ch);
+      const ox = ov[0], oy = ov[1], ow = ov[2], oh = ov[3];
+      const x = ox + Math.round(mirRect[0] * ow), w = Math.round(mirRect[2] * ow);
+      const h = Math.round(mirRect[3] * oh), y = oy + oh - Math.round(mirRect[1] * oh) - h;
       if (w < 2 || h < 2) return;
       const CT = opts && opts.tune;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, core.outputFBO());
       gl.viewport(x, y, w, h);
       gl.disable(gl.DEPTH_TEST);
       setBlend(false);
@@ -1102,7 +1125,7 @@ const GLXPost = (function () {
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       bindVAO(null);
       gl.enable(gl.DEPTH_TEST);
-      gl.viewport(0, 0, cw, ch);
+      gl.viewport(ov[0], ov[1], ov[2], ov[3]);
       mirComposites++;
     }
     const mirror = {
