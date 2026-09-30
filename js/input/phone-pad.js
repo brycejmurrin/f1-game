@@ -305,7 +305,7 @@ const PhonePad = (function () {
                 // A link that died before it opened (ICE failed) still holds
                 // the room's relay sockets; nothing will use them now.
                 dropRoom();
-                say("Phone disconnected — press PHONE AS CONTROLLER for a new code.", true);
+                say("Phone disconnected — press STEER THIS GAME WITH A PHONE for a new code.", true);
                 Log.info("input", "phone pad lost");
                 if (ui.lost) { try { ui.lost(); } catch (e) { /* ui's problem */ } }
               },
@@ -417,8 +417,8 @@ const PhonePad = (function () {
     text("pos", h.flags & DASH.retired ? "DNF" : h.flags & DASH.timeTrial ? "" : h.pos ? "P" + h.pos + "/" + h.cars : "");
     text("last", h.lastLapMs ? "LAST " + fmtLap(h.lastLapMs) : "");
     text("ot", h.flags & DASH.otActive ? "OVERTAKE" : h.flags & DASH.otArmed ? "OT READY" : "OT");
-    text("aero", h.flags & DASH.aeroNone ? "NO ZONES" : h.flags & DASH.aeroAuto ? (h.flags & DASH.xOpen ? "AUTO X-MODE" : "AERO AUTO")
-      : h.flags & DASH.xOpen ? "X-MODE" : h.flags & DASH.xArmed ? "AERO ARMED" : "AERO");
+    text("aero", h.flags & DASH.aeroNone ? "NO ZONES" : h.flags & DASH.aeroAuto ? (h.flags & DASH.xOpen ? "AUTO STRAIGHT" : "AERO AUTO")
+      : h.flags & DASH.xOpen ? "STRAIGHT MODE" : h.flags & DASH.xArmed ? "AERO ARMED" : "AERO");
     text("flag", h.state === "count" ? "LIGHTS" : h.flags & DASH.paused ? "PAUSED" : !inRace ? "MENU" : CAUTION[h.caution] || "");
     text("mtitle", h.flags & DASH.paused ? "PAUSED" : "MENU");   // the pad screen's title (controller.html #mp-title)
     if (el.ers && el.ers.style) el.ers.style.width = (h.ers * 100).toFixed(0) + "%";
@@ -617,7 +617,7 @@ const PhonePad = (function () {
           // The handshake's own words are for two friends racing; here the
           // other end is the game on the big screen.
           say(why.error === "build_mismatch" ? "The game and this page are on different versions — reload both and try again."
-            : why.error === "expired" ? "The game is not offering that code any more — press PHONE AS CONTROLLER there for a new one."
+            : why.error === "expired" ? "The game is not offering that code any more — press STEER THIS GAME WITH A PHONE there for a new one."
             : why.message || "Could not reach the game. Make a new code there and try again.", true);
           try { transport.close(); } catch (e) { /* never opened */ }
           return why;

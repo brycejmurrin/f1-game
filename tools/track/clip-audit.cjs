@@ -294,7 +294,7 @@ function attribute(id, r) {
 }
 
 const ids = args.includes("--all")
-  ? buildContext().Tracks.LIST.map((d) => d.id)
+  ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
   : [args.find((a) => !a.startsWith("-") && isNaN(+a))];
 
 if (!ids[0]) {

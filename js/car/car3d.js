@@ -3050,9 +3050,9 @@ const Car3D = (function () {
       // exterior halo — the driver sees a flat bar across the top of the
       // frame (crown constant at 0.96), not tubes converging at the centre.
       // Legs rise from the old loft endpoints (±0.30, 0.92, -0.15).
-      addTube(out, haloHoopPath(0.30, 0.92, -0.15, 0.28, 0.18, 0.96, 0.62),
-              0.025, 6, HALO, SURFACES.metal);
-      addBox(out, 0, 0.79, 0.62, 0.045, 0.38, 0.045, HALO, SURFACES.metal); // front pillar
+      const hk = opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];   // opts.halo = size (CockpitOpts.haloSize: 1 slim, 2 standard, 3 thick; true = 2)
+      addTube(out, haloHoopPath(0.30, 0.92, -0.15, 0.28, 0.18, 0.96, 0.62), 0.025 * hk, 6, HALO, SURFACES.metal);
+      addBox(out, 0, 0.79, 0.62, 0.045 * hk, 0.38, 0.045 * hk, HALO, SURFACES.metal); // front pillar
     }
     // The hoop centreline is computed HERE (shared by the blade fairing below
     // and part("halo") further down — the sections run in one function scope).

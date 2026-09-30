@@ -254,6 +254,7 @@ export const RULES = [
   [/^assets\//, ["hooks"], "the baked pack loader"],
   [/^tests\//, ["audit"], "every test file must belong to a topical group"],
   [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
+  [/^desktop\//, ["desktop-unit", "tooling-fast"], "electron-builder config, identity, notices, version"],
   [/^(CLAUDE|README)\.md|^docs\//, ["tooling-fast"], "docs integrity is a real test"],
 ];
 

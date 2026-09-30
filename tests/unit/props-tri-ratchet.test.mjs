@@ -41,8 +41,10 @@ const sweep = () => (cached ||= JSON.parse(execFileSync(
 )));
 
 test("every circuit is measured", () => {
-  const roster = require("../../tools/manifest.cjs").CIRCUITS.length;
-  assert.equal(sweep().length, roster, `expected ${roster} circuits, got ${sweep().length}`);
+  // The SCOPED roster: APEX_CIRCUITS (ci.yml's circuit lane) narrows the CLI's
+  // --all and this floor together (tools/lib/circuit-scope.cjs).
+  const roster = require("../../tools/lib/circuit-scope.cjs").scope(require("../../tools/manifest.cjs").CIRCUITS).length;
+  assert.equal(sweep().length, roster, `expected ${roster} circuits${process.env.APEX_CIRCUITS ? ` (APEX_CIRCUITS=${process.env.APEX_CIRCUITS})` : ""}, got ${sweep().length}`);
 });
 
 test("props triangles stay within 0.5 % of the per-circuit baseline", () => {
@@ -62,7 +64,9 @@ test("props triangles stay within 0.5 % of the per-circuit baseline", () => {
 test("baseline has no stale entries — a cap far above the measured count is a lie", () => {
   const measured = new Map(sweep().map((r) => [r.id, r.tris]));
   const slack = [];
-  for (const [id, cap] of Object.entries(BASELINE)) {
+  // Only the SCOPED baseline rows: under APEX_CIRCUITS the sweep measured that subset.
+  const { scope } = require("../../tools/lib/circuit-scope.cjs");
+  for (const [id, cap] of Object.entries(BASELINE).filter(([id]) => scope([id]).length)) {
     const now = measured.get(id);
     assert.notEqual(now, undefined, `baseline names unknown circuit "${id}"`);
     if (now < cap * STALE) slack.push(`${id}: baseline ${cap} but measured ${now} — lower it`);
