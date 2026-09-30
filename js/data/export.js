@@ -269,7 +269,8 @@ const DataExport = (function () {
         running = true; dlBtn.disabled = true; dlBtn.textContent = "Zipping…";
         const enc = new TextEncoder();
         const json = JSON.stringify(result, null, 1);
-        const files = [{ name: "startlines-" + sel.year + ".json", data: enc.encode(json) }];
+        // The GATHERED year: the pill may have moved since.
+        const files = [{ name: "startlines-" + result.year + ".json", data: enc.encode(json) }];
         const keys = Object.keys(result.circuits);
         log("rendering " + keys.length + " circuit map image(s)…");
         let chain = Promise.resolve();
@@ -282,8 +283,8 @@ const DataExport = (function () {
         });
         chain.then(function () {
           const zip = makeZip(files);
-          triggerDownload(zip, "apex-startlines-" + sel.year + ".zip");
-          log("Downloaded apex-startlines-" + sel.year + ".zip — " + files.length +
+          triggerDownload(zip, "apex-startlines-" + result.year + ".zip");
+          log("Downloaded apex-startlines-" + result.year + ".zip — " + files.length +
               " file(s), " + Math.round(zip.size / 1024) + " KB");
         }).catch(function (e) {
           log("ZIP ERROR: " + (e && e.message || e));

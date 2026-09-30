@@ -805,6 +805,22 @@ test("the wrap-up credits the fastest lap among cars that took the flag, never a
   assert.match(text, /fastest lap to you/i, text);
 });
 
+test("the wrap-up credits a fastest lap set by a car still running at the flag", async () => {
+  const { A: An, G, synth } = load();
+  G.state = "results";
+  const a = An.create(G);
+  const ver = { name: "Max Verstappen", finished: true, finishT: 100, lap: 13, finPos: 1, best: 81 };
+  const you = { name: "You", isPlayer: true, finished: true, finishT: 104, lap: 13, gridPos: 3, finPos: 2, best: 80.5 };
+  const lec = { name: "Charles Leclerc", finished: false, lap: 13, finPos: 3, best: 79 };   // 3 s back when the session closed
+  assert.equal(a.wrapUp([ver, you, lec], info()), true);
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    for (const c of synth.calls) if (c.m === "speak" && c.u && c.u.onend && !c._ended) { c._ended = true; c.u.onend(); }
+  }
+  const text = synth.calls.filter((c) => c.m === "speak").map((c) => c.text).join(" ");
+  assert.match(text, /fastest lap to (charles )?leclerc/i, text);
+});
+
 test("a flyby with no room before the grid shot plays nothing — a zero budget used to mean 'no limit'", () => {
   const { A: An, G, synth } = load();
   const a = An.create(G);
