@@ -586,9 +586,14 @@ the numbers):
   under `Σ stint costs + stops × pit loss` — the formulation strategists
   actually solve, with pit loss taken from the LANE's own geometry so a circuit
   that costs more to stop at really does see fewer stops. Two per-car tastes
-  come out of the same race hash the launch plan uses (so arming still costs the
-  sim RNG nothing): one for stopping, one for grip over durability. Both are
+  come out of a hash of seed, round and DRIVER (so arming still costs the sim
+  RNG nothing): one for stopping, one for grip over durability. Both are
   needed — biasing only the stop count measured as twenty cars on one plan.
+  The taste is widened by the driver's **strategic temper**
+  (`AiDrive.strategyTemper`, from the ratings): `gamble` (1 − experience) lets
+  a rookie's roll reach the extra stop or the marathon stint while a veteran
+  runs the book; `react` (experience + awareness) and `attack` (craft) gate
+  the rival rules below.
   Strategies MIX because a full tank wears tyres (`FUEL_WEAR`), which is what
   puts harder rubber early and softer late.
   Three rules override the plan: the **free stop** under a caution (worth
@@ -596,6 +601,15 @@ the numbers):
   in either direction, and a **spent set**. The last two ignore the plan's stop
   budget, because both are about a tyre that cannot do its job rather than about
   strategy — gating them left every 0-stop car circulating on slicks in the rain.
+  **The plan adapts.** Each AI re-cuts it from the wear it measures
+  (`PitLane.replan`, fuel-adjusted): a set that lasts runs longer, one going
+  off stops sooner — only on a real surprise (a 2-3 lap move) and at most
+  every 4 laps. And each car gets ONE **rival call** a race, pulling a stop the
+  plan already wants forward: **cover** when the car directly behind (≤ 2 s)
+  boxes, **undercut** after a lap stuck within 1 s of a car that has not.
+  Neither fires when the next set cannot reach its own stop, nor under a red
+  flag (it is not a pit window). `tools/check/ai-strategy-census.mjs` runs
+  full races and reports stops, reasons, re-cuts and strategies.
 - **Mistakes, under pressure most of all** (`AiDrive.mistakeChance`). Once per
   braking point a car may miss it: base 0.4% × (1 + 2 × pressure) × (1.3 −
   consistency) × `err`, pressure being the share of the last six seconds spent
@@ -900,6 +914,12 @@ it on. `js/race/reliability.js` ships off for the same reason.
   never decides — nothing it says arms a stop. That is §11 decision 1 ("live,
   not pre-planned") made good: the AI has a plan and `PitLane.think` executes
   it; the player has an engineer.
+  It reads the race around the player too: an undercut THREAT before the car
+  behind boxes, where the stop rejoins (behind whom, or clear air), MANAGE when
+  the set is short of the flag and PUSH when it has laps to spare and a car to
+  catch, and PLAN B with the reason when the re-cut moves the stop. The
+  driving coach files tyre wear by turn and names the corner eating a set
+  that wears faster than its plan.
 - **A stop fits what you OWN.** Real F1 allocates 13 sets a weekend and Apex has
   no practice sessions to allocate across — but career already tracks which
   parts you own, so `PitLane.pickFor` fits the fastest owned compound that still

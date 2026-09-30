@@ -108,7 +108,15 @@ export function pagesVerdictRun(runs, containsHead) {
 // start minutes after the push (the merge ref is built first), so "none after
 // 3 min" read as green on a conflicting PR (2026-09-25). Only a SHA with no
 // open PR (a docs-only push, a topic branch not yet PR'd) is a real "none".
-export function noneVerdict(pr, waitedMs) {
+//
+// AND "no run" must be confirmed from a second source. The runs list is
+// filtered by head_sha, which GitHub documents as a SEARCH (1,000-result cap);
+// on 2026-09-30 it listed nothing for PR #537's head for ten minutes while
+// run 36728654810 was already in progress, and this said `none-yet`. The
+// commit's check-runs come from a different endpoint: when that shows checks,
+// CI exists and the answer is `indexing` (keep waiting), never none/late.
+export function noneVerdict(pr, waitedMs, checkRuns = 0) {
+  if (checkRuns > 0) return "indexing";
   if (!pr) return waitedMs > 180_000 ? "none" : "wait";
   if (pr.mergeable_state === "dirty") return "blocked";
   return waitedMs > 600_000 ? "late" : "wait";
@@ -161,7 +169,12 @@ async function watchSha(sha, { interval, deadline, once }) {
     // run at all; after 3 min of nothing that is the answer, not "queued".
     if (v.state === "none" && Date.now() - start > 180_000) {
       const pr = openPrFor(sha);
-      const nv = noneVerdict(pr, Date.now() - start);
+      const checks = api(`commits/${sha}/check-runs?per_page=1`).json?.total_count || 0;
+      const nv = noneVerdict(pr, Date.now() - start, checks);
+      if (nv === "indexing" && !announced.has("indexing")) {
+        announced.add("indexing");
+        say(`runs list is empty for ${sha.slice(0, 7)} but the commit has ${checks} check run(s): GitHub's run search is lagging — still waiting`);
+      }
       if (nv === "none") { say(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
       if (nv === "blocked") { say(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
       if (nv === "late") { say(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min; re-arm, or check the Actions tab`); return 124; }
