@@ -108,9 +108,10 @@
  *     mirrorBegin(frame, w, h) -> bool  (frame already carries the mirror
  *     camera: viewProj/view/proj/eye/cullDist) -> (redraw world + cars + sky)
  *     -> mirrorEnd()   renders into a w×h target of the backend's own.
- *     mirrorRect([x,y,w,h] | null)  canvas fractions, top-left origin: present()
- *     composites the last mirror image there, FLIPPED left-right and tone-mapped
- *     with the frame's exposure. mirrorState() -> {ready,dead,w,h,renders,composites}.
+ *     mirrorRect([x,y,w,h] | null, flip = true)  canvas fractions, top-left origin:
+ *     present() composites the last mirror image there, FLIPPED left-right (flip
+ *     false: straight — the broadcast PiP reuses the target) and tone-mapped with
+ *     the frame's exposure. mirrorState() -> {ready,dead,w,h,renders,composites,flip}.
  *     js/render/shared/mirror-pass.js is the one caller.
  *   begin(frame)              clear + bind scene target; upload frame uniforms.
  *   draw(mesh, model, opts) / drawChunked(mesh, model, opts)

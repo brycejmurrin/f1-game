@@ -14,6 +14,11 @@ const Broadcast = (function () {
   const SHOTS = ["side", "heli", "tcam", "chase", "cinematic", "low"];
   const EVENT_SHOTS = { pass: ["side", "heli", "chase"], pit: ["heli", "side"], out: ["heli", "side"], fastest: ["tcam", "chase", "side"] };
   const EVENT_RANK = { out: 4, pass: 3, fastest: 2, pit: 1 };
+  // THE PICTURE-IN-PICTURE: a second car in a corner inset (the mirror's camera,
+  // js/render/shared/mirror-pass.js). Held at least SHOT_MIN_S; dropped once
+  // nothing has asked for it for PIP_DROP_S.
+  const PIP_DROP_S = 2;
+  const PIP_LABEL = { battle: "ONBOARD · ", pass: "OVERTAKE · ", pit: "PIT · ", out: "OUT · ", fastest: "FASTEST LAP · " };
 
   // ── Timing (pure): the tower at race time T ───────────────────────────────
   /** Seconds from lights out at which driver d crossed the line for the k-th time (k >= 1), or null. */
@@ -107,6 +112,22 @@ const Broadcast = (function () {
     }
     return out.sort((x, y) => x.score - y.score);
   }
+  /** The PiP's car (pure): the followed car's battle partner — the car BEHIND when
+   *  it is sandwiched, the threat — on an onboard shot; else the other car in the
+   *  next event; else null. Never the followed car. fights: battles(); evKey/evKind:
+   *  the next event's car and kind. */
+  function pipPick(fights, followKey, evKey, evKind) {
+    let behind = null, ahead = null;
+    for (const f of fights) {
+      if (f.ahead === followKey && behind == null) behind = f.key;
+      if (f.key === followKey && ahead == null) ahead = f.ahead;
+    }
+    const partner = behind != null ? behind : ahead;
+    if (partner != null && partner !== followKey) return { key: partner, cam: "tcam", kind: "battle" };
+    if (evKey != null && evKey !== followKey) return { key: evKey, cam: "chase", kind: evKind || "pass" };
+    return null;
+  }
+
   /** The shot for a cut: from the kind's list when it has one, never the shot on air. */
   function shotFor(kind, onAir, n) {
     const pool = (EVENT_SHOTS[kind] || SHOTS).filter((s) => s !== onAir);
@@ -119,6 +140,7 @@ const Broadcast = (function () {
     let wall = 0, lastCut = -1e9, manualUntil = 0, cuts = 0, onAirShot = null, setCam = null;
     let shown = new Set(), towerT = 0, mode = "gap", prevPos = new Map(), deltaAt = new Map();
     let clickBound = null;
+    let pip = null;   // {key, label, at (wall), seen (wall)} — the car in the inset
 
     function modeIdx(id) {
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
@@ -145,6 +167,7 @@ const Broadcast = (function () {
     function stop() {
       if (!on) return;
       on = false;
+      setPip(null);
       if (tower) {
         if (clickBound) tower.removeEventListener("click", clickBound);
         tower.hidden = true; tower.textContent = "";
@@ -256,18 +279,43 @@ const Broadcast = (function () {
 
     /** Every frame from RealReplay.tick: dt wall seconds; st = {script, T, speed, list, reel, followNum,
      *  isOut(num), carOf(num), colourOf(num), running() -> [{key, prog, speed}] by progress}. */
+    function pipLabelEl() {
+      const e = typeof document !== "undefined" ? document.getElementById("bc-pip") : null;
+      return e && e.querySelector ? e.querySelector(".bc-pip-label") : null;
+    }
+    function setPip(p) {
+      pip = p;
+      if (G.setPip) G.setPip(p ? p.key : null, p ? p.cam : null);
+      const l = pipLabelEl();
+      if (l) l.textContent = p ? p.label : "";
+    }
+    // Four times a second, with the tower: who belongs in the inset now.
+    function pipTick(st) {
+      const follow = st.follow;
+      const running = st.running();
+      const ev = nextEvent(st.list, st.T, new Set(), EVENT_LEAD_S * Math.max(1, st.speed), (num) => !st.isOut(num));
+      const evCar = ev ? st.carOf(ev.h.num) : null;
+      const pick = pipPick(battles(running), follow, evCar, ev && ev.h.kind);
+      if (pip && (pip.key === follow || pip.key.retired)) { setPip(null); }   // the viewer followed it, or it stopped
+      if (!pick) { if (pip && wall - pip.seen > PIP_DROP_S) setPip(null); return; }
+      if (pip && pip.key === pick.key) { pip.seen = wall; return; }
+      if (pip && wall - pip.at < SHOT_MIN_S) return;   // hold the shot on air
+      setPip({ key: pick.key, cam: pick.cam, label: (PIP_LABEL[pick.kind] || "") + (pick.key.code || ""), at: wall, seen: wall });
+    }
+
     function tick(dt, st) {
       if (!on || !st) return;
       wall += dt;
       direct(st);
       towerT -= dt;
-      if (towerT <= 0) { towerT = TOWER_TICK_S; paintTower(st); }
+      if (towerT <= 0) { towerT = TOWER_TICK_S; paintTower(st); pipTick(st); }
     }
-    function status() { return on ? { auto, manual: wall < manualUntil, shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode } : null; }
+    function status() { return on ? { auto, manual: wall < manualUntil, shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,
+                                      pip: pip ? { code: pip.key.code || null, label: pip.label } : null } : null; }
 
     return { start, stop, tick, onCut, manual, setAuto, status, isOn: () => on };
   }
 
-  return { create, towerAt, crossAt, doneBy, battles, nextEvent, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };
+  return { create, towerAt, crossAt, doneBy, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };
 })();
 Object.freeze(Broadcast);

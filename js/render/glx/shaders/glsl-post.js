@@ -1473,10 +1473,11 @@ uniform float uAcesB;
 uniform float uAcesC;
 uniform float uAcesD;
 uniform float uAcesE;
+uniform float uFlip;   // 1 = the mirror (left-right like glass); 0 = the broadcast PiP (a straight picture)
 out vec4 outColor;
 ${GLXChunks.tonemap}
 void main() {
-  vec3 c = texture(uTex, vec2(1.0 - vUV.x, vUV.y)).rgb;
+  vec3 c = texture(uTex, vec2(mix(vUV.x, 1.0 - vUV.x, uFlip), vUV.y)).rgb;
   if (uHdr > 0.5) c = acesTonemap(c * uExposure / uWhitePoint);
   outColor = vec4(c, 1.0);
 }`;

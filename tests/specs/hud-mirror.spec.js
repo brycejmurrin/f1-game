@@ -173,12 +173,50 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   }
 }
 
+// THE BROADCAST PiP (REAL RACE WATCH, js/race/broadcast.js): under body.bc-on the
+// mirror stands down and its ONE target is re-aimed at another car on a TV shot,
+// composited UNFLIPPED into #bc-pip. Same boot as the mirror case: the backend's
+// own counters say the pass rendered and composited, where the frame is, straight.
+// TLX only (see the GLX test).
+async function pipCase(page) {
+  const before = await page.evaluate(() => {
+    document.body.classList.add("bc-on");
+    return window.__apex.mirror(undefined, { car: 1, cam: "tcam", mode: "on" });
+  });
+  const r0 = before.backend ? before.backend.renders : 0, c0 = before.backend ? before.backend.composites : 0;
+  await page.waitForFunction(({ r0, c0 }) => {
+    const m = window.__apex.mirror();
+    return m.pip.shown && m.backend && m.backend.flip === false && m.backend.renders > r0 && m.backend.composites > c0;
+  }, { r0, c0 }, { polling: 100, timeout: FRAME_MS });
+  const st = await page.evaluate(() => ({
+    m: window.__apex.mirror(),
+    mirrorHidden: document.getElementById("hud-mirror").hidden,
+    pipHidden: document.getElementById("bc-pip").hidden,
+  }));
+  const diag = JSON.stringify(st);
+  expect(st.m.shown, diag).toBe(false);            // no rear-view mirror on the TV picture
+  expect(st.mirrorHidden, diag).toBe(true);
+  expect(st.pipHidden, diag).toBe(false);
+  expect(st.m.pip.cam, diag).toBe("tcam");
+  expect(st.m.backend.dead, diag).toBe(false);
+  expect(st.m.backend.rect, diag).toEqual(st.m.pip.rect);   // composited where #bc-pip is
+  expect(st.m.backend.w / st.m.backend.h, diag).toBeGreaterThan(1.5);   // the 16:9 frame, in the backend's own target pixels
+  // The WATCH ends: the subject goes, the frame hides, and the mirror path is FLIPPED again.
+  await page.evaluate(() => { window.__apex.mirror("on", { car: null, mode: "auto" }); document.body.classList.remove("bc-on"); });
+  await page.waitForFunction(() => { const m = window.__apex.mirror(); return m.shown && !m.pip.shown && m.backend && m.backend.flip === true; },
+    null, { polling: 100, timeout: FRAME_MS });
+  expect(await page.evaluate(() => document.getElementById("bc-pip").hidden)).toBe(true);
+}
+
 test.describe("HUD rear-view mirror", () => {
   test.describe.configure({ timeout: 300000 });
 
   test("GLX renders the mirror pass, composites it into #hud-mirror, and the key turns it off", async ({ page }) => {
     await mirrorRace(page);
     expect(await page.evaluate(() => sessionStorage.getItem("apex26.gfxBound"))).toBe("webgl2");
+    // No PiP case here: on this box a GLX frame is seconds, and the mirror case
+    // alone takes most of the budget; the GLX composite's flag is pinned by
+    // gfx-backend-canary.test.mjs, the pass itself by mirror-pass.test.mjs.
     await mirrorCase(page, { requirePixels: true });
   });
 
@@ -194,6 +232,7 @@ test.describe("HUD rear-view mirror", () => {
     test("TLX renders the mirror pass, composites it into #hud-mirror, and the key turns it off", async ({ page }) => {
       await mirrorRace(page);
       await mirrorCase(page);
+      await pipCase(page);
     });
   });
 });

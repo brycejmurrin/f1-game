@@ -1046,7 +1046,7 @@ const GLXPost = (function () {
     // reads it back. HDR (RGBA16F) exactly when the scene target is, so the
     // lit shaders write the same range they write into sceneTex.
     let mirFBO = null, mirTex = null, mirDepthRB = null, mirW = 0, mirH = 0, mirHdr = false;
-    let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null;
+    let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null, mirFlip = true;
     let mirRenders = 0, mirComposites = 0;
     function mirrorFree() {
       if (mirFBO) gl.deleteFramebuffer(mirFBO);
@@ -1097,7 +1097,7 @@ const GLXPost = (function () {
       if (!mirProg) {
         mirProg = link(POST_VS, MIRROR_FS);
         if (!mirProg) { mirDead = true; Log.warn("gfx", "GLX mirror program failed — mirror off"); return; }
-        mirU = locs(mirProg, ["uTex", "uHdr", "uExposure", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE"]);
+        mirU = locs(mirProg, ["uTex", "uHdr", "uExposure", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uFlip"]);
       }
       // The DEFAULT FRAMEBUFFER's own size — the present size under SGSR, the
       // render size otherwise. Not getPresentSize(): that reports the present
@@ -1128,6 +1128,7 @@ const GLXPost = (function () {
       gl.uniform1f(mirU.uAcesC, PostCommon.knob(CT, "acesC"));
       gl.uniform1f(mirU.uAcesD, PostCommon.knob(CT, "acesD"));
       gl.uniform1f(mirU.uAcesE, PostCommon.knob(CT, "acesE"));
+      gl.uniform1f(mirU.uFlip, mirFlip ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       bindVAO(null);
       gl.enable(gl.DEPTH_TEST);
@@ -1139,10 +1140,10 @@ const GLXPost = (function () {
       end() { if (!mirActive) return; mirActive = false; mirRenders++; },
       active: () => mirActive,
       bindTarget: bindMirrorTarget,
-      rect(r) { mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; },
+      rect(r, flip) { mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; mirFlip = flip !== false; },
       composite: mirrorComposite,
       state: () => ({ ready: !!mirTex && mirRenders > 0, dead: mirDead, w: mirW, h: mirH, hdr: mirHdr,
-        renders: mirRenders, composites: mirComposites, rect: mirRect }),
+        renders: mirRenders, composites: mirComposites, rect: mirRect, flip: mirFlip }),
     };
 
     function invalidateUniformCache() {

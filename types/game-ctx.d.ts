@@ -703,6 +703,7 @@ interface GameCtx {
   readonly setWeatherLive: (w: Weather) => void;
   /** A real replay: every car AI-flagged, this one local (camera, HUD, audio); nobody drives. */
   readonly followCar: (c: CarState) => void;
+  readonly setPip: (c: CarState | null, camMode?: string) => void;
   /** A mid-race jump-in: the countdown becomes the race at once (no gantry, no launch model); false outside the countdown. */
   readonly goRolling: () => boolean;
   /** A jump-in's rolling hand-over count, big on the gantry's plate: 4..1, "GO", or null to clear. */

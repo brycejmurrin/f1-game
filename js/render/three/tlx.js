@@ -1071,7 +1071,7 @@ const TLX = (function () {
       // empties the list. present() hands the texture to the post chain, which
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
-      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0;
+      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFlip = true;   // flip false: the broadcast PiP
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
       // attribute.array.constructor on that first compile — the env probe's
@@ -3301,11 +3301,11 @@ const TLX = (function () {
           _instAlive.clear();
           _poolBatch++;
         },
-        mirrorRect(r) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; },
+        mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, error: _mirErr };
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, flip: _mirFlip, error: _mirErr };
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
@@ -4043,7 +4043,7 @@ const TLX = (function () {
                 const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
                 const r = _mirRect, ok = !!(r && mirRT && _mirRenders > 0 && !_mirDead);
                 post.setMirror(ok ? mirRT.texture : null, ok ? [Math.round(r[0] * cw), Math.round(r[1] * ch),
-                  Math.round(r[2] * cw), Math.round(r[3] * ch)] : null, ok && mirRT.texture.type === THREE.HalfFloatType);
+                  Math.round(r[2] * cw), Math.round(r[3] * ch)] : null, ok && mirRT.texture.type === THREE.HalfFloatType, _mirFlip);
               }
               try {
                 renderer.setRenderTarget(post.sceneTarget());
