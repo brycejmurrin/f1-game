@@ -413,7 +413,7 @@ export async function resetSharedPage(page) {
       // view()/orbit()/cinematic() install a G.dbgCam free-cam that outranks
       // the game camera. Measured: "the road dominates the lower frame"
       // wanted >0.7 and got 0.5, because an earlier camera test's free-cam
-      // was still installed. camera("chase") clears dbgCam (apex.js:179) and
+      // was still installed. camera("chase") clears dbgCam (`camera` in js/agent/apex.js) and
       // restores the default mode in one call.
       try { a.freeze(false); } catch (_) {}
       try { a.camera("chase"); } catch (_) {}
