@@ -231,15 +231,9 @@ const Tracks = (function () {
   // (tools/track/verify-track.cjs) has to keep working, and a 1 ms clock is
   // plenty for phases measured in tens.
   const _now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
-  // THE BUILD AS STEPS. One body, two drivers: build() runs it straight through
-  // (every tool and the synchronous loadTrack keep their contract), and
-  // game.js's loadTrackStepped runs it a few ms per animation frame, so the
-  // pre-race garage drive-out keeps animating while the circuit builds. It
-  // yields at every lap() below (and inside the two longest phases, props and
-  // the hidden-face strip), so the output is byte-identical by construction.
-  // Time spent suspended between steps is not charged to the next lap. Each step
-  // yields the track so far, so a driver that abandons the build can free the
-  // meshes it has already uploaded.
+  // THE BUILD AS STEPS: build() runs it straight through, buildPaced a few ms per frame
+  // (the garage drive-out keeps animating). Yields the track so far at every lap() and
+  // inside props and the strip: byte-identical by construction; suspended time is no lap's.
   function* buildSteps(def, opts) {
     // A centerline-only consumer has buildCenterline(). A full build without
     // uploads silently skipped road, props, barriers and pit boundary opening,
@@ -249,7 +243,6 @@ const Tracks = (function () {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const _prof = []; let _t = _now();
     const lap = (n, k) => { const now = _now(); _prof.push({ n, k, ms: +(now - _t).toFixed(2) }); _t = now; };
-    // An inner phase's own steps: its suspended time is not the phase's cost either.
     function* inner(it) { for (;;) { const r = it.next(); if (r.done) return r.value; const p = _now(); yield; _t += _now() - p; } }
     const track = buildCenterline(def);
     track.buildProfile = _prof;
@@ -393,26 +386,21 @@ const Tracks = (function () {
     Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
   }
-  // Every build bumps it; a paced build still in flight when a newer one starts
-  // is abandoned (build() is the synchronous loadTrack).
-  let _buildGen = 0;
+  let _buildGen = 0, _pacing = 0;   // bumped by every build (a newer one abandons a paced one); paced in flight
   function build(def, opts) {
     _buildGen++;
     const it = buildSteps(def, opts);
     for (;;) { const r = it.next(); if (r.done) return r.value; }
   }
-  // buildSteps, driven ~budgetMs per animation frame (a paint between slices,
-  // which a setTimeout does not promise). Resolves the track, or null when alive()
-  // turns false (or a newer build starts) between slices — after handing onAbandon
-  // the partial track, whose uploaded meshes the caller owns and must free.
+  // ~budgetMs per frame, a paint between slices. Resolves the track, or null once alive() is
+  // false or a newer build started — after handing onAbandon the partial track to free.
   async function buildPaced(def, opts, alive, onAbandon, budgetMs) {
     const gen = ++_buildGen, it = buildSteps(def, opts), budget = budgetMs > 0 ? budgetMs : 8;
-    let partial = null;
+    let partial = null, r;
     _pacing++;
     try {
       for (;;) {
         const t0 = _now();
-        let r;
         do { r = it.next(); if (r.value) partial = r.value; } while (!r.done && _now() - t0 < budget);
         if (r.done) return r.value;
         await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 16)));
@@ -421,24 +409,16 @@ const Tracks = (function () {
     } catch (e) { if (onAbandon) onAbandon(partial); throw e; }
     finally { _pacing--; }
   }
-  // A paced build is in flight (its caller's world is null by design until it lands).
-  let _pacing = 0;
-  const building = () => _pacing > 0;
-  // Every GPU resource build() uploaded for `t`, released through the backend
-  // that owns it. Null-safe per handle: the old world before a rebuild, or a
-  // paced build abandoned part-way (its partial track).
-  function free(t, gfx) {
-    const m = t && t.meshes;
+  const building = () => _pacing > 0;   // a paced build is in flight (its caller's world is null till it lands)
+  function free(t, gfx) {   // every GPU resource build() uploaded; null-safe (a partial track too)
+    const m = t && t.meshes, ck = !!gfx.freeChunkedMesh;
     if (!m) return;
-    const chunked = (h) => { if (gfx.freeChunkedMesh) gfx.freeChunkedMesh(h); else gfx.freeMesh(h); };
-    gfx.freeMesh(m.floor); gfx.freeMesh(m.road); gfx.freeMesh(m.terrain);
-    if (m.roadChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(m.roadChunked);
-    if (m.terrainChunked && gfx.freeChunkedMesh) gfx.freeChunkedMesh(m.terrainChunked);
-    chunked(m.props);
-    if (m.propBatches && gfx.freeInstancedBatch) { for (const b of m.propBatches) gfx.freeInstancedBatch(b); m.propBatches = null; }
-    if (m.glass) chunked(m.glass);
+    for (const h of [m.floor, m.road, m.terrain, m.gate, m.startline]) gfx.freeMesh(h);
+    if (ck) { gfx.freeChunkedMesh(m.props); if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked); if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked); }
+    else gfx.freeMesh(m.props);
+    if (m.glass) { if (ck) gfx.freeChunkedMesh(m.glass); else gfx.freeMesh(m.glass); }
     if (m.water) gfx.freeMesh(m.water);
-    gfx.freeMesh(m.gate); gfx.freeMesh(m.startline);
+    if (m.propBatches && gfx.freeInstancedBatch) { for (const b of m.propBatches) gfx.freeInstancedBatch(b); m.propBatches = null; }
   }
 
   function buildMap(px, pz, n) {
