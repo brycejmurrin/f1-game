@@ -1,8 +1,8 @@
 /* Apex 26 — HUNGARORING scenery (data only), split out of js/circuits/hungaroring.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["hungaroring"] =
   function (api) {
@@ -287,13 +287,10 @@
       });
       // Extra lamp clusters at key braking zones
       for (const [s0, s1, side] of [[0.95, 0.08, 1], [0.52, 0.62, 1], [0.30, 0.44, -1]]) {
-        // Walk a COUNTED number of steps across the window. The old loop advanced
-        // by `step` and broke only on kk === kEnd exactly — which a stride that
-        // does not divide the window essentially never hits, so it ran its full
-        // `n` iterations and wrapped the lap `step` times over, restacking lamps
-        // on nodes it had already dressed. Those duplicates were byte-identical,
-        // hence coplanar on every face, and were this circuit's whole z-fight
-        // population as well as thousands of wasted verts.
+        // Walk a COUNTED number of steps across the window: breaking on
+        // kk === kEnd never fires when the stride does not divide the window,
+        // so the loop wraps the lap `step` times, restacking byte-identical
+        // (coplanar, z-fighting) lamps on nodes it has already dressed.
         const k0 = K(s0), kEnd = K(s1), step = Math.max(1, Math.round(50 / ds));
         const arc = ((kEnd - k0) % n + n) % n;
         const count = Math.floor(arc / step);
@@ -341,7 +338,7 @@
         // https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/
         // Pit stays on side -1 (def.pit.side); do not flip from this pass.
         // Authored length ~128 m (under the sourced 340 m) to hold the props-tris
-        // ratchet while still reading as a long parallel mass vs the old ~80 m slab.
+        // ratchet while still reading as a long parallel mass.
         const LEN = 128;
         const STOREYS = 5;
         const STOREY_H = 3.4;
@@ -513,28 +510,15 @@
       every(26, (kk) => {
         const sf = kk / n;
         // Stadium bowl (T1-4, s0-0.10) + the lake/amphitheatre back sweeps.
-        // frac~0.42-0.44 used to be excluded here for a reported terrain
-        // intrusion at road level. DIAGNOSED: rebuilt this circuit headlessly
-        // (tools/track/verify-track.cjs harness) with the skip removed and instrumented
-        // every [scenery] SUPPRESSED warning — none fire anywhere near frac 0.43
-        // for any gap this file actually uses (8m lamps, 40-58m crowd blanket).
-        // A raycast against the built terrain mesh (mirroring the anchor()
-        // terrainYAt lookup) also shows a normal monotonic downhill slope away
-        // from the road there, no spike. The circuit already carries
-        // `terrainOuter: 90` (see top of file) specifically to stop this
-        // twisty-middle-sector terrain ribbon from chording across a nearby
-        // fold-back — that fix was applied circuit-wide and evidently also
-        // resolved this narrower band, leaving these three skips stale. Root
-        // mechanism (terrain ribbons from geometrically-close-but-lap-distant
-        // sections overlapping when a node's own outerW reaches far enough to
-        // touch a taller nearby section — confirmed: the s≈0.56 crest, py≈13.7m,
-        // sits only ~75-90m from this stretch in world space) lives in
-        // js/track/core/mesh.js buildTerrain + js/track/tracks.js terrainYAt, both
-        // engine files this task may not edit. No further js/track/ mitigation
-        // needed here since the symptom no longer reproduces at this circuit's
-        // gaps; if it resurfaces at a different gap, tightening `terrainOuter`
-        // further (currently 90) is the circuit-data lever, at the cost of
-        // thinning the ribbon on the wide, legitimate stretches too.
+        // frac~0.42-0.44 needs no skip: a headless verify-track build with
+        // every [scenery] SUPPRESSED warning instrumented fires none near 0.43
+        // at this file's gaps (8 m lamps, 40-58 m crowd blanket), and the
+        // terrain there slopes monotonically away from the road. `terrainOuter:
+        // 90` stops the twisty-middle-sector ribbon chording across the s≈0.56
+        // crest (py≈13.7 m, ~75-90 m away in world space; mechanism in
+        // js/track/core/mesh.js buildTerrain + tracks.js terrainYAt). If an
+        // intrusion resurfaces at another gap, tightening `terrainOuter` is the
+        // circuit-data lever, at the cost of thinning the wide stretches too.
         const inBowl = sf < 0.12 || (sf > 0.32 && sf < 0.62) || sf > 0.88;
         if (!inBowl) return;
         for (const side of [-1, 1]) {
@@ -569,12 +553,10 @@
 
       // ── Grass-bank hillside crowd terracing behind each grandstand — the
       //    Hungaroring signature: informal stepped earth risers rising up the
-      //    natural banking, wrapping the bowl. This used to be a hand-rolled
-      //    local terracedHillStand() (a mini shell+roof stand duplicating what
-      //    spectatorHill() now provides as a shared model — see
-      //    docs/archive/SCENERY-UPGRADE-PLAN.md §1.4/§2). Deleted in favour of
-      //    spectatorHill(): real stepped risers + standing crowd, no shell/roof,
-      //    the correct silhouette for "general-admission hillside", set well
+      //    natural banking, wrapping the bowl. The shared spectatorHill()
+      //    model (docs/archive/SCENERY-UPGRADE-PLAN.md §1.4/§2): stepped
+      //    risers + standing crowd, no shell/roof — the silhouette of a
+      //    "general-admission hillside" — set well
       //    below its ~70 verts/m default (rows/density cut) since this rings
       //    most of the lap and is repeated-furniture budget, not one hero bank.
       const HG_RISER = [0.42, 0.43, 0.47];

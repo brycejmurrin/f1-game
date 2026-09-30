@@ -101,14 +101,15 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   // a43691c8 unified lamps/floodlights into the "lighting" fixture kind, which
   // collapsed montreal's seven pre-unification exclusion entries into three.
   // Assert the semantic content, not the count: the island-wide foliage span
-  // plus the two lighting clearance windows (measured on the def: 0.19-0.23
-  // and 0.69-0.73).
+  // plus the two lighting clearance windows. 1389215d2 dropped the bogus
+  // sceneryStartFrac 0.915 and re-keyed those windows into the racing frame
+  // (was 0.19-0.23 / 0.69-0.73 under the 0.86 shift).
   expect(result.def.dressingExclusions).toHaveLength(3);
   expect(result.def.dressingExclusions).toContainEqual({ kind: "foliage", s0: 0, s1: 1 });
   const lightingSpans = result.def.dressingExclusions
     .filter((entry) => entry.kinds?.includes("lighting"))
     .map((entry) => [entry.s0, entry.s1]);
-  expect(lightingSpans).toEqual([[0.19, 0.23], [0.69, 0.73]]);
+  expect(lightingSpans).toEqual([[0.05, 0.09], [0.55, 0.59]]);
 
   for (const session of Object.values(result.sessions)) {
     expect(session.geometry.every((entry) => entry.ok)).toBe(true);
@@ -126,8 +127,23 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
     // the complex over-claiming and eating real scenery — it has reported a
     // Monaco fountain 308 m from the nearest pit node — shows up here as a new
     // id, not as a count that quietly grows.
+    //
+    // After 1389215d2 dropped sceneryStartFrac 0.915, park lawns sit on the
+    // racing-frame right and the pit complex also supersedes the espace-
+    // paddock kit plus the six pit-lawn slabs along the pit wall.
     expect(session.models.suppressed.map((entry) => entry.id).sort())
-      .toEqual(["kit:montreal:pit-building", "montreal-park-lawn-l-0", "montreal-park-lawn-l-1"]);
+      .toEqual([
+        "kit:montreal:espace-paddock",
+        "kit:montreal:pit-building",
+        "montreal-park-lawn-r-0",
+        "montreal-park-lawn-r-10",
+        "montreal-pit-lawn-l-1",
+        "montreal-pit-lawn-l-2",
+        "montreal-pit-lawn-l-3",
+        "montreal-pit-lawn-l-4",
+        "montreal-pit-lawn-l-5",
+        "montreal-pit-lawn-l-6",
+      ]);
     const bridge = session.models.emitted.find((entry) => entry.id === "montreal-casino-footbridge");
     expect(bridge).toMatchObject({ required: true, overhead: true, clearance: 8 });
     const supportModels = session.models.emitted.filter((entry) =>

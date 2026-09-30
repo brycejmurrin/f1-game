@@ -12,8 +12,7 @@
     // The trace opens on the 682 m main straight — Mugello's longest — and its
     // first vertex is the line itself.
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches San Donato.
-    // Was 0.05, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     // No sceneryStartFrac: the scenery is authored against this line (pit
     // bays 0.945-0.999 on the pit lane 0.950-0.021, Arrabbiata 0.495, Bucine
     // 0.880); the preserved 0.05 shifted it 0.133 and stood the paddock short

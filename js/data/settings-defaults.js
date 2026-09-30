@@ -2,12 +2,12 @@
    in one file, as data.
 
    WHY THIS EXISTS. Every preference is read as `store.get(key, literal)` or
-   `store.raw(key)`, so the shipped default used to be a literal argument spread
-   across js/game.js, js/audio/panel.js, js/input/steer-tuning.js,
-   js/race/driving-coach.js, js/race/race-control.js, js/ui/debris-opts.js and
-   js/perf/metrics-overlay.js. "Make my settings the defaults" was therefore a
-   hunt through those files for one literal each, with nothing checking that
-   js/ui/settings-export.js's SPEC still agreed with any of them — and SPEC's
+   `store.raw(key)`, so without this file the shipped default is a literal
+   argument spread across js/game.js, js/audio/panel.js,
+   js/input/steer-tuning.js, js/race/driving-coach.js, js/race/race-control.js,
+   js/ui/debris-opts.js and js/perf/metrics-overlay.js. "Make my settings the
+   defaults" is then a hunt through those files for one literal each, with
+   nothing checking that js/ui/settings-export.js's SPEC still agrees — and SPEC's
    agreement is what makes the CHANGED list in an exported settings file true.
    A default edited in one place and not the other does not fail anything; it
    just quietly starts lying to every player who exports their settings.

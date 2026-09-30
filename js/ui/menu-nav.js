@@ -24,10 +24,9 @@
 // position indicator stay honest).
 window.MenuNav = (function () {
 
-  // The menu LAYERS and "which one is on top" both live in js/ui/layers.js
-  // now — js/input/input.js and js/ui/modal.js ask the same module the same
-  // question, which is the whole point of it. This file used to carry its own
-  // copy of the list, and the copies drifted by five screens.
+  // The menu LAYERS and "which one is on top" both live in js/ui/layers.js —
+  // js/input/input.js and js/ui/modal.js ask the same module the same
+  // question, so no private copy of the list can drift.
   const UL = window.UiLayers;
 
   // Scroll regions, same list ScrollFade watches — `.pane` first and by class,
@@ -64,7 +63,7 @@ window.MenuNav = (function () {
   }
 
   // `oyIn` lets onWheel's ancestor walk share ONE getComputedStyle between
-  // canScroll and isRegion — they used to each read it per ancestor per wheel
+  // canScroll and isRegion rather than each reading it per ancestor per wheel
   // event, in the scroll-latency path, at 60-120 Hz.
   function canScroll(el, dy, oyIn) {
     if (!el || el.nodeType !== 1) return false;
@@ -145,12 +144,10 @@ window.MenuNav = (function () {
     // native path scrolls smoothly and latches; a redirect would be worse.
     //
     // A REGION YOU ARE POINTING AT KEEPS THE GESTURE EVEN WHEN IT CANNOT MOVE.
-    // Only `canScroll` used to end this walk, and it goes false the moment a pane
-    // is pinned at either end — so a wheel over the garage's category rail, once
-    // the rail bottomed out, was handed to the option list beside it, and the two
-    // panes read as one. That is what `overscroll-behavior: contain` already
-    // promises for the native path (css/components.css sets it on every .pane);
-    // the redirect was quietly breaking the promise. The redirect exists for
+    // `canScroll` alone goes false the moment a pane is pinned at either end, so
+    // a wheel over the garage's category rail, once bottomed out, would pass to
+    // the option list beside it. `overscroll-behavior: contain` promises the
+    // same for the native path (css/components.css sets it on every .pane). The redirect exists for
     // gestures that land on NO scroll region — the sheet head, the stats block,
     // the circuit map — and that is all it should do.
     const stop = layer.parentNode;
@@ -417,12 +414,10 @@ window.MenuNav = (function () {
   // Left/Right from a focused slider would make it unadjustable by keyboard.
   // CARET_KEYS are the keys that move a caret or a slider thumb along ITS OWN
   // axis, and they are all any <input> owns — Up/Down must leave the row. A text
-  // field used to own EVERY key: the circuit search box was the one control on
-  // the select screen a pad could land on (Right off the CLASSICS chip) and
-  // never leave — D-pad Down was a dead press, and B closes the whole screen.
-  // Up/Down and the page keys now leave a text field like they leave a slider;
-  // Home/End stay with it (they jump the caret, and a range to min/max — the
-  // ARIA slider pattern — which MenuNav used to take from a focused slider).
+  // field owning EVERY key would trap a pad in the circuit search box (D-pad
+  // Down dead, and B closes the whole screen). Up/Down and the page keys leave
+  // a text field like they leave a slider; Home/End stay with it (they jump the
+  // caret, and a range to min/max — the ARIA slider pattern).
   const CARET_KEYS = { ArrowLeft: 1, ArrowRight: 1, Home: 1, End: 1 };
   function ownsArrows(el, key, event) {
     if (!el) return false;
@@ -516,11 +511,10 @@ window.MenuNav = (function () {
     const inLayer = active && layer.contains(active) && list.indexOf(active) >= 0;
 
     if (paging) {
-      // THE REGION HOLDING FOCUS OWNS THESE KEYS. Home and End used to address
-      // the whole layer, so from inside the garage's option list End jumped to
-      // DONE in the sheet foot and Home landed on a preview control outside the
-      // sheet altogether — from a list of twenty parts, neither key could reach
-      // that list's own ends. Scope them to the pane focus is in; fall back to
+      // THE REGION HOLDING FOCUS OWNS THESE KEYS. Addressing the whole layer,
+      // End from inside the garage's option list would jump to DONE in the
+      // sheet foot and Home out of the sheet — neither could reach that list's
+      // own ends. Scope them to the pane focus is in; fall back to
       // the layer when it is in none (the head, a foot button).
       const region = inLayer ? scrollerOf(active, layer) : null;
       if (key === "Home" || key === "End") {

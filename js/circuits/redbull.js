@@ -4,20 +4,19 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "redbull",
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 2.3 m off centreline; = trace vertex 0 (timing line).
-    // Was 0.1875, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     // No sceneryStartFrac: the dressing is authored against THIS line. The Wing,
     // motorhomes and paddock towers sit at K(0)±0.04 and the T1 tyre wall at
-    // 0.08-0.13 (T1 apex 0.0851). The old 0.1875 (shift 0.295) stood the paddock
-    // at Remus and grew 105 trees along the pit lane — docs/notes/DEFECT-LEDGER.md.
+    // 0.08-0.13 (T1 apex 0.0851). A 0.1875 (shift 0.295) stands the paddock at
+    // Remus and grows 105 trees along the pit lane — docs/notes/DEFECT-LEDGER.md.
     sceneryCoordinates: "racing",
     // The Wing (K(0), right, 38 m: behind the garages, pit side +1) and the
     // pit-straight stands (left, opposite the pits, as at the real ring) own
     // this straight; the engine's generic 7-box stand (k 0-24, left, 14 m)
-    // stood inside the Wing: a 4.00 m / 1005 m3 box-vs-box clip at frac 0.000.
+    // would stand inside the Wing: a 4.00 m / 1005 m3 box clip at frac 0.000.
     ownPitStraight: true,
     name: "RED BULL RING",
     gp: "Austrian GP",

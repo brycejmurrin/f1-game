@@ -270,17 +270,13 @@ const AgentView = (function () {
           turn: "T" + (i + 1),
           frac: +(wrapS(s) / total).toFixed(4),
           s: r1(wrapS(s)),
-          // POSITIVE CURVATURE IS A LEFT-HAND TURN. spline.js's curvatureRaw
-          // used to say "+ = right" and this table used to agree with it; both
-          // were wrong, and every corner on every circuit came back with the
-          // opposite hand. Measured, not derived: park on
+          // POSITIVE CURVATURE IS A LEFT-HAND TURN. Measured, not derived: park on
           // the centreline before a corner, drive with ZERO steer, and watch
           // which way you run wide — you always run wide to the OUTSIDE, so a
           // right-hander pushes you to negative lateral. Monza T1 (k = +0.037)
           // drifts to +9.2 m and T5 (k = −0.015) to −12.2 m, i.e. +k bends the
-          // road LEFT. game.js agrees and always did: its racing line is
-          // -sign(k) with the comment "k>0 curves toward screen-left", which is
-          // why the AI drives correct apexes while this label read backwards.
+          // road LEFT. game.js agrees: its racing line is -sign(k) with the
+          // comment "k>0 curves toward screen-left".
           dir: radius >= STRAIGHT_R ? "straight" : psi > 0 ? "L" : "R",
           radiusM: r1(radius),
           // Signed mean curvature over the whole corner (psi/arc = sign(psi)/radius),
@@ -1030,7 +1026,7 @@ const AgentView = (function () {
         // Measured in a plain realm on a real 11,028-vert car: 0.109 ms of a
         // 3.915 ms build (2.8%), and ~12-14 builds happen at a race start, so
         // gating it takes ~1.4 ms off the race-start hitch — the same beat
-        // DebrisWorld.prime() was moved out of.
+        // DebrisWorld.prime() stays out of.
         const mesh = Car3D.build(team.color, team.color2,
                                  { parts: res.visual, teamId: team.id, measure: true });
         meshRef = mesh;

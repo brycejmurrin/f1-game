@@ -887,13 +887,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
   let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
   let vDist = length(in.wpos - F.eye.xyz);
-  // ONE dynamic-layer sample replaces the old 30-sample hoist (13 albedo +
-  // 13 normal + 2 road layers sampled, 28 discarded per fragment). WGSL only
+  // ONE dynamic-layer sample, not a 30-sample hoist (13 albedo + 13 normal +
+  // 2 road layers sampled, 28 discarded per fragment). WGSL only
   // requires that textureSample (implicit LOD + aniso) sit in UNIFORM CONTROL
   // FLOW — the layer index and UV may be non-uniform EXPRESSIONS. That is
   // exactly GLX's texture(matTex, vec3(uv, layer)) path: same implicit LOD,
   // same aniso, same quad divergence at material seams (GLX ships it).
-  // matUvLit(16) == the old roadUv (road is not wall-like, same wpos.xz/sc),
+  // matUvLit(16) is the road UV (road is not wall-like, same wpos.xz/sc),
   // so the road folds into the same lookup. Identity layers (0/3/15) still
   // sample — the result is select()ed away, keeping the call unconditional.
   let topNgeo = normalize(in.nrm);
@@ -913,8 +913,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // by per-fragment carPaint. Clearcoat stays on geometric N (GLX Ngeo).
   let ccDx = dpdx(topNgeo);
   let ccDy = dpdy(topNgeo);
-  // Same value — the old second dpdx/dpdy pair of topNgeo relied on the
-  // compiler to CSE across divergent later uses; reuse explicitly.
+  // Same value — reuse explicitly rather than rely on the compiler to CSE a
+  // second dpdx/dpdy pair of topNgeo across divergent later uses.
   let saaDxGeo = ccDx;
   let saaDyGeo = ccDy;
   // Paint peel ran for EVERY fragment — road, terrain, buildings — feeding a
@@ -1547,8 +1547,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // cleared texture) from darkening wet road toward black. ssrStrength=0 also
   // makes this a no-op.
   // SSR is consumed SAME-FRAME in COMPOSITE (wgsl-post.js), matching GLX
-  // COMPOSITE_FS. LIT used to sample last present()'s ssrTex here — a 1-frame
-  // lag on wet road / lacquer. The texture stays bound so a 1×1 placeholder
+  // COMPOSITE_FS; sampling last present()'s ssrTex here in LIT would lag wet
+  // road / lacquer by a frame. The texture stays bound so a 1×1 placeholder
   // cannot poison unused bindings; the mix lives in post.
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
@@ -1694,7 +1694,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    blockerG0Layout in wgx.js: 0 = shadow depth texture, 1 = BlockerU
   //    (xy = 1/SHADOW_SIZE source texel). textureLoad, not textureSampleLevel:
   //    Safari / compat-mode rejects texture_depth_2d + a non-comparison sampler
-  //    (gpuweb compatibility-mode.md) and that used to fail the whole create().
+  //    (gpuweb compatibility-mode.md), which fails the whole create().
   const BLOCKER = `
 struct BlockerU { srcTexel : vec4<f32> };   // xy = 1/SHADOW_SIZE
 @group(0) @binding(0) var depthTex : texture_depth_2d;

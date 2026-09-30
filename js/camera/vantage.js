@@ -142,38 +142,31 @@ const CHASE_CORNER_LEAD_DEFAULT = 0.54;
 const CHASE_G_DOLLY = 14;    // m of nose-IN per rad of dive (≈0.34 m at full braking)
 const CHASE_G_AIM   = 5;     // m the aim drops per rad of dive, so you watch the car dive
 
-// How the chase rigs decide their vertical framing. They used to take it from
-// two independent point samples of the centreline — the eye from the road
-// `back` m behind, the target from the road at (or ahead of) the car — so the
-// rig's pitch was a finite DIFFERENCE of the elevation profile over ~12 m. That
-// is the one operator that AMPLIFIES short wavelengths, and this profile has
+// How the chase rigs decide their vertical framing. Two independent point
+// samples of the centreline (eye `back` m behind, target at the car) would make
+// the rig's pitch a finite DIFFERENCE of the elevation profile over ~12 m — the
+// one operator that AMPLIFIES short wavelengths, and this profile has
 // them on purpose: on top of the authored cosine bumps, buildCenterline adds a
 // "fine surface undulation" of three harmonics at 30-110 m wavelengths
 // (js/track/tracks.js) so the road isn't mathematically flat between corners.
 // The car is meant to ride that. The camera differentiating it is not.
 //
-// On flat road that difference is a constant nobody can see, which is why the
-// bug only shows up on a hill. Put a real gradient under it and it stops being
-// constant: MEASURED on Monaco's climb out of Sainte Dévote (16 % over the rig's
-// own 5.8 m) the chase pitch swung ±0.93° in the 10-60 m band — roughly 1-2 Hz
-// at racing speed, reversing every 17 m. That is the "camera bobs up and down
-// going up the incline" report.
+// On flat road that difference is an invisible constant; on a hill it is not:
+// MEASURED on Monaco's climb out of Sainte Dévote (16 % over the rig's own
+// 5.8 m) two-sample pitch swung ±0.93° in the 10-60 m band — roughly 1-2 Hz at
+// racing speed, reversing every 17 m (the "camera bobs going up the incline").
 //
 // So the rig is built from ONE smoothed height and ONE smoothed gradient rather
 // than from two raw samples:
 //
 //     eyeY = rideY(s) - back * grade + eyeUp
 //
-// The pitch now depends only on `grade`, so nothing differentiates the ripple.
-// On flat road (grade 0) and on ANY constant slope this reproduces the old
-// framing to the millimetre — a Hann average of a straight line is the line, and
-// -back*grade is exactly what the old sample `back` m behind returned. It can
-// only differ where the profile BENDS, which is exactly where the bob was, and
-// even there it stays within 0.28 m of eye height and 1.0° of pitch on every
-// circuit measured. What it removes is 78-90 % of the pitch bob band
-// (monaco/spa/redbull/suzuka), and because the eye no longer sits on individual
-// ripple peaks it GAINS ground-clamp margin rather than spending it (Spa's worst
-// case 0.04 m → 0.15 m).
+// The pitch depends only on `grade`, so nothing differentiates the ripple. On
+// flat road and on ANY constant slope this equals the two-sample framing to the
+// millimetre (a Hann average of a straight line is the line); where the profile
+// BENDS it stays within 0.28 m of eye height and 1.0° of pitch on every circuit
+// measured, removes 78-90 % of the pitch bob band (monaco/spa/redbull/suzuka),
+// and GAINS ground-clamp margin (Spa's worst case 0.04 m → 0.15 m).
 //
 // rideY is a 7-tap Hann average 60 m wide: a null at the 30 m harmonic (which
 // carries nearly all the vertical acceleration, bob scaling as amplitude ÷
@@ -212,7 +205,7 @@ const RIDE_GRADE = 40;                    // half-baseline the road slope is rea
 // Catmull-Rom is C1, so the velocity is continuous and no node rate survives at
 // all. It still passes exactly through every node, and on collinear nodes (flat
 // road, constant slope) it reproduces the straight line to floating-point — so
-// this changes nothing anywhere the old curve was already smooth.
+// it matches a linear blend anywhere the nodes already lie on a line.
 function crY(p0, p1, p2, p3, t) {
   const t2 = t * t, t3 = t2 * t;
   return 0.5 * ((2 * p1) + (-p0 + p2) * t

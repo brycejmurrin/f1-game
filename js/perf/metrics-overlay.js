@@ -502,17 +502,16 @@ function fmtTime(t) {
 // Two-column row: label (padded to L chars) then value.
 const L = 8;
 function row(label, value) { return (label + ":").padEnd(L) + " " + value; }
-// CAN THE BOX ACTUALLY HOLD THE WIDE LAYOUT? The old test was
-// `metricsRatio() < 480`, a VIEWPORT proxy, while the width came from a vw cap
-// in css/hud.css — two different notions of "room", and they disagreed. So the
-// wide layout got chosen for boxes that could not hold it and the tail was CUT
-// (white-space:pre inside overflow:hidden — lost, not scrolled).
+// CAN THE BOX ACTUALLY HOLD THE WIDE LAYOUT? A VIEWPORT proxy
+// (`metricsRatio() < 480`) disagrees with the width's vw cap in css/hud.css,
+// so it picks the wide layout for boxes that cannot hold it and the tail is
+// CUT (white-space:pre inside overflow:hidden — lost, not scrolled).
 // MEASURED with a 20-character probe in the body's own font, both viewports:
 //   narrow longest 25 ch, wide longest 52 ch (GOV is the widest page)
 //   desktop boxes 170/221/322 px at ch 8.57 -> 19/25/37 fit
 //   phone   boxes 111/134/189 px at ch 7.35 -> 15/18/25 fit
-// Seven of nine desktop cases and nine of nine phone cases cut. WIDE_CH is that
-// measured 52 plus one, and the CSS steps were re-sized in the same units.
+// Under the proxy seven of nine desktop cases and nine of nine phone cases cut.
+// WIDE_CH is that measured 52 plus one, and the CSS steps are sized in the same units.
 // The measurement forces layout, so it is cached on (font-size, box width) —
 // this runs at 4 Hz and must not reflow every paint.
 const WIDE_CH = 53;
@@ -612,7 +611,7 @@ function paintOverlay() {
         pair("ax",   fmt(s.axEstSm, 2), "slope", fmt(s.slope, 3)),
         pair("vmax", fmt(s.vmaxNow, 1), "ww", fmt(s.wrongWay)),
         pair("grip", fmt(s.aeroGrip, 3), "xOn", fmt(s.xOn)),
-        // The eight physState() fields the panel used to fetch and drop. Kept
+        // Eight more physState() fields. Kept
         // inside the 25-char narrow budget the width work measured — a longer
         // line here is CUT, not scrolled.
         pair("tow", fmt(s.towing, 2), "bb", fmt(s.brakeBias, 2)),

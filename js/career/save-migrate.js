@@ -25,7 +25,7 @@ const SaveMigrate = (function () {
   // finishes: driverId -> per-position counts (SeasonCal.award()).
   // roundPts: driverId -> points per ROUND (both legs of a sprint weekend land
   // in the same index); SeasonCal.netPts() reads it when scores are dropped,
-  // so a string or a negative in a row used to reach the arithmetic raw.
+  // so a string or a negative in a row must not reach the arithmetic raw.
   // Owned here so migrateCareer's remapPoints and SeasonCal.resume() sanitise
   // the same way; season-cal.js delegates to these.
   function roundMap(o) {

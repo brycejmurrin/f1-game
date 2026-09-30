@@ -11,8 +11,7 @@
     // The 647 m run opening the trace is the oval front straight — the pit
     // straight for the Grand Prix — and its first vertex is the line.
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches the real T1.
-    // Was 0.05, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     // No sceneryStartFrac: the scenery is authored against THIS line (yard of
     // bricks at K(0.0), pagoda 0.005, pit stalls 0.955, Gasoline Alley

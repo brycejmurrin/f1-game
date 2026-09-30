@@ -39,7 +39,7 @@ Fetched `origin/claude/f1-game-project-26h3ng` at full tip
 
 | Finding | New-tip verdict | Current evidence |
 |---|---|---|
-| 1. Solo standing red from one car's mixed debris | **FIXED via #148** | Wall impacts now stamp one source and car impacts stamp both sources (`js/physics/debris-world.js:461-477`); slots retain the source list (`js/physics/debris-world.js:638-642`). `hazards()` initializes `redTotal` to zero and only promotes it after at least two distinct source cars (`js/physics/debris-world.js:958-996`). Race control applies `RED_MIN` to `redTotal`, while the mixed `total` still drives lower cautions (`js/race/race-control.js:187-200`). The unit case pins 17 single-source hazards to Safety Car rather than RED (`tests/unit/race-control.test.mjs:370-382`). |
+| 1. Solo standing red from one car's mixed debris | **FIXED via #148** | Wall impacts now stamp one source and car impacts stamp both sources (`js/physics/debris-world.js:457-473`); slots retain the source list (`js/physics/debris-world.js:634-638`). `hazards()` initializes `redTotal` to zero and only promotes it after at least two distinct source cars (`js/physics/debris-world.js:954-992`). Race control applies `RED_MIN` to `redTotal`, while the mixed `total` still drives lower cautions (`js/race/race-control.js:187-200`). The unit case pins 17 single-source hazards to Safety Car rather than RED (`tests/unit/race-control.test.mjs:370-382`). |
 | 2. Foundation specs inspect the previous race build | **FIXED-ON-TIP via #156** | The affected callbacks now await `window.__apex.race(...)` before reading diagnostics: Bahrain (`tests/specs/bahrain-foundation.spec.js:184-190`), Montreal (`tests/specs/montreal-foundation.spec.js:76-88`), Monaco day/night and prop audit (`tests/specs/monaco-foundation.spec.js:25-29`, `tests/specs/monaco-foundation.spec.js:72-73`, `tests/specs/monaco-foundation.spec.js:179-183`), Madrid (`tests/specs/new-hooks.spec.js:895-901`), and Shanghai (`tests/specs/new-hooks.spec.js:915-917`). Verified at `73b1a1f03f5ae749d490edbe65eabfcae6577e99`. |
 | 3. Ghost traces grow without a budget and bypass save health | **FIXED-ON-TIP via #156** | Ghost storage now has a 512 KiB budget, evicts least-recently-used entries, thins an oversized remaining trace, and writes through `GameStore.store.write` so durability failures reach store health (`js/car/ghost.js:9-11`, `js/car/ghost.js:86-121`, `js/car/ghost.js:148-162`). Verified at `73b1a1f03f5ae749d490edbe65eabfcae6577e99`. |
 | 4. Settings export drops custom radio-voice tuning | **FIXED-ON-TIP via #156** | The audio export/import `SPEC` now includes `voiceTune` with an effective `{}` default beside `radioVoice` and `volRadio` (`js/ui/settings-export.js:65-67`). Verified at `73b1a1f03f5ae749d490edbe65eabfcae6577e99`. |
@@ -64,14 +64,14 @@ the original `cceb9d615` audit.**
 
 1. Impact provenance reaches `spawnImpact` as `carIdx`, but is used for seeded
    scatter and diagnostics only; live debris slots retain no source-car identity
-   (`js/physics/debris-world.js:610-635`).
+   (`js/physics/debris-world.js:606-631`).
 2. `hazards()` increments one `total` for every settled live shard, disturbed
    cone, and broken panel on the racing surface
-   (`js/physics/debris-world.js:948-980`).
+   (`js/physics/debris-world.js:944-976`).
 3. Race control raises RED solely when that mixed `total` reaches 16
    (`js/race/race-control.js:187-199`), then requests a standing restart after
    the stop/hold procedure (`js/race/race-control.js:157-169`;
-   `js/game.js:1946-1949`, `js/game.js:3812`).
+   `js/game.js:1938-1941`, `js/game.js:3797`).
 4. The multiplayer downgrade to Safety Car is the only provenance-adjacent
    guard. Solo has no distinct-source check.
 
@@ -108,8 +108,8 @@ the original `cceb9d615` audit.**
 
 `__apex.race()` returns an awaitable thenable around asynchronous `startRace()`
 (`js/agent/apex.js:6-20`, `js/agent/apex.js:1285-1301`), and `startRace()` yields
-before rebuilding the track (`js/game.js:2522-2526`,
-`js/game.js:2548-2551`). The following callbacks discard that thenable and read
+before rebuilding the track (`js/game.js:2512-2516`,
+`js/game.js:2538-2541`). The following callbacks discard that thenable and read
 diagnostics synchronously in the same `page.evaluate`:
 
 - Bahrain night rebuild: `tests/specs/bahrain-foundation.spec.js:184-189`
@@ -195,7 +195,7 @@ the original `cceb9d615` audit.**
 1. Settings export includes the radio enable and volume rows, but no `voiceTune`
    row (`js/ui/settings-export.js:57-70`).
 2. Export and import enumerate only the `SPEC` allowlist
-   (`js/ui/settings-export.js:216-239`, `js/ui/settings-export.js:308-329`).
+   (`js/ui/settings-export.js:213-236`, `js/ui/settings-export.js:305-326`).
 3. The radio panel exposes player-editable voice selectors/sliders
    (`js/audio/panel.js:288-361`), and the radio module persists their combined
    value under `voiceTune` (`js/audio/radio-voice.js:283-290`).
@@ -262,8 +262,8 @@ The following claims were falsified or narrowed out of the main list:
 1. **AI double-stack queue is broken — REJECTED.** `boxBusy()` blocks only an
    occupied box; the second car remains lane-limited and can stop if the box
    clears before it passes, otherwise AI retains its armed plan for the next lap
-   (`js/race/pit-lane.js:960-976`, `js/race/pit-lane.js:1159-1169`,
-   `js/race/pit-lane.js:1223-1238`).
+   (`js/race/pit-lane.js:952-968`, `js/race/pit-lane.js:1147-1157`,
+   `js/race/pit-lane.js:1211-1226`).
 2. **Daily records need day/plan identity — REJECTED as a defect.** Daily's own
    best remains day-keyed (`js/race/daily-challenge.js:71-90`); personal ghosts
    and TT boards intentionally compare effective performance conditions, not
@@ -291,15 +291,15 @@ The following claims were falsified or narrowed out of the main list:
    omission.
 8. **Current HUD/a11y source chain — REJECTED.** No complete current-tip defect
    was established; alert/status roles and dynamic control state are maintained
-   (`index.html:446-469`, `js/ui/hud.js:713-732`).
+   (`index.html:446-469`, `js/ui/hud.js:702-721`).
 9. **Career saves ignore durability/conflicts — REJECTED.** Career uses
    structured write results, refuses stale cross-tab writes, and surfaces
    `unsaved` (`js/career/career.js:140-194`,
    `js/career/career.js:763-772`).
 10. **Input release/disconnect remains latched — REJECTED.** Menu-focused key
     releases clear held controls, and lifecycle resets clear input state
-    (`js/input/input.js:897-904`, `js/input/input.js:1996-2004`,
-    `js/input/input.js:2114-2136`).
+    (`js/input/input.js:889-896`, `js/input/input.js:1979-1987`,
+    `js/input/input.js:2094-2116`).
 11. **Fresh-page async waits are all false-green — REJECTED at seven checked
     sites.** Bahrain day returns the thenable; Montreal day, Scenery Kits, and
     Abu Dhabi navigate fresh and wait until the race reports a track; the

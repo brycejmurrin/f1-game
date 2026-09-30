@@ -350,8 +350,7 @@
       const lampArmed = !!(S && S.lampArmed);
       const o = opts || {};
       const GT = o.tune || null;
-      // Knob read with the TUNE_DEFS default (PostCommon.knob) — the defaults
-      // used to be restated here as literals.
+      // Knob read with the TUNE_DEFS default (PostCommon.knob), never a literal.
       const gk = (id) => PostCommon.knob(GT, id);
       const prevAutoClear = renderer.autoClear;
       renderer.autoClear = false;   // fullscreen passes overwrite; UP accumulates
@@ -651,12 +650,11 @@
         const deadline = performance.now() + 3000;
         for (const job of jobs) {
           renderer.setRenderTarget(job.target);
-          // THE LIVE QUAD, not a snapshot. The warm used to compile a fresh
-          // QuadMesh per job, and on macos-latest Metal the race then built the
-          // same 16 post programs AGAIN through runPass (gpu-census 205: x16
-          // tagged warm, x16 tagged runPass, the same eight sites) — a fresh
-          // object does not share a render-object cache key with the one
-          // present() draws. Compiling `quad` itself with the job's material is
+          // THE LIVE QUAD, not a snapshot: a fresh QuadMesh per job does not
+          // share a render-object cache key with the one present() draws, so
+          // the race built the same 16 post programs AGAIN through runPass
+          // (gpu-census 205 on macos-latest Metal: x16 tagged warm, x16 tagged
+          // runPass, the same eight sites). Compiling `quad` itself with the job's material is
           // exactly what runPass does, so the hit is guaranteed whatever the key
           // contains.
           quad.material = job.mat;

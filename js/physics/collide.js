@@ -31,7 +31,7 @@ const Collide = (() => {
   //
   // The peak is 60-75°, the three-quarters-on car — NOT the fully sideways one,
   // whose LONGITUDINAL extent has shrunk to 3.4 m against the fixed 4.8 m, i.e.
-  // there the old test over-detects. So this both adds and removes contacts.
+  // there a fixed-box test over-detects. So this both adds and removes contacts.
   //
   // WHOSE yaw. Only a car with a REAL heading can be crossways here: AI cars
   // are driven by a kinematic controller that writes `head = atan2(tangent)`
@@ -189,9 +189,9 @@ const Collide = (() => {
     // so nothing aliases across a pair and the relaxation loop stays allocation-free.
     const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
     const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
-    // Reused AiDrive ctxs — updateCar used to pass a fresh object literal to
-    // wantBoost / otShouldFire / brakeDecision / wantX / adaptLane / otPull /
-    // defendPull / isBoxed every physics step (~8 × 20 cars × 60 Hz). Same
+    // Reused AiDrive ctxs — not a fresh object literal to wantBoost /
+    // otShouldFire / brakeDecision / wantX / adaptLane / otPull / defendPull /
+    // isBoxed every physics step (~8 × 20 cars × 60 Hz). Same
     // read-before-next-call contract as _ct / AiDrive.traits.
     // Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
     // contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
@@ -366,9 +366,9 @@ const Collide = (() => {
         shiftLong(b, -sgn * corr * sB);
         const relV = sgn >= 0 ? bSp - aSp : aSp - bSp;   // >0 means the rear car is closing
         if (relV > 0) {
-          // Soft momentum exchange (was 1.15). Skip only cars Rapier already
-          // owns — a relV≥15 skip used to drop jImp even when promoteCarDynamic
-          // failed later, leaving the pair with no resolver. owns() cars are
+          // Soft momentum exchange. Skip only cars Rapier already owns — a
+          // relV≥15 skip would drop jImp even when promoteCarDynamic fails
+          // later, leaving the pair with no resolver. owns() cars are
           // also skipped in _colSepPair; this is the same rule at the impulse.
           // notifyCar still queues a shunt; below threshold it no-ops (C3).
           if (!(incidentSim.owns(a) || incidentSim.owns(b))) {
@@ -536,7 +536,7 @@ const Collide = (() => {
       // separation pass: enforce the car boundary firmly so they don't visibly
       // overlap. A small slop is kept to avoid a hard per-frame snap (the proactive
       // steering separation now keeps cars spaced, so collisions rarely fire and a
-      // tighter boundary no longer causes the old vibration).
+      // tighter boundary does not vibrate).
       if (useBuckets) {
         if (_colShifted) nB = _colFillBuckets(ranked);
         _colForBucketPairs(nB, _colSepCB);
@@ -564,11 +564,10 @@ const Collide = (() => {
       // frame's integration would overwrite the push and cars would slide through
       // each other. Heading is unchanged by a bump.
       //
-      // ONLY when it moved. This used to run every frame unconditionally, which
-      // quietly turned world → (s, x) → world into a per-frame feedback loop; with a
-      // reconstruction that wasn't quite the inverse of the read (see
-      // worldFromTrack) the loop had gain < 1 and dragged the car onto the
-      // centreline. Untouched frames must leave the car's own integration alone.
+      // ONLY when it moved. Run every frame, world → (s, x) → world is a
+      // per-frame feedback loop; with a reconstruction that is not quite the
+      // inverse of the read (see worldFromTrack) the loop has gain < 1 and drags
+      // the car onto the centreline. Untouched frames must leave the car's own integration alone.
       if (player && player.px != null && !player.finished && !incidentSim.owns(player) &&
           (player.s !== _preColS || player.x !== _preColX)) {
         const w = G.worldFromTrack(player.s, player.x);

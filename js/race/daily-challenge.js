@@ -141,8 +141,8 @@ const DailyChallenge = (function () {
     function isActive() { return !!active; }
     function current() { return active; }
     // The streak as it STANDS today: a lap today or yesterday keeps it alive, an
-    // older one has already broken it. data().streak keeps the old count until
-    // the next lap resets it, so the title read "STREAK 12" long after the chain broke.
+    // older one has already broken it. data().streak keeps its count until the
+    // next lap resets it, so reading it raw shows "STREAK 12" after the chain broke.
     function liveStreak() {
       const st = data().streak, day = dayKey();
       return st.count > 0 && (st.last === day || st.last === prevDay(day)) ? st.count : 0;

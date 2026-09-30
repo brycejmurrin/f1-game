@@ -44,8 +44,8 @@ cones on the road's inner edge, a glowing stop gate at each box and the team's
 crest on the pier and the pit wall. A driver who looks at the road has the cues;
 the HUD is where they are still thin.
 
-**The cue.** `PitLane.cue(c)` (`js/race/pit-lane.js:526-579`) is a pure ladder the
-HUD paints into `#hud-pit` (`index.html:432`, `js/ui/hud.js:648-656`, styles
+**The cue.** `PitLane.cue(c)` (`js/race/pit-lane.js:518-571`) is a pure ladder the
+HUD paints into `#hud-pit` (`index.html:432`, `js/ui/hud.js:637-645`, styles
 `css/hud.css:448-470`): counting down from 550 m (`CUE_M`, `:523`), "HOLD THE LANE"
 inside the entry road, "BOX" once armed, the limit in the lane, "BOX <n>m" from 90 m
 out (`BOX_CUE_M`, `:524`), "KEEP LEFT/RIGHT" when the car is not laterally in the
@@ -59,23 +59,23 @@ decision (`:78-81`): wrong tread, a cheaper stop under caution with the pit loss
 seconds, rain in N laps, blisters, tyres gone, graining, cold, the axle call, and the
 wear ladder at 50/25/10/0 % (`WEAR_STEPS`, `:29`). One line every 9 s at most, no
 line twice in 45 s (`:43-46`), through `G.announce` at "info" priority so it never
-talks over a flag (`:176-178`; priorities `js/game.js:1101`).
+talks over a flag (`:176-178`; priorities `js/game.js:1099`).
 
-**The estimate.** `PitLane.estimate(c)` (`js/race/pit-lane.js:467-479`) already returns
+**The estimate.** `PitLane.estimate(c)` (`js/race/pit-lane.js:460-472`) already returns
 `lossS` (lane travel at the limit plus the box time minus the road time), `gapS` to
 the car behind and `marginS = gapS − lossS`, i.e. "do you come out ahead of them".
 Only the engineer's caution line reads it today.
 
 **Strategy.** Only the AI has a plan: `c.pitPlan = pits.planFor(roll)` for every
-non-human car at grid-up (`js/game.js:1909`), from `AiDrive.stintPlan`
-(`js/physics/ai-drive.js:694`) with pit loss derived from the lane in laps
-(`js/race/pit-lane.js:1069-1083`), executed by `PitLane.think` (`:1087-1119`) through
-`AiDrive.pitNow` (`ai-drive.js:782`), with the compound chosen by
+non-human car at grid-up (`js/game.js:1901`), from `AiDrive.stintPlan`
+(`js/physics/ai-drive.js:689`) with pit loss derived from the lane in laps
+(`js/race/pit-lane.js:1061-1075`), executed by `PitLane.think` (`:1087-1119`) through
+`AiDrive.pitNow` (`ai-drive.js:776`), with the compound chosen by
 `AiDrive.compoundFor` (`:762`). The player has `pitPlan = null`, chooses a starting
 compound on the TYRES tab, and decides live. The plan is not exposed anywhere a
 player can read it — not their own (there is none) and not a rival's.
 
-**The map.** `drawMinimap` (`js/ui/hud.js:850-1013`) draws the lane as a light dashed
+**The map.** `drawMinimap` (`js/ui/hud.js:839-1002`) draws the lane as a light dashed
 run from `pit.sA` to `pit.sB` and a white "P" disc at the entry line `pit.sIn`
 (`:927-948`), rivals as 4 px squares, the player as a 4 px white disc. The map is
 auto-hidden in onboard cameras and in the MINIMAL profile (`:82-83`), and MINIMAL
@@ -98,7 +98,7 @@ and `#hud-tyre` survive it.
 
 **Marker at the peel-off, not the line.** Draw the "P" at `pit.sA` and keep the
 dashed run from `sA` to `sB`; the entry line becomes a short tick across the lane
-run. One-line change in `drawMinimap` (`hud.js:943`).
+run. One-line change in `drawMinimap` (`hud.js:932`).
 
 **A marker that carries state.** Read the same three facts the cue reads:
 
@@ -122,7 +122,7 @@ run uses (`:937-941`) from `player.s` to `sA`.
 1. *Keep the map hidden, promote the cue.* In MINIMAL, `#hud-pit` moves from the
    tyre box to the top centre under the banner, with the arrow doubled in size and
    a distance under it, from `CUE_M` in. The cue is already the one element that
-   knows both direction (`side`, `hud.js:655`) and distance (`dist`); MINIMAL loses
+   knows both direction (`side`, `hud.js:644`) and distance (`dist`); MINIMAL loses
    nothing it did not already hide. CSS only: a `body.hud-prof-minimal #hud-pit`
    block in `css/hud.css`.
 2. *Show a 60 px map slice around the entry* while `toEntry(c) < CUE_M` in MINIMAL.
@@ -133,7 +133,7 @@ run uses (`:937-941`) from `player.s` to `sA`.
 - `tests/unit/pit-lane.test.mjs`: `worthStopping` is the cue's gate — for every
   `(wear, tread, caution)` triple, `cue(c) != null` ⇔ `worthStopping(c)`.
 - A DOM test for the map is not worth a browser; a **VM** test can call the pure
-  arc-builder if the loop at `hud.js:937-941` is extracted as
+  arc-builder if the loop at `hud.js:926-930` is extracted as
   `laneRun(map, n, fa, fb)` — assert the run starts at `sA`'s node and the entry
   tick lands at `sIn`'s.
 - `tests/unit/css-layers.test.mjs` already catches a hidden element that paints;
@@ -179,7 +179,7 @@ whose `s` is behind the exit road's end and closing.
 
 **A distance bar.** `#hud-pit` gains a thin bar under the text that fills from
 `CUE_M` to 0 (a `--pit-dist` custom property set from `cue.dist`, the way
-`--pit-commit` is set today, `hud.js:642`). The bar turns `--you` in the last 90 m
+`--pit-commit` is set today, `hud.js:631`). The bar turns `--you` in the last 90 m
 (`BOX_CUE_M`). CSS only past the one property.
 
 **One voice.** `RaceEngineer.update` skips its line while `PitLane.cue(c)` is in a
@@ -230,7 +230,7 @@ pit-lane.js ≈ +60 (not ratcheted at game.js's level; it has its own row), hud.
 ### 4.2 Design
 
 **A player plan, from the same function.** At grid-up give the player
-`c.pitPlan = pits.planFor(0.5)` too (`js/game.js:1909` drops the `!c.human`), with
+`c.pitPlan = pits.planFor(0.5)` too (`js/game.js:1901` drops the `!c.human`), with
 `plan.start` NOT applied (the TYRES tab is the player's choice, `:1910` stays AI-only).
 Nothing executes it — `PitLane.think` keeps its `c.human` guard — it is a
 **reference**: the plan the pit wall would run.

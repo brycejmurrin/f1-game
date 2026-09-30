@@ -13,8 +13,7 @@
     // shorter of the pair is the pit straight, so the line goes there. Not
     // GPS-calibrated (no OpenF1 coverage for a circuit that left in 2017).
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches the real T1.
-    // Was 0.95, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     // No sceneryStartFrac: the scenery, elevations and bankZones are authored
     // against startFrac 0 (pit bays 0.955-0.999, T1 gravel 0.060, T15 gravel

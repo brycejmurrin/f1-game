@@ -1,4 +1,4 @@
-/* Apex 26 — RELIABILITY: whether a car reaches the flag at all. Every car used to finish every race, which makes a championship — and a career above all — a pure … */
+/* Apex 26 — RELIABILITY: whether a car reaches the flag at all. Without it every car finishes every race, and a championship — a career above all — is a pure … */
 const Reliability = (function () {
   "use strict";
 

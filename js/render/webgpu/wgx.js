@@ -109,13 +109,11 @@ const WGX = (function () {
   let POST_HDR_FORMAT = "rg11b10ufloat";
   const BLOOM_MAX_LEVELS = 5;           // GLX bloom mip-chain depth cap
 
-  // Resolved defensively, because this file used to dereference WGSLChunks at
-  // IIFE-EVAL time: a missing/failed wgsl-chunks.js threw HERE, which left the
-  // `const WGX` binding permanently in its temporal dead zone — and a TDZ
-  // binding makes even `typeof WGX` THROW in gfx.js rather than report
-  // "undefined". That only stayed survivable because Gfx.create() wraps
-  // everything in try/catch. A missing dependency is exactly the failure that
-  // hit vendor/ in production, so it must degrade the documented way instead:
+  // Resolved defensively, never dereferenced at IIFE-EVAL time: a throw HERE
+  // from a missing/failed wgsl-chunks.js would leave the `const WGX` binding
+  // permanently in its temporal dead zone — and a TDZ binding makes even
+  // `typeof WGX` THROW in gfx.js rather than report "undefined". A missing
+  // dependency must degrade the documented way instead:
   // WGX still exists, and WGX.create() returns null so the caller uses GLX.
   const _Chunks = (function () {
     try { if (typeof WGSLChunks !== "undefined" && WGSLChunks) return WGSLChunks; } catch (_) { /* TDZ / missing global: fall through to window, then null */ }
@@ -138,10 +136,9 @@ const WGX = (function () {
   // draw. Packing the used bytes contiguously and binding with one offset per
   // batch would cut the per-frame upload by ~44%, but it means giving up
   // dynamic offsets for a per-batch bind-group carousel — a redesign of the
-  // draw path, not a patch, so it is NOT attempted here. A `DRAW_FLOATS =
-  // DRAW_USED_BYTES / 4` const used to sit on this line as the beginning of
-  // that work; nothing ever read it (writeBuffer uses DRAW_F32_STRIDE), and a
-  // dead const that LOOKS like the stride is a trap, so it is gone.
+  // draw path, not a patch, so it is NOT attempted here. Do not add a
+  // `DRAW_FLOATS = DRAW_USED_BYTES / 4` const: writeBuffer uses
+  // DRAW_F32_STRIDE, and a dead const that LOOKS like the stride is a trap.
   const LAMP_MASK_ALL = 16777215;                       // 2^24-1: f32-exact all-ones lamp mask
   // Dynamic uniform-buffer offsets must be a multiple of
   // minUniformBufferOffsetAlignment (<=256 on all adapters); 256 is always a
@@ -491,7 +488,7 @@ const WGX = (function () {
       if (!adapter) return _fail("no adapter");
       // Software / headless adapters: the native swapchain never composites
       // (black #game) but the 2D soft-present blit does. SETTINGS ▸ WEBGPU
-      // must stay on WGX here — refusing used to silently bind GLX.
+      // must stay on WGX here — refusing would silently bind GLX.
       // `apex26.gfxWgxAllowSoftware` is a legacy no-op (tools still set it).
       // Sync signals only — never await requestAdapterInfo() (has hung create()
       // with no timeout on Dawn/SwiftShader).
@@ -2222,14 +2219,11 @@ const WGX = (function () {
     function _makeFrameBGs(nextSsrView) {
       // EVERY binding, not just frameUBO. WebGPU rejects a bind group whose
       // resource is null — Safari's message is "Member GPUBufferBinding.buffer
-      // is required and must be an instance of GPUBuffer" — and the old guard
-      // named only two of the sixteen. init() calls _rebuildFrameBG() straight
-      // after the UBOs are made, ~90 lines BEFORE matScaleUBO, the material
-      // views, the blocker view and both extra shadow views exist, so the
-      // first call built a group full of nulls and threw out of init. That
-      // aborted WGX entirely on a real device (measured: iPhone, Safari 26.6,
-      // build 1281, `apex26.gfxWgxFail` = that exact string, RENDERER showing
-      // "WEBGPU (WEBGL2)"). It survived every test because the WebGPU mock in
+      // is required and must be an instance of GPUBuffer". init() calls
+      // _rebuildFrameBG() straight after the UBOs are made, ~90 lines BEFORE
+      // matScaleUBO, the material views, the blocker view and both extra
+      // shadow views exist; guarding only some of them aborts WGX on a real
+      // device (iPhone, Safari 26.6). The WebGPU mock in
       // tests/unit/webgpu-lifecycle.test.mjs does not validate bind groups.
       //
       // Bailing is safe: this is a rebuild, and the callers that matter re-run
@@ -2826,8 +2820,8 @@ const WGX = (function () {
       if (_roadLutReady && zeroAttrBG) return { sbuf: null, attrBG: zeroAttrBG };
       return _makeAttrBG(attr);
     }
-    // World-XZ spatial LUT (32×32×16). Group-2 used to be a per-vertex
-    // mat+trk array — vertex_index stays 0 on this adapter, and a 4th
+    // World-XZ spatial LUT (32×32×16), not a per-vertex mat+trk array in
+    // group 2 — vertex_index stays 0 on this adapter, and a 4th
     // vertex attr zeros (and breaks pos) even on piece VBOs. Magic 12345
     // marks a LUT vs a dummy/attr buffer.
     // Thin wrapper: the table is built by the module-scope _roadLutTable (see
@@ -2876,7 +2870,7 @@ const WGX = (function () {
       if (lut) _rememberRoadLut(lut);
       let vbuf = null, ibuf = null, sbuf = null, attrBG = null;
       // Hoisted out of the piece branch so the catch can see it: an OOM on
-      // piece k used to drop pieces 0..k-1 undestroyed.
+      // piece k must still destroy pieces 0..k-1.
       let pieces = null;
       try {
         if (pulled) {
@@ -3231,8 +3225,7 @@ const WGX = (function () {
       d[133] = SHD.lampArmed ? 1 : 0;
       d[134] = SHD.lampIdx;
       d[135] = (T && T.matTexMix != null) ? T.matTexMix : 1;
-      // params9 (floats 136..139): LIT tuner knobs that used to have no FrameU
-      // lane. Always pack the resolved value — WGSL reads them directly, so 0
+      // params9 (floats 136..139): LIT tuner knobs. Always pack the resolved value — WGSL reads them directly, so 0
       // is a real "off", not an unset slot. Defaults = shipped GLX look.
       d[136] = (T && T.ambContactDark != null) ? T.ambContactDark : 1.0;
       d[137] = (T && T.lampWallSpill  != null) ? T.lampWallSpill  : 1.0;
@@ -3334,7 +3327,7 @@ const WGX = (function () {
       // apart deliberately: the segment allocator below may only be reset for
       // the former. Gen moves every frame while flicker runs, and resetting the
       // allocator there would re-bake every chunk table every frame.
-      // The knob is NOT in this key, and used to be: the loop below copies AL
+      // The knob is deliberately NOT in this key: the loop below copies AL
       // verbatim, so a knob move cannot change one byte here. It moves only the
       // per-chunk TABLES, and only via capFor() — 1000 slider steps, <=17 caps.
       const _tlCap = (typeof LampChunks !== "undefined") ? LampChunks.capFor(framePerChunk) : 0;
@@ -3348,8 +3341,8 @@ const WGX = (function () {
         // js/lighting/frame-lights.js makes upstream, where only rgb can move. _tlScratch
         // is module-scope and written nowhere else, so its static lanes survive
         // between frames and only need writing when the SET changes. Gen moves
-        // every frame under flicker or the warm-up ramp, and that used to rewrite
-        // all 16 lanes of up to TRACK_LIGHT_CAP 1024 records to change three.
+        // every frame under flicker or the warm-up ramp; keying on it alone would
+        // rewrite all 16 lanes of up to TRACK_LIGHT_CAP 1024 records to change three.
         if (_tlFullPack !== AL || _tlLoGen !== _lbGen) {
           for (let i = 0; i < tn; i++) {
             const o = i * 15, b = i * 16;
@@ -3483,8 +3476,8 @@ const WGX = (function () {
         litPass = encoder.beginRenderPass(rp);
         return true;
       } catch (e) {
-        // Device dying mid-begin used to throw into tick() ("Caught @ tick")
-        // and THEN device.lost reloaded onto GLX — the overlay crash.
+        // Device dying mid-begin must not throw into tick() ("Caught @ tick")
+        // before device.lost reloads onto GLX — the overlay crash.
         _jsStrike("begin", e);
         return false;
       }
@@ -3758,12 +3751,11 @@ const WGX = (function () {
       } catch (e) {
         // RELEASE WHAT WAS MADE, AND LATCH. envCubeTex was assigned first, so a
         // throw from any later view/texture (OOM on the device class this
-        // probe is gated for) used to leave the re-entry guard satisfied with
-        // envFaceViews empty — and every following envFaceBegin passed an
+        // probe is gated for) would leave the re-entry guard satisfied with
+        // envFaceViews empty — and every following envFaceBegin would pass an
         // undefined view to beginRenderPass: one validation error per probe
         // cycle for the life of the tab, enough to climb the GPU-error ladder
-        // off a working device. createMesh / _makeAttrBG / _capEncode already
-        // release on failure; this one was missed.
+        // off a working device. Same rule as createMesh / _makeAttrBG / _capEncode.
         try { if (envCubeTex) envCubeTex.destroy(); } catch (_) { /* already invalid */ }
         try { if (envDepthTex) envDepthTex.destroy(); } catch (_) { /* already invalid */ }
         envCubeTex = null; envSampleView = null; envFaceViews = null; envDepthTex = null; envDepthView = null;
@@ -4094,9 +4086,9 @@ const WGX = (function () {
       SHD.lampArmed = false;
       _blurWriteSlot = 0;
       _particleFlip = 0;
-      // A device lost MID-FRAME used to return here with litPass/encoder still
-      // set, and begin() bails before it can clear them — so every later draw()
-      // passed its `if (!litPass)` guard and recorded into a pass belonging to a
+      // A device lost MID-FRAME returns here with litPass/encoder still set,
+      // and begin() bails before it can clear them — so every later draw()
+      // would pass its `if (!litPass)` guard and recorded into a pass belonging to a
       // dead device. Harmless while the reload above lands, unbounded when it
       // cannot (see the device.lost handler). Drop the frame state instead.
       if (_lost || !encoder) { litPass = null; encoder = null; currentView = null; return; }
@@ -4541,9 +4533,9 @@ const WGX = (function () {
                 _gpuMs = Number(t[1] - t[0]) / 1e6;
               }
             } catch (_) { /* keep last-good gpuMs */ }
-            // ALWAYS unmap: a throw above used to leave the buffer mapped for
+            // ALWAYS unmap: a throw above would leave the buffer mapped for
             // the rest of the session, and the `mapState === "unmapped"` gate
-            // then silently switched the GPU timer off for good.
+            // would silently switch the GPU timer off for good.
             try { timerRead.unmap(); } catch (_) { /* already unmapped / destroyed */ }
           }, function () { /* map rejected (device busy or lost): the timer keeps its last-good value */ });
         } catch (_) { /* mapAsync unsupported or already mapped */ }
@@ -5327,8 +5319,8 @@ const WGX = (function () {
     // PROVEN — only now claim the GPU canvas. Soft-present keeps #game as the
     // 2D display target and renders on an offscreen node: configure the
     // offscreen FIRST, then take #game's 2D context LAST. Claiming 2D before
-    // configure used to lock #game as typed-2D when resize/_configureCanvas
-    // failed — same-page GLX getContext("webgl2") then died and forced a reload.
+    // configure locks #game as typed-2D if resize/_configureCanvas fails —
+    // same-page GLX getContext("webgl2") then dies and forces a reload.
     // Every refusal above still returns with #game untouched.
     try {
       ctx = canvas.getContext("webgpu");
@@ -5502,17 +5494,14 @@ const WGX = (function () {
       aabbInFrustum: Frustum.aabbInFrustum,
       aabbDist2: Frustum.aabbDist2,
 
-      // These were once absent / explicit `undefined`. They are real WGX
-      // implementations now (2026-08 parity pass) and MUST remain listed here
+      // These are real WGX implementations and MUST remain listed here
       // because of HOW this backend is installed: game.js does
       //     Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend))
       // so every name the backend does NOT define keeps GLX's own function —
       // and GLX's functions run against `gl`/`SHD`/`CHK`, which stay null when
       // GLX.init() was never called. A caller's feature test
-      // (`if (gfx.someMissingApi)`) then PASSES and the call dies inside GLX.
-      // That happened with lampShadowBegin before WGX grew a real one: game.js
-      // inherited GLX's, and every night frame threw inside SHD (null) — aborting
-      // tickBody before present().
+      // (`if (gfx.someMissingApi)`) then PASSES and the call dies inside GLX
+      // (e.g. every night frame throwing inside SHD before present()).
       // Omitting a name (or leaving a stale "absent" comment that tempts a
       // delete) re-opens that hole. Gated by backend-surface-parity.test.mjs.
       // Honest remaining gap vs GLX: TAA scaffold (`_TAA_ENABLED`) is still off.

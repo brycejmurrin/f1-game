@@ -82,15 +82,12 @@ const LightStore = (() => {
       const c = F["*|" + tod];
       if (!c) return null;
       const gfx = G.gfx;
-      // CAPABILITY only. The preset-id and isMobile tests that used to live
-      // here were POLICY, and both were wrong:
-      //   - "ultra only": HIGH is the same PerfGov tier 0 and the desktop
-      //     DEFAULT preset, so the rung shipped to almost nobody. Nothing
-      //     measured separated the two.
-      //   - "not mobile": never measured at all (docs/LIGHTING-TUNER-SLIDERS.md
-      //     says so in as many words), and it meant a phone read 0 at every
-      //     preset and every hour — the feature simply did not exist there.
-      // What actually bounds the cost now lives where the cost is: the resolved
+      // CAPABILITY only, no preset-id or isMobile POLICY:
+      //   - "ultra only" misses HIGH, the same PerfGov tier 0 and the desktop
+      //     DEFAULT preset; nothing measured separates the two.
+      //   - "not mobile" was never measured (docs/LIGHTING-TUNER-SLIDERS.md
+      //     says so) and zeroes the feature on a phone at every preset and hour.
+      // What actually bounds the cost lives where the cost is: the resolved
       // gate in game.js sheds on the GOVERNOR's measured tier and the crash
       // floor, so a device that cannot afford it loses it by evidence rather
       // than by device class. hasPerChunkLights stays — three.js genuinely

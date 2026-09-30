@@ -1,8 +1,8 @@
 /* Apex 26 — PAUL_RICARD scenery (data only), split out of js/circuits/paul_ricard.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["paul_ricard"] =
   function (api) {
@@ -36,9 +36,8 @@
 
       // Keyed to THIS centreline's corners (Verrerie 0.087 L, Mistral chicane
       // 0.490 L / 0.502 R, Signes 0.713 R, Beausset 0.735-0.755 R, Village
-      // 0.887-0.907 L): the old 0.44/0.565/0.72 were written for an earlier
-      // trace and left Signes' run-off mid-Mistral. Side is the OUTSIDE of the
-      // corner (1 = left). 60 m at the chicane: longer crosses its second leg.
+      // 0.887-0.907 L). Side is the OUTSIDE of the corner (1 = left). 60 m at
+      // the chicane: longer crosses its second leg.
       for (const [id, s, side, w, l] of [
         ["pr-runoff-verrerie", 0.070, -1, 82, 150],
         ["pr-runoff-mistral", 0.490, -1, 70, 60],
@@ -393,7 +392,7 @@
           center: vadd(a.c, a.u, 1.2), size: [12, 4, 9], basis: b,
         }, (stage) => {
           // Body rides low with gear that touches the apron so the airframe
-          // BFS-grounds (unsupported wings used to float the whole plane).
+          // BFS-grounds (unsupported wings float the whole plane).
           const body = vadd(a.c, a.u, 0.95);
           stage._mat = MAT.METAL;
           addBox(stage, body, [1.1, 1.1, 7], WHITE, b);

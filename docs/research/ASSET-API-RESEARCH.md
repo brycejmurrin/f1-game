@@ -45,7 +45,7 @@ Two paths already carry real textures:
 
 | path | source | where |
 |---|---|---|
-| livery / sponsor decals | `LiveryTex.buildAtlas()` — canvas 2D, generated at runtime | `game.js:1048-1055`, `carmesh.js:126-176` |
+| livery / sponsor decals | `LiveryTex.buildAtlas()` — canvas 2D, generated at runtime | `game.js:1046-1053`, `carmesh.js:126-176` |
 | lens-dirt for the flare | procedural canvas | `glx/post.js:174-180` |
 
 `gfx.createTexture(src)` (`createTexture()` in `glx.js`) takes a canvas/image, mipmaps it,
@@ -64,7 +64,7 @@ Texture units in use: 0 (shadow), 5 (env cube), 6, 7 (blocker), 8 (car shadow),
 image URIs, Draco / meshopt compression, animations, skins/morphs."* Material
 colour comes from `baseColorFactor` only (`gltf.js:348-351`).
 
-`loadCarModel(url)` (`game.js:1395-1411`) fetches a `.glb`, validates it through
+`loadCarModel(url)` (`game.js:1393-1409`) fetches a `.glb`, validates it through
 `GLTF.toMesh`, and on success rebuilds every team mesh from it. It is
 **deliberately never auto-called** — the comment says *"Drop in a model then
 call this once a CC-licensed .glb is available."* It is exposed as

@@ -569,9 +569,9 @@
           // CONDITIONING, not absolute magnitude (COMPOSITE_FS in
           // js/render/glx/shaders/glsl-post.js). crvL scales with |dpx|·|dpy|, so at
           // grazing distance the cross stays large while its DIRECTION is
-          // depth-quantization noise — the old crvL>1e-6 guard almost never
-          // fired where it was needed and the wet-road mask collapsed past
-          // the first few metres. sinT is the scale-free sine of the angle
+          // depth-quantization noise — a crvL>1e-6 guard almost never fires
+          // where it is needed and the wet-road mask collapses past the first
+          // few metres. sinT is the scale-free sine of the angle
           // between the derivatives.
           const sinT = crvL.div(max(length(dpx).mul(length(dpy)), 1e-12)).toVar();
           const Nv = select(crvL.greaterThan(1e-6).and(sinT.greaterThan(0.08)),

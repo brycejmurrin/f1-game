@@ -33,7 +33,7 @@ out vec4 outColor;
 void main() {
   vec3 c = texture(uScene, vUV).rgb;
   float l = max(max(c.r, c.g), c.b);
-  // Quadratic soft knee (half-width = threshold/2) instead of the old hard
+  // Quadratic soft knee (half-width = threshold/2) instead of a hard
   // max(0, l-t) cut: pixels ramp smoothly into the bloom as they approach the
   // threshold, so a small lamp crossing it at distance FADES in over a few
   // frames instead of popping its whole halo on in one. Above the knee the
@@ -119,7 +119,7 @@ void main() {
 
   // Mip-chain bloom upsample: 9-tap tent filter, drawn ADDITIVELY (ONE, ONE) into
   // the next-larger level so every octave of blur accumulates — a wide, smooth,
-  // banding-free halo instead of the old single-octave gaussian's tight ring.
+  // banding-free halo instead of a single-octave gaussian's tight ring.
   const UP_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
@@ -258,8 +258,8 @@ void main() {
   // steps accumulate in-scattered sunlight, shadowed steps don't. The shafts are
   // therefore occluded by REAL geometry (grandstands, trees, cars), unlike a flat
   // screen-space radial blur. Forward Mie phase brightens them toward the sun.
-  // Half-res, added to the scene before TONEMAP — but NOT before BLOOM, which this
-  // line used to claim. present() runs the bright pass off sceneTex (glx/post.js,
+  // Half-res, added to the scene before TONEMAP — but NOT before BLOOM.
+  // present() runs the bright pass off sceneTex (glx/post.js,
   // "bindTexture(gl.TEXTURE_2D, sceneTex)" under useProg(brightProg)) and only then
   // runs the composite, where the god-ray buffer is added. The bright pass therefore
   // never sees these shafts, so they cannot halo — the shaft term is flat additive
@@ -1052,8 +1052,8 @@ void main() {
       // coherent. Car paint's Nr IS Nv, so car behaviour is unchanged.
       float fres = pow(1.0 - max(dot(Nr, V), 0.0), 3.0);
       // Car SSR reflects the on-screen HDR scene — sharp, bright light sources
-      // (neon, lit windows, floodlights) that punch through. They do NOT bloom,
-      // which this line used to claim: the substitution below happens in the
+      // (neon, lit windows, floodlights) that punch through. They do NOT bloom:
+      // the substitution below happens in the
       // COMPOSITE, and the bright pass has already sampled sceneTex by then. It is
       // doubly unreachable anyway — reflCol is soft-clipped to ~2.86 and mixAmt caps
       // at 0.80, so the result could not pass the bright threshold even if the order
@@ -1271,8 +1271,8 @@ void main() {
   // Dither: a triangular-PDF noise of ~1 output LSB, added in the LDR domain to
   // break the 8-bit banding that otherwise stamps visible steps onto smooth sky
   // and fog gradients (and rescues the RGBA8 fallback path). Interleaved-
-  // gradient hashes on PIXEL coords (the old vUV-seeded sin-hash was screen-
-  // locked white noise — a frozen speckle welded to the panel), stepped each
+  // gradient hashes on PIXEL coords (a vUV-seeded sin-hash is screen-locked
+  // white noise — a frozen speckle welded to the panel), stepped each
   // frame by the golden-ratio IGN offset so the pattern re-randomises in time
   // like real sensor noise. Two decorrelated hashes → triangular in [-1,1].
   vec2 dc = gl_FragCoord.xy + 5.588238 * mod(floor(uGrainTime * 60.0), 64.0);
@@ -1438,10 +1438,9 @@ void main() {}`;
 
   // PCSS blocker map: conservative min-of-4 downsample of the sun shadow map
   // (SHADOW_SIZE² -> 512²), one tap at the centre of each quadrant of this dest
-  // texel's source footprint. uSrcTexel = 1/SHADOW_SIZE: the old hardcoded
-  // 1/512*0.25 offset happened to equal one source texel on the desktop 2048
-  // map (identical output) but sampled only a half-texel window on the 1024
-  // mobile map — under-sampled blockers, optimistic penumbra, tier-dependent.
+  // texel's source footprint. uSrcTexel = 1/SHADOW_SIZE, not a hardcoded
+  // 1/512*0.25 offset: that equals one source texel only on the desktop 2048
+  // map and under-samples blockers on the 1024 mobile map (optimistic penumbra).
   const BLOCKER_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;

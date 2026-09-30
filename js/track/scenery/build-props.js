@@ -872,8 +872,7 @@ const TrackBuildProps = (function () {
     // Cells follow the track's own frame (each along-step re-reads that node's
     // right vector), so the basin curves with the shoreline instead of being an
     // axis-aligned rectangle. Colour is ONE sea tone with a small per-cell
-    // drift — the old code alternated two tones on a checkerboard, which is
-    // most of what made the water read as tiles rather than as a surface.
+    // drift: two tones on a checkerboard read as tiles rather than a surface.
     // The region is described in TRACK space (a window along the lap, a span
     // outward) but rasterised onto a fixed WORLD-XZ grid. Both halves matter.
     // Stepping in track space and emitting world-axis-aligned boxes does not
@@ -960,20 +959,17 @@ const TrackBuildProps = (function () {
     const groundedSegments = (spec) => models.groundedSegments(spec);
     const barSegs = [];
     const SEG = 5;                      // stride of one barSegs record
-    // (The widest-half-width accumulator that used to live here is gone —
-    // barrierClear()'s cell sweep no longer widens by it. See the proof at that
-    // call site: barGridInsert already buckets by inflated bounds, so the
-    // allowance was being counted on both sides of the lookup.)
+    // No widest-half-width allowance in barrierClear()'s cell sweep:
+    // barGridInsert already buckets by inflated bounds (proof at that call site).
     // Append, and keep the spatial index LIVE rather than dropping it. Nulling
-    // barGrid here made the next barrierClear() re-bucket every segment, and
-    // hedge() is a query-then-dirty pair by construction (js/track/scenery/nature.js
-    // queries the clearance, then indexSolid()s its own footprint) — so a
-    // circuit calling hedge() in a loop rebuilt a monotonically growing index
-    // once per call. Measured on redbull, which calls hedge() ~170 times from
-    // inside every(36): 171 rebuilds, 938,569 segments re-bucketed, ~1.0 s, 41%
-    // of its prop build. Incremental insert honours the same invariant the null
-    // was protecting ("queries run mid-scenery") — the grid is never stale,
-    // because it is never behind.
+    // barGrid here would make the next barrierClear() re-bucket every segment,
+    // and hedge() is a query-then-dirty pair by construction
+    // (js/track/scenery/nature.js queries the clearance, then indexSolid()s its
+    // own footprint) — so a circuit calling hedge() in a loop rebuilds a
+    // monotonically growing index once per call (redbull, ~170 hedge() calls
+    // inside every(36): 171 rebuilds, 938,569 segments, ~1.0 s, 41% of its prop
+    // build). Incremental insert honours the same invariant ("queries run
+    // mid-scenery") — the grid is never stale, because it is never behind.
     const pushSeg = (x0, z0, x1, z1, w) => {
       const i = barSegs.length;
       barSegs.push(x0, z0, x1, z1, w);
@@ -983,7 +979,7 @@ const TrackBuildProps = (function () {
     // s0→s1 on `side` at clearance `gap` beyond the road edge. Skips nodes where
     // the barrier geometry would be suppressed (a parallel stretch of track), so
     // we never raise a phantom wall the player can't see.
-    // `tighten` separates the two things this used to conflate. Feeding the
+    // `tighten` separates two things.
     // spatial index is about where SOLID GEOMETRY stands; tightening barL/barR
     // is about where the CAR is allowed to go. They are not the same question,
     // and a catch fence is the case that proves it: it is solid enough that a
@@ -1250,7 +1246,7 @@ const TrackBuildProps = (function () {
       note("prop", c, sz, { k, side });
       // solid box → the car must stop before its inner face (sz[0] across, sz[2] long).
       // Not a box shorter than the 0.8 m sink + 5 cm: its top is at or under the
-      // ground, so it is a buried kerb flash / paint decal — a wall there was an
+      // ground, so it is a buried kerb flash / paint decal — a wall there is an
       // INVISIBLE wall 0.4-2 m past the road edge on 12 circuits (2026-09-24 audit).
       if (sz[1] >= THIN_PROP_H) blockAt(k, side, dist - sz[0] / 2, sz[2] / 2);
       // …and the scenery engine must know a solid body physically stands here,
@@ -1271,10 +1267,10 @@ const TrackBuildProps = (function () {
     // dressingExclusions are authored in the def's scenery frame, exactly like
     // the range helpers on the api (wall / hedge / cityFront …), so each window
     // goes through TrackSpace.sceneryRange and its side flips on a reversed lap
-    // — the rule then sits where the circuit's own bespoke calls land. This
-    // used to add the origin shift alone: on singapore (reverse + mirror) the
-    // "no generic city under my cityFront facades" rules landed on the other
-    // side of the road, a third of a lap away. Resolved ONCE per build; an
+    // — the rule then sits where the circuit's own bespoke calls land. Adding
+    // the origin shift alone lands singapore's (reverse + mirror) "no generic
+    // city under my cityFront facades" rules on the other side of the road, a
+    // third of a lap away. Resolved ONCE per build; an
     // absent s0/s1 still means the whole lap.
     const exclusionRules = (def.dressingExclusions || []).map((rule) => {
       const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
@@ -1325,11 +1321,9 @@ const TrackBuildProps = (function () {
       const u = upOf(track, k);
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
-      // noteSuppressed, NOT a bare Log.info: this was the only guard in the file
-      // that dropped geometry without recording it, so its drops reached no
-      // test, no tool and no __apex hook. Given a counter it reported 539
-      // suppressed backdrops fleet-wide, 295 at redbull alone (43 % of its
-      // calls) — none of it previously observable.
+      // noteSuppressed, NOT a bare Log.info, so these drops reach the tests,
+      // the tools and the __apex hooks: 539 suppressed backdrops fleet-wide,
+      // 295 at redbull alone (43 % of its calls).
       // MARGIN LEFT ALONE ON PURPOSE. sz[0] is the length ALONG the tangent
       // (addBox below uses basis [t, u, r]; the reach toward the road is
       // sz[2]/2), so this is the along-track-as-radial shape already fixed for

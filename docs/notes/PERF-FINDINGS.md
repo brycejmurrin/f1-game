@@ -982,7 +982,7 @@ is the ~30 frame-scalars in `begin()` times the 5-6 passes a frame" — was an
 arithmetic guess written up as if measured, and it is wrong. `begin()` runs
 **~1.25x/frame**, not 5-6: the shadow passes bind `depthProg` and their own FBO
 and never call it (`js/render/glx/shadow.js:151,224,254`), and the env probe is
-one face every 4th frame (`js/game.js:6729`). The real distribution, traced to
+one face every 4th frame (`js/game.js:6693`). The real distribution, traced to
 source:
 
 - `uniform1f` 167.4 is dominated by **`litMaterial`** (`glx.js:1385-1393`) — up
@@ -1616,7 +1616,7 @@ so a cache collapses none of it. Nothing here reopens that.
 
 The plan for this round was to hoist `drawShadow`'s per-call `uniform2f(uSize)`
 and its `setPolyOffset` on/off bracket out of the flush loop at
-`js/game.js:7249`, on the estimate that a full grid draws ~20 blob shadows.
+`js/game.js:7213`, on the estimate that a full grid draws ~20 blob shadows.
 
 **Measured: 1.8 a frame.** The r=8 m frustum gate plus the behind-eye test cull
 almost the whole field in that camera. The hoist would save ~9 calls a frame and
@@ -3927,7 +3927,7 @@ emptied array with a non-zero `count` it computes a NaN centre and radius,
 which poisons the sort key and every later reader.
 
 The configuration matters as much as the reader: at `PerfGov.tier() >= 3`
-`js/game.js:2444` passes `chunkRibbons: false`, so the ROAD is a plain mesh
+`js/game.js:2434` passes `chunkRibbons: false`, so the ROAD is a plain mesh
 instead of a chunked one — and a plain road mesh is exactly what the static
 sweep is allowed to touch. A phone on the LOW preset is tier 4. That is the one
 place the road reaches this code, and it is why every software probe here came

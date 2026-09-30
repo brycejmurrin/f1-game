@@ -1,8 +1,8 @@
 /* Apex 26 — REDBULL scenery (data only), split out of js/circuits/redbull.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["redbull"] =
   function (api) {
@@ -393,7 +393,7 @@
         backdrop(K(0.22), 1, 42, [95, 26, 62], GM);
         backdrop(K(0.24), 1, 58, [115, 34, 72], GF);
         backdrop(K(0.26), 1, 48, [100, 28, 65], GM);
-        // Crest→descent ridge (both sides) — taller than the old framing hills
+        // Crest→descent ridge (both sides) — taller than the framing hills
         for (const [sfrac, side, distOff, szW, szH, col] of [
           [0.28, -1,  0, 110, 32, GM], [0.28,  1,  0, 100, 28, GN],
           [0.30, -1, 14, 125, 38, GF], [0.30,  1, 12, 110, 32, GM],

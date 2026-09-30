@@ -1,8 +1,8 @@
 /* Apex 26 — CATALUNYA scenery (data only), split out of js/circuits/catalunya.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["catalunya"] =
   function (api) {
@@ -45,9 +45,8 @@
 
       // Fracs are the def's engine frame (no sceneryStartFrac): pit lane 0.945-0.024,
       // T1 0.158, Repsol 0.345, Seat 0.432-0.442, Campsa 0.609, La Caixa 0.727.
-      // The Repsol, Seat and Campsa clusters were tuned under the old 0.138 shift
-      // and keep those engine fracs; T1's sat 0.09 short of the corner in either
-      // frame and was moved onto it. docs/notes/DEFECT-LEDGER.md, "catalunya".
+      // The Repsol, Seat and Campsa clusters keep the engine fracs they were
+      // tuned at; T1's sits on the corner. docs/notes/DEFECT-LEDGER.md.
       const openInfield = (s) => (s >= 0.92 || s <= 0.12) || (s >= 0.558 && s <= 0.658);
       every(30, (k) => {
         const s = k / n;
@@ -339,7 +338,7 @@
         });
       }
 
-      // Single-side hedges only where both sides used to share a plane.
+      // Single-side hedges where both sides would share a plane.
       hedge(0.955, 0.045, -1, 16, 3.0, [0.18, 0.36, 0.18]);
       hedge(0.022, 0.078, 1, 16, 2.6, [0.19, 0.37, 0.19]);
       hedge(0.660, 0.715, -1, 15, 2.6, [0.19, 0.37, 0.19]);
