@@ -43,19 +43,19 @@ const g = await createGame({ track: TRACK, storage: { tyreWear: "real", difficul
 if (g.apex.seed) g.apex.seed(SEED);
 await g.race(TRACK, "day", WX, { laps: LAPS });
 const G = g.G;
-// The player's car is never driven here: parked on its grid slot it is a
-// wall the field has to find a way round, and one did not (SAI, 2026-09-30:
-// stuck behind it from lap 3, no stop, a one-compound DSQ). Parked well off
-// the road instead (retired, the race ends with the player: state "results").
-const parkPlayer = () => { if (G.player) { G.player.x = 60; G.player.speed = 0; } };
-parkPlayer();
+// The player's car is never driven here: left on its grid slot it is a wall
+// the field has to find a way round, and some did not (SAI and RUS,
+// 2026-09-30: stopped behind it for the rest of the race). Retiring it ends
+// the race, and moving its track `x` does not move the physics (px/pz), so it
+// is taken out of the field: every AI loop reads G.cars.
+if (G.player && G.cars.indexOf(G.player) >= 0) G.cars.splice(G.cars.indexOf(G.player), 1);
 const ai = G.cars.filter((c) => !c.human);
 const plan0 = new Map(ai.map((c) => [c, c.pitPlan ? { seq: c.pitPlan.seq.slice(), lapsAt: c.pitPlan.lapsAt.slice() } : null]));
 const stops = new Map(ai.map((c) => [c, []])), armed = new Map();
 const DT = 1 / 60, MAXF = Math.round((LAPS * 400 + 600) / DT);   // generous: 400 s a lap
 let f = 0;
 while (f < MAXF && G.state !== "results" && !ai.every((c) => c.finished || c.retired)) {
-  g.step(1, DT); f++; parkPlayer();
+  g.step(1, DT); f++;
   if (f % 6) continue;
   for (const c of ai) {
     const a = !!c.pitArmed;
