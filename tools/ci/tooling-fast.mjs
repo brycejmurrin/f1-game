@@ -207,6 +207,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/digital-steer.test.mjs",
+  "tests/unit/dock-layout.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   "tests/unit/driving-coach.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a

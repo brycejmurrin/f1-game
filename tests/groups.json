@@ -163,6 +163,7 @@
     "tests/unit/desktop-unpacked-bin.test.mjs",
     "tests/unit/desktop-version.test.mjs",
     "tests/unit/digital-steer.test.mjs",
+    "tests/unit/dock-layout.test.mjs",
     "tests/unit/docs-integrity.test.mjs",
     "tests/unit/driving-coach.test.mjs",
     "// …and the DUEL ROW that reaches it: one control carrying OFF / ON / a",
@@ -1053,6 +1054,7 @@
       "files": [
         "tests/unit/brake-cue.test.mjs",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/dock-layout.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/phone-pad.test.mjs",
