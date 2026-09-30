@@ -81,7 +81,7 @@ test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", ()
   // The asymmetry above was the bug: that test pins "an empty batch list is
   // correct for prose" and never asserts the VERDICT, so an empty batch list
   // from the opposite cause — no rule claimed the files at all — reported the
-  // same `pass`, exit 0. pick-tests.mjs:243 publishes a three-way `reason`
+  // same `pass`, exit 0. pick-tests.mjs's --json output publishes a three-way `reason`
   // precisely so a caller can tell those apart, and this tool called the raw
   // pick() Map API and dropped it. What made it matter: .claude/skills/check-changes
   // calls --fast the default for verify-agent, and apex-tools-mcp runs it as
@@ -105,7 +105,7 @@ test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", ()
 });
 
 test("verify-change derives its reason the same way pick-tests publishes it", () => {
-  // Two copies of one rule drift. pick-tests.mjs:243 is the definition; this
+  // Two copies of one rule drift. pick-tests.mjs's --json `reason` is the definition; this
   // asserts verify-change computes the identical expression over the identical
   // inputs (its `groups` is pick-tests' `named`, same filter, same sort), so a
   // change to the contract cannot silently apply to only one of them.
