@@ -4806,8 +4806,8 @@ test("selector preparation waits for the player's hands before the build and the
   // the player's next tap (2026-09-24). Both now wait for MENU_IDLE_MS of quiet.
   const src = read("js/game.js");
   const body = fnBody(src, "scheduleFlybyTrack");
-  assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*loadTrack\(want\);/,
-    "the build waits for an idle menu");
+  assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*if \(!\(await loadTrackStepped\(want, current\)\)\) return;/,
+    "the build waits for an idle menu, and runs in steps (a tap on the sheet mid-build is answered)");
   assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
     "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
   const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
@@ -4851,6 +4851,8 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; };
+  const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
+  const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
   const fire = () => { const [id, fn] = [...timers].pop(); timers.delete(id); return fn(); };

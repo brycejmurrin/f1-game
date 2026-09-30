@@ -1063,6 +1063,7 @@
     "test:sweeps": {
       "files": [
         "tests/unit/baked-model-road-guard.test.mjs",
+        "tests/unit/build-steps.test.mjs",
         "tests/unit/car-front-wing-width.test.mjs",
         "tests/unit/coplanar-faces.test.mjs",
         "tests/unit/debris-hazard-hint.test.mjs",

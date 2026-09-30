@@ -170,6 +170,18 @@ test('GARAGE ARRIVAL TUNER is an ADVANCED VISUALS tool: opens over the settings 
   assert.ok(!shell.includes('id="ga-settings"'), 'no inline fold left in the tools list');
 });
 
+test('race settings pre-builds the garage, hidden, so the drive-out\'s first frame compiles nothing', () => {
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const pw = game.slice(game.indexOf('async function garagePrewarm(current)'), game.indexOf('function scheduleFlybyTrack('));
+  assert.match(pw, /_menuGate\.garageReady \|\| \$\("race-settings"\)\.hidden \|\| !\(await menuIdle\(current\)\)/, 'once, on race settings, when the sheet is idle');
+  assert.ok(pw.indexOf('gfx.warm()') > 0 && pw.indexOf('gfx.warm()') < pw.indexOf('_menuGate.garageWarm = 2'), 'the program warm is requested before the hidden frames are armed');
+  assert.match(game, /await menuFinish\(current, key\);\n\s*await garagePrewarm\(current\);/, 'after the circuit is done');
+  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4000);
+  const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');
+  assert.ok(gate > 0 && hidden > gate, 'drawn after the visibility gate: the canvas stays hidden under race settings');
+  assert.match(render, /if \(setupPreviewOn\) _menuGate\.garageReady = true;/, 'the real garage screen counts as pre-built');
+});
+
 // ── #garrival's PREVIEW IN / OUT (js/garage/setup-camera.js startArrivalPreview) ──
 // The block runs for real in a VM: the room's own clock, never the WORK ON CAR
 // chrome, and the settings page gets the canvas back when it ends.
