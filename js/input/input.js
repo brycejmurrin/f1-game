@@ -2174,14 +2174,6 @@ const Input = (function () {
     oeInit = false; tiltSteerVal = 0;
   }
 
-  // False until init() has wired the hold buttons and the window-level nets.
-  // Input.steer (and the rest of the façade) exists as soon as this file
-  // evaluates, which is BEFORE game.js calls init — so a wait on `!!Input.steer`
-  // can win the race, press a pedal that has no listener yet, and read travel 0.
-  // touch-input.js (and anything else that synthesises a press at boot) waits
-  // on ready() instead.
-  let ready = false;
-
   function init(canvas, opts) {
     Log.info("input", "Input.init");
     onPauseCb = (opts && opts.onPause) || null;
@@ -2331,7 +2323,6 @@ const Input = (function () {
          left: swapping one of two pads is not an interruption. */
       if (!still && onPadLostCb) { try { onPadLostCb(); } catch (_) { /* the game's own handler must not break input teardown */ } }
     });
-    ready = true;
   }
 
   function reset() {
@@ -2447,7 +2438,6 @@ const Input = (function () {
   return {
     init,
     reset,
-    ready: () => ready,
     keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen, activeInputSource,
     padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,
