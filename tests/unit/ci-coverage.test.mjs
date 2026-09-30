@@ -262,7 +262,14 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
  * ci.yml run, while tooling-fast holds guards over exactly those trees.
  * docs-guards.yml closes it by triggering on the SAME list as `paths:` — so the
  * two lists must stay one list, and the job must run the group that holds them. */
-test("docs-guards.yml triggers on exactly ci.yml's paths-ignore list and runs the prose guards", () => {
+/* EVERY REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30). Branch protection on
+ * the deploy branch requires the fast-tier jobs and docs-guards; a required
+ * check that never reports blocks the merge for good. So neither workflow may
+ * path-filter its pull_request trigger: ci.yml runs the fast tier on a prose
+ * PR too (the node plan keeps it to guards plus seconds), and docs-guards runs
+ * on every PR and exits before `npm ci` unless the diff is prose-only — a
+ * list it READS from ci.yml's push paths-ignore, the one filter that stays. */
+test("docs-guards.yml and ci.yml both run on every pull request; the prose list is read from ci.yml's push filter", () => {
   const docsWorkflow = fs.readFileSync(new URL("../../.github/workflows/docs-guards.yml", import.meta.url), "utf8");
   const listAfter = (text, key, from = 0) => {
     const at = text.indexOf(`\n    ${key}:\n`, from);
@@ -274,15 +281,21 @@ test("docs-guards.yml triggers on exactly ci.yml's paths-ignore list and runs th
   };
   const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\njobs:\n"));
   const pushIgnore = listAfter(onBlock, "paths-ignore");
-  const prIgnore = listAfter(onBlock, "paths-ignore", pushIgnore.at + 1);
   assert.ok(pushIgnore.list.length >= 3, `ci.yml push paths-ignore parsed to ${pushIgnore.list.length} entries`);
-  assert.deepEqual(prIgnore.list, pushIgnore.list, "ci.yml's push and pull_request paths-ignore lists differ");
-  assert.match(onBlock.slice(onBlock.indexOf("pull_request:")), /paths-ignore:/, "the second list must be the pull_request one");
-  const docsPaths = listAfter(docsWorkflow, "paths");
-  assert.deepEqual(docsPaths.list, pushIgnore.list,
-    "docs-guards.yml `paths:` must equal ci.yml's `paths-ignore:` — otherwise some prose-only PR runs no guard at all");
+  assert.ok(pushIgnore.at < onBlock.indexOf("  pull_request:"), "the one paths-ignore list must be the push one");
+  const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  merge_group:"));
+  assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
+    "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required checks");
+  const docsOn = docsWorkflow.slice(docsWorkflow.indexOf("\non:"), docsWorkflow.indexOf("\npermissions:"));
   assert.match(docsWorkflow, /^on:\n  pull_request:\n/m, "docs-guards runs on pull requests");
+  assert.doesNotMatch(docsOn, /\n    paths(-ignore)?:/, "docs-guards must report on every PR too (it is a required check)");
+  assert.match(docsWorkflow, /- name: Is every changed path prose\?/);
+  assert.match(docsWorkflow, /readFileSync\("\.github\/workflows\/ci\.yml", "utf8"\)/, "the prose list is READ from ci.yml, never retyped");
+  assert.match(docsWorkflow, /push\.indexOf\("paths-ignore:"\)/, "…from the push block's paths-ignore, the one filter that stays");
+  assert.match(docsWorkflow, /uses: \.\/\.github\/actions\/setup-apex[^\n]*\n\s+if: steps\.prose\.outputs\.prose != 'false'/,
+    "a mixed PR must exit before npm ci");
   assert.match(docsWorkflow, /run: npm run test:docs-guards\s*$/m);
+  assert.match(docsWorkflow, /run: npm run test:docs-guards\n\s+if: steps\.prose\.outputs\.prose != 'false'/);
 
   const groups = JSON.parse(fs.readFileSync(new URL("../groups.json", import.meta.url), "utf8"));
   const files = groups.groups["test:docs-guards"]?.files || [];
@@ -990,10 +1003,10 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\npermissions:"));
   const pushBlock = onBlock.slice(onBlock.indexOf("  push:"), onBlock.indexOf("  pull_request:"));
   const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
-  for (const b of [pushBlock, prBlock]) {
-    assert.match(b, /paths-ignore:\n(?:\s+- "[^"]+"\n)+/, "push and pull_request must carry a paths-ignore list");
-    for (const p of ['"docs/**"', '"**/*.md"', '".claude/**"', '".cursor/**"']) assert.ok(b.includes(`- ${p}`), `${p} missing from paths-ignore`);
-  }
+  assert.match(pushBlock, /paths-ignore:\n(?:\s+- "[^"]+"\n)+/, "push must carry a paths-ignore list");
+  for (const p of ['"docs/**"', '"**/*.md"', '".claude/**"', '".cursor/**"']) assert.ok(pushBlock.includes(`- ${p}`), `${p} missing from paths-ignore`);
+  // pull_request is NOT filtered (2026-09-30): every required check must report on every PR.
+  assert.doesNotMatch(prBlock, /paths-ignore:/, "a path-filtered pull_request trigger leaves prose-only PRs unmergeable under branch protection");
   // The deploy branch is NOT ignored any more: a push there gets the FAST tier
   // (pages.yml is a train and no longer runs on push), so the push must reach
   // this workflow, and the two heavy browser jobs must opt out of that tier by
