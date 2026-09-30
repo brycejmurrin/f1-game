@@ -565,9 +565,11 @@ jobs:
         #   vm-b2  game-vm-b2                       ~2.4 min (measured)
         #   page   vm-page                          2.6 min
         #   slow   node-slow                        2.2 min
-        # Matrix rows come from unit-plan / pick-unit-slices (one `{slice}` per
-        # needed row). The FULL set is those six names; the plan emits a subset.
-        # node-plan.mjs (step below) still skips scripts INSIDE a spun runner.
+        # Matrix rows come from unit-plan / pick-unit-slices. Every NODE_SLICE
+        # name is ALWAYS present (needed true|false): branch protection pins
+        # those six check names, and a subset left vm-a1/vm-a2 unreported on
+        # #454 (BLOCKED with an otherwise green CI). Unneeded rows exit 0.
+        # node-plan.mjs (step below) still skips scripts INSIDE a needed runner.
         include: ${{ fromJSON(needs.unit-plan.outputs.slices) }}
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
@@ -641,6 +643,12 @@ jobs:
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
           # `planned <script>` is the plan step's predicate (true on every
           # non-PR event); a skip prints SKIPPED <script> and the reason.
+          # matrix.needed=false: check name still reports (branch protection)
+          # but no work runs for a slice this diff does not select.
+          if [ "${{ matrix.needed }}" = "false" ]; then
+            echo "SKIPPED slice ${{ matrix.slice }} — not selected for this diff (needed=false)"
+            exit 0
+          fi
           . "${RUNNER_TEMP:-.}/node-plan.sh"
           case "${{ matrix.slice }}" in
             vm-a1)
