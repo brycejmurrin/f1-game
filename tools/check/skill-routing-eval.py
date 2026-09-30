@@ -11,7 +11,7 @@
 # call (or a Read of a SKILL.md) before any other tool is the verdict. Detection
 # follows the skill-creator's run_eval.py. Cost: one short call per query
 # (~50k cached input tokens each); 216 queries take ~30 min at --workers 6.
-# Baseline 2026-09-30 on claude-fable-5-1: 182/216 before the `paths:` removal.
+# Baseline 2026-09-30 on claude-fable-5-1: 182/216 before the `paths:` removal, 214/216 after.
 import argparse, json, os, re, select, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path

@@ -654,7 +654,9 @@ and query set in `tools/check/skill-routing-eval.py` / `tests/data/skill-routing
 found the four `paths:` skills fired on 0 of 20 should-fire queries and 0 of
 their near-misses, against 112 of 115 for the other 23; `/skill-doctor` listed
 23 project skills. The field is not additive. Removed from all four;
-`agent-surface.test.mjs` now forbids it.
+`agent-surface.test.mjs` now forbids it. Re-run of the 34 misses after the
+removal: 32 correct, so 214 of 216 overall; the two left are single wording
+gaps (slim-bloat on repetitive docs, steward on a ready-for-review cancel).
 
 **Settings, landed on the second try.** The `.claude/settings.json` write
 was refused by the auto-mode permission classifier as self-modification, as
