@@ -7,9 +7,9 @@
  * clearcoat lobes, cloud shadows, wetness, the analytic clearcoat env mirror,
  * metallic-flake sparkle, emissive/hdrTag over-white glow, and the full fog
  * stack (height fog + sun in-scatter + fogTint + lamp-fog Reinhard + ground
- * mist). Constants are lifted verbatim from lit.js — line refs in comments.
+ * mist). Constants are lifted verbatim from glsl-lit.js — line refs in comments.
  *
- * M4: sun/car/lamp SHADOW-MAP sampling is live — a 1:1 port of lit.js
+ * M4: sun/car/lamp SHADOW-MAP sampling is live — a 1:1 port of glsl-lit.js
  * sampleShadow() + the in-loop lamp shadow (the uLampShadowOn branch), fed by
  * tlx-shadow.js depth targets through ctx.shadow. Depth taps compile to
  * hardware-compare sampler2DShadow on the WebGL backend via TSL's
@@ -214,7 +214,7 @@
       lightVP:        uniform(new THREE.Matrix4()),
       carLightVP:     uniform(new THREE.Matrix4()),
       carShadowOn:    uniform(0.0),
-      carBiasScale:   uniform(1.0),   // car map box/texel ratio (lit.js uCarBiasScale parity)
+      carBiasScale:   uniform(1.0),   // car map box/texel ratio (glsl-lit.js uCarBiasScale parity)
       lampShadowVP:   uniform(new THREE.Matrix4()),
       lampShadowOn:   uniform(0.0),
       lampShadowIdx:  uniform(-1.0),  // float compare vs the loop index (small ints are exact)
@@ -568,7 +568,7 @@
             const cosTheta = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
             const slopeBias = t.mul(1.5).mul(sqrt(cosTheta.mul(cosTheta).oneMinus()).div(cosTheta));
             const biasTerm = clamp(slopeBias, 0.0005, 0.004).add(U.shadowBias.mul(0.5)).toVar();
-            // SHADOW DISTANCE bias scaling (lit.js parity). biasTerm is clamped in
+            // SHADOW DISTANCE bias scaling (glsl-lit.js parity). biasTerm is clamped in
             // absolute depth units, but a shadow texel's world size sweeps 12.5x
             // across the SHADOW DISTANCE range — unscaled, the same push is ~25x
             // too much at the near end and barely covers acne at the far end.
@@ -731,7 +731,7 @@
       inputs: [{ name: "mid", type: "float" }, { name: "uv", type: "vec2" }] });
 
     // Per-MATERIAL coordinate classification, shared by the procedural bump and
-    // the baked texture sample below (GLX: matWallLike in lit.js). Declared here
+    // the baked texture sample below (GLX: matWallLike in glsl-lit.js). Declared here
     // rather than next to the baked-texture block so it precedes its first use.
     const matWallLike = (mid) => mid.equal(1.0).or(mid.equal(2.0)).or(mid.equal(4.0))
       .or(mid.equal(5.0)).or(mid.equal(7.0)).or(mid.equal(12.0))
@@ -778,7 +778,7 @@
           });
         }).Else(() => {
           // Ground/road gets the SAME grazing-angle guard as the wall branch
-          // (lit.js aaG, 0.10/0.55 on the xz footprint). It was missing here, so
+          // (glsl-lit.js aaG, 0.10/0.55 on the xz footprint). It was missing here, so
           // the road — the one horizontal surface viewed almost edge-on at
           // 80 m/s — kept full relief where a pixel spans many times the 0.22
           // probe epsilon and the 3-tap gradient aliases into crawling moire.
@@ -1659,7 +1659,7 @@
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
               const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
               // U.lampFog is 0 by day, so skip the accumulate (uniform CF —
-              // safe for TSL→WGSL). Matches GLX lit.js / WGSL chunks.
+              // safe for TSL→WGSL). Matches GLX glsl-lit.js / WGSL chunks.
               If(U.lampFog.greaterThan(0.0), () => {
                 lampFogAcc.addAssign(LCol(i, row).mul(att.mul(mix(float(0.35), float(1.0), beam))));
               });
@@ -1777,7 +1777,7 @@
           });
         });
 
-        // clearcoat ENV mirror (the analytic-clearcoat-ENV block in lit.js).
+        // clearcoat ENV mirror (the analytic-clearcoat-ENV block in glsl-lit.js).
         //    uEnvStr = 0 -> analytic
         //    sky-gradient path only; > 0 blends in the M9 live cube fetch
         // (textureLod(uEnvCube, Rg, rough*2.5) × uEnvStr — glx.js parity).

@@ -55,7 +55,7 @@ these, and they need different fixes:
 | Failure mode | How to tell | Fix |
 |---|---|---|
 | **Not stored** | `__apex.lightTune({id: v})` then `__apex.lightTune()[id] !== v` | the store/clamp path, not the renderer |
-| **Stored but not re-applied** | `lightTune()[id]` updates but the scene does not, until some *other* action re-runs `applyRaceSettings()` | the id is missing from `APPLY_RACE_IDS` in `light-store.js` (this is what broke five knobs — see below) |
+| **Stored but not re-applied** | `lightTune()[id]` updates but the scene does not, until some *other* action re-runs `applyRaceSettings()` | the id is missing from `APPLY_RACE_IDS` in `js/lighting/profiles.js` (this is what broke five knobs — see below) |
 | **Stored but not rebuilt** | a lamp/floodlight knob updates but the lamp geometry does not, until the track reloads | the id is read in `buildTrackLights` but its TUNE_DEFS entry lacks `rebuild:true` |
 | **Inert everywhere** | stored, re-applied, but pushed to its extreme it moves no SCENE STATE in any condition | its consumer is gated off, or the effect is genuinely a no-op |
 | **Conditional** | inert in the condition you are in, live in another | **expected, not a defect** — night lamp knobs in daylight, wet-road knobs when dry |
@@ -215,7 +215,7 @@ raising `moonBright` alongside it gives the shadows enough key to actually read.
 `lampCull`/`lampReach` exist to ration 32 shader slots across the whole visible
 scene. But **`MAX_LIGHTS = 32` is a fragment-shader uniform-array size, so it
 bounds lights per DRAW, not per scene.** Binding a different 32 per draw needs no
-shader change at all — `lit.js`, `MAX_LIGHTS` and the per-fragment loop are
+shader change at all — `glsl-lit.js`, `MAX_LIGHTS` and the per-fragment loop are
 untouched. Two properties of this codebase make that cheap: track lamps are baked
 and static (`track._lights`), and chunked scenery already carries per-chunk AABBs
 that `drawChunked` frustum-tests, so each chunk's lamp set is computed once
@@ -296,7 +296,7 @@ lamps reaching it, where the cap drops real contributors — rare for props (2 o
 
 **`_keepPositions` is mandatory when building the chunked road**, not defensive:
 `createChunkedMesh` nulls `data.pos`/`data.idx`, and `track.roadGeo` is still
-read by `debrisworld.js` (the Rapier side-world) and `__apex.trackGeometry()`.
+read by `js/physics/debris-world.js` (the Rapier side-world) and `__apex.trackGeometry()`.
 Verified byte-identical across the build — pos 69,672 / idx 128,256 before and
 after (≈42.7k triangles, comfortably over the 2,000-triangle chunking floor).
 
@@ -344,7 +344,7 @@ wrong every time:
 | knob | why this capture missed it | how it was confirmed live |
 |---|---|---|
 | `starBright` | stars are sub-pixel point features; a frame MEAN can't resolve a few dozen brightened pixels in a 160×90 capture | signal `max 22` vs noise `max 14`, `p99 1.33` vs `1.0` — the distribution TAIL moves even though the mean (0.19 vs 0.34) does not |
-| `starBright` (2nd cause) | `sky.js` multiplies stars by `(1 - cityCov)`; Vegas (`street_night`) has heavy city glow that suppresses the star field to near-zero regardless of `starBright` | re-probed on `bahrain` (desert, dark sky) with the camera tilted skyward — still measured no change purely from the mean-vs-point-feature issue above, confirming the FIRST cause is what matters, not the theme |
+| `starBright` (2nd cause) | `glsl-sky.js` multiplies stars by `(1 - cityCov)`; Vegas (`street_night`) has heavy city glow that suppresses the star field to near-zero regardless of `starBright` | re-probed on `bahrain` (desert, dark sky) with the camera tilted skyward — still measured no change purely from the mean-vs-point-feature issue above, confirming the FIRST cause is what matters, not the theme |
 | `lampCull` | `lampCap(carCount, …)` only applies the knob `carCount > 1`; the standard `park()` capture teleports every AI car away, leaving the player solo | traced the gate in `js/lighting/lighting.js`; a capture with traffic present (no `park()`, or a scripted grid start) would show it |
 | `tailLightMul` | `appendCarTailLights` only emits for cars within `tailRange` (160 m); `park()` scatters the field 600 m away, so there are zero tail lights to scale | same fix as above — needs cars in frame, not a parked solo car |
 | `beamCone` | build-only, changes lamp cone SHAPE not brightness — a subtler pixel delta than `poolEnergy` (its build-only sibling, same rebuild path), which DID move measurably in the same capture | `poolEnergy` moving proves `set()` → `rebuild:true` → `track._lights = null` fires correctly; `beamCone` rides the identical path |
@@ -439,7 +439,7 @@ reload, and why RESET is per-condition rather than global.
 
 - **uniform** — the GLSL uniform when the knob is a direct shader upload.
   Knobs without one are consumed in JS: light building, per-frame scene state.
-- **consumed in** — files on the SHIPPING path. `light-presets.js` is excluded
+- **consumed in** — files on the SHIPPING path. `js/lighting/presets.js` is excluded
   because it is preset DATA keyed by knob id, not a consumer.
 - **three backends** — every `u:` knob is named on GLX, WGX, and TLX
   (`tests/unit/light-grid.test.mjs`). CPU knobs bake into `frame.*` /

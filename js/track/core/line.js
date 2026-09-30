@@ -299,7 +299,7 @@ const TrackLine = (function () {
     // of an 1113 ms monza build, 44 % of building a circuit — for a target the
     // AI damps into over ~0.7 s and never follows exactly. This construction
     // is O(n), lands within 0.25 m of where the relaxed inner family sat at
-    // the turn-in, and cannot leave the road. 2026-09-08.
+    // the turn-in, and cannot leave the road.
     const xi = new Float32Array(n), xo = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       const d = w[i] * FAM_SHIFT_M * insideSgn[i];

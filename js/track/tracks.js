@@ -677,7 +677,7 @@ const Tracks = (function () {
       // same silent way, since "no shift" is a legitimate value.
       sceneryStartFrac: d.sceneryStartFrac != null ? d.sceneryStartFrac : null,
       // The def's curated FIA markings (RACING-LAP fractions, never fmap'd; no
-      // sectors → thirds), real centreline and dressing rows (ex scenery-data.js
+      // sectors → thirds), real centreline and dressing rows (formerly the js/track/scenery/data.js
       // id tables) — all READ OFF THE BUILT DEF: the same trap as the seven above.
       sectors: d.sectors || null, turns: d.turns || null, path: d.path || null,
       lineHints: d.lineHints || null,   // authored racing-line hints per turn (TrackLine.bake)

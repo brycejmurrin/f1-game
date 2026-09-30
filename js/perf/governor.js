@@ -48,8 +48,8 @@ let _downHold = 0;        // ms left on the recovery hold after a cut / refused 
 // sentinelArm(), so a fresh race never inherits a previous session's run.
 let _slowRun = 0;
 // A COOLDOWN ONLY MEANS SOMETHING WHILE FRAMES ARE BEING MEASURED. Boot arms
-// two of them before the first race tick — ui-scale.js applyResMode() ->
-// setAutoRes(true) on every load, gfx-quality.js applyLive() -> setUserTier(2)
+// two of them before the first race tick — js/ui/scale.js applyResMode() ->
+// setAutoRes(true) on every load, js/perf/quality-preset.js applyLive() -> setUserTier(2)
 // on every phone — and tick() only counts them down in a race, so the first
 // 300 race frames were spent inside a cooldown that protected nothing. That
 // window is the ONLY one in which a device slow from frame 1 is catchable:
@@ -181,13 +181,13 @@ let _tierFutile = false;
 // for frame COST, which is true only while the display is what you are
 // competing with. Under an external cap (iOS Low Power Mode throttles rAF to
 // 30 fps, a 30 Hz panel, a browser background throttle) the two decouple: every
-// frame lands at ~33.3 ms no matter how cheap it is to draw, the old governor
-// downscaled to the floor and shed every optional feature within ~27 s, and
-// NONE of it could ever help — the clock was capped externally and had nothing
-// to do with how long the frame took to draw. `_floorMs` tracks the FLOOR of
+// frame lands at ~33.3 ms no matter how cheap it is to draw, an interval-driven
+// governor downscales to the floor and sheds every optional feature within ~27 s,
+// and NONE of it can help — the clock is capped externally and has nothing to
+// do with how long the frame takes to draw. `_floorMs` tracks the FLOOR of
 // observed frame intervals (a low percentile, not the mean — the fastest this
 // display has actually gone) and the thresholds below are relative to it, so a
-// 60 Hz panel keeps exactly today's numbers (floor settles near 16.7 ms) while
+// 60 Hz panel keeps the plain numbers (floor settles near 16.7 ms) while
 // a capped device is correctly judged to be MEETING its budget instead of
 // chasing a number it cannot move. Pulled toward a faster observed frame
 // quickly (that is direct evidence the device can go there); crept toward a
@@ -418,9 +418,8 @@ function init(gfx) {
   _autoShed = 0;
 }
 
-// ONE owner for the strikes -> floor mapping. It used to be spelled out at init
-// and simply missing from cleanRace(), so paying a strike down moved the counter
-// and left the floor where boot had put it. See cleanRace() for what that cost.
+// ONE owner for the strikes -> floor mapping, shared by init and cleanRace(), so
+// paying a strike down moves the floor with the counter (see cleanRace()).
 function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
 // RE-ARM WITHOUT THE RESET. The visibilitychange handler used sentinelArm(true)
