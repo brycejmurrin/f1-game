@@ -444,7 +444,7 @@ function main() {
 
   const env = buildContext();
   const ids = argv.includes("--all")
-    ? env.Tracks.LIST.map((d) => d.id)
+    ? require("../lib/circuit-scope.cjs").scope(env.Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
     // Skip any token consumed as a flag's VALUE, or `--site scenery-city.js:109`
     // is read as a track id.
     : argv.filter((a, i) => !a.startsWith("--") && isNaN(Number(a)) &&

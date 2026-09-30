@@ -227,6 +227,12 @@ test("a CLEAN merge whose base added a unit file ends with the ladder figures re
     fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"));
     g("init", "-q", "-b", "base");
     g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    // Regenerate in the COPY before the base commit (2026-09-30): this test is
+    // about the merge, and it went red on the deploy tip whenever the tip's own
+    // committed figures were a file behind — the exact state the merge cure
+    // exists to fix — because the copied tree "must start fresh". It starts
+    // fresh by construction now; docs-integrity owns the repo's own figures.
+    execFileSync(process.execPath, ["tools/gen/gen-ladder-figures.mjs"], { cwd: dir, stdio: "pipe" });
     g("add", "-A"); g("commit", "-qm", "base");
     assert.equal(ladderCheck().status, 0, "the copied tree must start with fresh figures: " + ladderCheck().stdout);
 

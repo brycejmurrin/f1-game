@@ -339,12 +339,15 @@ test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same ca
 test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
   const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const draw = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");
-  assert.match(game, /GameCams\.cockpitViewmodelAxes\([^;]*visorEye \? GameCams\.VISOR_EYE_FWD : null, visorEye \? GameCams\.VISOR_EYE_UP : null\);/,
+  // The rig is anchored with the SAME seat vantage() puts the camera on: VISOR's
+  // own pair, or the chosen cockpit seat (CockpitOpts.layout).
+  assert.match(game, /GameCams\.cockpitViewmodelAxes\([^;]*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\)\);/,
     "the rig is anchored with visor's own eye offsets");
   assert.match(game, /drawCockpitRig\(c, _cockMat, dt, paint, visorEye\);/, "the same rig is drawn for visor, flagged wheel-less");
   const rig = draw.slice(draw.indexOf("function drawCockpitRig("));
-  // VISOR forces the wheel-less interior whatever the WHEEL setting says.
-  assert.match(rig, /const wheelStyle = noWheel \? "none" : CockpitOpts\.wheel\(\);/, "visor overrides the chosen wheel");
+  // VISOR forces the wheel-less interior and the STANDARD seat (its eye is
+  // VISOR_EYE_*) whatever the WHEEL and SEAT settings say.
+  assert.match(rig, /const wheelStyle = noWheel \? "none" : CockpitOpts\.wheel\(\), lay = CockpitOpts\.layout\(wheelStyle, noWheel \? "std" : null\);/, "visor overrides the chosen wheel and seat");
   const cut = rig.indexOf('if (wheelStyle === "none") {');
   assert.ok(cut > 0, "the no-wheel branch exists");
   assert.ok(rig.indexOf("cockpitBodyMesh(c.team, c)") < cut && rig.indexOf("drawPlayerWheels(") < cut, "the body and the front wheels are drawn before it");

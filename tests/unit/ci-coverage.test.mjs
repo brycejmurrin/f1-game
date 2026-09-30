@@ -1285,3 +1285,34 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
   }
   assert.ok(blocks >= 2, `found only ${blocks} node -e blocks — the extraction regex has stopped matching`);
 });
+
+/* ONE CHECK THAT ALWAYS REPORTS FOR THE CHANGE-AWARE GATE (2026-09-30).
+ * Branch protection requires checks by name, and `selected`'s names carry
+ * its matrix, so it could not be required: #491 merged with a red selected
+ * gate on the merged tree and the tip sat red. `selected-verdict` has one
+ * fixed name, runs whatever `selected` did, and reads the pair the way
+ * poke-train does. Pinned so it cannot quietly stop covering a case. */
+test("selected-verdict: one fixed-name check that always judges the change-aware gate", () => {
+  const job = ciWorkflow.slice(ciWorkflow.indexOf("\n  selected-verdict:\n"), ciWorkflow.indexOf("\n  baseline-trial:\n"));
+  assert.ok(job.length > 0, "the selected-verdict job is gone");
+  assert.match(job, /^    name: Selected specs \(verdict\)$/m, "the required-check name; branch protection names it");
+  assert.match(job, /^    needs: \[select, selected\]$/m);
+  assert.match(job, /^    if: \$\{\{ always\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
+    "always(): a skipped `selected` must still be judged; the events are select's own");
+  // The reading: select must pass; selected passes, or is skipped with nothing dropped.
+  assert.match(job, /SELECT: \$\{\{ needs\.select\.result \}\}/);
+  assert.match(job, /SELECTED: \$\{\{ needs\.selected\.result \}\}/);
+  assert.match(job, /DROPPED: \$\{\{ needs\.select\.outputs\.dropped \}\}/);
+  assert.match(job, /success\) ;;\n\s+\*\) echo "::error::the selection itself did not pass/);
+  assert.match(job, /skipped\)\n\s+if \[ "\$\{DROPPED:-0\}" = "0" \]; then/, "an empty plan with nothing dropped is a pass");
+  assert.match(job, /elif \[ "\$CALLED" = "true" \]; then echo "::warning::/, "on the train an unaffordable plan warns");
+  assert.match(job, /else echo "::error::the plan is empty because \$\{DROPPED\} routed spec\(s\) were unaffordable[^\n]*; exit 1/,
+    "on a push or PR an unaffordable plan is a red — the renderer case that poked a train with no backend booted");
+  assert.match(job, /\*\) echo "::error::selected specs \$SELECTED"; exit 1 ;;/);
+  // It joins the Pages aggregate like every other job (no needs on the renderer chain).
+  const verdict = report.jobs.find((j) => j.name === "selected-verdict");
+  assert.ok(verdict && verdict.deployGate, "selected-verdict must be in the deploy gate");
+  // The matrix job's name still varies, which is the whole reason this exists.
+  assert.match(ciWorkflow, /^    name: Selected specs \(change-aware gate\)$/m);
+  assert.match(ciWorkflow, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
+});
