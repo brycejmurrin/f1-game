@@ -2092,7 +2092,7 @@
     <div class="sheet-body pane" id="vs-body">
 
       <div id="vs-pick" class="vs-step">
-        <p class="vs-hint">Two drivers, one circuit. One of you hosts and picks the race; the other joins.</p>
+        <p class="vs-hint">Two to four drivers, one circuit. One of you hosts and picks the race; the others join.</p>
         <button id="vs-host" class="bigbtn">HOST A RACE</button>
         <button id="vs-join" class="bigbtn alt">JOIN A FRIEND</button>
         <!-- Room codes are a BACKUP path, and ALWAYS available — nothing is
@@ -2766,12 +2766,12 @@
         <div id="htp-inputs">
           <details data-input="keyboard" open>
             <summary class="adv-more-btn">KEYBOARD</summary>
-            <p><span id="htp-keys">Steer ← → / A D · Gas ↑ / W · Brake ↓ / S · Boost Space · Overtake X · Active aero Z · Camera C · Pause P</span></p>
+            <p><span id="htp-keys">Steer ← → / A D · Gas ↑ / W · Brake ↓ / S · Boost Space · Overtake X · Active aero Z · Camera C · Look back B · Recover R · Radio T · Mirror M · Pause P</span></p>
             <p>Change driving keys in SETTINGS › CONTROLS › KEYBOARD. In menus, arrows move, Enter confirms and Esc goes back. Esc pauses when no menu is open.</p>
           </details>
           <details data-input="controller">
             <summary class="adv-more-btn">CONTROLLER</summary>
-            <p><span id="htp-pad">Steer left stick / D-pad · Gas RT / A · Brake LT / B · Boost X · Overtake Y · Active aero D-pad ↑ · Camera View · Pause Menu / Start</span></p>
+            <p><span id="htp-pad">Steer left stick / D-pad · Gas RT / A · Brake LT / B · Boost X · Overtake Y · Active aero D-pad ↑ · Camera View · Look back RS · Recover LS · Radio D-pad ↓ · Mirror unset · Pause Menu / Start</span></p>
             <p>Triggers give gradual throttle and braking. Change driving buttons and prompt labels in SETTINGS › CONTROLS › CONTROLLER. In menus, use either stick or the D-pad; the confirm button selects, the back button returns and triggers page.</p>
           </details>
           <details data-input="touch">
@@ -2791,14 +2791,16 @@
         <dd>In MANUAL, press your active aero control (keyboard <span data-help-keys="aero">Z</span>, controller <span data-help-pad="aero">D-pad ↑</span>, or AERO on screen) inside an activation zone. STRAIGHT MODE (the flaps open) reduces drag and grip; braking or leaving the zone closes the wings.
           <br>SETTINGS › CONTROLS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
         <dt>OVERTAKE</dt>
-        <dd>Follow within one second to arm it, then activate for four seconds of electric power. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
+        <dd>Follow within one second to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt>GEARS</dt>
         <dd>Choose SETTINGS › CONTROLS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
+        <dt>RACE CONTROL</dt>
+        <dd>Yellow flags, the virtual safety car, the safety car and the red flag are OFF by default. Turn them on in RACE SETTINGS › CAUTIONS. Cars a lap down move aside for the car lapping them.</dd>
         <!-- PIT STOPS came from the deploy branch while this branch restructured
              the sheet around it. The nav above links #htp-pits, so the section is
              carried over rather than lost to the restructure. -->
         <dt id="htp-pits">PIT STOPS &mdash; TYRE WEAR RUNS THEM</dt>
-        <dd><span class="key">SETTINGS &rarr; TYRE WEAR</span> ships on <span class="key">LIGHT</span>: tyres wear at a little over half the rate the compounds are built around, so a set lasts roughly twice as long and stopping is a choice rather than a schedule. <span class="key">REAL</span> wears them at the full rate &mdash; a set will not reach the flag and a stop is part of the race.
+        <dd><span class="key">RACE SETTINGS &rarr; TYRE WEAR</span> ships on <span class="key">REAL</span>: tyres lose grip over a stint at the full rate, so pit stops matter and a stop is part of the race. <span class="key">LIGHT</span> wears at about half the real rate, so a set lasts nearly twice as long and stopping is a choice rather than a schedule.
           <br>Turn it to <span class="key">OFF</span> and <b>there is no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either</dd>
         <dt>THERE IS NO PIT BUTTON</dt>
         <dd>You call a stop the way a driver does: put the car <b>in the pit lane at the entry and keep it there</b> for about half a second. The limiter comes on by itself and the crew tells you which set is ready. A car that merely runs wide at the entry, or is spun or stopped there, calls nothing &mdash; it has to be deliberate and held</dd>
@@ -2837,7 +2839,9 @@
         <dt>TRACK LIMITS</dt>
         <dd>Every counted cut deletes that lap's time. In a race the first two are warnings, the third brings the black-and-white flag, and the fourth and every one after it add +5 s. The HUD shows the count in every driving camera.</dd>
         <dt id="htp-setup">CAMERA</dt>
-        <dd>Tap the camera button or press your camera binding (keyboard <span data-help-keys="camera">C</span>, controller <span data-help-pad="camera">View</span>) to cycle views. Hold the on-screen button briefly, or right-click it, to open the picker. Your choice is saved.</dd>
+        <dd>Tap the camera button or press your camera binding (keyboard <span data-help-keys="camera">C</span>, controller <span data-help-pad="camera">View</span>) to cycle views. Hold the on-screen button briefly, or right-click it, to open the picker. Your choice is saved. Views: CHASE, FAR, DRIFT, COCKPIT, HOOD, OVERHEAD, HELI, REVERSE, TV SIDE, CINEMATIC, LOW, T-CAM, REAR CAM and VISOR (the cockpit without its wheel, for steering with a phone).</dd>
+        <dt>RACE SETTINGS</dt>
+        <dd>Shown before each race: LAPS, WEATHER, CONDITIONS (MIXED lets the weather change), TIME OF DAY, DIFFICULTY, GRID, DUEL, CAUTIONS, RELIABILITY, DRIVING LINE and TYRE WEAR. QUICK RACE, FULL WEEKEND and ENDURANCE set several at once.</dd>
         <dt>SETTINGS</dt>
         <dd>Pause with your binding (keyboard <span data-help-keys="pause">P</span>, controller <span data-help-pad="pause">Menu / Start</span>) or the pause button, then open SETTINGS. You can also open it from the title menu. BACK returns to the previous page. BACKUP &amp; RESTORE saves your preferences; garage files stay in GARAGE › TEAM, and career progress is separate.</dd>
         <dt>CONTROLS</dt>
@@ -2847,19 +2851,24 @@
         <dt>DISPLAY</dt>
         <dd>Adjust UI, HUD and button sizes separately. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.</dd>
         <dt>MUSIC &amp; SOUND</dt>
-        <dd>Choose music and effects, their volumes and playback controls in SETTINGS › MUSIC &amp; SOUND.</dd>
+        <dd>Choose music and effects, their volumes and playback controls in SETTINGS › MUSIC &amp; SOUND. SOURCE picks which songs play; with your own Spotify connected there, OPEN PLAYER shows what is playing and lets you change it.</dd>
         <dt id="htp-modes">RACE</dt>
-        <dd>22 cars, five red lights, then lights out. Points go to the first ten: 25-18-15-12-10-8-6-4-2-1.</dd>
+        <dd>22 cars by default, five red lights, then lights out. Points go to the first ten: 25-18-15-12-10-8-6-4-2-1. In RACE SETTINGS, GRID sets the starting order and DUEL races one rival instead of the field.</dd>
         <dt>SEASON</dt>
-        <dd>Race the calendar in order. Championship progress is saved between visits.</dd>
+        <dd>Race the calendar in order. Championship progress is saved between visits. SEASON SETUP picks the rounds, qualifying and sprint weekends; STANDINGS on the title menu shows the table.</dd>
         <dt>TIME TRIAL</dt>
-        <dd>Drive solo for your fastest lap. Your track record is saved and shown on the circuit list.</dd>
+        <dd>Drive solo for your fastest lap against a ghost of your best one. Your track record is saved and shown on the circuit list. DAILY TIME TRIAL sets one circuit and conditions a day, the same for every player, and keeps your best and your streak.</dd>
         <dt>CAREER</dt>
         <dd>Sign for a team as a DRIVER or run your own in MY TEAM. Qualify, race, earn prize money and develop the car. Each mode has three save slots and its own guide under CAREER MODES.</dd>
         <dt>QUALIFYING</dt>
         <dd>Championship weekends start with a flying lap. DRIVE MY LAP sets your own time; SIMULATE calculates one. The result sets your starting grid.</dd>
+        <dt>DATA HUB</dt>
+        <dd>Real Formula 1 schedules, standings and results. RACE IT replays a real Grand Prix: JUMP IN at any lap in a real driver&rsquo;s seat, or WATCH it or its HIGHLIGHTS recreated.</dd>
+        <dt>GARAGE</dt>
+        <dd>Fit parts within your budget and design your livery.</dd>
         <dt id="htp-friends">RACE A FRIEND</dt>
-        <dd>Create an invite, send it to your friend and paste their reply to connect. In the same room, you can scan QR codes instead. Everyone needs the same game version.</dd>
+        <dd>Race 2&ndash;4 players. The host creates an invite, sends it and pastes the reply to connect. In the same room, you can scan QR codes instead. Or use a short room code: the host taps NEW CODE and everyone else ENTER CODE. Everyone needs the same game version.
+          <br>On a phone, USE AS CONTROLLER on the title menu steers a game on another screen: type the room code it shows.</dd>
       </dl>
     </div>
     <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn alt">CLOSE</button></div>
