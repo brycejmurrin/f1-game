@@ -228,8 +228,6 @@ const pwTest = base.extend({
    *   test('...', async ({ loadTrack, page }) => { await loadTrack('monza'); ... });
    */
   loadTrack: async ({ page }, use) => {
-    // Default wx "dry" is the grip-sensitive pin (A3 / look=drive). Callers that
-    // need wet/rain must pass wx explicitly — never inherit ambient weather.
     await use(async (id = "monza", tod = "day", wx = "dry", opts = {}) => {
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
@@ -460,8 +458,6 @@ const pwSharedTest = pwTest.extend({
     await use(page);
   },
 
-  // Default wx "dry" is the grip-sensitive pin (A3 / look=drive) — same as the
-  // Playwright loadTrack above. Pass wx explicitly for wet/rain scenarios.
   loadTrack: async ({ page }, use) => {
     await use(async (id = "monza", tod = "day", wx = "dry") => {
       await ensureLive(page);
