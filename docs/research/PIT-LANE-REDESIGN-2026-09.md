@@ -31,7 +31,7 @@ garages *and* the GARAGE screen all read.
 | # | What | Owner | What it says |
 |---|---|---|---|
 | 1 | the lane tarmac | `Tracks.pitLaneFit` — `js/track/tracks.js:234` | a strip `PIT_LANE_W = 3.2 m` (min 2.4) offset laterally from the racing centreline by `hw + gap`, built only where `barR − hw` leaves ≥ 2.7 m, tapered over 40 m at each end |
-| 2 | where a car stops | `PitLane.boxThroughFor` — `js/race/pit-lane.js:354` | **11** boxes from `Teams.LIST` at **14 m** pitch, anchored just past pole's grid slot, clamped into the ribbon |
+| 2 | where a car stops | `PitLane.boxThroughFor` — `js/race/pit-lane.js:347` | **11** boxes from `Teams.LIST` at **14 m** pitch, anchored just past pole's grid slot, clamped into the ribbon |
 | 3 | the painted boxes | `TrackMesh.buildPitBoxes` — `js/track/core/mesh.js:1062` | **10** boxes at **9 m** pitch, 2.8 × 8 m, block centred in `lane.lenM − 80` |
 | 4 | the garages | each circuit's `scenery()`; `CircuitKit.pitBuilding` — `js/track/scenery/circuit-kit.js:199`; Albert Park's own hull — `js/circuits/scenery/albert_park.js:389` | kit: a hull `[18, 10, 72]` m with 12–24 doors at `L / garages`; Albert Park: **26** bays at **6.6 m** pitch, hand-anchored **16 m** off the centreline at the start node, 190 m long |
 | 5 | the frontage on the GARAGE screen | `GarageScene.buildPitLane` — `js/garage/scene.js:637` | door → working lane **2.5 m** (box 3.8 × 2.05 m in it) → line → fast lane **2.75 m** → line → bollards → wall; 5.45 m in all |
@@ -135,7 +135,7 @@ sites; treat those figures as ranges.
 - **The ribbon mechanism already exists and works** — `pitLaneFit` +
   `buildPitLane` build a second tarmac ribbon from a per-node lateral profile,
   `pitLaneAt`/`inPitLane` read the same profile, and the physics exemption
-  (`game.js:4241`) and the AI lane steer (`game.js:4538`) read those. What is
+  (`game.js:4226`) and the AI lane steer (`game.js:4519`) read those. What is
   wrong is what the profile is (`hw + gap`, 3.2 m, measured room) — not that a
   profile drives everything.
 - **The scenery must yield, not the lane.** Today the lane exists where the

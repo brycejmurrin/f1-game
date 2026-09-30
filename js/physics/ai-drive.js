@@ -206,7 +206,7 @@ const AiDrive = (function () {
   // that cannot backs OUT — its pace ceiling drops under the other car's speed
   // until it is clear. Without this the rub being cheap (rubDecel) let AI pairs
   // grind along a barrier for seconds (racecraft bench: prolonged-contact pairs
-  // 0 -> 4 on monaco once the old scrub stopped knocking the trailing car back).
+  // 0 -> 4 on monaco once the scrub no longer knocked the trailing car back).
   function squeezeEase(street) {
     return street ? 0.88 : 0.9;
   }
@@ -473,12 +473,10 @@ const AiDrive = (function () {
   }
 
   // THE INCENTIVE, on PACE rather than on the blocker's speed this instant.
-  // `held` used to compare our straight-line vmax with the blocker's live
-  // speed — so it was TRUE in every corner and braking zone (where a pass
-  // cannot complete) and FALSE at top speed on the straight (where it could),
-  // then released, and on release the pull snapped to zero and the car
-  // re-centred on the line it had just left. Inverted over the lap, with no
-  // memory. Compare vmax with vmax (every car stashes _vmaxNow; a human's is
+  // Comparing our straight-line vmax with the blocker's live speed is TRUE in
+  // every corner and braking zone (where a pass cannot complete) and FALSE at
+  // top speed on the straight (where it could) — inverted over the lap, and on
+  // release the car re-centres on the line it just left. Compare vmax with vmax (every car stashes _vmaxNow; a human's is
   // its live vmax too), and scale the margin with the top speed so OVERALL
   // SPEED does not turn a 7 % edge into a 14 % one at pace 0.5.
   function otWant(ctx) {
@@ -563,14 +561,12 @@ const AiDrive = (function () {
     const lim = (hw || 5) - 0.6;
     return clamp(passX + side * clear, -lim, lim);
   }
-  // IS THE PASS LANE STILL REACHABLE? The latch used to drop whenever less
-  // than a car width (WCAR) of road was left beyond the passing car on its
-  // side — checked every frame, INCLUDING after the car had arrived in the
-  // lane. passTarget allows a lane 0.6 m from the edge, so a pass round the
-  // outside was cancelled the moment it got there: on monza that branch ended
-  // 73-105 of ~180 pass attempts per 240 s against ~20 completions, and every
-  // one of them dropped the car back into the queue it had just left (the
-  // clump). The side is closed only when the room left is less than the
+  // IS THE PASS LANE STILL REACHABLE? Dropping the latch whenever less than a
+  // car width (WCAR) of road is left beyond the passing car — checked every
+  // frame, INCLUDING after it arrives in the lane (passTarget allows 0.6 m from
+  // the edge) — cancels an outside pass the moment it gets there: on monza that
+  // ended 73-105 of ~180 pass attempts per 240 s against ~20 completions, each
+  // dropping the car back into the queue (the clump). The side is closed only when the room left is less than the
   // distance still to travel (`need`, capped at a car width), with 0.1 m of slack.
   function passSideClosed(sideRoom, need, wcar) {
     return sideRoom < Math.min(wcar || 2, Math.max(0, need || 0)) - 0.1;
@@ -587,12 +583,11 @@ const AiDrive = (function () {
     return lerp(3.5, 1.8, t.experience);
   }
 
-  // SIDE RUB: WHO YIELDS. Two cars alongside used to get identical treatment —
-  // sepShares splits the push 50/50 for AI-AI, contactGive cut BOTH cars'
-  // steering authority to 0.25-0.55, and rubScrub bled BOTH by 0.5 %/frame.
-  // Nobody had priority, so both computed the mirror answer every frame and
-  // the pair sank to the speed where throttle and scrub balance — 17.4 m/s at
-  // vmax 70 (closed form; measured standoffs sat at 15-24). The car BEHIND on
+  // SIDE RUB: WHO YIELDS. Identical treatment of two cars alongside (sepShares
+  // 50/50, contactGive cutting BOTH to 0.25-0.55, rubScrub bleeding BOTH by
+  // 0.5 %/frame) gives nobody priority: both compute the mirror answer every
+  // frame and the pair sinks to the speed where throttle and scrub balance —
+  // 17.4 m/s at vmax 70 (closed form; measured standoffs 15-24). The car BEHIND on
   // arc yields (it is the one overlapping); dead level, the car further from
   // the centreline yields, which on a corner is the outside car — bt's
   // filterSColl and usr's asymmetric side margin both give the inside car the
@@ -749,10 +744,9 @@ const AiDrive = (function () {
   // with the fuel still aboard, and the planner reaches for harder rubber early
   // and softer late. That is the real pattern, arrived at from the real cause.
   const FUEL_WEAR = 0.22;    // life lost at a full tank, as a fraction
-  /* WHAT A STOP COSTS, when the caller has not measured it — ONE number, because
-     this module used to carry two. stintPlan fell back to 0.18 and wornPays() to
-     0.12, so "is it worth stopping" and "when should I stop" answered the same
-     question differently by half again. js/race/pit-lane.js derives the real
+  /* WHAT A STOP COSTS, when the caller has not measured it — ONE number, shared
+     by stintPlan and wornPays() so "is it worth stopping" and "when should I
+     stop" cannot answer the same question differently. js/race/pit-lane.js derives the real
      value (loss / lapRefS, clamped) and passes it; this is only for a caller
      that has none yet, and 0.18 is the planner's own long-standing figure. */
   const PIT_LOSS_FALLBACK = 0.18;
@@ -888,16 +882,12 @@ const AiDrive = (function () {
               // DIVIDED, NOT SUBTRACTED. The sim raises tyre LOAD by
               // (1 + FUEL_LOAD·fuel) — js/physics/tyre-model.js fuelLoadMul,
               // applied to the load that drives wear — so the life a set
-              // actually has is life / (1 + 0.22·fuel). The planner charged
-              // life × (1 − 0.22·fuel), which is the first-order approximation
-              // of the same idea and is short by 4.84% at a full tank (0.7800
-              // against 0.8197), 2.72% at three-quarters, 1.21% at half. It
-              // believed every set would die sooner than it does. Measured
-              // over 1620 plans against the old form (with the matching fix in
-              // splitStints above, which is what actually sets the lap
-              // numbers): 381 plans move, the first stint runs LONGER in 326
-              // of them and shorter in 46, and the stop COUNT is a wash — 10
-              // fewer, 10 more. It was stopping early, not stopping often.
+              // actually has is life / (1 + 0.22·fuel). The first-order
+              // life × (1 − 0.22·fuel) is short by 4.84% at a full tank (0.7800
+              // against 0.8197), 2.72% at three-quarters, 1.21% at half.
+              // Measured over 1620 plans against it (with the matching form in
+              // splitStints above): 381 plans move, the first stint runs LONGER
+              // in 326 and shorter in 46, and the stop COUNT is a wash.
               // Same constant on both sides; now the same FORM.
               + degCost(stints[i], lives[i] / (1 + FUEL_WEAR * fuel));
         done += stints[i];
@@ -948,8 +938,8 @@ const AiDrive = (function () {
 
   // The compound for an UNPLANNED stop — a spent set, or a track that has dried
   // out. The plan has nothing to say about these (a 0-stop plan has no next
-  // compound at all, which used to fall back to "medium" whether there were
-  // three laps left or thirty), so pick the fastest rubber that can still cover
+  // compound at all, and a fixed "medium" ignores whether there are three
+  // laps left or thirty), so pick the fastest rubber that can still cover
   // what remains: softest first, and the hardest as the fallback when nothing
   // comfortably lasts.
   function compoundFor(lapsLeft, lifeLaps) {
@@ -964,9 +954,8 @@ const AiDrive = (function () {
   //   1. THE FREE STOP. Under a safety car or VSC the whole field is slowed, so
   //      a stop costs 40-60% less — 8-12 s, the single biggest lever in the
   //      sport. A car within reach of its planned stop takes it.
-  //   2. THE WRONG TYRE. A dry->rain arc used to punish a slick with no
-  //      recourse; docs/PHYSICS.md called that the first thing to revisit if
-  //      rain felt unfair. Pitting IS the recourse.
+  //   2. THE WRONG TYRE. A dry->rain arc punishes a slick; pitting IS the
+  //      recourse (docs/PHYSICS.md).
   //   3. THE SET IS GONE. Past its life the cliff costs more than the stop.
   //
   // Returns a REASON string (or "") rather than a boolean, so the caller can say
@@ -1108,10 +1097,10 @@ const AiDrive = (function () {
   }
 
   // MIRRORS: how far back a car in our lane is SEEN — a time, not a distance. The
-  // traffic scan (game.js) used to stop at a flat 13 m, which at 60 m/s is 0.2 s: the
-  // attacker was in the gearbox before the defender knew it was there. It also cut
-  // short the two rules below it that were written in TIME — holdLineGap (a second
-  // behind) and the pressure timer (0.6 s) — neither could see past 13 m. Awareness
+  // traffic scan (game.js) at a flat 13 m is 0.2 s at 60 m/s: the attacker is in
+  // the gearbox before the defender knows it is there, and the two rules below
+  // written in TIME — holdLineGap (a second behind) and the pressure timer
+  // (0.6 s) — could not see past 13 m. Awareness
   // is the reach: a sharp driver watches a second back, a dull one about 0.6 s.
   function mirrorReach(t, speed) {
     const v = Math.max(speed || 0, 10);
@@ -1131,11 +1120,10 @@ const AiDrive = (function () {
     const kA = ctx.kA || 0;
     // COVER SIDE. Into a corner the inside is the thing worth having, so the
     // side comes from curvature. On a STRAIGHT kA is ~0 and -Math.sign(kA) is
-    // not a direction, which is why this used to `return 0` outright — and that
-    // made the whole straight undefendable: no covering the line into turn 1,
-    // no breaking the tow. It also left defendOnce's "one defensive move per
-    // straight" limiter (game.js, beside this call) with nothing it could ever
-    // limit, since the braking zone resets the side anyway.
+    // not a direction, but `return 0` there makes the whole straight
+    // undefendable (no covering the line into turn 1, no breaking the tow) and
+    // leaves defendOnce's "one defensive move per straight" limiter (game.js,
+    // beside this call) nothing to limit.
     // A straight has its own answer: cover the side the attacker is lining up
     // on. dx is the chaser's lateral offset from us, +x = right, so the side to
     // take IS its sign. Dead behind is not yet a move to cover — hold the line
@@ -1176,13 +1164,11 @@ const AiDrive = (function () {
     return street ? 12 : 12;
   }
 
-  // CONTACT IS NOT CONFINEMENT. `contactT > 0 => boxed` used to be the first
-  // line here, so ANY rub — including a clean side-by-side on a 15 m-wide
-  // permanent — declared the car wedged. Boxed feeds stuckT, which feeds
-  // unstuckActive, which cancels braking and yanks the car sideways; a driver
-  // leaning on an AI therefore switched it into dig-out mode while it still had
-  // a whole lane free. Contact now only counts when the room is already gone,
-  // which is the state the flag was named for.
+  // CONTACT IS NOT CONFINEMENT. `contactT > 0 => boxed` would declare ANY rub —
+  // even a clean side-by-side on a 15 m-wide permanent — wedged. Boxed feeds
+  // stuckT -> unstuckActive, which cancels braking and yanks the car sideways,
+  // so a driver leaning on an AI would switch it into dig-out mode with a whole
+  // lane free. Contact counts only when the room is already gone.
   function isBoxed(ctx) {
     const roomL = ctx.roomL || 0, roomR = ctx.roomR || 0;
     if (roomL < 1.3 && roomR < 1.3) return true;

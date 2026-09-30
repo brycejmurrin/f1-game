@@ -352,8 +352,8 @@ const Quali = (function () {
       if (!classification || !classification.some((r) => r.t > 0)) return null;
       return classification.map(({ car, ...row }) => row);   // drop the live car ref
     }
-    // In-memory only. openQuali() used to call this and wipe a driven grid
-    // every time the sheet reopened. Pass true (quit-to-menu, post-GP award
+    // In-memory only — openQuali() must not call this, or reopening the sheet
+    // wipes a driven grid. Pass true (quit-to-menu, post-GP award
     // already deletes) when THIS weekend's order must not come back.
     function forgetOrder() {
       const s = G.season;

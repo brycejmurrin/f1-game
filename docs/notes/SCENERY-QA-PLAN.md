@@ -34,7 +34,7 @@ Known blind spots, measured before this plan:
   faces (`glx.js:941`), TLX scenery materials are FrontSide (`tsl-lit.js:1919`),
   WGX's lit pipeline uses `cullMode "back"`, so ~600 opposite-facing touching pairs
   fleet-wide can never fight. Depth is 24-bit, near 0.9 m (0.3 m in cockpit/hood,
-  `game.js:6751`), far 900 m: one depth step is ~2.6 mm at 200 m (8 mm with the
+  `game.js:6715`), far 900 m: one depth step is ~2.6 mm at 200 m (8 mm with the
   0.3 m near plane), so only a gap of ~0 mm fights at driving distances;
 - **coplanar-audit skips every face with |n.y| >= 0.5 unless `--horizontal` is
   passed, and `coplanar-faces.test.mjs` never passes it**: no deck bottom, soffit,

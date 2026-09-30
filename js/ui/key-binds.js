@@ -362,7 +362,7 @@ function create(G) {
      abandonable — a half-finished wizard leaves the previous map alone. */
   /* Abort the wheel wizard without changing the saved map. closeSettings /
      disarmAll must call this: beginAxisCapture alone zeroes the pad every
-     frame until cancelled, and the 2026-09-22 slot disarm left the wizard out. */
+     frame until cancelled. */
   let abortWheel = null;
   const wheelBtn = $("pm-pad-wheel");
   if (wheelBtn && Input.beginAxisCapture) {

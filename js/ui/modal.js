@@ -84,8 +84,8 @@ window.TopModal = (function () {
       // row fires a non-cancelable `cancel` (the first consumed the
       // history-action activation), and the dialog closes behind our
       // preventDefault. For a screen with a door, press the door; for a gate
-      // (data-esc="none") or a door that chose to stay, put it back — a
-      // refused RESULTS sheet used to vanish onto a frozen HUD.
+      // (data-esc="none") or a door that chose to stay, put it back — or a
+      // refused RESULTS sheet vanishes onto a frozen HUD.
       const via = el.getAttribute("data-esc-close");
       if (via) { const btn = document.getElementById(via); if (btn) btn.click(); }
       if (el.hidden) return;
@@ -105,10 +105,8 @@ window.TopModal = (function () {
      Five screens never became <dialog>s and so never got Escape: #select,
      #career, #carsetup, #lighting and #camtune, plus the free-camera overlay
      #photo-controls. (#track-detail was a sixth, until it migrated to a real
-     <dialog> — see docs/research/PLATFORM-INPUT-NOTES.md §9a. That migration
-     shipped, silently lost its markup hunk to a merge, and was restored in
-     2026-08 after tests/specs/menu-keyboard.spec.js's ":modal" assertion — which had
-     been red and unrun the whole time — was found pinning it.) Two of the
+     <dialog> — see docs/research/PLATFORM-INPUT-NOTES.md §9a; the ":modal"
+     assertion in tests/specs/menu-keyboard.spec.js pins it.) Two of the
      remainder must NOT become modal dialogs — #carsetup is
      `pointer-events: none` so a drag reaches the live turntable rendering
      behind it, and showModal() would make that canvas inert — so instead of
@@ -165,11 +163,10 @@ window.TopModal = (function () {
 
   /* WHAT FOCUS MAY LAND ON. One selector — MenuNav's, once it has loaded (it
      ships after this file) — and one visibility rule: a control that is
-     `hidden`, disabled, aria-hidden or has no box is not a landing spot. The
-     containment below used to take the FIRST focusable in DOM order whether
-     or not it was on screen — a search-filtered circuit row, a CSS-hidden
-     button — and `focus()` on a hidden element is a silent no-op, so the
-     pull-back read as done while focus stayed outside the layer. */
+     `hidden`, disabled, aria-hidden or has no box is not a landing spot:
+     `focus()` on a hidden element (a search-filtered circuit row, a CSS-hidden
+     button) is a silent no-op, so the containment below would read as done
+     while focus stayed outside the layer. */
   const FOCUSABLE_FALLBACK = "button:not([disabled]),a[href],input:not([disabled])," +
     "select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex='-1'])";
   const focusableSel = () => (window.MenuNav && window.MenuNav.FOCUSABLE) || FOCUSABLE_FALLBACK;

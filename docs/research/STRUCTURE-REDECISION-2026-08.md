@@ -29,8 +29,8 @@ All figures re-verified live in this session (commands: `wc -l`, grep counts, ju
 | Rule-11 class-count ratchet test | prescribed | **not installed** — no test carries a 538/543 ceiling | execution gap in a prior ruling, see Q5 |
 | `#track-detail` regression (ARCHITECTURE-REVIEW §7) | open defect | **fixed** — index.html:688 ships a real `<dialog id="track-detail" class="screen dim">` | |
 | Bedrock implementation status | adopted | **"No phase has been implemented yet"** (ARCHITECTURE-REDESIGN-2026-08.md) | bears on Q1, Q3, Q6 |
-| `endRace` size | analyst gap-method: 383 ln | judge brace-count: **64 ln** (ends game.js:2556); the "383" mostly = the G façade block that follows it | measurement dispute, recorded under Q4 |
-| Fenced megablocks | — | `updateCar()` ~1,189–1,194 ln (game.js:3372–~4560); `render()` ~1,413 ln (from 5175) | both remain fenced |
+| `endRace` size | analyst gap-method: 383 ln | judge brace-count: **64 ln** (ends game.js:2546); the "383" mostly = the G façade block that follows it | measurement dispute, recorded under Q4 |
+| Fenced megablocks | — | `updateCar()` ~1,189–1,194 ln (game.js:3357–~4560); `render()` ~1,413 ln (from 5175) | both remain fenced |
 
 ---
 

@@ -1,7 +1,7 @@
 /* Apex 26 — FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up.
  * Peer times arrive on NetPlay EV.QUALI / EV.QLIVE; the q-go button shows why the
  * grid is still locked. QualiNet.create(hooks) — game.js passes openQuali and the
- * quali sheet rebuild; netPlay/netLobby are read at call time like the old inline code. */
+ * quali sheet rebuild; netPlay/netLobby are read at call time. */
 const QualiNet = (function () {
   "use strict";
 

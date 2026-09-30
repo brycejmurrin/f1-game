@@ -64,14 +64,14 @@ runs the sweeps and the selected specs.
 as one commit with the tests named; the radio card's compact anchor fix
 (`4b2787b86`) followed. Kept for the record of what was decided:
 
-1. **The player's reference plan** — `js/game.js:1909` drops `!c.human` from
+1. **The player's reference plan** — `js/game.js:1901` drops `!c.human` from
    the `pitPlan` draw (`c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : roll) : null`,
    keeping `tyreClass = plan.start` AI-only on `:1910`); `PitLane.think` gains
-   `if (c.human) return "";` so the plan is advice (`js/race/pit-lane.js:1100`
+   `if (c.human) return "";` so the plan is advice (`js/race/pit-lane.js:1087`
    has no human guard today — game.js is what keeps it off the player,
    `:3777`). Test: a human car through `think` never arms.
 2. **`stintPlan` pins** — `ctx.stops` (pin the stop count) and `ctx.start`
-   (pin the first compound) as filters in `walk` (`js/physics/ai-drive.js:715-730`),
+   (pin the first compound) as filters in `walk` (`js/physics/ai-drive.js:710-725`),
    plus `ctx.firstLife` (the laps left in the CURRENT set, for a re-plan).
    Tests in `ai-strategy.test.mjs`: a pinned count returns that count with
    `lapsAt` inside `[1, laps−1]`; a pinned start is `seq[0]`; a short
@@ -93,19 +93,19 @@ as one commit with the tests named; the radio card's compact anchor fix
 5. **Rivals' windows** — on the gap chips, not a tower (there is none:
    `.hud-gaps` `:398-401` is the only per-rival HUD element): `data-pit="P12"`
    / `"IN"` from `pits.windowOf(o)` (`plan.lapsAt[o.pitStops]` within 3 laps),
-   painted as `::after` so `gapForm`'s learned widths (`hud.js:223-260`) see a
+   painted as `::after` so `gapForm`'s learned widths (`hud.js:217-254`) see a
    suffix, not a new spelling — measure the drop rule after.
 6. **Re-planning** — once per lap for the local human in `pits.update`: re-run
    `stintPlan` over the laps left with `start` = the current class and
    `firstLife` = the set's remaining life; adopt only when the next stop lap
-   moves by ≥ 2 (the stagger is ±1 by design, `ai-drive.js:743`), and say
+   moves by ≥ 2 (the stagger is ±1 by design, `ai-drive.js:738`), and say
    "NEW PLAN — BOX LAP n" once.
 7. **The STRATEGY row** in `js/race/race-settings.js` (not ratcheted): a
    `#rs-plan` set-row (AUTO / NO STOP / 1 STOP / 2 STOPS, the pin persisted as
    `apex26.pitPlan.<trackId>`) plus a stint bar under it (compound colours
    from `TyreModel.AI_CLASS`, lengths from the plan, the pit loss in seconds
    from a new `pits.lossS()`), hidden with `rs-tyres` in a time trial and when
-   wear is off. The hooks object (`game.js:3096-3114`) gains `getPits`.
+   wear is off. The hooks object (`game.js:3081-3099`) gains `getPits`.
    Test in `race-settings-vm.test.mjs`: the row's visibility and options; the
    bar only where the VM has a built track (it may not — degrade to "—").
 

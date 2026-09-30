@@ -24,16 +24,14 @@ const Duel = (function () {
   // adds attack persistence (shorter cooldown, faster retry) and consistency
   // removes mistakes under pressure.
   //
-  // AWARENESS IS DELIBERATELY NOT BUMPED, and this was a bug in the first cut of
-  // this table. It reads as "sharper driver", but in ai-drive.js it is the
+  // AWARENESS IS DELIBERATELY NOT BUMPED. It reads as "sharper driver", but in ai-drive.js it is the
   // CAUTION axis and it runs the wrong way for a benchmark:
   //     awareMul     = lerp(1.25, 0.7, awareness)  -> raising it makes the
   //         rival PULL THE TRIGGER LESS on its own overtakes
-  // So +10 awareness bought a rival that attacks less — the opposite of the
-  // intent. (It also used to CONCEDE sooner through letPassDelay; since
-  // 2026-09-29 that timer is a blue flag only, for a car LAPPING it, and
-  // awareness now also widens the mirrors and the cover window — which a
-  // defending rival would gain — but the attack cost stands.) Left at 0: lowering it instead would buy a
+  // So +10 awareness buys a rival that attacks less — the opposite of the
+  // intent. (Awareness also widens the mirrors and the cover window, which a
+  // defending rival would gain, and letPassDelay is a blue flag only, but the
+  // attack cost stands.) Left at 0: lowering it instead would buy a
   // stubborn rival at the cost of its box-exit, launch reaction and
   // pressure-error handling, which is a worse car rather than a harder one.
   //
@@ -50,8 +48,8 @@ const Duel = (function () {
    * both halves of racecraft, consistency removes mistakes under pressure,
    * experience shortens the overtake cooldown — and AWARENESS STAYS 0, because
    * in ai-drive.js it is the CAUTION axis on attack (awareMul 1.25 -> 0.7), so
-   * lifting it buys a rival that attacks less (letPassDelay is a blue flag only
-   * since 2026-09-29, so it no longer concedes a position fight). Raising it to
+   * lifting it buys a rival that attacks less (letPassDelay is a blue flag only,
+   * so it does not concede a position fight). Raising it to
    * "sharpen" him would make his attack EASIER to live with.
    *
    * Pace stays the smallest, and barely matters anyway: skill() spans only
@@ -119,10 +117,8 @@ const Duel = (function () {
    * tier-relative draw, so no BUMP is applied on top. Fangio arrives at his own
    * numbers, not at a midfielder's plus ten.
    *
-   * AND HIS CAR, when the caller hands one over. This used to stop at the name:
-   * Schumacher arrived in whatever machine the grid slot held, so a duel against
-   * him was a 2026 Red Bull with MSC on the timing screen — the first thing a
-   * player notices and the reason it is fixed here.
+   * AND HIS CAR, when the caller hands one over — not whatever machine the grid
+   * slot held (a 2026 Red Bull with MSC on the timing screen).
    *
    * `legend.team` is the rival's own team object (js/data/legends.js raceTeam):
    * a per-legend id nothing else is keyed by, his tribute palette and the period

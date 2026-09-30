@@ -187,7 +187,7 @@ rival ahead.
 
 ### h. Stale comment (trivial): SHIPPED #250
 
-- `js/game.js:7072` says "night flood set only". Day floods bake too.
+- `js/game.js:7036` says "night flood set only". Day floods bake too.
 
 ### b. Wet nights (investigation first; large)
 

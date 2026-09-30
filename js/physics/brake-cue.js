@@ -63,10 +63,10 @@ const BrakeCue = (function () {
       const lat = PC.LAT_MAX || 22, brake = PC.BRAKE || 22;
       // The bounds are METRES, so they ride the OVERALL SPEED scale: ground
       // speed carries PACE while `brake` is absolute, which puts braking
-      // distance on PACE². A bare 120 m ceiling stopped the sample loop short
-      // of the braking point at pace > 1 — and already clipped the top notches
-      // at pace 1, where lookSec 2.3 wants 165 m. HI is now the full stopping
-      // distance from top speed (117.8 m at PACE 1, the old literal).
+      // distance on PACE². A bare 120 m ceiling stops the sample loop short of
+      // the braking point at pace > 1 and clips the top notches at pace 1, where
+      // lookSec 2.3 wants 165 m. HI is the full stopping distance from top
+      // speed (117.8 m at PACE 1).
       const vt = (G.vTop ? G.vTop() : 0) || (PC.VMAX || 72);
       const lookLo = 28 * Math.max(vt / (PC.VMAX || 72), 0.05);
       const lookHi = Math.max(lookLo, vt * vt / (2 * Math.max(brake, 1)));

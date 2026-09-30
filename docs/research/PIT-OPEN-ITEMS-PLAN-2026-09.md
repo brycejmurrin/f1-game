@@ -38,8 +38,8 @@ table-driven check in the same file.
 ## 2. A planned stop arms at the line and circulates a lap armed
 
 **Facts.** `PitLane.think` runs every tick for every AI car in the race
-(`js/game.js:3777`) and arms as soon as `AiDrive.pitNow` says so
-(`js/race/pit-lane.js:1098-1115`), with `lapsToStop = nextAt − c.lap`. The lap
+(`js/game.js:3762`) and arms as soon as `AiDrive.pitNow` says so
+(`js/race/pit-lane.js:1087-1103`), with `lapsToStop = nextAt − c.lap`. The lap
 counter increments at the line, and the line is INSIDE the pit window — the
 window opens up to 260 m before it and closes 110 m after (`pit.js:73`) — so a
 car whose plan says "lap N" crosses the line, sees `lapsToStop === 0`, arms, and
@@ -49,7 +49,7 @@ run since the counter existed (`scratch/pit-hunt.cjs:206`).
 
 **What it costs — nothing, measured against the code.** An armed AI is only
 held to the pit side within `APPROACH_M` of the entry road (`laneX`,
-`pit-lane.js:791-799`), and its speed cap `entryV` (`:606-611`) is
+`pit-lane.js:783-791`), and its speed cap `entryV` (`:606-611`) is
 `sqrt(limit² + 2·ENTRY_BRAKE·d)` — 288 km/h at 300 m out, unbounded inside the
 window — so a car armed at the line drives its lap at racing pace on the racing
 line and stops at the END of its planned lap, which is what "box on lap N"

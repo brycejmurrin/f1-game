@@ -133,7 +133,7 @@ window.ScrollFade = (function () {
     timer = 0;
     // Measure everything, THEN write everything: one layout for the whole batch
     // instead of one per region. Skip regions whose screen layer is [hidden] —
-    // mid-race resize used to force layout over every menu pane still in the DOM.
+    // a mid-race resize would force layout over every menu pane still in the DOM.
     const els = document.querySelectorAll(SEL);
     const measured = [];
     els.forEach((el) => {

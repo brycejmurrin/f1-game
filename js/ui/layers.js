@@ -136,7 +136,7 @@ window.UiLayers = (function () {
   /* Resolved by ID rather than by document query, because THIS one is called
      from the frame loop. Input.poll() -> pollGamepad() runs every frame (before
      the paused gate, so on menus too) and asks anyOpen() on every one — and
-     the 24-selector comma list it used to pass to querySelectorAll misses
+     a 24-selector comma list passed to querySelectorAll misses
      Blink's single-selector fast paths and walks the element tree
      instead. `#id:not([hidden])` is exactly `getElementById(id)` plus an
      `el.hidden` test, so 24 map lookups give the identical answer without the
@@ -168,7 +168,7 @@ window.UiLayers = (function () {
     const els = gateEls();
     for (let i = 0; i < els.length; i++) {
       const el = els[i];
-      if (el.hidden) continue;          // the cheap test the selector used to do
+      if (el.hidden) continue;          // the cheap test, first
       if (shownLayer(el)) return true;
     }
     return false;
