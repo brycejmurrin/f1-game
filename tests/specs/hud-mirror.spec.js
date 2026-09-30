@@ -95,7 +95,7 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   // on a phone the card covered the mirror, and beside the mirror it still
   // sat on the view. hud.js fits at 10 Hz and re-measures a same-key layout
   // every 3 s, so the slot is waited for, not assumed.
-  await page.waitForFunction(() => document.documentElement.classList.contains("hud-radio-top"), null, { polling: 100, timeout: FRAME_MS });
+  await page.waitForFunction(() => document.body.classList.contains("hud-radio-top"), null, { polling: 100, timeout: FRAME_MS });
   const card = await page.evaluate(() => {
     document.getElementById("announce-who").textContent = "RUSSELL · RADIO";
     document.getElementById("announce-text").textContent = "Box this lap, box this lap.";

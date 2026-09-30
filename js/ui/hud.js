@@ -333,7 +333,7 @@ let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the fo
 // pause buttons, in the tower's own row — off the road and clear of the mirror
 // under the tower (a phone report: the card beside the mirror still sat on the
 // view). The strip ends at whichever button shares the tower's rows. Published
-// in SCREEN px on :root.hud-radio-top — css/hud.css divides by the card's own
+// in SCREEN px with body.hud-radio-top — css/hud.css divides by the card's own
 // zoom — and only where a shrunk card fits; otherwise the card keeps its slot
 // under the tower (beside the mirror, js/render/shared/mirror-pass.js, or
 // below it). Never in BROADCAST, whose tower is top-left and whose mirror
@@ -348,7 +348,7 @@ function radioTopSlot(root, bcast) {
   }
   const x = t ? t.right + RADIO_TOP_GAP : 0;
   const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
-  hToggle(root, "hud-radio-top", fits);
+  hToggle(document.body, "hud-radio-top", fits);
   if (!fits) return;
   hStyle(root, "--radio-top-x", x.toFixed(1) + "px");
   hStyle(root, "--radio-top-y", t.top.toFixed(1) + "px");
