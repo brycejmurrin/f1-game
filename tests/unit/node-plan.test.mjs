@@ -11,7 +11,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { plan, toShell, SCOPED, RUN_ALL_PATHS, adaptedGroups, circuitsOf, scriptBuilds } from "../../tools/ci/node-plan.mjs";
+import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds } from "../../tools/ci/node-plan.mjs";
+import { filesFor } from "../../tools/ci/run-group.mjs";
+import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -38,6 +40,41 @@ test("a UI-only diff skips the VM slices; the fast scripts are never in the plan
   const sh = toShell(p);
   assert.match(sh, /unset APEX_CIRCUITS/);
   assert.match(sh, /planned\(\) \{/);
+  assert.equal(p.skipTf, true, "matched PR plans thin tooling-fast overlap on topical riders");
+  assert.match(sh, /export NODE_PLAN_SKIP_TF=1/);
+});
+
+test("PR matched plans skip only tooling-fast ∩ always-on topical; --all and fail-safe do not", () => {
+  const tf = new Set(TOOLING_FAST_FILES);
+  const overlap = topicalTfOverlap();
+  assert.ok(overlap.length >= 40, `expected ~49–55 double-run files, got ${overlap.length}`);
+  for (const f of overlap) {
+    assert.ok(tf.has(f), `${f} must be in tooling-fast (anti-vacuity)`);
+    assert.ok(ALWAYS_ON_TOPICAL.some((s) => (groups[s]?.files || []).includes(f)),
+      `${f} must belong to an always-on topical group`);
+  }
+  // A file not in tooling-fast is never in the skip set.
+  for (const script of ALWAYS_ON_TOPICAL) {
+    for (const f of groups[script]?.files || []) {
+      if (!tf.has(f)) assert.ok(!overlap.includes(f), `${f} onlyHere must not be planner-skipped`);
+    }
+  }
+  const matched = plan(["js/ui/hud.js"]);
+  assert.equal(matched.skipTf, true);
+  assert.deepEqual(matched.skipTfFiles, overlap);
+  for (const script of ALWAYS_ON_TOPICAL) {
+    const kept = filesFor(script, { skipTf: true });
+    for (const f of kept) assert.ok(!tf.has(f), `${script} --skip-tf must not keep ${f}`);
+    for (const f of groups[script].files) if (!tf.has(f)) assert.ok(kept.includes(f), `${script} must keep onlyHere ${f}`);
+  }
+  // Deploy / nightly / infra fail-safe: every file.
+  const allPlan = plan([]);
+  assert.equal(allPlan.skipTf, false);
+  assert.deepEqual(allPlan.skipTfFiles, []);
+  assert.match(toShell(allPlan), /unset NODE_PLAN_SKIP_TF/);
+  assert.match(toShell(plan(["package.json"])), /unset NODE_PLAN_SKIP_TF/);
+  for (const script of ALWAYS_ON_TOPICAL)
+    assert.deepEqual(filesFor(script, { skipTf: false }), groups[script].files);
 });
 
 test("a circuit-only diff runs the elevation twin narrowed to that circuit", () => {
@@ -115,7 +152,17 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
   const b1 = groups["test:game-vm-b1"].files, b2 = groups["test:game-vm-b2"].files;
   assert.deepEqual([...b1, ...b2].sort(), [...groups["test:game-vm-b"].files].sort(), "b1 + b2 is exactly game-vm-b");
   assert.equal(new Set([...b1, ...b2]).size, b1.length + b2.length, "b1 and b2 are disjoint");
-  // The seconds-long scripts are NOT guarded: a skip there buys nothing.
+  // The seconds-long scripts are NOT guarded by planned(): a script skip there
+  // buys nothing. On a matched PR they thin tooling-fast overlap via
+  // run-group --skip-tf; the npm run else-branch stays for gateNodeSuites.
   for (const script of gateNodeSuites().filter((s) => !(s in SCOPED)))
     assert.doesNotMatch(step, new RegExp(`planned ${script}\\b`), `${script} must always run`);
+  for (const script of ALWAYS_ON_TOPICAL) {
+    const esc = script.replace(/[-]/g, "\\-");
+    assert.match(step, new RegExp(
+      `if \\[ -n "\\$\\{NODE_PLAN_SKIP_TF:-\\}" \\]; then node tools/ci/run-group\\.mjs ${esc} --skip-tf; else\\n\\s+npm run ${esc}\\n\\s+fi`),
+      `${script} must thin TF on PR and keep npm run for the deploy gate`);
+  }
+  assert.ok(gateNodeSuites().filter((s) => ALWAYS_ON_TOPICAL.includes(s)).length === ALWAYS_ON_TOPICAL.length,
+    "every always-on topical script must still parse from the npm run else-branch");
 });

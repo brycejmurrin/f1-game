@@ -582,10 +582,11 @@ like the average measured circuit rather than like an extreme:
 | `albert_park` (Australia) | 0.030 | 0.61 | **0.61** |
 | `shanghai` (China) | 0.022 | 0.45 | **0.45** |
 
-Every other circuit stays un-authored at 1.0. That is a deliberate refusal to
-guess: a made-up severity on forty-four circuits would look like data and be
-noise, and the model clamps to 0.4–2.0 so a future authored value cannot break
-a race by a typo.
+Every other circuit stayed un-authored at 1.0 until evidence landed. The first
+calendar pass (2026-09-30) authored eight more from Chronicle rates and Pirelli
+surface cites — see `docs/notes/TYRE-SEVERITY-AUTHORING-2026-09-30.md`. Remaining
+circuits still default to 1.0 rather than inventing noise. The model clamps to
+0.4–2.0 so a future authored value cannot break a race by a typo.
 
 ---
 
