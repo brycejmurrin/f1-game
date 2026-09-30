@@ -9,11 +9,12 @@
 // Why this exists: 128 of the catalog's 297 options are SIGNATURE clones — same
 // cost, same four stat multipliers as the option they name as `equivalent`,
 // existing only to carry a different `visual` recipe. Nothing checked that they
-// do. tests/specs/parts-physics.spec.js:874 hashes each option's mesh and fails
+// do. tests/specs/parts-physics.spec.js (the "distinct consumed mesh signature"
+// test) hashes each option's mesh and fails
 // on a collision, which proves options are not byte-IDENTICAL; a one-vertex
 // 0.001 m change passes it. tyres/sig_alpine_tyre passes it today with a 2.4 mm
 // maximum displacement, because its only real delta (bandWidth 0.085 -> 0.092)
-// is eaten by the band clamp at js/car/car3d.js:579.
+// is eaten by the tyre band clamp in js/car/car3d.js.
 //
 // THE OPTICAL ANCHOR. Every threshold below hangs off one measurement:
 // tools/car/audit-parts.mjs shoots 720x560 at a 34 deg vertical FOV from dist
@@ -115,7 +116,7 @@ export function loadParts() {
 
 // The one way this whole sweep can lie in the direction that looks like a
 // catalog bug. Car3D memoises the flap solve on `aLvl + flapSig(style)`
-// (js/car/car3d.js:1003), and flapSig hashes SIX named fields. This tool is the
+// (js/car/car3d.js), and flapSig hashes SIX named fields. This tool is the
 // first thing that ever builds ~430 aero styles in one process: a field the
 // solver reads but flapSig omits would let two different recipes share one
 // cached record, and the affected options would report as a FALSE INVISIBLE
@@ -148,7 +149,7 @@ export function assertFlapSig(src) {
 
 // ── catalog ────────────────────────────────────────────────────────────────
 // Which team can actually SEE a gated option. Mirrors eligibleTeam() in
-// tools/car/audit-parts.mjs:69-75 — a SIGNATURE built under the wrong team is
+// tools/car/audit-parts.mjs — a SIGNATURE built under the wrong team is
 // rejected by isOptionAvailable() and silently falls back to the default.
 function eligibleTeam(Parts, Teams, option, fallback) {
   const teams = Teams.LIST.filter((t) => Parts.FACTORY_PRESETS[t.id]);
@@ -182,10 +183,10 @@ export function catalogRows(Parts, Teams, fallback = "mclaren") {
 }
 
 // TRAP: an unknown or unavailable id resolves to DEFAULTS with no warning
-// (js/car/parts.js:594), so a typo photographs the default car and reports a
+// (`_resolve` in js/car/parts.js), so a typo photographs the default car and reports a
 // false "identical". Assert the RESOLVED id, which also catches the gate.
 export function assertResolves(Parts, Teams, teamId, cat, optionId) {
-  // The TEAM OBJECT, not team.engine. teamContext (js/car/parts.js:576) reads
+  // The TEAM OBJECT, not team.engine. teamContext (js/car/parts.js) reads
   // .id for the `teams:[...]` gate and only treats a bare string as an engine
   // supplier — so passing the engine makes every SIGNATURE fail its own gate and
   // silently resolve to the category default.
@@ -198,7 +199,7 @@ export function assertResolves(Parts, Teams, teamId, cat, optionId) {
 // The DRS-open pose, which buildComplete cannot give us.
 //
 // buildComplete bakes the movable flaps with no rotation at all — it undoes
-// buildFlapGeom's hinge translation and stops. drawAeroFlaps (js/game.js:1364)
+// buildFlapGeom's hinge translation and stops. drawAeroFlaps (js/game.js)
 // instead spins each element about the car's local X by
 // `zAngle + (xAngle - zAngle) * blend` and then hangs it at its own pivot. So
 // two aero options that differ ONLY in flap travel are byte-identical in the
@@ -766,7 +767,7 @@ export function attribute(M, row, opts = {}) {
 
 // ── clamp scan ─────────────────────────────────────────────────────────────
 // A knob can be registered, consumed, and still dead — because the consumer
-// clamps it away. car3d.js:579 pins the tyre band radius with
+// clamps it away. The tyre band in car3d.js pins the tyre band radius with
 // `Math.max(0.76 * edgeRm, outer - bandWidth)`, which eats almost the whole
 // range the catalog uses for bandWidth; that is why sig_alpine_tyre exists to
 // look different and moves 2.4 mm. That is a CATALOG-WIDE finding, worth more
