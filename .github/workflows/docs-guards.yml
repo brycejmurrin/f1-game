@@ -1,27 +1,21 @@
 name: Docs guards
 
 # THE PROSE-ONLY PR HOLE (2026-09-25). ci.yml ignores docs/**, **/*.md,
-# .claude/**, .cursor/** and .codex/** on push AND pull_request, so a PR that
-# touches only those trees starts no CI at all — yet tooling-fast holds guards
-# OVER exactly those trees (docs-integrity, generated-docs, agent-config,
-# skill-progressive, hooks-documented, …). A prose PR could merge red on them.
+# .claude/**, .cursor/** and .codex/** on push, so a docs push buys no gate —
+# yet tooling-fast holds guards OVER exactly those trees (docs-integrity,
+# generated-docs, agent-config, skill-progressive, hooks-documented, …).
 #
 # This workflow runs ONLY that group (`npm run test:docs-guards`, whose file
-# list lives in tests/groups.json), and its `paths:` is ci.yml's `paths-ignore`
-# list VERBATIM — tests/unit/ci-coverage.test.mjs fails if the two drift.
-# Semantics (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax):
-# `paths-ignore` skips a run only when EVERY changed path matches, `paths` runs
-# when AT LEAST ONE matches — so a mixed PR runs both workflows (this one is
-# ~1 min of node), and a prose-only PR runs this one alone.
+# list lives in tests/groups.json), on EVERY pull request (2026-09-30): it is
+# a required check under the deploy branch's protection, and a required check
+# that never reports blocks the merge for good, so it cannot be path-filtered.
+# The prose list it decides by is ci.yml's push `paths-ignore`, READ from that
+# file, never retyped. A prose-only PR runs the group (~1 min of node); a
+# mixed PR exits before `npm ci`, because ci.yml's guards job runs
+# tooling-fast, a superset, on it.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "docs/**"
-      - "**/*.md"
-      - ".claude/**"
-      - ".cursor/**"
-      - ".codex/**"
 
 permissions:
   contents: read
@@ -41,5 +35,46 @@ jobs:
           persist-credentials: false
           # Same as ci.yml's guards job: a few of these read git history.
           fetch-depth: 0
+          filter: blob:none
+      # PROSE-ONLY PRs RUN THE GROUP (2026-09-30). This ran on 122 of 122 PR
+      # pushes on 2026-09-29, and on a mixed PR ci.yml's guards job already
+      # runs tooling-fast, a superset of this group. The prose list is read
+      # from ci.yml's push `paths-ignore` (ci-coverage.test.mjs pins the
+      # read), never retyped. No base, or a git error, runs the guards.
+      - name: Is every changed path prose?
+        id: prose
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          run_all() { echo "prose=true" >> "$GITHUB_OUTPUT"; echo "RUNNING DOCS GUARDS: $1"; exit 0; }
+          # The test commit's first parent, not the event's base.sha, which
+          # lags one sync behind it (tools/ci/ci-pr-base.sh).
+          PR_BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
+          case "${PR_BASE:-}" in ""|0000000000000000000000000000000000000000) run_all "no base sha" ;; esac
+          git cat-file -e "${PR_BASE}^{commit}" 2>/dev/null || run_all "base $PR_BASE unreachable"
+          CHANGED="$(git diff --name-only "$PR_BASE" "$GITHUB_SHA")" || run_all "git diff failed"
+          printf '%s\n' "$CHANGED" | node -e '
+            const fs = require("fs");
+            const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
+            const push = ci.slice(ci.indexOf("\n  push:\n"), ci.indexOf("\n  pull_request:\n"));
+            const globs = [];
+            for (const l of push.slice(push.indexOf("paths-ignore:")).split("\n").slice(1)) {
+              const m = /^\s+- "([^"]+)"\s*$/.exec(l); if (!m) break; globs.push(m[1]);
+            }
+            if (!globs.length) { console.log("prose=true"); process.exit(0); }
+            // `**/` and `**` become placeholders BEFORE the single-star pass, or
+            // that pass rewrites the `.*` they expand to.
+            const res = globs.map((g) => new RegExp("^" + g.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+              .replace(/\*\*\//g, "\u0001").replace(/\*\*/g, "\u0002").replace(/\*/g, "[^/]*")
+              .replace(/\u0001/g, "(.*/)?").replace(/\u0002/g, ".*") + "$"));
+            const changed = fs.readFileSync(0, "utf8").split("\n").filter(Boolean);
+            const code = changed.filter((f) => !res.some((r) => r.test(f)));
+            console.error(code.length ? `code paths in this PR: ${code.slice(0, 5).join(", ")}` : "every changed path is prose");
+            console.log(`prose=${code.length ? "false" : "true"}`);
+          ' >> "$GITHUB_OUTPUT"
+          tail -1 "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+        if: steps.prose.outputs.prose != 'false'
       - run: npm run test:docs-guards
+        if: steps.prose.outputs.prose != 'false'

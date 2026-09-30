@@ -543,8 +543,16 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    tall), and at UI SIZE 130 % on a 320x568 phone scrollTop jittering 342/343
    every repaint, so HELP never held still long enough to tap. Hiding the thumb
    there for one read clamped the reader back to the top instead. The fades
-   (sf-t / sf-b) still say "there is more"; the doors are the position. */
-#overlay.sf-scroll::before { display: none; }
+   (sf-t / sf-b) still say "there is more"; the doors are the position.
+
+   #menu-buttons is the REAL title scroller (zoom rides `#overlay > *`, so
+   #overlay's own overflow-y is mostly a dead letter). Its children are also
+   grid items, and on a narrow landscape column (568×320, UI 130 %) the 6px
+   accent thumb had no .sheet-body padding lane to sit in — it painted a red
+   strip down the door edges and clipped CAREER / DAILY labels. Same hide,
+   same fades-still-say-more contract. */
+#overlay.sf-scroll::before,
+#menu-buttons.sf-scroll::before { display: none; }
 
 /* ---------- STATE HAS DURATION ----------
    Selection used to be instant everywhere: tap a chip and the ring simply
@@ -1699,6 +1707,11 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
    page has no two-column grid and no one-line budget to protect, so the row can
    simply have the two pixels. */
 #pm-padbrand > div > select { flex-basis: 8.5rem; width: 8.5rem; }
+/* MUSIC & SOUND voice pickers (js/audio/panel.js voiceRow): no chevrons to line
+   up, and the values are voice NAMES — at the row's 8rem even the default read
+   "SYSTEM DEFAL…". Wider, and it shrinks back toward 8rem on a narrow phone.
+   Matched by id, so the pane gains no class. */
+.set-row > div > select[id^="as-v-"] { flex: 0 1 14rem; width: 14rem; min-width: 8rem; }
 .set-row > div > select:disabled,
 .set-row > div > button:disabled { opacity: 0.45; cursor: default; }
 .set-row + .adv-help { margin-top: 0; }
@@ -1801,6 +1814,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   grid-template-areas:
     "uih uih"
     "uis uis"
+    "uihelp uihelp"
     "hudopts hudopts"
     "metrics metrics"
     "renopts renopts"
@@ -1829,6 +1843,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h { grid-area: uih; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: uis; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-help { grid-area: uihelp; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
    a track that is already --slider. */

@@ -60,6 +60,15 @@ const ELEVATION_TRACKS = [
   "jacarepagua",
 ];
 const BANKED_TRACKS = ["zandvoort", "madrid"];
+// APEX_CIRCUITS (comma list) narrows the per-circuit launches below — this file
+// is the node gate's slowest (~5.6 min, 40 circuit builds). Unset = every
+// circuit, which is what CI runs today: the node-suites job has no plan to
+// read (docs/notes/CI-CAPACITY-2026-09-29.md §Not done). Set it locally to
+// check one circuit. The fixed zandvoort/madrid geometry tests always run.
+const SCOPE = (process.env.APEX_CIRCUITS || "").split(",").map((s) => s.trim()).filter(Boolean);
+const inScope = (id) => !SCOPE.length || SCOPE.includes(id);
+const GRADE_RUNS = ELEVATION_TRACKS.filter(inScope);
+const BANK_RUNS = BANKED_TRACKS.filter(inScope);
 const FLAT_LAUNCH = 40;    // m/s, flat-out reference run on the straightest stretch
 const CLIMB_LAUNCH = 10;   // m/s, low-speed run at the steepest climb
 const LAUNCHES = { FLAT_LAUNCH, CLIMB_LAUNCH };
@@ -82,8 +91,8 @@ before(async () => {
       p.catch(() => {});                  // the awaiting test reports it
       queued.set(key, p);
     };
-    for (const id of ELEVATION_TRACKS) add(`grad:${id}`, id, GRADIENT);
-    for (const id of BANKED_TRACKS) add(`bank:${id}`, id, BANKED);
+    for (const id of GRADE_RUNS) add(`grad:${id}`, id, GRADIENT);
+    for (const id of BANK_RUNS) add(`bank:${id}`, id, BANKED);
   }
   g = await createGame(BOOT);
   state = INIT(g);
@@ -215,7 +224,7 @@ test("chase camera follows the road bank instead of showing a sideways wall", as
 // The per-circuit recipes live in tests/helpers/elevation-probes.cjs — ONE copy
 // that a pool worker compiles from source and the serial path calls directly.
 
-for (const id of ELEVATION_TRACKS) {
+for (const id of GRADE_RUNS) {
   test(`${id}: slope gravity behaves + road-following holds on the grade`, async () => {
     const { result: r, errors } = await probed(`grad:${id}`, id, GRADIENT);
     assert.ok(r.relief, `${id}: elevation profile never showed relief`);
@@ -232,7 +241,7 @@ for (const id of ELEVATION_TRACKS) {
   });
 }
 
-for (const id of BANKED_TRACKS) {
+for (const id of BANK_RUNS) {
   test(`${id}: banked corner is drivable and stays on the road`, async () => {
     const { result: r, errors } = await probed(`bank:${id}`, id, BANKED);
     assert.ok(r.relief, `${id}: elevation profile never showed relief`);

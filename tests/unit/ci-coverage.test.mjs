@@ -260,7 +260,14 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
  * ci.yml run, while tooling-fast holds guards over exactly those trees.
  * docs-guards.yml closes it by triggering on the SAME list as `paths:` — so the
  * two lists must stay one list, and the job must run the group that holds them. */
-test("docs-guards.yml triggers on exactly ci.yml's paths-ignore list and runs the prose guards", () => {
+/* EVERY REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30). Branch protection on
+ * the deploy branch requires the fast-tier jobs and docs-guards; a required
+ * check that never reports blocks the merge for good. So neither workflow may
+ * path-filter its pull_request trigger: ci.yml runs the fast tier on a prose
+ * PR too (the node plan keeps it to guards plus seconds), and docs-guards runs
+ * on every PR and exits before `npm ci` unless the diff is prose-only — a
+ * list it READS from ci.yml's push paths-ignore, the one filter that stays. */
+test("docs-guards.yml and ci.yml both run on every pull request; the prose list is read from ci.yml's push filter", () => {
   const docsWorkflow = fs.readFileSync(new URL("../../.github/workflows/docs-guards.yml", import.meta.url), "utf8");
   const listAfter = (text, key, from = 0) => {
     const at = text.indexOf(`\n    ${key}:\n`, from);
@@ -272,15 +279,21 @@ test("docs-guards.yml triggers on exactly ci.yml's paths-ignore list and runs th
   };
   const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\njobs:\n"));
   const pushIgnore = listAfter(onBlock, "paths-ignore");
-  const prIgnore = listAfter(onBlock, "paths-ignore", pushIgnore.at + 1);
   assert.ok(pushIgnore.list.length >= 3, `ci.yml push paths-ignore parsed to ${pushIgnore.list.length} entries`);
-  assert.deepEqual(prIgnore.list, pushIgnore.list, "ci.yml's push and pull_request paths-ignore lists differ");
-  assert.match(onBlock.slice(onBlock.indexOf("pull_request:")), /paths-ignore:/, "the second list must be the pull_request one");
-  const docsPaths = listAfter(docsWorkflow, "paths");
-  assert.deepEqual(docsPaths.list, pushIgnore.list,
-    "docs-guards.yml `paths:` must equal ci.yml's `paths-ignore:` — otherwise some prose-only PR runs no guard at all");
+  assert.ok(pushIgnore.at < onBlock.indexOf("  pull_request:"), "the one paths-ignore list must be the push one");
+  const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  merge_group:"));
+  assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
+    "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required checks");
+  const docsOn = docsWorkflow.slice(docsWorkflow.indexOf("\non:"), docsWorkflow.indexOf("\npermissions:"));
   assert.match(docsWorkflow, /^on:\n  pull_request:\n/m, "docs-guards runs on pull requests");
+  assert.doesNotMatch(docsOn, /\n    paths(-ignore)?:/, "docs-guards must report on every PR too (it is a required check)");
+  assert.match(docsWorkflow, /- name: Is every changed path prose\?/);
+  assert.match(docsWorkflow, /readFileSync\("\.github\/workflows\/ci\.yml", "utf8"\)/, "the prose list is READ from ci.yml, never retyped");
+  assert.match(docsWorkflow, /push\.indexOf\("paths-ignore:"\)/, "…from the push block's paths-ignore, the one filter that stays");
+  assert.match(docsWorkflow, /uses: \.\/\.github\/actions\/setup-apex[^\n]*\n\s+if: steps\.prose\.outputs\.prose != 'false'/,
+    "a mixed PR must exit before npm ci");
   assert.match(docsWorkflow, /run: npm run test:docs-guards\s*$/m);
+  assert.match(docsWorkflow, /run: npm run test:docs-guards\n\s+if: steps\.prose\.outputs\.prose != 'false'/);
 
   const groups = JSON.parse(fs.readFileSync(new URL("../groups.json", import.meta.url), "utf8"));
   const files = groups.groups["test:docs-guards"]?.files || [];
@@ -653,8 +666,13 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
   assert.match(timings, /git fetch -q origin "\$TIMINGS_BRANCH"/);
   // The train's gate runs ci.yml as a reusable workflow, so its junit lands in
   // the PAGES run; a workflow_run on "CI" alone never sees those samples.
-  assert.match(timings, /workflows: \["CI", "Deploy to GitHub Pages"\]/,
-    "the Pages train's gate is the one full smoke run on the tip — collect it too");
+  // THE TRAIN ONLY (2026-09-30): listening to "CI" as well created a run per
+  // PR completion that the job's `if:` then skipped — 119 skipped runs in
+  // seven hours, queued one at a time, after the `branches:` filter landed.
+  assert.match(timings, /workflows: \["Deploy to GitHub Pages"\]/,
+    "the Pages train's gate is the one full smoke run on the tip, and the only trigger worth a run");
+  assert.doesNotMatch(timings, /workflows: \[[^\]]*"CI"/,
+    "a workflow_run on CI fires for every PR completion and skips (2026-09-29: 119 in 7 h)");
 });
 
 test("the ship filter is ONE job whose answer every smoke shard reads", () => {
@@ -897,14 +915,25 @@ test("the deploy-gate count excludes what the renderer job runs", () => {
   assert.equal(gfx.deployGate, false);
 });
 
-test("the push-gate smoke spec is sharded four ways on separate runners (unsharded it hits the 30-minute cap)", () => {
+test("smoke.spec.js is ONE shard on PRs and the Pages call; the wide nightly/dispatch run keeps four", () => {
   // Pages runs 1873/1876 measured smoke.spec.js at 30-37 min on one shared
-  // runner — the job's own cap. The matrix must be a constant four (never a
-  // one-shard fallback on push) and the Smoke step must pass --shard.
+  // runner — on SwiftShader. On llvmpipe (2026-09-16) the four shards did
+  // 0.3-0.9 min of work each, and every job holds one of the account's 20
+  // concurrent slots (docs/notes/CI-CAPACITY-2026-09-29.md). So the matrix is
+  // one shard unless the run is the WIDE one (a whole browser group), which is
+  // a schedule or dispatch with no Pages caller key.
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
-  assert.match(smokeJob, /^\s+shard: \[1, 2, 3, 4\]\s*$/m, "the smoke matrix must be a constant four shards");
-  assert.doesNotMatch(smokeJob, /fromJSON\([^)]*'\[1\]'/, "no one-shard fallback on push");
-  assert.match(smokeJob, /run: npm run test:smoke -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
+  assert.match(smokeJob, /^\s+shard: \$\{\{ fromJSON\(\(inputs\.concurrency_key == '' && \(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)\) && '\[1, 2, 3, 4\]' \|\| '\[1\]'\) \}\}\s*$/m,
+    "four shards exactly when the wide run can happen, one otherwise");
+  assert.match(smokeJob, /run: npm run test:smoke -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/1/);
+  // The one-shard claim rests on a measurement; keep it measured. llvmpipe
+  // samples of smoke.spec.js must fit a single runner's cap with room to spare.
+  const t = JSON.parse(fs.readFileSync(new URL("../data/spec-timings.json", import.meta.url), "utf8"));
+  const walls = (t.specs["tests/specs/smoke.spec.js"]?.s || []).filter((x) => x[1] === "llvmpipe").map((x) => x[2]).sort((a, b) => a - b);
+  assert.ok(walls.length >= 3, "smoke.spec.js has no llvmpipe history — the one-shard decision has no evidence");
+  const capMin = Number(/timeout-minutes: \$\{\{ [^}]*\|\| (\d+) \}\}/.exec(smokeJob)?.[1]);
+  assert.ok(walls.at(-1) * 5 < capMin * 60,
+    `slowest llvmpipe smoke.spec.js run ${walls.at(-1)} s x5 must stay under the ${capMin}-min job cap on one runner`);
   // The nightly / dispatch step: a dispatch runs whichever browser group the
   // `group` input names, and a SCHEDULED run takes tonight's ROTATING group —
   // the runner-side verification for specs the SwiftShader dev box cannot time.
@@ -936,8 +965,11 @@ test("gpu-census runs nightly beside the boot group, with the full check and its
   assert.match(gpuWorkflow, /if: \$\{\{ needs\.plan\.outputs\.census_only != 'true' \}\}/);
   assert.match(gpuWorkflow, /if: \$\{\{ always\(\) && needs\.plan\.outputs\.census_only != 'true' \}\}/,
     "the Verdict must still gate a scheduled run");
-  assert.match(gpuWorkflow, /INPUT_IMAGES: \$\{\{ inputs\.images \|\| 'ubuntu-latest,macos-latest,windows-latest' \}\}/);
-  assert.match(gpuWorkflow, /inputs\.images \|\| '[^']*macos-latest[^']*'/, "the nightly must include the one image with a real GPU");
+  // The NIGHTLY is macOS only (2026-09-29): ubuntu/windows have no hardware
+  // adapter and their software game checks were cancelled at the 30-min cap
+  // every night. A dispatch keeps the three default images.
+  assert.match(gpuWorkflow, /INPUT_IMAGES: \$\{\{ inputs\.images \|\| \(github\.event_name == 'schedule' && 'macos-latest'\) \|\| 'ubuntu-latest,macos-latest,windows-latest' \}\}/);
+  assert.match(gpuWorkflow, /github\.event_name == 'schedule' && '[^']*macos-latest[^']*'/, "the nightly must include the one image with a real GPU");
   const trackUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"/g) || [];
   assert.equal(trackUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must use the plan-resolved track");
   assert.match(gpuWorkflow, /paths: \["\.github\/gpu-census-request\.json"\]/,
@@ -969,10 +1001,10 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\npermissions:"));
   const pushBlock = onBlock.slice(onBlock.indexOf("  push:"), onBlock.indexOf("  pull_request:"));
   const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
-  for (const b of [pushBlock, prBlock]) {
-    assert.match(b, /paths-ignore:\n(?:\s+- "[^"]+"\n)+/, "push and pull_request must carry a paths-ignore list");
-    for (const p of ['"docs/**"', '"**/*.md"', '".claude/**"', '".cursor/**"']) assert.ok(b.includes(`- ${p}`), `${p} missing from paths-ignore`);
-  }
+  assert.match(pushBlock, /paths-ignore:\n(?:\s+- "[^"]+"\n)+/, "push must carry a paths-ignore list");
+  for (const p of ['"docs/**"', '"**/*.md"', '".claude/**"', '".cursor/**"']) assert.ok(pushBlock.includes(`- ${p}`), `${p} missing from paths-ignore`);
+  // pull_request is NOT filtered (2026-09-30): every required check must report on every PR.
+  assert.doesNotMatch(prBlock, /paths-ignore:/, "a path-filtered pull_request trigger leaves prose-only PRs unmergeable under branch protection");
   // The deploy branch is NOT ignored any more: a push there gets the FAST tier
   // (pages.yml is a train and no longer runs on push), so the push must reach
   // this workflow, and the two heavy browser jobs must opt out of that tier by
@@ -1252,4 +1284,35 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
     }
   }
   assert.ok(blocks >= 2, `found only ${blocks} node -e blocks — the extraction regex has stopped matching`);
+});
+
+/* ONE CHECK THAT ALWAYS REPORTS FOR THE CHANGE-AWARE GATE (2026-09-30).
+ * Branch protection requires checks by name, and `selected`'s names carry
+ * its matrix, so it could not be required: #491 merged with a red selected
+ * gate on the merged tree and the tip sat red. `selected-verdict` has one
+ * fixed name, runs whatever `selected` did, and reads the pair the way
+ * poke-train does. Pinned so it cannot quietly stop covering a case. */
+test("selected-verdict: one fixed-name check that always judges the change-aware gate", () => {
+  const job = ciWorkflow.slice(ciWorkflow.indexOf("\n  selected-verdict:\n"), ciWorkflow.indexOf("\n  baseline-trial:\n"));
+  assert.ok(job.length > 0, "the selected-verdict job is gone");
+  assert.match(job, /^    name: Selected specs \(verdict\)$/m, "the required-check name; branch protection names it");
+  assert.match(job, /^    needs: \[select, selected\]$/m);
+  assert.match(job, /^    if: \$\{\{ always\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
+    "always(): a skipped `selected` must still be judged; the events are select's own");
+  // The reading: select must pass; selected passes, or is skipped with nothing dropped.
+  assert.match(job, /SELECT: \$\{\{ needs\.select\.result \}\}/);
+  assert.match(job, /SELECTED: \$\{\{ needs\.selected\.result \}\}/);
+  assert.match(job, /DROPPED: \$\{\{ needs\.select\.outputs\.dropped \}\}/);
+  assert.match(job, /success\) ;;\n\s+\*\) echo "::error::the selection itself did not pass/);
+  assert.match(job, /skipped\)\n\s+if \[ "\$\{DROPPED:-0\}" = "0" \]; then/, "an empty plan with nothing dropped is a pass");
+  assert.match(job, /elif \[ "\$CALLED" = "true" \]; then echo "::warning::/, "on the train an unaffordable plan warns");
+  assert.match(job, /else echo "::error::the plan is empty because \$\{DROPPED\} routed spec\(s\) were unaffordable[^\n]*; exit 1/,
+    "on a push or PR an unaffordable plan is a red — the renderer case that poked a train with no backend booted");
+  assert.match(job, /\*\) echo "::error::selected specs \$SELECTED"; exit 1 ;;/);
+  // It joins the Pages aggregate like every other job (no needs on the renderer chain).
+  const verdict = report.jobs.find((j) => j.name === "selected-verdict");
+  assert.ok(verdict && verdict.deployGate, "selected-verdict must be in the deploy gate");
+  // The matrix job's name still varies, which is the whole reason this exists.
+  assert.match(ciWorkflow, /^    name: Selected specs \(change-aware gate\)$/m);
+  assert.match(ciWorkflow, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
 });

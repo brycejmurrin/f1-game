@@ -184,6 +184,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/log-namespaces.test.mjs",
   "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
@@ -192,6 +193,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/glx-occlusion.test.mjs",
+  // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
+  "tests/unit/glx-output-target.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/glx-multidraw.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
@@ -211,6 +214,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-native.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
+  "tests/unit/desktop-builder-config.test.mjs",
+  "tests/unit/desktop-version.test.mjs",
+  "tests/unit/desktop-notices.test.mjs",
   "tests/unit/ship-filter-paths.test.mjs",
   // Capacitor Android (task 45): frozen identity, config shape, manifest,
   // Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.
@@ -296,6 +302,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/legend-parts-seed.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
+  "tests/unit/node-plan.test.mjs",
+  "tests/unit/ci-pr-base.test.mjs",
+  "tests/unit/circuit-scope.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
   // the bounded rolling record, the CI-bucket fallback and the growth flag.
   // Pure fixtures plus one pass over the committed tests/data/spec-timings.json,

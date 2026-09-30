@@ -29,8 +29,22 @@ on:
     # REUSABLE workflow, so the train's gate uploads its junit into the Pages
     # run — and a `workflow_run` on "CI" never fires for it. The train is the
     # one gate that runs the whole smoke suite on the deploy tip every time.
-    workflows: ["CI", "Deploy to GitHub Pages"]
+    # THE TRAIN ONLY (2026-09-30). With "CI" here too, every PR run's
+    # completion still created a run of this workflow that the job's `if:`
+    # then skipped — 119 skipped runs in seven hours on 2026-09-29, each one
+    # queued in the one-at-a-time group below, AFTER the `branches:` filter
+    # was added. The train runs on the deploy branch by construction and is
+    # the one gate that runs the whole smoke suite, so it is the record.
+    workflows: ["Deploy to GitHub Pages"]
     types: [completed]
+    # FILTERED AT THE TRIGGER, not only by the job's `if:` (2026-09-29). Every
+    # PR's CI run fired this workflow and the job then skipped: 354 runs in
+    # 41 h, 208 skipped and 79 cancelled in this workflow's one-at-a-time
+    # queue (docs/notes/CI-CAPACITY-2026-09-29.md). `branches` on a
+    # workflow_run matches the triggering run's head branch, the same test as
+    # the `if:` below, which stays as the dispatch-aware guard.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#running-a-workflow-based-on-the-branch-of-another-workflow
+    branches: [claude/f1-game-project-26h3ng]
   workflow_dispatch:
 
 # Read the triggering run's artifacts; write only the side branch below.

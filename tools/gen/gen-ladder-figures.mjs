@@ -9,7 +9,10 @@
 // #171 (+6 files) and PR #172 (the pin) were each green alone and the deploy
 // tip was red for half an hour on their union (2026-09-22). The derived
 // figures around the pin ("the other 73", "281 of 296", "the remaining 15")
-// were not pinned at all and drifted on their own.
+// were not pinned at all and drifted on their own. Merge #476 (2026-09-30)
+// did the same on the ship tip: a unit file landed, the figures stayed at
+// 300 of 388 / gate 371, and Structural guards failed until this generator
+// rewrote them to 301 of 389 / gate 372.
 //
 // One generator owns every one of those numbers now:
 //   TARGET     docs/notes/PREPUSH-GATE-LADDER.md — the ladder table lives in a
