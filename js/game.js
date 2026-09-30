@@ -3921,10 +3921,11 @@ function studioOpen(n, info) {
   if (_studio) studioClose(_studio.n);
   const real = info && info.real;
   // None for: a race joined mid-way or watched (not your car leaving the garage), a
-  // habitual skipper (the flyby's short cut), a hidden tab or a headless run (no
-  // frames, so its clock would not run).
-  const off = (real && (real.watch || real.startLap > 1)) || loadingScreen.nextFlyMs() === LoadingScreen.SHORT_FLY_MS ||
-    headlessMode || document.hidden;
+  // hidden tab or a headless run (no frames, so its clock would not run). EVERY
+  // other RACE! plays it — a habitual skipper included: the skip streak shortens
+  // the FLYBY, and a tap skips this too (it was dropped at 3 skips, which hid it
+  // from exactly the players testing it).
+  const off = (real && (real.watch || real.startLap > 1)) || headlessMode || document.hidden;
   const ms = off ? 0 : setupCam.startDriveOut();
   if (ms > 0) { _studio = { at: performance.now(), ms, n, info, cardUp: !!(gfx.warming && gfx.warming()) }; setupPreviewOn = true; }
   if (_studio && !_studio.cardUp) loadingScreen.garage(info, () => studioSkip(n));

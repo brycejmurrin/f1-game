@@ -132,7 +132,7 @@ test('the garage drive-out owns the screen with no card, and the card arrives on
     vm.createContext(c); vm.runInContext(src, c);
     const took = c.introGarage(c.go);
     for (let i = 0; i < 400; i++) await Promise.resolve();
-    if (mode === 'off' || mode === 'watched' || mode === 'skipper' || mode === 'hidden') {
+    if (mode === 'off' || mode === 'watched' || mode === 'hidden') {
       assert.equal(took, false, mode + ': no drive-out, so raceIntro flies at once');
       assert.equal(c.setupPreviewOn, false, mode);
       continue;
@@ -145,7 +145,7 @@ test('the garage drive-out owns the screen with no card, and the card arrives on
     }
     assert.equal(events[0], 'garage', mode + ': the drive-out owns the screen first, with no card');
     assert.equal(c.setupPreviewOn, false, mode + ': the garage preview is down afterwards');
-    if (mode === 'ready') assert.deepEqual(events, ['garage', 'out', 'card', 'fly:world'], 'the car out, then the card, then the flyby');
+    if (mode === 'ready' || mode === 'skipper') assert.deepEqual(events, ['garage', 'out', 'card', 'fly:world'], mode + ': the car out, then the card, then the flyby (a habitual skipper still gets the drive-out: the streak shortens the flyby only)');
     else if (mode === 'skip') assert.deepEqual(events, ['garage', 'out', 'card', 'skip:world'], 'a tap ends the drive-out at once and marks the run skipped');
     else assert.ok(!events.some((e) => e.startsWith('fly')) && events.includes('stop'), 'a quit mid-drive-out lowers the screen and flies nothing');
   }
