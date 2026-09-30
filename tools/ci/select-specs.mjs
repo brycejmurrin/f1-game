@@ -471,6 +471,11 @@ export const CIRCUIT_FILTERED_TESTS = new Set([
   // pit-complex is NOT scoped: its mouth test counts qualifying circuits
   // across the roster and its other tests build fixed circuits regardless.
   "tests/unit/shared-track-foundation-characterization.test.cjs",
+  // Second pass (2026-09-30, measured on #510's scoped run: lamp-fixture-anchor
+  // 54 s, pit-signs 69 s, props-over-road 68 s of a 344 s sweeps step).
+  "tests/unit/lamp-fixture-anchor.test.mjs",
+  "tests/unit/pit-signs.test.mjs",
+  "tests/unit/props-over-road.test.mjs",
 ]);
 // Paths that cannot change what a browser spec or a per-circuit loop sees, so
 // they do not break a circuit scope: prose, and node unit files other than

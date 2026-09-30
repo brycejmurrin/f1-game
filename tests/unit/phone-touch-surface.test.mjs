@@ -102,9 +102,16 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   const ov = css("css/overlays.css");
   assert.equal(decl(ov, "body:not(.desktop) .dock .touchbtn", "width"), "var(--tap)");
   assert.equal(decl(ov, /^body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
-  for (const id of ["#pausebtn", "#btn-cam", "#hud-restore"]) {
-    assert.equal(decl(ov, id, "height"), "var(--tap)", `${id} rides the --tap ladder`);
+  // The CAM and PAUSE buttons follow HUD SIZE (css/hud.css --tap-hud), but
+  // only UP: --hud-btn-z is the top band's zoom floored at 1, so --tap-hud
+  // never drops under the --tap rung. The restore eye stays on --tap itself.
+  for (const id of ["#pausebtn", "#btn-cam"]) {
+    assert.equal(decl(ov, id, "height"), "var(--tap-hud)", `${id} rides --tap-hud (HUD SIZE, floored at --tap)`);
   }
+  assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
+  const hudCss = css("css/hud.css");
+  assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
+  assert.match(decl(hudCss, ":root", "--hud-btn-z"), /^max\(1, /, "the HUD zoom can grow the buttons, never shrink them");
 });
 
 test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {

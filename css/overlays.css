@@ -657,8 +657,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   top: calc(8px + var(--sat));
   right: calc(10px + var(--sar));
   z-index: 14;
-  /* in-race chrome, but still a thumb target — on the ladder like the rest */
-  width: var(--tap); height: var(--tap);
+  /* in-race chrome, but still a thumb target — on the ladder like the rest.
+     --tap-hud (css/hud.css): it follows HUD SIZE with the timing tower beside
+     it, and never shrinks below --tap. */
+  width: var(--tap-hud); height: var(--tap-hud);
+  font-size: calc(100% * var(--hud-btn-z));
   border-radius: var(--r-md);
   padding: 0;
 }
@@ -669,13 +672,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* DERIVED, not 58: this used to be 10 + --tap + 4 with --tap hard-coded at
      its 44px desktop value, so on touch (--tap: 52px) CHASE overlapped the
      pause button by 4px on every phone. */
-  right: calc(10px + var(--tap) + 4px + var(--sar));
+  right: calc(10px + var(--tap-hud) + 4px + var(--sar));
   z-index: 14;
-  height: var(--tap);
-  min-width: 76px;
-  padding: 0 var(--gap);
+  height: var(--tap-hud);
+  min-width: calc(76px * var(--hud-btn-z));
+  padding: 0 calc(var(--gap) * var(--hud-btn-z));
   border-radius: var(--r-md);
-  font-size: var(--fs-micro);
+  font-size: calc(var(--fs-micro) * var(--hud-btn-z));
   font-weight: 700;
   letter-spacing: var(--ls-3);
 }
@@ -726,8 +729,8 @@ body.hud-hidden #hud-restore::after {
   position: fixed;
   /* Same derivation as #btn-cam above — 52 was 8 + --tap at 44px, so the
      picker overlapped #pausebtn by 8px on touch. */
-  top: calc(8px + var(--tap) + var(--sat));
-  right: calc(10px + var(--tap) + 4px + var(--sar));
+  top: calc(8px + var(--tap-hud) + var(--sat));
+  right: calc(10px + var(--tap-hud) + 4px + var(--sar));
   z-index: 24;
   display: flex; flex-wrap: wrap;
   --balance-basis: 84px; --balance-min: 84px;

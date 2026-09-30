@@ -105,10 +105,11 @@ test("pause owns paused navigation: #campicker stands down with the dim sheet", 
   assert.match(hud, /body:has\(\.screen\.dim:not\(\[hidden\]\)\) #campicker \{\s*display:\s*none/);
 });
 
-test("sector box still clears unscaled #pausebtn via --tap / --hud-z", () => {
+test("sector box still clears #pausebtn via --tap-hud / --hud-z", () => {
   const hud = read("css/hud.css");
+  // --tap-hud is #pausebtn's own height (it follows HUD SIZE, floored at --tap).
   assert.match(hud,
-    /#hud-sectors \{[\s\S]*?top:\s*calc\(\(8px \+ var\(--tap\) \+ 4px \+ var\(--sat\)\) \/ var\(--hud-z\)\)/);
+    /#hud-sectors \{[\s\S]*?top:\s*calc\(\(8px \+ var\(--tap-hud\) \+ 4px \+ var\(--sat\)\) \/ var\(--hud-z\)\)/);
 });
 
 /* THE TOUCH-CONTROL TRANSPARENCY LADDER, and the specificity trap under it.

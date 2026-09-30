@@ -151,10 +151,13 @@ on:
     # longer runs on push — it is a release train (three ticks an hour) that
     # calls this workflow for the FULL gate on the tip. A push to the deploy
     # branch gets the FAST tier here instead: guards, node suites, the parts
-    # census, driving-model and the change-aware selection, in its own
-    # concurrency group so sessions never cancel each other's verdict. The
-    # browser smoke shards, the geometry sweeps and the renderer jobs are the
-    # train's (and ready PRs'). The tier is decided by ONE expression,
+    # census, driving-model and the change-aware selection, sharing the
+    # `ship-push` concurrency group so a burst of tip pushes cancels
+    # superseded runs instead of queueing them. The train is a different
+    # group (pages.yml's unique concurrency_key) and is never cancelled by a
+    # later push. The browser smoke shards, the geometry sweeps and the
+    # renderer jobs are the train's (and ready PRs'). The tier is decided by
+    # ONE expression,
     # repeated on the heavy jobs (smoke, ship-filter, sweeps):
     #   inputs.concurrency_key == '' && (<deploy-branch push> || <draft PR>)
     # (a Pages call always carries a concurrency_key, so it is never fast).
@@ -208,7 +211,7 @@ on:
   # smoke.spec.js in FOUR shards (~8 min); a deploy-branch push is the fast
   # tier and does not run it.
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "17 4 * * *"
   workflow_dispatch:
     inputs:
       # Any browser group from package.json on the 4-shard matrix (default =
@@ -317,10 +320,13 @@ concurrency:
   # is queued behind exactly that. Run 2758 (2026-09-08) ended `cancelled` at
   # 20 min with no job over its cap and nothing failing, which is the shape
   # this produces.
-  # A push to the DEPLOY branch (the fast tier) also gets its own group: several
-  # sessions push there minutes apart, and a cancelled fast run would hand the
-  # session whose verdict it was a `cancelled` for someone else's commit.
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng')) && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
+  # A push to the DEPLOY branch (the fast tier) shares ONE group with
+  # cancel-in-progress: unique per-run groups queued 8-9 fast-tier runs at
+  # once against ~20 slots (docs/notes/CI-ANALYSIS-2026-09-29.md). Newest-wins
+  # cancels the superseded push. The run that is DEPLOYING is not in this
+  # group: pages.yml always passes a unique concurrency_key, and its own
+  # `pages-gate-*` group has cancel-in-progress false.
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && 'ship-push') || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
@@ -428,11 +434,76 @@ jobs:
       - name: What does this gate cover?
         run: node tools/ci/ci-coverage.mjs
 
+# pick-unit-slices github-output: assert via temp GITHUB_OUTPUT (2026-09-29)
+  # retrigger: 36644334828 + 36645018392 cancelled queued node slices (zero failures)
+  # WHICH NODE SLICES DOES THIS DIFF NEED? (2026-09-29 follow-up). Browser
+  # selection is change-aware; the node matrix was not — every PR paid for all
+  # six node slices (#508) + driving-model. tools/ci/pick-unit-slices.mjs maps
+  # paths → runners with FAIL-SAFE → all; node-plan.mjs skips scripts inside a
+  # spun runner. A scenery-only diff keeps guards + vm-a1/vm-a2 and skips the
+  # rest; editing a file owned by a skipped slice still selects that slice.
+  # Schedule and dispatch run --all. Empty matrix is never emitted:
+  # any_node=false skips the job via `if:`, so fromJSON always sees at least
+  # one row when the job runs. Landed AFTER ci-verdict so skipped slices do
+  # not block branch protection.
+  unit-plan:
+    name: Plan node unit slices
+    runs-on: ubuntu-latest
+    if: ${{ inputs.fast_tier_run == '' }}
+    timeout-minutes: 5
+    outputs:
+      slices: ${{ steps.plan.outputs.slices }}
+      any_node: ${{ steps.plan.outputs.any_node }}
+      driving: ${{ steps.plan.outputs.driving }}
+      reason: ${{ steps.plan.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Plan node unit slices
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          # Schedule / dispatch: no meaningful diff — run every slice.
+          case "$EVENT" in
+            schedule|workflow_dispatch)
+              node tools/ci/pick-unit-slices.mjs --all --github-output
+              exit 0
+              ;;
+          esac
+          BASE=""
+          case "$EVENT" in
+            pull_request) BASE="${PR_BASE:-}" ;;
+            push) BASE="${PUSH_BEFORE:-}" ;;
+          esac
+          case "${BASE}" in
+            ""|0000000000000000000000000000000000000000)
+              echo "no base SHA — fail-safe --all" >&2
+              node tools/ci/pick-unit-slices.mjs --all --github-output
+              exit 0
+              ;;
+          esac
+          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "base $BASE unreachable — fail-safe --all" >&2
+            node tools/ci/pick-unit-slices.mjs --all --github-output
+            exit 0
+          fi
+          node tools/ci/pick-unit-slices.mjs --since "$BASE" --github-output
+
   node-suites:
     name: Pure-node unit suites
+    needs: unit-plan
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
-    if: ${{ inputs.fast_tier_run == '' }}
+    # Also skipped when the unit-plan says this diff needs no node matrix slice
+    # (ci-verdict treats that skip as a pass).
+    if: ${{ inputs.fast_tier_run == '' && needs.unit-plan.outputs.any_node == 'true' }}
     # THREE RUNNERS, NOT ONE (2026-09-16). This job ran its scripts one after
     # another and measured 11.3 min on 40 of 40 runs — the floor of the fast
     # tier, hence of every deploy push, and never shortened by anything. The
@@ -454,21 +525,10 @@ jobs:
         # tests/helpers/vm-page.js (tools/ci/twinned-specs.mjs ADAPTED), one
         # child process per spec. Its own slice because a spec that builds a
         # circuit costs seconds to minutes each and the `fast` slice is seconds.
-        # THREE SLICES, NOT FIVE (2026-09-29). Every job holds one of the
-        # account's 20 concurrent slots, and on 2026-09-29 200-290 jobs sat
-        # queued behind them for seven hours (docs/notes/CI-CAPACITY-2026-09-29.md).
-        # Five slices measured 5.6 / 4.0 / 2.2 / 1.8 / 2.6 min of work; packed by
-        # that into three, each is within ~15 s of vm-a, which was already the
-        # longest — same wall, two fewer runners per run.
-        # SIX SLICES (2026-09-30). The account moved to Pro (40 slots), which
-        # made the wall the cost again, and the wall was vm-a: one file, 40
-        # circuit builds, 5.6 min, last to finish in 42 of 56 runs. It now
-        # runs as two shards of the same script (APEX_CIRCUIT_SHARD=i/2,
-        # tools/lib/circuit-scope.cjs inShard; the halves are a partition, so the two
-        # arms together are exactly the old vm-a), game-vm-b is two
-        # time-balanced tests/groups.json partitions (367 s each measured
-        # locally at --jobs=4), and vm-page / node-slow stand alone. Expected
-        # wall ≈ 3 min against 5.6, three more runners of ~10 s setup each.
+        # SIX SLICES (2026-09-30, #508). Pro plan (40 slots) made wall the cost
+        # again: vm-a was last to finish in 42 of 56 runs. It now runs as two
+        # shards (APEX_CIRCUIT_SHARD=i/2), game-vm-b is two time-balanced
+        # partitions, and vm-page / node-slow stand alone. Expected wall ≈ 3 min.
         # The slice names are the deploy branch's REQUIRED CHECKS
         # ("Pure-node unit suites (<slice>)"): renaming one means editing the
         # branch-protection rule in the same breath, or every PR blocks.
@@ -478,7 +538,10 @@ jobs:
         #   vm-b2  game-vm-b2                       ~2.4 min (measured)
         #   page   vm-page                          2.6 min
         #   slow   node-slow                        2.2 min
-        slice: [vm-a1, vm-a2, vm-b1, vm-b2, page, slow]
+        # Matrix rows come from unit-plan / pick-unit-slices (one `{slice}` per
+        # needed row). The FULL set is those six names; the plan emits a subset.
+        # node-plan.mjs (step below) still skips scripts INSIDE a spun runner.
+        include: ${{ fromJSON(needs.unit-plan.outputs.slices) }}
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -1348,9 +1411,12 @@ jobs:
 
   driving-model:
     name: Driving model (characterization traces)
+    needs: unit-plan
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
-    if: ${{ inputs.fast_tier_run == '' }}
+    # Also skipped when unit-plan says this diff does not need the characterization
+    # (ci-verdict treats that skip as a pass).
+    if: ${{ inputs.fast_tier_run == '' && needs.unit-plan.outputs.driving == 'true' }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1625,6 +1691,80 @@ jobs:
           name: playwright-artifacts-renderer-macos
           path: |
             census-macos.json
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # EMULATED-VR (IWER) — path-gated. The xr-emulated Playwright project and
+  # `npm run test:xr` existed but sat in no CI job; a js/xr/ change only ran
+  # the Node xr-phase0 suite under steering-unit. Two jobs like renderer-*:
+  # a cheap ubuntu filter, then the IWER suite only when the diff reaches XR
+  # (or on dispatch). Skipped on the Pages call and on the nightly schedule
+  # (the rotation excludes test:xr for the same reason gfx is excluded).
+  xr-filter:
+    name: Does this diff touch WebXR?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}
+    outputs:
+      xr: ${{ steps.filter.outputs.xr }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Does this diff touch WebXR?
+        id: filter
+        env:
+          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -u
+          run_all() { echo "xr=true" >> "$GITHUB_OUTPUT"; echo "RUNNING test:xr: $1"; exit 0; }
+          case "$EVENT" in
+            push|pull_request) ;;
+            *) run_all "event is '$EVENT' (dispatch forces the suite)" ;;
+          esac
+          case "${BEFORE:-}" in
+            ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push)" ;;
+          esac
+          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable"
+          CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
+          echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/xr/|tests/specs/vr-emulated\.spec\.js$|tests/helpers/iwer-install\.mjs$|tests/vendor/iwer-2\.5\.0\.min\.js$|playwright\.config\.js$|\.github/workflows/ci\.yml$)'; then
+            echo "xr=true" >> "$GITHUB_OUTPUT"
+            echo "RUNNING test:xr: the diff touches WebXR, IWER, or the xr-emulated project"
+          else
+            echo "xr=false" >> "$GITHUB_OUTPUT"
+            echo "SKIPPING test:xr: nothing in this diff reaches WebXR"
+          fi
+
+  xr:
+    name: Emulated VR (IWER / xr-emulated)
+    needs: xr-filter
+    if: needs.xr-filter.outputs.xr == 'true'
+    runs-on: ubuntu-latest
+    # Unmeasured on CI; local IWER suite is minutes. Cap generously.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
+      - name: Emulated VR (test:xr)
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+        run: npm run test:xr -- --timeout=600000
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-artifacts-xr
+          path: |
             artifacts/test-results-*/
             artifacts/report-*/
           retention-days: 7
@@ -2051,7 +2191,7 @@ jobs:
     name: Poke the release train
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [guards, node-suites, sweeps-parts, driving-model, select, selected]
+    needs: [guards, unit-plan, node-suites, sweeps-parts, driving-model, select, selected]
     # Fast tier only (a deploy-branch push, never a Pages call), and only when
     # every fast-tier job passed. A red fast tier pokes nothing; the cron
     # backstop still gates the tip later and fails it visibly.
@@ -2075,7 +2215,11 @@ jobs:
     #
     # Deliberately NOT gated on `reason`: an `infra` or `docs` plan can be
     # honestly empty, and those are the diffs this branch takes all day.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.node-suites.result == 'success' && needs.sweeps-parts.result == 'success' && needs.driving-model.result == 'success' && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) }}
+    #
+    # SKIPPED node-suites / driving-model ARE a pass when unit-plan said the
+    # slice was not needed (path-filtered). A skip for any other reason (cancelled
+    # parent, plan failure) is not a poke.
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.unit-plan.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.unit-plan.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.unit-plan.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) }}
     permissions:
       actions: write
       contents: read
@@ -2106,3 +2250,40 @@ jobs:
         run: |
           gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
           echo "Poked pages.yml on \`$GITHUB_REF_NAME\` for \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ONE STABLE REQUIRED CHECK. GitHub treats a skipped required check as
+  # blocking, so path-filtered jobs cannot be required by name. This job
+  # always runs when the workflow was not cancelled, and fails if any needed
+  # job failed or was cancelled. A needed job skipped by its `if:` is a pass.
+  # Make branch protection require only this job's name (`CI`).
+  # tools/ci/ci-verdict.mjs — land this BEFORE any node-slice `if:` skips.
+  ci-verdict:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - guards
+      - unit-plan
+      - node-suites
+      - sweeps-parts
+      - sweeps
+      - ship-filter
+      - smoke
+      - driving-model
+      - renderer-filter
+      - renderer-macos
+      - xr-filter
+      - xr
+      - select
+      - selected
+      - baseline-trial
+      - poke-train
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Aggregate job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: node tools/ci/ci-verdict.mjs

@@ -29,6 +29,7 @@ const GROUPS = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", imp
 export const EXCLUDED = {
   "test": "the whole suite — hours, and the point of a rotation is to fit one night",
   "test:gfx": "macOS/Metal, and it already has its own renderer-macos job",
+  "test:xr": "IWER emulated-VR — path-gated xr job in ci.yml, not a nightly rotation slot",
   "test:baseline": "the golden trial runs itself on the nightly, non-blocking",
   "test:gallery": "a screenshot gallery with no assertions — nothing to go red",
   "test:render": "empty group (its specs live in the renderer job)",
