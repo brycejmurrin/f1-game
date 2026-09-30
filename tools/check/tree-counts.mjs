@@ -97,7 +97,7 @@ export async function waitNoPolling() {
  *  the `async waitForTimeout(_ms)` method on tests/helpers/vm-page.js's page
  *  adapter — which sleeps for nothing, it only exists so an unmodified spec
  *  compiles against the VM — and a `waitForTimeout(300)` inside the comment at
- *  menu-keyboard.spec.js:414 that explains why that sleep was DELETED. Both
+ *  tests/specs/menu-keyboard.spec.js that explains why that sleep was DELETED. Both
  *  pushed the ceiling the wrong way. A real sleep is always `page.` or
  *  `racePage.`-qualified, so requiring the dot counts sleeps and nothing else;
  *  the ceiling came DOWN by two when this landed. */

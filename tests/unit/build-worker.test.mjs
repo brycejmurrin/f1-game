@@ -124,3 +124,14 @@ test("a worker error answers an error message, never a throw", () => {
   assert.equal(worker.posted[0].type, "error");
   assert.equal(worker.posted[0].seq, 3);
 });
+
+test("BUILD IN BACKGROUND's write flips exactly what enabled() (and loadTrackStepped) reads", () => {
+  const mem = new Map();
+  main.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) };
+  const C = main.TrackBuildClient;
+  assert.equal(C.enabled(), false, "unset reads OFF");
+  C.set(false); assert.equal(mem.get("apex26.buildWorker"), "0"); assert.equal(C.enabled(), false);
+  mem.set("apex26.buildWorker", "1"); assert.equal(C.enabled(), true, "\"1\" is on");
+  mem.set("apex26.buildWorker", "0"); assert.equal(C.enabled(), false);
+  delete main.localStorage;
+});
