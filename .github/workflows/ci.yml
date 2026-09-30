@@ -177,12 +177,29 @@ on:
     # `ready_for_review` is not a default type; the other three are.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".claude/**"
-      - ".cursor/**"
-      - ".codex/**"
+    # NO paths-ignore HERE (2026-09-30). Branch protection on the deploy
+    # branch requires this workflow's fast-tier jobs, and a required check
+    # that never reports blocks the merge for good — so a prose-only PR,
+    # which the old filter kept out of this workflow entirely, could never
+    # merge. Every PR runs the fast tier now; the per-PR node plan
+    # (tools/ci/node-plan.mjs) skips the multi-minute scripts on a diff that
+    # reaches none of them, so a docs PR costs guards plus seconds. The push
+    # filter above stays: a docs push to the deploy branch buys no gate.
+  # MERGE QUEUE (2026-09-30). On 2026-09-29 the deploy branch's log was ~80 %
+  # `sync-pr` base merges: fifteen open PRs each re-merged the tip every time
+  # it moved, every re-merge bought a fresh PR run (122 green, 39 cancelled by
+  # the next re-merge in one afternoon), and two PRs regenerating the ladder
+  # figures against different bases merged cleanly and reddened the branch 14
+  # times. A merge queue tests the MERGED result once and lands it; the
+  # per-PR sync loop stops. This event is what the queue fires; the heavy
+  # jobs' tier expression reads it as the full tier (it is neither a deploy
+  # push nor a draft PR), the filters fail safe on an event they do not know,
+  # and `select`/`poke-train` stay on push and pull_request. Enabling it is a
+  # repository setting (branch protection on the deploy branch: require the
+  # fast-tier jobs, require the queue); this trigger is the half in code.
+  # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group
+  merge_group:
+    types: [checks_requested]
   # NIGHTLY (2026-09-01): the wide browser run — the boot group (73 tests)
   # across 4 shards — moved here from every push. Its whole recorded failure
   # history in this file's header is timeouts on starved runners, never an
@@ -340,8 +357,22 @@ jobs:
       # measured 3.1-4.9 min one at a time on this job and 122 s at --jobs=3 on
       # a 4-core box, which is what a public runner is (4 vCPU). Same tool, same
       # START/PASS/FAIL lines; the npm script stays serial for a loaded dev box.
+      # DERIVED DOC FIGURES ARE ADVISORY OFF A PULL REQUEST (2026-09-30). The
+      # spec/unit counts and the "N of M" ladder are generated; two PRs that
+      # each add a test regenerate them identically against their own base,
+      # merge cleanly, and leave the tip one file short — 14 of 15 deploy-branch
+      # reds on 2026-09-29, a red no push can clear but a regeneration commit,
+      # read by every session as "the tip is broken". Same answer as the
+      # ratchet step's `--advisory` on push: a pull request still FAILS on a
+      # stale figure (it must regenerate); the merged tip and the train WARN,
+      # and the next PR regenerates. tests/unit/docs-integrity.test.mjs reads
+      # the env and pins this expression.
       - name: Structural guards
-        run: node tools/ci/tooling-fast.mjs --jobs=3
+        env:
+          APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
+        # --jobs=4 (2026-09-30): the job measured 209 s at --jobs=3 on #499's
+        # run; a public runner has 4 vCPU and the files are independent.
+        run: node tools/ci/tooling-fast.mjs --jobs=4
       # RATCHET RAISES, SAID OUT LOUD (2026-09-22). The commit hook absorbs a
       # ceiling raise of up to 40 lines by rewriting tests/data/ratchets.json
       # into the same commit, so a raise reaches CI as one changed number in a
@@ -443,26 +474,68 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The plan step below diffs a pull request against its base sha,
+          # which a depth-1 clone cannot show. Same trade as sweeps-parts.
+          fetch-depth: 0
+          filter: blob:none
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # WHICH SCRIPTS DOES THIS PR NEED? (2026-09-30) On a pull request the
+      # four multi-minute scripts (game-vm-a, game-vm-b, vm-page, node-slow)
+      # run only when tools/ci/pick-tests.mjs routes the PR's diff to a group
+      # they replay, and a circuit-only diff narrows elevation-tracks-vm to the
+      # circuits that moved (APEX_CIRCUITS). The seconds-long scripts always
+      # run. A deploy-branch push, a Pages call, a dispatch or the nightly run
+      # EVERYTHING, exactly as before: a merge is gated whole before the train
+      # ships it, so the `fast_tier_run` reuse contract is unchanged. Anything
+      # the planner cannot route runs everything (tools/ci/node-plan.mjs).
+      - name: Plan the slices for this diff
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          PLAN="${RUNNER_TEMP:-.}/node-plan.sh"
+          # The test commit's first parent, not the event's base.sha, which
+          # lags one sync behind it (tools/ci/ci-pr-base.sh).
+          BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
+          if [ "$EVENT" = "pull_request" ] && [ -n "${BASE:-}" ] && git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "plan base: $BASE (event base.sha ${PR_BASE:-none})"
+            node tools/ci/node-plan.mjs --since "$BASE" --sh > "$PLAN"
+            node tools/ci/node-plan.mjs --since "$BASE"
+          else
+            node tools/ci/node-plan.mjs --all --sh > "$PLAN"
+            echo "not a pull request (or no base): every script runs"
+          fi
       - name: Pure-node unit suites
         run: |
           # ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
+          # `planned <script>` is the plan step's predicate (true on every
+          # non-PR event); a skip prints SKIPPED <script> and the reason.
+          . "${RUNNER_TEMP:-.}/node-plan.sh"
           case "${{ matrix.slice }}" in
             vm-a)
               # The Node VM harness: js/game.js headless, exact parity with the
               # physics baseline (tests/unit/physics-characterization-vm.test.mjs).
               # Two partitions of test:game-vm on two runners (see the matrix).
+              if planned test:game-vm-a; then
               npm run test:game-vm-a
+              fi
               ;;
             page-slow)
+              if planned test:vm-page; then
               npm run test:vm-page
+              fi
               # The three raster/spawn-heavy car files, out of the edit loop
               # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
+              if planned test:node-slow; then
               npm run test:node-slow
+              fi
               ;;
             vm-b)
+              if planned test:game-vm-b; then
               npm run test:game-vm-b
+              fi
               # The former `fast` slice: seconds each, so they ride with vm-b.
               npm run test:net-unit
               npm run test:service-worker
@@ -515,6 +588,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          filter: blob:none
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       # DOES THIS DIFF TOUCH THE CAR THE CENSUS PHOTOGRAPHS?
       #
@@ -553,6 +627,9 @@ jobs:
             pull_request) BEFORE="${PR_BASE:-}" ;;
             *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push, a PR or a Pages call" ;;
           esac
+          # A PR diffs against the test commit's first parent (ci-pr-base.sh):
+          # the event's base.sha lags one sync behind it.
+          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no comparison base (new branch, first push, or caller omitted input)" ;;
           esac
@@ -623,6 +700,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          filter: blob:none
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       # SKIP THE SWEEPS WHEN THE DIFF CANNOT HAVE MOVED THE GEOMETRY.
       #
@@ -684,6 +762,10 @@ jobs:
             push|pull_request) ;;
             *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push, a pull request or a Pages call" ;;
           esac
+          # A PR diffs against the test commit's first parent (ci-pr-base.sh):
+          # the event's base.sha lags one sync behind it, and the fleet was
+          # rebuilding on any PR whose base had merged a circuit since its sync.
+          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push, or caller omitted input)" ;;
           esac
@@ -718,6 +800,18 @@ jobs:
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches the fleet build's inputs (track engine, circuit data, tools/track|lib, a TRACK_VM module) or a sweep suite"
+            # THE CIRCUIT LANE (2026-09-30): on a pull request whose every changed
+            # path is one circuit's own files, the sweeps run for that circuit
+            # (APEX_CIRCUITS, the contract the browser gate already uses) — 52
+            # builds became one on the scenery waves. Not on a push or the train
+            # (the tip is gated whole), and never when the scope cannot be read.
+            if [ "$EVENT" = pull_request ]; then
+              SCOPE_FILE="${RUNNER_TEMP:-.}/changed-files.txt"
+              printf '%s\n' "$CHANGED" > "$SCOPE_FILE"
+              IDS="$(node -e 'import("./tools/ci/select-specs.mjs").then((m) => { const fs = require("fs"); const ch = fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean); const c = m.circuitsTouched(ch, process.argv[2]); process.stdout.write(c.scoped ? c.ids.join(",") : ""); }).catch(() => process.stdout.write(""));' "$SCOPE_FILE" "$BEFORE")" || IDS=""
+              echo "circuits=$IDS" >> "$GITHUB_OUTPUT"
+              if [ -n "$IDS" ]; then echo "CIRCUIT-SCOPED SWEEPS: APEX_CIRCUITS=$IDS"; else echo "the whole fleet: this diff is not circuit-only"; fi
+            fi
           else
             # THE TARGETED TIER (2026-09-22). The suites of test:sweeps whose
             # inputs are NOT the fleet build — lighting, car, debris-world, the
@@ -738,6 +832,9 @@ jobs:
           fi
       - name: Geometry sweeps (rebuilds every circuit, per suite)
         if: steps.filter.outputs.geometry == 'true'
+        env:
+          # Empty = every circuit; a circuit-only PR's ids otherwise (the filter above).
+          APEX_CIRCUITS: ${{ steps.filter.outputs.circuits }}
         run: npm run test:sweeps
       # The cheap tier: only the suites that read this diff, from the same
       # table deploy.mjs uses locally. Never runs alongside the fleet (the
@@ -781,6 +878,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          filter: blob:none
       # DOES THIS DIFF CHANGE ANYTHING THAT ACTUALLY SHIPS?
       #
       # pages.yml stages a fixed list of runtime paths into _site/. A commit that
@@ -1351,6 +1449,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          filter: blob:none
       # Same shape as the sweeps filter, same rule: FAIL SAFE, NEVER FAIL OPEN.
       # Any path that cannot resolve a diff RUNS the job. A pull request is
       # diffed against its own base (pull_request.base.sha) rather than
@@ -1370,6 +1469,9 @@ jobs:
             push|pull_request) ;;
             *) run_all "event is '$EVENT', not a push/pull_request" ;;
           esac
+          # A PR diffs against the test commit's first parent (ci-pr-base.sh):
+          # the event's base.sha lags one sync behind it.
+          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push)" ;;
           esac
@@ -1388,7 +1490,12 @@ jobs:
           # The two playwright configs carry the launch flags this job depends
           # on, tests/helpers/ is what every spec boots through, and the
           # workflow file is here so an edit to THIS job runs it.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/lighting/|playwright(\.gpu)?\.config\.js$|\.github/workflows/ci\.yml$|tests/helpers/)' \
+          # NOT .github/workflows/ci.yml (2026-09-30): every CI-tooling PR was
+          # buying 13-14 min of macOS (821 s measured on #499, 10x Linux
+          # billing) to re-prove six gfx specs its diff could not touch. A
+          # change to THIS job's steps is tested by `renderer_macos: true` on
+          # a dispatch, or by the nightly.
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/lighting/|playwright(\.gpu)?\.config\.js$|tests/helpers/)' \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SPECS_FILE"; then
             echo "renderer=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING RENDERER SPECS: the diff touches the renderer, its lighting modules, a gfx spec or the launch config"
@@ -1538,6 +1645,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          filter: blob:none
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
       # PREVIOUSLY-FAILING SPECS, carried across runs. Fowler's TIA survey
       # records Microsoft's TIA and Google's Testar both re-running the last
@@ -1771,6 +1879,49 @@ jobs:
   # zero eligible specs, the shipped WebGL2 path among them) needs a canvas
   # instrument with a per-test budget under the gate's 180 s. Do not route
   # renderer or lighting paths here expecting cover they cannot give.
+  # ONE CHECK THAT ALWAYS REPORTS FOR THE CHANGE-AWARE GATE (2026-09-30).
+  # Branch protection can only require a check by name, and `selected`'s
+  # names carry its matrix (`(selected, …)`, `(oversize-…)`), which change
+  # per run — so it could not be required, and #491 merged with its
+  # selected gate red on the merged tree, leaving the tip red and the train
+  # unpoked. This job has ONE fixed name and runs on every push, pull request
+  # and Pages call (`always()`, so a skipped `selected` is still judged):
+  # green when `select` passed and `selected` passed, or was skipped because
+  # the plan was empty for a genuine reason (`dropped == 0`); red otherwise.
+  # The same reading poke-train makes — poke-train stays as it is. On the
+  # train (a Pages call, its plan against LIVE) an unaffordable plan is a
+  # warning, not a red: the train's answer is the fixed gates plus the
+  # sweeps, and dropped specs there ran on the PRs that carried them.
+  selected-verdict:
+    name: Selected specs (verdict)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [select, selected]
+    if: ${{ always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '') }}
+    steps:
+      - name: One answer for the change-aware gate
+        env:
+          SELECT: ${{ needs.select.result }}
+          SELECTED: ${{ needs.selected.result }}
+          DROPPED: ${{ needs.select.outputs.dropped }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+        run: |
+          set -u
+          echo "select=$SELECT selected=$SELECTED dropped=${DROPPED:-?} called=$CALLED"
+          case "$SELECT" in
+            success) ;;
+            *) echo "::error::the selection itself did not pass ($SELECT)"; exit 1 ;;
+          esac
+          case "$SELECTED" in
+            success) echo "selected specs passed" ;;
+            skipped)
+              if [ "${DROPPED:-0}" = "0" ]; then echo "nothing this diff touches has a spec — an empty plan is a pass"
+              elif [ "$CALLED" = "true" ]; then echo "::warning::the train's plan dropped ${DROPPED} routed spec(s) as unaffordable; the fixed gates and the PRs that carried them are the answer here"
+              else echo "::error::the plan is empty because ${DROPPED} routed spec(s) were unaffordable — nothing booted a backend for this diff"; exit 1
+              fi ;;
+            *) echo "::error::selected specs $SELECTED"; exit 1 ;;
+          esac
+
   baseline-trial:
     name: Golden menus on a runner (trial, non-blocking)
     # Nightly and dispatches only (PRs until 2026-09-29, below): never a push,

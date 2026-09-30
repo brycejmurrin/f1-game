@@ -117,7 +117,7 @@ const GLXShadow = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, shadowMapFBO);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, S.mapTex, 0);
       const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
 
       // ── Dynamic CAR shadow map: cars are NOT in the cached static map above (it
       // only re-renders on a snap-cell change, so a moving car would leave a stale
@@ -143,7 +143,7 @@ const GLXShadow = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, carShadowFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, S.carTex, 0);
         S.carEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
       }
 
       S.lampEnabled = false;
@@ -162,7 +162,7 @@ const GLXShadow = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, lampShadowFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, S.lampTex, 0);
         S.lampEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
       }
 
       S.pcssEnabled = false;
@@ -188,7 +188,7 @@ const GLXShadow = (function () {
           gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
           gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, S.blockerTex, 0);
           S.pcssEnabled = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
           if (S.pcssEnabled) {
             blockerSampler = gl.createSampler();
             gl.samplerParameteri(blockerSampler, gl.TEXTURE_COMPARE_MODE, gl.NONE);

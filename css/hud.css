@@ -535,6 +535,14 @@ body.hud-met-timing #hud-pit,
 body.hud-met-compact #hud-pit { display: none !important; }
 body.hud-met-timing #hud-tyre,
 body.hud-met-compact #hud-tyre { display: none !important; }
+/* LAPS LEFT on the set (js/ui/hud.js sets data-laps from the tyre model):
+   over the bar, in the code chip's ink, so it reads on fill and plate alike. */
+#hud-tyre-bar::after {
+  content: attr(data-laps); position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--fs-micro); font-weight: 700; line-height: 1;
+  color: var(--text); text-shadow: var(--hud-halo); pointer-events: none;
+}
 /* Light ink with the HUD's dark halo (the #hud-speed / .sec-val recipe) reads on
    both halves of the bar — over the fill and over the plate — where the old
    dark-on-fill ink only read while the bar was full. */

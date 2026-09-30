@@ -12,8 +12,8 @@ subset of the next:
 | command | unit files it runs | leaves out | when |
 |---|---|---|---|
 | `npm run test:guards` | 24 (curated) | — | hook-enforced, every `git commit` |
-| `npm run test:tooling-fast` | 298 of 386 | 88 | the documented edit-loop check |
-| `node tools/ci/deploy.mjs --gate-only` | 369 of 386 | 17 | the whole gate; what a deploy runs |
+| `npm run test:tooling-fast` | 302 of 390 | 88 | the documented edit-loop check |
+| `node tools/ci/deploy.mjs --gate-only` | 373 of 390 | 17 | the whole gate; what a deploy runs |
 
 _Derived from `tests/groups.json`, `tests/unit/` and ci.yml's "Pure-node unit suites" step by `node tools/gen/gen-ladder-figures.mjs`; `--check` runs in `test:guards`._
 <!-- /GENERATED -->
@@ -75,6 +75,18 @@ assertion about the fourth closer rather than to loosen it.
 `test-coverage-audit` already asked "is this file in some topical group?". That
 is a different question, and a file can pass it while nothing runs the file
 before a push. This asks the second question.
+
+## The figures on a merged tip (2026-09-30)
+
+Two PRs that each add a unit file regenerate this table identically against
+their own base, merge cleanly, and leave the union one file short: 14 of 15
+deploy-branch reds on 2026-09-29 were that, and every session read them as a
+broken tip. `docs-integrity`'s figure pins therefore FAIL on a pull request
+(the PR regenerates) and WARN on the merged tip and the train
+(`APEX_DOCS_FIGURES_ADVISORY`, set by ci.yml's guards step off pull requests
+only); the next PR that touches the tree regenerates. The figures here can
+lag the tip by a file or two between PRs; `node tools/gen/gen-ladder-figures.mjs --json`
+is always current.
 
 ## The open edge
 

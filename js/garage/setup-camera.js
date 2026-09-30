@@ -204,7 +204,7 @@ function setSetupAero(on) {
     b.classList.toggle("active", setupPreviewXOn);
     b.setAttribute("aria-pressed", String(setupPreviewXOn));
     const v = b.querySelector(".cs-aero-val");
-    if (v) v.textContent = setupPreviewXOn ? "X-MODE" : "Z-MODE";
+    if (v) v.textContent = setupPreviewXOn ? "STRAIGHT MODE" : "CORNER MODE";
   }
 }
 function setupZoom(mul) {

@@ -821,6 +821,15 @@ function updateHud(force, dtMs) {
     hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
     hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
     els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
+    // …and how many LAPS that is, at the rate this driver has been using it:
+    // a percentage says how worn, only laps say whether it reaches the flag.
+    // An attribute read by the bar's ::after (css/hud.css), not a new node.
+    const left = tyres.lapsLeft ? tyres.lapsLeft(player) : null;
+    const bar = els.tyreFill && els.tyreFill.parentNode;
+    if (bar && bar.dataset) {
+      const txt = left == null || spent >= 1 ? "" : "~" + Math.min(99, Math.round(left)) + "L";
+      if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
+    }
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
     // is called by holding the car on the pit side at the entry, so the dwell
     // has to be visible: without it a driver cannot tell the gesture is
@@ -942,15 +951,15 @@ function updateHud(force, dtMs) {
   // too slow to arm — a distance readout of zero, which reads as "the zone is
   // right here" rather than "you are in it". Whether the mode is available is
   // the CLASS's job (ax-armed lights the chip), so the two never contradict.
-  const aeroText = autoAero ? (xOpen ? "AUTO X-MODE" : "AERO AUTO")
+  const aeroText = autoAero ? (xOpen ? "AUTO STRAIGHT" : "AERO AUTO")
     : noZones ? "NO AERO ZONE"
-    : xOpen ? "X-MODE"
+    : xOpen ? "STRAIGHT MODE"
     : dz === 0 ? "AERO ZONE"
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
-    : "Z-MODE";
+    : "CORNER MODE";
   hText(els.aero, aeroText);
-  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? "Automatic X-mode active" : "Active aero automatic")
-    : noZones ? "No aero zone" : xOpen ? "X-mode active" : "Active aero manual");
+  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? "Automatic Straight Mode active" : "Active aero automatic")
+    : noZones ? "No aero zone" : xOpen ? "Straight Mode active" : "Active aero manual");
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
     // on <html> and outlives the session, so a race on a narrow phone left the

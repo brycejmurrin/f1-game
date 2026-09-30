@@ -7,7 +7,9 @@ side branch at `8d55063`. The fixes are in the same change as this note.
 
 ## What clogged
 
-- **The account runs at most 20 jobs at once.** From 08:15 to 15:15 UTC on
+- **The account runs at most 20 jobs at once** (GitHub Free; on 2026-09-30 the
+  account moved to Pro, which allows 40 standard and 5 macOS concurrent jobs —
+  https://docs.github.com/en/actions/reference/limits). From 08:15 to 15:15 UTC on
   09-29 all 20 were busy and **200–290 jobs waited**. Median queue wait was
   12–26 min per hour, worst 97 min. Before 07:00 queue waits were ~0.
 - **Unqueued, a PR run finishes in ~6 min** (56 runs on 09-28: median 5.8, p90
@@ -80,12 +82,45 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
 
 ## Not done here
 
-- **Geometry sweeps are not circuit-filtered.** The 19 `test:sweeps` files
-  each enumerate circuits their own way; a shared `APEX_CIRCUITS` helper is
-  the next step for circuit waves.
-- **`vm-a` is not narrowed on PRs.** `elevation-tracks-vm.test.mjs` honours
-  `APEX_CIRCUITS`, but the node-suites job runs without the plan (it has no
-  `needs:`, and it is tree-only, which is the fast-tier reuse contract).
+- ~~**Geometry sweeps are not circuit-filtered.**~~ Done 2026-09-30:
+  `tools/lib/circuit-scope.cjs` is the shared `APEX_CIRCUITS` helper; the
+  five audit CLIs' `--all` and the six roster-rebuilding sweep suites read it
+  (their anti-vacuity floors and baseline walks compare against the SCOPED
+  roster), and ci.yml's sweeps job sets it on a circuit-only pull request from
+  `circuitsTouched()`. Measured: the six suites scoped to one circuit run in
+  42 s; unscoped they are unchanged (pit-complex stays whole — its mouth test
+  counts circuits across the roster).
+- **The selected gate could not be a required check** (its matrix names vary
+  per run), which is how #491 merged with that gate red on the merged tree
+  and left the tip red. `selected-verdict` — `Selected specs (verdict)`, one
+  fixed name, `always()` — reads `select`/`selected` the way poke-train does,
+  so branch protection can require it. Add it to the rule's required checks.
+- ~~**`vm-a` is not narrowed on PRs.**~~ Done 2026-09-30: `tools/ci/node-plan.mjs`
+  runs inside the node-suites job on PULL REQUESTS only (its own `git diff`
+  against the PR base, no `needs:`), skips `game-vm-a`, `game-vm-b`, `vm-page`
+  and `node-slow` by name when pick-tests routes the diff to none of the
+  groups they replay, and sets `APEX_CIRCUITS` for a circuit-only diff. The
+  deploy push, the Pages call and the nightly still run everything, so the
+  tree-only reuse contract is unchanged. The same day: `spec-timings.yml`
+  listens to the train only (119 skipped runs in 7 h were CI completions the
+  `branches:` filter did not stop), `docs-guards.yml` exits before `npm ci`
+  on a mixed PR (its files all run in ci.yml's guards job there), and
+  `ci.yml` accepts `merge_group` so a merge queue can replace the per-PR
+  `sync-pr` loop (the repository setting is the other half). Later the same
+  day: GitHub offers the merge queue only to organisation-owned repositories,
+  so classic branch protection landed instead — a PR required, the eight
+  fast-tier checks required, no bypass — and with it `ci.yml`'s
+  `pull_request` trigger lost its `paths-ignore` (a required check that never
+  reports blocks a prose-only PR for good; the node plan keeps such a run to
+  guards plus seconds), `docs-guards.yml` runs on every PR with its early
+  exit, and every PR diff resolves its base through `tools/ci/ci-pr-base.sh`
+  (`pull_request.base.sha` lags one sync behind the merge under test, which
+  had the plan — and the sweeps, parts and renderer filters — reading the
+  base's own recent commits as the PR's diff). Then: the derived doc figures
+  (spec/unit counts, the gate ladder) fail only on a pull request and warn on
+  the merged tip (`APEX_DOCS_FIGURES_ADVISORY`), which retires the
+  merge-ordering red class above; sync a PR only on a conflict or a red tip;
+  nine history checkouts use `filter: blob:none`.
 - **49 unit files run twice per PR** (in tooling-fast under guards, and in
   the `vm-b` slice's topical groups). The rebalanced slices keep that off the
   wall clock. Removing it means changing what the topical groups mean.

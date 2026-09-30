@@ -5557,6 +5557,10 @@ const WGX = (function () {
         firstFrameCount: _pipeAtFirstPresent,
       }),
       softPresent: () => !!_softGpu,
+      setOutputTarget: undefined,
+      clearOutputTarget: undefined,
+      outputTargetState: undefined,
+      setRenderSizeOverride: undefined,
       // Occlusion culling is a GLX feature (js/render/glx/chunked.js) and these
       // are declared, not implemented. They exist because game.js installs a
       // backend by DESCRIPTOR-COPY onto GLX: a name WGX omits keeps GLX's own

@@ -267,6 +267,20 @@ test("ambient temperature follows a weather arc, not the flip of raceWeather", (
   assert.equal(s.info(c).ambient, T.T_AMBIENT.rain, "no arc: the race's weather");
 });
 
+test("lapsLeft: the laps a set has left, at the rate this car has been wearing it", () => {
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.74, { lap: 1 });
+  // Before a lap is run on the set: the planned life, all of it.
+  assert.ok(Math.abs(s.lapsLeft(c) - s.planLaps(0.74, 20)) < 1e-9, `fresh: ${s.lapsLeft(c)}`);
+  // Three laps on it at 30 % gone: 10 laps of life at that rate, 7 left.
+  c.lap = 4; c.tyreLap0 = 1; c.tyreWear = 0.3;
+  assert.ok(Math.abs(s.lapsLeft(c) - 7) < 1e-9, `measured rate: ${s.lapsLeft(c)}`);
+  c.tyreWear = 1.2;
+  assert.equal(s.lapsLeft(c), 0, "a set past the cliff has none");
+  const off = ctxFor({ laps: 20 });
+  assert.equal(off.lapsLeft(freshCar(off, 0.74)), null, "wear off: nothing to show");
+});
+
 test("planLaps plans against the circuit's severity, as the wear does", () => {
   // update() charges wear at severity() and planLaps ignored it, so at Austria
   // (1.97) every plan believed a set lasted twice as long as it did — a
