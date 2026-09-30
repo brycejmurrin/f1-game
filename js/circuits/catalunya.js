@@ -7,17 +7,14 @@
     classic: true,
     reverse: false,
     // The trace opens on the 700 m main straight, and its first vertex IS the
-    // start line — measured, not nudged.
     // Start/finish line. Snapped to the real one: coord 0.2 m off centreline; = trace vertex 0.
-    // Was 0.03. That already measured straight (mean |k| 0.00036 over
-    // 120 m) — it was on the wrong PART of the lap, not in a corner.
-    // See docs/tracks/START-LINES.md.
+    // 0.03 also measures straight (mean |k| 0.00036 over 120 m) but
+    // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
-    // No sceneryStartFrac. The 0.03 kept here after the line move made a 0.138
-    // shift that stood the pit block 0.055 short of T1 and put pines down the
-    // pit lane: the paddock and main straight are authored against THIS line.
-    // The tables below that were tuned against the old shift carry their shipped
-    // engine fracs verbatim. docs/notes/DEFECT-LEDGER.md, "catalunya".
+    // No sceneryStartFrac: the paddock and main straight are authored against
+    // THIS line; a 0.03 makes a 0.138 shift that stands the pit block 0.055
+    // short of T1 with pines down the pit lane. Tables tuned under that shift
+    // keep their shipped engine fracs verbatim. docs/notes/DEFECT-LEDGER.md.
     name: "CATALUNYA",
     gp: "Spanish GP",
     country: "Spain",

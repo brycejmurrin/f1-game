@@ -38,8 +38,7 @@
  * THE LOOK. Not a solid ribbon: a chevron every few metres pointing the way
  * the lap runs, the tip on the centre and the wings trailing at the edges —
  * the F1 games' form — each arrow bending with the road because it lives in
- * the strip's own space (the owner asked for arrows on a properly curving
- * line, 2026-09-08). The shaders pattern it from the per-vertex ALONG value
+ * the strip's own space, so the arrows follow a properly curving line. The shaders pattern it from the per-vertex ALONG value
  * (metres of lap), so all three backends agree.
  *
  * VERTEX LAYOUT (interleaved Float32, STRIDE floats per vertex, two vertices
@@ -109,8 +108,8 @@ window.DrivingLine = (function () {
      one change. The assist reads the raw curvature ahead and behind, and with
      a fixed look-ahead that CANCELS inside a long constant-radius arc — 60 m
      into a 180° turn the corner ahead IS this corner, so "go wide for the next
-     one" undid "hug this apex" and the line ran down the middle (unit test on
-     a stadium, 2026-09-08). Reading the CHANGE in curvature instead keeps the
+     one" undoes "hug this apex" and the line runs down the middle (unit test
+     on a stadium). Reading the CHANGE in curvature instead keeps the
      entry and exit wide (a corner appearing ahead / disappearing behind) and
      the apex inside for however long the corner lasts. */
   function lateral(api, s, hw) {

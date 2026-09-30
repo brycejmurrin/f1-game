@@ -119,7 +119,7 @@ not.
 | `sp-` | 12 | `tuner.css` | — |
 | `team-` | 11 | `menus.css` | components |
 | `steer-` | 10 | `overlays.css` | — |
-| `bc-` | 14 | `hud.css` | — (the REAL RACE WATCH timing tower, `js/race/broadcast.js`) |
+| `bc-` | 18 | `hud.css` | — (the REAL RACE WATCH timing tower and picture-in-picture, `js/race/broadcast.js`) |
 | `tdc-` | 10 | `track-detail.css` | — |
 | `co-`, `pm-`, `pane-`, `music-`, `set-` | ~9 each | career / components / components / tuner / components | — |
 

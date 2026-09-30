@@ -1,8 +1,8 @@
 /* Apex 26 — JEDDAH scenery (data only), split out of js/circuits/jeddah.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["jeddah"] =
   function (api) {
@@ -56,9 +56,9 @@
         // (night-photo identity — not a single sodium blob).
         addCyl(out, a.c, 0.10, 7.5, DARKPOLE, 4, b);
         // Arm runs LATERALLY from the pole to the yoke (0.9 m out toward the
-        // road); the yoke then spans along-track under both heads. Before, the
-        // yoke sat on the pole axis and the heads 0.9 m out with nothing
-        // joining them — ~540 heads floating 0.45 m off it (2026-09-24 audit).
+        // road); the yoke then spans along-track under both heads. A yoke on
+        // the pole axis leaves the heads 0.9 m out with nothing joining them —
+        // ~540 heads floating 0.45 m off it (2026-09-24 audit).
         const yoke = vadd(vadd(a.c, a.u, 7.2), a.r, -side * 0.9);
         addBox(out, vadd(vadd(a.c, a.u, 7.2), a.r, -side * 0.45), [1.0, 0.16, 0.16], DARKPOLE, b);
         addBox(out, vadd(yoke, a.u, 0.02), [0.18, 0.18, 1.8], DARKPOLE, b);
@@ -433,8 +433,8 @@
           if (onTrack(a.c[0], a.c[2], 4)) continue;
           // anchor() returns ground - 0.3 (a single-point embed for tall
           // props), and the terrain here falls ~0.13 m per metre across the
-          // strip, so a thin paint slab placed "at" the anchor sat 0.13-0.22 m
-          // UNDER the terrain (2026-09-24 audit). Each slab now spans its own
+          // strip, so a thin paint slab placed "at" the anchor sits 0.13-0.22 m
+          // UNDER the terrain (2026-09-24 audit). Each slab spans its own
           // footprint: top = highest terrain sample + lift, base = lowest - 5 cm.
           slabOnGround(K(sf), 9.5, 2.8, 7.5, PROMO[i % PROMO.length], 0.04);
           slabOnGround(K(sf), 9.5 - 1.6, 0.25, 7.5, [0.92, 0.92, 0.94], 0.04);

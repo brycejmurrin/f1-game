@@ -76,10 +76,10 @@ Decal path
   mark. Car atlas: `car-draw.js:161-186`, `buildAtlas` `:2210`.
 - Lifecycle: `Tracks.build` creates every `track.meshes.*` through the
   injected `G` (`tracks.js:222-283`); `game.js` frees them on a track change
-  (`js/game.js:2068-2091`, no `freeTexture` there today). The garage frees its
+  (`js/game.js:2060-2083`, no `freeTexture` there today). The garage frees its
   texture with `freeTexture` (`scene.js:1385, 1396`) and texMeshes with
   `freeMesh` (`:1373`).
-- Draw order: `drawWorldMeshes` (props `game.js:6193`) → `drawSky` (`:6940`)
+- Draw order: `drawWorldMeshes` (props `game.js:6165`) → `drawSky` (`:6940`)
   → skids → cars, car decals flushed after the car loop (`car-draw.js:
   327-339`). The env probe redraws `drawWorldMeshes` only (`:6910`).
 
@@ -94,7 +94,7 @@ Lettering, audits, VM, cameras
   (`tools/manifest.cjs:296-331`); the sandbox has no `document` and its `GLX`
   stub has only `createMesh`/`createChunkedMesh` (`tools/lib/track-build-vm.cjs:
   58-70`; `verify-track.cjs:99-111`).
-- Near plane 0.9 m (0.3 cockpit) `game.js:6445`; fov 60° `js/camera/vantage.js:
+- Near plane 0.9 m (0.3 cockpit) `game.js:6413`; fov 60° `js/camera/vantage.js:
   248`; `pit-shots` box framing eye 16 m back, 3.0 m up (`tools/shot/pit-shots.
   mjs:131-140`), lane eye 1.9 m (`:111`). Ratchets: `game.js` 8790 (file 8789),
   `tracks.js` 2680, `apex.js` 2928 (`tests/data/ratchets.json`).

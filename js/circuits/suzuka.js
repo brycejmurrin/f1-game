@@ -5,11 +5,10 @@
   {
     id: "suzuka",
     pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.3 m off centreline, 1 node before vertex 0.
-    // Was 0.6125. That already measured straight (mean |k| 0.00330 over
-    // 120 m) — it was on the wrong PART of the lap, not in a corner.
-    // See docs/tracks/START-LINES.md.
+    // 0.6125 also measures straight (mean |k| 0.00330 over 120 m) but
+    // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
     startFrac: 0.9942,
     // No `sceneryStartFrac` (was 0.6125, _sceneryShift 0.6198). The dressing
     // is authored against THIS line — pit block 0.975-0.995, Esses fences
@@ -38,26 +37,19 @@
       { kinds: ["foliage", "lighting"], s0: 0.79, s1: 0.85 },
     ],
     pal: { zenith: [0.35, 0.50, 0.70], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2], sunDir: [0.8846517369293829, 0.44232586846469146, 0.14744195615489716], sun: [1, 0.90, 0.65], sunColor: [1, 0.82, 0.55] },
-    // THE FIGURE-8 WAS UPSIDE DOWN. Measured self-crossing (both roads within
-    // 7 m in XZ): racing s = 0.437 and s = 0.845. 0.437 is the run from Degner
-    // to the hairpin; 0.845 is the back straight. In reality the BACK STRAIGHT
-    // flies over and the Degner road passes beneath — and the game had 0.437 at
-    // y 13.5 with 0.845 at y 5.0, so the lower road was 8.5 m ABOVE the upper.
+    // FIGURE-8 crossing, measured (both roads within 7 m in XZ): racing
+    // s = 0.437 (Degner to the hairpin, the LOWER road) and s = 0.845 (the back
+    // straight, which flies over). Both the lift here and the scenery deck are
+    // racing-frame (no `sceneryStartFrac`): lift at 0.845, deck at 0.437.
     //
-    // The cause was a frame mix-up between the scenery deck and this lift.
-    // With no `sceneryStartFrac` there is one frame: the lift is at 0.845
-    // (upper road) and the scenery deck at 0.437 (lower road), both racing.
-    //
-    // The lift is a BRIDGE and not an elevation on purpose: tracks.js raises the
+    // The lift is a BRIDGE, not an elevation, on purpose: tracks.js raises the
     // road for `bridges` and leaves ground level alone, which is what a flyover
-    // needs. The old { s: 0.8125, rise: 11 } was an ELEVATION, so it dragged the
-    // terrain up with it at exactly the XZ where the lower road has to pass —
-    // burying the road that is supposed to go underneath.
+    // needs. An ELEVATION drags the terrain up at exactly the XZ where the lower
+    // road has to pass, burying it.
     //
     // Elevation from SRTM bake in js/track/circuit-elevations.js
-    // (`node tools/gen/bake-elevation.mjs suzuka`). Two authored cosine bumps
-    // left ~71% of the lap under 0.5% grade — the stair-step undulation drivers
-    // felt. The figure-8 flyover stays a BRIDGE (terrain stays flat under it).
+    // (`node tools/gen/bake-elevation.mjs suzuka`); authored cosine bumps leave
+    // ~71% of the lap under 0.5% grade (stair-step undulation).
     bridges: [{ s: 0.845, halfM: 160, rise: 10 }],
     hwZones: [
       { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // arc 0.300-0.348 the Esses

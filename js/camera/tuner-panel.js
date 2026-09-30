@@ -31,8 +31,8 @@ const CT_PREVIEWS = {
 function previewCorner(key) {
   const p = CT_PREVIEWS[key];
   // The jump is the dev API's, which the shipped page does not load (__apex is
-  // null there, and `typeof null` is "object"): without it the old code swapped
-  // the circuit under a live race and then threw. openCamTuner hides the row.
+  // null there, and `typeof null` is "object"): without it a jump would swap
+  // the circuit under a live race and then throw. openCamTuner hides the row.
   if (!p || !G.player || !window.__apex) return;
   const idx = Tracks.LIST.findIndex((t) => t.id === p.id);
   if (idx < 0) return;

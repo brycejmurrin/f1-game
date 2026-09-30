@@ -1,8 +1,8 @@
 /* Apex 26 — SOCHI scenery (data only), split out of js/circuits/sochi.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["sochi"] =
   function (api) {
@@ -25,8 +25,8 @@
       // The venues ringing Turn 2, each a distinct silhouette.
       {
         // Fisht Stadium — translucent shell (2014 ceremonies / 2018 World Cup).
-        // Placed at s=0.18/175 m: the old s=0.085/150 m footprint covered the
-        // Turn 2 return and was culled entire. Shell = two telescoping halves
+        // Placed at s=0.18/175 m: an s=0.085/150 m footprint covers the
+        // Turn 2 return and is culled entire. Shell = two telescoping halves
         // (each slab bottoms on the next outward slab) so float + coplanar stay clear.
         const a = anchor(K(0.18), 1, 175);
         const b = [a.r, a.u, a.t];
@@ -430,7 +430,7 @@
       signBoard(K(0.815), 1, 7, "corner", 17);
       sponsorHoarding(0.930, 0.075, 1, 5.0, { h: 1.2, step: 10 });
       // Camera towers at the show corners — gaps bumped so monopole feet clear
-      // cambered terrain (were buried ≤0.14 m at the old gaps).
+      // cambered terrain (tighter gaps bury them ≤0.14 m).
       cameraTower(K(0.085), 1, 68, { h: 20 });
       cameraTower(K(0.545), -1, 34, { h: 17 });
       cameraTower(K(0.815), 1, 30, { h: 17 });

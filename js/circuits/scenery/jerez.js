@@ -133,16 +133,16 @@
         }
       };
 
-      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
-      // startFrac) because the grid had been laid through a 43 m corner, and
+      // RE-KEYED THROUGH sl(). The start line sits on a straight (def
+      // startFrac; v0 is in a 43 m corner), and
       // sceneryStartFrac holds the rest of this file on its real corners —
       // Dry Sack and the stadium section must not travel with the line. The
       // pit complex and its terracing belong AT the line, so these two blocks
       // alone are shifted; sl(f) is the authored frac that lands at the line.
       // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
-      // the 4 dp the props were placed against (a literal 0.1264 until 2026-09-22:
-      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
-      // keeps today's geometry while a retuned startFrac still moves the props).
+      // the 4 dp the props were placed against (the unrounded value flips a few
+      // K() nodes, so rounding keeps the geometry while a retuned startFrac still
+      // moves the props).
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
@@ -191,14 +191,13 @@
         building(K(s), 1, 11, 20, 7.5, 14,
           { wall: WHITEWASH, roof: [0.62, 0.60, 0.57] });
       }
-      // Control tower landmark (jerez-control-tower) replaces the old box
-      // tower here — see required modelGroup near the finish line below.
+      // Control tower: the required jerez-control-tower modelGroup near the
+      // finish line below.
       // Motorhomes belong to the paddock, so they key through sl() like the
-      // rest of this block (they were left raw by the re-key and parked
-      // themselves half a lap away, out in the T4 infield). Both rows now sit
-      // INSIDE the perimeter fence: past ~46 m the guard eats them. Skip any
-      // pad where terrain disagrees with the road-follow anchor (was burying
-      // up to 1.8 m on the paddock grade — sepang wave-6 pattern).
+      // rest of this block (raw fracs park them half a lap away, in the T4
+      // infield). Both rows sit INSIDE the perimeter fence: past ~46 m the
+      // guard eats them. Skip any pad where terrain disagrees with the
+      // road-follow anchor (it buries up to 1.8 m on the paddock grade).
       const seatOk = (k, side, gap) => {
         const a = anchor(k, side, gap);
         if (!a || onTrack(a.c[0], a.c[2], 10)) return false;
@@ -625,8 +624,8 @@
 
       // ── CONTROL TOWER + TÍO PEPE ─────────────────────────────────────────
       // Box Repsol: 30 m race-control tower crowned by the ~8 m Tío Pepe
-      // bottle-figure mascot. Sits where the old pit control box stood
-      // (gap ~14). Exact bottle art UNCERTAIN — silhouette only.
+      // bottle-figure mascot, at the pit control box's spot (gap ~14). Exact
+      // bottle art UNCERTAIN — silhouette only.
       {
         const a = anchor(K(sl(0.012)), 1, 14);
         if (!onTrack(a.c[0], a.c[2], 8)) {

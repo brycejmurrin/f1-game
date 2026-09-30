@@ -4,10 +4,9 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "vegas",
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.3 m off centreline, 1 node before vertex 0 (timing line).
-    // Was 0.8575, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.9899,
     sceneryStartFrac: 0.8575,
     name: "LAS VEGAS",

@@ -72,13 +72,13 @@ const TrackSpace = (function () {
   // records the startFrac a circuit's scenery was authored against and does
   // precisely that. Absent, it is a no-op everywhere below.
   //
-  // THE SHIFT IS NOT `startFrac - sceneryStartFrac`. That was the first attempt
-  // and it is wrong, because the two live in different spaces: `startFrac` is a
+  // THE SHIFT IS NOT `startFrac - sceneryStartFrac`. That looks right and is
+  // wrong, because the two live in different spaces: `startFrac` is a
   // CONTROL-POINT INDEX fraction (resolve() uses it as
   // `round(startFrac * points.length)`) while an authored scenery fraction is
   // an ARC-LENGTH fraction of the lap — and the control points are nowhere near
   // arc-uniform (Monaco's run 21 m apart, Baku's 70 m). Subtracting one from
-  // the other slid every landmark by the difference between the two
+  // the other slides every landmark by the difference between the two
   // parameterisations: plausible-looking everywhere, and still moving 34 k
   // vertices at Istanbul.
   //

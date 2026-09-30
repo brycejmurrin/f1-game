@@ -55,18 +55,18 @@ const NetSession = (function () {
     let pingId = 0;
     let lastPingAt = -Infinity;
     // THE LAST FEW PINGS WE SENT. A PONG carries the id and t0 the peer
-    // ECHOES, and both used to be taken on trust: a peer (or anything that
-    // could inject on the state channel) choosing t0 chose our RTT and clock
+    // ECHOES, and neither is taken on trust: a peer (or anything that could
+    // inject on the state channel) choosing t0 would choose our RTT and clock
     // offset — the number every one of its timestamps is converted through.
-    // Now a PONG counts only if it names an outstanding ping AND carries that
+    // A PONG counts only if it names an outstanding ping AND carries that
     // ping's original t0; each is answered once. A ping is HELD FOR AS LONG AS
     // A REPLY COULD PLAUSIBLY ARRIVE (MAX_PLAUSIBLE_RTT_MS, the same ceiling
-    // addSample accepts) — an eight-deep window was only 8 × syncPingEveryMs =
+    // addSample accepts) — an eight-deep window is only 8 × syncPingEveryMs =
     // 800 ms wide during the pre-sync burst, so on any slower link every PONG
-    // named a ping already evicted, takePing rejected it, no sample was ever
-    // taken and the session never synced: "connected, no rival", with
-    // lastHeardAt kept fresh so the timeout never fired either. The count is
-    // now only a memory bound, well past 4000 / 100 pings in flight.
+    // would name an evicted ping, no sample is taken and the session never
+    // syncs: "connected, no rival", with lastHeardAt kept fresh so the timeout
+    // never fires either. The count is only a memory bound, well past
+    // 4000 / 100 pings in flight.
     const SENT_PINGS_MAX = 64;
     const sentPings = [];                // [{ id, t0 }], oldest first
     function takePing(id, t0) {
@@ -261,13 +261,13 @@ const NetSession = (function () {
       alive: () => alive,
       lastHeard: () => lastHeardAt,
       close() {
-        // Release whatever `alive` says: a path that flipped `alive` first
-        // (transport-close event, timeout) used to make close() a no-op and
-        // netplay.stop() could never reach transport.close(). And flip
-        // `alive` BEFORE releasing: the transport's close event fires
-        // synchronously (rtc and loopback both) and the handler above
-        // reported our own close() as "transport" — the host dropping a
-        // wrong-build guest announced LEFT {why: "transport"}.
+        // Release whatever `alive` says: a path that flips `alive` first
+        // (transport-close event, timeout) must not make close() a no-op, or
+        // netplay.stop() can never reach transport.close(). And flip `alive`
+        // BEFORE releasing: the transport's close event fires synchronously
+        // (rtc and loopback both) and the handler above would report our own
+        // close() as "transport" — a host dropping a wrong-build guest would
+        // announce LEFT {why: "transport"}.
         const was = alive;
         alive = false;
         release();

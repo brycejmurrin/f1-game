@@ -27,11 +27,9 @@
     // SOURCE-trace fractions + source sides, like every range call in this
     // def's scenery (sceneryCoordinates: "source", reverse: true): the engine
     // maps them through TrackSpace.sceneryRange and flips the side, exactly as
-    // it does wall()/hedge(). Converted from the old shift-only numbers
-    // (0.50-0.60, 0.17-0.24, 0.29-0.70 R, 0-0.14 R) via s' = startFrac - s,
-    // side' = -side, so every window lands where it always has: tunnel
-    // 0.438-0.538 racing (measured bore 0.449-0.524), Casino 0.108-0.178,
-    // 0.228-0.638 R, 0.938-0.078 R.
+    // it does wall()/hedge() (racing s = startFrac - s, side' = -side).
+    // Racing windows: tunnel 0.438-0.538 (measured bore 0.449-0.524), Casino
+    // 0.108-0.178, 0.228-0.638 R, 0.938-0.078 R.
     dressingExclusions: [
       // Keep generic city furniture out of the tunnel and the Casino sightline.
       { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
@@ -48,9 +46,8 @@
     // begins on the straight with the first corner at its end (fraction of the
     // original trace; tuned against the reversed layout).
     // Start/finish line. Snapped to the real one: coord 0.5 m off centreline; this trace is stored REVERSED, so its vertex 0 is not the line.
-    // Was 0.28. That already measured straight (mean |k| 0.00298 over
-    // 120 m) — it was on the wrong PART of the lap, not in a corner.
-    // See docs/tracks/START-LINES.md.
+    // 0.28 also measures straight (mean |k| 0.00298 over 120 m) but
+    // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
     startFrac: 0.2516,
     sceneryStartFrac: 0.28,
     pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },

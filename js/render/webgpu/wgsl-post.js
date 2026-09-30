@@ -302,8 +302,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //    shadow maps (GLX GODRAY_FS). Composite adds the result. CPU gates on
   //    sun-on-screen or lampVol > 0. A separable BLUR follows the march.
   //    Lamp loop is 6 — GR_MAX_LIGHTS=6 on GLX too, upload and march alike
-  //    (the old upload-12/march-6 split was removed; see the removal note in
-  //    glx/post.js). Matching keeps WGX from showing more beams than GLX.
+  //    (see glx/post.js). Matching keeps WGX from showing more beams than GLX.
   const GODRAY = `
 struct GodrayU {
   invVP    : mat4x4<f32>,   // off   0

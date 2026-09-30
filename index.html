@@ -543,6 +543,11 @@
        fills it with the whole field (the TV graphic) and shows it; a row is a
        button that puts that car on camera, the head flips GAP / INTERVAL. -->
   <div id="bc-tower" role="region" aria-label="Timing tower" hidden></div>
+  <!-- THE PICTURE-IN-PICTURE. An empty frame like #hud-mirror: in a WATCH the
+       mirror's second camera is re-aimed at another car (a battle partner, the
+       car in the next pass or stop) and composited, unflipped, into this box
+       (js/render/shared/mirror-pass.js); js/race/broadcast.js writes the label. -->
+  <div id="bc-pip" aria-hidden="true" hidden><span class="bc-pip-label"></span></div>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
   <!-- role="alert", not role="status" + aria-live="assertive": status carries an

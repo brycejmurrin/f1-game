@@ -1,19 +1,14 @@
 "use strict";
 /* Apex 26 — PRE-RACE LOADING SCREEN.
  *
- * The flyby used to play BEHIND the race-settings sheet, where it competed
- * with the settings rows for attention and made the menu look like a paused
- * race. It now plays here instead, in the gap the player already pays for:
- * between pressing RACE! and the grid appearing.
+ * The flyby plays here, in the gap the player already pays for between
+ * pressing RACE! and the grid appearing — not behind the race-settings sheet,
+ * where it competes with the rows and makes the menu look like a paused race.
  *
- * THE CARD AND THE FLYBY RUN TOGETHER. They used to be two phases — cinematic
- * first, card afterwards — because the card was there to stall behind while
- * loadTrack() did its ~1.1 s of synchronous work. That is not what the wait is
- * any more: the world is BUILT UNDER RACE SETTINGS (scheduleFlybyTrack, and
- * loadTrack memoises on builtTrackId, so the call at race start is nearly free),
- * so by the time RACE! is pressed there is nothing to hide. Showing the card
- * afterwards just meant the flyby and the circuit's details never shared the
- * screen. The card now fades in at the start and stays for the whole sequence.
+ * THE CARD AND THE FLYBY RUN TOGETHER. The world is BUILT UNDER RACE SETTINGS
+ * (scheduleFlybyTrack, and loadTrack memoises on builtTrackId, so the call at
+ * race start is nearly free), so there is nothing to stall behind: the card
+ * fades in at the start and shares the screen with the flyby throughout.
  *
  * With no pre-built world to fly over — a circuit picked a moment ago, scenery
  * still downloading — there is no cinematic to play: the card goes up alone and
@@ -576,7 +571,7 @@ const LoadingScreen = (function () {
     /** A skip goes straight to the race. There is no second half to advance to
      *  any more, and the build behind it is already warm. */
     // A keydown AUTO-REPEAT is not a new press: holding Enter a beat long on
-    // RACE! used to skip the flyby on the first repeat.
+    // RACE! must not skip the flyby on the first repeat.
     // Once per run: the listeners stay up until startRace lowers the screen, and a
     // triple tap counted three skips (the short flyby arrived a run early).
     // SKIP_GRACE_MS: the second click of a double-click on RACE! (or a second

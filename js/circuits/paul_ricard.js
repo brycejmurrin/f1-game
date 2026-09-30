@@ -11,8 +11,7 @@
     // The trace's first vertex opens the pit straight and IS the start line; the
     // 1044 m run at source 0.52-0.70 is the Mistral, not the start.
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured LEFT, matches the Verrerie left-right.
-    // Was 0.03, which put the line inside a corner — a start line is
-    // always on a straight. See docs/tracks/START-LINES.md.
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
     // No sceneryStartFrac: the scenery is authored against THIS start (pit block
     // 0.95-0.01 = pitLaneSpan, Verrerie bank 0.07 = T1). The 0.03 the start-line
     // campaign kept was a shift of 0.923 on this reversed lap and stood the pit

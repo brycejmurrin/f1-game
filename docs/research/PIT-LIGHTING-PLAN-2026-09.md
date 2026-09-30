@@ -26,13 +26,13 @@ against `lampCap` (`:193`): 48 solo / `LT.lampCull` 40 with traffic / 24 on the 
 tier / never above `LightBudget.slots()`. Budget constants: `js/render/shared/light-budget.js:13-17`
 (MAX 48, MOBILE 24, LITE 16 for TLX-lite, CHUNK 24, TAIL_RESERVE 5). PerfGov shed is
 `tierShed` (`frame-lights.js:216-222`): tier ≥ 1 → 32, tier ≥ 2 → 24. Lamps are fed only
-when `isFloodActiveSession()` (`js/game.js:2208`: night/dusk/dawn, or default on a
-`def.night` track) or the DAYTIME LAMPS knob is up (`game.js:6700-6708`); brightness
+when `isFloodActiveSession()` (`js/game.js:2198`: night/dusk/dawn, or default on a
+`def.night` track) or the DAYTIME LAMPS knob is up (`game.js:6664-6672`); brightness
 ramps by sun elevation at dusk/dawn (`:6742-6755`).
 
 **Emissive.** ✗ "track props draw with emissive 0" → ✓ **only by day.** `_wmPropsDryN`
-is *declared* with `emissive: 0` (`game.js:6083`) but the draw sets
-`m.emissive = floodEmit` whenever `floodEmit > 0` (`game.js:6182-6184`), and
+is *declared* with `emissive: 0` (`game.js:6057`) but the draw sets
+`m.emissive = floodEmit` whenever `floodEmit > 0` (`game.js:6154-6156`), and
 `_floodEmit` is 0.78 × `LT.floodEmitMul` at night, ≤ 0.70 at dusk/dawn (`:6875-6879`).
 The shader then lerps to albedo and adds `smoothstep(0.50, 0.95, max(albedo)) × emissive ×
 uGlowAmp × (1 + max(bright−1, 0) × uBloomBoost)` (`js/render/glx/shaders/glsl-lit.js:1606-1627`).
@@ -82,7 +82,7 @@ complex `inPitFootprint` (`:644-656`) rejects anything past `hw + 4.3`. Result:
 
 The row (`row.s0..s1`, frac 0.995→0.018–0.020, 12 boxes at 11.0 m) is lit only by the
 far side's masts 14–28 m away and Bahrain/Qatar's stadium banks. The pit-lane tarmac is a
-decal in the `startline` mesh (`tracks.js:2293-2298`, drawn `game.js:6167`), one
+decal in the `startline` mesh (`tracks.js:2293-2298`, drawn `game.js:6141`), one
 unchunked draw — it is lit from the **global** culled set, never the per-chunk table.
 
 **Circuits' own pit lighting.** All decoration, no record: `miami.js:316-329` (10 pairs at

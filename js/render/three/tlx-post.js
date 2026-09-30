@@ -272,13 +272,14 @@
     // Rear-view mirror (tlx.js mirrorBegin/End render it; present() composites
     // it LAST, over the FXAA / SGSR output, into the rect tlx.js hands over in
     // present-target pixels, top-left origin). null tex = no mirror this frame.
-    let _mirTex = null, _mirHdr = true, _mirComposites = 0;
+    let _mirTex = null, _mirHdr = true, _mirComposites = 0, _mirFlip = true;
     const _mirRect = [0, 0, 0, 0];
     let _mirPrevVP = null;   // the canvas viewport to restore (made on first use)
-    function setMirror(tex, rect, hdr) {
+    function setMirror(tex, rect, hdr, flip) {
       _mirTex = tex && rect && rect[2] >= 2 && rect[3] >= 2 ? tex : null;
       if (_mirTex) { _mirRect[0] = rect[0]; _mirRect[1] = rect[1]; _mirRect[2] = rect[2]; _mirRect[3] = rect[3]; }
       _mirHdr = !!hdr;
+      _mirFlip = flip !== false;
     }
     // Viewport, not scissor: the quad covers exactly the viewport. A target's
     // own .viewport is what three reads when one is bound; the renderer's is
@@ -289,6 +290,7 @@
       M.tex.value = _mirTex;
       M.U.rect.value.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
       M.U.hdr.value = _mirHdr ? 1 : 0;
+      if (M.U.flip) M.U.flip.value = _mirFlip ? 1 : 0;
       if (dest) dest.viewport.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
       else { renderer.getViewport(_mirPrevVP || (_mirPrevVP = new THREE.Vector4())); renderer.setViewport(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]); }
       try { runPass(M.mat, dest); _mirComposites++; }
@@ -350,8 +352,7 @@
       const lampArmed = !!(S && S.lampArmed);
       const o = opts || {};
       const GT = o.tune || null;
-      // Knob read with the TUNE_DEFS default (PostCommon.knob) — the defaults
-      // used to be restated here as literals.
+      // Knob read with the TUNE_DEFS default (PostCommon.knob), never a literal.
       const gk = (id) => PostCommon.knob(GT, id);
       const prevAutoClear = renderer.autoClear;
       renderer.autoClear = false;   // fullscreen passes overwrite; UP accumulates
@@ -651,12 +652,11 @@
         const deadline = performance.now() + 3000;
         for (const job of jobs) {
           renderer.setRenderTarget(job.target);
-          // THE LIVE QUAD, not a snapshot. The warm used to compile a fresh
-          // QuadMesh per job, and on macos-latest Metal the race then built the
-          // same 16 post programs AGAIN through runPass (gpu-census 205: x16
-          // tagged warm, x16 tagged runPass, the same eight sites) — a fresh
-          // object does not share a render-object cache key with the one
-          // present() draws. Compiling `quad` itself with the job's material is
+          // THE LIVE QUAD, not a snapshot: a fresh QuadMesh per job does not
+          // share a render-object cache key with the one present() draws, so
+          // the race built the same 16 post programs AGAIN through runPass
+          // (gpu-census 205 on macos-latest Metal: x16 tagged warm, x16 tagged
+          // runPass, the same eight sites). Compiling `quad` itself with the job's material is
           // exactly what runPass does, so the hit is guaranteed whatever the key
           // contains.
           quad.material = job.mat;

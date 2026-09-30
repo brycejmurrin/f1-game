@@ -101,13 +101,13 @@ soffit did, at 16 m: `energy 0.04`). `LAMP_KINDS.led` is 5000 K white
 coloured kind**, and `registerPitLamp` overrides `kind` to `led` anyway. A record
 with `glareW > 0` draws a lens-halo billboard, so it must sit within 1 m of a
 drawn fixture (`tests/unit/lamp-fixture-anchor.test.mjs:67`, `ON_FIXTURE_M`).
-Lamps are fed only in a flood-active session (night/dusk/dawn, `game.js:2208`)
+Lamps are fed only in a flood-active session (night/dusk/dawn, `game.js:2198`)
 or with DAYTIME LAMPS up; the per-frame cull keeps the nearest 48 (40 with
 traffic, 24 mobile) — six canopy slots are already the complex's
 (`pits.js:461-463`).
 
 **Colour at night without a record.** Any over-white vertex colour in the props
-mesh glows at night (`game.js:6182-6184` sets `floodEmit`; `glsl-lit.js:1606-1627`
+mesh glows at night (`game.js:6154-6156` sets `floodEmit`; `glsl-lit.js:1606-1627`
 adds `smoothstep(0.50, 0.95, max(albedo)) × emissive`) — that is how the exit
 signal's green aspect, the bays' LED strips (`pits.js:480`) and the door neon
 (`:497`) read as lit. It is BUILD-time: the aspect that glows is chosen when the
@@ -116,7 +116,7 @@ the race (red under a red flag) cannot come from the props mesh
 (`PIT-LIGHTING-PLAN` §8.3).
 
 **A per-frame coloured draw exists.** `PitSigns.draw` (`js/garage/pit-signs.js:161`,
-called every frame from `game.js:7131` after the sky, gated by distance to the
+called every frame from `game.js:7095` after the sky, gated by distance to the
 row) draws `track.pitSigns` — the fascia cells, the boards, the panels and the
 crests — as ONE textured decal from a canvas atlas (`TrackPit.SIGN`,
 `pit.js:41-57`: 1024², `cells 12`, `boards 2`, `crests 12`). A quad added to
@@ -125,7 +125,7 @@ free rows below the crests (`crestY 512` + 2 rows of 160 px = 832 of 1024).
 
 **Race control's state.** `G.cautionInfo()` (`js/race/race-control.js:68`,
 `:119`, `:270`) carries `level` (0 green … 4 red flag, `LABEL`); `PitLane.estimate`
-returns null at level ≥ 4 (`pit-lane.js:470-471`) — the lane is closed under a
+returns null at level ≥ 4 (`pit-lane.js:463-464`) — the lane is closed under a
 red flag already, in the model; nothing in the world says so.
 
 **Tests that count.** `tests/unit/pit-complex.test.mjs:386-412` asserts exactly

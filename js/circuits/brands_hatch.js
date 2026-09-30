@@ -18,19 +18,18 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // MEASURED, not assumed. The stitcher was supposed to leave v0 mid-straight
-    // and did not: the 182 m of starting grid behind v0 ran through a corner of
-    // 136 m radius, so the grid was laid round a bend. Now 6482 m.
+    // MEASURED: v0 sits in a 136 m-radius corner with the 182 m grid behind
+    // it, so the line moves to the nearest node holding R >= 1500 m across the
+    // whole grid zone (radius there: 6482 m).
     //
     // startFrac is an INDEX fraction into the control points, NOT an arc
     // fraction. The points are not arc-uniform, so this value comes from
-    // projecting each control point onto the spline the grid is measured on and
-    // taking the nearest node that holds R >= 1500 m across the whole zone.
-    // Scaling a polyline length instead put this circuit on a 35 m radius.
+    // projecting each control point onto the spline the grid is measured on;
+    // scaling a polyline length instead lands on a 35 m radius.
     //
-    // sceneryStartFrac records that every prop, landmark and corner board was
-    // authored against the OLD origin, so the dressed world stays on its real
-    // corners while only the line and grid move.
+    // sceneryStartFrac keeps the dressing on the v0 origin it was authored
+    // against, so props, landmarks and corner boards stay on their real corners
+    // while only the line and grid move.
     startFrac: 0.1226,
     sceneryStartFrac: 0.0000,
     name: "BRANDS HATCH",

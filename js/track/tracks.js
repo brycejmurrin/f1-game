@@ -143,11 +143,11 @@ const Tracks = (function () {
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
     // ── THE PIT LANE IS REAL TARMAC, NOT A STRIP CARVED OUT OF THE ROAD ──────
-    // Until now the lane was painted INSIDE the racing surface: the road kept
-    // its width and the lane ate 3.2 m of it, which on a narrow circuit meant
-    // racing on less road because a pit lane existed. Widen the road across the
-    // pit window instead, by exactly the lane's width, so the racing surface is
-    // untouched and the lane is new tarmac beyond where the edge used to be.
+    // Painted INSIDE the racing surface, the lane eats 3.2 m of the road's
+    // width, so a narrow circuit races on less road because a pit lane
+    // exists. Widen the road across the pit window instead, by exactly the
+    // lane's width, so the racing surface is untouched and the lane is new
+    // tarmac beyond the racing edge.
     //
     // WHY HERE: the curvature LUT is baked two lines up and the mesh is not
     // built until build(), so this is the one seam where the window can be
@@ -539,9 +539,9 @@ const Tracks = (function () {
   const DEFS = (typeof window !== "undefined" && window.TrackDefs) || [];
 
   // CATMULL-ROM, not linear. X/Z has always been a spline; interpolating Y
-  // linearly creased the road at every one of the 64 samples, so the car crested
+  // linearly creases the road at every one of the 64 samples, so the car crests
   // a kink each ~60 m. What a driver feels is the CHANGE of gradient, not the
-  // gradient, so that read as "abrupt" even inside the baker's 8% slope clamp
+  // gradient, so that reads as "abrupt" even inside the baker's 8% slope clamp
   // (Brands Hatch, 2026-09-14: 8.0% max slope, 5.4% slope change per step).
   // C1 continuity here fixes it without touching the profile data; circuits
   // with no CircuitElevations entry never reach this function.
@@ -724,12 +724,12 @@ const Tracks = (function () {
       barrier: d.barrier || null, furniture: d.furniture || null, kit: d.kit || null,
       standSet: d.standSet || null, cityStyle: d.cityStyle || null,
     };
-    // PERF-FINDINGS: boot ran realPoints for all 40 circuits (24.0 ms)
-    // even though a session builds exactly one. Keep LIST.length===40 and every
+    // PERF-FINDINGS: realPoints for all 40 circuits costs 24.0 ms at boot,
+    // and a session builds exactly one. Keep LIST.length===40 and every
     // metadata field copied as today; defer points (+ startFrac remaps /
     // elevation fmap / applyHwZones) until first access. The getter replaces
-    // itself with a data property after materializing the SAME pipeline that
-    // used to run inline — bit-identical once touched. Tracks.build →
+    // itself with a data property after materializing the SAME pipeline —
+    // bit-identical once touched. Tracks.build →
     // buildCenterline calls ensurePoints so the heavy path never sees a getter.
     Object.defineProperty(def, "points", {
       configurable: true,

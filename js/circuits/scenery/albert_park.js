@@ -1,8 +1,8 @@
 /* Apex 26 — ALBERT_PARK scenery (data only), split out of js/circuits/albert_park.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["albert_park"] =
   function (api) {
@@ -638,12 +638,11 @@
             seat.box(stage, vadd(vadd(a.c, a.r, lat), a.u, y + 0.14),
                      [1.0, 0.5, len - 1.2], [0.30, 0.33, 0.38], b);
             // General admission, half-empty in practice — so this row is a
-            // SPARSE speckle of standing clumps, never one box per seat. The
-            // old ~1 m stride emitted a body slot for every seat on every row
-            // of every deck; at the distance these are read from, a clump of
-            // three is indistinguishable from three people, and this circuit is
-            // already among the heaviest in the fleet. Clump width (1.6 m) is
-            // what keeps the thinned run reading as full as the old one.
+            // SPARSE speckle of standing clumps, never one box per seat: at the
+            // distance these are read from, a clump of three is
+            // indistinguishable from three people, and this circuit is already
+            // among the heaviest in the fleet. Clump width (1.6 m) keeps the
+            // thinned run reading full.
             const cnt = Math.min(12, Math.floor(len / 4.2));
             for (let j = 0; j < cnt; j++) {
               const h2 = hash(k(s) * 11 + t * 61 + j * 19);

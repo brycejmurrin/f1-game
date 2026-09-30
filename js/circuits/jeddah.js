@@ -4,7 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "jeddah",
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Known-wrong corner placement (START-LINES: no usable source). Deliberately untouched.
     startFrac: 0.9625,
     name: "JEDDAH",

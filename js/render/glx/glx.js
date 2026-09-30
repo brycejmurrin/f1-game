@@ -241,7 +241,7 @@ const GLXBackend = (function () {
   // every begin() — and begin() runs up to eight times a game frame.
   const ZERO3 = [0, 0, 0];
   const SKY_ZENITH_DEF = [0.18, 0.40, 0.78], SKY_HORIZON_DEF = [0.62, 0.74, 0.88];
-  // begin() fallbacks (hoisted: these used to be allocated every begin()).
+  // begin() fallbacks (hoisted so begin() does not allocate).
   const REFL_SKY_HORIZON_DEF = [0.05, 0.06, 0.09], REFL_SKY_ZENITH_DEF = [0.02, 0.025, 0.05];
   const AMB_SKY_DEF = [0.3, 0.32, 0.36], AMB_GROUND_DEF = [0.2, 0.19, 0.18];
 
@@ -590,10 +590,10 @@ const GLXBackend = (function () {
     if (!_softPresent) return Promise.resolve(_softBlitGen);
     if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
     // Wait for a NEWER blit, not the last one already on the overlay.
-    // The wrap/indexOf(waiter) mismatch used to leave timed-out waiters on
-    // the list forever, and an early return on gen>0 made SAVE SCREENSHOT
-    // after a camera move byte-identical to the previous still (same class
-    // as TLX/WGX 2026-09-03). Timeout must splice the same function push()
+    // A wrap/indexOf(waiter) mismatch leaves timed-out waiters on the list
+    // forever, and an early return on gen>0 makes SAVE SCREENSHOT after a
+    // camera move byte-identical to the previous still (same class as
+    // TLX/WGX). Timeout must splice the same function push()
     // stored — see renderer-soft-lifecycle. Return true/false so notify's
     // keep[] can re-queue waiters whose predicate has not fired (a dim
     // skip never notifies; the next good blit must still wake them).
@@ -825,36 +825,17 @@ const GLXBackend = (function () {
       useProg, bindVAO, setBlend, setDepthMask, setCull, setPolyOffset,
       compile, link, locs, beginLinks, resolveLinks,
       toF32, createMesh, litMaterial,
-      // ARITY 3 ON PURPOSE, and this is a REVERT, not the original oversight.
+      // ARITY 3 ON PURPOSE — a REVERT, not an oversight (decision record).
       //
-      // The bug is real: GLXChunked's per-chunk lamp upload passes SIX
-      // arguments, so L2/o2/n2 — the car tail-light slice — were dropped here
-      // and every per-chunk lamp set silently lost the field's tail lights.
-      // Forwarding them (2026-08-14) fixed that. It also turned a code path
-      // that had been inert since PER-CHUNK LAMPS shipped into a live one for
-      // the first time, and the very next build drew a crash report from a
-      // player running with the knob on.
-      //
-      // That crash is NOT reproducible here: boot, build, race, night,
-      // perChunkLights at 1 / 0.3, roadChunkLamps, and four track changes
-      // including a free+rebuild of vegas all run clean under SwiftShader, and
-      // test:tiny is 71/71. But with the knob at 1 the other three changes in
-      // that build are provably no-ops (the per-chunk dimmer computed to exactly
-      // 1, so col*1 was bit-identical — that scale and its per-lamp inFrameTail
-      // test have since been removed as dead; the knob ranges change no runtime behaviour;
-      // envCull was default-off), which leaves this as the only live behavioural
-      // delta reaching that player.
-      //
-      // Suspect by elimination, not by a fault anyone has pointed at — so it
-      // goes back to the shipped-for-months behaviour while the crash is
-      // diagnosed, rather than staying in on the strength of my own reasoning.
-      // The cost of reverting is one cosmetic loss (scenery does not catch
-      // tail-light spill under per-chunk lamps) that nobody had until this
-      // week. Re-land it WITH a repro of the crash it may or may not have
-      // caused, not before.
-      // (Re-applied 2026-08-21: the 6-arg forwarding reappeared in the build-
-      // 1496 squash merge with this decision record intact — the revert was
-      // lost in the merge, not overturned; no crash repro has landed.)
+      // GLXChunked's per-chunk lamp upload passes SIX arguments, so L2/o2/n2 —
+      // the car tail-light slice — are dropped here and per-chunk lamp sets
+      // lose the field's tail lights. Forwarding them made a previously inert
+      // path live, and the next build drew a player crash report with the
+      // per-chunk knob on; it is the only live behavioural delta that build
+      // reached that player with, though the crash does not reproduce under
+      // SwiftShader. The cost of reverting is one cosmetic loss (scenery does
+      // not catch tail-light spill under per-chunk lamps). Re-land it WITH a
+      // repro of the crash, not before (gfx-backend-canary pins this arity).
       uploadLightSet: (L, idx, n) => uploadLightSet(L, idx, n),
       // Lamp-shadow SLOT retarget for per-chunk light sets (GLXChunked): the
       // lit shader gates its lamp PCF on loop slot == uLampShadowIdx — a slot
@@ -1147,8 +1128,7 @@ const GLXBackend = (function () {
     // Packed and interleaved by VertexPack (js/render/shared/vertex-pack.js).
     // Optional per-vertex material id (data.mat) rides in the alpha of the
     // colour attribute and so costs nothing; meshes without it encode 0, which
-    // is the same FLAT the old disabled attribute 3 read from its generic
-    // default. Optional track coords (data.trk: arc-length s, signed lateral
+    // is FLAT. Optional track coords (data.trk: arc-length s, signed lateral
     // offset, half-width — attrib 4) let the ROAD evaluate its markings
     // analytically in the fragment shader instead of carrying a vertex column
     // per painted line. Meshes without it read (0,0,0), and the shader gates on
@@ -1692,15 +1672,12 @@ const GLXBackend = (function () {
     // here is what made it a toggle.
     framePerChunkLights = +frame.perChunkLights || 0;
     frameRoadChunkLamps = +frame.roadChunkLamps || 0;
-    // The knob is NO LONGER a brightness multiplier. It used to dim every track
-    // lamp to compensate for chunked scenery reading too bright — and the reason
-    // it read too bright is that the per-chunk path was fed the RAW baked list,
-    // with none of LAMP LEVEL / TEMPERATURE / FLICKER / WARM-UP / the twilight
-    // ramp applied. setFrameLights now scales that set exactly like the culled
-    // one, so the compensation is not needed and actively harmed: applied to the
-    // GLOBAL set too, it meant a governor tier shed (which zeroes the knob)
-    // stepped the whole night ~3.3x brighter and back. The knob keeps its real
-    // jobs — enabling per-chunk sets and setting their cap via capFor.
+    // The knob is NOT a brightness multiplier. setFrameLights scales the
+    // per-chunk set exactly like the culled one (LAMP LEVEL / TEMPERATURE /
+    // FLICKER / WARM-UP / twilight ramp), so no compensation is needed — and
+    // one applied to the GLOBAL set would step the whole night ~3.3x brighter
+    // whenever a governor tier shed zeroes the knob. Its jobs are enabling
+    // per-chunk sets and setting their cap via capFor.
     frameTailStart = frame.tailStart | 0;
     frameTailCount = frame.tailCount | 0;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
@@ -1743,8 +1720,8 @@ const GLXBackend = (function () {
 
     useProg(litProg);
     // Sampler units are program state: point uEnvCube at unit 6 ONCE per link
-    // (the cube itself is bound there every frame below). This used to be a
-    // uniform1i on every begin() — up to eight a game frame.
+    // (the cube itself is bound there every frame below), not a uniform1i on
+    // every begin() — up to eight a game frame.
     if (!_envUnitSet) { gl.uniform1i(litU.uEnvCube, 6); _envUnitSet = true; }
     bindLampBake(frame);
     gl.uniformMatrix4fv(litU.uViewProj, false, frame.viewProj);
@@ -1951,7 +1928,7 @@ const GLXBackend = (function () {
     // matte (gentle analytic sheen) instead of mirroring last race's scene.
     // Fallback 0 (= probe OFF) is the SAFE side of the tier-gated TUNE_DEFS
     // carEnvCube default (0.3 desktop / 0.0 mobile) — a caller with no tune obj
-    // gets no probe rather than the old 1.0 fallback's full-mirror surprise.
+    // gets no probe rather than a full-mirror surprise.
     uf1(litU.uEnvStr, _litUf, "envStr", (envTex && envReady && !_envActive && !frame.noEnv)
       ? (T && T.carEnvCube != null ? T.carEnvCube : 0.0) : 0.0);
     // Point lights (floodlights / street lights). frame.lights is a flat array
@@ -2138,8 +2115,7 @@ const GLXBackend = (function () {
   // opts.upload === false is the SHADOW cull (game.js drawPropShadows): the pack
   // goes to the batch's OWN shadow instance buffer, never ibo. Sharing ibo made
   // every shadow recentre stomp the camera pack and its cell-set cache, so the
-  // camera cull always re-uploaded on the same frame (bug hunt 2026-09-09;
-  // WGX already separated the buffers on 2026-09-02).
+  // camera cull always re-uploaded on the same frame (WGX separates them too).
   function _shadowPackFor(batch) {
     if (!batch.packMatrices || !batch.ibo) return null;
     if (!batch._shadowPacked) batch._shadowPacked = new Float32Array(batch.packMatrices.length);
@@ -2321,7 +2297,7 @@ const GLXBackend = (function () {
     if (batch.shadowCbo) { gl.deleteBuffer(batch.shadowCbo); batch.shadowCbo = null; }
     batch._shadowPacked = null;
     batch._shadowColors = null;
-    freeMesh(batch);   // a hoisted same-scope declaration; the old `if` could not be false
+    freeMesh(batch);   // a hoisted same-scope declaration: no existence guard needed
   }
 
   function draw(mesh, modelMat, opts) {
@@ -2727,7 +2703,7 @@ const GLXBackend = (function () {
     envFaceEnd,
     mirrorBegin,
     mirrorEnd,
-    mirrorRect: (r) => { if (PST) PST.mirror.rect(r); },
+    mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
     mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }),
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the

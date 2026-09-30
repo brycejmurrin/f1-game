@@ -116,15 +116,9 @@ const vt = (fn) => {
   setTimeout(run, 60);
 };
 
-// Full-screen team picker: the twelve-way team choice, opened from the
-// garage's TEAM & DRIVER tab. It used to be reachable from a summary card on
-// the select screen too; that card is gone, and the garage is the one place a
-// team is chosen.
+// Full-screen team picker: the twelve-way team choice. Its ONE host is the
+// garage's TEAM & DRIVER tab — the garage is the one place a team is chosen.
 const teamPicker = () => $("teampicker");
-// The picker's ONE host is the garage's TEAM tab (the select screen's card
-// door was removed with the screen split). A pickerHost variable and a
-// select-host rebuild branch survived that removal for a year with no caller
-// able to reach them — removed 2026-08.
 let previewOpenRaf = 0;
 
 function fittedLivery(t) {
@@ -177,9 +171,8 @@ function teamSwatch(t) {
 
 /* Open/close the team picker (the garage's TEAM tab is its one caller). */
 function setTeamPicker(open) {
-  // Build on open, not on every buildSelect(). The tiles used to be filled in
-  // by buildSelect alone, so opening the sheet from the garage straight off the
-  // title screen — where buildSelect has never run — showed an empty sheet.
+  // Build on open, not in buildSelect(): opened from the garage straight off
+  // the title screen, buildSelect has never run and the sheet would be empty.
   Log.info("ui", "Menus.setTeamPicker " + (open ? "open" : "close"));
   if (open) buildTeamPicker();
   teamPicker().hidden = !open;
@@ -228,10 +221,8 @@ function buildTeamPicker() {
       // Same as the circuit row: the decision this sheet exists for clicked
       // silently while the card that OPENED it did not.
       if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
-      // The old team's driver index means nothing here, so this used to reset
-      // to seat 0 flat. In a friend race seat 0 may be the seat the other
-      // player is in, which dropped you straight into a taken seat with a
-      // disabled chip underneath you. Take the first seat nobody holds; the
+      // The old team's driver index means nothing here, and a flat seat 0 may
+      // be the other player's seat in a friend race. Take the first seat nobody holds; the
       // seat-clash rule in js/net/lobby.js catches the simultaneous case.
       let seat = 0;
       while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
@@ -381,9 +372,8 @@ function trackFilterBar() {
 
 // One tile per circuit: a flag over a name. `.track-row` is the picker's
 // row contract (aria-label = the circuit name, aria-pressed = chosen, hidden
-// when a search excludes it) — the same button the old vertical list was, so
-// the keyboard walker, the gamepad and every spec that names it still work;
-// only its shape changed. data-kind carries night/street/classic for the
+// when a search excludes it), so the keyboard walker, the gamepad and every
+// spec that names it work on it. data-kind carries night/street/classic for the
 // stylesheet; the .trb badges stay in the DOM (hidden in the strip) because the
 // SEASON filter's "no classics shown" contract is asserted on them.
 function trackTile(t, i, opts) {
@@ -432,8 +422,7 @@ function revealActiveTile() {
 }
 
 function buildSelect() {
-  // ONE QUESTION: WHERE. The car summary that used to share this screen is
-  // gone (index.html) — WHO and WHAT are chosen in the garage via YOUR CAR.
+  // ONE QUESTION: WHERE. WHO and WHAT are chosen in the garage via YOUR CAR.
   // NEXT opens race settings. The only thing that differs between modes here
   // is what the screen is called and what the foot button promises next.
   const room = !!G.netRoom;
@@ -593,8 +582,8 @@ function buildSelect() {
   // SwiftShader contexts competed). The strip has a box by then too, so the
   // chosen tile can be scrolled into view.
   // FIRST, A ZERO-DELAY TIMER. Anything heavy queued right after this screen
-  // opens (the boot flyby build used to land here and hold the main thread
-  // for seconds on a slow device) pushes the rAF pair and the hero's
+  // opens (a flyby build can hold the main thread for seconds on a slow
+  // device) pushes the rAF pair and the hero's
   // ResizeObserver behind it, leaving the outline at its 520x300 attribute
   // size until then (measured 5 s on SwiftShader). A timer queued now runs
   // first, so a synchronous reveal (reduced motion, or a browser without view

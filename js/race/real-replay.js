@@ -206,7 +206,7 @@ const RealReplay = (function () {
     // What it reads each frame — one object for the run, the lists computed only when asked.
     const bcState = {
       get script() { return run.script; }, get T() { return run.T; }, get speed() { return run.speed; },
-      get list() { return run.list; }, get reel() { return !!run.reel; },
+      get list() { return run.list; }, get reel() { return !!run.reel; }, get follow() { return run.follow; },
       get followNum() { const f = run.follow && run.cars.get(run.follow); return f ? f.num : null; },
       isOut: (num) => { for (const [c, f] of run.cars) if (f.num === num) return !f.tr || !!(f.parked && c.retired); return true; },
       carOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c; return null; },

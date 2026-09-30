@@ -1,4 +1,4 @@
-/* Apex 26 — GarageEquipment: the pit equipment standing in the bay. The rear jack, the wheel guns on their hose reels, the tyre trolleys, floor boxes, the fan, the trophy cabinet and the timing-screen housing, built into the per-wall groups by build(g, liv, ctx). Split out of scene.js on 2026-09-08. */
+/* Apex 26 — GarageEquipment: the pit equipment standing in the bay. The rear jack, the wheel guns on their hose reels, the tyre trolleys, floor boxes, the fan, the trophy cabinet and the timing-screen housing, built into the per-wall groups by build(g, liv, ctx). Split out of scene.js. */
 const GarageEquipment = (function () {
   "use strict";
   const { Z_BACK, STEEL, DARK, block, cyl, tube, hose, MAT, scale, rgb, tile } = GaragePrims;

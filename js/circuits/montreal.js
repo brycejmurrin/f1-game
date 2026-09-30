@@ -5,11 +5,10 @@
   {
     id: "montreal",
     pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
-    reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
+    reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.1 m off centreline, 2 nodes past vertex 0.
-    // Was 0.9150. That already measured straight (mean |k| 0.00003 over
-    // 120 m) — it was on the wrong PART of the lap, not in a corner.
-    // See docs/tracks/START-LINES.md.
+    // 0.9150 also measures straight (mean |k| 0.00003 over 120 m) but
+    // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
     startFrac: 0.0198,
     name: "MONTREAL",
     gp: "Canadian GP",
@@ -23,12 +22,12 @@
       // Bespoke parkland below owns Montreal's foliage; avoid a duplicate shared row.
       { kind: "foliage", s0: 0, s1: 1 },
       // Foldbacks need a furniture-free envelope on both sides.
-      { kinds: ["lighting"], s0: 0.05, s1: 0.09 },   // T1-T2 foldback (was 0.19-0.23 under the 0.86 shift)
-      { kinds: ["lighting"], s0: 0.55, s1: 0.59 },   // hairpin foldback (was 0.69-0.73)
+      { kinds: ["lighting"], s0: 0.05, s1: 0.09 },   // T1-T2 foldback
+      { kinds: ["lighting"], s0: 0.55, s1: 0.59 },   // hairpin foldback
     ],
     pal: { zenith: [0.30, 0.50, 0.82], horizon: [0.74, 0.80, 0.86], grass: [0.24, 0.50, 0.20], runoff: [0.18, 0.38, 0.16], fogDensity: 0.0014, sunDir: [0.5134360308102702, 0.6067880364121376, 0.6067880364121376], sun: [1, 0.92, 0.78], sunColor: [1, 0.9, 0.76] },
-    // Re-keyed +0.8598 (the old _sceneryShift) when the bogus sceneryStartFrac
-    // 0.915 was dropped, so every bank stays on the corner it already sat on.
+    // Racing-frame fracs (scenery-frame values +0.8598), so each bank sits on
+    // its corner with no sceneryStartFrac.
     bankZones: [
       { frac: 0.0769, angleDeg: 3.0, widthM: 120 },   // T2
       { frac: 0.2296, angleDeg: 3.0, widthM: 120 },   // T5

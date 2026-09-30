@@ -442,3 +442,46 @@ test("no engineer call under the pause menu (VS FRIEND keeps ticking)", () => {
   const src = readFileSync(join(ROOT, "js/race/engineer.js"), "utf8");
   assert.match(src, /if \(!c \|\| !c\.local \|\| !\(dt > 0\) \|\| G\.paused\) return "";/);
 });
+
+// ── 6. The adaptive lines: threat, rejoin, pace ────────────────────────────
+
+test("the undercut THREAT comes before the rival boxes, and the stop call says where it rejoins", () => {
+  assert.match(line({ threat: "LEC", lapsToStop: 2, wear: 0.6 }), /^LEC CAN UNDERCUT — BOX NEXT LAP TO COVER$/);
+  // A rival that HAS boxed is the stronger call.
+  assert.match(line({ threat: "LEC", rivalBoxed: "LEC", lapsToStop: 2 }), /HAS BOXED/);
+  assert.match(line({ lapsToStop: 1, nextCode: "H", rejoin: "NOR" }), /^BOX NEXT LAP — H — REJOIN BEHIND NOR$/);
+  assert.match(line({ lapsToStop: 1, nextCode: "H", rejoin: "" }), /^BOX NEXT LAP — H — CLEAR AIR$/);
+});
+
+test("pace calls: manage a set short of the flag, push one with laps to spare and a car to catch", () => {
+  const planned = { planned: true };
+  assert.match(line({ ...planned, setLaps: 4, stintLeft: 7, lapsToStop: null }), /^MANAGE THE TYRES — 7 LAPS TO THE FLAG/);
+  assert.equal(line({ ...planned, setLaps: 7, stintLeft: 7, lapsToStop: null }), "", "a set that reaches the flag needs no managing");
+  assert.match(line({ ...planned, setLaps: 12, stintLeft: 5, lapsToStop: 5, ahead: "PIA", aheadGap: 0.8 }), /^TYRES ARE GOOD — PUSH, PIA IS 0\.8s AHEAD$/);
+  assert.equal(line({ ...planned, setLaps: 12, stintLeft: 5, lapsToStop: 5 }), "", "nobody to push for: silence");
+  assert.equal(line({ ...planned, setLaps: 6, stintLeft: 5, lapsToStop: 5, ahead: "PIA", aheadGap: 0.8 }), "", "not enough spare to push");
+  // No plan, no pace call: the plan is what says a stop is still coming.
+  assert.equal(line({ setLaps: 4, stintLeft: 7, lapsToStop: null }), "");
+});
+
+test("senseOf reads the cars around the player: the threat, the car ahead, and the rejoin", () => {
+  const { eng, tyres, G } = sessionFor();
+  const c = carOn(tyres, { wear: 0.6, prog: 100000, speed: 70, lastLap: 90 });
+  c.lap = 5;   // carOn runs the car three laps into its stint
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], lapsAt: [7], stints: [7, 18] };   // lap 5: two to go
+  const behind = { code: "LEC", prog: 100000 - 70 * 4, lap: 5, pitState: "none" };
+  const ahead = { code: "PIA", prog: 100000 + 70 * 0.9, lap: 5, pitState: "none" };
+  G.cars = [c, behind, ahead];
+  G.track = { total: 5386 };
+  G.pits = { estimate: () => ({ lossS: 20, marginS: 0 }), windowOf: (o) => (o === behind ? "P6" : "") };
+  let s = eng.senseOf(c);
+  assert.equal(s.threat, "LEC");
+  assert.equal(s.ahead, "PIA");
+  assert.ok(Math.abs(s.aheadGap - 0.9) < 1e-6);
+  // The lap before the stop: a stop's loss (20 s at the lap's pace) behind us is LEC.
+  c.pitPlan.lapsAt = [6];
+  s = eng.senseOf(c);
+  assert.equal(s.rejoin, "LEC");
+  behind.prog = 0;   // nobody inside the loss window: clear air
+  assert.equal(eng.senseOf(c).rejoin, "");
+});

@@ -141,19 +141,14 @@ const NetTransport = (function () {
   // A TURN relay is the only thing that connects two symmetric NATs, and STUN
   // alone leaves roughly 10-25% of pairs unable to connect at all — which is
   // exactly the "both sides found an address but the link was blocked" failure
-  // seen on real devices.
+  // seen on real devices. Our traffic is ~2 KB/s per player and only relays
+  // when a direct path fails.
   //
-  // It turns out this does NOT have to be paid for. Open Relay publishes STATIC
-  // credentials intended to be embedded in client-side JavaScript, ~20 GB a
-  // month free, on ports 80 and 443 so corporate firewalls pass it. Our traffic
-  // is ~2 KB/s per player and only relays when a direct path fails, so that
-  // allowance is effectively unbounded here.
-  //
-  // THE STATIC FREE RELAY IS DEAD. Open Relay's embeddable credentials
-  // (openrelayproject/openrelayproject) were retired — Metered now requires a
+  // NO STATIC FREE RELAY. Open Relay's embeddable credentials
+  // (openrelayproject/openrelayproject) are retired — Metered requires a
   // per-account API key and a credentials endpoint that RETURNS the iceServers
-  // array. Measured from a real device: the old config gathered zero relay
-  // candidates while STUN worked, which is worse than shipping nothing,
+  // array. Measured from a real device, that static config gathers zero relay
+  // candidates while STUN works, which is worse than shipping nothing,
   // because it looks like a relay exists and diagnosis chases the wrong thing.
   //
   // That is why no static CREDENTIALS ship — what ships is a credentials URL
@@ -163,7 +158,7 @@ const NetTransport = (function () {
   //     when the lobby opens; when set it replaces the shipped URL, so a
   //     player who configured one is never quietly moved onto another quota.
   //   apex26.turn — a single static server you run yourself, listed first.
-  //   Since build 972, two free no-account relays, appended LAST so anything
+  //   Two free no-account relays, appended LAST so anything
   //   you configured still wins — but OFF unless opted into, and the
   //   free-relays block below says why that is not timidity.
   // THE SHIPPED RELAY. A Metered free-tier credentials URL on the game owner's
@@ -491,9 +486,9 @@ const NetTransport = (function () {
         }
       };
       ch.onclose = () => {
-        // Route through shutdown(): flipping ep.status here used to make
+        // Route through shutdown(): flipping ep.status here would make
         // shutdown() — the ONLY caller of pc.close() — a permanent no-op, so
-        // every peer-initiated disconnect leaked a live RTCPeerConnection,
+        // every peer-initiated disconnect would leak a live RTCPeerConnection,
         // its ICE agent, and up to INBOX_BYTE_CAP of buffered messages.
         shutdown("peer");
       };
@@ -576,8 +571,8 @@ const NetTransport = (function () {
       if (!count) return 0;
       // DETACH, THEN EMIT. _emit runs handlers synchronously, and one of them
       // empties this very array mid-walk: EV.BYE → stop() → shutdown() →
-      // `inbox.length = 0`. The old index walk then read inbox[i] as undefined
-      // and threw on `.channel` — out of pump(), out of the game loop, on the
+      // `inbox.length = 0`. An index walk would then read inbox[i] as undefined
+      // and throw on `.channel` — out of pump(), out of the game loop, on the
       // one frame a peer says goodbye. Clearing BEFORE the loop also means a
       // handler that queues a fresh message keeps it for the next pump instead
       // of having it wiped by a trailing reset.

@@ -321,10 +321,9 @@ const IncidentSim = (function () {
             if (w && fin(w.x) && fin(w.z)) { wx = w.x; wz = w.z; }
           } catch (e) { /* wx/wz keep the (px, pz) fallback set above */ }
         }
-        // Human and AI used to take separate branches here that wrote the same
-        // seven fields (px/pz/head/s/x/speed/vLat) in a different order — order
-        // that cannot matter, since each write is independent and ds/_lapCross
-        // only ever read c.s before it is reassigned below, in both orderings.
+        // Human and AI share one branch: the seven fields (px/pz/head/s/x/speed/
+        // vLat) are independent writes, and ds/_lapCross only read c.s before it
+        // is reassigned below, so write order cannot matter.
         const L = (G.track && G.track.total) || 1;
         let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
         if (fin(ds)) { c.prog += ds; _lapCross(c, ds, tf.s, L); }

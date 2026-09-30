@@ -30,12 +30,11 @@ const Car3D = (function () {
   const TYRE   = [0.06, 0.06, 0.07];
   const RIM    = [0.11, 0.11, 0.13];
   const HUB    = [0.28, 0.28, 0.31];
-  // Wheel-cover profile. The three tones have to SEPARATE — the old cover and
-  // hubcap were 0.28 and 0.15 of the same neutral under a studio key and washed
-  // into one flat disc.
+  // Wheel-cover profile. The three tones have to SEPARATE — 0.28 and 0.15 of
+  // the same neutral wash into one flat disc under a studio key.
   // Value ORDER matters more than the values: a covered F1 wheel is a bright
-  // machined rim around a DARK dish, and the first pass had it the other way up
-  // — a pale face with a dark ring, which reads as a hubcap off a road car.
+  // machined rim around a DARK dish; the other way up — a pale face with a
+  // dark ring — reads as a hubcap off a road car.
   const LIP      = [0.40, 0.41, 0.44];     // machined rim, the brightest ring
   const COVER    = [0.24, 0.245, 0.27];    // dish wall
   const COVER_IN = [0.14, 0.14, 0.16];     // its floor, deepest in shadow
@@ -868,12 +867,10 @@ const Car3D = (function () {
   // car in 2022-25; ~1700 against 1900 for 2026), and that gap is the whole
   // point of the endplate — the wake is pushed AROUND the outside of the tyre.
   //
-  // Ours stood 95 mm PROUD of it. Measured on the default build: the widest
-  // vertex in the whole car was (±1.045, 0.042, 2.570) — the endplate
-  // footplate, which grows outboard as `epX + s*(PLATE.footW * 0.23)`. Every
-  // endplate spec cleared the tyre: 1.016 / 1.045 / 1.089 / 1.067 against a
-  // 0.95 face. So the car measured 2.09 m wide at the WING and 1.90 m at the
-  // wheels, and read head-on like a wing bolted to a narrower car.
+  // The widest vertex is the endplate footplate, which grows outboard as
+  // `epX + s*(PLATE.footW * 0.23)`: uncapped, every endplate spec clears the
+  // 0.95 tyre face (1.016 / 1.045 / 1.089 / 1.067), a 2.09 m wing on a 1.90 m
+  // car that reads head-on like a wing bolted to a narrower car.
   //
   // 0.715 is set by the WIDEST option, not the default: sweeping all 31 aero
   // options, `outwash_max` and `reg26_concept` reach span + 0.240 (the spec-3
@@ -883,7 +880,7 @@ const Car3D = (function () {
   // 1.90 m car against the regulation 1700/1900. The invariant — no aero
   // option puts the wing outboard of the tyre — is held by
   // tests/unit/car-front-wing-width.test.mjs across every option, because
-  // calibrating on the default alone is what let two specs sit 5 mm proud.
+  // calibrating on the default alone lets two specs sit 5 mm proud.
   const FW_SPAN = 0.715;
   function frontHalf(aLvl) {
     return FW_SPAN * (aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0));
@@ -1278,19 +1275,19 @@ const Car3D = (function () {
     return [0, y / els.length, z / els.length];
   }
   // REGIONS.wing — the rear-wing sponsor band, on the flap's TOP SKIN at its
-  // REST attitude. It used to be authored off the recipe's DESIGN CHORD, where
-  // no flap is ever drawn: drawAeroFlaps hangs each one at its pivot and rotates
-  // it by zAngle (0.34 rad at EVERY level), so the band floated ~90 mm over a
-  // parked car and buried itself ~30 mm with the wing open. The old guard tested
-  // it against the element's axis-aligned BOUNDING BOX, which that rotation
-  // makes tall enough to swallow the error.
+  // REST attitude, not the recipe's DESIGN CHORD, where no flap is ever drawn:
+  // drawAeroFlaps hangs each one at its pivot and rotates it by zAngle
+  // (0.34 rad at EVERY level), so a design-chord band floats ~90 mm over a
+  // parked car and buries itself ~30 mm with the wing open. A guard against
+  // the element's axis-aligned BOUNDING BOX cannot see that: the rotation
+  // makes the box tall enough to swallow the error.
   //
   // It cannot FOLLOW the flap — baked into the static decal mesh, flap drawn
   // separately with no atlas UVs of its own — so rest is the pose it is authored
   // for and it lifts off as the wing opens, as the sponsor does on the real
   // element; making it follow means giving buildFlapGeom a UV channel. The
   // TOPMOST rear surface carries it (`rearTop` at max downforce, the baked DRS
-  // plane with that package); both used to be drawn straight over it. Chord
+  // plane with that package); both would otherwise draw straight over it. Chord
   // fractions clear the leading curl and the trailing edge, HALF is inside the
   // element's own 0.51, the span is cut into addWingFoil's own five segments so
   // the band follows the sweep, `proud` is along the local normal, not +Y.
@@ -1436,9 +1433,9 @@ const Car3D = (function () {
   // (0.72x, top - d), then two facets rounding over to a flat crown ±0.32x
   // wide at `top`. d is 18 % of the height, so the shoulders round in
   // proportion at every spine height and the crown reads as a hump rather
-  // than the box the old single trapezoid was ("less squared off"). The
-  // shoulder x is the old crown x, so the flank plane is unchanged and
-  // coverAt(z).top is still the crown centre.
+  // than a single-trapezoid box ("less squared off"). The shoulder x is the
+  // trapezoid's crown x, so the flank plane matches it and coverAt(z).top is
+  // the crown centre.
   const COVER_SHOULDER = 0.72, COVER_CROWN = 0.32, COVER_DROP = 0.18;
   function coverProfile(c) {
     const h = c.top - c.bottom, d = h * COVER_DROP;
@@ -1544,10 +1541,10 @@ const Car3D = (function () {
     return [at(i, vBase), at(1 - i, vBase), at(1 - i, 1 - i), at(i, 1 - i)];
   }
   // v0/v1 are FRACTIONS of the blade, not absolute heights: at fin 0.55 the top
-  // is at y 0.890, and the old fixed 0.725..0.955 window would have hung the
-  // badge off the end of the fin. u0/u1 are fractions of the BASE for the same
-  // reason across shapes: the stub's base is half the standard chord, and the
-  // old absolute z -1.235 would have put the badge's front edge off its nose.
+  // is at y 0.890, and a fixed 0.725..0.955 window would hang the badge off
+  // the end of the fin. u0/u1 are fractions of the BASE for the same reason
+  // across shapes: the stub's base is half the standard chord, and an
+  // absolute z -1.235 would put the badge's front edge off its nose.
   // On the standard shape these fractions reproduce z -1.235 / -1.465 exactly.
   // The WIDTH is not a fraction, though: it is the standard badge's aspect
   // (0.23 m over its 0.153 m height at fin 1) re-applied to each shape's own
@@ -1757,13 +1754,12 @@ const Car3D = (function () {
     // lower-field rays landing on body paint under the wheel (|yaw| < 25 deg)
     // 1073 -> 658 of 13430; the flanks the driver SHOULD see keep their paint.
     const monoC = ckpt ? CARBON : c1;
-    // THE OPENING HAS TO CLEAR THE WHEEL. The aperture used to start at the
-    // cockpit span's own front, z 0.05 — but the driver's hands and the wheel
-    // sit at z 0.17-0.21, so they were roofed by solid monocoque and no camera
-    // could see them. A cockpit you cannot see the wheel through is a slot with
-    // a head in it. The exterior monocoque therefore stops CLOSED at z 0.28 and
-    // the aperture carries on from there; the first-person build keeps the one
-    // closed span it has always had (its own dash geometry lives inside it).
+    // THE OPENING HAS TO CLEAR THE WHEEL. The driver's hands and the wheel sit
+    // at z 0.17-0.21, so an aperture starting at the cockpit span's own front
+    // (z 0.05) roofs them with solid monocoque where no camera can see them —
+    // a slot with a head in it. The exterior monocoque therefore stops CLOSED
+    // at z 0.28 and the aperture carries on from there; the first-person build
+    // keeps its one closed span (its own dash geometry lives inside it).
     const MONO_APEX_Z = 0.28;
     const monoAt = (z) => { const A = CHASSIS.monocoque[0], B = CHASSIS.monocoque[1];
       const f = (A.z - z) / (A.z - B.z), L = (a, b) => a + (b - a) * f;
@@ -1781,12 +1777,9 @@ const Car3D = (function () {
     addSpan(out, { z: 1.58, y: 0.058 + rideDY, w: 0.36, h: 0.028, t: 0.92 },
                  { z: 1.30, y: 0.062 + rideDY, w: 0.64, h: 0.030, t: 0.96 }, CARBON);
     addBox(out, 0, 0.132 + rideDY, 1.44, 0.10, 0.125, 0.26, CARBON);
-    // THE COCKPIT APERTURE. This span used to be ONE closed loft, so the deck
-    // over the driver was a filled surface and the helmet merely pierced it:
-    // a downward ray on the centreline crossed THREE lids (the tub top, and
-    // the old 0.045 surround slab's 0.622 face and 0.578 underside) with no
-    // opening anywhere — which is why the head read as sitting on the car
-    // rather than in it. addLoft emits all six faces and there is no CSG here,
+    // THE COCKPIT APERTURE. As ONE closed loft the deck over the driver is a
+    // filled surface the helmet merely pierces, and the head reads as sitting
+    // on the car rather than in it. addLoft emits all six faces and there is no CSG here,
     // so the hole has to come from HOW the span is built: a tub capped at the
     // seat floor, a rail either side, and the well closed behind.
     //
@@ -1794,7 +1787,7 @@ const Car3D = (function () {
     // the tub bottom is 0.195 the whole way, the deck top runs 0.635 -> 0.660
     // and the top half-width 0.197 -> 0.150. Rails come out ~4.5 cm across at
     // the coaming at BOTH ends because the opening narrows toward the headrest
-    // as the tub does — held straight, the rear rail was 1 cm and vanished.
+    // as the tub does — held straight, the rear rail is 1 cm and vanishes.
     const CK_A = CHASSIS.cockpit[0], CK_B = CHASSIS.cockpit[1];
     const CK_REAR_Z = -0.33;    // behind the headrest; the tub aft of it stays closed
     const CK_FLOOR_Y = 0.47;    // seat floor — the helmet's neck rim sits at 0.490
@@ -1867,7 +1860,7 @@ const Car3D = (function () {
     // 5. The tub AFT of the headrest stays a closed block, as it was.
     addSpan(out, ckMid, CK_B, c1);
     // Bevel only the CLOSED section: over the aperture the rails stop short of
-    // the old deck corners, so the original full-span crease hung in mid-air.
+    // the deck corners, so a full-span crease would hang in mid-air.
     addTopBevel(out, ckMid, CK_B, 0.028, c1);
   }
 
@@ -2235,14 +2228,13 @@ const Car3D = (function () {
     // — eye, wheel, cowl, nose is the order the real parts sit in. It must also
     // stay BELOW THE WHEEL'S TOP (rig 0.63 + half-height x 0.80 = 0.756): it is
     // further away, so equal height puts it HIGHER on screen and it draws over
-    // the wheel — measured, that is why the wheel once vanished. Top 0.54 here.
-    // THE SCUTTLE MUST FALL INTO THE COCKPIT, not wall it off. The exterior
-    // rear station used to top out at 0.660 (y 0.585 + h/2) and stop at z 0.08,
-    // which is 7.5 cm PROUD of the cockpit rail it meets at 0.585 and directly
-    // across the driver's face: the visor's own band is 0.612-0.700, so this
-    // slab took the bottom half of it and read as a wall with a helmet behind.
-    // Dropping it to a 0.605 top lands it on the rail line, so the deck now
-    // sweeps down into the opening the way a real scuttle does.
+    // the wheel (measured: the wheel vanishes). Top 0.54 here.
+    // THE SCUTTLE MUST FALL INTO THE COCKPIT, not wall it off. An exterior
+    // rear station topping out at 0.660 (y 0.585 + h/2) stands 7.5 cm PROUD of
+    // the cockpit rail it meets at 0.585, directly across the driver's face
+    // (the visor's band is 0.612-0.700): a wall with a helmet behind. A 0.605
+    // top lands it on the rail line, so the deck sweeps down into the opening
+    // the way a real scuttle does.
     const hR = ckpt ? { z: 0.58, y: 0.42, w: 0.66, h: 0.12, t: 0.58 }
                     : { z: 0.30, y: 0.545, w: 0.42, h: 0.13, t: 0.58 };   // stops at the aperture (0.28), top 0.610 onto the tub line
     addSpan(out, hF, hR, c1, c1);
@@ -2534,8 +2526,8 @@ const Car3D = (function () {
       for (const s of [-1, 1]) for (let i = 0; i < pn; i++) {
         const z = pz0 - i * pdz, p = anchors.coverAt(z);
         // Sunk to COVER_STACK.flankTrim: a hatch is a panel line, not a blister,
-        // and the drape has to run over it. At the old 19 mm it stood PROUD of
-        // the flank decal, a grey rectangle through any full-flank design.
+        // and the drape has to run over it. At 19 mm it stands PROUD of the
+        // flank decal, a grey rectangle through any full-flank design.
         addBox(out, s*(coverFlankX(p, p.top - 0.18) + COVER_STACK.flankTrim - 0.009), p.top - 0.18, z,
           0.018, 0.10, 0.13, [0.24,0.24,0.27], SURFACES.metal);
       }
@@ -3018,14 +3010,6 @@ const Car3D = (function () {
     // Measured on Monza: the halo group projected 47.7 deg above the eye line —
     // a dark bar across the middle of the frame. The chase car keeps all of it.
     if (!ckpt) {
-      // (The 0.40 x 0.045 x 0.78 slab that stood here was the FAKE opening: a
-      // flat plate at 0.622 under a closed deck, which is what a ray on the
-      // centreline hit second. The tub now carries a real aperture, rails and
-      // a floor, so the plate would float inside the well.)
-      // The dark converging beams + front post that used to sit here were the
-      // pre-tube inner halo frame. With the real titanium hoop and centre
-      // pillar in part("halo"), they were duplicate structure reading as a
-      // black chevron directly under the level crown bar — removed.
       addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop
       // Recipe-gated HEADREST behind the helmet: 0 flat rim (shipped) / 1 raised
       // horseshoe pad / 2 winged pad. Front face z -0.25 sits just behind the
@@ -3048,7 +3032,7 @@ const Car3D = (function () {
       // First-person hoop: same round-tube, LEVEL-bar treatment as the
       // exterior halo — the driver sees a flat bar across the top of the
       // frame (crown constant at 0.96), not tubes converging at the centre.
-      // Legs rise from the old loft endpoints (±0.30, 0.92, -0.15).
+      // Legs rise from (±0.30, 0.92, -0.15).
       const hk = opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];   // opts.halo = size (CockpitOpts.haloSize: 1 slim, 2 standard, 3 thick; true = 2)
       addTube(out, haloHoopPath(0.30, 0.92, -0.15, 0.28, 0.18, 0.96, 0.62), 0.025 * hk, 6, HALO, SURFACES.metal);
       addBox(out, 0, 0.79, 0.62, 0.045 * hk, 0.38, 0.045 * hk, HALO, SURFACES.metal); // front pillar
@@ -3063,9 +3047,9 @@ const Car3D = (function () {
     if (haloBlade > 0) {
       const bladeC = haloTint || HALO;
       // The fairing is a CO-AXIAL TUBE over the hoop's own centreline — a
-      // fairing thickens the hoop it wraps. The old four straight spans
-      // chorded the curve and read as the pre-tube triangle laid over the
-      // round halo. Radii sit 8-11 mm proud of the hoop: no coplanar faces.
+      // fairing thickens the hoop it wraps. Straight spans would chord the
+      // curve and read as a triangle laid over the round halo. Radii sit
+      // 8-11 mm proud of the hoop: no coplanar faces.
       if (haloBlade === 1) {
         // Low fairing: shoulders + crown bar only (path pts 3..11 of 15).
         addTube(out, hoop.slice(3, 12), hr + 0.008, 6, bladeC, SURFACES.metal);
@@ -3132,8 +3116,8 @@ const Car3D = (function () {
       // Tapered aero arm (wide at the tub, narrow at the housing) instead of a
       // flat box — real F1 mirror stalks are swept aero elements, not a plain post.
       // C3.7.5: the Inner Stay "must intersect Mirror Body and Mid Chassis". The
-      // ckpt root is BURIED in the crown; it used to start at 0.68 — 17 cm above
-      // it, attached to nothing. Move the crown and this must move with it.
+      // ckpt root is BURIED in the crown (a start at 0.68 is 17 cm above it,
+      // attached to nothing). Move the crown and this must move with it.
       const xi = s * (msx - 0.04), xo = s * mx;
       const sB = ckpt ? 0.53 : 0.68;    // root, BURIED in the crown (0.558 at z 0.92)
       const sR = ckpt ? 0.10 : 0.04;    // rise: must span crown -> housing underside
@@ -3142,9 +3126,9 @@ const Car3D = (function () {
         [xi, sB + aY, mz - 0.045], [xi, sB + aY, mz + 0.045], [xi, sB + sR + aY, mz + 0.045], [xi, sB + sR + aY, mz - 0.045],
         [xo, sB + sR*0.75 + aY, mz - 0.02],  [xo, sB + sR*0.75 + aY, mz + 0.02],  [xo, sB + sR*1.5 + aY, mz + 0.02],  [xo, sB + sR*1.5 + aY, mz - 0.02],
       ], DARK);
-      // Glass goes on the face TOWARD the viewer (-z). It used to sit at
-      // mz+0.066 — 8mm BEYOND the housing's own back face, so the driver AND
-      // the chase camera both saw carbon and never the reflective surface.
+      // Glass goes on the face TOWARD the viewer (-z). At mz+0.066 it sits
+      // 8 mm BEYOND the housing's own back face, and the driver AND the chase
+      // camera see carbon, never the reflective surface.
       // Housing as an 8-corner block with the outboard face pulled BACK in z —
       // the C14.2.2 d i inboard toe (~25°): real mirrors angle at the driver,
       // and the cant is what stops the housing reading as a shoebox.
@@ -3259,9 +3243,9 @@ const Car3D = (function () {
       // continuous tube, collars (±0.235, 0.505, -0.46) rising to a crown
       // that holds y 0.845 (+HALO_RISE shallow arch) from mid to mid while
       // sweeping to the front apex (z 0.49) — round in plan, never peaking or
-      // dipping toward the centre. r 0.028 keeps the old square section's
-      // outer envelope, so the haloBlade/haloWing/camPods attachments above
-      // still land on the hoop. haloSty/hr/crownY and the hoop path itself
+      // dipping toward the centre. r 0.028 keeps the square-section outer
+      // envelope the haloBlade/haloWing/camPods attachments above were placed
+      // against, so they land on the hoop. haloSty/hr/crownY and the hoop path itself
       // (haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49)) are
       // computed once beside the blade fairing above, which wraps the SAME
       // centreline as a co-axial tube.
@@ -3399,10 +3383,9 @@ const Car3D = (function () {
       const F = finOf(finShape);
       const fb = F.halfBase, ft = F.halfTop;
       // The base follows the engine cover in BOTH directions — sharkFinRoot(),
-      // the same function car-mesh places the decal from, so the graphic can no
-      // longer be left behind by a crown that moved. (It used to lower only, for
-      // exactly that fear; the price was 113 mm of the panel inside the cover on
-      // every shipped dorsal car.)
+      // the same function car-mesh places the decal from, so the graphic cannot
+      // be left behind by a crown that moved. (Lowering only costs 113 mm of the
+      // panel inside the cover on every shipped dorsal car.)
       const fRoot = sharkFinRoot(anchors, aeroStyle && aeroStyle.fin, finShape);
       const bLE = fRoot.bLE, bTE = fRoot.bTE;
       const root = (z, y0) => {

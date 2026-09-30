@@ -87,14 +87,10 @@ const FlybySeq = (function () {
    * cinematic renders with the far plane pushed out and the fog thinned, the
    * way photo mode does.
    *
-   * BOTH ENDS READ THESE. The live screen (js/game.js's flyby branch) and the
-   * EDITOR's preview (__apex.flybyCam, through dbgCam) used to pick their own:
-   * the preview got photo mode's 6000 m and 15 % fog, the live screen got
-   * gameplay's 900 m and 100 % fog, and the same shot came out clear in the
-   * editor and a wall of haze on the loading screen. Reported as "why does the
-   * loading flyby look way more foggy than what's shown in the editor" — it was
-   * not the lighting, it was the lens. One pair of numbers, so they cannot
-   * disagree again. */
+   * BOTH ENDS READ THESE: the live screen (js/game.js's flyby branch) and the
+   * EDITOR's preview (__apex.flybyCam, through dbgCam). With separate far clip
+   * and fog (6000 m / 15 % vs gameplay's 900 m / 100 %) the same shot is clear
+   * in the editor and a wall of haze on the loading screen. */
   const FAR = 6000;               // metres of far clip — a whole circuit, not a corner
   const FOG = 0.15;               // × the session's fog density (photo mode's value)
   // Near plane. Pinned rather than inherited: gameplay picks 0.3 for cockpit and
@@ -676,9 +672,9 @@ const FlybySeq = (function () {
     // out than a grandstand without a per-circuit number.
     if (pose.at === "landmark") {
       const lm = landmarks(track);
-      // NO LANDMARK: the whole circuit instead. This used to be "start + 20 m",
-      // which for a LOOK pose sat 8 m above an eye that the same fallback put
-      // at start + 12 m — the camera stared straight up. A whole-circuit pose
+      // NO LANDMARK: the whole circuit instead. A "start + 20 m" fallback puts
+      // a LOOK pose 8 m above an eye the same fallback puts at start + 12 m —
+      // the camera stares straight up. A whole-circuit pose
       // keeps an eye an eye and a look a look (solve() swaps the whole shot for
       // landmarkFallback(); this is for callers that solve one pose).
       if (!lm.length) {
@@ -920,8 +916,8 @@ const FlybySeq = (function () {
        wide2       the far side of the lap, lower and closer
        landmark1/2 this circuit's own buildings, from the TRACK side, low,
                    looking UP so they stand against the sky with the circuit
-                   in front of them (it used to look DOWN at them from above
-                   their centre — towers against grass, no horizon, no track)
+                   in front of them (looking DOWN from above their centre
+                   gives towers against grass, no horizon, no track)
        turn-*      from the OUTSIDE of the turn, raised like a trackside stand
        grid-crane  up behind the back row: the whole field, long lens
        grid        up the aisle between the columns, ending among the front
@@ -988,9 +984,8 @@ const FlybySeq = (function () {
       fov: [40, 43],
     },
     // ---- and then the grid you start from ------------------------------------
-    // The road's slope-scaled depth bias used to hide every car seen from ahead
-    // of pole (fixed in PR #248: the road draws unbiased), so the grid can now
-    // be filmed from the front again.
+    // The road draws without slope-scaled depth bias (PR #248), so the grid can
+    // be filmed from ahead of pole.
     {
       id: "grid-walk", dur: 0.08, ease: "inOut",
       // THE GRID WALK: head height, a slow dolly up the aisle between the
@@ -1484,7 +1479,7 @@ const FlybySeq = (function () {
     // plans, not up to 14: the rate falls roughly with the travel, so the first
     // measurement predicts the rung; walk down while too fast, then up while the
     // rung above still passes. One planEye is up to ~30 ms on a dense circuit,
-    // and the old walk from the top cost 657 ms for one shot (Mont-Tremblant).
+    // and walking down from the top cost 657 ms for one shot (Mont-Tremblant).
     let best = at(1);
     if (best.fast && (squeeze(track, shot.eye, 0.5) !== shot.eye || squeeze(track, baseLook, 0.5) !== baseLook)) {   // else nothing to squeeze
       const rung = (n) => at(Math.pow(PAN_K, n));

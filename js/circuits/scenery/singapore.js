@@ -1,8 +1,8 @@
 /* Apex 26 — SINGAPORE scenery (data only), split out of js/circuits/singapore.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["singapore"] =
   function (api) {
@@ -19,9 +19,9 @@
       // flipped, while the kit's frameAt is shift-only (frac + _sceneryShift).
       // So the node that meets the kit at authored frac s is the MIRROR INVERSE
       // (n - K(s)) % n with the opposite side, and the shift cancels. (A KOLD
-      // index-shift helper stood here until 2026-09-01; it put the beacon
-      // 1.4 km from the tower, and the "corrected" arc shift 33 m in the air —
-      // measured in the Node build, see docs/ARCHITECTURE-REVIEW.md §7.)
+      // index shift puts the beacon 1.4 km from the tower, and a plain arc
+      // shift 33 m in the air — measured in the Node build, see
+      // docs/ARCHITECTURE-REVIEW.md §7.)
       const kitNode = (s) => (n - K(s)) % n;
 
       // Shared-kit adoption: bounded race operations outside the bay hero zones.
@@ -589,10 +589,9 @@
           const c   = vadd(vadd(a.c, a.t, (t2 - 0.5) * 66), a.u, up + 2);
           // Piers at the abutments and the third points, down to the rendered
           // ground under each. The deck starts 2 m up and the arch reaches 15 m,
-          // and nothing else of the bridge touches the ground: it used to read
-          // as supported only because the generic city pass stacked buildings
-          // under it — the very buildings the side-1 0.78-0.90 exclusion is
-          // there to remove (float-audit: 5 clusters once that rule landed).
+          // and nothing else of the bridge touches the ground: the side-1
+          // 0.78-0.90 exclusion removes the generic city buildings beneath it
+          // (float-audit: 5 clusters without the piers).
           if (j % 5 === 0) {
             const gy = groundUnder(c[0], c[2]) - 0.5;
             const ph = c[1] - gy + 1.0;
@@ -814,15 +813,11 @@
         bush(k, hash(k) < 0.5 ? -1 : 1, 8 + hash(k) * 5, [0.14, 0.36, 0.18]);
       });
 
-      // TRACKSIDE NEON SIGNAGE — collapsed from three overlapping billboard
-      // passes (a 32-slot barrier ring, a scattered punctuation pass and a
-      // corner-neon pass) that stacked near-identical geometry, worst around
-      // s 0.90-0.98 where all three used to fire within a few metres of each
-      // other. One varied pass now carries the same neon presence: hand-set
-      // corner/straight positions (folded in from the old scattered + corner
-      // passes) plus a sparse jittered ring filling the gaps between them —
-      // never a mechanical 1-in-32 grid — and it explicitly skips s
-      // 0.895-0.995, which the pit-straight funnel below already owns.
+      // TRACKSIDE NEON SIGNAGE — ONE varied pass (separate ring, scatter and
+      // corner passes stack near-identical geometry): hand-set corner/straight
+      // positions plus a sparse jittered ring filling the gaps between them —
+      // never a mechanical 1-in-32 grid. It skips s 0.895-0.995, which the
+      // pit-straight funnel below owns.
       for (const [s, side, hue, w, h] of [
         [0.04,  1, 1, 16, 10], [0.08,  1, 2, 15, 9],  [0.14, -1, 0, 17, 10],
         [0.24, -1, 3, 14, 9],  [0.31,  1, 1, 18, 10], [0.36,  1, 0, 15, 9],

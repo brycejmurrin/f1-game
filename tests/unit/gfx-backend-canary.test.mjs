@@ -5192,3 +5192,27 @@ test("cancelled menu finishing cannot change the active montage", async () => {
     assert.equal(_menuFly, null);
   }
 });
+
+test("the mirror composite's flip reaches every backend: default flipped (the mirror), false straight (the broadcast PiP)", () => {
+  // js/render/shared/mirror-pass.js re-aims the ONE mirror target at a second car
+  // in a REAL RACE WATCH and composites it unflipped (mirrorRect(rect, false)).
+  // Each backend carries the flag to its own composite; a backend that dropped it
+  // would show the PiP as glass, or — worse — the mirror as a straight picture.
+  const glsl = read("js/render/glx/shaders/glsl-post.js");
+  assert.match(glsl, /uniform float uFlip;/);
+  assert.match(glsl, /mix\(vUV\.x, 1\.0 - vUV\.x, uFlip\)/, "GLX samples by the flag");
+  const post = read("js/render/glx/post.js");
+  assert.match(post, /rect\(r, flip\) \{[^}]*mirFlip = flip !== false;/, "GLX defaults to flipped");
+  assert.match(post, /gl\.uniform1f\(mirU\.uFlip, mirFlip \? 1 : 0\)/);
+  assert.match(read("js/render/glx/glx.js"), /mirrorRect: \(r, flip\) => \{ if \(PST\) PST\.mirror\.rect\(r, flip\); \}/);
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /flip: uniform\(1\)/);
+  assert.match(tsl, /mix\(p\.x, p\.x\.oneMinus\(\), mirrorU\.flip\)/, "TLX samples by the flag");
+  assert.match(read("js/render/three/tlx-post.js"), /_mirFlip = flip !== false;[\s\S]{0,1200}M\.U\.flip\.value = _mirFlip \? 1 : 0/);
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);
+  assert.match(tlx, /HalfFloatType, _mirFlip\);/, "TLX hands the flag to the post chain");
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, /_mirData\[1\] = _mirFlip \? 1 : 0/, "WGX: the shader already branches on params.y");
+  assert.match(wgx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);
+});

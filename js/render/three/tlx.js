@@ -52,12 +52,10 @@ const TLX = (function () {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
 
-      // PHONES GET TLX WHEN THEY PICK IT (decision 2026-09-02)
-      // three retains the CPU copy of every geometry attribute (71.5 MB /
-      // 5,665 buffers vs GLX 17.8 MB / 253) and that has jetsam-killed an
-      // iPhone tab mid-race; releasing the arrays was DISPROVED live
-      // (docs/PERF-FINDINGS.md 2m). The gate declined phones by default until
-      // the owner chose three on phones despite the risk: now an OPT-OUT
+      // PHONES GET TLX WHEN THEY PICK IT. three retains the CPU copy of every
+      // geometry attribute (71.5 MB / 5,665 buffers vs GLX 17.8 MB / 253) and
+      // that has jetsam-killed an iPhone tab mid-race; releasing the arrays was
+      // DISPROVED live (docs/PERF-FINDINGS.md 2m). So phones are an OPT-OUT
       // (apex26.tlxMobile="0"), with the boot canary (gfxBackendProbe reverts
       // a load that never presented) and the RENDERER button as the way back.
       const _mobileOptOut = (function () {
@@ -166,12 +164,9 @@ const TLX = (function () {
             const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
             // An EMPTY adapter.info is UNKNOWN, not software. Browsers trim
             // these fields to limit fingerprinting — Chrome already reports
-            // architecture and device as "" on the Apple adapter, and only
-            // vendor:"apple" kept it clear of the old infoEmpty clause. A
-            // player whose browser returns no vendor string would have been
-            // handed the degraded path on real hardware, which is this bug
-            // reachable with no CI involved. Break the tie on LIMITS, measured
-            // 2026-08-28: SwiftShader and llvmpipe both report
+            // architecture and device as "" on the Apple adapter, so an empty
+            // blob would hand real hardware the degraded path. Break the tie
+            // on LIMITS, measured 2026-08-28: SwiftShader and llvmpipe both report
             // maxTextureDimension2D 8192 / maxBufferSize 1 GiB; the Apple
             // adapter reports 16384 / 2 GiB.
             const lim = ad.limits || null;
@@ -179,8 +174,7 @@ const TLX = (function () {
               || lim.maxBufferSize <= 1073741824));
             // `soft(ware|pipe)`, NOT bare `soft` — that substring matches any
             // adapter whose info says "Microsoft", which is a real D3D12
-            // description on hardware. WGX's sniff (js/render/webgpu/wgx.js)
-            // was corrected for exactly this and TLX's copy kept the bug; here
+            // description on hardware (WGX's sniff guards the same way); here
             // a false positive costs the whole instanced prop set, not just a
             // presentation blit.
             const named = /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft(ware|pipe)/.test(infoBlob);
@@ -249,23 +243,17 @@ const TLX = (function () {
       // for the life of the canvas — so the decision has to be right here,
       // before three touches #game at all.
       //
-      // Deciding on the BIND rather than the PICK is the lesson the boot canary
-      // learned this week ("gfx === GLX on both paths, so only the bind site can
-      // tell them apart"). three will not tell us before it binds, so we ask the
-      // two questions it would ask, in its order, and stop guessing.
+      // Only the bind site can tell the two paths apart, and three will not say
+      // before it binds, so we ask the two questions it would ask, in its order.
       //
       // An explicit WebGPU pin (`_glPin === "0"`) is still honoured — the clause
       // already excludes it, and a pin is a user override. backendState()
       // reports canvasAlpha so that case is diagnosable rather than silent.
-      // WEBKIT (Safari, every iOS browser) TAKES three's WebGL2 BACKEND ON AUTO
-      // (2026-09-03). Two consecutive deploys rendered three-WebGPU wrongly on
-      // the owner's iPhone — first painted bodywork missing with decals live,
-      // then (c6d8fd3) nothing but the sky — with `gfx: three/webgpu` and ZERO
-      // reported GPU or WGSL errors on the GOV panel, so the failure is silent
-      // to every instrument this backend has. three's WebGL2 backend on the
-      // same phone is known-good (ed8f41f's 16-lamp cap was made for it). A
-      // pin of "0" (THREE PATH: WEBGPU) still forces WebGPU for the
-      // investigation; backendState().pin/forceWebGL say which one bound.
+      // WEBKIT (Safari, every iOS browser) TAKES three's WebGL2 BACKEND ON AUTO:
+      // three-WebGPU rendered wrongly on an iPhone (missing bodywork, then sky
+      // only) with ZERO reported GPU or WGSL errors, while three's WebGL2 backend
+      // on the same phone is known-good. A pin of "0" (THREE PATH: WEBGPU) still
+      // forces WebGPU; backendState().pin/forceWebGL say which one bound.
       let forceWebGL = _glPin === "1"
         || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL || isWebKit));
       const _liteGpu = !!(isMobile || isWebKit || _softAdapter);
@@ -587,19 +575,16 @@ const TLX = (function () {
       // device needed. `skipBatches()` sheds the instanced scenery on a
       // SOFTWARE adapter because Dawn mis-binds a per-vertex vec3 as
       // instance-rate there and "one failed draw invalidates the whole
-      // encoder" (see drawInstanced). The gate assumes real GPUs are immune.
-      // On 2026-09-08 the owner's phone reported `err 1 / Invalid
-      // CommandEncoder` on three/webgpu at 51 fps — the first gpuErrors > 0
-      // ever seen on hardware, and the same failure that comment describes.
-      // The assumption may simply be wrong: Dawn is Dawn on a phone too.
+      // encoder" (see drawInstanced). The gate assumes real GPUs are immune,
+      // but a phone has reported `err 1 / Invalid CommandEncoder` on
+      // three/webgpu — Dawn is Dawn on a phone too.
       //
       // Blind-widening the gate is NOT the fix — 48 % of all prop geometry is
       // instanced-only (79.6 % Vegas), so it would strip the scenery from
       // every real GPU to chase one error. This pin reverts the one suspect on
       // the one device that has it, in a reload, exactly as tlxForceHw does
-      // for the software side. If the error goes with the batches, the cause
-      // is named; if it stays, this is exonerated and the next suspect is
-      // free. Reported by backendState() so a screenshot says which way it ran.
+      // for the software side. Reported by backendState() so a screenshot
+      // says which way it ran.
       const _skipBatchesPin = (function () {
         try { return localStorage.getItem("apex26.tlxSkipBatches") === "1"; } catch (_) { return false; }
       })();
@@ -618,15 +603,10 @@ const TLX = (function () {
       // them all at once costs more llvmpipe seconds than a present budget
       // has, and a timeout would not say which path did it:
       //   sky | env | chunked | batches | shadow   (or "1" / "all")
-      // A/B switch left from the WebKit-WebGPU investigation. It reverts ONE
-      // suspect without a deploy, and is reported by backendState() + the GOV
-      // `tlx` row:
+      // A/B switch that reverts ONE WebKit-WebGPU suspect without a deploy,
+      // reported by backendState() + the GOV `tlx` row:
       //   apex26.tlxArrayNearest=1  placeholders keep the pre-0a3f480
       //                             Nearest/Clamp state (textureLoad program)
-      // Its sibling `apex26.tlxNoMrt` is GONE (2026-09-03): it tested whether
-      // the SSR MRT attachment caused the sky-only iPhone, and the cause was
-      // WebKit's 8 KB var<private> cap (PATCHES.md §4) — a disproved switch
-      // costs three per-frame terms and an axis in every phone diag.
       const _arrayNearest = (function () {
         try { return localStorage.getItem("apex26.tlxArrayNearest") === "1"; } catch (_) { return false; }
       })();
@@ -1091,7 +1071,7 @@ const TLX = (function () {
       // empties the list. present() hands the texture to the post chain, which
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
-      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0;
+      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFlip = true;   // flip false: the broadcast PiP
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
       // attribute.array.constructor on that first compile — the env probe's
@@ -1415,9 +1395,9 @@ const TLX = (function () {
       }
 
       const drawList = [];          // {geo, matrix, material} in submission order
-      // POOLED DRAW RECORDS (TLX-PERF-PLAN R1). Every producer used to push a
-      // fresh object literal — ~150-400 a frame, in 4-5 shapes, so V8 saw them
-      // polymorphic — and none outlives the frame (every consumer reads a record
+      // POOLED DRAW RECORDS (TLX-PERF-PLAN R1). Fresh object literals — ~150-400
+      // a frame, in 4-5 shapes — made V8 see them polymorphic, and none outlives
+      // the frame (every consumer reads a record
       // synchronously; _mirrorRelease keeps the chunked MESH, not the record).
       // One fixed shape, every field written on every push: em/al stay
       // undefined for FX records (acquireMesh tests `!== undefined`).
@@ -1860,10 +1840,9 @@ const TLX = (function () {
       // still latches (M9 parked-race hook), but uEnvStr must stay 0 — a
       // ready black cube darkens clearcoat (envW absorb) and kills chrome.
       let _envBlank = false;
-      // A probe face that THREW used to be counted like a good one: six of
-      // them latch envReady over a cube nothing ever wrote, and every lit
-      // surface then samples black. Count the failures instead, and keep the
-      // last good cube bound.
+      // A probe face that THREW must not count like a good one: six of them
+      // would latch envReady over a cube nothing ever wrote, and every lit
+      // surface would sample black. Count the failures, keep the last good cube.
       let _envFailN = 0, _envFailMsg = "", _envFailStack = "";
       // BEGINS vs ENDS vs the live MASK. envState() reports `face` (consecutive
       // baked faces from bit 0) and that is not enough to say why a probe never
@@ -2052,15 +2031,14 @@ const TLX = (function () {
             // node for the scene pass and calls post.present() BEFORE restoring
             // it, so every live post quad compiles with that node in its render
             // context — a different fragment-output struct, a different program.
-            // This warm used to null the MRT here, and post.warm() nulled it
-            // again, so the sixteen post programs it built were the no-MRT
-            // variants and the race rebuilt all sixteen on its first visible
-            // present (gpu-census 206: 56 warm-tagged modules, and x2 lazy at
-            // each of the eight runPass sites regardless). The casters render
+            // Nulling the MRT here would warm the sixteen no-MRT variants and
+            // the race would rebuild all sixteen on its first visible present
+            // (gpu-census 206: 56 warm-tagged modules, and x2 lazy at each of
+            // the eight runPass sites). The casters render
             // BEFORE present(), with the MRT restored to null, so their warm
             // runs after the null below.
-            // THE POST CHAIN IS WARMED UNGATED. The 3 s gate this used to sit
-            // behind was measured against the scene warm's own elapsed time,
+            // THE POST CHAIN IS WARMED UNGATED. The 3 s gate
+            // is measured against the scene warm's own elapsed time,
             // which on macos-latest Metal consumes it: gpu-census 203 attributed
             // 16 of the race window's 50 shader modules to tlx-post.js runPass —
             // eight quad materials, two stages each — compiled synchronously on
@@ -2240,13 +2218,10 @@ const TLX = (function () {
         m.__tlxSeen = _poolNow;   // one clock read per present (prunePool needs ~20 s resolution)
         // scene.matrixWorldAutoUpdate is false (see create() above), so three
         // will NEVER promote m.matrix → matrixWorld. The renderer uploads
-        // matrixWorld as the model matrix: writing only `.matrix` left every
-        // pooled mesh at identity forever. World-baked track/terrain still
-        // looked right (identity IS their model matrix); cars, flaps, blob
-        // shadows, and any draw() with a non-identity model sat at the origin
-        // — invisible from a chase cam on track, but correct in the garage
-        // where the car IS near the origin. Same symptom the material-cache
-        // dispose used to cause; this is the remaining half.
+        // matrixWorld as the model matrix: writing only `.matrix` leaves every
+        // pooled mesh at identity forever — world-baked track/terrain look
+        // right, but cars, flaps, blob shadows and any non-identity draw()
+        // sit at the origin (correct only in the garage).
         if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
         m.matrixWorld.copy(m.matrix);
         m.matrixWorldNeedsUpdate = false;
@@ -2346,9 +2321,9 @@ const TLX = (function () {
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
       function sweepGeoMirrors(now) {
-        // NOT ON A PHONE, until a handset says otherwise. The owner's phone
-        // (2026-09-02, TLX bound, LOW preset = tier 4) rendered NO road and a
-        // car in disconnected pieces while terrain and sky were fine — the
+        // NOT ON A PHONE, until a handset says otherwise. A phone (TLX bound,
+        // LOW preset = tier 4) rendered NO road and a car in disconnected
+        // pieces while terrain and sky were fine — the
         // signature of geometry read after its mirror went. Tier >= 3 is the
         // only configuration that exposes the road to this sweep at all:
         // game.js builds ribbons chunked only below tier 3, and chunk geos are
@@ -3326,11 +3301,11 @@ const TLX = (function () {
           _instAlive.clear();
           _poolBatch++;
         },
-        mirrorRect(r) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; },
+        mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, error: _mirErr };
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, flip: _mirFlip, error: _mirErr };
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
@@ -3798,13 +3773,10 @@ const TLX = (function () {
           // order because FX never write depth.
           // PER-CHUNK LAMPS: ONE grid for the WHOLE draw list, baked on change.
           //
-          // This used to bake inside the loop below, per chunked record, and the
-          // feature was INERT because of it: _lgKey/_lgSrc and the grid uniforms
-          // are a SINGLE shared set, so every record overwrote the previous
-          // one's grid and only the last survived. Every other record's
-          // fragments then looked up a grid built for chunks that were not
-          // theirs, missed, and took the documented fallback to the global lamp
-          // set - silently, and pixel-identically. Measured 2026-09-15 on
+          // NOT per chunked record in the loop below: _lgKey/_lgSrc and the grid
+          // uniforms are a SINGLE shared set, so each record would overwrite the
+          // previous one's grid and every other record's fragments would miss
+          // and silently fall back to the global lamp set. Measured 2026-09-15 on
           // singapore: chunkState() drew 567 chunks while the grid covered 122,
           // and toggling the knob moved the frame less than its own noise floor
           // (docs/notes/TLX-PER-CHUNK-LAMPS-INERT.md).
@@ -4071,7 +4043,7 @@ const TLX = (function () {
                 const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
                 const r = _mirRect, ok = !!(r && mirRT && _mirRenders > 0 && !_mirDead);
                 post.setMirror(ok ? mirRT.texture : null, ok ? [Math.round(r[0] * cw), Math.round(r[1] * ch),
-                  Math.round(r[2] * cw), Math.round(r[3] * ch)] : null, ok && mirRT.texture.type === THREE.HalfFloatType);
+                  Math.round(r[2] * cw), Math.round(r[3] * ch)] : null, ok && mirRT.texture.type === THREE.HalfFloatType, _mirFlip);
               }
               try {
                 renderer.setRenderTarget(post.sceneTarget());
@@ -4156,12 +4128,10 @@ const TLX = (function () {
           // sweeps:0 on the first run meant the gate never opened. Record WHICH
           // term holds it shut instead of guessing between the three.
           const _now = typeof performance !== "undefined" ? performance.now() : Date.now();
-          // THE STATIC SWEEP IS OFF FOR EVERY PLAYER, and it takes THREE
-          // independent gates to say so — two sessions added one each on
-          // 2026-09-02 without seeing the other's, so read all three before
-          // concluding anything about what this does in production:
-          //   1. this call site is opt-in (apex26.tlxMirrorSweep=1) — added by
-          //      the revert after a player's handset lost its road;
+          // THE STATIC SWEEP IS OFF FOR EVERY PLAYER, behind THREE independent
+          // gates — read all three before concluding anything about production:
+          //   1. this call site is opt-in (apex26.tlxMirrorSweep=1), since a
+          //      player's handset lost its road;
           //   2. sweepGeoMirrors() declines outright on mobile (94b9a2da);
           //   3. the env gate above, which on a phone can never open anyway
           //      (game.js tier-gates the probe at PerfGov.tier() < 1).

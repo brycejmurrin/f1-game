@@ -34,9 +34,9 @@
     },
     // Elevation comes from the surveyed SRTM bake in
     // js/track/circuit-elevations.js (`node tools/gen/bake-elevation.mjs nurburgring`).
-    // Four authored cosine bumps used to leave long dead-flat plateaus between
-    // short ramps (~25% of the built lap under 0.5% grade) — the stair-step
-    // hills drivers felt. hasRealElevation(id) nulls any `elevations` key here.
+    // Authored cosine bumps leave dead-flat plateaus between short ramps (~25%
+    // of the lap under 0.5% grade with four) — stair-step hills;
+    // hasRealElevation(id) nulls any `elevations` key here.
     hwZones: [
       { s0: 0.100, s1: 0.180, hw: 6.2, ease: 0.012 },  // Mercedes-Arena complex
       { s0: 0.630, s1: 0.690, hw: 6.4, ease: 0.012 },  // Dunlop-Kehre

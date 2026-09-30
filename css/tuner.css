@@ -471,8 +471,13 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   border: none;
   border-radius: 0;
   box-shadow: none;
-  height: var(--chip-h);
+  /* A FLOOR, not a height, and the values wrap: TEAM RADIO · OFF · NORMAL ·
+     SPOTTER ON is wider than a 390px phone's sheet, and a fixed height with
+     no wrap ran SPOTTER ON off the edge (layout audit, 2026-09-30). The
+     summary is a flex row of spans, so it breaks between values. */
+  height: auto;
   min-height: var(--chip-h);
+  flex-wrap: wrap; row-gap: 0;
   box-sizing: border-box;
   cursor: pointer;
   justify-content: flex-start;

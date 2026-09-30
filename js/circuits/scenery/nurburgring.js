@@ -1,8 +1,8 @@
 /* Apex 26 — NURBURGRING scenery (data only), split out of js/circuits/nurburgring.js.
    LAZY_SCENERY (tools/manifest.cjs): no <script> tag. game.js fetches the ONE
    circuit a session builds; all 40 together were 1,083 KB of the boot wall for
-   a player who races one of them. Body moved verbatim — see tools/manifest.cjs
-   and tests/unit/load-order.test.mjs for the lockstep. */
+   a player who races one of them. tools/manifest.cjs and
+   tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["nurburgring"] =
   function (api) {
@@ -17,8 +17,8 @@
         const TUBE = [0.62, 0.63, 0.66], DECK = [0.44, 0.45, 0.48];
         const BENCH = [[0.80, 0.78, 0.74], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24]];
         // Raw primitives book no ground: reserve the rake so the deferred
-        // roadside scatter does not plant through it (0.766-0.78 lost the
-        // spectator bank that used to hold that ground).
+        // roadside scatter does not plant through it (0.766-0.78 has no other
+        // spectator bank to hold that ground).
         indexSolid(s0, s1, side, gap, rows * 1.9 + 1);
         let i = 0;
         along(s0, s1, 6, (k, spacing) => {
@@ -79,8 +79,8 @@
       // The deep rank on the RIGHT: its 41 m offset carries pines to within
       // ~11-13 m of the parallel back straight across the loop. Under the
       // authored cosine bumps that leg was ~8 m lower; under the SRTM bake
-      // it is ~40 m lower, so crowns that used to sit just over a shallow dip
-      // now float 20+ m (float-audit: cones reported at nearest-road frac
+      // it is ~40 m lower, so crowns placed for a shallow dip float 20+ m
+      // (float-audit: cones reported at nearest-road frac
       // 0.31 / lat 12 m, planted from this belt near 0.45). Widen the skip
       // across the parallel zone. Restart on the belt's odd-node grid. 0.5500, not
       // 0.5515: node 0.5516 planted a pine 56 m out over the 0.17 leg's verge,
@@ -289,10 +289,10 @@
 
       groundPatch(K(0.785), 1, 5, [24, 0.18, 32], GRAVEL,
         { id: "nurburgring-schumacher-gravel", samples: 6 });
-      // Keep the roadside keep-out the old scaffoldStand booked: without it the
-      // deferred scatter replants through this bank and clip-audit rises. The
-      // open tube tribune itself is gone — after the elevation survey remap its
-      // feet face-sampled a fold-hit skirt (~9 m false air gap → unsupported).
+      // Keep the roadside keep-out booked here: without it the deferred
+      // scatter replants through this bank and clip-audit rises. No open tube
+      // tribune: on the surveyed elevation its feet face-sample a fold-hit
+      // skirt (~9 m false air gap → unsupported).
       indexSolid(0.766, 0.798, -1, 16, 6 * 1.9 + 1);
       indexSolid(0.766, 0.798, 1, 12, 6 * 1.9 + 1);
       marshalPost(K(0.790), -1, 9);

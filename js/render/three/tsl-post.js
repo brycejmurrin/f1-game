@@ -569,9 +569,9 @@
           // CONDITIONING, not absolute magnitude (COMPOSITE_FS in
           // js/render/glx/shaders/glsl-post.js). crvL scales with |dpx|·|dpy|, so at
           // grazing distance the cross stays large while its DIRECTION is
-          // depth-quantization noise — the old crvL>1e-6 guard almost never
-          // fired where it was needed and the wet-road mask collapsed past
-          // the first few metres. sinT is the scale-free sine of the angle
+          // depth-quantization noise — a crvL>1e-6 guard almost never fires
+          // where it is needed and the wet-road mask collapses past the first
+          // few metres. sinT is the scale-free sine of the angle
           // between the derivatives.
           const sinT = crvL.div(max(length(dpx).mul(length(dpy)), 1e-12)).toVar();
           const Nv = select(crvL.greaterThan(1e-6).and(sinT.greaterThan(0.08)),
@@ -1010,12 +1010,12 @@
      *    backends. Exposure and the ACES curve are the composite's own uniforms
      *    (C), so the TONE CURVE knobs reach the mirror; the grade does not. */
     const mirrorTex = texture(ctx.blackTex);
-    const mirrorU = { rect: uniform(new THREE.Vector4(0, 0, 1, 1)), hdr: uniform(1) };
+    const mirrorU = { rect: uniform(new THREE.Vector4(0, 0, 1, 1)), hdr: uniform(1), flip: uniform(1) };   // flip 0: the broadcast PiP
     const mirror = {
       tex: mirrorTex, U: mirrorU,
       mat: passMaterial(Fn(() => {
         const p = vec2(screenCoordinate).sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
-        const c = vec3(mirrorTex.sample(vec2(p.x.oneMinus(), p.y)).rgb).toVar();
+        const c = vec3(mirrorTex.sample(vec2(mix(p.x, p.x.oneMinus(), mirrorU.flip), p.y)).rgb).toVar();
         const t = acesTonemap(c.mul(C.exposure).div(C.whitePoint));
         return vec4(select(mirrorU.hdr.greaterThan(0.5), t, c), 1.0);
       })(), "tlx-post-mirror"),

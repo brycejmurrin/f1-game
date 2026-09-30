@@ -124,11 +124,10 @@ const Input = (function () {
   // iOS sheet). `gyroDenied` also latches on the TRANSIENT path — the promise
   // REJECTING because the call had no user activation, which is what a
   // gamepad A press synthesised as .click() on RACE! produces — and iOS gives
-  // both the same shape from the outside. game.js enableTilt() used to read
-  // `gyroDenied` there and persist steerMode="buttons" for a refusal that was
-  // never the player's; it should auto-switch (and persist) only on THIS flag,
-  // and leave the label's "(NO GYRO)" to `gyroDenied`, which keeps its
-  // meaning for every existing reader.
+  // both the same shape from the outside. game.js enableTilt() auto-switches
+  // (and persists steerMode="buttons") only on THIS flag, so a refusal that was
+  // never the player's persists nothing; the label's "(NO GYRO)" stays on
+  // `gyroDenied`, which keeps its meaning for every existing reader.
   let gyroHardDenied = false;
   // single source of truth for how the player steers: "tilt" | "buttons" | "touch"
   // BUTTONS, not tilt, so this module's pre-boot value matches the shipped
@@ -229,9 +228,8 @@ const Input = (function () {
     gyroAttached = true;
     window.addEventListener("deviceorientation", onOrient);
   }
-  // Leaving tilt used to leave the sensor streaming (and the One-Euro filter
-  // running) for the whole session; attach is idempotent, so re-entering tilt
-  // costs nothing.
+  // Leaving tilt stops the sensor stream (and the One-Euro filter) rather than
+  // running it all session; attach is idempotent, so re-entering tilt costs nothing.
   function detachGyro() {
     if (!gyroAttached) return;
     gyroAttached = false;
@@ -384,13 +382,10 @@ const Input = (function () {
   // THE TILT MAP AND THE SLEW, factored out so the live path and the
   // deterministic harness cannot disagree about them.
   //
-  // They used to be written twice — here and in simTilt — and the copies had
-  // already drifted: the hit-stop `timeScale` fix landed in the live one only.
-  // That omission is CORRECT for the harness (it is handed an explicit dt and
-  // exists to be reproducible; hit-stop is a live-loop idea), which is the worst
-  // kind of drift — right by accident, unstated, with autopilot's tilt lap
-  // riding on it. Now the only difference between the two callers is the one
-  // that is supposed to differ: where dt comes from.
+  // The only difference between the two callers is the one that is supposed
+  // to differ: where dt comes from. The harness (simTilt) is handed an explicit
+  // dt and takes no hit-stop `timeScale` — hit-stop is a live-loop idea, and
+  // autopilot's tilt lap relies on the harness being reproducible.
 
   function tiltTarget() {
     let d = tiltSmoothed - tiltZero;
@@ -427,16 +422,13 @@ const Input = (function () {
   }
   /* One ramp step for a DIGITAL source (arrows, on-screen buttons).
    *
-   * UNWINDING IS NOT THE SAME ACT AS BUILDING LOCK, and the old step did not
-   * know that: `moveToward(val, target, (target !== 0 ? rateIn : RAMP_OUT))`
-   * used the BUILD rate for any non-zero target, so pressing the OPPOSITE arrow
-   * crossed back through centre at the build rate rather than the release rate.
-   * Measured at 41.7 m/s with ADAPTIVE BUTTONS on (rateIn 3/s vs RAMP_OUT 8/s):
-   * full lock to centre took 0.33 s by pressing the other way and 0.125 s by
-   * simply letting go — so the fastest way through a chicane was release, wait,
-   * press, which is not a technique anyone should have to find. It is worse
-   * exactly where it matters most, because the assist slows the build rate with
-   * speed and never touched the release rate.
+   * UNWINDING IS NOT THE SAME ACT AS BUILDING LOCK. A single
+   * `moveToward(val, target, (target !== 0 ? rateIn : RAMP_OUT))` uses the
+   * BUILD rate for any non-zero target, so pressing the OPPOSITE arrow crosses
+   * centre at the build rate. Measured at 41.7 m/s with ADAPTIVE BUTTONS on
+   * (rateIn 3/s vs RAMP_OUT 8/s): full lock to centre took 0.33 s pressing the
+   * other way and 0.125 s simply letting go — release, wait, press should never
+   * be the fastest way through a chicane.
    *
    * Unwind at the release rate, build at the build rate, switch at centre. A
    * frame at 60 Hz can contain both halves, so the leftover time is spent at
@@ -602,8 +594,8 @@ const Input = (function () {
      navigator.keyboard.getLayoutMap() is the API for the other direction.
      Chromium-only and experimental, so it is a progressive enhancement:
      resolved once at init, consulted only for the alphanumeric codes whose
-     label actually moves between layouts, and absent everywhere else — where
-     the old behaviour is exactly what remains. */
+     label actually moves between layouts; everywhere else the label is the
+     e.code name. */
   let kbLayout = null;
   function loadLayoutMap() {
     const kb = typeof navigator !== "undefined" && navigator.keyboard;
@@ -947,14 +939,10 @@ const Input = (function () {
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
        driving gate — but still below the typing check, because P in a text
-       field is a letter.
-       They used to sit inside the switch below, which only worked by accident:
-       the gate's screen list happened not to mention the two tuner panels, so
-       the pause key reached them. The moment that list was corrected (one list
-       for everyone, js/ui/layers.js) the key started being swallowed in the
-       LIGHTING TUNER and free camera — the one place its documented
-       all-the-way-out behaviour matters most. Reachability should not be a
-       side effect of a list being incomplete. */
+       field is a letter. Inside the switch below they would be swallowed by
+       the gate's screen list (js/ui/layers.js) in the LIGHTING TUNER and free
+       camera — the one place their documented all-the-way-out behaviour
+       matters most. */
     const act = codeToAction[normCode(e.code)] || null;
     if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !typing) {
       if (act === "pause") {
@@ -1235,8 +1223,8 @@ const Input = (function () {
   // lostpointercapture is a TEARDOWN signal, not a lift. It fires when the
   // capture target is hidden/removed (the stuck-GAS case) AND when a second
   // hold button calls setPointerCapture — WebKit keeps one capture slot, so
-  // tapping LEFT while GAS is down steals capture from GAS and used to drop
-  // the throttle with the thumb still on it.
+  // tapping LEFT while GAS is down steals capture from GAS — treated as a lift,
+  // that drops the throttle with the thumb still on it.
   //
   // Honour the event only when the button DISAPPEARED mid-hold (visible at
   // pointerdown, gone now). Buttons start `[hidden]` in the shell and tests
@@ -1356,10 +1344,9 @@ const Input = (function () {
     }
     return pickPad(pads);
   }
-  /* WHICH PAD DRIVES. getGamepads() lists pads in connection-slot order, and
-     the first connected one used to win outright — so a wheel base, a flight
-     stick or an idle second controller that happened to hold slot 0 ignored the
-     pad in the player's hands. A "standard" mapping is the layout every button
+  /* WHICH PAD DRIVES. getGamepads() lists pads in connection-slot order, so
+     first-connected-wins lets a wheel base, a flight stick or an idle second
+     controller in slot 0 ignore the pad in the player's hands. A "standard" mapping is the layout every button
      index in this file assumes, so it ranks first; among equals the most
      recently USED one wins (Gamepad.timestamp advances on each state change),
      and slot order breaks exact ties so an idle pair stays stable.
@@ -1432,7 +1419,7 @@ const Input = (function () {
       // Recovery re-probe, ~1 s throttle. gamepadconnected fires only on
       // connection / first input (MDN) — it never re-fires for a pad that is
       // still plugged in, so a transient getGamepads() hole (focus loss, a
-      // SECOND pad's unplug, a stale slot) used to kill gamepad input for the
+      // SECOND pad's unplug, a stale slot) would kill gamepad input for the
       // rest of the session. Polling is the only recovery path; the throttle
       // keeps getGamepads()'s per-call array allocation off the frame budget.
       if (++_padReprobe < 60) return;
@@ -1464,13 +1451,10 @@ const Input = (function () {
     }
     const axes = pad.axes || [];
     const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert);
-    // THE D-PAD IS A DIGITAL SOURCE AND MUST RAMP LIKE ONE. It used to assign
-    // `ax = ±1` outright — a teleport to full lock, bypassing digitalStep while
-    // every other digital source in this file (arrows, on-screen buttons) went
-    // through it. At 300 km/h a d-pad tap was an instant full-lock input, which
-    // is not a control anyone can drive with; XAG 107 requires the digital path
-    // to WORK, not merely to exist. It now shares the arrows' ramp exactly, so
-    // ADAPTIVE BUTTONS reaches it too.
+    // THE D-PAD IS A DIGITAL SOURCE AND MUST RAMP LIKE ONE: `ax = ±1` outright
+    // is a teleport to full lock (at 300 km/h, undriveable), and XAG 107
+    // requires the digital path to WORK. It shares the arrows' digitalStep ramp
+    // exactly, so ADAPTIVE BUTTONS reaches it too.
     const dpad = padDpadSteer(pad);
     padSteerAnalog = Math.abs(stick) > 0.001;
     padSteer = padSteerAnalog ? stick : dpad;
@@ -1564,10 +1548,9 @@ const Input = (function () {
     // and both tab rails are written that way (the garage's category rail,
     // js/garage/setup-sheet.js csTabKey, and the circuit filter chips). Those
     // rails own their axis, so MenuNav steps aside for them by design; with
-    // the key dispatched at document their handlers never ran either, and a
-    // pad could not move along either rail at all: measured 2026-09-08, the
-    // D-pad sat on the garage's TEAM tab forever while a real ArrowDown
-    // walked all fifteen. Bubbling from the control still reaches document
+    // the key dispatched at document their handlers never run, and a pad
+    // cannot move along either rail (measured 2026-09-08: the D-pad sat on the
+    // garage's TEAM tab while a real ArrowDown walked all fifteen). Bubbling from the control still reaches document
     // (TopModal's Escape) and window (MenuNav's capture listener), which is
     // what the dispatch-at-document note below the fallback was protecting.
     const el = document.activeElement;
@@ -1653,7 +1636,7 @@ const Input = (function () {
     return null;
   }
 
-  // One ArrowDown into MenuNav — the same empty path padActivate used to inline.
+  // One ArrowDown into MenuNav — the empty path padActivate takes.
   // MenuNav has no seed helper of its own (it exports activeLayer / FOCUSABLE
   // only), so this is the one mover; never .focus() a node from here.
   function padSeedFocus() {
@@ -2051,13 +2034,10 @@ const Input = (function () {
     if (steerMode !== "tilt") detachGyro();
   }
 
-  // TOUCH SENSITIVITY, at last. touchRangeFrac has existed since the drag mode
-  // shipped — declared, read by touchRangePx(), and never assigned by anything,
-  // so the one steer mode with no settings at all had a knob sitting unused in
-  // its own source. docs/research/DRIVING-CONTROLS-RESEARCH.md called for the
-  // slider in 2026-08 ("it should be exposed as a slider regardless") and the
-  // wiring was simply never done. Bounds: 6 % of the long edge is a flick,
-  // 24 % is a deliberate sweep; 12 % is what shipped and stays the default.
+  // TOUCH SENSITIVITY: the drag mode's touchRangeFrac (read by touchRangePx()),
+  // exposed as a slider per docs/research/DRIVING-CONTROLS-RESEARCH.md. Bounds:
+  // 6 % of the long edge is a flick, 24 % is a deliberate sweep; 12 % is the
+  // default.
   function setTouchRange(frac) {
     if (typeof frac === "number" && isFinite(frac)) touchRangeFrac = clamp(frac, 0.06, 0.24);
   }
@@ -2223,12 +2203,9 @@ const Input = (function () {
     // under heavy multi-touch can leave a pointer with no pointerup and no
     // pointercancel (w3c/pointerevents#407 tracks that as a real, unfixed
     // cross-engine class) while still delivering the touch-event lift. A ghost
-    // id then sits in a hold set indefinitely. The comment here used to assert
-    // "iOS never reuses pointerIds, so the ghost is PERMANENT" — UNSOURCED, and
-    // PE3 only requires uniqueness among ACTIVE pointers, so an id may well be
-    // recycled later. The fix does not depend on it either way; only the
-    // severity did, and an unsourced platform absolute in a comment is how the
-    // next person gets misled. Worse,
+    // id then sits in a hold set indefinitely (PE3 only requires uniqueness
+    // among ACTIVE pointers, so the id may or may not be recycled later; the
+    // fix does not depend on it). Worse,
     // a fresh press+release cannot clear it: the new id is added and removed
     // while the ghost keeps the set non-empty, so apply(false) never runs —
     // the exact "throttle stays on no matter what I press" shape a player

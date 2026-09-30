@@ -53,7 +53,7 @@ function create(G) {
       flavour: "driver",
       teamId: teams.length ? teams[0].id : "haas",
       seat: 1,                 // the junior seat by default — you are the newcomer
-      amb: 1,                  // WHAT THEY ASK — the target every contract used to carry
+      amb: 1,                  // WHAT THEY ASK — the middle rung, the team's own target
       name: "Your Name", code: "YOU", num: 99,
       hire: "NKM",
     };
@@ -91,8 +91,8 @@ function create(G) {
       picking = false;
       if (s.used) { Career.useSlot(s.flavour, s.i); G.openCareer(); return; }
       // Opening an EMPTY slot repoints the live pointer at it; backing out
-      // used to leave it there, and load() then re-homed the player to the
-      // FIRST used slot rather than the one they were in.
+      // must restore it, or load() re-homes the player to the FIRST used slot
+      // rather than the one they were in.
       draftFrom = Career.slot();
       Career.useSlot(s.flavour, s.i);
       draft = freshDraft();
@@ -721,11 +721,11 @@ function create(G) {
       left.appendChild(head("THIS ROUND"));
       const objCard = el("div", "cr-card cr-objective");
       // THE BRIEF IS A CHOICE. Three, drawn from the seed, one of them the kind
-      // that used to be dealt — so this is a decision (take the points brief in a
+      // a single dealt brief would be — so this is a decision (take the points brief in a
       // bad car, gamble the finish brief when it is quick) rather than an
       // instruction. Once quali or a sprint has run the pick is locked, because
       // some of these briefs measure things the weekend has already decided; the
-      // card then shows the chosen line alone, as it always did.
+      // card then shows the chosen line alone.
       const choices = Career.objectiveChoices(c.season.round);
       const picked = Career.objectivePick(c.season.round);
       if (Career.objectiveLocked() || choices.length < 2) {
@@ -750,7 +750,7 @@ function create(G) {
           : `${st.era.name} · ${st.era.left} to the first rule change`));
       }
       if (c.deal) {
-        // MY TEAM keeps the bare row it always had: rollover() resolves the goal
+        // MY TEAM keeps a bare row: rollover() resolves the goal
         // only for a driver career, because an owner has nobody to promise to.
         const promised = c.flavour !== "myteam";
         // The LABEL comes from the goal's own kind — a contract can promise a
@@ -846,9 +846,9 @@ function create(G) {
     slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots(); };
     left.appendChild(slotBtn);
 
-    // A disabled door says WHY. Both upgrade cards used to grey out with no
-    // reason on the card — the balance is a header away, and a title alone
-    // never shows on touch — so the shortfall rides on the affordance line
+    // A disabled door says WHY. A greyed upgrade card with no reason on it is
+    // a dead end — the balance is a header away, and a title alone never
+    // shows on touch — so the shortfall rides on the affordance line
     // (.cr-record-cta wraps; it carries no nowrap, so it cannot truncate).
     const shortBy = (cost) => (Career.freeMoney() ? 0 : Math.max(0, cost - st.money));
     const shortNote = (n) => (n > 0 ? "  ·  SHORT " + n.toLocaleString() + " cr" : "");
@@ -1049,11 +1049,10 @@ function create(G) {
     // An empty second seat blocks the weekend outright — there is nothing for GO
     // RACING to do until the car has a driver in it.
     //
-    // ORDER MATTERS, and getting it wrong cost nothing visible: this used to sit
-    // ABOVE the `disabled = false` that restores the button after the picker
-    // hides it, so the reset overwrote the rule on the very next line and the
-    // seat never blocked anything. The rule was right, the button just never
-    // heard about it. Set the reset first and let the rule have the last word.
+    // ORDER MATTERS, silently: above the `disabled = false` that restores the
+    // button after the picker hides it, this rule would be overwritten on the
+    // very next line and the seat would never block anything. Set the reset
+    // first and let the rule have the last word.
     $("cr-go").disabled = !!st.hire || Career.conflicted();
     $("cr-garage").hidden = false;
   }
@@ -1066,11 +1065,10 @@ function create(G) {
     $("co-title").textContent = past ? "SEASON " + past.year : "END OF SEASON";
 
     // THE DECISION FIRST, the season recap under it. This screen exists to pick
-    // a seat, and the recap used to come first: measured on a landscape phone
-    // (852x393 with the notch insets), #co-body shows 277px of 519px, which put
-    // ON THE TABLE at y=315 and the first offer at y=391 — both below the fold,
-    // while the only pinned control read DECIDE LATER. A player who did not
-    // scroll saw three recap cards and a deferral, and no sign a choice existed.
+    // a seat. Recap first, on a landscape phone (852x393 with the notch insets;
+    // #co-body shows 277px of 519px) ON THE TABLE lands at y=315 and the first
+    // offer at y=391 — both below the fold, while the only pinned control reads
+    // DECIDE LATER: three recap cards, a deferral, and no sign a choice exists.
     // THE YEAR / YOUR CONTRACT / THE DRIVER MARKET are context FOR the choice,
     // so they still belong on this screen — underneath it.
     // No offers (MY TEAM, or a driver mid-contract — rollover() leaves the list
@@ -1313,11 +1311,11 @@ function create(G) {
   }
   // close() is the one exit every path shares, so it is where the screen's
   // TRANSIENT state dies: the NEW CAREER draft, the slot it was borrowed from,
-  // and an armed DELETE?. draftFrom was already restored at the MAIN MENU
-  // button (2026-09-01); its siblings were not — a draft abandoned there came
-  // back as NEW CAREER on the next openHub() with no career live, and an armed
-  // DELETE? came back armed, one tap from deleting a save with no warning
-  // (the hazard #ss-apply's disarm comment in season-ui.js describes).
+  // and an armed DELETE?. Not only draftFrom: a draft abandoned at the MAIN
+  // MENU button would come back as NEW CAREER on the next openHub() with no
+  // career live, and an armed DELETE? would come back armed, one tap from
+  // deleting a save with no warning (the hazard #ss-apply's disarm comment
+  // in season-ui.js describes).
   function close() {
     Log.info("ui", "CareerUI.close");
     $("career").hidden = true;

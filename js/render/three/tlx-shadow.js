@@ -131,7 +131,7 @@
     // states with gl.getParameter (cached after the first copy); in Chrome that
     // first read is a synchronous GPU-process round trip, and census 289 (real
     // Metal, WebGL2 leg) spent 2 s of spike frames in it behind the queued shader
-    // links. apex26.tlxLampStatic=0 is the old full rebuild, =1 forces on.
+    // links. apex26.tlxLampStatic=0 forces the full rebuild, =1 forces on.
     let lampStaticOn = isWebGPU;
     try {
       const v = localStorage.getItem("apex26.tlxLampStatic");
@@ -235,8 +235,8 @@
     let _lastPassOk = false;       // endPass's own render succeeded (not the sticky S.enabled)
     // Parked wrappers (index >= used after a pass) point at this instead of
     // their last caster: a hidden Mesh still REFERENCES its geometry, so after
-    // a track switch the old track's chunk geometries stayed alive in every
-    // slot the new track did not refill. An attribute-less geometry is never
+    // a track switch the previous track's chunk geometries would stay alive in
+    // every slot the new track did not refill. An attribute-less geometry is never
     // rendered (the wrapper is invisible) and costs nothing.
     const parkedGeo = new THREE.BufferGeometry();
 
@@ -259,10 +259,10 @@
 
     // Instanced casters (TrackGraph.batches → createInstancedBatch): ONE
     // InstancedMesh per batch, made the first time the batch is cast and kept
-    // until freeInstanced() — never a slot pool. The slot pool this replaces
-    // handed slot i whichever batch the cull put i-th, and swapped in a bigger
-    // InstancedMesh whenever a larger batch landed there. Disposing the old one
-    // released its pipeline, three deletes a program whose use count reaches 0,
+    // until freeInstanced() — never a slot pool. A slot pool hands slot i
+    // whichever batch the cull put i-th, and swaps in a bigger InstancedMesh
+    // whenever a larger batch lands there. Disposing the smaller one releases
+    // its pipeline, three deletes a program whose use count reaches 0,
     // and three keys an instanced node build on the object's uuid — so the next
     // caster needing that shader rebuilt and recompiled it on the main thread,
     // inside the sun rebuild. Measured on TLX/WebGL2 (scratch churn probe, 16
@@ -503,7 +503,7 @@
       S.castCullVP = null;
       endPass(lampStaticRT);
       // The static render's OWN result: S.enabled is sticky, so one earlier
-      // sun/car failure used to disable L1 for the rest of the session.
+      // sun/car failure would otherwise disable L1 for the rest of the session.
       _lampStaticValid = _lastPassOk;
       if (_lampStaticValid) S.lampStaticBuilds++;
     }

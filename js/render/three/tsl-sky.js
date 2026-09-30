@@ -458,7 +458,7 @@
     })();
 
     // Cheap miss-path for software GL (tlx.js drawSky). No invViewProj ray —
-    // a SwiftShader HDR target used to collapse the full node to fog beige
+    // a SwiftShader HDR target collapses the full node to fog beige
     // or a flat zenith lid. Mix the same zenith/horizon uniforms the full
     // node reads, keyed on screen Y (top-left origin on both backends).
     const fallbackNode = Fn(() => {

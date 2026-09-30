@@ -23,7 +23,7 @@ const F1API = (function () {
   const RETRY_BASE_MS = 10000; // 10 s first retry — OpenF1 rate-limits hard; short
   const RETRY_CAP_MS = 25000;  //   delays only eat more quota, so wait longer
   // Retry-After is honoured AS SENT up to this ceiling. OpenF1 commonly asks
-  // for 60 s, and the old 25 s clamp fired both retries INSIDE that window —
+  // for 60 s, and a 25 s clamp fires both retries INSIDE that window —
   // two more 429s, quota burned, nothing gained. Past the ceiling the request
   // fails fast instead (stale cache if there is one): that is what a tab can
   // act on; a 90 s+ sleep behind a spinner is not.
@@ -257,8 +257,8 @@ const F1API = (function () {
             // A non-JSON error body just falls through to the generic
             // "HTTP <status>" error below; the deliberate detail/error throws
             // above must surface. Matched structurally: JSON.parse failures
-            // are SyntaxErrors on every engine, where the V8 message strings
-            // this used to match let Firefox/Safari parse errors escape —
+            // are SyntaxErrors on every engine, whereas matching V8 message
+            // strings lets Firefox/Safari parse errors escape —
             // and an escaped raw SyntaxError lacks "HTTP 401"/"HTTP 403",
             // defeating request()'s refusal to serve stale cache on lockouts.
             if (!(e instanceof SyntaxError)) throw e;
@@ -445,9 +445,9 @@ const F1API = (function () {
     // The known-latest session is always treated as live.
     if (sessionKey === latestSessionKey) return TTL_LATEST;
     // A session we've seen that started comfortably in the past is frozen — its
-    // data never changes, so cache it for a week. This no longer depends on
-    // latestSession() having run first (the old guard left every session on the
-    // 10 min TTL whenever latestSessionKey was still null).
+    // data never changes, so cache it for a week. This does not depend on
+    // latestSession() having run first (a latestSessionKey guard leaves every
+    // session on the 10 min TTL while that key is null).
     const ds = sessionDates[sessionKey];
     if (ds) {
       const age = Date.now() - Date.parse(ds);

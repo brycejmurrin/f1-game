@@ -39,16 +39,14 @@ const GameStore = (function () {
       return v === undefined ? this._def(k, d) : v;
     },
     // THE CACHE IS WRITTEN EVEN WHEN THE DISK WRITE FAILS, AND THAT IS DELIBERATE —
-    // but it used to be silent, which made it a data-loss bug that looked like
-    // nothing at all. Safari on iOS sets the localStorage quota to ZERO in Private
-    // Browsing, so setItem throws on the very first write. The catch swallowed it,
-    // _cache answered every subsequent get() with the right value, and the game ran
-    // a whole career perfectly — until reload, when all of it was gone and the
-    // player had no way to know it was never being saved.
+    // but it must not be silent. Safari on iOS sets the localStorage quota to ZERO
+    // in Private Browsing, so setItem throws on the very first write while _cache
+    // answers every get() with the right value: a whole career runs perfectly and
+    // is gone on reload, with no way for the player to know it was never saved.
     //
     // Still caching on failure is correct: dropping the value would break the
-    // SESSION as well as the save, which is strictly worse. What was missing is
-    // that anything noticed. `broken` is now the record, Log carries it once, and
+    // SESSION as well as the save, which is strictly worse. `broken` is the
+    // record, Log carries it once, and
     // __apex.persistState() exposes it so the failure is testable rather than
     // inferred from a player's reload.
     set(k, v) {
@@ -79,12 +77,12 @@ const GameStore = (function () {
     },
     // THE RAW STRING LANE. The settings panels (GfxQuality, CockpitOpts,
     // GameMetrics), the perf sentinel, BodyAttitude and the Spotify client keep
-    // bare "1"/"0" flags and ids under the same "apex26." prefix, and each used
-    // to reach localStorage on its own inside a `catch (_) {}`. Same storage,
+    // bare "1"/"0" flags and ids under the same "apex26." prefix, read here
+    // rather than each inside its own `catch (_) {}`. Same storage,
     // same prefix (accepted spelled either way, like keyRevision), but NOT the
     // JSON cache above: a raw read hits the disk every call, so a devtools edit
     // or another tab's write is seen at once, and the on-disk form stays the
-    // bare string the old call sites wrote — no key changes, no quoting. What
+    // legacy bare string — no key changes, no quoting. What
     // they gain is `broken`: a failed raw write is recorded and reported once,
     // the same as a failed JSON write, instead of vanishing.
     raw(k) {
