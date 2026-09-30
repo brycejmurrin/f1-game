@@ -120,6 +120,7 @@ function makeGpuHarness(opts = {}) {
   // Optional feature negotiation. Default is the historical harness: a
   // timestamp-query-only device, which is also the tier that must DOWNGRADE
   // POST_HDR_FORMAT (rg11b10ufloat is renderable only behind its own feature).
+  const asyncDescs = [];
   const adapterFeatures = opts.adapterFeatures || ["timestamp-query"];
   const deviceFeatures = opts.deviceFeatures || adapterFeatures;
   const deviceRequests = [];
@@ -169,6 +170,10 @@ function makeGpuHarness(opts = {}) {
       pipelines.push({ desc });
       return pipeline;
     },
+    // Present only when a test asks: most of this file pins the sync path.
+    ...(opts.asyncPipelines ? {
+      createRenderPipelineAsync: async (desc) => { asyncDescs.push(desc); return { desc, async: true }; },
+    } : {}),
     createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => {
       if (failEncoder) throw new Error("injected encoder failure");
@@ -361,6 +366,7 @@ function makeGpuHarness(opts = {}) {
     buffers,
     writes,
     pipelineDescs,
+    asyncDescs,
     configureCalls,
     WGX: context.window.WGX,
     pipelines,
@@ -987,6 +993,34 @@ test("GL depthBias [factor, units] maps to WebGPU slope scale / constant, not sw
   for (const d of h.pipelineDescs.slice(n)) {
     assert.ok(!d.depthStencil || !d.depthStencil.depthBias, "road pipeline carries no depth bias");
   }
+});
+
+test("the lit-variant warm compiles through createRenderPipelineAsync, and first use still works without it", async () => {
+  // The boot warm used to be eight (sixteen with MSAA) synchronous Dawn compiles
+  // in one timer task. With the async API it blocks nothing, and a variant it
+  // settled is the one a later draw uses — no second, synchronous compile.
+  const h = makeGpuHarness({ asyncPipelines: true });
+  const gfx = await h.create();
+  gfx.resize();
+  await new Promise((r) => setTimeout(r, 20));   // the warm's setTimeout(0), then its promises
+  const warmed = h.asyncDescs.filter((d) => d.vertex && d.vertex.entryPoint === "vs_main");
+  assert.ok(warmed.length >= 8, "every warm variant went through the async API (got " + warmed.length + ")");
+  const blended = () => h.pipelineDescs.filter((d) => d && d.vertex && d.vertex.entryPoint === "vs_main" && d.fragment?.targets?.[0]?.blend);
+  const syncBefore = blended().length;
+  assert.equal(gfx.begin({}), true);
+  const mesh = gfx.createMesh({
+    pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2],
+  });
+  gfx.draw(mesh, new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), { alpha: 0.5 });
+  assert.equal(blended().length, syncBefore, "the alpha draw used the warmed variant: nothing compiled synchronously");
+  assert.ok(gfx.litPipelineStats().count >= warmed.length, "the settled variants are counted like minted ones");
+  // Without the API (older Chrome/Safari) the warm stays synchronous, as before.
+  const s = makeGpuHarness();
+  await s.create();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(s.asyncDescs.length, 0);
+  assert.ok(s.pipelineDescs.filter((d) => d && d.vertex && d.vertex.entryPoint === "vs_main" && d.fragment?.targets?.[0]?.blend).length >= 2);
 });
 
 test("WGX source keeps the proven parity fixes", () => {
