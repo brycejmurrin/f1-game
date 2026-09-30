@@ -31,7 +31,7 @@ generated row.
 ├─ SEASON ────────> #season-setup ──> customise ──> #race-settings ─> race
 ├─ DATA HUB ──────> #datahub
 ├─ GARAGE ────────> #carsetup / #customize
-├─ SETTINGS ──────> #pmsettings
+├─ SETTINGS ──────> #pmsettings (→ #tl-editor, #garrival)
 └─ HOW TO PLAY ───> #howtoplay
 
 race
@@ -257,7 +257,19 @@ Other in-race roots are:
   editor, and resume/quit close it.
 - `#garrival` — the GARAGE ARRIVAL TUNER dock (`#pm-garrival` under Display →
   Advanced Visuals; `js/garage/arrival.js`). Opens outside a race too; DONE or
-  Escape returns to Settings.
+  Escape returns to Settings. PREVIEW IN / PREVIEW OUT (`#ga-preview-in` /
+  `#ga-preview-out`) play the saved arrival or RACE! drive-out once in the garage
+  room (`js/garage/setup-camera.js` startArrivalPreview) with `#garrival-inner`
+  hidden; it ends by itself, on DONE or on Escape, and a paused race redraws its
+  own frame after. Refused while the GARAGE or the drive-out owns the room.
+- `#tl-editor` — the TITLE LAYOUT editor's docked bar (`#pm-tl-edit`, EDIT ON
+  TITLE SCREEN…, under Appearance → TITLE LAYOUT; `js/ui/title-layout.js`).
+  Title screen only (disabled while `#overlay` is hidden). Hides `#pmsettings`,
+  sets `html[data-tl-edit]` and makes `#menu-buttons`, `#menu-brand` and
+  `#tl-art` (a proxy over `#title-car`) draggable; `#tl-handle` sizes the
+  selected piece. DONE or Escape returns to the fold. It is left out of the
+  title's background isolation (`TopModal.syncMenuIsolation`) and MenuNav's
+  arrows (they move the piece).
 - `#photo-controls` — free-camera overlay.
 - `#quali`, `#standings` and `#results` — session flow.
 - `#rotate-device` — portrait race blocker.
@@ -294,7 +306,7 @@ no context.
 
 ### Layer model
 
-`UiLayers.DEFS` is the canonical list of 28 screen-sized roots. A layer gates
+`UiLayers.DEFS` is the canonical list of 30 screen-sized roots. A layer gates
 driving/menu input unless its definition explicitly sets `gate: false`.
 
 | Layer root | Gates? | Role |
@@ -325,6 +337,8 @@ driving/menu input unless its definition explicitly sets `gate: false`.
 | `#camtune` | yes | Camera tuner |
 | `#flyby` | yes | Flyby shot editor |
 | `#freecam` | yes | Free camera panel |
+| `#garrival` | yes | Garage arrival tuner (and its PREVIEW) |
+| `#tl-editor` | yes | Title layout editor bar (title screen) |
 | `#photo-controls` | yes | Free-camera controls |
 | `#datahub` | yes | Data and telemetry hub |
 
@@ -333,7 +347,7 @@ open. `#rotate-device` is non-gating so Escape and driving keys still reach the
 race beneath its opaque, media-query-controlled blocker.
 
 Most roots are real `<dialog>` elements and begin hidden. The non-dialog
-screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#garrival`, `#photo-controls`,
+screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#garrival`, `#tl-editor`, `#photo-controls`,
 `#carsetup`, `#career` and `#select`.
 
 ### Major shell and race IDs

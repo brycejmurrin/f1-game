@@ -11,7 +11,11 @@ const GarageArrival = (function () {
     return { enabled: v.enabled !== false, speed: number("speed", 0.5, 2),
       angle: ["cut", "left", "right"].includes(v.angle) ? v.angle : "cut", fov: number("fov", 40, 75) };
   }
-  function bindSettings($, store) {
+  /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
+   *  and return whether it started; preview(null) stops one and returns whether
+   *  one was playing (js/garage/setup-camera.js startArrivalPreview). */
+  function bindSettings($, store, opts = {}) {
+    const preview = typeof opts.preview === "function" ? opts.preview : null;
     const read = () => settings(store.get("garageArrival", null));
     const fields = ["enabled", "speed", "angle", "fov"];
     function refresh() {
@@ -41,7 +45,11 @@ const GarageArrival = (function () {
       if (typeof document !== "undefined" && document.body) document.body.classList.add("lt-open");
       if (done && done.focus) done.focus();
     };
+    for (const [b, dir] of [[$("ga-preview-in"), "in"], [$("ga-preview-out"), "out"]]) {
+      if (b) b.onclick = () => { if (preview) preview(dir, b); };
+    }
     if (panel && done) done.onclick = () => {
+      if (preview && preview(null)) return;   // DONE (or Escape) mid-playback stops it, back to the panel
       panel.hidden = true; page(true);
       if (typeof document !== "undefined" && document.body) document.body.classList.remove("lt-open");
       // After the settings dialog's own re-show handling, which focuses its

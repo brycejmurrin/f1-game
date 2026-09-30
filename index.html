@@ -415,24 +415,6 @@
     try {
       if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
-    // Title layout: apex26.titleLayout (object | unset). Stored only when
-    // custom, already clamped (js/ui/title-layout.js set()); the same arithmetic
-    // as TitleLayout.vars, held equal by tests/unit/title-layout.test.mjs.
-    try {
-      var tl = JSON.parse(localStorage.getItem("apex26.titleLayout")), de = document.documentElement;
-      if (tl && typeof tl === "object") {
-        ["btns", "title", "art"].forEach(function (k) {
-          var o = tl[k] || {};
-          de.style.setProperty("--tl-" + k + "-x", (+o.x || 0) + "vw");
-          de.style.setProperty("--tl-" + k + "-y", (+o.y || 0) + "vh");
-          de.style.setProperty("--tl-" + k + "-size", String((+o.size || 100) / 100));
-        });
-        if (tl.btns && +tl.btns.width > 0) { de.style.setProperty("--tl-btns-w", String(+tl.btns.width)); de.dataset.titleBtnw = "on"; }
-        if (tl.side === "swap") de.dataset.titleSide = "swap";
-        if (tl.layout === "stack" || tl.layout === "row") de.dataset.titleBtns = tl.layout;
-        de.dataset.titleLayout = "on";
-      }
-    } catch (e) { /* TitleLayout answers at eval */ }
     var b = document.body;
     if (!b || !window.getComputedStyle) return;
     try {
@@ -456,6 +438,27 @@
         .getPropertyValue("--tall-at")) || 1.05;
       b.setAttribute("data-shape", (hOwn / wOwn) >= tallAt ? "tall" : "wide");
     } catch (e) { /* a wrong first shape is survivable; a boot failure is not */ }
+    // Title layout: apex26.titleLayout (object | unset), AFTER data-shape
+    // above: the store keeps one layout per shape, {v: 2, wide, tall} (a
+    // missing shape is shipped), and a v1 object (no `v`) is both. Stored only
+    // when custom, already clamped (js/ui/title-layout.js set()); the same
+    // arithmetic as TitleLayout.vars, held equal by tests/unit/title-layout.test.mjs.
+    try {
+      var tl = JSON.parse(localStorage.getItem("apex26.titleLayout")), de = document.documentElement;
+      if (tl && typeof tl === "object" && tl.v === 2) tl = tl[b.getAttribute("data-shape") === "tall" ? "tall" : "wide"];
+      if (tl && typeof tl === "object") {
+        ["btns", "title", "art"].forEach(function (k) {
+          var o = tl[k] || {};
+          de.style.setProperty("--tl-" + k + "-x", (+o.x || 0) + "vw");
+          de.style.setProperty("--tl-" + k + "-y", (+o.y || 0) + "vh");
+          de.style.setProperty("--tl-" + k + "-size", String((+o.size || 100) / 100));
+        });
+        if (tl.btns && +tl.btns.width > 0) { de.style.setProperty("--tl-btns-w", String(+tl.btns.width)); de.dataset.titleBtnw = "on"; }
+        if (tl.side === "swap") de.dataset.titleSide = "swap";
+        if (tl.layout === "stack" || tl.layout === "row") de.dataset.titleBtns = tl.layout;
+        de.dataset.titleLayout = "on";
+      }
+    } catch (e) { /* TitleLayout answers at eval */ }
   })();
 </script>
 <!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
@@ -3078,7 +3081,7 @@
   <div id="garrival-inner" class="sheet">
     <div id="ga-head"><h2>GARAGE ARRIVAL TUNER</h2></div>
     <div id="ga-rows" class="pane">
-      <p class="adv-help">Saved for WORK ON CAR pit visits. Reduced motion skips the animation.</p>
+      <p class="adv-help">Saved for WORK ON CAR pit visits (IN) and the drive-out every RACE! opens on (OUT). Reduced motion skips both. PREVIEW plays one here now, even with PLAY ARRIVAL off or reduced motion on; Escape stops it.</p>
       <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ARRIVAL</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
       <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
         <select id="ga-speed"><option value="0.5">SLOW · 12.8s</option><option value="1" selected>NORMAL · 6.4s</option><option value="2">FAST · 3.2s</option></select>
@@ -3091,10 +3094,21 @@
       </div></div>
     </div>
     <div class="sheet-foot balanced-row">
+      <button id="ga-preview-in" type="button">PREVIEW IN</button>
+      <button id="ga-preview-out" type="button">PREVIEW OUT</button>
       <button id="ga-reset" type="button">RESET</button>
       <button id="ga-close" class="bigbtn" type="button">DONE</button>
     </div>
   </div>
+</div>
+
+<!-- title layout editor: SETTINGS › APPEARANCE › TITLE LAYOUT's EDIT ON TITLE
+     SCREEN. A small toolbar docked over #overlay while the player drags the
+     title screen's pieces. Only the layer and its Escape door live here; the
+     bar (piece, SIZE, WIDTH, RESET PIECE) is built by js/ui/title-layout.js,
+     which adopts tl-done into it. -->
+<div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>
+  <button id="tl-done" type="button">DONE</button>
 </div>
 
 <!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).

@@ -49,6 +49,9 @@ window.UiLayers = (function () {
     { id: "flyby" },
     { id: "freecam" },
     { id: "garrival" },
+    /* The TITLE LAYOUT editor's docked toolbar (js/ui/title-layout.js): over
+       #overlay while the title screen is being dragged about. */
+    { id: "tl-editor" },
     { id: "photo-controls" },
     { id: "datahub" },
   ];
