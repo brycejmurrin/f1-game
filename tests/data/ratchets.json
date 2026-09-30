@@ -71,7 +71,7 @@
       "slack": 0
     },
     "twinDebt": {
-      "ceiling": 7,
+      "ceiling": 6,
       "slack": 0
     },
     "waitForTimeout": 149,
