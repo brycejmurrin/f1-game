@@ -315,16 +315,36 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       };
     });
 
+    // data-fit="on" can land a turn before the painted zoom matches the fit's
+    // --sheet-scale. On a fast CI runner the baseline read caught zoom 1 while
+    // the settled cap was 1.363, and "keyboard gone" then compared settled to
+    // unsettled (ci run 36652043544). Wait until style and paint agree.
+    await page.waitForFunction(() => {
+      const sheet = document.getElementById("cs-inner");
+      if (!sheet || sheet.dataset.fit !== "on") return false;
+      const scale = parseFloat(sheet.style.getPropertyValue("--sheet-scale"));
+      const zoom = Number(getComputedStyle(sheet).zoom);
+      return Number.isFinite(scale) && scale > 0 && Math.abs(zoom - scale) < 0.001;
+    }, null, { polling: 100, timeout: 5_000 });
+
     const before = await read();
     expect(before.padBottom, "no keyboard: the pad is just the safe-area gutter")
       .toBeLessThan(120);
 
-    // Exactly the two things watchKeyboard does: write the property, reclassify.
+    // Exactly what watchKeyboard's apply() does: write --kb, flush the
+    // .screen padding cascade, reclassify. The flush is load-bearing — without
+    // it classifyFit can still see the pre-keyboard pad on this turn.
     await page.evaluate(() => {
       document.documentElement.style.setProperty("--kb", "120px");
+      void document.documentElement.offsetHeight;
       window.SheetShape.reclassify();
     });
-    await page.waitForTimeout(100);
+    await page.waitForFunction((was) => {
+      const screen = document.getElementById("carsetup");
+      const sheet = document.getElementById("cs-inner");
+      return parseFloat(getComputedStyle(screen).paddingBottom) === 120
+        && Number(getComputedStyle(sheet).zoom) < was;
+    }, before.effective, { polling: 100, timeout: 5_000 });
     const withKb = await read();
     expect(withKb.padBottom, "--kb reaches .screen as bottom padding").toBe(120);
     expect(withKb.effective, "the fit cap tightens for the space the keyboard took")
@@ -335,9 +355,15 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // the same ratchet bug the rotation case guards against.
     await page.evaluate(() => {
       document.documentElement.style.removeProperty("--kb");
+      void document.documentElement.offsetHeight;
       window.SheetShape.reclassify();
     });
-    await page.waitForTimeout(100);
+    await page.waitForFunction((was) => {
+      const screen = document.getElementById("carsetup");
+      const sheet = document.getElementById("cs-inner");
+      return parseFloat(getComputedStyle(screen).paddingBottom) === was.pad
+        && Math.abs(Number(getComputedStyle(sheet).zoom) - was.zoom) < 1e-3;
+    }, { pad: before.padBottom, zoom: before.effective }, { polling: 100, timeout: 5_000 });
     const after = await read();
     expect(after.padBottom, "keyboard gone: pad returns").toBe(before.padBottom);
     expect(after.effective, "keyboard gone: fit cap returns").toBeCloseTo(before.effective, 3);

@@ -383,7 +383,11 @@ test("all current track mesh buffers are finite and structurally indexable", () 
     }
   });
   try {
-    for (const def of Tracks.LIST) {
+    // APEX_CIRCUITS (ci.yml's circuit lane, a circuit-only PR) narrows the
+    // whole-roster build; unset = every circuit. The LIST-length pin below is
+    // about the roster itself and stays unscoped.
+    const SCOPE = (process.env.APEX_CIRCUITS || "").split(",").map((s) => s.trim()).filter(Boolean);
+    for (const def of Tracks.LIST.filter((d) => !SCOPE.length || SCOPE.includes(d.id))) {
       trackId = def.id;
       Tracks.build(def, { night: false });
     }

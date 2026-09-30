@@ -4725,7 +4725,7 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   let playerVisualKey = "previous-setup", carModelBuf = null, builds = 0;
   const playerBodies = {}, playerBodyOrder = [], PLAYER_BODY_CACHE_MAX = 3;
   const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
-  const CockpitOpts = { halo: () => true }, Parts = { getVisualTiers: () => ({}) };
+  const CockpitOpts = { halo: () => true, haloSize: () => 2 }, Parts = { getVisualTiers: () => ({}) };
   const Car3D = { build: () => { builds++; return {}; } };
   // js/car/car-draw.js reads the backend and the parts through the G façade and the livery through deps.
   const G = { gfx: { createMesh: x => x }, getTeamParts: () => ({}) };

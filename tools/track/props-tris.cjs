@@ -84,7 +84,7 @@ function main() {
   const json = args.includes("--json");
   const pos = args.filter((a) => !a.startsWith("--"));
   const env = args.includes("--all") ? null : pos;
-  const ids = env || buildContext().Tracks.LIST.map((d) => d.id);
+  const ids = env || require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id));   // APEX_CIRCUITS narrows --all
   if (!ids.length) { console.error("usage: props-tris.cjs <id>|--all [--json]"); process.exit(2); }
   const rows = measureAll(ids);
   if (json) { process.stdout.write(JSON.stringify(rows)); return; }
