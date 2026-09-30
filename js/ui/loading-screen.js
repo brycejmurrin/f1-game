@@ -680,6 +680,23 @@ const LoadingScreen = (function () {
       return true;
     }
 
+    /* THE GARAGE. RACE! opens on the car driving out of the setup screen's
+     * garage (js/garage/setup-camera.js startDriveOut), and that shot is the
+     * car's alone: no card, no scrim, no letterbox — the card arrives with the
+     * flyby and the announcer. Up only to own the screen while game.js draws
+     * the garage (and builds the circuit behind it); no timer, no skip, and not
+     * active(). Painted now, so building() or run() only has to fade it in. */
+    function garage(info) {
+      stop();
+      const r = root();
+      if (!r || !info || !info.track) return false;
+      cur = info; paint(info);
+      applyCard();
+      r.hidden = false;
+      setPhase("garage");
+      return true;
+    }
+
     /* THE HANDOFF. run() fires `go` (startRace) and the race owns the screen
      * from then on — but not yet the CANVAS. The backend compiles the race's
      * programs on the first countdown frame (gfx.warm(), spent inside present())
@@ -705,7 +722,7 @@ const LoadingScreen = (function () {
     }
 
     return {
-      run, stop, hold, building, handoff,
+      run, stop, hold, building, garage, handoff,
       /** The next flyby's length (the short cut for a habitual skipper), so its
        *  shots are planned for the seconds they will actually have. */
       nextFlyMs: (wantMs) => flyMsFor(readSkips(), wantMs),

@@ -808,7 +808,33 @@ function flash(btn, msg) {
   btn._fbT = setTimeout(() => { btn.textContent = btn._fbLabel; btn._fbLabel = ""; }, 1800);
 }
 
+/** FREE CAMERA — the editor's sub-mode, as the lighting tuner has one. Flies
+ *  from the frame being previewed on the flyby lens; SET SHOT START / END write
+ *  the flown view into the selected shot, and DONE comes back here. */
+function setPose(end, r) {
+  const s = ensure()[sel];
+  if (!s || !r || !r.shot) return "";
+  s.eye[end] = r.shot.eye[0]; s.look[end] = r.shot.look[0]; s.fov[end] = r.shot.fov[0];
+  edited();
+  return "Shot " + (sel + 1) + (end ? " ends" : " starts") + " here (round trip: eye " + r.err.eye + " m, look " + r.err.look + " m).";
+}
+function freeCam() {
+  if (typeof FreeCam === "undefined" || !FreeCam.enterFrom) return;
+  const c = G.dbgCam;
+  const from = c ? { eye: c.eye.slice(), target: c.target.slice(), fov: c.fov } : {};
+  closeFlyby(false);
+  const ok = FreeCam.enterFrom(Object.assign(from, {
+    lens: "flyby",
+    back: openFlyby,
+    actions: [
+      { label: "SET SHOT START", title: "Make this view where the selected shot begins", run: (r) => setPose(0, r) },
+      { label: "SET SHOT END", title: "Make this view where the selected shot ends", run: (r) => setPose(1, r) },
+    ],
+  }));
+  if (!ok) openFlyby();
+}
 $("pm-flyby").onclick = openFlyby;
+if ($("fb-freecam")) $("fb-freecam").onclick = freeCam;
 $("fb-close").onclick = () => closeFlyby(true);
 $("fb-u").oninput = () => { setU(parseFloat($("fb-u").value) / 1000); preview(); };
 $("fb-add").onclick = () => { shots = addShot(ensure(), sel); sel += 1; setU(midOf(sel)); edited(); };

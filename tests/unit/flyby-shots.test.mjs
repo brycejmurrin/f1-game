@@ -778,13 +778,13 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
   assert.match(game, /const planned = world && _menuFly && _menuFly\.track === track && _menuFly\.key === _menuGate\.ready/);
 });
 
-test("RACE! before the menu's build: build under the card, then fly (never the bare card)", () => {
+test("RACE! before the menu's build: build under the garage drive-out (or the card), then fly", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.match(body, /if \(!built && !menuWorld\(\) && introBuild\(go\)\) return;/, "no world: raceIntro diverts to the build");
   const j = game.indexOf("function introBuild(go)"), ib = game.slice(j, game.indexOf("\n}\n", j));
-  const b = ib.indexOf("loadingScreen.building("), l = ib.indexOf("loadTrack(idx)"), p = ib.indexOf("FlybySeq.planSteps"), r = ib.indexOf("raceIntro(go)");
-  assert.ok(b > 0 && l > b && p > l && r > p, "card up, then build, then plan, then the flyby");
+  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("loadTrack(idx)"), p = ib.indexOf("FlybySeq.planSteps"), r = ib.indexOf("raceIntro(go)");
+  assert.ok(b > 0 && l > b && p > l && r > p, "the garage (or the card) up, then build, then plan, then the flyby");
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
   assert.match(ib, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
   assert.match(ib, /motionReduced\(\)/, "reduced motion (the OS flag or SETTINGS › MOTION) has no flyby to build for");
@@ -809,7 +809,8 @@ test("intro builds cancel at async boundaries and never fly over pending compila
       entrySettings: () => c.settings, menuKey: () => "world", motionReduced: () => false, titleIfBare: () => {},
       clearTimeout() {}, setTimeout: f => f(), requestAnimationFrame: f => f(),
       performance: { now: () => now }, loadingInfo: () => ({}),
-      loadingScreen: { building: () => events.push("build"), stop: () => events.push("stop"), nextFlyMs: () => 24000 },
+      loadingScreen: { building: () => { c._ph = "build"; events.push("build"); }, garage: () => { c._ph = "garage"; events.push("garage"); },
+        stop: () => { c._ph = ""; events.push("stop"); }, phase: () => c._ph || "", nextFlyMs: () => 24000 },
       ensureScenery: () => new Promise((r, j) => { resolveScenery = r; rejectScenery = j; }),
       loadTrack: () => events.push("load"), prepareMenuCarAssets: async () => {},
       warmPrograms: () => { warming = mode !== "ready" && mode !== "plan-cancel"; }, gfx: { warming: () => warming },
@@ -835,6 +836,8 @@ test("intro builds cancel at async boundaries and never fly over pending compila
     assert.equal(events.includes("intro"), success, mode);
     assert.equal(!!c._menuFly, success, mode + ": no stale plan committed");
     assert.equal(c.setupPreviewOn, false, mode + ": the studio drive-out is closed");
+    assert.equal(events[0], "garage", mode + ": RACE! opens on the garage, never the card");
+    if (success) assert.ok(events.indexOf("build") > events.indexOf("load"), mode + ": the card only once the car is out, after the build step");
     if (mode === "quit" || mode === "old-timeout") assert.equal(events.includes("load"), false, mode);
     if (mode.includes("timeout") || mode === "fetch-fail") {
       assert.ok(events.includes("recover") && events.includes("message"), mode + ": recover visibly");

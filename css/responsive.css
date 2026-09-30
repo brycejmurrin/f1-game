@@ -317,4 +317,61 @@ body.rotate-help-open #rotate-device { display: none !important; }
   #disclaimer { color: var(--text); border-color: var(--text); }
 }
 
+/* ---------- TITLE LAYOUT player setting (js/ui/title-layout.js) ----------
+   Every rule keys on html[data-title-layout], which only a CUSTOM layout sets —
+   untouched, none of this matches and the title screen is the shipped one.
+   In this layer on purpose: it must beat both the component rules (menus.css)
+   and the two-column landscape block above, whatever their specificity.
+   MOVES ARE `translate`, SIZES ARE `zoom`. The individual `translate` / `scale`
+   properties compose with the intro's `transform` keyframes instead of
+   replacing them. Size is zoom on the two UI pieces so a bigger cluster still
+   takes up layout room and scrolls like the shipped one; the drawing is not a
+   grid item, so it scales from its foot. */
+:root[data-title-layout] #menu-buttons {
+  translate: var(--tl-btns-x, 0) var(--tl-btns-y, 0);
+  zoom: calc(var(--ui-scale) * var(--tl-btns-size, 1));
+}
+:root[data-title-layout] #menu-brand {
+  translate: var(--tl-title-x, 0) var(--tl-title-y, 0);
+  zoom: calc(var(--ui-scale) * var(--tl-title-size, 1));
+}
+:root[data-title-layout] #title-car {
+  translate: var(--tl-art-x, 0) var(--tl-art-y, 0);
+  scale: var(--tl-art-size, 1);
+  transform-origin: 50% 100%;
+}
+/* WIDTH: a share of the SCREEN, whatever the cluster's size. --vwz already
+   undoes --ui-scale; dividing by the size undoes the cluster's own zoom. The
+   rows then fill the cluster instead of their per-shape shipped widths. */
+:root[data-title-btnw] #menu-buttons {
+  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
+  max-width: none; min-width: 0; justify-self: center;
+}
+:root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-secondary) { width: 100%; max-width: none; }
+/* LAYOUT. .balanced-row sizes its children from --balance-basis / -min
+   (css/components.css): 100% is one per line, 0px is one equal row. */
+:root[data-title-btns="stack"] #menu-buttons > :is(#menu-primary, #menu-secondary) { --balance-basis: 100%; --balance-min: 100%; }
+:root[data-title-btns="stack"] #menu-retention { grid-template-columns: minmax(0, 1fr); }
+:root[data-title-btns="row"] #menu-buttons > :is(#menu-primary, #menu-secondary) { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
+/* SIDE. Two-column shapes trade columns; a single column trades order. */
+:root[data-title-side="swap"] #menu-brand { order: 1; }
+:root[data-title-side="swap"] :where(body[data-shape="tall"]) #menu-brand { grid-row: 2; }
+:root[data-title-side="swap"] :where(body[data-shape="tall"]) #menu-buttons { grid-row: 1; }
+:root[data-title-side="swap"] :where(body[data-shape="wide"][data-density="compact"]) #overlay { grid-template-columns: min(46%, 400px) minmax(0, 1fr); }
+:root[data-title-side="swap"] :where(body[data-shape="wide"][data-density="compact"]) #menu-brand { grid-column: 2; }
+:root[data-title-side="swap"] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons { grid-column: 1; }
+@media (min-width: 900px) and (orientation: landscape) {
+  /* The density guard FIRST (tests/unit/css-media-disjoint.test.mjs); the swap
+     condition rides in a second zero-specificity :where(), and the rule wins on
+     order — same specificity and layer as the placement above, and later. */
+  :where(body:not([data-density="compact"])):where(:root[data-title-side="swap"] *) #menu-brand { grid-column: 2; }
+  :where(body:not([data-density="compact"])):where(:root[data-title-side="swap"] *) #menu-buttons { grid-column: 1; }
+}
+/* PEEK: while a TITLE LAYOUT slider is held, the title screen shows through
+   the settings page (css/components.css fades #overlay under any open dialog). */
+body[data-tl-peek] #overlay { opacity: 1; }
+body[data-tl-peek] #pmsettings { background: transparent; }
+body[data-tl-peek] #pmsettings::backdrop { background: transparent; }
+body[data-tl-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
+
 } /* @layer overlays */

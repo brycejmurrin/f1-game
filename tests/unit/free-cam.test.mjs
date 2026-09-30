@@ -123,7 +123,7 @@ test("snap maths: behind the car along its heading; a corner from its outside, b
 test("open flies from the game camera; roll, lens and Q/E decorate dbgCam; DONE restores", () => {
   const { dom, G, api, sb } = boot();
   assert.equal(api.isOpen(), false);
-  dom.byId("pm-freecam").click();
+  assert.equal(api.open(), true);
   assert.equal(api.isOpen(), true); assert.equal(G.photoMode, true);
   assert.equal(dom.byId("freecam").hidden, false);
   assert.equal(dom.byId("pmsettings").hidden, true, "the settings page stands down for the live view");
@@ -227,7 +227,7 @@ test("wired into the real photo mode: speed dial drives the fly-cam, Q rolls, EX
   };
   const pm = vm.runInContext("Photomode", ctx).create(G);
   const fc = pm.freeCam;
-  dom.byId("pm-freecam").click();
+  fc.open();
   assert.equal(fc.isOpen(), true); assert.equal(G.photoMode, true);
   assert.deepEqual(plain(G.dbgCam.eye), [0, 10, 0], "published at once, from the game camera");
   const key = (code, type) => (wl[type] || []).forEach((fn) => fn({ code, type, preventDefault() {}, stopPropagation() {} }));
@@ -239,9 +239,36 @@ test("wired into the real photo mode: speed dial drives the fly-cam, Q rolls, EX
   dom.byId("pc-exit").click();
   assert.equal(fc.isOpen(), false); assert.equal(G.photoMode, false); assert.equal(G.dbgCam, null);
   assert.equal(dom.byId("pmsettings").hidden, false, "EXIT from the free camera returns to the settings page");
-  dom.byId("pm-freecam").click();
+  fc.open();
   G.paused = false; dom.byId("pmsettings").hidden = true;
   pm.exitPhotoMode();                                        // setPaused(false) / quitToMenu
   assert.equal(fc.isOpen(), false); assert.equal(dom.byId("freecam").hidden, true);
   assert.equal(dom.byId("pmsettings").hidden, true, "resume does not bring the menu back");
+});
+
+test("the flyby editor's sub-mode: starts at the previewed frame on the flyby lens, runs its shot actions, DONE goes back to the editor", () => {
+  const { dom, G, api, FC } = boot();
+  let back = 0; const got = [];
+  const ok = api.enterFrom({
+    eye: [10, 20, 30], target: [10, 20, -70], fov: 42, lens: "flyby",
+    back: () => { back++; },
+    actions: [{ label: "SET SHOT START", run: (r) => { got.push(r.shot.id); return "Shot 1 starts here."; } }],
+  });
+  assert.equal(ok, true); assert.equal(api.isOpen(), true);
+  assert.equal(api.state().lens, "flyby");
+  assert.deepEqual(plain(G.dbgCam.eye), [10, 20, 30], "flies from the frame the editor was previewing");
+  const shot = dom.byId("fc-shot");
+  assert.equal(shot.hidden, false, "the opener's actions show");
+  assert.equal(shot.children.length, 1);
+  shot.children[0].click();
+  assert.deepEqual(got, ["freecam"], "the action gets the view as a flyby pose");
+  dom.byId("fc-close").click();
+  assert.equal(api.isOpen(), false);
+  assert.equal(back, 1, "DONE returns to the editor");
+  assert.equal(dom.byId("pmsettings").hidden, true, "not to the settings page");
+  assert.equal(shot.hidden, true, "a plain open shows no actions");
+  assert.equal(typeof FC.enterFrom, "function");
+  api.enterFrom({ back: () => { back++; } });
+  G.photoMode && api.close(false);                          // resume / quit
+  assert.equal(back, 1, "resume does not bounce back into the editor");
 });

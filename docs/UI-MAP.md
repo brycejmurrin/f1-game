@@ -37,7 +37,7 @@ generated row.
 race
 ├─ HUD / #pausebtn ──> #pausemenu ──> #pmsettings?
 ├─ race flow ────────> #quali | #standings | #results
-└─ tools ────────────> #lighting | #camtune | #flyby | #freecam | #photo-controls
+└─ tools ────────────> #lighting | #camtune | #flyby (→ #freecam) | #garrival | #photo-controls
 ```
 
 `?` means optional. Pause was walked headlessly; the race-flow and visual-tuner
@@ -250,10 +250,14 @@ Assists and Music & Sound doors documented above.
 Other in-race roots are:
 
 - `#lighting`, `#camtune` and `#flyby` — visual tuner docks.
-- `#freecam` — the FREE CAMERA dock (`#pm-freecam` under Display → Advanced
-  Visuals, disabled outside a race like the three tuners). It flies with
-  `#photo-controls`; DONE, EXIT or Escape returns to Settings, and resume/quit
-  close it.
+- `#freecam` — the FREE CAMERA dock, the flyby editor's sub-mode (`#fb-freecam`
+  in `#fb-head`, as `#pc-toggle` is the lighting tuner's). It flies with
+  `#photo-controls` from the previewed frame on the flyby lens; SET SHOT START /
+  END write the view into the selected shot; DONE, EXIT or Escape return to the
+  editor, and resume/quit close it.
+- `#garrival` — the GARAGE ARRIVAL TUNER dock (`#pm-garrival` under Display →
+  Advanced Visuals; `js/garage/arrival.js`). Opens outside a race too; DONE or
+  Escape returns to Settings.
 - `#photo-controls` — free-camera overlay.
 - `#quali`, `#standings` and `#results` — session flow.
 - `#rotate-device` — portrait race blocker.
@@ -329,7 +333,7 @@ open. `#rotate-device` is non-gating so Escape and driving keys still reach the
 race beneath its opaque, media-query-controlled blocker.
 
 Most roots are real `<dialog>` elements and begin hidden. The non-dialog
-screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#photo-controls`,
+screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#garrival`, `#photo-controls`,
 `#carsetup`, `#career` and `#select`.
 
 ### Major shell and race IDs
