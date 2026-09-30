@@ -67,8 +67,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
   "tests/unit/agent-surface.test.mjs",
-  "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-band.test.mjs",
+  "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
   // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
   // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
