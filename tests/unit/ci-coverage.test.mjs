@@ -1297,8 +1297,9 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   assert.ok(job.length > 0, "the selected-verdict job is gone");
   assert.match(job, /^    name: Selected specs \(verdict\)$/m, "the required-check name; branch protection names it");
   assert.match(job, /^    needs: \[select, selected\]$/m);
-  assert.match(job, /^    if: \$\{\{ always\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
-    "always(): a skipped `selected` must still be judged; the events are select's own");
+  assert.match(job, /^    if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
+    "!cancelled(): a skipped `selected` must still be judged, but a cancelled run (a draft's run superseded by ready_for_review, #510) has no verdict; the events are select's own");
+  assert.doesNotMatch(job, /^    if: \$\{\{ always\(\)/m, "always() turned a superseded run's cancelled `selected` into a red verdict");
   // The reading: select must pass; selected passes, or is skipped with nothing dropped.
   assert.match(job, /SELECT: \$\{\{ needs\.select\.result \}\}/);
   assert.match(job, /SELECTED: \$\{\{ needs\.selected\.result \}\}/);
