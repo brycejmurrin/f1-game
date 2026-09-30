@@ -127,5 +127,7 @@ test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path
   const scrubGate = game.indexOf("if (replayBuf.isScrubbing())");
   const score = game.indexOf("Career.scoreRound");
   assert.ok(scrubGate >= 0 && score > scrubGate, "scrub gate precedes career score");
+  // Ghost.flush still leads endRace (ghost.test pin); scrub return follows it.
+  assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
   api.endScrub();
 });

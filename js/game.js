@@ -3201,8 +3201,8 @@ function netOrder(order) {
 }
 
 function endRace(forcedOrder) {
-  if (replayBuf.isScrubbing()) return;   // scrub must not settle career / open results
   Ghost.flush();
+  if (replayBuf.isScrubbing()) return;   // scrub must not settle career / open results
   try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
@@ -9438,7 +9438,6 @@ $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
 // STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
-// (pause-card build stamp lives in PauseOpts.paintBuild — extracted with ReplayBuf.)
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
   if (STEER_MODES.indexOf(mode) < 0) mode = "buttons";
