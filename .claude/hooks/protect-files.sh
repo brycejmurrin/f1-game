@@ -7,7 +7,7 @@
 #     outright (tests/data/ratchets.json too — moved by ratchets.mjs, not by
 #     hand); index.html and sw.js only inside their @gen-shell blocks;
 #     package.json only on a test:* script line (source: tests/groups.json).
-#     Other generated docs (ladder figures, DEBUG-HOOKS/ARCHITECTURE tables)
+#     Other generated docs (DEBUG-HOOKS/ARCHITECTURE tables, tools/README.md)
 #     are NOT blocked here; `npm run gen:check` names their drift.
 #  2. §Verification 2 — no js/, css/ or index.html edit while a `playwright
 #     test` process is live (tests serve the working tree).

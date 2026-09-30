@@ -61,6 +61,10 @@ status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $
 # the CLI reads it, before the first prompt is built.
 mem=$("$ROOT/.claude/hooks/memory-sync.sh" restore </dev/null 2>/dev/null)
 [ -n "$mem" ] && status+=("$mem")
+# The gate ladder's sizes (AGENTS.md rule 3). Measured, never committed:
+# committed digits made every two test-adding PRs conflict (2026-09-30).
+lad=$(timeout 10 node "$ROOT/tools/gen/gen-ladder-figures.mjs" 2>/dev/null)
+[ -n "$lad" ] && status+=("$lad")
 
 printf 'apex26 session-start:'; printf ' %s;' "${status[@]}"; printf '\n'
 exit 0

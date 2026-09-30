@@ -4,7 +4,7 @@
 // suites" step, derived at runtime so the two cannot drift.
 //
 // WHY THIS EXISTS. `npm run test:tooling-fast` is the documented edit-loop
-// check, and it is a SUBSET: 69 of 277 unit files are not on its list. That is
+// check, and it is a SUBSET: many unit files are not on its list. That is
 // deliberate — the list is tuned for a fast loop — but it reads as "the gate",
 // and a file off it is invisible until something else happens to run it. It has
 // cost real deploys twice:

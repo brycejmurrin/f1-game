@@ -364,7 +364,7 @@ jobs:
       # a 4-core box, which is what a public runner is (4 vCPU). Same tool, same
       # START/PASS/FAIL lines; the npm script stays serial for a loaded dev box.
       # DERIVED DOC FIGURES ARE ADVISORY OFF A PULL REQUEST (2026-09-30). The
-      # spec/unit counts and the "N of M" ladder are generated; two PRs that
+      # exact spec/unit counts a doc may still carry are derived; two PRs that
       # each add a test regenerate them identically against their own base,
       # merge cleanly, and leave the tip one file short — 14 of 15 deploy-branch
       # reds on 2026-09-29, a red no push can clear but a regeneration commit,
