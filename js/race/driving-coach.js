@@ -8,7 +8,7 @@ const DrivingCoach = (function () {
     rearBrake: { label: "Rear grip under braking", text: "REAR SLIDING — EASE THE BRAKE GENTLY", detail: "The rear tyres are near their grip limit under braking. Release some brake pressure smoothly.", dwell: 0.5 },
     rearCoast: { label: "Rear grip while coasting", text: "REAR SLIDING — KEEP INPUTS SMOOTH", detail: "The rear tyres are near their grip limit. Avoid sudden steering or pedal changes while the car settles.", dwell: 0.5 },
     front: { label: "Front grip", text: "FRONTS SLIDING — UNWIND SOME STEERING", detail: "The front tyres are near their grip limit. Ease some steering instead of turning harder.", dwell: 0.6 },
-    xmode: { label: "X-mode in corners", text: "CLOSE THE WING — X-MODE LOSES GRIP IN CORNERS", detail: "The active aero was open while the car was cornering hard. X-mode trades downforce for straight-line speed; close it before you turn in.", dwell: 0.5 },
+    xmode: { label: "Straight Mode in corners", text: "CLOSE THE WING — STRAIGHT MODE LOSES GRIP IN CORNERS", detail: "The active aero was open while the car was cornering hard. Straight Mode trades downforce for straight-line speed; close it before you turn in.", dwell: 0.5 },
     coasting: { label: "Coasting", text: "COASTING ON THE STRAIGHT — CHECK YOUR THROTTLE", detail: "Neither pedal was used at speed on a clear straight. If you are not deliberately saving fuel or energy, build speed until your braking point.", dwell: 1.2 },
     limits: { label: "Track limits", text: "TRACK LIMITS — KEEP THE CAR INSIDE THE WHITE LINES", detail: "A track-limits strike was recorded and the lap time deleted. In a race the third strike brings the black-and-white flag and the fourth and every one after it add five seconds; in a Time Trial or qualifying the lap is simply deleted.", dwell: 0 }
   });
@@ -24,7 +24,7 @@ const DrivingCoach = (function () {
     rearCoast: "slalom", limits: "sector", coasting: "braking" });
   const APPROACH = Object.freeze({ trail: "RELEASE THE BRAKE AS YOU TURN", rearBrake: "RELEASE THE BRAKE SMOOTHLY",
     power: "BUILD THROTTLE SMOOTHLY ON EXIT", front: "AVOID ADDING STEERING IF THE FRONTS SLIDE",
-    rearCoast: "KEEP YOUR INPUTS SMOOTH", xmode: "CLOSE X-MODE BEFORE TURNING", limits: "STAY INSIDE THE WHITE LINES" });
+    rearCoast: "KEEP YOUR INPUTS SMOOTH", xmode: "CLOSE STRAIGHT MODE BEFORE TURNING", limits: "STAY INSIDE THE WHITE LINES" });
   const SUGGEST_AT = 3;        // repeats of one tip before the goal is worth naming
   // METRES either side of an apex that still count as that turn — not a lap
   // FRACTION, which is a different distance on every circuit: 5% of a lap is

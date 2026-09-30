@@ -131,11 +131,11 @@ test('studio drive-out (poseOut): shutter up, parked a beat, then nose first out
 test('game.js plays the studio drive-out AT ONCE when RACE! beats the circuit, and the warm waits for it', () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
-  assert.match(build, /loadingScreen\.building\(info0\); studioOpen\(\);/, 'the drive-out starts with the card, before any build step');
-  assert.ok(build.indexOf('await studioDone(live)') > 0 && build.indexOf('await studioDone(live)') < build.indexOf('warmPrograms()'), 'the warm waits for the car to be out');
+  assert.match(build, /loadingScreen\.building\(info0\); studioOpen\(n\);/, 'the drive-out starts with the card, before any build step');
+  assert.ok(build.indexOf('await studioDone(live, n)') > 0 && build.indexOf('await studioDone(live, n)') < build.indexOf('warmPrograms()'), 'the warm waits for the car to be out');
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
-  assert.match(warm, /loadingScreen\.building\(loadingInfo\(\)\); studioOpen\(\);/);
-  assert.ok(warm.indexOf('await studioDone(live)') < warm.indexOf('warmPrograms()'));
+  assert.match(warm, /loadingScreen\.building\(loadingInfo\(\)\); studioOpen\(n\);/);
+  assert.ok(warm.indexOf('await studioDone(live, n)') < warm.indexOf('warmPrograms()'));
   assert.match(game, /const studio = !!built && _studioPlayed; _studioPlayed = false;/, 'the montage does not repeat it on the pit lane');
   assert.match(game, /const lead = world && flybyShots && !studio &&/);
   assert.match(game, /\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, 'the studio shows through the build card');
@@ -143,4 +143,5 @@ test('game.js plays the studio drive-out AT ONCE when RACE! beats the circuit, a
   assert.match(cam, /const arriving = driveOut \? stepDriveOut\(dt\) : arrival\.step\(dt\);/);
   assert.match(cam, /if \(!cfg\.enabled \|\| reducedMotion\(\)\) return 0;/, 'the arrival tuner and reduced motion gate it');
   assert.match(game, /setupCam\.driveOutLeft\(\) > 0 && performance\.now\(\) - _studio\.at < _studio\.ms \* 3\)/, 'a build stall delays the car, never cuts it off in the doorway');
+  assert.match(game, /function studioClose\(n\) \{ if \(_studio && _studio\.n === n\)/, 'only the intro run that opened it closes it');
 });

@@ -55,6 +55,9 @@ jobs:
         run: |
           set -u
           run_all() { echo "prose=true" >> "$GITHUB_OUTPUT"; echo "RUNNING DOCS GUARDS: $1"; exit 0; }
+          # The test commit's first parent, not the event's base.sha, which
+          # lags one sync behind it (tools/ci/ci-pr-base.sh).
+          PR_BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
           case "${PR_BASE:-}" in ""|0000000000000000000000000000000000000000) run_all "no base sha" ;; esac
           git cat-file -e "${PR_BASE}^{commit}" 2>/dev/null || run_all "base $PR_BASE unreachable"
           CHANGED="$(git diff --name-only "$PR_BASE" "$GITHUB_SHA")" || run_all "git diff failed"
