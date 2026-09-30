@@ -56,12 +56,17 @@ test("every audit CLI's --all resolves its roster through scope()", () => {
   }
   // float-audit has three --all entry points (foliage, clip, default); all three.
   assert.equal((read("tools/track/float-audit.cjs").match(/circuit-scope\.cjs"\)\.scope\(/g) || []).length, 3);
+  // verify-track --all (ci.yml's "Every circuit still builds headlessly", 70 s on #510) too.
+  assert.match(read("tools/track/verify-track.cjs"), /circuit-scope\.cjs"\)\.scope\(loadTrackIds\(\)\)/, "verify-track --all ignores APEX_CIRCUITS");
 });
 
 test("the sweep suites that rebuild the roster are scoped, listed, and hold the SCOPED floor", () => {
   const scoped = ["tests/unit/prop-clipping.test.mjs", "tests/unit/scenery-grounding.test.mjs", "tests/unit/coplanar-faces.test.mjs",
     "tests/unit/props-tri-ratchet.test.mjs", "tests/unit/road-under-floor.test.mjs",
-    "tests/unit/shared-track-foundation-characterization.test.cjs"];
+    "tests/unit/shared-track-foundation-characterization.test.cjs",
+    // Second pass (2026-09-30): the three fleet walks that cost 191 s of #510's
+    // 344 s scoped sweeps step.
+    "tests/unit/lamp-fixture-anchor.test.mjs", "tests/unit/pit-signs.test.mjs", "tests/unit/props-over-road.test.mjs"];
   // pit-complex stays whole on purpose: its mouth test counts qualifying
   // circuits across the roster, and its other tests build fixed ids anyway.
   assert.doesNotMatch(read("tests/unit/pit-complex.test.mjs"), /APEX_CIRCUITS/);

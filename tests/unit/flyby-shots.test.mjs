@@ -823,7 +823,9 @@ test("intro builds cancel at async boundaries and never fly over pending compila
         planSteps: () => () => mode !== "plan-cancel" || slices > 0 },
       raceIntro: () => { assert.equal(warming, false, mode + ": never start unseen shots"); events.push("intro"); },
       quitToMenu: () => { c.cancelIntro(); c.loadingScreen.stop(); events.push("recover"); },
-      announce: () => events.push("message"), Log: { warn() {} } };
+      announce: () => events.push("message"), Log: { warn() {} },
+      // The studio drive-out, on in every mode: no path may leave the garage preview up.
+      setupPreviewOn: false, setupCam: { startDriveOut: () => 5000, stopDriveOut() {}, driveOutLeft: () => Math.max(0, 5000 - now) } };
     vm.createContext(c); vm.runInContext(game.slice(a, b), c);
     c.introBuild(() => events.push("go"));
     if (mode === "quit") c.quitToMenu();
@@ -832,6 +834,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
     const success = mode === "ready" || mode === "slow";
     assert.equal(events.includes("intro"), success, mode);
     assert.equal(!!c._menuFly, success, mode + ": no stale plan committed");
+    assert.equal(c.setupPreviewOn, false, mode + ": the studio drive-out is closed");
     if (mode === "quit" || mode === "old-timeout") assert.equal(events.includes("load"), false, mode);
     if (mode.includes("timeout") || mode === "fetch-fail") {
       assert.ok(events.includes("recover") && events.includes("message"), mode + ": recover visibly");
@@ -856,7 +859,7 @@ test("the world key includes the grid size, and a failed build does not keep the
   assert.match(game, /const menuKey = \(idx\) => \[idx, raceTimeOfDay, raceWeather, fieldSize\(\)\]\.join\("\|"\);/);
   assert.equal((game.match(/\[(trackIdx|want|idx), (raceTimeOfDay|tod), (raceWeather|weather)\]\.join\("\|"\)/g) || []).length, 0, "every menu key goes through menuKey()");
   assert.match(game, /track = null; builtTrackId = null;/, "a build that throws must force the next loadTrack to rebuild");
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| loadingScreen\.phase\(\) === "build";/, "the no-world card shows no stale circuit, nor a build card over the results");
+  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, "the no-world card shows no stale circuit, nor a build card over the results");
 });
 
 test("plans are reused when they still hold, and re-planned when they do not", async () => {
