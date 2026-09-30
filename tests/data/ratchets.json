@@ -50,7 +50,7 @@
       "ceiling": 49,
       "slack": 39
     },
-    "waitForTimeout": 151,
+    "waitForTimeout": 149,
     "dynamicIdReads": {
       "ceiling": 66,
       "slack": 5
