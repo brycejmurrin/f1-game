@@ -77,13 +77,20 @@ const DataTelemetry = (function () {
     function shortLS() {
       return typeof window !== "undefined" && window.innerHeight < 520 && window.innerWidth > window.innerHeight;
     }
+    // A PORTRAIT PHONE has height to spare and no width. At the landscape
+    // 190/600 a 336 px trace was 106 px tall: seven channels in a strip, the
+    // two left axes printed over each other and the gap chart's title under
+    // its own line. It scrolls anyway, so it gets a taller trace instead.
+    function tallNarrow(w) {
+      return w < 480 && typeof window !== "undefined" && window.innerHeight > window.innerWidth * 1.2;
+    }
     function chartH(w, compact) {
-      const base = Math.round(w * (w < 480 ? 190 : 220) / 600);
+      const base = Math.round(w * (tallNarrow(w) ? 0.56 : w < 480 ? 190 / 600 : 220 / 600));
       if (compact && shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.38));
       return base;
     }
     function deltaH(w) {
-      const base = Math.round(w * (72 / 600));
+      const base = Math.round(tallNarrow(w) ? Math.max(64, w * 0.2) : w * (72 / 600));
       if (shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.12));
       return base;
     }
@@ -281,7 +288,9 @@ const DataTelemetry = (function () {
           const fullName = d.name || dcode(d);
           const parts = fullName.trim().split(/\s+/);
           const shortName = parts.length > 1 ? parts[parts.length - 1] : fullName;
-          const b = el("button", "dh-dchip", dcode(d) + " · " + shortName);
+          // The surname in its own span: a phone shows the code alone (css/data.css), and aria-label keeps the full name.
+          const b = el("button", "dh-dchip", dcode(d));
+          b.appendChild(el("span", null, " · " + shortName));
           b.type = "button";
           b.style.borderColor = cssColor(driverColor(d));
           b.setAttribute("aria-label", "Select " + fullName);
@@ -1373,7 +1382,10 @@ const DataTelemetry = (function () {
       series.forEach(function (s) { if (s.mn < mn) mn = s.mn; if (s.mx > mx) mx = s.mx; });
       const span = Math.max(0.15, mx - mn);
       const X = function (t) { return chartX(view, t, W); };
-      const Y = function (v) { return pad + (mx - v) / span * (H - 2 * pad); };
+      // The plot starts BELOW the title band: with every gap one way the zero
+      // line sits at the top of the range, and it used to strike the title out.
+      const top = 14;
+      const Y = function (v) { return top + (mx - v) / span * (H - top - pad); };
       const y0 = Y(0);
       // zero line
       g.strokeStyle = "rgba(255,255,255,0.25)"; g.lineWidth = 1;

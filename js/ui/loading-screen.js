@@ -178,13 +178,18 @@ const LoadingScreen = (function () {
    * the MAP already has, so the card never changes size under the camera's
    * last move.
    *
-   * LEGIBLE BEFORE COMPLETE. A 22-car grid in a 150 px box is 13 px a row,
-   * and no phone can read that. So the rows are sized first (GRID_ROW_MIN
-   * displayed px, at least a 10 px code), the graphic shows as many rows as
-   * fit, and the window is placed so the player's row is in it, which is the
-   * part of the grid the player is looking for. Pure: CSS px in, boxes out,
-   * tested without a canvas. */
-  const GRID_ROW_MIN = 20, GRID_PAD = 4, GRID_GAP = 6;
+   * THE WHOLE FIELD, AS A WALL OF CHIPS. A 22-car grid in two columns of a
+   * 150 px box is 13 px a row, and no phone can read that; the graphic used to
+   * answer with a WINDOW of rows around the player, which hid the front of the
+   * grid behind the part the player was already looking at. Now the field is
+   * split into BLOCKS, each a staggered pair of columns (P1-P12 | P13-P22 on a
+   * full grid), and the block count is the smallest that keeps a row at
+   * GRID_ROW_MIN px and a chip at GRID_CHIP_MIN px. When nothing fits both
+   * (a phone), the count that fits best wins, and a chip too narrow for
+   * "12 VER" drops the number and keeps the code: the order says where a
+   * car starts, the player's own chip is highlighted, and the canvas label
+   * says their slot aloud. Pure: CSS px in, boxes out, tested without a canvas. */
+  const GRID_ROW_MIN = 20, GRID_CHIP_MIN = 30, GRID_PAD = 4, GRID_GAP = 3, GRID_BLOCK_GAP = 8, GRID_MAX_BLOCKS = 3;
   const isGridShot = (id) => typeof id === "string" && id.indexOf("grid") === 0;
   /** The field as the card may use it: an array of {code, colour, isPlayer}
    *  with at least two cars and exactly one player, else null (the map stays).
@@ -200,35 +205,53 @@ const LoadingScreen = (function () {
     }
     return mine < 0 ? null : grid;
   }
-  /** Boxes for `grid` in a w×h CSS-px slot. `player` is the grid index to
-   *  highlight, or -1 for none. Returns {rows, first, rowH, font, cells[]}
-   *  where each cell is {i, pos, col, x, y, w, h, code, colour, isPlayer}. */
+  /** Rows per block, row height and column width for `blocks` blocks. */
+  function gridFit(n, w, h, blocks) {
+    const rows = Math.max(1, Math.ceil(Math.ceil(n / 2) / blocks));
+    const rowH = (h - 2 * GRID_PAD) / (rows + 0.5);
+    const colW = (w - 2 * GRID_PAD - blocks * GRID_GAP - (blocks - 1) * GRID_BLOCK_GAP) / (2 * blocks);
+    return { blocks, rows, rowH, colW, fit: Math.min(rowH / GRID_ROW_MIN, colW / GRID_CHIP_MIN) };
+  }
+  /** Boxes for EVERY car of `grid` in a w×h CSS-px slot. `player` is the grid
+   *  index to highlight, or -1 for none. Returns {blocks, rows, first, rowH,
+   *  font, showPos, cells[]} where each cell is {i, pos, block, col, x, y, w,
+   *  h, code, colour, isPlayer}; `first` is always 0 (the start line). */
   function gridLayout(grid, w, h, player) {
     const n = Array.isArray(grid) ? grid.length : 0;
-    const total = Math.ceil(n / 2);
-    const fit = Math.floor((h - 2 * GRID_PAD) / GRID_ROW_MIN - 0.5);
-    const rows = Math.max(1, Math.min(total, fit));
+    let best = null;
+    for (let b = 1; b <= GRID_MAX_BLOCKS; b++) {
+      const f = gridFit(n, w, h, b);
+      if (f.fit >= 1) { best = f; break; }                 // the fewest blocks that are legible
+      if (!best || f.fit > best.fit + 1e-9) best = f;      // else the most legible
+      if (f.rows <= 1) break;                              // more blocks cannot help
+    }
+    const { blocks, rows, rowH, colW } = best;
     const me = player >= 0 && player < n ? player : -1;
-    // The window: the player's row at (or just above) the middle, clamped to the grid's ends.
-    const myRow = me >= 0 ? Math.floor(me / 2) : 0;
-    const first = Math.max(0, Math.min(total - rows, myRow - Math.floor((rows - 1) / 2)));
-    const rowH = (h - 2 * GRID_PAD) / (rows + 0.5);
-    const colW = (w - 2 * GRID_PAD - GRID_GAP) / 2;
     const boxH = rowH * 0.82;
+    let font = Math.max(8, Math.min(14, Math.round(boxH * 0.62)));
+    // drawGrid's layout in font units: the slot number ("14", 0.8 of the font)
+    // at 6 px, the code 1.35 fonts after it, and a wide bold code ("HAM",
+    // "LAW") 2.3 fonts across, 2 px to spare. The number may cost the font a
+    // size or two, never below 10 px; past that the code goes alone.
+    const withPos = Math.min(font, Math.floor((colW - 8) / 3.65));
+    const showPos = withPos >= 10;
+    // A code alone may fill more of its box: as tall as the chip allows, as wide as the column does.
+    font = showPos ? withPos : Math.max(8, Math.min(14, Math.round(boxH * 0.8), Math.floor((colW - 8) / 2.3)));
     const cells = [];
-    for (let i = first * 2; i < Math.min(n, (first + rows) * 2); i++) {
-      const col = i % 2, r = Math.floor(i / 2) - first;
+    for (let i = 0; i < n; i++) {
+      const block = Math.floor(i / (2 * rows)), local = i - block * 2 * rows;
+      const col = local % 2, r = Math.floor(local / 2);
       const c = grid[i] || {};
       cells.push({
-        i, pos: i + 1, col,
-        x: GRID_PAD + col * (colW + GRID_GAP),
+        i, pos: i + 1, block, col,
+        x: GRID_PAD + block * (2 * colW + GRID_GAP + GRID_BLOCK_GAP) + col * (colW + GRID_GAP),
         y: GRID_PAD + r * rowH + (col ? rowH / 2 : 0),
         w: colW, h: boxH,
         code: typeof c.code === "string" ? c.code.slice(0, 3).toUpperCase() : "",
         colour: c.colour, isPlayer: i === me,
       });
     }
-    return { rows, first, rowH, font: Math.max(10, Math.min(14, Math.round(boxH * 0.58))), cells };
+    return { blocks, rows, first: 0, rowH, font, showPos, cells };
   }
   /** A team colour ([r,g,b] in 0..1, or a CSS string) as CSS, lifted toward
    *  white when it is too dark to see on the card (the 2026 Mercedes is black). */
@@ -239,6 +262,13 @@ const LoadingScreen = (function () {
     const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
     if (lum < 0.18) { const k = 0.45; r += (1 - r) * k; g += (1 - g) * k; b += (1 - b) * k; }
     return "rgb(" + [r, g, b].map((v) => Math.round(v * 255)).join(",") + ")";
+  }
+  /** Text on the player's chip, which is filled with their team colour: dark
+   *  on a light livery (white on a yellow chip could not be read), else white. */
+  function gridInk(col) {
+    if (!Array.isArray(col) || col.length < 3 || !col.slice(0, 3).every((v) => Number.isFinite(+v))) return "#ffffff";
+    const [r, g, b] = col.slice(0, 3).map((v) => Math.max(0, Math.min(1, +v)));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55 ? "#0a0a10" : "#ffffff";
   }
 
   function create(hooks) {
@@ -262,10 +292,10 @@ const LoadingScreen = (function () {
 
     let timer = 0, phase = "", build = null, el = null, flyT0 = 0, flyMs = FLY_MS, skipCb = null;
     // This run's flyby: `cur` is its info (shot list, field), `view` what the
-    // map slot shows ("map" | "grid"), `mapBox` the map's CSS box, and
-    // `radioState` the radio check ("" not yet, "done" tried, "live" on air;
-    // stop() cuts a live one).
-    let cur = null, view = "map", radioState = "", mapBox = null;
+    // map slot shows ("map" | "grid"), `mapBox` the map's CSS box, `markN`
+    // the turn marked on the map (0 none), and `radioState` the radio check
+    // ("" not yet, "done" tried, "live" on air; stop() cuts a live one).
+    let cur = null, view = "map", radioState = "", mapBox = null, markN = 0;
 
     function readSkips() {
       try { return store && store.get ? store.get("flySkips", 0) : 0; } catch (_) { return 0; }
@@ -340,8 +370,9 @@ const LoadingScreen = (function () {
      *  circuit's own aspect, and oversampled for HiDPI the way the picker's
      *  preview is, with the line weight scaled by the same ratio so it keeps
      *  its visual thickness. Wrapped: a map that will not draw must never stop
-     *  a race from starting. */
-    function drawMap(t) {
+     *  a race from starting. `mark`: the turn the flyby is filming, tagged on
+     *  the outline so the shot on screen has a place on the lap (0: none). */
+    function drawMap(t, mark) {
       const cv = $("ld-map");
       // TrackMaps comes from `hooks`, not window: every module here is a bare
       // lexical `const` at script scope, so window.TrackMaps is undefined and a
@@ -350,7 +381,9 @@ const LoadingScreen = (function () {
       try {
         const fit = TrackMaps.fitCanvas(cv, MAP_W, MAP_H, t, true);
         mapBox = { w: fit.w, h: fit.h };
-        setView(cv, "map", "Circuit layout");
+        markN = mark > 0 ? mark | 0 : 0;
+        if (cv.dataset) cv.dataset.turn = markN ? String(markN) : "";
+        setView(cv, "map", markN ? "Circuit layout, turn " + markN + " on camera" : "Circuit layout");
         // THE CARD'S SCALE IS PART OF THE OVERSAMPLE. A canvas laid out at 210
         // CSS px and then scaled to 1.6 by the card is a 210 px raster stretched
         // across 336 — the one element on the card that cannot reflow, and the
@@ -366,7 +399,7 @@ const LoadingScreen = (function () {
         TrackMaps.draw(cv, t, {
           color: "#ffffff", casing: "rgba(0,0,0,0.55)", startColor: "#e10600",
           width: lw * br, pad: Math.round(lw * 1.5) * br,
-          corners: false, sectors: false, drs: false,
+          corners: false, sectors: false, drs: false, mark: markN, markFont: Math.round(11 * br),
         });
       } catch (_) { /* no outline is a smaller loss than no race */ }
     }
@@ -401,9 +434,10 @@ const LoadingScreen = (function () {
         const k = cv.width / w;
         ctx.setTransform(k, 0, 0, k, 0, 0);
         ctx.clearRect(0, 0, w, h);
-        if (L.first === 0) {   // the front of the grid: the start line above P1
+        if (L.cells.length) {   // the front of the grid: the start line above P1's block
+          const c0 = L.cells[0], c1 = L.cells[Math.min(1, L.cells.length - 1)];
           ctx.fillStyle = "#e10600";
-          ctx.fillRect(GRID_PAD, 1, w - 2 * GRID_PAD, 2);
+          ctx.fillRect(c0.x, 1, c1.x + c1.w - c0.x, 2);
         }
         ctx.textBaseline = "middle";
         for (const c of L.cells) {
@@ -417,13 +451,15 @@ const LoadingScreen = (function () {
             ctx.strokeRect(c.x + 0.75, c.y + 0.75, c.w - 1.5, c.h - 1.5);
           }
           const mid = c.y + c.h / 2;
-          ctx.font = "600 " + Math.round(L.font * 0.85) + "px system-ui, sans-serif";
-          ctx.fillStyle = c.isPlayer ? "#ffffff" : "rgba(255,255,255,0.7)";
-          ctx.fillText("P" + c.pos, c.x + 7, mid);
+          if (L.showPos) {
+            ctx.font = "600 " + Math.round(L.font * 0.8) + "px system-ui, sans-serif";
+            ctx.fillStyle = c.isPlayer ? gridInk(c.colour) : "rgba(255,255,255,0.7)";
+            ctx.fillText(String(c.pos), c.x + 6, mid);
+          }
           if (c.code) {
             ctx.font = "700 " + L.font + "px system-ui, sans-serif";
-            ctx.fillStyle = "#ffffff";
-            ctx.fillText(c.code, c.x + 7 + L.font * 2.1, mid);
+            ctx.fillStyle = c.isPlayer ? gridInk(c.colour) : "#ffffff";
+            ctx.fillText(c.code, c.x + 6 + (L.showPos ? L.font * 1.35 : 0), mid);
           }
         }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -441,8 +477,12 @@ const LoadingScreen = (function () {
       try { id = FlybySeq.shotAt(flyU(), cur.shots).id; } catch (_) { return; }
       const field = gridField(cur.grid);
       const want = field && isGridShot(id) ? "grid" : "map";
-      if (want !== view) {
-        if (want === "map") drawMap(cur.track);
+      // The corner on air (FlybySeq.airCorner: what the last rendered frame
+      // filmed). The map is redrawn only when it changes, a few times a flyby.
+      let turn = 0;
+      if (want === "map" && typeof FlybySeq.airCorner === "function") { try { turn = FlybySeq.airCorner() | 0; } catch (_) { turn = 0; } }
+      if (want !== view || (want === "map" && turn !== markN)) {
+        if (want === "map") drawMap(cur.track, turn);
         else if (!drawGrid(field)) cur.grid = null;   // could not draw: the map, for the rest of the run
       }
       if (id === "grid-mine" && !radioState) radioCheck(field);
@@ -768,6 +808,6 @@ const LoadingScreen = (function () {
   }
 
   return { create, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
-    gridLayout, gridField, gridColour, isGridShot, GRID_ROW_MIN };
+    gridLayout, gridField, gridColour, gridInk, isGridShot, GRID_ROW_MIN };
 })();
 Object.freeze(LoadingScreen);

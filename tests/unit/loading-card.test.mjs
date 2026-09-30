@@ -406,7 +406,7 @@ test("the skip hint is a run-phase pseudo-element that waits ~3 s — no new she
  * radio run through a real create() over the REAL FlybySeq.shotAt and
  * RadioLines, with the radio and the announcer as recording stubs. */
 
-const { gridLayout, gridField, gridColour, isGridShot, GRID_ROW_MIN } = LS;
+const { gridLayout, gridField, gridColour, gridInk, isGridShot, GRID_ROW_MIN } = LS;
 const field = (n, me) => Array.from({ length: n }, (_, i) => ({ code: "D" + String(i).padStart(2, "0"), colour: [0.2, 0.4, 0.8], isPlayer: i === me }));
 /** A bare sandbox with `files` evaluated in it (the const -> var rewrite). */
 function modules(files) {
@@ -416,43 +416,59 @@ function modules(files) {
   return sb;
 }
 
-test("grid geometry: two staggered columns, P1 left and half a row ahead of P2, all inside the card's map box", () => {
+const inBox = (L, w, h) => L.cells.every((c) => c.x >= 0 && c.y >= 0 && c.x + c.w <= w + 1e-9 && c.y + c.h <= h + 1e-9);
+/** The chip's text fits it (drawGrid's layout: the code 6 px + 1.35 fonts in after a slot number, 6 px alone; a wide code is 2.3 fonts). */
+const textFits = (L) => L.cells[0].w >= 6 + (L.showPos ? L.font * 1.35 : 0) + L.font * 2.3;
+
+test("grid geometry: the WHOLE field, in blocks of two staggered columns, P1 left and half a row ahead of P2", () => {
   const L = gridLayout(field(22, 11), 210, 150, 11);
-  assert.ok(L.rows >= 4 && L.rows <= 11, `rows ${L.rows}`);
+  assert.equal(L.cells.length, 22, "every car is on the wall, not a window around the player");
+  assert.deepEqual(Array.from(L.cells, (c) => c.pos), Array.from({ length: 22 }, (_, i) => i + 1));
+  assert.equal(L.blocks, 2, "22 cars in the card's map box: P1-P12 | P13-P22");
   assert.ok(L.rowH >= GRID_ROW_MIN, `row ${L.rowH} px is under the legibility floor`);
-  assert.ok(L.font >= 10, `a ${L.font} px code is not readable on a phone`);
-  for (const c of L.cells) {
-    assert.ok(c.x >= 0 && c.y >= 0 && c.x + c.w <= 210 + 1e-9 && c.y + c.h <= 150 + 1e-9, `P${c.pos} leaves the box`);
-    assert.equal(c.col, (c.pos - 1) % 2, "odd positions left, even right");
-  }
+  assert.ok(L.font >= 10 && L.showPos, `a ${L.font} px chip with its position on a desktop card`);
+  assert.ok(inBox(L, 210, 150), "every chip inside the card's map box");
+  assert.ok(textFits(L), "'12 D11' fits its chip");
+  for (const c of L.cells) assert.equal(c.col, (c.pos - 1) % 2, "odd positions left, even right");
   for (let k = 0; k + 1 < L.cells.length; k += 2) {
     const a = L.cells[k], b = L.cells[k + 1];
+    assert.equal(a.block, b.block, "a grid row never splits across blocks");
     assert.ok(a.x + a.w < b.x, "the odd slot is on the left, clear of the even one");
     assert.ok(Math.abs(b.y - a.y - L.rowH / 2) < 1e-9, "the even slot is half a row behind");
   }
-  // The player's row is IN the window, and theirs is the only highlight.
+  const p13 = L.cells[12], p12 = L.cells[11];
+  assert.equal(p13.block, 1, "the second block starts at P13");
+  assert.equal(p13.y, L.cells[0].y, "and at the top, beside P1");
+  assert.ok(p13.x > p12.x + p12.w, "the blocks do not overlap");
   const mine = L.cells.filter((c) => c.isPlayer);
   assert.equal(mine.length, 1);
   assert.equal(mine[0].pos, 12);
   assert.equal(mine[0].code, "D11");
 });
 
-test("grid geometry: the window follows the player, and clamps at the grid's ends", () => {
-  const front = gridLayout(field(22, 0), 210, 150, 0);
-  assert.equal(front.first, 0, "pole: the window starts at the front row");
-  assert.equal(front.cells[0].pos, 1);
-  const back = gridLayout(field(22, 21), 210, 150, 21);
-  assert.equal(back.cells.at(-1).pos, 22, "last on the grid: the window ends at the back row");
-  assert.ok(back.cells.some((c) => c.isPlayer && c.pos === 22));
-  // A phone: the canvas shown at 70 % keeps its rows legible by showing FEWER.
+test("grid geometry: a phone keeps every car and drops the position before the code", () => {
+  // The canvas shown at 70 %: rows too short and chips too narrow for "P12 D11".
   const phone = gridLayout(field(22, 11), 147, 105, 11);
-  assert.ok(phone.rows < gridLayout(field(22, 11), 210, 150, 11).rows);
-  assert.ok(phone.rowH >= GRID_ROW_MIN && phone.font >= 10);
-  assert.ok(phone.cells.some((c) => c.isPlayer), "the player's box survives the smaller window");
-  // A wide circuit leaves a short box: still at least one row, never an empty graphic.
-  assert.ok(gridLayout(field(22, 5), 210, 40, 5).cells.some((c) => c.isPlayer));
-  // A two-car duel is one row.
-  assert.equal(gridLayout(field(2, 1), 210, 150, 1).rows, 1);
+  assert.equal(phone.cells.length, 22);
+  assert.ok(inBox(phone, 147, 105));
+  assert.equal(phone.showPos, false, "a 31 px chip carries the code alone");
+  assert.ok(phone.font >= 10, `a ${phone.font} px code is not readable on a phone`);
+  assert.ok(textFits(phone), "the code fits its chip");
+  assert.ok(phone.cells.some((c) => c.isPlayer && c.pos === 12));
+  // A wide circuit leaves a short box: every car still drawn, still inside it.
+  const flat = gridLayout(field(22, 5), 210, 40, 5);
+  assert.equal(flat.cells.length, 22);
+  assert.ok(inBox(flat, 210, 40) && flat.cells.some((c) => c.isPlayer));
+  // A tall, narrow circuit (Monza's box is ~85 x 150): one pair of columns, the
+  // code alone, and still inside its chip ("P14 LAW" overran it before).
+  const tall = gridLayout(field(22, 13), 85, 150, 13);
+  assert.equal(tall.cells.length, 22);
+  assert.ok(inBox(tall, 85, 150) && textFits(tall) && tall.font >= 8, `font ${tall.font}, pos ${tall.showPos}`);
+  // The fewest blocks that are legible: a small field and a duel stay one pair of columns.
+  assert.equal(gridLayout(field(10, 3), 210, 150, 3).blocks, 1);
+  const duel = gridLayout(field(2, 1), 210, 150, 1);
+  assert.equal(duel.rows, 1);
+  assert.equal(duel.blocks, 1);
 });
 
 test("grid geometry: an unknown slot highlights nobody, and the card keeps its map", () => {
@@ -468,6 +484,10 @@ test("grid geometry: an unknown slot highlights nobody, and the card keeps its m
 
 test("grid colours: a black car is lifted to be visible, junk falls back to the accent", () => {
   assert.equal(gridColour([1, 0.502, 0]), "rgb(255,128,0)");
+  // The player's chip is filled with that colour: its text goes dark on a light livery.
+  assert.equal(gridInk([1, 0.95, 0.2]), "#0a0a10", "yellow chip, dark code");
+  assert.equal(gridInk([0.9, 0, 0.1]), "#ffffff", "red chip, white code");
+  for (const junk of [null, "#fff", [NaN, 0, 0]]) assert.equal(gridInk(junk), "#ffffff");
   const m = gridColour([0.045, 0.055, 0.065]).match(/\d+/g).map(Number);
   assert.ok(m.every((v) => v > 100), `Mercedes black must be lifted, got ${m}`);
   for (const junk of [null, undefined, [], [NaN, 0, 0], {}]) assert.equal(gridColour(junk), "#e10600");
@@ -480,7 +500,7 @@ test("grid colours: a black car is lifted to be visible, junk falls back to the 
 function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = true, stored = {} } = {}) {
   let now = 5000, seq = 0;
   const q = [], listeners = {}, saved = new Map(Object.entries(stored));
-  const said = [], stops = [], stings = [], ops = [], plays = [], annStops = [];
+  const said = [], stops = [], stings = [], ops = [], plays = [], annStops = [], draws = [];
   const elem = () => ({
     dataset: {}, style: { props: {}, setProperty(k, v) { this.props[k] = v; } },
     hidden: true, innerHTML: "", textContent: "", width: 420, height: 300, clientWidth: 0, attrs: {},
@@ -509,7 +529,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
   const screen = sb.LoadingScreen.create({
     $: (id) => (els[id] = els[id] || elem()),
     Tracks: {}, Flags: { svg: () => "" },
-    TrackMaps: { corners: () => [], fitCanvas: () => ({ w: 210, h: 150 }), draw: () => ops.push("map") },
+    TrackMaps: { corners: () => [], fitCanvas: () => ({ w: 210, h: 150 }), draw: (cv, t, o) => { ops.push("map"); draws.push(o); } },
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
     announcer: () => ({ play: (inf, life) => { plays.push(life); return true; }, stop() { annStops.push(now); }, speaking }),
     radio: () => ({ sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return radioOn; }, stop: () => stops.push(now),
@@ -517,7 +537,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
   });
   const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true, shots: sb.FlybySeq.DEFAULT, grid };
   const h = {
-    screen, said, stops, stings, ops, els, plays, annStops, saved, listeners,
+    screen, said, stops, stings, ops, els, plays, annStops, saved, listeners, draws, sb,
     run: (over = {}) => { h.t0 = now; screen.run(Object.assign({}, info, over), () => {}); },
     skip: (ev = {}) => { for (const fn of listeners.keydown || []) fn(Object.assign({ type: "keydown", repeat: false }, ev)); },
     view: () => els["ld-map"].dataset.view,
@@ -554,6 +574,39 @@ test("the map slot switches to the grid for the grid shots, and back to the map 
   assert.equal(h.view(), "map");
   h.tickTo(0.9);
   assert.equal(h.view(), "map", "a list with no grid shot never shows the graphic");
+});
+
+test("the turn on camera is tagged on the map, and only redrawn when it changes", () => {
+  const h = gridHarness();
+  let onAir = 0;
+  h.sb.FlybySeq = Object.assign({}, h.sb.FlybySeq, { airCorner: () => onAir });
+  h.run();
+  assert.equal(h.draws.at(-1).mark, 0, "the card goes up with the plain outline");
+  h.tickTo(0.2);
+  const before = h.draws.length;
+  onAir = 4;
+  h.tickTo(0.25);
+  assert.equal(h.draws.length, before + 1, "one redraw for the new corner");
+  assert.equal(h.draws.at(-1).mark, 4);
+  assert.equal(h.els["ld-map"].dataset.turn, "4");
+  assert.match(h.els["ld-map"].attrs["aria-label"], /turn 4/i);
+  h.tickTo(0.3);
+  assert.equal(h.draws.length, before + 1, "the same corner is not redrawn ten times a second");
+  onAir = 0;
+  h.tickTo(0.35);
+  assert.equal(h.draws.at(-1).mark, 0, "a shot of no corner clears the tag");
+  assert.equal(h.els["ld-map"].dataset.turn, "");
+  // The grid shots own the slot whatever the last corner was.
+  onAir = 9;
+  h.tickTo(0.72);
+  assert.equal(h.view(), "grid");
+});
+
+test("FlybySeq.airCorner: 0 until a corner shot is solved, and reset() clears it", () => {
+  const sb = modules(["js/camera/flyby-seq.js"]);
+  assert.equal(sb.FlybySeq.airCorner(), 0);
+  sb.FlybySeq.reset();
+  assert.equal(sb.FlybySeq.airCorner(), 0);
 });
 
 test("an unknown slot (random grid) or a missing field keeps the map through the grid shots", () => {

@@ -445,6 +445,11 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   color: var(--text);
 }
 .dh-dchip.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+/* A phone: 22 "HUL · Hulkenberg" chips were nine rows, most of a screen
+   between the session pickers and the lap they select. The three-letter code
+   alone, in an even grid (the surname stays in each chip's aria-label). */
+body[data-width="narrow"] .dh-driverpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(5 * var(--fs-micro)), 1fr)); }
+body[data-width="narrow"] .dh-dchip > span { display: none; }
 .dh-telem-detail { display: flex; flex-direction: column; gap: 10px; }
 .dh-canvas {
   width: 100%; max-width: 600px; height: auto;
@@ -944,6 +949,13 @@ body[data-density="compact"][data-width="wide"] {
   padding: 0 calc(var(--gap) * 4 / 3) calc(var(--gap) * 7 / 6);
 }
 body[data-width="narrow"] .dh-telem-main { padding: 10px var(--gap); gap: calc(var(--gap) * 2 / 3); }
+/* A phone: the lane header is two lines, not one squeezed into ellipses
+   ("PRIMARY T…  S1 22.456 …"). Name and lap time on the first; the role and
+   the sectors wrap under them (the ::after is the line break). */
+body[data-width="narrow"] .dh-thead { flex-wrap: wrap; row-gap: 0; }
+body[data-width="narrow"] .dh-thead::after { content: ""; order: 1; flex-basis: 100%; }
+body[data-width="narrow"] .dh-thead .dh-tlap { margin-left: auto; }
+body[data-width="narrow"] .dh-thead .dh-tsect { order: 2; flex: 0 1 auto; margin-left: 0; text-align: left; }
 body[data-width="narrow"] .dh-telem-side { padding: 0 var(--gap) 10px; gap: calc(var(--gap) * 2 / 3); }
 
 /* Wide local viewport: chart left, gauges + map right. Compact chrome stays
