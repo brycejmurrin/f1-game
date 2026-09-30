@@ -315,6 +315,16 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       };
     });
 
+    // data-fit="on" lands before the fit's --sheet-scale does: on a fast runner
+    // the first read caught zoom 1 while the settled cap was 1.363, and the
+    // "keyboard gone" read then compared a settled value to an unsettled one
+    // (ci run 36652043544). Read the baseline once zoom holds still.
+    await page.waitForFunction(() => {
+      const z = Number(getComputedStyle(document.getElementById("cs-inner")).zoom);
+      const w = window.__kbZoomProbe || (window.__kbZoomProbe = { z: NaN, n: 0 });
+      w.n = z === w.z ? w.n + 1 : 0; w.z = z;
+      return w.n >= 3;
+    }, null, { polling: 100, timeout: 5_000 });
     const before = await read();
     expect(before.padBottom, "no keyboard: the pad is just the safe-area gutter")
       .toBeLessThan(120);
