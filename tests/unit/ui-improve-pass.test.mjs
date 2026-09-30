@@ -1236,7 +1236,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details > summary/, "color"), "var(--steel)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",

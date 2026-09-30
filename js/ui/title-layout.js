@@ -20,7 +20,7 @@
 
    PEEK: the title screen is faded out under the settings dialog, so a slider
    would move things nobody can see. While a layout slider is held (or just
-   moved), body.tl-peek shows the title screen through a near-transparent
+   moved), body[data-tl-peek] shows the title screen through a near-transparent
    settings page.
 
    Needs GameStore at eval (HARD_EDGES). SettingRow is read when the page is
@@ -108,8 +108,8 @@ const TitleLayout = (function () {
   function peek(on, holdMs) {
     if (typeof document === "undefined" || !document.body) return;
     clearTimeout(peekT);
-    if (on) document.body.classList.add("tl-peek");
-    if (!on || holdMs) peekT = setTimeout(() => document.body.classList.remove("tl-peek"), on ? holdMs : 0);
+    if (on) document.body.setAttribute("data-tl-peek", "");
+    if (!on || holdMs) peekT = setTimeout(() => document.body.removeAttribute("data-tl-peek"), on ? holdMs : 0);
   }
 
   const pctTxt = (k, n) => {

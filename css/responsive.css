@@ -361,14 +361,17 @@ body.rotate-help-open #rotate-device { display: none !important; }
 :root[data-title-side="swap"] :where(body[data-shape="wide"][data-density="compact"]) #menu-brand { grid-column: 2; }
 :root[data-title-side="swap"] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons { grid-column: 1; }
 @media (min-width: 900px) and (orientation: landscape) {
-  :root[data-title-side="swap"] :where(body:not([data-density="compact"])) #menu-brand { grid-column: 2; }
-  :root[data-title-side="swap"] :where(body:not([data-density="compact"])) #menu-buttons { grid-column: 1; }
+  /* The density guard FIRST (tests/unit/css-media-disjoint.test.mjs); the swap
+     condition rides in a second zero-specificity :where(), and the rule wins on
+     order — same specificity and layer as the placement above, and later. */
+  :where(body:not([data-density="compact"])):where(:root[data-title-side="swap"] *) #menu-brand { grid-column: 2; }
+  :where(body:not([data-density="compact"])):where(:root[data-title-side="swap"] *) #menu-buttons { grid-column: 1; }
 }
 /* PEEK: while a TITLE LAYOUT slider is held, the title screen shows through
    the settings page (css/components.css fades #overlay under any open dialog). */
-body.tl-peek #overlay { opacity: 1; }
-body.tl-peek #pmsettings { background: transparent; }
-body.tl-peek #pmsettings::backdrop { background: transparent; }
-body.tl-peek #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
+body[data-tl-peek] #overlay { opacity: 1; }
+body[data-tl-peek] #pmsettings { background: transparent; }
+body[data-tl-peek] #pmsettings::backdrop { background: transparent; }
+body[data-tl-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
 
 } /* @layer overlays */

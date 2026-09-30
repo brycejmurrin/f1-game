@@ -1960,10 +1960,8 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
 /* Fold summaries are disclosures, not plates: steel + rule + left chevron
    (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate made
    HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary,
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary:active,
-#rs-body details > summary,
-#rs-body details > summary:active {
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary,
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary:active {
   color: var(--steel);
   font-style: italic;
   opacity: 1;

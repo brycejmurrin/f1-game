@@ -113,14 +113,14 @@ test("the APPEARANCE fold: built before REPLAY INTRO, sliders store and PEEK, ch
   assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "AUTO");
   const x = dom.byId("pm-tl-btns-x");
   dom.dispatch(x, { type: "pointerdown" });
-  assert.ok(dom.body.classList.contains("tl-peek"), "holding a slider shows the title screen");
+  assert.ok(dom.body.hasAttribute("data-tl-peek"), "holding a slider shows the title screen");
   x.value = "-25"; dom.dispatch(x, { type: "input" });
   assert.equal(data.titleLayout.btns.x, -25);
   assert.equal(html.style.getPropertyValue("--tl-btns-x"), "-25vw");
   assert.equal(dom.byId("pm-tl-btns-x-v").textContent, "25% left");
   assert.equal(sum.textContent, "TITLE LAYOUT · CUSTOM");
   timers.at(-1).fn();
-  assert.equal(dom.body.classList.contains("tl-peek"), false, "and lets go of it after");
+  assert.equal(dom.body.hasAttribute("data-tl-peek"), false, "and lets go of it after");
   const side = dom.byId("pm-tl-side-sel");
   side.value = "swap"; dom.dispatch(side, { type: "change" });
   assert.equal(data.titleLayout.side, "swap");
@@ -140,7 +140,9 @@ test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and
   const block = CSS.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, "");
   const sels = [...block.matchAll(/(^|\})\s*([^{}@]+)\{/g)].map((m) => m[2].trim()).filter(Boolean);
   assert.ok(sels.length >= 12, "rules found");
-  for (const s of sels) assert.match(s, /^(:root\[data-title-(layout|btnw|btns|side)|body\.tl-peek)/, `gated: ${s}`);
+  // Gated at the front, or (inside the large-landscape block, whose selectors
+  // must START with the density guard) by a :where(:root[data-title-side]) clause.
+  for (const s of sels) assert.match(s, /^(:root\[data-title-(layout|btnw|btns|side)|body\[data-tl-peek\]|:where\(body:not\(\[data-density="compact"\]\)\):where\(:root\[data-title-side="swap"\] \*\))/, `gated: ${s}`);
   assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*translate: var\(--tl-btns-x, 0\) var\(--tl-btns-y, 0\)/);
   assert.match(block, /zoom: calc\(var\(--ui-scale\) \* var\(--tl-btns-size, 1\)\)/);
   assert.match(block, /#title-car \{[^}]*scale: var\(--tl-art-size, 1\)/);

@@ -1076,7 +1076,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* THE GARAGE ARRIVAL TUNER is a short form, not a slider list: its rows are
    the settings page's own .set-row, and #ga-rows is the scroller between the
    fixed head and the RESET / DONE foot like #fb-rows in the flyby editor. */
-#ga-rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+#ga-rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
 /* Room for TWO CAMERA CUT: the settings page's fixed 8rem select clipped it. */
 #ga-rows .set-row > div > select { flex: 0 1 12rem; width: 12rem; }
 /* Opened from the TITLE screen there is no race behind to preview, only the
