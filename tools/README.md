@@ -183,6 +183,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | Tool | Does | Paired skill |
 |---|---|---|
 | **track/aero-zone-turns.cjs** | Pairs each geometry-detected straight with the `def.turns[]` indices bounding it, so an aero-zone claim can be checked. | agent-view |
+| **track/barrier-jumps.cjs** | Pure helpers: max adjacent \|Δbar\| / wallAt step on a barrier table (run-off terminus teleports). | check-changes |
 | **track/clip-audit.cjs** | PROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`. | scenery-dress |
 | **track/coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
 | **track/float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |
