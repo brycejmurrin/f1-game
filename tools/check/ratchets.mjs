@@ -150,7 +150,10 @@ export async function update(data = load()) {
     const raw = bag[r.metric];
     bag[r.metric] = typeof raw === "number" ? r.value : { ...raw, ceiling: r.value };
   }
-  fs.writeFileSync(DATA, JSON.stringify(data, null, 2) + "\n");
+  // Sorted keys + one entry per line so two PRs raising different ceilings
+  // insert on different lines (tools/check/merge-hygiene.mjs).
+  const { normalizeRatchets, stableStringify } = await import("./merge-hygiene.mjs");
+  fs.writeFileSync(DATA, stableStringify(normalizeRatchets(data)));
   return rows;
 }
 

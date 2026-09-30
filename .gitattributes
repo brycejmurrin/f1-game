@@ -11,4 +11,10 @@
 # This is only correct BECAUSE they are append-only. Anything that rewrites
 # earlier entries must not be listed here — union would keep both versions of
 # the rewritten text.
+#
+# NEVER add merge=union for JSON (ratchets.json, groups.json, baselines,
+# package.json) or order/comma-sensitive lists (manifest CIRCUITS / FULL /
+# HARD_EDGES, tooling-fast). Union keeps BOTH number lines and corrupts
+# ceilings; see docs/notes/MERGE-HYGIENE-2026-09-29.md and
+# tools/check/merge-hygiene.mjs (one-entry-per-line + sorted keys instead).
 docs/notes/CEILING-HISTORY.md   merge=union
