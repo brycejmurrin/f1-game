@@ -446,17 +446,25 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       window.__apex.freeze(true);
       window.__wheelGroundProbe.length = 0;
     });
-    // Kick a soft blit each poll: under a loaded selected shard SwiftShader can
-    // starve the rAF loop for tens of seconds after freeze(), so the probe saw
-    // zero draws and timed out at 20 s (CI #564). snapCam arms an on-demand
-    // soft present without raising the bound; alone the test already passes.
-    await page.waitForFunction(() => {
-      try {
-        window.__apex.headless(false);
-        window.__apex.snapCam();
-      } catch (_) { /* harness */ }
-      return window.__wheelGroundProbe.length >= 4;
-    }, null, { polling: 100, timeout: 20_000 });
+    // Pump real frames from inside the page. snapCam-only polling (prior try)
+    // only arms a soft *blit* after present(); when the selected shard starves
+    // rAF, present never runs and the probe stays empty for the whole 20 s
+    // (CI #564 after 6fed4d5c1). Awaiting requestAnimationFrame yields the
+    // main thread so tick() can draw wheel meshes into the probe — same 20 s
+    // budget, no timeout raise.
+    await page.evaluate(async () => {
+      try { window.__apex.headless(false); } catch (_) { /* harness */ }
+      const t0 = performance.now();
+      while (window.__wheelGroundProbe.length < 4) {
+        if (performance.now() - t0 > 19_000) break;
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      if (window.__wheelGroundProbe.length < 4) {
+        throw new Error(
+          "__wheelGroundProbe got " + window.__wheelGroundProbe.length + " draws in 19 s (need ≥4)"
+        );
+      }
+    });
 
     const probe = await page.evaluate(() => {
       const st = window.__apex.physState();
