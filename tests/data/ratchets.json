@@ -74,7 +74,7 @@
       "ceiling": 6,
       "slack": 0
     },
-    "waitForTimeout": 149,
+    "waitForTimeout": 127,
     "waitNoPolling": {
       "ceiling": 49,
       "slack": 39
