@@ -181,25 +181,30 @@ body[data-density="compact"] .dh-error { gap: var(--gap); padding: var(--gap); }
 body[data-density="compact"] .dh-race-sub {
   white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
 }
-/* TALL-SHAPED viewport: 2-column tab grid so all 6 destinations are visible
-   without a sideways gesture. Landscape keeps the horizontal strip (height
+/* TALL-SHAPED viewport: a tab GRID so every destination is visible without a
+   sideways gesture. As many columns as a label fits (auto-fit on the label's
+   own width, 7.1 of its font), not a fixed two: the grid was sized for six
+   tabs, and the seventh (RACE IT) made a 390px phone four rows with an orphan
+   — ~170px of a portrait screen before any content. Three columns there. Landscape keeps the horizontal strip (height
    is scarce there, not width). Uses body[data-shape="tall"] (zoom-corrected,
    set by SheetShape classifyBody) instead of @media (orientation: portrait)
    which is wrong at non-100% zoom. Width still uses the zoom-aware body flag. */
 body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(7.1 * var(--fs-micro))), 1fr));
   overflow-x: hidden;
   overscroll-behavior-x: auto;
   touch-action: pan-y;
-  /* Use compact-size tabs in the 2-col grid so the 3 rows consume
-     var(--tap-min)*3 ≈ 72-84px instead of var(--tap)*3 ≈ 156px.
-     Reclaims ~80px for the content area on a portrait phone. */
+  /* Compact-size tabs in the grid, so its rows cost var(--tap-min) each
+     instead of var(--tap): the space goes to the content on a portrait phone. */
   gap: calc(var(--gap) * 0.4);
   padding: calc(var(--gap) * 0.5) var(--gap);
 }
+/* 7.1 fonts above is TELEMETRY, the widest label, at this padding (measured:
+   91px of text at a 14px font + 2 x 4px) — the column must never be narrower
+   than the label it holds. */
 body[data-shape="tall"][data-width="narrow"] .dh-tab {
-  width: 100%; min-width: 0; padding-inline: calc(var(--gap) * 2 / 3);
+  width: 100%; min-width: 0; padding-inline: calc(var(--gap) / 3);
   min-height: var(--tap-min);
   font-size: var(--fs-micro);
 }
