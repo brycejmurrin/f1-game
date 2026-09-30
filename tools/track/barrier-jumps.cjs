@@ -108,13 +108,13 @@ function syntheticCliff(n, at, high, low, feather) {
  * @param {Float32Array|number[]} arr track.barL or barR
  * @param {Float32Array|number[]} hw track.hw
  * @param {{ cliff?: number, nodes?: number }} [opts]
- *   cliff — min |Δ(over)| to treat as a terminus (default 3 m)
- *   nodes — ramp length on the wide side (default 3 ≈ 12 m at ds=4)
+ *   cliff — min |Δ(over)| to treat as a terminus (default 1.5 m)
+ *   nodes — ramp length on the wide side (default 5 ≈ 20 m at ds=4; step ≈ H/6)
  */
 function featherBarrierEnds(arr, hw, opts) {
   opts = opts || {};
-  const cliff = opts.cliff != null ? opts.cliff : 3;
-  const nodes = Math.max(1, opts.nodes != null ? opts.nodes : 3);
+  const cliff = opts.cliff != null ? opts.cliff : 1.5;
+  const nodes = Math.max(1, opts.nodes != null ? opts.nodes : 5);
   if (!arr || !hw || arr.length !== hw.length || arr.length < 2) return arr;
   const n = arr.length;
   for (let k = 0; k < n; k++) {

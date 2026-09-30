@@ -316,7 +316,10 @@ const Tracks = (function () {
       TrackPit.openBoundary(track);
       // Feather bar* cliffs AFTER openBoundary (pit tapers) and every
       // markBarrier/recordBarrier — see TrackBuildProps.featherBarrierEnds.
+      // Two passes: overlapping termini leave a residual cliff after one.
       if (TrackBuildProps.featherBarrierEnds && track.barL && track.hw) {
+        TrackBuildProps.featherBarrierEnds(track.barL, track.hw);
+        TrackBuildProps.featherBarrierEnds(track.barR, track.hw);
         TrackBuildProps.featherBarrierEnds(track.barL, track.hw);
         TrackBuildProps.featherBarrierEnds(track.barR, track.hw);
       }

@@ -24,14 +24,14 @@ test("synthetic one-node cliff of 7.9 is detected as maxAdj / maxWallStep", () =
   assert.ok(maxWallAtStep(arr) > 7.5, `maxWallStep=${maxWallAtStep(arr)}`);
 });
 
-test("a 3-node linear feather keeps adjacent Δ under 3 m", () => {
+test("a 3-node authored ramp stays under 3 m (helper sanity)", () => {
   // high 16.2, low 8.3, cliff 7.9 — three-step ramp → steps of 7.9/4 = 1.975.
   const arr = syntheticCliff(40, 10, 16.2, 8.3, 3);
   assert.ok(maxAdjDelta(arr) < 3.0, `feathered maxAdj=${maxAdjDelta(arr)}`);
   assert.ok(maxWallAtStep(arr) < 3.0, `feathered maxWallStep=${maxWallAtStep(arr)}`);
 });
 
-test("featherBarrierEnds turns a 7.9 cliff into steps under 3 m (would fail before)", () => {
+test("featherBarrierEnds turns a 7.9 cliff into steps under 1.5 m (would fail before)", () => {
   const n = 40;
   const hw = new Float32Array(n);
   for (let i = 0; i < n; i++) hw[i] = 7;
@@ -40,8 +40,8 @@ test("featherBarrierEnds turns a 7.9 cliff into steps under 3 m (would fail befo
   for (let i = 0; i < n; i++) arr[i] = hw[i] + 9;
   arr[10] = hw[10] + 1.1;
   assert.ok(maxAdjOver(arr, hw) > 7.5, "precondition: cliff present");
-  featherBarrierEnds(arr, hw, { nodes: 3, cliff: 3 });
-  assert.ok(maxAdjOver(arr, hw) < 3.0, `after feather maxOver=${maxAdjOver(arr, hw)}`);
+  featherBarrierEnds(arr, hw, { nodes: 5, cliff: 1.5 });
+  assert.ok(maxAdjOver(arr, hw) < 1.5, `after feather maxOver=${maxAdjOver(arr, hw)}`);
   // Tight face must not rise.
   assert.ok(Math.abs((arr[10] - hw[10]) - 1.1) < 1e-5, `tight face raised to ${arr[10] - hw[10]}`);
 });
@@ -58,15 +58,15 @@ test("maxAdjOver ignores a pure hw step with constant clearance", () => {
   assert.ok(maxAdjDelta(bar) >= 2); // absolute bar still steps with hw
 });
 
-test("fleet: open-circuit tyre termini stay under 3 m after feather (Slice 2)", () => {
+test("fleet: open-circuit tyre termini stay under 1.5 m after feather (Slice 2)", () => {
   // Would fail on ship tip before featherBarrierEnds (maxOver ≈ 7.9).
   const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
   const { Tracks } = buildContext();
   for (const id of ["monza", "spa", "bahrain", "silverstone"]) {
     const track = Tracks.build(Tracks.LIST.find((d) => d.id === id));
     const s = summariseTrack(track);
-    assert.ok(s.maxOver < 3.0, `${id} maxOver=${s.maxOver} (want < 3)`);
-    assert.ok(s.maxWallStep < 3.0, `${id} maxWallStep=${s.maxWallStep} (want < 3)`);
+    assert.ok(s.maxOver < 1.5, `${id} maxOver=${s.maxOver} (want < 1.5)`);
+    assert.ok(s.maxWallStep < 1.5, `${id} maxWallStep=${s.maxWallStep} (want < 1.5)`);
   }
   // Interior of a known Monza stack face stays near hw+1.1 (feather must not raise it).
   const monza = Tracks.build(Tracks.LIST.find((d) => d.id === "monza"));
@@ -75,10 +75,10 @@ test("fleet: open-circuit tyre termini stay under 3 m after feather (Slice 2)", 
   assert.ok(over < 2.0, `mid-stack over should be ~1.1, got ${over} at k=${kTight}`);
 });
 
-test("monaco pit taper: feather after openBoundary keeps maxOver under 3 m", () => {
+test("monaco pit taper: feather after openBoundary keeps maxOver under 1.5 m", () => {
   const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
   const { Tracks } = buildContext();
   const track = Tracks.build(Tracks.LIST.find((d) => d.id === "monaco"));
   const s = summariseTrack(track);
-  assert.ok(s.maxOver < 3.0, `monaco maxOver=${s.maxOver} (want < 3)`);
+  assert.ok(s.maxOver < 1.5, `monaco maxOver=${s.maxOver} (want < 1.5)`);
 });

@@ -16,9 +16,11 @@ const TrackBuildProps = (function () {
   // teleport a car ~7–9 m sideways at run-off termini (DEFECT-LEDGER 2026-09-26).
   // Only LOWERs the wide side toward the tight face — never raises a barrier.
   // Keep in lockstep with tools/track/barrier-jumps.cjs featherBarrierEnds.
+  // cliff=1.5 so residual mid-size jumps are ramped; two passes (caller)
+  // settle overlapping termini under the 1.5 m one-step clamp budget.
   function featherBarrierEnds(arr, hw, cliff, nodes) {
-    cliff = cliff == null ? 3 : cliff;
-    nodes = Math.max(1, nodes == null ? 3 : nodes);
+    cliff = cliff == null ? 1.5 : cliff;
+    nodes = Math.max(1, nodes == null ? 5 : nodes);
     if (!arr || !hw || arr.length !== hw.length || arr.length < 2) return;
     const N = arr.length;
     for (let k = 0; k < N; k++) {
