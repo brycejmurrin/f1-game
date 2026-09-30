@@ -193,6 +193,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/glx-occlusion.test.mjs",
+  // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
+  "tests/unit/glx-output-target.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/glx-multidraw.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
@@ -303,6 +305,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   "tests/unit/node-plan.test.mjs",
+  "tests/unit/ci-pr-base.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
   // the bounded rolling record, the CI-bucket fallback and the growth flag.
   // Pure fixtures plus one pass over the committed tests/data/spec-timings.json,

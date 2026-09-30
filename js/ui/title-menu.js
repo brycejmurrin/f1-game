@@ -40,9 +40,9 @@ const TitleMenu = (function () {
 
       const dailyBtn = $("mb-daily"), dailySub = $("mb-daily-sub");
       if (dailyBtn && dailySub) {
-        const p = G.daily.plan(), st = G.daily.data().streak;
+        const p = G.daily.plan(), streak = G.daily.liveStreak ? G.daily.liveStreak() : 0;   // a broken streak is not shown
         dailySub.textContent = p.trackName + " · " + p.weather.toUpperCase()
-          + (st.count > 0 ? " · STREAK " + st.count : "");
+          + (streak > 0 ? " · STREAK " + streak : "");
         dailyBtn.setAttribute("aria-label", "Daily challenge — " + dailySub.textContent);
       }
     }

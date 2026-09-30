@@ -67,7 +67,9 @@ test("fail safe: no diff, an infra path, a unit file, a harness, or an unrouted 
 test("ci.yml: the node-suites job plans on a pull request and guards exactly the scoped scripts", () => {
   assert.match(nodeJob, /fetch-depth: 0/, "the plan diffs against the PR base; a depth-1 clone cannot");
   assert.match(nodeJob, /- name: Plan the slices for this diff/);
-  assert.match(nodeJob, /node tools\/ci\/node-plan\.mjs --since "\$PR_BASE" --sh > "\$PLAN"/);
+  // `$BASE`, resolved by tools/ci/ci-pr-base.sh — never the event's base.sha directly.
+  assert.match(nodeJob, /node tools\/ci\/node-plan\.mjs --since "\$BASE" --sh > "\$PLAN"/);
+  assert.doesNotMatch(nodeJob, /node-plan\.mjs --since "\$PR_BASE"/, "the event's base.sha lags one sync behind the test commit's base");
   assert.match(nodeJob, /node tools\/ci\/node-plan\.mjs --all --sh > "\$PLAN"/, "a non-PR event runs everything");
   assert.match(nodeJob, /\. "\$\{RUNNER_TEMP:-\.\}\/node-plan\.sh"/, "the suites step must source the plan");
   const step = nodeJob.slice(nodeJob.indexOf("- name: Pure-node unit suites"));

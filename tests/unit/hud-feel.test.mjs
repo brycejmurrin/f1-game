@@ -184,7 +184,7 @@ test("automatic active aero identifies its mode while the manual control stays u
   G.raceAeroMode = "auto";
   player.xArmed = true; player.aeroX = 1;
   tick();
-  assert.equal(els.aero.textContent, "AUTO X-MODE");
+  assert.equal(els.aero.textContent, "AUTO STRAIGHT");
   assert.equal(els.aero.className, "ax-open");
   assert.equal(els.btnAero.getAttribute("aria-disabled"), "true");
   assert.equal(els.btnAero.getAttribute("data-state"), "automatic");
