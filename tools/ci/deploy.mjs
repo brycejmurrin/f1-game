@@ -5,7 +5,7 @@
 // requires a pull request with the eight fast-tier checks green and allows no
 // bypass, so the default mode's final `git push` fails with GH006. `--pr` is
 // the form that lands work now; `--gate-only` is still the pre-push check.
-// @doc The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, push (or `--pr`).
+// @doc The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`.
 // Full description: the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else only the targeted sweeps that read it) → verify-track → push the deploy branch (or --pr); pages.yml stamps it
 //
 //   node tools/ci/deploy.mjs --plan        # print the steps + the union diffstat, run nothing

@@ -36,8 +36,9 @@ decisions → **css-play** (`references/restructure.md`).
 
 ```sh
 node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
-node tools/ci/test-bg.mjs ui
-node tools/ci/test-bg.mjs gallery          # ui-audit captures — read the PNGs
+node --test tests/unit/menu-a11y-audit.test.mjs   # Escape/door/layer pins, no browser
+node tools/ci/test-bg.mjs ui               # BROWSER (10-40 min): one group, background
+node tools/ci/test-bg.mjs gallery          # BROWSER: ui-audit captures — read the PNGs
 npm run test:tooling-fast
 ```
 

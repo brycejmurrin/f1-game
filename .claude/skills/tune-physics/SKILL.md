@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Camera lag as a framing/state bug → playwright-probe; device/gamepad/touch/tilt bugs → input-controls; AI racecraft → ai-racecraft.
+description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag as a framing/state bug → playwright-probe; device/gamepad/touch/tilt bugs → input-controls; AI racecraft → ai-racecraft.
 ---
 
 # Tune the physics
@@ -48,8 +48,22 @@ node tools/ci/test-bg.mjs physics-core # browser-gated — driving model (~35 te
 node tools/ci/test-bg.mjs collisions  # browser-gated — car-to-car + wall contact
 node tools/ci/test-bg.mjs aero         # aero-zones, active-aero, drift, understeer (~37 tests)
 node tools/ci/test-bg.mjs input        # steering + camera
-node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>
+node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (launchChromium) — stability probe, not an A/B
 ```
+
+No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop for an A/B):
+
+```sh
+TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json]   # skidpad, step-steer, trail-brake, midCorner_*; no flags to set physics
+node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SHAPES
+```
+
+`player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, script it in
+`scratch/` — `createGame({track})`, `await g.race(track)`, `g.apex.setPhysics({frontGrip: x})`,
+`measure(g, frac)` per value — and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
+slip past its peak with rear settled = understeer). `physics-tune-sweep.mjs` is BROWSER + long (sharded
+DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the
+same tables; stop there, then the named browser group.
 
 If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)) before commit. Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.

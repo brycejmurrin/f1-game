@@ -12,8 +12,16 @@ The lit shader combines a slope-scale bias with the SHADOW BIAS tuner knob
 ```glsl
 float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
 float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
-float z = sc.z - biasTerm;
+float z = sc.z - biasTerm * (uShadowRange / 80.0);   // static map only; the car map uses biasTerm * uCarBiasScale
 ```
+
+`t` = `uShadowTexel` (1/SHADOW_SIZE, glx.js). Bias scales with SHADOW DISTANCE
+(`uShadowRange`, def 80): acne that appears only after raising that knob is the
+first thing to check. Chunk: `sampleShadow`, not `glsl-chunks.js`. Uniform
+locations: `glx.js` ~931 list, uploads ~1833-1871 (`T.shadowBias`, `T.shadowRange`).
+`tools/lighting/ab-lighting.mjs` catalog id `shadow.biasClamp` pins the clamp to ONE site
+(BROWSER-ONLY run; `list` is static). Static, no browser: `node --test tests/unit/shadow-pass-depth.test.mjs`
+(light-VP depth span; a too-tight near/far also reads as missing/odd shadows).
 
 Acne on flat surfaces → raise the SHADOW BIAS slider (`uShadowBias`, TUNE_DEFS
 def 0.001, **max 0.004**). Peter-Panning (shadows detach from feet) → lower it.
@@ -22,7 +30,7 @@ Do NOT hand-edit the clamp constants first; the tuner knob exists for this.
 ### Shadow shimmer / edge flicker while driving
 
 The shadow box recentres in sBox/4 steps snapped on the LIGHT's right/up axes
-so the texel grid stays world-stable (game.js shadow pass), and shadows fade
+so the texel grid stays world-stable (`js/render/shared/shadow-pass.js` sunPass), and shadows fade
 by receiver distance via `uShadowRange` (SHADOW DISTANCE knob) well inside the
 box border. If edges shimmer again, check that the snap code still quantizes
 in light space (not world XZ) and that the rebuild gate includes sunDir.
@@ -68,11 +76,15 @@ HeadlessChrome: `#game` is opacity 0 and the blit is `#game-soft`. `getError()`
 on `#game`'s WebGL context can be 0 while a locator screenshot of `#game` is
 black. Await `GLX.awaitSoftPresent()` and read the overlay (or `readPixels`).
 
-## 7. Quick one-liners via apex-eval
+## 7. Quick one-liners via apex-eval (BROWSER-ONLY: each boots Chromium; not while a test-bg run is live)
 
 ```sh
 # Check HDR mode (--backend webgl2 is REQUIRED: the default is TLX, and GLX.x() would answer for it)
 node tools/shot/apex-eval.mjs monza "GLX.hdrMode()" --raw --backend webgl2
+
+# Shadow acne at dawn: set dawn, read the live knobs (lightState has no shadow fields), then A/B the bias
+node tools/shot/apex-eval.mjs monza "(a.setTimeOfDay('dawn'), a.lightTune())" --raw --backend webgl2
+node tools/shot/apex-eval.mjs monza "(a.setTimeOfDay('dawn'), a.lightTune({shadowBias:0.003}))" --raw --backend webgl2
 
 # Light state on a night track (Monza has night:false — use vegas/singapore)
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw --backend webgl2

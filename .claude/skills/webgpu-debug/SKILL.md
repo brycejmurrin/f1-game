@@ -39,7 +39,7 @@ probe (prefer the parent). Prefer hooks/probe over reasoning from absence.
 Still true: SwiftShader is not a PERFORMANCE oracle, software adapters force
 MSAA 1, and `deviceLostHint: true` after a clean init is a note, not a failure.
 
-## 2. Backend and error state
+## 2. Backend and error state (BROWSER-ONLY: needs a live page)
 
 ```js
 __apex.diag({download:false}).env   // { backend, msaa, hdr, ... }
@@ -51,14 +51,25 @@ __apex.logs()                       // "gfx" ns
 `backend: "webgl2"` when you expected webgpu means WGX refused — read
 `WGX.lastFailure` and `localStorage["apex26.gfxWgxFail"]`.
 
-## 3. Unit gates and live poke
+Fallback path (read-only trace, no browser): `Gfx.bind` (`js/render/gfx.js`
+~L240) awaits `WGX.create()`, which returns null on ANY failure after
+`wgx.js` records `_lastFailure` + `apex26.gfxWgxFail` and logs
+`WGX unavailable (...) — falling back to WebGL2`; `Gfx.bind` logs
+`Gfx.bind fallback webgl2` and `js/game.js` binds GLX. NaN-white road with
+NO fallback = warning-mode Dawn ran undefined derivatives (defects.md #2);
+with fallback = strict uniformity error. Static half of that check:
+`--static` plus `node --test tests/unit/webgpu-lifecycle.test.mjs`. Live
+half (BROWSER-ONLY, parent): bare `wgx-validate.mjs` prepends
+`diagnostic(error, derivative_uniformity)` like WebKit.
+
+## 3. Unit gates and live poke (the live pokes are BROWSER-ONLY)
 
 - `tests/unit/webgpu-lifecycle.test.mjs` — mock-GPU + static WGSL uniformity.
 - `tests/unit/gfx-backend-canary.test.mjs` — boot canary / probe-revert.
 - `tests/unit/backend-surface-parity.test.mjs` +
   `docs/research/WEBGPU-PARITY.md` — Gfx façade × 3 backends.
 
-`apex-eval.mjs <track> <expr> --backend webgpu` pins WGX (pass it whenever the
+`tools/shot/apex-eval.mjs <track> <expr> --backend webgpu` pins WGX (pass it whenever the
 expr names `WGX`/`GLX`; the default is TLX). Or, through the chrome MCP:
 
 ```sh

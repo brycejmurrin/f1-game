@@ -97,4 +97,4 @@ field COUNT in `buildTrackLights` — every `lights.push(...)` must be exactly
 
 ## Load on demand
 
-- Common failure modes, Playwright probe pattern, apex-eval one-liners → [references/failures.md](references/failures.md).
+- Shadow acne (which shader chunk, uniforms, knobs), common failure modes, Playwright probe pattern, apex-eval one-liners → [references/failures.md](references/failures.md).

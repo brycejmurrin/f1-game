@@ -30,8 +30,10 @@ A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
 viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
 
 ```sh
+# BROWSER-FREE (safe anywhere; exits before any launch): --help, --list, --report
 node tools/ui/layout-audit.mjs --help
-node tools/ui/layout-audit.mjs --list
+node tools/ui/layout-audit.mjs --list            # 48 screens x 11 viewports (2026-09-30); the enumeration step
+# BROWSER-ONLY (launch Chromium: check /proc/loadavg < 3, no Playwright run live):
 node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
 node tools/ui/layout-audit.mjs --screen=settings # one cell
@@ -45,6 +47,16 @@ node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /
 CSS survey (`tools/mcp/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture.
+
+Flags (header of `layout-audit.mjs`): `--screens=a,b` / `--viewports=ios-*`
+(wildcard = prefix), `--scale=100,130` (40-200), `--circuits=`, `--shots`, `--dom`,
+`--jobs=N`, `--gallery`, `--screen=ID` + `--viewport=NAME`, `--force`, `--report`
+(summarize the last gallery, no browser), `--out=DIR`.
+
+Order: 1. `--list` and diff against `index.html` dialogs (browser-free, setup.md
+§Enumerate). 2. Measure/capture (browser-only). 3. Stop when every cell of
+screens x viewports x scales you scoped has a row or a "clean" mark; the verdict
+is the defect table sorted by failure mode (probes.md §6), not a pass count.
 
 ## Load on demand
 

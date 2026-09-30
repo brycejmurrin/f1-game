@@ -50,9 +50,24 @@ geometry bug.
 ### Pause settings overlay
 
 Opening pause settings hides `#pausemenu` so only `#pmsettings` is visible.
-Escape routes through `data-esc-close="pm-settings-close"` (same ladder in
+Escape routes through `data-esc-close="pm-settings-close"` (browser ladder in
 `tests/specs/ui-button-touch.spec.js`). Scroll region:
 `#pmsettings-inner .sheet-body.pane`.
+
+Back-stack (Escape/BACK goes to the wrong screen): Escape -> `TopModal`
+`cancel`/`onEscape` (`js/ui/modal.js`) -> clicks `#pm-settings-close` ->
+`js/game.js` `if (settingsNav.back()) closeSettings()`. `SettingsNav.back()`
+(`js/ui/settings-tabs.js`) pops a page to `home` and returns `false`; only on
+`home` does it return `true`, and `closeSettings()` then unhides `#pausemenu`
+**only if `paused`** (title-menu settings, `#mb-settings`, has no pause menu to
+return to, so it closes to the title). The pause key takes the same path via
+`Input.init` `onPause`. Suspect `paused` / `state` first, then whether
+`hidden` on `#pmsettings` was flipped by something other than the door.
+Node-level pins (no browser, run singly):
+`node --test tests/unit/menu-a11y-audit.test.mjs` (Escape/door lockstep, "repeated
+keyboard Escape advances one dialog page"), `tests/unit/ui-improve-pass.test.mjs`
+(SettingsNav on mini-DOM: BACK pops to home, then reports close),
+`tests/unit/uilayers-modal-order.test.mjs` (`top()` ranking).
 
 ## Common mistakes
 

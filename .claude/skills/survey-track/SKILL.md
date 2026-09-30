@@ -23,6 +23,9 @@ node tools/track/survey-track.mjs <id> --oblique  # plus bounds-fitted topdown +
 #   survey-track.mjs monaco --oblique 0.1,0.5
 node tools/track/verify-track.cjs <id>            # after every edit
 node .claude/skills/survey-track/ground-profile.mjs <id>   # numbers only
+# survey-track.mjs and ground-profile.mjs BOOT CHROMIUM (a probe, not a test group; ~1 min).
+# No-browser first pass (Node VM, ~4 s each): verify-track.cjs <id>, float-audit.cjs <id>
+# ("clean" = 0 elevated clusters; it checks props, NOT terrain-over-road or water level).
 ```
 
 Hands off: **scenery-dress** (`js/circuits/scenery/<id>.js` `scenery(api)`),
