@@ -48,6 +48,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/session-contracts.mjs** | Normalize hosted tool envelopes and diagnose session capability prerequisites without calling remote services. | check-changes |
 | **lib/solid-in-road.cjs** | Solid-in-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass prims whose XZ hull stands on tarmac. | scenery-dress |
 | **lib/track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness the audits and VM tests load the engine through. | agent-view |
+| **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
 | **lib/webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | mcp-probe |
 
 ### `tools/ci/`
@@ -56,13 +57,15 @@ The test runner and the release pipeline: what to run, how to run it in the back
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **ci/archive-branches.mjs** | Plans and verifies the git-bundle archive of branches with no history in common with deploy (archive-branches.yml). | check-changes |
+| **ci/branch-audit.mjs** | Per-branch verdict (merged/absorbed/superseded/pr-closed/unmerged) from ancestry, merge-tree, line presence, PRs, CI. | check-changes |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
-| **ci/prune-branches.mjs** | Lists or deletes merged branches with no open PR, and expired claude/claims/* markers (prune-branches.yml). | check-changes |
+| **ci/prune-branches.mjs** | Lists or deletes merged/absorbed branches with no open PR and expired claims, by branch-audit (prune-branches.yml). | check-changes |
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml); a line per shard, then `= group`. | check-changes |
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so always-on vm-b1 riders do not double-bill. | — |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run) as Markdown or `--json`. | check-changes |
@@ -217,6 +220,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/survey-track.mjs** | One-command circuit survey: aerial/orbit/driver-eye shots per spot plus a flagged ground-profile probe; `--oblique`. | survey-track |
 | **track/track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **track/track-verts.cjs** | Per-circuit vertex + model-diagnostics dump for exact before/after diffing (`--diff before.json`). | agent-view |
+| **track/tumftm-import.mjs** | Converts TUMFTM racetrack-database CSV centrelines into track-designer apex26.track envelopes (LGPL-attributed). | new-track |
 | **track/verify-track.cjs** | Headless build guard: runs `buildRoad/Terrain/Props/Gate` for one circuit (or `--all`) in a VM; any THROW fails. | agent-view |
 
 ### `tools/car/`

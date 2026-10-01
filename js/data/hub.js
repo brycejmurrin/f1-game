@@ -340,18 +340,39 @@ const DataHub = (function () {
   function errorBlock(id, err, hasStale) {
     const w = el("div", "dh-error");
     w.setAttribute("role", "status");
-    // Three different things were all one sentence telling the player to check
-    // a connection that may be fine. navigator.onLine is only trustworthy in
-    // the negative — false really does mean no network — so it is read that
-    // way and nothing is claimed when it is true.
-    let msg = navigator.onLine === false
-      ? "You're offline. This tab needs a connection."
-      : "Couldn't reach the F1 data service. It may be busy — try again.";
-    if (hasStale) msg += " Showing the last data you loaded.";
-    if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
-      msg = err.message;
+    // Three different situations used to share one dead-end sentence. Split them
+    // so the player can tell OFFLINE (no network) from UPSTREAM (service busy /
+    // HTTP failure while the device thinks it is online). Cached content from
+    // this session still paints under the banner when hasStale is true.
+    const offline = navigator.onLine === false;
+    let reason = offline ? "offline" : "upstream";
+    let title = offline ? "OFFLINE" : "SERVICE UNAVAILABLE";
+    let msg = offline
+      ? "No network on this device. Open Data Hub once while online to keep a copy of schedule and standings for later."
+      : "Couldn't reach the F1 data service. It may be busy or blocked — try again in a moment.";
+    if (hasStale) {
+      title = offline ? "OFFLINE · CACHED" : "REFRESH FAILED · CACHED";
+      msg = offline
+        ? "You're offline. Showing the last data loaded on this device."
+        : "Couldn't refresh from the F1 data service. Showing the last data you loaded.";
+      reason = offline ? "offline-cached" : "upstream-cached";
     }
+    if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
+      title = "LIVE SESSION";
+      msg = err.message;
+      reason = "live-auth";
+    }
+    w.dataset.reason = reason;
+    const titleEl = el("div", "dh-error-msg", title);
+    titleEl.dataset.role = "title";
+    w.appendChild(titleEl);
     w.appendChild(el("div", "dh-error-msg", msg));
+    if (!hasStale && offline) {
+      const hint = el("div", "dh-error-msg",
+        "Tip: schedule, standings and results keep an API cache after a successful fetch — retry after you reconnect.");
+      hint.dataset.role = "hint";
+      w.appendChild(hint);
+    }
     const retry = el("button", "dh-retry", "RETRY");
     retry.type = "button";
     retry.addEventListener("click", function () { loadTab(id); });
@@ -365,6 +386,7 @@ const DataHub = (function () {
     if (mins < 1) txt = "updated just now";
     else if (mins < 60) txt = "updated " + mins + "m ago";
     else txt = "updated " + Math.floor(mins / 60) + "h " + (mins % 60) + "m ago";
+    if (navigator.onLine === false) txt += " · offline copy";
     return el("div", "dh-footnote", txt);
   }
 

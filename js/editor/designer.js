@@ -13,7 +13,7 @@ const TrackDesigner = (function () {
   "use strict";
   const el = Dom.el;
   const S = TrackShape;
-  const PREVIEW_MS = 80, DRAFT_MS = 600, UNDO_CAP = 100;
+  const PREVIEW_MS = 80, DRAFT_MS = 600, UNDO_CAP = 100, NUDGE_MS = 500, IMPORT_MAX = 64 * 1024;
   const TOOLS = [["select", "SELECT"], ["draw", "DRAW"], ["straight", "STRAIGHT"], ["corner", "CORNER"], ["hairpin", "HAIRPIN"], ["chicane", "CHICANE"], ["sbend", "S-BEND"]];
   const STEPS = { L: 10, R: 5, deg: 5 };
   const PARAM_LABEL = { L: "LENGTH m", R: "RADIUS m", deg: "ANGLE °" };
@@ -25,6 +25,10 @@ const TrackDesigner = (function () {
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   const undo = [], redo = [];
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
+  // savedSnap: the design as last loaded or saved — anything else is unsaved
+  // work a load must not drop. nudge: the arrow-key run one undo entry covers.
+  // checksSaid: the red/amber counts last announced through ui.msg.
+  let savedSnap = null, nudge = null, checksSaid = null;
 
   // ── helpers ───────────────────────────────────────────────────────────────
   const tick = () => { if (G && G.soundOn && typeof GameAudio !== "undefined" && GameAudio.uiTick) GameAudio.uiTick(); };
@@ -49,14 +53,87 @@ const TrackDesigner = (function () {
     return b;
   }
 
+  // ── zones follow the loop ─────────────────────────────────────────────────
+  // Every zone list is keyed by ARC fraction of the control polygon (toRaw maps
+  // hwZones to the engine's index fractions; the rest are read as arc
+  // fractions of the built lap). bankZones are { frac, angleDeg, widthM },
+  // elevations / bridges { s, … }, hwZones { s0, s1, … } — sanitize's shapes.
+  const wrap01 = (v) => ((v % 1) + 1) % 1;
+  function cumArc(pts) {
+    const c = [0];
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; c.push(c[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    return c;
+  }
+  /** Every zone list through one fraction map at(f, role) → f' | null (drop).
+   *  A range asks for each end as a point first; an end that is dropped asks
+   *  again as "s0"/"s1" (a clamp to the edit's edge); both ends gone drops it.
+   *  flip swaps the ends (REVERSE). angleDeg is never touched: its SIGN is not
+   *  the camber side (mesh.js reads that off curvature), a negative is adverse. */
+  function zoneMap(d, at, flip) {
+    const pt = (key) => (z) => { const f = at(z[key], "p"); return f == null ? null : Object.assign({}, z, { [key]: wrap01(f) }); };
+    const range = (z) => {
+      let a = at(z.s0, "p"), b = at(z.s1, "p");
+      if (a == null && b == null) return null;
+      if (a == null) a = at(z.s0, "s0");
+      if (b == null) b = at(z.s1, "s1");
+      if (a == null || b == null) return null;
+      if (flip) { const t = a; a = b; b = t; }
+      return Object.assign({}, z, { s0: wrap01(a), s1: wrap01(b) });
+    };
+    const each = (list, fn) => (Array.isArray(list) ? list : []).map(fn).filter(Boolean);
+    return { hwZones: each(d.hwZones, range), bankZones: each(d.bankZones, pt("frac")), elevations: each(d.elevations, pt("s")), bridges: each(d.bridges, pt("s")) };
+  }
+  /** After an insert / delete / stamp: a zone BEFORE the edited span keeps its
+   *  arc distance from the start, one AFTER it its distance to the finish, one
+   *  inside it is dropped (a range is clipped to the span's edge). Anchors are
+   *  the control points both loops share — the unchanged head walked forward,
+   *  the unchanged tail walked back (a stamp may thin the tail with RDP, so its
+   *  survivors are a subsequence) — and a zone between two anchors keeps its
+   *  share of that stretch. When the start point itself changed there is no
+   *  anchor and the fractions stand. */
+  function remapZones(d, oldPts, newPts) {
+    const N = oldPts.length, M = newPts.length;
+    const same = (p, q) => p[0] === q[0] && p[1] === q[1];
+    if (!N || !M || !same(oldPts[0], newPts[0])) return d;
+    const head = [[0, 0]];
+    let i = 1, j = 1;
+    while (i < N && j < M && same(oldPts[i], newPts[j])) head.push([i++, j++]);
+    if (i === N && j === M) return d;                    // nothing changed
+    const tail = [[N, M]];                               // both loops close back onto point 0
+    for (let jn = M - 1, io = N - 1; jn >= j; jn--) {
+      let k = io;
+      while (k >= i && !same(oldPts[k], newPts[jn])) k--;
+      if (k < i) break;                                  // a new point: the edit ends here
+      tail.unshift([k, jn]); io = k - 1;
+    }
+    const cO = cumArc(oldPts), cP = cumArc(newPts), LO = cO[N], LP = cP[M];
+    if (!(LO > 0 && LP > 0)) return d;
+    const A = head.concat(tail).map(([o, n]) => [cO[o], cP[n]]), gap = head.length - 1, eps = 1e-9 * LO;
+    const at = (f, role) => {
+      const x = wrap01(f) * LO;
+      let k = 0;
+      while (k < A.length - 2 && x > A[k + 1][0]) k++;
+      if (k === gap && x > A[k][0] + eps && x < A[k + 1][0] - eps) return role === "s0" ? A[k + 1][1] / LP : role === "s1" ? A[k][1] / LP : null;
+      const span = A[k + 1][0] - A[k][0];
+      return (A[k][1] + (span > 0 ? (x - A[k][0]) / span : 0) * (A[k + 1][1] - A[k][1])) / LP;
+    };
+    return Object.assign({}, d, zoneMap(d, at, false));
+  }
+
   // ── state transitions ─────────────────────────────────────────────────────
   function snapshot() { return JSON.stringify(design); }
   function pushUndo(snap) { undo.push(snap); if (undo.length > UNDO_CAP) undo.shift(); redo.length = 0; }
-  /** Replace the design (geometry edits go through here so UNDO sees them). */
+  const REMAP = /^(insert|delete|stamp:)/;
+  /** Replace the design (geometry edits go through here so UNDO sees them). A
+   *  run of arrow nudges on one point inside NUDGE_MS of each other is ONE entry. */
   function commit(next, kind) {
-    pushUndo(snapshot());
+    const now = Date.now();
+    if (kind === "nudge" && nudge && nudge.sel === sel && now - nudge.t < NUDGE_MS && undo.length) redo.length = 0;
+    else pushUndo(snapshot());
+    nudge = kind === "nudge" ? { sel, t: now } : null;
+    next.pts = lattice(next.pts);
+    if (REMAP.test(kind || "") && design && design.pts) next = remapZones(next, design.pts, next.pts);
     design = next;
-    design.pts = lattice(design.pts);
     afterChange(kind);
   }
   function afterChange(kind) {
@@ -73,14 +150,31 @@ const TrackDesigner = (function () {
     clearTimeout(previewT); previewT = 0;
     if (!design) return null;
     verdict = design.pts.length ? TrackValidate.check(design) : { ok: false, red: 1, amber: 0, issues: [{ code: "points", level: "red", msg: "Draw a loop, stamp one, or press RANDOMISE" }], stats: null, tr: null, turns: [] };
+    // A design the registry refuses outright (a loop under 1 km, a point out
+    // of range) builds nothing and may name no red: never show "All checks pass".
+    if (!verdict.ok && !verdict.red) verdict = Object.assign({}, verdict, { red: 1, issues: verdict.issues.concat([{ code: "bounds", level: "red", msg: "This loop cannot be built — make it bigger (2.5–7 km) and keep its points in range" }]) });
     if (cv) { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); }
-    renderIssues(); renderStats();
+    renderIssues(); renderStats(); announceChecks();
     const blocked = !verdict.ok;
     for (const b of [ui.save, ui.race, ui.tt]) if (b) { b.disabled = blocked; b.setAttribute("aria-disabled", blocked ? "true" : "false"); }
     return verdict;
   }
   function scheduleDraft() { clearTimeout(draftT); draftT = setTimeout(saveDraft, DRAFT_MS); }
   function saveDraft() { clearTimeout(draftT); draftT = 0; if (design && custom && design.pts.length) custom.setDraft(design); }
+  /** The CHECKS list is not a live region (it is rebuilt every preview); the
+   *  status line says only when the red / amber counts change. */
+  function announceChecks() {
+    if (!verdict || !openFlag || !ui.msg) return;
+    const key = verdict.red + "/" + verdict.amber;
+    if (key === checksSaid) return;
+    const first = checksSaid == null;
+    checksSaid = key;
+    if (first) return;
+    const n = (k, w) => k + " " + w + (k === 1 ? "" : "s");
+    const said = verdict.red ? n(verdict.red, "red issue") + (verdict.amber ? ", " + n(verdict.amber, "warning") : "") : verdict.amber ? n(verdict.amber, "warning") : "all checks pass";
+    const base = String(ui.msg.textContent || "").split(" · CHECKS: ")[0];
+    message((base ? base + " · " : "") + "CHECKS: " + said, base ? ui.msg.dataset.warn === "1" : verdict.red > 0);
+  }
 
   // ── edits ─────────────────────────────────────────────────────────────────
   function stampParams() {
@@ -130,7 +224,7 @@ const TrackDesigner = (function () {
     if (p.length > CustomTracks.LIMITS.ptsMax) p = S.rdp(p, 2);
     p = startOnLongestStraight(p);
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: p }), "draw");
+    commit(Object.assign({}, design, { pts: p, originId: undefined }), "draw");   // a new circuit: SAVE adds, never replaces
     message("Loop drawn — drag the points to tune it");
     return true;
   }
@@ -148,23 +242,16 @@ const TrackDesigner = (function () {
     const base = Object.assign({}, design);
     const r = TrackRandom.generateValid(s, (pts) => TrackValidate.check(Object.assign({}, base, { pts })).ok, 12);
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: r.pts, seed: r.seed }), "randomise");
+    commit(Object.assign({}, design, { pts: r.pts, seed: r.seed, originId: undefined }), "randomise");   // a new circuit, as DRAW
     if (cv) cv.fit();
     message(r.ok ? "Randomised — seed " + r.seed : "No clean loop in 12 tries — RANDOMISE again or tune the points", !r.ok);
     return !!r.ok;
   }
-  const flipS = (z) => Object.assign({}, z, { s0: 1 - z.s1, s1: 1 - z.s0 });
-  const flipP = (z) => Object.assign({}, z, { s: 1 - z.s });
   function reverse() {
     const pts = design.pts;
     if (pts.length < 3) return false;
-    const next = Object.assign({}, design, {
-      pts: [pts[0]].concat(pts.slice(1).reverse()),
-      hwZones: (design.hwZones || []).map(flipS),
-      bankZones: (design.bankZones || []).map((z) => Object.assign(flipS(z), { angle: -(z.angle || 0) })),
-      elevations: (design.elevations || []).map(flipP),
-      bridges: (design.bridges || []).map(flipP),
-    });
+    // The start point stays; every arc fraction f is 1 − f on the reversed loop.
+    const next = Object.assign({}, design, { pts: [pts[0]].concat(pts.slice(1).reverse()) }, zoneMap(design, (f) => 1 - f, true));
     commit(next, "reverse");
     message("Direction reversed");
     return true;
@@ -174,14 +261,8 @@ const TrackDesigner = (function () {
     if (!(i > 0 && i < N)) { message("Select a point that is not already the start", true); return false; }
     let L = 0, upto = 0;
     for (let k = 0; k < N; k++) { const a = pts[k], b = pts[(k + 1) % N]; const d = Math.hypot(b[0] - a[0], b[1] - a[1]); if (k < i) upto += d; L += d; }
-    const f = L ? upto / L : 0, wrap = (v) => ((v % 1) + 1) % 1;
-    const shiftS = (z) => Object.assign({}, z, { s0: wrap(z.s0 - f), s1: wrap(z.s1 - f) });
-    const shiftP = (z) => Object.assign({}, z, { s: wrap(z.s - f) });
-    const next = Object.assign({}, design, {
-      pts: S.rotate(pts, i),
-      hwZones: (design.hwZones || []).map(shiftS), bankZones: (design.bankZones || []).map(shiftS),
-      elevations: (design.elevations || []).map(shiftP), bridges: (design.bridges || []).map(shiftP),
-    });
+    const f = L ? upto / L : 0;
+    const next = Object.assign({}, design, { pts: S.rotate(pts, i) }, zoneMap(design, (v) => v - f, false));
     sel = 0; span = -1;
     commit(next, "start");
     message("Start line moved");
@@ -196,8 +277,8 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { pts: next }), "delete");
     return true;
   }
-  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); design = JSON.parse(undo.pop()); sel = -1; span = -1; afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); design = JSON.parse(redo.pop()); sel = -1; span = -1; afterChange("redo"); return true; }
+  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); design = JSON.parse(undo.pop()); sel = -1; span = -1; nudge = null; afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); design = JSON.parse(redo.pop()); sel = -1; span = -1; nudge = null; afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -215,35 +296,65 @@ const TrackDesigner = (function () {
     if (cv) cv.setTool(tool);
     refreshControls();
   }
-  function load(item, label) {
+  /** Unsaved work about to be replaced → one UNDO away, and kept under
+   *  apex26.customTrackDraftPrev so the new design's autosave cannot clobber
+   *  it. True when something was kept. */
+  function stash() {
+    if (!design || !design.pts || !design.pts.length) return false;
+    const snap = snapshot();
+    if (snap === savedSnap) return false;
+    pushUndo(snap);
+    if (custom && custom.setDraftPrev) custom.setDraftPrev(JSON.parse(snap));
+    return true;
+  }
+  /** Replace the design. `origin`: the MY CIRCUITS id it was opened from, which
+   *  SAVE replaces instead of adding a copy per geometry change (it rides the
+   *  design as `originId`; sanitize drops it, so it never reaches the id). */
+  function load(item, label, origin) {
+    const kept = stash();
+    if (!kept) { undo.length = 0; redo.length = 0; }
     design = copy(item);
     for (const k of ["hwZones", "bankZones", "elevations", "bridges", "turns"]) if (!Array.isArray(design[k])) design[k] = [];
-    undo.length = 0; redo.length = 0; sel = -1; span = -1;
+    if (origin) design.originId = origin; else delete design.originId;
+    sel = -1; span = -1; nudge = null;
     afterChange(label || "load");
+    savedSnap = snapshot();
     if (cv) cv.fit();
+    return kept;
+  }
+  const keptNote = (kept) => (kept ? " · UNDO brings back the design you had" : "");
+  /** The autosaved draft, sanitized loosely (a work in progress may be red). */
+  function draftItem() {
+    const d = custom.draft();
+    const it = d && custom.sanitize(d, { loose: true });
+    if (!it || !it.pts.length) return null;
+    if (typeof d.originId === "string") it.originId = d.originId;
+    return it;
   }
 
   // ── save / race ───────────────────────────────────────────────────────────
-  function save() {
+  function save(forRace) {
     if (previewT || !verdict) runPreview();
-    if (!verdict || !verdict.ok) { message("Fix the red issues before saving", true); return { ok: false, reason: "red" }; }
+    if (!verdict || !verdict.ok) { message("Fix the red issues before " + (forRace ? "racing" : "saving"), true); return { ok: false, reason: "red" }; }
     design.turns = verdict.turns.slice();
     design.lengthM = Math.round(verdict.tr.total);
     design.name = CustomTracks.sanitizeName(ui.name ? ui.name.value : design.name);
-    const r = custom.upsert(design);
+    const r = custom.upsert(design, { replace: design.originId });
     if (!r.ok) {
-      message(r.reason === "full" ? "MY CIRCUITS is full (" + r.limit + ") — delete one first" : "Could not save this design", true);
+      // A race runs a SAVED circuit, so a full library blocks racing a new design too.
+      message(r.reason === "full" ? "MY CIRCUITS is full (" + r.limit + " circuits) — delete one in MY CIRCUITS to " + (forRace ? "race" : "save") + " this design" : "Could not save this design", true);
       Log.warn("track", "designer save refused: " + r.reason);
       return r;
     }
-    design.id = r.id;
+    design.id = r.id; design.originId = r.id;
+    savedSnap = snapshot();
     message(r.durable ? "Saved to MY CIRCUITS" : "Saved — but storage is full, so it may not survive a reload", !r.durable);
     Log.info("track", "designer saved " + r.id + " (" + design.name + ", " + design.lengthM + " m)");
     renderLibrary();
     return r;
   }
   function race(mode) {
-    const r = save();
+    const r = save(true);
     if (!r.ok) return false;
     return raceId(r.id, mode);
   }
@@ -288,7 +399,7 @@ const TrackDesigner = (function () {
     body.append(stage, rail);
     // foot
     const foot = el("div", "td-foot");
-    ui.save = btn("SAVE", "sel-edit", () => save());
+    ui.save = btn("SAVE", "sel-edit", () => save(false));
     ui.race = btn("RACE", "sel-edit", () => race("gp"));
     ui.tt = btn("TIME TRIAL", "sel-edit", () => race("tt"));
     ui.share = btn("SHARE", "sel-chip", () => share());
@@ -313,6 +424,14 @@ const TrackDesigner = (function () {
       onDraw: (path) => freehand(path),
     });
     cv.setTool(tool);
+    // Window CAPTURE, ahead of TopModal's document-capture Escape and the
+    // dialog's own cancel (a pad's B arrives as `cancel`): with a point
+    // selected the focused canvas owns the arrows, so Escape / B first lets go
+    // of it — deselect and move focus to the rail — rather than close the screen.
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("keydown", onBack, true);
+      window.addEventListener("cancel", onBack, true);
+    }
   }
   function tabBtn(label, pane) {
     const b = btn(label, "sel-chip td-tab", () => showPane(pane));
@@ -396,7 +515,8 @@ const TrackDesigner = (function () {
     circuit.appendChild(actions);
     // issues
     const issues = group("CHECKS");
-    ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-live", "polite"); ui.issues.setAttribute("aria-label", "Design checks");
+    // Not a live region: it is rebuilt on every preview (announceChecks speaks the counts).
+    ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-label", "Design checks");
     issues.appendChild(ui.issues);
     // share in: a pasted code or link (SHARE on the foot copies one out)
     const sharing = group("SHARE CODE");
@@ -435,7 +555,9 @@ const TrackDesigner = (function () {
   /** The `apex26.track` file envelope for the current design (what EXPORT writes). */
   async function exportEnvelope() {
     const code = await shareCode();
-    return code ? TrackCodec.fileEnvelope(design, code) : null;
+    if (!code) return null;
+    const d = copy(design); delete d.originId;   // this player's library link, not the circuit
+    return TrackCodec.fileEnvelope(d, code);
   }
   async function exportFile() {
     const env = await exportEnvelope();
@@ -454,6 +576,8 @@ const TrackDesigner = (function () {
     } catch (e) { message("Export failed: " + (e && e.message || e), true); return false; }
   }
   async function importFile(file) {
+    // An exported circuit is a few KB; never read a large file into memory to find out it is not one.
+    if (!file || !(file.size <= IMPORT_MAX)) { message("That file is too big to be an Apex 26 circuit (" + (IMPORT_MAX >> 10) + " KB max)", true); return false; }
     try { return await loadFrom(await file.text()); } catch (e) { message("Could not read that file", true); return false; }
   }
   /** Load a design from any of: a share link, a bare APXT1 code, or an exported file's JSON. */
@@ -466,18 +590,22 @@ const TrackDesigner = (function () {
       const f = TrackCodec.fromFile(obj);
       if (!f) { message("Not an Apex 26 circuit file", true); return false; }
       if (f.code) code = f.code; else raw = f.design;
-    } else if (/[#&]track=/.test(s)) code = TrackCodec.fromHash(s.slice(s.indexOf("#")));
-    else code = s;
+    } else if (/[#&]track=/.test(s)) {
+      try { code = TrackCodec.fromHash(s.slice(Math.max(0, s.indexOf("#")))); } catch (_) { code = null; }
+      if (!code) { message("That link carries no readable share code", true); return false; }
+    } else code = s;
     let it = null;
     if (code) {
-      const r = await TrackCodec.decode(code);
+      let r = null;
+      try { r = await TrackCodec.decode(code); } catch (_) { r = null; }
+      if (!r) { message("That share code could not be read", true); return false; }
       if (!r.ok) { message("That share code was refused (" + r.reason + ")", true); return false; }
       it = r.design;
     } else it = custom.sanitize(raw);
     if (!it) { message("That design could not be loaded", true); return false; }
-    load(it, "import");
+    const kept = load(it, "import");
     showPane("design");
-    message("Loaded " + it.name + " — SAVE to keep it in MY CIRCUITS");
+    message("Loaded " + it.name + " — SAVE to keep it in MY CIRCUITS" + keptNote(kept));
     return true;
   }
   function clampParam(key, v) {
@@ -545,11 +673,14 @@ const TrackDesigner = (function () {
       const meta = el("div", "td-card-meta", fmtKm(it.lengthM) + " · " + (TrackThemes.get(it.theme).label || it.theme) + " · " + (it.turns ? it.turns.length : 0) + " corners");
       const row = el("div", "td-chips");
       row.append(
-        btn("EDIT", "sel-chip", () => { load(it, "library"); showPane("design"); message("Editing " + it.name); }),
+        btn("EDIT", "sel-chip", () => { const kept = load(it, "library", it.id); showPane("design"); message("Editing " + it.name + keptNote(kept)); }),
         btn("RACE", "sel-chip", () => raceId(it.id, "gp")),
         btn(confirmDel === it.id ? "DELETE?" : "DELETE", "sel-chip", () => {
           if (confirmDel !== it.id) { confirmDel = it.id; renderLibrary(); return; }
-          confirmDel = null; custom.remove(it.id); if (design && design.id === it.id) delete design.id; renderLibrary(); message("Deleted " + it.name);
+          confirmDel = null; custom.remove(it.id);
+          if (design && design.id === it.id) delete design.id;
+          if (design && design.originId === it.id) delete design.originId;
+          renderLibrary(); message("Deleted " + it.name);
         }),
       );
       card.append(c, name, meta, row);
@@ -565,17 +696,35 @@ const TrackDesigner = (function () {
     build();
     return true;
   }
+  function onBack(ev) {
+    if (!openFlag || !canvas || sel < 0 || document.activeElement !== canvas) return;
+    if (ev.type === "keydown" && ev.key !== "Escape") return;
+    ev.preventDefault(); ev.stopPropagation();
+    sel = -1; span = -1;
+    if (cv) cv.setSelection(sel, span);
+    refreshControls();
+    const first = ui.tools && ui.tools.children[0];
+    if (first) first.focus();
+  }
   function open(opts) {
     if (!built && !init()) return false;
-    returnFocus = document.activeElement;
-    if (opts && opts.design) { load(opts.design, "open"); if (opts.shared) message("Shared circuit loaded — SAVE to keep it in MY CIRCUITS"); }
+    // A share link opened while the screen is up (hashchange) must not make
+    // close() hand focus back into the hidden dialog.
+    if (!openFlag) returnFocus = document.activeElement;
+    if (cv) cv.reset();
+    // A fresh page has the player's unsaved draft only on disk: bring it in
+    // first, so a share link's design replaces it through stash(), not over it.
+    if (!design && opts && opts.design) {
+      const it = draftItem();
+      if (it) { load(it, "draft", it.originId); if (!custom.get(it.id)) savedSnap = null; }
+    }
+    if (opts && opts.design) { const kept = load(opts.design, "open"); if (opts.shared) message("Shared circuit loaded — SAVE to keep it in MY CIRCUITS" + keptNote(kept)); }
     else if (!design) {
-      const d = custom.draft();
-      const it = d && custom.sanitize(d);
-      if (it && it.pts.length) { load(it, "draft"); message("Draft restored"); }
+      const it = draftItem();
+      if (it) { load(it, "draft", it.originId); if (!custom.get(it.id)) savedSnap = null; message("Draft restored"); }
       else { design = blank(); afterChange("blank"); randomise(design.seed); }
     }
-    root.hidden = false; openFlag = true;
+    root.hidden = false; openFlag = true; checksSaid = null;
     showPane("design");
     confirmDel = null;
     Log.info("track", "designer open");
@@ -589,6 +738,7 @@ const TrackDesigner = (function () {
   function close() {
     if (!root || !openFlag) return;
     saveDraft();
+    if (cv) cv.reset();
     root.hidden = true; openFlag = false;
     Log.info("track", "designer close");
     if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
@@ -609,6 +759,6 @@ const TrackDesigner = (function () {
     };
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, loadFrom, TOOLS };
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, TOOLS };
 })();
 Object.freeze(TrackDesigner);
