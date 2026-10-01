@@ -905,6 +905,21 @@ function simSeed(v) {
   }
   return _simSeed;
 }
+// A PLAYER'S SESSION starts from a fresh seed: at a fixed 1 the first race after
+// every page load was the same race (retirements, weather arc, mistakes,
+// strategies). Kept at 1 under automation (navigator.webdriver: Playwright, the
+// Chrome MCP), pinned by ?seed=N (the game-vm harness passes ?seed=1); daily,
+// career and net play set their own. It resets the stream and draws nothing.
+(function bootSeed() {
+  try {
+    const q = typeof location !== "undefined" ? new URLSearchParams(location.search || "").get("seed") : null;
+    if (q) { simSeed(+q); return; }
+    if (typeof navigator !== "undefined" && navigator.webdriver) return;
+    const a = new Uint32Array(1);
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(a); else a[0] = Math.random() * 4294967296;
+    simSeed(a[0]);
+  } catch (_) { /* keep 1 */ }
+})();
 // uniform [0,1) — the drop-in for Math.random() on sim paths
 function simRnd() {
   _simRngState = (Math.imul(_simRngState, 1103515245) + 12345) >>> 0;
@@ -2733,7 +2748,7 @@ function isFloodActiveSession() {
 // takes a second-plus to converge, during which a broken projection renders the
 // cockpit bodywork as a black box across the frame at the start ("clips until I
 // throttle past the start"). Shared by startRace() and __apex.snapCam().
-function snapGameCam() {
+function snapGameCam(paint) {
   if (!player || !track) return;
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
@@ -2754,7 +2769,7 @@ function snapGameCam() {
   // from the grid) would otherwise carry the grid's look OFFSET across, so the cockpit
   // opened facing the way the grid faced and swung round over the next half second.
   camAncX = null;
-  try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* GLX */ }
+  try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); if (paint) { headlessMode = false; render(paint === true ? 1 / 60 : Math.min(+paint || 1 / 60, 1 / 20)); } } catch (_) { /* GLX */ }
 }
 
 // Races started this session. It is the round number a one-off Grand Prix hashes
