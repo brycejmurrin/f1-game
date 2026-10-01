@@ -68,10 +68,11 @@ test("pose aims at the subject car when carPos is supplied", () => {
   assert.equal(p.count, 3);
 });
 
-test("CAM_MODES appends trackside last (save-index contract)", () => {
+test("CAM_MODES appends trackside after visor (save-index contract)", () => {
   const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...ms.matchAll(/\{ id: "([^"]+)"/g)].map((m) => m[1]);
-  assert.equal(ids[ids.length - 1], "trackside");
+  // TRACKSIDE owns index 14 on ship; later PRs may append after it (rival/pitwall/drone).
+  assert.ok(ids.includes("trackside"), "trackside is in CAM_MODES");
   assert.ok(ids.includes("visor"), "visor stays before the append");
   assert.ok(ids.indexOf("visor") < ids.indexOf("trackside"));
 });
