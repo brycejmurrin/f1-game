@@ -115,6 +115,57 @@ test("persisted SOUND OFF and out-of-range volumes apply on first load", async (
   await expect.poll(() => engineRequests.length).toBe(1);
 });
 
+test("recorded voice choices, radio presets and previews work in the settings panel", async ({ page }) => {
+  await toMenu(page);
+  await page.evaluate(() => window.__apex.headless(true));
+  await page.locator("#mb-settings").click();
+  await page.locator("#pm-audio").click();
+  await page.locator("#as-radio-sum").click();
+  await page.locator("#as-ann-sum").click();
+  await page.locator("#as-v-radio").focus();
+  await page.locator("#as-v-radio").selectOption("recorded:michael");
+  await expect(page.locator("#as-v-radio")).toBeFocused();
+  await page.locator("#as-v-announcer").selectOption("recorded:bella");
+  await page.locator("#as-rpreset-sel").selectOption("clean");
+  await expect(page.locator("#as-v-radio-pitch")).toBeDisabled();
+  await expect(page.locator("#as-v-announcer-rate")).toBeDisabled();
+  expect(await page.evaluate(() => ({ preset: GameAudio.radioPreset(),
+    tune: JSON.parse(localStorage.getItem("apex26.voiceTune")),
+    saved: JSON.parse(localStorage.getItem("apex26.radioPreset")) }))).toMatchObject({
+    preset: "clean", saved: "clean", tune: { radio: { pack: "michael" }, announcer: { pack: "bella" } },
+  });
+  // Capture the real decoded clip entering the audio graph, not just a TEST click.
+  await page.evaluate(() => {
+    window.__voicePreviews = [];
+    const play = GameAudio.radioVoice;
+    GameAudio.radioVoice = function (parts, at, opts) {
+      window.__voicePreviews.push({ seconds: parts.reduce((n, p) => n + (p.duration || 0), 0), fx: opts.fx });
+      return play.apply(this, arguments);
+    };
+  });
+  await page.locator("#as-v-announcer-test").click();
+  await expect.poll(() => page.evaluate(() => window.__voicePreviews.some((p) => p.seconds > 1 && p.fx === "announcer")),
+    { timeout: 30000 }).toBe(true);
+  await page.locator("#as-rpreset-sel").selectOption("vintage");
+  expect(await page.evaluate(() => GameAudio.radioPreset())).toBe("vintage");
+  await page.locator("#as-v-radio").selectOption("");
+  await expect(page.locator("#as-v-radio-pitch")).toBeEnabled();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.radioPack")))).toBe(false);
+  await page.locator("#as-v-radio").selectOption("recorded:george");
+  await page.locator("#as-v-announcer").selectOption("recorded:fable");
+  await page.locator("#as-rpreset-sel").selectOption("modern");
+  const viewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("#as-v-radio")).toBeVisible();
+  await expect(page.locator("#as-rpreset-sel")).toBeVisible();
+  const bounds = await page.locator("#as-v-radio").boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  await page.setViewportSize(viewport);
+  await page.locator("#pm-settings-close").click();
+  await page.locator("#pm-settings-close").click();
+});
+
 test("re-enabling sound during a race restarts race music", async ({ page, loadTrack }) => {
   await toMenu(page);
   // startRace() is async (ensureScenery). loadTrack waits for the build AND

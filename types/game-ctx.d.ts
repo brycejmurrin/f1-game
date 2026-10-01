@@ -799,6 +799,8 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
    NetSession (js/net/session.js takes {transport}) — same `create()` spelling,
    different contract. */
 declare const AeroZones: GameModuleFactory;
+// js/editor/custom-tracks.js — create(G, { load, door? }): the TRACK DESIGNER door + its lazy bundle.
+declare const CustomTracks: GameModuleFactory;
 declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
 declare const ShadowPass: GameModuleFactory;
@@ -808,6 +810,7 @@ declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
 declare const RadioVoice: GameModuleFactory;
+declare const RecordedAnnouncer: GameModuleFactory;
 declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const PlayerForces: GameModuleFactory;

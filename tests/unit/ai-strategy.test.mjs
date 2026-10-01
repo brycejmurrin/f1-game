@@ -466,12 +466,13 @@ test("the lane's follow distance is a car length plus air, and wider than the ra
   const CAR_L = 4.8;
   const lane = A.laneFollow();
   assert.ok(lane > CAR_L, `a held gap must clear a car length (${lane} vs ${CAR_L})`);
-  // Racing follow is base + pad; the pad is bounded, so compare against the
-  // most generous racing figure there is.
+  // Racing follow is a time headway (AiDrive.followGap: s0 + v·T), so the
+  // like-for-like figure is at the lane's QUEUE speed — a crawl to rest — where
+  // the racing gap is its s0, a metre of air: the lane holds more than that.
   const t = { craft: 1, awareness: 1, experience: 1, skill: 1, consistency: 1 };
-  const widestRacing = A.followBase(false) + A.followPad(t, false, null, 0, null, null);
-  assert.ok(lane > widestRacing,
-    `the lane holds more than racing traffic does (${lane} vs ${widestRacing.toFixed(2)})`);
+  const atCrawl = A.followGap(t, false, 0, 0, null, 0, null, null);
+  assert.ok(lane > atCrawl,
+    `the lane holds more than racing traffic does at a crawl (${lane} vs ${atCrawl.toFixed(2)})`);
   // …and it is not so wide that a short lane cannot hold a queue: five cars at
   // this spacing must still fit inside the shortest complex in the game.
   assert.ok(lane * 5 < 190, `five cars queue inside a short lane (${lane * 5} m)`);
