@@ -335,15 +335,23 @@ test.describe("Apex 26 — steering", () => {
 
   test("symmetry: opposite inputs turn the heading by opposite, equal amounts", async ({ page }) => {
     await startLiveRace(page);
+    // Assists add a signed bias that does not flip with steer; pin them off
+    // so the comparison is left/right input alone (sharedTest reset is shallow).
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
+    await setRaceLine(page, 0);
     const { frac } = await findStraight(page);
 
-    // Compare heading change over a short burst (pre-saturation) so the result
-    // isn't dominated by residual track curvature over a long slide.
+    // Compare heading change over a short burst (pre-saturation). Residual
+    // track curvature adds the SAME signed drift to both directions — subtract
+    // a zero-steer control so the 15 % bound measures input symmetry, not the
+    // straight's leftover k (CI 36807856916: |aR+aL|=0.016 vs max*0.15=0.012).
+    const zero = await run(page, { frac, speed: 30, steer: 0, ticks: 6 });
     const right = await run(page, { frac, speed: 30, steer: 1, ticks: 6 });
     const left = await run(page, { frac, speed: 30, steer: -1, ticks: 6 });
 
-    const aR = right.after.angle - right.before.angle;
-    const aL = left.after.angle - left.before.angle;
+    const a0 = zero.after.angle - zero.before.angle;
+    const aR = (right.after.angle - right.before.angle) - a0;
+    const aL = (left.after.angle - left.before.angle) - a0;
     expect(aR).toBeGreaterThan(0);
     expect(aL).toBeLessThan(0);
     // Within 15 % of each other.
