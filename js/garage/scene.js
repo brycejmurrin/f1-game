@@ -1474,7 +1474,9 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
   // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
   if (carMesh) {
-    arrivalMirror[14] = carMat ? carMat[14] : 0;
+    // The car's own matrix mirrored in y = 0 (its y row negated): it turns and moves with the car.
+    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
+    else arrivalMirror.set(MAT_MIRROR);
     _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
   }
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);

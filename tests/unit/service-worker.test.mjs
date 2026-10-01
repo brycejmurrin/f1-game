@@ -531,7 +531,7 @@ test("install rejects a missing or invalid build instead of creating apex26-0", 
   }
 });
 
-test("activation preserves prior caches unless the current generation is complete", async () => {
+test("activation preserves prior caches unless the current generation is settled", async () => {
   const harness = createHarness({ fetchImpl: installFetch() });
   harness.stores.set("apex26-320", new Map([["healthy", new Response("old")]]));
   harness.stores.set("apex26-321", new Map());
@@ -543,7 +543,20 @@ test("activation preserves prior caches unless the current generation is complet
   assert.equal(harness.claimed, 0);
 });
 
-test("activation removes prior caches after a complete successful install", async () => {
+test("activation preserves prior caches while only INSTALL_COMPLETE is set (background pool still running)", async () => {
+  const harness = createHarness({ fetchImpl: installFetch() });
+  harness.stores.set("apex26-320", new Map([["healthy", new Response("old")]]));
+  harness.stores.set("apex26-321", new Map([
+    [`${ORIGIN}/__apex_install_complete__`, new Response("complete")],
+  ]));
+
+  await harness.lifecycleEvent("activate").done();
+
+  assert.deepEqual(harness.deleted, [], "COMPLETE alone must not delete the previous generation");
+  assert.equal(harness.claimed, 0);
+});
+
+test("activation removes prior caches after a settled successful install", async () => {
   const harness = createHarness({ fetchImpl: installFetch({ failOptional: true }) });
   harness.stores.set("apex26-320", new Map([["healthy", new Response("old")]]));
 
@@ -704,7 +717,7 @@ test("stale generations are swept from the fetch path once the current one is co
   assert.equal(harness.deleted.length, 2, "one sweep per worker lifetime, not one per fetch");
 });
 
-test("no fetch-path sweep between the essential marker and the optional pool (SKIPWAITING STAYS LAST's window)", async () => {
+test("no fetch-path sweep between the essential marker and the optional pool (SETTLED gates the sweep)", async () => {
   const harness = sweepHarness({ complete: true, settled: false });
   await twoFetches(harness);
   assert.deepEqual(harness.deleted, [], "an old active worker must not delete its own cache while the new install is still seeding lazy assets");
@@ -715,7 +728,13 @@ test("offline, a FINISHED install outranks a newer half-written generation", asy
   const fn = src.match(/async function computeCacheOrder\(current\) \{[\s\S]*?\n\}/)[0];
   assert.match(fn, /INSTALL_SETTLED_URL/);
   assert.match(fn, /\(done\.get\(b\) - done\.get\(a\)\) \|\| \(rank\(b\) - rank\(a\)\)/, "completeness first, then current/newest");
-  assert.ok(src.indexOf('cache.put(INSTALL_SETTLED_URL') < src.indexOf("await self.skipWaiting()"), "settled is written after the optional pool, before skipWaiting");
+  // skipWaiting runs after the install-critical optional pool; SETTLED is written
+  // after the BACKGROUND pool (scenery / WGX / data / net). Activate deletes
+  // prior gens only on SETTLED — see "activation removes prior caches…".
+  assert.ok(src.indexOf("await self.skipWaiting()") < src.indexOf("cache.put(INSTALL_SETTLED_URL"),
+    "skipWaiting before the background pool settles");
+  assert.match(src, /isInstallCriticalOptional/, "chosen backend (TLX+three) is the install-critical optional set");
+  assert.match(src, /isBackgroundOptional/, "scenery / WGX / data / net background after skipWaiting");
 });
 
 test("no fetch-path sweep while the current generation is incomplete", async () => {
