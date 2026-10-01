@@ -93,10 +93,10 @@ test("the global baseline profile, if present, is a plain knob map", () => {
 const TOD = ["dawn", "day", "dusk", "night"];
 const WX = ["dry", "wet", "rain", "fog", "overcast"];
 
-test("B1b fallthrough circuits ship a full tod×weather grid with no wetness pins", () => {
-  // Would fail before the B1b bake: korea/jerez had zero track| keys.
+test("B1 fallthrough circuits ship a full tod×weather grid with no wetness pins", () => {
+  // B1a fuji/okayama + B1b korea/jerez — each had zero track| keys before bake.
   const P = presets();
-  for (const track of ["korea", "jerez"]) {
+  for (const track of ["fuji", "okayama", "korea", "jerez"]) {
     const keys = TOD.flatMap((tod) => WX.map((wx) => `${track}|${tod}|${wx}`));
     const missing = keys.filter((k) => !P[k] || typeof P[k] !== "object");
     assert.deepEqual(missing, [], `${track} must ship all 20 tod×weather keys (not "*" fallthrough)`);
