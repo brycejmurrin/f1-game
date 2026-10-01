@@ -374,11 +374,41 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   min-height: 2.7em;                 /* two lines reserved: no reflow as the camera flies */
   overflow-wrap: anywhere;
 }
-#fc-snaps, #fc-lens, #fc-copies { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 3); margin: calc(var(--gap) / 2) 0; }
-#fc-snaps > button, #fc-lens > button, #fc-copies > button { flex: 1 1 0; margin: 0; min-height: var(--tap-min); }
+#fc-snaps, #fc-lens, #fc-copies, #fc-kit { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 3); margin: calc(var(--gap) / 2) 0; }
+#fc-snaps > button, #fc-lens > button, #fc-copies > button, #fc-kit > button { flex: 1 1 0; margin: 0; min-height: var(--tap-min); }
 #fc-lens > button[aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 #fc-help, #fc-msg { font-size: var(--fs-micro); color: var(--dim); margin: calc(var(--gap) / 3) 0; }
 #fc-out { flex-shrink: 0; width: 100%; min-height: 6em; }
+/* Photo-kit viewport overlays (JS-built in free-cam / photo-kit). Id-only so
+   the cssClasses ratchet does not grow. Hidden unless free camera is open. */
+#fc-comp-grid, #fc-dof {
+  position: fixed; inset: 0; z-index: 41; pointer-events: none;
+}
+#fc-comp-grid[data-grid="thirds"] {
+  background:
+    linear-gradient(to right, transparent calc(33.33% - 0.5px), color-mix(in oklab, var(--text) 35%, transparent) 0, color-mix(in oklab, var(--text) 35%, transparent) calc(33.33% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to right, transparent calc(66.66% - 0.5px), color-mix(in oklab, var(--text) 35%, transparent) 0, color-mix(in oklab, var(--text) 35%, transparent) calc(66.66% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to bottom, transparent calc(33.33% - 0.5px), color-mix(in oklab, var(--text) 35%, transparent) 0, color-mix(in oklab, var(--text) 35%, transparent) calc(33.33% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to bottom, transparent calc(66.66% - 0.5px), color-mix(in oklab, var(--text) 35%, transparent) 0, color-mix(in oklab, var(--text) 35%, transparent) calc(66.66% + 0.5px), transparent 0) 0 0 / 100% 100%;
+}
+#fc-comp-grid[data-grid="golden"] {
+  background:
+    linear-gradient(to right, transparent calc(38.2% - 0.5px), color-mix(in oklab, var(--gold) 40%, transparent) 0, color-mix(in oklab, var(--gold) 40%, transparent) calc(38.2% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to right, transparent calc(61.8% - 0.5px), color-mix(in oklab, var(--gold) 40%, transparent) 0, color-mix(in oklab, var(--gold) 40%, transparent) calc(61.8% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to bottom, transparent calc(38.2% - 0.5px), color-mix(in oklab, var(--gold) 40%, transparent) 0, color-mix(in oklab, var(--gold) 40%, transparent) calc(38.2% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to bottom, transparent calc(61.8% - 0.5px), color-mix(in oklab, var(--gold) 40%, transparent) 0, color-mix(in oklab, var(--gold) 40%, transparent) calc(61.8% + 0.5px), transparent 0) 0 0 / 100% 100%;
+}
+#fc-dof {
+  backdrop-filter: blur(var(--fc-dof-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--fc-dof-blur, 0px));
+  -webkit-mask-image: radial-gradient(circle at 50% 45%,
+    transparent 0, transparent var(--fc-dof-clear, 40%),
+    black var(--fc-dof-soft, 70%), black 100%);
+  mask-image: radial-gradient(circle at 50% 45%,
+    transparent 0, transparent var(--fc-dof-clear, 40%),
+    black var(--fc-dof-soft, 70%), black 100%);
+}
+body.pc-uihidden #fc-comp-grid, body.pc-uihidden #fc-dof { display: none !important; }
 /* EYE FROM / EYE TO / LOOK FROM / LOOK TO. Four poses of nine sliders read as
    one undifferentiated column without them. */
 #fb-rows .fb-group {
