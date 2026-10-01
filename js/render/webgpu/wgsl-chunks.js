@@ -2018,7 +2018,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   }
 
   if (moon > 0.0 && stars > 0.5) {
-    let moonDir = normalize(vec3<f32>(0.42, 0.72, 0.55));
+    // The disc hangs on sunDir: at night it IS the moon key light (GLX parity).
+    let moonDir = normalize(sunDir);
     let md = dot(dir, moonDir);
     let moonPerp = length(dir - moonDir * max(md, 0.0));
     let moonDisc = smoothstep(0.025 * moonDiscSize, 0.010 * moonDiscSize, moonPerp) * moon;   // MOON DISC SIZE knob
