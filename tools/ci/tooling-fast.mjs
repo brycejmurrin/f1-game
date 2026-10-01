@@ -214,6 +214,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
+  // Decorrelated DriverRatings.BASE + skill()/overall personality pins.
+  "tests/unit/driver-ratings-personality.test.mjs",
   "tests/unit/driving-coach.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
   // named legend has to round-trip through two setters, and the inert VM DOM
