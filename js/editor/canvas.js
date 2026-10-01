@@ -9,6 +9,7 @@
 const DesignerCanvas = (function () {
   "use strict";
   const S = TrackShape;
+  const clamp = M4.clamp;          // the shared scalar (js/core/mat4.js, FULL), never a private copy
   const HIT_PX = 24;                 // a thumb-sized hit radius around a handle (css px)
   const LATTICE = 4;                 // 0.25 m — the storage lattice, so a drag never lands off it
   const MIN_SCALE = 0.02, MAX_SCALE = 40;
@@ -72,7 +73,6 @@ const DesignerCanvas = (function () {
       if (scale < 0.6) scale = 0.6;
       render();
     }
-    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
     // ── size ────────────────────────────────────────────────────────────────
     function resize() {
