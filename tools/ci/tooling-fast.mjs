@@ -322,6 +322,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
+  "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",

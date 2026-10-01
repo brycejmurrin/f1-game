@@ -217,6 +217,7 @@ const FULL = [
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/car/ghost-share.js",
+  "js/car/input-ghost.js",
   "js/race/session-records.js",
   "js/race/race-insights.js",
   "js/race/driving-coach.js",
