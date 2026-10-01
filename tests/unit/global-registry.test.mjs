@@ -88,7 +88,6 @@ const GROWABLE_GLOBALS = {
 const KNOWN_EXTERNAL_READS = {
   "js/track/core/def.js": ["CircuitElevations"],  // tools/gen/bake-elevation.mjs output; typeof-guarded feature probe (moved from tracks.js with elevationAt)
   "js/editor/custom-tracks.js": ["TrackDesigner", "TrackCodec"], // the LAZY_EDITOR screen and codec; typeof-guarded, reached only after ensureEditor() loaded the bundle
-  "js/ui/select-screen.js": ["TrackDesigner"],     // EDIT IN DESIGNER on a custom circuit's preview; typeof-guarded behind CustomTracks.ensureEditor()
   "js/audio/spotify.js": [
     "Spotify",                      // the Spotify Web Playback SDK, injected at connect time
     "onSpotifyWebPlaybackSDKReady", // the SDK's own window callback contract
@@ -99,7 +98,7 @@ const KNOWN_EXTERNAL_READS = {
     "__APEX_NATIVE__",              // Electron preload
     "Capacitor",                    // Capacitor runtime; isNativePlatform / getPlatform / Plugins
   ],
-  "js/ui/select-screen.js": ["__APEX_BUILD"],          // exportRecovery stamps the shell build id
+  "js/ui/select-screen.js": ["__APEX_BUILD", "TrackDesigner"],   // exportRecovery stamps the shell build id; EDIT IN DESIGNER on a custom circuit's preview (typeof-guarded behind CustomTracks.ensureEditor())
   "js/career/career-backup.js": ["__APEX_BUILD"],     // backup envelope stamps the shell build id
   "js/editor/codec.js": ["__APEX_BUILD"],             // the track file envelope stamps the shell build id, like the backup
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
