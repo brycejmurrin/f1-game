@@ -1270,11 +1270,15 @@ const TLX = (function () {
         m.vertexNode = skyClipNode();
         m.depthTest = true;
         m.depthWrite = false;
+        // WGX shipped a late sky with depthCompare "always" and it painted
+        // over the world (docs/notes/PERF-FINDINGS.md). Less-equal at the far
+        // plane is what lets early-Z drop the pixels the world already covered.
+        m.depthFunc = THREE.LessEqualDepth;
         m.lights = false;
         m.fog = false;
         m.toneMapped = false;
         m.transparent = false;
-        m.side = THREE.DoubleSide;
+        m.side = THREE.FrontSide;
         m.customProgramCacheKey = () => key;
         return m;
       }
