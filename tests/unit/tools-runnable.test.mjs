@@ -260,6 +260,11 @@ test("the MCP-facing entry points answer without touching a browser or a network
     { cmd: "bash", args: [tool("playwright-mcp.sh"), "help"], want: /browser_resize/ },
     { cmd: "bash", args: [tool("playwright-mcp.sh"), "help"], want: /css-play\.mjs/ },
     { cmd: process.execPath, args: [tool("css-play.mjs"), "--help"], want: /hot-swap|hot swap/i },
+    // Probe-debug CLIs that used to treat --help as a run (2026-10-01 audit):
+    { cmd: process.execPath, args: [tool("cdmcp-bg.mjs"), "--help"], want: /usage:/ },
+    { cmd: "python3", args: [tool("cdmcp-cli.py"), "--help"], want: /list-tools/ },
+    { cmd: process.execPath, args: [tool("report-server.mjs"), "--help"], want: /--port/ },
+    { cmd: process.execPath, args: [tool("garage-angles.mjs"), "--help"], want: /--plan/ },
     // Prefer an explicit path so the assertion is independent of a clean vs
     // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
     // either shape is fine — the path form also exercises RULES → test:gfx.
