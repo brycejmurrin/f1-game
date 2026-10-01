@@ -2631,7 +2631,15 @@ async function menuFinish(current, key) {
   if (!current()) return;   // a RACE! tap or a new selection owns the sequencer now
   FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
-  while (current() && !step()) await menuSlice();
+  let yielded = false;
+  for (let slice = 0; current();) {
+    const at = performance.now(), done = step();
+    slice += performance.now() - at;
+    if (done) break;
+    if (slice >= 3) { await menuSlice(); slice = 0; yielded = true; }
+  }
+  // Even cheap plans give the world's queued warm a render opportunity before garage prewarm.
+  if (!yielded && current() && _menuGate.warm > 0) await menuSlice();
   if (current()) _menuFly = fly;
   if (lit && await menuIdle(current)) { warmPrograms("|lit"); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
@@ -4031,11 +4039,12 @@ async function introPlan(live, key, info, n) {
   FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));
   const fly = { key, track, shots: flybyShots || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   // Compilation can delay a yielded timer for seconds; budget only planner CPU.
-  for (let spent = 0; live() && _introSkip !== n && spent < 800;) {
-    const at = performance.now(), done = step();
-    spent += performance.now() - at;
+  for (let spent = 0, slice = 0; live() && _introSkip !== n && spent < 800;) {
+    const at = performance.now(), done = step(), elapsed = performance.now() - at;
+    spent += elapsed; slice += elapsed;
     if (done || spent >= 800) break;
-    await menuSlice();
+    // Cheap/cache-hit shots share a slice; one expensive shot still yields alone.
+    if (slice >= 3) { await menuSlice(); slice = 0; }
   }
   return live() && _introSkip !== n ? fly : null;
 }
@@ -5481,10 +5490,10 @@ function updateCar(c, dt, ranked) {
 
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
-  if (c.onKerb) {
-    c.speed = Math.sign(c.speed) * Math.max(0, Math.abs(c.speed) - 6 * dt);
-    if (c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
-  }
+  // Speed cut follows kerbGripSm (λ=12), not raw onKerb — that flag flickers ~20 Hz.
+  c.kerbGripSm = damp(c.kerbGripSm ?? 1, c.onKerb ? 0.7 : 1, 12, dt);
+  if (c.kerbGripSm < 0.999) c.speed = Math.sign(c.speed) * Math.max(0, Math.abs(c.speed) - 6 * (1 - c.kerbGripSm) / 0.3 * dt);
+  if (c.onKerb && c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
   // The raw onKerb flag is a floor-indexed per-node lookup (TrackMesh.onKerb)
   // and flickers at the ~4 m node rate at speed (≈20 Hz at 300 km/h) when the
   // car straddles the kerb line. Run the CUES on a short sticky hold so
@@ -5820,13 +5829,8 @@ function updateCar(c, dt, ranked) {
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
   if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX);
-  // Riding a kerb loses a little grip — damped continuous instead of a binary
-  // 1↔0.7 flip: the raw flag flickers at the ~4 m node rate at speed, and a
-  // 30% lateral-grip square wave at ~20 Hz was genuine yaw dither in the
-  // physics. λ=12 (τ≈83 ms): a solid kerb ride reaches the full 0.7 penalty in
-  // ~0.25 s (handling penalty preserved); a one-tick flicker moves grip <2%.
-  // Deterministic (damp is exp-based, dt here is the fixed PHYS_DT).
-  const kerbGrip = (c.kerbGripSm = damp(c.kerbGripSm ?? 1, c.onKerb ? 0.7 : 1, 12, dt));
+  // Riding a kerb loses a little grip — kerbGripSm already damped with the speed cut.
+  const kerbGrip = c.kerbGripSm ?? 1;
   // Banking: computed once, shared between player and AI so both get grip boost.
   const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
   const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
@@ -5918,30 +5922,14 @@ function updateCar(c, dt, ranked) {
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
     const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * kPath * yawEase * offAssistFade;
-    // --- RACING LINE assist (pause-menu slider; 0 = off, the default). Two
-    // things deliberately set it apart from the line the AI drives.
-    //   1. It is the PLAYER's line. The AI aims at `-k·130` — the inside of
-    //      whichever corner it is in right now — so it sits mid-track on entry
-    //      and exit and only ever finds the apex. This samples the corner AHEAD
-    //      and the one just BEHIND as well, so the car is opened out wide before
-    //      turn-in and allowed to run wide on exit: the out-in-out arc, which the
-    //      AI's formula cannot express.
-    //   2. It acts through the FRONT TYRE like every other steering input. The
-    //      old version added straight to c.x, sliding the car across the road
-    //      without turning it — the chassis crabbed, and the assist could drag
-    //      the car sideways through grip it did not have (or into a wall).
+    // Racing-line slider. TrackLine.at is the AI's line; lineW is 0 on a
+    // straight so the raw offset there is not a target. Front tyre, not c.x.
     let lineDelta = 0;
-    if (raceLineAssist !== 0) {
+    if (raceLineAssist !== 0 && track.line) {
       const look = clamp(Math.abs(c.speed) * 0.9, 25, 90);
-      const kAhead = Tracks.curvature(track, wrapS(c.s + look));
-      const kBehind = Tracks.curvature(track, wrapS(c.s - look * 0.7));
-      // k > 0 curves toward screen-left, so the inside is -x: -k pulls to the
-      // apex of this corner, +kAhead/+kBehind push wide for the next/last one.
-      const lineX = clamp(-k * 170 + (kAhead + kBehind) * 85, -0.72, 0.72) * Math.max(0, hw - 0.6);
-      // Pure pursuit: closing a lateral error e over a look-ahead distance Ld
-      // needs a path curvature of about 2e/Ld², and a road-wheel angle of
-      // WHEELBASE × that. Speed-scaling falls out of Ld, so the correction stays
-      // gentle at 300 km/h and still finds the line in a slow corner.
+      const ln = TrackLine.at(track, wrapS(c.s + look));
+      const edge = Math.max(0, hw - 0.6);
+      const lineX = clamp(ln.x * ln.w, -edge, edge);
       const Ld = clamp(Math.abs(c.speed) * 1.2, 22, 70);
       lineDelta = raceLineAssist * LINE_PURSUIT * WHEELBASE * 2 * (lineX - c.x) / (Ld * Ld) * offAssistFade;
     }

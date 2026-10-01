@@ -503,7 +503,7 @@ struct FrameU {
   lightVP    : mat4x4<f32>,   // off 224  sun light-space view-proj (shadow, Phase 3)
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
-  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, reserved, reserved) — zw unread: SSR is same-frame in COMPOSITE, car reflection is analytic-sky / params5.x
+  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, rain, specKnee) — SSR is same-frame in COMPOSITE, car reflection is analytic-sky / params5.x
   params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, mistShare) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth, ground-mist share of the lamp-fog glow
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
   params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, carSparkle, fogSunCore) — wet darkening + car-shadow arm flag + pure-look sparkle/fog knobs (zw always packed; WGSL reads them directly)
@@ -1348,7 +1348,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let Vg = V_SmithGGX(NoV, NoL, a);
     let Fg = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
     var specCol = (Dg * Vg) * Fg * F.sunColor.xyz * litNoL;
-    specCol = specCol / (1.0 + specCol);
+    // soft knee, asymptote params4.w (SUN GLINT RANGE, def 4): sun glints can reach bloom (GLX uSpecKnee)
+    specCol = specCol / (1.0 + specCol / max(F.params4.w, 0.5));
     color = color + specCol;
   }
 
@@ -1534,6 +1535,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let Rw = reflect(-V, N);
     let skyT = pow(max(Rw.y, 1e-4), 0.40);
     var envColor = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyT);
+    // the live env probe (params5.x) replaces the gradient near the car (GLX
+    // uEnvStr; faded with eye distance — one cube is parallax-wrong far away)
+    if (F.params5.x > 0.001) {
+      let probeW = clamp(F.params5.x, 0.0, 1.0) * clamp(1.0 - (vDist - 60.0) / 90.0, 0.0, 1.0);
+      if (probeW > 0.001) {
+        envColor = mix(envColor, textureSampleLevel(envCube, envCubeSamp, Rw, rough * 2.5).rgb, probeW);
+      }
+    }
     let envSunAlign = max(dot(Rw, F.sunDir.xyz), 0.0);
     envColor = mix(envColor, envColor * F.sunColor.xyz * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
     // WINDOW SUN FLASH (params9.z = uWindowSunFlash): dry glossy glass catches
