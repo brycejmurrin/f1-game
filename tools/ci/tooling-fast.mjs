@@ -226,6 +226,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/digital-steer.test.mjs",
+  // Dirty-air wake shapes (js/physics/consts.js DirtyAir): classic linear
+  // fade stays bit-compatible; CFD is exp×Gaussian; OFF is identity mul.
+  "tests/unit/dirty-air.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   // Decorrelated DriverRatings.BASE + skill()/overall personality pins.
   "tests/unit/driver-ratings-personality.test.mjs",
@@ -597,6 +600,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/trim-comments.test.mjs",
+  // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
+  // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
+  "tests/unit/tumftm-import.test.mjs",
   "tests/unit/twin-drift.test.mjs",
   "tests/unit/twin-fidelity.test.mjs",
   "tests/unit/twinned-specs.test.mjs",
