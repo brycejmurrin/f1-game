@@ -60,14 +60,14 @@ const hasVertex = (d, x, y, z, eps = 1e-6) => {
 
 test("each choice defaults to what shipped, persists, falls back, and takes a URL override", () => {
   const { opts, store } = loadOpts({});
-  assert.deepEqual([...opts.CHOICES.wheel.values], ["f1", "retro", "round", "none"]);
+  assert.deepEqual([...opts.CHOICES.wheel.values], ["f1", "gt", "butterfly", "retro", "round", "none"]);
   assert.deepEqual([...opts.CHOICES.seat.values], ["std", "low", "high", "fwd"]);
   assert.deepEqual([...opts.CHOICES.interior.values], ["carbon", "team", "classic"]);
   assert.deepEqual([opts.wheel(), opts.seat(), opts.interior(), opts.haloSize()], ["f1", "std", "carbon", 2], "an untouched install is the cockpit that shipped");
   opts.setWheel("retro"); opts.setSeat("high"); opts.setInterior("team");
   assert.deepEqual([store.get("apex26.cockpitWheel"), store.get("apex26.cockpitSeat"), store.get("apex26.cockpitInterior")], ["retro", "high", "team"], "written raw");
   assert.equal(loadOpts({ "apex26.cockpitSeat": "low" }).opts.seat(), "low", "a stored choice survives a reload");
-  assert.equal(loadOpts({ "apex26.cockpitWheel": "gt" }).opts.wheel(), "f1", "the retired GT wheel falls back to F1 2026");
+  assert.equal(loadOpts({ "apex26.cockpitWheel": "unknown" }).opts.wheel(), "f1", "an unknown wheel falls back to F1 2026");
   assert.equal(opts.setInterior("banana"), "carbon");
   const url = loadOpts({ "apex26.cockpitWheel": "retro" }, "?ckwheel=none&ckseat=fwd&ckint=classic").opts;
   assert.deepEqual([url.wheel(), url.seat(), url.interior()], ["none", "fwd", "classic"], "URL overrides for shots");
@@ -114,9 +114,9 @@ test("the camera eye is the chosen seat; VISOR keeps its own", () => {
   assert.deepEqual([cams.seatFwd("visor"), cams.seatUp("visor")], [cams.VISOR_EYE_FWD, cams.VISOR_EYE_UP], "the phone's VISOR ignores SEAT");
 });
 
-test("only the F1 2026 wheel carries the readouts, and a change reaches listeners", () => {
+test("all modern wheels carry the readouts, and a change reaches listeners", () => {
   const { opts } = loadOpts({});
-  assert.deepEqual([...opts.CHOICES.wheel.values].map((w) => opts.wheelHasScreen(w)), [true, false, false, false]);
+  assert.deepEqual([...opts.CHOICES.wheel.values].map((w) => opts.wheelHasScreen(w)), [true, true, true, false, false, false]);
   const seen = [];
   opts.onWheel((name, v) => seen.push(name + ":" + v));
   opts.setWheel("round"); opts.setSeat("low");
@@ -139,7 +139,7 @@ test("the refined wheel styles fit their mounts and keep the shared LCD and hand
     for (const side of [-1,1]) assert.ok(d.pos.some((v,i) => i%3===0 && Math.abs(v-side*0.165)<0.025
       && Math.abs(d.pos[i+1])<0.060 && d.pos[i+2]<-0.02), `${st}: a palm at the ${side<0?"left":"right"} grip`);
   }
-  assert.deepEqual([...CarMesh.COCKPIT_WHEELS], ["f1", "retro", "round"], "NONE is getCockpitDash, not a wheel");
+  assert.deepEqual([...CarMesh.COCKPIT_WHEELS], ["f1", "gt", "butterfly", "retro", "round"], "NONE is getCockpitDash, not a wheel");
 });
 
 test("the interiors build inside the tub, keyed by livery, and only CLASSIC has glass", () => {
@@ -174,14 +174,14 @@ test("the rig draws the chosen wheel, seat and interior; a screenless wheel give
   const gate = rig.indexOf("if (!CockpitOpts.wheelHasScreen(wheelStyle)) return;"), gear = rig.indexOf("getGearDigit(");
   assert.ok(none > 0 && none < wheel, "NONE (and VISOR) return with the column and bulkhead before any wheel");
   assert.ok(wheel < gate && gate < gear, "no screen, no gear/LED/speed/ERS/OT draws");
-  assert.match(draw, /":H" \+ haloSz \+ ":"/, "the cockpit body is cached per halo size");
+  assert.match(draw, /":H" \+ haloSz \+ ":B" \+ CockpitOpts\.body\(\)/, "the cockpit body is cached per halo size");
   assert.match(read("js/car/car3d.js"), /opts\.halo === true \? 1 : \[0, 0\.64, 1, 1\.44\]/, "car3d sizes the first-person hoop");
   const ms = read("js/camera/mode-switch.js");
   assert.match(ms, /"cockpit-cam", CAM_MODES\[G\.camMode\]\.id === "cockpit"\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/,
     "body.cockpit-cam (which hides the HUD gear/speed) needs a wheel with a screen");
   assert.match(ms, /CockpitOpts\.onWheel\(refreshCamBtn\);/, "a mid-race change re-evaluates it");
   const exp = read("js/ui/settings-export.js");
-  for (const [k, def, one] of [["cockpitWheel", "f1", '"f1", "retro", "round", "none"'], ["cockpitSeat", "std", '"std", "low", "high", "fwd"'],
+  for (const [k, def, one] of [["cockpitWheel", "f1", '"f1", "gt", "butterfly", "retro", "round", "none"'], ["cockpitSeat", "std", '"std", "low", "high", "fwd"'],
     ["cockpitInterior", "carbon", '"carbon", "team", "classic"']])
     assert.ok(exp.includes(`k: "${k}", lane: "raw", group: "camera", def: "${def}"`) && exp.includes(`oneOf: [${one}]`), `${k} is exported and imported`);
   assert.ok(exp.includes('oneOf: ["0", "slim", "1", "thick", "fairing"]'), "cockpitHalo accepts the sizes and faired style");
@@ -239,9 +239,9 @@ function firstMaterial(mesh, eye, target) {
 
 test("both cockpit mirror lenses remain clear of their stays from every seat",()=>{
   const {Car3D,Teams,Parts}=loadCar3D(), {opts}=loadOpts({});
-  for(const team of Teams.LIST.slice(0,2))for(const setup of [Parts.DEFAULTS,Parts.getFactorySetup(team)]){
+  for(const team of Teams.LIST.slice(0,2))for(const setup of [Parts.DEFAULTS,Parts.getFactorySetup(team)])for(const cockpitBody of opts.CHOICES.body.values){
   const mesh=Car3D.build(team.color,team.color2,{teamId:team.id,parts:Parts.getVisualTiers(setup,team),
-    cockpit:true,noWheels:true,noDriver:true,measure:true});
+    cockpit:true,cockpitBody,noWheels:true,noDriver:true,measure:true});
   let start=0;
   for(const p of mesh.parts){if(p.name==='mirrors')break;start+=p.vertices;}
   const end=start+mesh.parts.find(p=>p.name==='mirrors').vertices;
@@ -281,4 +281,46 @@ test("the cockpit shoulders wrap the wheel while staying below the low-seat eye"
   const {mx}=bounds({pos:mesh.pos.slice(start*3,(start+count)*3)});
   assert.ok(mx[1]>opts.layout('f1','std').wheelY+0.045,"shoulders enclose the wheel at hand height");
   assert.ok(mx[1]<opts.layout('f1','low').eyeU,"raised walls stay below even the LOW eye");
+});
+
+
+test("body designs persist, export and take URL overrides without changing the default", () => {
+  const { opts, store } = loadOpts({});
+  assert.equal(opts.body(), "standard");
+  opts.setBody("wide");
+  assert.equal(store.get("apex26.cockpitBody"), "wide");
+  assert.equal(loadOpts({ "apex26.cockpitBody": "wide" }).opts.body(), "wide");
+  assert.equal(loadOpts({ "apex26.cockpitBody": "wide" }, "?ckbody=sculpted").opts.body(), "sculpted");
+  assert.equal(opts.setBody("unknown"), "standard");
+  assert.match(read("js/ui/settings-export.js"), /k: "cockpitBody".*oneOf: \["standard", "sculpted", "wide"\]/);
+});
+
+test("modern wheel alternatives retain the shared live LCD and have distinct shapes", () => {
+  const { CarMesh } = loadMesh();
+  const meshes = ["f1", "gt", "butterfly"].map(w => CarMesh.getCockpitWheel(LIV, w).d);
+  for (const d of meshes) {
+    assert.ok(hasVertex(d, -0.056, -0.01, -0.031), "live LCD face stays at its telemetry mount");
+    const { mn, mx } = bounds(d);
+    assert.ok(mn[2] >= -0.072 && mx[0] <= 0.224 && mn[0] >= -0.224, "hands and near-plane clearance");
+    assert.ok(mx[1] * 0.80 + 0.70 < 0.82, "modern rim stays below the STANDARD eye");
+  }
+  assert.notDeepEqual(meshes[0].pos, meshes[1].pos);
+  assert.notDeepEqual(meshes[0].pos, meshes[2].pos);
+});
+
+test("body alternatives change shoulders but retain cockpit clearance and geometry budget", () => {
+  const { Car3D } = loadCar3D(), { opts } = loadOpts({});
+  const shapes = opts.CHOICES.body.values.map(cockpitBody => Car3D.build(LIV.c1, LIV.c2,
+    { cockpit: true, cockpitBody, noWheels: true, noDriver: true, measure: true }));
+  for (const mesh of shapes) {
+    assert.ok(mesh.pos.every(Number.isFinite) && mesh.nrm.every(Number.isFinite));
+    assert.ok(mesh.idx.length / 3 <= 1500, "body-only cockpit triangle budget");
+    let start = 0;
+    for (const part of mesh.parts) { if (part.name === "bolsters") break; start += part.vertices; }
+    const count = mesh.parts.find(p => p.name === "bolsters").vertices;
+    const { mx } = bounds({ pos: mesh.pos.slice(start * 3, (start + count) * 3) });
+    assert.ok(mx[1] < opts.layout("f1", "low").eyeU, "walls stay below the LOW-seat eye");
+  }
+  assert.notDeepEqual(shapes[0].pos, shapes[1].pos);
+  assert.notDeepEqual(shapes[0].pos, shapes[2].pos);
 });

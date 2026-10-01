@@ -550,7 +550,7 @@ test("the survey forwarders are gone — layout-audit --survey is the entry poin
 // off so the tables in docs/notes/AI-FIELD-RESEARCH.md stay reproducible.
 // Race instruments (boot the VM). ai-ratings.mjs is data-only and is pinned
 // separately — it must NOT invent a --wear flag that does nothing.
-const AI_INSTRUMENTS = ["ai-pace.mjs", "ai-field.mjs", "ai-line.mjs", "ai-human.mjs", "ai-band.mjs"];
+const AI_INSTRUMENTS = ["ai-pace.mjs", "ai-field.mjs", "ai-tactics.mjs", "ai-line.mjs", "ai-human.mjs", "ai-band.mjs"];
 
 test("every AI instrument takes --wear and passes it into the VM's storage seed", () => {
   for (const name of AI_INSTRUMENTS) {
@@ -572,6 +572,16 @@ test("ai-ratings is data-only (no race, no --wear) and ai-race dispatches it", (
   const dispatch = fs.readFileSync(tool("ai-race.mjs"), "utf8");
   assert.match(dispatch, /ratings:\s*"ai-ratings\.mjs"/);
   assert.match(dispatch, /band:\s*"ai-band\.mjs"/);
+  assert.match(dispatch, /tactics:\s*"ai-tactics\.mjs"/);
+});
+
+// THE PARKED PLAYER. The VM's player has no input, so every AI-only instrument
+// raced around it sitting on its grid box (attacked 7-10x a race). The field
+// instruments take it OUT with game-vm's aiOnly(); this pins that they do.
+test("the AI-only field instruments take the player out of the field (aiOnly)", () => {
+  for (const name of ["ai-pace.mjs", "ai-field.mjs", "ai-tactics.mjs"]) {
+    assert.match(fs.readFileSync(tool(name), "utf8"), /\.aiOnly\(\)/, `${name}: races around a parked player`);
+  }
 });
 
 test("--wear defaults to off, and a bad level is refused rather than defaulted", async () => {

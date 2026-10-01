@@ -79,9 +79,10 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-human.mjs** | Does the AI race a HUMAN as it races another AI? Yield elections, lean dwell and contact with a player on the line. | ai-racecraft |
 | **check/ai-line.mjs** | Where the AI actually puts the car in a corner: approach offset and apex depth per baked corner, with run-to-run range. | ai-racecraft |
 | **check/ai-pace.mjs** | How fast is the AI field, per circuit and per difficulty? Simulated laps in the VM, no browser, no renderer. | ai-racecraft |
-| **check/ai-race.mjs** | One entry for the AI instruments: pace / field / line / human / ratings / band. | ai-racecraft |
+| **check/ai-race.mjs** | One entry for the AI instruments: pace / field / tactics / line / human / ratings / band. | ai-racecraft |
 | **check/ai-ratings.mjs** | Pearson matrix and column stats over DriverRatings.BASE — the personality dial check. | ai-racecraft |
 | **check/ai-strategy-census.mjs** | The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, stop reasons. | ai-racecraft |
+| **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
@@ -131,6 +132,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/title-art.mjs** | Draws index.html's #title-car from js/car/car3d.js through the garage camera; --check fails on drift. | — |
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
 | **gen/vendor-three.mjs** | Vendors three.js (patch, terser-minify, write vendor/three-<ver>/ + MANIFEST.json); `--check` verifies hashes. | check-changes |
+| **gen/voice-audition.mjs** | Generate a 12-call voice audition with Kokoro, OpenAI or ElevenLabs; credentials stay author-side. | audio-debug |
 | **gen/voice-corpus.mjs** | Author-time: races the game VM and writes every radio line it spoke, by channel → `tools/gen/voice-corpus.json`… | audio-debug |
 | **gen/voicepack.mjs** | Author-time radio voice pack (Kokoro-82M) → `assets/voice/<id>.{bin,json}`; `--list` prints the phrases. | audio-debug |
 
