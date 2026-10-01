@@ -365,6 +365,12 @@ async function precacheAssetLists() {
     "js/input/phone-pad.js",
     // LAZY_WORKER — worker entry scripts (new Worker, never a page tag)
     "js/track/build-worker.js",
+    // LAZY_EDITOR — the track designer behind the TRACK DESIGNER door
+    "js/editor/shape.js",
+    "js/editor/stamps.js",
+    "js/editor/randomise.js",
+    "js/editor/validate.js",
+    "js/editor/codec.js",
     // /@gen-shell:sw-optional
   ]);
   const shell = await fetch("index.html", { cache: "no-store" });
@@ -479,7 +485,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
         ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js). Then skipWaiting
     // so the new worker can activate without waiting on ~5 MB of scenery/WGX/

@@ -137,12 +137,13 @@ test("stored input is player input: hostile shapes are dropped or repaired, neve
   const it = C.list()[0];
   assert.equal(it.baseHW, 8, "baseHW clamps to 5–8");
   assert.equal(it.seed, (-4) >>> 0, "seed is floored into a u32");
-  assert.deepEqual(plain(it.hwZones), [{ s0: 0.5, s1: 0.9, hw: 3 }, { s0: 0.1, s1: 0.2, hw: 6, ease: 0.2 }],
-    "fractions wrap, hw and ease clamp, junk rows drop — repair over discard where the geometry is sound");
-  assert.deepEqual(plain(it.bankZones), [{ frac: 0.3, angleDeg: 30, widthM: 20 }], "bank angle and width clamp to their limits");
-  assert.deepEqual(plain(it.elevations), [{ s: 0.5, halfM: 20, rise: 1.02 }], "a 1e9 m spike over 40 m is held to the 8 % grade cap (halfM / 19.6)");
+  const g = (v) => Math.round(v * 65535) / 65535;   // the share code's u16 fraction grid
+  assert.deepEqual(plain(it.hwZones), [{ s0: g(0.5), s1: g(0.9), hw: 3 }, { s0: g(0.1), s1: g(0.2), hw: 6, ease: 0.2 }],
+    "fractions wrap onto the u16 grid, hw and ease clamp, junk rows drop — repair over discard where the geometry is sound");
+  assert.deepEqual(plain(it.bankZones), [{ frac: g(0.3), angleDeg: 30, widthM: 20 }], "bank angle and width clamp to their limits");
+  assert.deepEqual(plain(it.elevations), [{ s: g(0.5), halfM: 20, rise: 1 }], "a 1e9 m spike over 40 m is held to the 8 % grade cap (halfM / 19.6, on the 0.25 m rise grid)");
   assert.equal(it.bridges, null, "null stays null");
-  assert.deepEqual(plain(it.turns), [0.1, 0.25], "turns wrap to [0,1)");
+  assert.deepEqual(plain(it.turns), [g(0.1), g(0.25)], "turns wrap to [0,1) on the fraction grid");
   assert.ok(it.lengthM > 3000, "a missing lengthM is recomputed from the chord");
   assert.equal(C.sanitize(null), null);
   assert.equal(C.sanitize({ pts: [[0, 0]] }), null);

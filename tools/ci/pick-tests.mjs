@@ -290,6 +290,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
   const files = [
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
+    ...(manifest.LAZY_EDITOR || []),
   ];
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }

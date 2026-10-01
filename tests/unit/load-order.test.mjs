@@ -173,7 +173,7 @@ function lazyFiles() {
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
-    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || [])];
+    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -218,7 +218,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // never opens it should not pay for it in the install).
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
-                   ...(MANIFEST.LAZY_WORKER || [])]) {
+                   ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -237,7 +237,7 @@ test("sw.js stamps every injected asset it seeds", () => {
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
-    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || [])];
+    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
@@ -320,6 +320,19 @@ test("the data-hub DAG orders every tab module before hub.js", () => {
   assert.deepEqual(MANIFEST.LAZY_DATA_EDGES, want);
   assert.equal(want.length, MANIFEST.LAZY_DATA.length - 1,
     "every LAZY_DATA file except the hub itself must be ordered before it");
+});
+
+// stamps / randomise / validate destructure TrackShape at EVAL (js/editor/*);
+// the codec stands alone. Derived like the data hub's, asserted the same way.
+test("the track-designer DAG orders shape.js before every module that destructures it", () => {
+  assert.equal(MANIFEST.LAZY_EDITOR[0], "js/editor/shape.js", "shape.js evaluates first");
+  const want = MANIFEST.LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js").map((f) => ["js/editor/shape.js", f]);
+  assert.deepEqual(MANIFEST.LAZY_EDITOR_EDGES, want);
+  for (const f of MANIFEST.LAZY_EDITOR) {
+    const src = readFileSync(join(ROOT, f), "utf8");
+    const binds = /const\s+S\s*=\s*TrackShape\b/.test(src);
+    assert.equal(binds, want.some(([, b]) => b === f), `${f}: an eval-time TrackShape bind must have an edge, and only then`);
+  }
 });
 
 test("sw.js optional precache does not include LAZY_AGENT", () => {

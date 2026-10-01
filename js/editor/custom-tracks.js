@@ -21,9 +21,14 @@ const CustomTracks = (function () {
     items: 24, name: 24, ptsMin: 8, ptsMax: 200, coord: 10000,
     hwMin: 5, hwMax: 8, zones: 24, halfM: 2000, rise: 60, angleDeg: 30,
   });
-  const q = (v) => Math.round(v * 4) / 4;   // the 0.25 m lattice (storage AND share codes: same id both ends)
+  // ONE LATTICE for storage and the share code (js/editor/codec.js): points on
+  // 0.25 m, lap fractions on 1/65535, widths and ease on 0.1 / 0.001, angles and
+  // rises on 0.25, lengths on 1 m — so a design's content id is the same on
+  // both ends of a code, and the TT board and ghosts that key on it line up.
+  const q = (v) => Math.round(v * 4) / 4;
   const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt);
-  const frac = (v) => (Number.isFinite(v) ? v - Math.floor(v) : null);   // exact for in-range input (`(v % 1 + 1) % 1` adds float noise)
+  const frac = (v) => (Number.isFinite(v) ? Math.round((v - Math.floor(v)) * 65535) / 65535 : null);
+  const dm = (v) => Math.round(v * 10) / 10, mil = (v) => Math.round(v * 1000) / 1000;
 
   function sanitizeName(s) {
     let t = String(s == null ? "" : s);
@@ -62,19 +67,19 @@ const CustomTracks = (function () {
     let rise = num(z.rise, -LIMITS.rise, LIMITS.rise, null);
     if (s == null || halfM == null || rise == null) return null;
     const cap = halfM / 19.6;
-    if (Math.abs(rise) > cap) rise = Math.sign(rise) * Math.round(cap * 100) / 100;
-    return { s, halfM, rise };
+    if (Math.abs(rise) > cap) rise = Math.sign(rise) * cap;
+    return { s, halfM: Math.round(halfM), rise: q(rise) };
   };
   const HWZ = (z) => {
     const s0 = frac(z.s0), s1 = frac(z.s1), hw = num(z.hw, 3, LIMITS.hwMax, null);
     if (s0 == null || s1 == null || hw == null) return null;
-    const row = { s0, s1, hw };
-    if (Number.isFinite(z.ease)) row.ease = num(z.ease, 0, 0.2, 0.025);
+    const row = { s0, s1, hw: dm(hw) };
+    if (Number.isFinite(z.ease)) row.ease = mil(num(z.ease, 0, 0.2, 0.025));
     return row;
   };
   const BANK = (z) => {
     const f = frac(z.frac), angleDeg = num(z.angleDeg, -LIMITS.angleDeg, LIMITS.angleDeg, null), widthM = num(z.widthM, 20, 600, null);
-    return f == null || angleDeg == null || widthM == null ? null : { frac: f, angleDeg, widthM };
+    return f == null || angleDeg == null || widthM == null ? null : { frac: f, angleDeg: q(angleDeg), widthM: Math.round(widthM) };
   };
 
   /** The content id: everything that shapes the built circuit, nothing that
