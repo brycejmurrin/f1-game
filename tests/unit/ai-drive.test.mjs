@@ -192,6 +192,34 @@ test("craft late-brake raises the limit when attacking with room", () => {
   assert.ok(attack > plain);
 });
 
+test("aggression raises otFireRate and shortens queue patience (fire half)", () => {
+  const base = {
+    traits: { ...mid, aggression: 0 }, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
+    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false,
+  };
+  const hot = { ...base, traits: { ...mid, aggression: 1 } };
+  const cold = { ...base, traits: { ...mid, aggression: -1 } };
+  assert.ok(A.otFireRate(hot) > A.otFireRate(base));
+  assert.ok(A.otFireRate(base) > A.otFireRate(cold));
+  assert.ok(A.queuePatience(hot.traits) < A.queuePatience(base.traits));
+  assert.ok(A.passHold(hot.traits) > A.passHold(base.traits));
+});
+
+test("optimism raises brakeTarget entry speed (late markers)", () => {
+  const samples = [{ d: 50, k: 0.018, bank: 0 }];
+  const neut = A.brakeTarget({ traits: { ...mid, optimism: 0 }, samples, latMax: 22, brake: 22, grip: 1 });
+  const opt = A.brakeTarget({ traits: { ...mid, optimism: 1 }, samples, latMax: 22, brake: 22, grip: 1 });
+  const shy = A.brakeTarget({ traits: { ...mid, optimism: -1 }, samples, latMax: 22, brake: 22, grip: 1 });
+  assert.ok(opt > neut);
+  assert.ok(neut > shy);
+});
+
+test("traits defaults style axes to neutral", () => {
+  const t = A.traits({});
+  assert.equal(t.aggression, 0);
+  assert.equal(t.optimism, 0);
+});
+
 test("compound-corner brake limits exactly match the tightest individual sample", () => {
   let seed = 8556;
   const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
