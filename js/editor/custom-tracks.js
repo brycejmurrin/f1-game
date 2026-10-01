@@ -14,12 +14,19 @@
 const CustomTracks = (function () {
   "use strict";
   const store = GameStore.store;
-  const KEY = "customTracks", DRAFT_KEY = "customTrackDraft", V = 1;
+  // DRAFT_PREV_KEY holds the unsaved design a load replaced (a share link, an
+  // EDIT, an IMPORT), so the 600 ms autosave of the new one cannot clobber it.
+  const KEY = "customTracks", DRAFT_KEY = "customTrackDraft", DRAFT_PREV_KEY = "customTrackDraftPrev", V = 1;
   // A STORED DESIGN IS PLAYER INPUT (and, via a share code, someone else's):
   // every field is rebuilt to these limits on load, never trusted off disk.
   const LIMITS = Object.freeze({
     items: 24, name: 24, ptsMin: 8, ptsMax: 200, coord: 10000,
     hwMin: 5, hwMax: 8, zones: 24, halfM: 2000, rise: 60, angleDeg: 30,
+    // A stored loop must be one the engine can build: no two consecutive
+    // control points closer than the editor's spacing (8 coincident points
+    // registered as raceable with curvature NaN), and a control polygon no
+    // shorter than this (validate.js's lap floor is 2.5 km on the BUILT road).
+    spacing: 8, loopMin: 1000,
   });
   // ONE LATTICE for storage and the share code (js/editor/codec.js): points on
   // 0.25 m, lap fractions on 1/65535, widths and ease on 0.1 / 0.001, angles and
@@ -70,15 +77,19 @@ const CustomTracks = (function () {
     if (Math.abs(rise) > cap) rise = Math.sign(rise) * cap;
     return { s, halfM: Math.round(halfM), rise: q(rise) };
   };
+  // A narrowing never takes the road under the registry's own width floor, and
+  // `ease` is ALWAYS stored (the engine's 0.025 default when absent): the share
+  // code always carries one, so an absent ease gave the receiver another id. A
+  // zero ease is a step in the road edge, so it floors above 0.
   const HWZ = (z) => {
-    const s0 = frac(z.s0), s1 = frac(z.s1), hw = num(z.hw, 3, LIMITS.hwMax, null);
+    const s0 = frac(z.s0), s1 = frac(z.s1), hw = num(z.hw, LIMITS.hwMin, LIMITS.hwMax, null);
     if (s0 == null || s1 == null || hw == null) return null;
-    const row = { s0, s1, hw: dm(hw) };
-    if (Number.isFinite(z.ease)) row.ease = mil(num(z.ease, 0, 0.2, 0.025));
-    return row;
+    return { s0, s1, hw: dm(hw), ease: mil(num(z.ease, 0.005, 0.2, 0.025)) };
   };
+  // mesh.js reads `(angleDeg || 18)` and takes the camber SIDE from curvature:
+  // 0 would build 18° and a negative angle adverse camber, so [1, 30] only.
   const BANK = (z) => {
-    const f = frac(z.frac), angleDeg = num(z.angleDeg, -LIMITS.angleDeg, LIMITS.angleDeg, null), widthM = num(z.widthM, 20, 600, null);
+    const f = frac(z.frac), angleDeg = num(z.angleDeg, 1, LIMITS.angleDeg, null), widthM = num(z.widthM, 20, 600, null);
     return f == null || angleDeg == null || widthM == null ? null : { frac: f, angleDeg: q(angleDeg), widthM: Math.round(widthM) };
   };
 
@@ -91,11 +102,29 @@ const CustomTracks = (function () {
   }
   function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
 
-  /** Repair rather than discard where the geometry is sound; null when it is not. */
-  function sanitize(raw) {
+  /** Control-polygon perimeter (the closing chord included), or -1 when two
+   *  consecutive points sit closer than LIMITS.spacing. */
+  function loopLength(pts) {
+    let L = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (d < LIMITS.spacing) return -1;
+      L += d;
+    }
+    return L;
+  }
+
+  /** Repair rather than discard where the geometry is sound; null when it is not.
+   *  opts.loose: a WORK IN PROGRESS — the designer's autosaved draft, and the
+   *  validator's preview build — may have two points too close or a loop too
+   *  small (the CHECKS list says so in red); restoring or judging it must not
+   *  throw it away. Never for storage or a share code. */
+  function sanitize(raw, opts) {
     if (!raw || typeof raw !== "object") return null;
     const pts = sanitizePts(raw.pts);
     if (!pts) return null;
+    const L = loopLength(pts);
+    if (!(opts && opts.loose) && L < LIMITS.loopMin) return null;
     const it = {
       name: sanitizeName(raw.name),
       seed: Number.isFinite(raw.seed) ? (Math.floor(raw.seed) >>> 0) : 1,
@@ -111,7 +140,7 @@ const CustomTracks = (function () {
       created: num(raw.created, 0, 8.64e15, Date.now()),
       updated: num(raw.updated, 0, 8.64e15, Date.now()),
     };
-    if (!it.lengthM) { let L = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; L += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(L); }
+    if (!it.lengthM) { let C = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(C); }
     it.id = idOf(it);
     return it;
   }
@@ -135,10 +164,25 @@ const CustomTracks = (function () {
   }
   function write(items) { return store.write(KEY, { v: V, items }); }
 
+  /** A lap fraction measured along the CONTROL POLYGON's arc → the control
+   *  INDEX fraction ((i + t) / N) at the same place, interpolated inside the
+   *  segment. applyHwZones keys its windows on i / N; the designer (START HERE,
+   *  REVERSE, the stamp remap) works in arc fractions — exact for any spacing. */
+  function arcToIndexFrac(pts, f) {
+    const N = pts.length, cum = [0];
+    for (let i = 0; i < N; i++) { const a = pts[i], b = pts[(i + 1) % N]; cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    const L = cum[N];
+    if (!(L > 0)) return f;
+    const x = Math.min(1, Math.max(0, f)) * L;
+    let i = 0;
+    while (i < N - 1 && cum[i + 1] < x) i++;
+    const seg = cum[i + 1] - cum[i];
+    return (i + (seg > 0 ? (x - cum[i]) / seg : 0)) / N;
+  }
+
   /** Design record → the raw def shape js/circuits/<id>.js authors, ready for TrackDef.fromRaw. */
   function toRaw(it) {
     const theme = TrackThemes.defFields(it.theme);
-    const N = it.pts.length;
     const raw = Object.assign({
       id: it.id, custom: true, name: it.name, gp: it.name + " GP", country: "",
       lengthKm: Math.round(it.lengthM / 100) / 10 || 0.1, classic: false,
@@ -148,10 +192,10 @@ const CustomTracks = (function () {
       turns: it.turns && it.turns.length ? it.turns.slice() : null, sectors: null,
       bankZones: it.bankZones, elevations: it.elevations, bridges: it.bridges,
     }, theme);
-    // applyHwZones keys its windows on the CONTROL INDEX fraction (i / N), the
-    // designer authors arc fractions; with ~uniform control spacing the two
-    // agree to within one point, and the engine's eased shoulders hide the rest.
-    if (it.hwZones) raw.hwZones = it.hwZones.map((z) => Object.assign({}, z, { s0: Math.round(z.s0 * N) / N, s1: Math.round(z.s1 * N) / N }));
+    // applyHwZones keys its windows on the CONTROL INDEX fraction (i / N); the
+    // designer authors arc fractions, so map each end through the polygon's
+    // cumulative length rather than assume equal spacing.
+    if (it.hwZones) raw.hwZones = it.hwZones.map((z) => Object.assign({}, z, { s0: arcToIndexFrac(it.pts, z.s0), s1: arcToIndexFrac(it.pts, z.s1) }));
     raw.scenery = TrackThemes.sceneryFor(it);
     return raw;
   }
@@ -171,26 +215,55 @@ const CustomTracks = (function () {
   function list() { return load().items; }
   function get(id) { return load().items.find((x) => x.id === id) || null; }
 
-  /** Save (new id = new entry; same content id = refresh the label). */
-  function upsert(design) {
+  /** The selected circuit's id: the façade's trackIdx when game.js handed it
+   *  over (create), else the stored stable id. */
+  function selectedId() {
+    const t = _G && Number.isInteger(_G.trackIdx) ? Tracks.LIST[_G.trackIdx] : null;
+    const id = t ? t.id : store.get("trackId", null);
+    // Only a CUSTOM selection can move: the shipped 52 sit ahead of the tail.
+    return typeof id === "string" && id.startsWith("custom-") ? id : null;
+  }
+  /** After the custom tail changed: put the selection back on `id` (or index
+   *  0 when it is gone) and rewrite BOTH stored keys, so neither the façade
+   *  nor a reload's positional fallback lands on whatever slid into its slot. */
+  function reselect(id) {
+    let idx = id ? Tracks.LIST.findIndex((t) => t.id === id) : -1;
+    if (idx < 0) idx = 0;
+    if (_G) _G.trackIdx = idx;
+    if (Tracks.LIST[idx]) { store.set("trackId", Tracks.LIST[idx].id); store.set("track", idx); }
+    return idx;
+  }
+
+  /** Save (new id = new entry; same content id = refresh the label).
+   *  opts.replace: the id this design was opened from (the designer's EDIT) —
+   *  a geometry change makes a new content id, and the edited circuit is
+   *  REPLACED in place instead of gaining a duplicate per change. */
+  function upsert(design, opts) {
     const it = sanitize(design);
     if (!it) return { ok: false, reason: "geometry" };
+    const sel = selectedId();
     const items = load().items;
+    const origin = opts && typeof opts.replace === "string" && opts.replace !== it.id ? items.findIndex((x) => x.id === opts.replace) : -1;
     const i = items.findIndex((x) => x.id === it.id);
-    if (i >= 0) { it.created = items[i].created; items[i] = it; }
+    if (i >= 0) { it.created = items[i].created; items[i] = it; if (origin >= 0) items.splice(origin, 1); }
+    else if (origin >= 0) { it.created = items[origin].created; items[origin] = it; }
     else { if (items.length >= LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items }; items.push(it); }
     it.updated = Date.now();
     const r = write(items);
-    sync();
-    return { ok: true, id: it.id, durable: !!(r && r.durable), reason: r && r.reason };
+    if (origin >= 0) { try { store.rawDel("ttlb." + opts.replace); } catch (_) { /* never had one */ } }
+    if (sync() >= 0 && sel) reselect(sel === (opts && opts.replace) ? it.id : sel);
+    return { ok: true, id: it.id, replaced: origin >= 0 ? opts.replace : null, durable: !!(r && r.durable), reason: r && r.reason };
   }
 
   function remove(id) {
+    const sel = selectedId();
     const items = load().items.filter((x) => x.id !== id);
     const r = write(items);
     // Its time-trial board goes with it (GameStore.ttBoard key shape).
     try { store.rawDel("ttlb." + id); } catch (_) { /* never had one */ }
-    sync();
+    // Re-resolve by id: the tail re-syncs, so the removed circuit's index now
+    // names its successor (or nothing) and every later custom slid down one.
+    if (sync() >= 0 && sel) reselect(sel === id ? null : sel);
     return { ok: true, durable: !!(r && r.durable) };
   }
 
@@ -204,6 +277,8 @@ const CustomTracks = (function () {
 
   function draft() { return store.get(DRAFT_KEY, null); }
   function setDraft(d) { if (d == null) store.rawDel(DRAFT_KEY); else store.set(DRAFT_KEY, d); }
+  function draftPrev() { return store.get(DRAFT_PREV_KEY, null); }
+  function setDraftPrev(d) { if (d == null) store.rawDel(DRAFT_PREV_KEY); else store.set(DRAFT_PREV_KEY, d); }
 
   /** game.js hands the façade + the lazy loader; the designer screen (PR4) and
    *  the #track= share link (PR5) hang off this. Idempotent, DOM-optional. */
@@ -230,14 +305,17 @@ const CustomTracks = (function () {
     if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) { Log.info("track", "share link deferred: racing"); return Promise.resolve(null); }
     return ensureEditor().then(async (ok) => {
       if (!ok || typeof TrackCodec === "undefined" || typeof TrackDesigner === "undefined") return false;
-      const code = TrackCodec.fromHash(location.hash);
-      const r = await TrackCodec.decode(code);
+      // A malformed fragment (`%E0%A4%A`) must not throw past here: the strip
+      // below would never run and every hashchange would re-throw.
+      let code = null;
+      try { code = TrackCodec.fromHash(location.hash); } catch (_) { code = null; }
+      const r = code ? await TrackCodec.decode(code) : { ok: false, reason: "malformed" };
       try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(location.hash)); } catch (_) { /* a sandboxed page */ }
       if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); return false; }
       Log.info("track", "share link opened " + r.id);
       TrackDesigner.open({ design: r.design, shared: true });
       return true;
-    });
+    }).catch((e) => { Log.warn("track", "share link failed: " + (e && e.message || e)); return false; });
   }
   function create(G, hooks) {
     _G = G; _hooks = hooks || {};
@@ -255,6 +333,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { KEY, DRAFT_KEY, LIMITS, sanitize, sanitizeName, idOf, canonical, toRaw, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, ensureEditor, consumeTrackHash, create };
+  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, sanitize, sanitizeName, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create };
 })();
 Object.freeze(CustomTracks);
