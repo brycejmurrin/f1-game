@@ -117,7 +117,9 @@ export function phrases(id = "george") {
     // "P{pos}" is one spoken unit ("P seven"), recorded whole as a value below,
     // so the bare P in front of a position slot is not a phrase of its own.
     const parts = String(tpl).replace(/P\{(pos|grid)\}/g, "{$1}").split(/\{\w+\}/);
-    for (const part of parts) for (const r of runs(part)) add(keyOf(r));
+    // A log or store id ("aidrive.strat.caution_reach") is a literal on an
+    // announce() line, never a word on the card.
+    for (const part of parts) for (const r of runs(part)) if (!r.some((w) => /[_]|[a-z]\.[a-z]/.test(w))) add(keyOf(r));
   };
   // ── THE SLOT VALUES every channel's lines carry ──
   add("percent", "percent");
