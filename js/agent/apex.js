@@ -1637,8 +1637,7 @@ const api = {
   weatherArc(from, to, seconds) {
     if (from === undefined) {
       return G.weatherArc ? { from: G.weatherArc.from, to: G.weatherArc.to, t: G.weatherArc.t,
-                            dur: G.weatherArc.dur, weather: G.raceWeather,
-                            wetness: (G.trackWetness ? G.trackWetness() : (G.frame.wetness || 0)) } : null;
+                            dur: G.weatherArc.dur, weather: G.raceWeather, wetness: (G.trackWetness ? G.trackWetness() : (G.frame.wetness || 0)) } : null;
     }
     if (from === null || from === false) { G.weatherArc = null; return null; }
     const arc = startWeatherArc(from, to, seconds);

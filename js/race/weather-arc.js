@@ -164,7 +164,7 @@ const WeatherArc = (function () {
         frame.wetness = pin;
         return;
       }
-      const wetTarget = G.roadWetness ? G.roadWetness() : 0;
+      const wetTarget = G.trackWetness ? G.trackWetness() : 0;
       const cur = frame.wetness || 0;
       const step = (dt == null || !(dt > 0)) ? 1 : Math.min(1, dt * 0.8);
       frame.wetness = cur + (wetTarget - cur) * step;

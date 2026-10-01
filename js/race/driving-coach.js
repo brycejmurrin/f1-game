@@ -190,7 +190,7 @@ const DrivingCoach = (function () {
         slipFront: c.slipFront || 0, slipRear: c.slipRear || 0, frontUtil: c.frontUtil || 0, rearUtil: c.rearUtil || 0,
         forceFront: c.forceFront || 0, forceRear: c.forceRear || 0, lateralAccel: c.lateralAccel || 0,
         longitudinalUse: c.axFrac || 0, brakeUse: brakeUse(c), yawRate: c.yawRateCur || 0, energy: c.energy,
-        wetness: (G.trackWetness || G.roadWetness)(), practice, enabled,
+        wetness: (G.trackWetness ? G.trackWetness() : 0), practice, enabled,
         ghostSpeedDelta: ghostSpeed == null ? null : c.speed - ghostSpeed };
     }
     function status() {
