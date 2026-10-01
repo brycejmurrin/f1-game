@@ -186,9 +186,22 @@ const TrackValidate = (function () {
       }
       // Clearance between non-adjacent spans at the same level.
       const Dnodes = Math.ceil(3 * (2 * tr.hw[0] + 10) / ds);
+      // A custom design's pit complex reaches workOut past the road edge
+      // (openBoundary stops the car 0.9 m short of that line). Two ribbons
+      // whose centrelines clear the cars can still have the pit lane cross
+      // the other road. Shipped defs have no design.pts, so the fleet oracle
+      // does not take this gate.
+      let pitReach = 0;
+      if (Array.isArray(design.pts) && typeof TrackPit !== "undefined" && TrackPit.resolve) {
+        try {
+          const off = TrackPit.resolve(def).off;
+          pitReach = Math.max(0, ((off && off.workOut) || 0) - 0.9);
+        } catch (_) { pitReach = 0; }
+      }
       for (const w of S.clearance(px, pz, py, n, Dnodes, LIMITS.bridgeSep, CLEAR_CELL, 6)) {
         const need = hwA[w.i] + hwA[w.j];
         if (w.dist < need + 2) { add("clearance", "red", "Two parts of the track overlap (" + Math.round(w.dist) + " m apart)", { s: w.i * ds, s2: w.j * ds }); break; }
+        if (pitReach > 2 && w.dist < need + pitReach) { add("clearance", "red", "The pit opening crosses the other part of the track", { s: w.i * ds, s2: w.j * ds }); break; }
         if (w.dist < need + 10) { add("clearance", "amber", "Two parts of the track run very close (" + Math.round(w.dist) + " m)", { s: w.i * ds, s2: w.j * ds }); break; }
       }
       // Grade over a gradeWindowM (40 m) window; elevation range for the stats.

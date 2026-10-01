@@ -47,7 +47,9 @@ Authored count after A1: **15 / 52** (7 anchors + 8).
 
 ## Deferred (A2)
 
-Remaining circuits stay at default **1.0** until a measured rate or a
-surface-class proxy with a cited source is written. Candidates: spa (resurfaced;
-thermal vs abrasion mix), zandvoort, cota, mexico, interlagos, baku, vegas,
-abudhabi, imola, paul_ricard, and all historic / classic-only layouts.
+Remaining circuits stay at default **1.0** (`TyreModel` `SEVERITY_DEFAULT`) until
+a measured rate or a surface-class proxy with a cited source is written.
+**1.0 is the calendar-neutral placeholder** — do not invent per-track guesses
+in the model. Candidates: spa (resurfaced; thermal vs abrasion mix), zandvoort,
+cota, mexico, interlagos, baku, vegas, abudhabi, imola, paul_ricard, and all
+historic / classic-only layouts.
