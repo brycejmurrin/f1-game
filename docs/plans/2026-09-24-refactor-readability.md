@@ -13,6 +13,7 @@ agents to navigate without gambling physics, scenery, or renderer parity.
 | Doc | Role vs this plan |
 |---|---|
 | [`CLEANUP-ROADMAP.md`](CLEANUP-ROADMAP.md) | Earlier carve queue (Tier A–C). Several items landed; this plan **supersedes it as the ranked readability backlog** and absorbs unfinished carves. |
+| [`2026-09-30-carve-headroom.md`](2026-09-30-carve-headroom.md) | Ratchet-slack workstream: helpers out of saturated `game.js` blocks peers need next (forces / wall / grip / band). |
 | [`notes/ARCHITECTURE-REVIEW.md`](../notes/ARCHITECTURE-REVIEW.md) | Founding bet, `G` façade lessons, why megafunctions stay. |
 | [`ARCHITECTURE-MAP.md`](../ARCHITECTURE-MAP.md) | Correct mental model (domain dirs). Prefer over stale `js/game/` prose. |
 | [`SCENERY-AND-TRACK-BUILD.md`](../SCENERY-AND-TRACK-BUILD.md) | Track build pipeline (accurate). |

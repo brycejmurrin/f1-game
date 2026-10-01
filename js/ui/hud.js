@@ -4,6 +4,14 @@ const GameHud = (function () {
 
 const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins js/physics/consts.js first
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
+// REDUCED MOTION for the one HUD motion no stylesheet reaches — the canvas
+// minimap's armed pit-marker pulse. The same pair js/game.js motionReduced
+// reads: the OS flag, OR SETTINGS › APPEARANCE › MOTION: REDUCED
+// (html[data-motion], js/ui/title-fx.js), both live.
+const _rmq = (typeof window !== "undefined" && window.matchMedia)
+  ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+const motionReduced = () => !!(_rmq && _rmq.matches)
+  || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
 
 function create(G) {
 Log.info("ui", "GameHud.create");
@@ -20,6 +28,7 @@ let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
 let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
+let _flagSaid = "", _flagLiveT = 0;   // the caution text last sent to #announce-live, and its pending write
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 let _teamSkinRev = -1;        // …and the store rev it was written at (a CUSTOM team's colour is editable)
 let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
@@ -133,23 +142,21 @@ function syncHudCamClasses() {
 }
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
 function buildSecRows() {
-  // S2 is NOT the brand #e10600: at 14px bold on the 72% plate that red measures
-  // ~4.2:1 on pure black and less over a bright scene (css/tokens.css records
-  // ~2.6:1 on the page) — under the 4.5:1 AA floor for text this size. The
-  // lighter red keeps the hue and clears ~5.9:1; the minimap stroke matches.
   // Sector labels carry no identity colour: .sec-lbl inherits the row's ink.
+  // (S2 once wore the brand #e10600, ~4.2:1 on black at 14px — under the
+  // 4.5:1 AA floor; no HUD text uses the brand red.)
   // Should they ever be coloured, they must NOT use the value palette's
-  // --sec-best #c084fc or --faster #a3e635, or purple would mean both
-  // "sector 1" and "session best". The minimap keeps its own
-  // copy (drawMinimap), where identity is the only thing distinguishing arcs.
+  // --sec-best or --faster, or purple would mean both "sector 1" and
+  // "session best". The minimap colours its arcs by sector (drawMinimap:
+  // the podium metals, TrackMaps.sectorColors), where identity is the only
+  // thing distinguishing them.
   const labels = ["S1", "S2", "S3"];
   els.hudSectors.textContent = "";
   _secRows = [];
   for (let i = 0; i < 3; i++) {
     const row = document.createElement("div"); row.className = "sec-row";
-    // The label keeps the row's dim ink: SC (sector identity) still colours
-    // the minimap, but a purple S1 label beside a purple "session best" value
-    // would read as two of the same thing.
+    // The label keeps the row's dim ink: sector identity colours only the
+    // minimap's arcs, so a label can never collide with a timing colour.
     const lbl = document.createElement("span"); lbl.className = "sec-lbl"; lbl.textContent = labels[i];
     const val = document.createElement("span"); val.className = "sec-val"; val.textContent = "--";
     row.appendChild(lbl); row.appendChild(val); els.hudSectors.appendChild(row);
@@ -883,7 +890,7 @@ function updateHud(force, dtMs) {
     if (els.workBtn) els.workBtn.hidden = !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active());
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
-    // lap before, --you on the lap, and FREE STOP under a caution that fits it.
+    // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
     const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     if (pl && pl.state) els.tyre.dataset.plan = pl.state; else delete els.tyre.dataset.plan;
@@ -1101,10 +1108,29 @@ function updateHud(force, dtMs) {
                 : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR";
       hText(els.flag, txt);
       hClass(els.flag, cn.level === 4 ? "flag-red" : cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
-    }
+      if (txt !== _flagSaid) { _flagSaid = txt; sayFlag(cn); }
+    } else _flagSaid = "";
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
   }
   drawMinimap();
+}
+
+// THE FLAG IS SPOKEN through #announce-live, the radio card's always-present
+// polite region (js/game.js showAnnounce), and ONLY there: #hud-flag carries no
+// live role. It used to be a role="alert" filled and unhidden in the same step
+// — the pattern NVDA, JAWS and macOS VoiceOver miss (index.html, above
+// #announce-live) — so a safety car reached a screen-reader user as nothing. Same beat as showAnnounce:
+// clear, then write a moment later, so a repeated flag is still a change. Once
+// per change of the chip's text, never per HUD tick; spelled out in full words
+// because "VSC" and "S2" are glyphs to the eye and noise to a voice.
+function sayFlag(cn) {
+  const live = els.announceLive;
+  if (!live) return;
+  const said = "RACE CONTROL: " + (cn.level === 1 ? "YELLOW FLAG" + (cn.sector >= 0 ? ", SECTOR " + (cn.sector + 1) : "")
+    : cn.level === 2 ? "VIRTUAL SAFETY CAR" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR");
+  live.textContent = "";
+  clearTimeout(_flagLiveT);
+  _flagLiveT = setTimeout(() => { live.textContent = said; }, 60);
 }
 
 function drawMinimap() {
@@ -1152,7 +1178,17 @@ function drawMinimap() {
     mc.setTransform(ratio, 0, 0, ratio, 0, 0);
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
-    const SC = ["rgba(192,132,252,0.8)", "rgba(255,59,48,0.8)", "rgba(163,230,53,0.8)"];   // = the sector labels
+    // SECTOR IDENTITY: the podium metals in rank order (S1 gold, S2 silver,
+    // S3 bronze), from css/tokens.css via TrackMaps.sectorColors — the CIRCUIT
+    // DETAIL diagram draws the same three, so the menu and the map agree. It
+    // was purple / red / lime: purple is the timing screen's SESSION BEST
+    // (--sec-best) and red against lime is the red-green colour-blind pair.
+    // The metals separate on lightness and chroma, which every colour-vision
+    // type keeps, and none is the AERO blue, the ghost cyan or --you. The
+    // HUD's S1/S2/S3 labels carry no colour (buildSecRows), so this is the
+    // only place sector identity is a colour at all. 0.8 alpha, as before.
+    const SC = TrackMaps.sectorColors();
+    mc.globalAlpha = 0.8;
     // Same def.sectors splits as TrackMaps.draw / sectorAt (thirds if missing).
     const sec = track.def && track.def.sectors;
     const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
@@ -1172,6 +1208,7 @@ function drawMinimap() {
       }
       mc.stroke();
     }
+    mc.globalAlpha = 1;
     // Activation-zone highlight, slightly thicker, in the AERO chip's own blue
     // (#hud-aero.ax-armed / #btn-aero.armed), so the map and the chip name the
     // zone in one colour.
@@ -1292,7 +1329,7 @@ function drawMinimap() {
       mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
       mm.stroke();
     }
-    if (player.pitArmed) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
+    if (player.pitArmed && !motionReduced()) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
     mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, _mmYou);
     mm.globalAlpha = 1;
   }

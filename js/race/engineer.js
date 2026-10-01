@@ -114,8 +114,13 @@ const RaceEngineer = (function () {
       // with margin to spare, a rival's undercut, rain arriving before the
       // planned stop, and the stop lap itself. Every one names a LAP or a
       // compound — a sentence a driver can act on, never a status.
-      if (s.freeStop && s.marginS != null && s.marginS > 0) return ["CAUTION — STOP NOW LOSES NOTHING", "caution"];
-      if (s.freeStop) return ["CAUTION — CHEAPER STOP" + (s.pitLoss != null ? ", ABOUT " + Math.round(s.pitLoss) + "s LOST" : " — CONSIDER BOXING"), "caution"];
+      // Caution stop: always name the measured loss when we have it. Never
+      // "free" / "loses nothing" — estimate() is a point estimate (gap behind
+      // minus lane loss) and the voice pack already covers CHEAPER STOP / ABOUT.
+      if (s.cheapStop && s.pitLoss != null) {
+        return ["CAUTION — CHEAPER STOP, ABOUT " + Math.round(s.pitLoss) + "s LOST", "caution"];
+      }
+      if (s.cheapStop) return ["CAUTION — CHEAPER STOP — CONSIDER BOXING", "caution"];
       if (s.rivalBoxed) return [s.rivalBoxed + " HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS", "undercut"];
       // …and the THREAT before it happens: the car close behind is due in
       // (its plan's window, PitLane.windowOf) and ours is near. Boxing first
@@ -288,9 +293,10 @@ const RaceEngineer = (function () {
         wrongTread: !noStop && (c.tyre.tread || 0) !== wantTread,
         oneCompound: !noStop && !!(G.pits && G.pits.compoundDue && G.pits.compoundDue(c)),
         // A discounted stop needs something to gain: a part-used set.
-        // The estimate includes lane travel and stationary service time.
+        // The estimate includes lane travel and stationary service time — it is
+        // advice with a tilde, never a promise of a free stop.
         pitLoss: pit ? pit.lossS : null,
-        freeStop: !noStop && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35,
+        cheapStop: !noStop && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35,
         wet: wantTread > 0,
         noStop, finalLap,
         rainInLaps: !noStop && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
