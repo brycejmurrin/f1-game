@@ -220,7 +220,11 @@ const Particles = (function () {
   // and RAIN WIND slants the fall along the shared WIND DIRECTION knob the
   // trees sway to. Drops are stored as OFFSETS from the eye and wrap in the
   // box, so the field is stationary in the world yet always fills the view.
-  const RAIN_R = 14, RAIN_DOWN = 4, RAIN_UP = 7;      // box: ±R around the eye, RAIN_DOWN below .. RAIN_UP above (m)
+  // Box: ±R around the eye, RAIN_DOWN below .. RAIN_UP above (m). Only about a
+  // quarter of it is in view, so the on-screen count is rainCount / 4: at
+  // 18 x 18 x 8 m the shipped 360 drops read like the overlay's density did
+  // (measured on the montreal rain probe: 28 x 28 x 11 m looked sparse).
+  const RAIN_R = 9, RAIN_DOWN = 3, RAIN_UP = 5;
   const RAIN_H = RAIN_DOWN + RAIN_UP;
   const RAIN_EXPO = 0.022;                             // s — the "shutter" that turns apparent velocity into streak length
   const RAIN_COL = [0.69, 0.78, 0.91];                 // the overlay's #afc8e8

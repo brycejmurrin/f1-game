@@ -73,7 +73,7 @@ test("rain re-seeds only newly visible drops when the governor sheds less", () =
       const o = v * 10;
       assert.equal(d[o + 8], 0, "size 0: the shader adds nothing to the expanded corner");
       assert.ok(d[o + 9] > 0 && d[o + 9] <= 1, `alpha in (0, 1]: ${d[o + 9]}`);
-      assert.ok(Math.abs(d[o + 2] - eye[0]) <= 15 && Math.abs(d[o + 4] - eye[2]) <= 15 && d[o + 3] - eye[1] > -5 && d[o + 3] - eye[1] < 8,
+      assert.ok(Math.abs(d[o + 2] - eye[0]) <= 10 && Math.abs(d[o + 4] - eye[2]) <= 10 && d[o + 3] - eye[1] > -4 && d[o + 3] - eye[1] < 6,
         `drop corner inside the box around the eye: ${d.slice(o + 2, o + 5)}`);
       for (let k = 0; k < 10; k++) assert.ok(Number.isFinite(d[o + k]), "no NaN in the batch");
     }
@@ -86,7 +86,7 @@ test("rain re-seeds only newly visible drops when the governor sheds less", () =
   rain.draw();
   assert.equal(calls[0].floats, 4 * 6 * 10, "density returns when the governor recovers");
   for (const d of drops(calls[0])) {
-    assert.ok(d[3] - eye[1] > -5 && d[3] - eye[1] < 8, `after 10 s every drop still sits inside the box (wrap): y ${d[3] - eye[1]}`);
+    assert.ok(d[3] - eye[1] > -4 && d[3] - eye[1] < 6, `after 10 s every drop still sits inside the box (wrap): y ${d[3] - eye[1]}`);
   }
   // A moving camera: the apparent velocity rakes the streak toward the motion,
   // so the quad's long axis gains a horizontal component.
