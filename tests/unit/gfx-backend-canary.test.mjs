@@ -4640,7 +4640,7 @@ test("GPU verdict rejects captured compilation errors even with zero uncaptured 
 test("TLX defers resize during compilation and applies the latest requested size afterward", () => {
   let _warmPending = {}, cssDirty = false;
   let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
-  let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
+  let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null, _softReadPending = false;
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
   let _glMaxDim = -1, _glMaxTries = 0;   // resize()'s once-per-device WebGL2 texture ceiling
   let _xrActive = false;                 // immersive-vr skip (tlx.js attachXrSession)
@@ -4665,8 +4665,10 @@ test("TLX defers resize during compilation and applies the latest requested size
   resize();
   assert.deepEqual(calls, []);
   assert.deepEqual([W, H], [852, 393]);
+  _softReadPending = true;               // a read in flight at the old size
   _warmPending = null; resize();
   assert.deepEqual(calls, [["canvas", 1125, 563], ["post", 1125, 563]]);
+  assert.equal(_softReadPending, false, "the voided old-size read must not hold the gate");
   resize(); assert.equal(calls.length, 2, "deferred changes apply once");
 });
 
