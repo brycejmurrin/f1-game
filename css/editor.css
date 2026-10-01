@@ -1,0 +1,151 @@
+@layer overlays {
+/* Apex 26 — TRACK DESIGNER (#trackdesigner). All classes prefixed td-; the
+   chips, the close glyph and the red action buttons reuse the shared recipes
+   (.sel-chip / .dh-close / .sel-edit) so this sheet adds layout, not paint.
+   Tokens only: colours, spacing and type come from css/tokens.css (the
+   rawColor / rawSpacing / subFloorFontSize ratchets carry zero slack). */
+
+/* A real <dialog> (index.html) opened by TopModal mirroring `hidden`. Same two
+   load-bearing lines as #datahub / #track-detail: no boxes while closed (this
+   layer outranks the components-layer dialog.screen guard), and the scrim is
+   on the element so ::backdrop stays silent. */
+#trackdesigner:not([open]) { display: none; }
+#trackdesigner::backdrop { background: none; }
+#trackdesigner[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* .screen centres its items (place-items: center): with that, the body is
+     content-sized (890px on a 412px-tall phone, measured 2026-10-01), overlaps
+     the head and the foot, and the rail never scrolls. Stretch fills the track. */
+  place-items: stretch;
+  margin: 0;
+  width: 100%; height: 100%;
+  background: var(--bg);
+  /* UI SIZE applies; the safe-area padding lives INSIDE the zoom, so it is
+     divided back out (the #track-detail precedent, measured 2026-08-21). */
+  zoom: var(--ui-scale);
+  padding:
+    calc(var(--safe-t) / var(--ui-scale))
+    calc(var(--safe-r) / var(--ui-scale))
+    calc(var(--safe-b) / var(--ui-scale))
+    calc(var(--safe-l) / var(--ui-scale));
+  box-sizing: border-box;
+  overflow: hidden;
+}
+/* The canonical .sheet-head delivers the paint and the brand-red rail; the
+   dialog is a grid, so only the flex deltas the .sheet grid would supply. */
+#trackdesigner .sheet-head { flex: none; }
+
+.td-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, min(340px, 38%));
+  /* ONE definite row: an implicit auto row grows to the rail's content and the
+     rail's overflow-y never engages. 0 minimum so the row is the track, not
+     the content; overflow hidden so nothing paints over the foot. */
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--gap);
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(var(--pad) * 0.4) var(--pad) 0;
+}
+.td-stage { position: relative; min-height: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
+.td-stage canvas {
+  flex: 1 1 auto; min-height: 0; width: 100%; height: 100%;
+  touch-action: none;                 /* one finger drags or pans, two pinch — the page never scrolls under it */
+  background: var(--surf-1);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+  outline: none;
+  cursor: default;
+}
+.td-stage canvas:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+.td-stats, .td-hint, .td-card-meta, .td-msg {
+  font-size: var(--fs-micro);
+  color: var(--dim);
+  letter-spacing: var(--ls-2);
+}
+.td-stats { display: flex; flex-wrap: wrap; gap: var(--gap); text-transform: uppercase; letter-spacing: var(--ls-3); font-variant-numeric: tabular-nums; }
+.td-rail {
+  min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
+  display: flex; flex-direction: column; gap: var(--gap);
+  padding-right: calc(var(--gap) / 4);
+}
+.td-tabs, .td-chips { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); }
+.td-tab { flex: 1 1 auto; }
+.td-pane { display: flex; flex-direction: column; gap: var(--gap); }
+.td-group { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
+.td-label {
+  font-size: var(--label); font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-4); color: var(--steel); text-transform: uppercase;
+}
+/* label · − · value · + : the two keys are --tap-sm squares (paired micro-toggles) */
+.td-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--tap-sm) minmax(3.5em, auto) var(--tap-sm);
+  align-items: center;
+  gap: calc(var(--gap) / 2);
+  font-size: var(--fs-micro);
+}
+.td-row .sel-chip { min-height: var(--tap-sm); padding: 0; justify-content: center; }
+.td-num { text-align: center; font-variant-numeric: tabular-nums; }
+.td-input {
+  min-height: var(--chip-h);
+  padding: 0 var(--gap);
+  font: inherit; font-size: var(--fs-2); text-transform: uppercase; letter-spacing: var(--ls-2);
+  color: var(--text);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+}
+.td-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.td-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 3); font-size: var(--fs-micro); }
+.td-issue {
+  padding: calc(var(--gap) / 3) calc(var(--gap) / 2);
+  border-left: 3px solid var(--dim);
+  background: var(--plate);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+.td-issue[data-level="red"] { border-left-color: var(--slower); }
+.td-issue[data-level="amber"] { border-left-color: var(--sec-slow); }
+.td-issue[data-level="info"] { border-left-color: var(--edit-fill); }
+.td-issue[data-level="ok"] { border-left-color: var(--faster); }
+.td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); }
+.td-card {
+  display: flex; flex-direction: column; gap: calc(var(--gap) / 2);
+  padding: calc(var(--gap) / 2);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+}
+.td-card canvas { width: 100%; aspect-ratio: 16 / 11; background: var(--surf-1); border-radius: var(--r-sm); }
+.td-empty { font-size: var(--fs-micro); color: var(--dim); }
+.td-foot {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--gap);
+  padding: calc(var(--pad) * 0.4) var(--pad) calc(var(--pad) * 0.5);
+  border-top: 1px solid var(--plate-line);
+}
+.td-foot .sel-edit[disabled] { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.td-msg { flex: 1 1 12em; min-width: 0; }
+.td-msg[data-warn="1"] { color: var(--sec-slow); }
+
+.td-msg:empty { display: none; }
+
+/* Portrait or narrow: the rail drops under the canvas and scrolls on its own;
+   the foot becomes a 3-up grid (two rows of three, the message under them)
+   instead of a wrapping row that cost 172px on a 412px-wide phone. */
+@media (max-width: 760px), (orientation: portrait) {
+  .td-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(200px, 1fr) minmax(0, 42%); }
+  .td-hint { display: none; }
+  .td-foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
+  .td-foot .td-msg { grid-column: 1 / -1; }
+}
+/* Short (a phone in landscape, 412px tall measured 2026-10-01): the canvas is
+   the point of the screen, so the hint goes and the head and foot shrink. */
+@media (max-height: 500px) {
+  .td-hint { display: none; }
+  .td-stage { gap: calc(var(--gap) / 4); }
+  .td-foot { padding-top: calc(var(--pad) * 0.2); padding-bottom: calc(var(--pad) * 0.25); }
+}
+}

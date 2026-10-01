@@ -146,6 +146,11 @@ const TrackDef = (function () {
       barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
       flatTerrain: !!d.flatTerrain,
+      // The terrain's own material layer beyond the runoff verge (js/track/core/mesh.js
+      // ribbon()): "SAND" / "SNOW" for the track designer's desert and alpine
+      // themes; absent on every shipped def, and absent stays absent so the 52
+      // keep their golden hashes (tests/unit/track-def-factory.test.mjs).
+      ...(d.terrainMat === "SAND" || d.terrainMat === "SNOW" ? { terrainMat: d.terrainMat } : {}),
       sceneryCoordinates: d.sceneryCoordinates || "legacy",
       // Read off the COPIED def by TrackSpace.lapMirror, so it has to be copied
       // here — the sixth member of the family the comment below describes. It

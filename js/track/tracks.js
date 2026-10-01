@@ -20,7 +20,9 @@ const Tracks = (function () {
   // designer's) is built by the same code as a script-tag circuit.
   const { elevationAt, hasRealElevation, fromRaw } = TrackDef;
 
-  function buildCenterline(def) {
+  /** Centreline only, no meshes. `opts.line === false` skips ONLY the racing-line bake (~75 %
+   *  of the time): tr.line = null, lineW/lineCorners/… absent — the designer's preview build. */
+  function buildCenterline(def, opts) {
     ensurePoints(def);
     const P = def.points, N = P.length;
     const idx = (i) => ((i % N) + N) % N;
@@ -168,7 +170,7 @@ const Tracks = (function () {
     // The taper matters more than the width. A step in `hw` is a step in the
     // road mesh, the kerb line and the racing-line LUT all at once, so the
     // window opens and closes over PIT_TAPER metres.
-    TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
+    if (opts && opts.line === false) track.line = null; else TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
     track.bankP = bankingProfile(track);
     return track;
   }

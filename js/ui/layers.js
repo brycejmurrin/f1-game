@@ -54,6 +54,9 @@ window.UiLayers = (function () {
     { id: "tl-editor" },
     { id: "photo-controls" },
     { id: "datahub" },
+    /* The TRACK DESIGNER (js/editor/designer.js): a <dialog> like #datahub,
+       built on first open behind #mb-designer. */
+    { id: "trackdesigner" },
   ];
 
   const LAYER_IDS = DEFS.map((d) => d.id);

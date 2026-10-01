@@ -135,6 +135,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // dropped one severe cone×cyl pair; measured, not assumed.
 // portimao 51 -> 44 (2026-09-24): SRTM Algarve bake + hillside escarpment
 // ground-seat; mid-sector terrace split cleared floaters and six severe spots.
+// brands_hatch 31→34, hungaroring 1→2, jerez 16→17, mont_tremblant 38→52,
+// zolder 39→46; singapore 6→5, spa 11→8, imola 9→8 (2026-10-01):
+// transformSceneryApi wraps every() to authored-frame k (same as along), so
+// pine/marshalPost/backdrop no longer double-shift. Caps follow the measured
+// counts — raises where correctly placed stands now overlap, lowers where the
+// double-shift had been inventing contacts.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );
