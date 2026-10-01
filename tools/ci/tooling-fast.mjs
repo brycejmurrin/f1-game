@@ -69,6 +69,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
+  // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
+  // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
+  "tests/unit/ai-ratings-math.test.mjs",
   // ...and the field's strategy: the plan scales with the distance, a 20-car
   // grid does not converge on one plan, strategies mix, and the reactive
   // rules (free stop, weather, spent set) fire in the right order. ~0.1 s.
@@ -116,6 +119,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
+  "tests/unit/career-backup.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
@@ -265,6 +269,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Every freezable module surface stays frozen (pure file read; < 1 s).
   "tests/unit/frozen-globals.test.mjs",
   "tests/unit/frustum-buckets.test.mjs",
+  // Seeded fuzz over every door that decodes player-shaped data (ghost hash,
+  // invite paste, peer snapshot, settings/garage import, career migrate,
+  // store reads). Hash32-seeded, N=2000/surface, <10 s; a red prints the seed.
+  "tests/unit/fuzz-untrusted-inputs.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/game-ctx-surface.test.mjs",
   // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in

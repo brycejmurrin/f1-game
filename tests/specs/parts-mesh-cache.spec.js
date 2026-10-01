@@ -412,6 +412,14 @@ test.describe("Parts mesh caches — eviction bounds", () => {
         return draw(mesh, matrix);
       };
       window.__wheelGroundProbe = centres;
+      // sharedTest (and a prior race on this worker) leaves wheelMeshCache /
+      // fieldWheelCache warm: race()'s warmCarAssets is then all cache hits
+      // (cpuMs:0), createMesh never tags rotating meshes, and snapCam(paint)
+      // draws untagged meshes → 0 probe samples for 19 s (CI selected shards
+      // 36771184315 / 36771182471; Pages 36789770575 / 36791453560 on
+      // ecc12b129 / 4cf997fdd). Same cure as parts-factory-presets.spec.js:
+      // drop caches AFTER the hook so the next warm rebuilds through it.
+      if (window.__apex.clearCarMeshCaches) window.__apex.clearCarMeshCaches();
     });
     await pinFreePlay(page);
 
@@ -444,10 +452,27 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       // between the last captured frame and the evaluate that measures under
       // it, and on an undulating circuit that is centimetres of drift.
       window.__apex.freeze(true);
-      window.__wheelGroundProbe.length = 0;
     });
-    await page.waitForFunction(() => window.__wheelGroundProbe.length >= 4,
-      null, { polling: 100, timeout: 20_000 });
+    // Synchronous snapCam(dt) — not rAF / chainWindowRaf. Under a loaded
+    // selected shard XrBoot.chainWindowRaf is a no-op while _windowPending is
+    // true, and awaiting rAF alone returned 0 GLX.draw samples for 19 s
+    // (Pages change-aware gate on ecc12b129). Clear the probe in the SAME
+    // evaluate as the paints so a pending tick cannot sneak samples in before
+    // the wait starts. Same 20 s budget, no timeout raise, 0.005 bound kept.
+    await page.evaluate(() => {
+      try { window.__apex.headless(false); } catch (_) { /* harness */ }
+      window.__wheelGroundProbe.length = 0;
+      const t0 = performance.now();
+      while (window.__wheelGroundProbe.length < 4) {
+        if (performance.now() - t0 > 19_000) break;
+        window.__apex.snapCam(1 / 60);
+      }
+      if (window.__wheelGroundProbe.length < 4) {
+        throw new Error(
+          "__wheelGroundProbe got " + window.__wheelGroundProbe.length + " draws in 19 s (need ≥4)"
+        );
+      }
+    });
 
     const probe = await page.evaluate(() => {
       const st = window.__apex.physState();
