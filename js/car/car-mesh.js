@@ -605,9 +605,29 @@ function _rigPlate(out, pts, z, depth, col) {
   }
 }
 function _rigRounded(out, x, y, z, w, h, d, r, col) {
-  const a = w/2, b = h/2, c = Math.min(r, a, b);
-  _rigPlate(out, [[x-a+c,y-b],[x+a-c,y-b],[x+a,y-b+c],[x+a,y+b-c],
-    [x+a-c,y+b],[x-a+c,y+b],[x-a,y+b-c],[x-a,y-b+c]], z, d, col);
+  const a=w/2, b=h/2, c=Math.min(r,a,b), pts=[];
+  for (const [cx,cy,start] of [[a-c,b-c,0],[-a+c,b-c,Math.PI/2],[-a+c,-b+c,Math.PI],[a-c,-b+c,Math.PI*1.5]])
+    for(let i=0;i<=4;i++) {const t=start+i*Math.PI/8; pts.push([x+cx+c*Math.cos(t),y+cy+c*Math.sin(t)]);}
+  _rigPlate(out,pts,z,d,col);
+}
+// Smooth closed forms for fabric wrapped around a grip, with shared normals.
+function _rigEllipsoid(out, x, y, z, rx, ry, rz, col, angle=0) {
+  const N=12, M=6, base=out.pos.length/3, c=Math.cos(angle), s=Math.sin(angle);
+  const vertex=(px,py,pz)=>{
+    const n=[px/(rx*rx),py/(ry*ry),pz/(rz*rz)], L=Math.hypot(...n);
+    out.pos.push(x+c*px-s*py,y+s*px+c*py,z+pz);
+    out.nrm.push((c*n[0]-s*n[1])/L,(s*n[0]+c*n[1])/L,n[2]/L); out.col.push(...col);
+  };
+  vertex(0,-ry,0);
+  for(let i=1;i<M;i++)for(let j=0;j<N;j++) {
+    const a=i/M*Math.PI, t=j/N*Math.PI*2;
+    vertex(rx*Math.sin(a)*Math.cos(t),-ry*Math.cos(a),rz*Math.sin(a)*Math.sin(t));
+  }
+  vertex(0,ry,0); const top=base+1+(M-1)*N;
+  for(let j=0;j<N;j++) {
+    const k=(j+1)%N; out.idx.push(base,base+1+j,base+1+k,top,top-N+k,top-N+j);
+    for(let i=0;i<M-2;i++) {const a=base+1+i*N+j,b=base+1+i*N+k;out.idx.push(a,a+N,b+N,a,b+N,b);}
+  }
 }
 // A circular button / rotary / quick-release boss, with real depth rather
 // than a square painted block. The face is slightly proud of its bezel.
@@ -650,14 +670,14 @@ function _wheelScreen(out, c2) {
   const CARB = [0.09, 0.095, 0.105], DARK = [0.022, 0.028, 0.036];
   _rigPlate(out, [[-0.090,-0.090],[0.090,-0.090],[0.112,-0.065],[0.116,0.068],
     [0.101,0.095],[-0.101,0.095],[-0.116,0.068],[-0.112,-0.065]], 0.014, 0.042, CARB);
-  _rigRounded(out, 0, 0.024, -0.016, 0.125, 0.080, 0.020, 0.008, [0.16,0.17,0.19]);
+  _rigRounded(out, 0, 0.024, -0.016, 0.125, 0.080, 0.020, 0.008, [0.06,0.067,0.075]);
   _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, DARK);
   // Original aligned LCD cells: cyan speed, orange gear, green battery charge.
   _rigBox(out, 0.048, 0.024, -0.0295, 0.012, 0.050, 0.003, [0.03,0.04,0.045]);
   _rigRounded(out, -0.034, 0.022, -0.0292, 0.052, 0.040, 0.003, 0.002, [0.10,0.11,0.13]);
   _rigRounded(out, -0.034, 0.022, -0.0296, 0.047, 0.035, 0.003, 0.001, [0.010,0.016,0.026]);
-  _rigRounded(out, 0.014, 0.022, -0.0292, 0.034, 0.044, 0.003, 0.002, [0.38,0.07,0.06]);
-  _rigRounded(out, 0.014, 0.022, -0.0296, 0.029, 0.039, 0.003, 0.001, [0.16,0.025,0.03]);
+  _rigRounded(out, 0.014, 0.022, -0.0292, 0.034, 0.044, 0.003, 0.002, [0.032,0.028,0.027]);
+  _rigRounded(out, 0.014, 0.022, -0.0296, 0.029, 0.039, 0.003, 0.001, [0.014,0.018,0.024]);
   const BTN = [[0.83,0.12,0.09],[0.16,0.43,0.85],[0.12,0.65,0.30],[0.88,0.70,0.12]];
   for (const side of [-1,1]) {
     for (let i = 0; i < 3; i++) _rigButton(out, side*0.096, 0.055-i*0.037, -0.027, 0.008, BTN[(i+(side>0?1:0))%4]);
@@ -667,6 +687,10 @@ function _wheelScreen(out, c2) {
   // Three lower multifunction rotaries, with index marks and raised selectors.
   for (const [x,col] of [[-0.064,BTN[3]],[0,BTN[1]],[0.064,BTN[2]]])
     _rigButton(out, x, -0.063, -0.026, 0.017, col, true);
+  for (const x of [-0.064,0,0.064]) for (let i=0;i<8;i++) {
+    const a=i/8*Math.PI*2, c=Math.cos(a), sn=Math.sin(a);
+    _rigBar(out,x+c*0.021,-0.063+sn*0.021,x+c*0.024,-0.063+sn*0.024,-0.030,0.0014,0.001,[0.54,0.55,0.51]);
+  }
   // Fasteners, separate from controls; no fake HDR glow on physical buttons.
   for (const x of [-0.104,0.104]) for (const y of [-0.072,0.084])
     _rigDisc(out, x, y, -0.009, 0.003, 8, [0.40,0.42,0.44]);
@@ -682,14 +706,16 @@ function _wheelPaddles(out, wide) {
 // Curved backs, individual finger pads, an inboard thumb and tapered cuffs.
 // All styles use the same nine-and-three grip points and rotate with the wheel.
 function _wheelHands(out, acc, c1) {
-  const GLOVE = [0.22,0.23,0.245], EDGE = [0.13,0.14,0.16], PAD = acc || EDGE;
-  for (const s of [-1,1]) {
-    _rigRounded(out, s*0.185, -0.004, -0.010, 0.060, 0.118, 0.048, 0.020, GLOVE);
-    for (let i=0;i<4;i++) _rigRounded(out, s*0.163, 0.040-i*0.027, 0.027, 0.041, 0.023, 0.022, 0.007, GLOVE);
-    _rigBar(out, s*0.155, 0.045, s*0.128, 0.013, -0.019, 0.024, 0.031, GLOVE);
-    _rigRounded(out, s*0.185, 0.014, -0.036, 0.039, 0.035, 0.007, 0.010, PAD);
-    _rigPlate(out, [[s*0.160,-0.044],[s*0.211,-0.044],[s*0.210,-0.146],[s*0.163,-0.146]], -0.025, 0.044, GLOVE);
-    _rigRounded(out, s*0.186, -0.057, -0.026, 0.052, 0.015, 0.046, 0.005, c1 || EDGE);
+  const GLOVE=[0.15,0.16,0.175], SEAM=[0.18,0.20,0.22];
+  for (const side of [-1,1]) {
+    _rigEllipsoid(out,side*0.181,-0.006,-0.007,0.028,0.057,0.027,GLOVE);
+    for(let i=0;i<4;i++) _rigEllipsoid(out,side*0.164,0.039-i*0.025,0.017,0.018,0.012,0.019,GLOVE);
+    _rigEllipsoid(out,side*0.144,0.029,-0.021,0.013,0.026,0.018,GLOVE,-side*0.58);
+    _rigEllipsoid(out,side*0.189,-0.115,-0.003,0.025,0.068,0.025,GLOVE,-side*0.08);
+    _rigGrip(out,[[side*0.166,-0.064],[side*0.177,-0.068],[side*0.192,-0.068],[side*0.209,-0.063]],0.004,0.026,c1 ? c1.map(v=>v*0.35) : SEAM);
+    // Small embroidery and a shaped knuckle seam, rather than a rigid badge.
+    _rigBar(out,side*0.176,0.016,side*0.185,0.005,-0.034,0.002,0.001,SEAM);
+    _rigBar(out,side*0.185,0.005,side*0.193,0.016,-0.032,0.002,0.001,SEAM);
   }
 }
 const COCKPIT_WHEELS = ["f1", "gt", "butterfly", "yoke", "endurance", "retro", "round"];
@@ -780,6 +806,16 @@ function getCockpitWheel(liv, style) {
     _wheelRimF1(out, CARB, RUB, GRIP, acc, st);
     _wheelScreen(out, c2);
   }
+  // Physical fascia fasteners, paddle pivots and stitched glove cuffs on all wheels.
+  for (const side of [-1,1]) {
+    const bx=side*(st === "round" ? 0.075 : 0.084), by=st === "round" ? -0.002 : -0.092;
+    _rigDisc(out,bx,by,-0.019,0.0035,8,[0.42,0.44,0.46]);
+    _rigBar(out,bx-0.0018,by,bx+0.0018,by,-0.020,0.0008,0.001,[0.025,0.03,0.035]);
+    if (st !== "round") {
+      _rigDisc(out,side*0.130,0.026,0.043,0.004,8,[0.36,0.38,0.40]);
+      for (let i=0;i<4;i++) _rigBar(out,side*0.146,-0.022+i*0.013,side*0.161,-0.018+i*0.013,0.044,0.0015,0.001,[0.22,0.23,0.25]);
+    }
+  }
   _wheelHands(out, acc, c1);
   cockpitWheelMesh = _gfx.createMesh(out);
   return cockpitWheelMesh;
@@ -797,11 +833,17 @@ function getCockpitDash() {
   if (cockpitDashMesh) return cockpitDashMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const CARB = [0.04, 0.04, 0.05], DARK = [0.015, 0.015, 0.02], MET = [0.30, 0.30, 0.33];
-  _rigBox(out, 0, -0.012, 0.17, 0.062, 0.062, 0.30, CARB);        // steering column into the bulkhead
-  _rigBox(out, 0, 0, 0.020, 0.085, 0.085, 0.034, MET);             // quick-release boss where the hub clips on
-  _rigBox(out, 0, 0, 0.001, 0.040, 0.040, 0.006, DARK);            // its spline socket, facing the driver
-  _rigBox(out, 0, -0.090, 0.32, 0.76, 0.32, 0.035, CARB);          // front bulkhead, down to the coaming (world y 0.43..0.69)
-  _rigBox(out, 0, 0.068, 0.305, 0.74, 0.012, 0.030, [0.10, 0.10, 0.12]); // its top lip
+  _rigTube(out, [[0,-0.012,0.025],[0,-0.012,0.32]], 0.028, CARB);        // steering column into the bulkhead
+  _rigRing(out, 0, 0, 0.020, 0.037, 16, 0.012, 0.034, MET);             // quick-release boss where the hub clips on
+  _rigDisc(out, 0, 0, 0.001, 0.027, 12, DARK);            // its spline socket, facing the driver
+  _rigPlate(out, [[-0.28,-0.25],[0.28,-0.25],[0.34,-0.15],[0.37,0.04],[0.34,0.07],[-0.34,0.07],[-0.37,0.04],[-0.34,-0.15]], 0.32, 0.035, CARB);          // front bulkhead, down to the coaming (world y 0.43..0.69)
+  _rigTube(out, [[-0.34,0.064,0.305],[-0.17,0.072,0.305],[0,0.075,0.305],[0.17,0.072,0.305],[0.34,0.064,0.305]], 0.009, [0.10,0.10,0.12]); // its top lip
+  for (let i=0;i<6;i++) {
+    const a=i/6*Math.PI*2;
+    _rigDisc(out,Math.cos(a)*0.032,Math.sin(a)*0.032,-0.001,0.003,8,[0.50,0.52,0.54]);
+  }
+  for (const side of [-1,1]) for (let i=0;i<4;i++)
+    _rigRounded(out,side*(0.22+i*0.026),-0.080,0.298,0.012,0.078,0.008,0.003,DARK);
   cockpitDashMesh = _gfx.createMesh(out);
   return cockpitDashMesh;
 }
@@ -836,6 +878,27 @@ function _rigBeam(out, p0, p1, w, col) {
   _rigQuad(out, P(p0, -1, -1), P(p0, 1, -1), P(p0, 1, 1), P(p0, -1, 1), ng(u), col);
   _rigQuad(out, P(p1, -1, -1), P(p1, 1, -1), P(p1, 1, 1), P(p1, -1, 1), u, col);
 }
+// Rounded removable padding: circular sections follow the tub instead of
+// exposing the corners of a rectangular beam at the driver's eye.
+function _rigTube(out, path, r, col) {
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const unit=v=>{const L=Math.hypot(...v);return v.map(x=>x/L);}, start=out.pos.length/3, dirs=[];
+  for(let i=0;i<path.length;i++) {
+    const p=path[i], lo=path[Math.max(0,i-1)], hi=path[Math.min(path.length-1,i+1)];
+    const d=unit(hi.map((x,k)=>x-lo[k])), a=unit(cross(d,Math.abs(d[1])<0.9?[0,1,0]:[1,0,0])), b=cross(d,a); dirs.push(d);
+    for(let j=0;j<8;j++) {
+      const t=j/8*Math.PI*2, n=a.map((x,k)=>x*Math.cos(t)+b[k]*Math.sin(t));
+      out.pos.push(...p.map((x,k)=>x+r*n[k])); out.nrm.push(...n); out.col.push(...col);
+    }
+  }
+  for(let i=0;i<path.length-1;i++) for(let j=0;j<8;j++) {
+    const a=start+i*8+j,b=start+i*8+(j+1)%8;out.idx.push(a,b,b+8,a,b+8,a+8);
+  }
+  for(const i of [0,path.length-1]) {
+    const c=out.pos.length/3;out.pos.push(...path[i]);out.nrm.push(...dirs[i].map(x=>i===0?-x:x));out.col.push(...col);
+    for(let j=0;j<8;j++) {const a=start+i*8+j,b=start+i*8+(j+1)%8;out.idx.push(c,i===0?b:a,i===0?a:b);}
+  }
+}
 // A flat disc facing the driver (-z) at z = cz: gauge faces.
 function _rigDisc(out, cx, cy, cz, r, n, col) {
   const i0 = out.pos.length / 3;
@@ -868,18 +931,66 @@ function _rigGauge(out, cx, cy, cz, r, turn, face, bezel) {
   const a = Math.PI * (1.25 - 1.5 * turn);
   _rigBar(out, cx, cy, cx + Math.cos(a) * r * 0.8, cy + Math.sin(a) * r * 0.8, cz - 0.002, r * 0.08, 0.002, [1.4, 0.22, 0.08]);
 }
+// Lofted panels with outward normals and closed ends, rather than box walls.
+function _rigLiner(out, rings, col) {
+  const face=(a,b,c,d)=>{
+    const u=b.map((v,i)=>v-a[i]), v=c.map((q,i)=>q-a[i]);
+    const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]], L=Math.hypot(...n);
+    _rigQuad(out,a,b,c,d,n.map(q=>q/L),col);
+  };
+  for(let i=0;i<rings.length-1;i++) for(let j=0;j<rings[i].length;j++) {
+    const k=(j+1)%rings[i].length; face(rings[i][j],rings[i+1][j],rings[i+1][k],rings[i][k]);
+  }
+  for(const end of [0,rings.length-1]) {
+    const q=end===0 ? rings[end].slice().reverse() : rings[end];
+    for(let j=1;j<q.length-1;j++) {
+      const before=out.idx.length; face(q[0],q[j],q[j+1],q[0]); out.idx.length=before+3;
+    }
+  }
+}
+// A closed lower tub shared by EVERY trim and body choice. Extending behind
+// the eye keeps the near plane from cutting an opening into the road below.
+function _cockpitLowerTub(out, kind, accent) {
+  const carbon=[0.065,0.070,0.080], edge=[0.16,0.17,0.19], metal=[0.32,0.34,0.36];
+  const pad=kind === "classic" ? [0.14,0.085,0.05] : kind === "suede" ? [0.14,0.13,0.12] : [0.09,0.095,0.105];
+  _rigBox(out,0,0.245,0.20,0.66,0.040,1.80,carbon); // continuous opaque floor
+  _rigBox(out,0,0.450,1.08,0.66,0.450,0.040,carbon); // closed footwell end
+  for (const side of [-1,1]) {
+    const rings=[[-0.70,0.326,0.690],[0.22,0.313,0.677],[1.10,0.300,0.655]].map(([z,x,y])=>{
+      const ring=[[side*0.230,0.265,z],[side*0.255,0.245,z],[side*x,y,z],[side*(x-0.016),y-0.008,z],
+        [side*(x-0.027),y-0.035,z],[side*(x-0.037),y-0.115,z],[side*0.244,0.410,z]];
+      return side>0 ? ring : ring.reverse();
+    });
+    _rigLiner(out,rings,pad);
+    _rigBeam(out,[side*0.246,0.365,-0.20],[side*0.238,0.365,0.81],0.006,edge);
+    for (const z of [0.10,0.34,0.58,0.80])
+      _rigBeam(out,[side*0.244,0.375,z],[side*0.289,0.631,z],0.005,edge);
+    _rigRounded(out,side*0.212,0.440,0.17,0.045,0.055,0.055,0.007,metal);
+    _rigRounded(out,side*0.212,0.440,0.137,0.028,0.033,0.008,0.004,accent);
+    _rigBeam(out,[side*0.16,0.275,-0.15],[side*0.16,0.275,0.90],0.012,edge);
+    for (const y of [0.37,0.61]) {
+      _rigDisc(out,side*0.270,y,1.052,0.007,8,metal);
+      _rigBar(out,side*0.267,y,side*0.273,y,1.051,0.0015,0.001,[0.025,0.03,0.035]);
+    }
+  }
+  _rigRounded(out,0,0.345,-0.025,0.44,0.085,0.37,0.018,pad); // seat base
+  _rigBeam(out,[-0.20,0.382,0.10],[0.20,0.382,0.10],0.004,edge);
+  _rigBox(out,0,0.320,0.76,0.34,0.050,0.16,carbon); // raised pedal heel rest
+  for (const x of [-0.10,0,0.10]) _rigBeam(out,[x,0.349,0.69],[x,0.349,0.83],0.006,edge);
+}
 // Modern tub trim: rounded removable pads, a carbon scuttle, moulded seam
 // lines and recessed fasteners. TEAM adds accents to the same shaped trim.
 function _teamCabin(out, pad, stitch) {
   const CARB = [0.08,0.085,0.095];
   for (const side of [-1,1]) {
-    _rigBeam(out,[side*0.298,0.719,-0.10],[side*0.280,0.684,0.38],0.032,pad);
+    _rigTube(out,[[side*0.298,0.719,-0.16],[side*0.296,0.716,-0.04],[side*0.291,0.708,0.10],
+      [side*0.281,0.694,0.24],[side*0.262,0.682,0.36],[side*0.231,0.687,0.42]],0.024,pad);
     _rigBeam(out,[side*0.288,0.730,-0.04],[side*0.274,0.698,0.31],0.003,stitch);
     _rigRounded(out,side*0.281,0.704,0.21,0.035,0.044,0.07,0.008,CARB);
     _rigDisc(out, side*0.281, 0.713, 0.172, 0.009, 12, [0.26,0.28,0.30]);
     _rigDisc(out, side*0.281, 0.713, 0.171, 0.004, 8, [0.035,0.04,0.045]);
   }
-  _rigRounded(out,0,0.704,0.425,0.49,0.036,0.046,0.012,CARB);
+  _rigTube(out,[[-0.231,0.687,0.42],[-0.15,0.704,0.44],[0,0.709,0.45],[0.15,0.704,0.44],[0.231,0.687,0.42]],0.024,CARB);
   _rigRounded(out,0,0.721,0.400,0.44,0.012,0.008,0.005,pad);
   _rigBar(out,-0.18,0.728,0.18,0.728,0.394,0.002,0.002,stitch);
 }
@@ -888,8 +999,8 @@ function _classicCabin(out, paint) {
   // Padded scuttle round the front of the opening. It starts just ahead of the
   // eye (z -0.20): run back past it, the rails filled the lower corners.
   const rim = [[-0.30, 0.69, -0.05], [-0.30, 0.69, 0.25], [-0.18, 0.71, 0.40], [0.18, 0.71, 0.40], [0.30, 0.69, 0.25], [0.30, 0.69, -0.05]];
-  for (let i = 0; i + 1 < rim.length; i++) _rigBeam(out, rim[i], rim[i + 1], 0.04, LEATHER);
-  _rigBox(out, 0, 0.745, 0.47, 0.50, 0.13, 0.03, paint);        // painted dash panel
+  _rigTube(out,rim,0.020,LEATHER);
+  _rigRounded(out, 0, 0.745, 0.47, 0.50, 0.13, 0.03, 0.038, paint);        // painted dash panel
   _rigGauge(out, 0, 0.75, 0.453, 0.045, 0.62, FACE, CHROME);     // rev counter, centre
   _rigGauge(out, -0.15, 0.745, 0.453, 0.028, 0.35, FACE, CHROME); // oil / water
   _rigGauge(out, 0.15, 0.745, 0.453, 0.028, 0.45, FACE, CHROME);
@@ -914,6 +1025,7 @@ function getCockpitCabin(kind, liv) {
   if (_cabinMesh) return _cabinMesh;
   _cabinKey = key;
   const out = { pos: [], nrm: [], col: [], idx: [] };
+  _cockpitLowerTub(out, kind, acc);
   if (kind === "classic") _classicCabin(out, col);
   else _teamCabin(out, kind === "team" ? col : kind === "suede" ? [0.12,0.115,0.11] : [0.095,0.10,0.11], kind === "team" ? acc : [0.18,0.19,0.20]);
   if (kind === "suede" || kind === "ribbed") {
