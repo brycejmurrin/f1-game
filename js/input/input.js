@@ -1940,21 +1940,31 @@ const Input = (function () {
     // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
     // whatever the local mode. Pedals-only phones fall through to it.
     if (remoteSteers()) return analogShape(tiltSteering(), "tilt");
-    if (steerMode === "buttons") return buttonSteering();
+    // On-screen buttons and the drag wheel. A friend race keeps simulating
+    // under the pause menu; the pad already zeroes itself while a menu is open.
+    // Gate on anyOpen(), NOT navOpen(): navOpen() is also true on the title
+    // #overlay (gate:false) so the pad can walk the doors — that must not
+    // mute the on-screen GAS / drag wheel on a freshly loaded page (steering
+    // latch + touch-pedals specs). Do not clear the finger — the hold should
+    // still be there when the menu closes. Keyboard, tilt and the pad are
+    // unchanged.
+    if (steerMode === "buttons") return navBlocksTouch() ? 0 : buttonSteering();
     if (tiltActive()) return analogShape(tiltSteering(), "tilt");
-    return analogShape(touchSteering(), "touch");
+    return navBlocksTouch() ? 0 : analogShape(touchSteering(), "touch");
   }
 
   const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
   function remoteThrottle() { return remoteActive() && remThr > REMOTE_PEDAL_ON; }
   function remoteBrake() { return remoteActive() && remBrk > REMOTE_PEDAL_ON; }
+  // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
+  function navBlocksTouch() { return !!(window.UiLayers && window.UiLayers.anyOpen()); }
 
   function throttle() {
-    return keyThrottle || btnThrottle || padThrottle || remoteThrottle();
+    return keyThrottle || (!navBlocksTouch() && btnThrottle) || padThrottle || remoteThrottle();
   }
 
   function braking() {
-    return keyBrake || btnBrake || padBrake || remoteBrake();
+    return keyBrake || (!navBlocksTouch() && btnBrake) || padBrake || remoteBrake();
   }
 
   // 0..1 pedal travel. A KEY is digital and is therefore always full travel; an
@@ -1964,13 +1974,13 @@ const Input = (function () {
   // a stray pad axis.
   function throttleLevel() {
     if (keyThrottle) return 1;
-    if (btnThrottle) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
+    if (btnThrottle && !navBlocksTouch()) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
     if (remoteThrottle()) return remThr;
     return padThrottleVal > 0.12 ? padThrottleVal : 0;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
-    if (btnBrake) return btnBrakeVal;
+    if (btnBrake && !navBlocksTouch()) return btnBrakeVal;
     if (remoteBrake()) return remBrk;
     return padBrakeVal > 0.12 ? padBrakeVal : 0;
   }

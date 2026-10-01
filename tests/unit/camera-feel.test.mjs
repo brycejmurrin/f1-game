@@ -132,6 +132,8 @@ test("speed vignette defaults off and persists", () => {
 test("vantage.js routes FOV and look-back through CamFeel", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
   assert.match(src, /CamFeel\.modeFov/);
+  // #700 COMFORT › SPEED FOV: vantage feeds CamTune-scaled spFov, not raw spN.
+  assert.match(src, /CamFeel\.modeFov\([^)]*spFov/);
   assert.match(src, /CamFeel\.applyFreeLook/);
   assert.match(src, /CamFeel\.shouldLookBack/);
   // no leftover bare lerp FOV on the modes that must share the curve

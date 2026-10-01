@@ -104,9 +104,11 @@ const CamFeel = (function () {
     far:        { base: 61, widen: 6,  scale: 1,   dep: 3 },
   });
 
-  function modeFov(mode, spN, deploy) {
+  // `sp` is the FOV speed blend (0..1). vantage.js passes CamTune-scaled
+  // `spFov` so COMFORT › SPEED FOV still lands; look-ahead keeps full spN.
+  function modeFov(mode, sp, deploy) {
     const r = FOV_BY_MODE[mode] || FOV_BY_MODE.chase;
-    return speedFov(r.base, r.widen, spN, r.scale, (deploy ? 1 : 0) * r.dep);
+    return speedFov(r.base, r.widen, sp, r.scale, (deploy ? 1 : 0) * r.dep);
   }
 
   function shouldLookBack(mode, held) {
