@@ -6936,24 +6936,18 @@ function render(dt) {
       shake = Math.max(0, shake - dt * 1.6);
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
       // OFFSET, not the trauma — shake still decays on its own clock, so cues
-      // keyed to it are untouched and only the camera stops moving.
-      const amt = camComfort() ? 0 : shake * shake * 0.9;
+      // keyed to it are untouched. CamTune.shakeOffset also applies COMFORT › HEAD BOB.
+      const amt = CamTune.shakeOffset(shake, camComfort());
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
-    // Onboard speed vibration: a subtle high-frequency buzz on the rigid-mounted
-    // cams (cockpit/hood/tcam) that grows with speed² — the visceral
-    // "the car is alive under you" cue. DISABLED on a wet road: it jitters the
-    // eye/target ~10-18 Hz every frame, and the wet-road SSR is a screen-space,
-    // camera-dependent reflection — so the buzz flipped the reflection's
-    // hit/miss pattern each frame and the wet road FLICKERED in patches from
-    // the cockpit. On a dry road there's no such reflection, so the buzz stays
-    // for feel; on a wet road we drop it to keep the reflection stable. Also
-    // fades in with speed so it never jitters a slow/standing car. REDUCE MOTION drops it.
+    // Onboard speed vibration (cockpit/hood/tcam): grows with speed². Off on wet
+    // roads — the wet SSR is camera-dependent and the buzz flickered it. REDUCE
+    // MOTION and COMFORT › HEAD BOB both land in CamTune.buzzAmp.
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && !camComfort() && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
+    if (state === "race" && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
       const spV = clamp(player.speed / vTop(), 0, 1);
-      const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
+      const vAmp = CamTune.buzzAmp(spV, player.deploying, camComfort(), _buzzWet);
       if (vAmp > 0.001) {
         const tv = performance.now() * 0.001;
         const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;
@@ -7041,10 +7035,11 @@ function render(dt) {
     // physics step onto the horizon — the most visible jitter class. λ7 on the
     // roll itself matches the old linear dt/0.15 blend at 60 fps
     // (1−e^(−7/60) ≈ 0.110 ≈ (1/60)/0.15) but is frame-rate independent, so
-    // 30 and 120 Hz devices converge at the same real-time rate.
+    // 30 and 120 Hz devices converge at the same real-time rate. COMFORT › ROLL
+    // LEAN scales via CamTune.rollTarget (camComfort still forces level above).
     const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
     camSlipSm = damp(camSlipSm, clamp(slipRaw, -1, 1), 10, dt);
-    camRoll = damp(camRoll, roadCamRoll + camSlipSm * 0.07 + (onboard && player ? (player.baRoll || 0) * 0.85 : 0), 7, dt);   // + chassis roll: a bolted-on camera leans with the car (js/camera/vantage.js onboardAttitude)
+    camRoll = damp(camRoll, CamTune.rollTarget(roadCamRoll, camSlipSm, (onboard && player ? (player.baRoll || 0) * 0.85 : 0), false), 7, dt);
   }
 
   // Debug free camera (set via __apex.view) overrides the chase cam — instant

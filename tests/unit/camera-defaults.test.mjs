@@ -187,11 +187,94 @@ test("every body class the HUD toggles has a rule that reads it", () => {
     "write with no reader, which is what hud-onboard was: " + orphans.join(", "));
 });
 
-test("CamTune exports player edits as window.CameraEdits", () => {
+test("CamTune exports player edits as window.CameraEdits and imports them back", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8");
   assert.match(src, /function exportEdits\(\)/);
+  assert.match(src, /function importText\(/);
+  assert.match(src, /SHARE_MAGIC\s*=\s*"APXC1"/);
   const panel = fs.readFileSync(path.join(root, "js/camera/tuner-panel.js"), "utf8");
   assert.match(panel, /window\.CameraEdits/);
+  assert.match(panel, /ct-import/);
+
+  const CamTune = loadCamTune();
+  CamTune.set("chase", "dist", 2.5);
+  CamTune.setGlobal("fov", 4);
+  CamTune.comfortSet("bob", 0.3);
+  const pack = CamTune.exportPack();
+  assert.equal(pack.v, 1);
+  assert.equal(pack.modes.chase.dist, 2.5);
+  assert.equal(pack.global.fov, 4);
+  assert.equal(pack.comfort.bob, 0.3);
+
+  const share = CamTune.encodeShare(pack);
+  assert.match(share, /^APXC1\./);
+
+  CamTune.resetAll();
+  assert.equal(Object.keys(CamTune.exportEdits()).length, 0);
+  const r = CamTune.importText(share);
+  assert.equal(r.ok, true);
+  assert.equal(CamTune.getModeOnly("chase", "dist"), 2.5);
+  assert.equal(CamTune.getGlobal("fov"), 4);
+  assert.equal(CamTune.bob(), 0.3);
+
+  // Legacy CameraEdits snippet
+  CamTune.resetAll();
+  const legacy = CamTune.importText('window.CameraEdits = {\n  "hood": {"height": 0.5}\n};');
+  assert.equal(legacy.ok, true);
+  assert.equal(CamTune.getModeOnly("hood", "height"), 0.5);
+
+  // Clamping: out-of-range values are clamped, non-numbers dropped
+  CamTune.resetAll();
+  CamTune.importPack({ v: 1, modes: { chase: { dist: 999, height: "nope" } }, comfort: { bob: -2 } });
+  assert.equal(CamTune.getModeOnly("chase", "dist"), 24);
+  assert.equal(CamTune.stored("chase", "height"), false);
+  assert.equal(CamTune.bob(), 0);
+});
+
+test("CamTune comfort knobs are independent of reduce-motion and default to shipped", () => {
+  const CamTune = loadCamTune();
+  for (const d of CamTune.COMFORT_DEFS) {
+    assert.equal(CamTune.comfortGet(d.id), d.def, d.id + " ships at its registry default");
+  }
+  assert.equal(CamTune.shakeOffset(1, true), 0, "camComfort/reduce-motion still zeroes shake");
+  assert.equal(CamTune.shakeOffset(1, false), 0.9, "shipped bob=1 keeps the old 0.9×shake²");
+  CamTune.comfortSet("bob", 0.5);
+  assert.equal(CamTune.shakeOffset(1, false), 0.45);
+  assert.equal(CamTune.buzzAmp(1, false, true, 1), 0, "reduce-motion zeroes buzz");
+  assert.ok(CamTune.buzzAmp(1, false, false, 1) > 0);
+  assert.equal(CamTune.rollTarget(0.1, 0, 0, true), 0, "reduce-motion zeroes roll");
+  CamTune.comfortSet("rollLean", 0.5);
+  assert.equal(CamTune.rollTarget(0.2, 0, 0, false), 0.1);
+});
+
+test("CamTune global baseline layers under per-mode; copyFrom and presets work", () => {
+  const CamTune = loadCamTune();
+  CamTune.setGlobal("fov", 6);
+  assert.equal(CamTune.values("chase").fov, 6, "untouched mode inherits global FOV");
+  CamTune.set("chase", "fov", -2);
+  assert.equal(CamTune.values("chase").fov, -2, "per-mode wins over global");
+  assert.equal(CamTune.values("hood").fov, 6, "other modes still see the baseline");
+
+  CamTune.set("hood", "height", 0.4);
+  CamTune.copyFrom("hood", "tcam");
+  assert.equal(CamTune.getModeOnly("tcam", "height"), 0.4);
+
+  assert.equal(CamTune.applyPreset("flat"), true);
+  assert.equal(CamTune.cornerLead("chase"), 0);
+  assert.equal(CamTune.applyPreset("calm"), true);
+  assert.equal(CamTune.bob(), 0.2);
+  assert.equal(CamTune.applyPreset("stock"), true);
+  assert.equal(CamTune.count("chase"), 0);
+  assert.equal(CamTune.countGlobal(), 0);
+  assert.equal(CamTune.bob(), 1);
+});
+
+test("vantage.js FOV blends use comfort speedFov; corner-lead comment matches 0.54", () => {
+  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
+  assert.match(src, /const spFov = spN \* \(typeof CamTune/);
+  assert.match(src, /fov = lerp\(57, 63, spFov\)/);
+  assert.match(src, /shipped 0\.54/);
+  assert.doesNotMatch(src, /shipped 0\.18\)/);
 });
 
 // Announcement filtering across these cameras is exercised as behavior in
