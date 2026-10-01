@@ -8,8 +8,12 @@
    index.html's inline boot script, and CSS that keys off the attribute through
    tokens alone (css/components.css).
 
-   LAYOUT: GRID / LIST. GRID is the shipped two-up (RESTART | SETTINGS share a
-   row); LIST stacks every button full width. Lands on <html data-pause-layout>.
+   LAYOUT: GRID / LIST / COMPACT / WIDE / SIDEBAR. GRID is the shipped two-up
+   (RESTART | SETTINGS share a row); LIST stacks every button full width;
+   COMPACT puts three doors to a row at chip height for short screens; WIDE
+   lays the doors in one row along the bottom so the race keeps the top;
+   SIDEBAR is a full-height strip on the SIDE edge (CENTRE reads as LEFT).
+   Lands on <html data-pause-layout>.
 
    SIDE: CENTRE / LEFT / RIGHT. Where the card sits in the viewport, so a
    thumb-side player can keep the race visible on the other half. Lands on
@@ -29,15 +33,21 @@
    whenever the pause card hides. A disabled button (multiplayer restart) is
    never armed. Behaviour only, so no attribute.
 
-   Needs GameStore at eval (HARD_EDGES). SettingRow is read at call time only. */
+   SHIPPED composes: the fold's summary says SHIPPED only while these four AND
+   ScreenLooks' lookPause knobs (BUTTONS & CARD, mounted into the same fold)
+   are at their defaults. Every setter also PEEKS the pause card behind the
+   settings page, like the ScreenLooks rows do.
+
+   Needs GameStore at eval (HARD_EDGES). SettingRow and ScreenLooks are read at
+   call time only (screen-looks.js loads after this file). */
 const PauseOpts = (function () {
   "use strict";
 
-  const KEY_LAYOUT = "pauseLayout";    // apex26.pauseLayout — json: "grid" | "list" | unset
+  const KEY_LAYOUT = "pauseLayout";    // apex26.pauseLayout — json: "grid" | "list" | "compact" | "wide" | "sidebar" | unset
   const KEY_SIDE = "pauseSide";        // apex26.pauseSide — json: "centre" | "left" | "right" | unset
   const KEY_DIM = "pauseDim";          // apex26.pauseDim — json: "full" | "soft" | "off" | unset
   const KEY_CONFIRM = "pauseConfirm";  // apex26.pauseConfirm — json: "on" | "off" | unset
-  const LAYOUTS = [["grid", "GRID"], ["list", "LIST"]];
+  const LAYOUTS = [["grid", "GRID"], ["list", "LIST"], ["compact", "COMPACT"], ["wide", "WIDE"], ["sidebar", "SIDEBAR"]];
   const SIDES = [["centre", "CENTRE"], ["left", "LEFT"], ["right", "RIGHT"]];
   const DIMS = [["full", "FULL"], ["soft", "SOFT"], ["off", "OFF"]];
   const CONFIRMS = [["on", "ON"], ["off", "OFF"]];
@@ -62,9 +72,11 @@ const PauseOpts = (function () {
   const sideMode = () => pick(KEY_SIDE, SIDES, "centre");
   const dimMode = () => pick(KEY_DIM, DIMS, "full");
   const confirmMode = () => pick(KEY_CONFIRM, CONFIRMS, "on");
-  /** Every knob at its shipped answer — what the fold's summary calls SHIPPED. */
+  /** Every knob at its shipped answer — what the fold's summary calls SHIPPED.
+   *  Includes the ScreenLooks lookPause knobs that share this fold. */
   const shipped = () => layoutMode() === "grid" && sideMode() === "centre"
-    && dimMode() === "full" && confirmMode() === "on";
+    && dimMode() === "full" && confirmMode() === "on"
+    && (typeof ScreenLooks === "undefined" || ScreenLooks.isShipped("pause"));
 
   function stamp(attr, value, def) {
     if (!root || !root.dataset) return;
@@ -92,6 +104,7 @@ const PauseOpts = (function () {
       store.set(key, next);
       apply();
       paintRow(rowId, read());
+      if (typeof ScreenLooks !== "undefined" && ScreenLooks.peek) ScreenLooks.peek("pause", ScreenLooks.PEEK_MS);
       return read();
     };
   }
@@ -170,7 +183,7 @@ const PauseOpts = (function () {
     const help = document.createElement("p");
     help.className = "adv-help";
     help.id = "pm-pausemenu-help";
-    help.textContent = "LAYOUT: GRID pairs RESTART and SETTINGS, LIST gives every button its own row. SIDE: LEFT or RIGHT keeps half the race in view. BACKGROUND: how much the race darkens behind the card. CONFIRM QUIT: ON asks for a second tap before QUIT TO MENU or RESTART RACE.";
+    help.textContent = "LAYOUT: GRID pairs RESTART and SETTINGS, LIST gives every button its own row, COMPACT fits three to a row, WIDE runs them along the bottom of the screen, SIDEBAR makes a full-height strip on the SIDE edge. SIDE: LEFT or RIGHT keeps half the race in view. BACKGROUND: how much the race darkens behind the card. CONFIRM QUIT: ON asks for a second tap before QUIT TO MENU or RESTART RACE.";
     body.appendChild(help);
     const rows = [
       ["pm-pauselayout", "LAYOUT", LAYOUTS, layoutMode, setLayout],
