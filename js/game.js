@@ -1921,29 +1921,15 @@ function driverSkill(team, d, di) {
   // for attack/defence/OT/ERS/lane (see updateCar + js/physics/ai-drive.js). Still
   // exactly ONE simRnd() draw — the stream-position contract reliability.js and
   // career.spec.js depend on.
+  // Style −1..+1 (excluded from skill / overall / vmax product).
   return {
     skill: DriverRatings.skill(r, roll),
     craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
     experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
+    aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism),
   };
 }
-
-// The pace an AI car gets from running a DEVELOPED build instead of its
-// team's works car — MY TEAM's hire, and nothing else on the grid.
-//
-// It rides in `tierV`, the number the tier has always contributed, so the
-// per-car update at `c.tierV * c.skill * dd.ai` is unchanged in shape and no
-// AI gains a parts branch on the physics path. The mean of the four axes
-// because a human car spends its mods across four channels and an AI has
-// exactly one scalar — one axis alone would rate a cornering upgrade as no
-// upgrade at all. Pure: consumes no RNG, so the stream-position contract
-// makeCars() lives under is untouched.
-function buildPace(built, works) {
-  const b = built.mods, w = works.mods;
-  let sum = 0;
-  for (const k of ["speed", "accel", "cornering", "braking"]) sum += (b[k] || 1) / (w[k] || 1);
-  return sum / 4;
-}
+const buildPace = DriverRatings.buildPace;
 
 // The teams that will actually grid, and how many cars they field. Shared by
 // makeCars() and the track build so the PAINT cannot disagree with the CARS —
@@ -2886,6 +2872,7 @@ async function startRaceBody() {
   _raceProfile = []; let _rt = performance.now();
   const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   rlap("scenery");
+  radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
   const seasonSaveConflict = flow === "season" && SeasonCal.conflicted();
@@ -5471,6 +5458,7 @@ function updateCar(c, dt, ranked) {
     c.passFailT = Math.max(0, (c.passFailT || 0) - dt);
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
+    // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking
     // point, from a hash (never simRnd), and never while alongside a car.
     c.pressT = clamp((c.pressT || 0) + (chaser && chaserGap < 0.6 * Math.max(c.speed, 10) ? dt : -dt * 0.5), 0, 6);

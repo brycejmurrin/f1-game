@@ -172,6 +172,8 @@
     "// Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.",
     "tests/unit/director.test.mjs",
     "tests/unit/docs-integrity.test.mjs",
+    "// Decorrelated DriverRatings.BASE + skill()/overall personality pins.",
+    "tests/unit/driver-ratings-personality.test.mjs",
     "tests/unit/driving-coach.test.mjs",
     "// …and the DUEL ROW that reaches it: one control carrying OFF / ON / a",
     "// named legend has to round-trip through two setters, and the inert VM DOM",
