@@ -343,20 +343,21 @@ test("career slot cards expose EXPORT and IMPORT buttons", () => {
   ui.openSlots();
 
   const left = G.$("cr-left");
-  const labels = left.querySelectorAll(".cr-slot-del").map((n) => n.textContent);
-  assert.ok(labels.includes("EXPORT"), "used slot must offer EXPORT");
-  assert.ok(labels.includes("IMPORT"), "slot cards must offer IMPORT");
-  assert.ok(labels.includes("DELETE"), "used slot still offers DELETE");
+  const acts = left.querySelectorAll("[data-cr-act]").map((n) => n.textContent);
+  assert.ok(acts.includes("EXPORT"), "used slot must offer EXPORT");
+  assert.ok(acts.includes("IMPORT"), "slot cards must offer IMPORT");
+  const dels = left.querySelectorAll(".cr-slot-del").map((n) => n.textContent);
+  assert.deepEqual(dels, ["DELETE"], "cr-slot-del is DELETE-only (never EXPORT/IMPORT)");
 
-  const expBtn = left.querySelectorAll(".cr-slot-del").find((n) => n.textContent === "EXPORT");
+  const expBtn = left.querySelector('[data-cr-act="export"]');
   assert.ok(expBtn);
   expBtn.onclick({ stopPropagation() {} });
   assert.equal(exports.length, 1, "EXPORT calls CareerBackup.exportAll");
 
   // Empty slots still get IMPORT (restore into an empty card).
   const right = G.$("cr-right");
-  const emptyLabels = right.querySelectorAll(".cr-slot-del").map((n) => n.textContent);
-  assert.ok(emptyLabels.includes("IMPORT"));
-  assert.ok(!emptyLabels.includes("EXPORT"), "empty slots do not EXPORT");
-  assert.ok(!emptyLabels.includes("DELETE"));
+  const emptyActs = right.querySelectorAll("[data-cr-act]").map((n) => n.textContent);
+  assert.ok(emptyActs.includes("IMPORT"));
+  assert.ok(!emptyActs.includes("EXPORT"), "empty slots do not EXPORT");
+  assert.equal(right.querySelectorAll(".cr-slot-del").length, 0, "empty slots have no DELETE");
 });
