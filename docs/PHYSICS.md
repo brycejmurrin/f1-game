@@ -515,11 +515,10 @@ the numbers):
 other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
 `docs/notes/AI-FIELD-RESEARCH.md` §2026-10-01):
 
-- **The follow gap is a time** (`AiDrive.followGap`, IDM's s0 + v·T): s0 is
-  the old `followBase` (6 m, 8 street), T = 0.15–0.30 s by awareness (house
-  hold and team orders scale it; streets 0.8 of it), shrinking toward 0.05 s
-  (0.025 s on a street) while a pass is latched or armed (`c.atkOn`) or in a
-  tow on a straight (to 0.6 of the way while the car merely wants the move),
+- **The follow gap is a time on a permanent circuit** (`AiDrive.followGap`,
+  IDM's s0 + v·T): s0 is the old `followBase` (6 m), T = 0.15–0.30 s by
+  awareness (house hold and team orders scale it), shrinking toward 0.05 s
+  while a pass is latched or armed (`c.atkOn`) or in a tow on a straight (to 0.6 of the way while the car merely wants the move),
   and capped at 28 m so
   the tow (TOW_RANGE 34 m) still reaches. It was a flat 6.7–8.2 m — a tenth
   of a second at speed. The first cut (0.25–0.45 s, tight 0.12 s) cost a third
@@ -534,8 +533,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   a passing straight (next zone q ≥ 0.4) a follower that wants the move holds
   +0.15 s (`runExtra`), then closes in the tow and latches LATE (`latchLate`:
   far down a straight it waits for a 1.5 %-of-top-speed closing rate or a 10 m
-  gap, or the tight gap, or its queue patience spent); on a street circuit
-  `passReach` gives no late-brake allowance (1.0× the distance to the turn-in).
+  gap, or the tight gap, or its queue patience spent).
   **AiCorridor looks down the lane**: a slower car within 1.5 s ahead in
   the target lane that would be caught before the pass completes closes it.
   **The attack roll is per attempt** (`attemptRoll`: a hash of the per-car race
@@ -562,6 +560,16 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
 - **The first lap** (`AiDrive.startCalm`): a launching car, and for 20 s from
   the green, +0.2 s of headway and half the attack quality; `c.calmUntil` is
   set when the launch ends, so a car placed at speed is never calm.
+- **Street circuits keep the old passing game** (`track.street`). Every gate
+  above that pays on a long wide straight cost monaco passes (settled 48 → 33
+  at 5 seeds × 8 laps), so on a street: the METRE follow gap (8 m + the old
+  awareness pad, halved; only the first-lap +0.2 s is time — at monaco speeds
+  that gap is already ~0.25 s), no lane look-ahead, no `latchLate` or
+  `runExtra`, otSide's 0.3 tiebreak instead of the 0.8 next-corner bonus, no
+  defending extras, and the passer is not a wide blocker during the re-pass
+  lockout (the lockout itself, the per-attempt roll, commit-or-yield, the
+  next-corner level election and the first-lap calm all stay). After: monaco
+  settled 50, conversion 4.8 %, swap-back 13 %, AI-AI contact 73 (base 83).
 
 - **A standing start is a launch** (`AiDrive.launchPlan` / `launchMul`). Every
   AI car used to accelerate identically, so a 22-car grid held its 8 m pitch for

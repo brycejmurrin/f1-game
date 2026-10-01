@@ -52,7 +52,9 @@ corner yields, commit-or-yield after 2 s (`sbsCommitT`); any flip -> `repassLock
 the passer is a wide blocker; defending mid-train / adjacent lane / predicted side
 (`defendPull`); first 20 s calm (`startCalm`). A human blocker is judged by `paceVmax`
 (`paceSample` profile), and a held line arms `humanYieldT` at a quarter rate.
-`kTurn` never reaches a human pair in collide.js. Measure: `ai-race.mjs tactics`.
+`kTurn` never reaches a human pair in collide.js. STREETS (`track.street`) keep the metre
+gap and the old pass gates (no look-ahead / latchLate / runExtra / 0.8 side bonus / wide
+lockout blocker): they cost monaco passes. Measure: `ai-race.mjs tactics`.
 
 ## Stuck / unstuck (AI wedged, never recovers)
 

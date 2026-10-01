@@ -4883,7 +4883,7 @@ function updateCar(c, dt, ranked) {
         if (deficit > 0) sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);   // push AWAY from o
       }
       // A car that just passed us (or that we just gave up on) is our blocker across the lane too, until the lockout ends: concede the place, do not run parallel and swap back (AiDrive.repassLock).
-      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 ? 6 : BLOCKER_HALF_W)) { blocker = o; blockerGap = dprog; }
+      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 && !track.street ? 6 : BLOCKER_HALF_W)) { blocker = o; blockerGap = dprog; }
       if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < TOW_HALF_W) { towCar = o; towGap = dprog; }   // wake giver
       if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < (!track.street && -dprog < 0.5 * Math.max(c.speed, 10) ? 5.5 : 3)) { chaser = o; chaserGap = -dprog; }  // attacker behind: our lane, or the next one inside half a second
     }
@@ -5478,7 +5478,7 @@ function updateCar(c, dt, ranked) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant) : 0;
+    c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking

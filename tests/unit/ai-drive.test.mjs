@@ -71,7 +71,6 @@ test("the follow gap is a time headway: s0 + v·T, awareness widens T", () => {
   assert.equal(A.followBase(false), 6);
   assert.equal(A.followBase(true), 8);
   assert.ok(A.followTime(ace) > A.followTime(rook), "awareness leaves more time");
-  assert.ok(A.followTime(ace, true) < A.followTime(ace, false), "streets take less of it");
   const T = A.followTime(mid, false);
   assert.ok(T >= 0.15 && T <= 0.30, `T ${T} s outside the 0.15..0.30 s band`);
   // IN SECONDS AT SPEED: the gap grows with speed (it was a flat ~7.5 m, 0.1 s at 75 m/s)
@@ -80,7 +79,11 @@ test("the follow gap is a time headway: s0 + v·T, awareness widens T", () => {
   assert.ok((g40 - 6) / 40 > 0.15, "more than 0.15 s of headway at racing speed (the old pad was ~0.04 s)");
   // a latched/armed pass or a tow tightens it to 0.05 s; `extra` adds seconds
   assert.ok(Math.abs(A.followGap(mid, false, 40, 1) - (6 + 40 * 0.05)) < 1e-9);
-  assert.ok(Math.abs(A.followGap(mid, true, 40, 1) - (8 + 40 * 0.025)) < 1e-9, "a street attack starts closer");
+  // STREETS keep the metre gap (8 m + the old awareness pad, halved), only the first-lap `extra` is time
+  assert.ok(Math.abs(A.followGap(mid, true, 40, 1) - (8 + (-0.8 + 3 * 0.75) * 0.5)) < 1e-9, "street: the old gap, tight or not");
+  assert.equal(A.followGap(mid, true, 40, 0), A.followGap(mid, true, 20, 1), "street: not a headway");
+  assert.ok(Math.abs(A.followGap(mid, true, 40, 0, null, 0, null, null, 0.2) - A.followGap(mid, true, 40, 0) - 8) < 1e-9, "street: the first lap still adds time");
+  assert.ok(A.followGap(ace, true, 30) > A.followGap(rook, true, 30), "street: awareness still widens it");
   assert.ok(Math.abs(A.followGap(mid, false, 40, 0, null, 0, null, null, 0.1) - (6 + 40 * (T + 0.1))) < 1e-9);
   // ...and it stays inside the tow's reach (TOW_RANGE 34 m) at any speed
   assert.ok(A.followGap(ace, false, 95) <= 28, `capped: ${A.followGap(ace, false, 95)}`);
@@ -1108,6 +1111,8 @@ test("get a run: hang back through the corner onto a passing straight, pull out 
   assert.equal(A.runExtra(0.02, 0.6, false), 0, "not wanting the move");
   assert.equal(A.runExtra(0.001, 0.6, true), 0, "already on the straight");
   assert.equal(A.runExtra(0.02, 0.2, true), 0, "a poor zone is not worth a run");
+  assert.equal(A.runExtra(0.02, 0.6, true, true), 0, "never on a street");
+  assert.equal(A.latchLate({ traits: mid, toTurnIn: 400, kAhead: 0, vTop: 72, speed: 70, blockerSpeed: 70, blockerGap: 20, street: true }), true, "a street latches as before");
   const st = { traits: mid, toTurnIn: 400, kAhead: 0, vTop: 72, speed: 70, blockerSpeed: 70, blockerGap: 20, queueT: 0 };
   assert.equal(A.latchLate(st), false, "far down a straight with no closing rate: wait");
   assert.equal(A.latchLate({ ...st, speed: 72 }), true, "closing in the tow: go");

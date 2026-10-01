@@ -112,15 +112,23 @@ const AiDrive = (function () {
   // with the contact, side-by-side and swap-back gains intact.
   const FOLLOW_TIGHT = 0.05, FOLLOW_MAX = 28;
   function followTime(t, street, team, seat, other, stats) {
-    const T = lerp(0.15, 0.30, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
+    return lerp(0.15, 0.30, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
       * ordersMul(team, seat, other, "follow");
-    return street ? T * 0.8 : T;
   }
+  // STREET CIRCUITS KEEP THE METRE GAP (2026-10-01): followBase 8 m plus the old
+  // awareness pad (-0.4..+1.1 m), and only `extra` (the first lap) as time. At
+  // monaco speeds the old gap IS ~0.25 s, and every headway tried there cost
+  // passes the narrow zones cannot spare: ai-tactics, 5 seeds x 8 laps, settled
+  // passes 48 base -> 33 with the time headway, 50 with this (conversion 4.8 %
+  // both); docs/notes/AI-FIELD-RESEARCH.md has the street ablation.
   function followGap(t, street, speed, tight, team, seat, other, stats, extra) {
-    // Streets tighten to HALF of it: an attack at monaco starts from s0 (8 m) + a
-    // few metres, or the narrow zones are out of reach by the turn-in.
-    const T = lerp(followTime(t, street, team, seat, other, stats), street ? FOLLOW_TIGHT * 0.5 : FOLLOW_TIGHT, clamp(tight || 0, 0, 1)) + (extra || 0);
-    return Math.min(followBase(street) + Math.max(speed || 0, 0) * T, FOLLOW_MAX);
+    const v = Math.max(speed || 0, 0);
+    if (street) {
+      return followBase(true) + lerp(-0.8, 2.2, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
+        * 0.5 * ordersMul(team, seat, other, "follow") + v * (extra || 0);
+    }
+    const T = lerp(followTime(t, street, team, seat, other, stats), FOLLOW_TIGHT, clamp(tight || 0, 0, 1)) + (extra || 0);
+    return Math.min(followBase(street) + v * T, FOLLOW_MAX);
   }
 
   // Slipstream vmax gain. Streets get a half-size tow: with none, the 8 m train
@@ -676,14 +684,18 @@ const AiDrive = (function () {
   // out LATE (latchLate): far from the braking zone it waits for a real
   // closing rate or a short gap, so the slingshot is used, not spent early.
   const RUN_T = 0.15;
-  function runExtra(kHere, qNext, want) {
-    return want && Math.abs(kHere || 0) > 0.004 && qNext >= 0.4 ? RUN_T : 0;
+  // Permanent circuits only, like latchLate, the side bonus and the lane
+  // look-ahead: on a street every one of them cost monaco passes (the street
+  // ablation, docs/notes/AI-FIELD-RESEARCH.md 2026-10-01).
+  function runExtra(kHere, qNext, want, street) {
+    return !street && want && Math.abs(kHere || 0) > 0.004 && qNext >= 0.4 ? RUN_T : 0;
   }
   // "On the gearbox" is the tight follow gap (FOLLOW_TIGHT) plus a little. A
   // car held for its whole patience goes anyway: at racing speed two cars
   // accelerate alike, so a 4 % car may never close the last metres in the tow
   // (measured: requiring it, a 4 % faster car never passed in 50 s at monza).
   function latchLate(ctx) {
+    if (ctx.street) return true;
     if (!(ctx.toTurnIn > 150) || Math.abs(ctx.kAhead || 0) > 0.004) return true;   // the zone is near, or not a straight
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     if ((ctx.blockerSpeed || 0) < 0.12 * ref || queuePress(ctx) >= 1) return true;
@@ -781,9 +793,7 @@ const AiDrive = (function () {
     if (gain <= 0) return true;
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
     const dv = Math.max((ctx.speed || 0) - (ctx.blockerSpeed || 0), (ctx.freeSpeed || 0) - bv, ref / 72);
-    // Streets get no late-brake allowance: the zones are short and narrow, and
-    // a marginal move there was an attack that failed (monaco conversion 3-4 %).
-    return (ctx.speed || 0) * gain / dv <= (ctx.street ? 1 : 1.25) * to;
+    return (ctx.speed || 0) * gain / dv <= 1.25 * to;
   }
 
   // QUEUE PRESSURE. THE TRAIN: the queue cap holds a follower at the blocker's
@@ -1455,7 +1465,7 @@ const AiDrive = (function () {
   // over 3 m of extra room), otherwise the old 0.3 for otSide's pick.
   function passSideBonus(ctx, side) {
     const k = ctx.kTurn || 0;
-    if (Math.abs(k) > 0.004 && ctx.toTurnIn < 250) return side === -Math.sign(k) ? 0.8 : 0;
+    if (!ctx.street && Math.abs(k) > 0.004 && ctx.toTurnIn < 250) return side === -Math.sign(k) ? 0.8 : 0;
     return otSide(ctx) === side ? 0.3 : 0;
   }
 

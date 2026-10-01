@@ -52,7 +52,7 @@ const AiCorridor = (function () {
       // that we would catch before the pass is done (blocker gap + a car
       // length, at our closing rate on the blocker) is the next blocker — the
       // move pulls out only to queue again. Within 1.5 s of road.
-      if (other !== blocker && gap > 0 && gap < reach && Math.abs(other.x - out.target) < 2.2
+      if (!ctx.street && other !== blocker && gap > 0 && gap < reach && Math.abs(other.x - out.target) < 2.2
         && gap - (car.speed - other.speed) * passT < 6) { out.reason = "traffic ahead in the passing lane"; return; }
     }
     out.reason = "clear passing lane";

@@ -938,3 +938,51 @@ cap (55 m/s) reads as a slow `paceF`, so the AI attacks it a little more.
 
 **Coverage.** The instrument is a VM bench of AI-vs-AI and a SCRIPTED player; nothing here
 ran in a browser, and `tests/specs/` collision / physics-characterization were not run.
+
+### Street circuits: the old passing game back (same day, before shipping)
+
+The table above shipped Monaco with fewer passes (48 -> 33 settled). A street ablation
+(temporary flags, 2 seeds x 4 laps to rank, then 5 x 8 to confirm) found the time headway
+the main cost on a narrow track, then the gates that only pay on long wide straights. On a
+street circuit (`track.street`) the shipped tree keeps the METRE follow gap (8 m + the old
+awareness pad, halved; only the first-lap +0.2 s is time), the old `passReach` allowance,
+otSide's 0.3 side tiebreak, and drops the lane look-ahead, `latchLate`, `runExtra` and the
+wide re-pass blocker. The trade is plain in the 5 x 8 confirms — every variant that won
+back contact or lap 1 gave passes away, because at monaco the passes ARE the lap-1 shuffle:
+
+| monaco, 5 seeds x 8 laps | settled | conversion % | swap-back % | AI-AI contact | lap-1 <0.5 s % | stuck >30 s |
+|---|---|---|---|---|---|---|
+| base | 48 | 4.8 | 14.5 | 83 | 38.6 | 33 |
+| shipped first (all gates, street headway) | 33 | 4 | 13.6 | 44 | 21.2 | 40 |
+| old metre gap + old reach, no look-ahead / latchLate / runExtra / wide lockout | 46 | 4.3 | 12.7 | 77 | 30.5 | 36 |
+| ...and the old side bonus (SHIPPED) | 50 | 4.8 | 13 | 73 | 31.3 | 34 |
+| N1: SHIPPED + wide lockout blocker | 42 | 5.6 | 5.6 | 52 | 30.5 | 30 |
+| N1 + lap-1 extra x1.5 | 46 | 4.1 | 7.3 | 64 | 23.7 | 28 |
+| SHIPPED + lap-1 extra x1.5 | 37 | 5.5 | 17.3 | 70 | 27.6 | 25 |
+| M1: SHIPPED + lap-1 extra x2.5 | 37 | 5.5 | 13.1 | 63 | 24.8 | 24 |
+| N1 + lap-1 extra x2.5 | 38 | 4.8 | 8.7 | 51 | 21.1 | 30 |
+| M1 + 0.06 s headway | 37 | 3.6 | 16.7 | 41 | 17.6 | 28 |
+| M1 + 0.12 s headway | 35 | 5.2 | 21.3 | 49 | 15.2 | 27 |
+
+**The shipped tree against base, all four circuits** (5 seeds x 8 laps, medians; monaco
+and baku re-run on the final commit; monza and silverstone are the table above —
+their code path is unchanged, checked byte-for-byte: a 2-lap `--json` run of the final
+and the previous tree is identical on monza, silverstone and human-mode monza):
+
+| metric | monaco before → after | baku before → after | monza before → after | silverstone before → after |
+|---|---|---|---|---|
+| settled passes | 48 → 50 | 110 → 103 | 158 → 168 | 147 → 139 |
+| attack conversion % | 4.8 → 4.8 | 14.6 → 14.5 | 22.7 → 29.7 | 18.5 → 21.6 |
+| swap-back % of flips | 14.5 → 13 | 19.9 → 20.7 | 23.4 → 11.7 | 18.3 → 11.7 |
+| AI-AI contact episodes | 83 → 73 | 75 → 70 | 70 → 29 | 96 → 44 |
+| lap-1 intervals <0.5 s % | 38.6 → 31.3 | 46.8 → 42.6 | 57.4 → 55.2 | 57.5 → 49 |
+| side-by-side p90 s | 4.5 → 4.3 | 4.5 → 4.8 | 5.5 → 4.3 | 4.8 → 3.5 |
+| stuck >30 s (faster behind slower) | 33 → 34 | 32 → 42 | 29 → 29 | 28 → 35 |
+| lap-8 leader-to-last s | 39.3 → 40.2 | 60.4 → 55.6 | 64.7 → 65.3 | 72 → 71 |
+
+Monaco meets the passing bar (settled 50 >= 48, conversion 4.8 % = base, swap-back 13 %
+<= 14.5) and keeps part of its other gains (AI-AI contact 83 -> 73, lap-1 under 0.5 s
+38.6 -> 31.3 %) — not the 44 / 21 % the headway bought. Baku (a street circuit with long
+straights) sits at base: passes 110 -> 103 and conversion 14.6 -> 14.5 % inside the
+seed range, contact 75 -> 70, swap-back 19.9 -> 20.7 %, stuck >30 s 32 -> 42 (the
+measure discussed above).

@@ -81,3 +81,10 @@ test('the inside of the next corner wins the pass side', () => {
   assert.equal(scenario([], { kAhead: 0, kTurn: 0.01, toTurnIn: 120 }).side, -1);
   assert.equal(scenario([], { kAhead: 0, kTurn: -0.01, toTurnIn: 120, roomR: 3, roadR: 3 }).side, 1, 'even with less room');
 });
+
+// STREETS (2026-10-01): neither the lane look-ahead nor the next-corner bonus —
+// both cost monaco passes; the old otSide tiebreak scores the side.
+test('on a street the look-ahead and the next-corner bonus are off', () => {
+  assert.equal(scenario([{ prog: 120, x: -2.8, speed: 37 }], { blockerGap: 15, street: true }).side, -1, 'a slower car ahead does not close a street lane');
+  assert.equal(scenario([], { kAhead: 0, kTurn: -0.01, toTurnIn: 120, roomR: 3, roadR: 3, street: true }).side, -1, 'no 0.8 inside bonus: the roomier lane wins');
+});
