@@ -334,3 +334,57 @@ test('the drive-out coasts on past OUT_DURATION (the held garage), and settles w
   const step = Math.hypot(end.x - at(Arrival.OUT_SETTLE - 0.02).x, end.z - at(Arrival.OUT_SETTLE - 0.02).z);
   assert.ok(step < 0.02, `the last 20 ms moves ${step.toFixed(4)} m: no stop jerk`);
 });
+test('START during a pending shader warm keeps race settings up (PREPARING…), then opens on the garage: no black card first', async () => {
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const src = game.slice(game.indexOf('let _sheetHold = false;'), game.indexOf('function raceIntro(go) {'));
+  const run = async (mode) => {
+    let warming = mode !== 'free', now = 0;
+    const events = [];
+    const btn = { textContent: 'START RACE', disabled: false };
+    const sheet = { hidden: false };
+    const ctx = { _introRun: 0, state: 'menu', settings: 'one', Log: { warn() {} },
+      gfx: { warming: () => warming }, performance: { now: () => now },
+      entrySettings: () => ctx.settings,
+      raceIntro: (go) => events.push(['intro', sheet.hidden, btn.disabled, btn.textContent]),
+      menuSlice: async () => {
+        now += 500;
+        if (now === 1000) events.push(['held', sheet.hidden, btn.disabled, btn.textContent]);
+        if (mode === 'ends' && now >= 1500) warming = false;
+        if (mode === 'back' && now >= 1500) sheet.hidden = true;
+        if (mode === 'quit' && now >= 1500) ctx._introRun++;
+        if (mode === 'setting' && now >= 1500) ctx.settings = 'two';
+        if (mode === 'again' && now === 1000) ctx.raceIntroFromSheet(() => events.push(['go']), sheet, btn);
+        if (mode === 'again' && now === 2000) events.push(['still', btn.disabled, btn.textContent]);
+        if (mode === 'again' && now >= 2500) warming = false;
+      } };
+    vm.createContext(ctx);
+    vm.runInContext(src, ctx);
+    ctx.raceIntroFromSheet(() => events.push(['go']), sheet, btn);
+    if (mode !== 'free') events.push(['sync', sheet.hidden, btn.disabled]);
+    for (let i = 0; i < 400; i++) await Promise.resolve();
+    return { events, btn, sheet };
+  };
+  const free = await run('free');
+  assert.deepEqual(free.events, [['intro', true, false, 'START RACE']], 'no warm: the sheet closes and the intro runs at once, as before');
+  const ends = await run('ends');
+  assert.deepEqual(ends.events[0], ['sync', false, true], 'a pending warm: the sheet stays up and START is busy — no card over a black canvas');
+  assert.deepEqual(ends.events[1], ['held', false, true, 'PREPARING…']);
+  assert.deepEqual(ends.events[2], ['intro', true, false, 'START RACE'], 'the warm over: the sheet closes, the button is given back, the intro opens on the garage');
+  for (const mode of ['back', 'quit', 'setting']) {
+    const r = await run(mode);
+    assert.equal(r.events.some((e) => e[0] === 'intro'), false, mode + ': abandoned, no intro');
+    assert.equal(r.btn.disabled, false, mode + ': START is usable again');
+    assert.equal(r.btn.textContent, 'START RACE', mode);
+  }
+  const again = await run('again');
+  assert.deepEqual(again.events.find((e) => e[0] === 'still'), ['still', true, 'PREPARING…'], 'a second press while it waits is ignored: the button stays busy');
+  assert.equal(again.events.filter((e) => e[0] === 'intro').length, 1, 'and one intro, not two');
+  assert.deepEqual(again.events.at(-1), ['intro', true, false, 'START RACE']);
+  const stuck = await run('stuck');
+  assert.deepEqual(stuck.events.at(-1), ['intro', true, false, 'START RACE'], 'a warm that never ends is bounded: the intro (and its card) after 30 s, never a dead button');
+  const rs = readFileSync(new URL('../../js/race/race-settings.js', import.meta.url), 'utf8');
+  const go = rs.slice(rs.indexOf('$("rs-go").onclick = () => {'), rs.indexOf('    }\n\n    return {'));
+  assert.match(go, /raceIntro\(startRace, sheet, \$\("rs-go"\)\)/, 'race settings hands its sheet and button to the intro');
+  assert.ok(go.indexOf('sheet.hidden = true') > go.indexOf('if (netRoom) {'), 'and does not close the sheet before routing');
+  assert.match(game, /buildStandings, raceIntro: raceIntroFromSheet,/, 'game.js wires the sheet-holding intro into race settings');
+});

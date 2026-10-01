@@ -3867,7 +3867,7 @@ qualiNet = QualiNet.create({
 raceSettings = RaceSettings.create(G, {
   GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
   qualiResults: () => quali.results(), openQuali, enableTilt,
-  getSteerMode: () => steerMode, buildStandings, raceIntro,
+  getSteerMode: () => steerMode, buildStandings, raceIntro: raceIntroFromSheet,
 });
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, and startRaceBody keeps
@@ -3956,7 +3956,8 @@ async function awaitIntroWarm(current) {
 // NO CARD (LoadingScreen.garage), while the circuit builds behind it; the card and
 // the announcer arrive with the flyby. The circuit's warm waits for it (render()
 // draws nothing while a warm is pending), and a warm ALREADY pending at RACE! gets
-// the card until the garage's first frame (render() swaps it in). A build still
+// the card until the garage's first frame (render() swaps it in) — except from race
+// settings, whose sheet waits it out instead (raceIntroFromSheet). A build still
 // running when the car is out gets the card (studioClose). A tap skips to the race
 // (studioSkip, raceIntro). Tagged with its intro run: only that run closes it, so a
 // stale run backing out never closes a newer one's.
@@ -4107,6 +4108,31 @@ function startRaceCovered() {
 }
 // An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
 function titleIfBare() { if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
+// START RACE WHILE A SHADER WARM IS STILL COMPILING. Race settings requests two (the
+// world's, menuFinish; the garage's, garagePrewarm) and TLX presents nothing until one
+// ends, 1-4 s on a real GPU: a tap inside that window could not draw the drive-out, so
+// studioOpen put the card up over a black canvas — card, garage, then the card again
+// with the flyby. The tapped sheet stays up instead, START reading PREPARING…, until
+// the renderer is free; raceIntro then opens on the drawn garage. Bounded as
+// awaitIntroWarm is (then the card, as before); BACK, a changed setting or leaving the
+// menu abandons it and gives the button back.
+let _sheetHold = false;
+function raceIntroFromSheet(go, sheet, btn) {
+  if (_sheetHold) return;   // already waiting (the button is disabled: a synthetic second press)
+  if (!sheet || !btn || !(gfx.warming && gfx.warming())) { if (sheet) sheet.hidden = true; raceIntro(go); return; }
+  _sheetHold = true;
+  const n = ++_introRun, settings = entrySettings(), label = btn.textContent, at = performance.now();
+  const live = () => n === _introRun && state === "menu" && settings === entrySettings() && !sheet.hidden;
+  btn.disabled = true; btn.textContent = "PREPARING…";
+  (async () => {
+    while (live() && gfx.warming() && performance.now() - at < 30000) await menuSlice();
+    _sheetHold = false; btn.disabled = false;
+    if (btn.textContent === "PREPARING…") btn.textContent = label;   // unless the sheet relabelled it meanwhile
+    if (!live()) return;
+    sheet.hidden = true;
+    try { raceIntro(go); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); go(); }
+  })();
+}
 function raceIntro(go) {
   // The card is the whole screen: the Data Hub's JUMP IN closes a dialog that sat OVER the title, which then showed round the card.
   els.overlay.hidden = true;
