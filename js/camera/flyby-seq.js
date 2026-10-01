@@ -1343,7 +1343,7 @@ const FlybySeq = (function () {
      screen's FLY_MS; the unit test pins the two together) and, while it is
      over PAN_MAX, squeezes the shot's travel about its middle (both pairs, the
      same factor), down to PAN_MIN_K of it. */
-  const REF_S = 24, PAN_MAX = 40 * Math.PI / 180, PAN_K = 0.85, PAN_MIN_K = 0.1, PAN_N = 48;
+  const REF_S = 20, PAN_MAX = 40 * Math.PI / 180, PAN_K = 0.85, PAN_MIN_K = 0.1, PAN_N = 48;
   const _pe = [0, 0, 0], _pt = [0, 0, 0];
   function panRate(track, shot, frac, eye, look, prof) {
     const ease = EASE[shot.ease] || EASE.inOut;
@@ -1364,8 +1364,8 @@ const FlybySeq = (function () {
     }
     return peak * PAN_N / (Math.max(1e-6, frac) * _flyS);
   }
-  /** The run's real length: a habitual skipper's flyby is 12 s, and every shot
-   *  planned against REF_S's 24 panned at twice PAN_MAX. */
+  /** The run's real length: a habitual skipper's flyby is 10 s, and every shot
+   *  planned against REF_S's 20 panned at twice PAN_MAX. */
   const PAN_RUNGS = Math.floor(Math.log(PAN_MIN_K) / Math.log(PAN_K) + 1e-9);   // 0.85^14 = 0.103: the walk's last rung
   let _flyS = REF_S;
   function setDuration(ms) { _flyS = ms > 0 ? ms / 1000 : REF_S; }
