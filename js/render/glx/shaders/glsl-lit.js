@@ -154,6 +154,7 @@ uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specu
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
 uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
+uniform float uRain;        // 0..1 rain FALLING (frame.rain): drives the puddle ripples
 // ── Baked PBR material maps (js/render/shared/assets.js) ────────────────────────────
 // TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID (js/track/core/geom.js MAT). No
 // UV channel exists anywhere on the lit path and none is needed: the sample
@@ -1172,6 +1173,30 @@ void main() {
     puddle = smoothstep(0.48, 0.88, pn) * wet;        // only low spots pool
     // Porous ground cannot hold standing water — no pooling, and no sheen below.
     puddle *= 1.0 - porous;
+    // RAIN RIPPLES (2026-10-01): expanding rings from drop impacts, keyed to the
+    // game clock, as a normal perturbation on the POOLED water only. N is read
+    // below by the sun/lamp GGX lobes and the sky reflection, never by the
+    // diffuse NoL computed above — right for a ripple, a specular event. Two
+    // cell grids of random impact points; each cell spawns one ring per cycle
+    // at its own phase, the ring is sin((r - v·t)·k) damped by radius and age,
+    // and the normal tilt is that sine's gradient (cos·k·r̂). Mirrored constant
+    // for constant in js/render/three/tsl-lit.js and js/render/webgpu/wgsl-chunks.js.
+    if (puddle > 0.001 && uRain > 0.001) {
+      vec2 rg = vec2(0.0);
+      for (int k = 0; k < 2; k++) {
+        float fk = float(k);
+        float sc = k == 0 ? 1.7 : 2.9;                        // ~0.6 m and ~0.35 m cells
+        vec2 rp = vWorldPos.xz * sc + fk * 7.3;
+        vec2 ci = floor(rp), cf = fract(rp) - 0.5;
+        float hh = hash21(ci + fk * 19.0);
+        float t = fract(uTime * (0.8 + 0.5 * fk) + hh);       // 0..1 ring life, staggered per cell
+        float r = length(cf) + 1e-4;
+        float ph = (r - t * 0.45) * 40.0;
+        float amp = (1.0 - t) * t * 4.0 * exp(-r * 5.0) * step(r, t * 0.45 + 0.08);   // rises, spreads, dies
+        rg += cos(ph) * (cf / r) * amp;
+      }
+      N = normalize(N + vec3(rg.x, 0.0, rg.y) * (0.10 * uRain * puddle));
+    }
     // Water absorbs light: wet asphalt reads notably darker, puddles a touch darker
     // (not stark, so they don't read as flat dark blobs). WET ROAD DARKEN knob
     // scales the absorption (uWetDark 1 = shipped 0.42 floor, 0 = no darkening).
