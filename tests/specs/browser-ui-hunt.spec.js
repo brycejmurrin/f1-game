@@ -155,6 +155,8 @@ test("Live uses the hub content as its only stacked scroll owner", async ({ page
   await page.getByRole("tab", { name: "LIVE" }).click();
   await expect(page.locator(".dh-class-rows .dh-row")).toHaveCount(20);
 
+  // Field-by-field: the live reporter truncates a deep toEqual to
+  // "Received + 1" and swallows which key flipped (ui-scale.spec.js lesson).
   const overflow = await page.evaluate(() => {
     const content = document.querySelector(".dh-content");
     const right = document.querySelector(".dh-split-R");
@@ -165,15 +167,17 @@ test("Live uses the hub content as its only stacked scroll owner", async ({ page
       rightY: getComputedStyle(right).overflowY,
       splitGrow: getComputedStyle(split).flexGrow,
       rightHorizontalOverflow: right.scrollWidth > right.clientWidth + 1,
+      rightScrollDelta: right.scrollWidth - right.clientWidth,
     };
   });
-  expect(overflow).toEqual({
-    outerY: "auto",
-    rightX: "visible",
-    rightY: "visible",
-    splitGrow: "0",
-    rightHorizontalOverflow: false,
-  });
+  expect(overflow.outerY, "hub content owns vertical scroll").toBe("auto");
+  expect(overflow.rightX, "right pane must not own horizontal scroll").toBe("visible");
+  expect(overflow.rightY, "right pane must not own vertical scroll").toBe("visible");
+  expect(overflow.splitGrow, "stacked split must not flex-grow into a second scroller").toBe("0");
+  expect(
+    overflow.rightHorizontalOverflow,
+    `right pane must not grow sideways (scrollDelta=${overflow.rightScrollDelta})`,
+  ).toBe(false);
 });
 
 test("Export explains the Gather prerequisite before Download is ready", async ({ page }) => {
