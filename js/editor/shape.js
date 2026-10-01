@@ -30,7 +30,10 @@ const TrackShape = (function () {
     for (const p of pts) { x += p[0]; z += p[1]; }
     return [x / pts.length, z / pts.length];
   }
-  /** Signed area: > 0 when the loop turns LEFT overall in this frame (x right, z forward). */
+  /** Signed area (shoelace over x, z): < 0 when the loop turns LEFT overall
+   *  (built Σk = +2π, +k = LEFT), > 0 when it turns RIGHT (clockwise as a
+   *  circuit map reads). Measured through the engine: a loop built to Σk = −2π
+   *  reads positive here, and its reverse negative (track-randomise.test.mjs). */
   function signedArea(pts) {
     let a = 0;
     for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p[0] * q[1] - q[0] * p[1]; }
