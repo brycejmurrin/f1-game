@@ -585,6 +585,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-preview-plan.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/trim-comments.test.mjs",
+  // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
+  // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
+  "tests/unit/tumftm-import.test.mjs",
   "tests/unit/twin-drift.test.mjs",
   "tests/unit/twin-fidelity.test.mjs",
   "tests/unit/twinned-specs.test.mjs",
