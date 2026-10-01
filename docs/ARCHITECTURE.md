@@ -1507,6 +1507,12 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
+- **CROWN ROUNDING (2026-10-01):** data-side, so on all three for free. Every
+  primitive carries flat per-face normals; a tree crown (cone stacks) lit as a
+  faceted lantern. `TrackGeom.roundNormals` blends a crown's normals toward the
+  radial from its axis (`ROUND_K` 0.6) — run by the emitters' `swayOff()` and by
+  the graph's replay and canonical bake for a swaying op (`track-graph.test.mjs`
+  pins bake == replay). Positions, counts, colours and ids are untouched.
 - **SUN GLINT RANGE (2026-10-01):** on all three. The sun specular's soft clip
   is a knee with an asymptote (`specCol / (1 + specCol / K)`, K the
   `specKnee` knob, def 4; GLX `uSpecKnee`, TLX `U.specKnee`, WGX `params4.w`)
