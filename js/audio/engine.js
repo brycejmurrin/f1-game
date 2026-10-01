@@ -2181,7 +2181,26 @@ const GameAudio = (function () {
     });
   }
 
+  // MENU SOUNDS (apex26.menuSfx, js/audio/panel.js): the three ui* blips have
+  // their own switch, because a player who wants the engine and the tyres can
+  // still want silent menus. ONE CLICK, ONE SOUND: a handler that blips and then
+  // calls a helper that blips again (the track tile's uiSelect + tickUi) is a
+  // double click in the ear, so a second ui blip inside UI_GAP_MS is dropped.
+  // performance.now(), not ctx.currentTime: a suspended context's clock stands
+  // still and would swallow every blip after the first.
+  let uiEnabled = true, uiLast = -1e9;
+  const UI_GAP_MS = 60;
+  function uiOk() {
+    if (!uiEnabled || !sfxOk()) return false;
+    const t = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (t - uiLast < UI_GAP_MS) return false;
+    uiLast = t;
+    return true;
+  }
+  function setUiEnabled(b) { uiEnabled = !!b; }
+
   function uiTick() {
+    if (!uiOk()) return;
     blip(660, "square", 0.08, 0.004, 0.05);
   }
 
@@ -2216,6 +2235,7 @@ const GameAudio = (function () {
   }
 
   function uiSelect() {
+    if (!uiOk()) return;
     blip(880, "square", 0.13, 0.005, 0.09);
   }
 
@@ -2224,6 +2244,7 @@ const GameAudio = (function () {
   // fitted one. A short low sawtooth (the penalty() family's timbre, UI-
   // sized) is unmistakably not a confirmation.
   function uiReject() {
+    if (!uiOk()) return;
     blip(220, "sawtooth", 0.12, 0.006, 0.14);
   }
 
@@ -2984,6 +3005,8 @@ const GameAudio = (function () {
     brakeCue,
     uiSelect,
     uiReject,
+    setUiEnabled,
+    uiEnabled() { return uiEnabled; },
     penalty,
     startRain,
     stopRain,
