@@ -430,6 +430,21 @@ function vantage(track, mode, s, x, spd, now, extra) {
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 10) + 0.45 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.6; tgt[2] = p[2];
     fov = lerp(55, 68, spN);
+  } else if (mode === "trackside") {
+    // Fixed corner cameras that auto-switch as the subject passes (js/camera/trackside.js).
+    const ts = typeof TracksideCams !== "undefined" ? TracksideCams.pose(track, s, x, extra) : null;
+    if (ts) {
+      eye[0] = ts.eye[0]; eye[1] = ts.eye[1]; eye[2] = ts.eye[2];
+      tgt[0] = ts.tgt[0]; tgt[1] = ts.tgt[1]; tgt[2] = ts.tgt[2];
+      fov = ts.fov;
+    } else {
+      // No measured corners yet — fall back to TV side framing.
+      const sgn = 1;
+      const sl = Math.min(25, corr);
+      eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 6.0; eye[2] = p[2] + r[2] * sgn * sl;
+      tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+      fov = 44;
+    }
   } else if (mode === "tcam") {
     eye[0] = p[0] - t[0] * 0.52; eye[1] = p[1] + 1.46; eye[2] = p[2] - t[2] * 0.52;
     const avT = aheadPt(20, 0.35, x * 0.5);
@@ -530,6 +545,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
   if (typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack()) {
     const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
     tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
+  }
+  // Open-circuit wall / building avoidance for broadcast cams (street circuits
+  // already use `corr`). Steps toward the road, then lifts over roofs — see
+  // js/camera/cam-avoid.js. Runs before the ground floor so a lifted eye is
+  // still caught by terrain.
+  if (typeof CamAvoid !== "undefined" && CamAvoid.applies(mode)) {
+    CamAvoid.freeEye(track, eye, cvA);
   }
   // The broadcast framings (heli, cinematic, roadside, low, drift) place the eye
   // by arc offset and lateral distance with no idea what the ground does out

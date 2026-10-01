@@ -48,12 +48,13 @@ function loadExtraRigs() {
   return { ExtraRigs: ctx.exported, disk, ctx };
 }
 
-test("CAM_MODES appends rival, pitwall, drone after visor (save-format contract)", () => {
+test("CAM_MODES appends rival, pitwall, drone after trackside (save-format contract)", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8");
   const ids = [...src.matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(ids.slice(-4), ["visor", "rival", "pitwall", "drone"],
+  // TRACKSIDE (#702) landed on ship first at index 14; our three append after it.
+  assert.deepEqual(ids.slice(-5), ["visor", "trackside", "rival", "pitwall", "drone"],
     "new cams must append — apex26.camMode is an index");
-  assert.equal(ids.length, 17);
+  assert.equal(ids.length, 18);
 });
 
 test("ExtraRigs.pickRival uses Broadcast.battles when present", () => {
