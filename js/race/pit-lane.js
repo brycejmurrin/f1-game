@@ -1194,7 +1194,8 @@ const PitLane = (function () {
         // approaches. Clearing pitArmed/pitCommitted unconditionally here wipes
         // the commitment made on the previous tick before the block below can
         // read it, and the commit/abort state machine never advances.
-        // tests/unit/pit-lane-vm.test.mjs:101 catches it in one assertion.
+        // tests/unit/pit-lane-vm.test.mjs ("a commitment is made on the ENTRY
+        // ROAD…") catches it in one assertion.
         if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { c.pitArmed = false; c.pitCommitted = false; } }
         // THE ENTRY ROAD, before the entry line: where a LOCAL car commits —
         // holding the lane's tarmac arms the stop, and the limiter waits for
