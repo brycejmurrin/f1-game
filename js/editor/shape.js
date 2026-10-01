@@ -244,7 +244,7 @@ const TrackShape = (function () {
     const d3 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax), d4 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
     if (d1 * d2 <= 0 && d3 * d4 <= 0 && !(d1 === 0 && d2 === 0)) {
       const t = d1 === d2 ? 0 : d1 / (d1 - d2);
-      return [cx + (dx - cx) * t, cz + (dz - cz) * t];
+      return [ax + (bx - ax) * t, az + (bz - az) * t];
     }
     return null;
   }

@@ -324,7 +324,7 @@ const ScreenLooks = (function () {
 
   // ── PEEK ────────────────────────────────────────────────────────────────
   const PEEK_MS = 1800;
-  const pk = { id: null, t: 0, button: false, cleanups: [], swallowClick: false };
+  const pk = { id: null, t: 0, button: false, cleanups: [], swallowClick: false, swallowGen: 0 };
   const peekUi = {};   // id -> { btn, status, fold }
   const settingsOpen = () => { const p = byId("pmsettings"); return !!p && !p.hidden; };
   function foldOf(id) {
@@ -420,7 +420,18 @@ const ScreenLooks = (function () {
       e.preventDefault();
       e.stopImmediatePropagation();
       pk.swallowClick = true;
-      setTimeout(() => { pk.swallowClick = false; }, 700);
+      // preventDefault often suppresses the click that onClick would clear,
+      // and a long hold then ate the NEXT click. The click event is
+      // dispatched before a 0-timer, so clear on the following turn if this
+      // generation is still the one that armed the swallow.
+      const gen = ++pk.swallowGen;
+      const up = () => {
+        window.removeEventListener("pointerup", up, true);
+        window.removeEventListener("pointercancel", up, true);
+        setTimeout(() => { if (pk.swallowGen === gen) pk.swallowClick = false; }, 0);
+      };
+      window.addEventListener("pointerup", up, true);
+      window.addEventListener("pointercancel", up, true);
     }
   }
   function onClick(e) {

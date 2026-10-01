@@ -54,6 +54,8 @@ test("polyline tools: RDP, resample, Catmull, Menger, rotate, project, hull", ()
   assert.equal(S.convexHull([[0, 0], [5, 5], [10, 0], [5, 2], [5, 10]]).length, 3, "the two interior points are dropped");
   assert.equal(S.crossings([0, 100, 100, 0], [0, 100, 0, 100], 4, 0).length, 1, "a bow-tie crosses once");
   assert.equal(S.crossings([0, 100, 100, 0], [0, 0, 100, 100], 4, 0).length, 0, "a square does not");
+  const hit = S.segIntersect(0, 0, 100, 0, 10, -10, 20, 10);
+  assert.ok(hit && Math.abs(hit[0] - 15) < 1e-9 && Math.abs(hit[1]) < 1e-9, "asymmetric cross lands on AB");
 });
 
 test("stamps: a +90° CORNER builds as a LEFT turn of (about) the requested radius; −90° turns right", () => {
@@ -250,4 +252,17 @@ test("buildCenterline(def, { line: false }) is the default build minus the racin
     assert.equal(b.line, null, "line: false leaves tr.line null");
     assert.equal(b.lineW, undefined);
   }
+});
+
+test("clearance: a return straight inside the pit opening is not a green save", () => {
+  const { V } = bootEditor();
+  const n = 800, ds = 4, hw = 7, half = n / 2;
+  const px = new Float64Array(n), pz = new Float64Array(n), py = new Float64Array(n);
+  const curv = new Float64Array(n), hwA = new Float64Array(n);
+  for (let i = 0; i < half; i++) { px[i] = i * ds; pz[i] = 0; hwA[i] = hw; }
+  for (let i = 0; i < half; i++) { px[half + i] = (half - 1 - i) * ds; pz[half + i] = 22; hwA[half + i] = hw; }
+  const tr = { n, total: n * ds, px, pz, py, curv, hw: hwA };
+  const d = { pts: [[0, 0], [1, 0]], pit: { mode: "full", side: 1 } };
+  const j = V.judge(tr, d, d);
+  assert.ok(j.issues.some((i) => i.level === "red" && i.code === "clearance"));
 });
