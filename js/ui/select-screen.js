@@ -15,7 +15,9 @@ const Menus = (function () {
 function create(G) {
 Log.info("ui", "Menus.create");
 // Stable helpers from the game.js closure.
-const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = G;
+// No tickUi: every handler here already plays uiSelect, and a tickUi after it
+// was a second blip on one click (the track and team tiles).
+const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
 
 // localStorage can be unavailable even while the game remains fully playable.
 // Surface that distinction globally: the in-memory cache preserves this
@@ -234,7 +236,7 @@ function buildTeamPicker() {
       setTeamPicker(false);
       // The garage (the one host) repaints its own 3D car for free —
       // getSetupPreviewMesh() is keyed on the team id.
-      G.buildSetup(); tickUi();
+      G.buildSetup();
     };
     els.selTeams.appendChild(b);
   });
@@ -278,7 +280,7 @@ function toggleFav(id) {
     if (trackFilter === "fav") { trackFilter = "all"; store.set("trackFilter", "all"); }
   }
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
-  if (els.select && !els.select.hidden) { buildSelect(); tickUi(); }
+  if (els.select && !els.select.hidden) buildSelect();
   return on;
 }
 
@@ -317,7 +319,7 @@ function setTrackFilter(id, focus, keepDaily) {
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
   vt(() => {
-    buildSelect(); tickUi();
+    buildSelect();
     // THE BAR IS NOT INSIDE THE STRIP. mountToolbar puts it on the SHELF, as a
     // sibling of #sel-tracks and not a child, precisely so it does not scroll
     // sideways with the tiles — and this read searched the strip, found
@@ -600,7 +602,6 @@ function buildSelect() {
           r.setAttribute("aria-pressed", on ? "true" : "false");
         });
         updateTrackPreview();
-        tickUi();
         // The still IS the preview — nothing is shown behind the sheet. But once
         // the player settles on a tile the circuit is PRE-BUILT hidden, so NEXT
         // opens race settings onto a ready world (js/game.js scheduleFlybyTrack).

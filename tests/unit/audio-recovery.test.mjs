@@ -30,6 +30,7 @@ function boot(opts = {}) {
     document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {}, navigator: {}, AudioContext: function () { return ctx; },
     fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(8), { _url: url })) }); } };
+  if (opts.perf) sb.performance = opts.perf;
   sb.window = sb;
   if (opts.clock) sb.Date = { now: opts.clock };
   const v = vm.createContext(sb);
@@ -159,4 +160,25 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
   assert.match(g, /function tiltSay\(msg\) \{ els\.audiostate\.textContent = msg; if \(msg\) announce\(/, "tilt fallbacks reach the banner, not only the title line");
   assert.match(g, /if \(state === "race" && !camComfort\(\) && _buzzWet > 0\.01/, "REDUCE MOTION / XR comfort drops the onboard speed buzz");
   assert.match(g, /_vantExtra\.reduceMotion = camComfort\(\);/, "…and the kerb shiver (js/camera/vantage.js)");
+});
+
+// MENU SOUNDS (apex26.menuSfx) and ONE CLICK, ONE SOUND: the track tile once
+// played uiSelect then tickUi's uiTick — two blips for one tap.
+test("ui blips: one per click, and MENU SOUNDS OFF silences them without touching SFX", async () => {
+  const clock = { t: 1000 };
+  const { A, started } = boot({ perf: { now: () => clock.t } });
+  A.init(); await flush();
+  const oscs = () => started.filter((n) => n.kind === "osc").length;
+  let n = oscs();
+  A.uiSelect(); A.uiTick();
+  assert.equal(oscs() - n, 1, "a second ui blip on the same click is dropped");
+  clock.t += 200; n = oscs();
+  A.uiTick();
+  assert.equal(oscs() - n, 1, "the next click still sounds");
+  A.setUiEnabled(false); clock.t += 200; n = oscs();
+  A.uiTick(); A.uiSelect(); A.uiReject();
+  assert.equal(oscs() - n, 0, "MENU SOUNDS OFF");
+  assert.equal(A.uiEnabled(), false);
+  A.lap();
+  assert.ok(oscs() - n > 0, "race sfx are not menu sounds");
 });

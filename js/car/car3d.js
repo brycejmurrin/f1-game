@@ -1547,8 +1547,11 @@ const Car3D = (function () {
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
     // The cowl stays ahead of the wheel and rises to its surround, beneath
     // the raised hand position; the exterior aperture keeps its own datums.
+    const bodyShape = ckpt && ["sculpted", "wide"].includes(opts.cockpitBody) ? opts.cockpitBody : "standard";
     const hR = ckpt ? { z: 0.58, y: 0.59, w: 0.66, h: 0.13, t: 0.58 }
                     : { z: 0.30, y: 0.545, w: 0.42, h: 0.13, t: 0.58 };   // stops at the aperture (0.28), top 0.610 onto the tub line
+    if (bodyShape === "wide") hR.w += 0.10;
+    if (bodyShape === "sculpted") { hR.w -= 0.06; hR.y -= 0.015; }
     // The cockpit cowl rounds into the opening rather than forming one wedge.
     const deck = ckpt ? [hF, { z: 0.86, y: 0.56, w: 0.58, h: 0.12, t: 0.62 }, hR] : [hF, hR];
     for (let i = 0; i < deck.length - 1; i++) {
@@ -1577,6 +1580,10 @@ const Car3D = (function () {
           [[s*0.285,0.37,0.94],[s*0.565,0.29,0.94],[s*0.535,0.655,0.91],[s*0.285,0.69,0.91]],
           [[s*0.32,0.40,-0.04],[s*0.55,0.32,-0.04],[s*0.53,0.73,-0.10],[s*0.32,0.755,-0.10]],
         ];
+        for (let i=0;i<3;i++) for (const j of [1,2]) {
+          shoulder[i][j][0] += s * (bodyShape === "wide" ? [0.025,0.075,0.070][i] : bodyShape === "sculpted" ? [-0.015,-0.045,0.015][i] : 0);
+          if (j === 2) shoulder[i][j][1] += bodyShape === "wide" ? 0.020 : bodyShape === "sculpted" ? [0,0.035,-0.012][i] : 0;
+        }
         for (let i=0;i<2;i++) addBlock(out, shoulder[i].concat(shoulder[i+1]), c1);
         // Rolled carbon edge follows the opening back beside the driver's hands.
         addTube(out,[[s*0.315,0.745,-0.10],[s*0.280,0.680,0.91],[s*0.295,0.610,1.46]],0.012,4,CARBON,SURFACES.carbon);

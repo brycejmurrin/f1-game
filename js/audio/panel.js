@@ -95,6 +95,10 @@ const AudioPanel = (() => {
     let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.2));
     let sfxOn = store.get("sfx", true);
     GameAudio.setSfxEnabled(sfxOn);
+    // MENU SOUNDS: the button blips only (uiTick/uiSelect/uiReject). Under the
+    // SFX switch, not beside it — SFX OFF silences menus too.
+    let menuSfxOn = store.get("menuSfx", true) !== false;
+    GameAudio.setUiEnabled(menuSfxOn);
     // Restored here with the other levels rather than inside the engine: the
     // engine owns the chain, the panel owns the persistence, and radioSting is
     // reachable from showAnnounce before this panel is ever opened.
@@ -217,6 +221,8 @@ const AudioPanel = (() => {
       const sfxLive = sfxOn && G.soundOn;
       SettingRow.paint($("as-music"), G.musicEnabled ? "on" : "off", ONOFF);
       SettingRow.paint($("as-sound"), sfxOn ? "on" : "off", ONOFF);
+      SettingRow.paint($("as-ui"), menuSfxOn ? "on" : "off", ONOFF);
+      SettingRow.disable($("as-ui"), !sfxLive);
       $("as-mvol").disabled = !musicLive;
       $("as-svol").disabled = !sfxLive;
       $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
@@ -584,6 +590,13 @@ const AudioPanel = (() => {
     };
     SettingRow.wire("as-sound", { values: ONOFF, read: () => (sfxOn ? "on" : "off"),
       write: (v) => { if (v === "on") { setSfx(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setSfx(false); } } });
+    SettingRow.wire("as-ui", { values: ONOFF, read: () => (menuSfxOn ? "on" : "off"),
+      write: (v) => {
+        menuSfxOn = v === "on"; store.set("menuSfx", menuSfxOn);
+        GameAudio.setUiEnabled(menuSfxOn);
+        if (menuSfxOn) GameAudio.uiTick();   // ON answers with the sound it turned on; OFF stays silent
+        syncAudioPanel();
+      } });
     // `input` not `change`: the level should follow the thumb while dragged.
     $("as-mvol").oninput = (e) => {
       musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);
