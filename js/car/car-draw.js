@@ -85,12 +85,12 @@ const CarDraw = (function () {
         try { return GLTF.toMesh(carModelBuf, { scale: CAR_MODEL_SCALE, tint: liv.c1 }); }
         catch (e) { /* any parse trouble: fall through to the procedural car */ }
       }
-      const factorySetup = Parts.getFactorySetup(team);
+      const setup = (extra && extra.setup) || Parts.getFactorySetup(team);
       return Car3D.build(liv.c1, liv.c2, {
         livery: liv,
         teamId: team.id,   // per-team chassis style (nose/airbox/fin/mirrors/inlet)
         num: (extra && extra.num != null) ? extra.num : (team.drivers && team.drivers[0] && team.drivers[0].num),
-        parts: Parts.getVisualTiers(factorySetup, team),
+        parts: Parts.getVisualTiers(setup, team),
         noWheels: !!(extra && extra.noWheels),
         field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
         silhouette: !!(extra && extra.silhouette),
@@ -132,28 +132,36 @@ const CarDraw = (function () {
     // ONE hoisted factory for the three team caches: the caller sets the pending
     // build, then putBoundedMesh calls it on a miss only. A per-call arrow here
     // was a fresh closure per drawn car per pass (~66 a frame) on the hit path.
-    let _pbTeam = null, _pbNum = null, _pbKind = 0;   // 0 painted, 1 silhouette, 2 body-only
+    let _pbTeam = null, _pbNum = null, _pbKind = 0, _pbSetup = null;   // 0 painted, 1 silhouette, 2 body-only
     function buildPendingTeamMesh() {
-      const team = _pbTeam, num = _pbNum;
-      return G.gfx.createMesh(buildCarData(team, _pbKind === 1 ? { num, silhouette: true }
-        : _pbKind === 2 ? { noWheels: true, num } : { num }));
+      const team = _pbTeam, num = _pbNum, setup = _pbSetup;
+      const extra = _pbKind === 1 ? { num, silhouette: true, setup }
+        : _pbKind === 2 ? { noWheels: true, num, setup } : { num, setup };
+      return G.gfx.createMesh(buildCarData(team, extra));
     }
     // Painted full meshes are KEYED PER DRIVER (helmet design is opts.num). Shadow
     // casters pass silhouette:true — depth cannot see paint, and Car3D already
     // drops paint-edge splits + in-tub torso on that path, so both seats of a team
-    // build bit-identical casters. Sharing one ":sh" per team(+parts) halves
-    // shadow-mesh residency (22 → 11) with no depth change; seat stays on the
-    // painted key only.
+    // build bit-identical casters WHEN they share a setup. A career hire or an AI
+    // works car with its own fitted shelf must not share the factory mesh: the
+    // stamp (catalog ids, once, on the car) joins the suffix, including ":sh".
+    // Null visualSetup keeps the factory suffix, so the key does not move.
     function teamMesh(team, car, silhouette) {
       const sil = silhouette === true || (car == null && silhouette !== false);
       const num = carDecalNum(team, car);
       _pbTeam = team; _pbNum = num; _pbKind = sil ? 1 : 0;
-      return putBoundedMesh(teamMeshes, teamMeshOrder, sil ? teamMeshKeyFor(team, "sh") : teamMeshKeyFor(team, num),
+      _pbSetup = (car && car.visualSetup) || null;
+      const painted = (_pbSetup && car.visPaint) || num;
+      const shadow = (_pbSetup && car.visSh) || "sh";
+      return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKeyFor(team, sil ? shadow : painted),
         buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
     }
     function teamBodyMesh(team, car) {
-      _pbTeam = team; _pbNum = carDecalNum(team, car); _pbKind = 2;   // body-only: noWheels, num
-      return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKeyFor(team, _pbNum), buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
+      const num = carDecalNum(team, car);
+      _pbTeam = team; _pbNum = num; _pbKind = 2;   // body-only: noWheels, num
+      _pbSetup = (car && car.visualSetup) || null;
+      const suffix = (_pbSetup && car.visPaint) || _pbNum;
+      return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKeyFor(team, suffix), buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
     }
 
     // ── decals ──────────────────────────────────────────────────────
@@ -220,14 +228,29 @@ const CarDraw = (function () {
     // [factory, player] maps of team.id -> state; rev/leg compared as parts, no
     // per-call key or "rev|legality" string (this runs per drawn car per frame).
     const _aeroLevelCache = [new Map(), new Map()];
-    function teamDecalState(team, usePlayerSetup) {
+    const _aeroCustom = new Map();   // team.id -> Map(stamp -> state); hit path allocates nothing
+    function teamDecalState(team, usePlayerSetup, setup, stamp) {
+      if (setup) {
+        let byTeam = _aeroCustom.get(team.id);
+        if (!byTeam) { byTeam = new Map(); _aeroCustom.set(team.id, byTeam); }
+        const leg = Parts.legalityKey();
+        const key = stamp || "";
+        const c = byTeam.get(key);
+        if (c && c.leg === leg) return c;
+        const parts = Parts.getVisualTiers(setup, team);
+        const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
+                        aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
+                        parts, rev: -1, leg, fwKey: null };
+        byTeam.set(key, state);
+        return state;
+      }
       const cache = _aeroLevelCache[usePlayerSetup ? 1 : 0];
       // Factory: the ruleset (Parts.setLegality) is the only thing that moves it.
       const rev = usePlayerSetup ? G.store.rev : -1, leg = Parts.legalityKey();
       const c = cache.get(team.id);
       if (c && c.rev === rev && c.leg === leg) return c;
-      const setup = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
-      const parts = Parts.getVisualTiers(setup, team);
+      const resolved = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
+      const parts = Parts.getVisualTiers(resolved, team);
       // aero: the resolved RECIPE, resolved once here for every flap consumer.
       // parts.aero is the tier NUMBER — passing that to Car3D.aeroFlaps() NaN'd
       // every flap vertex and made the moveable wings invisible (see aeroStyleOf).
@@ -296,8 +319,8 @@ const CarDraw = (function () {
       }
       Log.info("gfx", "selector car assets ready", { cars: field.length, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs) });
     }
-    function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
-      const state = teamDecalState(team, usePlayerSetup);
+    function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup, setup, stamp) {
+      const state = teamDecalState(team, usePlayerSetup, setup, stamp);
       // A loaded GLB is a static body and does not consume procedural part recipes;
       // keep its overlay on stable default/legacy anchors as setup options change.
       const legacyBody = !!carModelBuf;
@@ -367,8 +390,10 @@ const CarDraw = (function () {
     const _decalNums = [];
     const _decalCockpit = [];
     const _decalSetup = [];
+    const _decalVis = [];
+    const _decalStamp = [];
     let _decalCount = 0;
-    function queueCarDecals(team, modelMat, num, cockpit, usePlayerSetup) {
+    function queueCarDecals(team, modelMat, num, cockpit, usePlayerSetup, setup, stamp) {
       let m = _decalMats[_decalCount];
       if (!m) { m = new Float32Array(16); _decalMats[_decalCount] = m; }
       m.set(modelMat);
@@ -376,6 +401,8 @@ const CarDraw = (function () {
       _decalNums[_decalCount] = num;
       _decalCockpit[_decalCount] = !!cockpit;
       _decalSetup[_decalCount] = !!usePlayerSetup;
+      _decalVis[_decalCount] = setup || null;
+      _decalStamp[_decalCount] = stamp || null;
       _decalCount++;
     }
     // ── cockpit-wheels-model ────────────────────────────────────────
@@ -575,8 +602,9 @@ const CarDraw = (function () {
     const fieldWheelOrder = [];
     const FIELD_WHEEL_CACHE_MAX = 12;
     let _fwVt = null;   // the pending build for the hoisted factory below (no closure per car per frame)
-    function getFieldWheelMeshes(team) {
-      const st = teamDecalState(team, false);
+    function getFieldWheelMeshes(team, car) {
+      const setup = car && car.visualSetup;
+      const st = setup ? teamDecalState(team, false, setup, car.visStamp) : teamDecalState(team, false);
       const vt = st.parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
       // A pure function of the cached state's parts, so it is built once per state.
       const key = st.fwKey || (st.fwKey = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1"));
@@ -628,7 +656,7 @@ const CarDraw = (function () {
     }
     function pitCrewDrawn() { const n = _crewDrawn; _crewDrawn = 0; return n; }
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
-      const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team);
+      const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team, c);
       c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt) % (Math.PI * 2);
       // Fronts have their own spin so a lock-up (c.wheelLock) freezes them while
       // the car still moves; the flat spot it leaves bumps them once per rev.
@@ -769,7 +797,7 @@ const CarDraw = (function () {
     function beginDecals() { _decalCount = 0; }
     function flushDecals(night) {
       for (let i = 0; i < _decalCount; i++)
-        drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i]);
+        drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i], _decalVis[i], _decalStamp[i]);
     }
     // recomputePlayerMods hands over the player's resolved wheel spec + cosmetic key.
     function setPlayerParts(vt, visualKey) {

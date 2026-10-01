@@ -985,6 +985,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let satinMetalSurface = surfaceId == 29;
   let iriSurface = surfaceId == 30;
   let carbonFinish = surfaceId == 31;   // bare weave OVER the livery colour
+  // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its mean
+  // over 8-16 m so the 3.3 cm cross-hatch cannot moire at range. Computed
+  // here, ahead of the roughness ripple below and the albedo twill further on.
+  var weave = 0.5;
+  if (carbonFinish || carbonSurface) {
+    let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
+    let wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+  }
   // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
   // clearcoat, but a DIELECTRIC env response, not chrome — see baseRefl below.
   let visorSurface = surfaceId == 32;
@@ -1074,7 +1083,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (matteSurface) { specular = 0.16; }
     emissive = select(0.0, D.mat0.x, paintLike);
     if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
-    if (carbonSurface || carbonFinish) { rough = max(rough, 0.56); }
+    if (carbonSurface || carbonFinish) { rough = max(rough, 0.56) + (weave - 0.5) * 0.10; }   // the twill's roughness ripple
     if (rubberSurface) { rough = max(rough, 0.90); }
     if (metalSurface) { rough = min(rough, 0.16); }
     if (glassSurface || visorSurface) { rough = min(rough, 0.13); }
@@ -1117,10 +1126,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // toward dark resin and lay a fine cross-hatch over it, keeping a trace of
   // the team tint. sin*sin, so no derivative and no control-flow hazard.
   if (carbonFinish) {
-    let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
-    let weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y);
     albedo = mix(albedo * 0.16 + vec3<f32>(0.030, 0.031, 0.035), albedo * 0.28, vec3<f32>(0.25));
     albedo = albedo * (0.86 + 0.28 * weave);
+  } else if (carbonSurface) {
+    albedo = albedo * (0.93 + 0.14 * weave);
   }
   if (iriSurface) {
     let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
