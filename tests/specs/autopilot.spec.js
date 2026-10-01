@@ -258,6 +258,15 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
     expect(tilt.finite).toBe(true);
     expect(tilt.maxWall).toBeLessThan(1);         // tilt drives without clipping a barrier
     expect(tilt.distPct).toBeGreaterThan(30);     // and gets meaningfully round the lap
+    // STEER-COMMAND VARIANCE. distPct alone cannot see a dead tilt map: the
+    // wedge-recovery path keeps the throttle on and crawls ~45 % of Monza with
+    // jitter 0 (m-tilt-gain-dead, measured 2026-09-22 / reconfirmed 2026-09-30).
+    // Healthy tilt with tremor lands ~0.010 mean |Δsteer|/tick under the
+    // adapter; a dead map is identically 0.
+    expect(tilt.jitter).toBeGreaterThan(0.001);
+    // Off-road frames: the same dead map spends ~half the lap off the road
+    // (4465/9000); a working tilt stays under ~1500 on Monza.
+    expect(tilt.offFrames).toBeLessThan(2500);
   });
 
 });

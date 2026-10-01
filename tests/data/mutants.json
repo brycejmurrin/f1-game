@@ -194,6 +194,19 @@
         "emits complete hero, overhead, barrier, and geometry contracts by day and night": true,
         "keeps the back-straight crest in place and terrain below the road corridor": false
       }
+    },
+    {
+      "id": "m-tilt-gain-dead",
+      "file": "js/input/input.js",
+      "find": "return clamp(d / (MAX_TILT - DEADZONE), -1, 1);",
+      "replace": "return clamp(d / (MAX_TILT - DEADZONE), -1, 1) * 1e-3;",
+      "why": "Scales tiltTarget()'s gain by 1e-3 so the tilt map never moves the steer command (jitter 0). The tilt test's jitter/offFrames floor goes red; the direct-input circuit laps stay green.",
+      "spec": "tests/specs/autopilot.spec.js",
+      "catchers": {
+        "can drive safely via emulated tilt input": true,
+        "autopilot drives safely and makes progress at monza": false,
+        "autopilot drives safely and makes progress at suzuka": false
+      }
     }
   ],
   "openQuestions": [
@@ -218,24 +231,6 @@
         }
       },
       "sowhat": "The test costs ~110 s of browser per run and guards less than it claims. Before it can gate anything, someone has to find driving that MAKES the projection ambiguous (roadFollow 0.7 may hold the car too near the line for a hairpin to be ambiguous at all) \u2014 and until then it should not be cited as projection coverage. Recorded rather than quietly deleted: docs/notes/DEFECT-LEDGER.md, 2026-09-16."
-    },
-    {
-      "id": "m-tilt-map-dead",
-      "file": "js/input/input.js",
-      "spec": "tests/specs/autopilot.spec.js",
-      "test": "can drive safely via emulated tilt input",
-      "finding": "The tilt test's floor (distPct > 30, maxWall < 1, finite) cannot see a dead tilt pipeline. Two mutations of the tilt map leave it green: MAX_TILT = 36000 (a no-op \u2014 js/input/steer-tuning.js re-applies MAX_TILT through the 8..60-clamped setTiltSensitivity at boot) and tiltTarget()'s gain scaled by 1e-3 (the steer command never moves: jitter 0).",
-      "measured": {
-        "MAX_TILT = 36000": {
-          "twin": "1/1 green (166 s)",
-          "browser": "not measured"
-        },
-        "tiltTarget gain * 1e-3": {
-          "twin": "1/1 green (175 s); with the map dead the lap reports jitter 0, distPct 44.1, maxWall 0, finite true \u2014 the autopilot's wedge recovery keeps the throttle on and the car crawls 44 % of Monza in 150 s with 4378 of 9000 frames off-road (7.68 m over the edge); ROAD_FOLLOW defaults to 0, so no assist masks it",
-          "browser": "not measured"
-        }
-      },
-      "sowhat": "autopilot.spec.js is portable and 3/3 green under the adapter (168 s) but stays on the browser gate: without a mutant that bites, listing it as ADAPTED would be the vacuous count check the fidelity gate exists to refuse. Before it can move, the test needs a floor a dead tilt map fails \u2014 e.g. steer-command variance, or off-road frames bounded \u2014 measured in a browser first. Recorded 2026-09-22."
     }
   ]
 }
