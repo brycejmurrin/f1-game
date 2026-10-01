@@ -1158,7 +1158,12 @@ Shared transient-particle pool (tyre smoke, collision sparks, gravel/grass
 kickup, rain spray): a fixed CPU pool of camera-facing soft billboards drawn
 in two batches per frame via `gfx.drawParticles()` — alpha-blended
 (smoke/dust/spray) and additive (sparks; HDR tints feed bloom for free). Also
-owns the **rain overlay** (`Particles.rain*`). Emitters only READ car state;
+owns the **rain streak field** (`Particles.rain*`, 2026-10-01): drops in a box
+that travels with the eye, each a pre-expanded world-space quad appended to the
+alpha batch with size 0, so the particle shaders' soft-disc falloff draws a
+depth-tested streak along the drop's APPARENT velocity (fall − camera motion)
+on all three backends with no new program; it replaced a Canvas2D overlay that
+had no depth, no fog, no mirror and a compositor layer of its own. Emitters only READ car state;
 update/draw run in the RENDER path only, never inside the physics step, so
 headless obs/act runs are identical with FX on or off.
 
