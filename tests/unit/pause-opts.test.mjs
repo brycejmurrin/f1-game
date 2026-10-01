@@ -415,7 +415,7 @@ test("CSS: each new LAYOUT and every lookPause knob has a rule in the pause bloc
   assert.match(COMP, /:root\[data-pause-layout="compact"\] :is\(#pm-quit, #pm-standings, #pm-howto\) \{ grid-column: auto; \}/);
   // WIDE: along the bottom, one wrapping flex row.
   assert.match(COMP, /:root\[data-pause-layout="wide"\] #pausemenu \{[^}]*align-items: end/);
-  assert.match(COMP, /:root\[data-pause-layout="wide"\] #pausemenu \.sheet-body\.stack \{ display: flex; flex-wrap: wrap; \}/);
+  assert.match(COMP, /:root\[data-pause-layout="wide"\] #pausemenu \.sheet-body\.stack \{ display: flex; flex-direction: row; flex-wrap: wrap; \}/, "WIDE is a ROW: .stack is a column flex");
   assert.match(COMP, /:root\[data-pause-layout="wide"\] :is\(#pm-now-card, #pm-build\) \{ flex-basis: 100%; \}/);
   // SIDEBAR: full height on the start edge, the end edge for SIDE RIGHT.
   assert.match(COMP, /:root\[data-pause-layout="sidebar"\] #pausemenu \{[^}]*justify-items: start;[^}]*align-items: stretch/);
