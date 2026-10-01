@@ -154,15 +154,17 @@ const STRIP = {
   // longer moored; buried harbour balconies skipped; ground-audit)
   // → merged follow-ups 286489/257979 (yachts moored in open water, not
   // dropped; engine-helpers plinth sink)
-  // → track limits 285946/257518 (two moored hulls over the road hole dropped)
-  monaco: { before: 285946, after: 257518 },
-  // ship 342347/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
+  // → track limits 285994/257518 (two moored hulls over the road hole dropped)
+  // → start-gantry lights 285946/257466 (the gantry housing is one bar, not three boxes: −48 indices)
+  monaco: { before: 285946, after: 257466 },
+  // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
   // → bahrain hollow-stand guard: grandstandEx suppresses when crowdBank
   // places 0 risers, so monza's fold-site shells (no seating) no longer emit
-  // → back to ship emission 342347; strip after 315572
-  monza: { before: 342347, after: 315572 },
+  // → back to ship emission 342395; strip after 315572
+  // → start-gantry lights 342347/315520 (one housing bar per gantry: −48 indices)
+  monza: { before: 342347, after: 315520 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
