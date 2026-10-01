@@ -237,7 +237,7 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   const game = code("js/game.js");
   const present = game.search(/gfx\.present\(\s*po\s*\)/);
   const before = game.slice(Math.max(0, present - 200), present);
-  const after = game.slice(present, present + 400);
+  const after = game.slice(present, present + 900);
   // XR Phase 0: present goes through XrBoot.present(…) || gfx.present(po). The
   // canary must still arm immediately before that gate — nothing else may sit
   // between armBackendProbe() and the present call.
@@ -3384,7 +3384,8 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
   // .test.mjs) around startRaceBody(), which still carries this whole flow.
   const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
-  assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
+  assert.match(sr, /RaceEntryProfile\.span\("warmCarAssets", \(\) => warmCarAssets\(\)\);[\s\S]{0,160}?RaceEntryProfile\.span\("debrisPrime"/,
+    "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
@@ -4746,7 +4747,8 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   let playerVisualKey = "previous-setup", carModelBuf = null, builds = 0;
   const playerBodies = {}, playerBodyOrder = [], PLAYER_BODY_CACHE_MAX = 3;
   const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
-  const CockpitOpts = { halo: () => true, haloSize: () => 2 }, Parts = { getVisualTiers: () => ({}) };
+  let cockpitStyle = "standard";
+  const CockpitOpts = { halo: () => true, haloSize: () => 2, body: () => cockpitStyle }, Parts = { getVisualTiers: () => ({}) };
   const Car3D = { build: () => { builds++; return {}; } };
   // js/car/car-draw.js reads the backend and the parts through the G façade and the livery through deps.
   const G = { gfx: { createMesh: x => x }, getTeamParts: () => ({}) };
@@ -4761,6 +4763,11 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   playerVisualKey = "selected-setup";
   assert.equal(body(team, car), preparedBody); assert.equal(cockpit(team, car), preparedCockpit);
   assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
+  cockpitStyle = "wide";
+  assert.notEqual(cockpit(team, car), preparedCockpit, "a body change selects a distinct mesh cache entry");
+  assert.equal(builds, 3);
+  cockpitStyle = "standard";
+  assert.equal(cockpit(team, car), preparedCockpit, "switching back reuses the original body");
 });
 
 test("selector car assets yield for costly work, skip cached waits, and cancel stale settings", async () => {

@@ -386,12 +386,12 @@ const CarDraw = (function () {
     function cockpitBodyMesh(team, car, visualKey = playerVisualKey) {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
       // is always this team's key — no per-frame partsVisualKey() rebuild.
-      const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick
-      const key = team.id + ":" + visualKey + ":H" + haloSz + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
+      const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick, 4 faired
+      const key = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
       return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
         const liv = deps.resolveLivery(team);
         return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-          { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, halo: haloSz, num,
+          { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: haloSz, num,
             parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
       }, COCKPIT_BODY_CACHE_MAX);
     }
@@ -408,10 +408,10 @@ const CarDraw = (function () {
     const _digM = new Float32Array(16);
     // Windscreen / aeroscreen glass: a faint tint that still shows the road.
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
-    const _rigFx = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
+    const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
     function drawCockpitRig(c, base, dt, paint, noWheel) {
       const nite = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && G.track.def.night);
-      _cockpitOpts.emissive = nite ? 0.16 : 0;
+      _cockpitOpts.emissive = nite ? 0.16 : 0.08;
       const opt = _cockpitOpts;
       // The actual car around you: body (minus helmet) with the real paint, plus
       // the steering/spinning FRONT wheels (the rears sit right beside the camera
@@ -423,13 +423,11 @@ const CarDraw = (function () {
       // seat (its eye is vantage.js VISOR_EYE_*) and no wheel.
       const wheelStyle = noWheel ? "none" : CockpitOpts.wheel(), lay = CockpitOpts.layout(wheelStyle, noWheel ? "std" : null);
       G.gfx.draw(cockpitBodyMesh(c.team, c), base, paint);
-      // INTERIOR: TEAM padding, or CLASSIC's scuttle, gauges and aeroscreen.
+      // INTERIOR: carbon or team trim; CLASSIC adds gauges and an aeroscreen.
       // Car-local like the body (base), never rolled with the wheel.
       const cab = CockpitOpts.interior();
-      if (cab !== "carbon") {
-        G.gfx.draw(getCockpitCabin(cab, deps.resolveLivery(c.team)), base, opt);
-        if (cab === "classic") G.gfx.draw(getCockpitGlass(cab), base, _glassOpts);
-      }
+      G.gfx.draw(getCockpitCabin(cab, deps.resolveLivery(c.team)), base, opt);
+      if (cab === "classic") G.gfx.draw(getCockpitGlass(cab), base, _glassOpts);
       // The wheel mount follows the seat: hub and scale from the layout.
       _rigT[0] = _rigT[5] = _rigT[10] = lay.wheelS; _rigT[13] = lay.wheelY; _rigT[14] = lay.wheelZ;
       // The cockpit body includes the FRONT wing, whose top elements are active
@@ -764,7 +762,7 @@ const CarDraw = (function () {
     }
 
     // ── cockpit-opts ────────────────────────────────────────────────
-    const _cockpitOpts = { roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: 0 };
+    const _cockpitOpts = { doubleSided: true, roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: 0 };
     const _cockpitWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
 
     // The render loop drains the decal queue once per frame, after the bodies.

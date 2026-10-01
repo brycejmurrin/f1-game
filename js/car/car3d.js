@@ -379,8 +379,8 @@ const Car3D = (function () {
   // slope where it meets the crown), and the crown bar swept as a
   // half-ellipse in x-z with the sin-shaped RISE on top.
   const HALO_RISE = 0.012;                   // shallow arch: ~1.2 cm at centre
-  function haloHoopPath(rearX, rearY, rearZ, midX, midZ, crownY, apexZ) {
-    const LEG = 4, BAR = 6, pts = [];
+  function haloHoopPath(rearX, rearY, rearZ, midX, midZ, crownY, apexZ, barSteps = 6) {
+    const LEG = 4, BAR = barSteps, pts = [];
     for (let i = 0; i < LEG; i++) {          // left leg: collar -> crown
       const t = i / LEG;
       pts.push([-(rearX + (midX - rearX) * t),
@@ -2224,39 +2224,21 @@ const Car3D = (function () {
     // (docs/notes/OCCLUSION-PROBE.md §4). Narrow (w 0.36): a spine, not a wall.
     const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.50, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
-    // Cockpit: the REAR station stops AHEAD of the wheel (game.js _rigT z 0.26)
-    // — eye, wheel, cowl, nose is the order the real parts sit in. It must also
-    // stay BELOW THE WHEEL'S TOP (rig 0.63 + half-height x 0.80 = 0.756): it is
-    // further away, so equal height puts it HIGHER on screen and it draws over
-    // the wheel (measured: the wheel vanishes). Top 0.54 here.
-    // THE SCUTTLE MUST FALL INTO THE COCKPIT, not wall it off. An exterior
-    // rear station topping out at 0.660 (y 0.585 + h/2) stands 7.5 cm PROUD of
-    // the cockpit rail it meets at 0.585, directly across the driver's face
-    // (the visor's band is 0.612-0.700): a wall with a helmet behind. A 0.605
-    // top lands it on the rail line, so the deck sweeps down into the opening
-    // the way a real scuttle does.
-    const hR = ckpt ? { z: 0.58, y: 0.42, w: 0.66, h: 0.12, t: 0.58 }
+    // The cowl stays ahead of the wheel and rises to its surround, beneath
+    // the raised hand position; the exterior aperture keeps its own datums.
+    const bodyShape = ckpt && ["sculpted", "wide"].includes(opts.cockpitBody) ? opts.cockpitBody : "standard";
+    const hR = ckpt ? { z: 0.58, y: 0.59, w: 0.66, h: 0.13, t: 0.58 }
                     : { z: 0.30, y: 0.545, w: 0.42, h: 0.13, t: 0.58 };   // stops at the aperture (0.28), top 0.610 onto the tub line
-    addSpan(out, hF, hR, c1, c1);
-    addTopBevel(out, hF, hR, 0.026, c1);
-    // Accent stripe down the vanity deck crown (team colour) — CHASE ONLY.
-    // It was pushed ahead of the wheel once already (at centre 0.95 x length
-    // 1.75 it began at z 0.075, behind the wheel, and drew across its face),
-    // but ahead of the wheel is no better: in cockpit the bar starts 0.65 m
-    // from the eye (0, 0.82, -0.20) and runs 1.30 m straight down the centre
-    // of the view, so it foreshortens into a flat slab rather than reading as
-    // a stripe. On a livery whose accent is white it is a bright grey box
-    // sitting in front of the wheel — measured: the centre ray at the cockpit
-    // tuner's -20.5 deg pitch hits it at 0.69 m, and ferrari's c2 is [1,1,1].
-    // The driver of a real car does not see their own spine stripe; the chase
-    // cameras still do, so only the cockpit build drops it.
-    //
-    // It also has to FOLLOW the deck. As a single flat addBox at y 0.665 it did
-    // not: the chase crown runs 0.48 at z 1.15 to 0.66 at z 0.08, so the bar's
-    // underside sat 124 mm above the surface at its forward end (z 0.85), 57 mm
-    // at mid-length, and only met the deck at the very back — a cantilevered
-    // rail with daylight under it, not a stripe. A span between two stations on
-    // the crown line costs the same twelve triangles and lies on the paint.
+    if (bodyShape === "wide") hR.w += 0.10;
+    if (bodyShape === "sculpted") { hR.w -= 0.06; hR.y -= 0.015; }
+    // The cockpit cowl rounds into the opening rather than forming one wedge.
+    const deck = ckpt ? [hF, { z: 0.86, y: 0.56, w: 0.58, h: 0.12, t: 0.62 }, hR] : [hF, hR];
+    for (let i = 0; i < deck.length - 1; i++) {
+      addSpan(out, deck[i], deck[i + 1], c1, c1);
+      addTopBevel(out, deck[i], deck[i + 1], 0.026, c1);
+    }
+    // Exterior crown stripe follows the deck. In cockpit it foreshortens into
+    // a slab (a white accent hit the centre ray at 0.69 m), so it stays outside.
     if (!ckpt) {
       const deckTop = (z) => {
         const t = Math.max(0, Math.min(1, (hF.z - z) / (hF.z - hR.z)));
@@ -2270,40 +2252,27 @@ const Car3D = (function () {
     part("bolsters");
     if (ckpt) {
       for (const s of [-1, 1]) {
-        // Survival-cell SIDE WALL: the tub edge the driver sits between, rising
-        // beside the eye and tapering down/outward toward the nose. The rear
-        // headrest portion sits behind the camera and never renders, so the
-        // visible span is the dash side that wraps the wheel.
-        // Crown heights beside the driver are REGULATION: the survival cell's
-        // upper edge runs Z 610 (headrest fixing, C12.6) to Z 695 (halo rear
-        // faces, C12.4.2) — docs/notes/COCKPIT-DATUMS.md. 0.56/0.58 sat below that
-        // band entirely; 0.66/0.68 sat high in it and swallowed the front wing
-        // (0.62% -> 0.01% of frame). 0.62/0.64 is the band's lower end: still
-        // compliant, still enclosing, wing tips back. Above ~0.70 eats mirrors.
-        addBlock(out, [
-          [s*0.30, 0.34, 1.50], [s*0.56, 0.26, 1.50], [s*0.54, 0.50, 1.46], [s*0.30, 0.54, 1.46],  // front (nose end, low)
-          [s*0.32, 0.40, 0.40], [s*0.55, 0.32, 0.40], [s*0.53, 0.62, 0.34], [s*0.32, 0.64, 0.34],  // rear (beside the driver, SHOULDER height)
-        ], c1);
-        addBox(out, s*0.45, 0.59, 0.85, 0.03, 0.03, 1.0, c2);
-        // Inner tub wall (dark carbon) facing the driver. Follows the crown up.
-        addBox(out, s*0.315, 0.49, 0.52, 0.02, 0.28, 0.60, INTAKE);
+        // Cockpit view shoulders wrap the wheel at hand height and taper
+        // down to the nose, as in the supplied driver-eye references.
+        const shoulder = [
+          [[s*0.30,0.34,1.50],[s*0.56,0.26,1.50],[s*0.54,0.585,1.46],[s*0.30,0.62,1.46]],
+          [[s*0.285,0.37,0.94],[s*0.565,0.29,0.94],[s*0.535,0.655,0.91],[s*0.285,0.69,0.91]],
+          [[s*0.32,0.40,-0.04],[s*0.55,0.32,-0.04],[s*0.53,0.73,-0.10],[s*0.32,0.755,-0.10]],
+        ];
+        for (let i=0;i<3;i++) for (const j of [1,2]) {
+          shoulder[i][j][0] += s * (bodyShape === "wide" ? [0.025,0.075,0.070][i] : bodyShape === "sculpted" ? [-0.015,-0.045,0.015][i] : 0);
+          if (j === 2) shoulder[i][j][1] += bodyShape === "wide" ? 0.020 : bodyShape === "sculpted" ? [0,0.035,-0.012][i] : 0;
+        }
+        for (let i=0;i<2;i++) addBlock(out, shoulder[i].concat(shoulder[i+1]), c1);
+        // Rolled carbon edge follows the opening back beside the driver's hands.
+        addTube(out,[[s*0.315,0.745,-0.10],[s*0.280,0.680,0.91],[s*0.295,0.610,1.46]],0.012,4,CARBON,SURFACES.carbon);
+        // Tapered carbon liner underneath the removable cockpit padding.
+        addBlock(out, [[s*0.295,0.36,0.82],[s*0.315,0.36,0.82],[s*0.315,0.695,0.82],[s*0.295,0.705,0.82],
+          [s*0.305,0.40,-0.10],[s*0.325,0.40,-0.10],[s*0.325,0.738,-0.10],[s*0.305,0.748,-0.10]], INTAKE);
+
       }
-      // Dash coaming: the padded rim across the FRONT of the cockpit opening, just
-      // under the wheel, tying the two side walls together into a tub.
-      // Heights are set against the eye (0.72), and the binding constraint is
-      // what lies BEYOND the coaming: the driver must look over it onto the deck
-      // and nose running out ahead. At top 0.485 it was the tallest thing in the
-      // lower-centre and took 1780 of the deck's 2631 px (OCCLUSION-PROBE.md);
-      // 0.425 clears the eye-to-deck-crest sightline, which passes y 0.62 here.
-      // CARBON, NOT c1 — but NOT "the" reported slab: that was the livery CREST
-      // STRIPE, gated !ckpt in part("livery") below. Still the right colour
-      // though. Measured from the driver eye the coaming is x -0.33..0.33,
-      // y 0.295..0.425, z 0.52..0.68, so its front face and top deck are a
-      // body-coloured table across the driver's lap whatever else is in frame,
-      // and _ckAcc cannot help — it only darkens colours whose MIN channel is
-      // >= 0.45, and Ferrari red is [0.863, 0, 0], min 0. A real dash coaming is
-      // padded black anyway; the c2 accent lip below keeps the team identity.
-      // Same fix, same reason, as the monocoque span above.
+      // Carbon front coaming stays below the eye-to-deck sightline: top
+      // 0.425, z 0.52–0.68. A taller or painted slab fills the driver's lap.
       addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, CARBON);
       addBox(out, 0, 0.427, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
       addBox(out, 0, 0.345, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
@@ -3029,16 +2998,38 @@ const Car3D = (function () {
         }
       }
     } else if (opts && opts.halo) {
-      // First-person hoop: same round-tube, LEVEL-bar treatment as the
-      // exterior halo — the driver sees a flat bar across the top of the
-      // frame (crown constant at 0.96), not tubes converging at the centre.
-      // Legs rise from (±0.30, 0.92, -0.15).
-      const hk = opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];   // opts.halo = size (CockpitOpts.haloSize: 1 slim, 2 standard, 3 thick; true = 2)
-      addTube(out, haloHoopPath(0.30, 0.92, -0.15, 0.28, 0.18, 0.96, 0.62), 0.025 * hk, 6, HALO, SURFACES.metal);
-      addBox(out, 0, 0.79, 0.62, 0.045 * hk, 0.38, 0.045 * hk, HALO, SURFACES.metal); // front pillar
+      const faired = opts.halo === 4;
+      const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
+      const path = haloHoopPath(0.30,0.92,-0.15,0.28,0.18,faired?1.10:0.96,0.62,faired?12:6);
+      const hc = haloTint || (faired ? CARBON : HALO);
+      if (faired) {
+        // Broad carbon roof; underside curves smoothly into the central Y.
+        // Swept crown rises toward the nose so its upper edge reads level
+        // from the seat, instead of projecting as a deep U over the road.
+        for (const p of path) p[1] = 0.82 + 0.39*(p[2]+0.20) - 0.028;
+        const rings = path.map((p,i) => {
+          const a=path[Math.max(0,i-1)], b=path[Math.min(path.length-1,i+1)];
+          const dx=b[0]-a[0], dz=b[2]-a[2], len=Math.hypot(dx,dz);
+          const nx=-dz/len*0.038, nz=dx/len*0.038;
+          const low=p[1]-0.035*(p[2]+0.20)/0.82-0.15*Math.exp(-p[0]*p[0]/0.0081);
+          return [[p[0]+nx,p[1]+0.028,p[2]+nz],[p[0]-nx,p[1]+0.028,p[2]-nz],
+            [p[0]-nx,low,p[2]-nz],[p[0]+nx,low,p[2]+nz]];
+        });
+        for(let i=0;i<rings.length-1;i++)for(let j=0;j<4;j++)
+          addQuad(out,rings[i][j],rings[i+1][j],rings[i+1][(j+1)%4],rings[i][(j+1)%4],hc,SURFACES.carbon);
+      } else addTube(out,path,0.025*hk,6,HALO,SURFACES.metal);
+      // Carbon fairing: a narrow stem blending into a broad Y at the crown.
+      const stem = faired ? [[0.67,0.014,0.026],[0.90,0.018,0.025],[0.95,0.026,0.028],
+        [1.00,0.045,0.031],[1.05,0.077,0.034],[1.10,0.135,0.036]]
+        : [[0.67,0.014,0.026],[0.89,0.018,0.025],[0.971,0.054,0.031]];
+      for (let i=0;i<stem.length-1;i++) {
+        const ring = (v) => [[-v[1]*hk,v[0],0.62-v[2]*hk],[v[1]*hk,v[0],0.62-v[2]*hk],
+          [v[1]*hk,v[0],0.62+v[2]*hk],[-v[1]*hk,v[0],0.62+v[2]*hk]];
+        const a=ring(stem[i]), b=ring(stem[i+1]);
+        for (let j=0;j<4;j++) addQuad(out,a[j],b[j],b[(j+1)%4],a[(j+1)%4],hc,SURFACES.carbon);
+      }
     }
-    // The hoop centreline is computed HERE (shared by the blade fairing below
-    // and part("halo") further down — the sections run in one function scope).
+    // Shared exterior centreline for the fairing and part("halo") below.
     const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
     const hr = haloSty === 1 ? 0.024 : 0.028;
     const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
@@ -3046,10 +3037,7 @@ const Car3D = (function () {
     const haloBlade = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.haloBlade || 0)));
     if (haloBlade > 0) {
       const bladeC = haloTint || HALO;
-      // The fairing is a CO-AXIAL TUBE over the hoop's own centreline — a
-      // fairing thickens the hoop it wraps. Straight spans would chord the
-      // curve and read as a triangle laid over the round halo. Radii sit
-      // 8-11 mm proud of the hoop: no coplanar faces.
+      // Co-axial fairing follows the hoop's curve, 8–11 mm proud (no coplanar faces).
       if (haloBlade === 1) {
         // Low fairing: shoulders + crown bar only (path pts 3..11 of 15).
         addTube(out, hoop.slice(3, 12), hr + 0.008, 6, bladeC, SURFACES.metal);
@@ -3109,7 +3097,7 @@ const Car3D = (function () {
     const mScale = Math.max(0.85, Math.min(1.35, cockpitStyle.mirror || 1));
     const mx = ((ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0)) * mScale;
     const msx = (ckpt ? 0.54 : 0.30) * mScale;
-    const mY = (ckpt ? 0.678 : 0.735) + (mSty === 2 ? -0.032 : 0);
+    const mY = (ckpt ? 0.780 : 0.735) + (mSty === 2 ? -0.032 : 0);
     const mW = mSty === 1 ? 0.235 : 0.215;   // swept style: wider housing
     const mH = mSty === 1 ? 0.065 : 0.075;
     for (const s of [-1, 1]) {
@@ -3119,12 +3107,14 @@ const Car3D = (function () {
       // ckpt root is BURIED in the crown (a start at 0.68 is 17 cm above it,
       // attached to nothing). Move the crown and this must move with it.
       const xi = s * (msx - 0.04), xo = s * mx;
-      const sB = ckpt ? 0.53 : 0.68;    // root, BURIED in the crown (0.558 at z 0.92)
-      const sR = ckpt ? 0.10 : 0.04;    // rise: must span crown -> housing underside
-      const aY = mY - (ckpt ? 0.678 : 0.735);   // style drop carries into the stalk too
+      const sB = ckpt ? 0.655 : 0.68;    // root buried in the cockpit shoulder
+      const sR = ckpt ? 0.070 : 0.04;    // rise: must span crown -> housing underside
+      const aY = mY - (ckpt ? 0.780 : 0.735);   // style drop carries into the stalk too
+      const stalkTop = ckpt ? mY - mH / 2 + 0.006 : sB + sR*1.5 + aY;
+      const stalkZ = mz + (ckpt ? 0.025 : 0); // tuck the stay behind the glass
       addBlock(out, [
         [xi, sB + aY, mz - 0.045], [xi, sB + aY, mz + 0.045], [xi, sB + sR + aY, mz + 0.045], [xi, sB + sR + aY, mz - 0.045],
-        [xo, sB + sR*0.75 + aY, mz - 0.02],  [xo, sB + sR*0.75 + aY, mz + 0.02],  [xo, sB + sR*1.5 + aY, mz + 0.02],  [xo, sB + sR*1.5 + aY, mz - 0.02],
+        [xo, sB + sR*0.75 + aY, stalkZ - 0.02],  [xo, sB + sR*0.75 + aY, stalkZ + 0.02],  [xo, stalkTop, stalkZ + 0.02],  [xo, stalkTop, stalkZ - 0.02],
       ], DARK);
       // Glass goes on the face TOWARD the viewer (-z). At mz+0.066 it sits
       // 8 mm BEYOND the housing's own back face, and the driver AND the chase
@@ -3132,21 +3122,28 @@ const Car3D = (function () {
       // Housing as an 8-corner block with the outboard face pulled BACK in z —
       // the C14.2.2 d i inboard toe (~25°): real mirrors angle at the driver,
       // and the cant is what stops the housing reading as a shoebox.
-      const toe = ckpt ? 0 : 0.045;
+      const toe = ckpt ? 0.030 : 0.045;
       const hy0 = mY - mH / 2, hy1 = mY + mH / 2;
       const xIn = s * (mx - mW / 2), xOut = s * (mx + mW / 2);
       addBlock(out, [
         [xIn, hy0, mz - 0.03], [xOut, hy0, mz - 0.03 + toe], [xOut, hy1, mz - 0.03 + toe], [xIn, hy1, mz - 0.03],
         [xIn, hy0, mz + 0.03], [xOut, hy0, mz + 0.03 + toe], [xOut, hy1, mz + 0.03 + toe], [xIn, hy1, mz + 0.03],
       ], [0.09, 0.09, 0.11], null, SURFACES.carbon);
-      addBox(out, s*mx, mY, mz - 0.032, mW * 0.97, mH * 0.80, 0.012, [0.10, 0.11, 0.14], SURFACES.glass); // bezel / surround
-      // glass clamps roughness <=0.13 and adds an env lobe, so this colour is a
-      // FLOOR the sky stacks on. From chase the periwinkle reads as a bright
-      // mirror (wanted); from the cockpit the pair sits 1.2 m out at +-30 deg
-      // and the same wash reads as two blank pale boxes flanking the wheel
-      // (21 of 6095 view rays). Dark glass keeps the sheen, drops the slab.
-      addBox(out, s*mx, mY, mz - 0.038, 0.200, 0.050, 0.008,
-             ckpt ? [0.10, 0.12, 0.17] : [0.46, 0.56, 0.78], SURFACES.glass); // reflective surface, C14.2.2b
+      // Recessed glass and carbon bezel share the housing's cant. A flat
+      // glass box on a swept housing reads as a detached grey rectangle.
+      const face = (inset, z, depth) => {
+        const xi=xIn+s*inset, xo=xOut-s*inset, y0=hy0+inset, y1=hy1-inset;
+        const zi=z+toe*inset/mW, zo=z+toe*(1-inset/mW);
+        return [[xi,y0,zi],[xo,y0,zo],[xo,y1,zo],[xi,y1,zi],
+          [xi,y0,zi+depth],[xo,y0,zo+depth],[xo,y1,zo+depth],[xi,y1,zi+depth]];
+      };
+      if (ckpt) {
+        addBlock(out,face(0.004,mz-0.035,0.006),[0.035,0.04,0.045],null,SURFACES.carbon);
+        addBlock(out,face(0.012,mz-0.038,0.003),[0.055,0.075,0.10],null,SURFACES.glass);
+      } else {
+        addBox(out,s*mx,mY,mz-0.032,mW*0.97,mH*0.80,0.012,[0.10,0.11,0.14],SURFACES.glass);
+        addBox(out,s*mx,mY,mz-0.038,0.200,0.050,0.008,[0.46,0.56,0.78],SURFACES.glass);
+      }
       if (!ckpt) {
         // Top winglet + the C3.7.5 OUTER stay down to the tub shoulder — the
         // two details every 2026 housing carries.
