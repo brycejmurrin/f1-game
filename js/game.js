@@ -1986,6 +1986,9 @@ function makeCars() {
       const lane = clamp((idx % 2 ? 1 : -1) * ((idx >> 1) / half) * 0.78
         + (simRnd() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
+      const visualSetup = (isP || mate) ? getTeamParts(team.id)
+        : (Career.inCareer() && Career.aiSetup ? Career.aiSetup(team) : null);
+      const visStamp = visualSetup ? Parts.CATALOG.map((cat) => visualSetup[cat.id] || "").join(",") : "";
       cars.push({
         team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num,
         // Role flags — see setCarRole. Today the only human IS the local player,
@@ -2016,6 +2019,9 @@ function makeCars() {
         tyre: null, tyreWear: 0, tyreLap0: 0, tyreStints: 0,
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
+        visualSetup, visStamp,
+        visPaint: visStamp ? visStamp + ":" + d.num : "",
+        visSh: visStamp ? visStamp + ":sh" : "",
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otE: 0, deploying: false,
@@ -7985,14 +7991,14 @@ function render(dt) {
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
     if (body) {
       gfx.draw(body, tmpMat, paint);
-      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
+      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // crew + kit, on the ground beside it
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
-      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
+      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
       // A loaded glb is one piece (no separate wheels), but the crew still
       // stands in the box — and without this a glb stop was an empty bay.
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);
@@ -8023,7 +8029,7 @@ function render(dt) {
         drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < 150 * 150;
       }
       if (drawFlaps) {
-        const aSt = teamDecalState(c.team, c.isPlayer);
+        const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
         drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
       }
     }
@@ -8080,7 +8086,7 @@ function render(dt) {
     if (!carDraw.modelBuf && vStd(c.speed) < 5.56) {
       const mdx = tmpP[0] - camEye[0], mdy = tmpP[1] - camEye[1], mdz = tmpP[2] - camEye[2];
       if (c.isPlayer || mdx * mdx + mdy * mdy + mdz * mdz < 40 * 40) {
-        const mSt = teamDecalState(c.team, c.isPlayer);
+        const mSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
         const cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
         drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(c.team.id, cm && cm.mirror));
       }
