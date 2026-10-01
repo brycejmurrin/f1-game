@@ -106,6 +106,9 @@ export const RULES = [
    ["circuits", "physics-core", "sweeps"],
    "surveyed road elevation: re-shapes the road surface of every circuit listed in it"],
   [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
+  // The track designer: its def factory parity and registry tests are Node-only
+  // and run in the edit loop; the screen's browser spec (PR4) joins `modes`.
+  [/^js\/editor\//, ["tooling-fast", "modes"], "the custom track designer: its unit tests (tooling-fast) and tests/specs/track-designer.spec.js (modes)"],
 
   // ── DIRECTORY rules (Phase 2b) ──────────────────────────────────────────
   // js/game/ dissolved into domain directories in the 2026-09-03 move window,
@@ -126,6 +129,10 @@ export const RULES = [
   [/^js\/data\/legends\.js/, ["guards"], "the sourced record and the ratings derived from it must stay consistent"],
   [/^js\/data\/teams\.js/, ["car", "modes"], "the grid feeds season and career"],
   [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
+  // GhostShare.decode is an untrusted-input door (#ghost= / pasted APXG1); the
+  // seeded fuzz that hammers it lives in net-unit (with the other paste/packet
+  // codecs) as well as tooling-fast.
+  [/^js\/car\/ghost-share\.js/, ["car", "net-unit"], "fuzz-untrusted-inputs + ghost-share unit"],
   [/^js\/car\//, ["car"], "the car's mesh, livery and parts"],
   [/^js\/garage\/pit-signs\.js/, ["circuits", "sweeps"], "the pit bay signs' atlas + decal: pit-signs.spec.js rides in test:circuits, pit-signs.test.mjs in test:sweeps"],
   [/^js\/garage\//, ["car", "ui"], "the garage bay: the studio scene and the setup sheet the menu specs click through"],
@@ -161,6 +168,12 @@ export const RULES = [
   // ── modes and their screens ─────────────────────────────────────────────
   // `ui` on the season files because the SETUP screen is DOM the menu specs
   // click through; `modes` is season+career+TT+quali.
+  // career-ui / career-backup: modes alone is not enough — career.spec.js
+  // declares over the selected-gate budget, so select-specs' SOURCE_AFFECTED
+  // elevates it to oversize when these two change (PR #611 shipped green
+  // without it). Keep this rule so pick-tests names the reason.
+  [/^js\/career\/(career-ui|career-backup)\.js/, ["modes", "state-unit"],
+   "career.spec.js — SOURCE_AFFECTED in select-specs elevates it past overBudget"],
   [/^js\/career\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
   [/^js\/career\//, ["modes", "state-unit"], ""],
 
@@ -208,6 +221,7 @@ export const RULES = [
   [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
   [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
   [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],
+  [/^js\/ui\/screen-looks\.js/, ["state-unit"], "screen-looks.test.mjs (also run title-layout + pause-opts: both peek through it)"],
   [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
   // .test.mjs in steering-unit, but the file reaches further than that: it
@@ -276,6 +290,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
   const files = [
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
+    ...(manifest.LAZY_EDITOR || []),
   ];
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }

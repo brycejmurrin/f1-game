@@ -34,6 +34,8 @@ const AiCorridor = (function () {
     const lateral = out.target - car.x;
     const seconds = Math.max(.4, Math.min(1.6, Math.abs(lateral) / 2.4));
     out.seconds = seconds;
+    const reach = Math.max(car.speed, 10) * 1.5;
+    const passT = Math.min(8, ((ctx.blockerGap || 0) + 6.3) / Math.max((ctx.freeSpeed || car.speed) - (ctx.blockerVmax || blocker.speed), (ctx.vTop || 72) / 72));
     for (const other of cars) {
       if (other === car || other.retired || other.finished) continue;
       const raw = other.prog - car.prog;
@@ -46,9 +48,15 @@ const AiCorridor = (function () {
           other.x - out.target, closing + accel * seconds, 0, .5, accel)) {
         out.reason = other === blocker ? "cannot clear the blocker in time" : "traffic in the passing lane"; return;
       }
+      // LOOK DOWN THE LANE, not just beside it: a car ahead in the target lane
+      // that we would catch before the pass is done (blocker gap + a car
+      // length, at our closing rate on the blocker) is the next blocker — the
+      // move pulls out only to queue again. Within 1.5 s of road.
+      if (!ctx.street && other !== blocker && gap > 0 && gap < reach && Math.abs(other.x - out.target) < 2.2
+        && gap - (car.speed - other.speed) * passT < 6) { out.reason = "traffic ahead in the passing lane"; return; }
     }
     out.reason = "clear passing lane";
-    out.score = Math.min(room, 8) * .25 - seconds + (AiDrive.otSide(ctx) === side ? .3 : 0);
+    out.score = Math.min(room, 8) * .25 - seconds + AiDrive.passSideBonus(ctx, side);
   }
   function choose(ctx, car, blocker, cars, total, clear, out = {}) {
     out.left = out.left || {}; out.right = out.right || {};

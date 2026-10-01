@@ -676,8 +676,8 @@ function tick(dtMs) {
     // shed by evidence. Only the GRAPHICS preset's _userTier still bit, because
     // that is a separate term in tier()'s max().
     // Using the return value removes the epsilon dependency entirely rather than
-    // chasing the constant, and tests/unit/perf-governor.test.mjs:38 already
-    // calls that boolean "the real gfx contract PerfGov.tick() relies on".
+    // chasing the constant; tests/unit/perf-governor.test.mjs pins that boolean
+    // as the gfx contract PerfGov.tick() relies on.
     let stepped = false;
     if (_autoRes && cur > 0.5 && !_scaleFutile) stepped = !!_gfx.setRenderScale(cur - 0.1);
     if (stepped) {

@@ -491,7 +491,7 @@ test.describe("__apex.trackProfile()", () => {
         // If these ever read ~0.35 again, re-measure the bumps; do NOT "fix"
         // the elevation transform in js/track/tracks.js — its two-step
         // fmap+_sceneryShift composition is the documented contract (see the
-        // note at its fmap site and js/circuits/suzuka.js:39-41).
+        // note at its fmap site and the startFrac note in js/circuits/suzuka.js).
         firstBumpRise: at(0.1495).y - minY,
         backStraightCrestRise: at(0.3895).y - minY,
       };

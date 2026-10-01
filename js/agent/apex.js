@@ -37,6 +37,10 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT",
+  // Racecraft: the next corner's signed curvature (side-by-side ownership) and
+  // the car alongside last frame (the swap-back lockout) — a stale _alPrev
+  // would arm a lockout on the first frame of the next episode.
+  "kTurn", "_alPrev", "_alPrevDp",
   // The last three appear only on a STREET circuit with real contact — sweep
   // tracks, not just monza.
   "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI",
@@ -346,10 +350,10 @@ const api = {
     setCamMode(i);
     return { mode: CAM_MODES[G.camMode].id, index: G.camMode };
   },
-  snapCam() {
+  snapCam(paint) {
     if (!G.player || !G.track) return;
     G.dbgCam = null;   // snapping the game camera clears any view() free-cam override
-    snapGameCam();
+    snapGameCam(paint);   // truthy paint → one sync render (rAF-starved probe harnesses)
   },
   previewCam(mode, frac = 0, speed = 60, lat = 0) {
     if (!G.track) return false;
@@ -1278,12 +1282,12 @@ const api = {
   // back-pressure, and this says WHICH JavaScript, which is what decides
   // whether moving the build off the main thread would move anything.
   buildProfile: () => (G.track && G.track.buildProfile) || null,
-  // The RACE-ENTRY timeline (js/game.js, "RACE-ENTRY PROFILE"): one row per
-  // phase of startRace, the build being only one of them. buildProfile() says
-  // which part of the BUILD costs; this says whether the build is the part of
-  // race entry that costs at all — measured at 23 % of it on the default
-  // backend, so the rest of this list is where the freeze actually lives.
+  // The RACE-ENTRY timeline (js/perf/race-entry-profile.js): raceProfile() is
+  // the legs; raceEntryProfile() adds marks + longtask ring (real-device probe —
+  // soft-blit CI is not this freeze). buildProfile() is the build slice only.
   raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
+  // Legs + marks + longtask ring (real-device probe; soft-blit CI is not this freeze).
+  raceEntryProfile: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.snapshot()) || null,
   // WEBGL_multi_draw (GLX only, apex26.multiDraw). multiDraw(true|false)
   // toggles it live; no argument reports the COUNTED oracle — multi-draw calls
   // issued, ranges inside them, the drawElements calls thereby avoided, and the
@@ -1293,8 +1297,7 @@ const api = {
   // this container measures the box.
   multiDraw: (on) => {
     if (!gfx || !gfx.multiDraw) return { supported: false, on: false };
-    if (on === undefined) return gfx.multiDrawStats ? gfx.multiDrawStats() : { supported: false, on: false };
-    gfx.multiDraw(!!on);
+    if (on !== undefined) gfx.multiDraw(!!on);
     return gfx.multiDrawStats ? gfx.multiDrawStats() : { supported: false, on: !!on };
   },
   // Occlusion culling (GLX only, ships OFF behind apex26.occlusionCull).
@@ -1305,8 +1308,7 @@ const api = {
   // measures the box (docs/notes/CI-RENDERING-PERFORMANCE.md).
   occlusionCull: (on) => {
     if (!gfx || !gfx.occlusionCull) return { supported: false, on: false };
-    if (on === undefined) return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: false };
-    gfx.occlusionCull(!!on);
+    if (on !== undefined) gfx.occlusionCull(!!on);
     return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: !!on };
   },
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).

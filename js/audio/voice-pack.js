@@ -5,6 +5,10 @@
  * pack cannot cover whole is NOT spoken from the pack; RadioVoice falls back
  * to speech synthesis for it, so nothing is ever half-said.
  *
+ * ONE PACK PER RADIO CHANNEL (RadioVoice.PACK_VOICE): the engineer, the
+ * commentator, race control and the coach each have their own voice and only
+ * their own lines.
+ *
  * The clips are Kokoro-82M renders (Apache-2.0), made offline by
  * tools/gen/voicepack.mjs into ONE file per voice: `assets/voice/<id>.bin` is
  * the MP3 clips back to back, each a complete file, and `<id>.json` maps a key
@@ -16,6 +20,21 @@
  * tool writes are exactly the keys the game looks up.
  */
 const VoicePack = (() => {
+  // Author-time generator and player picker share this catalogue. A pack only
+  // contains its channel's words; the spotter shares the engineer's voice.
+  const VOICES = Object.freeze({
+    george: { name: "George · British", voice: "bm_george", speaker: "radio", speed: 1.12 },
+    michael: { name: "Michael · American", voice: "am_michael", speaker: "radio", speed: 1.08 },
+    fable: { name: "Fable · British", voice: "bm_fable", speaker: "announcer", speed: 1.12 },
+    bella: { name: "Bella · American", voice: "af_bella", speaker: "announcer", speed: 1.05 },
+    emma: { name: "Emma · British", voice: "bf_emma", speaker: "control", speed: 1.06 },
+    heart: { name: "Heart · American", voice: "af_heart", speaker: "coach", speed: 1.02 },
+  });
+  const choices = (speaker) => Object.entries(VOICES).filter(([, v]) => v.speaker === speaker)
+    .map(([id, v]) => ({ id, name: v.name }));
+  // Full utterances retain their punctuation and performance. Keep them in a
+  // separate namespace so older fragment packs remain valid.
+  const lineKey = (text) => "@line:" + String(text || "").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
   const PAUSE = Object.freeze({ ".": 0.1, "!": 0.1, "?": 0.1, ",": 0.05, ";": 0.08, ":": 0.08 });
   const MAX_WORDS = 12;          // longest key the greedy matcher tries
   const CACHE_MAX = 80;          // decoded clips kept
@@ -26,7 +45,10 @@ const VoicePack = (() => {
   const WATCHDOG_MS = 4000;      // a decode that never settles frees the channel after this
 
   /** Speakable text (RadioVoice.speakable's output) → words and pauses.
-   *  A pause is punctuation FOLLOWED BY a space or the end, so "1.4" stays a word. */
+   *  A pause is punctuation FOLLOWED BY a space or the end, so "1.4" stays a word.
+   *  A lap time is read the way the broadcast reads one — "1:32.4" is "1 32
+   *  point 4", "1:05.3" is "1 oh 5 point 3" — so it splices from number clips
+   *  instead of needing a clip per time. */
   function norm(text) {
     const out = [];
     const s = String(text == null ? "" : text).toLowerCase()
@@ -34,8 +56,15 @@ const VoicePack = (() => {
     const re = /([.,!?;:])(?=\s|$)|[^\s.,!?;:]+(?:[.:][^\s.,!?;:]+)*/g;
     let m;
     while ((m = re.exec(s))) {
-      if (m[1]) { if (out.length && typeof out[out.length - 1] === "string") out.push({ p: PAUSE[m[1]] }); }
-      else out.push(m[0].replace(/^'+|'+$/g, ""));
+      if (m[1]) { if (out.length && typeof out[out.length - 1] === "string") out.push({ p: PAUSE[m[1]] }); continue; }
+      const w = m[0].replace(/^'+|'+$/g, "");
+      const t = /^(\d{1,2}):(\d\d)(?:\.(\d))?$/.exec(w);
+      if (t) {
+        out.push(String(+t[1]));
+        if (t[2][0] === "0") out.push("oh");
+        out.push(String(+t[2]));
+        if (t[3] != null) out.push("point", t[3]);
+      } else out.push(w);
     }
     while (out.length && typeof out[out.length - 1] !== "string") out.pop();
     return out;
@@ -47,6 +76,7 @@ const VoicePack = (() => {
   /** Greedy longest-match of `text` over the keys `has` accepts. Returns a list
    *  of { k } clips and { p } pauses, or null when any word is not covered. */
   function compose(text, has) {
+    if (String(text || "").trim() && has(lineKey(text))) return [{ k: lineKey(text) }];
     const toks = norm(text);
     const seq = [];
     let i = 0;
@@ -86,7 +116,7 @@ const VoicePack = (() => {
       if (v.state !== "idle" || typeof fetch !== "function") return v.state;
       v.state = "loading";
       const get = (f, t) => fetch(base + f).then((r) => { if (!r.ok) throw new Error(f + " " + r.status); return r[t](); });
-      Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])
+      v.loading = Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])
         .then(([man, bin]) => {
           if (!man || !man.clips || !(bin && bin.byteLength)) throw new Error("empty pack");
           v.man = man; v.bin = bin; v.state = "ready";
@@ -149,7 +179,7 @@ const VoicePack = (() => {
 
     /** Speak `text` from voice `id` after `leadS`, if the pack covers all of it
      *  and it fits `budgetS`. Returns false (nothing scheduled) otherwise, so
-     *  the caller falls back to speech synthesis. `onEnd` runs once, when the
+     *  the caller can leave an unavailable line written. `onEnd` runs once, when the
      *  line finishes or is cut. */
     function speak(id, text, o) {
       const pl = plan(id, text);
@@ -185,7 +215,7 @@ const VoicePack = (() => {
           // starting late and cutting it off in the middle of an instruction.
           if (opt.budgetS != null && start + pl.secs > at + opt.budgetS + SLACK_S) { release(); return; }
           const h = GameAudio.radioVoice(parts, start, {
-            channel: ch, volume: opt.volume == null ? 1 : opt.volume });
+            channel: ch, fx: opt.fx, volume: opt.volume == null ? 1 : opt.volume });
           if (!h) { release(); return; }
           token.h = h;
           token.stop = () => { h.stop(); done(); };
@@ -199,10 +229,11 @@ const VoicePack = (() => {
 
     return {
       ensure, ready, plan, speak, stop, remaining,
+      load(id) { ensure(id); return (voice(id).loading || Promise.resolve()).then(() => ready(id)); },
       busy: (channel) => (channel ? !!live[channel] : Object.keys(live).length > 0),
       debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq }),
     };
   }
 
-  return Object.freeze({ create, norm, compose, keyOf, PAUSE, MAX_WORDS, SLACK_S });
+  return Object.freeze({ create, norm, compose, keyOf, lineKey, choices, VOICES, PAUSE, MAX_WORDS, SLACK_S });
 })();

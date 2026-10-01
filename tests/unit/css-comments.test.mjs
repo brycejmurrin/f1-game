@@ -10,11 +10,11 @@
  * Two live instances, found in the 2026-08 cleanup pass by measuring prelude
  * lengths rather than by reading:
  *
- *   css/tuner.css:2   — the header wrote `.adv-*` followed by `/`, i.e. an
+ *   css/tuner.css     — the header wrote `.adv-*` followed by `/`, i.e. an
  *                       accidental `* /`, closing the comment 4 lines early.
  *                       The swallowed rule was `:root { --dock-w: 0; --dock-px: 0 }`,
  *                       the no-panel defaults the file's own comment promises.
- *   css/menus.css:362 — a block lost its opening `/ *` in an edit, so nine lines
+ *   css/menus.css     — a block lost its opening `/ *` in an edit, so nine lines
  *                       of prose swallowed `#sel-inner[data-shape="tall"]
  *                       #sel-track-section { flex: 0 0 52% }`. That rule IS the
  *                       fix its own comment describes — the map band collapsing

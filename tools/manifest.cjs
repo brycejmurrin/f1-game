@@ -154,6 +154,7 @@ const FULL = [
   // reason. Pure data with no dependencies of its own.
   "js/data/settings-defaults.js",
   "js/core/store.js",
+  "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
   "js/track/core/geom.js",
@@ -170,6 +171,7 @@ const FULL = [
   "js/track/core/line.js",
   "js/track/core/mesh.js",
   "js/track/core/hidden-faces.js",
+  "js/track/core/def.js",   // TrackDef: raw def → LIST entry (palettes, realPoints, fromRaw); tracks.js destructures it at eval
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
   "js/track/scenery/city.js",
@@ -186,6 +188,11 @@ const FULL = [
   "js/track/tracks.js",
   "js/track/build-client.js", // TrackBuildClient: the build Worker's page side (apex26.buildWorker, default OFF)
   "js/ui/track-maps.js",
+  // THE TRACK DESIGNER'S BOOT HALF (js/editor/): the theme presets and the
+  // registry that appends the player's saved circuits to Tracks.LIST at eval,
+  // before game.js resolves the stored trackId. The editor itself is LAZY.
+  "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
+  "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
@@ -200,6 +207,7 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
+  "js/audio/announcer-recorded.js",
   "js/audio/announcer.js",
   "js/audio/panel.js",
   "js/car/parts.js",
@@ -232,6 +240,7 @@ const FULL = [
   "js/fx/particles.js",
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
+  "js/career/ai-dev.js",
   "js/career/career.js",
   "js/career/season-cal.js",
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
@@ -285,6 +294,7 @@ const FULL = [
   "js/input/steer-tuning.js",
   "js/perf/governor.js",
   "js/perf/loop-health.js",
+  "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/perf/gfx-debug-overlay.js",
@@ -294,6 +304,7 @@ const FULL = [
   "js/ui/appearance-opts.js",
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
+  "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
@@ -321,6 +332,7 @@ const FULL = [
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
   "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
+  "js/physics/wall-clamp.js", // barrier / pit / gantry hard clamp + human writeback (WallClamp.apply), carve-headroom B
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
@@ -338,6 +350,7 @@ const CSS = [
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
+  "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
 ];
 // The two title-critical sheets are also <link rel="preload">ed above the
 // stylesheet block (gen-shell writes that block too).
@@ -346,7 +359,7 @@ const CSS_PRELOAD = ["css/tokens.css", "css/components.css"];
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
 const CSS_DEFERRED = [
   "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/overlays.css",
-  "css/track-detail.css", "css/career.css", "css/data.css",
+  "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.
@@ -422,6 +435,7 @@ const TRACK_VM = [
   "js/track/core/line.js",
   "js/track/core/mesh.js",
   "js/track/core/hidden-faces.js",
+  "js/track/core/def.js",   // TrackDef: raw def → LIST entry (palettes, realPoints, fromRaw); tracks.js destructures it at eval
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
   "js/track/scenery/city.js",
@@ -460,6 +474,7 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
   ["js/core/store.js", "js/ui/title-layout.js"],  // binds GameStore.store and applies the title layout at eval
   ["js/core/store.js", "js/ui/pause-opts.js"],    // binds GameStore.store and applies data-pause-* at eval
+  ["js/core/store.js", "js/ui/screen-looks.js"],  // binds GameStore.store and applies data-look-* at eval
   ["js/core/store.js", "js/career/badges.js"],    // binds GameStore.store at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
@@ -511,6 +526,8 @@ const HARD_EDGES = [
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/core/mesh.js"],               // mesh destructures TrackSpline at eval
   ["js/track/core/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
+  ["js/track/core/geom.js", "js/track/core/def.js"],             // def destructures TrackGeom.norm at eval (palettes)
+  ["js/track/core/def.js", "js/track/tracks.js"],                // tracks destructures TrackDef at eval (LIST = DEFS.map(fromRaw))
   // build-props.js owns Tracks.buildProps orchestration (Phase 1 peel).
   ["js/core/mat4.js", "js/track/scenery/build-props.js"],        // destructures M4.lerp at eval
   ["js/track/core/geom.js", "js/track/scenery/build-props.js"],  // destructures TrackGeom at eval
@@ -535,7 +552,15 @@ const HARD_EDGES = [
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
+  ["js/car/parts.js", "js/career/ai-dev.js"],       // AI winter develops catalog options through Parts
+  ["js/data/teams.js", "js/career/ai-dev.js"],
+  ["js/core/mat4.js", "js/career/ai-dev.js"],         // aliases M4.clamp at eval
+  ["js/career/ai-dev.js", "js/career/career.js"],     // rolloverTeams calls CareerAiDev.developWinter
   ["js/career/save-migrate.js", "js/core/store.js"],
+  ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
+  ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
+  ["js/core/native-download.js", "js/career/career-backup.js"], // Capacitor Share download path
+  ["js/career/career-backup.js", "js/career/career-ui.js"],     // EXPORT/IMPORT on slot cards
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
@@ -577,6 +602,16 @@ const HARD_EDGES = [
   ["js/car/liveries.js", "js/car/custom-liveries.js"], // resolve/getLiveries read Liveries at call time; keep ordered
   ["js/data/teams.js", "js/career/custom-team.js"], // DEFAULT_CUSTOM + Teams.LIST
   ["js/career/custom-team.js", "js/game.js"],      // game.js calls CustomTeam.create(hooks) after Menus
+  // The track designer's boot half: presets read the ATM/COL packs at eval; the
+  // registry binds the store, the engine and the factory at eval and appends the
+  // stored customs to Tracks.LIST before game.js reads the saved trackId.
+  ["js/track/scenery/data.js", "js/editor/track-themes.js"],
+  ["js/core/store.js", "js/editor/custom-tracks.js"],
+  ["js/core/hash32.js", "js/editor/custom-tracks.js"],
+  ["js/track/tracks.js", "js/editor/custom-tracks.js"],
+  ["js/track/core/def.js", "js/editor/custom-tracks.js"],
+  ["js/editor/track-themes.js", "js/editor/custom-tracks.js"],
+  ["js/editor/custom-tracks.js", "js/game.js"],    // game.js calls CustomTracks.create(G, { load }) after the DATA door
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval
@@ -616,6 +651,8 @@ const HARD_EDGES = [
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
+  ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
+  ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];
@@ -728,6 +765,31 @@ const LAZY_DATA = [
 // the hub", so a hand-written copy can only ever drift out of step with it.
 const LAZY_DATA_EDGES = LAZY_DATA.filter((f) => f !== "js/data/hub.js")
   .map((f) => [f, "js/data/hub.js"]);
+
+// THE TRACK DESIGNER (js/editor/*, the part behind the TRACK DESIGNER door).
+// The boot half — TrackThemes and the CustomTracks registry — is FULL (the
+// picker needs the saved circuits at eval); everything that only matters once
+// the designer opens lifts off the boot wall as one bundle: the geometry kit,
+// the stamp tools, the randomiser, the validator, the share codec, and (PR4)
+// the canvas and the screen. js/editor/custom-tracks.js ensureEditor() loads
+// it through game.js's loadBackendScripts, exactly as the DATA door loads
+// LAZY_DATA. Order IS the eval order: shape.js first (the others destructure
+// TrackShape at eval), the screen last.
+const LAZY_EDITOR = [
+  "js/editor/shape.js",       // TrackShape: arcs, Dubins, RDP, resample, Menger, crossing + clearance scans
+  "js/editor/stamps.js",      // TrackStamps: STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND + the Dubins rejoin
+  "js/editor/randomise.js",   // TrackRandom: hull + displacement + fixAngles (Maciel), seeded
+  "js/editor/validate.js",    // TrackValidate: WYSIWYG rules over Tracks.buildCenterline
+  "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
+  "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
+  "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
+];
+// stamps / randomise / validate / canvas destructure TrackShape at eval — the
+// same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
+// roster; designer.js (the screen) must follow every other editor module.
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/designer.js")
+  .map((f) => ["js/editor/shape.js", f])
+  .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS
@@ -1110,7 +1172,7 @@ module.exports = {
   MOVED,
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
-  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER,
+  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };

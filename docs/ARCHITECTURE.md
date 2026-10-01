@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_241 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_257 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -146,7 +146,9 @@ _241 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
+| `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
+| `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
 | `badges.js` | `Badges` | tag | LICENCE BADGES: local achievements unlocked from facts the game already computes (a classified result, a pole, a daily streak), persisted at `apex26.badges`. |
@@ -180,6 +182,7 @@ _241 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
+| `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -199,6 +202,7 @@ _241 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `line.js` | `TrackLine` | tag | TrackLine: the baked RACING LINE, a lateral offset per centreline node, computed once at track build beside track.curv. |
 | `mesh.js` | `TrackMesh` | tag | TrackMesh: the kerb/banking band + the road/terrain/floor mesh builders for the tracks engine. upOf() is the shared per-node up-basis, hash() the dete… |
 | `hidden-faces.js` | `TrackHiddenFaces` | tag | build-time strip of prop triangles no camera can see (enclosed in an opaque box, buried under terrain, down-facing on the ground), then compaction of the… |
+| `def.js` | `TrackDef` | tag | TrackDef: the def FACTORY. |
 
 **`js/track/scenery/`**
 
@@ -259,6 +263,20 @@ _241 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `tracks.js` | `Tracks` | tag | track engine shell: LIST / build() / centerline / pit helpers / terrainY. |
 | `build-client.js` | `TrackBuildClient` | tag | the page side of the track build Worker (js/track/build-worker.js). |
 
+**`js/editor/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `track-themes.js` | `TrackThemes` | tag | TrackThemes: the custom track designer's THEME PRESETS. |
+| `custom-tracks.js` | `CustomTracks` | tag | CustomTracks: the registry of the player's OWN circuits. |
+| `shape.js` | `TrackShape` | LAZY_EDITOR | TrackShape: the track designer's 2D geometry kit. |
+| `stamps.js` | `TrackStamps` | LAZY_EDITOR | TrackStamps: the designer's STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND tools. |
+| `randomise.js` | `TrackRandom` | LAZY_EDITOR | TrackRandom: the RANDOMISE button. |
+| `validate.js` | `TrackValidate` | LAZY_EDITOR | TrackValidate: WYSIWYG validation for the track designer. |
+| `codec.js` | `TrackCodec` | LAZY_EDITOR | TrackCodec: the share code for a custom circuit. |
+| `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
+| `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
+
 **`js/car/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -295,6 +313,7 @@ _241 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `car-sfx.js` | `CarSfx` | tag | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
 | `voice-pack.js` | `VoicePack` | tag | VoicePack — recorded radio voice, composed from clips the way Crew Chief does it: fixed phrases, driver surnames, positions, numbers and gaps are separate… |
 | `radio-voice.js` | `RadioVoice` | tag | The radio banner, spoken aloud by the browser's own speech synthesiser. |
+| `announcer-recorded.js` | `RecordedAnnouncer` | tag | A recorded read owns its pending load as well as its playing clips. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
 
@@ -314,6 +333,7 @@ _241 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
 | `contact-geometry.js` | `ContactGeometry` | tag | Oriented boxes in the local (along-road, right) plane. |
 | `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
+| `wall-clamp.js` | `WallClamp` | tag | WALL CLAMP: per-side barrier / pit-wall / gantry limits, human slide-along + scrub, lane-side pit clamp, and the conditional road→world writeback when xPinned. |
 
 **`js/lighting/`**
 
@@ -370,6 +390,7 @@ _241 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
 | `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
+| `race-entry-profile.js` | `RaceEntryProfile` | tag | RaceEntryProfile: the race-entry stopwatch OUTSIDE the track build. |
 | `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
 | `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
@@ -1153,7 +1174,12 @@ Shared transient-particle pool (tyre smoke, collision sparks, gravel/grass
 kickup, rain spray): a fixed CPU pool of camera-facing soft billboards drawn
 in two batches per frame via `gfx.drawParticles()` — alpha-blended
 (smoke/dust/spray) and additive (sparks; HDR tints feed bloom for free). Also
-owns the **rain overlay** (`Particles.rain*`). Emitters only READ car state;
+owns the **rain streak field** (`Particles.rain*`, 2026-10-01): drops in a box
+that travels with the eye, each a pre-expanded world-space quad appended to the
+alpha batch with size 0, so the particle shaders' soft-disc falloff draws a
+depth-tested streak along the drop's APPARENT velocity (fall − camera motion)
+on all three backends with no new program; it replaced a Canvas2D overlay that
+had no depth, no fog, no mirror and a compositor layer of its own. Emitters only READ car state;
 update/draw run in the RENDER path only, never inside the physics step, so
 headless obs/act runs are identical with FX on or off.
 
@@ -1466,6 +1492,23 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **PUDDLE RIPPLES (2026-10-01):** on all three. Inside each lit shader's wet
+  block, where `puddle > 0` and rain is FALLING (`frame.rain`, ramped like
+  wetness: GLX `uRain`, TLX `U.rain`, WGX `params4.z`), two cell grids of
+  impact rings tilt the normal (`cos((r − v·t)·k)·r̂`, damped by radius and
+  age, keyed to the game clock) before the sun/lamp GGX lobes and the sky
+  reflection read it — the diffuse `NoL` above the block is untouched, a
+  ripple being a specular event. Constant for constant across the three
+  (`light-grid.test.mjs` pins the constants and the plumbing).
+- **FOLIAGE WIND SWAY (2026-10-01):** GLX + TLX; **WGX gap** (the same gap as the
+  FLAG wave — WGX has no per-vertex `mat` attribute, `docs/research/WEBGPU-PARITY.md`).
+  Tree emitters in `js/track/scenery/nature.js` stamp FOLIAGE vertices with a
+  height weight in the id's fraction (`TrackGeom.swayMatAt`, `SWAY_FRAC` 0.45 —
+  below the 0.5 the fragment side rounds at; instanced pines through
+  `rec.mat(id, [y0, y1])` in `graph.js`). GLX `LIT_VS` and TLX `tsl-lit.js`
+  `vertexMotionNode` bend the crown downwind by weight² plus a flutter, constant
+  for constant, from `uWind` / `U.wind` (knobs `windSpeed`, `windDir`). Shadow
+  casters do not sway (no positionNode; the sun map is snap-cached).
 - **DRIVING LINE ribbon (2026-09-08):** on all three. `js/render/shared/driving-line.js`
   builds one stride-6 strip; GLX draws it with `LINE_VS`/`LINE_FS`
   (`glsl-fx.js`), WGX with `WGSLFx.LINE` (a triangle-strip pipeline beside
