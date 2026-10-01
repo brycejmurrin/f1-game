@@ -1335,6 +1335,15 @@
         const satinMetalSurface = surfaceId.equal(29.0).toVar();
         const iriSurface = surfaceId.equal(30.0).toVar();
         const carbonFinish = surfaceId.equal(31.0).toVar();   // bare weave OVER the livery colour
+        // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its
+        // mean over 8-16 m so the 3.3 cm cross-hatch cannot moire at range.
+        // Computed here, ahead of the roughness ripple and the albedo twill.
+        const weave = float(0.5).toVar();
+        If(carbonFinish.or(carbonSurface), () => {
+          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
+          const wvFade = clamp(vd.sub(8.0).div(8.0).oneMinus(), 0.0, 1.0);
+          weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
+        });
         // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
         // clearcoat, dielectric env response — mirrors the GLX/WGSL split.
         const visorSurface = surfaceId.equal(32.0).toVar();
@@ -1446,7 +1455,7 @@
 
         // roughness resolution + car-surface clamps (js/render/glx/shaders/glsl-lit.js)
         const rough = clamp(matU.roughness, 0.04, 1.0).toVar();
-        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56)); });
+        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56).add(weave.sub(0.5).mul(0.10))); });   // the twill's roughness ripple
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
         If(metalSurface, () => { rough.assign(min(rough, 0.16)); });
         If(glassSurface.or(visorSurface), () => { rough.assign(min(rough, 0.13)); });
@@ -1462,10 +1471,10 @@
         // colour face-on. No derivative, so it is safe in any control flow.
         // CARBON FINISH (mirrors js/render/glx/shaders/glsl-lit.js).
         If(carbonFinish, () => {
-          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
-          const weave = wv.x.sin().mul(wv.y.sin()).mul(0.5).add(0.5).toVar();
           albedo.assign(mix(albedo.mul(0.16).add(vec3(0.030, 0.031, 0.035)), albedo.mul(0.28), 0.25));
           albedo.assign(albedo.mul(weave.mul(0.28).add(0.86)));
+        }).ElseIf(carbonSurface, () => {
+          albedo.assign(albedo.mul(weave.mul(0.14).add(0.93)));
         });
         If(iriSurface, () => {
           const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
