@@ -543,7 +543,7 @@ async function settle(pred, maxTurns) {
  *           first manifest file — the VM's equivalent of page.addInitScript
  *   carMeshes false stubs Car3D's builders (~1 s a process; see stubCarMeshes)
  *           — OPT-IN, and never on a parity twin
- *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx, opts),
+ *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx, opts), aiOnly(),
  *             settle(pred), flushTimers(), record, bootMs, trackMs }
  */
 async function createGame(opts) {
@@ -649,6 +649,20 @@ async function createGame(opts) {
       return r;
     },
     step: (n, dt) => apex.step(dt != null ? dt : 1 / 60, n != null ? n : 1),
+    // AI-ONLY FIELD. A VM race has a player with no input: it sat PARKED on its
+    // grid box all race, a blocker the AI attacked 7-10 times a race (11-21 % of
+    // passes within 60 m of it) and the leading human the rubber band banded
+    // the field toward. Hand the car to the AI (finishDelay then waits for the
+    // first finisher, not the human) and RETIRE it: a retired car is out of
+    // `ranked`, so out of every traffic scan, collision and tow. Call after
+    // race(); returns the removed car (null when there is no player).
+    aiOnly() {
+      const i = G ? G.cars.findIndex((c) => c.isPlayer || c.human) : -1;
+      if (i < 0) return null;
+      apex.carRole(i, { human: false });
+      apex.retire(i, "bench");
+      return G.cars[i];
+    },
     settle,
     flushTimers: (onlyDue) => timers.flush(onlyDue),
     pumpFrame: (now) => { const q = world.rafQueue.splice(0); for (const fn of q) fn(now != null ? now : performance.now()); return q.length; },

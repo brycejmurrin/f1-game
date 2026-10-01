@@ -1,0 +1,105 @@
+name: Prune branches
+
+# Delete remote branches that are already MERGED into the deploy branch.
+#
+# Agent sessions cannot do this themselves: the remote containers' git proxy
+# refuses ref deletion (403), and 475 branches had piled up by 2026-10-01. The
+# Actions token can (`contents: write`,
+# https://docs.github.com/en/rest/git/refs#delete-a-reference), so the rule
+# lives in tools/ci/prune-branches.mjs and this workflow runs it.
+#
+# DISPATCH ONLY, and a DRY RUN unless `apply` is ticked. Every run writes the
+# BRANCH AUDIT (tools/ci/branch-audit.mjs) to the step summary and as an
+# artifact: one verdict per branch — merged, absorbed (a dry merge into the
+# deploy branch changes nothing), superseded (its added lines are already in
+# deploy), post-merge, pr-closed, unmerged — with the PR and the last CI run.
+# A branch is deleted only when it is merged or absorbed (nothing on it is
+# lost), or its verdict is listed in `also` (a person read the report), AND no
+# open PR has it as its head AND it has been quiet for `min_age_days`.
+# claude/claims/* markers (who-is-on-it.mjs) go once quiet for a day. The
+# deploy branch, the default branch and gh-pages are never touched.
+#
+# Settings > General > "Automatically delete head branches" stops new merged
+# branches piling up; this clears the backlog and the squash-free leftovers.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Delete for real (unticked = list only)"
+        type: boolean
+        required: false
+        default: false
+      min_age_days:
+        description: "Only branches whose last commit is at least this many days old"
+        required: false
+        default: "1"
+      keep:
+        description: "Regex of extra branch names to keep (blank = none)"
+        required: false
+        default: ""
+      also:
+        description: "Also delete these audit verdicts, comma-separated: superseded, post-merge, pr-closed, no-history (blank = none)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write        # delete refs
+  pull-requests: read    # the open-PR heads that are never pruned
+  actions: read          # the audit's last-CI-run column
+
+concurrency:
+  group: prune-branches
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          fetch-depth: 0    # every branch, full history: the ancestry test needs both
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: PRs and CI runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --repo "$GITHUB_REPOSITORY" --state all --limit 5000 --json number,state,headRefName,headRefOid,title,mergedAt,closedAt,createdAt > "$RUNNER_TEMP/prs.json"
+          echo "PRs: $(jq length "$RUNNER_TEMP/prs.json") ($(jq '[.[] | select(.state == "OPEN")] | length' "$RUNNER_TEMP/prs.json") open)"
+          gh run list --repo "$GITHUB_REPOSITORY" --limit 2000 --json headSha,conclusion,status,workflowName,createdAt > "$RUNNER_TEMP/runs.json"
+          echo "CI runs: $(jq length "$RUNNER_TEMP/runs.json")"
+      - name: Prune
+        env:
+          APPLY: ${{ inputs.apply }}
+          MIN_AGE: ${{ inputs.min_age_days }}
+          KEEP: ${{ inputs.keep }}
+          ALSO: ${{ inputs.also }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          args=(--base claude/f1-game-project-26h3ng --default "$DEFAULT_BRANCH" --min-age-days "${MIN_AGE:-1}"
+                --prs "$RUNNER_TEMP/prs.json" --runs "$RUNNER_TEMP/runs.json"
+                --report "$RUNNER_TEMP/branch-audit.md" --json "$RUNNER_TEMP/branch-audit.json")
+          if [ -n "$KEEP" ]; then args+=(--keep "$KEEP"); fi
+          if [ -n "$ALSO" ]; then args+=(--also "$ALSO"); fi
+          if [ "$APPLY" = "true" ]; then args+=(--apply); fi
+          set -o pipefail
+          node tools/ci/prune-branches.mjs "${args[@]}" | tee "$RUNNER_TEMP/prune.log"
+      - name: Summary
+        if: always()
+        run: |
+          { echo '### Prune branches'; echo; echo '```'; cat "$RUNNER_TEMP/prune.log" 2>/dev/null || echo "no log"; echo '```'; echo;
+            cat "$RUNNER_TEMP/branch-audit.md" 2>/dev/null || echo "no audit"; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the audit
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: branch-audit
+          path: |
+            ${{ runner.temp }}/branch-audit.md
+            ${{ runner.temp }}/branch-audit.json
+            ${{ runner.temp }}/prune.log
+          if-no-files-found: warn

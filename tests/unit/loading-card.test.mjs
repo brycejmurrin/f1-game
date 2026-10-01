@@ -327,11 +327,17 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // first countdown present on TLX starts the program warm and paints nothing.
   const game = read("js/game.js");
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
-  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;[^\n]*\n\s*clearMenuScreens\(\);\s*if \(handoff\) loadingScreen\.handoff\(\);/,
+  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;/,
+    "startRaceBody still decides handoff from the screen that was up before the sweep");
+  assert.match(body, /clearMenuScreens\(\);\s*if \(handoff\) RaceEntryProfile\.raiseHandoff\(loadingScreen\);/,
     "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
-  assert.match(render, /gfx\.present\(po\);[\s\S]{0,400}?if \(loadingScreen\.phase\(\) === "handoff" && !\(gfx\.warming && gfx\.warming\(\)\)\) loadingScreen\.stop\(\);/,
-    "render() lowers it after a present that painted, never one that only started the warm");
+  assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx\);/,
+    "render() lowers it via afterPresent after a present that painted");
+  assert.match(read("js/perf/race-entry-profile.js"), /function raiseHandoff\(screen\) \{[\s\S]*?screen\.handoff\(\);/,
+    "raiseHandoff still calls loadingScreen.handoff()");
+  assert.match(read("js/perf/race-entry-profile.js"), /function afterPresent\(screen, gfx\) \{[\s\S]*?screen\.phase\(\) === "handoff"[\s\S]*?screen\.stop\(\)/,
+    "afterPresent still stops the card only when not warming");
   assert.match(read("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
 });
 
@@ -823,8 +829,9 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   const intro = game.slice(game.indexOf("function introWarm(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
-  assert.match(intro, /if \(_warmKey !== key\) \{[^\n]*\n\s*if \(warmPrograms\(\) \|\| !\(_studio && _studio\.held\)\) _menuGate\.warm = 2;/, "a built but UNWARMED world is warmed under the card (or under the held garage), as introBuild does");
-  assert.match(intro, /await awaitIntroWarm\(live\)/, "same 30 s compile bound as introBuild — never fly over a pending warm");
+  assert.match(intro, /await introPrepare\(live, key, info, n, cold\)/, "a built but unwarmed world joins planning and warm under the card before motion");
+  const prepare = game.slice(game.indexOf("async function introPrepare("), game.indexOf("// A ready, warm world"));
+  assert.match(prepare, /await awaitIntroWarm\(current\)/, "shared compile bound — never fly over pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
   assert.match(intro, /if \(!built && menuWorld\(\) && introWarm\(go\)\) return;/, "raceIntro routes a built world with a pending warm through it");
   assert.match(intro, /function startRaceCovered\(\) \{\s*if \(!loadingScreen\.phase\(\)\) loadingScreen\.building\(loadingInfo\(\)\);\s*return startRace\(\);/);
@@ -834,7 +841,8 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   // The build path plans the flyby for the length it will run (a real race's read).
   const build = game.slice(game.indexOf("function introBuild(go)"), game.indexOf("function introWarm(go)"));
   assert.match(build, /const info0 = loadingInfo\(\);/);
-  assert.match(build, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info0\.readMs\)\);/);
+  assert.match(build, /await introPrepare\(live, key, info0, n, true\)/);
+  assert.match(game, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
   assert.match(build, /await awaitIntroWarm\(live\)/, "introBuild waits via awaitIntroWarm, not the race-start introWarm(go)");
 });
 
@@ -876,6 +884,14 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   h.tick(LS.SKIP_GRACE_MS + 10); h.skip();
   assert.equal(late, 0, "the build card has no skip of its own");
   assert.equal((h.listeners.keydown || new Set()).size, 0, "stop() took the garage's listeners down");
+  h.screen.building(info, () => late++);
+  h.skip(); assert.equal(late, 0, "the preparation skip retains the double-click grace");
+  h.tick(LS.SKIP_GRACE_MS + 10); h.skip(); h.skip();
+  assert.equal(late, 1, "a preparation skip marks the cinematic once, without lowering its card");
+  assert.equal(h.saved.get("flySkips"), 2, "a preparation skip also counts toward the shorter cinematic");
+  assert.equal(h.screen.phase(), "build", "preparation continues safely after the skip");
+  h.screen.stop();
+  assert.equal((h.listeners.keydown || new Set()).size, 0, "cancellation removes preparation skip listeners");
   const css = read("css/overlays.css");
   assert.match(css, /#loading\[data-phase="garage"\] \{ background: none; \}/, "no scrim over the car");
   assert.match(css, /#loading\[data-phase="garage"\] #ld-card \{ visibility: hidden; \}/, "the card is out of the accessibility tree, not just transparent");

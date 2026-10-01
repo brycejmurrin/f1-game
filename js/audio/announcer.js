@@ -534,7 +534,9 @@ const Announcer = (function () {
   function create(G) {
     const synth = typeof window !== "undefined" && window.speechSynthesis;
     const Utter = typeof window !== "undefined" && window.SpeechSynthesisUtterance;
-    if (!(synth && typeof Utter === "function")) {
+    const recorded = typeof RecordedAnnouncer !== "undefined" ? RecordedAnnouncer.create(G) : null;
+    const recordedOn = () => G.radio && (G.radio.announcerPackOn ? G.radio.announcerPackOn() : G.radio.packOn && G.radio.packOn());
+    if (!(synth && typeof Utter === "function") && !(recorded && G.radio && G.radio.pack)) {
       Log.info("audio", "Announcer: no speechSynthesis — the loading card stays written");
       return inert();
     }
@@ -559,6 +561,7 @@ const Announcer = (function () {
     }
 
     function stop() {
+      if (recorded) recorded.stop();
       wrapGen++;               // a wrap-up still waiting for the radio is retired too
       generation++;            // before cancel(): a queued onend must already see itself as stale
       const owned = !!speaking; speaking = null;
@@ -742,6 +745,12 @@ const Announcer = (function () {
         .map((l) => { const t = String(l == null ? "" : l); return RadioVoice.speakable ? RadioVoice.speakable(t) : t; })
         .filter(Boolean);
       if (!parts.length) return false;
+      if (recorded && recordedOn()) {
+        if (G.radio.stop) G.radio.stop();
+        stop();
+        return recorded.play(parts, budgetMs, landLast);
+      }
+      if (!synth || typeof Utter !== "function") return false;
       // Starting a read takes the channel deliberately; merely turning this
       // speaker off must never cancel somebody else's radio transmission.
       if (G.radio && G.radio.stop) G.radio.stop();
@@ -809,7 +818,7 @@ const Announcer = (function () {
        *  the caller can tell "off" from "spoke" without reading storage. */
       play(info, budgetMs) {
         if (!on || (budgetMs != null && budgetMs < 0)) return false;   // a flyby with no room for it
-        return speak(scriptFor(info, budgetMs), budgetMs, true);
+        return speak(scriptFor(info, recordedOn() ? 0 : budgetMs), budgetMs, true);
       },
       /** The editor's PLAY button: speaks regardless of the player's toggle,
        *  because pressing play in an authoring panel IS the consent. Master
@@ -829,6 +838,9 @@ const Announcer = (function () {
         try {
           const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(CHANNEL)) || { rate: 1 };
           const lines = script(factsFor(info), 0, tune.rate || 1);
+          if (recorded && recordedOn()) {
+            return recorded.readMs(lines.map((l) => RadioVoice.speakable(l)));
+          }
           return Math.round(lines.reduce((n, l) => n + (seconds(l, tune.rate || 1) + GAP_S) * 1000, 0) + LAND_MS);   // GAP_S: the pause between chained lines
         } catch (e) { Log.info("audio", "Announcer: no read length", e); return 0; }
       },
@@ -838,7 +850,7 @@ const Announcer = (function () {
       /** Is a read in progress — a line on air, or the hold before the last
        *  one? The loading screen's radio check waits on this: the two share
        *  one speechSynthesis, and RadioVoice's say() cancels it. */
-      speaking: () => !!speaking,
+      speaking: () => !!speaking || !!(recorded && recorded.speaking()),
       setEnabled(b) { on = !!b; try { G.store.set("announcer", on); } catch (_) { /* storage refused */ } if (!on) stop(); },
       available: () => true,
     };

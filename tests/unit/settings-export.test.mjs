@@ -243,6 +243,19 @@ test("a tuner that saves its whole table reports only the fields the player move
   assert.deepEqual(f.defaults.audio.voiceTune, {}, "an absent channel uses the shipped voice/prosody defaults");
 });
 
+test("recorded voice choices and radio sound survive settings backup and restore", () => {
+  const voiceTune = { radio: { pack: "michael" }, announcer: { pack: "bella" } };
+  const file = boot({ disk: { "apex26.radioPreset": JSON.stringify("vintage"),
+    "apex26.voiceTune": JSON.stringify(voiceTune) } }).collect("changes");
+  const dst = boot();
+  assert.equal(dst.loadSettings(file).skipped, 0);
+  assert.equal(JSON.parse(dst.disk.get("apex26.radioPreset")), "vintage");
+  assert.deepEqual(JSON.parse(dst.disk.get("apex26.voiceTune")), voiceTune);
+  const bad = dst.loadSettings({ format: "apex26-settings-v1", settings: { audio: { radioPreset: "unknown" } } });
+  assert.equal(bad.skipped, 1);
+  assert.equal(JSON.parse(dst.disk.get("apex26.radioPreset")), "vintage");
+});
+
 test("the binding tables count as changed by Input's word, not by value", () => {
   const disk = { "apex26.keys": JSON.stringify({ throttle: ["ArrowUp", "KeyW"] }) };
   assert.deepEqual(boot({ disk }).collect("changes").changed, [], "a saved default map is not a change");

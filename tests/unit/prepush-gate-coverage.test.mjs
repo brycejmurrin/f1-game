@@ -57,6 +57,7 @@ const UNIT = path.join(ROOT, "tests/unit");
 const SWEEPS_ONLY = new Map([
   ["car-front-wing-width.test.mjs", "test:sweeps — per-circuit geometry"],
   ["coplanar-faces.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["kerb-stripes.test.mjs", "test:sweeps — per-circuit geometry (kerb stripe edges, the line-following rubber band)"],
   ["debris-hazard-hint.test.mjs", "test:sweeps — per-circuit geometry"],
   ["driving-line-opts.test.mjs", "test:sweeps — per-circuit geometry"],
   ["driving-line.test.mjs", "test:sweeps — per-circuit geometry"],
@@ -73,6 +74,8 @@ const SWEEPS_ONLY = new Map([
   ["scenery-grounding.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-ground-audit.test.mjs", "test:sweeps — per-circuit geometry"],
   ["shared-track-foundation-characterization.test.cjs", "test:sweeps — per-circuit geometry"],
+  ["track-validate-fleet.test.mjs", "test:sweeps — per-circuit geometry (the designer's validator judged on all 52 centrelines)"],
+  ["track-themes-build.test.mjs", "test:sweeps — per-circuit geometry (eight theme presets × two seeds, full custom-circuit builds)"],
   ["spline-project-height.test.mjs", "test:sweeps — per-circuit geometry"],
 ]);
 
