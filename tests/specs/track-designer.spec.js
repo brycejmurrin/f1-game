@@ -15,7 +15,7 @@ async function bootClean(page) {
   await page.addInitScript(() => {
     if (sessionStorage.getItem("apex26.spec.td-clean")) return;
     sessionStorage.setItem("apex26.spec.td-clean", "1");
-    for (const k of Object.keys(localStorage)) if (k === "apex26.customTracks" || k === "apex26.customTrackDraft" || k === "apex26.trackId" || k === "apex26.track") localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) if (k === "apex26.customTracks" || k === "apex26.customTrackDraft" || k === "apex26.customTrackDraftPrev" || k === "apex26.trackId" || k === "apex26.track") localStorage.removeItem(k);
   });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
