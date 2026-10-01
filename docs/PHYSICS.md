@@ -469,8 +469,11 @@ the numbers):
   slow; and a parked car is passed, not queued behind at the crawl floor
   (measured: the crawl floor sits below the closing margin, so without the
   third clause an AI crept into the back of a stopped player and welded). A
-  HUMAN blocker has no ceiling to read — `_vmaxNow` is the model's top speed
-  for every car — so the caller passes 0 and the human's speed is their pace.
+  HUMAN blocker's `_vmaxNow` is only its car's; since 2026-10-01 it is judged
+  by `paceVmax` — that vmax times `paceF`, its speed/vmax against a per-node
+  profile the AI cars teach in free air (`AiDrive.paceSample`). Its LIVE speed,
+  the read before, is low in every corner and braking zone, so the AI attacked
+  a player exactly where it would never attack an AI.
   Comparing instantaneous speeds alone let AI cars follow a slower car for
   36 s (monza) and 43 s (monaco); the pace comparison halved both.
 - **A pass is a LATCH with a target beside the passed car** (`c.passOf`,
@@ -487,8 +490,13 @@ the numbers):
   attacker after a FAILURE; nothing distinguished a completed pass from a
   re-pass, so the car that had just been passed attacked straight back. It now
   takes the same `2 × passCooldown` lockout against that car specifically that a
-  lunge-abandon already gives, scaled by its own `experience`, and never written
-  onto a human — a player may re-pass whenever they like. Without it, 74 % of
+  lunge-abandon already gives, scaled by its own `experience` and (since
+  2026-10-01, `AiDrive.repassLock`) cut to as little as 30 % by a pace edge,
+  and never written onto a human — a player may re-pass whenever they like.
+  Since 2026-10-01 ANY order flip with the car alongside writes it (a player's
+  pass included, latched or not), and while it runs the passer is the passed
+  car's blocker across the lane (|dx| < 6 m): it concedes the place instead of
+  running parallel and swapping back. Without it, 74 % of
   monza's order changes were the same PAIRS trading places rather than the field
   racing (`tools/check/ai-field.mjs` splits settled passes from oscillation).
 - **Exactly one car yields in an alongside pair** (`AiDrive.sideYieldsA`): the
@@ -500,6 +508,68 @@ the numbers):
   other car). Scrubbing and softening BOTH gave neither priority: pairs
   sank to ~17 m/s at a 70 m/s ceiling for as long as the corner kept them
   touching — six such standoffs per four minutes on monza, none after.
+
+### Racecraft tactics (2026-10-01)
+
+"AI cars bunch up and aren't very tactical about how to manoeuvre around each
+other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
+`docs/notes/AI-FIELD-RESEARCH.md` §2026-10-01):
+
+- **The follow gap is a time on a permanent circuit** (`AiDrive.followGap`,
+  IDM's s0 + v·T): s0 is the old `followBase` (6 m), T = 0.15–0.30 s by
+  awareness (house hold and team orders scale it), shrinking toward 0.05 s
+  while a pass is latched or armed (`c.atkOn`) or in a tow on a straight (to 0.6 of the way while the car merely wants the move),
+  and capped at 28 m so
+  the tow (TOW_RANGE 34 m) still reaches. It was a flat 6.7–8.2 m — a tenth
+  of a second at speed. The first cut (0.25–0.45 s, tight 0.12 s) cost a third
+  of silverstone's settled passes — a car 0.4 s back at a corner exit is out of
+  the tow for the straight — and was retuned on measurement (the ablation table
+  is in `docs/notes/AI-FIELD-RESEARCH.md`). The queue window (the cap, `queueT`, the free-pace
+  read) reaches `max(16, follow + 6)` m: at 16 m a car under a 20–28 m
+  headway hovered uncapped at the edge and queue pressure never built.
+- **The pass is for the next corner.** `c.kTurn` (the largest-magnitude of three
+  curvature samples 10/30/55 m past the next turn-in, `AiDrive.cornerK`, AI-only) breaks `otSide`'s tie and scores the inside of that corner
+  +0.8 in `AiCorridor` (`passSideBonus`). **Get a run**: through the corner onto
+  a passing straight (next zone q ≥ 0.4) a follower that wants the move holds
+  +0.15 s (`runExtra`), then closes in the tow and latches LATE (`latchLate`:
+  far down a straight it waits for a 1.5 %-of-top-speed closing rate or a 10 m
+  gap, or the tight gap, or its queue patience spent).
+  **AiCorridor looks down the lane**: a slower car within 1.5 s ahead in
+  the target lane that would be caught before the pass completes closes it.
+  **The attack roll is per attempt** (`attemptRoll`: a hash of the per-car race
+  hash, lap and zone — never a `simRnd()` draw), not the race-long
+  `c.phaseRoll` that left some cars timid all race.
+- **Side by side resolves.** Level, the car on the OUTSIDE of the next corner
+  yields (`sideYieldsA(.., kTurn)`; `collide.js` passes `kTurn` only between AI
+  cars, so no curvature read decides a player's scrub). A yielder still
+  alongside after 2 s that is not clearly the faster lifts to 0.97 of the other
+  car and tucks in (`sbsCommitT` / `sbsEase`); a latched attacker keeps its own
+  patience instead.
+- **Defending** (`defendPull`): mid-train when the chaser is nearer than the
+  car ahead; the chaser scan sees the adjacent lane (|dx| < 5.5 m) within half
+  a second; dead behind on a straight the cover goes to the inside of the next
+  corner once it is within two seconds (the attacker's own chooser) — those
+  three on permanent circuits only (on a 9 m street the adjacent lane is the
+  whole road, and the extra covers cut monaco's attack conversion); never
+  closer than a car width + 0.5 m to the road edge; zeroed under braking; one
+  move per straight (`defendOnce`). The chaser may be the player — same rules.
+- **The player**: judged by pace (`paceVmax`, above); one yielder always — a
+  held line inside the band arms `humanYieldT` at a quarter rate (1.2 s of rub,
+  then the AI concedes) and the concession holds while the pair is alongside;
+  the post-pass lockout applies when the player passes an AI too.
+- **The first lap** (`AiDrive.startCalm`): a launching car, and for 20 s from
+  the green, +0.2 s of headway and half the attack quality; `c.calmUntil` is
+  set when the launch ends, so a car placed at speed is never calm.
+- **Street circuits keep the old passing game** (`track.street`). Every gate
+  above that pays on a long wide straight cost monaco passes (settled 48 → 33
+  at 5 seeds × 8 laps), so on a street: the METRE follow gap (8 m + the old
+  awareness pad, halved; only the first-lap +0.2 s is time — at monaco speeds
+  that gap is already ~0.25 s), no lane look-ahead, no `latchLate` or
+  `runExtra`, otSide's 0.3 tiebreak instead of the 0.8 next-corner bonus, no
+  defending extras, and the passer is not a wide blocker during the re-pass
+  lockout (the lockout itself, the per-attempt roll, commit-or-yield, the
+  next-corner level election and the first-lap calm all stay). After: monaco
+  settled 50, conversion 4.8 %, swap-back 13 %, AI-AI contact 73 (base 83).
 
 - **A standing start is a launch** (`AiDrive.launchPlan` / `launchMul`). Every
   AI car used to accelerate identically, so a 22-car grid held its 8 m pitch for
@@ -957,7 +1027,7 @@ it lands.
 | file | sites (symbol) | channel | why it never reaches the player with assists off |
 |---|---|---|---|
 | `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only BodyAttitude (render-only) |
-| `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path |
+| `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick / next-corner `c.kTurn` / get-a-run | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path. `c.kTurn` (2026-10-01: pass side, the level side-by-side election, the defender's predicted side) and `runExtra`'s read of `k` are the same kind: they move only AI targets. `js/physics/collide.js` reads `kTurn` only for an all-AI pair, so it never picks which car a PLAYER rub scrubs |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
 | `js/game.js` | `drivingLineApi` (feeds `js/render/shared/driving-line.js`) | **surface** | the DRIVING LINE ribbon: the adapter hands the builder the static curvature LUT, read once per circuit to place the line and shade its braking zones; a picture on the road, no car reads it. Same lateral formula as the assist-gated `lineX` so the two agree. The builder it feeds ALSO derives an audible cue — see the `driving-line.js` row |
 | `js/render/shared/driving-line.js` | ribbon `build`/`speedAt`, plus `cue()` | **assist-gated** | the ribbon itself is surface; `cue()` turns the LUT's cornering speed into a brake-urgency ramp that `js/game.js` hands to `GameAudio.brakeCue` — AUDIBLE TO THE PLAYER, but gated by `DrivingLineOpts.brakeCue()` and audio-only: no force, torque or steer path. Escaped this table until 2026-09-22 because it reads an INJECTED `api.curvature(s)`, which the guard's alias test could not see |
