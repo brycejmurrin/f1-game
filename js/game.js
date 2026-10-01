@@ -6817,9 +6817,6 @@ function armBackendProbe() {
   }
 }
 function render(dt) {
-  // Look=drive: keep frame.wetness on the physics wetness even when headless
-  // skips the rest of this frame (menu flyby / live race both need it).
-  if (wxArc) wxArc.syncWetness(dt);
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   if (gfx.warming && gfx.warming()) return;
@@ -7288,9 +7285,9 @@ function render(dt) {
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
   frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
-  // frame.wetness: synced at the top of render (and every wxArc.tick) so
-  // headless and on-screen share one continuous trackWetness. LT.wetness ≥ 0
-  // remains the live tuner diagnostic pin only — never a shipped preset.
+  // frame.wetness: WeatherArc.syncWetness (also from wxArc.tick for headless
+  // look=drive). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
+  if (wxArc) wxArc.syncWetness(dt);
   // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
   // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
   // the same 0.8/s as wetness so the rings fade in and out rather than pop.
