@@ -353,6 +353,7 @@ function makeGlx(record) {
 // ---------------------------------------------------------------------------
 
 function buildSandbox(opts) {
+  const vmSearch = opts && opts.search != null ? opts.search : "?seed=1";
   const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [], carMeshes: "real", carMeshStubs: 0 };
   const timers = makeTimers();
   const rafQueue = [];
@@ -378,9 +379,12 @@ function buildSandbox(opts) {
     innerWidth: 1280, innerHeight: 720, outerWidth: 1280, outerHeight: 720, devicePixelRatio: 1,
     scrollX: 0, scrollY: 0, pageXOffset: 0, pageYOffset: 0, name: "", isSecureContext: true,
     origin: "http://localhost:3456",
-    location: { href: "http://localhost:3456/", protocol: "http:", host: "localhost:3456", hostname: "localhost",
-      port: "3456", pathname: "/", search: "", hash: "", origin: "http://localhost:3456",
-      reload: noop, replace: noop, assign: noop, toString: () => "http://localhost:3456/" },
+    // ?seed=1 by default: a real session boots from a fresh seed (js/game.js
+    // bootSeed) unless automated or pinned, and this stub reports webdriver
+    // false — every VM run stays reproducible. opts.search overrides.
+    location: { href: "http://localhost:3456/" + vmSearch, protocol: "http:", host: "localhost:3456", hostname: "localhost",
+      port: "3456", pathname: "/", search: vmSearch, hash: "", origin: "http://localhost:3456",
+      reload: noop, replace: noop, assign: noop, toString: () => "http://localhost:3456/" + vmSearch },
     history: { state: null, length: 1, pushState: noop, replaceState: noop, back: noop, forward: noop, go: noop, scrollRestoration: "auto" },
     navigator: {
       userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36 apex-game-vm",

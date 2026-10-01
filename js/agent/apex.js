@@ -346,10 +346,10 @@ const api = {
     setCamMode(i);
     return { mode: CAM_MODES[G.camMode].id, index: G.camMode };
   },
-  snapCam() {
+  snapCam(paint) {
     if (!G.player || !G.track) return;
     G.dbgCam = null;   // snapping the game camera clears any view() free-cam override
-    snapGameCam();
+    snapGameCam(paint);   // truthy paint → one sync render (rAF-starved probe harnesses)
   },
   previewCam(mode, frac = 0, speed = 60, lat = 0) {
     if (!G.track) return false;

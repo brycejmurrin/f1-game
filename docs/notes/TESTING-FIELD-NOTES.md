@@ -2170,3 +2170,20 @@ Also measured, for the record: the restructure's landscape doors paint at
 * var(--ui-compact-text))` is later at equal specificity — and every phone
 screenshot in that commit was taken at 17 px. Fixed in f1d581065b by removing
 the dead declaration rather than keeping a value that never applied.
+
+## 2026-09-30 — render on a 4-vCPU runner: four workers were slower AND red
+
+`image-grade-visual.spec.js › blacks visibly change the deepest image detail`
+failed on the render group's shard 1 in three of three browser-group.yml runs
+(llvmpipe; run 36752751997, its re-run, and 36758100445): one
+`pageScreenshot` capture waited out its 60 s `softTimeout`, and the retry
+passed, so `APEX_FAIL_ON_FLAKY=1` made the run red. `test:render` pins
+`--workers=4`, which overrode the workflow's `APEX_WORKERS: 1`, so four
+llvmpipe browsers shared a 4-vCPU `ubuntu-latest` runner.
+
+The same shard at `--workers 1` (run 36783558304, deploy-tip code): 85/85,
+no retry, "blacks" 69 s, shard 12.6 min — against 19-21 min at four workers.
+Contention, not a GLX capture bug (the spec pins GLX; a TLX soft-read gate
+theory was falsified by the 4-worker re-run on a patched tree, 36758100445).
+browser-group.yml now defaults `workers` to 1; `remote-group.mjs --workers N`
+overrides it. The group script's `--workers=4` still suits a many-core local box.
