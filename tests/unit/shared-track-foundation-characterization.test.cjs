@@ -304,9 +304,17 @@ test("recordBarrier wraps partial ranges and treats 0 to 1 as a full lap", () =>
   assert.ok(masked > 0 && masked <= ownedCount, `masked ${masked} of ${ownedCount} owned`);
   for (let k = 0; k < actual.n; k++)
     if (!owned(k)) assert.ok(right.includes(k), `node ${k} is outside the pit and must be lowered`);
-  assert.equal(left.length, expectedWrappedCount);
-  assert.ok(left.includes(0));
+  assert.equal(left.includes(0), true);
   assert.ok(left.includes(actual.n - 1));
+  // Every authored wrap node must be lowered. featherBarrierEnds may also
+  // lower a few neighbours outside the span (ramp into runoff) — that is
+  // intentional, so the count is >= expectedWrappedCount, not equal.
+  for (let i = 0; i < expectedWrappedCount; i++) {
+    const k = (start + i) % actual.n;
+    assert.ok(left.includes(k), `wrap node ${k} must be lowered`);
+  }
+  assert.ok(left.length >= expectedWrappedCount,
+    `left lowered ${left.length}, wrap span ${expectedWrappedCount}`);
 });
 
 // UPDATED (was stale, root-caused below — no longer a TODO). capture() below
