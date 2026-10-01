@@ -182,12 +182,13 @@ function create(G) {
     };
     card.appendChild(open);
     // EXPORT dumps ALL six slots (the backup envelope). Same action on every
-    // used card so a player never has to hunt for a separate toolbar. Buttons
-    // reuse .cr-slot-del (quiet until armed) so cssClasses / rawSpacing stay
-    // inside the tree ratchets — no new class tokens.
+    // used card so a player never has to hunt for a separate toolbar. Style via
+    // [data-cr-act] (same rules as .cr-slot-del) — never reuse cr-slot-del; that
+    // class selects DELETE in career.spec.js and must stay unambiguous.
     if (s.used && typeof CareerBackup !== "undefined") {
-      const exp = el("button", "cr-slot-del", "EXPORT");
+      const exp = el("button", "", "EXPORT");
       exp.type = "button";
+      exp.setAttribute("data-cr-act", "export");
       exp.setAttribute("aria-label", `Export all career saves (backup from ${modeName} slot ${s.i + 1})`);
       exp.onclick = (ev) => {
         ev.stopPropagation();
@@ -204,9 +205,10 @@ function create(G) {
       const otherArmed = armedImport === `${s.flavour}:other` && pendingImport
         && pendingImport.focusFlavour === s.flavour;
       const armed = armedImport === id || otherArmed;
-      const imp = el("button", `cr-slot-del${armed ? " armed" : ""}`,
+      const imp = el("button", armed ? "armed" : "",
         otherArmed ? "ALL MODES?" : (armedImport === id ? "IMPORT?" : "IMPORT"));
       imp.type = "button";
+      imp.setAttribute("data-cr-act", "import");
       const what = `${modeName} slot ${s.i + 1}`;
       imp.setAttribute("aria-label", otherArmed
         ? `Confirm: import the other career mode too`
@@ -295,6 +297,19 @@ function create(G) {
 
     modeColumn(left, "driver");
     modeColumn(right, "myteam");
+
+    // CAREER FILE: inject from SettingsExport so shellNodes does not grow.
+    // buildSlotPanes clears both panes every open, so a fresh row each time.
+    if (typeof SettingsExport !== "undefined" && SettingsExport.careerRow) {
+      const row = SettingsExport.careerRow();
+      if (row) {
+        left.appendChild(head("BACKUP"));
+        left.appendChild(el("div", "cr-note",
+          "Save or restore every career slot as one JSON file. Settings and "
+          + "garage builds are not included — use SETTINGS › FILES and GARAGE › TEAM for those."));
+        left.appendChild(row);
+      }
+    }
 
     $("cr-go").hidden = true;
     $("cr-go").disabled = false;
@@ -602,6 +617,8 @@ function create(G) {
       ["Progress saves", "after every round"],
       "The two modes keep SEPARATE slots, so a driver career and a team can run "
       + "side by side and neither costs the other room.",
+      "SAVE CAREER FILE on the CAREER MODES screen backs up all six slots and "
+      + "which one is live. Settings and garage builds stay in their own files.",
       "RELIABILITY is a race setting, and it ships off. Turn it on and cars retire "
       + "— an engine, a gearbox, an accident. Developing the team and spending on "
       + "the engine and gearbox both buy the risk down, so money buys finishes as "

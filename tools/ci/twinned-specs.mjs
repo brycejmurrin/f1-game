@@ -121,6 +121,8 @@ export const ADAPTED = {
     "agentview's corner facts and the bench policies against game-vm; 5/5 in 48 s; m-straight-exit-threshold proves the exitsOntoStraight derivation is watched",
   "tests/specs/pit-lane.spec.js":
     "the pit lane's limiter, box and lane geometry through __apex; 6/6 in 91 s; m-box-lat-swallows-line proves the box-vs-racing-line distinction is watched",
+  "tests/specs/autopilot.spec.js":
+    "closed-loop __apex driver (direct + tilt) through runLap metrics; 3/3 under the adapter (~168 s); m-tilt-gain-dead proves the tilt map's steer variance is watched",
 };
 
 /** Portable by every static measure and deliberately NOT adapted: the
