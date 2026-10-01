@@ -3514,9 +3514,9 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
     "endRace clears the 2D rain overlay the way quitToMenu already did");
   const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn) { renderSetupPreview(dt); return; }"),
+  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) { renderSetupPreview(dt); return; }"),
     "the visibility gate precedes the garage-preview return");
-  assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn)"),
+  assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
     "results freeze precedes the garage-preview return");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
@@ -4637,7 +4637,7 @@ test("GPU verdict rejects captured compilation errors even with zero uncaptured 
 test("TLX defers resize during compilation and applies the latest requested size afterward", () => {
   let _warmPending = {}, cssDirty = false;
   let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
-  let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
+  let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null, _softReadPending = false;
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
   let _glMaxDim = -1, _glMaxTries = 0;   // resize()'s once-per-device WebGL2 texture ceiling
   let _xrActive = false;                 // immersive-vr skip (tlx.js attachXrSession)
@@ -4662,8 +4662,10 @@ test("TLX defers resize during compilation and applies the latest requested size
   resize();
   assert.deepEqual(calls, []);
   assert.deepEqual([W, H], [852, 393]);
+  _softReadPending = true;               // a read in flight at the old size
   _warmPending = null; resize();
   assert.deepEqual(calls, [["canvas", 1125, 563], ["post", 1125, 563]]);
+  assert.equal(_softReadPending, false, "the voided old-size read must not hold the gate");
   resize(); assert.equal(calls.length, 2, "deferred changes apply once");
 });
 
