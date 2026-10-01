@@ -5933,8 +5933,14 @@ function updateCar(c, dt, ranked) {
       const look = clamp(Math.abs(c.speed) * 0.9, 25, 90);
       let lineX;
       if (track.line) {
-        // .x immediately: TrackLine.at returns one shared object.
-        lineX = TrackLine.at(track, wrapS(c.s + look)).x;
+        // .x and .w immediately: TrackLine.at returns one shared object.
+        // lineW is 0 on a straight (the line has no opinion) and 1 through a
+        // corner — the blend the AI already uses. The raw offset is still the
+        // relaxed seed on a straight (~6 m at Monza's grid); chasing it pulls
+        // the car off the road and the pursuit does not come back. Clamp to
+        // the tarmac so an apex on the edge cannot demand the grass.
+        const ln = TrackLine.at(track, wrapS(c.s + look));
+        lineX = clamp(ln.x * ln.w, -(hw - 0.6), hw - 0.6);
       } else {
         const kAhead = Tracks.curvature(track, wrapS(c.s + look));
         const kBehind = Tracks.curvature(track, wrapS(c.s - look * 0.7));
