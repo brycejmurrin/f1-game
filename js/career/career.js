@@ -1265,12 +1265,6 @@ function rolloverTeams(tStand) {
     const next = clamp(Math.round((career.tdev[team.id] || 0) * 0.5 + shove), -TDEV_MAX, TDEV_MAX);
     if (next) career.tdev[team.id] = next; else delete career.tdev[team.id];
   }
-  // Catalog steps for AI constructors (one legal option per developing team).
-  // Kept beside tdev so a winter moves both the ±2 % pace wobble and the works
-  // shelf. Saves without aiParts stay on factory until the first developWinter.
-  if (typeof CareerAiDev !== "undefined" && CareerAiDev.developWinter) {
-    CareerAiDev.developWinter(career, tStand, expect, rnd);
-  }
 }
 
 /** Fitted setup an AI car should resolve in career, or null → factory. */
@@ -1488,6 +1482,10 @@ function rollover() {
   if (!career || careerConflict) return null;
   const dStand = driverStandings();
   const tStand = teamStandings();
+  // Dice and the expected order belong to the year that just ended. year++
+  // and applyRegs() below can ban a step that was legal a line earlier.
+  const devYear = career.year;
+  const devExpect = expectedConstructor();
   const me = seasonDriverId(career.team, career.seat);
   const myRow = dStand.find((r) => r.id === me);
   const myTeam = tStand.find((r) => r.id === career.team);
@@ -1562,6 +1560,13 @@ function rollover() {
   // engage(): rollover() runs while the career is still the thing being played,
   // and budgetCap()/the garage read the era on the very next hub build.
   applyRegs();
+  // A step fitted under last year's rules can be illegal the moment the era
+  // flips. Strip those, then develop against the ruleset that is now in force.
+  // The dice stay on devYear so an existing save's winter stream does not jump.
+  if (typeof CareerAiDev !== "undefined") {
+    if (CareerAiDev.scrubFitted) CareerAiDev.scrubFitted(career);
+    if (CareerAiDev.developWinter) CareerAiDev.developWinter(career, tStand, devExpect, rnd, devYear);
+  }
   // MUTATED IN PLACE, never reassigned: game.js aliases this exact object as its
   // `season` (openCareer does `season = c.season`), and a fresh object would
   // orphan that alias so the next race wrote its points into a dead one.
