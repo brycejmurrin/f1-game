@@ -6950,6 +6950,12 @@ function render(dt) {
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
     _vantExtra.carHead = headInterp(player);
+    // CamFeel (free-look / look-back latch / speed vignette) ticks BEFORE the
+    // vantage solve so this frame's offsets land in the same eye/tgt.
+    if (typeof CamFeel !== "undefined") {
+      CamFeel.tickRace(mode, dt, camComfort(), state === "race" || state === "count",
+        clamp(player.speed / vTop(), 0, 1));
+    }
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), _vantExtra);
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
@@ -6957,21 +6963,17 @@ function render(dt) {
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
       // OFFSET, not the trauma — shake still decays on its own clock, so cues
       // keyed to it are untouched and only the camera stops moving.
+      // SCOPE: trauma shake applies to EVERY race camera (docs/notes/CAMERA-FEEL.md).
       const amt = camComfort() ? 0 : shake * shake * 0.9;
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
-    // Onboard speed vibration: a subtle high-frequency buzz on the rigid-mounted
-    // cams (cockpit/hood/tcam) that grows with speed² — the visceral
-    // "the car is alive under you" cue. DISABLED on a wet road: it jitters the
-    // eye/target ~10-18 Hz every frame, and the wet-road SSR is a screen-space,
-    // camera-dependent reflection — so the buzz flipped the reflection's
-    // hit/miss pattern each frame and the wet road FLICKERED in patches from
-    // the cockpit. On a dry road there's no such reflection, so the buzz stays
-    // for feel; on a wet road we drop it to keep the reflection stable. Also
-    // fades in with speed so it never jitters a slow/standing car. REDUCE MOTION drops it.
+    // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/visor/tcam). Off when
+    // wet (SSR flicker) or under camComfort(). See docs/notes/CAMERA-FEEL.md.
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && !camComfort() && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
+    if (state === "race" && !camComfort() && _buzzWet > 0.01
+        && (typeof CamFeel !== "undefined" ? CamFeel.isBuzzMode(mode)
+          : (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam"))) {
       const spV = clamp(player.speed / vTop(), 0, 1);
       const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
       if (vAmp > 0.001) {
