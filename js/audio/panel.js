@@ -281,6 +281,8 @@ const AudioPanel = (() => {
         "not-racing": "Nothing is read aloud outside a race — that is on purpose.",
         empty: "That card had nothing speakable on it.",
         "too-long": "The last line was too long for the time its card was up.",
+        "not-recorded": "That line has words no recorded voice has yet, so it stayed written.",
+        "pack-loading": "The recorded voice was still downloading.",
       };
       if (rnote) {
         let note = !radioReady ? "This browser has no speech voices, so the radio stays written."
@@ -300,7 +302,7 @@ const AudioPanel = (() => {
         // js/audio/radio-voice.js): say so, and name the setting that avoids it.
         if (radioLive && dbg && dbg.synth && dbg.synth.slow > 0) {
           note += " This browser's speech engine held the game up (worst " + Math.round(dbg.synth.maxMs) +
-            " ms). RADIO VOICE: RECORDED speaks most lines without it.";
+            " ms). RADIO VOICE: RECORDED never uses it.";
         }
         rnote.textContent = note;
       }
@@ -411,8 +413,8 @@ const AudioPanel = (() => {
      * voice list actually changing — not by a timer, and not by a re-open that
      * would throw away a half-made selection. */
     const VOICE_CHANNELS = [
-      ["control", "RACE CONTROL", "Penalties, warnings and flags."],
-      ["coach", "COACH", "Practice drills and driving advice."],
+      ["control", "RACE CONTROL", "Penalties, warnings and flags. Changing this voice or its tuning selects SYSTEM; RECORDED uses Emma."],
+      ["coach", "COACH", "Practice drills and driving advice. Changing this voice or its tuning selects SYSTEM; RECORDED uses Heart."],
       ["radio", "TEAM RADIO", "Your engineer: box calls, position, tyres. Changing this voice or its tuning selects SYSTEM; RECORDED uses George. The spotter always uses recorded George."],
     ];
     /* THE ANNOUNCER'S ROW IS THE SAME ROW, IN A DIFFERENT SECTION. It is a
@@ -421,7 +423,7 @@ const AudioPanel = (() => {
      * so it cannot live under that switch's heading where every other control
      * greys out with it. Its own <details>, its own host, one shared builder. */
     const ANN_CHANNEL = ["announcer", "ANNOUNCER",
-      "Daniel on a Mac, another British voice elsewhere — or pick your own."];
+      "The pre-race show: Daniel on a Mac, another British voice elsewhere — or pick your own. In the race, RADIO VOICE: RECORDED commentates in Fable."];
     let voiceRowsFor = null;   // the voice-list length the rows were built against
 
     function voiceRow(ch, label, blurb) {
@@ -510,7 +512,10 @@ const AudioPanel = (() => {
 
     const setTune = (ch, patch) => {
       if (G.radio && G.radio.setTune) G.radio.setTune(ch, patch);
-      if (ch === "radio" && G.radio && G.radio.setPackOn) { G.radio.setPackOn(false); syncAudioPanel(); }
+      // A race channel's recorded voice would override the pick, so picking one
+      // is choosing SYSTEM. Not the announcer: its pick reads the pre-race show,
+      // and the in-race commentary keeps the recorded commentator under RECORDED.
+      if (ch !== "announcer" && G.radio && G.radio.setPackOn) { G.radio.setPackOn(false); syncAudioPanel(); }
     };
     // TEST is an explicit audition, independent of the automatic speech switch.
     const preview = (ch) => {

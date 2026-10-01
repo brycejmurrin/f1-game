@@ -287,6 +287,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-arrival.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
+  "tests/unit/garage-panel-side.test.mjs",
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.
@@ -463,6 +464,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
+  "tests/unit/screen-looks.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
   "tests/unit/select-budget.test.mjs",
