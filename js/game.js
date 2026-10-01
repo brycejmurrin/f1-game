@@ -6817,9 +6817,9 @@ function armBackendProbe() {
   }
 }
 function render(dt) {
-  // Look=drive: keep frame.wetness on the physics wetness even when headless
-  // skips the rest of this frame (menu flyby / live race both need it).
-  if (wxArc) wxArc.syncWetness(dt);
+  // Look=drive: frame.wetness follows trackWetness even when headless returns next.
+  // typeof: garage/unit harnesses extract this prefix without declaring wxArc.
+  if (typeof wxArc !== "undefined" && wxArc) wxArc.syncWetness(dt);
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   if (gfx.warming && gfx.warming()) return;

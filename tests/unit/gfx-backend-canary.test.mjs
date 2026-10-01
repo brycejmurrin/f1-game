@@ -3528,12 +3528,25 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
     "endRace clears the 2D rain overlay the way quitToMenu already did");
-  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) {"),
+  // 1800 (was 1600): ship tip had ~22 bytes of headroom after comment-strip; the
+  // look=drive wxArc.syncWetness at render entry needs more. Window must still
+  // cover through `if (!track) return;` — assert the needles exist so a short
+  // window cannot fail as a misleading "precedes" (indexOf -1 trap).
+  const renderStart = game.indexOf("function render(dt) {");
+  const renderBody = game.slice(renderStart, renderStart + 1800);
+  const menuBlankAt = renderBody.indexOf("const menuBlank");
+  const previewAt = renderBody.indexOf("if (setupPreviewOn && !heldWarm) {");
+  const resultsAt = renderBody.indexOf('if (state === "results") return;');
+  const noTrackAt = renderBody.indexOf("if (!track) return;");
+  assert.ok(menuBlankAt >= 0, "render prefix window must include the visibility gate");
+  assert.ok(previewAt >= 0, "render prefix window must include the garage-preview return");
+  assert.ok(resultsAt >= 0, "render prefix window must include the results freeze");
+  assert.ok(noTrackAt >= 0, "render prefix window must include the no-track return");
+  assert.ok(menuBlankAt < previewAt,
     "the visibility gate precedes the garage-preview return");
-  assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
+  assert.ok(resultsAt < previewAt,
     "results freeze precedes the garage-preview return");
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
+  assert.ok(menuBlankAt < noTrackAt,
     "the visibility gate precedes the no-track return");
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
     "loadTrack's memo still makes a repeat build free");
