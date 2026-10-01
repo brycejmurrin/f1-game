@@ -905,6 +905,21 @@ function simSeed(v) {
   }
   return _simSeed;
 }
+// A PLAYER'S SESSION starts from a fresh seed: at a fixed 1 the first race after
+// every page load was the same race (retirements, weather arc, mistakes,
+// strategies). Kept at 1 under automation (navigator.webdriver: Playwright, the
+// Chrome MCP), pinned by ?seed=N (the game-vm harness passes ?seed=1); daily,
+// career and net play set their own. It resets the stream and draws nothing.
+(function bootSeed() {
+  try {
+    const q = typeof location !== "undefined" ? new URLSearchParams(location.search || "").get("seed") : null;
+    if (q) { simSeed(+q); return; }
+    if (typeof navigator !== "undefined" && navigator.webdriver) return;
+    const a = new Uint32Array(1);
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(a); else a[0] = Math.random() * 4294967296;
+    simSeed(a[0]);
+  } catch (_) { /* keep 1 */ }
+})();
 // uniform [0,1) — the drop-in for Math.random() on sim paths
 function simRnd() {
   _simRngState = (Math.imul(_simRngState, 1103515245) + 12345) >>> 0;
@@ -4678,7 +4693,7 @@ function collideFx(a, b, impact) {
   // Never read by physics — headless runs are unaffected.
   pc.fxSparkI = Math.max(pc.fxSparkI || 0, impact);
   Input.vibrate(18 + impact * 50);
-  Input.rumble(0.4 + impact * 0.6, 120);
+  Input.rumble(0.4 + impact * 0.6, 120, "handles");
 }
 
 function updateCar(c, dt, ranked) {
@@ -5390,7 +5405,7 @@ function updateCar(c, dt, ranked) {
     shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90, "handles"); c.kerbHapT = 0.12; }
   }
 
   // Signed observed acceleration, including braking/grass, for AI lane
@@ -6068,7 +6083,7 @@ function updateCar(c, dt, ranked) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
           Input.vibrate(15 + incidence * 35);
-          Input.rumble(0.35 + incidence * 0.5, 100);
+          Input.rumble(0.35 + incidence * 0.5, 100, "handles");
         }
       }
       // Steering held INTO the barrier while pinned = the wall denies that turn,
