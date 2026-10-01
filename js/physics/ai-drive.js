@@ -619,6 +619,56 @@ const AiDrive = (function () {
   function passCooldown(t) {
     return lerp(3.5, 1.8, t.experience);
   }
+  // THE RE-PASS LOCKOUT, scaled by the pace edge. A car just passed may not
+  // attack the car that passed it for twice its cooldown — the same
+  // "threshold endured" game.js gives an abandoned pass — unless it has the
+  // pace to: `edge` is (its pace - the passer's) / the top speed, and a 6 %
+  // edge (a car only passed on a tow or a mistake) cuts the lockout to 30 %.
+  // 42-61 % of the field's order flips were the SAME pair swapping straight
+  // back (ai-tactics swapBackPct, 2026-10-01): hysteresis on the overtake
+  // state, Game AI Pro ch.38.
+  function repassLock(t, edge) {
+    return 2 * passCooldown(t) * clamp(1 - (edge || 0) / 0.06, 0.3, 1);
+  }
+
+  // A PER-ATTEMPT ROLL. attackOK's roll was c.phaseRoll — drawn once per car
+  // per race, so a car that drew low was timid in every attack it ever
+  // considered. Each braking zone (key = the turn-in's metre) on each lap is
+  // a fresh attempt now: an integer hash of the car's race hash, the lap and
+  // the zone — deterministic and seeded, never a simRnd() draw.
+  function attemptRoll(hash, lap, key) {
+    let h = ((hash | 0) ^ Math.imul(lap | 0, 0x9e3779b1) ^ Math.imul(key | 0, 0x85ebca6b)) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+    h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
+  // GET A RUN. Through the corner that leads onto a passing straight (the
+  // next zone's quality `qNext` >= 0.4), a follower that wants the move hangs
+  // back RUN_T s more: out of the dirty air it carries its own corner speed
+  // and exits with a run instead of exiting in the gearbox of the car ahead.
+  // On the straight it closes in the tow (followGap's tight term) and pulls
+  // out LATE (latchLate): far from the braking zone it waits for a real
+  // closing rate or a short gap, so the slingshot is used, not spent early.
+  const RUN_T = 0.15;
+  function runExtra(kHere, qNext, want) {
+    return want && Math.abs(kHere || 0) > 0.004 && qNext >= 0.4 ? RUN_T : 0;
+  }
+  function latchLate(ctx) {
+    if (!(ctx.toTurnIn > 150) || Math.abs(ctx.kAhead || 0) > 0.004) return true;   // the zone is near, or not a straight
+    const ref = ctx.vTop > 0 ? ctx.vTop : 72;
+    if ((ctx.blockerSpeed || 0) < 0.12 * ref || queuePress(ctx) >= 1) return true;
+    return (ctx.speed || 0) - (ctx.blockerSpeed || 0) >= 0.015 * ref || (ctx.blockerGap || 0) <= 10;
+  }
+
+  // COMMIT OR YIELD. A side-by-side the rule has decided (sideYieldsA) was
+  // still left to geometry: the yielder only kept a lane's gap, so a pair ran
+  // alongside for seconds (ai-tactics: p90 5 s, max 20-25 s) and half of the
+  // fights never changed the order. Past SBS_COMMIT s alongside as the
+  // yielder, a car that is not clearly the faster lifts to SBS_EASE of the
+  // other's speed and tucks in behind.
+  function sbsCommitT() { return 2; }
+  function sbsEase() { return 0.97; }
 
   // SIDE RUB: WHO YIELDS. Identical treatment of two cars alongside (sepShares
   // 50/50, contactGive cutting BOTH to 0.25-0.55, rubScrub bleeding BOTH by
@@ -1219,10 +1269,15 @@ const AiDrive = (function () {
     return otherX <= x ? desiredX < x : desiredX > x;
   }
 
+  // LEVEL, THE INSIDE OF THE NEXT CORNER OWNS IT. With `kTurn` (the
+  // curvature just past the next turn-in, AI-only) the outer car is the one on
+  // the outside of THAT corner — |x| from the centreline is the outside of the
+  // corner only when the pair is already in it. Without it, as before.
   const SIDE_LEVEL = 2.4;
-  function sideYieldsA(dProg, xA, xB) {
+  function sideYieldsA(dProg, xA, xB, kTurn) {
     if (dProg < -SIDE_LEVEL) return true;        // A is behind B
     if (dProg > SIDE_LEVEL) return false;        // A is ahead
+    if (Math.abs(kTurn || 0) > 0.004 && xA !== xB) return (xA - xB) * Math.sign(kTurn) > 0;   // A outside (+k = left: outside is +x)
     return Math.abs(xA) >= Math.abs(xB);         // level: the outer car concedes
   }
 
@@ -1327,11 +1382,23 @@ const AiDrive = (function () {
     const roomL = ctx.roomL || 0, roomR = ctx.roomR || 0;
     const diff = roomR - roomL;
     if (Math.abs(diff) >= 0.6) return diff > 0 ? 1 : -1;
-    const kA = ctx.kAhead || 0;
+    const kA = Math.abs(ctx.kTurn || 0) > 0.002 ? ctx.kTurn : (ctx.kAhead || 0);   // the corner the pass is FOR, else the bend ahead
     if (Math.abs(kA) > 0.002) return kA > 0 ? -1 : 1;   // inside = -sign(k)
     const lane = ctx.lane || 0;
     if (Math.abs(lane) > 0.05) return lane > 0 ? 1 : -1;
     return diff >= 0 ? 1 : -1;
+  }
+
+  // THE INSIDE AT THE CATCH POINT. The pass completes at the next turn-in
+  // (passReach), so the side worth having is the inside of THAT corner —
+  // kTurn, not the curvature 18-70 m ahead (which on a straight is ~0 and
+  // left the choice to a coin of lane and room). AiCorridor adds this to a
+  // lane's score: 0.8 for the inside of a real corner within 250 m (worth
+  // over 3 m of extra room), otherwise the old 0.3 for otSide's pick.
+  function passSideBonus(ctx, side) {
+    const k = ctx.kTurn || 0;
+    if (Math.abs(k) > 0.004 && ctx.toTurnIn < 250) return side === -Math.sign(k) ? 0.8 : 0;
+    return otSide(ctx) === side ? 0.3 : 0;
   }
 
   // LET PASS. A car that is faster, right behind, and not held up by anything
@@ -1384,7 +1451,7 @@ const AiDrive = (function () {
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
-    otWant, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    otWant, repassLock, attemptRoll, runExtra, latchLate, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

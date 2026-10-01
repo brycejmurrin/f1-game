@@ -63,3 +63,21 @@ test('our braking does not hide a steady rival closing from behind', () => {
   assert.equal(p.side,1);
   assert.match(p.left.reason,/traffic/);
 });
+
+// LOOK DOWN THE LANE (2026-10-01): a slower car AHEAD in the target lane, that
+// we would catch before the pass is done, closes the lane — pulling out only to
+// queue behind it was a re-queue, not a pass.
+test('a slower car ahead in the passing lane closes it; a far or quicker one does not', () => {
+  const p = scenario([{ prog: 120, x: -2.8, speed: 37 }], { blockerGap: 15 });
+  assert.equal(p.side, 1);
+  assert.match(p.left.reason, /traffic ahead/);
+  assert.equal(scenario([{ prog: 175, x: -2.8, speed: 37 }], { blockerGap: 15 }).side, -1, 'beyond 1.5 s of road');
+  assert.equal(scenario([{ prog: 120, x: -2.8, speed: 48 }], { blockerGap: 15 }).side, -1, 'pulling away');
+});
+// THE INSIDE AT THE CATCH POINT: with the next corner's curvature (kTurn) the
+// inside of THAT corner wins a lane with up to ~3 m less room.
+test('the inside of the next corner wins the pass side', () => {
+  assert.equal(scenario([], { kAhead: 0, kTurn: -0.01, toTurnIn: 120 }).side, 1, 'right-hander: inside is +x');
+  assert.equal(scenario([], { kAhead: 0, kTurn: 0.01, toTurnIn: 120 }).side, -1);
+  assert.equal(scenario([], { kAhead: 0, kTurn: -0.01, toTurnIn: 120, roomR: 3, roadR: 3 }).side, 1, 'even with less room');
+});

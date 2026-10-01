@@ -22,9 +22,9 @@
  * baked line at --pace x the field's median pace, driven through setInput,
  * re-inserted into traffic when alone). vsPlayer adds: AI attacks on the player
  * and how many began in a corner, contact episodes per 100 s, and
- * zeroYieldPct — frames an AI is alongside the player inside the clear gap
- * while AiDrive.sideYieldsA elects the HUMAN and the AI's grace timer has not
- * flipped it (nobody yields: the human runs no protocol).
+ * zeroYieldPct — frames an AI is alongside the player inside the clear gap,
+ * over 1.5 s into the episode, while AiDrive.sideYieldsA elects the HUMAN and
+ * the AI's grace timer has not flipped it (nobody yields: the human runs none).
  *
  *   node tools/check/ai-tactics.mjs --track monza --laps 8 --runs 5
  *   node tools/check/ai-tactics.mjs --mode human --pace 0.97 --runs 5
@@ -154,7 +154,7 @@ async function measure(seed) {
   const contactKeys = new Set(); let aaContactEp = 0, apContactEp = 0;
   const hits0 = ai.reduce((a, c) => a + (c.hits || 0), 0);
   const covers = { vsPlayer: 0, vsAI: 0 }, wasDef = new Map();
-  const vsP = { zeroYield: 0, alongFrames: 0, alongDx: [], under: 0, aiPassP: [], encounters: [], encOpen: new Map() };
+  const vsP = { zeroYield: 0, longIn: 0, inGap: new Map(), alongFrames: 0, alongDx: [], under: 0, aiPassP: [], encounters: [], encOpen: new Map() };
   const startOrder = racers.slice().sort((a, b) => b.prog - a.prog);
   const SB_DPROG = 5.0, SB_DX = 4.5;
   let t = 0, endT = null;
@@ -252,11 +252,14 @@ async function measure(seed) {
         if (adx < CLEAR) {
           vsP.under++;
           // WHO YIELDS? the AI's own election (sideYieldsA from the AI's side), or its grace timer.
+          // Counted only 1.5 s into an unbroken inside-the-gap episode: inside that the
+          // grace (0.3 s, 1.2 s for a held line) is the AI legitimately holding.
           const aiC = a === player ? b : a, dpAi = wrap(player.prog - aiC.prog);
-          const aiYields = Ai.sideYieldsA(-dpAi, aiC.x, player.x) || Ai.humanYieldTakes(aiC.hYieldT);
-          if (!aiYields) vsP.zeroYield++;
-        }
-      }
+          const aiYields = Ai.sideYieldsA(-dpAi, aiC.x, player.x, aiC.kTurn) || Ai.humanYieldTakes(aiC.hYieldT);
+          if (!vsP.inGap.has(k)) vsP.inGap.set(k, st);
+          if (st - vsP.inGap.get(k) > 1.5) { vsP.longIn++; if (!aiYields) vsP.zeroYield++; }
+        } else vsP.inGap.delete(k);
+      } else if (isP) vsP.inGap.delete(k);
     }
     // encounters with the player: AI within 1 s behind the player -> how long until it is past
     if (humanMode && st - insertedAt > 3) {
@@ -330,7 +333,7 @@ async function measure(seed) {
       passOnStraightPct: share(ps, (e) => e.straight), passLeftPct: share(ps, (e) => e.side === "L"), medPassDxM: r2(med(ps.map((e) => Math.abs(e.dx)))),
       minPassDxM: ps.length ? r2(Math.min(...ps.map((e) => Math.abs(e.dx)))) : null,
       attacksOnPlayer: atkP.length, attacksOnPlayerInCorner: atkP.filter((a) => !a.straight).length, attackSuccessPct: share(atkP, (a) => a.ok),
-      contactPer100s: r2(100 * apContactEp / Math.max(endT, 1)), zeroYieldPct: r2(100 * vsP.zeroYield / Math.max(vsP.under, 1), 1),
+      contactPer100s: r2(100 * apContactEp / Math.max(endT, 1)), zeroYieldPct: r2(100 * vsP.zeroYield / Math.max(vsP.under, 1), 1), inGapOver1500msPct: r2(100 * vsP.longIn / Math.max(vsP.under, 1), 1),
       encounters: enc.length, encPassedPct: share(enc, (e) => e.passed), encMedS: r2(med(enc.map((e) => e.dur)), 1), encP90S: r2(pctl(enc.map((e) => e.dur), 0.9), 1),
       alongFrames: vsP.alongFrames, alongMedDxM: r2(med(vsP.alongDx)), alongUnderClearPct: r2(100 * vsP.under / Math.max(vsP.alongFrames, 1), 1), clearM: r2(CLEAR),
       coversVsPlayer: covers.vsPlayer, coversVsAI: covers.vsAI };

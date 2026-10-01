@@ -385,3 +385,30 @@ test("an AI alongside a player who will not yield opens the gap itself", async (
   assert.ok(insideT < 1.2, `nobody yielded for ${insideT.toFixed(2)} s inside the clear gap`);
   assert.ok(lateMin >= CLEAR - 0.3, `the concession was not held: dx fell to ${lateMin.toFixed(2)} m`);
 });
+
+// A PASS STICKS (2026-10-01). Two AI cars 3 % apart on pace, the faster 14 m
+// behind on the Curva Grande run: it gets past, and the pair does not trade
+// places back. Measured before: the pass at 14.7 s, swapped back at 46.3 s and
+// again at 53.1 s (no lockout outside a latched pass, the order flips on tow
+// and side-by-side alone). The re-pass lockout (AiDrive.repassLock) on any
+// flip, commit-or-yield alongside and the look-down-the-lane check hold it.
+test("a faster AI completes a pass and the pair does not swap back", async () => {
+  const A = g.apex;
+  const pIdx = await slowAiPlayer(0.62, 60, 0.97);
+  const pc = g.G.cars[pIdx];
+  pc.skill = pristinePace.skill;   // pace from tierV alone: 3 % slower, not a different driver
+  const idx = A.rival(-14, 0).rival;
+  A.go();
+  const c = g.G.cars[idx];
+  let prev = c.prog > pc.prog;
+  const flips = [];
+  for (let i = 0; i < 60 / DT; i++) {
+    A.step(DT, 1);
+    const now = c.prog > pc.prog;
+    if (now !== prev) { flips.push(+(i * DT).toFixed(1)); prev = now; }
+  }
+  A.headless(false);
+  assert.ok(flips.length >= 1 && flips[0] < 30, `the faster car never got past: flips ${JSON.stringify(flips)}`);
+  assert.equal(flips.length, 1, `the pair traded places: flips at ${JSON.stringify(flips)} s`);
+  assert.ok(c.prog - pc.prog > LCAR, "and it is clear ahead at the end");
+});

@@ -1042,6 +1042,66 @@ test("paceSample: the field teaches the profile, a human is judged against it", 
   assert.equal(fresh.paceF, undefined);
 });
 
+// ── TACTICAL PASSING (2026-10-01) ────────────────────────────────────────────
+test("repassLock: twice the cooldown for an equal car, shorter with a pace edge, never under 30 %", () => {
+  const base = A.repassLock(mid, 0);
+  assert.ok(Math.abs(base - 2 * A.passCooldown(mid)) < 1e-9);
+  assert.ok(A.repassLock(mid, 0.03) < base && A.repassLock(mid, 0.03) > A.repassLock(mid, 0.06));
+  assert.ok(Math.abs(A.repassLock(mid, 0.5) - 0.3 * base) < 1e-9, "floored");
+  assert.equal(A.repassLock(mid, -0.05), base, "a slower car gets the full lockout");
+});
+
+test("attemptRoll: deterministic, uniform-ish, and a fresh roll per zone and lap", () => {
+  assert.equal(A.attemptRoll(12345, 2, 800), A.attemptRoll(12345, 2, 800));
+  assert.notEqual(A.attemptRoll(12345, 2, 800), A.attemptRoll(12345, 2, 1600));
+  assert.notEqual(A.attemptRoll(12345, 2, 800), A.attemptRoll(12345, 3, 800));
+  let sum = 0, lo = 0, n = 2000;
+  for (let i = 0; i < n; i++) { const r = A.attemptRoll(987654321, i % 7, i * 37); assert.ok(r >= 0 && r < 1); sum += r; if (r < 0.25) lo++; }
+  assert.ok(Math.abs(sum / n - 0.5) < 0.03, `mean ${sum / n}`);
+  assert.ok(Math.abs(lo / n - 0.25) < 0.04, `lower quartile share ${lo / n}`);
+  // a car is no longer timid in EVERY attempt: some zones roll high, some low
+  const rolls = Array.from({ length: 20 }, (_, z) => A.attemptRoll(42, 1, z * 300));
+  assert.ok(Math.min(...rolls) < 0.3 && Math.max(...rolls) > 0.7);
+});
+
+test("get a run: hang back through the corner onto a passing straight, pull out late", () => {
+  assert.ok(A.runExtra(0.02, 0.6, true) > 0, "in the corner before a good zone, wanting the move");
+  assert.equal(A.runExtra(0.02, 0.6, false), 0, "not wanting the move");
+  assert.equal(A.runExtra(0.001, 0.6, true), 0, "already on the straight");
+  assert.equal(A.runExtra(0.02, 0.2, true), 0, "a poor zone is not worth a run");
+  const st = { traits: mid, toTurnIn: 400, kAhead: 0, vTop: 72, speed: 70, blockerSpeed: 70, blockerGap: 14, queueT: 0 };
+  assert.equal(A.latchLate(st), false, "far down a straight with no closing rate: wait");
+  assert.equal(A.latchLate({ ...st, speed: 72 }), true, "closing in the tow: go");
+  assert.equal(A.latchLate({ ...st, blockerGap: 9 }), true, "on the gearbox: go");
+  assert.equal(A.latchLate({ ...st, toTurnIn: 120 }), true, "the braking zone is near: as before");
+  assert.equal(A.latchLate({ ...st, kAhead: 0.01 }), true, "not a straight: as before");
+  assert.equal(A.latchLate({ ...st, queueT: 60 }), true, "held for its whole patience");
+});
+
+test("sideYieldsA: level, the car on the OUTSIDE of the next corner concedes (kTurn)", () => {
+  // +k = LEFT turn: inside is -x, outside +x
+  assert.equal(A.sideYieldsA(0, 1, -1, 0.01), true, "right of the other car into a left-hander: outside");
+  assert.equal(A.sideYieldsA(0, -1, 1, 0.01), false);
+  assert.equal(A.sideYieldsA(0, 1, -1, -0.01), false, "into a right-hander the right car is inside");
+  // behind / ahead are untouched by the corner, and no kTurn is the old rule
+  assert.equal(A.sideYieldsA(-5, -1, 1, 0.01), true);
+  assert.equal(A.sideYieldsA(5, 1, -1, 0.01), false);
+  assert.equal(A.sideYieldsA(0, 3, 1), true);
+  assert.equal(A.sideYieldsA(0, 3, 1, 0.001), true, "a straight is no corner");
+});
+
+test("commit or yield is a couple of seconds and a small lift", () => {
+  assert.ok(A.sbsCommitT() >= 1.5 && A.sbsCommitT() <= 3);
+  assert.ok(A.sbsEase() > 0.9 && A.sbsEase() < 1);
+});
+
+test("otSide breaks a tie toward the inside of the corner the pass is for", () => {
+  const tie = { roomL: 3, roomR: 3, kAhead: 0, lane: 0.3 };
+  assert.equal(A.otSide({ ...tie, kTurn: 0.01 }), -1);
+  assert.equal(A.otSide({ ...tie, kTurn: -0.01 }), 1);
+  assert.equal(A.otSide({ ...tie, kTurn: 0 }), 1, "no corner: the car's own lane, as before");
+});
+
 // --- difficulty's second dimension -----------------------------------------
 // Until 2026-09-15 difficulty was ONE number: every level braked, defended,
 // deployed and erred identically and differed only in top speed. `corner`
