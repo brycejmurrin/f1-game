@@ -714,7 +714,7 @@ interface GameCtx {
   readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
   /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */
   readonly weather: (w?: Weather) => Weather;
-  readonly snapGameCam: () => void;
+  readonly snapGameCam: (paint?: number | true) => void;
   readonly setCarRole: (c: CarState, human: boolean, local: boolean) => void;
   readonly modsFor: (team: TeamDef, setup: PartsSetup) => CarMods;
   readonly swapGridSlots: (a: number, b: number) => boolean;
