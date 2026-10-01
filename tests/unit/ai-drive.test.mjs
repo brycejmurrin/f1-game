@@ -810,6 +810,24 @@ test("attackOK: a straight is always a place to pass; a corner entry only at its
   assert.equal(A.sideLevel(), 2.4);
 });
 
+// THE FIRST LAP (2026-10-01): a launching car, and for 20 s from the green,
+// leaves more headway and attacks at half the quality; nothing after.
+test("startCalm: full while launching, fades out by 20 s from the green, never for a car that did not launch", () => {
+  assert.equal(A.startCalm(true, undefined, 1), 1);
+  assert.equal(A.startCalm(false, 20, 5), 1, "well inside the window");
+  const fade = A.startCalm(false, 20, 16);
+  assert.ok(fade > 0 && fade < 1, `fading: ${fade}`);
+  assert.equal(A.startCalm(false, 20, 20), 0, "and gone at 20 s");
+  assert.equal(A.startCalm(false, undefined, 3), 0, "placed at speed, no launch: no calm");
+  assert.equal(A.startCalmS(), 20);
+  assert.ok(A.startGapT(1) > 0.1 && A.startGapT(0) === 0);
+  const t = { craft: 0.75 };
+  const zone = { traits: t, speed: 46, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 80, attackQ: 0.55 };
+  assert.equal(A.attackOK(zone), true, "a good zone on lap 20");
+  assert.equal(A.attackOK({ ...zone, calm: 1 }), false, "the same zone into turn 1");
+  assert.equal(A.attackOK({ ...zone, attackQ: 1, calm: 1 }), true, "a prime one is still on");
+});
+
 test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
   const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
   // Hard / default errMul=1 keeps the 0.004 base (Slice 4 lift is em>1 only).

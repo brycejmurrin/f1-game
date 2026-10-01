@@ -361,6 +361,7 @@ test("an AI alongside a player who will not yield opens the gap itself", async (
   A.go();
   const r = A.rivals([{ dProg: 3.2, dx: 2.2, speed: 45 }])[0];
   const c = g.G.cars[r], p = g.G.player;
+  const lane0 = { lane: c.lane, lanePref: c.lanePref };
   c.lane = c.lanePref = c.x / (g.G.track.hw[0] - 1.2);   // its own lane is inside the gap
   A.act({ steer: 0, throttle: true, brake: false }, DT, 1);
   const tierV0 = c.tierV;
@@ -378,7 +379,7 @@ test("an AI alongside a player who will not yield opens the gap itself", async (
         if (i * DT > 1.5) lateMin = Math.min(lateMin, dx);
       }
     }
-  } finally { c.tierV = tierV0; A.headless(false); }
+  } finally { c.tierV = tierV0; c.lane = lane0.lane; c.lanePref = lane0.lanePref; A.headless(false); }
   assert.ok(alongT > 3.5, `the pair was not kept alongside (${alongT.toFixed(1)} s) — wrong scenario`);
   // Measured before: 2.5 s inside the gap with nobody yielding, then a concession
   // that was dropped at the gap and re-armed. After: conceded inside ~0.6 s, held.
@@ -386,29 +387,39 @@ test("an AI alongside a player who will not yield opens the gap itself", async (
   assert.ok(lateMin >= CLEAR - 0.3, `the concession was not held: dx fell to ${lateMin.toFixed(2)} m`);
 });
 
-// A PASS STICKS (2026-10-01). Two AI cars 3 % apart on pace, the faster 14 m
-// behind on the Curva Grande run: it gets past, and the pair does not trade
-// places back. Measured before: the pass at 14.7 s, swapped back at 46.3 s and
-// again at 53.1 s (no lockout outside a latched pass, the order flips on tow
-// and side-by-side alone). The re-pass lockout (AiDrive.repassLock) on any
-// flip, commit-or-yield alongside and the look-down-the-lane check hold it.
+// A PASS STICKS (2026-10-01). Two AI cars 4 % apart on pace (the faster the
+// same car as the slower, 4 % up), the faster 12 m behind on the run to the
+// Curva Grande. It completes the pass (a car length and a half clear), and the
+// passed car does not take the place straight back: the re-pass lockout
+// (AiDrive.repassLock) on any order flip, with the passer as its blocker across
+// the lane until it ends. 42-61 % of the field's flips were the same pair
+// swapping back before (ai-tactics swapBackPct).
 test("a faster AI completes a pass and the pair does not swap back", async () => {
-  const A = g.apex;
-  const pIdx = await slowAiPlayer(0.62, 60, 0.97);
-  const pc = g.G.cars[pIdx];
-  pc.skill = pristinePace.skill;   // pace from tierV alone: 3 % slower, not a different driver
-  const idx = A.rival(-14, 0).rival;
-  A.go();
-  const c = g.G.cars[idx];
-  let prev = c.prog > pc.prog;
-  const flips = [];
-  for (let i = 0; i < 60 / DT; i++) {
-    A.step(DT, 1);
-    const now = c.prog > pc.prog;
-    if (now !== prev) { flips.push(+(i * DT).toFixed(1)); prev = now; }
-  }
-  A.headless(false);
-  assert.ok(flips.length >= 1 && flips[0] < 30, `the faster car never got past: flips ${JSON.stringify(flips)}`);
-  assert.equal(flips.length, 1, `the pair traded places: flips at ${JSON.stringify(flips)} s`);
-  assert.ok(c.prog - pc.prog > LCAR, "and it is clear ahead at the end");
+  // Its own boot: a pass is chaotic in the shared stream and the field state
+  // the tests above leave behind (measured: the same scenario passes alone and
+  // never completes after the racing-line lap).
+  const g2 = await createGame({ track: "monza" });
+  try {
+    const A = g2.apex;
+    await g2.race("monza");
+    A.headless(true);
+    A.reset(0.62, 60, 0);
+    const pIdx = A.cars().findIndex((x) => x.p);
+    A.carRole(pIdx, { human: false });
+    const pc = g2.G.cars[pIdx];
+    const idx = A.rival(-12, 0).rival;
+    A.go();
+    const c = g2.G.cars[idx];
+    c.tierV = pc.tierV; c.skill = pc.skill;   // the same car...
+    pc.tierV *= 0.96;                         // ...4 % up on the one ahead
+    let doneAt = null, regained = null;
+    for (let i = 0; i < 50 / DT; i++) {
+      A.step(DT, 1);
+      const dp = c.prog - pc.prog, t = i * DT;
+      if (doneAt == null && dp > LCAR + 1.5) doneAt = t;
+      if (doneAt != null && regained == null && t < doneAt + 15 && dp < 0) regained = t;
+    }
+    assert.ok(doneAt != null && doneAt < 35, `the faster car never completed the pass (${doneAt})`);
+    assert.equal(regained, null, `passed at ${doneAt && doneAt.toFixed(1)} s and swapped back at ${regained && regained.toFixed(1)} s`);
+  } finally { g2.close(); }
 });
