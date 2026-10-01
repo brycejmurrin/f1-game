@@ -31,7 +31,8 @@
  * node_modules/ffmpeg-static; ~1 GB, never committed).
  *
  * Usage:
- *   node tools/gen/voicepack.mjs --list [--id george|fable|emma|heart]
+ *   node tools/gen/voicepack.mjs --list [--id george|michael|fable|bella|emma|heart]
+ *   node tools/gen/voicepack.mjs --append --id <voice> --ffmpeg /usr/bin/ffmpeg
  *   node tools/gen/voicepack.mjs --kokoro scratch/voicepack --id <voice> [--voice bm_george] [--dtype q4] [--speed 1.08]
  */
 import fs from "node:fs";
@@ -40,6 +41,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const arg = (k, d) => { const i = process.argv.indexOf("--" + k); return i > 0 ? process.argv[i + 1] : d; };
@@ -62,15 +64,22 @@ function sandbox(files) {
 // `runs`: the files whose card literals this channel speaks, recorded as whole
 // phrases (game.js: only its announce() lines). The phrasebook is the
 // engineer's and the commentator's source on top (phrases below).
-export const VOICES = Object.freeze({
-  george: { voice: "bm_george", speaker: "radio", speed: 1.12,
-    runs: ["js/game.js", "js/race/pit-lane.js", "js/race/weather-arc.js", "js/race/race-insights.js", "js/race/session-records.js"] },
-  fable: { voice: "bm_fable", speaker: "announcer", speed: 1.12, runs: [] },
-  emma: { voice: "bf_emma", speaker: "control", speed: 1.06,
-    runs: ["js/game.js", "js/race/race-control.js", "js/race/sporting-regs.js"] },
-  heart: { voice: "af_heart", speaker: "coach", speed: 1.02,
-    runs: ["js/game.js", "js/race/driving-coach.js", "js/race/race-insights.js"] },
-});
+const RUNS = {
+  radio: ["js/game.js", "js/race/pit-lane.js", "js/race/weather-arc.js", "js/race/race-insights.js", "js/race/session-records.js"],
+  announcer: [], control: ["js/game.js", "js/race/race-control.js", "js/race/sporting-regs.js"],
+  coach: ["js/game.js", "js/race/driving-coach.js", "js/race/race-insights.js"],
+};
+export const VOICES = Object.freeze(Object.fromEntries(Object.entries(sandbox(["js/audio/voice-pack.js"]).VoicePack.VOICES)
+  .map(([id, v]) => [id, { ...v, runs: RUNS[v.speaker] }])));
+
+// A replacement voice must also cover older calls retained in its shipped
+// channel pack, even when the current phrase harvester no longer emits them.
+export function fallbackVocabulary(id) {
+  const base = sandbox(["js/audio/radio-voice.js"]).RadioVoice.PACK_VOICE[VOICES[id].speaker];
+  if (base === id) return [];
+  const man = JSON.parse(fs.readFileSync(path.join(ROOT, "assets/voice", base + ".json"), "utf8"));
+  return Object.keys(man.clips).filter((key) => !key.startsWith("@line:")).map((key) => ({ key, text: key }));
+}
 
 /* THE FILES THAT FEED THE RADIO CARD: every module that calls announce(), plus
  * the phrasebook and the engineer. Their ALL-CAPS literals are the words a
@@ -140,8 +149,8 @@ export function phrases(id = "george") {
   // the engineer's alone. The coach and race control name the player's KEYS
   // instead ("ACTIVE AERO, Z, YOU CAN OPEN IT NOW", js/input/input.js keyLabel),
   // so there a letter is the letter — except "a" and "i", which are words first.
-  if (id === "george") for (const [k, t] of Object.entries({ s: "Softs", m: "Mediums", h: "Hards", i: "Inters", w: "Wets" })) add(k, t);
-  else if (id !== "fable") {
+  if (spec.speaker === "radio") for (const [k, t] of Object.entries({ s: "Softs", m: "Mediums", h: "Hards", i: "Inters", w: "Wets" })) add(k, t);
+  else if (spec.speaker !== "announcer") {
     for (const c of "bcdefghjklmnopqrstuvwxyz") add(c, c.toUpperCase());
     for (const k of ["shift", "space", "enter", "tab", "control", "alt", "up", "down", "left", "right", "num"]) add(k, k);
   }
@@ -155,7 +164,7 @@ export function phrases(id = "george") {
   }
   // ── THE CHANNEL'S OWN PHRASES ──
   const P = sb.RadioLines.POOLS;
-  if (id === "george") {
+  if (spec.speaker === "radio") {
     for (const [k, pool] of Object.entries(P)) if (k.startsWith("eng.")) for (const t of pool) literalRuns(t);
     const eng = fs.readFileSync(path.join(ROOT, "js/race/engineer.js"), "utf8");
     // Every string literal carrying an upper-case word, including the pieces a
@@ -167,7 +176,7 @@ export function phrases(id = "george") {
     }
     for (const [key, text] of Object.entries(sb.Spotter.KEYS)) add(key, text);
   }
-  if (id === "fable") {
+  if (spec.speaker === "announcer") {
     for (const [k, pool] of Object.entries(P)) if (k.startsWith("tv.")) for (const t of pool) literalRuns(t);
     for (const why of Object.values(sb.RadioLines.WHY || {})) literalRuns(why);
   }
@@ -194,11 +203,52 @@ export function phrases(id = "george") {
   // THE SAFETY NET: every word a card can carry, on its own (feedFiles above).
   // The commentator's lines are all phrasebook templates, which the runs above
   // already cover whole.
-  if (id !== "fable") {
+  if (spec.speaker !== "announcer") {
     for (const f of feedFiles()) {
       for (const lit of cardLiterals(f)) for (const t of norm(speakable(lit.replace(/\{x\}/g, " ")))) if (typeof t === "string" && /^[a-z][a-z']*$/.test(t)) add(t);
     }
     for (const line of corpus[spec.speaker] || []) for (const t of norm(line)) if (typeof t === "string" && /^[a-z][a-z']*$/.test(t)) add(t);
+  }
+  for (const p of fallbackVocabulary(id)) add(p.key, p.text);
+  for (const p of fullPhrases(id)) add(p.key, p.text);
+  return [...out].map(([key, text]) => ({ key, text }));
+}
+
+/** Whole calls first, fragments only for unbounded numbers and names. */
+export function fullPhrases(id) {
+  const spec = VOICES[id];
+  const sb = sandbox(["js/audio/voice-pack.js", "js/audio/radio-voice.js", "js/race/radio-lines.js",
+    "js/data/circuit-lore.js", "js/audio/announcer.js"]);
+  const out = new Map();
+  const add = (line) => {
+    const text = sb.RadioVoice.speakable(line);
+    if (text) out.set(sb.VoicePack.lineKey(text), text);
+  };
+  add(sb.RadioVoice.SAMPLE[spec.speaker]);
+  const prefix = spec.speaker === "radio" ? "eng." : spec.speaker === "announcer" ? "tv." : "";
+  if (prefix) for (const [pool, lines] of Object.entries(sb.RadioLines.POOLS)) if (pool.startsWith(prefix)) {
+    for (const line of lines) if (!/\{\w+\}/.test(line)) add(line);
+  }
+  if (spec.speaker === "announcer") {
+    const require = createRequire(import.meta.url);
+    const { CIRCUITS } = require("../manifest.cjs");
+    for (const id of CIRCUITS) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/circuits/" + id + ".js"), "utf8"), sb);
+    for (const track of sb.TrackDefs) for (let variant = 0; variant < 3; variant++) {
+      for (const row of sb.Announcer.rows({ track, variant })) add(row.text);
+      for (const weather of ["rain", "wet", "fog", "overcast"]) {
+        for (const row of sb.Announcer.rows({ track, weather, tod: "night" })) add(row.text);
+      }
+    }
+    for (const session of ["tt", "quali"]) for (const practice of [false, true]) {
+      for (const row of sb.Announcer.rows({ session, practice })) add(row.text);
+    }
+    for (const mode of [{ practice: true }, { duel: true }, { sprint: true },
+      { real: { watch: true } }, { real: { watch: true, reel: true } }, { real: { startLap: 2 } }]) {
+      for (const row of sb.Announcer.rows(mode)) add(row.text);
+    }
+    for (let laps = 1; laps <= 100; laps++) add(laps + " laps. Let's go racing.");
+    add("Norris gets past Piastri for P3");
+    add("By just 1.4! Norris wins it!");
   }
   return [...out].map(([key, text]) => ({ key, text }));
 }
@@ -207,7 +257,7 @@ async function build() {
   const kdir = path.resolve(ROOT, arg("kokoro", "scratch/voicepack"));
   const req = createRequire(path.join(kdir, "package.json"));
   const { KokoroTTS } = await import(req.resolve("kokoro-js"));
-  const ffmpeg = req("ffmpeg-static");
+  const ffmpeg = arg("ffmpeg", null) || req("ffmpeg-static");
   const id = arg("id", "george"), dtype = arg("dtype", "q4");
   if (!VOICES[id]) throw new Error("unknown voice " + id);
   const voice = arg("voice", VOICES[id].voice);
@@ -222,18 +272,27 @@ async function build() {
   };
   const KBPS = 32;
   const outDir = path.resolve(ROOT, arg("out", "assets/voice"));
-  const cache = path.join(ROOT, "artifacts", "voicepack", id);
+  const cache = path.join(ROOT, "artifacts", "voicepack", id, voice + "-" + dtype);
   fs.mkdirSync(cache, { recursive: true });
   fs.mkdirSync(outDir, { recursive: true });
-  const list = phrases(id);
-  const tts = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", { dtype, device: "cpu" });
-  const safe = (k) => k.replace(/[^a-z0-9]+/gi, "_").slice(0, 60) + "_" + Buffer.from(k).toString("hex").slice(0, 8);
+  const list = flag("append") ? [...fallbackVocabulary(id), ...fullPhrases(id)] : phrases(id);
+  const tts = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
+    dtype, device: "cpu", session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
+  });
+  const safe = (k) => k.replace(/[^a-z0-9]+/gi, "_").slice(0, 60) + "_" + createHash("sha256").update(k).digest("hex").slice(0, 16);
   const clips = {};
   const chunks = [];
   let off = 0, i = 0;
+  if (flag("append")) {
+    const old = JSON.parse(fs.readFileSync(path.join(outDir, id + ".json"), "utf8"));
+    if (old.voice !== voice) throw new Error("--append cannot mix different voices");
+    const bin = fs.readFileSync(path.join(outDir, id + ".bin"));
+    Object.assign(clips, old.clips); chunks.push(bin); off = bin.length;
+  }
   for (const { key, text } of list) {
     i++;
-    const sp = speedFor(key);
+    if (clips[key]) continue;
+    const sp = key.startsWith("@line:") ? speed : speedFor(key);
     const mp3 = path.join(cache, safe(key) + "_" + sp + "_" + KBPS + ".mp3");
     if (!fs.existsSync(mp3)) {
       const wav = mp3.replace(/\.mp3$/, ".wav");

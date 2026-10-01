@@ -444,9 +444,10 @@ if (typeof Assets !== "undefined") {
   Assets.loadModels();
 }
 
-// ---------- rain overlay ----------
-// The 2D falling-streak overlay lives in js/fx/particles.js (Particles.rain*).
-// game.js decides the weather tier and hands booleans/speed in.
+// ---------- rain ----------
+// The falling-streak field lives in js/fx/particles.js (Particles.rain*): drops
+// in a box around the camera, drawn through the alpha particle batch, depth-
+// tested in the frame. game.js decides the weather tier and hands booleans in.
 let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug: lightState)
 function initRainDrops() {
   // DRIZZLE tier: "wet" (damp track, no storm) — sparse/short/slow streaks.
@@ -3230,9 +3231,9 @@ function endRace(forcedOrder) {
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
-  // quitToMenu clears the 2D rain overlay; endRace must too — otherwise
-  // rainDraw keeps stroking every present on the results sheet (audio alone
-  // stopped). Particles.rainActive() is the overlay gate, not the audio flag.
+  // quitToMenu hides the rain field; endRace must too — otherwise it keeps
+  // drawing into every frame behind the results sheet (audio alone stopped).
+  // Particles.rainActive() is the seed gate, not the audio flag.
   Particles.rainShow(false);
   if (soundOn) GameAudio.finish();
   // Qualifying ends in its own sheet: the player's flying lap is measured
@@ -8098,6 +8099,13 @@ function render(dt) {
   // with the RENDER dt and drawn into the HDR scene before present, so smoke
   // and spray tone-map with the world and the HDR spark tints feed bloom.
   // Render-path only — headless physics never touches the pool.
+  // Falling rain: the streak field around the camera, drawn inside the alpha
+  // particle batch (depth-tested, fogged by nothing, in the frame — never an
+  // overlay). Full storm streaks when raining, the sparse DRIZZLE tier when
+  // merely WET (rainSeed picked which). Open-cockpit cars have no windscreen,
+  // so onboard views get the same field as the chase cam — no water-on-glass
+  // beading and no wiper (there is nothing to wipe).
+  if (isWetRoad() && Particles.rainActive()) Particles.rainUpdate(dt, camEye, isRaining());
   Particles.update(dt);
   Particles.draw();
 
@@ -8293,17 +8301,6 @@ function render(dt) {
     // this, one kill months ago plus one today retires the pick on what looks
     // like a first failure.
     try { localStorage.removeItem("apex26.gfxProbeStrikes"); } catch (_) { /* blocked storage */ }
-  }
-  if (isWetRoad() && Particles.rainActive()) {
-    // Falling-streak precipitation, identical in every camera: full storm
-    // streaks when raining, the sparse DRIZZLE tier when merely WET (the
-    // storm flag below picks which). Open-cockpit cars have no windscreen,
-    // so onboard views get the same streaks as the chase cam — no
-    // water-on-glass beading and no wiper (there is nothing to wipe).
-    Particles.rainDraw(dt, (player && player.speed) || 0, isRaining());
-    // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
-    // Stronger bleach (was 0.18) so a strike is a real concussive sky-flash.
-    if (_ltFlash > 0.001) Particles.rainFlash(Math.min(0.55, _ltFlash * 0.40));
   }
 }
 

@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_246 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_247 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -298,6 +298,7 @@ _246 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `car-sfx.js` | `CarSfx` | tag | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
 | `voice-pack.js` | `VoicePack` | tag | VoicePack — recorded radio voice, composed from clips the way Crew Chief does it: fixed phrases, driver surnames, positions, numbers and gaps are separate… |
 | `radio-voice.js` | `RadioVoice` | tag | The radio banner, spoken aloud by the browser's own speech synthesiser. |
+| `announcer-recorded.js` | `RecordedAnnouncer` | tag | A recorded read owns its pending load as well as its playing clips. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
 
@@ -1158,7 +1159,12 @@ Shared transient-particle pool (tyre smoke, collision sparks, gravel/grass
 kickup, rain spray): a fixed CPU pool of camera-facing soft billboards drawn
 in two batches per frame via `gfx.drawParticles()` — alpha-blended
 (smoke/dust/spray) and additive (sparks; HDR tints feed bloom for free). Also
-owns the **rain overlay** (`Particles.rain*`). Emitters only READ car state;
+owns the **rain streak field** (`Particles.rain*`, 2026-10-01): drops in a box
+that travels with the eye, each a pre-expanded world-space quad appended to the
+alpha batch with size 0, so the particle shaders' soft-disc falloff draws a
+depth-tested streak along the drop's APPARENT velocity (fall − camera motion)
+on all three backends with no new program; it replaced a Canvas2D overlay that
+had no depth, no fog, no mirror and a compositor layer of its own. Emitters only READ car state;
 update/draw run in the RENDER path only, never inside the physics step, so
 headless obs/act runs are identical with FX on or off.
 

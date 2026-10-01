@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2075,
+      "ceiling": 2081,
       "slack": 25
     },
     "subFloorFontSize": {
