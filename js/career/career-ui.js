@@ -298,6 +298,19 @@ function create(G) {
     modeColumn(left, "driver");
     modeColumn(right, "myteam");
 
+    // CAREER FILE: inject from SettingsExport so shellNodes does not grow.
+    // buildSlotPanes clears both panes every open, so a fresh row each time.
+    if (typeof SettingsExport !== "undefined" && SettingsExport.careerRow) {
+      const row = SettingsExport.careerRow();
+      if (row) {
+        left.appendChild(head("BACKUP"));
+        left.appendChild(el("div", "cr-note",
+          "Save or restore every career slot as one JSON file. Settings and "
+          + "garage builds are not included — use SETTINGS › FILES and GARAGE › TEAM for those."));
+        left.appendChild(row);
+      }
+    }
+
     $("cr-go").hidden = true;
     $("cr-go").disabled = false;
     $("cr-garage").hidden = true;
@@ -604,6 +617,8 @@ function create(G) {
       ["Progress saves", "after every round"],
       "The two modes keep SEPARATE slots, so a driver career and a team can run "
       + "side by side and neither costs the other room.",
+      "SAVE CAREER FILE on the CAREER MODES screen backs up all six slots and "
+      + "which one is live. Settings and garage builds stay in their own files.",
       "RELIABILITY is a race setting, and it ships off. Turn it on and cars retire "
       + "— an engine, a gearbox, an accident. Developing the team and spending on "
       + "the engine and gearbox both buy the risk down, so money buys finishes as "
