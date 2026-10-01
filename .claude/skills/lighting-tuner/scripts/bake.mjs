@@ -13,12 +13,21 @@
 // replaces the assignment in js/lighting/presets.js. It does NOT touch the
 // shell: committed tags stay ?v=dev and the deploy stamps hashes (see the tail
 // of this file). Does NOT commit — the skill drives review + push.
+import vm from "node:vm";
+import { validatePresets, presetChanges } from "../../../../tools/lighting/preset-validation.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const ROOT = new URL("../../../../", import.meta.url).pathname;   // repo root
 
+const argv = process.argv.slice(2);
+const unknown = argv.find((a) => a.startsWith("--") && !["--check", "--dry-run", "--json", "--help"].includes(a));
+if (unknown) { console.error(`Unknown option: ${unknown}`); process.exit(1); }
+if (argv.includes("--help")) { console.log("Usage: bake.mjs [file | -] [--check | --dry-run] [--json] (full LightPresets snapshot)"); process.exit(0); }
+const inputs = argv.filter((a) => !a.startsWith("--"));
+if (inputs.length > 1) { console.error("Expected at most one input file"); process.exit(1); }
+const check = argv.includes("--check") || argv.includes("--dry-run");
 function readInput() {
-  const arg = process.argv[2];
+  const arg = inputs[0];
   if (arg && arg !== "-") return readFileSync(arg, "utf8");
   return readFileSync(0, "utf8");   // stdin
 }
@@ -46,25 +55,14 @@ let obj;
 try {
   obj = JSON.parse(raw);
 } catch (e) {
-  try { obj = (0, eval)("(" + raw + ")"); }   // fallback: a JS object literal
+  try { obj = vm.runInNewContext("(" + raw + ")", {}, { timeout: 1000 }); }   // fallback: a JS object literal
   catch (e2) { console.error("Could not parse the preset object:", e.message); process.exit(1); }
 }
 if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
   console.error("Preset must be a JSON object keyed by \"track|tod|weather\"."); process.exit(1);
 }
-// Shape check: every value is a flat map of knob id -> finite number.
-let nKnobs = 0;
-for (const [k, v] of Object.entries(obj)) {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) {
-    console.error(`Profile "${k}" must be an object of {knobId: number}.`); process.exit(1);
-  }
-  for (const [id, val] of Object.entries(v)) {
-    if (typeof val !== "number" || !isFinite(val)) {
-      console.error(`Value for ${k}.${id} is not a finite number.`); process.exit(1);
-    }
-    nKnobs++;
-  }
-}
+const errors = validatePresets(obj);
+if (errors.length) { console.error(errors.join("\n")); process.exit(1); }
 
 // Replace the assignment in js/lighting/presets.js, preserving the file header.
 const lpPath = ROOT + "js/lighting/presets.js";
@@ -80,16 +78,18 @@ if (!oldMatch) { console.error("Could not find the window.LightPresets assignmen
 // always the full file+local merge, so a legitimate paste should not usually
 // carry far fewer profiles than what already shipped. Best-effort shrink
 // detector: warn, but never block, since a real reset/pruning export is valid.
+let changes;
 try {
   const oldLiteral = oldMatch[0].replace(/^window\.LightPresets\s*=\s*/, "").replace(/;\s*$/, "");
   const oldObj = JSON.parse(oldLiteral);
+  changes = presetChanges(oldObj, obj);
   const oldKeys = Object.keys(oldObj).length;
   const newKeys = Object.keys(obj).length;
   if (oldKeys > 0 && newKeys < oldKeys / 2) {
     console.error(`WARNING: this blob has ${newKeys} profile(s) vs ${oldKeys} already in js/lighting/presets.js.`);
     console.error("bake.mjs does a FULL replace, not a merge — if this was meant to be a");
-    console.error("one-key update, STOP: re-copy the full COPY VALUES export from the tuner");
-    console.error("(it already merges file+local), or hand-merge instead of re-running this:");
+    console.error("one-key update, STOP: COPY VALUES exports a LightEdits delta; use merge-proposals.mjs.");
+    console.error("For a full replace, provide the complete LightPresets snapshot:");
     console.error('  read js/lighting/presets.js, Object.assign the one key into the parsed');
     console.error("  object, JSON.stringify it back into the window.LightPresets = ...; literal.");
     console.error("Writing anyway (this tool never blocks) — review `git diff` before committing.");
@@ -97,7 +97,12 @@ try {
 } catch { /* best-effort only; a parse failure here is not a reason to block the bake */ }
 
 src = src.replace(re, "window.LightPresets = " + JSON.stringify(obj, null, 2) + ";");
-writeFileSync(lpPath, src);
+if (!check) writeFileSync(lpPath, src);
+if (argv.includes("--json")) {
+  console.log(JSON.stringify({ ok: true, mode: check ? "check" : "write", profiles: Object.keys(obj).length, changes }));
+  process.exit(0);
+}
+if (check) { console.log(JSON.stringify({ ok: true, mode: "check", changes }, null, 2)); process.exit(0); }
 
 // Committed shell tags stay ?v=dev; deploy stamps hashes. Do not rewrite
 // index.html / version.json here.

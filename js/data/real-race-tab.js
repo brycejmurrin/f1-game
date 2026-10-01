@@ -477,6 +477,8 @@ const DataRealRace = (function () {
     let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
     let traces = null;     // the real positions for the painted script, once loaded
     let loading = null;    // {done, total} while the positions load
+    let requestGen = 0;
+    function cancel() { ++bodyGen; ++requestGen; loading = null; }
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
@@ -504,8 +506,11 @@ const DataRealRace = (function () {
     }
 
     function loadRealRace() {
+      cancel();
+      const generation = bodyGen;
       return ensureSession(false).then(() => {
         const wrap = el("div");
+        if (generation !== bodyGen) return wrap;
         wrap.appendChild(buildPicker((meta) => renderBody(meta, body)));
         const body = el("div");
         wrap.appendChild(body);
@@ -515,6 +520,8 @@ const DataRealRace = (function () {
     }
 
     function renderBody(meta, body) {
+      ++requestGen;
+      loading = null;
       const myGen = ++bodyGen;
       clear(body);
       if (!meta || meta.sessionKey == null) { body.appendChild(emptyMsg(NO_RACE_MSG)); return; }
@@ -592,7 +599,8 @@ const DataRealRace = (function () {
       const state = el("span", "dh-lr-meta", have ? "REAL POSITIONS LOADED · " + Object.keys(traces.cars).length + " CARS" : loading ? "LOADING REAL POSITIONS · " + loading.done + " / " + loading.total : "REAL POSITIONS · " + script.drivers.length + " CARS, ONE PULL EACH (≈ 60 MB, CACHED)");
       row.appendChild(state);
       // A race loaded on an earlier visit is in IndexedDB: say so once it answers (a repaint, not a fetch).
-      if (!have && !loading) traceGet(script.sessionKey).then((hit) => { if (hit && !traces && slot && slot.isConnected !== false) { traces = hit; clear(slot); paint(script, slot); } });
+      const generation = requestGen;
+      if (!have && !loading) traceGet(script.sessionKey).then((hit) => { if (generation === requestGen && hit && !traces && slot && slot.isConnected !== false) { traces = hit; clear(slot); paint(script, slot); } });
       const mk = (label, aria, fn) => { const b = el("button", "dh-pill", label); b.type = "button"; b.setAttribute("aria-label", aria); b.disabled = !!loading; b.addEventListener("click", fn); row.appendChild(b); return b; };
       if (!have) mk("LOAD", "Load the real positions of every car", () => loadTraces(script, slot, null));
       mk("HIGHLIGHTS", "Watch the highlights of the race, recreated", () => watch(script, slot, 1, true));
@@ -600,27 +608,30 @@ const DataRealRace = (function () {
       return row;
     }
     function loadTraces(script, slot, then) {
-      if (loading) return;
+      if (loading) return false;
+      const generation = ++requestGen;
+      const current = () => generation === requestGen && (!isOpen || isOpen()) && (!slot || slot.isConnected !== false);
       loading = { done: 0, total: script.drivers.length };
-      const repaint = () => { if (slot) { clear(slot); paint(script, slot); } };
+      const repaint = () => { if (current() && slot) { clear(slot); paint(script, slot); } };
       repaint();
-      fetchTraces(script, (done, total) => { loading = { done, total }; repaint(); })
-        .then((tr) => { traces = tr; loading = null; repaint(); if (then) then(tr); },
-              (e) => { loading = null; Log.warn("data", "real positions: " + (e && e.message || e)); repaint(); });
+      fetchTraces(script, (done, total) => { if (!current()) return; loading = { done, total }; repaint(); })
+        .then((tr) => { if (!current()) return; traces = tr; loading = null; repaint(); if (then) then(tr); },
+              (e) => { if (!current()) return; loading = null; Log.warn("data", "real positions: " + (e && e.message || e)); repaint(); });
+      return true;
     }
     /** WATCH / HIGHLIGHTS: the positions first (if not yet), then the replay in the DRIVE AS seat. */
     function watch(script, slot, fromLap, reel) {
+      const seat = seatCode, camera = watchCamera;
       const go = (tr) => {
         if (typeof RealRace === "undefined" || !RealRace.launch) return false;
         if (isOpen && !isOpen()) return false;   // the positions landed after the hub closed (or a JUMP IN left it): nothing to watch from
         startLap = fromLap;
-        Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seatCode);
+        Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seat);
         if (close) close();
-        return !!RealRace.launch(script, { seat: seatCode, laps: script.laps, startLap: fromLap, watch: true, camera: watchCamera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
+        return !!RealRace.launch(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
       };
       if (traces && traces.sessionKey === script.sessionKey) return go(traces);
-      loadTraces(script, slot, go);
-      return true;
+      return loadTraces(script, slot, go);
     }
 
     /** The race lap by lap: one row per lap with what it held and a JUMP IN; a
@@ -788,11 +799,12 @@ const DataRealRace = (function () {
       return !!RealRace.launch(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
     }
 
-    return { loadRealRace, scriptFor, jumpIn, lapEvents, watch, loadTraces,
+    return { loadRealRace, scriptFor, jumpIn, lapEvents, watch, loadTraces, cancel,
              traces: () => traces, setTraces: (tr) => { traces = tr || null; return traces; },
              setDistance: (f) => { distance = DISTANCES.includes(f) ? f : 1; return distance; },
              setStartLap: (n) => { startLap = Math.max(1, n | 0); return startLap; },
-             setSeat: (code) => { seatCode = code || null; return seatCode; } };
+             setSeat: (code) => { seatCode = code || null; return seatCode; },
+             setWatchCamera: (camera) => { watchCamera = camera; return watchCamera; } };
   }
 
   return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached,

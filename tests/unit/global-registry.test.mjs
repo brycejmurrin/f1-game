@@ -86,6 +86,7 @@ const GROWABLE_GLOBALS = {
 // Known reads of names NO manifest file assigns — each with its story. A new
 // external name is a red flag (an undeclared dependency or a typo'd global).
 const KNOWN_EXTERNAL_READS = {
+  "js/ui/layers.js": ["HTMLDialogElement"], // Browser native dialog prototype; typeof-guarded opening-order tracking, absent in VM mocks.
   "js/track/core/def.js": ["CircuitElevations"],  // tools/gen/bake-elevation.mjs output; typeof-guarded feature probe (moved from tracks.js with elevationAt)
   "js/editor/custom-tracks.js": ["TrackDesigner", "TrackCodec"], // the LAZY_EDITOR screen and codec; typeof-guarded, reached only after ensureEditor() loaded the bundle
   "js/audio/spotify.js": [

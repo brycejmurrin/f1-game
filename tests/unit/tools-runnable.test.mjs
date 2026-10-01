@@ -220,7 +220,8 @@ test("cloud-agent install is offline-tolerant (npm ECONNRESET must not fail a us
   assert.doesNotMatch(browsers, /^set -e/m);
   assert.match(cloud, /mesa-vulkan-drivers/);
   assert.match(cloud, /install-browsers\.sh/);
-  assert.match(cloud, /\/opt\/google\/chrome\/chrome/);
+  assert.match(cloud, /tools\/lib\/chromium-path\.mjs/);
+  assert.match(cloud, /--path/);
   assert.match(cloud, /node_modules\/playwright\/package\.json/);
   assert.doesNotMatch(cloud, /^set -e/m);
 });

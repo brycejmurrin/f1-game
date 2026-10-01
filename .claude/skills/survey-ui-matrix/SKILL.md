@@ -1,18 +1,14 @@
 ---
 name: survey-ui-matrix
-context: fork
-agent: general-purpose
-description: Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play).
+description: "Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play)."
 ---
 
 # Surveying the whole UI across the whole matrix
 
-Runs FORKED (`context: fork`, `agent: general-purpose`): a matrix walk is
-dozens of `browser_*` snapshots, so the cells and their measurements stay in the
-fork and the parent gets the defect table (screen × shape × scale × pointer,
-one row per finding, screenshot paths under `artifacts/`). The fork edits
-nothing: fixes are the parent's, one cell at a time, via `css-play` or
-`ui-menu-a11y`.
+The parent runs the browser matrix with one Chromium session. Delegate only
+browser-free catalog checks and artifact analysis. Subagents return defect tables
+with screenshot paths and missing cells; the parent applies fixes via `css-play`
+or `ui-menu-a11y`. This follows AGENTS.md rule 10.
 
 ## Prerequisites (always)
 

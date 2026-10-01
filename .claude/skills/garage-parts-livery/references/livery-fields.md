@@ -21,8 +21,7 @@ FILL (`sideTint`), SUN, 2ND BAND, PLATE — only when the current TOP/SIDE/BIND
 paints that surface. `ridgeTint` / `airboxTint` / `crestInk` / `plateInk` are
 migrated away (`Liveries.migratePaint`).
 The tail DESIGN is four enum fields with defaults that reproduce the shipped car —
-`finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
-a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
+`finShape` (`Car3D.FIN_SHAPES` + `none`; a geometry-changing livery field, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
 drives the fin panel ONLY — the crown's gradient wash was removed, so every
 SPINE TOP now stands on bare paint with hard edges; `drawTailGraphic` is called
 on `REGIONS.fin` alone, which is why the garage greys TAIL STYLE under FIN

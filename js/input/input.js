@@ -2434,8 +2434,14 @@ const Input = (function () {
   }
 
   function debugState() {
+    const active = document.activeElement;
+    const tag = active && active.tagName || "";
+    const interactive = ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(tag) || !!(active && active.isContentEditable);
+    const hudControl = !!(active && active.matches && active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore, .touchbtn"));
     return {
       steerMode,
+      gate: { anyOpen: !!menuOverlayOpen(), typing: interactive && !hudControl, hudControl,
+              focus: { id: active && active.id || null, tag, editable: !!(active && active.isContentEditable) } },
       key: { left: keyLeft, right: keyRight, throttle: keyThrottle, brake: keyBrake },
       btn: { throttle: btnThrottle, brake: btnBrake, left: btnSteerLeft, right: btnSteerRight,
              throttleVal: btnThrottleVal, brakeVal: btnBrakeVal, steerVal: btnSteerVal,

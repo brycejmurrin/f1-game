@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Only eleven CLIs are wrapped as `apex_*` (twelve tools: `apex_garage` is a
+do the work. Only twelve CLIs are wrapped as `apex_*` (thirteen tools: `apex_garage` is a
 session over one of them).
 
 ```
@@ -29,7 +29,7 @@ surface without hand-wiring:
 | MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
 | Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
 | Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the three catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
-| Cloud VM | `.cursor/environment.json` | `install` + Chromium path + allowlist of the three catalog commands. |
+| Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the three catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
 
 **Layout principles (Claude + Codex + Cursor, 2026):**
@@ -71,7 +71,7 @@ auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
-| **apex-tools** | `apex_*` | Pin safe flags on eleven committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
+| **apex-tools** | `apex_*` | Pin safe flags on twelve committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `npx -y @playwright/mcp@0.0.79` |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 
@@ -158,17 +158,19 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Eleven wraps, twelve tools (30 → 11 on 2026-09: the audits, startline,
+names the CLI. Twelve wraps, thirteen tools (30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
 `apex_frame_report`, a node-VM framing report that answers in seconds what a
-flyby render answers in minutes).
+flyby render answers in minutes; 12 → 13 on 2026-10-01 for the read-only
+`apex_doctor` capability and skill diagnostics).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
+| `apex_doctor` | `check/doctor.mjs` | tree | check-changes |
 | `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |
 | `apex_select_specs` | `ci/select-specs.mjs` | tree | check-changes |
 | `apex_verify_change_fast` | `ci/verify-change.mjs` | tree | check-changes |
@@ -183,6 +185,7 @@ flyby render answers in minutes).
 
 Pins the wrap always applies (you cannot override them):
 
+- `apex_doctor` → `--tree --json` (diagnostics only; never installs or launches)
 - `apex_verify_change_fast` → `--fast --json` (never `--wait`)
 - `apex_bump_cache_check` → `--check --json` (never `--apply`)
 - `apex_pick_tests` / `apex_select_specs` → `--json` (never `--bg`)
@@ -190,7 +193,7 @@ Pins the wrap always applies (you cannot override them):
 - `apex_graph_parity` → requires `base` (never vacuous HEAD-vs-clean)
 - `apex_frame_report` → one circuit: `track` must be a `Tracks.LIST` id, `u`
   (numbers in 0..1, ≤ 64) or `frames` (1..120) but not both, `shots` must be an
-  existing file under `artifacts/` or `scratch/` (symlinks resolved); never
+  existing JSON file under `artifacts/` or `scratch/` (symlinks resolved); never
   `--out` / `--fleet` / `--diff` / `--pose`. The fleet sweep
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
 - Browser wraps never take `--url`; output paths (`out`) must stay under

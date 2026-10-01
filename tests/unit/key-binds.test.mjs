@@ -57,6 +57,23 @@ function boot() {
   const fire = (t, e) => (listeners[t] || []).forEach((f) => f(e || {}));
   return { Input, key, sb, fire, dispatched, navOpen };
 }
+
+test("inputState gate explains typing, overlay and HUD focus without modifying held keys", () => {
+  const { Input, sb, navOpen, key } = boot();
+  key("KeyW", true);
+  sb.document.activeElement = { id: "query", tagName: "INPUT", matches: () => false };
+  navOpen.on = true;
+  let s = Input.debugState();
+  assert.equal(s.key.throttle, true);
+  assert.equal(s.gate.typing, true);
+  assert.equal(s.gate.anyOpen, true);
+  assert.equal(s.gate.focus.id, "query");
+  sb.document.activeElement = { id: "pausebtn", tagName: "BUTTON", matches: () => true };
+  s = Input.debugState();
+  assert.equal(s.gate.typing, false);
+  assert.equal(s.gate.hudControl, true);
+  assert.equal(s.key.throttle, true);
+});
 // A standard-mapping pad the sandbox's navigator reports as the only one.
 // press(i, v) sets button i (a trigger takes a value); gamepadconnected must be
 // fired once so pollGamepad reads it every frame instead of re-probing.

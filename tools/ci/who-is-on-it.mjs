@@ -34,9 +34,10 @@
 //   node tools/ci/who-is-on-it.mjs --release
 //   node tools/ci/who-is-on-it.mjs --no-fetch --json
 //
-// Exit 0 always (it informs; the reading is yours). A branch is "live" when
+// Read-only listing exits 0 (it informs); invalid claim/CLI arguments exit 1. A branch is "live" when
 // its tip is inside the window; the deploy branch is always listed; claims
 // branches are never listed as branches.
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,8 +55,10 @@ const git = (...args) => {
 };
 
 /** The session this process belongs to, short and filename-safe. */
-export const sessionId = (env = process.env) =>
-  (env.CLAUDE_CODE_SESSION_ID || env.CLAUDE_SESSION_ID || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12) || "nosession";
+export const sessionId = (env = process.env) => {
+  const id = env.APEX_SESSION_ID || env.CODEX_THREAD_ID || env.CLAUDE_CODE_SESSION_ID || env.CLAUDE_SESSION_ID;
+  return id ? createHash("sha256").update(String(id)).digest("hex").slice(0, 24) : null;
+};
 
 /** `claude/fix-autopilot` + session -> `fix-autopilot-ab12cd34ef56`.
  *
@@ -68,8 +71,10 @@ export const sessionId = (env = process.env) =>
  *  colliding must not make them collide. The `--` slash folding had the same
  *  shape on its own: `claude/a/b` and `claude/a--b` are different branches
  *  that produced one ref. */
-export const claimSlug = (branch, session = sessionId()) =>
-  `${branch.replace(/^claude\//, "").replace(/\//g, "--")}-${session}`;
+export const claimSlug = (branch, session = sessionId()) => {
+  if (!session) throw new Error("Claim slug requires a session identifier");
+  return `${branch.replace(/^claude\//, "").replace(/\//g, "--")}-${session}`;
+};
 
 /** for-each-ref lines for the claims branches -> claims with age. Pure: `now`
  *  is unix seconds. Line shape:
@@ -116,8 +121,7 @@ export function currentBranch() {
   return git("rev-parse", "--abbrev-ref", "HEAD").trim();
 }
 
-function pushClaim(text, branch) {
-  const session = sessionId();
+function pushClaim(text, branch, session) {
   const slug = claimSlug(branch, session);
   const sha = claimCommit(text, branch, session);
   const ref = `refs/heads/${CLAIMS_PREFIX}${slug}`;
@@ -131,26 +135,39 @@ function pushClaim(text, branch) {
 
 export function main(argv = process.argv.slice(2)) {
   if (argv.includes("--help") || argv.includes("-h")) {
-    console.log('usage: node tools/ci/who-is-on-it.mjs [--hours N] [--no-fetch] [--json] [--claim "<text>" | --release] [path ...]');
+    console.log('usage: node tools/ci/who-is-on-it.mjs [--hours N] [--session ID] [--no-fetch] [--json] [--claim "<text>" | --release] [path ...]');
     return 0;
   }
   const opt = (name, dflt) => {
     const i = argv.indexOf(name);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
   };
-  const hours = Number(opt("--hours", "6")) || 6;
+  const known = new Set(["--hours", "--session", "--claim", "--release", "--no-fetch", "--json"]);
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith("-") && !known.has(argv[i])) { console.error(`Unknown option: ${argv[i]}`); return 1; }
+    if (["--hours", "--session", "--claim"].includes(argv[i])) {
+      if (!argv[i + 1] || argv[i + 1].startsWith("-")) { console.error(`${argv[i]} requires a value`); return 1; }
+      i++;
+    }
+  }
+  const hours = Number(opt("--hours", "6"));
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 8760) { console.error("--hours must be in (0, 8760]"); return 1; }
+  const session = argv.includes("--session") ? sessionId({ APEX_SESSION_ID: opt("--session") }) : sessionId();
   const json = argv.includes("--json");
   const noFetch = argv.includes("--no-fetch");
   const claim = opt("--claim", "");
   const release = argv.includes("--release");
-  const paths = argv.filter((a, i) => !a.startsWith("--") && argv[i - 1] !== "--hours" && argv[i - 1] !== "--claim");
+  const paths = argv.filter((a, i) => !a.startsWith("--") && argv[i - 1] !== "--hours" && argv[i - 1] !== "--claim" && argv[i - 1] !== "--session");
+
+  if ((claim || release) && !session) { console.error("Claim/release requires --session ID or APEX_SESSION_ID/CODEX_THREAD_ID/Claude session id. Reuse the same ID to release."); return 1; }
+  if (claim && release) { console.error("Choose --claim or --release"); return 1; }
 
   // Claim / release first, so the listing that follows shows the result.
   const branch = currentBranch();
   let claimed = null;
   if (claim || release) {
     if (!branch || branch === "HEAD") { console.error("who-is-on-it: not on a branch, nothing to claim"); return 0; }
-    claimed = { action: release ? "release" : "claim", ...pushClaim(release ? RELEASED : claim, branch) };
+    claimed = { action: release ? "release" : "claim", ...pushClaim(release ? RELEASED : claim, branch, session) };
   }
 
   let fetched = false;
@@ -205,7 +222,7 @@ export function main(argv = process.argv.slice(2)) {
       ? '(none — nobody has claimed anything; --claim "<text>" to say what you are on)'
       : "(no claims in stale local refs — re-run with the network up before trusting this)");
   }
-  const mine = claimSlug(branch);
+  const mine = session ? claimSlug(branch, session) : null;
   for (const c of active) console.log(`${ago(c.ageMin).padStart(7)} ago  ${c.stale ? "STALE " : "      "}${c.slug}${c.slug === mine ? "  [you]" : ""}  — ${c.who}: ${c.text}`);
   if (paths.length) {
     console.log(`\n# commits in the window that touched: ${paths.join(" ")}`);

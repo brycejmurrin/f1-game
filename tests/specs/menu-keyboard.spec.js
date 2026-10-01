@@ -590,3 +590,36 @@ test.describe("Escape is BACK", () => {
     }))).toEqual({ standings: true, pause: false });
   });
 });
+
+// Selectors preserve DOM order; the native top layer follows opening order.
+test('native modal opening order survives reverse DOM order and reopen', async ({ page }, testInfo) => {
+  await page.goto('/'); await waitReady(page);
+  await page.evaluate(() => window.__apex.headless(true));
+  const dialogs = await page.evaluate(() => {
+    const list = window.UiLayers.LAYER_IDS.map(id => document.getElementById(id))
+      .filter(el => el instanceof HTMLDialogElement && el.hidden);
+    const ordered = [...document.querySelectorAll('dialog')].filter(el => list.includes(el)).slice(0, 2);
+    if (ordered.length !== 2) throw new Error('Two native registered dialogs are required');
+    for (const el of ordered) {
+      const button = document.createElement('button');
+      button.textContent = 'Native modal order probe'; el.appendChild(button);
+      el.hidden = false;
+    }
+    ordered[1].showModal(); ordered[0].showModal();
+    return ordered.map(el => el.id);
+  });
+  const seen = () => page.evaluate(ids => ({
+    selectorOrder: [...document.querySelectorAll(':modal')].filter(el => ids.includes(el.id)).map(el => el.id),
+    top: window.UiLayers.top()?.id,
+    focused: ids.find(id => document.getElementById(id).contains(document.activeElement)),
+  }), dialogs);
+  expect(await seen()).toEqual({ selectorOrder: dialogs, top: dialogs[0], focused: dialogs[0] });
+  await page.keyboard.press('Tab');
+  expect((await seen()).focused).toBe(dialogs[0]);
+  await page.screenshot({ path: testInfo.outputPath('native-modal-order.png') });
+  await page.evaluate(id => { const el = document.getElementById(id); el.hidden = true; el.close(); }, dialogs[0]);
+  expect((await seen()).top).toBe(dialogs[1]);
+  await page.evaluate(id => { const el = document.getElementById(id); el.hidden = false; el.showModal(); }, dialogs[0]);
+  expect((await seen()).top).toBe(dialogs[0]);
+  await page.evaluate(ids => { for (const id of ids) { const el = document.getElementById(id); el.hidden = true; el.close(); } }, dialogs);
+});

@@ -3734,6 +3734,12 @@ const G = {
   redFlagRestart,
   get daily() { return daily; },
   holdCaution: (level, cause) => raceCtl.hold(level, cause),   // a scripted flag (js/race/real-race.js); 0 releases it
+  resetEpisodeOwners() { IncidentSim.reset(); raceCtl.reset(); DebrisWorld.reset(); },
+  cameraDampingState() {
+    return { eye: camEye.slice(), target: camTgt.slice(), fov: camFov,
+      previousAnchor: [camAncX, camAncZ], nextAnchor: [camAncNX, camAncNZ],
+      renderFrame: _frameNo, simulationTime: raceT, renderTime: _skyT };
+  },
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
   // target the host decides (wxArcPlan) — see startRace / WeatherArc.planFor.

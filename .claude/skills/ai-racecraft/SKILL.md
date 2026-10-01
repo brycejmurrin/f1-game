@@ -1,6 +1,6 @@
 ---
 name: ai-racecraft
-description: Use when AI racecraft is wrong — overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, a wall or the pit lane, rescue teleport), driver ratings craft/awareness/experience, or js/physics/ai-drive.js. Do not change player physics (tune-physics), or race control — flags, safety car stuck out, pile-ups, debris launches (race-incidents-control).
+description: "Use when AI racecraft is wrong — overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, a wall or the pit lane, rescue teleport), driver ratings craft/awareness/experience, or js/physics/ai-drive.js. Do not change player physics (tune-physics), or race control — flags, safety car stuck out, pile-ups, debris launches (race-incidents-control)."
 ---
 
 # AI racecraft — `AiDrive`, not the bicycle model
@@ -58,19 +58,21 @@ lockout blocker): they cost monaco passes. Measure: `ai-race.mjs tactics`.
 
 ## Stuck / unstuck (AI wedged, never recovers)
 
-Two timers, both in `updateCar` (`game.js`, grep `stuckT` / `rescueT`): `stuckT` grows while
-`speed < 7 && AiDrive.isBoxed` (no room both sides, or a blocker < 6 m); past
-`AiDrive.stuckThreshold(awareness)` (0.45-1.15 s) `unstuckActive` cancels braking and adds
-`unstuckPull` sideways (+ `unstuckLatFloor` steering floor, `queueFloor` crawl). If that fails,
-`rescueT` (`aiStuck`: offroad > 0.5 s, or `speed < 5` past `raceT > 2`) passes
-`AiDrive.aiRescueDelay` (4 s, 7 s in contact) and TELEPORTS the car to `x` inside `hw - 1.5`
-at `14·PACE` speed. Exempt: `pitState === "box"`, queued in the lane, red-held. A pit-lane car is
-rescued onto `pits.laneX`, so a wall/pit-boundary case is `pits.inLane(c)` (`game.js` ~6023
-"THE PIT WALL"), not the road branch. Unit pins: `ai-drive.test.mjs` (isBoxed/stuckThreshold).
-No CLI counts stuck/rescue: `ai-field.mjs` reports dwell/contact only (`--seconds` floor 60;
-`--track baku --seconds 60` ~1 min VM, dwellMax is the nearest proxy); for a per-car
-`stuckS` use `__apex.field()` live (agent-view, browser).
-Record: track, seed, car, `stuckT`/`rescueT` at freeze, pitState, inLane, roomL/R.
+Two timers live in `updateCar` (`game.js`; search `stuckT` / `rescueT`).
+`stuckT` grows under the boxed slow-car condition. `AiDrive.stuckThreshold(aiT)`
+reads a traits object (for example `{awareness:0.75}`), not a scalar. Past it,
+`unstuckActive` cancels braking and adds sideways pull, steering floor and crawl.
+`beachedAt(c)` tests offroad plus a pace-scaled slow-speed threshold; it has no
+half-second `offT` gate. The slow-speed rescue branch requires `!unstuckActive`.
+Pit-box, queued-lane and red-held states have separate gates. Road rescue restores
+`Math.min(vTop(), Math.max(existingSpeed, 14*Math.max(PACE,0.05)))`; pit-lane
+rescue uses its own lane/floor rule. A persistent boxed case needs behavioral
+inspection before blaming the rescue timer.
+Use `cars()` / `field()` to identify the car, then `__apex.carAt(idx)` for
+`stuckT` / `rescueT`; `field()` contains no `stuckS`. Record track, seed, car,
+timers, `pitState`, `pits.inLane(c)` and room left/right. VM behavioral check:
+`node --test --test-name-pattern='stopped player' tests/unit/ai-stuck-vm.test.mjs`.
+Browser collision/appearance evidence remains separate.
 
 ```sh
 node --test tests/unit/ai-drive.test.mjs      # ~100 tests, ~1 s
