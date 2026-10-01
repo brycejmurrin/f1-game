@@ -170,6 +170,9 @@
       lampFog:     uniform(0.0),      // frame.lampFog (0 = day/off)
       wetness:     uniform(0.0),
       time:        uniform(0.0),      // frame.time — drives FLAG wave + cloud drift (deterministic with the game clock)
+      // WIND (knobs windDir / windSpeed): xy = unit direction in world xz, z =
+      // speed scale. Read by vertexMotionNode — the foliage sway. GLX uWind.
+      wind:        uniform(new THREE.Vector3(0.819, 0.574, 1.0)),
       cloudCover:  uniform(0.0),
       cloudSpeed:  uniform(1.0),
       // LIGHTING TUNER knobs (TUNE_DEFS defs in comments)
@@ -331,6 +334,10 @@
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
       U.time.value = frame.time != null ? frame.time : 0;
+      {
+        const wd = k("windDir", 35) * (Math.PI / 180);
+        U.wind.value.set(Math.cos(wd), Math.sin(wd), k("windSpeed", 1.0));
+      }
       U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
       U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
       uf1(U.bounceK, k("bounceK", 0.04));
@@ -1942,17 +1949,48 @@
       })();
     }
 
-    /* FLAG cloth-wave vertex displacement (LIT_VS — js/render/glx/shaders/glsl-lit.js)
-     * mat in [15,16): fract(aMat)*2.5 = per-vertex wave weight; a travelling
-     * two-sine ripple displaces along the face normal. U.time (frame.time) is
-     * the clock — deterministic with the game. */
-    function flagPositionNode() {
+    /* Vertex motion (LIT_VS — js/render/glx/shaders/glsl-lit.js main()): the two
+     * materials whose vertices move, keyed on the ROUNDED id with the per-vertex
+     * weight in the id's fraction. U.time (frame.time) is the clock —
+     * deterministic with the game. The maths is GLX's, constant for constant.
+     *  FLAG (15, fraction 0..0.4 = wave weight × 0.4): a travelling two-sine
+     *    cloth ripple along the face normal, in object space.
+     *  FOLIAGE (6, fraction 0..SWAY_FRAC = height weight, js/track/core/geom.js):
+     *    GPU Gems 3 ch.16-style main bending — a downwind lean plus a gust that
+     *    travels across the forest along U.wind — scaled by weight², so the
+     *    crown's foot stays on the trunk; plus a small per-vertex flutter along
+     *    the normal. Bare FOLIAGE (fraction 0: hedges, bushes, mountains) and
+     *    every other id take the exact static path.
+     * positionLocal is read AFTER three applied the instance matrix (r186
+     * NodeMaterial.setupPosition: instance → positionNode), and every world mesh
+     * here draws at an identity model matrix, so the sway direction is world
+     * xz on baked props and instanced pines alike — the same frame GLX uses. */
+    function vertexMotionNode() {
       const matA = attribute("mat", "float");
-      const isFlag = matA.greaterThanEqual(15.0).and(matA.lessThan(16.0));
-      const fw = fract(matA).mul(2.5);
+      const mid = floor(matA.add(0.5));
+      const mfr = clamp(matA.sub(mid), 0.0, 1.0);
+      // FLAG — unchanged maths; the gate is the rounded id, not a half-open range
+      // (GLX's own comment: a neighbour decoding a hair low has fract ~1.0).
+      const fw = mfr.mul(2.5);
       const ph = U.time.mul(5.5).add(positionGeometry.x.mul(1.9)).add(positionGeometry.z.mul(1.9));
       const wave = sin(ph).mul(0.085).add(sin(ph.mul(2.17).add(1.3)).mul(0.045)).mul(fw);
-      return positionLocal.add(normalLocal.mul(select(isFlag, wave, float(0.0))));
+      // FOLIAGE sway
+      const w = clamp(mfr.div(0.45), 0.0, 1.0);
+      const p = positionLocal;
+      const spd = U.wind.z;
+      const along = p.x.mul(U.wind.x).add(p.z.mul(U.wind.y));          // metres downwind
+      const gust = U.time.mul(spd.mul(1.1).add(0.6)).sub(along.mul(0.07));
+      const bend = sin(gust).mul(0.55)
+        .add(sin(gust.mul(2.31).add(along.mul(0.19)).add(1.7)).mul(0.25))
+        .add(0.45);                                                      // downwind lean bias
+      const amp = spd.mul(0.32).mul(w).mul(w);
+      const sway = vec3(U.wind.x, 0.0, U.wind.y).mul(bend.mul(amp));
+      const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7));
+      const flutter = normalLocal.mul(sin(flPh).mul(spd.mul(0.05)).mul(w));
+      const leaf = sway.add(flutter);
+      const isFlag = mid.equal(15.0);
+      const isLeaf = mid.equal(6.0).and(mfr.greaterThan(0.002));
+      return positionLocal.add(select(isFlag, normalLocal.mul(wave), select(isLeaf, leaf, vec3(0.0))));
     }
 
     /* material factory
@@ -2088,7 +2126,7 @@
       // here is what made three.js cars invisible (see factory comment).
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
-      m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
+      m.positionNode = _sharedPos || (_sharedPos = vertexMotionNode());
       pinProgram(m, o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit"));
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).

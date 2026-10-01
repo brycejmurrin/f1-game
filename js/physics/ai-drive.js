@@ -402,7 +402,10 @@ const AiDrive = (function () {
   // No iterative solver in the per-car, per-node brake lookahead.
   function cornerSpeed(k, lat, pace = 1, vmax = 72) {
     const V = Math.max(0.05, pace) * Math.max(1, vmax), kk = Math.max(k, 1e-5), L = Math.max(0, lat);
-    const den = kk - L * AI_DF / (V * V);
+    return cornerSpeedEnvelope(kk, L, V, V * V);
+  }
+  function cornerSpeedEnvelope(kk, L, V, vSq) {
+    const den = kk - L * AI_DF / vSq;
     if (den > 0) {
       const v = Math.sqrt(L / den);
       if (v <= V) return v;
@@ -418,12 +421,16 @@ const AiDrive = (function () {
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
+    // The aero speed envelope is shared by every lookahead node this tick.
+    // Keep the same solve as cornerSpeed without reclamping pace/vmax per node.
+    const V = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace)
+      * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
     let vLimSq = Infinity;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
       const bankMu = 1 + Math.sin(s.bank || 0) * 0.8;
-      const vC = cornerSpeed(k, latMax * bankMu * grip, ctx.pace, ctx.vmax) * skill * (ctx.diffCorner || 1);
+      const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq) * skill * (ctx.diffCorner || 1);
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
       const entrySq = vC * vC + 2 * brake * 0.85 * d;
