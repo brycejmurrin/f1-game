@@ -75,7 +75,7 @@
       float, int, vec2, vec3, vec4, mrt,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
       cameraPosition, frontFacing,
-      fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, sqrt,
+      fract, floor, mod, dot, cross, mix, smoothstep, step, clamp, pow, exp, sqrt,
       abs, max, min, normalize, length, reflect, select, sin, cos,
       dFdx, dFdy, fwidth,
     } = TSL;
@@ -169,6 +169,7 @@
       pitBox:      uniform(new THREE.Vector4(0, 0, 0, 0)),
       lampFog:     uniform(0.0),      // frame.lampFog (0 = day/off)
       wetness:     uniform(0.0),
+      rain:        uniform(0.0),      // frame.rain — rain FALLING (0..1): the puddle ripples. GLX uRain.
       time:        uniform(0.0),      // frame.time — drives FLAG wave + cloud drift (deterministic with the game clock)
       // WIND (knobs windDir / windSpeed): xy = unit direction in world xz, z =
       // speed scale. Read by vertexMotionNode — the foliage sway. GLX uWind.
@@ -333,6 +334,7 @@
       }
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
+      U.rain.value = frame.rain != null ? frame.rain : 0;
       U.time.value = frame.time != null ? frame.time : 0;
       {
         const wd = k("windDir", 35) * (Math.PI / 180);
@@ -1510,6 +1512,23 @@
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
           puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
+          // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
+          // two cell grids of impact rings, a normal tilt on the pooled water that
+          // the GGX lobes and the sky reflection below read (N is a toVar).
+          If(puddle.greaterThan(0.001).and(U.rain.greaterThan(0.001)), () => {
+            const ring = (sc, seed, hseed, rate) => {
+              const rp = wp.xz.mul(sc).add(seed);
+              const ci = floor(rp), cf = fract(rp).sub(0.5);
+              const hh = hash21(ci.add(hseed));
+              const t = fract(U.time.mul(rate).add(hh));
+              const r = length(cf).add(1e-4);
+              const ph = r.sub(t.mul(0.45)).mul(40.0);
+              const amp = t.oneMinus().mul(t).mul(4.0).mul(exp(r.mul(-5.0))).mul(step(r, t.mul(0.45).add(0.08)));
+              return cos(ph).mul(cf.div(r)).mul(amp);
+            };
+            const rg = ring(1.7, 0.0, 0.0, 0.8).add(ring(2.9, 7.3, 19.0, 1.3)).toVar();
+            N.assign(normalize(N.add(vec3(rg.x, 0.0, rg.y).mul(U.rain.mul(puddle).mul(0.10)))));
+          });
           // Porous as a FRACTION of the road result — mirrors js/render/glx/shaders/glsl-lit.js.
           // The two coefficients were transposed here as they were in GLX: mix(a,b,t)
           // returns a for porous=0 (tarmac) and b for porous=1, so tarmac absorbed

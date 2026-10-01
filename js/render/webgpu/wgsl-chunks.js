@@ -1163,6 +1163,27 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     wet = wetness * upFace;
     let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
+    // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
+    // constant for constant: two cell grids of impact rings as a normal tilt
+    // on the pooled water; the GGX lobes and the sky reflection below read N.
+    // params4.z = frame.rain (rain FALLING, 0..1), params0.z = time.
+    if (puddle > 0.001 && F.params4.z > 0.001) {
+      var rg = vec2<f32>(0.0);
+      for (var k: i32 = 0; k < 2; k++) {
+        let fk = f32(k);
+        let sc = select(2.9, 1.7, k == 0);
+        let rp = in.wpos.xz * sc + vec2<f32>(fk * 7.3);
+        let ci = floor(rp);
+        let cf = fract(rp) - vec2<f32>(0.5);
+        let hh = hash21(ci + vec2<f32>(fk * 19.0));
+        let t = fract(F.params0.z * (0.8 + 0.5 * fk) + hh);
+        let r = length(cf) + 1e-4;
+        let ph = (r - t * 0.45) * 40.0;
+        let amp = (1.0 - t) * t * 4.0 * exp(-r * 5.0) * step(r, t * 0.45 + 0.08);
+        rg += cos(ph) * (cf / r) * amp;
+      }
+      N = normalize(N + vec3<f32>(rg.x, 0.0, rg.y) * (0.10 * F.params4.z * puddle));
+    }
     // POROUS MUST BE DARKER THAN THE ROAD, not lighter. Two independently
     // clamped coefficients transpose the order: 0.42 fades SLOWER than 0.58, so
     // at wetDark 1.0 porous sat at 0.58 against the road's 0.42 — verges and

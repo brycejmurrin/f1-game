@@ -1472,6 +1472,14 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **PUDDLE RIPPLES (2026-10-01):** on all three. Inside each lit shader's wet
+  block, where `puddle > 0` and rain is FALLING (`frame.rain`, ramped like
+  wetness: GLX `uRain`, TLX `U.rain`, WGX `params4.z`), two cell grids of
+  impact rings tilt the normal (`cos((r − v·t)·k)·r̂`, damped by radius and
+  age, keyed to the game clock) before the sun/lamp GGX lobes and the sky
+  reflection read it — the diffuse `NoL` above the block is untouched, a
+  ripple being a specular event. Constant for constant across the three
+  (`light-grid.test.mjs` pins the constants and the plumbing).
 - **FOLIAGE WIND SWAY (2026-10-01):** GLX + TLX; **WGX gap** (the same gap as the
   FLAG wave — WGX has no per-vertex `mat` attribute, `docs/research/WEBGPU-PARITY.md`).
   Tree emitters in `js/track/scenery/nature.js` stamp FOLIAGE vertices with a

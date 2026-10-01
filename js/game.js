@@ -7207,6 +7207,14 @@ function render(dt) {
     const cur = frame.wetness || 0;
     frame.wetness = cur + (wetTarget - cur) * Math.min(1, dt * 0.8);
   }
+  // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
+  // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
+  // the same 0.8/s as wetness so the rings fade in and out rather than pop.
+  {
+    const rainTarget = isRaining() ? 1 : isWetRoad() ? 0.35 : 0;
+    const cur = frame.rain || 0;
+    frame.rain = cur + (rainTarget - cur) * Math.min(1, dt * 0.8);
+  }
 
   // Moon: use the value set by applyRaceSettings; pass through for default
   // night tracks that didn't go through the explicit raceTimeOfDay branch.
