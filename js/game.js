@@ -1965,7 +1965,7 @@ function makeCars() {
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
-    const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
+    const factoryParts = Parts.resolveSetup((Career.inCareer() && Career.aiSetup && Career.aiSetup(team)) || Parts.getFactorySetup(team), team);
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
@@ -2390,20 +2390,24 @@ function currentCarGroundMat(c, out) {
 const sessionDarkFor = (def) => raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
   raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && !!def.night);
 const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots, retainGraph: wantAgentSurface() });
+// The world freed: the old one before a stepped rebuild, or one the player picked away from (scheduleFlybyTrack).
+function dropTrackWorld() {
+  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0; _menuFly = null;
+  shadowPass.reset(); freeTrackMeshes(track);
+  track = null; builtTrackId = null;
+  if (typeof LampBake !== "undefined") LampBake.reset();
+}
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
 // drive-out keeps animating. Frees the old world first, adopts the new one whole; a
 // newer build or live() going false abandons it and frees its partial uploads.
 async function loadTrackStepped(idx, live) {
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
-  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const prevId = builtTrackId;
   try { PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   let built = null;
   try {
-    shadowPass.reset(); freeTrackMeshes(track);
-    track = null; builtTrackId = null;
-    if (typeof LampBake !== "undefined") LampBake.reset();
+    dropTrackWorld();
     // apex26.buildWorker (PROTOTYPE, default OFF): built off the main thread and
     // replayed here; null (off, failed) falls back to the stepped build.
     const opts = trackBuildOpts(sessionDark, wantSlots);
@@ -2639,6 +2643,8 @@ function scheduleFlybyTrack(settle) {
   const generation = ++_menuGate.generation;
   _menuGate.warm = 0;
   if (!(trackIdx >= 0)) return;
+  // ANOTHER CIRCUIT PICKED: the last one's world is freed now, not when this one's build starts.
+  if (state === "menu" && track && Tracks.LIST[trackIdx] && builtTrackId !== Tracks.LIST[trackIdx].id) dropTrackWorld();
   const want = trackIdx, tod = raceTimeOfDay, weather = raceWeather;
   const key = menuKey(want);
   const current = () => generation === _menuGate.generation && state === "menu" &&
@@ -2658,11 +2664,10 @@ function scheduleFlybyTrack(settle) {
       if (_menuGate.ready === key && _menuGate.track === track) {
         await menuFinish(current, key); await garagePrewarm(current); return;
       }
-      // The build holds the main thread for 1-3 s: never start it while the
-      // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
-      // that crosses dark rebuilds, and every tap then froze the sheet).
-      if (!(await menuIdle(current))) return;
-      if (!(await loadTrackStepped(want, current))) return;   // in steps: a tap on the sheet mid-build is answered
+      // AT ONCE, NOT AFTER MENU_IDLE_MS: the build is stepped (~8 ms a frame), so a
+      // tap on the picker or RACE SETTINGS is answered mid-build, and RACE! finds the
+      // world built sooner. The warms (menuFinish) still wait for idle: they block.
+      if (!(await loadTrackStepped(want, current))) return;
       _menuGate.ready = key; _menuGate.track = track;
       // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
       await menuSlice();
@@ -2672,9 +2677,9 @@ function scheduleFlybyTrack(settle) {
       await garagePrewarm(current);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
-  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build itself waits
-  // for MENU_IDLE_MS of quiet inside prepare (menuIdle), which is what keeps
-  // the 1-3 s main-thread build off a player still tapping. A longer settle
+  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build is stepped,
+  // so it starts at once; the blocking warms wait for MENU_IDLE_MS of quiet
+  // (menuFinish -> menuIdle), off a player still tapping. A longer settle
   // (1.5 s) only delays the download and everything queued behind it, so a
   // RACE! tap soon after the picker meets the build card. 400 ms: a tile
   // browsed past in under half a second still fetches nothing.
@@ -3033,8 +3038,7 @@ async function startRaceBody() {
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
-  dbgCam = null;              // fresh race — drop any leftover debug free-cam
-  director.reset();           // drop TV-director wall clock / owned dbgCam
+  dbgCam = null; director.reset(); // fresh race — drop free-cam + TV director clock
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
@@ -3779,8 +3783,7 @@ const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
-const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
-const director = Director.create(G);      // live TV director cam (js/camera/director.js) — CAM_MODES "tv"
+const onboard = Onboard.create(G), director = Director.create(G); // coach marks + TV director
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -8331,8 +8334,7 @@ function tickBody(now) {
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
-  onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
-  director.tick(dt);               // TV director: dbgCam only, never car forces (solo / finished)
+  onboard.tick(dt); director.tick(dt); // coach marks + TV director (dbgCam only)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
