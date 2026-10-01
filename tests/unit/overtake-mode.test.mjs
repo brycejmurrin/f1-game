@@ -199,7 +199,7 @@ test("LOW GRIP (B7.2.2(d)): treaded-tyre conditions switch Overtake off and say 
   assert.equal(wet.notes.length, 3, "reset() re-arms the note for the next race");
 
   // A weather arc drying the track below the intermediate threshold hands it back.
-  wet.G.roadWetness = () => 0.2;
+  wet.G.trackWetness = () => 0.2;
   assert.equal(wet.rc.otEnabled(), true);
 });
 

@@ -36,7 +36,7 @@ test('energy forecast requires full clean sectors, excludes the initial partial,
   G.sectorIdx = 0; tick({ prog: 240, energy: .7 }, 3);
   G.sectorIdx = 1; tick({ prog: 330, energy: .6 }, 3);
   assert.ok(Math.abs(api.forecast().energyPerLap - .3) < 1e-10);
-  G.roadWetness = () => .2; tick({ prog: 350 }, 1);
+  G.trackWetness = () => .2; tick({ prog: 350 }, 1);
   assert.equal(api.forecast().energyPerLap, null);
 });
 test('stint estimate is measured, waits half a lap and stays unknown with wear disabled', () => {

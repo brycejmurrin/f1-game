@@ -30,11 +30,10 @@ function settleWetness() {
   g.apex.step(0, 1);
 }
 
-test("trackWetness aliases roadWetness and dry pins look=drive", async () => {
+test("trackWetness is on G; roadWetness is the in-file alias (look=drive)", async () => {
   await raceDry();
   assert.equal(typeof g.G.trackWetness, "function");
   assert.equal(g.G.trackWetness(), 0);
-  assert.equal(g.G.roadWetness(), 0);
   g.apex.weather("dry");
   settleWetness();
   assert.equal(g.G.frame.wetness, 0,

@@ -419,7 +419,7 @@ const RaceControl = (function () {
     // live, so a weather arc that dries the track hands both back.
     function lowGrip() {
       if (typeof TyreModel === "undefined" || G.raceWeather == null) return false;
-      return TyreModel.treadFor(G.raceWeather, typeof G.roadWetness === "function" ? G.roadWetness() : undefined) > 0;
+      return TyreModel.treadFor(G.raceWeather, typeof G.trackWetness === "function" ? G.trackWetness() : undefined) > 0;
     }
     // May a car EARN Overtake at the Detection Line now? Not under the Safety
     // Car or red flag (a bunched queue would all earn it for the restart lap),
