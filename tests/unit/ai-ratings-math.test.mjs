@@ -57,17 +57,23 @@ test("columnStats mean matches mean()", () => {
   assert.deepEqual(QUALITY_AXES, ["pace", "craft", "awareness", "consistency", "experience"]);
 });
 
-test("ai-ratings.mjs --json reports the shipped craft-cluster defect", () => {
+test("ai-ratings.mjs --json: craft/awareness/consistency are decorrelated", () => {
   const r = spawnSync(process.execPath, ["tools/check/ai-ratings.mjs", "--json"], {
     cwd: ROOT, encoding: "utf8", timeout: 15000,
   });
   assert.equal(r.status, 0, r.stderr || r.stdout);
   const j = JSON.parse(r.stdout);
   assert.equal(j.n, 22);
-  assert.ok(j.craftClusterMaxAbsR > 0.85, `expected one-dial defect, got ${j.craftClusterMaxAbsR}`);
-  assert.equal(j.decorrelated, false);
+  assert.ok(j.craftClusterMaxAbsR < 0.5, `decorrelation gate |r|<0.5, got ${j.craftClusterMaxAbsR}`);
+  assert.equal(j.decorrelated, true);
   assert.equal(j.style.present, false);
-  assert.ok(j.matrix["craft~awareness"] > 0.9);
+  // Column means stay near the pre-decorrelation tip (±1.5).
+  assert.ok(Math.abs(j.stats.craft.mean - 82.9) <= 1.5, `craft mean ${j.stats.craft.mean}`);
+  assert.ok(Math.abs(j.stats.awareness.mean - 80.0) <= 1.5, `awareness mean ${j.stats.awareness.mean}`);
+  assert.ok(Math.abs(j.stats.consistency.mean - 81.3) <= 1.5, `consistency mean ${j.stats.consistency.mean}`);
+  // Overall top/bottom stay recognisable (pace dominates the weight).
+  assert.ok(j.overallTop5.includes("VER"), `VER still top-ish: ${j.overallTop5}`);
+  assert.ok(j.overallBottom5.includes("LIN"), `LIN still bottom-ish: ${j.overallBottom5}`);
 });
 
 test("ai-race.mjs ratings dispatches (help and json)", () => {
