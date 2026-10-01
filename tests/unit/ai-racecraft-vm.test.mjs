@@ -247,24 +247,38 @@ test("the AI drives a racing line: outside on the approach, inside at the apex, 
   }
 });
 
-// THE RUBBER BAND IS OFF THE START LINE AND OFF A LAPPED CAR. The band scales
-// an AI's vmax (and, since the corner-authority fix, its brake target) by how
-// far the leading human is up the road. `prog` is cumulative and the grid is
-// laid out at -(14 + i*8), so P22 begins 182 m back and was banded from the
-// first frame — +4.7 % of vmax into Turn 1 on easy, which Game AI Pro ch.42
-// names as exactly the wrong place for it. At the other end the gap clamps the
-// band to full, so an easy car a lap down took min(1, 0.93 * 1.18) = 1.0, i.e.
-// HARD's corner authority, and un-lapped itself in front of the player.
-// Both guards only ever REMOVE a boost, so no DIFF row can move; and the
-// AI-only benches (ai-pace/field/line) have no human at all, so the band never
-// fires there and their tables are untouched by construction.
-test("the rubber band never fires off the start line, and never for a lapped car", async () => {
+// THE RUBBER BAND IS OFF BY DEFAULT (scripted AI pace) AND, WHEN CATCH-UP IS
+// ON, STILL OFF THE START LINE AND OFF A LAPPED CAR. Scripted mode (the ship
+// default, Pure / Black Rock) keeps each AI on tierV × skill × DIFF.ai with
+// no gap-to-player boost. Catch-up restores the legacy reverse-only vmax band
+// against the leading human. `prog` is cumulative and the grid is laid out at
+// -(14 + i*8), so P22 begins 182 m back — banding that into T1 is what Game AI
+// Pro ch.42 names as exactly the wrong place. At the other end the gap clamps
+// the band to full, so an easy car a lap down took HARD's corner authority.
+// Both guards only ever REMOVE a boost. AI-only benches have no human, so the
+// band never fires there either way.
+test("scripted AI pace never rubber-bands; catch-up keeps start and lapping guards", async () => {
   const a = g.apex;
   await g.race("monza", "day", "dry");
   a.go();
   const ai = () => g.G.cars.filter((c) => !c.human);
   const banded = () => ai().filter((c) => (c._bandNow || 0) > 0).length;
 
+  // Default is scripted: even past the old 8 s guard with a huge chase gap,
+  // nothing bands.
+  g.G.aiPace = "scripted";
+  for (let i = 0; i < 60 * 12; i++) a.step(1 / 60, 1);
+  assert.ok(g.G.raceT > 8, "past the catch-up start guard");
+  const victim = ai()[0];
+  victim.prog = g.G.player.prog - 600;
+  a.step(1 / 60, 1);
+  assert.equal(victim._bandNow || 0, 0, "scripted mode must not boost from the player's gap");
+  assert.equal(banded(), 0, "no AI car may band under scripted pace");
+
+  // Catch-up: start guard and lapping quiet; a real chase still bands.
+  g.G.aiPace = "catchup";
+  await g.race("monza", "day", "dry");
+  a.go();
   for (let i = 0; i < 60; i++) a.step(1 / 60, 1);
   assert.equal(banded(), 0, `a car was banded ${g.G.raceT.toFixed(1)}s after green, off the grid`);
   for (let i = 0; i < 60 * 6; i++) a.step(1 / 60, 1);
@@ -272,14 +286,14 @@ test("the rubber band never fires off the start line, and never for a lapped car
   assert.equal(banded(), 0, `a car was banded ${g.G.raceT.toFixed(1)}s after green`);
 
   for (let i = 0; i < 60 * 4; i++) a.step(1 / 60, 1);   // past the guard
-  const victim = ai()[0], L = g.G.track.total;
-  victim.prog = g.G.player.prog - (L + 200);            // a full lap down
+  const v2 = ai()[0], L = g.G.track.total;
+  v2.prog = g.G.player.prog - (L + 200);            // a full lap down
   a.step(1 / 60, 1);
-  assert.equal(victim._bandNow || 0, 0, "a lapped car must not be handed the band's full clamp");
+  assert.equal(v2._bandNow || 0, 0, "a lapped car must not be handed the band's full clamp");
 
-  victim.prog = g.G.player.prog - 600;                  // a real chase, well inside half a lap
+  v2.prog = g.G.player.prog - 600;                  // a real chase, well inside half a lap
   a.step(1 / 60, 1);
-  assert.ok((victim._bandNow || 0) > 0, "the band must still work for a car the player is actually racing");
+  assert.ok((v2._bandNow || 0) > 0, "catch-up must still work for a car the player is actually racing");
 });
 
 // NO OVERTAKING UNDER VSC OR SAFETY CAR (FIA 2026 Sporting Regs). 16217f3c1: the
