@@ -17,6 +17,27 @@ const TrackDesigner = (function () {
   const TOOLS = [["select", "SELECT"], ["draw", "DRAW"], ["straight", "STRAIGHT"], ["corner", "CORNER"], ["hairpin", "HAIRPIN"], ["chicane", "CHICANE"], ["sbend", "S-BEND"]];
   const STEPS = { L: 10, R: 5, deg: 5 };
   const PARAM_LABEL = { L: "LENGTH m", R: "RADIUS m", deg: "ANGLE °" };
+  /** The HOW TO tab's text, one table (docs/TRACK-DESIGNER.md is the long form):
+   *  STEPS in the order a first circuit is built, GESTURES per input, LIMITS. */
+  const HOWTO = Object.freeze({
+    STEPS: Object.freeze([
+      { n: 1, title: "Start", text: "RANDOMISE gives you a legal circuit to start from. Or pick DRAW and draw one closed loop in a single stroke — it closes and smooths itself." },
+      { n: 2, title: "Shape", text: "Drag the white points to bend the road; tap the road to add a point, and double-tap a point (or DELETE POINT) to remove it. Pinch or wheel to zoom, drag empty space to pan, and FIT VIEW recentres the circuit." },
+      { n: 3, title: "Corners", text: "Choose CORNER, HAIRPIN, CHICANE or S-BEND, set its radius, angle and LEFT or RIGHT, then tap the point where it should begin (STRAIGHT works the same way with a length). If you dislike it, UNDO takes it back." },
+      { n: 4, title: "Start line", text: "Select a point and press START HERE to put the start line there. It needs a long straight behind it for the grid and the pit lane." },
+      { n: 5, title: "Look", text: "Pick a theme — the scenery, time of day and terrain follow it. Then name the circuit and set the half-width of the road." },
+      { n: 6, title: "Checks", text: "Red rows block saving; amber rows are only warnings. Tap a row to see where it is, and tap FIX (or FIX ALL) to let the designer repair it." },
+      { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL: your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, and EXPORT / IMPORT move a circuit as a file." },
+    ]),
+    GESTURES: Object.freeze([
+      { input: "Touch", text: "Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan." },
+      { input: "Mouse", text: "Drag a point to move it · click the road to add one · double-click a point to delete it · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
+      { input: "Keyboard", text: "Tab to the canvas · [ and ] step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it." },
+      { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer." },
+    ]),
+    LIMITS: "2.5–7 km a lap · 8–200 points · 24 saved circuits · no online play on your own circuits yet.",
+  });
+  const COACH_KEY = "designerCoached";
 
   let G = null, custom = null, root = null, built = false, openFlag = false, returnFocus = null;
   let cv = null, canvas = null;
@@ -29,6 +50,9 @@ const TrackDesigner = (function () {
   // work a load must not drop. nudge: the arrow-key run one undo entry covers.
   // checksSaid: the red/amber counts last announced through ui.msg.
   let savedSnap = null, nudge = null, checksSaid = null;
+  // ctxAt: the point the canvas's press-and-hold row acts on (-1 = hidden).
+  // randomisedOnOpen: this visit began on a fresh RANDOMISE (the coach card says so).
+  let ctxAt = -1, randomisedOnOpen = false;
 
   // ── helpers ───────────────────────────────────────────────────────────────
   const tick = () => { if (G && G.soundOn && typeof GameAudio !== "undefined" && GameAudio.uiTick) GameAudio.uiTick(); };
@@ -46,6 +70,27 @@ const TrackDesigner = (function () {
     ui.msg.dataset.warn = warn ? "1" : "";
     clearTimeout(msgT);
     if (text) msgT = setTimeout(() => { if (ui.msg.textContent === text) ui.msg.textContent = ""; }, 6000);
+  }
+  /** The game's store (G.store, the GameStore façade) — null in a bare harness. */
+  const gstore = () => (G && G.store) || (typeof GameStore !== "undefined" && GameStore.store) || null;
+  function coached() { const st = gstore(); try { return !!(st && st.get(COACH_KEY, false)); } catch (_) { return true; } }
+  function setCoached() { const st = gstore(); try { if (st) st.set(COACH_KEY, true); } catch (e) { Log.warn("track", "designer: coach flag not stored: " + (e && e.message)); } }
+  /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
+  function toolHint() {
+    const kind = TrackStamps.KINDS[tool];
+    return tool === "draw" ? "DRAW: draw one closed loop in a single stroke — it closes and smooths itself"
+      : kind ? kind.label + ": tap a point to stamp it after that point (shift-tap a second point to replace the span between them)"
+        : "SELECT: drag points · tap the road to add one · double-tap a point to delete it · wheel or pinch to zoom";
+  }
+  /** "CORNER R 45 m × 90° LEFT" — what STAMP will lay down with the stepper values. */
+  function stampExample() {
+    const kind = TrackStamps.KINDS[tool]; if (!kind) return "";
+    const p = stampParams(), bits = [kind.label];
+    if (p.L != null) bits.push(p.L + " m");
+    if (p.R != null) bits.push("R " + p.R + " m");
+    if (p.deg != null) bits.push("× " + p.deg + "°");
+    if (p.dir != null) bits.push(p.dir === -1 ? "RIGHT" : "LEFT");
+    return bits.join(" ");
   }
   function btn(label, cls, onClick) {
     const b = el("button", cls, label); b.type = "button";
@@ -139,6 +184,7 @@ const TrackDesigner = (function () {
   function afterChange(kind) {
     if (sel >= design.pts.length) sel = -1;
     if (span >= design.pts.length) span = -1;
+    if (ctxAt >= 0) hideCtx();                         // its point index may name another point now
     if (cv) { cv.setPoints(design.pts); cv.setSelection(sel, span); }
     schedulePreview();
     scheduleDraft();
@@ -291,10 +337,22 @@ const TrackDesigner = (function () {
     return true;
   }
   function setName(s) { design.name = CustomTracks.sanitizeName(s); scheduleDraft(); if (ui.name && ui.name.value !== design.name && document.activeElement !== ui.name) ui.name.value = design.name; }
+  /** The ghost a stamp would lay down from control i, in world metres from
+   *  that point's pose (the canvas draws it under the pointer). */
+  function ghost(i) {
+    if (!design || !TrackStamps.KINDS[tool] || !(i >= 0 && i < design.pts.length) || design.pts.length < 3) return null;
+    const a = design.pts[i];
+    const st = TrackStamps.sample(tool, stampParams(), { x: a[0], z: a[1], th: S.heading(design.pts, i) });
+    return st && st.pts.length ? { pts: [[a[0], a[1]]].concat(st.pts) } : null;
+  }
+  /** cv.setTool(name, previewFn): a canvas without the ghost ignores the second argument. */
+  function canvasTool() { if (!cv) return; if (TrackStamps.KINDS[tool]) cv.setTool(tool, ghost); else cv.setTool(tool); }
   function setTool(name) {
+    const was = tool;
     tool = TOOLS.some((t) => t[0] === name) ? name : "select";
-    if (cv) cv.setTool(tool);
+    canvasTool();
     refreshControls();
+    if (tool !== was && built && design) message(toolHint());   // once per choice: the stage hint is hidden on a phone
   }
   /** Unsaved work about to be replaced → one UNDO away, and kept under
    *  apex26.customTrackDraftPrev so the new design's autosave cannot clobber
@@ -385,17 +443,28 @@ const TrackDesigner = (function () {
     canvas.setAttribute("aria-label", "Circuit design. Drag a point to move it, tap the road to add one, double-tap a point to delete it. Arrow keys move the selected point.");
     ui.stats = el("div", "td-stats");
     ui.hint = el("div", "td-hint", "Drag points · tap the road to add one · shift-tap a second point to select a span");
-    stage.append(canvas, ui.stats, ui.hint);
+    // The canvas's press-and-hold row (hooks.onContext): absolute over the
+    // stage at the press, acting on one point; any new press on the canvas hides it.
+    ui.ctx = el("div", "td-chips td-ctx"); ui.ctx.hidden = true; ui.ctx.setAttribute("role", "group");
+    ui.ctxDel = btn("DELETE", "sel-chip", () => { const i = ctxAt; hideCtx(); deletePoint(i); });
+    ui.ctxStart = btn("START HERE", "sel-chip", () => { const i = ctxAt; hideCtx(); setStart(i); });
+    ui.ctxClose = btn("CLOSE", "sel-chip", () => hideCtx());
+    ui.ctx.append(ui.ctxDel, ui.ctxStart, ui.ctxClose);
+    canvas.addEventListener("pointerdown", () => hideCtx());
+    stage.append(canvas, ui.stats, ui.hint, ui.ctx);
     // rail
     const rail = el("div", "td-rail");
     const tabs = el("div", "td-tabs"); tabs.setAttribute("role", "tablist");
-    ui.tabDesign = tabBtn("DESIGN", "design"); ui.tabLib = tabBtn("MY CIRCUITS", "library");
-    tabs.append(ui.tabDesign, ui.tabLib);
+    ui.tabDesign = tabBtn("DESIGN", "design"); ui.tabLib = tabBtn("MY CIRCUITS", "library"); ui.tabHow = tabBtn("HOW TO", "howto");
+    tabs.append(ui.tabDesign, ui.tabLib, ui.tabHow);
     ui.paneDesign = el("section", "td-pane"); ui.paneDesign.setAttribute("role", "tabpanel"); ui.paneDesign.dataset.pane = "design";
     ui.paneLib = el("section", "td-pane"); ui.paneLib.setAttribute("role", "tabpanel"); ui.paneLib.dataset.pane = "library"; ui.paneLib.hidden = true;
-    rail.append(tabs, ui.paneDesign, ui.paneLib);
+    ui.paneHow = el("section", "td-pane"); ui.paneHow.setAttribute("role", "tabpanel"); ui.paneHow.dataset.pane = "howto"; ui.paneHow.hidden = true;
+    ui.paneHow.setAttribute("aria-label", "How to build a circuit");
+    rail.append(tabs, ui.paneDesign, ui.paneLib, ui.paneHow);
     buildDesignPane(ui.paneDesign);
     ui.lib = el("div", "td-grid"); ui.paneLib.appendChild(ui.lib);
+    buildHowTo(ui.paneHow);
     body.append(stage, rail);
     // foot
     const foot = el("div", "td-foot");
@@ -422,8 +491,10 @@ const TrackDesigner = (function () {
       },
       onDelete: (i) => deletePoint(i),
       onDraw: (path) => freehand(path),
+      // A canvas that supports press-and-hold calls this; an older one never does.
+      onContext: (i, at) => showCtx(i, at),
     });
-    cv.setTool(tool);
+    canvasTool();
     // Window CAPTURE, ahead of TopModal's document-capture Escape and the
     // dialog's own cancel (a pad's B arrives as `cancel`): with a point
     // selected the focused canvas owns the arrows, so Escape / B first lets go
@@ -439,12 +510,63 @@ const TrackDesigner = (function () {
     return b;
   }
   function showPane(pane) {
-    const lib = pane === "library";
-    ui.paneDesign.hidden = lib; ui.paneLib.hidden = !lib;
-    for (const [b, on] of [[ui.tabDesign, !lib], [ui.tabLib, lib]]) { b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false"); }
-    if (lib) renderLibrary();
+    if (pane !== "library" && pane !== "howto") pane = "design";
+    for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
+      const on = id === pane;
+      p.hidden = !on;
+      b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false");
+    }
+    if (pane === "library") renderLibrary();
   }
-  function group(label) { const g = el("div", "td-group"); g.appendChild(el("div", "td-label", label)); return g; }
+  function group(label) { const g = el("div", "td-group"); g._label = el("div", "td-label", label); g.appendChild(g._label); return g; }
+  /** HOW TO: flat info rows (the CHECKS row recipe) under .td-label headings, from HOWTO. */
+  function buildHowTo(pane) {
+    const list = (label, rows) => {
+      const ul = el("ul", "td-issues"); ul.setAttribute("aria-label", label);
+      for (const t of rows) { const li = el("li", "td-issue", t); li.dataset.level = "info"; ul.appendChild(li); }
+      pane.append(el("div", "td-label", label), ul);
+    };
+    list("Build a circuit in seven steps", HOWTO.STEPS.map((st) => st.n + " · " + st.title.toUpperCase() + " — " + st.text));
+    list("Controls", HOWTO.GESTURES.map((g) => g.input.toUpperCase() + " — " + g.text));
+    list("Limits", [HOWTO.LIMITS]);
+  }
+  /** The first-open card: one info row and HOW TO / GOT IT, until GOT IT or a close. */
+  function showCoach() {
+    if (ui.coach || coached() || !ui.paneDesign) return;
+    const lead = randomisedOnOpen ? "RANDOMISE gave you a circuit to start from. " : "";
+    const card = el("div", "td-group");
+    const li = el("div", "td-issue", lead + "Drag the white points, add corners with the tools, then SAVE and RACE. Open HOW TO for the full guide.");
+    li.dataset.level = "info";
+    const row = el("div", "td-chips");
+    row.append(btn("HOW TO", "sel-chip", () => showPane("howto")), btn("GOT IT", "sel-chip", () => dismissCoach(true)));
+    card.append(li, row);
+    ui.coach = card;
+    ui.paneDesign.insertBefore(card, ui.paneDesign.firstChild);
+  }
+  function dismissCoach(focusRail) {
+    if (!ui.coach) return;
+    setCoached();
+    ui.coach.remove(); ui.coach = null;
+    if (focusRail && ui.tools && ui.tools.firstChild) ui.tools.firstChild.focus();
+  }
+  /** The canvas's press-and-hold: DELETE · START HERE · CLOSE for point i, anchored at the press. */
+  function showCtx(i, at) {
+    if (!ui.ctx || !design || !(i >= 0 && i < design.pts.length)) return;
+    ctxAt = i; sel = i; span = -1;
+    if (cv) cv.setSelection(sel, span);
+    refreshControls();
+    const x = Math.max(0, +(at && at.x) || 0), y = Math.max(0, +(at && at.y) || 0);
+    const r = canvas && canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+    const w = (r && r.width) || 0, h = (r && r.height) || 0;
+    // Open away from the nearer edges so the row never hangs off the canvas.
+    const st = ui.ctx.style;
+    if (w && x > w / 2) { st.left = ""; st.right = Math.round(w - x) + "px"; } else { st.right = ""; st.left = Math.round(x) + "px"; }
+    if (h && y > h / 2) { st.top = ""; st.bottom = Math.round(h - y) + "px"; } else { st.bottom = ""; st.top = Math.round(y) + "px"; }
+    ui.ctx.setAttribute("aria-label", "Point " + (i + 1));
+    ui.ctxStart.disabled = i === 0;
+    ui.ctx.hidden = false;
+  }
+  function hideCtx() { ctxAt = -1; if (ui.ctx) ui.ctx.hidden = true; }
   function stepper(label, get, set, step, fmt) {
     const row = el("div", "td-row");
     const lab = el("span", "", label);
@@ -458,15 +580,19 @@ const TrackDesigner = (function () {
   }
   function buildDesignPane(pane) {
     // tools
-    const tools = group("TOOLS");
+    // The rail reads as the order a circuit is built in: 1 SHAPE … 5 CHECKS.
+    const tools = group("1 SHAPE");
     ui.tools = el("div", "td-chips");
     for (const [id, label] of TOOLS) {
       const b = btn(label, "sel-chip", () => setTool(id)); b.dataset.tool = id; b.setAttribute("aria-pressed", "false");
       ui.tools.appendChild(b);
     }
-    tools.appendChild(ui.tools);
+    // The stage's hint is hidden on a phone (css/editor.css): this copy stays in the rail.
+    ui.toolHint = el("div", "td-hint", toolHint());
+    tools.append(ui.tools, ui.toolHint);
     // stamp params
-    ui.shape = group("SHAPE");
+    ui.shape = group("2 CORNERS");
+    ui.shapeLabel = ui.shape._label;
     ui.paramRows = {};
     for (const key of ["L", "R", "deg"]) {
       const row = stepper(PARAM_LABEL[key], () => params[key], (v) => { params[key] = clampParam(key, v); refreshControls(); }, STEPS[key]);
@@ -479,7 +605,7 @@ const TrackDesigner = (function () {
     ui.apply = btn("STAMP AT SELECTED POINT", "sel-edit", () => applyStamp(sel >= 0 ? sel : 0, span >= 0 ? span : null));
     ui.shape.appendChild(ui.apply);
     // theme
-    const theme = group("THEME");
+    const theme = group("3 LOOK");
     ui.themes = el("div", "td-chips");
     for (const id of TrackThemes.ORDER) {
       const p = TrackThemes.get(id);
@@ -494,7 +620,7 @@ const TrackDesigner = (function () {
     }
     theme.appendChild(ui.themes);
     // circuit
-    const circuit = group("CIRCUIT");
+    const circuit = group("4 DETAILS");
     ui.name = el("input", "td-input"); ui.name.type = "text"; ui.name.maxLength = CustomTracks.LIMITS.name; ui.name.autocomplete = "off"; ui.name.spellcheck = false;
     ui.name.setAttribute("aria-label", "Circuit name"); ui.name.placeholder = "CIRCUIT NAME";
     ui.name.addEventListener("input", () => { design.name = CustomTracks.sanitizeName(ui.name.value); scheduleDraft(); });
@@ -514,10 +640,15 @@ const TrackDesigner = (function () {
     actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.undo, ui.redo, ui.fitBtn);
     circuit.appendChild(actions);
     // issues
-    const issues = group("CHECKS");
+    const issues = el("div", "td-group");
+    // The label row carries FIX ALL (shown while a red issue has an automatic fix).
+    const head = el("div", "td-chips");
+    ui.fixAll = btn("FIX ALL", "sel-chip", () => fixEverything());
+    ui.fixAll.hidden = true; ui.fixAll.setAttribute("aria-label", "Fix every issue the designer can repair");
+    head.append(el("div", "td-label", "5 CHECKS"), ui.fixAll);
     // Not a live region: it is rebuilt on every preview (announceChecks speaks the counts).
     ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-label", "Design checks");
-    issues.appendChild(ui.issues);
+    issues.append(head, ui.issues);
     // share in: a pasted code or link (SHARE on the foot copies one out)
     const sharing = group("SHARE CODE");
     ui.code = el("input", "td-input"); ui.code.type = "text"; ui.code.autocomplete = "off"; ui.code.spellcheck = false;
@@ -625,27 +756,64 @@ const TrackDesigner = (function () {
       ui.dirL.classList.toggle("active", params.dir === 1); ui.dirR.classList.toggle("active", params.dir === -1);
       ui.dirL.setAttribute("aria-pressed", params.dir === 1 ? "true" : "false"); ui.dirR.setAttribute("aria-pressed", params.dir === -1 ? "true" : "false");
       ui.apply.textContent = span >= 0 && sel >= 0 ? "REPLACE THE SELECTED SPAN" : sel >= 0 ? "STAMP AFTER POINT " + (sel + 1) : "STAMP AT THE START";
+      ui.shapeLabel.textContent = "2 CORNERS · " + stampExample();
     }
     for (const b of ui.themes.children) { const on = b.dataset.theme === design.theme; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
     if (document.activeElement !== ui.name) ui.name.value = design.name;
     ui.width._refresh();
     ui.undo.disabled = !undo.length; ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
-    ui.hint.textContent = tool === "draw" ? "Draw one closed loop in a single stroke — it closes and smooths itself"
-      : kind ? "Tap a point to stamp after it (shift-tap a second point to replace the span between them)"
-        : "Drag points · tap the road to add one · double-tap a point to delete it · wheel or pinch to zoom";
+    ui.hint.textContent = ui.toolHint.textContent = toolHint();
+  }
+  // ── FIX: TrackFixes (the editor fixes module) repairs what it can; each is one UNDO entry ──
+  const fixer = () => (typeof TrackFixes !== "undefined" && TrackFixes ? TrackFixes : null);
+  function canFix(it) { const F = fixer(); try { return !!(F && F.canFix && F.canFix(it)); } catch (_) { return false; } }
+  function fixIssue(it) {
+    const F = fixer();
+    let r = null;
+    try { r = F && F.apply ? F.apply(design, it, verdict) : null; } catch (e) { Log.warn("track", "designer fix " + (it && it.code) + " threw: " + (e && e.message)); r = null; }
+    if (!r || !r.design || r.design === design) { message("No automatic fix for this one", true); return false; }
+    commitFix(r.design, [it.code]);
+    message("Fixed: " + (r.msg || it.code) + " — UNDO to revert");
+    return true;
+  }
+  /** One UNDO entry for a remedy, keyed off issue.code (never issue.fix: the
+   *  crossing's tag is "bridge"). A start remedy rotates point 0 like setStart;
+   *  a length remedy rescales everything, so the view refits. */
+  function commitFix(next, codes) {
+    sel = codes.includes("start") ? 0 : -1; span = -1;
+    commit(next, "fix");
+    if (codes.includes("length") && cv) cv.fit();
+  }
+  function fixEverything() {
+    const F = fixer();
+    let r = null;
+    try { r = F && F.fixAll ? F.fixAll(design, TrackValidate.check) : null; } catch (e) { Log.warn("track", "designer fix all threw: " + (e && e.message)); r = null; }
+    const applied = r && Array.isArray(r.applied) ? r.applied : [];
+    // Nothing applied → fixAll hands back the SAME design object: no commit.
+    if (!r || !r.design || r.design === design || !applied.length) { message("Nothing here can be fixed automatically", true); return false; }
+    commitFix(r.design, applied);
+    message("Fixed " + applied.join(", ") + " — UNDO to revert");
+    return true;
   }
   function renderIssues() {
     if (!ui.issues) return;
     while (ui.issues.firstChild) ui.issues.removeChild(ui.issues.firstChild);
     const list = verdict ? verdict.issues : [];
+    if (ui.fixAll) ui.fixAll.hidden = !list.some((it) => it.level === "red" && canFix(it));
     if (!list.length) { const li = el("li", "td-issue", "All checks pass — ready to save and race"); li.dataset.level = "ok"; ui.issues.appendChild(li); return; }
     const order = { red: 0, amber: 1, info: 2 };
     for (const it of list.slice().sort((a, b) => (order[a.level] || 0) - (order[b.level] || 0))) {
       const li = el("li", "td-issue", it.msg); li.dataset.level = it.level; li.tabIndex = 0;
       const go = () => { if (Number.isFinite(it.s) && cv) cv.focusAt(it.s); if (Number.isFinite(it.ctrl)) { sel = it.ctrl; span = -1; cv.setSelection(sel, span); refreshControls(); } if (it.fix === "start" && sel >= 0) message("START HERE moves the line to the selected point"); };
-      li.addEventListener("click", go);
-      li.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+      // The row's own presses only: a key or click on its FIX chip is the chip's.
+      li.addEventListener("click", (ev) => { if (ev && ev.target && ev.target !== li) return; go(); });
+      li.addEventListener("keydown", (ev) => { if (ev.target && ev.target !== li) return; if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+      if (canFix(it)) {
+        const fix = btn("FIX", "sel-chip", (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); fixIssue(it); });
+        fix.setAttribute("aria-label", "Fix: " + it.msg);
+        li.appendChild(fix);
+      }
       ui.issues.appendChild(li);
     }
   }
@@ -722,10 +890,12 @@ const TrackDesigner = (function () {
     else if (!design) {
       const it = draftItem();
       if (it) { load(it, "draft", it.originId); if (!custom.get(it.id)) savedSnap = null; message("Draft restored"); }
-      else { design = blank(); afterChange("blank"); randomise(design.seed); }
+      else { design = blank(); afterChange("blank"); randomise(design.seed); randomisedOnOpen = true; }
     }
     root.hidden = false; openFlag = true; checksSaid = null;
     showPane("design");
+    hideCtx();
+    showCoach();
     confirmDel = null;
     Log.info("track", "designer open");
     // Boxes exist only once TopModal's observer has opened the dialog (a
@@ -739,6 +909,10 @@ const TrackDesigner = (function () {
     if (!root || !openFlag) return;
     saveDraft();
     if (cv) cv.reset();
+    hideCtx();
+    // The card is a one-time note: seen for one visit is enough (GOT IT also stores it).
+    if (ui.coach) dismissCoach(false);
+    randomisedOnOpen = false;
     root.hidden = true; openFlag = false;
     Log.info("track", "designer close");
     if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
@@ -759,6 +933,6 @@ const TrackDesigner = (function () {
     };
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, TOOLS };
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO };
 })();
 Object.freeze(TrackDesigner);
