@@ -452,8 +452,13 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
    it, and a hovered list row keeps its hover. Parity counts siblings, so a lap
    board opened inside a table shifts the stripes below it — acceptable for a
    reading aid, and cheaper than a JS-written parity class. */
-:root[data-look-datahub-stripes="on"] #datahub :is(.dh-row:not(.dh-row-lead), .dh-race:not(.dh-race-next)):nth-child(even):not(:hover) {
+:root[data-look-datahub-stripes="on"] #datahub :is(.dh-row:not(.dh-row-lead), .dh-race:not(.dh-race-next)):nth-child(even) {
   background: color-mix(in oklab, var(--plate) 50%, transparent);
+}
+/* A striped row still answers the pointer: .dh-row's own hover fill, at the
+   stripe's weight and later (gated like every :hover, css/tokens.css policy). */
+@media (hover: hover) {
+  :root[data-look-datahub-stripes="on"] #datahub .dh-row:not(.dh-row-lead):nth-child(even):hover { background: var(--plate); }
 }
 :root[data-look-datahub-stripes="on"] #datahub .dh-table tbody tr:nth-child(even):not(.dh-cut, .dh-lap-board, .dh-lr-p1, .dh-lr-p2, .dh-lr-p3, [aria-expanded="true"]) {
   background: color-mix(in oklab, var(--plate) 50%, transparent);
