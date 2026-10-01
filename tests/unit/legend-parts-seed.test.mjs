@@ -21,7 +21,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
-function boot() {
+function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
   const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON });
   ctx.globalThis = ctx;
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"]) {
@@ -39,8 +39,8 @@ function boot() {
     $: () => null, store, Teams, DEFAULT_CUSTOM: { id: "custom" },
     invalidateDecalTextures() {}, invalidateCustomMeshCaches() {}, spMeshBust() {},
     getSoundOn: () => false, GameAudio: { uiTick() {} },
-    getEls: () => ({}), getTeamIdx: () => 0, setTeamIdx() {},
-    getDriverIdx: () => 0, setDriverIdx() {}, buildSelect() {}, buildSetup() {},
+    getEls: () => ({}), getTeamIdx: () => sel.teamIdx, setTeamIdx() {},
+    getDriverIdx: () => sel.driverIdx, setDriverIdx() {}, buildSelect() {}, buildSetup() {},
     isCarsetupVisible: () => false, hexToRgb: () => [0, 0, 0], rgbToHex: () => "#000",
     hexToArr: () => [0, 0, 0], clamp: (v) => v,
     getLivDraftOverride: () => null, setLivDraftOverride() {},
@@ -93,4 +93,20 @@ test("every legend's seeded sheet fits the garage budget", () => {
     assert.ok(sheet, `${Legends.LIST[i].id}: a sheet must be written`);
     assert.deepEqual(sheet, Legends.parts(Legends.LIST[i].id));
   }
+});
+
+test("boot rebuilds the SAVED legend, not legend 0: no Fangio sheet in Schumacher's paint", () => {
+  // The saved selection is Legends (the slot about to be appended after the one
+  // real team here: index 1) and driver 2, Fangio. syncCustomTeam calls
+  // syncLegendsTeam() with no seat, before the entry exists.
+  const { ct, Legends, Teams } = boot({ teamIdx: 1, driverIdx: 2 });
+  ct.syncLegendsTeam();
+  const entry = Teams.LIST.find((t) => t.id === "legends");
+  assert.equal(entry.legend, "fangio", "the saved legend comes back");
+  assert.deepEqual(entry.color, Legends.byId("fangio").livery.c1, "in his own paint");
+  assert.equal(entry.crest, "mercedes");
+  // Legends not the saved team: a first boot builds legend 0, as before.
+  const other = boot({ teamIdx: 0, driverIdx: 2 });
+  other.ct.syncLegendsTeam();
+  assert.equal(other.Teams.LIST.find((t) => t.id === "legends").legend, Legends.LIST[0].id);
 });
