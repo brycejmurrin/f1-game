@@ -2,6 +2,19 @@
 const GameStore = (function () {
   "use strict";
 
+  // JSON.parse turns an oversized numeric literal ("8"×N, "1e309") into
+  // Infinity without throwing. That is player-shaped disk data — a hand edit
+  // or a truncated write — and returning it into Career money / season points
+  // is the same class of bug as treating a stored string as a promise. Refuse
+  // non-finite top-level numbers the same way a SyntaxError is refused.
+  function parseStored(raw, label) {
+    const v = JSON.parse(raw);
+    if (typeof v === "number" && !Number.isFinite(v)) {
+      throw new Error("non-finite number" + (label ? " in " + label : ""));
+    }
+    return v;
+  }
+
   const store = {
     _cache: new Map(),   // full-key -> parsed value; kills per-frame getItem + JSON.parse in the render loop
     _keyRev: new Map(),  // full-key -> writes observed in this document (local or foreign)
@@ -21,8 +34,10 @@ const GameStore = (function () {
       const key = "apex26." + k;
       let v = this._cache.get(key);
       if (v === undefined && !this._cache.has(key)) {
-        try { const raw = localStorage.getItem(key); v = raw === null ? undefined : JSON.parse(raw); }
-        catch (e) {
+        try {
+          const raw = localStorage.getItem(key);
+          v = raw === null ? undefined : parseStored(raw, k);
+        } catch (e) {
           // A read that throws is either storage being unavailable (same conditions
           // as set()) or a corrupt value. Either way the default is the right answer
           // — but say so once, because "your settings reset themselves" is otherwise
@@ -370,7 +385,7 @@ const GameStore = (function () {
           if (!newer) continue;             // still no room: the mirror keeps it for next time
           // Still no room, but the session must run on the newer value, not the
           // stale disk copy: serve it from the cache; the row stays lsOk:false.
-          try { store._cache.set(row.k, JSON.parse(row.v)); } catch (e) { continue; }
+          try { store._cache.set(row.k, parseStored(row.v, row.k)); } catch (e) { continue; }
           _ownNewer.add(row.k);             // this session runs on the newest value: its saves supersede the row
         } else {
           // The disk has it now — and this session runs on it, so its later
