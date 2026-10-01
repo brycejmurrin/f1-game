@@ -167,7 +167,7 @@ function rcWith(weather, wetness) {
   const saved = new Map([["caution", true]]);
   const notes = [];
   const G = {
-    state: "race", ranked: [{ lap: 3 }], raceWeather: weather, roadWetness: () => wetness,
+    state: "race", ranked: [{ lap: 3 }], raceWeather: weather, trackWetness: () => wetness,
     netPlay: { ownsRaceControl: () => true, active: false },
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
     announce: (m) => { notes.push(m); return true; },
