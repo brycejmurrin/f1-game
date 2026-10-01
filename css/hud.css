@@ -473,17 +473,17 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
 #hud-delta[data-sign="slow"] .hud-value { color: var(--slower); }
 #hud-delta[hidden] { display: none !important; }
-/* Per-element HUD toggles — body[data-hud-hide~="id"] (js/ui/hud-elements.js). */
+/* Per-element HUD toggles (js/ui/hud-elements.js). body[data-hud-hide~=id]. */
 body[data-hud-hide~="pos"] .hud-top .hud-box:nth-child(1),
-body[data-hud-hide~="lap"] .hud-top .hud-box:nth-child(2),
+body[data-hud-hide~="lap"] .hud-top .hud-box:nth-child(2) { display: none !important; }
 body[data-hud-hide~="time"] .hud-top .hud-box:nth-child(3),
-body[data-hud-hide~="best"] .hud-top .hud-box:nth-child(4),
+body[data-hud-hide~="best"] .hud-top .hud-box:nth-child(4) { display: none !important; }
 body[data-hud-hide~="delta"] #hud-delta,
-body[data-hud-hide~="sectors"] #hud-sectors,
+body[data-hud-hide~="sectors"] #hud-sectors { display: none !important; }
 body[data-hud-hide~="speed"] #hud-speed,
-body[data-hud-hide~="gear"] #hud-gearbox,
+body[data-hud-hide~="gear"] #hud-gearbox { display: none !important; }
 body[data-hud-hide~="energy"] #hud-energy,
-body[data-hud-hide~="tyre"] #hud-tyre,
+body[data-hud-hide~="tyre"] #hud-tyre { display: none !important; }
 body[data-hud-hide~="ot"] #hud-ot,
 body[data-hud-hide~="aero"] #hud-aero,
 body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
