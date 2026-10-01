@@ -945,13 +945,19 @@ const Input = (function () {
       keyLeft = keyRight = keyThrottle = keyBrake = false;
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
-       driving gate — but still below the typing check, because P in a text
-       field is a letter. Inside the switch below they would be swallowed by
-       the gate's screen list (js/ui/layers.js) in the LIGHTING TUNER and free
-       camera — the one place their documented all-the-way-out behaviour
-       matters most. */
+       driving gate — but still below a TEXT-FIELD check, because P in a field
+       is a letter. BUTTON / SELECT / A focus must NOT block them: after
+       SETTINGS → BACK → RESUME (or Escape through that stack), focus often
+       stays on a door inside the now-hidden dialog, and the wider `typing`
+       flag then refused Escape so the race could not be paused again
+       (menu-traversal "DISPLAY page under" pause, 2026-10-01). Driving still
+       uses `typing` below so a focused button does not steer. Inside the
+       switch below these would be swallowed by the gate's screen list
+       (js/ui/layers.js) in the LIGHTING TUNER and free camera — the one place
+       their documented all-the-way-out behaviour matters most. */
     const act = codeToAction[normCode(e.code)] || null;
-    if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !typing) {
+    const inTextField = tag === "INPUT" || tag === "TEXTAREA" || !!(active && active.isContentEditable);
+    if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
         if (onPauseCb) onPauseCb();
         return;
