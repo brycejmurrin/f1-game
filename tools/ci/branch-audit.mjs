@@ -6,11 +6,16 @@
 //
 // WHY. prune-branches.mjs deleted the 220 branches that were provably merged
 // (2026-10-01). The ~290 left needed a person to answer "is this work in the
-// game or not?", and ancestry cannot: the deploy branch's history was RESTARTED
-// on 2026-09-29, so every older branch shares no merge base with it (116 of
-// them), and squash merges and later refactors move the same code under new
-// commits and new files. Measured on that tree: ancestor 73, absorbed 19,
-// clean-but-adds 30, conflicting 139.
+// game or not?", and ancestry alone cannot: squash merges, re-applied commits
+// and later refactors put the same code into deploy under new commits and new
+// files, so a branch can be "not an ancestor" yet have nothing left to give.
+//
+// RUN IT ON FULL HISTORY. Agent containers clone shallow (~50 commits), and a
+// shallow clone's cut-off commits look like roots: on 2026-10-01 that read as
+// "the deploy branch was restarted on 2026-09-29, 116 branches share no history
+// with it". It was not — on the workflow's fetch-depth 0 checkout every branch
+// but one shares history with deploy. A "no-history" verdict or a size figure
+// from a shallow clone is an artefact (`git rev-parse --is-shallow-repository`).
 //
 // THE EVIDENCE, cheapest and most certain first:
 //   ancestor   the tip is in the deploy history — merged, nothing to lose.
@@ -18,9 +23,8 @@
 //   absorbed   `git merge-tree --write-tree <deploy> <branch>` succeeds and the
 //              result is deploy's own tree: merging it would change NOTHING.
 //              Zero-loss by construction, so prune-branches deletes these too.
-//   presence   for the branch's own diff (from its merge base with deploy, or
-//              with an --old-base such as main for pre-restart branches), the
-//              share of ADDED lines (trimmed, >= MIN_LINE chars) that exist in
+//   presence   for the branch's own diff (from its merge base with deploy),
+//              the share of ADDED lines (trimmed, >= MIN_LINE chars) that exist in
 //              deploy — in the same file, and anywhere (code moves in splits).
 //              Evidence for a person, never a deletion rule on its own.
 //   PR         the newest PR whose head is this branch: open / merged / closed
@@ -41,7 +45,7 @@ export const VERDICTS = {
   "post-merge": "its PR merged, then more commits were pushed — review what came after",
   "pr-closed": "its PR was closed without merging — review, likely abandoned",
   unmerged: "work that is not in deploy — keep",
-  "no-history": "shares no history with deploy or any old base — review by hand",
+  "no-history": "shares no history with deploy (on a full clone) — review by hand",
 };
 
 /** Share (0-100) of `added` lines found in `sameFile` / `anyFile` sets. Empty diff = 100. */
@@ -136,7 +140,7 @@ export function treeLines(ref) {
 }
 
 /** Audit `branches` [{name, sha, time}] against `base`. Git-heavy; the verdict itself is verdictFor. */
-export function audit(branches, { base, oldBases = ["main"], prs = new Map(), runs = new Map(), now = Math.floor(Date.now() / 1000), minAgeDays = 1, skip = () => false }) {
+export function audit(branches, { base, prs = new Map(), runs = new Map(), now = Math.floor(Date.now() / 1000), minAgeDays = 1, skip = () => false }) {
   const baseRef = "refs/remotes/origin/" + base;
   const baseTree = git(["rev-parse", baseRef + "^{tree}"]).trim();
   let lines = null;   // built on first need: reading the whole tree is the slow part
@@ -151,15 +155,15 @@ export function audit(branches, { base, oldBases = ["main"], prs = new Map(), ru
     if (!row.ancestor) {
       const mt = spawnSync("git", ["merge-tree", "--write-tree", baseRef, ref], { encoding: "utf8" });
       row.absorbed = mt.status === 0 && mt.stdout.split("\n")[0].trim() === baseTree;
-      for (const ob of [base, ...oldBases]) {
-        const mb = tryGit(["merge-base", "refs/remotes/origin/" + ob, ref]);
-        if (mb) { row.from = ob; row.ahead = Number(tryGit(["rev-list", "--count", `${mb}..${ref}`])) || 0;
-          if (!row.absorbed) {
-            lines = lines || treeLines(baseRef);
-            const p = presence(addedLines(git(["diff", "--unified=0", "--no-renames", mb, ref])), (f) => lines.perFile.get(f), lines.all);
-            Object.assign(row, { lines: p.lines, samePct: p.samePct, anyPct: p.anyPct });
-          }
-          break; }
+      const mb = tryGit(["merge-base", baseRef, ref]);
+      if (mb) {
+        row.from = base;
+        row.ahead = Number(tryGit(["rev-list", "--count", `${mb}..${ref}`])) || 0;
+        if (!row.absorbed) {
+          lines = lines || treeLines(baseRef);
+          const p = presence(addedLines(git(["diff", "--unified=0", "--no-renames", mb, ref])), (f) => lines.perFile.get(f), lines.all);
+          Object.assign(row, { lines: p.lines, samePct: p.samePct, anyPct: p.anyPct });
+        }
       }
       row.noHistory = !row.from;
     }
@@ -185,7 +189,7 @@ export function renderMarkdown(rows, base) {
       const pres = r.ancestor ? "ancestor" : r.absorbed ? "absorbed" : r.anyPct == null ? "—" : `${r.samePct}% / ${r.anyPct}% of ${r.lines}`;
       const pr = r.pr ? `#${r.pr.number} ${r.pr.state}` : "—";
       const ci = r.ci ? `${r.ci.workflow}: ${r.ci.conclusion}` : "—";
-      out.push(`| \`${r.name}\` | ${Number.isFinite(r.ageDays) ? r.ageDays : "?"} | ${r.from && r.from !== base ? `${r.ahead} (from ${r.from})` : r.ahead} | ${pres} | ${pr} | ${ci} |`);
+      out.push(`| \`${r.name}\` | ${Number.isFinite(r.ageDays) ? r.ageDays : "?"} | ${r.ahead} | ${pres} | ${pr} | ${ci} |`);
     }
   }
   return out.join("\n") + "\n";
