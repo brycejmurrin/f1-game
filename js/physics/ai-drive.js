@@ -1296,8 +1296,11 @@ const AiDrive = (function () {
   // gearbox — too late to be a cover. Awareness widens it: 0.35 s .. 0.7 s.
   function defendWindowT(t) { return lerp(0.35, 0.7, t ? t.awareness : 0.75); }
 
+  // MID-TRAIN TOO (2026-10-01): a car with a car ahead never defended at all,
+  // so every car in a train was a free pass. It defends when the attack
+  // behind is nearer than the car ahead (blockerGap) — the threat that matters.
   function defendPull(ctx) {
-    if (ctx.blocker || !ctx.chaser) return 0;
+    if (!ctx.chaser || (ctx.blocker && !(ctx.chaserGap < ctx.blockerGap))) return 0;
     const gT = (ctx.chaserGap == null ? 99 : ctx.chaserGap) / Math.max(ctx.speed || 0, 10);
     const winT = defendWindowT(ctx.traits);
     if (gT >= winT) return 0;
@@ -1313,18 +1316,29 @@ const AiDrive = (function () {
     // on. dx is the chaser's lateral offset from us, +x = right, so the side to
     // take IS its sign. Dead behind is not yet a move to cover — hold the line
     // and let defendOnce spend the move when they commit.
+    // PREDICT THE ATTACKER (Liniger's defender plans against the attacker's
+    // best reply): dead behind on a straight, the move it will make is the
+    // one otSide / passSideBonus make for it — the inside of the next corner
+    // (kTurn) once that corner is within two seconds of road. Cover that.
     let coverSide, straight = false;
     if (Math.abs(kA) > 0.004) {
       coverSide = -Math.sign(kA);
     } else {
       const ox = ctx.other && Number.isFinite(ctx.other.x) ? ctx.other.x : 0;
       const dx = ox - (ctx.x || 0);
-      if (Math.abs(dx) < 0.35) return 0;
-      coverSide = dx > 0 ? 1 : -1;
+      const kT = ctx.kTurn || 0;
+      if (Math.abs(dx) >= 0.35) coverSide = dx > 0 ? 1 : -1;
+      else if (Math.abs(kT) > 0.004 && ctx.toTurnIn < 2 * Math.max(ctx.speed || 0, 10)) coverSide = -Math.sign(kT);
+      else return 0;
       straight = true;
     }
     const coverRoom = coverSide > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
     if (ctx.street && coverRoom < 2.2) return 0;
+    // LEAVE A CAR'S WIDTH at the edge (FIA): never pull closer to the road
+    // edge than a car width plus half a metre. roadL/R are the room to the
+    // ROAD edge (roomL/R reach into the run-off on a permanent circuit).
+    const road = coverSide > 0 ? ctx.roadR : ctx.roadL;
+    const edgeCap = road != null ? Math.max(0, road - 2.5) : Infinity;
     const mag = lerp(0.2, 1.1, ctx.traits.craft)
       * clamp(1 - gT / winT, 0, 1) * clamp(coverRoom / 2, 0, 1)
       * houseMulCtx(ctx, 0.90, 1.12, "hold")
@@ -1332,7 +1346,7 @@ const AiDrive = (function () {
     // A straight cover is a lane move, not a chop: three fifths of the corner
     // pull, and defendOnce still spends it once per straight.
     const scale = (ctx.street ? 0.45 : 1) * (straight ? 0.6 : 1);
-    return coverSide * mag * scale;
+    return coverSide * Math.min(mag * scale, edgeCap);
   }
 
   function wallHitLoss(street) {

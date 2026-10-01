@@ -925,6 +925,26 @@ test("the straight branch respects the gates the corner branch already had", () 
   assert.equal(A.defendPull({ ...onStraight, street: true, roomR: 1.5, other: { x: 1.4 } }), 0);
 });
 
+// ── DEFENDING (2026-10-01) ───────────────────────────────────────────────────
+test("mid-train: a car defends when the attack behind is nearer than the car ahead", () => {
+  const near = { ...onStraight, chaserGap: 6, other: { x: 1.4 } };
+  assert.ok(A.defendPull({ ...near, blocker: {}, blockerGap: 20 }) > 0, "attacker 6 m back, car ahead 20 m: cover");
+  assert.equal(A.defendPull({ ...near, blocker: {}, blockerGap: 5 }), 0, "the car ahead is the nearer business");
+});
+
+test("dead behind, the cover goes to the inside of the next corner it will attack into", () => {
+  const behind = { ...onStraight, other: { x: 0 } };
+  assert.equal(A.defendPull({ ...behind, kTurn: 0.01, toTurnIn: 400 }), 0, "the corner is far: hold the line");
+  assert.ok(A.defendPull({ ...behind, kTurn: 0.01, toTurnIn: 90 }) < 0, "left-hander near: cover the inside (-x)");
+  assert.ok(A.defendPull({ ...behind, kTurn: -0.01, toTurnIn: 90 }) > 0, "right-hander near: cover +x");
+});
+
+test("the cover leaves a car's width at the road edge", () => {
+  const p = A.defendPull({ ...onStraight, kA: 0.01, other: { x: 1.4 }, roadL: 2.9 });
+  assert.ok(p < 0 && -p <= 0.4 + 1e-9, `cover ${p} must stop 2.5 m from the edge`);
+  assert.equal(A.defendPull({ ...onStraight, kA: 0.01, other: { x: 1.4 }, roadL: 2.0 }), -0, "no room for a car: no move");
+});
+
 /* THE HUMAN-YIELD GRACE.
  *
  * sideYieldsA elects exactly ONE car of an alongside pair to concede, and only

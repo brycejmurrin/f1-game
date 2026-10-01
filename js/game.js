@@ -4663,7 +4663,7 @@ const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, g
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, roll: 0.5, queueT: 0 };
-const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, x: 0 };
+const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0 };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
@@ -4878,7 +4878,7 @@ function updateCar(c, dt, ranked) {
       // A car that just passed us (or that we just gave up on) is our blocker across the lane too, until the lockout ends: concede the place, do not run parallel and swap back (AiDrive.repassLock).
       if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 ? 6 : BLOCKER_HALF_W)) { blocker = o; blockerGap = dprog; }
       if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < TOW_HALF_W) { towCar = o; towGap = dprog; }   // wake giver
-      if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
+      if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < (-dprog < 0.5 * Math.max(c.speed, 10) ? 5.5 : 3)) { chaser = o; chaserGap = -dprog; }  // attacker behind: our lane, or the next one inside half a second
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
     _aiBoxed.contactT = c.contactT; _aiBoxed.roomL = roomL; _aiBoxed.roomR = roomR;
@@ -5586,16 +5586,17 @@ function updateCar(c, dt, ranked) {
       if (freeRoom > 1.6) yieldPull = freeSide * AiDrive.letPassPull(aiT, !!track.street) * clamp(freeRoom / 2.4, 0, 1);
     }
     let defend = 0;
-    if (chaser && !blocker && !letPass) {
+    if (chaser && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser.speed;
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x;
+      _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
       defend = AiDrive.defendPull(_aiDefend);
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in
     // the braking zone, where defending is over anyway (holdLine below).
-    if (braking) c.defendSide = 0;
+    if (braking) { c.defendSide = 0; defend = 0; }   // NO MOVE UNDER BRAKING (FIA), the cover included
     else { AiDrive.defendOnce(defend, c.defendSide || 0, _aiDefOnce); defend = _aiDefOnce.defend; c.defendSide = _aiDefOnce.side; }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
