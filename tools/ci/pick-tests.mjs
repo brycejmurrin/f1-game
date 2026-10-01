@@ -126,6 +126,10 @@ export const RULES = [
   [/^js\/data\/legends\.js/, ["guards"], "the sourced record and the ratings derived from it must stay consistent"],
   [/^js\/data\/teams\.js/, ["car", "modes"], "the grid feeds season and career"],
   [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
+  // GhostShare.decode is an untrusted-input door (#ghost= / pasted APXG1); the
+  // seeded fuzz that hammers it lives in net-unit (with the other paste/packet
+  // codecs) as well as tooling-fast.
+  [/^js\/car\/ghost-share\.js/, ["car", "net-unit"], "fuzz-untrusted-inputs + ghost-share unit"],
   [/^js\/car\//, ["car"], "the car's mesh, livery and parts"],
   [/^js\/garage\/pit-signs\.js/, ["circuits", "sweeps"], "the pit bay signs' atlas + decal: pit-signs.spec.js rides in test:circuits, pit-signs.test.mjs in test:sweeps"],
   [/^js\/garage\//, ["car", "ui"], "the garage bay: the studio scene and the setup sheet the menu specs click through"],
