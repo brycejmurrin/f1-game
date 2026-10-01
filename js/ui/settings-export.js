@@ -63,6 +63,7 @@ const SPEC = [
   { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
     subsystem: "ships the game MUTED for every new player — an export from a silenced phone looks exactly like this" },
   { k: "sfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
+  { k: "menuSfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
   { k: "music", lane: "json", group: "audio", def: true, src: "js/game.js" },
   { k: "volMusic", lane: "json", group: "audio", def: 0.6, src: "js/audio/panel.js" },
   { k: "volSfx", lane: "json", group: "audio", def: 0.2, src: "js/audio/panel.js" },
