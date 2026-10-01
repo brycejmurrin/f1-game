@@ -49,6 +49,17 @@ const TrackBuildProps = (function () {
     }
   }
 
+  // Call AFTER TrackPit.openBoundary: two passes on barL/barR, protect pit.keep.
+  function featherAfterOpen(track) {
+    if (!track || !track.barL || !track.hw) return;
+    const pit = track.pit;
+    const protect = (pit && !pit.painted) ? (k) => pit.keep[k] > 0 : null;
+    featherBarrierEnds(track.barL, track.hw, null, null, protect);
+    featherBarrierEnds(track.barR, track.hw, null, null, protect);
+    featherBarrierEnds(track.barL, track.hw, null, null, protect);
+    featherBarrierEnds(track.barR, track.hw, null, null, protect);
+  }
+
   function transformSceneryApi(api, def, n) {
     const RK = (k) => TrackSpace.sceneryNode(def, k, n);
     const RS = (s) => TrackSpace.sceneryFrac(def, s);
@@ -2190,6 +2201,6 @@ const TrackBuildProps = (function () {
     const it = buildSteps(track);
     for (;;) { const r = it.next(); if (r.done) return r.value; }
   }
-  return { build, buildSteps, featherBarrierEnds };
+  return { build, buildSteps, featherBarrierEnds, featherAfterOpen };
 })();
 Object.freeze(TrackBuildProps);

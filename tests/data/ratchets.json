@@ -27,7 +27,7 @@
       "lines": 2766
     },
     "js/track/tracks.js": {
-      "lines": 945
+      "lines": 932
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
