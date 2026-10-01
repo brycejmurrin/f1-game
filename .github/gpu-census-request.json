@@ -1,10 +1,1 @@
-{
-  "images": "macos-latest",
-  "track": "montreal",
-  "tod": "night",
-  "clock": 12,
-  "census_only": false,
-  "force": "",
-  "ls": "",
-  "leg": "warm-shows-hidden-casters-NIGHT-2026-09-26"
-}
+{"images":"macos-latest","track":"montreal","tod":"day","clock":12,"census_only":false,"force":"","ls":"apex26.hudMirror=\"on\"","leg":"steady-race-final-2026-10-01a"}
