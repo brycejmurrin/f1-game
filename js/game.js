@@ -2391,20 +2391,24 @@ function currentCarGroundMat(c, out) {
 const sessionDarkFor = (def) => raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
   raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && !!def.night);
 const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots, retainGraph: wantAgentSurface() });
+// The world freed: the old one before a stepped rebuild, or one the player picked away from (scheduleFlybyTrack).
+function dropTrackWorld() {
+  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0; _menuFly = null;
+  shadowPass.reset(); freeTrackMeshes(track);
+  track = null; builtTrackId = null;
+  if (typeof LampBake !== "undefined") LampBake.reset();
+}
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
 // drive-out keeps animating. Frees the old world first, adopts the new one whole; a
 // newer build or live() going false abandons it and frees its partial uploads.
 async function loadTrackStepped(idx, live) {
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
-  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const prevId = builtTrackId;
   try { PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   let built = null;
   try {
-    shadowPass.reset(); freeTrackMeshes(track);
-    track = null; builtTrackId = null;
-    if (typeof LampBake !== "undefined") LampBake.reset();
+    dropTrackWorld();
     // apex26.buildWorker (PROTOTYPE, default OFF): built off the main thread and
     // replayed here; null (off, failed) falls back to the stepped build.
     const opts = trackBuildOpts(sessionDark, wantSlots);
@@ -2640,6 +2644,8 @@ function scheduleFlybyTrack(settle) {
   const generation = ++_menuGate.generation;
   _menuGate.warm = 0;
   if (!(trackIdx >= 0)) return;
+  // ANOTHER CIRCUIT PICKED: the last one's world is freed now, not when this one's build starts.
+  if (state === "menu" && track && Tracks.LIST[trackIdx] && builtTrackId !== Tracks.LIST[trackIdx].id) dropTrackWorld();
   const want = trackIdx, tod = raceTimeOfDay, weather = raceWeather;
   const key = menuKey(want);
   const current = () => generation === _menuGate.generation && state === "menu" &&
@@ -2659,11 +2665,10 @@ function scheduleFlybyTrack(settle) {
       if (_menuGate.ready === key && _menuGate.track === track) {
         await menuFinish(current, key); await garagePrewarm(current); return;
       }
-      // The build holds the main thread for 1-3 s: never start it while the
-      // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
-      // that crosses dark rebuilds, and every tap then froze the sheet).
-      if (!(await menuIdle(current))) return;
-      if (!(await loadTrackStepped(want, current))) return;   // in steps: a tap on the sheet mid-build is answered
+      // AT ONCE, NOT AFTER MENU_IDLE_MS: the build is stepped (~8 ms a frame), so a
+      // tap on the picker or RACE SETTINGS is answered mid-build, and RACE! finds the
+      // world built sooner. The warms (menuFinish) still wait for idle: they block.
+      if (!(await loadTrackStepped(want, current))) return;
       _menuGate.ready = key; _menuGate.track = track;
       // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
       await menuSlice();
@@ -2673,9 +2678,9 @@ function scheduleFlybyTrack(settle) {
       await garagePrewarm(current);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
-  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build itself waits
-  // for MENU_IDLE_MS of quiet inside prepare (menuIdle), which is what keeps
-  // the 1-3 s main-thread build off a player still tapping. A longer settle
+  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build is stepped,
+  // so it starts at once; the blocking warms wait for MENU_IDLE_MS of quiet
+  // (menuFinish -> menuIdle), off a player still tapping. A longer settle
   // (1.5 s) only delays the download and everything queued behind it, so a
   // RACE! tap soon after the picker meets the build card. 400 ms: a tile
   // browsed past in under half a second still fetches nothing.
