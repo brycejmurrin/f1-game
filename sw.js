@@ -371,6 +371,8 @@ async function precacheAssetLists() {
     "js/editor/randomise.js",
     "js/editor/validate.js",
     "js/editor/codec.js",
+    "js/editor/canvas.js",
+    "js/editor/designer.js",
     // /@gen-shell:sw-optional
   ]);
   const shell = await fetch("index.html", { cache: "no-store" });

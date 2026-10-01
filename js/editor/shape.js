@@ -30,7 +30,10 @@ const TrackShape = (function () {
     for (const p of pts) { x += p[0]; z += p[1]; }
     return [x / pts.length, z / pts.length];
   }
-  /** Signed area: > 0 when the loop turns LEFT overall in this frame (x right, z forward). */
+  /** Signed area (shoelace over x, z): < 0 when the loop turns LEFT overall
+   *  (built Σk = +2π, +k = LEFT), > 0 when it turns RIGHT (clockwise as a
+   *  circuit map reads). Measured through the engine: a loop built to Σk = −2π
+   *  reads positive here, and its reverse negative (track-randomise.test.mjs). */
   function signedArea(pts) {
     let a = 0;
     for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p[0] * q[1] - q[0] * p[1]; }
@@ -45,22 +48,28 @@ const TrackShape = (function () {
     for (let i = 1; i <= n; i++) out.push([pose.x + sx * L * i / n, pose.z + cz * L * i / n]);
     return { pts: out, end: { x: pose.x + sx * L, z: pose.z + cz * L, th: pose.th } };
   }
-  /** Arc of radius R sweeping `sweep` radians (+ = left) from pose; start excluded. */
-  function arcPts(pose, R, sweep, h) {
+  /** Arc of radius R sweeping `sweep` radians (+ = left) from pose; start excluded.
+   *  `n` steps when given (arcSteps), else ≤ h m and ≤ 10° per step. Each point is
+   *  the exact chord from the start, so the last one IS the analytic end pose. */
+  function arcPts(pose, R, sweep, h, n) {
     const len = Math.abs(sweep) * R;
-    const n = Math.max(1, Math.ceil(Math.max(len / (h || 8), Math.abs(sweep) / (10 * Math.PI / 180))));
-    const out = [];
-    let x = pose.x, z = pose.z, th = pose.th;
-    const dth = sweep / n, dl = len / n;
-    for (let i = 0; i < n; i++) {
-      // midpoint heading keeps the chord on the true arc (exact for a circle)
-      const mid = th + dth / 2;
-      x += Math.sin(mid) * 2 * R * Math.sin(Math.abs(dth) / 2) * (dl ? 1 : 0) * (R ? 1 : 0);
-      z += Math.cos(mid) * 2 * R * Math.sin(Math.abs(dth) / 2);
-      th += dth;
-      out.push([x, z]);
+    n = n || Math.max(1, Math.ceil(Math.max(len / (h || 8), Math.abs(sweep) / (10 * Math.PI / 180))));
+    const out = [], dth = sweep / n;
+    for (let i = 1; i <= n; i++) {
+      // the chord to step i leaves at the mean heading: exact for a circle
+      const a = i * dth, c = 2 * R * Math.sin(Math.abs(a) / 2), mid = pose.th + a / 2;
+      out.push([pose.x + Math.sin(mid) * c, pose.z + Math.cos(mid) * c]);
     }
-    return { pts: out, end: { x, z, th } };
+    const e = out[out.length - 1];
+    return { pts: out, end: { x: e[0], z: e[1], th: pose.th + sweep } };
+  }
+  /** Steps for an arc of radius R: ≈ `step` rad each (default 10°), but chords never
+   *  above cMax (n ≥ ⌈RΘ/cMax⌉) and never below cMin (2R sin(Θ/2n) ≥ cMin wins). */
+  function arcSteps(R, sweep, cMin, cMax, step) {
+    const A = Math.abs(sweep), chord = (n) => 2 * R * Math.sin(A / (2 * n));
+    let n = Math.max(Math.ceil(A / (step || 10 * Math.PI / 180)), Math.ceil(R * A / cMax), 1);
+    while (n > 1 && chord(n) < cMin) n--;
+    return n;
   }
 
   // ── Dubins (shortest CSC/CCC path between two poses, turning radius r) ──
@@ -92,16 +101,20 @@ const TrackShape = (function () {
     for (const o of out) o.len = o.t + o.p + o.q;
     return out;
   }
-  /** Integrate one word from pose q0 (our frame) and return the points + end pose. */
-  function dubinsSample(q0, word, r, h) {
+  /** Integrate one word from pose q0 (our frame) and return the points + end pose.
+   *  Straights every ≤ h m; arcs ≤ 10° per step, and ≤ h m — or, with `chord` =
+   *  [min, max, step], chords kept inside [min, max] m (arcSteps) at ≈ 10° on the
+   *  word's FIRST piece (what meets the caller's road) and ≈ `step` rad after it. */
+  function dubinsSample(q0, word, r, h, chord) {
     // standard frame
     let X = q0.x, Y = q0.z, phi = Math.PI / 2 - q0.th;
     const out = [];
     const segs = [[word.w[0], word.t], [word.w[1], word.p], [word.w[2], word.q]];
-    for (const [kind, lenU] of segs) {
+    for (const [si, [kind, lenU]] of segs.entries()) {
       const len = lenU * r;
       if (len < 1e-9) continue;
-      const n = Math.max(1, Math.ceil(kind === "S" ? len / (h || 25) : Math.max(len / (h || 8), lenU / (10 * Math.PI / 180))));
+      const n = kind === "S" ? Math.max(1, Math.ceil(len / (h || 25))) : chord ? arcSteps(r, lenU, chord[0], chord[1], si ? chord[2] : 0)
+        : Math.max(1, Math.ceil(Math.max(len / (h || 8), lenU / (10 * Math.PI / 180))));
       const dl = len / n;
       for (let i = 0; i < n; i++) {
         if (kind === "S") { X += Math.cos(phi) * dl; Y += Math.sin(phi) * dl; }
@@ -114,14 +127,15 @@ const TrackShape = (function () {
     }
     return { pts: out, end: { x: X, z: Y, th: wrapAngle(Math.PI / 2 - phi) }, len: word.len * r };
   }
-  /** Shortest Dubins path q0 → q1 at radius r: { pts, end, len, word } or null. */
-  function dubins(q0, q1, r, h) {
+  /** Shortest Dubins path q0 → q1 at radius r: { pts, end, len, word } or null
+   *  (h, chord: the sampling, as dubinsSample). */
+  function dubins(q0, q1, r, h, chord) {
     const dx = q1.x - q0.x, dy = q1.z - q0.z, D = hyp(dx, dy);
     const psi = Math.atan2(dy, dx), d = D / r;
     const al = mod2pi((Math.PI / 2 - q0.th) - psi), be = mod2pi((Math.PI / 2 - q1.th) - psi);
     const words = dubinsWords(d, al, be).filter((w) => Number.isFinite(w.len)).sort((a, b) => a.len - b.len);
     for (const w of words) {
-      const s = dubinsSample(q0, w, r, h);
+      const s = dubinsSample(q0, w, r, h, chord);
       // The closed forms have sign corners; only trust a word whose integration lands.
       if (hyp(s.end.x - q1.x, s.end.z - q1.z) < 0.02 * r + 0.05 && Math.abs(wrapAngle(s.end.th - q1.th)) < 0.02) return Object.assign(s, { word: w.w });
     }
@@ -197,16 +211,20 @@ const TrackShape = (function () {
     }
     return best;
   }
-  /** Merge control points closer than `min` to their predecessor (index 0 always kept). */
+  /** Merge control points closer than `min` to their predecessor (index 0 always
+   *  kept). A `protect`ed input index (a stamp's tangent point) evicts unprotected
+   *  predecessors that crowd it instead of being dropped; spacing ≥ min always holds. */
   function enforceSpacing(pts, min, protect) {
-    const out = [pts[0]];
+    const out = [pts[0]], prot = [true];
+    const near = (a, b) => hyp(a[0] - b[0], a[1] - b[1]) < min;
     for (let i = 1; i < pts.length; i++) {
-      const prev = out[out.length - 1], p = pts[i];
-      if (hyp(p[0] - prev[0], p[1] - prev[1]) < min && !(protect && protect.has(i))) continue;
-      out.push(p);
+      const p = pts[i], keep = !!(protect && protect.has(i));
+      if (keep) while (out.length > 1 && !prot[prot.length - 1] && near(out[out.length - 1], p)) { out.pop(); prot.pop(); }
+      if (near(out[out.length - 1], p)) continue;
+      out.push(p); prot.push(keep);
     }
     // …and the seam back to index 0.
-    while (out.length > 3 && hyp(out[out.length - 1][0] - out[0][0], out[out.length - 1][1] - out[0][1]) < min) out.pop();
+    while (out.length > 3 && near(out[out.length - 1], out[0])) out.pop();
     return out;
   }
   function convexHull(pts) {
@@ -226,7 +244,7 @@ const TrackShape = (function () {
     const d3 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax), d4 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
     if (d1 * d2 <= 0 && d3 * d4 <= 0 && !(d1 === 0 && d2 === 0)) {
       const t = d1 === d2 ? 0 : d1 / (d1 - d2);
-      return [cx + (dx - cx) * t, cz + (dz - cz) * t];
+      return [ax + (bx - ax) * t, az + (bz - az) * t];
     }
     return null;
   }
@@ -287,7 +305,7 @@ const TrackShape = (function () {
     return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
 
-  return { TAU, wrapI, mod2pi, wrapAngle, heading, polyLen, centroid, signedArea, straightPts, arcPts, dubins, dubinsWords, dubinsSample,
+  return { TAU, wrapI, mod2pi, wrapAngle, heading, polyLen, centroid, signedArea, straightPts, arcPts, arcSteps, dubins, dubinsWords, dubinsSample,
     rdp, resample, catmull, menger, rotate, project, enforceSpacing, convexHull, segIntersect, crossings, clearance, rng };
 })();
 Object.freeze(TrackShape);

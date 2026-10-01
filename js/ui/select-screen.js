@@ -803,6 +803,17 @@ function updateTrackPreview() {
     for (const [cls, label] of kinds) {
       const b = document.createElement("span"); b.className = cls; b.textContent = label; factsEl.appendChild(b);
     }
+    if (t.custom) {
+      // Straight from the picker into the designer with THIS design; the
+      // LAZY_EDITOR bundle loads on the first click (CustomTracks.ensureEditor).
+      const e = document.createElement("button"); e.type = "button"; e.className = "sel-chip"; e.textContent = "EDIT IN DESIGNER";
+      e.setAttribute("aria-label", "Edit " + t.name + " in the track designer");
+      e.onclick = () => {
+        if (G.soundOn) GameAudio.uiSelect();
+        CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id) }); });
+      };
+      factsEl.appendChild(e);
+    }
   }
   // The numbers beside the still, as a definition list (label over value).
   const km = t.lengthKm || 0;

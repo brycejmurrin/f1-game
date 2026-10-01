@@ -19,7 +19,7 @@ const TABLET = { name: "ipad-mini", port: { width: 744, height: 1133 }, land: { 
 
 const DOORS = [
   "mb-career", "mb-daily", "mb-race", "mb-tt", "mb-vs", "mb-season",
-  "mb-data", "mb-garage", "mb-settings", "mb-help",
+  "mb-data", "mb-designer", "mb-garage", "mb-settings", "mb-help",
 ];
 
 /** @param {import("@playwright/test").Page} page */

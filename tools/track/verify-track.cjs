@@ -239,7 +239,10 @@ function customContext(Tracks) {
   } };
   for (const g of ["TextEncoder", "TextDecoder", "CompressionStream", "DecompressionStream", "Response", "Uint8Array", "Map", "Set"])
     if (typeof globalThis[g] !== "undefined") ctx[g] = globalThis[g];
-  const files = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/custom-tracks.js"].concat(MANIFEST.LAZY_EDITOR || []);
+  // The editor's PURE core only: the screen pair (canvas.js, designer.js) binds
+  // Dom at eval and needs a page; this is the headless gate, so it stays out.
+  const files = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/custom-tracks.js"]
+    .concat((MANIFEST.LAZY_EDITOR || []).filter((f) => !/\/(canvas|designer)\.js$/.test(f)));
   for (const f of files) {
     const src = fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
     vm.runInContext(src, ctx, { filename: path.join(ROOT, f) });

@@ -93,9 +93,12 @@ const CareerAiDev = (function () {
    * Winter development pass. Mutates `career.aiParts`. `rnd(…parts)` is
    * Career.rnd. `tStand` is constructors' standings from rollover.
    * `expected` is Map teamId → expected position (Career.expectedConstructor).
+   * `diceYear`, when passed, is the season that just ended — rollover
+   * increments career.year before this runs, and the stream must not move.
    */
-  function developWinter(career, tStand, expected, rnd) {
+  function developWinter(career, tStand, expected, rnd, diceYear) {
     if (!career || typeof Parts === "undefined") return;
+    const year = diceYear != null ? diceYear : career.year;
     const posOf = new Map((tStand || []).map((r) => [r.id, r.pos]));
     for (const team of Teams.LIST) {
       if (!Teams.isReal || !Teams.isReal(team)) continue;
@@ -105,7 +108,7 @@ const CareerAiDev = (function () {
       // the field does not freeze on the factory shelf.
       const shove = exp - pos;
       const chance = clamp(0.30 + shove * 0.12, 0.12, 0.80);
-      if (rnd(career.year, "aidev", team.id) > chance) continue;
+      if (rnd(year, "aidev", team.id) > chance) continue;
       const bag = ensureSeed(career, team);
       const cap = teamCap(team, career);
       const step = pickStep(team, bag.fitted, cap);
@@ -115,6 +118,28 @@ const CareerAiDev = (function () {
     }
   }
 
-  return { developWinter, fittedOf, teamCap, pickStep, scoreMods };
+  /** Drop fitted ids the current ruleset bans. The replacement is that
+   *  team's factory row for the category, and the banned id leaves `owned`
+   *  so a later winter cannot treat it as already paid for. */
+  function scrubFitted(career) {
+    if (!career || !career.aiParts || typeof Parts === "undefined") return;
+    for (const team of Teams.LIST) {
+      if (!Teams.isReal || !Teams.isReal(team)) continue;
+      const bag = career.aiParts[team.id];
+      if (!bag || !bag.fitted || typeof bag.fitted !== "object") continue;
+      const factory = Parts.getFactorySetup(team);
+      for (const cat of Parts.CATALOG) {
+        const id = bag.fitted[cat.id];
+        if (id == null) continue;
+        const opt = cat.options.find((o) => o.id === id);
+        if (opt && Parts.isOptionAvailable(opt, team)) continue;
+        bag.fitted[cat.id] = factory[cat.id];
+        const oi = bag.owned ? bag.owned.indexOf(id) : -1;
+        if (oi >= 0) bag.owned.splice(oi, 1);
+      }
+    }
+  }
+
+  return { developWinter, fittedOf, teamCap, pickStep, scoreMods, scrubFitted };
 })();
 Object.freeze(CareerAiDev);

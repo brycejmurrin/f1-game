@@ -58,7 +58,7 @@ const RaceFacts = (function () {
       if (!s) {
         s = { id: nextId++, cp: -1, fresh: true, times: new Float64Array(RING), idx: new Int32Array(RING).fill(-1),
           lap: c.lap || 0, lastLap: c.lastLap || 0, retired: !!c.retired, finished: !!c.finished,
-          stops: c.pitStops || 0, pit: inPits(c), pitT: -99 };
+          stops: c.pitStops || 0, pit: inPits(c), pitT: -99, errs: c.errCount | 0 };
         st.set(c, s);
       }
       return s;
@@ -156,6 +156,13 @@ const RaceFacts = (function () {
         }
         if (c.retired && !s.retired) ev.push({ type: "retire", car: c, why: c.dnf || c.dnfWhy || "mechanical", pos: order.indexOf(c) + 1 });
         s.retired = !!c.retired;
+        // AI mistake rising edge (c.errCount): radio only — never announce from
+        // the physics roll site. Skip the player (humans have no mistake model).
+        const errs = c.errCount | 0;
+        if (errs > (s.errs | 0) && !c.isPlayer && !c.human) {
+          ev.push({ type: "mistake", car: c, pos: order.indexOf(c) + 1 });
+        }
+        s.errs = errs;
         const pit = inPits(c);
         // The player's own stop is not pace: a gap measured across it (or across
         // a caution, below) read as "LOSING 2.7 A LAP" — start the history again.

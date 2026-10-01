@@ -7,7 +7,7 @@
 // physics block, so load order matters (a HARD_EDGES entry in
 // tools/manifest.cjs).
 window.PhysicsConsts = {
-  REVISION: "2026-09-tyre-peak-1", // increment when comparable lap physics changes
+  REVISION: "2026-09-ai-mistakes-1", // increment when comparable lap physics changes
   VMAX: 72,            // m/s base (~259 km/h) — F1 race pace; scales all speeds
                        //   (PACE and the vTop()/vStd() normalisers live in game.js)
   ACCEL: 7,            // m/s^2 at low speed
@@ -160,8 +160,9 @@ window.PhysicsConsts = {
   OT_MJ: 0.5,          // the Overtake allowance, MJ, spent over the following lap
   ES_MJ: 4,            // the Energy Store window c.energy 0..1 stands for (js/race/overtake-mode.js)
   // The slipstream window, shared by the AI scan, the player scan and
-  // game.js wakeOf(): a car 0.5–TOW_RANGE m ahead and within TOW_HALF_W m
-  // laterally; the wake fades over the last TOW_FADE m of that range.
+  // DirtyAir.wakeOf() (PhysicsConsts.DirtyAir): a car 0.5–TOW_RANGE m ahead
+  // and within TOW_HALF_W m laterally; CLASSIC mode fades over the last
+  // TOW_FADE m of that range. CFD mode uses its own λ / lateral sigma.
   // BLOCKER_HALF_W is the narrower lane box the AI queues behind.
   TOW_RANGE: 34, TOW_FADE: 28, TOW_HALF_W: 4,
   BLOCKER_HALF_W: 2.2,
@@ -250,4 +251,47 @@ window.PhysicsConsts.BAND_CEIL = (() => {
   // …and never above the player's own scale: with `ai` past 1.0 the derived
   // value would license a rubber-banded easy car to out-run the player outright.
   return Math.min(1, top.ai * (1 + top.band));
+})();
+
+/* DIRTY-AIR WAKE MODEL (nested on PhysicsConsts — one file, one global). A
+ * following car loses front downforce from the car ahead. Positions only —
+ * never curvature. Levels: off / classic (default, linear fade + 0.35 loss,
+ * FIA-aligned) / cfd (exp(-gap/λ) × lateral falloff, ~67 % SAE 2017-01-1546
+ * close-spacing ceiling). See docs/PHYSICS.md §Slipstream. */
+window.PhysicsConsts.DirtyAir = (function () {
+  "use strict";
+  // Inline Math.max/min — do not bind a private `clamp` (shared-math) and do
+  // not touch M4 here: many unit VMs load consts.js without mat4.js.
+  const LOSS = { off: 0, classic: 0.35, cfd: 0.67 };
+  // CFD starters to tune: streamwise λ (m) and lateral sigma (m).
+  const CFD_LAMBDA = 12;
+  const CFD_LAT = 3.5;
+  const GAP_MIN = 0.5;
+  function isLevel(v) { return Object.prototype.hasOwnProperty.call(LOSS, v); }
+  function wakeOf(gap, dx, mode, tow) {
+    const g = Math.max(GAP_MIN, gap || 0);
+    const x = dx || 0;
+    if (mode === "cfd") {
+      const long = Math.exp(-g / CFD_LAMBDA);
+      const lat = Math.exp(-(x * x) / (2 * CFD_LAT * CFD_LAT));
+      return Math.max(0, Math.min(1, long * lat));
+    }
+    const range = tow && tow.range != null ? tow.range : 34;
+    const fade = tow && tow.fade != null ? tow.fade : 28;
+    const halfW = tow && tow.halfW != null ? tow.halfW : 4;
+    return Math.max(0, Math.min(1, (range - g) / fade))
+      * Math.max(0, Math.min(1, 1 - Math.abs(x) / halfW));
+  }
+  function mul(wake, speed, mode, downforce, vTop) {
+    if (!wake || mode === "off") return 1;
+    const loss = LOSS[mode] != null ? LOSS[mode] : LOSS.classic;
+    if (!loss) return 1;
+    const aeroShare = downforce / (1 + downforce);
+    const q = Math.min(1, Math.abs(speed || 0) / Math.max(1, vTop || 1)) ** 2;
+    return 1 - loss * wake * aeroShare * q;
+  }
+  return {
+    LOSS, CFD_LAMBDA, CFD_LAT, GAP_MIN, isLevel, wakeOf, mul,
+    defaultLevel: "classic",
+  };
 })();

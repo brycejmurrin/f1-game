@@ -4,16 +4,25 @@
    a 16-bit FNV check — and `APXT1.z.…` the same bytes through deflate-raw
    (CompressionStream, Baseline 2023) when that is shorter. The code rides a URL
    fragment (`#track=`, never sent to the host) and the JSON file envelope.
-   Decoding is DEFENSIVE: every field is bounded, nothing throws, and the design
-   that comes out is re-sanitised by CustomTracks before anyone keeps it. The
-   same lattice as storage means a code's content id matches on both ends.
+   Decoding is DEFENSIVE: every field is bounded, nothing public throws (a
+   refusal is { ok: false, reason } or null), and the design that comes out is
+   re-sanitised by CustomTracks before anyone keeps it. The same lattice and the
+   same zone caps as storage (CustomTracks.LIMITS.zones) mean a code's content
+   id matches on both ends — tests/unit/track-codec.test.mjs pins it.
    Mirrors js/car/ghost-share.js. LAZY_EDITOR; no eval-time dependencies. */
 const TrackCodec = (function () {
   "use strict";
   const MAGIC = "APXT1", VERSION = 1;
   const MAX_CODE = 4096, MAX_BYTES = 16384, MAX_N = 200, MIN_N = 8, UNIT = 4 /* per metre */, COORD_MAX = 10000 * UNIT;
   const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16 };
-  const ZONE_CAPS = { hwZones: 16, bankZones: 24, elevations: 12, bridges: 4 };
+  // = CustomTracks.LIMITS.zones for every list: a lower cap here silently
+  // dropped what storage keeps (a dropped bridge turned into a RED crossing on
+  // the receiver). 24 of each is ~600 bytes, well inside MAX_CODE.
+  const ZONE_CAPS = { hwZones: 24, bankZones: 24, elevations: 24, bridges: 24 };
+  // A hwZone with no `ease` (older stores) rides as this byte, so the receiver
+  // rebuilds the SAME record (and id) instead of gaining the 0.025 default.
+  // Stored ease tops out at 0.2 → 200, so 255 is never a real value.
+  const NO_EASE = 255;
 
   // ── byte writer / reader ────────────────────────────────────────────────
   function writer() {
@@ -64,11 +73,20 @@ const TrackCodec = (function () {
     for (const ch of s) { acc = (acc << 6) | B64.indexOf(ch); bits += 6; if (bits >= 8) { bits -= 8; out.push((acc >> bits) & 0xff); } }
     return Uint8Array.from(out);
   }
-  const u16frac = (f) => Math.round((((f % 1) + 1) % 1) * 65535);
+  // Lap fractions on the storage lattice (k / 65535). CustomTracks' frac()
+  // rounds 0.9999995 UP to exactly 1.0 and keeps it, but maps an incoming 1.0
+  // to 0 — so 1.0 rides as 65535 (not wrapped to 0) and 65535 decodes a
+  // quarter-step below 1, which that sanitiser rounds back to the sender's
+  // 1.0 (and a wrap-to-0 sanitiser to 0). Either way the round trip is exact.
+  const u16frac = (f) => { if (!Number.isFinite(f)) return 0; if (f < 0 || f > 1) f = ((f % 1) + 1) % 1; return Math.min(65535, Math.round(f * 65535)); };
+  const fracU16 = (v) => (v === 65535 ? (65535 - 0.25) / 65535 : v / 65535);
 
   // ── encode ──────────────────────────────────────────────────────────────
-  /** The raw bytes for a (sanitised) design; name omitted when withName is false (the content id's canon). */
+  /** The raw bytes for a (sanitised) design; name omitted when withName is false (the content id's canon).
+   *  Throws RangeError("zones") for a list over ZONE_CAPS — encode() turns that
+   *  into a refusal; a share code never silently drops what storage keeps. */
   function encodeBytes(it, withName = true) {
+    for (const k of Object.keys(ZONE_CAPS)) if (Array.isArray(it[k]) && it[k].length > ZONE_CAPS[k]) throw new RangeError("zones");
     const w = writer();
     const themeIdx = Math.max(0, TrackThemes.ORDER.indexOf(it.theme));
     const zones = { hwZones: it.hwZones || [], bankZones: it.bankZones || [], elevations: it.elevations || [], bridges: it.bridges || [] };
@@ -87,9 +105,9 @@ const TrackCodec = (function () {
       if (i === 1) w.zz(ndx).zz(ndz); else w.zz(ndx - dx).zz(ndz - dz);
       dx = ndx; dz = ndz; px = x; pz = z;
     }
-    if (flags & FLAG.hwZones) { w.varint(Math.min(ZONE_CAPS.hwZones, zones.hwZones.length)); for (const z of zones.hwZones.slice(0, ZONE_CAPS.hwZones)) w.u16(u16frac(z.s0)).u16(u16frac(z.s1)).u8(Math.round(z.hw * 10)).u8(Math.round((z.ease != null ? z.ease : 0.025) * 1000)); }
-    if (flags & FLAG.bankZones) { w.varint(Math.min(ZONE_CAPS.bankZones, zones.bankZones.length)); for (const z of zones.bankZones.slice(0, ZONE_CAPS.bankZones)) w.u16(u16frac(z.frac)).zz(Math.round(z.angleDeg * 4)).u16(Math.round(z.widthM)); }
-    for (const k of ["elevations", "bridges"]) if (flags & FLAG[k]) { w.varint(Math.min(ZONE_CAPS[k], zones[k].length)); for (const z of zones[k].slice(0, ZONE_CAPS[k])) w.u16(u16frac(z.s)).u16(Math.round(z.halfM)).zz(Math.round(z.rise * 4)); }
+    if (flags & FLAG.hwZones) { w.varint(zones.hwZones.length); for (const z of zones.hwZones) w.u16(u16frac(z.s0)).u16(u16frac(z.s1)).u8(Math.round(z.hw * 10)).u8(Number.isFinite(z.ease) ? Math.min(200, Math.max(0, Math.round(z.ease * 1000))) : NO_EASE); }
+    if (flags & FLAG.bankZones) { w.varint(zones.bankZones.length); for (const z of zones.bankZones) w.u16(u16frac(z.frac)).zz(Math.round(z.angleDeg * 4)).u16(Math.round(z.widthM)); }
+    for (const k of ["elevations", "bridges"]) if (flags & FLAG[k]) { w.varint(zones[k].length); for (const z of zones[k]) w.u16(u16frac(z.s)).u16(Math.round(z.halfM)).zz(Math.round(z.rise * 4)); }
     if (flags & FLAG.name) { w.u8(name.length).bytes(name); }
     const body = w.out();
     const all = new Uint8Array(body.length + 2);
@@ -118,9 +136,13 @@ const TrackCodec = (function () {
         x += dx; z += dz; push();
       }
       const design = { theme: TrackThemes.ORDER[themeIdx], baseHW, seed, pts };
-      if (flags & FLAG.hwZones) { const n = r.varint(); if (n > ZONE_CAPS.hwZones) return { ok: false, reason: "bounds" }; design.hwZones = []; for (let i = 0; i < n; i++) design.hwZones.push({ s0: r.u16() / 65535, s1: r.u16() / 65535, hw: r.u8() / 10, ease: r.u8() / 1000 }); }
-      if (flags & FLAG.bankZones) { const n = r.varint(); if (n > ZONE_CAPS.bankZones) return { ok: false, reason: "bounds" }; design.bankZones = []; for (let i = 0; i < n; i++) design.bankZones.push({ frac: r.u16() / 65535, angleDeg: r.zz() / 4, widthM: r.u16() }); }
-      for (const k of ["elevations", "bridges"]) if (flags & FLAG[k]) { const n = r.varint(); if (n > ZONE_CAPS[k]) return { ok: false, reason: "bounds" }; design[k] = []; for (let i = 0; i < n; i++) design[k].push({ s: r.u16() / 65535, halfM: r.u16(), rise: r.zz() / 4 }); }
+      if (flags & FLAG.hwZones) {
+        const n = r.varint(); if (n > ZONE_CAPS.hwZones) return { ok: false, reason: "bounds" };
+        design.hwZones = [];
+        for (let i = 0; i < n; i++) { const z = { s0: fracU16(r.u16()), s1: fracU16(r.u16()), hw: r.u8() / 10 }, e = r.u8(); if (e !== NO_EASE) z.ease = e / 1000; design.hwZones.push(z); }
+      }
+      if (flags & FLAG.bankZones) { const n = r.varint(); if (n > ZONE_CAPS.bankZones) return { ok: false, reason: "bounds" }; design.bankZones = []; for (let i = 0; i < n; i++) design.bankZones.push({ frac: fracU16(r.u16()), angleDeg: r.zz() / 4, widthM: r.u16() }); }
+      for (const k of ["elevations", "bridges"]) if (flags & FLAG[k]) { const n = r.varint(); if (n > ZONE_CAPS[k]) return { ok: false, reason: "bounds" }; design[k] = []; for (let i = 0; i < n; i++) design[k].push({ s: fracU16(r.u16()), halfM: r.u16(), rise: r.zz() / 4 }); }
       if (flags & FLAG.name) { const n = r.u8(); if (n > 48) return { ok: false, reason: "bounds" }; design.name = new TextDecoder().decode(r.bytes(n)); }
       if (r.left !== 0) return { ok: false, reason: "corrupt" };
       return { ok: true, design };
@@ -143,23 +165,42 @@ const TrackCodec = (function () {
       return out;
     } catch (_) { return null; }
   }
+  /** deflate-raw bytes → { ok, bytes } | { ok: false, reason }. Read chunk by
+   *  chunk under a running MAX_BYTES cap and cancelled past it: a 4 KiB code
+   *  can inflate to megabytes, and buffering all of it first was the cost. */
   async function inflate(bytes) {
-    if (typeof DecompressionStream === "undefined") return null;
+    if (typeof DecompressionStream === "undefined") return { ok: false, reason: "unsupported" };
+    let rd = null;
     try {
       const ds = new DecompressionStream("deflate-raw");
       const wr = ds.writable.getWriter();
       const fed = Promise.all([wr.write(bytes), wr.close()]).catch(() => null);
-      let buf = null;
-      try { buf = await new Response(ds.readable).arrayBuffer(); } catch (_) { buf = null; }
+      rd = ds.readable.getReader();
+      const parts = [];
+      let total = 0;
+      for (;;) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_BYTES) { rd.cancel().catch(() => null); return { ok: false, reason: "bounds" }; }
+        parts.push(value);
+      }
       await fed;
-      return !buf || buf.byteLength > MAX_BYTES ? null : new Uint8Array(buf);
-    } catch (_) { return null; }
+      const out = new Uint8Array(total);
+      let at = 0;
+      for (const p of parts) { out.set(p, at); at += p.byteLength; }
+      return { ok: true, bytes: out };
+    } catch (_) {
+      if (rd) rd.cancel().catch(() => null);
+      return { ok: false, reason: "corrupt" };
+    }
   }
   /** design → "APXT1.p.…" (or "APXT1.z.…" when deflate is shorter). */
   async function encode(design) {
     const it = CustomTracks.sanitize(design);
     if (!it) return null;
-    const bytes = encodeBytes(it, true);
+    let bytes;
+    try { bytes = encodeBytes(it, true); } catch (e) { if (typeof Log !== "undefined") Log.warn("track", "share code refused: " + (e && e.message || e)); return null; }
     const plain = MAGIC + ".p." + b64url(bytes);
     const z = await deflate(bytes);
     if (z && z.length < bytes.length - 8) { const zc = MAGIC + ".z." + b64url(z); if (zc.length < plain.length) return zc; }
@@ -175,7 +216,7 @@ const TrackCodec = (function () {
       if (m[1] !== String(VERSION)) return { ok: false, reason: "version" };
       let bytes = unb64url(m[3]);
       if (!bytes) return { ok: false, reason: "corrupt" };
-      if (m[2] === "z") { bytes = await inflate(bytes); if (!bytes) return { ok: false, reason: "corrupt" }; }
+      if (m[2] === "z") { const z = await inflate(bytes); if (!z.ok) return z; bytes = z.bytes; }
       const d = decodeBytes(bytes);
       if (!d.ok) return d;
       const it = CustomTracks.sanitize(d.design);
@@ -190,10 +231,12 @@ const TrackCodec = (function () {
     const b = base || (typeof location !== "undefined" ? location.origin + location.pathname : "");
     return b + "#" + HASH_KEY + "=" + code;
   }
-  /** The code in a location hash, or null. */
+  /** The code in a location hash, or null — also for a malformed %-escape
+   *  (`#track=%E0%A4%A`), which decodeURIComponent throws on. */
   function fromHash(hash) {
     const m = /(?:^#|&)track=([^&]+)/.exec(String(hash || ""));
-    return m ? decodeURIComponent(m[1]) : null;
+    if (!m) return null;
+    try { return decodeURIComponent(m[1]); } catch (_) { return null; }
   }
   /** The hash with only #track= removed (other fragments kept). */
   function withoutTrack(hash) {
@@ -212,6 +255,6 @@ const TrackCodec = (function () {
     return null;
   }
 
-  return { MAGIC, VERSION, FLAG, ZONE_CAPS, MAX_CODE, encodeBytes, decodeBytes, encode, decode, b64url, unb64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
+  return { MAGIC, VERSION, FLAG, ZONE_CAPS, MAX_CODE, MAX_BYTES, encodeBytes, decodeBytes, encode, decode, inflate, b64url, unb64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
 })();
 Object.freeze(TrackCodec);
