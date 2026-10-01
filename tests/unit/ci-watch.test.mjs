@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict } from "../../tools/ci/ci-watch.mjs";
+import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, resolveGithubToken } from "../../tools/ci/ci-watch.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
 const job = (id, name, status, conclusion, steps = []) => ({ id, name, status, conclusion, steps, html_url: `u/${id}` });
@@ -95,4 +95,12 @@ test("no run yet: none only without a PR; a conflicting PR is blocked, never gre
   assert.equal(noneVerdict({ number: 537, mergeable_state: "blocked" }, 11 * MIN, 3), "indexing");
   assert.equal(noneVerdict(null, 4 * MIN, 1), "indexing", "not `none` — a docs-only verdict needs the checks empty too");
   assert.equal(noneVerdict({ number: 321, mergeable_state: "dirty" }, 4 * MIN, 2), "indexing");
+});
+
+test("resolveGithubToken prefers env, then gh auth token, else null", () => {
+  assert.equal(resolveGithubToken({ env: { GH_TOKEN: "from-gh" }, runGh: () => ({ status: 0, stdout: "ignored\n" }) }), "from-gh");
+  assert.equal(resolveGithubToken({ env: { GITHUB_TOKEN: "from-github" }, runGh: () => ({ status: 0, stdout: "ignored\n" }) }), "from-github");
+  assert.equal(resolveGithubToken({ env: {}, runGh: () => ({ status: 0, stdout: "  from-cli\n" }) }), "from-cli");
+  assert.equal(resolveGithubToken({ env: {}, runGh: () => ({ status: 1, stdout: "", stderr: "not logged in" }) }), null);
+  assert.equal(resolveGithubToken({ env: {}, runGh: () => ({ status: 0, stdout: "   \n" }) }), null);
 });

@@ -28,8 +28,10 @@
 // run started — a docs-only push), 1 red, 2 cancelled with no live sibling,
 // 3 no token / API unreachable, 124 --timeout.
 //
-// Auth: GH_TOKEN or GITHUB_TOKEN (the remote containers carry both), sent via
-// curl's stdin config so it never appears in argv. Read-only: GET requests only.
+// Auth: GH_TOKEN or GITHUB_TOKEN (the remote containers carry both), falling
+// back to `gh auth token` when the env is unset (Cursor Cloud agents often
+// have `gh` logged in without exporting the token). Sent via curl's stdin
+// config so it never appears in argv. Read-only: GET requests only.
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,9 +42,25 @@ export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
 const say = (...a) => console.log("[ci-watch]", ...a);
 
+/** Resolve a GitHub API token: env first, then `gh auth token`. Exported for
+ *  the unit pin that env-only auth left Cursor Cloud agents saying
+ *  `= ci unknown — no GH_TOKEN / GITHUB_TOKEN` while `gh` worked. */
+export function resolveGithubToken({ env = process.env, runGh = null } = {}) {
+  const fromEnv = env.GH_TOKEN || env.GITHUB_TOKEN;
+  if (fromEnv) return fromEnv;
+  const r = (runGh || (() => spawnSync("gh", ["auth", "token"], {
+    encoding: "utf8", timeout: 5000,
+  })))();
+  if (r && r.status === 0) {
+    const t = String(r.stdout || "").trim();
+    if (t) return t;
+  }
+  return null;
+}
+
 function api(pathQs) {
-  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-  if (!token) return { error: "no GH_TOKEN / GITHUB_TOKEN" };
+  const token = resolveGithubToken();
+  if (!token) return { error: "no GH_TOKEN / GITHUB_TOKEN (and gh auth token unavailable)" };
   const r = spawnSync("curl", ["-sS", "--max-time", "30", "-K", "-", "-w", "\n%{http_code}",
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
     `https://api.github.com/repos/${REPO}/${pathQs}`],
