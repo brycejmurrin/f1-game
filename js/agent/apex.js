@@ -1278,14 +1278,11 @@ const api = {
   // back-pressure, and this says WHICH JavaScript, which is what decides
   // whether moving the build off the main thread would move anything.
   buildProfile: () => (G.track && G.track.buildProfile) || null,
-  // The RACE-ENTRY timeline (js/perf/race-entry-profile.js): one row per
-  // phase of startRace, the build being only one of them. buildProfile() says
-  // which part of the BUILD costs; this says whether the build is the part of
-  // race entry that costs at all — measured at 23 % of it on the default
-  // backend, so the rest of this list is where the freeze actually lives.
+  // The RACE-ENTRY timeline (js/perf/race-entry-profile.js): raceProfile() is
+  // the legs; raceEntryProfile() adds marks + longtask ring (real-device probe —
+  // soft-blit CI is not this freeze). buildProfile() is the build slice only.
   raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
-  // Full race-entry attribution (js/perf/race-entry-profile.js): legs + marks +
-  // longtask ring. Soft-blit CI is not this freeze — use a real-device probe.
+  // Legs + marks + longtask ring (real-device probe; soft-blit CI is not this freeze).
   raceEntryProfile: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.snapshot()) || null,
   // WEBGL_multi_draw (GLX only, apex26.multiDraw). multiDraw(true|false)
   // toggles it live; no argument reports the COUNTED oracle — multi-draw calls
@@ -1296,8 +1293,7 @@ const api = {
   // this container measures the box.
   multiDraw: (on) => {
     if (!gfx || !gfx.multiDraw) return { supported: false, on: false };
-    if (on === undefined) return gfx.multiDrawStats ? gfx.multiDrawStats() : { supported: false, on: false };
-    gfx.multiDraw(!!on);
+    if (on !== undefined) gfx.multiDraw(!!on);
     return gfx.multiDrawStats ? gfx.multiDrawStats() : { supported: false, on: !!on };
   },
   // Occlusion culling (GLX only, ships OFF behind apex26.occlusionCull).
@@ -1308,8 +1304,7 @@ const api = {
   // measures the box (docs/notes/CI-RENDERING-PERFORMANCE.md).
   occlusionCull: (on) => {
     if (!gfx || !gfx.occlusionCull) return { supported: false, on: false };
-    if (on === undefined) return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: false };
-    gfx.occlusionCull(!!on);
+    if (on !== undefined) gfx.occlusionCull(!!on);
     return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: !!on };
   },
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
