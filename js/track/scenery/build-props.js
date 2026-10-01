@@ -16,7 +16,7 @@ const TrackBuildProps = (function () {
   // teleport a car ~7–9 m sideways at run-off termini (DEFECT-LEDGER 2026-09-26).
   // Only LOWERs the wide side toward the tight face — never raises a barrier.
   // Keep in lockstep with tools/track/barrier-jumps.cjs featherBarrierEnds.
-  // cliff=1.5 so residual mid-size jumps are ramped; two passes (caller)
+  // cliff=1.5 so residual mid-size jumps are ramped; three passes (caller)
   // settle overlapping termini under the 1.5 m one-step clamp budget.
   // `protect(k)` — when true, node k is never lowered (pit keep / openBoundary).
   function featherBarrierEnds(arr, hw, cliff, nodes, protect) {
@@ -49,15 +49,20 @@ const TrackBuildProps = (function () {
     }
   }
 
-  // Call AFTER TrackPit.openBoundary: two passes on barL/barR, protect pit.keep.
+  // Call AFTER TrackPit.openBoundary: three passes on barL/barR, protect pit.keep.
+  // Two passes settled simple tyre-terminus cliffs; a third is required when a
+  // correctly placed marshalPost (every() authored-frame wrap) sits next to a
+  // tyre wall — the single-pass scan can leave a >1.5 m step behind the k it
+  // already visited (spa Bus Stop L, maxOver 2.62 after two passes; a third
+  // drops it under 1.5). More passes only lower, never raise.
   function featherAfterOpen(track) {
     if (!track || !track.barL || !track.hw) return;
     const pit = track.pit;
     const protect = (pit && !pit.painted) ? (k) => pit.keep[k] > 0 : null;
-    featherBarrierEnds(track.barL, track.hw, null, null, protect);
-    featherBarrierEnds(track.barR, track.hw, null, null, protect);
-    featherBarrierEnds(track.barL, track.hw, null, null, protect);
-    featherBarrierEnds(track.barR, track.hw, null, null, protect);
+    for (let pass = 0; pass < 3; pass++) {
+      featherBarrierEnds(track.barL, track.hw, null, null, protect);
+      featherBarrierEnds(track.barR, track.hw, null, null, protect);
+    }
   }
 
   function transformSceneryApi(api, def, n) {
