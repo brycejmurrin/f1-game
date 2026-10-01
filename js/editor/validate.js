@@ -14,32 +14,60 @@ const TrackValidate = (function () {
     lenMin: 2500, lenMax: 7000, lenAmber: 3500,
     // The fleet oracle (tests/unit/track-validate-fleet.test.mjs) sets these:
     // shipped hairpins build down to 10 m (Monaco, Korea), so RED sits at 9 m
-    // with the hairpin floor as advice; real gradients reach 15-22 % over 20 m
-    // (Spa, Monaco), so grade is advice above 8 % and RED only for a wall.
+    // with the hairpin floor as advice; real gradients reach 15-22 % over the
+    // 40 m grade window (Spa reads 22.1 %), so grade is advice above 8 % and
+    // RED only for a wall.
     rMin: 9, rAmber: 15, kinkMin: 7,                      // Korea's hairpin measures 8 m on a 24 m chord; a control-point kink reads 2-5
     gradeRed: 0.15, gradeAmber: 0.08, gradeWindowM: 40,
+    // The start straight against the pit model (js/track/core/pit.js). BEHIND
+    // the line: RED under ENTRY_MIN (the limiter window's floor); under gridM
+    // the back of the grid stands in the last corner — AMBER, not RED, because
+    // the fleet has real starts there (Mexico 184 m, Monaco 192 m). AHEAD: RED
+    // under EXIT_MIN + ROAD_MIN, and RED whenever TrackPit's own window leaves
+    // no room for the garage row (hasBays false: ~80-100 m ahead when the
+    // straight behind is short) — judged by TrackPit.build, not a constant.
     startBackRed: 150, startBackAmber: 240, gridM: 198,     // ENTRY_MIN; ENTRY_MIN + ENTRY_ROAD + MOUTH_RUN; 14 + 23·8
     startFwdRed: 70, startFwdAmber: 240,                    // EXIT_MIN + ROAD_MIN; EXIT_M + EXIT_ROAD + MERGE_RUN
     bridgeSep: 7,                                           // overheadSpan's 4.8 m clearance + deck
     foldFrac: 0.6, foldAmberFrac: 0.8,                      // node-scale radius / half-width (see the fold rule)
     ptsMin: 8, ptsMax: 200, ptsAmber: 180, spacing: 8, hwMin: 5, hwMax: 8,
   });
-  let _rev = 0;
+  // The clearance scan's grid cell: a 3×3 neighbourhood sees every pair closer
+  // than one cell, and the AMBER threshold reaches hw_i + hw_j + 10 m.
+  const CLEAR_CELL = Math.max(24, 2 * LIMITS.hwMax + 10);
 
-  /** The built-def for a design under a throwaway id (never registered, never cached). */
+  /** The built-def for a design under its CONTENT id (CustomTracks.sanitize's
+   *  it.id) — the id seeds the elevation ripple, so the preview is the saved
+   *  circuit to the millimetre. Never registered: TrackDef.fromRaw only builds
+   *  the LIST-shaped copy (nothing is pushed onto Tracks.LIST — that is
+   *  CustomTracks.sync's job), so a preview cannot collide with a saved twin. */
   function previewDef(design) {
-    const it = CustomTracks.sanitize(design);
+    // { loose: true }: a work in progress — a loop under the registry's storage
+    // floor (too small, two points on top of each other) still builds, so the
+    // length / spacing rules below can say what is wrong with it.
+    const it = CustomTracks.sanitize(design, { loose: true });
     if (!it) return null;
-    const raw = CustomTracks.toRaw(it);
-    raw.id = "__preview-" + (++_rev);
-    return TrackDef.fromRaw(raw);
+    return TrackDef.fromRaw(CustomTracks.toRaw(it));
   }
+  /** The engine's centreline for a design, without the racing-line bake (79 %
+   *  of the build, and nothing here reads it): `{ line: false }`. */
   function build(design) {
     const def = previewDef(design);
     if (!def) return null;
-    try { return { def, tr: Tracks.buildCenterline(def) }; } catch (e) { return { def, tr: null, error: String(e && e.message || e) }; }
+    try { return { def, tr: Tracks.buildCenterline(def, { line: false }) }; } catch (e) { return { def, tr: null, error: String(e && e.message || e) }; }
   }
 
+  /** True when the def wants garages (TrackPit.resolve) but the pit model built
+   *  over this centreline has no room for the row (TrackPit.build → hasBays).
+   *  False when TrackPit is not loaded or the model throws: advice, not a gate. */
+  function noBays(tr, def) {
+    if (typeof TrackPit === "undefined" || !TrackPit.build || !TrackPit.resolve) return false;
+    try {
+      if (!TrackPit.resolve(def).hasBays) return false;
+      const pit = TrackPit.build(tr, def, Tracks.curvature);
+      return !!pit && !pit.hasBays;
+    } catch (_) { return false; }
+  }
   /** How far the road stays straight from arc s0 in direction dir (±1), up to max (TrackPit.straightRun). */
   function straightRun(tr, s0, dir, max) {
     const K = (typeof TrackPit !== "undefined" && TrackPit.PIT_K) || 0.0035, STEP = 8, L = tr.total;
@@ -73,6 +101,7 @@ const TrackValidate = (function () {
 
   /** The verdict: { ok, red, amber, issues, stats, def, tr, turns }. */
   function check(design) {
+    if (!design || typeof design !== "object") design = {};
     const issues = [];
     const add = (code, level, msg, extra) => issues.push(Object.assign({ code, level, msg }, extra || {}));
     const pts = design && Array.isArray(design.pts) ? design.pts : [];
@@ -86,9 +115,13 @@ const TrackValidate = (function () {
     const hw = +design.baseHW;
     if (!(hw >= LIMITS.hwMin && hw <= LIMITS.hwMax)) add("width", "red", "Track half-width must be " + LIMITS.hwMin + "–" + LIMITS.hwMax + " m");
     const built = pts.length >= LIMITS.ptsMin ? build(design) : null;
+    // The registry refused it even as a work in progress (a point off the
+    // ±10 km map, a malformed point): nothing can be built, saved or raced —
+    // never "All checks pass".
+    if (pts.length >= LIMITS.ptsMin && !built) add("bounds", "red", "This loop cannot be built — keep every point inside the ±10 km map");
     if (built && built.error) add("build", "red", "The engine could not build this loop: " + built.error);
     const tr = built && built.tr;
-    const j = tr ? judge(tr, design) : { issues: [], stats: emptyStats(), turns: [] };
+    const j = tr ? judge(tr, design, built.def) : { issues: [], stats: emptyStats(), turns: [] };
     issues.push(...j.issues);
     const red = issues.filter((i) => i.level === "red").length, amber = issues.filter((i) => i.level === "amber").length;
     return { ok: red === 0 && !!tr, red, amber, issues, stats: j.stats, def: built && built.def, tr, turns: j.turns };
@@ -97,8 +130,11 @@ const TrackValidate = (function () {
 
   /** The road rules over a BUILT centreline (any track, a shipped circuit too —
    *  tests/unit/track-validate-fleet.test.mjs judges all 52 as the oracle).
-   *  `design.bridges` is the only authored input read. */
-  function judge(tr, design) {
+   *  `design.bridges` is the only authored input read; `def` (default: the
+   *  design itself, as for a shipped def) gives TrackPit its pit choices. */
+  function judge(tr, design, def) {
+    design = design || {};
+    def = def || design;
     const issues = [];
     const add = (code, level, msg, extra) => issues.push(Object.assign({ code, level, msg }, extra || {}));
     const stats = emptyStats();
@@ -135,26 +171,27 @@ const TrackValidate = (function () {
       else if (foldAmber) add("fold", "amber", "Corner nearly as tight as the road is wide", { s: foldAmber.k * ds, k: foldAmber.k });
       // Crossings: covered by a bridge (built height difference) or at grade.
       const bridges = Array.isArray(design.bridges) ? design.bridges : [];
-      for (const c of S.crossings(px, pz, n, 3)) {
+      const xs = S.crossings(px, pz, n, 3);
+      for (const c of xs) {
         stats.crossings++;
         const sep = Math.abs(py[c.i] - py[c.j]);
         if (sep >= LIMITS.bridgeSep) add("bridge", "info", "Crossing bridged (" + sep.toFixed(1) + " m clearance)", { s: c.i * ds, s2: c.j * ds, x: c.x, z: c.z });
         else add("crossing", "red", "The road crosses itself at grade — add a bridge", { s: c.i * ds, s2: c.j * ds, x: c.x, z: c.z, fix: "bridge" });
       }
       // Both roads of a bridge must not rise together.
-      for (const b of bridges) for (const c of S.crossings(px, pz, n, 3)) {
+      for (const b of bridges) for (const c of xs) {
         const sb = ((b.s % 1) + 1) % 1 * tr.total;
         const near = (s) => { let d = Math.abs(s - sb); d = Math.min(d, tr.total - d); return d < b.halfM; };
         if (near(c.i * ds) && near(c.j * ds)) { add("bridge", "red", "Both roads rise under this bridge — shorten it or move it", { s: sb }); break; }
       }
       // Clearance between non-adjacent spans at the same level.
       const Dnodes = Math.ceil(3 * (2 * tr.hw[0] + 10) / ds);
-      for (const w of S.clearance(px, pz, py, n, Dnodes, LIMITS.bridgeSep, 24, 6)) {
+      for (const w of S.clearance(px, pz, py, n, Dnodes, LIMITS.bridgeSep, CLEAR_CELL, 6)) {
         const need = hwA[w.i] + hwA[w.j];
         if (w.dist < need + 2) { add("clearance", "red", "Two parts of the track overlap (" + Math.round(w.dist) + " m apart)", { s: w.i * ds, s2: w.j * ds }); break; }
         if (w.dist < need + 10) { add("clearance", "amber", "Two parts of the track run very close (" + Math.round(w.dist) + " m)", { s: w.i * ds, s2: w.j * ds }); break; }
       }
-      // Grade over a 20 m window; elevation range for the stats.
+      // Grade over a gradeWindowM (40 m) window; elevation range for the stats.
       let lo = Infinity, hi = -Infinity, gMax = 0, gAt = 0;
       const W = Math.max(1, Math.round(LIMITS.gradeWindowM / ds));
       for (let k = 0; k < n; k++) { if (py[k] < lo) lo = py[k]; if (py[k] > hi) hi = py[k]; const g = Math.abs(py[(k + W) % n] - py[k]) / (W * ds); if (g > gMax) { gMax = g; gAt = k; } }
@@ -164,8 +201,10 @@ const TrackValidate = (function () {
       // The start straight: grid behind the line, pit entry road before it, exit road after.
       stats.startBackM = straightRun(tr, 0, -1, 600); stats.startFwdM = straightRun(tr, 0, +1, 600);
       if (stats.startBackM < LIMITS.startBackRed) add("start", "red", "Only " + stats.startBackM + " m of straight before the start line — the grid and pit entry need " + LIMITS.startBackAmber + " m", { s: 0, fix: "start" });
+      else if (stats.startBackM < LIMITS.gridM) add("start", "amber", stats.startBackM + " m of straight before the line — the back of the grid needs " + LIMITS.gridM + " m, the pit entry " + LIMITS.startBackAmber + " m", { s: 0, fix: "start" });
       else if (stats.startBackM < LIMITS.startBackAmber) add("start", "amber", stats.startBackM + " m of straight before the line — " + LIMITS.startBackAmber + " m fits the whole grid and pit entry", { s: 0, fix: "start" });
       if (stats.startFwdM < LIMITS.startFwdRed) add("start", "red", "Only " + stats.startFwdM + " m of straight after the start line — the pit exit needs " + LIMITS.startFwdRed + " m", { s: 0, fix: "start" });
+      else if (noBays(tr, def)) add("start", "red", "The pit lane has no room for its garages — move the start line earlier on the straight (only " + stats.startFwdM + " m after it)", { s: 0, fix: "start" });
       else if (stats.startFwdM < LIMITS.startFwdAmber) add("start", "amber", stats.startFwdM + " m of straight after the line — " + LIMITS.startFwdAmber + " m lets the pit exit merge cleanly", { s: 0, fix: "start" });
       try { if (typeof TrackPit !== "undefined" && TrackPit.window) { const w = TrackPit.window(tr, Tracks.curvature); stats.pitEntryM = Math.round(w.entryM); stats.pitExitM = Math.round(w.exitM); } } catch (_) { /* informational */ }
       turns = bakeTurns(tr);
@@ -175,6 +214,6 @@ const TrackValidate = (function () {
     return { issues, stats, turns };
   }
 
-  return { LIMITS, previewDef, build, check, judge, straightRun, bakeTurns, estLap };
+  return { LIMITS, previewDef, build, check, judge, straightRun, noBays, bakeTurns, estLap };
 })();
 Object.freeze(TrackValidate);
