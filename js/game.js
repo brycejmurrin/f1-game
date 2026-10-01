@@ -3937,7 +3937,7 @@ function flybyGridOrder() {
 // RACE! before the menu's idle build: prepare under the card, then drive out
 // and fly. The race reuses this build; its outgoing shot never waits for shaders.
 let _introKey = "", _introRun = 0, _introSkip = 0;
-function cancelIntro() { _introRun++; _introKey = ""; _introSkip = 0; sheetRelease(false); }
+function cancelIntro() { if (_studio) studioClose(_studio.n); _introRun++; _introKey = ""; _introSkip = 0; sheetRelease(false); }
 async function awaitIntroWarm(current) {
   const at = performance.now();
   while (current() && gfx.warming && gfx.warming()) {
@@ -3953,7 +3953,7 @@ async function awaitIntroWarm(current) {
 let _studio = null;
 // RACE SETTINGS COVERS ITS OWN START (raceIntroFromSheet): the sheet stays up, START
 // reading PREPARING… and BACK (Escape's door) off, not the build card over a black canvas
-// before the garage. studioOpen or raceIntro lowers it; titleIfBare/cancelIntro give the buttons back.
+// before the garage. studioShown or raceIntro lowers it; titleIfBare/cancelIntro give the buttons back.
 let _introSheet = null;
 function sheetRelease(hide) {
   const h = _introSheet; if (!h) return;
@@ -3964,7 +3964,6 @@ function sheetRelease(hide) {
 /** Cold preparation's cover: the build card, unless race settings already covers it. */
 function introCover(info, n) { if (!_introSheet) loadingScreen.building(info, () => studioSkip(n)); }
 function studioOpen(n, info) {
-  sheetRelease(true);   // the car moves: the sheet gives way to it
   if (_studio) studioClose(_studio.n);
   const real = info && info.real;
   // None for: a race joined mid-way or watched (not your car leaving the garage), a
@@ -3974,15 +3973,22 @@ function studioOpen(n, info) {
   // from exactly the players testing it).
   const off = (real && (real.watch || real.startLap > 1)) || headlessMode || document.hidden;
   const ms = off ? 0 : setupCam.startDriveOut();
-  if (ms > 0) { _studio = { at: performance.now(), ms, n, info, cardUp: !!(gfx.warming && gfx.warming()) }; setupPreviewOn = true; }
-  if (_studio && !_studio.cardUp) loadingScreen.garage(info, () => studioSkip(n));
-  else loadingScreen.building(info, () => studioSkip(n));
+  if (ms > 0) { _studio = { at: performance.now(), ms, n, info, cardUp: true }; setupPreviewOn = true; }
+  if (_studio && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent) {
+    const studio = _studio; studio.softReady = false;
+    if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent();   // discard readbacks from the previous camera
+    gfx.awaitSoftPresent(30000).then(() => { if (_studio === studio) studio.softReady = true; }, (e) => { if (_studio === studio) studio.error = e; });
+  }
+  introCover(info, n);   // present() may start a queued warm: keep preparation covered
 }
 /** The garage's first drawn frame after a pending warm: the card gives way to it (render()). */
 function studioShown() {
   if (!_studio || !_studio.cardUp) return;
+  const soft = gfx.softPresentState && gfx.softPresentState();
+  if (soft && soft.shownGen < soft.sceneGen) return;   // WGX's first readback may belong to the previous scene
   const n = _studio.n;
   _studio.cardUp = false; _studio.at = performance.now();
+  sheetRelease(true);
   loadingScreen.garage(_studio.info, () => studioSkip(n));
 }
 function studioSkip(n) {
@@ -3999,7 +4005,14 @@ function studioClose(n) {
 async function studioDone(live, n) {
   // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length,
   // from the garage's first frame — a card held for a pending warm is not the car's time, and has its own ceiling).
-  while (_studio && _studio.n === n && !_studio.skip && live() && setupCam.driveOutLeft() > 0 && performance.now() - _studio.at < (_studio.cardUp ? 30000 : _studio.ms * 3)) await menuSlice();
+  while (_studio && _studio.n === n && !_studio.skip && live() && (_studio.cardUp || setupCam.driveOutLeft() > 0)) {
+    if (_studio.error) throw _studio.error;
+    if (performance.now() - _studio.at >= (_studio.cardUp ? 30000 : _studio.ms * 3)) {
+      if (_studio.cardUp) throw new Error("Garage preparation timed out");
+      break;
+    }
+    await menuSlice();
+  }
   // Keep the last pose until this run cuts to the flyby in the same async turn.
   // Preparation is already settled: no shader work follows the outgoing animation.
   if (_studio && _studio.n === n && gfx.warm && !_studio.skip && live()) _studio.held = true;
@@ -4022,14 +4035,14 @@ function introGarage(go) {
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
   studioOpen(n, info);
   if (!_studio) { loadingScreen.stop(); return false; }   // no drive-out (tuner off, a watched race): fly at once, as before
-  const out = studioDone(live, n);
+  let prepared = false;
   (async () => {
-    try { const fly = await introPlan(live, key, info, n); await out; if (live() && fly) _menuFly = fly; }
-    catch (e) { Log.warn("gfx", "intro planning failed", e); await out; }
+    try { const fly = await introPlan(live, key, info, n); await studioDone(live, n); if (live() && fly) _menuFly = fly; prepared = true; }
+    catch (e) { if (live()) { Log.warn("gfx", "intro garage failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } }
     finally {
       studioClose(n);
       if (n === _introRun) {
-        if (!live()) loadingScreen.stop();
+        if (!prepared || !live()) { loadingScreen.stop(); titleIfBare(); }
         else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
       }
     }
@@ -4043,6 +4056,7 @@ function introBuild(go) {
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
+  let prepared = false;
   (async () => {
     try {
       await ensureScenery(idx);
@@ -4064,6 +4078,7 @@ function introBuild(go) {
       if (live() && fly) _menuFly = fly;
       _menuGate.warm = 0;
       if (_introSkip !== n) { studioOpen(n, info0); await studioDone(live, n); }
+      prepared = true;
     } catch (e) {
       if (live()) { Log.warn("gfx", "intro build failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); }
     }
@@ -4071,7 +4086,7 @@ function introBuild(go) {
       // Only this request may hand over; a quit or newer request owns its own screen.
       studioClose(n);
       if (n === _introRun) {
-        if (!live()) { loadingScreen.stop(); titleIfBare(); }
+        if (!prepared || !live()) { loadingScreen.stop(); titleIfBare(); }
         else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
       }
     }
@@ -4093,7 +4108,6 @@ function introWarm(go) {
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
   const info = loadingInfo(), cold = _warmKey !== key;
   if (cold) introCover(info, n); else studioOpen(n, info);
-  const out = cold ? null : studioDone(live, n);
   (async () => { try {
       const fly = await introPlan(live, key, info, n);
       if (!live()) return;
@@ -4105,7 +4119,7 @@ function introWarm(go) {
       if (fly) _menuFly = fly;
       _menuGate.warm = 0;
       if (cold && _introSkip !== n) { studioOpen(n, info); await studioDone(live, n); }
-      else if (out) await out;
+      else if (!cold) await studioDone(live, n);
       if (!live()) return;
       studioClose(n);   // the held garage hands straight to the flyby
       try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
@@ -4130,17 +4144,21 @@ function titleIfBare() { sheetRelease(false); if (state === "menu" && els.overla
 function raceIntroFromSheet(go, sheet, btn) {
   if (_introSheet) return;   // already preparing (START is disabled: a synthetic second press)
   if (!sheet || !btn) { if (sheet) sheet.hidden = true; raceIntro(go); return; }
-  const back = $("rs-cancel"); _introSheet = { sheet, btn, back, label: btn.textContent };
+  const back = $("rs-cancel"), owner = _introSheet = { sheet, btn, back, label: btn.textContent };
   btn.disabled = true; btn.textContent = "PREPARING…"; if (back) back.disabled = true;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;
-  const intro = () => { try { raceIntro(go); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); sheetRelease(true); go(); } };
-  if (!(gfx.warming && gfx.warming())) { intro(); return; }
-  const n = ++_introRun, settings = entrySettings(), at = performance.now();
+  const failed = (e) => {
+    if (_introSheet !== owner) return;
+    Log.warn("game", "pre-race preparation failed", e); cancelIntro(); loadingScreen.stop();
+    announce("PREPARATION FAILED — please retry", 5, "info");
+  };
+  const intro = () => { try { raceIntro(go); } catch (e) { failed(e); } };
+  try { if (!(gfx.warming && gfx.warming())) { intro(); return; } } catch (e) { failed(e); return; }
+  const n = ++_introRun, settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings();
-  (async () => {
-    while (live() && gfx.warming() && performance.now() - at < 30000) await menuSlice();
-    if (live()) intro(); else if (n === _introRun) sheetRelease(false);
-  })();
+  (async () => { try {
+    if (await awaitIntroWarm(live)) intro(); else if (_introSheet === owner) sheetRelease(false);
+  } catch (e) { failed(e); } })();
 }
 function raceIntro(go) {
   // The card is the whole screen: the Data Hub's JUMP IN closes a dialog that sat OVER the title, which then showed round the card.
@@ -6792,7 +6810,6 @@ function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   if (gfx.warming && gfx.warming()) return;
-  if (_studio) studioShown();   // a warm pending at RACE! is over: the garage replaces its card
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
   // PRE-RACE LOADING SCREEN's flyby, or the garage's car preview; under every other
   // menu it is HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat
@@ -6804,7 +6821,7 @@ function render(dt) {
   // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
   const menuBlank = (state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld()))
     || (loadingScreen.phase() === "build" && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
-  const vis = menuBlank ? "hidden" : "";
+  const vis = menuBlank || (_studio && _studio.cardUp) ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
   // its visibility in lockstep with #game or a blank menu still shows the last blit.
@@ -6814,7 +6831,7 @@ function render(dt) {
   // owes them): shaders, textures and shadow maps warm up under the picker, not
   // in front of the player the instant race settings opens.
   // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too.
-  if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { _menuGate.garageWarm--; _menuGate.garageReady = true; renderSetupPreview(dt); return; }
+  if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; return; }
   if (menuBlank && !(track && _menuGate.warm > 0)) return;
   if (menuBlank) _menuGate.warm--;
   // RESULTS: physics and PerfGov already stop; the sheet is translucent over
@@ -6826,8 +6843,14 @@ function render(dt) {
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0);
   if (heldWarm) _menuGate.warm--;
-  if (setupPreviewOn && !heldWarm) _menuGate.garageReady = true;
-  if (setupPreviewOn && !heldWarm) { renderSetupPreview(dt); return; }
+  if (setupPreviewOn && !heldWarm) {
+    if (renderSetupPreview(dt, !!(_studio && _studio.cardUp))) {
+      _menuGate.garageReady = true;
+      if (!_studio || _studio.softReady !== false) studioShown();
+      if (_studio && !_studio.cardUp) { canvas.style.visibility = ""; if (_softEl) _softEl.style.visibility = ""; }
+    }
+    return;
+  }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
   // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas
