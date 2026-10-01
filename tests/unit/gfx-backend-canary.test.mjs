@@ -3542,7 +3542,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
 test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const human = game.slice(game.indexOf("throttleLvl = inp ? (inp.throttleLevel ?? 1)"), game.indexOf("AiDrive.beginLook();"));
-  assert.match(human, /c\.wake = wakeOf\(tg, tc\.x - c\.x\)/, "the player's tow uses the AI's window and fade");
+  assert.match(human, /c\.wake = wakeOf\(tg, tc\._snapX - c\.x\)/, "the player's tow uses the AI's window and fade");
   assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
   // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).

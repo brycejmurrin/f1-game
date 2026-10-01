@@ -42,5 +42,7 @@ test("a red-flag restart is a standing start in first, and the coast estimate ma
   const coast = "-COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0))";
   assert.ok(src.includes("const cd = COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0))"));
   assert.ok(src.includes(coast));
-  assert.match(src, /vStd\(c\.speed\) < 7 && boxed/);
+  // Crawl detector stays absolute (vstd APPROVED): grip-limited corner floor
+  // carries no PACE term, so 7 m/s means crawling at every OVERALL SPEED.
+  assert.match(src, /c\.speed < 7 && boxed/);
 });

@@ -1368,7 +1368,7 @@ test("letPassCase: a lapping car closing on the gearbox is waved through; a same
   assert.equal(on({ racing: false }), false, "only in the race");
   assert.equal(on({ chaser: null }), false);
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /AiDrive\.letPassCase\([\s\S]{0,200}chaser\.prog - c\.prog > track\.total \* 0\.5\)/,
+  assert.match(game, /AiDrive\.letPassCase\([\s\S]{0,200}chaser\._snapProg - c\.prog > track\.total \* 0\.5\)/,
     "game.js asks the rule with LAPPING = a lap or more ahead in progress");
 });
 
