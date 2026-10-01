@@ -162,7 +162,8 @@ const STRIP = {
   // → bahrain hollow-stand guard: grandstandEx suppresses when crowdBank
   // places 0 risers, so monza's fold-site shells (no seating) no longer emit
   // → back to ship emission 342395; strip after 315572
-  monza: { before: 342395, after: 315572 },
+  // → Racing Kit barriers + pylons 341415/314563 (28- and 108-index kit props for the 72/84-index synthetic ones)
+  monza: { before: 341415, after: 314563 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
