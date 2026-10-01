@@ -104,7 +104,7 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // The canary was redbull (295 drops). Its scenery file now asks the same
   // onTrack question BEFORE calling backdrop() (js/circuits/scenery/redbull.js,
   // also silverstone / shanghai / monaco), so it drops none; spa still asks for
-  // 53 backdrops the guard refuses and stands in.
+  // backdrops the guard refuses and stands in.
   const Tracks = buildContext();
   const c = counts(Tracks, "spa");
   assert.ok(c.backdrop > 0,
@@ -115,8 +115,12 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // not a side effect. Raise or lower it in the same commit that changes it.
   // (A drop the pit complex causes is counted on `supersededByPit`, not
   // here — this counter is the guard MARGIN's alone.)
-  assert.equal(c.backdrop, 53,
-    `spa backdrop drops = ${c.backdrop}, expected 53 — if you changed the ` +
+  // 53 → 47 (2026-10-01): transformSceneryApi now hands every() authored-frame
+  // k (same as along). Spa's every(64) backdrop pass no longer double-shifts,
+  // so six calls land where onTrack already clears them and the guard never
+  // sees them. Guard margin unchanged — placement frame only.
+  assert.equal(c.backdrop, 47,
+    `spa backdrop drops = ${c.backdrop}, expected 47 — if you changed the ` +
     `guard, re-measure and update this with the reason`);
   // And the pre-check must not have changed what redbull SHIPS: it skips the
   // 295 calls the engine refused, and only those (graph-parity proved it).
