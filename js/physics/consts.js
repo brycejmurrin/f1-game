@@ -260,7 +260,8 @@ window.PhysicsConsts.BAND_CEIL = (() => {
  * close-spacing ceiling). See docs/PHYSICS.md §Slipstream. */
 window.PhysicsConsts.DirtyAir = (function () {
   "use strict";
-  const clamp = M4.clamp;
+  // Inline Math.max/min — do not bind a private `clamp` (shared-math) and do
+  // not touch M4 here: many unit VMs load consts.js without mat4.js.
   const LOSS = { off: 0, classic: 0.35, cfd: 0.67 };
   // CFD starters to tune: streamwise λ (m) and lateral sigma (m).
   const CFD_LAMBDA = 12;
@@ -273,12 +274,13 @@ window.PhysicsConsts.DirtyAir = (function () {
     if (mode === "cfd") {
       const long = Math.exp(-g / CFD_LAMBDA);
       const lat = Math.exp(-(x * x) / (2 * CFD_LAT * CFD_LAT));
-      return clamp(long * lat, 0, 1);
+      return Math.max(0, Math.min(1, long * lat));
     }
     const range = tow && tow.range != null ? tow.range : 34;
     const fade = tow && tow.fade != null ? tow.fade : 28;
     const halfW = tow && tow.halfW != null ? tow.halfW : 4;
-    return clamp((range - g) / fade, 0, 1) * clamp(1 - Math.abs(x) / halfW, 0, 1);
+    return Math.max(0, Math.min(1, (range - g) / fade))
+      * Math.max(0, Math.min(1, 1 - Math.abs(x) / halfW));
   }
   function mul(wake, speed, mode, downforce, vTop) {
     if (!wake || mode === "off") return 1;

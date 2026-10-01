@@ -18,9 +18,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
   ctx.window = ctx;
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js"]) {
-    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
-  }
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: "consts.js" });
   return vm.runInContext("PhysicsConsts.DirtyAir", ctx);
 }
 const D = load();

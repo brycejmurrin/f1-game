@@ -549,7 +549,6 @@ const HARD_EDGES = [
   ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
-  ["js/core/mat4.js", "js/physics/consts.js"], // PhysicsConsts.DirtyAir binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
