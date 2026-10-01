@@ -308,6 +308,15 @@ test("the minimum life holds AFTER severity: a 5-lap race at Austria is one set"
   assert.ok(half.tyreWear < 0.65, `two laps are half a set, not all of it: ${half.tyreWear.toFixed(3)}`);
 });
 
+test("a 5-lap race on the softest set ends on usable tyres, fuel and all", () => {
+  // At MIN_LIFE_LAPS 4 the fuel load (+22 % at a full tank) took every car in
+  // a 5-lap Austria past the cliff: 1.13-1.26 at the flag (census, 2026-09-30).
+  const s = ctxFor({ laps: 5, severity: 1.97 }); s.setLevel("real");
+  const c = freshCar(s, 0.48);
+  run(s, c, 5);
+  assert.ok(c.tyreWear <= 1.05, `wear at the flag of a 5-lap race: ${c.tyreWear.toFixed(3)}`);
+});
+
 // ── 3. The grip curve ───────────────────────────────────────────────────────
 
 test("grip falls linearly across the stint, then falls off a cliff", () => {
