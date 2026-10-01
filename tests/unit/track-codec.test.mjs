@@ -93,3 +93,92 @@ test("URL fragment and file envelope helpers", () => {
   assert.equal(CD.fromFile({ format: "apex26-career-backup-v1" }), null);
   assert.equal(CD.fromFile(null), null);
 });
+
+// ── content-id stability (the TT board and ghosts key on the id) ────────────
+const EDGE = 0.9999995;   // a lap fraction that rounds to the lattice's 1.0
+/** encode → decode keeps the id the SENDER's store computed. */
+async function sameId(CD, C, d, label, resanitize = true) {
+  const it = C.sanitize(d);
+  assert.ok(it, label + ": sanitises");
+  const code = await CD.encode(d);
+  assert.ok(code, label + ": encodes");
+  const back = await CD.decode(code);
+  assert.equal(back.ok, true, label + ": " + back.reason);
+  assert.equal(back.id, it.id, label + ": same content id on both ends");
+  if (resanitize) assert.equal(C.sanitize(back.design).id, it.id, label + ": …and after the receiver's own sanitize");
+  return { it, back };
+}
+
+test("id equality: an hwZone without `ease`, 24 of every zone list, and fractions ≈ 1", async () => {
+  const { CD, C } = bootEditor();
+  // (i) No ease: whatever the store keeps (absent, or the 0.025 default) the code carries.
+  await sameId(CD, C, design({ hwZones: [{ s0: 0.2, s1: 0.3, hw: 5.5 }] }), "no ease");
+  // (ii) The codec caps ARE the storage caps: nothing is dropped on the way.
+  assert.deepEqual(Object.values(CD.ZONE_CAPS), [C.LIMITS.zones, C.LIMITS.zones, C.LIMITS.zones, C.LIMITS.zones], "ZONE_CAPS = CustomTracks.LIMITS.zones");
+  const n = C.LIMITS.zones, at = (i) => (i + 0.5) / n;
+  const full = design({
+    hwZones: Array.from({ length: n }, (_, i) => ({ s0: at(i), s1: at(i) + 0.01, hw: 6, ease: 0.02 })),
+    bankZones: Array.from({ length: n }, (_, i) => ({ frac: at(i), angleDeg: 5 + (i % 5), widthM: 60 })),
+    elevations: Array.from({ length: n }, (_, i) => ({ s: at(i), halfM: 60, rise: 1 })),
+    bridges: Array.from({ length: n }, (_, i) => ({ s: at(i), halfM: 80, rise: 2 })),
+  });
+  const { back } = await sameId(CD, C, full, "24 of each");
+  for (const k of ["hwZones", "bankZones", "elevations", "bridges"]) assert.equal(back.design[k].length, n, k + ": all " + n + " survive");
+  // Over the cap is a refusal, never a silent truncation.
+  const over = C.sanitize(full); over.bridges = over.bridges.concat([{ s: 0.01, halfM: 80, rise: 2 }]);
+  assert.throws(() => CD.encodeBytes(over, true), /zones/);
+  // (iii) 0.9999995 rounds to the lattice's 1.0 in storage; the code must not turn it into 0.
+  // (A re-sanitize of that 1.0 is CustomTracks' own idempotence — the TODO test below.)
+  await sameId(CD, C, design({ hwZones: [{ s0: 0.95, s1: EDGE, hw: 6, ease: 0.02 }], bankZones: [{ frac: EDGE, angleDeg: 6, widthM: 80 }],
+    elevations: [{ s: EDGE, halfM: 100, rise: 2 }], bridges: [{ s: EDGE, halfM: 120, rise: 3 }] }), "frac ≈ 1", false);
+  await sameId(CD, C, design({ elevations: [{ s: 0, halfM: 100, rise: 2 }, { s: 1, halfM: 90, rise: 1 }] }), "frac 0 and 1");
+});
+
+// CustomTracks.sanitize's frac() (js/editor/custom-tracks.js) rounds 0.9999995
+// to 1.0 and KEEPS it, but maps a stored 1.0 to 0 on the next load — so the
+// id of such a design changes between upsert() and load(), share code or not.
+// The fix is there (wrap 65535 → 0 inside frac); TODO until it lands.
+{
+  const { C } = bootEditor();
+  const once = C.sanitize(design({ elevations: [{ s: EDGE, halfM: 100, rise: 2 }] }));
+  const idempotent = C.sanitize(once).id === once.id;
+  test("CustomTracks.sanitize is idempotent at a fraction ≈ 1 (the stored id survives a reload)",
+    { todo: idempotent ? false : "js/editor/custom-tracks.js frac(): wrap a rounded 1.0 to 0" }, async () => {
+      const { CD, C: C2 } = bootEditor();
+      const d = design({ hwZones: [{ s0: 0.95, s1: EDGE, hw: 6, ease: 0.02 }], bankZones: [{ frac: EDGE, angleDeg: 6, widthM: 80 }], elevations: [{ s: EDGE, halfM: 100, rise: 2 }] });
+      const it = C2.sanitize(d);
+      assert.equal(C2.sanitize(it).id, it.id, "sanitize(sanitize(x)) keeps the id");
+      await sameId(CD, C2, d, "frac ≈ 1, re-sanitised");
+    });
+}
+
+test("fromHash: a malformed %-escape is null, not a URIError", () => {
+  const { CD } = bootEditor();
+  assert.equal(CD.fromHash("#track=%E0%A4%A"), null);
+  assert.equal(CD.fromHash("#ghost=1&track=%"), null);
+  assert.equal(CD.fromHash("#track=APXT1.p.%41"), "APXT1.p.A");
+});
+
+test("inflate: an oversized stream is cut off under MAX_BYTES; no DecompressionStream reads as unsupported", async () => {
+  const { CD, ctx } = bootEditor();
+  // 64 KiB of zeros deflates to a few dozen bytes — a tiny code that would inflate past MAX_BYTES.
+  const cs = new CompressionStream("deflate-raw");
+  const wr = cs.writable.getWriter(); wr.write(new Uint8Array(65536)); wr.close();
+  const bomb = new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  assert.ok(bomb.length < 200, `the bomb is ${bomb.length} bytes`);
+  const r = await CD.inflate(bomb);
+  assert.deepEqual([r.ok, r.reason], [false, "bounds"]);
+  const viaCode = await CD.decode("APXT1.z." + CD.b64url(bomb));
+  assert.deepEqual([viaCode.ok, viaCode.reason], [false, "bounds"]);
+  // A real z. code still inflates.
+  const small = new CompressionStream("deflate-raw"); const w2 = small.writable.getWriter(); w2.write(new Uint8Array([1, 2, 3])); w2.close();
+  const ok = await CD.inflate(new Uint8Array(await new Response(small.readable).arrayBuffer()));
+  assert.equal(ok.ok, true); assert.deepEqual([...ok.bytes], [1, 2, 3]);
+  // A browser without DecompressionStream cannot read a z. code: say so, not "corrupt".
+  const keep = ctx.DecompressionStream;
+  ctx.DecompressionStream = undefined;
+  try {
+    const u = await CD.decode("APXT1.z." + CD.b64url(bomb));
+    assert.deepEqual([u.ok, u.reason], [false, "unsupported"]);
+  } finally { ctx.DecompressionStream = keep; }
+});
