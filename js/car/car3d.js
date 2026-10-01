@@ -2205,8 +2205,7 @@ const Car3D = (function () {
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
 
     part("hood");
-    // Driver-eye references: a descending nose deck ahead of the wheel,
-    // with curved shoulders wrapping the arms (official F1 / Sky visor cams).
+    // Driver-eye deck and shoulders (official F1 / Sky visor cams).
     const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.50, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
     // The cowl stays ahead of the wheel and rises to its surround, beneath
@@ -2240,7 +2239,7 @@ const Car3D = (function () {
         const shoulder = [
           [[s*0.30,0.34,1.50],[s*0.56,0.26,1.50],[s*0.54,0.585,1.46],[s*0.30,0.62,1.46]],
           [[s*0.285,0.37,0.94],[s*0.565,0.29,0.94],[s*0.535,0.655,0.91],[s*0.285,0.69,0.91]],
-          [[s*0.32,0.40,-0.04],[s*0.55,0.32,-0.04],[s*0.53,0.73,-0.10],[s*0.32,0.755,-0.10]],
+          [[s*0.32,0.40,-2.56],[s*0.55,0.32,-2.56],[s*0.53,0.73,-2.52],[s*0.32,0.755,-2.52]],
         ];
         for (let i=0;i<3;i++) for (const j of [1,2]) {
           shoulder[i][j][0] += s * profile[2][i];
@@ -2978,25 +2977,26 @@ const Car3D = (function () {
     } else if (opts && opts.halo) {
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
-      const path = haloHoopPath(0.30,0.92,-0.15,0.28,0.18,faired?1.10:0.96,0.62,faired?24:10);
+      const path = haloHoopPath(0.30,0.765,-0.80,0.28,0.18,faired?1.10:0.96,0.62,faired?24:10);
       const hc = haloTint || (faired ? CARBON : HALO);
       if (faired) {
         const start=out.pos.length/3;
         // Broad carbon roof; underside curves smoothly into the central Y.
         // Swept crown rises toward the nose so its upper edge reads level
         // from the seat, instead of projecting as a deep U over the road.
-        for (const p of path) p[1] = 0.82 + 0.39*(p[2]+0.20) - 0.028;
+        for (const p of path) p[1] = Math.max(0.765,0.82 + 0.39*(p[2]+0.20) - 0.028);
         const rings = path.map((p,i) => {
           const a=path[Math.max(0,i-1)], b=path[Math.min(path.length-1,i+1)];
           const dx=b[0]-a[0], dz=b[2]-a[2], len=Math.hypot(dx,dz);
           const nx=-dz/len*0.038, nz=dx/len*0.038;
-          const low=p[1]-0.035*(p[2]+0.20)/0.82-0.15*Math.exp(-p[0]*p[0]/0.0081);
+          const low=p[1]-0.035*Math.max(0,p[2]+0.20)/0.82-0.15*Math.exp(-p[0]*p[0]/0.0081);
           return [[p[0]+nx,p[1]+0.028,p[2]+nz],[p[0]-nx,p[1]+0.028,p[2]-nz],
             [p[0]-nx,low,p[2]-nz],[p[0]+nx,low,p[2]+nz]];
         });
         for(let i=0;i<rings.length-1;i++)for(let j=0;j<4;j++)
           addQuad(out,rings[i][j],rings[i+1][j],rings[i+1][(j+1)%4],rings[i][(j+1)%4],hc,SURFACES.carbon);
         smoothSkin(out,start);
+        for(const i of [0,rings.length-1]) { const q=i===0?rings[i].slice().reverse():rings[i]; addQuad(out,q[0],q[1],q[2],q[3],hc,SURFACES.carbon); }
       } else addTube(out,path,0.025*hk,10,HALO,SURFACES.metal);
       // Carbon fairing: a narrow stem blending into a broad Y at the crown.
       const stem = faired ? [[0.67,0.014,0.026],[0.90,0.018,0.025],[0.95,0.026,0.028],
