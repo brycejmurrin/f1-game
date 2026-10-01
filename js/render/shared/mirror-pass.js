@@ -54,6 +54,16 @@ const MirrorPass = (function () {
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
   const MEASURE_EVERY = 30;           // frames between #hud-mirror layout reads
+  // SUPERSAMPLED, then mip-filtered down by the composite (every backend builds
+  // the target's mip chain after the pass). A small image with no anti-aliasing
+  // of its own shimmers as the car moves — kerb stripes, fences, grandstand
+  // rows and the sun disc when it is behind the car fall between pixels from
+  // frame to frame: the "flashy" mirror reported from a phone. The fragments
+  // are cheap at this size (a phone's frame is ~8k pixels; the mirror's cost is
+  // its draw calls), so the rungs keep their draw-distance / cadence savings and
+  // resolution buys the steadiness. MAX_W/MAX_H are every backend's own clamp,
+  // applied here with the aspect kept (a per-axis clamp would stretch it).
+  const SS = 2, MAX_W = 1024, MAX_H = 512;
   // A RUNG HOLDS ~1.5 s before the governor may move it. On a phone the tier
   // moves on its own measurements, and every move swapped resolution, draw
   // distance and cadence at once — scenery popping in and out of the mirror,
@@ -106,6 +116,18 @@ const MirrorPass = (function () {
     const MIRROR_TUNE = { carSunGlint: 0, carSparkle: 0, windowSunFlash: 0, shadowStr: 0 };
     const _mirTune = {};
 
+    // The target for a frame of cssW x cssH CSS px: device pixels (DPR capped at
+    // 2) x the rung's res x SS — independent of the governor's render scale, so
+    // it reallocates only when the frame resizes or the rung changes.
+    function targetSize(cssW, cssH, res) {
+      const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
+      let w = cssW * dpr * res * SS, h = cssH * dpr * res * SS;
+      const k = Math.min(1, MAX_W / (w || 1), MAX_H / (h || 1));
+      w = Math.round(w * k); h = Math.round(h * k);
+      _sz[0] = w; _sz[1] = h;
+      return _sz;
+    }
+    const _sz = [0, 0];
     function el() { return _el || (_el = document.getElementById("hud-mirror")); }
     function pipEl() { return _pipEl || (_pipEl = document.getElementById("bc-pip")); }
     function bcOn() { return document.body.classList.contains("bc-on"); }
@@ -314,11 +336,7 @@ const MirrorPass = (function () {
       if (qi !== _qWant) { _qWant = qi; _qHeld = 0; }
       if (qi !== _qi && (_qi < 0 || ++_qHeld >= Q_DWELL)) _qi = qi;
       _q = QUALITY[_qi];
-      // Device pixels of the frame (DPR capped at 2), independent of the
-      // governor's render scale — a stable target, reallocated only when the
-      // frame itself resizes or the rung changes.
-      const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
-      const w = Math.round(_cssW * dpr * _q.res), h = Math.round(_cssH * dpr * _q.res);
+      const sz = targetSize(_cssW, _cssH, _q.res), w = sz[0], h = sz[1];
       if (w < 16 || h < 8) return;
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;
@@ -349,10 +367,8 @@ const MirrorPass = (function () {
       g.mirrorRect(_pipRect, false);
       _frame++;
       _q = QUALITY[3];   // its own pass only: the mirror's rung dwell (_qi) is left alone
-      // Sized like the mirror: the frame's CSS box in device pixels (DPR capped at 2),
-      // not the render buffer the governor rescales.
-      const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
-      const w = Math.round(_pipCssW * dpr * _q.res), h = Math.round(_pipCssH * dpr * _q.res);
+      // Sized like the mirror (targetSize), not from the render buffer the governor rescales.
+      const sz = targetSize(_pipCssW, _pipCssH, _q.res), w = sz[0], h = sz[1];
       if (w < 16 || h < 8) return;
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;

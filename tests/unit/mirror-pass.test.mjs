@@ -161,7 +161,7 @@ test("the pass order, the rect, and the frame handed back untouched", () => {
   const [, rect] = h.calls[0];
   assert.deepEqual(Array.from(rect, (v) => +v.toFixed(4)), [0.3438, 0.0972, 0.3125, 0.1583]);
   const [, w, h2, vp, eye, cull] = h.calls[1];
-  assert.equal(w, 400); assert.equal(h2, 114);
+  assert.equal(w, 800); assert.equal(h2, 228);   // the 400x114 frame, supersampled 2x
   assert.notEqual(vp, h.mainVP, "begin saw the MIRROR camera");
   assert.ok(cull > 0 && cull <= 400, "a radial cull, never the main camera's 0 = unbounded");
   assert.ok(Math.abs(eye[1] - 1.05) < 1e-6 && eye[2] === 100, "helmet height over the car");
@@ -209,7 +209,7 @@ test("a phone gets the LITE pass: no prop batches, a short radius, fewer rivals,
   const h = boot({ mode: "on", mobile: true });
   h.render();
   const [, w, ht, , , cull] = h.calls.find((c) => c[0] === "begin");
-  assert.equal(w, 240); assert.equal(ht, 68);   // 60% of the 400x114 frame
+  assert.equal(w, 480); assert.equal(ht, 137);   // 60% of the 400x114 frame, x2 supersampled
   assert.ok(cull > 0 && cull <= 180, "the 180 m lite radius");
   assert.equal(h.calls.find((c) => c[0] === "world")[2], true, "drawWorldMeshes sees frame.mirrorLite");
   assert.equal(h.frame.mirrorLite, undefined, "and the flag comes off with the mirror camera");
@@ -234,8 +234,8 @@ test("only governor tier 2 halves the cadence", () => {
 });
 
 test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a third)", () => {
-  const cases = [[{ tier: 0 }, "full", 400, 114], [{ mobile: true }, "lite", 240, 68],
-    [{ tier: 3 }, "low", 200, 57], [{ tier: 4 }, "min", 160, 46]];
+  const cases = [[{ tier: 0 }, "full", 800, 228], [{ mobile: true }, "lite", 480, 137],
+    [{ tier: 3 }, "low", 400, 114], [{ tier: 4 }, "min", 320, 91]];
   for (const [opt, q, w, ht] of cases) {
     const h = boot(Object.assign({ mode: "on" }, opt));
     h.render();
@@ -349,11 +349,11 @@ test("a phone's governor cannot make the mirror flash: the target ignores render
   const h = boot({ mode: "on", tier: 2 });
   h.render();
   const size = () => { const b = h.calls.filter((c) => c[0] === "begin").pop(); return [b[1], b[2]]; };
-  assert.deepEqual(size(), [200, 57], "low rung: half of the 400x114 frame");
+  assert.deepEqual(size(), [400, 114], "low rung: half of the 400x114 frame, x2 supersampled");
   // Dynamic resolution rescales the render buffer; the mirror target does not move.
   h.gfx.width = 640; h.gfx.height = 360;
   for (let i = 0; i < 4; i++) h.render();
-  assert.deepEqual(size(), [200, 57], "sized from the frame's CSS box, not the render buffer");
+  assert.deepEqual(size(), [400, 114], "sized from the frame's CSS box, not the render buffer");
   // A tier blip shorter than the dwell never swaps the rung…
   h.setTier(4);
   for (let i = 0; i < 30; i++) h.render();
