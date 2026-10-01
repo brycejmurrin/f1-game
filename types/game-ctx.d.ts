@@ -807,6 +807,7 @@ declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
 declare const RadioVoice: GameModuleFactory;
+declare const RecordedAnnouncer: GameModuleFactory;
 declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const PlayerForces: GameModuleFactory;

@@ -132,6 +132,19 @@ test("the sound button unlocks WebAudio synchronously after enabling its master"
   assert.deepEqual(calls.slice(0, 3), ["enabled:true", "init", "start:-1"]);
 });
 
+test("master sound off cancels pending announcements and every recorded channel", () => {
+  const { panel, G, nodes, calls } = audioPanelHarness(); panel.init();
+  G.radio = { available: () => false, packOn: () => true,
+    stop: () => calls.push("radio-stop"), pack: { stop: () => calls.push("pack-stop") } };
+  G.announcer = { available: () => false, enabled: () => false, stop: () => calls.push("ann-stop") };
+  G.soundOn = true; calls.length = 0;
+  nodes.get("soundbtn").onclick();
+  assert.equal(G.soundOn, false);
+  assert.ok(calls.includes("radio-stop"));
+  assert.ok(calls.includes("ann-stop"));
+  assert.ok(calls.includes("pack-stop"));
+});
+
 test("music and SFX enable clicks also unlock a saved-off master synchronously", () => {
   for (const id of ["as-music", "as-sound"]) {
     const { panel, G, wired, calls } = audioPanelHarness();
@@ -477,5 +490,5 @@ test('same-size voice-list replacements refresh both settings selectors', () => 
   G.soundOn=true; wired.get('as-radio').write('off');
   voices[0]={name:'Replacement',lang:'en-GB'};
   wired.get('as-radio').write('off');
-  for(const id of ['as-v-radio','as-v-announcer']) assert.ok(nodes.get(id).children.some(o=>o.value==='Replacement'),id);
+  for(const id of ['as-v-radio','as-v-announcer']) assert.ok(nodes.get(id).children.flatMap(o=>o.children || [o]).some(o=>o.value==='Replacement'),id);
 });

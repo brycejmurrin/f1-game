@@ -2466,6 +2466,17 @@ const GameAudio = (function () {
   });
   const RADIO_FX_MAX = 1.5;
   let radioFx = 1;        // the player's level; 0 is off
+  const RADIO_PRESETS = Object.freeze({
+    modern: { name: "MODERN RADIO", lo: 300, hi: 3400, drive: 2.2, noise: 1, cue: true },
+    clean: { name: "CLEAN HEADSET", lo: 100, hi: 9000, drive: 1.1, noise: 0, cue: false },
+    vintage: { name: "VINTAGE RADIO", lo: 450, hi: 2800, drive: 3.2, noise: 1.5, cue: true },
+  });
+  let radioPreset = "modern";
+  function setRadioPreset(id) {
+    if (!Object.prototype.hasOwnProperty.call(RADIO_PRESETS, id)) return radioPreset;
+    radioStingStop(); radioPreset = id;
+    return radioPreset;
+  }
   let radioBed = null;    // the live hiss, or null
 
   /* THE COURTESY TONE — the beep before the message.
@@ -2592,7 +2603,13 @@ const GameAudio = (function () {
    *  is a case this game produces on its own. */
   function radioSting(channel, seconds) {
     radioStingStop();
-    const ch = RADIO_CH[channel];
+    const preset = RADIO_PRESETS[radioPreset];
+    const base = RADIO_CH[channel];
+    const ch = base && channel === "radio" ? Object.assign({}, base, {
+      lo: preset.lo, hi: preset.hi, click: base.click * preset.noise, hiss: base.hiss * preset.noise,
+      tail: base.tail * preset.noise, toneAmp: preset.cue ? base.toneAmp : 0,
+    }) : base;
+    if (channel === "radio" && !preset.cue) return false;
     if (!sfxOk() || !ch || radioFx <= 0) return false;
     const t0 = now();
     // KEY, THEN THE FIGURE, THEN THE LINE — the order the ear expects: the mic
@@ -2609,7 +2626,7 @@ const GameAudio = (function () {
     const src = ctx.createBufferSource();
     src.loop = true;
     src.buffer = noisePool();
-    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = RADIO_LO;
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = ch.lo || RADIO_LO;
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
     const g = ctx.createGain();
     const peak = ch.hiss * radioFx;
@@ -2644,7 +2661,7 @@ const GameAudio = (function () {
     radio:     { lo: RADIO_LO, hi: RADIO_HI, drive: 2.2, level: 0.95, click: 0 },
     spotter:   { lo: RADIO_LO, hi: RADIO_HI, drive: 2.8, level: 1.0,  click: 0.07 },
     control:   { lo: RADIO_LO, hi: RADIO_HI, drive: 1.6, level: 0.9,  click: 0 },
-    coach:     { lo: RADIO_LO, hi: RADIO_HI, drive: 1.6, level: 0.9,  click: 0 },
+    coach:     { lo: 90,       hi: 9000,     drive: 1.1, level: 0.9,  click: 0 },
     announcer: { lo: 90,       hi: 9000,     drive: 1.1, level: 0.85, click: 0 },
   });
   /* ONE CHAIN PER SOUND, built once per context and shared by every line: a
@@ -2691,12 +2708,16 @@ const GameAudio = (function () {
     // clock still: lines scheduled on it all play at once when it resumes.
     if (ctx.state && ctx.state !== "running") return null;
     const fx = VOICE_CH[o && o.fx] ? o.fx : VOICE_CH[o && o.channel] ? o.channel : "radio";
-    const ch = VOICE_CH[fx];
+    const preset = RADIO_PRESETS[radioPreset];
+    const isRadio = fx === "radio" || fx === "spotter";
+    const ch = isRadio ? Object.assign({}, VOICE_CH[fx], {
+      lo: preset.lo, hi: preset.hi, drive: preset.drive * (fx === "spotter" ? 2.8 / 2.2 : 1), click: VOICE_CH[fx].click * preset.noise,
+    }) : VOICE_CH[fx];
     const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
     if (!(vol > 0)) return null;
     const t0 = Math.max(now(), +at || 0);
     const g = ctx.createGain(); g.gain.value = ch.level * vol;
-    g.connect(voiceChain(fx, ch));
+    g.connect(voiceChain(isRadio ? fx + ":" + radioPreset : fx, ch));
     const srcs = [];
     let t = t0, joined = false;
     for (const p of parts) {
@@ -2915,6 +2936,9 @@ const GameAudio = (function () {
     radioSting,
     radioStingStop,
     setRadioFx,
+    setRadioPreset,
+    radioPreset: () => radioPreset,
+    radioPresets: () => Object.entries(RADIO_PRESETS).map(([id, p]) => [id, p.name]),
     radioFxLevel: () => radioFx,
     /** How long `channel`'s courtesy figure runs, in seconds, at the current
      *  level — 0 when it would not play at all. The VOICE waits this out so the
@@ -2923,6 +2947,7 @@ const GameAudio = (function () {
      *  the two cannot drift. */
     radioLeadS(channel) {
       const ch = RADIO_CH[channel];
+      if (channel === "radio" && !RADIO_PRESETS[radioPreset].cue) return 0;
       if (!ch || radioFx <= 0 || !Array.isArray(ch.tune)) return 0;
       return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
     },

@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_245 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_246 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -298,6 +298,7 @@ _245 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `car-sfx.js` | `CarSfx` | tag | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
 | `voice-pack.js` | `VoicePack` | tag | VoicePack — recorded radio voice, composed from clips the way Crew Chief does it: fixed phrases, driver surnames, positions, numbers and gaps are separate… |
 | `radio-voice.js` | `RadioVoice` | tag | The radio banner, spoken aloud by the browser's own speech synthesiser. |
+| `announcer-recorded.js` | `RecordedAnnouncer` | tag | A recorded read owns its pending load as well as its playing clips. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
 

@@ -1608,6 +1608,14 @@
             <button id="as-rpack-next" type="button" data-step="1" aria-label="Next radio voice">&rsaquo;</button>
           </div>
         </div>
+        <div id="as-rpreset" class="set-row" role="group" aria-labelledby="as-rpreset-label">
+          <span class="tune-label" id="as-rpreset-label">RADIO SOUND</span>
+          <div>
+            <button id="as-rpreset-prev" type="button" data-step="-1" aria-label="Previous radio sound">&lsaquo;</button>
+            <select id="as-rpreset-sel" aria-labelledby="as-rpreset-label"></select>
+            <button id="as-rpreset-next" type="button" data-step="1" aria-label="Next radio sound">&rsaquo;</button>
+          </div>
+        </div>
         <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
           <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
         <!-- RADIO FX — the key click, the hiss under the line and the squelch
@@ -1618,7 +1626,7 @@
              them — which is exactly what the voice volume above cannot do. -->
         <label class="tune-row"><span class="tune-label">RADIO FX <b id="as-rfx-v">10</b></span>
           <input id="as-rfx" type="range" min="0" max="15" step="1" value="10" aria-label="Team radio effect level"></label>
-        <p class="as-note">RADIO VOICE: RECORDED gives your engineer, race control, the coach and the commentator their own recorded voices, and never uses the browser's voice in a race — the smoothest choice on a phone; SYSTEM uses the browser's voice for everything. VOICE VOLUME sets every spoken line, the spotter and announcer included. RADIO FX is the click, hiss and squelch around each message, spoken or not.</p>
+        <p class="as-note">Choose a recorded voice below, then TEST to hear it. RADIO SOUND changes your engineer and spotter: a clean headset, modern radio or vintage radio. VOICE VOLUME sets all speech; RADIO FX sets the clicks and hiss. Recorded voices are AI-generated.</p>
 
         <!-- PER-CHANNEL VOICES. js/audio/radio-voice.js already partitions every
              announcement into three speakers — RACE CONTROL, the COACH and the
@@ -3421,6 +3429,7 @@
 <script defer crossorigin="anonymous" src="js/audio/voice-pack.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/radio-voice.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/announcer-recorded.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/announcer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/parts.js?v=dev"></script>

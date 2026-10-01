@@ -70,6 +70,7 @@ const SPEC = [
   { k: "announcer", lane: "json", group: "audio", def: true, src: "js/audio/announcer.js" },
   { k: "volRadio", lane: "json", group: "audio", def: 0.8, src: "js/audio/panel.js" },
   { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
+  { k: "radioPreset", lane: "json", group: "audio", def: "modern", oneOf: ["modern", "clean", "vintage"], src: "js/audio/panel.js" },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
