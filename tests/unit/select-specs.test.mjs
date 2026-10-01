@@ -10,6 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
+  SOLO_OWN_TIMEOUT_SEC,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
@@ -657,6 +658,41 @@ test("an over-budget spec the diff EDITS still runs; one merely routed still doe
   assert.ok(jobs.every((j) => j.perTest === own && j.timeout === shardCapMin(j.sec, own)),
     "each job is capped at the spec's own per-test timeout");
   if (jobs.length > 1) assert.ok(jobs.every((j) => /^\d+\/\d+$/.test(j.shard)), "a split plan carries --shard tokens");
+});
+
+test("mega-sweep over-budget specs never overflow into a shared selected job", () => {
+  // PR #604 / CI 36817164457: props-over-road and terrain-over-road declare
+  // 1500 s. As oversize they lose MAX_OVERSIZE_SHARDS to smaller-rank peers,
+  // spill to skipped, then overflow billed them at the 7.5 s fallback and
+  // packed them next to title-menu-rotation / qatar-foundation. The sweep
+  // then ran 5–10 min under llvmpipe and the next page.goto hung at 180 s
+  // (ERR_ABORTED / Navigate timeout); siblings on a fresh worker passed in ~8 s.
+  const mega = "tests/specs/props-over-road.spec.js";
+  const other = "tests/specs/career.spec.js";
+  const victim = "tests/specs/output-paths.spec.js"; // undeclared, small, packable
+  assert.ok(maxDeclaredTimeout(mega) / 1000 >= SOLO_OWN_TIMEOUT_SEC,
+    `props-over-road must stay above the solo threshold (${SOLO_OWN_TIMEOUT_SEC}s)`);
+
+  // Many over-budget peers at rank 1 so mega loses the oversize lottery.
+  const peers = [other, "tests/specs/ui-audit.spec.js", "tests/specs/hud-layout.spec.js", mega, victim];
+  const cut = fit(peers, 10, {
+    rank: (f) => (f === victim ? 3 : 1),
+    db: EMPTY,
+    overflowShards: 12,
+  });
+  assert.ok(!cut.overflow.some((s) => s.file === mega),
+    "a gate-over-declared mega-sweep must not ride as overflow");
+  assert.ok(cut.skipped.some((s) => s.file === mega) || cut.oversize.some((s) => s.file === mega),
+    "it stays oversize or skipped by name — never silently packed");
+
+  // When it DOES run (edited → oversize slot), shards() gives it a solo job so
+  // nothing inherits its Chromium after the all-circuits walk.
+  const alone = fit([mega], 30, { rank: () => 0, db: EMPTY });
+  assert.equal(alone.oversize.length, 1);
+  const plan = shards(alone, EMPTY);
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].specs, mega);
+  assert.match(plan[0].name, /^oversize-props-over-road/);
 });
 
 test("a spec this tool cannot READ is reported, never silently dropped", () => {
