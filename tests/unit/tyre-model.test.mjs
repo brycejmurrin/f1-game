@@ -826,3 +826,63 @@ test("authored tyreSeverity stays in [0.4, 2.0] and the seven P5 anchors hold", 
   }
   assert.ok(authored >= 15, `expected ≥15 authored severities after A1, got ${authored}`);
 });
+
+test("severity default is 1.0 for circuits without authored data", () => {
+  assert.equal(ctxFor({ severity: null }).severity(), 1.0);
+  assert.equal(T.SEVERITY_DEFAULT ?? 1.0, 1.0);
+});
+
+test("sliding heats the surface faster than a clean rolling load (slip × force)", () => {
+  // oxiphysics: Q_gen = slip_force · slip_speed. HEAT_SLIP fires only when
+  // slide > 0; a clean lap (slide 0) must still use the HEAT_ROLL equilibrium.
+  const life = 0.74;
+  const amb = T.T_AMBIENT.dry;
+  const track = amb + T.T_TRACK_DELTA.dry;
+  const base = { load: 1.1, vFrac: 0.95, amb, track, life, dt: 1 };
+  const clean = T.stepTemp(100, 100, { ...base, slide: 0 });
+  const scrub = T.stepTemp(100, 100, { ...base, slide: 0.8 });
+  assert.ok(scrub[0] > clean[0], `slide must heat more: scrub ${scrub[0]} vs clean ${clean[0]}`);
+});
+
+test("cooling sinks toward ambient and a warmer track surface", () => {
+  // A hotter track raises the blended sink, so a hot tyre cools less than on
+  // a cold track (same air temperature).
+  const life = 0.74;
+  const amb = 30;
+  const coolToward = (track) => {
+    let ts = 120, tb = 110;
+    for (let i = 0; i < 40; i++) {
+      const t = T.stepTemp(ts, tb, { load: 0, vFrac: 0, amb, track, life, slide: 0, dt: 1 });
+      ts = t[0]; tb = t[1];
+    }
+    return ts;
+  };
+  const onHotTrack = coolToward(amb + 25);
+  const onColdTrack = coolToward(amb);
+  assert.ok(onHotTrack > onColdTrack, `hotter track must cool less: ${onHotTrack} vs ${onColdTrack}`);
+  assert.ok(onColdTrack < 120, "a stopped hot tyre must cool");
+});
+
+test("wear rises with slip speed at the same load (load × slip)", () => {
+  const s = ctxFor({ laps: 10 }); s.setLevel("real");
+  const roll = freshCar(s, 0.74, { human: true, speed: 60, yawRateCur: 0.1, axFrac: 0.2, skidIntensity: 0 });
+  const slide = freshCar(s, 0.74, { human: true, speed: 60, yawRateCur: 0.1, axFrac: 0.2, skidIntensity: 0.9 });
+  for (let i = 0; i < 30; i++) { s.update(roll, 0.5); s.update(slide, 0.5); }
+  assert.ok(slide.tyreWear > roll.tyreWear,
+    `sliding must wear more: ${slide.tyreWear.toFixed(4)} vs ${roll.tyreWear.toFixed(4)}`);
+});
+
+test("tempGrip peaks near optTemp and falls either side", () => {
+  const life = 0.88;
+  const opt = T.optTemp(life);
+  assert.equal(T.tempGrip(opt, life), 1);
+  assert.ok(T.tempGrip(opt - 50, life) < 1);
+  assert.ok(T.tempGrip(opt + 50, life) < 1);
+});
+
+test("info() reports trackTemp above ambient in the dry", () => {
+  const s = ctxFor({ laps: 10 }); s.setLevel("real");
+  const c = freshCar(s, 0.74);
+  const info = s.info(c);
+  assert.ok(info.trackTemp > info.ambient, `${info.trackTemp} vs ambient ${info.ambient}`);
+});

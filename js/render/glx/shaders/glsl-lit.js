@@ -1114,11 +1114,22 @@ void main() {
   // CARBON FINISH: bodywork in bare weave. Crush the livery colour toward the
   // dark resin and lay a fine cross-hatch over it, keeping a trace of the team
   // tint so a red car is still identifiably that team's car in carbon.
-  if (carbonFinish) {
+  // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
+  // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 8-16 m so it
+  // cannot moire at range (it had no fade: a sin*sin at 190/m crawled on every
+  // wing at 30 m). The parts get a subtler twill and a roughness ripple so
+  // they read as carbon in cockpit and close-up instead of flat dark paint.
+  float weave = 0.5;
+  if (carbonFinish || carbonSurface) {
     vec2 wv = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
-    float weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y);
+    float wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+  }
+  if (carbonFinish) {
     albedo = mix(albedo * 0.16 + vec3(0.030, 0.031, 0.035), albedo * 0.28, 0.25);
     albedo *= 0.86 + 0.28 * weave;
+  } else if (carbonSurface) {
+    albedo *= 0.93 + 0.14 * weave;
   }
   if (iriSurface) {
     float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
@@ -1130,7 +1141,7 @@ void main() {
     albedo *= mix(vec3(1.0), 0.60 + 0.80 * shift, smoothstep(0.30, 0.92, fres) * 0.40);
   }
   float rough = clamp(uRoughness, 0.04, 1.0);
-  if (carbonSurface || carbonFinish) rough = max(rough, 0.56);
+  if (carbonSurface || carbonFinish) rough = max(rough, 0.56) + (weave - 0.5) * 0.10;   // the twill's roughness ripple
   if (rubberSurface) rough = max(rough, 0.90);
   if (metalSurface) rough = min(rough, 0.16);
   if (glassSurface || visorSurface) rough = min(rough, 0.13);
