@@ -460,7 +460,7 @@ test("TLX decal programs share a material map reference, not the first car's tex
   assert.match(fx, /m\.map = tex/);
   // One graph PER GLOW VALUE, not one shared graph: a TSL uniform node lives in
   // the shared graph, so a single per-draw uniform would retroactively restyle
-  // every decal material already built from it (2026-09 survey, tsl-fx.js:212).
+  // every decal material already built from it (2026-09 survey, `_decalGraph` in tsl-fx.js).
   // decalCache and the program key are already keyed per glow; the graph now is too.
   assert.match(fx, /const _decalGraph = new Map\(\)/);
   assert.match(fx, /_decalGraph\.get\(glow\)/);
@@ -1983,7 +1983,7 @@ test("TLX WebGPU remaps the RASTER projection with Z01, but hands post the GL in
   // roughly half depth. The WGSL port is the control: its ssaoViewPosFromD
   // feeds raw `d` ("depth already 0..1") and therefore DOES want inv(Z01·P).
   // Same depth texture on both (0.5*z_gl+0.5), different shader entry point.
-  // Fixed 2026-09 survey (tlx.js:2937); Z01INV/_invProjGpu had no other reader.
+  // Fixed 2026-09 survey (`_postF.invProj` in tlx.js); Z01INV/_invProjGpu had no other reader.
   assert.match(tlx, /_postF\.invProj = \(frame && frame\.invProj\) \|\| null/);
   assert.doesNotMatch(tlx, /Z01INV/,
     "inv(Z01·P) is the WGSL partner; feeding it to tsl-post double-remaps the depth");
@@ -3533,7 +3533,9 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   assert.match(human, /c\.wake = wakeOf\(tg, tc\.x - c\.x\)/, "the player's tow uses the AI's window and fade");
   assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
-  assert.match(game, /c\.wheelLock = braking && axFracF > 0\.60/, "a lock-up fires inside the REACHABLE front-axle budget: axFracF peaks at 0.638 dry / 0.887 rain (0.638 even at 62 % front bias), so a 0.92 gate can never fire and the flat-spot system behind it is dead code");
+  // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
+  const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(forces, /c\.wheelLock = braking && axFracF > 0\.60/, "a lock-up fires inside the REACHABLE front-axle budget: axFracF peaks at 0.638 dry / 0.887 rain (0.638 even at 62 % front bias), so a 0.92 gate can never fire and the flat-spot system behind it is dead code");
   // The planted wheels spin in the car-draw seam (js/car/car-draw.js), which reads WHEEL_R off PhysicsConsts.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");

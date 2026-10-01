@@ -9,6 +9,7 @@ const { $, store, clamp } = G;
 if ((typeof BrakeCue !== "undefined") && BrakeCue.create) BrakeCue.create(G);
 
 let hapRepaintWired = false;   // the gamepadconnected repaint is wired once
+let trigHapWired = false;      // TRIGGER HAPTICS row paint + gamepadconnected
 const SLIDER_MIN = 1, SLIDER_MAX = 10;
 const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 
@@ -257,6 +258,10 @@ function applyPreset(name) {
 }
 // A manual slider edit means the settings no longer match a named preset.
 function clearPreset() { store.set("preset", "custom"); refreshPresetButtons(); }
+// …but only a PRESET-OWNED row can break the match. A row no preset writes
+// (haptics, the per-device curves, pad dead zone, WEIGHT) leaves the chip alone:
+// PRO with a softer rumble is still exactly PRO on every key PRO sets.
+function clearPresetFor(key) { if (Object.prototype.hasOwnProperty.call(PRESET_STORE, key)) clearPreset(); }
 function refreshPresetButtons() {
   const active = store.get("preset", "standard");
   for (const name of ["rookie", "relax", "standard", "pro"]) {
@@ -513,6 +518,10 @@ function applySteerTuning() {
   Input.setKeyRampIn(steerRateFromSlider(steerRate2));
   Input.setAnalogSpeedMix(analogSpeedFromSlider(analogSpd));
   Input.setHaptics(haptics <= 1 ? 0 : (haptics - 1) / 9);
+  // TRIGGER HAPTICS defaults ON. Absent key = fresh install; no STEER_SCHEMA
+  // step owed (changing a default reaches fresh installs only).
+  const trigHap = store.get("triggerHaptics", true) !== false;
+  if (Input.setTriggerHaptics) Input.setTriggerHaptics(trigHap);
   Input.setPadDeadzone(padDz / 100);
   Input.setPadSaturation(padSat / 100);
   G.raceLineAssist = line / 5;
@@ -557,9 +566,11 @@ function applySteerTuning() {
       hapRepaintWired = true;
       window.addEventListener("gamepadconnected", () => {
         hapItem.hidden = !Input.hapticsSupported();
+        paintTriggerHapRow();
       });
     }
   }
+  paintTriggerHapRow();
   paintRow("pm-paddz", padDz, pctLabel(padDz));
   paintRow("pm-padsat", padSat, pctLabel(padSat));
   refreshPresetButtons();
@@ -600,7 +611,7 @@ if ($("pm-weight")) $("pm-weight").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("carWeight", v);
   G.YAW_INERTIA = weightFromSlider(v);
   G.YAW_DAMP = yawDampFromSlider(v);
-  $("pm-weight-v").textContent = v; clearPreset();
+  $("pm-weight-v").textContent = v; clearPresetFor("carWeight");   // not preset-owned: a no-op, kept so the rule reads the same everywhere
 };
 if ($("pm-adaptbtn")) $("pm-adaptbtn").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("adaptiveButtons", v);
@@ -639,10 +650,11 @@ $("pm-preset-standard").onclick = () => { applyPreset("standard"); if (G.soundOn
 $("pm-preset-pro").onclick      = () => { applyPreset("pro");      if (G.soundOn) GameAudio.uiSelect(); };
 
 /* One shape for every new row: clamp, store, push to Input, repaint, and drop
-   the preset chip — the same five acts each existing handler performs by hand.
-   Written once because ten more copies of that block is how one of them ends
-   up missing its clearPreset() and the chip starts claiming PRO for settings
-   PRO never chose. */
+   the preset chip IF the row is preset-owned — the same acts each existing
+   handler performs by hand. None of the rows below is in PRESET_STORE today, so
+   moving HAPTICS or the pad DEAD ZONE keeps the chip on PRO; it used to call
+   clearPreset() unconditionally and read CUSTOM for settings no preset writes
+   (tests/unit/steer-presets.test.mjs pins both directions). */
 function wireTune(id, key, def, lo, hi, push, label) {
   const el = $(id);
   if (!el) return;
@@ -651,7 +663,7 @@ function wireTune(id, key, def, lo, hi, push, label) {
     store.set(key, v);
     push(v);
     paintRow(id, v, label ? label(v) : undefined);
-    clearPreset();
+    clearPresetFor(key);
   };
 }
 wireTune("pm-tiltcurve", "tiltCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("tilt", curveTrimFromSlider(v)));
@@ -664,6 +676,29 @@ wireTune("pm-analogspeed", "analogSpeedSteer", 1, SLIDER_MIN, SLIDER_MAX, (v) =>
 wireTune("pm-haptics", "haptics", 6, SLIDER_MIN, SLIDER_MAX, (v) => Input.setHaptics(v <= 1 ? 0 : (v - 1) / 9), adaptLabel);
 wireTune("pm-paddz", "padDeadzone", 5, 0, 30, (v) => Input.setPadDeadzone(v / 100), pctLabel);
 wireTune("pm-padsat", "padSaturation", 0, 0, 30, (v) => Input.setPadSaturation(v / 100), pctLabel);
+
+function paintTriggerHapRow() {
+  const item = $("pm-triggerhap-item");
+  if (!item || typeof Input === "undefined") return;
+  const ok = !!(Input.triggerRumbleSupported && Input.triggerRumbleSupported());
+  item.hidden = !ok;
+  if (!ok || typeof SettingRow === "undefined") return;
+  const on = store.get("triggerHaptics", true) !== false;
+  SettingRow.paint($("pm-triggerhap"), on ? "on" : "off", SettingRow.labels(["off", "on"]));
+  if (!trigHapWired) {
+    trigHapWired = true;
+    SettingRow.wire("pm-triggerhap", {
+      values: SettingRow.labels(["off", "on"]),
+      read: () => (store.get("triggerHaptics", true) !== false ? "on" : "off"),
+      write: (v) => {
+        const want = v === "on";
+        store.set("triggerHaptics", want);
+        if (Input.setTriggerHaptics) Input.setTriggerHaptics(want);
+        if (G.soundOn) GameAudio.uiSelect();
+      },
+    });
+  }
+}
 
 $("pm-tiltsimple").oninput = (e) => {
   store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();

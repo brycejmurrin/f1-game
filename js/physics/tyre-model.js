@@ -140,10 +140,11 @@ const TyreModel = (function () {
   // floor clears the SHORTEST race the lap ladder offers (3 laps) with margin,
   // so a 3-lap blast on the softest compound finishes on one set however the
   // fraction works out — which is the failure the whole distance-fraction idea
-  // exists to prevent. It is deliberately only just clear: at 5 laps the softest
-  // compound is spent right at the flag, so the extreme end of the catalog still
-  // costs something even in a sprint.
-  const MIN_LIFE_LAPS = 4;
+  // exists to prevent. Five, not four: the fuel load (FUEL_LOAD, +22 % on a full
+  // tank) took every car in a 5-lap race at a severe circuit past the cliff at
+  // 4 (1.13-1.26 at the flag, measured); at 5 the softest set ends a 5-lap race
+  // at ~0.95 — used up, not off the cliff.
+  const MIN_LIFE_LAPS = 5;
   function lifeLaps(life, lapsTarget) {
     return Math.max(MIN_LIFE_LAPS, (life || LIFE_MID) * Math.max(1, lapsTarget || 1));
   }

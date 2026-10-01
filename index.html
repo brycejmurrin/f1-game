@@ -565,12 +565,11 @@
   <div id="bc-pip" aria-hidden="true" hidden><span class="bc-pip-label"></span></div>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
-  <!-- role="alert", not role="status" + aria-live="assertive": status carries an
-       implicit POLITE live region, so the pair was a mismatch the explicit
-       aria-live had to override. alert is the canonical interrupting role and
-       needs no override. A flag change is the one HUD event that earns an
-       interruption; #vs-status stays status+polite. -->
-  <div id="hud-flag" role="alert" hidden></div>
+  <!-- No live role: a live region filled and unhidden in the same step is the
+       pattern NVDA, JAWS and VoiceOver miss (see #announce-live below), so
+       js/ui/hud.js sayFlag() speaks each flag change through #announce-live
+       instead. A role here as well would read the flag twice where it works. -->
+  <div id="hud-flag" hidden></div>
 </div>
 
 <div id="lights" hidden>
@@ -1083,6 +1082,15 @@
                 </div>
               </div>
               <p class="adv-help">Carbon fragments, tyre marbles and knocked-over trackside furniture. OFF saves work on a phone and never changes lap time, penalties or damage.</p>
+              <div id="pm-buildworker" class="set-row" role="group" aria-labelledby="pm-buildworker-label">
+                <span class="tune-label" id="pm-buildworker-label">BUILD IN BACKGROUND</span>
+                <div>
+                  <button id="pm-buildworker-prev" type="button" data-step="-1" aria-label="Previous background build setting">&lsaquo;</button>
+                  <select id="pm-buildworker-sel" aria-labelledby="pm-buildworker-label"></select>
+                  <button id="pm-buildworker-next" type="button" data-step="1" aria-label="Next background build setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Experimental. Builds the circuit on a second thread while the loading screen plays, so fewer frames stall. Takes effect on the next circuit you load.</p>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
               <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to ULTRA. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
@@ -1343,6 +1351,17 @@
       <label class="tune-row"><span class="tune-label">HAPTICS <b id="pm-haptics-v">6</b></span>
         <input id="pm-haptics" type="range" min="1" max="10" step="1" value="6" aria-label="Haptics"></label>
       <p class="adv-help">Strength of every buzz and rumble: kerbs, contact, losing the front end, and the brake cue. 1 is OFF. Needs a phone that vibrates or a controller that rumbles &mdash; iPhone and iPad do neither from a web page.</p>
+    </div>
+    <div class="adv-item" id="pm-triggerhap-item" hidden>
+      <div id="pm-triggerhap" class="set-row" role="group" aria-labelledby="pm-triggerhap-label">
+        <span class="tune-label" id="pm-triggerhap-label">TRIGGER HAPTICS</span>
+        <div>
+          <button id="pm-triggerhap-prev" type="button" data-step="-1" aria-label="Previous trigger haptics">&lsaquo;</button>
+          <select id="pm-triggerhap-sel" aria-labelledby="pm-triggerhap-label"></select>
+          <button id="pm-triggerhap-next" type="button" data-step="1" aria-label="Next trigger haptics">&rsaquo;</button>
+        </div>
+      </div>
+      <p class="adv-help">L2/R2 motors on pads that support them (Chrome/Edge 126+, Opera, Samsung Internet on Windows and macOS, and over Bluetooth on Linux/ChromeOS). Lock-up buzzes the brake trigger; wheelspin the throttle. OFF falls back to the grip rumble. Adaptive trigger resistance is not available through the browser Gamepad API. Safari and Firefox have no pad rumble.</p>
     </div>
     </div>
     </details>
@@ -2924,7 +2943,7 @@
         <dd>Choose response presets and steering aids here. LINE STEERING ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING. Expand ADVANCED for detailed steering adjustments.
           <br><b>PRESETS</b> set every handling slider at once. ROOKIE is the easiest: the most corner help and line pull, the earliest braking cue, and AUTO throttle. RELAX is nearly as forgiving but leaves the throttle to you. STANDARD is the default car with no corner help. PRO is STANDARD with sharper RESPONSE. Moving any slider afterwards shows CUSTOM. OVERALL SPEED is separate: it slows or speeds the whole field, you and the AI alike.
           <br><b>FEEL:</b> TILT SENSITIVITY, and STEERING from SUPER EASY through ASSISTED and NORMAL to SIM (SIM also quickens turn-in).
-          <br><b>AIDS:</b> DRIVING HELP (LOW is off, MEDIUM, HIGH) steers part of each corner for you. LINE STEERING ASSIST (OFF, CORNERS, FULL) pulls the steering toward the ideal line. HAPTICS sets vibration strength; iPhone and iPad cannot vibrate from a web page.
+          <br><b>AIDS:</b> DRIVING HELP (LOW is off, MEDIUM, HIGH) steers part of each corner for you. LINE STEERING ASSIST (OFF, CORNERS, FULL) pulls the steering toward the ideal line. HAPTICS sets vibration strength; iPhone and iPad cannot vibrate from a web page. TRIGGER HAPTICS (when the pad supports it) routes lock-up to the brake trigger and wheelspin to the throttle; adaptive trigger resistance is not available from a web page.
           <details><summary class="adv-more-btn">ADVANCED SLIDERS</summary><p>TILT and TOUCH: how far you tilt or drag for full lock, smoothing, and the curve near centre. CONTROLLER: STICK CURVE, DEAD ZONE (raise it only for a drifting stick, after CALIBRATE STICK) and SATURATION (for a worn stick that cannot reach full lock). STEER RATE: how fast a held key or arrow winds on lock. CAR HANDLING, for every input: DRIVING HELP, RESPONSE (turn-in), LINEARITY (gentle or direct near centre), STEER LOCK, SPEED STEER (steering kept at high speed), STEADY AT SPEED (softens tilt, drag and stick as speed rises) and WEIGHT. RACING LINE biases you toward the apex (PULL) or wider (PUSH) and never overrides your steering.</p></details></dd>
         <dt>DISPLAY</dt>
         <dd>Adjust HUD and button sizes separately (UI SIZE, for the menus, is in APPEARANCE); PANEL OPACITY lightens the plates behind the readouts. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.
@@ -3298,6 +3317,7 @@
 <script defer crossorigin="anonymous" src="js/career/save-migrate.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/settings-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/geom.js?v=dev"></script>
@@ -3428,6 +3448,7 @@
 <script defer crossorigin="anonymous" src="js/career/badges.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
