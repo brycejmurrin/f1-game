@@ -6844,6 +6844,7 @@ function render(dt) {
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0);
   if (heldWarm) _menuGate.warm--;
   if (setupPreviewOn && !heldWarm) {
+    mirrorPass.standDown();   // the race's mirror must not composite over the car
     if (renderSetupPreview(dt, !!(_studio && _studio.cardUp))) {
       _menuGate.garageReady = true;
       if (!_studio || _studio.softReady !== false) studioShown();
