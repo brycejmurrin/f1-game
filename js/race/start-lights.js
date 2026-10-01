@@ -73,3 +73,4 @@ const StartLights = (function () {
 
   return { create };
 })();
+Object.freeze(StartLights);
