@@ -1,7 +1,7 @@
 /* audio-tune.test.mjs — the player TUNE layer must not break the engine's
  * timbre contract.
  *
- * js/audio/engine.js:19 states the rule ENGINE_VOICES lives by: every voice
+ * The ENGINE_VOICES note in js/audio/engine.js states the rule it lives by: every voice
  * field is a fixed multiplier, never a function of rev, so the pitch
  * invariants hold BY CONSTRUCTION rather than by measurement. The player tune
  * (profiles + sliders) is a second trim layered over that voice, so it inherits
