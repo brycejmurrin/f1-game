@@ -97,16 +97,22 @@ const AiDrive = (function () {
   // so every follower sat in the gearbox of the car ahead and the field ran as
   // trains no move could start from (ai-tactics, 2026-10-01: lap 1 with 85 %
   // of intervals under 1 s and trains of 12). s0 is the old base; T is
-  // lerp(0.25, 0.45, awareness) s, scaled by house hold and team orders as the
+  // lerp(0.15, 0.30, awareness) s, scaled by house hold and team orders as the
   // pad was, and streets take 0.8 of it (low speeds; the old street pad was
   // halved). `tight` (0..1) shrinks T toward FOLLOW_TIGHT — a pass latched or
   // armed, or a tow on a straight: closing up is the point there — and
   // `extra` adds seconds (getting a run, the first lap). Capped at FOLLOW_MAX
   // so a car at the gap still feels the wake (TOW_RANGE 34 m faded over 28:
   // a fifth of the tow at 28 m).
-  const FOLLOW_TIGHT = 0.12, FOLLOW_MAX = 28;
+  // MEASURED, NOT GUESSED (ai-tactics, silverstone, 2026-10-01): the first cut,
+  // T 0.25-0.45 s tightening to 0.12 s, cost a third of the settled passes
+  // (128 -> 83) and the conversion (19.9 -> 17.2 %) — a car 0.4 s back at the
+  // corner exit is out of the tow for the straight that follows. 0.15-0.30 s
+  // tightening to 0.05 s kept the passes (120) and raised the conversion (23.7 %)
+  // with the contact, side-by-side and swap-back gains intact.
+  const FOLLOW_TIGHT = 0.05, FOLLOW_MAX = 28;
   function followTime(t, street, team, seat, other, stats) {
-    const T = lerp(0.25, 0.45, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
+    const T = lerp(0.15, 0.30, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
       * ordersMul(team, seat, other, "follow");
     return street ? T * 0.8 : T;
   }

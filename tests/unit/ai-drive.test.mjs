@@ -73,14 +73,14 @@ test("the follow gap is a time headway: s0 + v·T, awareness widens T", () => {
   assert.ok(A.followTime(ace) > A.followTime(rook), "awareness leaves more time");
   assert.ok(A.followTime(ace, true) < A.followTime(ace, false), "streets take less of it");
   const T = A.followTime(mid, false);
-  assert.ok(T >= 0.25 && T <= 0.45, `T ${T} s outside the 0.25..0.45 s band`);
+  assert.ok(T >= 0.15 && T <= 0.30, `T ${T} s outside the 0.15..0.30 s band`);
   // IN SECONDS AT SPEED: the gap grows with speed (it was a flat ~7.5 m, 0.1 s at 75 m/s)
   const g40 = A.followGap(mid, false, 40), g20 = A.followGap(mid, false, 20);
   assert.ok(Math.abs(g40 - (6 + 40 * T)) < 1e-9 && g40 > g20, `gap at 40 m/s ${g40}`);
-  assert.ok((g40 - 6) / 40 > 0.25, "more than a quarter second of headway at racing speed");
-  // a latched/armed pass or a tow tightens it to 0.12 s; `extra` adds seconds
-  assert.ok(Math.abs(A.followGap(mid, false, 40, 1) - (6 + 40 * 0.12)) < 1e-9);
-  assert.ok(Math.abs(A.followGap(mid, true, 40, 1) - (8 + 40 * 0.06)) < 1e-9, "a street attack starts closer");
+  assert.ok((g40 - 6) / 40 > 0.15, "more than 0.15 s of headway at racing speed (the old pad was ~0.04 s)");
+  // a latched/armed pass or a tow tightens it to 0.05 s; `extra` adds seconds
+  assert.ok(Math.abs(A.followGap(mid, false, 40, 1) - (6 + 40 * 0.05)) < 1e-9);
+  assert.ok(Math.abs(A.followGap(mid, true, 40, 1) - (8 + 40 * 0.025)) < 1e-9, "a street attack starts closer");
   assert.ok(Math.abs(A.followGap(mid, false, 40, 0, null, 0, null, null, 0.1) - (6 + 40 * (T + 0.1))) < 1e-9);
   // ...and it stays inside the tow's reach (TOW_RANGE 34 m) at any speed
   assert.ok(A.followGap(ace, false, 95) <= 28, `capped: ${A.followGap(ace, false, 95)}`);
@@ -1111,11 +1111,11 @@ test("get a run: hang back through the corner onto a passing straight, pull out 
   const st = { traits: mid, toTurnIn: 400, kAhead: 0, vTop: 72, speed: 70, blockerSpeed: 70, blockerGap: 20, queueT: 0 };
   assert.equal(A.latchLate(st), false, "far down a straight with no closing rate: wait");
   assert.equal(A.latchLate({ ...st, speed: 72 }), true, "closing in the tow: go");
-  assert.equal(A.latchLate({ ...st, blockerGap: 12 }), true, "on the gearbox (the tight gap): go");
+  assert.equal(A.latchLate({ ...st, blockerGap: 10 }), true, "on the gearbox (the tight gap): go");
   assert.equal(A.latchLate({ ...st, toTurnIn: 120 }), true, "the braking zone is near: as before");
   assert.equal(A.latchLate({ ...st, kAhead: 0.01 }), true, "not a straight: as before");
   assert.equal(A.latchLate({ ...st, queueT: 60 }), true, "held for its whole patience: go");
-  assert.equal(A.latchLate({ ...st, blockerGap: 6 + 0.15 * 70 - 0.1 }), true, "the tight gap in the tow");
+  assert.equal(A.latchLate({ ...st, blockerGap: 6 + 0.08 * 70 - 0.1 }), true, "the tight gap in the tow");
   assert.equal(A.cornerK(0.0003, 0.012, 0.009), 0.012, "the corner, not its entry spiral");
   assert.equal(A.cornerK(-0.001, 0.0005, -0.02), -0.02);
 });
