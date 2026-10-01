@@ -495,7 +495,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 .dh-live-gapbar {
   height: 4px; border-radius: var(--r-xs); max-width: 80px;
-  flex: 1 1 auto; min-width: 0;
+  flex: 0 1 auto; min-width: 0;
 }
 .dh-live-gaplbl {
   font-size: var(--fs-1); color: var(--dim); font-variant-numeric: tabular-nums;

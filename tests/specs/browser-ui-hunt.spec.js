@@ -180,6 +180,9 @@ test("Live uses the hub content as its only stacked scroll owner", async ({ page
     overflow.rightHorizontalOverflow,
     `right pane must not grow sideways (scrollDelta=${overflow.rightScrollDelta})`,
   ).toBe(false);
+  const bars = await page.locator(".dh-live-gapbar").evaluateAll((els) =>
+    els.slice(0, 2).map((el) => el.getBoundingClientRect().width));
+  expect(bars[0], "smaller gaps retain a smaller bar").toBeLessThan(bars[1]);
 });
 
 test("Export explains the Gather prerequisite before Download is ready", async ({ page }) => {
