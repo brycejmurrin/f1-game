@@ -26,11 +26,16 @@
  *   chain returns) — the GLX ordering where the godray pass consumes the
  *   armed state that present() then retires.
  *
- * DEVIATION vs GLX (documented, deliberate): no MSAA scene target — three's
- *   RenderTarget MSAA resolve doesn't expose the resolved DEPTH the SSAO/SSR/
- *   godray blocks need, so TLX runs the GLX mobile-tier recipe (no MSAA,
- *   FXAA carries the edge AA) on every tier. No invalidateFramebuffer either
- *   (three owns attachment lifecycle).
+ * SCENE MSAA (2026-10-01; was a documented deviation): the scene target takes
+ *   ctx.sceneSamples (4 on the desktop WebGL2 backend, 0 elsewhere — tlx.js
+ *   decides). r186's WebGL backend resolves the colour attachments AND the
+ *   depth texture by blitFramebuffer when resolveDepthBuffer is set, so the
+ *   SSAO/SSR/godray blocks read a resolved depth. The old note ("three's MSAA
+ *   resolve doesn't expose the resolved DEPTH") described r184. Phones and
+ *   the native-WebGPU path keep the single-sample recipe (FXAA carries the
+ *   AA): core WebGPU cannot resolve a depth attachment. The ssrTag attachment
+ *   is resolved too, so a tag averages across an edge (accepted). No
+ *   invalidateFramebuffer either (three owns attachment lifecycle).
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.postChain = (THREE, TSL, ctx) => ({ enabled, hdrOk,
@@ -77,9 +82,9 @@
     }
     try {
     // ctx.isMobile is deliberately NOT read here, and that is a decision, not a
-    // dropped gate: the MSAA deviation above means this chain already runs the
-    // GLX mobile-tier recipe (no multisampled scene target, FXAA carries the
-    // AA) on every tier, and every remaining block is gated by the caller —
+    // dropped gate: the scene MSAA decision is the caller's (ctx.sceneSamples,
+    // 0 on a phone — the GLX mobile-tier recipe, FXAA carries the AA), and
+    // every remaining block is gated by the caller —
     // present(opts) receives ssao/godray/bloom already zeroed by PerfGov.tier()
     // and the GRAPHICS preset, so a disabled block allocates nothing (the
     // per-block bail above). A second phone-only gate here would shadow the
@@ -160,6 +165,7 @@
     sceneDepthTex.name = "TLXSceneDepth";
     const sceneRT = ownRT(new THREE.RenderTarget(1, 1, {
       type: hdrType, count: 2, depthBuffer: true, depthTexture: sceneDepthTex,
+      samples: ctx.sceneSamples || 0, resolveDepthBuffer: true,   // SCENE MSAA (header)
     }));
     ownedTextures.delete(sceneDepthTex); // sceneRT.dispose owns it from here
     sceneRT.texture.name = "output";

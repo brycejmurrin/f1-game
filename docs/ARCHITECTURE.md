@@ -1500,6 +1500,13 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
+- **SCENE MSAA (2026-10-01):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
+  4× on its desktop WebGL2 backend (`tlx.js` passes `sceneSamples` into
+  `tlx-post.js`'s scene target; r186's WebGL backend resolves the depth texture
+  by blit, so SSAO/SSR/godray read a resolved depth), **TLX-WebGPU and WGX gap**:
+  core WebGPU cannot resolve a depth attachment, so the native path stays
+  single-sample with FXAA alone (`docs/research/WEBGPU-PARITY.md`). Phones: no
+  scene MSAA on any backend (the mobile recipe).
 - **FOLIAGE WIND SWAY (2026-10-01):** GLX + TLX; **WGX gap** (the same gap as the
   FLAG wave — WGX has no per-vertex `mat` attribute, `docs/research/WEBGPU-PARITY.md`).
   Tree emitters in `js/track/scenery/nature.js` stamp FOLIAGE vertices with a
