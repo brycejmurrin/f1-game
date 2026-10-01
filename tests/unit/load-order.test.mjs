@@ -322,16 +322,22 @@ test("the data-hub DAG orders every tab module before hub.js", () => {
     "every LAZY_DATA file except the hub itself must be ordered before it");
 });
 
-// stamps / randomise / validate destructure TrackShape at EVAL (js/editor/*);
-// the codec stands alone. Derived like the data hub's, asserted the same way.
-test("the track-designer DAG orders shape.js before every module that destructures it", () => {
-  assert.equal(MANIFEST.LAZY_EDITOR[0], "js/editor/shape.js", "shape.js evaluates first");
-  const want = MANIFEST.LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js").map((f) => ["js/editor/shape.js", f]);
-  assert.deepEqual(MANIFEST.LAZY_EDITOR_EDGES, want);
+// stamps / randomise / validate / canvas / designer destructure TrackShape at
+// EVAL (js/editor/*); the codec stands alone; the SCREEN (designer.js) reads
+// every other editor module at init, so it is last and every module points at
+// it. Derived like the data hub's, asserted the same way.
+test("the track-designer DAG orders shape.js before every module that destructures it, and the screen last", () => {
+  const SHAPE = "js/editor/shape.js", CODEC = "js/editor/codec.js", SCREEN = "js/editor/designer.js";
+  assert.equal(MANIFEST.LAZY_EDITOR[0], SHAPE, "shape.js evaluates first");
+  assert.equal(MANIFEST.LAZY_EDITOR[MANIFEST.LAZY_EDITOR.length - 1], SCREEN, "the screen evaluates last");
+  const shapeEdges = MANIFEST.LAZY_EDITOR.filter((f) => f !== SHAPE && f !== CODEC && f !== SCREEN).map((f) => [SHAPE, f]);
+  const screenEdges = MANIFEST.LAZY_EDITOR.filter((f) => f !== SCREEN).map((f) => [f, SCREEN]);
+  assert.deepEqual(MANIFEST.LAZY_EDITOR_EDGES, shapeEdges.concat(screenEdges));
   for (const f of MANIFEST.LAZY_EDITOR) {
     const src = readFileSync(join(ROOT, f), "utf8");
     const binds = /const\s+S\s*=\s*TrackShape\b/.test(src);
-    assert.equal(binds, want.some(([, b]) => b === f), `${f}: an eval-time TrackShape bind must have an edge, and only then`);
+    const hasShapeEdge = MANIFEST.LAZY_EDITOR_EDGES.some(([x, y]) => x === SHAPE && y === f);
+    assert.equal(binds, hasShapeEdge, `${f}: an eval-time TrackShape bind must have a shape.js edge, and only then`);
   }
 });
 

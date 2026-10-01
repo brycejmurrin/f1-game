@@ -2534,6 +2534,20 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
 });
 
+test("TLX late sky depth-tests less-equal and does not write depth", () => {
+  // WGX's late sky used depthCompare "always" and erased the world. The
+  // saving is the covered fraction only when the far-plane triangle tests
+  // less-equal and leaves the depth buffer alone.
+  const src = read("js/render/three/tlx.js");
+  const i = src.indexOf("function makeSkyMat");
+  assert.notEqual(i, -1, "makeSkyMat moved");
+  const body = src.slice(i, i + 900);
+  assert.match(body, /depthTest = true/);
+  assert.match(body, /depthWrite = false/);
+  assert.match(body, /depthFunc = THREE\.LessEqualDepth/);
+  assert.doesNotMatch(body, /AlwaysDepth|depthCompare:\s*"always"/);
+});
+
 test("TLX pins the sky material before the HDR scene render, not only the canvas fallback", () => {
   const src = read("js/render/three/tlx.js");
   const present = src.indexOf("present(opts)");

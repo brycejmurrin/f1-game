@@ -449,6 +449,9 @@ const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on stor
 // would additionally need sunViewDir, and the sun is now only a fill.
 const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
 function renderSetupPreview(dt, holdDriveOut = false) {
+  // The race's HUD mirror: render() never reaches its slot on a garage frame,
+  // so its rect stayed set and present() composited it over the car.
+  if (typeof MirrorPass !== "undefined" && MirrorPass.instance()) MirrorPass.instance().standDown();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls

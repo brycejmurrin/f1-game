@@ -57,10 +57,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // name, manifest display_override. VM-executed
   // source, no browser, ~0.2 s.
   "tests/unit/a11y-pwa-pass.test.mjs",
-  // Every AUTHORED activation-zone turn table resolves against the BUILT
-  // centreline. One unresolvable pair discards a circuit's whole table and
-  // falls through to ZONE_COUNT — silently, which is how monza shipped a
-  // table nobody read. Node-side via verify-track.cjs, so it is cheap.
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
@@ -85,6 +81,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
+  // Every AUTHORED activation-zone turn table resolves against the BUILT
+  // centreline. One unresolvable pair discards a circuit's whole table and
+  // falls through to ZONE_COUNT — silently, which is how monza shipped a
+  // table nobody read. Node-side via verify-track.cjs, so it is cheap.
+  // archive-branches.yml's archive-then-delete: the selection, the exact
+  // bundle check, and a real-git restore round trip. ~1 s.
+  "tests/unit/archive-branches.test.mjs",
   "tests/unit/assert-audit.test.mjs",
   "tests/unit/assets-pack.test.mjs",
   "tests/unit/audio-recovery.test.mjs",
@@ -108,6 +111,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
   "tests/unit/boot-input-shape.test.mjs",
   "tests/unit/brake-cue.test.mjs",
+  // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
+  // and line presence, pinned against real git in a throwaway repo. ~1 s.
+  "tests/unit/branch-audit.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
@@ -186,6 +192,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // cost under a second and belong where the rule they guard is edited.
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  "tests/unit/data-hub-offline.test.mjs",
   "tests/unit/data-lazy-loader.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
@@ -319,8 +326,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
@@ -431,6 +440,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  // The branch-prune rule behind prune-branches.yml: merged-only, never an
+  // open PR's head, claims on age; pure fixtures, under a second.
+  "tests/unit/prune-branches.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
@@ -566,6 +578,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 52 shipped circuits and the designer's runtime defs: a golden hash per
   // circuit (metadata + materialised points) pins the extraction byte-for-byte.
   "tests/unit/track-def-factory.test.mjs",
+  // The track designer SCREEN (js/editor/designer.js + canvas.js) booted over the
+  // engine and a minimal DOM: init builds the rail before a design exists, the
+  // rail's edits keep the verdict coherent, SAVE / RACE land, the canvas routes a
+  // nudge back on the lattice. The 300 ms twin of tests/specs/track-designer.spec.js.
+  "tests/unit/track-designer-dom.test.mjs",
   // The track designer's pure core (js/editor/shape|stamps|randomise|validate|codec.js)
   // over the real engine: Dubins lands on its goal for all six words, stamps
   // build as the requested turn, the randomiser is deterministic and valid, the
@@ -579,8 +596,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-maps-corners.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   "tests/unit/track-preview-plan.test.mjs",
+  // RANDOMISE builds clockwise (Σk < 0 through the engine) with the grid side
+  // of the start straight ≥ the exit side, over 30 seeds; ~3 s.
+  "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/trim-comments.test.mjs",
+  // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
+  // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
+  "tests/unit/tumftm-import.test.mjs",
   "tests/unit/twin-drift.test.mjs",
   "tests/unit/twin-fidelity.test.mjs",
   "tests/unit/twinned-specs.test.mjs",

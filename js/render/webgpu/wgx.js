@@ -3165,17 +3165,19 @@ const WGX = (function () {
       // so mist is 0 unless the frame actually requests it, not an absolute knob.
       d[78] = (f.groundMist != null ? f.groundMist : 0) * (T && T.mistDensity != null ? T.mistDensity : 1);
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
-      // params4 (floats 80..83): pcssPen, shadowTintAmt, rain, then ONE RESERVED lane.
+      // params4 (floats 80..83): pcssPen, shadowTintAmt, rain, specKnee.
       // .z is frame.rain since 2026-10-01 (rain FALLING, 0..1 — the puddle
-      // ripples in Block 5; GLX uRain, TLX U.rain). .w (ssrStrength) stays 0 and
-      // is not packed: SSR is consumed SAME-FRAME in COMPOSITE (wgsl-post.js), so
-      // no WGSL reads params4.w. Do not re-pack it without a shader that samples it.
+      // ripples in Block 5; GLX uRain, TLX U.rain). .w is the SUN GLINT RANGE
+      // knob since 2026-10-01 (the sun specular's soft-clip asymptote, Block 6;
+      // GLX uSpecKnee, TLX U.specKnee) — it took the lane ssrStrength never
+      // packed (SSR is consumed SAME-FRAME in COMPOSITE, wgsl-post.js).
       // pcssPen is the GLX PENUMBRA-RATE knob (default 80). WGSL findBlocker
       // uses the same `clamp((refD-zb)*params4.x,0,1)` as GLX sampleShadow —
       // pack the raw knob, do not remap.
       d[80] = (T && T.pcssPen != null) ? T.pcssPen : 80;
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
       d[82] = f.rain != null ? f.rain : 0;
+      d[83] = (T && T.specKnee != null) ? T.specKnee : 4.0;
       // params5 (floats 84..87): envProbeStr — the REAL cube probe's strength, live only
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
       // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.

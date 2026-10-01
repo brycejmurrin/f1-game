@@ -270,7 +270,9 @@
     "js/editor/stamps.js",
     "js/editor/randomise.js",
     "js/editor/validate.js",
-    "js/editor/codec.js"
+    "js/editor/codec.js",
+    "js/editor/canvas.js",
+    "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
     [
@@ -284,6 +286,34 @@
     [
       "js/editor/shape.js",
       "js/editor/validate.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/canvas.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/stamps.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/randomise.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/validate.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/codec.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/canvas.js",
+      "js/editor/designer.js"
     ]
   ],
     TRACK_VM: [

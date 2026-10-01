@@ -151,7 +151,10 @@ test("the interiors build inside the tub, keyed by livery, and only CLASSIC has 
     // Nothing may crowd the eye: CLASSIC's scuttle starts ahead of it (run back
     // past it, the rails filled the lower corners); TEAM's pads run alongside the
     // driver but stay under the LOW seat's eye (0.76).
-    if (kind === "classic") assert.ok(mn[2] >= -0.20, `classic starts at or ahead of the STANDARD eye (z -0.20): ${mn[2].toFixed(3)}`);
+    if (kind === "classic") {
+      for (let i=0;i<d.pos.length;i+=3) if (d.pos[i+1] > 0.76)
+        assert.ok(d.pos[i+2] >= -0.20, "classic aeroscreen stays ahead of the eye; lower tub extends behind it");
+    }
     else assert.ok(mx[1] < 0.76, `team stays under the LOW seat's eye: top ${mx[1].toFixed(3)}`);
   }
   const a = CarMesh.getCockpitCabin("team", LIV);
@@ -220,14 +223,14 @@ test("fifteen shift lenses keep the existing ramp/flash states, with the origina
 
 // Trace the driver's sightline, not a screenshot colour: the glass can look
 // grey while a dark stay pierces its lower half. This checks actual occlusion.
-function firstMaterial(mesh, eye, target) {
+function firstMaterial(mesh, eye, target, maxT = Infinity, frontOnly = false) {
   const sub=(a,b)=>a.map((v,i)=>v-b[i]), dot=(a,b)=>a.reduce((n,v,i)=>n+v*b[i],0);
   const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
   const point=(i)=>mesh.pos.slice(i*3,i*3+3), d=sub(target,eye);
-  let nearest=Infinity, material=null;
+  let nearest=maxT, material=null;
   for(let i=0;i<mesh.idx.length;i+=3){
     const a=mesh.idx[i], p=point(a), e1=sub(point(mesh.idx[i+1]),p), e2=sub(point(mesh.idx[i+2]),p);
-    const h=cross(d,e2), det=dot(e1,h); if(Math.abs(det)<1e-10)continue;
+    const h=cross(d,e2), det=dot(e1,h); if(Math.abs(det)<1e-10 || (frontOnly && det <= 0))continue;
     // Inclusive edges avoid missing both triangles on a shared diagonal.
     const v=sub(eye,p), u=dot(v,h)/det; if(u < -1e-12 || u > 1+1e-12)continue;
     const q=cross(v,e1), w=dot(d,q)/det; if(w < -1e-12 || u+w > 1+1e-12)continue;
@@ -321,4 +324,18 @@ test("body alternatives change shoulders but retain cockpit clearance and geomet
     assert.ok(mx[1] < opts.layout("f1", "low").eyeU, "walls stay below the LOW-seat eye");
   }
   for (let i=0;i<shapes.length;i++) for (let j=0;j<i;j++) assert.notDeepEqual(shapes[i].pos, shapes[j].pos);
+});
+
+
+test("every interior blocks road rays through the lower footwell from every seat", () => {
+  const { CarMesh } = loadMesh(), { opts } = loadOpts({});
+  for (const interior of opts.CHOICES.interior.values) {
+    const d = CarMesh.getCockpitCabin(interior, LIV).d;
+    const mesh = { ...d, mat: Array(d.pos.length / 3).fill(1) };
+    for (const seat of opts.CHOICES.seat.values) {
+      const l = opts.layout("f1", seat), eye = [0, l.eyeU, l.eyeF];
+      for (const x of [-0.55,-0.28,0,0.28,0.55]) for (const z of [-0.10,0.25,0.65,1.25,2.0])
+        assert.equal(firstMaterial(mesh, eye, [x,0,z], 1, true), 1, `${interior}/${seat}: road leak toward ${x},${z}`);
+    }
+  }
 });

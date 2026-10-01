@@ -305,6 +305,8 @@ const FULL = [
   "js/camera/cockpit-opts.js",
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
+  "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
+  "js/ui/hud-tyres.js",      // FL/FR/RL/RR band + ΔT helpers for GameHud
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
@@ -360,6 +362,7 @@ const CSS = [
   "css/data.css",
   "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
   "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
+  "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
 ];
 // The two title-critical sheets are also <link rel="preload">ed above the
 // stylesheet block (gen-shell writes that block too).
@@ -368,7 +371,7 @@ const CSS_PRELOAD = ["css/tokens.css", "css/components.css"];
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
 const CSS_DEFERRED = [
   "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/overlays.css",
-  "css/track-detail.css", "css/career.css", "css/data.css",
+  "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.
@@ -482,6 +485,8 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/appearance-opts.js"],
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
+  ["js/core/store.js", "js/ui/hud-elements.js"],
+  ["js/ui/hud-tyres.js", "js/ui/hud.js"],
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
@@ -796,11 +801,15 @@ const LAZY_EDITOR = [
   "js/editor/randomise.js",   // TrackRandom: hull + displacement + fixAngles (Maciel), seeded
   "js/editor/validate.js",    // TrackValidate: WYSIWYG rules over Tracks.buildCenterline
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
+  "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
+  "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
-// stamps / randomise / validate destructure TrackShape at eval — the same meaning
-// HARD_EDGES carries for FULL, derived so it cannot drift from the roster.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js")
-  .map((f) => ["js/editor/shape.js", f]);
+// stamps / randomise / validate / canvas destructure TrackShape at eval — the
+// same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
+// roster; designer.js (the screen) must follow every other editor module.
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/designer.js")
+  .map((f) => ["js/editor/shape.js", f])
+  .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS

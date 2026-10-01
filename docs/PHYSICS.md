@@ -729,7 +729,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   `mistakeChance(t, p, errMul)` unit tests pin the multiplication itself
   (errMul 2 doubles the rate exactly, independent of sampling noise). Full
   artifacts: `artifacts/ai-mistakes-baseline/` (before) and
-  `artifacts/ai-mistakes-after/` (after, including the n=15 easy runs).
+  `artifacts/ai-mistakes-after/` (after, including the n=15 easy runs). A rising edge on `c.errCount` also emits a `mistake` race-fact so nearby rivals can trigger `eng.rivalErr` / `tv.mistake` radio (`js/race/race-facts.js`, `race-radio.js`); that path does not change the roll or the rate. `PhysicsConsts.REVISION` is `2026-09-ai-mistakes-1` so records/ghosts keyed on the post–Slice-4 formula do not compare against pre-raise laps.
 - **The aim, not the contact** (`AiDrive.aimIntrudes`, 2026-09-16). Every
   side-by-side rule keyed on where the cars ARE — the clear-gap election and
   the rub clamp began when the boxes were 0.8 m apart, and against a human
@@ -1044,7 +1044,7 @@ it lands.
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
 | `js/editor/validate.js` | `straightRun` (TrackPit's `PIT_K` walk from the start line) + the built `curv` LUT in `judge` | **broadcast-only** | the track designer's validator: judges a design's BUILT centreline for the editor's issue list (radius, kink, fold, start straights, lap estimate) and the picker's baked turns, read once per edit in a menu — the race that follows builds its own LUT and no car reads these numbers |
-| `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
+| `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick; `buildRoad` racing-line wear band (reads `track.line`, the line LUT TrackLine.bake derived from curv) | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself; the wear band is vertex COLOUR along the baked line, a picture on the asphalt no car reads |
 | `js/track/tracks.js` | build LUT bake | **surface** | the producer itself (centreline curv[] bake) |
 | `js/track/scenery/build-props.js` | signboard side pick, pit-pass curvature | **surface** | static scenery placement (`TrackBuildProps.build`) |
 

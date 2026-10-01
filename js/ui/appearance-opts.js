@@ -18,16 +18,20 @@ const AppearanceOpts = (function () {
   const K_HUD_HEX = "hudAccentHex";
   const K_TEXT = "textSize";
   const K_CONTRAST = "uiContrast";
+  const K_CVD = "cvdMode";
   const K_UNITS = "speedUnits";
   const K_HELP = "menuHelp";
 
   const THEMES = [["dark", "DARK"], ["light", "LIGHT"], ["system", "SYSTEM"]];
-  // READABILITY. Text size scales the --fs-* type ladder (tokens.css); the HUD
-  // keeps its own HUD SIZE slider. High contrast swaps see-through plates for
-  // solid ones and brightens secondary text. Units are display-only: physics
-  // and every stored number stay in km/h.
+  // READABILITY. Text size scales the --fs-* type ladder (tokens.css) and a
+  // modest --hud-text-boost so race digits grow with the menus. High contrast
+  // swaps see-through plates for solid ones and brightens secondary text.
+  // COLOUR VISION remaps semantic HUD/menu ink (faster/slower/you) for the
+  // three common deficiencies — not a full-scene filter (that washes the road).
+  // Units are display-only: physics and every stored number stay in km/h.
   const TEXT_SIZES = [["normal", "NORMAL"], ["large", "LARGE"], ["larger", "LARGER"]];
   const CONTRASTS = [["off", "OFF"], ["high", "HIGH"]];
+  const CVD_MODES = [["off", "OFF"], ["deutan", "DEUTERANOPIA"], ["protan", "PROTANOPIA"], ["tritan", "TRITANOPIA"]];
   const UNITS = [["kmh", "KM/H"], ["mph", "MPH"]];
   // HELP TEXT: HIDE drops the grey .adv-help explanations inside the settings
   // sheet and the race setup (css/components.css keys off <html
@@ -77,6 +81,7 @@ const AppearanceOpts = (function () {
   let hudHex = normHex(store.get(K_HUD_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
   let textSize = oneOf(store.get(K_TEXT, "normal"), TEXT_SIZES, "normal");
   let contrast = oneOf(store.get(K_CONTRAST, "off"), CONTRASTS, "off");
+  let cvdMode = oneOf(store.get(K_CVD, "off"), CVD_MODES, "off");
   let units = oneOf(store.get(K_UNITS, "kmh"), UNITS, "kmh");
   let help = oneOf(store.get(K_HELP, "on"), HELPS, "on");
 
@@ -260,7 +265,13 @@ const AppearanceOpts = (function () {
     if (!el) return;
     if (textSize === "normal") delete el.dataset.textSize; else el.dataset.textSize = textSize;
     if (contrast === "high") el.dataset.uiContrast = "high"; else delete el.dataset.uiContrast;
+    if (cvdMode === "off") delete el.dataset.cvd; else el.dataset.cvd = cvdMode;
     if (help === "off") el.dataset.menuHelp = "off"; else delete el.dataset.menuHelp;
+    // Race HUD digit boost rides TEXT SIZE (menus already scale via --fs-*).
+    // HUD SIZE remains the player's primary zoom; this is a readability nudge.
+    const boost = textSize === "larger" ? "1.18" : textSize === "large" ? "1.10" : "";
+    if (boost) el.style.setProperty("--hud-text-boost", boost);
+    else el.style.removeProperty("--hud-text-boost");
     // The speedo's unit label and the preview's; the number follows on the next HUD tick.
     if (typeof document !== "undefined" && document.querySelectorAll) {
       for (const u of document.querySelectorAll("#hud-speed .hud-unit, .pm-look-unit")) u.textContent = unitLabel();
@@ -340,6 +351,13 @@ const AppearanceOpts = (function () {
     paintRow("pm-contrast", contrast);
     return contrast;
   }
+  function setCvdMode(v) {
+    cvdMode = oneOf(v, CVD_MODES, "off");
+    store.set(K_CVD, cvdMode);
+    applyAll();
+    paintRow("pm-cvd", cvdMode);
+    return cvdMode;
+  }
   function setUnits(v) {
     units = oneOf(v, UNITS, "kmh");
     store.set(K_UNITS, units);
@@ -398,6 +416,25 @@ const AppearanceOpts = (function () {
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
+    // COLOUR VISION row is runtime-built (shellNodes at ceiling) — insert after
+    // HIGH CONTRAST so READABILITY stays one fold.
+    if (!byId("pm-cvd")) {
+      const contrastRow = byId("pm-contrast");
+      if (contrastRow && contrastRow.parentNode && SettingRow.build) {
+        const built = SettingRow.build("pm-cvd", "COLOUR VISION", CVD_MODES);
+        const help = document.createElement("p");
+        help.className = "adv-help";
+        help.id = "pm-cvd-help";
+        help.textContent = "Remaps green/red HUD and menu ink for colour vision deficiency. The driving line still has its own COLOUR-BLIND palette under DISPLAY › HUD.";
+        const after = contrastRow.nextElementSibling;
+        // Skip the contrast help <p> so CVD sits under it.
+        const insertBefore = after && after.tagName === "P" && after.id === "pm-contrast-help"
+          ? after.nextSibling
+          : after;
+        contrastRow.parentNode.insertBefore(built.row, insertBefore || null);
+        contrastRow.parentNode.insertBefore(help, built.row.nextSibling);
+      }
+    }
     SettingRow.wire("pm-uitheme", {
       values: THEMES,
       read: () => theme,
@@ -415,6 +452,9 @@ const AppearanceOpts = (function () {
     });
     SettingRow.wire("pm-textsize", { values: TEXT_SIZES, read: () => textSize, write: (v) => setTextSize(v) });
     SettingRow.wire("pm-contrast", { values: CONTRASTS, read: () => contrast, write: (v) => setContrast(v) });
+    if (byId("pm-cvd")) {
+      SettingRow.wire("pm-cvd", { values: CVD_MODES, read: () => cvdMode, write: (v) => setCvdMode(v) });
+    }
     SettingRow.wire("pm-units", { values: UNITS, read: () => units, write: (v) => setUnits(v) });
     SettingRow.wire("pm-helptext", { values: HELPS, read: () => help, write: (v) => setHelp(v) });
     buildSwatches("pm-menuaccent-swatches", "menu");
@@ -423,6 +463,11 @@ const AppearanceOpts = (function () {
     wireHexPair("pm-hudaccent-hex", "pm-hudaccent-hextext", setHudHex);
     syncCustomRows();
     applyReadability();   // the eval-time apply ran before #hud-speed's unit label existed
+    // TEXT SIZE help: menus AND a HUD digit nudge.
+    const tsHelp = byId("pm-textsize-help");
+    if (tsHelp) {
+      tsHelp.textContent = "Bigger words in the menus and settings, and a nudge to race HUD digits. HUD SIZE under DISPLAY still zooms the whole race chrome.";
+    }
   }
 
   // Apply before first paint when possible.
@@ -440,13 +485,14 @@ const AppearanceOpts = (function () {
   }
 
   return {
-    K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX, K_TEXT, K_CONTRAST, K_UNITS, K_HELP,
-    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS, TEXT_SIZES, CONTRASTS, UNITS, HELPS,
+    K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX, K_TEXT, K_CONTRAST, K_CVD, K_UNITS, K_HELP,
+    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS, TEXT_SIZES, CONTRASTS, CVD_MODES, UNITS, HELPS,
     textSize: () => textSize,
     contrast: () => contrast,
+    cvdMode: () => cvdMode,
     units: () => units,
     help: () => help,
-    speed, unitLabel, setTextSize, setContrast, setUnits, setHelp,
+    speed, unitLabel, setTextSize, setContrast, setCvdMode, setUnits, setHelp,
     theme: () => theme,
     menuAccent: () => menuAccent,
     hudAccent: () => hudAccent,

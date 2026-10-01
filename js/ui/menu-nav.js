@@ -422,6 +422,12 @@ window.MenuNav = (function () {
   function ownsArrows(el, key, event) {
     if (!el) return false;
     const t = el.tagName;
+    // A focused <canvas> is a drawing surface that owns every key it is handed
+    // (the TRACK DESIGNER nudges the selected control point with the arrows,
+    // 1 m a press); MenuNav walking focus off it mid-edit would be the bug.
+    // Unless it says `data-arrows="pass"` — the designer's canvas with nothing
+    // selected, where owning the D-pad would trap a pad (it has no Tab).
+    if (t === "CANVAS") return !(el.dataset && el.dataset.arrows === "pass");
     // A real keyboard edits a multiline field with every caret/page key. The
     // pad, however, reaches us as an untrusted synthetic KeyboardEvent and has
     // no native textarea default action, so letting the textarea "own" it

@@ -85,6 +85,7 @@ anything in here.
 | [notes/BUG-HUNT-2026-09-02.md](notes/BUG-HUNT-2026-09-02.md) | Two rounds of read-only bug hunts (UI, GLX, WGX+TLX, memory, race-flow; then track engine, physics/AI, input/audio, net): every CONFIRMED row and what each fix batch landed. |
 | [notes/PERF-HUNT-2026-08-18.md](notes/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT`, DebrisWorld asleep-skip. |
 | [notes/TRACK-ROSTER-RESEARCH-2026-09-14.md](notes/TRACK-ROSTER-RESEARCH-2026-09-14.md) | The 38 World Championship venues the game does not carry, why the upstream `bacinger/f1-circuits` trace file can add no more, what each remaining candidate costs to import (Overpass-measured), and the four shipped defs whose `classic` flag the 2027 calendar contradicts. |
+| [notes/TUMFTM-RACETRACK-DATABASE.md](notes/TUMFTM-RACETRACK-DATABASE.md) | TUMFTM racetrack-database (LGPL-3.0): designer CSV importer, roster overlap vs the three missing DTM layouts, and why upstream racelines are NOT wired into TrackLine/AI (bake already min-curvature). |
 
 ## `research/` — cited from source, not a description of behaviour
 

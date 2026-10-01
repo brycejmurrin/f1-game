@@ -10,3 +10,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — CI/tooling PRs: open ready, merge on request, watch the fast tier; never for js/ without the gate
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews: one Sonnet subagent per skill, never grouped
 - [GitHub Pro: 40 concurrent jobs](github-plan-pro-40-jobs.md) — account upgraded 2026-09-30; size CI against 40 standard / 5 macOS slots, not 20
+- [Stacked PRs land bottom-up](stacked-prs-land-bottom-up.md) — retarget by hand after each merge (no branch auto-delete), sync-pr on ratchets conflicts, ready + auto-merge one at a time

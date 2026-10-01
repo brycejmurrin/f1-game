@@ -411,7 +411,7 @@ const CarDraw = (function () {
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
     function drawCockpitRig(c, base, dt, paint, noWheel) {
       const nite = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && G.track.def.night);
-      _cockpitOpts.emissive = nite ? 0.16 : 0.08;
+      _cockpitOpts.emissive = nite ? 0.20 : 0.14;
       const opt = _cockpitOpts;
       // The actual car around you: body (minus helmet) with the real paint, plus
       // the steering/spinning FRONT wheels (the rears sit right beside the camera
@@ -762,7 +762,7 @@ const CarDraw = (function () {
     }
 
     // ── cockpit-opts ────────────────────────────────────────────────
-    const _cockpitOpts = { doubleSided: true, roughness: 0.55, metalness: 0.15, specular: 0.40, emissive: 0 };
+    const _cockpitOpts = { doubleSided: true, roughness: 0.88, metalness: 0.04, specular: 0.14, emissive: 0 };
     const _cockpitWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
 
     // The render loop drains the decal queue once per frame, after the bodies.

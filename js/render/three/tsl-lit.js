@@ -170,6 +170,7 @@
       lampFog:     uniform(0.0),      // frame.lampFog (0 = day/off)
       wetness:     uniform(0.0),
       rain:        uniform(0.0),      // frame.rain — rain FALLING (0..1): the puddle ripples. GLX uRain.
+      specKnee:    uniform(4.0),      // SUN GLINT RANGE knob: sun-specular soft-clip asymptote. GLX uSpecKnee.
       time:        uniform(0.0),      // frame.time — drives FLAG wave + cloud drift (deterministic with the game clock)
       // WIND (knobs windDir / windSpeed): xy = unit direction in world xz, z =
       // speed scale. Read by vertexMotionNode — the foliage sway. GLX uWind.
@@ -343,6 +344,7 @@
       U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
       U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
       uf1(U.bounceK, k("bounceK", 0.04));
+      uf1(U.specKnee, k("specKnee", 4.0));
       uf1(U.mistShare, k("mistShare", 1.5));
       uf1(U.lampFogClip, k("fogClip", 0.7));
       uf1(U.glowAmp, k("glowAmp", 2.3));
@@ -772,7 +774,9 @@
           const y = y0;
           const aaFade = clamp(fwWall.sub(0.04).div(0.22).oneMinus(), 0.0, 1.0).toVar();
           If(aaFade.greaterThan(0.005), () => {
-            const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
+            // T = the world axis hc runs along (GLX applyMaterialNormal): a seam
+            // is a groove on every face, where the old up-cross-N frame mirrored +x / -z walls.
+            const T = select(an0.x.greaterThan(an0.z), vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0));
             const e = 0.05;
             const h0 = matBumpHeight(mid, vec2(hc0, y0));
             const hx = matBumpHeight(mid, vec2(hc0.add(e), y0));
@@ -931,15 +935,19 @@
       vec2(select(abs(N).x.greaterThan(abs(N).z), wp.z, wp.x), wp.y),
       wp.xz).div(max(matTexScaleOf(mid), float(0.0001)));
 
-    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd]) => {
+    // nGeoIn: the PRE-BUMP normal — the tile plane (matTexUV) and the tangent
+    // frame are picked from it, as GLX picks from vNrm; picking from the bumped
+    // N was a parity gap on walls near 45 degrees.
+    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd, nGeoIn]) => {
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
+      const nGeo = normalize(vec3(nGeoIn)).toVar();
       const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
       const live = U.matTexMix.greaterThan(0.001)
         .and(matTexInPack(mid))
         .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + fwidth BEFORE the live/fade gate (non-uniform CF hazard on WGSL).
-      const uv = matTexUV(mid, N, wp).toVar();
+      const uv = matTexUV(mid, nGeo, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
       // Sample BEFORE the live/fade/aa gates — implicit tex derivatives
@@ -950,8 +958,16 @@
       If(live.and(fade.greaterThan(0.005)), () => {
         If(aa.greaterThan(0.005), () => {
           const dxy = nt.xy.sub(0.5).mul(2.0).toVar();
-          const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
-          const B = cross(N, T);
+          // Tangent frame = the world axes the tile coordinate maps to (GLX
+          // applyMaterialTexNormal): wall-like (hc, y) -> T along hc, B = up;
+          // ground (x, z) -> T = +x, B = +z. The old up-cross-N frame was degenerate on the
+          // ground and mirrored on +x / -z faces.
+          const an = abs(nGeo);
+          const wall = matWallLike(matTexLayer(mid));
+          const T = select(wall,
+            select(an.x.greaterThan(an.z), vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0)),
+            vec3(1.0, 0.0, 0.0));
+          const B = select(wall, vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
           // ASPHALT stays the weakest — the road is viewed edge-on all race.
           const amt = select(mid.equal(16.0), float(0.10), float(0.55))
             .mul(U.matTexMix).mul(fade).mul(aa);
@@ -1393,7 +1409,7 @@
         // per-material procedural bump (before V/L/H/NoL — js/render/glx/shaders/glsl-lit.js)
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
-        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd));
+        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd, Nsaa));
 
         const L = vec3(U.sunDir).toVar();
         const H = normalize(L.add(V).add(vec3(1e-5))).toVar();   // +eps: V==-L NaN guard
@@ -1769,7 +1785,8 @@
           const Vis = V_SmithGGX(NoV, NoL, a);
           const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
           const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
-          specCol.assign(specCol.div(specCol.add(1.0)));
+          // soft knee, asymptote U.specKnee (def 4): sun glints can reach bloom (GLX)
+          specCol.assign(specCol.div(specCol.div(U.specKnee).add(1.0)));
           color.addAssign(specCol);
         });
 
@@ -1870,6 +1887,17 @@
           const R = reflect(V.negate(), N).toVar();
           const skyT = pow(max(R.y, 1e-4), 0.40);
           const envColor = mix(vec3(U.skyHorizon), vec3(U.skyZenith), skyT).toVar();
+          // the live env probe replaces the gradient near the car (GLX; faded
+          // with eye distance — one cube is parallax-wrong far from its centre)
+          if (envCubeNode) {
+            If(U.envStr.greaterThan(0.001), () => {
+              const probeW = clamp(U.envStr, 0.0, 1.0)
+                .mul(clamp(vd.sub(60.0).div(90.0).oneMinus(), 0.0, 1.0)).toVar();
+              If(probeW.greaterThan(0.001), () => {
+                envColor.assign(mix(envColor, cubeTexture(envCubeNode, R, rough.mul(2.5)).rgb, probeW));
+              });
+            });
+          }
           const envSunAlign = max(dot(R, U.sunDir), 0.0).toVar();
           envColor.assign(mix(envColor, envColor.mul(U.sunColor).mul(1.15),
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));

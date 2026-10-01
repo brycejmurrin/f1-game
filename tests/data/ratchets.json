@@ -9,12 +9,12 @@
       "lines": 3221
     },
     "js/car/car3d.js": {
-      "lines": 4097
+      "lines": 4094
     },
     "js/game.js": {
-      "codeLines": 5249,
+      "codeLines": 5280,
       "gMembers": 281,
-      "lines": 9678,
+      "lines": 9696,
       "topLets": 159
     },
     "js/lighting/presets.js": {
@@ -24,10 +24,10 @@
       "lines": 1872
     },
     "js/render/glx/glx.js": {
-      "lines": 2777
+      "lines": 2778
     },
     "js/track/tracks.js": {
-      "lines": 688
+      "lines": 690
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
@@ -39,7 +39,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 617,
+      "ceiling": 639,
       "slack": 5
     },
     "dynamicIdReads": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2109,
+      "ceiling": 2119,
       "slack": 25
     },
     "subFloorFontSize": {
