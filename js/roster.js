@@ -311,6 +311,7 @@
     "js/track/scenery/pits.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
+    "js/garage/experience.js",
     "js/garage/scene-prims.js",
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",

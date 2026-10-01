@@ -194,6 +194,21 @@ test("defaults apply at eval: dark / brand / team data attrs", () => {
   assert.equal(dataset.hudAccent, "team");
 });
 
+test("profile restore updates live appearance caches and rows without another persistence batch", () => {
+  const { M, written, dataset, rows } = load();
+  M.restore({ uiTheme: "light", menuAccent: "cyan", hudAccent: "violet", menuAccentHex: "#ffffff", hudAccentHex: "#123456",
+    textSize: "large", uiContrast: "high", speedUnits: "mph", menuHelp: "off" });
+  assert.equal(M.theme(), "light"); assert.equal(M.menuAccent(), "cyan"); assert.equal(M.hudAccent(), "violet");
+  assert.equal(dataset.uiContrast, "high"); assert.equal(dataset.menuHelp, "off"); assert.equal(M.speed(287), 178);
+  assert.equal(rows.get("pm-uitheme").read(), "light"); assert.deepEqual(written, {});
+});
+
+test("menu custom colours receive the same safe ink selection as swatches", () => {
+  const { M, style } = load(); M.setMenuHex("#ffffff");
+  assert.equal(style.get("--menu-accent-ink"), "var(--bg)"); M.setMenuHex("#101010");
+  assert.equal(style.get("--menu-accent-ink"), "var(--text)");
+});
+
 test("setTheme persists and stamps data-ui-theme", () => {
   const { M, written, dataset } = load();
   M.setTheme("light");

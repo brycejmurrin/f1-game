@@ -247,6 +247,12 @@ most-shared class in the project and had no entry at all:
 - `.tune-label` — `components` + `tuner`
 - `.tune-row` — `components` + `tuner`
 
+- `watch-` — `watch-transport.css`: replay transport and its race layout context.
+- `.bc-head` — `hud.css` + `watch-transport.css`, timing header button semantics.
+- `.cr-nextrace` / `.cr-nr-name` — `career.css` + `career-experience.css`, real next-race brief.
+- `.photo-mode` — `overlays.css` + `watch-transport.css`, hide playback chrome during composition.
+- `.photo-studio-open` — `experience.css` + `photo-studio.css` + `watch-transport.css`, scene-only composition.
+
 ## Dead classes
 
 None, out of 559 — a class defined in `css/` and referenced from neither

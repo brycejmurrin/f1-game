@@ -520,8 +520,8 @@ function lights(liv) {
 // written in place, the moving props are static meshes under a matrix.
 const GANTRY_AT = FIXTURES.length + 2, LAMP_AT = GANTRY_AT + 4;   // record indices in _rig
 const GANTRY_TINT = [1.0, 0.93, 0.78];
-let pulseAt = -1e9, spotName = null, nightNow = false;
-function pulse() { pulseAt = typeof performance !== "undefined" ? performance.now() : Date.now(); }
+let liveNow = 0, pulseAt = -1e9, spotName = null, nightNow = false;
+function pulse() { pulseAt = liveNow; }
 function spot(name) { spotName = name || null; }
 // Where the work lamp stands for each preset, and what it looks at. Each
 // stand is OUTSIDE that preset's frame (the fit is +/-3.1 m across the view
@@ -541,6 +541,7 @@ let lampAim = [PARK[0], 0, PARK[1], 0, 0, 0, 0];   // x, z, yaw, on, ax, ay, az
 // seconds after a part is fitted. Returns the rig, plus the chase while it runs.
 function live(liv, now, ctx) {
   const rig = lights(liv);
+  liveNow = now;
   nightNow = !!(ctx && ctx.night);
   const ge = nightNow ? 6.5 * E : 0;
   for (let i = 0; i < 4; i++) {
@@ -567,11 +568,11 @@ function live(liv, now, ctx) {
   // a drop only when they line up, so it flickers rarely rather than strobes.
   {
     const t = now / 1000, f = (Math.sin(t * 23.1) + Math.sin(t * 7.3) + Math.sin(t * 41.7)) / 3;
-    const on = f > 0.62 ? 0.30 : f > 0.50 ? 0.72 : 1, F = FIXTURES[8], e = F[4] * E * on, o = 8 * 15;
+    const on = ctx && ctx.ambient === false ? 1 : f > 0.62 ? 0.30 : f > 0.50 ? 0.72 : 1, F = FIXTURES[8], e = F[4] * E * on, o = 8 * 15;
     rig[o + 3] = F[3][0] * e; rig[o + 4] = F[3][1] * e; rig[o + 5] = F[3][2] * e;
   }
   const u = (now - pulseAt) / 2200;
-  if (u < 0 || u >= 1) return rig;
+  if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return rig;
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
   const m = Math.max(c2[0], c2[1], c2[2]) || 1, ce = (2.6 / m) * E * Math.sin(u * Math.PI);
   const z = Z_BACK + (Z_DOOR - Z_BACK) * u, chase = rig.slice();
@@ -1390,6 +1391,7 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
     buildProps(g, liv);
     GarageEquipment.build(g, liv, ctx);
+    GarageExperience.buildFacility(g, liv, ctx);
     for (let i = 0; i < SIDES.length; i++)
       if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     for (let i = 0; i < SIDES.length; i++)
@@ -1405,6 +1407,7 @@ function rebuild(team, liv, info, ctx) {
       try {
         if (!liveCanvas) { liveCanvas = document.createElement("canvas"); liveCanvas.width = liveCanvas.height = LIVE; }
         paintLive(liveCanvas, team, liv, ctx);
+        GarageExperience.paintCareer(liveCanvas, ctx);
         if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
         liveTex = _gfx.createTexture(liveCanvas);
         if (!liveTex || liveTex._phase === 4) throw new Error("live texture upload returned no handle");
@@ -1460,7 +1463,7 @@ function ctxKey(ctx) {
   return `${ctx.track ? ctx.track.id : "-"}|${ctx.weather || "-"}|${ctx.tod || "-"}`
          + `|${ctx.wins | 0}|${ctx.night ? 1 : 0}|${ctx.career ? 1 : 0}|${ctx.round | 0}`
          + `|${last ? (last.dnf || "") + ":" + (last.p | 0) + ":" + (last.pts | 0) : "-"}`
-         + `|${ctx.sponsor && ctx.sponsor.label || "-"}`;
+         + `|${ctx.sponsor && ctx.sponsor.label || "-"}|${ctx.studio ? 1 : 0}|${GarageExperience.careerKey(ctx)}`;
 }
 let lastTrace = -1e9, traceFail = 0;
 const shutterMat = new Float32Array(MAT_I), arrivalMirror = new Float32Array(MAT_MIRROR);
@@ -1468,7 +1471,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   if (!_gfx) return;
   rebuild(team, liv, boardInfo(team, getParts, driverIdx), ctx);
   ensureDynamic();
-  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
   // THE FLOOR REFLECTION: the car again, mirrored in y = 0, drawn faint and
   // without a depth test straight after the floor. It writes no depth, so the
@@ -1482,6 +1485,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
     else arrivalMirror.set(MAT_MIRROR);
     _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
   }
+  if (ctx && ctx.studio) return;   // an actual car studio: floor/reflection, no room dressing
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
   // Each wall's furniture AND its lighting, only while the eye is inside that
   // wall — the same decision back-face culling makes for the wall itself. A
@@ -1513,7 +1517,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   }
   {
     const cyc = (now / 1000) % 34;
-    if (cyc < 6.5 && passMesh)
+    if ((!ctx || ctx.ambient !== false) && cyc < 6.5 && passMesh)
       _gfx.draw(passMesh, mk(_mPass, -24 + 48 * (cyc / 6.5), -0.04, PIT_FAST_Z, Math.PI / 2, 0), SHELL_OPTS);
   }
   // The engineers' traces tick over every 1.5 s: repaint one region of the
@@ -1521,7 +1525,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // Three strikes, as the dress: the atlas stays up with its last traces. A
   // Keep the last working handle until the replacement uploads successfully:
   // a transient upload failure can then retry without losing the live atlas.
-  if (liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
+  if ((!ctx || ctx.ambient !== false) && liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
     lastTrace = now;
     try {
       paintTrace(liveCanvas, liv, now);

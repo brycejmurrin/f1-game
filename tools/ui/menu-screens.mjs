@@ -66,6 +66,9 @@ async function openFieldFold(p) {
 }
 
 export const SCREENS = [
+  { id: "photostudio", name: "Photo Studio", root: "#photo-studio", open: async (p) => {
+      await p.evaluate(() => document.getElementById("mb-photo").click());
+      await p.waitForSelector("#photo-studio:not([hidden])", { timeout: 15000 }); } },
   { id: "title", name: "Title / main menu", root: "#overlay", open: async () => {} },
   { id: "select", name: "Circuit select", root: "#select", mapAxis: true, open: async (p, circuit) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });

@@ -229,6 +229,7 @@ const FULL = [
   "js/lighting/lighting.js",
   "js/lighting/profiles.js",
   "js/car/car-mesh.js",
+  "js/garage/experience.js",
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
@@ -261,6 +262,7 @@ const FULL = [
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
+  "js/career/experience.js",
   "js/career/career-ui.js",
   "js/career/season-ui.js",
   "js/ui/flags.js",
@@ -283,6 +285,7 @@ const FULL = [
   "js/race/overtake-mode.js",
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
+  "js/ui/watch-transport.js",
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   "js/race/weather-arc.js",
@@ -319,9 +322,14 @@ const FULL = [
   "js/xr/xr-ui.js",
   "js/xr/xr-boot.js",
   "js/ui/hud.js",
+  "js/ui/results-story.js",
   "js/ui/results-sheet.js",
   "js/race/quali-model.js",
   "js/race/daily-challenge.js",
+  "js/ui/appearance-studio.js",
+  "js/ui/home-world.js",
+  "js/ui/photo-studio.js",
+  "js/ui/experience.js",
   "js/ui/title-menu.js",
   "js/race/quali-net.js",
   "js/race/race-settings.js",
@@ -350,6 +358,8 @@ const CSS = [
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
+  "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
+  "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
 ];
 // The two title-critical sheets are also <link rel="preload">ed above the
 // stylesheet block (gen-shell writes that block too).
@@ -445,6 +455,7 @@ const TRACK_VM = [
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
   // here so a VM build ships the same complex the browser does.
   "js/data/teams.js",
+  "js/garage/experience.js",
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
@@ -456,6 +467,11 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/core/store.js", "js/ui/appearance-studio.js"],
+  ["js/ui/watch-transport.js", "js/race/real-replay.js"],
+  ["js/ui/appearance-studio.js", "js/game.js"],
+  ["js/ui/photo-studio.js", "js/game.js"],
+  ["js/ui/experience.js", "js/game.js"],
   // js/net's six intra-directory pairs moved to LAZY_NET_EDGES when the
   // multiplayer stack left FULL: a HARD_EDGES pair must have BOTH ends in FULL
   // to be orderable by tag position.

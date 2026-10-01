@@ -53,6 +53,7 @@ window.UiLayers = (function () {
        #overlay while the title screen is being dragged about. */
     { id: "tl-editor" },
     { id: "photo-controls" },
+    { id: "photo-studio" },
     { id: "datahub" },
   ];
 

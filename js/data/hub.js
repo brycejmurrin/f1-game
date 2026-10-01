@@ -25,7 +25,7 @@ const DataHub = (function () {
     { id: "results", label: "RESULTS", load: function () { return loadResults(); } },
     { id: "live", label: "LIVE", load: function () { return loadLive(); } },
     { id: "telemetry", label: "TELEMETRY", load: function () { return loadTelemetry(); } },
-    { id: "race", label: "RACE IT", load: function () { return loadRealRace(); } },
+    { id: "race", label: "WATCH & DRIVE", load: function () { return loadRealRace(); } },
     { id: "export", label: "EXPORT", load: function () { return loadExport(); } }
   ];
 
@@ -188,8 +188,9 @@ const DataHub = (function () {
     });
   }
 
-  function open() {
+  function open(want) {
     if (!root) return;
+    if (want && TABS.some(function (t) { return t.id === want; })) active = want;
     returnFocus = document.activeElement;
     Log.info("data", "hub open");
     root.hidden = false;

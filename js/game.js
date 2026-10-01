@@ -2656,7 +2656,7 @@ function scheduleFlybyTrack(settle) {
   const key = menuKey(want);
   const current = () => generation === _menuGate.generation && state === "menu" &&
     !setupPreviewOn && trackIdx === want && raceTimeOfDay === tod && raceWeather === weather &&
-    (!els.select.hidden || !$("race-settings").hidden);
+    (!els.select.hidden || !$("race-settings").hidden || (uiExperience && uiExperience.wantsTrack()));
   const prepare = async () => {
     if (!current()) return;
     try {
@@ -3066,6 +3066,7 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 function startRace() {
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   const key = entrySettings(), idx = trackIdx;
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     () => startRaceBody(), () => key === entrySettings(),
@@ -3346,7 +3347,7 @@ let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 // getters/setters + stable helpers. Getters read the current value at call
 // time; setters write back into the closure. Grown as extractions need it —
 // add a getter here rather than passing state ad hoc.
-let raceSettings = null, customTeam = null, titleMenu = null;
+let raceSettings = null, customTeam = null, titleMenu = null, uiExperience = null, photoStudio = null;
 
 const G = {
   $, els,
@@ -3628,7 +3629,8 @@ const G = {
   applyResMode: (...a) => applyResMode(...a),   // const from UiScale.create(G) below — defer
   ltKey: (...a) => ltKey(...a),
   // (setLightTune is a hoisted function, exposed as a plain shorthand below.)
-  exitPhotoMode: (...a) => exitPhotoMode(...a),   // const initialised below — defer
+  exitPhotoMode: (...a) => exitPhotoMode(...a),
+  openWatchPhoto: () => openExperiencePhoto("watch"),   // const initialised below — defer
   // Stable helpers consumed by js/lighting/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
@@ -3838,7 +3840,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const { setScale, applyResMode } = UiScale.create(G);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale;
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -4254,7 +4256,7 @@ function drivingLineApi(trk) {
 const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
 const carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter and wheel guns
 // Photo mode (js/camera/photo-cam.js).
-const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
+const photomode = Photomode.create(G), { updatePhotoCam, enterPhotoMode, exitPhotoMode } = photomode;
 // LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
 const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
@@ -4404,6 +4406,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 function quitToMenu() {
   Ghost.flush();
   cancelIntro();
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
@@ -6810,16 +6813,12 @@ function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   if (gfx.warming && gfx.warming()) return;
-  // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
-  // PRE-RACE LOADING SCREEN's flyby, or the garage's car preview; under every other
-  // menu it is HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat
-  // behind the title, title → GARAGE → MENU). First, before every early return.
-  // RACE SETTINGS IS NOT ON THIS LIST: a flyby behind the settings sheet makes the
-  // menu look like a paused race and gives the rows a moving, high-contrast
-  // backdrop to be read against. The world the picker warms is
-  // still built — it is just not SHOWN until the player commits to the race, where
-  // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
-  const menuBlank = (state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active() || !menuWorld()))
+  if (uiExperience && uiExperience.renderHome(dt)) return;
+  // The live Home garage returned above. Other menus hide undrawn canvases
+  // so a previous garage/race frame cannot leak behind a new screen. Loading
+  // cinematics and garage previews retain their existing covered warm-up.
+  const homeTrack = !!(uiExperience && uiExperience.trackActive());
+  const menuBlank = (state === "menu" && !setupPreviewOn && !homeTrack && (!track || !loadingScreen.active() || !menuWorld()))
     || (loadingScreen.phase() === "build" && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
   const vis = menuBlank || (_studio && _studio.cardUp) ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
@@ -6875,7 +6874,7 @@ function render(dt) {
     // flew through buildings. The sequencer places every eye against the props
     // registry instead. It is driven by PROGRESS through the flyby phase, so the
     // sequence keeps its shape whatever the phase is retuned to.
-    const fb = FlybySeq.solve(track, flybyProgress(), flybyShots);
+    const fb = (homeTrack && uiExperience.trackCamera(dt)) || FlybySeq.solve(track, flybyProgress(), flybyShots);
     eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
     // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
     // the change of angle into a long swim between two vantages, which reads as
@@ -7085,6 +7084,7 @@ function render(dt) {
   const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor") ? 0.3 : 0.9;
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
+  if (homeTrack && !dbgCam) { const view = uiExperience.trackCamera(); _mProj[8] = view.shiftX; _mProj[9] = view.shiftY; }
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {
@@ -8353,6 +8353,7 @@ function render(dt) {
   }
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
+  if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
   RaceEntryProfile.afterPresent(loadingScreen, gfx);
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
@@ -8782,6 +8783,22 @@ $("track-detail-close").onclick = closeTrackDetail;
 // the same rule the mode-dependent driving controls follow, so the grid never
 // reflows under a thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
+photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0), garage: {
+  snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
+} });
+function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
+  trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
+  photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio.") }); }
+uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperiencePhoto, openPractice: () => openTimeTrial(false),
+  prepareTrack: scheduleFlybyTrack, trackReady: menuWorld, trackKey: () => menuKey(trackIdx), updateTrackPhoto: updatePhotoCam,
+  captureTrackCamera: () => ({ eye: camEye.slice(), tgt: camTgt.slice(), fov: camFov }),
+  restoreTrackCamera: (v) => { if (v) { camEye.splice(0, 3, ...v.eye); camTgt.splice(0, 3, ...v.tgt); camFov = v.fov; } },
+  openWatch: () => ensureDataHub().then((ok) => { if (ok) DataHub.open("race"); }),
+  openSettingsPage: (page, fold) => { openSettings(); settingsNav.show(page, true); const f = fold && $(fold); if (f) { if (f.tagName === "DETAILS") f.open = true; else if (f.parentElement.tagName === "DETAILS") f.parentElement.open = true; f.scrollIntoView({ block: "start" }); f.focus(); } },
+});
+AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: () => openExperiencePhoto(state === "menu" ? "home" : "race"), openDisplay: () => settingsNav.show("display", true),
+  applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
+});
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
   SettingRow.disable($("pm-hidehud"), !inRace);
