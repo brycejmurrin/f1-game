@@ -1349,6 +1349,27 @@ test("recorded radio voice: clips play back to back through the radio band; a li
   assert.equal(GameAudio.radioVoice([clip(0.2)], 0, { volume: 0 }), null, "volume 0 is off");
 });
 
+test("clean and vintage radio presets change the recorded band and cue, but preserve the broadcast", async () => {
+  const { GameAudio: A, release } = boot(); A.init(); await release();
+  assert.equal(A.radioPreset(), "modern");
+  assert.equal(A.setRadioPreset("toString"), "modern");
+  const clip = { duration: 0.5 };
+  for (const [id, lo, hi, cue] of [["clean", 100, 9000, false], ["vintage", 450, 2800, true]]) {
+    A.setRadioPreset(id);
+    const h = A.radioVoice([clip], 0, { channel: "radio" });
+    assert.ok(h);
+    const filters = [...live].filter((n) => n.kind === "biquad").slice(-2);
+    assert.deepEqual(filters.map((f) => f.frequency.value), [lo, hi]);
+    assert.equal(A.radioLeadS("radio") > 0, cue);
+    assert.equal(A.radioSting("radio", 2), cue);
+    h.stop();
+    for (const fn of pendingTimers.splice(0)) fn();
+  }
+  const h = A.radioVoice([clip], 0, { fx: "announcer" });
+  assert.deepEqual([...live].filter((n) => n.kind === "biquad").slice(-2).map((f) => f.frequency.value), [90, 9000]);
+  h.stop(); for (const fn of pendingTimers.splice(0)) fn();
+});
+
 test("the pit limiter only ever CUTS the engine: base down by the depth, never louder, never negative", async () => {
   const A = await sampleEngine();
   const run = () => { for (let i = 0; i < 4; i++) A.setEngine(0.4, 0, false, 0.15, 2, {}); return A.engineLevel(); };

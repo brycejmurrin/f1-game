@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_269 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_270 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -321,6 +321,7 @@ _269 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `car-sfx.js` | `CarSfx` | tag | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
 | `voice-pack.js` | `VoicePack` | tag | VoicePack — recorded radio voice, composed from clips the way Crew Chief does it: fixed phrases, driver surnames, positions, numbers and gaps are separate… |
 | `radio-voice.js` | `RadioVoice` | tag | The radio banner, spoken aloud by the browser's own speech synthesiser. |
+| `announcer-recorded.js` | `RecordedAnnouncer` | tag | A recorded read owns its pending load as well as its playing clips. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
 
@@ -1530,6 +1531,15 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **FOLIAGE WIND SWAY (2026-10-01):** GLX + TLX; **WGX gap** (the same gap as the
+  FLAG wave — WGX has no per-vertex `mat` attribute, `docs/research/WEBGPU-PARITY.md`).
+  Tree emitters in `js/track/scenery/nature.js` stamp FOLIAGE vertices with a
+  height weight in the id's fraction (`TrackGeom.swayMatAt`, `SWAY_FRAC` 0.45 —
+  below the 0.5 the fragment side rounds at; instanced pines through
+  `rec.mat(id, [y0, y1])` in `graph.js`). GLX `LIT_VS` and TLX `tsl-lit.js`
+  `vertexMotionNode` bend the crown downwind by weight² plus a flutter, constant
+  for constant, from `uWind` / `U.wind` (knobs `windSpeed`, `windDir`). Shadow
+  casters do not sway (no positionNode; the sun map is snap-cached).
 - **DRIVING LINE ribbon (2026-09-08):** on all three. `js/render/shared/driving-line.js`
   builds one stride-6 strip; GLX draws it with `LINE_VS`/`LINE_FS`
   (`glsl-fx.js`), WGX with `WGSLFx.LINE` (a triangle-strip pipeline beside

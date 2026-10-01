@@ -213,7 +213,7 @@ const SceneryNature = (function () {
           const H = PINE_REF_H;
           rec.mat(MAT.WOOD);
           rec.cyl([0, 0, 0], 0.35 + H * 0.02, H * 0.4 + 0.5, [0.30, 0.22, 0.13], 6);
-          rec.mat(MAT.FOLIAGE);
+          rec.mat(MAT.FOLIAGE, [H * 0.32, H * 1.15]);   // wind-sway weight: 0 at the lowest tier, 1 at the tip
           let y = H * 0.3 + 0.5;
           for (let i = 0; i < tiers; i++) {
             const w = (sparse ? 2.3 : 2.7) * jQ * (1 - i * (sparse ? 0.24 : 0.21));
@@ -225,6 +225,14 @@ const SceneryNature = (function () {
         { kind: "pine", k, side, h });
       out._mat = 0;
     };
+    // WIND SWAY: FOLIAGE emitted while out._matAt is set carries a per-vertex
+    // weight in its material fraction (TrackGeom.swayMatAt): 0 at height y0 along
+    // `up` from `base` (the crown's foot — it stays on the trunk), 1 at y1 (the
+    // tip). The lit vertex shaders bend the crown downwind by it. Cleared with
+    // swayOff() before each emitter returns: the props record is posted whole
+    // from the build worker and a function on it would not clone.
+    const swayOn = (base, up, y0, y1) => { out._matAt = TrackGeom.swayMatAt(MAT.FOLIAGE, base, up, y0, y1); };
+    const swayOff = () => { out._matAt = null; };
     const tree = (k, side, dist, h, col, opts) => {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
@@ -265,6 +273,7 @@ const SceneryNature = (function () {
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
       out._mat = MAT.FOLIAGE;
+      swayOn(a.c, a.u, h * 0.22, h * 1.0);
       {
         const usR = (3.5 + h * 0.135) * j;
         const ringY = h * 0.34, apexY = h * 0.20;
@@ -319,7 +328,7 @@ const SceneryNature = (function () {
         addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j * sp, h * 0.26, c2, 8, b);    // shoulder
         addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j * sp, h * 0.22, c2, 7, b);    // rounded cap
       }
-      out._mat = 0;
+      out._mat = 0; swayOff();
     };
     // Palm: tall thin trunk + a crown of drooping frond prisms.
     const palm = (k, side, dist, h, frond) => {
@@ -346,6 +355,10 @@ const SceneryNature = (function () {
       }
       const base = joint(3);
       out._mat = MAT.FOLIAGE;
+      {
+        const hb = (base[0] - a.c[0]) * a.u[0] + (base[1] - a.c[1]) * a.u[1] + (base[2] - a.c[2]) * a.u[2];
+        swayOn(a.c, a.u, hb - 1.2, hb + 0.8);
+      }
       const top = vadd(base, a.u, -0.35);
       const frCol = frond || [0.18, 0.40, 0.16];
       const frDark = [frCol[0] * 0.8, frCol[1] * 0.82, frCol[2] * 0.78];
@@ -359,6 +372,7 @@ const SceneryNature = (function () {
         const fc = vadd(vadd(top, fr, 2.4), a.u, 0.15);
         addPrism(out, fc, [1.9, 0.5, len], i % 2 ? frCol : frDark, [fr, fu, [-fr[2], 0, fr[0]]]);
       }
+      swayOff();
       // Coconut cluster tucked under the crown.
       out._mat = MAT.WOOD;
       for (let i = 0; i < 3; i++) {
@@ -377,11 +391,12 @@ const SceneryNature = (function () {
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.3, h * 0.20 + 0.5, [0.34, 0.24, 0.15], 5, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
       out._mat = MAT.FOLIAGE;
+      swayOn(a.c, a.u, h * 0.20, h * 1.1);
       addCone(out, vadd(vadd(a.c, a.u, h * 0.14), a.r, lean * 0.14), (2.1 + h * 0.06) * j, h * 0.44, col, 7, b);
       addCone(out, vadd(vadd(a.c, a.u, h * 0.42), a.r, lean * 0.42), (1.6 + h * 0.05) * j, h * 0.38, col, 6, b);
       addCone(out, vadd(vadd(a.c, a.u, h * 0.70), a.r, lean * 0.70), (1.0 + h * 0.04) * j, h * 0.34, c2, 6, b);
       addCone(out, vadd(vadd(a.c, a.u, h * 0.88), a.r, lean * 0.88), (0.6 + h * 0.03) * j, h * 0.28, c2, 5, b);
-      out._mat = 0;
+      out._mat = 0; swayOff();
     };
 
     const cypress = (k, side, dist, h, col, opts) => {
@@ -399,10 +414,11 @@ const SceneryNature = (function () {
       out._mat = MAT.WOOD;
       addCyl(out, vadd(a.c, a.u, -0.4), 0.22, h * 0.18 + 0.4, opts.trunkCol || [0.30, 0.22, 0.14], 5, b);
       out._mat = MAT.FOLIAGE;
+      swayOn(a.c, a.u, h * 0.15, h * 1.0);
       addCone(out, vadd(a.c, a.u, h * 0.10), 1.45 * slim, h * 0.58, c, 6, b);
       addCone(out, vadd(a.c, a.u, h * 0.44), 1.10 * slim, h * 0.42, c, 6, b);
       addCone(out, vadd(a.c, a.u, h * 0.70), 0.70 * slim, h * 0.32, c, 6, b);   // pointed crown
-      out._mat = 0;
+      out._mat = 0; swayOff();
     };
 
     const stonePine = (k, side, dist, h, col, opts) => {
@@ -422,10 +438,11 @@ const SceneryNature = (function () {
       addCyl(out, vadd(foot, a.u, -0.5), 0.20 + h * 0.014, h * 0.66 + 0.5,
              opts.trunkCol || [0.40, 0.31, 0.23], 5, b);
       out._mat = MAT.FOLIAGE;
+      swayOn(foot, a.u, h * 0.58, h * 1.0);
       const crown = vadd(vadd(foot, a.u, h * 0.60), a.r, lean);
       addFrustum(out, crown, h * 0.12 * spread, h * 0.44 * spread, h * 0.16, col, 7, b);   // flared underside
       addCone(out, vadd(crown, a.u, h * 0.16), h * 0.44 * spread, h * 0.22, col, 7, b);    // shallow dome
-      out._mat = 0;
+      out._mat = 0; swayOff();
     };
 
     const broadleafFall = (k, side, dist, h, col, opts) => {
@@ -443,6 +460,7 @@ const SceneryNature = (function () {
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.22 + h * 0.012, h * 0.42 + 0.5,
              opts.barkCol || [0.36, 0.30, 0.24], 5, b) === false) return;   // no trunk, no crown
       out._mat = MAT.FOLIAGE;
+      swayOn(a.c, a.u, h * 0.40, h * 1.05);
       // Shade the lower lobes: a single flat autumn colour flattens into a blob.
       const c2 = [col[0] * 0.82, col[1] * 0.80, col[2] * 0.76];
       for (let i = 0; i < lobes; i++) {
@@ -453,7 +471,7 @@ const SceneryNature = (function () {
                    h * 0.26, i ? c2 : col, 6, b);
       }
       addCone(out, vadd(a.c, a.u, h * 0.76), h * 0.24 * spread, h * 0.30, col, 6, b);
-      out._mat = 0;
+      out._mat = 0; swayOff();
     };
 
     const acacia = (k, side, dist, h, col, opts) => {
@@ -497,6 +515,7 @@ const SceneryNature = (function () {
         addBox(out, vadd(vadd(a.c, a.u, forkY), a.r, dr * spread * 0.22),
                [spread * 0.44, 0.7, 0.22], bark, b);
       out._mat = MAT.FOLIAGE;
+      swayOn(a.c, a.u, trunkTop, h * 1.1);
       // Flat slabs, not cones: the crown's top and bottom are both near-planar.
       for (let i = 0; i < layers; i++) {
         const f = 1 - i * 0.4;
@@ -506,7 +525,7 @@ const SceneryNature = (function () {
         addBox(out, vadd(a.c, a.u, (top + bot) / 2),
                [spread * f, top - bot, spread * f], i % 2 ? c2 : col, b);
       }
-      out._mat = 0;
+      out._mat = 0; swayOff();
     };
 
     const plane = (k, side, dist, h, col, opts) => {
@@ -525,10 +544,11 @@ const SceneryNature = (function () {
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.42, h * 0.48 + 0.5,
              opts.trunkCol || [0.72, 0.70, 0.62], 6, b) === false) return;   // no trunk, no crown
       out._mat = MAT.FOLIAGE;
+      swayOn(a.c, a.u, h * 0.46, h * 1.1);
       for (let i = 0; i < stages; i++)
         addCyl(out, vadd(a.c, a.u, h * (0.46 + i * 0.28)), rad * (1 - i * 0.28),
                h * (0.34 - i * 0.10), i ? c2 : col, 7, b);
-      out._mat = 0;
+      out._mat = 0; swayOff();
     };
 
     // Distant mountain peak (world coords), pyramid so it reads as a summit, with
