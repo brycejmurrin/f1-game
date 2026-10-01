@@ -503,7 +503,7 @@ struct FrameU {
   lightVP    : mat4x4<f32>,   // off 224  sun light-space view-proj (shadow, Phase 3)
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
-  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, reserved, reserved) — zw unread: SSR is same-frame in COMPOSITE, car reflection is analytic-sky / params5.x
+  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, rain, specKnee) — SSR is same-frame in COMPOSITE, car reflection is analytic-sky / params5.x
   params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, mistShare) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth, ground-mist share of the lamp-fog glow
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
   params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, carSparkle, fogSunCore) — wet darkening + car-shadow arm flag + pure-look sparkle/fog knobs (zw always packed; WGSL reads them directly)
@@ -985,6 +985,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let satinMetalSurface = surfaceId == 29;
   let iriSurface = surfaceId == 30;
   let carbonFinish = surfaceId == 31;   // bare weave OVER the livery colour
+  // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its mean
+  // over 8-16 m so the 3.3 cm cross-hatch cannot moire at range. Computed
+  // here, ahead of the roughness ripple below and the albedo twill further on.
+  var weave = 0.5;
+  if (carbonFinish || carbonSurface) {
+    let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
+    let wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+  }
   // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
   // clearcoat, but a DIELECTRIC env response, not chrome — see baseRefl below.
   let visorSurface = surfaceId == 32;
@@ -1074,7 +1083,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (matteSurface) { specular = 0.16; }
     emissive = select(0.0, D.mat0.x, paintLike);
     if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
-    if (carbonSurface || carbonFinish) { rough = max(rough, 0.56); }
+    if (carbonSurface || carbonFinish) { rough = max(rough, 0.56) + (weave - 0.5) * 0.10; }   // the twill's roughness ripple
     if (rubberSurface) { rough = max(rough, 0.90); }
     if (metalSurface) { rough = min(rough, 0.16); }
     if (glassSurface || visorSurface) { rough = min(rough, 0.13); }
@@ -1117,10 +1126,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // toward dark resin and lay a fine cross-hatch over it, keeping a trace of
   // the team tint. sin*sin, so no derivative and no control-flow hazard.
   if (carbonFinish) {
-    let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
-    let weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y);
     albedo = mix(albedo * 0.16 + vec3<f32>(0.030, 0.031, 0.035), albedo * 0.28, vec3<f32>(0.25));
     albedo = albedo * (0.86 + 0.28 * weave);
+  } else if (carbonSurface) {
+    albedo = albedo * (0.93 + 0.14 * weave);
   }
   if (iriSurface) {
     let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
@@ -1348,7 +1357,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let Vg = V_SmithGGX(NoV, NoL, a);
     let Fg = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
     var specCol = (Dg * Vg) * Fg * F.sunColor.xyz * litNoL;
-    specCol = specCol / (1.0 + specCol);
+    // soft knee, asymptote params4.w (SUN GLINT RANGE, def 4): sun glints can reach bloom (GLX uSpecKnee)
+    specCol = specCol / (1.0 + specCol / max(F.params4.w, 0.5));
     color = color + specCol;
   }
 
@@ -1534,6 +1544,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let Rw = reflect(-V, N);
     let skyT = pow(max(Rw.y, 1e-4), 0.40);
     var envColor = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyT);
+    // the live env probe (params5.x) replaces the gradient near the car (GLX
+    // uEnvStr; faded with eye distance — one cube is parallax-wrong far away)
+    if (F.params5.x > 0.001) {
+      let probeW = clamp(F.params5.x, 0.0, 1.0) * clamp(1.0 - (vDist - 60.0) / 90.0, 0.0, 1.0);
+      if (probeW > 0.001) {
+        envColor = mix(envColor, textureSampleLevel(envCube, envCubeSamp, Rw, rough * 2.5).rgb, probeW);
+      }
+    }
     let envSunAlign = max(dot(Rw, F.sunDir.xyz), 0.0);
     envColor = mix(envColor, envColor * F.sunColor.xyz * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
     // WINDOW SUN FLASH (params9.z = uWindowSunFlash): dry glossy glass catches
