@@ -507,6 +507,7 @@ function restoreFreePlaySelection() {
 // in js/data/settings-defaults.js from that file, so the literal only mirrors
 // it (tests/unit/settings-defaults.test.mjs fails the build if they disagree).
 let difficulty = store.get("difficulty", "hard");
+AiBand.setMode(store.get("aiPace", "scripted"));
 // RELIABILITY — "off" | "low" | "real" (js/race/reliability.js), a standing
 // preference like difficulty. Ships OFF: this key is new for every existing
 // save, so OFF is the only default that does not silently start retiring cars
@@ -1298,7 +1299,8 @@ function inputOf(c) {
   if (c.local) return _testInput;              // null => live Input
   return c.netInput || NEUTRAL_INPUT;
 }
-// The human the AI rubber-bands against — recomputed once per update() rather
+// The human AiBand catch-up (aiPace=catchup) bands toward — once per update().
+// Scripted mode ignores it. Recomputed once per update() rather than once per AI car. Scripted mode ignores it.
 // than per AI car. Null when the field has no human at all.
 let _leadHuman = null;
 // Set by NetPlay while a session's countdown is pending: {at, hold, now()}.
@@ -1986,6 +1988,9 @@ function makeCars() {
       const lane = clamp((idx % 2 ? 1 : -1) * ((idx >> 1) / half) * 0.78
         + (simRnd() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
+      const visualSetup = (isP || mate) ? getTeamParts(team.id)
+        : (Career.inCareer() && Career.aiSetup ? Career.aiSetup(team) : null);
+      const visStamp = visualSetup ? Parts.CATALOG.map((cat) => visualSetup[cat.id] || "").join(",") : "";
       cars.push({
         team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num,
         // Role flags — see setCarRole. Today the only human IS the local player,
@@ -2016,6 +2021,9 @@ function makeCars() {
         tyre: null, tyreWear: 0, tyreLap0: 0, tyreStints: 0,
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
+        visualSetup, visStamp,
+        visPaint: visStamp ? visStamp + ":" + d.num : "",
+        visSh: visStamp ? visStamp + ":sh" : "",
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otE: 0, deploying: false,
@@ -3585,6 +3593,8 @@ const G = {
   // Mutable state + helpers consumed by js/ui/select-screen.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { setDriverIdxAt(v); },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
+  get aiPace() { return AiBand.mode(); },
+  set aiPace(v) { store.set("aiPace", AiBand.setMode(v)); },
   store, tickUi, scheduleFlybyTrack,
   // Same deferred-arrow trick for the garage <-> select plumbing: js/garage/setup-sheet.js is
   // created before js/ui/select-screen.js, and openGarage/openCustomize are declared further
@@ -4639,9 +4649,9 @@ function update(dt) {
   }
   if (!isPractice() && !isQuali()) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
 
-  // Leading human, for the AI rubber-band. Once per step, not once per AI car.
+  // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
   _leadHuman = null;
-  // !finished: a flagged human coasts on advancing prog — don't rubber-band toward it.
+  // !finished: a flagged human coasts on advancing prog — don't band toward it.
   for (const c of cars) if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
 
   for (const c of cars) updateCar(c, dt, ranked);
@@ -4817,21 +4827,14 @@ function updateCar(c, dt, ranked) {
 
   // --- speed targets ---
   let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
-  // asymmetric rubber band — boost only when player is ahead; no artificial slow-down when behind
-  // Rubber-band against the LEADING human, not "the" player: with a second
-  // driver on track, banding off whoever happens to be the local car would let
-  // the slower human drag the whole field back. One human => identical.
-  // ...and the band never lifts a level past the TOP OF THE LADDER. Without the
-  // cap easy's 0.851 x 1.18 = 1.004 beats hard's own 0.980: a lapped car on the
-  // easiest setting outran the fastest car on the hardest one, which makes the
-  // difficulty dial non-monotonic in the only place a player would notice it
-  // (a rival closing from a lap down). The ceiling is DIFF's own top scale, so
-  // it moves with the table rather than pinning a literal here.
+  // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
+  // restores the reverse-only rubber band via AiBand (start + lapping gates).
   if (!c.human && _leadHuman) {
-    const gap = _leadHuman.prog - c.prog;
-    const bandFactor = gap > 0 && gap < track.total * 0.5 && raceT - launchT0 > 8 ? Math.min(gap / 700, 1) * dd.band : 0;   // never off the START LINE (a P22 grid slot is 182 m back by itself = +4.7 % vmax on easy into T1, "the antithesis of what we want" — Game AI Pro ch.42) and never once LAPPED (the gap clamps the band to full, so an easy car a lap down took min(1, 0.93 x 1.18) = hard's corner authority and un-lapped itself). Both only ever REMOVE a boost, so the DIFF ladder cannot move.
-    const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
-    vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
+    const applied = AiBand.applyVmax(vmax, AiBand.factor({
+      leadProg: _leadHuman.prog, carProg: c.prog,
+      trackTotal: track.total, raceT, launchT0, bandAuth: dd.band,
+    }), c.tierV * c.skill * dd.ai, BAND_CEIL);
+    vmax = applied.vmax; c._bandNow = applied.bandNow;
   } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans included, not only the AI.
@@ -6929,24 +6932,18 @@ function render(dt) {
       shake = Math.max(0, shake - dt * 1.6);
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
       // OFFSET, not the trauma — shake still decays on its own clock, so cues
-      // keyed to it are untouched and only the camera stops moving.
-      const amt = camComfort() ? 0 : shake * shake * 0.9;
+      // keyed to it are untouched. CamTune.shakeOffset also applies COMFORT › HEAD BOB.
+      const amt = CamTune.shakeOffset(shake, camComfort());
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
-    // Onboard speed vibration: a subtle high-frequency buzz on the rigid-mounted
-    // cams (cockpit/hood/tcam) that grows with speed² — the visceral
-    // "the car is alive under you" cue. DISABLED on a wet road: it jitters the
-    // eye/target ~10-18 Hz every frame, and the wet-road SSR is a screen-space,
-    // camera-dependent reflection — so the buzz flipped the reflection's
-    // hit/miss pattern each frame and the wet road FLICKERED in patches from
-    // the cockpit. On a dry road there's no such reflection, so the buzz stays
-    // for feel; on a wet road we drop it to keep the reflection stable. Also
-    // fades in with speed so it never jitters a slow/standing car. REDUCE MOTION drops it.
+    // Onboard speed vibration (cockpit/hood/tcam): grows with speed². Off on wet
+    // roads — the wet SSR is camera-dependent and the buzz flickered it. REDUCE
+    // MOTION and COMFORT › HEAD BOB both land in CamTune.buzzAmp.
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && !camComfort() && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
+    if (state === "race" && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
       const spV = clamp(player.speed / vTop(), 0, 1);
-      const vAmp = (spV * spV * 0.022 + (player.deploying ? 0.008 : 0)) * _buzzWet;
+      const vAmp = CamTune.buzzAmp(spV, player.deploying, camComfort(), _buzzWet);
       if (vAmp > 0.001) {
         const tv = performance.now() * 0.001;
         const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;
@@ -7031,10 +7028,11 @@ function render(dt) {
     // physics step onto the horizon — the most visible jitter class. λ7 on the
     // roll itself matches the old linear dt/0.15 blend at 60 fps
     // (1−e^(−7/60) ≈ 0.110 ≈ (1/60)/0.15) but is frame-rate independent, so
-    // 30 and 120 Hz devices converge at the same real-time rate.
+    // 30 and 120 Hz devices converge at the same real-time rate. COMFORT › ROLL
+    // LEAN scales via CamTune.rollTarget (camComfort still forces level above).
     const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
     camSlipSm = damp(camSlipSm, clamp(slipRaw, -1, 1), 10, dt);
-    camRoll = damp(camRoll, roadCamRoll + camSlipSm * 0.07 + (onboard && player ? (player.baRoll || 0) * 0.85 : 0), 7, dt);   // + chassis roll: a bolted-on camera leans with the car (js/camera/vantage.js onboardAttitude)
+    camRoll = damp(camRoll, CamTune.rollTarget(roadCamRoll, camSlipSm, (onboard && player ? (player.baRoll || 0) * 0.85 : 0), false), 7, dt);
   }
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
   // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
@@ -7969,14 +7967,14 @@ function render(dt) {
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
     if (body) {
       gfx.draw(body, tmpMat, paint);
-      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
+      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // crew + kit, on the ground beside it
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
-      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
+      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
       // A loaded glb is one piece (no separate wheels), but the crew still
       // stands in the box — and without this a glb stop was an empty bay.
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);
@@ -8007,7 +8005,7 @@ function render(dt) {
         drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < 150 * 150;
       }
       if (drawFlaps) {
-        const aSt = teamDecalState(c.team, c.isPlayer);
+        const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
         drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
       }
     }
@@ -8064,7 +8062,7 @@ function render(dt) {
     if (!carDraw.modelBuf && vStd(c.speed) < 5.56) {
       const mdx = tmpP[0] - camEye[0], mdy = tmpP[1] - camEye[1], mdz = tmpP[2] - camEye[2];
       if (c.isPlayer || mdx * mdx + mdy * mdy + mdz * mdz < 40 * 40) {
-        const mSt = teamDecalState(c.team, c.isPlayer);
+        const mSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
         const cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
         drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(c.team.id, cm && cm.mirror));
       }
