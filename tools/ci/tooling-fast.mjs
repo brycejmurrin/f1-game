@@ -577,6 +577,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-polling.test.mjs",
+  "tests/unit/wall-clamp.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)
