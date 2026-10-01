@@ -14,7 +14,7 @@
 //
 //   node tools/ci/remote-group.mjs ui                  # dispatch on this branch, 4 shards, watch to the verdict
 //   node tools/ci/remote-group.mjs input --shards 2
-//   node tools/ci/remote-group.mjs render --workers 1  # override the group's --workers (hang vs contention)
+//   node tools/ci/remote-group.mjs render --workers 2  # workers per shard (default 1: a runner has 4 vCPUs)
 //   node tools/ci/remote-group.mjs ui --gl swiftshader  # reproduce a local-only (SwiftShader) red on CI
 //   node tools/ci/remote-group.mjs ui --no-wait         # dispatch, print the run URL, exit
 //   node tools/ci/remote-group.mjs --watch <run-id>     # watch a run already dispatched
@@ -49,7 +49,7 @@ export function browserGroups(scripts) {
 }
 
 /** Validate a dispatch and return its shard matrix, or {error}. Pure. */
-// browser-group.yml's `workers`: empty keeps the group script's own --workers.
+// browser-group.yml's `workers`: empty means the workflow's default of 1 per shard.
 export function parseWorkers(w) {
   if (w == null || w === "") return { workers: "" };
   const n = Number(w);
