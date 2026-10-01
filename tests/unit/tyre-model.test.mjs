@@ -21,7 +21,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
@@ -306,6 +306,15 @@ test("the minimum life holds AFTER severity: a 5-lap race at Austria is one set"
   assert.ok(c.tyreWear > 0.7 && c.tyreWear < 1.3, `wear after the floor's laps: ${c.tyreWear.toFixed(3)}`);
   const half = freshCar(s, 0.48); run(s, half, 2);
   assert.ok(half.tyreWear < 0.65, `two laps are half a set, not all of it: ${half.tyreWear.toFixed(3)}`);
+});
+
+test("a 5-lap race on the softest set ends on usable tyres, fuel and all", () => {
+  // At MIN_LIFE_LAPS 4 the fuel load (+22 % at a full tank) took every car in
+  // a 5-lap Austria past the cliff: 1.13-1.26 at the flag (census, 2026-09-30).
+  const s = ctxFor({ laps: 5, severity: 1.97 }); s.setLevel("real");
+  const c = freshCar(s, 0.48);
+  run(s, c, 5);
+  assert.ok(c.tyreWear <= 1.05, `wear at the flag of a 5-lap race: ${c.tyreWear.toFixed(3)}`);
 });
 
 // ── 3. The grip curve ───────────────────────────────────────────────────────
@@ -791,4 +800,29 @@ test("the TYRE WEAR setting reaches the live model, not just the store", () => {
     "setting TYRE WEAR must push the level into the model the STRATEGY preview reads");
   // gridUp's rule is the one to mirror: a time trial runs the model off.
   assert.match(setter[0], /isTimeTrial\(\) \? "off" : v/);
+});
+
+test("authored tyreSeverity stays in [0.4, 2.0] and the seven P5 anchors hold", () => {
+  // Slice A must not invent out-of-clamp values, and must not retune the seven
+  // measured 2026 anchors from TYRE-STRATEGY-DESIGN §5.5.
+  const dir = join(ROOT, "js/circuits");
+  const anchors = {
+    monaco: 1.01, silverstone: 0.89, suzuka: 0.85, miami: 1.22,
+    shanghai: 0.45, redbull: 1.97, albert_park: 0.61,
+  };
+  let authored = 0;
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith(".js")) continue;
+    const src = readFileSync(join(dir, f), "utf8");
+    const m = src.match(/tyreSeverity:\s*([0-9.]+)/);
+    if (!m) continue;
+    authored++;
+    const v = Number(m[1]);
+    assert.ok(v >= 0.4 && v <= 2.0, `${f}: tyreSeverity ${v} outside clamp`);
+    const id = f.replace(/\.js$/, "");
+    if (anchors[id] != null) {
+      assert.equal(v, anchors[id], `${id} P5 anchor must stay ${anchors[id]}`);
+    }
+  }
+  assert.ok(authored >= 15, `expected ≥15 authored severities after A1, got ${authored}`);
 });

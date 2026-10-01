@@ -151,13 +151,14 @@ on:
     # longer runs on push — it is a release train (three ticks an hour) that
     # calls this workflow for the FULL gate on the tip. A push to the deploy
     # branch gets the FAST tier here instead: guards, node suites, the parts
-    # census, driving-model and the change-aware selection, sharing the
-    # `ship-push` concurrency group so a burst of tip pushes cancels
-    # superseded runs instead of queueing them. The train is a different
-    # group (pages.yml's unique concurrency_key) and is never cancelled by a
-    # later push. The browser smoke shards, the geometry sweeps and the
-    # renderer jobs are the train's (and ready PRs'). The tier is decided by
-    # ONE expression,
+    # census, driving-model and the change-aware selection. Each ship push
+    # keys its own concurrency group on github.sha so a later merge never
+    # cancels an earlier one (Bryce 2026-10: every merge finishes its own
+    # run). Trade-off: merge bursts cost more runner minutes and queue longer
+    # against ~20 slots. The train is a different group (pages.yml's unique
+    # concurrency_key) and is never cancelled by a later push. The browser
+    # smoke shards, the geometry sweeps and the renderer jobs are the train's
+    # (and ready PRs'). The tier is decided by ONE expression,
     # repeated on the heavy jobs (smoke, ship-filter, sweeps):
     #   inputs.concurrency_key == '' && (<deploy-branch push> || <draft PR>)
     # (a Pages call always carries a concurrency_key, so it is never fast).
@@ -290,23 +291,23 @@ on:
 permissions:
   contents: read
 
-# ONE GATE PER BRANCH HEAD, NEWEST WINS (2026-09-10). A push to a branch with an
-# open PR used to start TWO full runs of identical work — the `push` event on
-# refs/heads/<branch> and the `pull_request` event on refs/pull/N/merge landed
-# in different groups, so neither cancelled the other. Measured on the last
-# assets change: 58.5 + 47.4 job-minutes for one commit. The group is keyed on
-# the BRANCH NAME for both events (pull_request.head.ref is the same string
-# github.ref_name is on the push), so the PR run, which arrives seconds later
-# and tests the merge commit, cancels the push run; a later push cancels both.
+# ONE GATE PER PR BRANCH HEAD, NEWEST WINS (2026-09-10; ship carve-out 2026-10).
+# A push to a topic branch with an open PR used to start TWO full runs of
+# identical work — the `push` event on refs/heads/<branch> and the
+# `pull_request` event on refs/pull/N/merge landed in different groups, so
+# neither cancelled the other (58.5 + 47.4 job-minutes for one commit). Topic
+# branches no longer get push CI (deploy branch only); PR runs still key on
+# pull_request.head.ref, and a later synchronize/ready_for_review cancels the
+# older PR run on that same branch (cancel-in-progress true for pull_request).
 #
-# cancel-in-progress on pushes is the newest-wins rule pages.yml now runs on
-# too. The 2026-08 objection to it — "fifteen consecutive runs ended cancelled
-# and the gate never once completed" — describes a branch pushed every few
-# minutes for an hour, where the LAST push's run does complete once the pushes
-# pause; what it never did was report on a commit nobody still cared about.
-# The deploy path is unaffected: a Pages caller supplies its run id, so every
-# deploy gate has its own group and is cancelled only by pages.yml's own
-# per-branch rule.
+# SHIP PUSHES DO NOT CANCEL EACH OTHER (2026-10). They used to share one
+# `ship-push` group with cancel-in-progress so a merge burst discarded every
+# earlier tip's fast tier. Bryce wants every merge's CI to finish: each deploy-
+# branch push now keys its own group on github.sha, and cancel-in-progress is
+# false for push. Cost: more runner minutes and a longer Actions queue during
+# merge bursts (~20 slots). The deploy path is unchanged: a Pages caller
+# supplies its run id (unique concurrency_key), so every deploy gate has its
+# own group and is cancelled only by pages.yml's own per-branch rule.
 concurrency:
   # A dispatched run gets its own group: it shares the ref with every push,
   # and cancellation killed the first dispatched `ui` group 30 s in when the
@@ -320,14 +321,14 @@ concurrency:
   # is queued behind exactly that. Run 2758 (2026-09-08) ended `cancelled` at
   # 20 min with no job over its cap and nothing failing, which is the shape
   # this produces.
-  # A push to the DEPLOY branch (the fast tier) shares ONE group with
-  # cancel-in-progress: unique per-run groups queued 8-9 fast-tier runs at
-  # once against ~20 slots (docs/notes/CI-ANALYSIS-2026-09-29.md). Newest-wins
-  # cancels the superseded push. The run that is DEPLOYING is not in this
-  # group: pages.yml always passes a unique concurrency_key, and its own
-  # `pages-gate-*` group has cancel-in-progress false.
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && 'ship-push') || github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+  # A push to the DEPLOY branch (the fast tier) keys on github.sha so each
+  # merge finishes its own run. Shared `ship-push` + cancel used to newest-
+  # win through merge bursts; that hid reds on superseded tips. Dispatch and
+  # schedule still get a unique run_id group. The run that is DEPLOYING is
+  # not in this group: pages.yml always passes a unique concurrency_key, and
+  # its own `pages-gate-*` group has cancel-in-progress false.
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.sha) || github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   guards:

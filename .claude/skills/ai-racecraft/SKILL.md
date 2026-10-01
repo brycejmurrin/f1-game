@@ -62,11 +62,14 @@ node --test tests/unit/ai-drive.test.mjs      # 75 tests, ~1 s
 node --test tests/unit/ai-racecraft-vm.test.mjs   # VM shape gate (jitter/approach/line); read its header first
 node tools/ci/test-bg.mjs collisions   # BROWSER group (background, AGENTS rule 4/5); racecraft lives in the contact specs
 
-# Field instruments (VM, no browser) — one dispatcher, three measurements:
-node tools/check/ai-race.mjs pace  [--track monza] [--diff normal]
-node tools/check/ai-race.mjs field [--track monza] [--seconds 240] [--runs 5]
-node tools/check/ai-race.mjs line  [--track monza]
-node tools/check/ai-race.mjs human [--track monza] [--runs 3]   # vs a PLAYER, not itself
-# All take --wear off|light|real (default off: no pits/deg). Direct: ai-pace/ai-field/ai-line/ai-human.mjs;
+# Field instruments (VM, no browser) — one dispatcher:
+node tools/check/ai-race.mjs pace    [--track monza] [--diff normal]
+node tools/check/ai-race.mjs field   [--track monza] [--seconds 240] [--runs 5]
+node tools/check/ai-race.mjs line    [--track monza]
+node tools/check/ai-race.mjs human   [--track monza] [--runs 3]   # vs a PLAYER, not itself
+node tools/check/ai-race.mjs ratings [--json]                     # Pearson / style zero-mean (no race)
+node tools/check/ai-race.mjs band    [--track monza] [--diff normal] [--seconds 90]  # rubber-band profile
+# Race subcommands take --wear off|light|real (default off: no pits/deg).
+# Direct: ai-pace/ai-field/ai-line/ai-human/ai-ratings/ai-band.mjs;
 # tyre strategy over a race: node tools/check/ai-strategy-census.mjs (wear real).
 ```
