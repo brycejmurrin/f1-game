@@ -237,7 +237,8 @@ test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canv
     while (h.playing() && n < 1000) { last = h.step(0.1); n++; }
     assert.ok(Math.abs(n - dur / 0.2) <= 2, `${dir}: SPEED 2 plays it in half the time (${n} steps)`);
     assert.equal(last.active, true, 'the last frame holds the final pose');
-    assert.equal(last.z, dir === 'in' ? 0 : Arrival.poseOut(dur).z, 'parked, or out of the door');
+    if (dir === 'in') assert.equal(last.z, 0, 'parked');
+    else assert.ok(last.z >= Arrival.poseOut(dur).z && last.z <= Arrival.poseOut(Arrival.OUT_SETTLE).z, 'out of the door, still coasting');
     assert.equal(h.G.setupPreviewOn, false, 'setupPreviewOn restored');
     assert.equal(h.$('garrival-inner').hidden, false, 'the panel is back');
     assert.equal(btn.focused, true, 'focus returns to the PREVIEW button');
@@ -323,4 +324,13 @@ test('the car out, the garage HOLDS until the flyby where the backend warms (TLX
   assert.match(render, /const heldWarm = !!\(_studio && _studio\.held && track && _menuGate\.warm > 0\);/, 'a held warm frame takes the world path with the canvas left visible (TLX paints nothing while it kicks the warm)');
   assert.match(game, /FlybySeq\.reset\(\); if \(warmPrograms\(\) \|\| !\(_studio && _studio\.held\)\) _menuGate\.warm = 2;/, 'held: world frames only when a warm was really requested, else the world would paint over the garage');
   assert.match(game, /studioClose\(n\);   \/\/ the held garage hands straight to the flyby\n\s*try \{ _introKey = key; raceIntro\(go\); \}/, 'introWarm closes the held garage at the handoff');
+});
+test('the drive-out coasts on past OUT_DURATION (the held garage), and settles without a jump', () => {
+  const cfg = Arrival.DEFAULT, at = (t) => Arrival.poseOut(t, cfg);
+  assert.ok(Arrival.OUT_SETTLE > Arrival.OUT_DURATION);
+  assert.ok(at(Arrival.OUT_DURATION + 0.5).z > at(Arrival.OUT_DURATION).z, 'still rolling while RACE! loads');
+  const end = at(Arrival.OUT_SETTLE);
+  assert.deepEqual([at(Arrival.OUT_SETTLE + 30).x, at(Arrival.OUT_SETTLE + 30).z], [end.x, end.z], 'then it holds');
+  const step = Math.hypot(end.x - at(Arrival.OUT_SETTLE - 0.02).x, end.z - at(Arrival.OUT_SETTLE - 0.02).z);
+  assert.ok(step < 0.02, `the last 20 ms moves ${step.toFixed(4)} m: no stop jerk`);
 });
