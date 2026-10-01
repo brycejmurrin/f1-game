@@ -124,6 +124,7 @@ const SPEC = [
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
   { k: "hudMapVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
+  { k: "hudElements", lane: "json", group: "hud", def: {}, src: "js/ui/hud-elements.js per-element on/off (missing key = on)" },
   { k: "hudMirror", lane: "json", group: "hud", def: "auto", oneOf: ["auto", "on", "off"], src: "js/render/shared/mirror-pass.js" },
   { k: "garageArrival", lane: "json", group: "camera", def: null, src: "js/garage/arrival.js (null = shipped arrival settings)" },
   { k: "flybyShots", lane: "json", group: "camera", def: null, src: "js/camera/flyby-panel.js FLYBY SHOT EDITOR (null = shipped shots)" },
@@ -178,6 +179,7 @@ const SPEC = [
   { k: "hudAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
   { k: "textSize", lane: "json", group: "appearance", def: "normal", src: "js/ui/appearance-opts.js TEXT SIZE", oneOf: ["normal", "large", "larger"] },
   { k: "uiContrast", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js HIGH CONTRAST", oneOf: ["off", "high"] },
+  { k: "cvdMode", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js COLOUR VISION", oneOf: ["off", "deutan", "protan", "tritan"] },
   { k: "speedUnits", lane: "json", group: "appearance", def: "kmh", src: "js/ui/appearance-opts.js SPEED UNITS", oneOf: ["kmh", "mph"] },
   { k: "menuHelp", lane: "json", group: "appearance", def: "on", src: "js/ui/appearance-opts.js HELP TEXT (on = SHOW | off = HIDE)", oneOf: ["on", "off"] },
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
