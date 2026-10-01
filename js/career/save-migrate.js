@@ -148,6 +148,8 @@ const SaveMigrate = (function () {
     career.history = Array.isArray(career.history) ? career.history : [];
     career.dev = career.dev && typeof career.dev === "object" ? career.dev : {};
     career.tdev = career.tdev && typeof career.tdev === "object" ? career.tdev : {};
+    career.aiParts = career.aiParts && typeof career.aiParts === "object" && !Array.isArray(career.aiParts)
+      ? career.aiParts : {};
     career.seats = career.seats && typeof career.seats === "object" ? career.seats : {};
     career.offers = Array.isArray(career.offers) ? career.offers : [];
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
