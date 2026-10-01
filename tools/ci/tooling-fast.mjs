@@ -94,6 +94,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bahrain-grandstand-rake.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/baku-migration.test.mjs",
+  // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / feather probe + monza characterisation until Slice 2 feathers termini. Pure helper + one track-build-vm build, ~1 s.
+  "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/behind-ship.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
@@ -377,6 +379,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/nontext-contrast.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
+  "tests/unit/pad-haptics.test.mjs",
   // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
