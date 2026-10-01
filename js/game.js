@@ -5098,7 +5098,8 @@ function updateCar(c, dt, ranked) {
     if (pitV >= 0) vmax = Math.min(vmax, pitV);
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
     // cap our pace to it, braking if closing fast, so we tuck behind not ram.
-    // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
+    // The follow distance is a TIME HEADWAY (AiDrive.followGap: s0 + v·T),
+    // tightened while a pass is latched or armed, or in a tow on a straight.
     // NOT against the car we are committed to passing once we are laterally
     // clear of it: the cap re-binding at |dx| < 2.2 is exactly what turned every
     // pull-out into a re-queue (the pass latch below owns that decision). 1.8 is
@@ -5119,7 +5120,7 @@ function updateCar(c, dt, ranked) {
       // so nothing about racing traffic changes.
       const onLane = queued && pits.held(c);
       const follow = onLane ? AiDrive.laneFollow()
-        : AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
+        : AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : 0, c.team, c.seat, blocker, c.houseStats);
       // Floored (AiDrive.queueFloor): the cap may match the blocker's pace but
       // must never command a STANDSTILL — which it did behind a stopped car,
       // and a stopped AI can never steer out. The crawl is itself capped at the
@@ -5554,7 +5555,7 @@ function updateCar(c, dt, ranked) {
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
       // No passing under the safety car or VSC (FIA Sporting Regs): the
       // caution capped speed but the pass logic ran on, 27 moves in 60 s.
-      const moveOn = raceCtl.level < 2 && !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
+      const moveOn = c.atkOn = raceCtl.level < 2 && !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
       if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M) {
         const side = AiCorridor.choose(_aiOtPull, c, blocker, cars, track.total, CLEAR, c.passPlan || (c.passPlan = {})).side;
         if (side && (side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
@@ -5566,6 +5567,7 @@ function updateCar(c, dt, ranked) {
       // 0 -> 6 in the bench with the zone gate alone).
       if (!c.passOf) overtake = moveOn && (!c.passPlan || c.passPlan.side) ? AiDrive.otPull(_aiOtPull) : 0;
     }
+    else c.atkOn = false;
     if (c.passOf && raceCtl.level >= 2) c.passOf = null;   // a move under way when the SC/VSC comes out is abandoned
     if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what

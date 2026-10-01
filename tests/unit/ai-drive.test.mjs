@@ -67,11 +67,23 @@ test("awareness shortens the stuck dig-out threshold", () => {
   assert.ok(A.stuckThreshold(mid) > 0.4 && A.stuckThreshold(mid) < 1.2);
 });
 
-test("awareness widens the following pad", () => {
-  assert.ok(A.followPad(ace) > A.followPad(rook));
-  assert.ok(A.followPad(ace, true) < A.followPad(ace, false));
+test("the follow gap is a time headway: s0 + v·T, awareness widens T", () => {
   assert.equal(A.followBase(false), 6);
   assert.equal(A.followBase(true), 8);
+  assert.ok(A.followTime(ace) > A.followTime(rook), "awareness leaves more time");
+  assert.ok(A.followTime(ace, true) < A.followTime(ace, false), "streets take less of it");
+  const T = A.followTime(mid, false);
+  assert.ok(T >= 0.25 && T <= 0.45, `T ${T} s outside the 0.25..0.45 s band`);
+  // IN SECONDS AT SPEED: the gap grows with speed (it was a flat ~7.5 m, 0.1 s at 75 m/s)
+  const g40 = A.followGap(mid, false, 40), g20 = A.followGap(mid, false, 20);
+  assert.ok(Math.abs(g40 - (6 + 40 * T)) < 1e-9 && g40 > g20, `gap at 40 m/s ${g40}`);
+  assert.ok((g40 - 6) / 40 > 0.25, "more than a quarter second of headway at racing speed");
+  // a latched/armed pass or a tow tightens it to 0.12 s; `extra` adds seconds
+  assert.ok(Math.abs(A.followGap(mid, false, 40, 1) - (6 + 40 * 0.12)) < 1e-9);
+  assert.ok(Math.abs(A.followGap(mid, false, 40, 0, null, 0, null, null, 0.1) - (6 + 40 * (T + 0.1))) < 1e-9);
+  // ...and it stays inside the tow's reach (TOW_RANGE 34 m) at any speed
+  assert.ok(A.followGap(ace, false, 95) <= 28, `capped: ${A.followGap(ace, false, 95)}`);
+  assert.equal(A.followGap(mid, false, 0), 6, "at a standstill it is s0");
 });
 
 test("aware drivers yield more on contact", () => {
@@ -509,8 +521,8 @@ test("houseStyle: Mercedes attacks more than Cadillac; missing stats are neutral
     roomL: 1.2, roomR: 3.4, street: false,
   };
   assert.ok(A.otPull({ ...openOt, team: mer }) > A.otPull(openOt));
-  assert.ok(A.followPad(ace, false, mcl) > A.followPad(ace, false),
-    "hold-car teams leave a wider follow pad");
+  assert.ok(A.followTime(ace, false, mcl) > A.followTime(ace, false),
+    "hold-car teams leave a wider follow gap");
 });
 
 test("seat 0 attacks more than seat 1; omitted seat stays the factory card", () => {
@@ -552,7 +564,7 @@ test("team orders: #2 holds vs #1; #1 may pass #2", () => {
   const vsRival = A.otFireRate({ ...midOpen, seat: 1, other: rival });
   assert.ok(vsLead < vsRival, `#2 vs #1 ${vsLead} should be colder than vs rival ${vsRival}`);
   assert.ok(vsSecond > vsRival, `#1 vs #2 ${vsSecond} should be hotter than vs rival ${vsRival}`);
-  assert.ok(A.followPad(mid, false, team, 1, lead) > A.followPad(mid, false, team, 0, second),
+  assert.ok(A.followTime(mid, false, team, 1, lead) > A.followTime(mid, false, team, 0, second),
     "#2 leaves #1 more space than #1 leaves #2");
   const cover = {
     traits: ace, chaser: true, chaserGap: 6, chaserSpeed: 58, speed: 54,

@@ -88,14 +88,31 @@ const AiDrive = (function () {
     return lerp(1.15, 0.45, t.awareness);
   }
 
-  function followPad(t, street, team, seat, other, stats) {
-    const pad = lerp(-0.8, 2.2, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats);
-    const out = street ? pad * 0.5 : pad;
-    return out * ordersMul(team, seat, other, "follow");
-  }
-
   function followBase(street) {
     return street ? 8 : 6;
+  }
+
+  // THE FOLLOW GAP IS A TIME — IDM's s0 + v·T. It was metres: followBase plus
+  // an awareness pad of -0.8..+2.2 m, which at 80 m/s is a tenth of a second,
+  // so every follower sat in the gearbox of the car ahead and the field ran as
+  // trains no move could start from (ai-tactics, 2026-10-01: lap 1 with 85 %
+  // of intervals under 1 s and trains of 12). s0 is the old base; T is
+  // lerp(0.25, 0.45, awareness) s, scaled by house hold and team orders as the
+  // pad was, and streets take 0.8 of it (low speeds; the old street pad was
+  // halved). `tight` (0..1) shrinks T toward FOLLOW_TIGHT — a pass latched or
+  // armed, or a tow on a straight: closing up is the point there — and
+  // `extra` adds seconds (getting a run, the first lap). Capped at FOLLOW_MAX
+  // so a car at the gap still feels the wake (TOW_RANGE 34 m faded over 28:
+  // a fifth of the tow at 28 m).
+  const FOLLOW_TIGHT = 0.12, FOLLOW_MAX = 28;
+  function followTime(t, street, team, seat, other, stats) {
+    const T = lerp(0.25, 0.45, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
+      * ordersMul(team, seat, other, "follow");
+    return street ? T * 0.8 : T;
+  }
+  function followGap(t, street, speed, tight, team, seat, other, stats, extra) {
+    const T = lerp(followTime(t, street, team, seat, other, stats), FOLLOW_TIGHT, clamp(tight || 0, 0, 1)) + (extra || 0);
+    return Math.min(followBase(street) + Math.max(speed || 0, 0) * T, FOLLOW_MAX);
   }
 
   // Slipstream vmax gain. Streets get a half-size tow: with none, the 8 m train
@@ -294,7 +311,7 @@ const AiDrive = (function () {
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
     const expMul = lerp(0.75, 1.15, t.experience);      // rookies hesitate
     // Aggression (Slice 3 fire half): ±35 % around the craft/awareness window.
-    // Spacing half (followPad / contactGive) stays out — stuck/bunching workstream.
+    // Spacing half (followTime / contactGive) stays out — stuck/bunching workstream.
     const aggrMul = 1 + clamp(t.aggression != null ? t.aggression : 0, -1, 1) * 0.22;
     const house = houseMulCtx(ctx, 0.88, 1.12, "attack");
     const orders = ordersMul(ctx.team, ctx.seat, ctx.other, "ot");
@@ -1361,7 +1378,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
+    lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
