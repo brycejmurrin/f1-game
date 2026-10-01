@@ -11,7 +11,7 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
-**2026-09-26 (bug hunt, five parallel hunters) — thirteen FIXED, three OPEN.**
+**2026-09-26 (bug hunt, five parallel hunters) — fourteen FIXED, two OPEN.**
 Each reproduced in the VM or a unit harness first (probes in `scratch/hunt-*`).
 - Classification put every FLAGGED car above every RUNNING one, so a lapped
   car that crossed in the ~2 s before results beat lead-lap cars still on their
@@ -32,12 +32,16 @@ Each reproduced in the VM or a unit harness first (probes in `scratch/hunt-*`).
   fades to zero near standstill): Coulomb bleed. Brake-to-reverse never engaged
   on a descent (slope gravity re-took the braking branch). The 5-step frame cap
   dropped a whole step's remainder, not just the backlog.
-- OPEN: barrier offsets jump ~7-9 m inward at run-off ends on nearly every
-  circuit, and the clamp moves a car up to 7.5 m sideways in one step instead of
-  hitting the end face (scratch/hunt-phys/p6*). The AI brakes by `excess / pace`,
-  so at OVERALL SPEED 1.34 it overshoots corners (pinned the other way by
-  ai-drive.test's pace-invariance case — needs a decision). An AI wedged behind
-  a PARKED player is never rescued (`!unstuckActive` gates the rescue timer).
+- FIXED (2026-09-30, PRs #572/#587/#592): barrier offsets jumped ~7-9 m inward
+  at run-off termini (`RUNOFF_DEFAULT` 9 ↔ tyre `hw+1.1`); `wallAt`'s
+  `Math.min` + the clamp teleported `c.x`. `TrackBuildProps.featherBarrierEnds`
+  (two passes, cliff 1.5 m, 5 nodes, `pit.keep` protected) ramps off-pit
+  clearance jumps under 1.5 m (`barrier-runoff-jumps.test.mjs`). Pit-edge
+  end-face clamp deferred.
+- OPEN: The AI brakes by `excess / pace`, so at OVERALL SPEED 1.34 it
+  overshoots corners (pinned the other way by ai-drive.test's pace-invariance
+  case — needs a decision). An AI wedged behind a PARKED player is never
+  rescued (`!unstuckActive` gates the rescue timer).
 
 **2026-09-22 (bug hunt) — UI, audio, lighting: seven defects. FIXED.**
 - An armed KEY-REBIND slot survived leaving settings (BACK/CLOSE/RESUME): the
