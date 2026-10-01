@@ -464,7 +464,7 @@ const RaceControl = (function () {
     for (const o of cars) {
       if (o === c || o.finished || o.retired || (skip && skip(o))) continue;
       const d = ((o.prog - c.prog) % total + total) % total;   // forward, on the road
-      if (d > 0.5 && d < gap) gap = d;
+      if (d > 0 && d < gap) gap = d;
     }
     if (!Number.isFinite(gap)) return SC_PACE;
     const gapS = gap / Math.max(1, SC_PACE * vTop);   // seconds at the SC pace

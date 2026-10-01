@@ -98,3 +98,50 @@ test("pickStep never exceeds the team cap", () => {
   const step = CareerAiDev.pickStep(team, fitted, cap);
   if (step) assert.ok(Parts.getCost(step.trial, team) <= cap);
 });
+
+test("scrubFitted replaces a banned fitted id with the factory row", () => {
+  const { CareerAiDev, Teams, Parts, Regulations } = boot();
+  const team = Teams.LIST.find((t) => t.id === "ferrari");
+  const era = Regulations.ERAS.find((e) => e.id === "powertrain");
+  const factory = Parts.getFactorySetup(team);
+  const banned = Regulations.bannedIds(era.id);
+  let bannedId = null, catId = null;
+  for (const cat of Parts.CATALOG) {
+    for (const opt of cat.options) {
+      if (banned.has(opt.id) && opt.id !== factory[cat.id]) { bannedId = opt.id; catId = cat.id; break; }
+    }
+    if (bannedId) break;
+  }
+  assert.ok(bannedId, "the powertrain era bans something other than Ferrari's factory row");
+  const career = { aiParts: { ferrari: { owned: [bannedId, factory[catId]], fitted: Object.assign({}, factory, { [catId]: bannedId }) } } };
+  Parts.setLegality(Regulations.legalityFor(era.id), era.id);
+  const legalFactory = Parts.getFactorySetup(team);
+  CareerAiDev.scrubFitted(career);
+  assert.notEqual(legalFactory[catId], bannedId);
+  assert.equal(career.aiParts.ferrari.fitted[catId], legalFactory[catId]);
+  assert.equal(career.aiParts.ferrari.owned.indexOf(bannedId), -1);
+  Parts.setLegality(null, "");
+});
+
+test("developWinter rolls the dice on diceYear, not career.year", () => {
+  const { CareerAiDev, Teams } = boot();
+  const career = { year: 2031, aiParts: {} };
+  const seen = [];
+  const rnd = (y, tag) => { seen.push([y, tag]); return 1; };
+  const tStand = Teams.LIST.filter((t) => Teams.isReal(t)).map((t, i) => ({ id: t.id, pos: i + 1 }));
+  CareerAiDev.developWinter(career, tStand, new Map(), rnd, 2026);
+  assert.ok(seen.length > 0);
+  assert.ok(seen.every((s) => s[0] === 2026 && s[1] === "aidev"));
+});
+
+test("rollover develops after applyRegs and keeps the dice on the year that ended", () => {
+  const src = read("js/career/career.js");
+  const teams = src.slice(src.indexOf("function rolloverTeams"), src.indexOf("function aiSetup"));
+  assert.doesNotMatch(teams, /developWinter/, "a winter step before the era flip can be banned on the next line");
+  const roll = src.slice(src.indexOf("function rollover("), src.indexOf("function rollover(") + 12000);
+  const regs = roll.indexOf("applyRegs()");
+  const dev = roll.indexOf("CareerAiDev.developWinter");
+  const scrub = roll.indexOf("CareerAiDev.scrubFitted");
+  assert.ok(regs > 0 && scrub > regs && dev > scrub, "scrub, then develop, both after the new ruleset");
+  assert.match(roll, /developWinter\(career, tStand, devExpect, rnd, devYear\)/);
+});
