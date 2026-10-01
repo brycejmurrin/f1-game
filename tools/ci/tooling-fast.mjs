@@ -107,6 +107,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
   "tests/unit/boot-input-shape.test.mjs",
   "tests/unit/brake-cue.test.mjs",
+  // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
+  // and line presence, pinned against real git in a throwaway repo. ~1 s.
+  "tests/unit/branch-audit.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
@@ -586,6 +589,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-maps-corners.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   "tests/unit/track-preview-plan.test.mjs",
+  // RANDOMISE builds clockwise (Σk < 0 through the engine) with the grid side
+  // of the start straight ≥ the exit side, over 30 seeds; ~3 s.
+  "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   "tests/unit/twin-drift.test.mjs",
