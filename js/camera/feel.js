@@ -7,9 +7,7 @@
 const CamFeel = (function () {
   "use strict";
 
-  const clamp = (typeof M4 !== "undefined" && M4.clamp)
-    ? M4.clamp
-    : (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  const clamp = M4.clamp;
   const DEG = Math.PI / 180;
   const store = typeof GameStore !== "undefined" ? GameStore.store : null;
 
