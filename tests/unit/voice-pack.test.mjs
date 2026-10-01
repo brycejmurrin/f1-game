@@ -100,11 +100,11 @@ test("every tyre and pit call the engineer (js/race/engineer.js) makes composes 
     "js/physics/tyre-model.js", "js/race/engineer.js"]).RaceEngineer;
   const E = RE.create({});
   const base = { wear: 0, step: -1, axle: 0, front: true, graining: 0, blistering: 0, belowWindow: 0, outLap: false,
-    wrongTread: false, freeStop: false, wet: false, rainInLaps: null, lap: 5, lapsToStop: null, nextCode: null,
+    wrongTread: false, cheapStop: false, wet: false, rainInLaps: null, lap: 5, lapsToStop: null, nextCode: null,
     rivalBoxed: null, marginS: null, pitLoss: null };
   const cases = [];
   for (const wet of [false, true]) cases.push({ wrongTread: true, wet });
-  cases.push({ freeStop: true, marginS: 3 }, { freeStop: true, pitLoss: 21 }, { freeStop: true });
+  cases.push({ cheapStop: true, marginS: 3 }, { cheapStop: true, pitLoss: 21 }, { cheapStop: true });
   for (const t of SB.Teams.LIST) for (const d of t.drivers || []) cases.push({ rivalBoxed: d.code, lapsToStop: 3 });
   for (const r of [1, 2, 4]) cases.push({ rainInLaps: r, lapsToStop: 9, lap: 58 }, { rainInLaps: r });
   cases.push({ blistering: 1 }, { wear: 1.2 }, { graining: 1 }, { outLap: true, belowWindow: 1 }, { axle: 0.5, front: true }, { axle: 0.5, front: false });
