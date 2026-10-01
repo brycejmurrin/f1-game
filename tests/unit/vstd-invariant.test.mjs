@@ -122,12 +122,12 @@ const ALLOWED = [
     why: "sign test — the direction the incident sim ended on, restored to a magnitude clamped relative to entry speed",
   },
   {
-    file: "js/game.js", expr: "c.speed > 0",
+    file: "js/physics/wall-clamp.js", expr: "c.speed > 0",
     code: "if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);",
     why: "sign test — wall scrub bleeds toward zero from the positive side",
   },
   {
-    file: "js/game.js", expr: "c.speed < 0",
+    file: "js/physics/wall-clamp.js", expr: "c.speed < 0",
     code: "else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);",
     why: "sign test — the negative half of the same wall-scrub branch",
   },
