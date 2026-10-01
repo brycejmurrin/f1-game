@@ -111,8 +111,11 @@ const { $, photoCam } = G;
 // editor's FREE CAMERA button, enterFrom below). DONE then returns to that tool
 // rather than to the pause menu, and the tool's pose actions show in #fc-shot.
 const st = { open: false, speed: SPD_DEF, roll: 0, lens: "race", corner: 0, anchor: "—", poseErr: null, statusT: 0,
-  back: null, actions: null };
+  back: null, actions: null, grid: "off", dofFocus: 0.4, dofBlur: 0 };
 const rk = { q: false, e: false };
+// Composition grid + soft DoF overlays (js/camera/photo-kit.js) — viewport, not panel.
+const kitOverlays = (typeof PhotoKit !== "undefined" && typeof document !== "undefined")
+  ? PhotoKit.mountOverlays(document.body, document) : { grid: null, dof: null };
 
 // ---- DOM (built here: index.html holds only the layer, its door and the
 // pause-menu button — the shell's node budget is spent) ----
@@ -157,7 +160,14 @@ if (root) {
         btn("fc-copy-view", "COPY VIEW", "Copy an __apex.view({eye,target,fov}) line that frames this picture"),
         btn("fc-copy-pose", "COPY FLYBY POSE", "Copy this view as a held flyby shot, anchored to the nearest corner or landmark"),
       ]),
-      mk("p", { id: "fc-help", className: "adv-help", textContent: "WASD move · R/F up and down · Q/E roll · mouse wheel speed · drag or arrow keys look (arrows while focus is outside this panel) · Shift boost" }),
+      mk("div", { id: "fc-kit", className: "balanced-row", attrs: { role: "group", "aria-label": "Photo kit" } }, [
+        btn("fc-grid", "GRID: OFF", "Cycle composition grid: off, rule of thirds, golden ratio"),
+        btn("fc-mark-save", "SAVE MARK", "Bookmark this camera pose for this circuit"),
+        btn("fc-mark-load", "LOAD MARK", "Jump to the last saved bookmark on this circuit"),
+      ]),
+      slider("fc-dof-focus", "DoF FOCUS", 0, 100, 1, "fc-dof-focus-val"),
+      slider("fc-dof-blur", "DoF BLUR", 0, 100, 1, "fc-dof-blur-val"),
+      mk("p", { id: "fc-help", className: "adv-help", textContent: "WASD move · R/F up and down · Q/E roll · mouse wheel speed · drag or arrow keys look (arrows while focus is outside this panel) · Shift boost · GRID / SAVE MARK / DoF for photo kit" }),
       mk("p", { id: "fc-msg", attrs: { "aria-live": "polite" } }),
       mk("textarea", { id: "fc-out", readOnly: true, hidden: true, attrs: { "aria-label": "Copied camera text" } }),
     ]),
@@ -174,10 +184,14 @@ function paint() {
   set("fc-speed", sliderFromSpeed(st.speed), Math.round(st.speed) + " m/s");
   set("fc-roll", Math.round(st.roll), Math.round(st.roll) + "°");
   set("fc-fov", Math.round(photoCam.fov), Math.round(photoCam.fov) + "°");
+  set("fc-dof-focus", Math.round(st.dofFocus * 100), Math.round(st.dofFocus * 100) + "%");
+  set("fc-dof-blur", Math.round(st.dofBlur * 100), Math.round(st.dofBlur * 100) + "%");
   for (const [id, on] of [["fc-lens-race", st.lens === "race"], ["fc-lens-flyby", st.lens === "flyby"]]) {
     const b = E[id]; if (!b) continue;
     b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
   }
+  const gb = E["fc-grid"];
+  if (gb) gb.textContent = "GRID: " + (st.grid === "off" ? "OFF" : st.grid === "thirds" ? "THIRDS" : "GOLDEN");
 }
 function paintStatus() {
   const s = E["fc-status"]; if (!s) return;
@@ -259,6 +273,10 @@ function decorate(cam, dt) {
   if (st.lens === "flyby" && typeof FlybySeq !== "undefined") {
     cam.cine = true; cam.far = FlybySeq.FAR; cam.fog = FlybySeq.FOG;
   }
+  if (typeof PhotoKit !== "undefined") {
+    PhotoKit.applyDof(cam, st.dofFocus, st.dofBlur, kitOverlays.dof);
+    PhotoKit.setGrid(kitOverlays.grid, st.grid);
+  }
   st.statusT -= dt;
   if (st.statusT <= 0) { st.statusT = 0.25; refreshAnchor(); paintStatus(); }
 }
@@ -291,6 +309,10 @@ function open() {
   const out = E["fc-out"]; if (out) out.hidden = true;
   say("");
   document.body.classList.add("lt-open");   // same dock as the three tuners: race HUD and touch controls stand down
+  if (typeof PhotoKit !== "undefined") {
+    PhotoKit.setGrid(kitOverlays.grid, st.grid);
+    PhotoKit.applyDof(null, st.dofFocus, st.dofBlur, kitOverlays.dof);
+  }
   const ps = $("pmsettings"); if (ps) ps.hidden = true;
   // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own
   // .hidden survives underneath and reappears the moment pmsettings does.
@@ -316,6 +338,7 @@ function close(showPauseMenu, keepPhotoMode) {
   if (root) root.hidden = true;
   if (inner) inner.hidden = false;           // HIDE PANEL tucks this; do not carry it over
   document.body.classList.remove("lt-open");
+  if (typeof PhotoKit !== "undefined") PhotoKit.showOverlays(false, kitOverlays.grid, kitOverlays.dof);
   if (typeof window !== "undefined" && window.removeEventListener) {
     window.removeEventListener("wheel", onWheel, { passive: true });
     window.removeEventListener("blur", releaseKeys);
@@ -377,6 +400,7 @@ function state() {
     open: st.open, speed: r2(st.speed), roll: r2(st.roll), lens: st.lens, corner: st.corner,
     eye: c ? c.eye.map(r2) : null, target: c ? c.target.map(r2) : null, fov: c ? r2(c.fov) : null,
     anchor: st.anchor, poseErr: st.poseErr,
+    grid: st.grid, dofFocus: r2(st.dofFocus), dofBlur: r2(st.dofBlur),
   };
 }
 function cmd(opts) {
@@ -410,6 +434,38 @@ on(E["fc-lens-race"], "click", () => { tick(); setLens("race"); publish(); });
 on(E["fc-lens-flyby"], "click", () => { tick(); setLens("flyby"); publish(); });
 on(E["fc-copy-view"], "click", copyView);
 on(E["fc-copy-pose"], "click", copyPose);
+on(E["fc-grid"], "click", () => {
+  tick();
+  if (typeof PhotoKit === "undefined") return;
+  st.grid = PhotoKit.nextGrid(st.grid);
+  PhotoKit.setGrid(kitOverlays.grid, st.grid);
+  paint();
+});
+on(E["fc-mark-save"], "click", () => {
+  tick();
+  if (typeof PhotoKit === "undefined" || !G.track || !G.store) { say("No circuit to bookmark."); return; }
+  const c = cam();
+  const list = PhotoKit.saveMark(G.store, G.track.id || G.track.name || "track", {
+    eye: c.eye, target: c.target, fov: c.fov, roll: st.roll,
+  });
+  say(list ? ("Saved mark " + list.length + " of " + PhotoKit.MAX_MARKS + ".") : "Could not save bookmark.");
+});
+on(E["fc-mark-load"], "click", () => {
+  tick();
+  if (typeof PhotoKit === "undefined" || !G.track || !G.store) { say("No bookmarks."); return; }
+  const list = PhotoKit.marksFor(G.store, G.track.id || G.track.name || "track");
+  if (!list.length) { say("No bookmarks on this circuit."); return; }
+  const m = list[list.length - 1];
+  st.roll = clampRoll(m.roll || 0);
+  place(m.eye, m.target, m.fov);
+  say("Loaded “" + m.name + "”.");
+});
+on(E["fc-dof-focus"], "input", (e) => {
+  st.dofFocus = clamp((+e.target.value || 0) / 100, 0, 1); paint(); publish();
+});
+on(E["fc-dof-blur"], "input", (e) => {
+  st.dofBlur = clamp((+e.target.value || 0) / 100, 0, 1); paint(); publish();
+});
 paint();
 
 const api = { open, close, isOpen, onPhotoExit, enterFrom, speed, decorate, key, releaseKeys, cmd, state,

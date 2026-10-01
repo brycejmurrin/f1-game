@@ -20,6 +20,7 @@ window.CamModes = (function () {
     { id: "tcam",      label: "T-CAM",     cut: 0 },
     { id: "rear",      label: "REAR CAM",  cut: 0.15 },
     { id: "visor",     label: "VISOR",     cut: 0 },        // the cockpit without its steering wheel (a linked phone is the wheel)
+    { id: "trackside", label: "TRACKSIDE", cut: 0.5 },      // fixed corner cams that auto-switch as the car passes (append-only)
   ];
   const HOLD_MS = 340;   // CAM button hold before the picker opens
 
@@ -205,6 +206,9 @@ window.CamModes = (function () {
     // so a session that starts in the cockpit heard the chase mix until the
     // first camera change.
     if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);
+    // AUTO COMFORT on first touch/XR boot (js/camera/cam-comfort.js) — no-op
+    // when the player already chose a preference.
+    if (typeof CamComfort !== "undefined" && G.store) CamComfort.boot(G.store);
 
     return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camPicker.hide };
   }
