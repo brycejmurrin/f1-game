@@ -367,6 +367,8 @@ const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", 
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function garageSeat() {
   const team = Teams.LIST[G.teamIdx];
+  if (typeof GarageScene !== "undefined" && GarageScene.seatDriverAt)
+    return GarageScene.seatDriverAt(team, G.driverIdx);
   const seats = (typeof Career !== "undefined" && Career.gridDrivers)
     ? (Career.gridDrivers(team) || team.drivers) : team.drivers;
   return (seats && seats[G.driverIdx]) || (seats && seats[0]) || null;
