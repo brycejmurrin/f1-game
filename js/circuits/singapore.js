@@ -32,6 +32,7 @@
       palette: { shell: [0.16, 0.30, 0.40], roof: [0.80, 0.88, 0.94] },
     },
     lengthKm: 4.9,
+    tyreSeverity: 1.15,  // Marina Bay: thermal stress is the main deg cause despite smooth asphalt (Pirelli)
     baseHW: 6,
     street: true,
     barrierGap: 1.2,

@@ -611,3 +611,47 @@ Worth stating because it is easy to lose: a bare iPad has no Escape key, so none
 of §1 or §5 reaches a tablet being used with fingers. Touch-side correctness is
 §2, §3, §4 and §7. Keep the two halves of a "controls" change separate when
 reasoning about who benefits.
+
+---
+
+## 14. Pad trigger rumble (`trigger-rumble`) is not dual-rumble, and resistance is out of reach
+
+**Symptom.** A DualSense or Xbox pad on Chrome buzzes the grips on kerbs but
+never the L2/R2 triggers; or a site promises "adaptive triggers" from a web
+page and nothing resists.
+
+**Mechanism.** The Gamepad Haptics extension defines two *effect types* on
+`GamepadHapticActuator` ([MDN `playEffect`](https://developer.mozilla.org/en-US/docs/Web/API/GamepadHapticActuator/playEffect),
+[Edge explainer](https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/GamepadHapticsActuatorTriggerRumble/explainer.md)):
+
+| effect | motors | parameters |
+|---|---|---|
+| `"dual-rumble"` | grip / handle motors | `strongMagnitude`, `weakMagnitude` |
+| `"trigger-rumble"` | L2 / R2 impulse motors | `leftTrigger`, `rightTrigger` |
+
+Feature detection is `pad.vibrationActuator.effects.includes("trigger-rumble")`.
+Support (as of 2026): Chrome / Edge 126+, Opera, Samsung Internet — Windows and
+macOS, and over **Bluetooth** on Linux / ChromeOS. **Not** over USB on Linux,
+**not** Android-native Chromium, **not** Safari (any iOS browser), **not**
+Firefox (which still only has the non-standard `hapticActuators[].pulse()` path
+for grips).
+
+Adaptive trigger *resistance* (the DualSense spring that hardens under the
+finger) is **not** part of the Gamepad API. It needs WebHID and a Chromium-only
+vendor report; that path is out of scope for Apex 26 and must not be promised
+in UI copy.
+
+**Fix / our contract.** `Input.rumble(intensity, ms, channel)`:
+
+- `"brake"` → left trigger when trigger-rumble is available and TRIGGER HAPTICS
+  is on (lock-up)
+- `"throttle"` → right trigger (wheelspin / rear slide)
+- `"handles"` / omitted → dual-rumble grips (kerbs, contact, wall, front washout)
+- unsupported effect, or TRIGGER HAPTICS off → dual-rumble fallback
+- HAPTICS slider at 1 (scale 0) → silence
+- every `playEffect` promise is `.catch()`'d (a `visibilityState === "hidden"`
+  rejection otherwise paints the unhandledrejection overlay — §DEFECT-LEDGER)
+
+Pinned by `tests/unit/pad-haptics.test.mjs`. No Sony / PlayStation / DualSense
+logos or marketing copy in the UI — keep the existing generic pad glyphs.
+

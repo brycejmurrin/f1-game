@@ -548,7 +548,9 @@ test("the survey forwarders are gone — layout-audit --survey is the entry poin
 // opt-in that makes the seam measurable, and these guard both halves of it —
 // that the flag exists and reaches createGame, and that the DEFAULT is still
 // off so the tables in docs/notes/AI-FIELD-RESEARCH.md stay reproducible.
-const AI_INSTRUMENTS = ["ai-pace.mjs", "ai-field.mjs", "ai-line.mjs", "ai-human.mjs"];
+// Race instruments (boot the VM). ai-ratings.mjs is data-only and is pinned
+// separately — it must NOT invent a --wear flag that does nothing.
+const AI_INSTRUMENTS = ["ai-pace.mjs", "ai-field.mjs", "ai-line.mjs", "ai-human.mjs", "ai-band.mjs"];
 
 test("every AI instrument takes --wear and passes it into the VM's storage seed", () => {
   for (const name of AI_INSTRUMENTS) {
@@ -560,6 +562,16 @@ test("every AI instrument takes --wear and passes it into the VM's storage seed"
     assert.match(src, /createGame\(\{[^}]*storage:\s*\{[^}]*tyreWear:\s*WEAR/,
       `${name}: --wear never reaches createGame's storage seed`);
   }
+});
+
+test("ai-ratings is data-only (no race, no --wear) and ai-race dispatches it", () => {
+  const ratings = fs.readFileSync(tool("ai-ratings.mjs"), "utf8");
+  assert.doesNotMatch(ratings, /wearArg/, "ratings must not pretend to take --wear");
+  assert.doesNotMatch(ratings, /createGame/, "ratings must not boot the race VM");
+  assert.match(ratings, /correlationMatrix|pearson/i, "ratings must compute correlations");
+  const dispatch = fs.readFileSync(tool("ai-race.mjs"), "utf8");
+  assert.match(dispatch, /ratings:\s*"ai-ratings\.mjs"/);
+  assert.match(dispatch, /band:\s*"ai-band\.mjs"/);
 });
 
 test("--wear defaults to off, and a bad level is refused rather than defaulted", async () => {
