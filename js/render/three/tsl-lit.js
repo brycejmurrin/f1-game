@@ -170,6 +170,7 @@
       lampFog:     uniform(0.0),      // frame.lampFog (0 = day/off)
       wetness:     uniform(0.0),
       rain:        uniform(0.0),      // frame.rain — rain FALLING (0..1): the puddle ripples. GLX uRain.
+      specKnee:    uniform(4.0),      // SUN GLINT RANGE knob: sun-specular soft-clip asymptote. GLX uSpecKnee.
       time:        uniform(0.0),      // frame.time — drives FLAG wave + cloud drift (deterministic with the game clock)
       // WIND (knobs windDir / windSpeed): xy = unit direction in world xz, z =
       // speed scale. Read by vertexMotionNode — the foliage sway. GLX uWind.
@@ -343,6 +344,7 @@
       U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
       U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
       uf1(U.bounceK, k("bounceK", 0.04));
+      uf1(U.specKnee, k("specKnee", 4.0));
       uf1(U.mistShare, k("mistShare", 1.5));
       uf1(U.lampFogClip, k("fogClip", 0.7));
       uf1(U.glowAmp, k("glowAmp", 2.3));
@@ -1769,7 +1771,8 @@
           const Vis = V_SmithGGX(NoV, NoL, a);
           const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
           const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
-          specCol.assign(specCol.div(specCol.add(1.0)));
+          // soft knee, asymptote U.specKnee (def 4): sun glints can reach bloom (GLX)
+          specCol.assign(specCol.div(specCol.div(U.specKnee).add(1.0)));
           color.addAssign(specCol);
         });
 
@@ -1870,6 +1873,17 @@
           const R = reflect(V.negate(), N).toVar();
           const skyT = pow(max(R.y, 1e-4), 0.40);
           const envColor = mix(vec3(U.skyHorizon), vec3(U.skyZenith), skyT).toVar();
+          // the live env probe replaces the gradient near the car (GLX; faded
+          // with eye distance — one cube is parallax-wrong far from its centre)
+          if (envCubeNode) {
+            If(U.envStr.greaterThan(0.001), () => {
+              const probeW = clamp(U.envStr, 0.0, 1.0)
+                .mul(clamp(vd.sub(60.0).div(90.0).oneMinus(), 0.0, 1.0)).toVar();
+              If(probeW.greaterThan(0.001), () => {
+                envColor.assign(mix(envColor, cubeTexture(envCubeNode, R, rough.mul(2.5)).rgb, probeW));
+              });
+            });
+          }
           const envSunAlign = max(dot(R, U.sunDir), 0.0).toVar();
           envColor.assign(mix(envColor, envColor.mul(U.sunColor).mul(1.15),
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));
