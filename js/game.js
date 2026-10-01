@@ -710,8 +710,8 @@ function aeroWetK() { return raceCtl && raceCtl.lowGrip() ? 0.5 : 1; }
 function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
 // A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample).
 function paceVmax(o) { return (o._vmaxNow || 0) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
-let _paceRef = null;   // per-node AI speed/vmax profile for paceSample, one per field
-function paceRef() { if (!_paceRef || _paceRef.cars !== cars) { _paceRef = new Float32Array(track.n); _paceRef.cars = cars; } return _paceRef; }
+// The per-node AI speed/vmax profile paceSample learns, one per field (kept on the function: no new top-level state).
+function paceRef() { let r = paceRef.r; if (!r || r.cars !== cars) { r = paceRef.r = new Float32Array(track.n); r.cars = cars; } return r; }
 function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
 function xCoastCut(c) { return aeroWetK() * lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
