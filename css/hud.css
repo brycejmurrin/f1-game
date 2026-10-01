@@ -434,7 +434,7 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 #hud-plan:empty { display: none; }
 #hud-tyre[data-plan="soon"] #hud-plan { color: var(--sec-slow); }
 #hud-tyre[data-plan="now"] #hud-plan,
-#hud-tyre[data-plan="free"] #hud-plan { color: var(--you); }
+#hud-tyre[data-plan="cheap"] #hud-plan { color: var(--you); }
 /* THE RIVALS' WINDOWS on the gap chips (PitLane.windowOf): "P12" when the
    neighbour's planned stop is within three laps, "IN" while it is stopping —
    a suffix painted here, so the spellings gapForm learns stay whole. */
