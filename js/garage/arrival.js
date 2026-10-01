@@ -77,15 +77,23 @@ const GarageArrival = (function () {
    * already up; the car sits a beat, then rolls out nose first and on out of the
    * door while the camera, at the arrival's interior three-quarter, follows it.
    * No circuit is needed — this is the setup screen's own room — so it plays the
-   * moment START is pressed, while the circuit builds behind it. */
-  const OUT_HOLD = 1.1, OUT_RUN = 3.9, OUT_DURATION = OUT_HOLD + OUT_RUN + 0.3;
+   * moment START is pressed, while the circuit builds behind it.
+   * ONCE OUT IT TURNS INTO THE PIT LANE: straight to OUT_STRAIGHT (clear of the
+   * door at z 6.4), then an arc of OUT_R metres through OUT_TURN radians, away
+   * from the camera so the car sweeps across the doorway rather than out of it.
+   * x and yaw ride the pose (setup-camera.js builds the car matrix from them). */
+  const OUT_HOLD = 1.1, OUT_RUN = 4.4, OUT_DURATION = OUT_HOLD + OUT_RUN + 0.3;
+  const OUT_STRAIGHT = 8, OUT_R = 5, OUT_TURN = 1.3;   // ~75 degrees
   function poseOut(seconds, config = DEFAULT) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
-    const z = 13 * ease((t - OUT_HOLD) / OUT_RUN);   // out of the door (z 6.4) and clear of it
-    const right = config.angle === "right";
-    return { active: t < OUT_DURATION, fov: config.fov, door: 1, z, label: "LEAVING THE GARAGE",
+    const right = config.angle === "right", side = right ? -1 : 1;   // turn away from the eye
+    const s = (OUT_STRAIGHT + OUT_R * OUT_TURN) * ease((t - OUT_HOLD) / OUT_RUN);   // distance along the path
+    const th = Math.max(0, s - OUT_STRAIGHT) / OUT_R;
+    const z = s < OUT_STRAIGHT ? s : OUT_STRAIGHT + OUT_R * Math.sin(th);
+    const x = side * OUT_R * (1 - Math.cos(th)), yaw = side * th;
+    return { active: t < OUT_DURATION, fov: config.fov, door: 1, x, z, yaw, label: "LEAVING THE GARAGE",
       eye: right ? [4.1, 2.25, -4.9] : [-3.8, 2.1, -4.8],
-      aim: [0, 0.8, Math.min(9, 1.2 + z * 0.62)] };
+      aim: [x * 0.7, 0.8, Math.min(9, 1.2 + z * 0.62)] };
   }
   function create($, reducedMotion, readSettings = () => DEFAULT) {
     let state = null, time = 0, config = DEFAULT;
