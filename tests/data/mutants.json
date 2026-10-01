@@ -184,6 +184,18 @@
       }
     },
     {
+      "id": "m-cota-amphi-renamed",
+      "file": "js/circuits/scenery/cota.js",
+      "find": "modelGroup(\"cota-amphitheater\", {",
+      "replace": "modelGroup(\"cota-amphitheater-X\", {",
+      "why": "Renames COTA's required amphitheater modelGroup id, so the hero-contracts test no longer finds cota-amphitheater while the crest/terrain test stays green.",
+      "spec": "tests/specs/cota-foundation.spec.js",
+      "catchers": {
+        "emits complete hero, overhead, barrier, and geometry contracts by day and night": true,
+        "keeps the back-straight crest in place and terrain below the road corridor": false
+      }
+    },
+    {
       "id": "m-tilt-gain-dead",
       "file": "js/input/input.js",
       "find": "return clamp(d / (MAX_TILT - DEADZONE), -1, 1);",
