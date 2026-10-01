@@ -165,6 +165,12 @@ export const RULES = [
   // ── modes and their screens ─────────────────────────────────────────────
   // `ui` on the season files because the SETUP screen is DOM the menu specs
   // click through; `modes` is season+career+TT+quali.
+  // career-ui / career-backup: modes alone is not enough — career.spec.js
+  // declares over the selected-gate budget, so select-specs' SOURCE_AFFECTED
+  // elevates it to oversize when these two change (PR #611 shipped green
+  // without it). Keep this rule so pick-tests names the reason.
+  [/^js\/career\/(career-ui|career-backup)\.js/, ["modes", "state-unit"],
+   "career.spec.js — SOURCE_AFFECTED in select-specs elevates it past overBudget"],
   [/^js\/career\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
   [/^js\/career\//, ["modes", "state-unit"], ""],
 
@@ -212,6 +218,7 @@ export const RULES = [
   [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
   [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
   [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],
+  [/^js\/ui\/screen-looks\.js/, ["state-unit"], "screen-looks.test.mjs (also run title-layout + pause-opts: both peek through it)"],
   [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
   // .test.mjs in steering-unit, but the file reaches further than that: it

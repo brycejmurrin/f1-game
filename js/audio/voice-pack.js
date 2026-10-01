@@ -5,6 +5,10 @@
  * pack cannot cover whole is NOT spoken from the pack; RadioVoice falls back
  * to speech synthesis for it, so nothing is ever half-said.
  *
+ * ONE PACK PER RADIO CHANNEL (RadioVoice.PACK_VOICE): the engineer, the
+ * commentator, race control and the coach each have their own voice and only
+ * their own lines.
+ *
  * The clips are Kokoro-82M renders (Apache-2.0), made offline by
  * tools/gen/voicepack.mjs into ONE file per voice: `assets/voice/<id>.bin` is
  * the MP3 clips back to back, each a complete file, and `<id>.json` maps a key
@@ -26,7 +30,10 @@ const VoicePack = (() => {
   const WATCHDOG_MS = 4000;      // a decode that never settles frees the channel after this
 
   /** Speakable text (RadioVoice.speakable's output) → words and pauses.
-   *  A pause is punctuation FOLLOWED BY a space or the end, so "1.4" stays a word. */
+   *  A pause is punctuation FOLLOWED BY a space or the end, so "1.4" stays a word.
+   *  A lap time is read the way the broadcast reads one — "1:32.4" is "1 32
+   *  point 4", "1:05.3" is "1 oh 5 point 3" — so it splices from number clips
+   *  instead of needing a clip per time. */
   function norm(text) {
     const out = [];
     const s = String(text == null ? "" : text).toLowerCase()
@@ -34,8 +41,15 @@ const VoicePack = (() => {
     const re = /([.,!?;:])(?=\s|$)|[^\s.,!?;:]+(?:[.:][^\s.,!?;:]+)*/g;
     let m;
     while ((m = re.exec(s))) {
-      if (m[1]) { if (out.length && typeof out[out.length - 1] === "string") out.push({ p: PAUSE[m[1]] }); }
-      else out.push(m[0].replace(/^'+|'+$/g, ""));
+      if (m[1]) { if (out.length && typeof out[out.length - 1] === "string") out.push({ p: PAUSE[m[1]] }); continue; }
+      const w = m[0].replace(/^'+|'+$/g, "");
+      const t = /^(\d{1,2}):(\d\d)(?:\.(\d))?$/.exec(w);
+      if (t) {
+        out.push(String(+t[1]));
+        if (t[2][0] === "0") out.push("oh");
+        out.push(String(+t[2]));
+        if (t[3] != null) out.push("point", t[3]);
+      } else out.push(w);
     }
     while (out.length && typeof out[out.length - 1] !== "string") out.pop();
     return out;
@@ -185,7 +199,7 @@ const VoicePack = (() => {
           // starting late and cutting it off in the middle of an instruction.
           if (opt.budgetS != null && start + pl.secs > at + opt.budgetS + SLACK_S) { release(); return; }
           const h = GameAudio.radioVoice(parts, start, {
-            channel: ch, volume: opt.volume == null ? 1 : opt.volume });
+            channel: ch, fx: opt.fx, volume: opt.volume == null ? 1 : opt.volume });
           if (!h) { release(); return; }
           token.h = h;
           token.stop = () => { h.stop(); done(); };
