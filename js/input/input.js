@@ -1922,9 +1922,13 @@ const Input = (function () {
     // whatever the local mode. Pedals-only phones fall through to it.
     if (remoteSteers()) return analogShape(tiltSteering(), "tilt");
     // On-screen buttons and the drag wheel. A friend race keeps simulating
-    // under the pause menu; the pad already zeroes itself while nav is open.
-    // Do not clear the finger — the hold should still be there when it closes.
-    // Keyboard, tilt and the pad are unchanged.
+    // under the pause menu; the pad already zeroes itself while a menu is open.
+    // Gate on anyOpen(), NOT navOpen(): navOpen() is also true on the title
+    // #overlay (gate:false) so the pad can walk the doors — that must not
+    // mute the on-screen GAS / drag wheel on a freshly loaded page (steering
+    // latch + touch-pedals specs). Do not clear the finger — the hold should
+    // still be there when the menu closes. Keyboard, tilt and the pad are
+    // unchanged.
     if (steerMode === "buttons") return navBlocksTouch() ? 0 : buttonSteering();
     if (tiltActive()) return analogShape(tiltSteering(), "tilt");
     return navBlocksTouch() ? 0 : analogShape(touchSteering(), "touch");
@@ -1933,7 +1937,8 @@ const Input = (function () {
   const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
   function remoteThrottle() { return remoteActive() && remThr > REMOTE_PEDAL_ON; }
   function remoteBrake() { return remoteActive() && remBrk > REMOTE_PEDAL_ON; }
-  function navBlocksTouch() { return !!(window.UiLayers && window.UiLayers.navOpen()); }
+  // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
+  function navBlocksTouch() { return !!(window.UiLayers && window.UiLayers.anyOpen()); }
 
   function throttle() {
     return keyThrottle || (!navBlocksTouch() && btnThrottle) || padThrottle || remoteThrottle();
