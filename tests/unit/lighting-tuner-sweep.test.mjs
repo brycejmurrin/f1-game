@@ -71,3 +71,27 @@ test("ground-profile.mjs --help exits 0 without launching Chromium", () => {
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Usage:.*ground-profile/);
 });
+
+test("carshot.mjs --help exits 0 without launching Chromium", () => {
+  const r = spawnSync(process.execPath, ["tools/car/carshot.mjs", "--help"], {
+    encoding: "utf8", cwd: ROOT, timeout: 5000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Usage:.*carshot/);
+});
+
+test("trace-car.mjs --help exits 0 without launching Chromium", () => {
+  const r = spawnSync(process.execPath, ["tools/car/trace-car.mjs", "--help"], {
+    encoding: "utf8", cwd: ROOT, timeout: 5000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Usage:.*trace-car/);
+});
+
+test("ssr-probe.mjs --help exits 0 without launching Chromium", () => {
+  const r = spawnSync(process.execPath, ["tools/gfx/ssr-probe.mjs", "--help"], {
+    encoding: "utf8", cwd: ROOT, timeout: 5000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Usage:.*ssr-probe/);
+});
