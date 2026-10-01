@@ -2630,7 +2630,15 @@ async function menuFinish(current, key) {
   if (!current()) return;   // a RACE! tap or a new selection owns the sequencer now
   FlybySeq.setDuration(loadingScreen.nextFlyMs());
   const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
-  while (current() && !step()) await menuSlice();
+  let yielded = false;
+  for (let slice = 0; current();) {
+    const at = performance.now(), done = step();
+    slice += performance.now() - at;
+    if (done) break;
+    if (slice >= 3) { await menuSlice(); slice = 0; yielded = true; }
+  }
+  // Even cheap plans give the world's queued warm a render opportunity before garage prewarm.
+  if (!yielded && current() && _menuGate.warm > 0) await menuSlice();
   if (current()) _menuFly = fly;
   if (lit && await menuIdle(current)) { warmPrograms("|lit"); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
@@ -4028,11 +4036,12 @@ async function introPlan(live, key, info, n) {
   FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));
   const fly = { key, track, shots: flybyShots || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   // Compilation can delay a yielded timer for seconds; budget only planner CPU.
-  for (let spent = 0; live() && _introSkip !== n && spent < 800;) {
-    const at = performance.now(), done = step();
-    spent += performance.now() - at;
+  for (let spent = 0, slice = 0; live() && _introSkip !== n && spent < 800;) {
+    const at = performance.now(), done = step(), elapsed = performance.now() - at;
+    spent += elapsed; slice += elapsed;
     if (done || spent >= 800) break;
-    await menuSlice();
+    // Cheap/cache-hit shots share a slice; one expensive shot still yields alone.
+    if (slice >= 3) { await menuSlice(); slice = 0; }
   }
   return live() && _introSkip !== n ? fly : null;
 }

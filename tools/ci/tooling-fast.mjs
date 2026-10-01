@@ -187,6 +187,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // cost under a second and belong where the rule they guard is edited.
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  "tests/unit/data-hub-offline.test.mjs",
   "tests/unit/data-lazy-loader.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
@@ -319,8 +320,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
