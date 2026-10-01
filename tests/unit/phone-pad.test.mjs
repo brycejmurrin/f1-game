@@ -941,3 +941,20 @@ test('a phone connecting before hostRoom returns still closes the late room with
   assert.equal(stopped,1); assert.equal(h.ctl.state().phase,'linked');
   assert.equal(h.ui.linkedN,1); h.ctl.cancel();
 });
+
+test("game.js: out of a race (no player) the dash still goes out, so the phone shows its MENU PAD", () => {
+  // The sampler returned null with no player, and a null sends nothing (the test above), so a
+  // phone paired from the title menu never left the wheel's placeholder LCD.
+  const g = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const src = g.slice(g.indexOf("function phonePadDash() {"), g.indexOf('$("pm-phonepad").onclick'));
+  const make = new Function("PhonePad", "player", "paused", "state", src + "; return phonePadDash;");
+  for (const [state, paused, why] of [["menu", false, "the title menu"], ["select", false, "car select"], ["race", true, "a pause before the car exists"]]) {
+    const h = make(PhonePad, null, paused, state)();
+    assert.ok(h, why + ": a dash, not null");
+    const back = PhonePad.decodeHud(PhonePad.encodeHud(h));
+    assert.ok(back && back.state === state, why + ": it survives the wire");
+    const el = lcd();
+    PhonePad.paintHud(el, back);
+    assert.ok(el.body.classes.has("menu"), why + ": the phone shows the MENU PAD");
+  }
+});
