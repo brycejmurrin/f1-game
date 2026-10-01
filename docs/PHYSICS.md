@@ -793,15 +793,27 @@ below.
 
 ### Slipstream vs wake — the two are not one number
 
-`c.wake` is the positions-only proximity to the car ahead (game.js `wakeOf`,
-window `TOW_RANGE`/`TOW_FADE`/`TOW_HALF_W` in `js/physics/consts.js`) and is
-recorded for EVERY car every step; `dirtyAirMul(c.wake)` charges it at
-`aeroGrip` (player) and `_aiBr.grip` (AI), so both pay dirty air in the
-corners. `c.towing` is the tow BENEFIT actually applied to vmax — gated on the
+`c.wake` is the positions-only proximity to the car ahead
+(`PhysicsConsts.DirtyAir.wakeOf` in `js/physics/consts.js`, window
+`TOW_RANGE`/`TOW_FADE`/`TOW_HALF_W`) and is recorded for EVERY car every step;
+`DirtyAir.mul` / game.js `dirtyAirMul(c.wake)` charges it at `aeroGrip`
+(player) and `_aiBr.grip` (AI), so both pay dirty air in the corners.
+`c.towing` is the tow BENEFIT actually applied to vmax — gated on the
 driver (not braking, wheel near straight) for the player and on the curvature
 lookahead for the AI — and is what the HUD chip and engine audio read. The
 player's wake used to be the gated value, so it paid no dirty air in corners
 while the AI always did.
+
+**Race setting `dirtyAir`** (`off` / `classic` / `cfd`, ships **`classic`**):
+
+| level | wake shape | max aero-share loss | why |
+|---|---|---|---|
+| `off` | still recorded | 0 | no grip penalty; tow HUD unchanged |
+| `classic` | linear fade `(range−gap)/fade × lateral` | 0.35 | FIA ~20 % DF at 20 m / ~35 % at 10 m; default safe for characterization and AI-field measurements (`docs/notes/AI-FIELD-RESEARCH.md`) |
+| `cfd` | `exp(−gap/λ) × Gaussian(dx)` | 0.67 | SAE 2017-01-1546 close-spacing ceiling; λ and σ are starters to tune |
+
+Raising the classic loss past ~0.35 to fix AI churn was measured and reverted
+(0.35 → 0.60); the next lever for field behaviour is AI-side, not this model.
 
 Under a caution (`raceCtl.level >= 2`) a car above the delta pace is braked
 at `CAUTION_BRAKE · BRAKE` (game.js) toward it, on descents too; the cut vmax
@@ -970,6 +982,12 @@ it on. `js/race/reliability.js` ships off for the same reason.
   heat, so it sat 19 °C above its window permanently. What still differs
   between compounds is the time constant: softs switch on in about a lap, hards
   in two or three.
+  Heating follows oxiphysics (`Q_gen = slip_force · slip_speed`): `HEAT_ROLL`
+  is the clean-lap load·speed term the equilibrium solve targets; `HEAT_SLIP`
+  adds slide·load·v on top. Cooling is toward a blend of **ambient** and
+  **track temperature** (`SINK_TRACK` · asphalt + air; `T_TRACK_DELTA` by
+  weather — dry asphalt runs ~18 °C above air; rain closes the gap). Peak grip
+  is still `tempGrip(ts, life)` (quadratic either side of the window).
 - **A fresh set comes out of blankets at 70 °C, below its window.** That is the
   out-lap, and it is the counterweight the undercut needs — without it a stop is
   free and therefore always correct, which is a worse game than the one with the
@@ -981,7 +999,9 @@ it on. `js/race/reliability.js` ships off for the same reason.
   stop the car turning in, worn rears let it step out: opposite complaints with
   opposite answers, which is what makes a gone tyre something you can drive
   around. `axleSplit` is a RATIO against `gripMul` because `muBase` already
-  carries the shared drop.
+  carries the shared drop. The wear integral is distance × load ×
+  `(1 + W_SLIP_SPD · slide)` — rolling load still spends the set; sliding
+  spends it faster (oxiphysics TireWearModel: wear ~ load × slip speed).
 - **Circuit severity is what the SURFACE does, on top of what the layout does.**
   The emergent load already says how hard a LAYOUT works a tyre — it falls out
   of the forces the car made, with no authoring. `tyreSeverity` says what the
@@ -990,9 +1010,10 @@ it on. `js/race/reliability.js` ships off for the same reason.
   lets the model say something one number could not: Monaco's layout works the
   tyre hard (1.221 emergent) while its surface and speeds work it gently, which
   is how one of the sport's most demanding layouts is one of its LOWEST deg
-  circuits (0.050 s/lap against Austria's 0.097). Authored on the seven
-  circuits with a measured 2026 rate; the rest stay at 1.0 rather
-  than guessed (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.5).
+  circuits (0.050 s/lap against Austria's 0.097). Authored on the measured
+  circuits (`docs/notes/TYRE-SEVERITY-AUTHORING-2026-09-30.md`); the rest use
+  `SEVERITY_DEFAULT = 1.0` — the calendar-neutral placeholder, not a guessed
+  surface class (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.5).
 - **The player is told, in words they can act on** (`js/race/engineer.js`).
   Every line names something to DO: graining says ease off and clean them up
   because it heals, blistering says the set is done because it does not, and

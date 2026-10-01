@@ -53,6 +53,7 @@ const RaceSettings = (function () {
   // and for the same reason — OFF is the shipped default, and the middle rung
   // exists so a player can have the mechanic without it deciding the race.
   const RS_TYRES = [["off", "OFF"], ["light", "LIGHT"], ["real", "REAL"]];
+  const RS_DIRTY = [["off", "OFF"], ["classic", "CLASSIC"], ["cfd", "CFD"]];
   const RS_LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
   // STRATEGY (js/race/pit-lane.js planFor): the player's reference plan for
   // this circuit — the planner's own choice, or a pinned stop count. The pin
@@ -190,6 +191,8 @@ const RaceSettings = (function () {
       // there: a lap against the clock is not a set anybody is asked to manage.
       $("rs-tyres").hidden = tt;
       SettingRow.paint("rs-tyres", G.raceTyreWear, RS_TYRES);
+      $("rs-dirty").hidden = tt;
+      SettingRow.paint("rs-dirty", G.raceDirtyAir, RS_DIRTY);
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
       paintPlan(tt, raceLaps);
       paintPresetState(full);
@@ -305,6 +308,7 @@ const RaceSettings = (function () {
       wire("rs-caution", () => (G.cautionInfo().enabled ? "on" : "off"), (v) => setCautionEnabled(v === "on"));
       wire("rs-reliab", () => G.raceReliability, (v) => { G.raceReliability = v; store.set("reliability", v); });
       wire("rs-tyres", () => G.raceTyreWear, (v) => { G.raceTyreWear = v; });
+      wire("rs-dirty", () => G.raceDirtyAir, (v) => { G.raceDirtyAir = v; });
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
       wire("rs-plan", () => { const p = G.pits; const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
            (v) => { const p = G.pits; if (p) p.setPinnedStops(v === "auto" ? null : +v); });
