@@ -3663,7 +3663,7 @@ const G = {
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
+  announce, applyCaution, camVantage, endRace, gridUp, gripMult, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },

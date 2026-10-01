@@ -20,7 +20,7 @@ const LEAD_MAX = 1;
 //             (fwd, up). The wheel mount moves with the seat, so the rim keeps its
 //             distance from the eye (the cockpit near plane is 0.30 m).
 //   INTERIOR  the trim car-mesh.js builds inside the tub (getCockpitCabin).
-//   HALO      OFF / SLIM / STANDARD / THICK: the hoop's tube (car3d.js, halo size).
+//   HALO      OFF / SLIM / STANDARD / THICK / FAIRED: the hoop's tube (car3d.js, halo size).
 const CHOICES = {
   wheel:    { key: "apex26.cockpitWheel", url: "ckwheel", values: ["f1", "retro", "round", "none"],
               labels: { f1: "F1 2026", retro: "2000s", round: "CLASSIC", none: "NONE" } },
@@ -35,10 +35,10 @@ const SCREEN_WHEELS = { f1: true };
 const EYE_F = -0.20, EYE_U = 0.82;
 const SEATS = { std: [0, 0], low: [0, -0.06], high: [0, 0.08], fwd: [0.12, -0.02] };
 // The wheel mount at STANDARD: hub (y, z) and scale, car-local, per wheel.
-const MOUNTS = { f1: [0.63, 0.26, 0.80], retro: [0.63, 0.26, 0.80], round: [0.66, 0.28, 0.92], none: [0.63, 0.26, 0.80] };
+const MOUNTS = { f1: [0.70, 0.26, 0.80], retro: [0.70, 0.26, 0.80], round: [0.73, 0.28, 0.92], none: [0.70, 0.26, 0.80] };
 // Halo, stored "0" / "slim" / "1" / "thick" ("1" and "0" are the old ON/OFF switch).
-const HALO_VALUES = ["0", "slim", "1", "thick"];
-const HALO_LABELS = { "0": "OFF", slim: "SLIM", "1": "STANDARD", thick: "THICK" };
+const HALO_VALUES = ["0", "slim", "1", "thick", "fairing"];
+const HALO_LABELS = { "0": "OFF", slim: "SLIM", "1": "STANDARD", thick: "THICK", fairing: "FAIRED" };
 
 let haloVal = null;
 let lead = null;
@@ -95,7 +95,7 @@ function haloSetting() {
   return haloVal;
 }
 
-// 0 OFF, 1 SLIM, 2 STANDARD, 3 THICK.
+// 0 OFF, 1 SLIM, 2 STANDARD, 3 THICK, 4 FAIRED.
 function haloSize() { return HALO_VALUES.indexOf(haloSetting()); }
 
 function halo() { return haloSize() > 0; }
@@ -236,7 +236,7 @@ function initUI() {
   row("pm-ckseat", "SEAT", C.seat.values, C.seat.labels,
     "Where you sit in the car. The wheel moves with the seat.", seat, setSeat);
   row("pm-halo", "HALO", HALO_VALUES, HALO_LABELS,
-    "The halo (secondary roll structure) over the cockpit, and how thick it is.", haloSetting, setHalo);
+    "The halo over the cockpit. FAIRED adds a broad carbon roof and curved centre junction.", haloSetting, setHalo);
   row("pm-ckint", "INTERIOR", C.interior.values, C.interior.labels,
     "The cockpit trim: bare carbon, padding in your team's colours, or a 1960s cockpit with an aeroscreen and round gauges.", interior, setInterior);
 
