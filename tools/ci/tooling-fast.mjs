@@ -561,6 +561,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 52 shipped circuits and the designer's runtime defs: a golden hash per
   // circuit (metadata + materialised points) pins the extraction byte-for-byte.
   "tests/unit/track-def-factory.test.mjs",
+  // The track designer SCREEN (js/editor/designer.js + canvas.js) booted over the
+  // engine and a minimal DOM: init builds the rail before a design exists, the
+  // rail's edits keep the verdict coherent, SAVE / RACE land, the canvas routes a
+  // nudge back on the lattice. The 300 ms twin of tests/specs/track-designer.spec.js.
+  "tests/unit/track-designer-dom.test.mjs",
   // The track designer's pure core (js/editor/shape|stamps|randomise|validate|codec.js)
   // over the real engine: Dubins lands on its goal for all six words, stamps
   // build as the requested turn, the randomiser is deterministic and valid, the

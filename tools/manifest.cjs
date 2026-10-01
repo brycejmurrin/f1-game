@@ -348,6 +348,7 @@ const CSS = [
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
+  "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
 ];
 // The two title-critical sheets are also <link rel="preload">ed above the
 // stylesheet block (gen-shell writes that block too).
@@ -356,7 +357,7 @@ const CSS_PRELOAD = ["css/tokens.css", "css/components.css"];
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
 const CSS_DEFERRED = [
   "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/overlays.css",
-  "css/track-detail.css", "css/career.css", "css/data.css",
+  "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.
@@ -778,11 +779,15 @@ const LAZY_EDITOR = [
   "js/editor/randomise.js",   // TrackRandom: hull + displacement + fixAngles (Maciel), seeded
   "js/editor/validate.js",    // TrackValidate: WYSIWYG rules over Tracks.buildCenterline
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
+  "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
+  "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
-// stamps / randomise / validate destructure TrackShape at eval — the same meaning
-// HARD_EDGES carries for FULL, derived so it cannot drift from the roster.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js")
-  .map((f) => ["js/editor/shape.js", f]);
+// stamps / randomise / validate / canvas destructure TrackShape at eval — the
+// same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
+// roster; designer.js (the screen) must follow every other editor module.
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/designer.js")
+  .map((f) => ["js/editor/shape.js", f])
+  .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS

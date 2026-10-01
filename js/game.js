@@ -8639,7 +8639,7 @@ $("mb-data").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
 };
-CustomTracks.create(G, { load: loadBackendScripts });   // TRACK DESIGNER door (LAZY_EDITOR) + the saved-circuit registry
+CustomTracks.create(G, { load: loadBackendScripts, door: $("mb-designer") });   // TRACK DESIGNER door (LAZY_EDITOR) + the saved-circuit registry
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 // USE AS CONTROLLER (this phone): a plain navigation to the wheel page beside
 // index.html — no net stack, no room; the code is typed there (or arrives by

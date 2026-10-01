@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_253 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_255 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -274,6 +274,8 @@ _253 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `randomise.js` | `TrackRandom` | LAZY_EDITOR | TrackRandom: the RANDOMISE button. |
 | `validate.js` | `TrackValidate` | LAZY_EDITOR | TrackValidate: WYSIWYG validation for the track designer. |
 | `codec.js` | `TrackCodec` | LAZY_EDITOR | TrackCodec: the share code for a custom circuit. |
+| `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
+| `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
 
 **`js/car/`**
 
