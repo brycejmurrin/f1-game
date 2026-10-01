@@ -17,6 +17,7 @@ let _enabled = false;    // user opt-in flag
 let _active = false;     // _enabled && rapier ready — the ONE boolean game.js reads
 let _loadState = 0;      // 0 idle | 1 loading | 2 ready | -1 failed
 let _loadErr = null;
+let _loadPromise = null; // shared by the idle kick and race-entry prerequisite
 
 // ── side-world state ────────────────────────────────────────────────────────
 let world = null;        // RAPIER.World
@@ -156,19 +157,27 @@ const _hinted = new Set();           // mirror indices hinted this tick (A1 spal
 
 // ── enable / load ───────────────────────────────────────────────────────────
 function _load() {
-  if (_loadState !== 0) return;
+  if (_loadState !== 0) return _loadPromise;
   _loadState = 1;
-  import(RAPIER_URL)
+  _loadPromise = import(RAPIER_URL)
     .then((m) => m.default.init().then(() => {
       RAPIER = m.default;
       _loadState = 2;
       _active = _enabled;
+      return _active;
     }))
     .catch((e) => {
       _loadState = -1; _loadErr = String(e); _active = false;
       Log.warn("game", "DebrisWorld load failed: " + ((e && e.message) || e));
+      return false; // optional debris must never reject race entry
     });
+  return _loadPromise;
 }
+
+// The entry latch awaits this alongside scenery, before it validates the
+// selected race and replaces its field. prime() then has WASM available at
+// setup even when the idle import was late; no first-green BVH construction.
+function ready() { return _enabled ? _load() : Promise.resolve(false); }
 
 function setEnabled(on) {
   _enabled = !!on;
@@ -1302,7 +1311,7 @@ function status() {
 }
 function _panelLive() { let n = 0; for (const p of _panels) if (p.live) n++; return n; }
 
-return { create, active, prime, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
+return { create, active, ready, prime, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
          registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
          rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose };
 })();

@@ -107,6 +107,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
   "tests/unit/boot-input-shape.test.mjs",
   "tests/unit/brake-cue.test.mjs",
+  // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
+  // and line presence, pinned against real git in a throwaway repo. ~1 s.
+  "tests/unit/branch-audit.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
@@ -174,6 +177,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-token-adoption.test.mjs",
   "tests/unit/css-tokens.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
+  // The track designer's registry (js/editor/custom-tracks.js + track-themes.js):
+  // stored designs become Tracks.LIST entries through TrackDef.fromRaw, after
+  // the 52 and never in SEASON; hostile stored input is repaired or dropped.
+  // Runs the TRACK_VM engine over a stub store, ~3 s.
+  "tests/unit/custom-tracks.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
@@ -422,6 +430,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  // The branch-prune rule behind prune-branches.yml: merged-only, never an
+  // open PR's head, claims on age; pure fixtures, under a second.
+  "tests/unit/prune-branches.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
@@ -552,6 +563,22 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-build-vm-release.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/track-centerline-seam.test.mjs",
+  "tests/unit/track-codec.test.mjs",
+  // js/track/core/def.js (TrackDef) is the ONE raw-def → LIST-entry path for the
+  // 52 shipped circuits and the designer's runtime defs: a golden hash per
+  // circuit (metadata + materialised points) pins the extraction byte-for-byte.
+  "tests/unit/track-def-factory.test.mjs",
+  // The track designer SCREEN (js/editor/designer.js + canvas.js) booted over the
+  // engine and a minimal DOM: init builds the rail before a design exists, the
+  // rail's edits keep the verdict coherent, SAVE / RACE land, the canvas routes a
+  // nudge back on the lattice. The 300 ms twin of tests/specs/track-designer.spec.js.
+  "tests/unit/track-designer-dom.test.mjs",
+  // The track designer's pure core (js/editor/shape|stamps|randomise|validate|codec.js)
+  // over the real engine: Dubins lands on its goal for all six words, stamps
+  // build as the requested turn, the randomiser is deterministic and valid, the
+  // validator reads the engine's centreline; the share code round-trips on the
+  // lattice and refuses every bad code with a reason. ~15 s together.
+  "tests/unit/track-editor-geometry.test.mjs",
   "tests/unit/track-foundation.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",

@@ -44,6 +44,7 @@ function audioPanelHarness({ voiceUI = false } = {}) {
     setEnabled(v) { calls.push(`enabled:${v}`); },
     setMusicEnabled(v) { calls.push(`music:${v}`); },
     setSfxEnabled(v) { calls.push(`sfx:${v}`); },
+    setUiEnabled(v) { calls.push(`ui:${v}`); },
     setMusicVolume(v) { return v; }, setSfxVolume(v) { return v; },
     startMusic(v) { calls.push(`start:${v}`); },
     stopMusic() { calls.push("stopMusic"); }, stopEngine() { calls.push("stopEngine"); },
@@ -132,6 +133,19 @@ test("the sound button unlocks WebAudio synchronously after enabling its master"
   assert.deepEqual(calls.slice(0, 3), ["enabled:true", "init", "start:-1"]);
 });
 
+test("master sound off cancels pending announcements and every recorded channel", () => {
+  const { panel, G, nodes, calls } = audioPanelHarness(); panel.init();
+  G.radio = { available: () => false, packOn: () => true,
+    stop: () => calls.push("radio-stop"), pack: { stop: () => calls.push("pack-stop") } };
+  G.announcer = { available: () => false, enabled: () => false, stop: () => calls.push("ann-stop") };
+  G.soundOn = true; calls.length = 0;
+  nodes.get("soundbtn").onclick();
+  assert.equal(G.soundOn, false);
+  assert.ok(calls.includes("radio-stop"));
+  assert.ok(calls.includes("ann-stop"));
+  assert.ok(calls.includes("pack-stop"));
+});
+
 test("music and SFX enable clicks also unlock a saved-off master synchronously", () => {
   for (const id of ["as-music", "as-sound"]) {
     const { panel, G, wired, calls } = audioPanelHarness();
@@ -144,6 +158,16 @@ test("music and SFX enable clicks also unlock a saved-off master synchronously",
     assert.deepEqual(calls.slice(0, 2), ["enabled:true", "init"],
       `${id} should enable before synchronously unlocking WebAudio`);
   }
+});
+
+test("MENU SOUNDS row persists apex26.menuSfx and gates the engine's ui blips", () => {
+  const { panel, wired, calls } = audioPanelHarness();
+  panel.init();
+  assert.ok(calls.includes("ui:true"), "boot restores the saved (default ON) switch");
+  calls.length = 0;
+  wired.get("as-ui").write("off");
+  assert.equal(wired.get("as-ui").read(), "off");
+  assert.ok(calls.includes("ui:false"));
 });
 
 test("a stopped QR attempt disposes a camera stream that arrives late", async () => {
@@ -477,5 +501,5 @@ test('same-size voice-list replacements refresh both settings selectors', () => 
   G.soundOn=true; wired.get('as-radio').write('off');
   voices[0]={name:'Replacement',lang:'en-GB'};
   wired.get('as-radio').write('off');
-  for(const id of ['as-v-radio','as-v-announcer']) assert.ok(nodes.get(id).children.some(o=>o.value==='Replacement'),id);
+  for(const id of ['as-v-radio','as-v-announcer']) assert.ok(nodes.get(id).children.flatMap(o=>o.children || [o]).some(o=>o.value==='Replacement'),id);
 });

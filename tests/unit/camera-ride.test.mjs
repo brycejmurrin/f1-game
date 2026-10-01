@@ -354,9 +354,15 @@ test("VISOR draws the cockpit rig without the steering wheel, and the column and
   const branch = rig.slice(cut, rig.indexOf("return;", cut) + 7);
   assert.match(branch, /G\.gfx\.draw\(getCockpitDash\(\), _rigA, opt\);/, "visor draws the column, boss and bulkhead, unrolled at the wheel mount");
   assert.ok(rig.indexOf("getCockpitWheel(") > cut + branch.length, "the steering wheel is drawn after the branch returns, so visor never draws it");
-  // The bulkhead closes the opening wall to wall: 0.76 local x 0.80 scale = ±0.304 m against inner walls at ±0.315.
-  const mesh = readFileSync(join(ROOT, "js/car/car-mesh.js"), "utf8");
-  assert.match(mesh, /_rigBox\(out, 0, -0\.090, 0\.32, 0\.76, 0\.32, 0\.035, CARB\);/, "the front bulkhead spans the tub and meets the coaming");
+  // Check the fitted geometry, so a curved bulkhead can replace a square slab.
+  const ctx=vm.createContext({ GaragePrims:{ block() {} } }); seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT,"js/car/car-mesh.js"),"utf8")+"\n;this.mesh=CarMesh;",ctx);
+  ctx.mesh.init({ createMesh:d=>d });
+  const dash=ctx.mesh.getCockpitDash(), x=[], y=[];
+  for(let i=0;i<dash.pos.length;i+=3) if(dash.pos[i+2]>0.28) {x.push(dash.pos[i]);y.push(dash.pos[i+1]);}
+  assert.ok(Math.min(...x)<=-0.35 && Math.max(...x)>=0.35, "bulkhead spans the tub");
+  assert.ok(Math.min(...y)<=-0.24 && Math.max(...y)>=0.07, "bulkhead meets the lower coaming and upper lip");
+
 });
 
 test("EVERY world-facing camera mode is C1 on a gradient", () => {
