@@ -120,7 +120,7 @@ test("a correction of numerical dust does not count as contact", async () => {
   const both = body.match(/contactT = b\.contactT = 0\.22/g) || [];
   assert.equal(both.length, 2, `expected the rear-end and the human-pair both-car arms, found ${both.length}`);
   assert.ok(body.includes("if (a.human || b.human) a.contactT = b.contactT = 0.22;"), "the side branch lost its human-pair arm");
-  assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.kTurn ?? b.kTurn)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }"),
+  assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }"),
     "the side branch no longer scrubs (once a frame) and flags exactly the yielder");
   for (const guard of ["if (corr > CORR_EPS) {", "if (corr > CORR_EPS) a.contactT"])
     assert.ok(body.includes(guard), `_colResolvePair lost its guard: ${guard}`);

@@ -348,7 +348,8 @@ const Collide = (() => {
         // second (collision bench S5). The flag is idempotent and stays.
         if (corr > CORR_EPS) {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
-          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.kTurn ?? b.kTurn)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
+          // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
+          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
           else { if (last) b.speed = Math.max(0, b.speed - rubScrub); b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars
