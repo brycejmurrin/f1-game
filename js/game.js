@@ -531,6 +531,11 @@ let raceReliability = store.get("reliability", "off");
 // where it belongs now: tests/helpers/fixtures.js sets this key "off" for every
 // spec, so the baselines measure the DRIVING MODEL, not the current default.
 let raceTyreWear = store.get("tyreWear", "real");
+// DIRTY AIR — wake downforce loss on the car behind. CLASSIC is the linear
+// fade + 0.35 loss that every characterization / AI-field measurement was
+// taken on; CFD is the exponential SAE-shaped model (PhysicsConsts.DirtyAir).
+// OFF zeroes the grip penalty while still recording c.wake for the tow HUD.
+let raceDirtyAir = store.get("dirtyAir", PhysicsConsts.DirtyAir.defaultLevel);
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
 // "auto". Inside an activation zone X-mode has no cost or downside, so the
 // optimal play is unconditionally on — which is what the AI does in one line.
@@ -540,6 +545,7 @@ let raceTyreWear = store.get("tyreWear", "real");
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "real";
+if (!PhysicsConsts.DirtyAir.isLevel(raceDirtyAir)) raceDirtyAir = PhysicsConsts.DirtyAir.defaultLevel;
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
@@ -996,39 +1002,13 @@ function onIncidentLineCross(c, cross, newS) {
   }
 }
 
-// DIRTY AIR. Before this model, the tow was strictly and only BENEFICIAL:
-// it gave +4.5 % of top speed and cost nothing at all. With a
-// median adjacent-car pace gap of 0.484 % that made a slipstream worth about
-// nine grid positions of pace, unopposed — which is why pairs of AI cars traded
-// places over and over (57 % of order changes at Monza were the same pairs
-// oscillating, measured by tools/check/ai-field.mjs). A car that drops behind
-// is handed a free surge and comes straight back past.
-//
-// Real cars pay for the wake. The FIA's own CFD, reported for the 2025 field,
-// is roughly 20 % of downforce lost at 20 m and 35 % at 10 m (the 2022 rules
-// targeted 4 % / 18 %; docs/notes/AI-FIELD-RESEARCH.md). So the SAME proximity
-// that grants the tow now costs downforce, and only the AERO part of grip —
-// mechanical grip is unaffected, which is why the penalty fades to nothing at
-// low speed exactly as the downforce it removes does.
-//
-// SYMMETRIC: `c.wake` is the positions-only proximity for EVERY car — the
-// player's at aeroGrip, the AI's at _aiBr.grip — and is never gated by driver
-// or arc state. Only the tow BENEFIT (`c.towing`, the vmax gain) is gated: on
-// the wheel and the pedal for the player, on the curvature lookahead for the
-// AI. (Gating the player's wake instead would spare it dirty air in the
-// corners the AI pays it in.) Positions only — never curvature — so it
-// stays outside docs/PHYSICS.md's curvature table by the same argument the
-// tow's own comment makes: the wake is behind a car, not around a corner.
-const DIRTY_AIR = 0.35;          // share of downforce lost in the closest wake
+// DIRTY AIR lives on PhysicsConsts.DirtyAir. SYMMETRIC: c.wake is
+// positions-only for EVERY car; only the tow BENEFIT (c.towing) is gated.
 const CAUTION_BRAKE = 0.5;       // fraction of BRAKE a car above the caution delta pace sheds at
-function wakeOf(gap, dx) {       // 0 clear air … 1 directly behind, close
-  return clamp((TOW_RANGE - gap) / TOW_FADE, 0, 1) * clamp(1 - Math.abs(dx) / TOW_HALF_W, 0, 1);
-}
+const _towWin = { range: TOW_RANGE, fade: TOW_FADE, halfW: TOW_HALF_W };
+function wakeOf(gap, dx) { return PhysicsConsts.DirtyAir.wakeOf(gap, dx, raceDirtyAir, _towWin); }
 function dirtyAirMul(wake, speed) {
-  if (!wake) return 1;
-  const aeroShare = DOWNFORCE / (1 + DOWNFORCE);       // how much of peak grip is aero
-  const q = Math.min(1, Math.abs(speed) / vTop()) ** 2;  // ...and how much of it is made, at this speed
-  return 1 - DIRTY_AIR * wake * aeroShare * q;
+  return PhysicsConsts.DirtyAir.mul(wake, speed, raceDirtyAir, DOWNFORCE, vTop());
 }
 
 // ---------- state ----------
@@ -3059,7 +3039,7 @@ function entrySettings() {
   if (season && !_seasonEntryIds.has(season)) _seasonEntryIds.set(season, ++_nextSeasonEntryId);
   return JSON.stringify([trackIdx, flow, session, raceWeather, raceTimeOfDay, raceLaps,
     teamIdx, driverIdx, difficulty, raceGrid, champGrid, duelSetting(), duelLegend, raceTyreWear,
-    raceReliability, raceAeroMode, simSeed(), raceIndex,
+    raceReliability, raceDirtyAir, raceAeroMode, simSeed(), raceIndex,
     wxArc.changeable, wxArc.plan && [wxArc.plan.to, wxArc.plan.dur],
     netPlay.active(), raceSettings && raceSettings.netRoom,
     season ? _seasonEntryIds.get(season) : null, season && season.round,
@@ -3421,6 +3401,13 @@ const G = {
     // against it: on a fresh boot (model "off") a full-length GP at REAL wear
     // previewed "NO STOP".
     tyres.setLevel(isTimeTrial() ? "off" : v);
+  },
+  // DIRTY AIR: wake downforce loss (PhysicsConsts.DirtyAir). Classic is
+  // the safe default for characterization traces; CFD is the SAE-shaped model.
+  get raceDirtyAir() { return raceDirtyAir; },
+  set raceDirtyAir(v) {
+    if (!PhysicsConsts.DirtyAir.isLevel(v)) return;
+    raceDirtyAir = v; store.set("dirtyAir", v);
   },
   get tyres() { return tyres; },
   get pits() { return pits; },
