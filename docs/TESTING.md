@@ -1243,6 +1243,7 @@ what it covers.
 | `*-foundation.spec.js` (16 circuits: abudhabi, albert-park, bahrain, cota, hungaroring, imola, interlagos, monaco, montreal, monza, qatar, redbull, spa, suzuka, vegas, zandvoort) | per-circuit runtime build: required models present, props clear of the racing surface, terrain grounded, water safe, walls sane |
 | `interlagos-foundation.spec.js` | Interlagos' migration to the track-owned foundation (renamed from `physics-interlagos-migration` with the rest of the family) |
 | `albert-park-foundation.test.mjs`, `baku-migration.test.mjs` | the same, as pure Node VM builds — no browser |
+| `barrier-runoff-jumps.test.mjs` | OPEN ledger (2026-09-26): `bar*` / `wallAt` adjacent jumps at run-off termini. Synthetic cliff of 7.9 m must be detected; a 3-node feather must stay under 3 m; monza characterisation locks the ship-tip cliff until the feather slice lands. Helper: `tools/track/barrier-jumps.cjs` |
 | `shared-track-foundation-characterization.test.cjs` | pins the shared-foundation compatibility behaviour: `startFrac`/`reverse` transforms, open vs street grounding, `recordBarrier` wrap, whole-model road suppression, finite mesh buffers |
 
 ### Track geometry & scenery
