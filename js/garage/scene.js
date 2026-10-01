@@ -826,6 +826,19 @@ function buildBayFloor(out, liv) {
 // 2D panel makes. getParts is passed in rather than read from the store because
 // career mode substitutes its own fitted set (js/game.js getTeamParts), and a
 // direct store read would quietly show the wrong car.
+// The race paints Career.driverOverride (MY TEAM seat 0 is you, seat 1 is
+// the hire). The turntable, the wall board and the pit board have to name
+// the same person, not the shipped team.drivers row.
+function seatDriverAt(team, idx) {
+  if (!team) return null;
+  const i = idx | 0;
+  const over = (typeof Career !== "undefined" && Career.driverOverride)
+    ? Career.driverOverride(team.id, i) : null;
+  if (over) return over;
+  const seats = (typeof Career !== "undefined" && Career.gridDrivers)
+    ? (Career.gridDrivers(team) || team.drivers) : team.drivers;
+  return (seats && seats[i]) || (seats && seats[0]) || null;
+}
 function boardInfo(team, getParts, driverIdx) {
   if (typeof Parts === "undefined" || typeof getParts !== "function") return null;
   try {
@@ -844,7 +857,7 @@ function boardInfo(team, getParts, driverIdx) {
       const opt = r.options[cat.id];
       return { cat: String(cat.label || cat.id).toUpperCase(), label: (opt && opt.label) || "Stock" };
     });
-    const drv = (team.drivers || [])[driverIdx | 0] || (team.drivers || [])[0] || {};
+    const drv = seatDriverAt(team, driverIdx) || {};
     // THE CAREER CAP, not the free-play constant. js/garage/setup-sheet.js resolves this the
     // same way and enforces against it, but the BUDGET board on the garage wall
     // read Parts.BUDGET (780) unconditionally — so a career at any team whose
@@ -969,7 +982,7 @@ function paintDress(team, liv, info) {
   ctx.fillStyle = css(c1); ctx.fillRect(D_BOARD.x, D_BOARD.y, D_BOARD.w, 56);
   ctx.fillStyle = "#f4f5f7"; ctx.font = "700 34px system-ui, sans-serif";
   ctx.fillText(String(team.short || ""), D_BOARD.x + D_BOARD.w / 2, D_BOARD.y + 29);
-  const drv = (team && team.drivers) || [];
+  const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   for (let i = 0; i < 2; i++) {
     const d = drv[i] || {}, top = D_BOARD.y + 78 + i * 140;
     ctx.fillStyle = "#f4f5f7"; ctx.font = "700 88px system-ui, sans-serif";
@@ -1344,7 +1357,7 @@ function buildStatic(liv, opts) {
 }
 
 function rebuild(team, liv, info, ctx) {
-  const drv = (team && team.drivers) || [];
+  const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
@@ -1695,6 +1708,6 @@ function debug() {
 }
 
   return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, draw, framingHull, recentre,
-           previewMesh, dropPreviewMeshes, pulse, spot, debug };
+           previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;
