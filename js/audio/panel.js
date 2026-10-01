@@ -20,6 +20,11 @@ const AudioPanel = (() => {
     function setSound(b, fromGesture) {
       G.soundOn = b; store.set("sound", b);
       GameAudio.setEnabled(b);
+      if (!b) {
+        if (G.announcer && G.announcer.stop) G.announcer.stop();
+        if (G.radio && G.radio.stop) G.radio.stop();
+        if (G.radio && G.radio.pack) G.radio.pack.stop();
+      }
       // AudioContext creation/resume must stay in the trusted click that turns
       // sound back on (not in a promise or the boot restore below), otherwise
       // iOS/Safari may leave it suspended. Setting the master first also makes
@@ -70,6 +75,7 @@ const AudioPanel = (() => {
     const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
+    const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
     const spotNow = () => (store.get("spotter", true) !== false ? "on" : "off");
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
@@ -95,10 +101,15 @@ const AudioPanel = (() => {
     let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.2));
     let sfxOn = store.get("sfx", true);
     GameAudio.setSfxEnabled(sfxOn);
+    // MENU SOUNDS: the button blips only (uiTick/uiSelect/uiReject). Under the
+    // SFX switch, not beside it — SFX OFF silences menus too.
+    let menuSfxOn = store.get("menuSfx", true) !== false;
+    GameAudio.setUiEnabled(menuSfxOn);
     // Restored here with the other levels rather than inside the engine: the
     // engine owns the chain, the panel owns the persistence, and radioSting is
     // reachable from showAnnounce before this panel is ever opened.
     GameAudio.setRadioFx(store.get("radioFx", 1));
+    if (GameAudio.setRadioPreset) GameAudio.setRadioPreset(store.get("radioPreset", "modern"));
 
     function setSfx(b) {
       if (b && !G.soundOn) { setSound(true, true); }
@@ -217,6 +228,8 @@ const AudioPanel = (() => {
       const sfxLive = sfxOn && G.soundOn;
       SettingRow.paint($("as-music"), G.musicEnabled ? "on" : "off", ONOFF);
       SettingRow.paint($("as-sound"), sfxOn ? "on" : "off", ONOFF);
+      SettingRow.paint($("as-ui"), menuSfxOn ? "on" : "off", ONOFF);
+      SettingRow.disable($("as-ui"), !sfxLive);
       $("as-mvol").disabled = !musicLive;
       $("as-svol").disabled = !sfxLive;
       $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
@@ -256,7 +269,7 @@ const AudioPanel = (() => {
       const vh = $("as-voices");
       if (vh && vh.classList) vh.classList.toggle("tune-off", !(G.soundOn && radioReady));
       if (vh && typeof vh.querySelectorAll === "function") {
-        for (const el of vh.querySelectorAll("select,input,button")) el.disabled = !(G.soundOn && radioReady);
+        for (const el of vh.querySelectorAll("select,input,button")) el.disabled = !(G.soundOn && radioReady) || (packNow() === "rec" && el.tagName === "INPUT");
       }
       // WHY IT IS SILENT, IN A SENTENCE THE PLAYER CAN READ.
       //
@@ -315,11 +328,12 @@ const AudioPanel = (() => {
       const ah = $("as-ann-voice");
       if (ah && ah.classList) ah.classList.toggle("tune-off", !annLive);
       if (ah && typeof ah.querySelectorAll === "function") {
-        for (const el of ah.querySelectorAll("select,input,button")) el.disabled = !annLive;
+        for (const el of ah.querySelectorAll("select,input,button")) el.disabled = !annLive || (recordedFor("announcer") && el.tagName === "INPUT");
       }
       SettingRow.paint($("as-chat"), chatNow(), CHAT_VALUES);
       SettingRow.paint($("as-comm"), commNow(), COMM_VALUES);
       SettingRow.paint($("as-rpack"), packNow(), PACK_VALUES);
+      if (GameAudio.radioPresets) SettingRow.paint($("as-rpreset"), GameAudio.radioPreset(), GameAudio.radioPresets());
       SettingRow.paint($("as-spot"), spotNow(), ONOFF);
       const cnote = $("as-chat-note");
       if (cnote) {
@@ -332,7 +346,8 @@ const AudioPanel = (() => {
       const anote = $("as-ann-note");
       if (anote) anote.textContent = !annReady ? "This browser has no speech voices, so the loading card stays written."
         : !G.soundOn ? "Master sound is off — ANNOUNCER ON turns it on."
-        : "The welcome is written from the circuit itself, and COMMENTARY uses the same voice when it is available locally; a network-only voice falls back to a local announcer during the race. VOICE VOLUME above sets the level.";
+        : packNow() === "rec" ? "The introduction and race commentary use your recorded announcer. Unrecorded story details stay on the loading card."
+        : "The introduction and race commentary use your system voice; network-only voices are used during the introduction. VOICE VOLUME sets the level.";
       // The master gate is what silences music when SOUND is off, and the MUSIC
       // switch still reads ON then — so the readout names the gate that is
       // actually shut instead of contradicting the switch beside it. The title
@@ -388,6 +403,8 @@ const AudioPanel = (() => {
       write: (v) => { if (rr()) rr().setChat(v); else store.set("radioChat", v); GameAudio.uiTick(); syncAudioPanel(); } });
     SettingRow.wire("as-rpack", { values: PACK_VALUES, read: packNow,
       write: (v) => { if (G.radio && G.radio.setPackOn) G.radio.setPackOn(v === "rec"); store.set("radioPack", v === "rec"); GameAudio.uiTick(); syncAudioPanel(); } });
+    if (GameAudio.radioPresets) SettingRow.wire("as-rpreset", { values: GameAudio.radioPresets(), read: () => GameAudio.radioPreset(),
+      write: (v) => { store.set("radioPreset", GameAudio.setRadioPreset(v)); syncAudioPanel(); preview("radio"); } });
     SettingRow.wire("as-spot", { values: ONOFF, read: spotNow,
       write: (v) => { if (rr()) rr().setSpotter(v === "on"); else store.set("spotter", v === "on"); GameAudio.uiTick(); syncAudioPanel(); } });
     SettingRow.wire("as-comm", { values: COMM_VALUES, read: commNow,
@@ -413,9 +430,9 @@ const AudioPanel = (() => {
      * voice list actually changing — not by a timer, and not by a re-open that
      * would throw away a half-made selection. */
     const VOICE_CHANNELS = [
-      ["control", "RACE CONTROL", "Penalties, warnings and flags. Changing this voice or its tuning selects SYSTEM; RECORDED uses Emma."],
-      ["coach", "COACH", "Practice drills and driving advice. Changing this voice or its tuning selects SYSTEM; RECORDED uses Heart."],
-      ["radio", "TEAM RADIO", "Your engineer: box calls, position, tyres. Changing this voice or its tuning selects SYSTEM; RECORDED uses George. The spotter always uses recorded George."],
+      ["control", "RACE CONTROL", "Penalties, warnings and flags."],
+      ["coach", "COACH", "Practice drills and driving advice, through a clean headset."],
+      ["radio", "TEAM RADIO", "Your engineer and spotter share this recorded voice. TEST plays a race call."],
     ];
     /* THE ANNOUNCER'S ROW IS THE SAME ROW, IN A DIFFERENT SECTION. It is a
      * RadioVoice channel (js/audio/radio-voice.js TONE) so it gets a voice, a
@@ -423,7 +440,7 @@ const AudioPanel = (() => {
      * so it cannot live under that switch's heading where every other control
      * greys out with it. Its own <details>, its own host, one shared builder. */
     const ANN_CHANNEL = ["announcer", "ANNOUNCER",
-      "The pre-race show: Daniel on a Mac, another British voice elsewhere — or pick your own. In the race, RADIO VOICE: RECORDED commentates in Fable."];
+      "A recorded voice introduces the circuit and commentates during the race. A system voice changes the pre-race welcome; race commentary follows RADIO VOICE. TEST plays the welcome."];
     let voiceRowsFor = null;   // the voice-list length the rows were built against
 
     function voiceRow(ch, label, blurb) {
@@ -448,14 +465,27 @@ const AudioPanel = (() => {
       // entry there and the pitch/rate below are what carry the channel.
       const auto = document.createElement("option");
       auto.value = ""; auto.textContent = list.length ? "DEFAULT" : "SYSTEM DEFAULT";
-      sel.appendChild(auto);
+      const recorded = (G.radio && G.radio.recordedVoices) ? G.radio.recordedVoices(ch) : [];
+      const recGroup = document.createElement("optgroup"); recGroup.label = "RECORDED";
+      for (const v of recorded) {
+        const o = document.createElement("option"); o.value = "recorded:" + v.id; o.textContent = v.name;
+        recGroup.appendChild(o);
+      }
+      if (recorded.length) sel.appendChild(recGroup);
+      const sysGroup = document.createElement("optgroup"); sysGroup.label = "SYSTEM";
+      sysGroup.appendChild(auto); sel.appendChild(sysGroup);
       for (const v of list) {
         const o = document.createElement("option");
         o.value = v.name; o.textContent = v.name;
-        sel.appendChild(o);
+        sysGroup.appendChild(o);
       }
-      sel.value = list.some((v) => v.name === tune.name) ? tune.name : "";
-      sel.onchange = () => { setTune(ch, { name: sel.value }); preview(ch); };
+      sel.value = recordedFor(ch) && recorded.length ? "recorded:" + G.radio.recordedVoice(ch)
+        : list.some((v) => v.name === tune.name) ? tune.name : "";
+      sel.onchange = () => {
+        if (sel.value.startsWith("recorded:")) { G.radio.setRecordedVoice(ch, sel.value.slice(9)); syncAudioPanel(); }
+        else setTune(ch, { name: sel.value });
+        preview(ch);
+      };
       const test = document.createElement("button");
       test.type = "button"; test.className = "cz-liv-none"; test.id = "as-v-" + ch + "-test";
       test.textContent = "TEST";
@@ -512,16 +542,22 @@ const AudioPanel = (() => {
 
     const setTune = (ch, patch) => {
       if (G.radio && G.radio.setTune) G.radio.setTune(ch, patch);
-      // A race channel's recorded voice would override the pick, so picking one
-      // is choosing SYSTEM. Not the announcer: its pick reads the pre-race show,
-      // and the in-race commentary keeps the recorded commentator under RECORDED.
-      if (ch !== "announcer" && G.radio && G.radio.setPackOn) { G.radio.setPackOn(false); syncAudioPanel(); }
+      if (ch !== "announcer" && G.radio && G.radio.setPackOn) G.radio.setPackOn(false);
+      syncAudioPanel();
     };
     // TEST is an explicit audition, independent of the automatic speech switch.
     const preview = (ch) => {
-      if (ch === "announcer") { if (G.announcer && G.announcer.sample) G.announcer.sample(); return; }
+      if (ch === "announcer" && !recordedFor(ch)) { if (G.announcer && G.announcer.sample) G.announcer.sample(); return; }
       if (G.radio && G.radio.preview) G.radio.preview(ch);
     };
+
+    function rememberVoiceFocus(host) {
+      const index = host.querySelectorAll ? Array.from(host.querySelectorAll("select,input,button")).indexOf(document.activeElement) : -1;
+      return () => {
+        const control = index >= 0 && host.querySelectorAll("select,input,button")[index];
+        if (control && control.focus) control.focus({ preventScroll: true });
+      };
+    }
 
     function buildVoiceRows() {
       buildAnnVoiceRow();
@@ -535,16 +571,18 @@ const AudioPanel = (() => {
       if (typeof RadioVoice === "undefined" || typeof document === "undefined"
           || typeof document.createElement !== "function") return;
       const n = (G.radio && G.radio.voiceList && G.radio.voiceList().length) || 0;
-      const key = JSON.stringify(G.radio && G.radio.voiceList ? G.radio.voiceList() : []);
+      const key = JSON.stringify([G.radio && G.radio.voiceList ? G.radio.voiceList() : [], packNow(),
+        VOICE_CHANNELS.map(([ch]) => G.radio && G.radio.recordedVoice ? G.radio.recordedVoice(ch) : "")]);
       if (voiceRowsFor === key && host.children.length > 1) return;   // already right for this list
+      const restoreFocus = rememberVoiceFocus(host);
       voiceRowsFor = key;
       while (host.children.length > 1) host.removeChild(host.lastChild);
       for (const [ch, label, blurb] of VOICE_CHANNELS) host.appendChild(voiceRow(ch, label, blurb));
+      restoreFocus();
       const note = $("as-voices-note");
       if (note) {
-        note.textContent = n
-          ? n + " system voices. A long message is sped up to fit its card, so RATE is a floor, not a promise — and some browsers (Edge) ignore PITCH entirely, where RATE is the only thing separating the channels."
-          : "This browser does not list its voices, so it picks one itself — PITCH and RATE are what separate the three channels here.";
+        note.textContent = packNow() === "rec" ? "Recorded voices are generated speech. Common calls play as complete recordings. Choosing a system race voice switches race channels to SYSTEM; pitch and rate apply there."
+          : n + " system voices available. Choosing a recorded race voice returns race channels to RECORDED. The pre-race announcer has its own voice choice.";
       }
     }
 
@@ -562,11 +600,14 @@ const AudioPanel = (() => {
       // network voices, so keying this off the radio's local-only count would
       // leave the row stale exactly where the two differ most (Chrome and Edge,
       // where the local count is often 0 and the real one is dozens).
-      const key = JSON.stringify(G.radio && G.radio.voiceList ? G.radio.voiceList(ANN_CHANNEL[0]) : []);
+      const key = JSON.stringify([G.radio && G.radio.voiceList ? G.radio.voiceList(ANN_CHANNEL[0]) : [], recordedFor("announcer"),
+        G.radio && G.radio.recordedVoice ? G.radio.recordedVoice("announcer") : ""]);
       if (annRowFor === key && host.children.length > 1) return;
+      const restoreFocus = rememberVoiceFocus(host);
       annRowFor = key;
       while (host.children.length > 1) host.removeChild(host.lastChild);
       host.appendChild(voiceRow.apply(null, ANN_CHANNEL));
+      restoreFocus();
     }
 
     // Sliders speak in TENTHS here, so 10 is the shipped 1.0 and the top of
@@ -584,6 +625,13 @@ const AudioPanel = (() => {
     };
     SettingRow.wire("as-sound", { values: ONOFF, read: () => (sfxOn ? "on" : "off"),
       write: (v) => { if (v === "on") { setSfx(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setSfx(false); } } });
+    SettingRow.wire("as-ui", { values: ONOFF, read: () => (menuSfxOn ? "on" : "off"),
+      write: (v) => {
+        menuSfxOn = v === "on"; store.set("menuSfx", menuSfxOn);
+        GameAudio.setUiEnabled(menuSfxOn);
+        if (menuSfxOn) GameAudio.uiTick();   // ON answers with the sound it turned on; OFF stays silent
+        syncAudioPanel();
+      } });
     // `input` not `change`: the level should follow the thumb while dragged.
     $("as-mvol").oninput = (e) => {
       musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);

@@ -101,17 +101,18 @@ const Spotter = (() => {
       if (!pack || !on() || !G.soundOn || (G.radio.volume && G.radio.volume() <= 0)) {
         st = fresh(); if (pack && pack.stop) pack.stop("spotter"); return "";
       }
-      pack.ensure("george");
+      const voice = G.radio.recordedVoice ? G.radio.recordedVoice("radio") : "george";
+      pack.ensure(voice);
       const synth = typeof window !== "undefined" && window.speechSynthesis;
       const speak = (key) => {
         if (pack.busy("spotter")) return false;
         // Do not interrupt a useful line for a pack that is still loading.
-        if (pack.plan && !pack.plan("george", KEYS[key])) return false;
+        if (pack.plan && !pack.plan(voice, KEYS[key])) return false;
         if (key !== "still there" && G.radio.yieldToSpotter) G.radio.yieldToSpotter();
         if (pack.busy() || (synth && synth.speaking) || (G.radio.busy && G.radio.busy())) return false;
         const state = st;
         const expected = key === "clear" ? 0 : key === "three wide" ? 3 : key === "car left" ? LEFT : key === "car right" ? RIGHT : st.cur;
-        return pack.speak("george", KEYS[key], { channel: "spotter", volume: G.radio.volume ? G.radio.volume() : 1,
+        return pack.speak(voice, KEYS[key], { channel: "spotter", volume: G.radio.volume ? G.radio.volume() : 1,
           // Recheck after decoding: a late "car left" is worse than silence.
           valid: () => { const valid = G.state === "race" && !G.paused && G.player === p && !p.finished && !p.retired && on() && G.soundOn
             && !(p.pitState && p.pitState !== "none") && Math.abs(p.speed || 0) >= G.vTop() * 0.12

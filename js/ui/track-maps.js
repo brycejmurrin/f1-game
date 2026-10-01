@@ -626,7 +626,7 @@ const TrackMaps = (function () {
   }
 
   return {
-    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
+    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
     SECTOR_COLORS, SECTOR_TOKENS, sectorColors, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
   };
 })();
