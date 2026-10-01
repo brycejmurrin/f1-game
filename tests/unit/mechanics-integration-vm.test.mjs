@@ -483,6 +483,56 @@ test("a driven race fills in the race-craft fields, debounced", async () => {
   } finally { h.close(); }
 });
 
+// VS FRIEND: a remote friend's car is c.human (setCarRole) and takes the human
+// wall path, but the street-wall FEEDBACK — camera shake, the crash sound, the
+// phone buzz, the pad rumble — belongs to THIS screen's car. It used to gate only
+// the rumble on c.isPlayer, so every wall the friend clipped shook and buzzed the
+// local player's device at full volume.
+test("VS FRIEND: a remote human's street-wall strike does not fire the local player's feedback", async () => {
+  const h = await createGame({ track: "monaco" });
+  try {
+    await h.race("monaco"); h.apex.go(); h.apex.headless(true);
+    const G = h.G, p = G.player;
+    G.soundOn = true;
+    const Input = vm.runInContext("Input", h.ctx), GameAudio = vm.runInContext("GameAudio", h.ctx);
+    const calls = { vibrate: 0, rumble: 0, collision: 0 };
+    Input.vibrate = () => { calls.vibrate++; };
+    Input.rumble = () => { calls.rumble++; };
+    GameAudio.collision = () => { calls.collision++; };
+    const k = G.cars.findIndex((c) => c !== p);
+    const friend = G.cars[k];
+    h.apex.carRole(k, { human: true, local: false });
+    assert.ok(friend.human && !friend.local && !friend.isPlayer, "the friend is a remote human");
+    h.apex.jump(0.75, 0, 0);   // the local car parked well away from the friend's wall
+    h.apex.aiPlace(k, 0.25, 40, 0);
+    h.apex.carInput(k, { steer: 1, throttle: 1, brake: 0 });
+    let strikes = 0;
+    for (let i = 0; i < 600; i++) {
+      if (friend.speed < 25) friend.speed = 25;
+      const was = friend.wasOnWall;
+      h.apex.step(1 / 60);
+      if (!was && friend.wasOnWall) strikes++;
+    }
+    h.apex.carInput(k, null);
+    assert.ok(strikes >= 1, "the friend must actually have struck the barrier");
+    assert.equal(p.hits | 0, 0, "the local car was never touched (no collideFx of its own)");
+    assert.deepEqual({ ...calls }, { vibrate: 0, rumble: 0, collision: 0 },
+      "a remote friend's wall strike must not buzz, rumble or crash-sound this device");
+
+    // The LOCAL car's own strike still gets all of it.
+    h.apex.jump(0.25, 40, 0);
+    h.apex.setInput({ steer: 1, throttle: 1, brake: 0 });
+    for (let i = 0; i < 600 && !(calls.vibrate && calls.rumble && calls.collision); i++) {
+      if (p.speed < 25) p.speed = 25;
+      h.apex.step(1 / 60);
+    }
+    h.apex.clearInput();
+    assert.ok(p.wallHits >= 1, "the local car struck the barrier");
+    assert.ok(calls.vibrate >= 1 && calls.rumble >= 1 && calls.collision >= 1,
+      "the local player's wall strike keeps its buzz, rumble and crash sound: " + JSON.stringify(calls));
+  } finally { h.close(); }
+});
+
 test("the radio queue keeps a burst in priority order, and drops only what would arrive too late", async () => {
   // THE BANNER IS A QUEUE, and it used to be ONE slot guarded by
   // `pri > queued.pri` — so a second message of EQUAL priority was not queued

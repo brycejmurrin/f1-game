@@ -1194,7 +1194,8 @@ const PitLane = (function () {
         // approaches. Clearing pitArmed/pitCommitted unconditionally here wipes
         // the commitment made on the previous tick before the block below can
         // read it, and the commit/abort state machine never advances.
-        // tests/unit/pit-lane-vm.test.mjs:101 catches it in one assertion.
+        // tests/unit/pit-lane-vm.test.mjs ("a commitment is made on the ENTRY
+        // ROAD…") catches it in one assertion.
         if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { c.pitArmed = false; c.pitCommitted = false; } }
         // THE ENTRY ROAD, before the entry line: where a LOCAL car commits —
         // holding the lane's tarmac arms the stop, and the limiter waits for
@@ -1530,7 +1531,11 @@ const PitLane = (function () {
       const busy = !!c.pitArmed || (c.pitState && c.pitState !== "none");
       let state = "", text = "PLAN " + label + " · BOX L" + next + (code ? " " + code : "");
       if (busy) state = "";
-      else if (est && est.marginS > 0 && lapsToStop <= (typeof AiDrive !== "undefined" && AiDrive.STRAT ? AiDrive.STRAT.CAUTION_REACH : 6)) { state = "free"; text = "FREE STOP · BOX NOW" + (code ? " " + code : ""); }
+      else if (est && est.marginS > 0 && lapsToStop <= (typeof AiDrive !== "undefined" && AiDrive.STRAT ? AiDrive.STRAT.CAUTION_REACH : 6)) {
+        state = "cheap";
+        const loss = est.lossS != null ? Math.round(est.lossS) : null;
+        text = "CHEAPER STOP" + (loss != null ? " · ~" + loss + "s" : "") + " · BOX NOW" + (code ? " " + code : "");
+      }
       else if (lapsToStop <= 0) { state = "now"; text = "BOX BOX BOX" + (code ? " · " + code : ""); }
       else if (lapsToStop === 1) { state = "soon"; text = "BOX NEXT LAP" + (code ? " · " + code : ""); }
       return { text, state, stops, next, lapsToStop, code };
