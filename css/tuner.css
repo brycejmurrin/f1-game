@@ -408,7 +408,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
     transparent 0, transparent var(--fc-dof-clear, 40%),
     black var(--fc-dof-soft, 70%), black 100%);
 }
-body.pc-uihidden #fc-comp-grid, body.pc-uihidden #fc-dof { display: none !important; }
+/* pc-uihidden hide for these overlays lives in css/hud.css with the other
+   photo-mode HIDE HUD rules — keep the class defined in one file. */
 /* EYE FROM / EYE TO / LOOK FROM / LOOK TO. Four poses of nine sliders read as
    one undifferentiated column without them. */
 #fb-rows .fb-group {

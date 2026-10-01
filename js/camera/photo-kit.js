@@ -12,7 +12,7 @@ const PhotoKit = (function () {
   const MAX_MARKS = 12;        // per track
 
   const fin = (v) => typeof v === "number" && isFinite(v);
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  const clamp = M4.clamp;   // js/core/mat4.js — the shared one
 
   function loadAll(store) {
     if (!store || typeof store.get !== "function") return {};

@@ -9,7 +9,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function load() {
-  const ctx = { Log: { info() {} } };
+  const ctx = {
+    Log: { info() {} },
+    M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
+  };
   vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, "js/camera/photo-kit.js"), "utf8") + "\nthis.exported = PhotoKit;",
     ctx);
