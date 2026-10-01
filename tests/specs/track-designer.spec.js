@@ -163,6 +163,52 @@ test.describe("Track designer", () => {
     await expect(page.locator('.track-row[aria-pressed="true"]')).toHaveAttribute("data-kind", "custom");
   });
 
+  test("a share link boots straight into the designer with the design, strips its fragment, and the picker's EDIT chip reopens a saved circuit", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    const st = await randomiseGreen(page, 42);
+    const url = await page.evaluate(async () => { const code = await TrackDesigner.shareCode(); return TrackCodec.shareUrl(code); });
+    expect(url).toMatch(/#track=APXT1\./);
+    // The link, cold: a fresh navigation carrying only the fragment.
+    await page.goto(url);
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen(), null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => !TrackDesigner.state().pending, null, { polling: 100, timeout: 15_000 });
+    const opened = await page.evaluate(() => ({ hash: location.hash, pts: TrackDesigner.state().design.pts, ok: TrackDesigner.state().ok }));
+    expect(opened.hash).toBe("");
+    expect(opened.pts).toEqual(st.design.pts);
+    expect(opened.ok).toBe(true);
+    // An exported file loads back through the same door.
+    const roundTrip = await page.evaluate(async () => {
+      const env = await TrackDesigner.exportEnvelope();
+      TrackDesigner.randomise(3);
+      const ok = await TrackDesigner.loadFrom(JSON.stringify(env));
+      return { ok, pts: TrackDesigner.state().design.pts, format: env.format };
+    });
+    expect(roundTrip.format).toBe("apex26.track");
+    expect(roundTrip.ok).toBe(true);
+    expect(roundTrip.pts).toEqual(st.design.pts);
+    // SAVE it, close, and come back in from the picker's EDIT IN DESIGNER chip.
+    const saved = await page.evaluate(() => TrackDesigner.save());
+    expect(saved.ok).toBe(true);
+    await page.evaluate(() => { TrackDesigner.close(); CustomTracks.select(TrackDesigner.state().library[0]); });
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-race").click();
+    await expect(page.locator('.track-row[aria-pressed="true"]')).toHaveAttribute("data-kind", "custom");
+    // A script click, as menu-baseline does: at compact density the facts row
+    // is display:none by design, and headless(true) stops the frames
+    // Playwright's actionability wait needs; the chip's wiring is the subject.
+    const chip = await page.evaluate(() => {
+      const b = [...document.querySelectorAll("#sel-preview-facts button")].find((x) => /EDIT IN DESIGNER/.test(x.textContent || ""));
+      if (!b) return null;
+      b.click();
+      return b.getAttribute("aria-label");
+    });
+    expect(chip).toMatch(/^Edit .* in the track designer$/);
+    await page.waitForFunction(() => TrackDesigner.isOpen(), null, { polling: 100, timeout: 15_000 });
+    expect(await page.evaluate(() => TrackDesigner.state().design.pts)).toEqual(st.design.pts);
+  });
+
   test("a freehand stroke becomes a closed loop and DELETE respects the point floor", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);

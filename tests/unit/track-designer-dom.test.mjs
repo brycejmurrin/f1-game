@@ -149,6 +149,68 @@ test("a freehand stroke closes into a valid loop", () => {
   assert.equal(b.D.freehand([[0, 0], [1, 1]]), false, "two points are not a loop");
 });
 
+test("share out / in: a code, a link and an exported file all load back as the same design; a #track= link opens the screen", async () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open(); b.D.randomise(7); b.D.preview();
+  const pts = plain(b.D.state().design.pts), id = b.C.sanitize(b.D.state().design).id;
+  const code = await b.D.shareCode();
+  assert.match(code, /^APXT1\.[pz]\./, "an APXT1 share code");
+  assert.equal(b.D.state().lastCode, code);
+  const env = await b.D.exportEnvelope();
+  assert.equal(env.format, b.CD.FILE_FORMAT); assert.equal(env.code, code); assert.ok(env.design && env.design.pts.length === pts.length);
+  // SHARE copies the link (the clipboard is stubbed) and parks it in the SHARE CODE field.
+  const written = [];
+  b.ctx.ApexClipboard = { write: async (t) => { written.push(t); return true; } };
+  const url = await b.D.share();
+  assert.equal(url, b.CD.shareUrl(code));
+  assert.deepEqual(plain(written), [url]);
+  // Three ways in, each a different design first so the load is visible.
+  for (const text of [code, url, JSON.stringify(env)]) {
+    b.D.randomise(99); b.D.preview();
+    assert.notDeepEqual(plain(b.D.state().design.pts), pts);
+    assert.equal(await b.D.loadFrom(text), true, "loads from " + text.slice(0, 12));
+    assert.deepEqual(plain(b.D.state().design.pts), pts);
+    assert.equal(b.C.sanitize(b.D.state().design).id, id, "the content id survives the round trip");
+  }
+  assert.equal(await b.D.loadFrom("APXT1.p.not-a-code"), false, "a bad code is refused, not thrown");
+  assert.equal(await b.D.loadFrom("{\"format\":\"other\"}"), false, "a foreign file is refused");
+  assert.equal(await b.D.loadFrom(""), false);
+  // The boot path: CustomTracks.consumeTrackHash() reads location, loads the
+  // bundle (already loaded here), opens the design and strips the fragment.
+  b.D.close();
+  b.D.randomise(5); b.D.preview();
+  const replaced = [];
+  // game.js hands CustomTracks the lazy loader; here the bundle is already in
+  // the VM, so the loader just reports it present (ensureEditor's seam).
+  b.ctx.ApexRoster = { LAZY_EDITOR: ["js/editor/designer.js"], LAZY_EDITOR_EDGES: [] };
+  b.C.create(b.G, { load: async () => true });
+  b.ctx.location = { hash: "#track=" + code, pathname: "/", search: "?x=1" };
+  b.ctx.history = { state: null, replaceState: (st, t, u) => replaced.push(u) };
+  assert.equal(await b.C.consumeTrackHash(), true);
+  assert.equal(b.D.isOpen(), true, "the designer opened on the shared design");
+  assert.deepEqual(plain(b.D.state().design.pts), pts);
+  assert.deepEqual(plain(replaced), ["/?x=1"], "the fragment is stripped, the query kept");
+  b.ctx.location = { hash: "", pathname: "/", search: "" };
+  assert.equal(await b.C.consumeTrackHash(), false, "no link, no-op");
+  b.ctx.location = { hash: "#track=APXT1.p.garbage", pathname: "/", search: "" };
+  assert.equal(await b.C.consumeTrackHash(), false, "a bad link is refused and still stripped");
+  assert.equal(replaced.length, 2);
+});
+
+test("the terrain material knob: desert and alpine presets name it, shipped defs never carry it", () => {
+  const b = bootScreen();
+  assert.equal(b.T.defFields("alpine").terrainMat, "SNOW");
+  assert.equal(b.T.defFields("oasis").terrainMat, "SAND");
+  assert.equal(b.T.defFields("desertnight").terrainMat, "SAND");
+  assert.equal("terrainMat" in b.T.defFields("parkland"), false);
+  for (const t of b.Tracks.LIST) if (!t.custom) assert.equal("terrainMat" in t, false, t.id + " carries no terrainMat (its golden hash holds)");
+  const def =b.ctx.TrackDef.fromRaw(Object.assign({ id: "t", name: "T", gp: "T", country: "", lengthKm: 4, path: { len: 4000, pts: [[0, 0], [100, 0], [100, 100], [0, 100]] }, baseHW: 7, theme: "green", pal: {}, terrainMat: "SNOW" }));
+  assert.equal(def.terrainMat, "SNOW");
+  const bad = b.ctx.TrackDef.fromRaw(Object.assign({ id: "t2", name: "T", gp: "T", country: "", lengthKm: 4, path: { len: 4000, pts: [[0, 0], [100, 0], [100, 100], [0, 100]] }, baseHW: 7, theme: "green", pal: {}, terrainMat: "LAVA" }));
+  assert.equal("terrainMat" in bad, false, "only SAND / SNOW are honoured");
+});
+
 test("DesignerCanvas: fit() frames the loop; an arrow nudge comes back as a lattice-aligned edit", () => {
   const b = bootScreen();
   const canvas = b.dom.document.createElement("canvas");

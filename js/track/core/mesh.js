@@ -724,6 +724,10 @@ const TrackMesh = (function () {
     const NTV = surface.rails.length;
     const isStreet = !!track.def.street;
     const flat = !!track.def.flatTerrain;
+    // The ground beyond the runoff verge: GRASS unless the def names SAND or
+    // SNOW (the designer's desert / alpine themes; no shipped def does, so the
+    // 52 keep their bytes — tests/unit/track-foundation* and verify-track).
+    const groundMat = track.def.terrainMat === "SAND" ? MAT.SAND : track.def.terrainMat === "SNOW" ? MAT.SNOW : MAT.GRASS;
     const outerW = surface.outerW;
     const latsL = surface.rails.map((d) => -d);
     const latsR = surface.rails.slice();
@@ -848,7 +852,7 @@ const TrackMesh = (function () {
           const gt = NTV <= 1 ? 1 : v / (NTV - 1);          // 0 inner edge → 1 far (same 1-rail guard as the position path)
           const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
-          mat.push(gt < 0.22 ? MAT.ROCK : MAT.GRASS);
+          mat.push(gt < 0.22 ? MAT.ROCK : groundMat);
         }
       }
       const faceSafe = (ia, ib, ic) => {

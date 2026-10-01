@@ -291,8 +291,13 @@ const TrackDesigner = (function () {
     ui.save = btn("SAVE", "sel-edit", () => save());
     ui.race = btn("RACE", "sel-edit", () => race("gp"));
     ui.tt = btn("TIME TRIAL", "sel-edit", () => race("tt"));
+    ui.share = btn("SHARE", "sel-chip", () => share());
+    ui.export = btn("EXPORT", "sel-chip", () => exportFile());
+    ui.import = btn("IMPORT", "sel-chip", () => ui.file.click());
+    ui.file = el("input"); ui.file.type = "file"; ui.file.accept = ".json,application/json"; ui.file.hidden = true; ui.file.setAttribute("aria-label", "Import a circuit file");
+    ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; if (f) importFile(f); });
     ui.msg = el("div", "td-msg"); ui.msg.setAttribute("role", "status"); ui.msg.setAttribute("aria-live", "polite");
-    foot.append(ui.save, ui.race, ui.tt, ui.msg);
+    foot.append(ui.save, ui.race, ui.tt, ui.share, ui.export, ui.import, ui.file, ui.msg);
     root.append(body, foot);
 
     cv = DesignerCanvas.create(canvas, {
@@ -393,7 +398,87 @@ const TrackDesigner = (function () {
     const issues = group("CHECKS");
     ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-live", "polite"); ui.issues.setAttribute("aria-label", "Design checks");
     issues.appendChild(ui.issues);
-    pane.append(tools, ui.shape, theme, circuit, issues);
+    // share in: a pasted code or link (SHARE on the foot copies one out)
+    const sharing = group("SHARE CODE");
+    ui.code = el("input", "td-input"); ui.code.type = "text"; ui.code.autocomplete = "off"; ui.code.spellcheck = false;
+    ui.code.placeholder = "PASTE A SHARE CODE OR LINK"; ui.code.setAttribute("aria-label", "Share code or link");
+    ui.code.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); loadFrom(ui.code.value); } });
+    const loadRow = el("div", "td-chips");
+    ui.load = btn("LOAD", "sel-chip", () => loadFrom(ui.code.value));
+    loadRow.appendChild(ui.load);
+    sharing.append(ui.code, loadRow);
+    pane.append(tools, ui.shape, theme, circuit, issues, sharing);
+  }
+
+  // ── share out / in ────────────────────────────────────────────────────────
+  let lastCode = null;
+  /** The APXT1 code for the current design (null when it does not sanitise). */
+  async function shareCode() {
+    if (!design || !design.pts.length) return null;
+    lastCode = await TrackCodec.encode(design);
+    return lastCode;
+  }
+  /** Copy the share link; the code also lands in the SHARE CODE field for a long-press copy. */
+  async function share() {
+    if (previewT || !verdict) runPreview();
+    if (!verdict || !verdict.ok) { message("Fix the red issues before sharing", true); return null; }
+    const code = await shareCode();
+    if (!code) { message("This design cannot be encoded", true); return null; }
+    const url = TrackCodec.shareUrl(code);
+    if (ui.code) ui.code.value = url;
+    let copied = false;
+    try { if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) copied = !!(await ApexClipboard.write(url)); } catch (_) { copied = false; }
+    message(copied ? "Share link copied (" + url.length + " characters)" : "Share link is in the SHARE CODE field — copy it from there", !copied);
+    Log.info("track", "designer share " + (design.id || "(unsaved)") + " " + code.length + " chars" + (copied ? " copied" : ""));
+    return url;
+  }
+  /** The `apex26.track` file envelope for the current design (what EXPORT writes). */
+  async function exportEnvelope() {
+    const code = await shareCode();
+    return code ? TrackCodec.fileEnvelope(design, code) : null;
+  }
+  async function exportFile() {
+    const env = await exportEnvelope();
+    if (!env) { message("Nothing to export yet", true); return false; }
+    const name = "apex26-track-" + (design.name || "circuit").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".apextrack.json";
+    const blob = new Blob([JSON.stringify(env, null, 2)], { type: "application/json" });
+    try {
+      if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable() && NativeDownload.saveBlob) await NativeDownload.saveBlob(blob, name);
+      else {
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      }
+      message("Exported " + name);
+      return true;
+    } catch (e) { message("Export failed: " + (e && e.message || e), true); return false; }
+  }
+  async function importFile(file) {
+    try { return await loadFrom(await file.text()); } catch (e) { message("Could not read that file", true); return false; }
+  }
+  /** Load a design from any of: a share link, a bare APXT1 code, or an exported file's JSON. */
+  async function loadFrom(text) {
+    const s = String(text || "").trim();
+    if (!s) { message("Paste a share code or link first", true); return false; }
+    let code = null, raw = null;
+    if (s[0] === "{") {
+      let obj = null; try { obj = JSON.parse(s); } catch (_) { obj = null; }
+      const f = TrackCodec.fromFile(obj);
+      if (!f) { message("Not an Apex 26 circuit file", true); return false; }
+      if (f.code) code = f.code; else raw = f.design;
+    } else if (/[#&]track=/.test(s)) code = TrackCodec.fromHash(s.slice(s.indexOf("#")));
+    else code = s;
+    let it = null;
+    if (code) {
+      const r = await TrackCodec.decode(code);
+      if (!r.ok) { message("That share code was refused (" + r.reason + ")", true); return false; }
+      it = r.design;
+    } else it = custom.sanitize(raw);
+    if (!it) { message("That design could not be loaded", true); return false; }
+    load(it, "import");
+    showPane("design");
+    message("Loaded " + it.name + " — SAVE to keep it in MY CIRCUITS");
+    return true;
   }
   function clampParam(key, v) {
     const k = TrackStamps.KINDS[tool] || TrackStamps.KINDS.corner;
@@ -483,7 +568,7 @@ const TrackDesigner = (function () {
   function open(opts) {
     if (!built && !init()) return false;
     returnFocus = document.activeElement;
-    if (opts && opts.design) load(opts.design, "open");
+    if (opts && opts.design) { load(opts.design, "open"); if (opts.shared) message("Shared circuit loaded — SAVE to keep it in MY CIRCUITS"); }
     else if (!design) {
       const d = custom.draft();
       const it = d && custom.sanitize(d);
@@ -520,9 +605,10 @@ const TrackDesigner = (function () {
       stats: verdict && verdict.stats ? copy(verdict.stats) : null,
       lengthM: verdict && verdict.tr ? Math.round(verdict.tr.total) : null,
       undo: undo.length, redo: redo.length, library: custom ? custom.list().map((i) => i.id) : [],
+      lastCode,
     };
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, TOOLS };
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, loadFrom, TOOLS };
 })();
 Object.freeze(TrackDesigner);

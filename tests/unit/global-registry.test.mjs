@@ -87,7 +87,8 @@ const GROWABLE_GLOBALS = {
 // external name is a red flag (an undeclared dependency or a typo'd global).
 const KNOWN_EXTERNAL_READS = {
   "js/track/core/def.js": ["CircuitElevations"],  // tools/gen/bake-elevation.mjs output; typeof-guarded feature probe (moved from tracks.js with elevationAt)
-  "js/editor/custom-tracks.js": ["TrackDesigner"], // the LAZY_EDITOR designer screen (lands with the designer UI); typeof-guarded, reached only after the bundle loads
+  "js/editor/custom-tracks.js": ["TrackDesigner", "TrackCodec"], // the LAZY_EDITOR screen and codec; typeof-guarded, reached only after ensureEditor() loaded the bundle
+  "js/ui/select-screen.js": ["TrackDesigner"],     // EDIT IN DESIGNER on a custom circuit's preview; typeof-guarded behind CustomTracks.ensureEditor()
   "js/audio/spotify.js": [
     "Spotify",                      // the Spotify Web Playback SDK, injected at connect time
     "onSpotifyWebPlaybackSDKReady", // the SDK's own window callback contract
