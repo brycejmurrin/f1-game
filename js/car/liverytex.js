@@ -435,14 +435,36 @@ const LiveryTex = (function () {
   // typeof guard is the standalone-harness fallback (no traced mark), same
   // reasoning as IS_MOBILE above.
   function crestSpecFor(teamId) {
-    return typeof CrestPaths !== "undefined" && CrestPaths[teamId];
+    return typeof CrestPaths !== "undefined" && CrestPaths[crestKey(teamId)];
+  }
+  // A LEGENDS car wears its legend's MARQUE crest — Senna's McLaren,
+  // Schumacher's Ferrari — not a monogram of its slot id: "legends" (the
+  // player's row) drew LGD and "legend_<id>" (a duel rival) LEG, on the car,
+  // the garage wall and the livery cards; only the TEAM picker tile read the
+  // marque. Every per-mark table here (CrestPaths, CRESTS, CREST_DISC,
+  // MARK_BRAND, MARK_PARTS) is read through this key; the PAINT stays the
+  // legend's own tribute livery. A legend whose marque is a wordmark (Lotus,
+  // Tyrrell, Vanwall: js/data/legends.js marque null) keeps the generic
+  // monogram, lettered with the team's NAME (crestGeneric), not "LGD".
+  function legendOf(teamId) {
+    const id = String(teamId || "");
+    if (typeof Legends === "undefined" || !Legends.byId) return null;
+    if (id === "legends") {
+      const t = (typeof Teams !== "undefined" && Teams.LIST || []).find((x) => x.id === "legends");
+      return t && t.legend ? Legends.byId(t.legend) : null;
+    }
+    return id.indexOf("legend_") === 0 ? Legends.byId(id.slice(7)) : null;
+  }
+  function crestKey(teamId) {
+    const l = legendOf(teamId);
+    return l && l.marque ? l.marque : teamId;
   }
   // A plate that stays on the shark-fin badge, not only on the engine cover.
   // Red Bull's sun is authored (the trace could not carry a disc). Ferrari's
   // shield is a traced `plate` role. Dropping either on the fin made the tail
   // a different logo than the spine / garage wall — HORSE without SHIELD.
   function crestKeepsPlate(teamId) {
-    if (CREST_DISC[teamId]) return true;
+    if (CREST_DISC[crestKey(teamId)]) return true;
     const spec = crestSpecFor(teamId);
     return !!(spec && spec.roles && spec.roles.includes("plate"));
   }
@@ -500,10 +522,10 @@ const LiveryTex = (function () {
     // CREST_DISC counts as a plate and the TRACE cannot know it: Red Bull's
     // backing is authored precisely because the traced one was not a sun, and
     // reading roles alone here sent SUN DISC straight back to the outline.
-    if (!roles) slot = SECOND_DRAWN[teamId] || "alt";   // the monogram's box is `alt`
+    if (!roles) slot = SECOND_DRAWN[crestKey(teamId)] || "alt";   // the monogram's box is `alt`
     else if (roles.includes("alt")) slot = "alt";
     else if (roles.includes("part")) slot = "part";
-    else slot = (roles.includes("plate") || CREST_DISC[teamId]) ? "plate" : "outline";
+    else slot = (roles.includes("plate") || CREST_DISC[crestKey(teamId)]) ? "plate" : "outline";
     if (!bare) return slot;
     // A slot nothing paints is a dead colour picker and falls through to the
     // outline. Haas's ring and the monogram box are not in that set (no
@@ -537,16 +559,16 @@ const LiveryTex = (function () {
   // the very field this would be choosing.
   function markOnField(teamId, liv) {
     const own = !liv || liv.id === "default";
-    const B = (own && MARK_BRAND[teamId]) || null;
+    const B = (own && MARK_BRAND[crestKey(teamId)]) || null;
     const mark = markBase(teamId, liv);
     if (!B || !B.plate) return [mark];
-    return CREST_DISC[teamId] ? [B.plate.slice(), mark] : [B.plate.slice()];
+    return CREST_DISC[crestKey(teamId)] ? [B.plate.slice(), mark] : [B.plate.slice()];
   }
 
   function markBase(teamId, liv) {
     if (liv && liv.logo) return liv.logo.slice();
     const own = !liv || liv.id === "default";
-    const b = own && MARK_BRAND[teamId];
+    const b = own && MARK_BRAND[crestKey(teamId)];
     if (b) return b.mark.slice();
     // Bases only — BODY STRIPE / DETAIL are other rows and must not recolour
     // the mark when logo is unset.
@@ -577,7 +599,7 @@ const LiveryTex = (function () {
   // the shield through `bare: true` on exactly the marks that have one.
   function markPalette(teamId, liv, field, bare, opts) {
     const own = !liv || liv.id === "default";
-    const B = (own && MARK_BRAND[teamId]) || null;
+    const B = (own && MARK_BRAND[crestKey(teamId)]) || null;
     // `field` may be ONE paint or a list of them, and the engine cover needs a
     // list: drawTailGraphic washes that region with an ALPHA gradient of
     // stripe||c2, so what the mark actually lands on runs from c1 to a c2 tint
@@ -609,8 +631,8 @@ const LiveryTex = (function () {
     //    plate from the livery for all of them put a lime panel behind the Aston
     //    wings, which then had to flip colour to contrast a plate it never asked
     //    for. A null brand plate means "this mark has no backing", permanently.
-    const wantsPlate = !!(MARK_BRAND[teamId] && MARK_BRAND[teamId].plate);
-    const disc = CREST_DISC[teamId] || null;
+    const wantsPlate = !!(MARK_BRAND[crestKey(teamId)] && MARK_BRAND[crestKey(teamId)].plate);
+    const disc = CREST_DISC[crestKey(teamId)] || null;
     const keepPlate = crestKeepsPlate(teamId);
     const slot2 = secondSlot(teamId, bare);
     let plate = null;
@@ -822,7 +844,7 @@ const LiveryTex = (function () {
     // The authored backing, behind every traced layer. Red Bull's sun is the
     // only one: the trace could give a union silhouette or nothing, and a
     // silhouette painted gold is a rim, not a sun (see CREST_DISC).
-    const disc = CREST_DISC[teamId];
+    const disc = CREST_DISC[crestKey(teamId)];
     if (disc && P.plate) {
       ctx.fillStyle = css(P.plate);
       ctx.beginPath();
@@ -966,8 +988,8 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Generic fallback — monogram of the team short code. The custom team's mark
-  // whenever it has no uploaded emblem.
+  // Generic fallback — monogram of the team short code (a wordmark legend: the
+  // team's name). The custom team's mark whenever it has no uploaded emblem.
   function crestGeneric(ctx, R, P, bare, teamId) {
     const f = fit(R, CREST_MARGIN);
     const box = { x: f.X(0.06), y: f.Y(0.22), w: f.S(0.88), h: f.S(0.56) };
@@ -975,7 +997,9 @@ const LiveryTex = (function () {
     ctx.strokeStyle = css(P.alt);
     ctx.lineWidth = swMin(f, 0.055);
     ctx.strokeRect(box.x, box.y, box.w, box.h);
-    drawWordmark(ctx, teamShort(teamId), box, P.mark, { align: "center", pad: f.S(0.06) });
+    const legend = legendOf(teamId);
+    const label = legend && legend.car ? String(legend.car).split(" ")[0].toUpperCase() : teamShort(teamId);
+    drawWordmark(ctx, label, box, P.mark, { align: "center", pad: f.S(0.06) });
     ctx.restore();
   }
 
@@ -1064,7 +1088,7 @@ const LiveryTex = (function () {
     // whenever buildSetup runs, which it does on entering that screen.
     if (LOGOS[teamId]) return [{ key: "logo", label: "EMBLEM TINT" },
                                { key: "logo3", label: "OUTLINE" }];
-    const named = MARK_PARTS[teamId] || [];
+    const named = MARK_PARTS[crestKey(teamId)] || [];
     const rows = [{ key: "logo", label: named[0] || "TEAM LOGO" }];
     if (named[1]) rows.push({ key: "logo2", label: named[1] });
     rows.push({ key: "logo3", label: "OUTLINE" });
@@ -1170,7 +1194,7 @@ const LiveryTex = (function () {
   function drawCrest(ctx, teamId, R, opts) {
     const o = opts || {};
     const P = o.palette || markPalette(teamId, o.liv, o.field, !!o.bare);
-    const fn = CRESTS[teamId] || crestGeneric;
+    const fn = CRESTS[crestKey(teamId)] || crestGeneric;
     // The halo is generic on purpose: the same repeated-draw-under-shadow trick
     // drawLogoImage uses, so a mark that cannot reach INK_TARGET gets separated
     // without every crest having to grow its own outline pass.
@@ -1375,7 +1399,7 @@ const LiveryTex = (function () {
     // The BRAND colour whenever it reads at all on the body — the RB22's red
     // across gold and navy alike. Picking this design in the editor already
     // makes a custom livery, so it cannot key on "own".
-    const brand = MARK_BRAND[teamId] && MARK_BRAND[teamId].mark;
+    const brand = MARK_BRAND[crestKey(teamId)] && MARK_BRAND[crestKey(teamId)].mark;
     if (brand && contrast(brand, c1) >= MARK_ON_BODY) return brand.slice();
     return (L.mark || inkOn([sunC, c1])).slice();
   }
@@ -2043,6 +2067,7 @@ const LiveryTex = (function () {
   // Audi) reports the whole fit box, which sizes it exactly as before.
   const crestExtentCache = {};
   function crestExtent(teamId) {
+    teamId = crestKey(teamId);   // a legends slot changes marque with its legend
     if (crestExtentCache[teamId]) return crestExtentCache[teamId];
     const spec = crestSpecFor(teamId);
     let u0 = 1, v0 = 1, u1 = 0, v1 = 0;
@@ -2054,7 +2079,7 @@ const LiveryTex = (function () {
         if (v < v0) v0 = v; if (v > v1) v1 = v;
       }
     }
-    const disc = CREST_DISC[teamId];
+    const disc = CREST_DISC[crestKey(teamId)];
     if (disc) {
       u0 = Math.min(u0, disc.cx - disc.r); u1 = Math.max(u1, disc.cx + disc.r);
       v0 = Math.min(v0, disc.cy - disc.r); v1 = Math.max(v1, disc.cy + disc.r);
