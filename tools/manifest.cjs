@@ -286,6 +286,7 @@ const FULL = [
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   "js/race/weather-arc.js",
+  "js/race/start-lights.js",   // StartLights.create(G): the start gantry's five lamps follow the countdown (after fx/particles.js)
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
   "js/lighting/tuner-panel.js",
@@ -594,6 +595,7 @@ const HARD_EDGES = [
   ["js/race/session-entry.js", "js/game.js"], // game.js creates the shared start/quali entry coordinator
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
+  ["js/race/start-lights.js", "js/game.js"],   // game.js calls StartLights.create(G) at eval time
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/race/quali-net.js", "js/game.js"],         // game.js calls QualiNet.create(hooks) after quali wiring
