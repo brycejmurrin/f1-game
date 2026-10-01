@@ -3228,10 +3228,13 @@ const TLX = (function () {
           w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
           try {
             if (!mirRT) {
+              // MIPMAPPED: the target is supersampled (mirror-pass.js SS) and the
+              // composite minifies it into the HUD rect; three rebuilds the chain
+              // after every render into it (both of its backends).
               mirRT = new THREE.RenderTarget(w, h, {
                 type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
                 format: THREE.RGBAFormat, depthBuffer: true,
-                generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+                generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
               });
               mirRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant, as the probe
               mirCam = new THREE.PerspectiveCamera();

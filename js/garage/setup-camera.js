@@ -522,7 +522,11 @@ function renderSetupPreview(dt) {
   spMat.specular = 0.22;
   spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
   spMat.metalness = Math.min(spMat.metalness, 0.05);
-  arrivalCar[14] = arriving ? arriving.z : 0;
+  // The car's matrix from the pose: translate (x, 0, z), turn by yaw about +Y, then the
+  // preview's X mirror (MAT_REFLECT_X). The arrival in, and the parked car, have no x/yaw.
+  const ay = (arriving && arriving.yaw) || 0, ac = Math.cos(ay), as = Math.sin(ay);
+  arrivalCar[0] = -ac; arrivalCar[2] = as; arrivalCar[8] = as; arrivalCar[10] = ac;
+  arrivalCar[12] = (arriving && arriving.x) || 0; arrivalCar[14] = arriving ? arriving.z : 0;
   GarageScene.draw(Teams.LIST[G.teamIdx], _spLiv(), eye, getTeamParts, G.driverIdx, garageCtx(), getSetupPreviewMesh(), arriving, arrivalCar);
   gfx.draw(getSetupPreviewMesh(), arrivalCar, spMat);
   // The moveable wings, so a player can watch active aero work before ever
