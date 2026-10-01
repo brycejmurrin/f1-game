@@ -117,6 +117,14 @@ const TrackBuildProps = (function () {
         fn(TrackSpace.sceneryNodeToAuthored(def, kEng, n), spacing);
       }, tag);
     };
+    // every() walks engine nodes (i + origin shift), the same frame `along`
+    // used to hand its callback. Circuit files then call wrapped pine /
+    // marshalPost, which shift again. Hand authored-frame k, as along does.
+    // Raw every (plantRoadsideTrees, marshal posts) is not this wrapper.
+    if (api.every) w.every = (m, fn) => {
+      if (typeof fn !== "function") return api.every(m, fn);
+      return api.every(m, (kEng) => fn(TrackSpace.sceneryNodeToAuthored(def, kEng, n)));
+    };
     // (s, …): single fraction, no side (gantry / underpass portal)
     if (api.gantry) w.gantry = (s, ...r) => api.gantry(RS(s), ...r);
     if (api.underpassPortal) w.underpassPortal = (s, ...r) => api.underpassPortal(RS(s), ...r);

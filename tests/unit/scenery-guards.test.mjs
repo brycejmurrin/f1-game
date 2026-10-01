@@ -278,4 +278,8 @@ test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored
     "along must be wrapped");
   assert.match(chunk, /TrackSpace\.sceneryNodeToAuthored\(def, kEng, n\)/,
     "callback k must be converted back to authored frame before helpers see it");
+  assert.match(chunk, /w\.every = \(m, fn\) =>/,
+    "every must be wrapped the same way as along");
+  assert.match(chunk, /api\.every\(m, \(kEng\) => fn\(TrackSpace\.sceneryNodeToAuthored\(def, kEng, n\)\)\)/,
+    "every's callback k must be authored-frame before pine/marshalPost shift again");
 });
