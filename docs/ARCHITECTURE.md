@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_240 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -146,6 +146,7 @@ _240 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
+| `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
@@ -305,6 +306,7 @@ _240 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `consts.js` | `PhysicsConsts` | tag | PhysicsConsts — the driving model's immutable numbers, moved out of js/game.js with the rationale that tunes them. |
 | `body-attitude.js` | `BodyAttitude` | tag | C2 visual suspension: cosmetic body attitude (pitch / roll / heave). |
 | `tyre-model.js` | `TyreModel` | tag | TYRE MODEL: wear, the grip it costs, and the fuel burn that argues with it. |
+| `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |

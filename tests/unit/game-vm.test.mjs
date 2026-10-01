@@ -139,6 +139,22 @@ test("the default seed pins tyre wear OFF (recorded AI numbers assume it)", () =
     "a car accumulated wear with the model off");
 });
 
+test("the sim seed: pinned to 1 here, fresh per page load for a player, ?seed=N wins", async () => {
+  // At a fixed 1 the first race after every page load was the same race. A
+  // player's session boots from a fresh seed (js/game.js bootSeed); this
+  // harness passes ?seed=1 so every VM run stays reproducible.
+  const def = await createGame();
+  const a = await createGame({ search: "" }), b = await createGame({ search: "" });
+  const pinned = await createGame({ search: "?seed=42" });
+  try {
+    assert.equal(def.apex.seed(), 1, "the harness pins seed 1");
+    const sa = a.apex.seed(), sb = b.apex.seed();
+    assert.notEqual(sa, 1, "an unpinned, non-automated boot draws a fresh seed");
+    assert.notEqual(sa, sb, `two page loads, two races: ${sa} vs ${sb}`);
+    assert.equal(pinned.apex.seed(), 42, "?seed=42 pins it");
+  } finally { def.close(); a.close(); b.close(); pinned.close(); }
+});
+
 test("opts.storage.tyreWear turns the model on — the seam --wear rides", async () => {
   const w = await createGame({ track: "monza", storage: { tyreWear: "real" } });
   try {

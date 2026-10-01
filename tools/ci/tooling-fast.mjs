@@ -69,6 +69,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
+  // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
+  // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
+  "tests/unit/ai-ratings-math.test.mjs",
   // ...and the field's strategy: the plan scales with the distance, a 20-car
   // grid does not converge on one plan, strategies mix, and the reactive
   // rules (free stop, weather, spent set) fire in the right order. ~0.1 s.
@@ -91,6 +94,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bahrain-grandstand-rake.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/baku-migration.test.mjs",
+  // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / feather probe + monza characterisation until Slice 2 feathers termini. Pure helper + one track-build-vm build, ~1 s.
+  "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/behind-ship.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
@@ -116,6 +121,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
+  "tests/unit/career-backup.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
@@ -265,6 +271,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Every freezable module surface stays frozen (pure file read; < 1 s).
   "tests/unit/frozen-globals.test.mjs",
   "tests/unit/frustum-buckets.test.mjs",
+  // Seeded fuzz over every door that decodes player-shaped data (ghost hash,
+  // invite paste, peer snapshot, settings/garage import, career migrate,
+  // store reads). Hash32-seeded, N=2000/surface, <10 s; a red prints the seed.
+  "tests/unit/fuzz-untrusted-inputs.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/game-ctx-surface.test.mjs",
   // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in
@@ -367,6 +377,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/nontext-contrast.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
+  "tests/unit/pad-haptics.test.mjs",
   // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
@@ -400,6 +411,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // enough to stop in, and the COMMITMENT that replaced the pit button tells
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
+  // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
+  "tests/unit/player-forces.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
   // answers the question that actually bites, "does the pre-push gate RUN it" —
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no

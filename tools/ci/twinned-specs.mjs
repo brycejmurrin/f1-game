@@ -103,6 +103,8 @@ export const TWINNED = {
  *  was reverted; move one only when its browser copy has been re-run green
  *  under the fixtures, in the same change that adapts it. */
 export const ADAPTED = {
+  "tests/specs/albert-park-foundation.spec.js":
+    "Albert Park runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter in 4.5 s; m-albert-hero-fountain proves the required fountain count is watched",
   "tests/specs/physics-fixes.spec.js":
     "pure __apex physics reads (wall scrub, lap-distance continuity); 2/2 under the adapter in 27 s vs 110 s of browser; mutant m-wall-scrub-flat proves it bites",
   "tests/specs/logging.spec.js":
@@ -123,6 +125,7 @@ export const ADAPTED = {
  *  reason is the whole entry. twinDebt() excludes these, so the ratchet can
  *  reach zero without asking for a substitution that would be a hole. */
 export const BROWSER_ONLY = {
+  "tests/specs/pit-signs.spec.js": "APEX_VM_PAGE=1 boots Albert Park but pitSigns().drawn stays 0 through TRACK_MS (waitForFunction 45 s) — the decal draw needs a real renderer frame, not a structural flake (measured 2026-09-30)",
   "tests/specs/smoke.spec.js": "the boot gate: it proves a real Chromium boots the shell, which is the one thing no VM can",
   "tests/specs/physics-characterization.spec.js": "tests/data/physics-baseline.json is a real-Chromium measurement; the VM twin asserts parity WITH it, so the browser copy is the reference",
   // Measured 2026-09-22 by RUNNING every statically portable spec under the

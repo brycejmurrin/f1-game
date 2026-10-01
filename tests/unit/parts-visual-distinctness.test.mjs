@@ -1,6 +1,7 @@
 // Every catalog option must be VISIBLY different from the one it replaces.
 //
-// tests/specs/parts-physics.spec.js:874 already hashes each option's mesh and
+// tests/specs/parts-physics.spec.js ("every option in a category produces a
+// distinct consumed mesh signature") already hashes each option's mesh and
 // fails on a collision. That proves options are not byte-identical; it does not
 // prove anyone can see the difference, and a one-vertex 0.001 m change passes
 // it. 128 of the 297 options are SIGNATURE clones whose entire reason to exist
@@ -72,7 +73,7 @@ test("a SIGNATURE is a pure reskin: same cost, same four stat multipliers", () =
 
 test("every option resolves to itself under an eligible team", async () => {
   // An unknown or gated-out id resolves to the category DEFAULT with no warning
-  // (js/car/parts.js:594), which would photograph the default car and report a
+  // (`_resolve` in js/car/parts.js), which would photograph the default car and report a
   // false "identical". sweep() asserts this per row; BROKEN is how it surfaces.
   assert.deepEqual(await of("BROKEN"), [], "an option does not resolve to itself");
 });
