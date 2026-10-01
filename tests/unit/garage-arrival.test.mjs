@@ -92,6 +92,26 @@ test('studio drive-out (poseOut): shutter up, parked a beat, then nose first out
   }
   assert.ok(Arrival.poseOut(0, Arrival.settings({ angle: 'right' })).eye[0] > 0 && Arrival.poseOut(0, Arrival.settings({})).eye[0] < 0, 'RIGHT stands on the other side');
 });
+test('once out of the door the car turns into the pit lane, away from the camera', () => {
+  for (const [angle, side] of [['cut', 1], ['left', 1], ['right', -1]]) {
+    const cfg = Arrival.settings({ angle });
+    let px = 0, pyaw = 0;
+    for (let t = 0; t <= Arrival.OUT_DURATION + 0.5; t += 0.02) {
+      const p = Arrival.poseOut(t, cfg);
+      if (p.z < 6.4) assert.ok(Math.abs(p.x) < 1e-9 && Math.abs(p.yaw) < 1e-9, 'straight out of the door: no turn inside the garage');
+      assert.ok(side * p.x >= side * px - 1e-9 && side * p.yaw >= side * pyaw - 1e-9, 'the turn only ever tightens one way');
+      px = p.x; pyaw = p.yaw;
+    }
+    const end = Arrival.poseOut(Arrival.OUT_DURATION, cfg);
+    assert.ok(side * end.yaw > 1.0 && side * end.yaw < Math.PI / 2, 'turned roughly 60-90 degrees, never back on itself');
+    assert.ok(side * end.x > 2, 'and off to the side, away from the camera (the eye stands at x ' + Math.sign(cfg.angle === 'right' ? 1 : -1) + ')');
+    assert.ok(Math.sign(end.aim[0]) === side, 'the camera follows it round');
+  }
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  assert.match(cam, /arrivalCar\[0\] = -ac; arrivalCar\[2\] = as; arrivalCar\[8\] = as; arrivalCar\[10\] = ac;/, 'the car matrix carries the yaw, over the preview\'s X mirror');
+  const scene = readFileSync(new URL('../../js/garage/scene.js', import.meta.url), 'utf8');
+  assert.match(scene, /arrivalMirror\.set\(carMat\); arrivalMirror\[1\] = -carMat\[1\]; arrivalMirror\[5\] = -carMat\[5\]/, 'the floor reflection turns with it');
+});
 test('game.js plays the studio drive-out AT ONCE on every RACE!, with no card, and the warm waits for it', () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
