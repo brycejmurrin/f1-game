@@ -285,10 +285,11 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight)
   // options by accident today — so this is latent, and a one-field aero edit is
   // all it takes to start painting the band 75 mm off the flap.
   // …and `drs` alone is not enough now that the band is placed on the flap's
-  // SOLVED pose: rearSweep and rearTaper move that pose too, so they join the
-  // key or a style change paints the band for the previous wing.
+  // SOLVED pose: rearSweep and rearTaper move that pose too, and `plate`
+  // moves the front endplate the decal is drawn on (frontPlateGeom). They
+  // join the key or a style change paints the previous wing.
   const aSt = Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null;
-  const drsK = aSt ? [aSt.drs ? 1 : 0, aSt.rearSweep, aSt.rearTaper].map((v) => +v || 0).join(",")
+  const drsK = aSt ? [aSt.drs ? 1 : 0, aSt.rearSweep, aSt.rearTaper, aSt.plate].map((v) => +v || 0).join(",")
                    : ((parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0);
   // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
   const shapeK = finShape || "standard";
