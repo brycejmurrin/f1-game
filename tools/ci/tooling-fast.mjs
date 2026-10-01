@@ -585,6 +585,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // validator reads the engine's centreline; the share code round-trips on the
   // lattice and refuses every bad code with a reason. ~15 s together.
   "tests/unit/track-editor-geometry.test.mjs",
+  // The designer's one-click remedies (js/editor/fixes.js) over the real engine:
+  // per code a design TrackValidate judges RED, the fix, the re-check; point 0
+  // and the zones stay put, apply never throws, fixAll clears a tiny loop and a
+  // figure-8 within three rounds and leaves a green RANDOMISE loop alone. ~2 s.
+  "tests/unit/track-fixes.test.mjs",
   "tests/unit/track-foundation.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",

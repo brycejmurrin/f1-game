@@ -124,6 +124,7 @@
   "TrackStamps",
   "TrackSurface",
   "TrackValidate",
+  "TrackFixes",
   "TrackDesigner",
   "DesignerCanvas",
   "TunerPanel",
