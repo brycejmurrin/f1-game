@@ -8,7 +8,12 @@
 // actually dress: a theme that fell back to generic dressing (its closure threw)
 // is a silent failure, so the build is compared against the bare build.
 //
-// Run: node --test tests/unit/track-themes-build.test.mjs   (~8 presets × 2 full builds)
+// At the validator's lap cap (lenMax 7 km) every preset must also stay under
+// 1.0 M prop vertices and 480 lamps (the city, belts and flood ring scale with
+// the lap: TrackThemes.cityGaps / BELT_REF_M / LAMP_BUDGET); survey() lists
+// the start straight once; and one dresser that throws leaves the others.
+//
+// Run: node --test tests/unit/track-themes-build.test.mjs   (~8 presets × 2 full builds + 8 at 6.9 km)
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -23,7 +28,10 @@ const SEEDS = [7, 23];
 const PROP_VERT_CAP = 1100000;   // verify-track's fleet cap
 
 function boot() {
-  const Tracks = buildContext(undefined, { quiet: true });
+  // quiet: false CAPTURES the VM's console.warn lines (Tracks._vmConsole; the
+  // VM never prints) — under quiet: true the capture is empty and the
+  // "dresser must not throw" check below would be vacuous.
+  const Tracks = buildContext(undefined, { quiet: false });
   const ctx = customContext(Tracks);
   return { Tracks, ctx };
 }
@@ -81,4 +89,106 @@ test("--custom accepts a share code: encode → verifyDef round trip", { timeout
   assert.ok(r.props > 0);
   assert.match(r.id, /^custom-[0-9a-f]{8}$/);
   assert.equal(r.id, ctx.CustomTracks.sanitize(design).id, "the built id is the design's content id");
+});
+
+/** A validator-green design stretched to a ~6.95 km control polygon (≤ 200
+ *  points, so RANDOMISE's 30 m spacing cannot reach it: a player's drag can). */
+function longDesign(ctx, seed, theme, targetL = 6950) {
+  const V = ctx.TrackValidate, S = ctx.TrackShape;
+  const base = designFor(ctx, seed, theme);
+  const f = targetL / S.polyLen(base.pts);
+  const pts = base.pts.map((p) => [Math.round(p[0] * f * 4) / 4, Math.round(p[1] * f * 4) / 4]);
+  const d = Object.assign({}, base, { pts, name: theme.toUpperCase() + " LONG" });
+  const v = V.check(d);
+  assert.equal(v.red, 0, `${theme}: the stretched loop is validator-green: ` + JSON.stringify(v.issues.filter((i) => i.level === "red")));
+  assert.ok(v.stats.lengthM > 6700 && v.stats.lengthM <= V.LIMITS.lenMax, `${theme}: built ${v.stats.lengthM} m, near the ${V.LIMITS.lenMax} m cap`);
+  return d;
+}
+/** The def as CustomTracks.toRaw builds it once it hands the DESIGN to
+ *  TrackThemes.defFields (the length-scaled fields): the theme's fields re-applied with the design. */
+function scaledDef(ctx, design) {
+  const it = ctx.CustomTracks.sanitize(design);
+  return ctx.TrackDef.fromRaw(Object.assign(ctx.CustomTracks.toRaw(it), ctx.TrackThemes.defFields(it.theme, it)));
+}
+const LONG_PROP_CAP = 1000000, LONG_LAMP_CAP = 480;
+
+test("every preset at ~6.9 km (the validator's lap cap) builds under 1.0 M prop vertices and 480 lamps", { timeout: 600000 }, () => {
+  const { Tracks, ctx } = boot();
+  const T = ctx.TrackThemes;
+  const rows = [];
+  for (const theme of T.ORDER) {
+    const design = longDesign(ctx, 7, theme);
+    const r = verifyDef(Tracks, scaledDef(ctx, design), { quiet: true });
+    const lamps = r.track.lampPosts ? r.track.lampPosts.length : 0;
+    rows.push(`${theme} ${Math.round(r.track.total)} m: props ${r.props}, lamps ${lamps}`);
+    assert.ok(r.props < LONG_PROP_CAP, `${theme} at ${Math.round(r.track.total)} m: props ${r.props} < ${LONG_PROP_CAP}`);
+    assert.ok(lamps <= LONG_LAMP_CAP, `${theme} at ${Math.round(r.track.total)} m: ${lamps} lamps ≤ ${LONG_LAMP_CAP}`);
+  }
+  for (const r of rows) console.log("themes @7 km: " + r);
+});
+
+// CustomTracks.toRaw (js/editor/custom-tracks.js) must pass the design:
+// `TrackThemes.defFields(it.theme, it)`. Until it does, the length-scaled
+// fields never reach a saved circuit — reported as a TODO, strict once wired.
+{
+  const probe = boot().ctx;
+  const d = { theme: "harbour", baseHW: 7, seed: 1, pts: Array.from({ length: 40 }, (_, i) => [Math.round(1400 * Math.cos(i / 40 * 2 * Math.PI)), Math.round(900 * Math.sin(i / 40 * 2 * Math.PI))]) };
+  const it = probe.CustomTracks.sanitize(d);
+  const wired = !!(it && probe.CustomTracks.toRaw(it).dressingExclusions);
+  test("CustomTracks.toRaw hands the design to TrackThemes.defFields (a long street lap carries its city gaps)",
+    { todo: wired ? false : "js/editor/custom-tracks.js toRaw: TrackThemes.defFields(it.theme) → defFields(it.theme, it)" }, () => {
+      assert.ok(it.lengthM > 3600, "the probe lap is longer than harbour's cityM");
+      assert.deepEqual(JSON.parse(JSON.stringify(probe.CustomTracks.toRaw(it).dressingExclusions || null)),
+        JSON.parse(JSON.stringify(probe.TrackThemes.cityGaps(it.lengthM, probe.TrackThemes.PRESETS.harbour.cityM))));
+    });
+}
+
+test("survey() lists the start straight once; cityGaps scale with the lap", { timeout: 300000 }, () => {
+  const { Tracks, ctx } = boot();
+  const T = ctx.TrackThemes;
+  const design = designFor(ctx, 7, "parkland");
+  const def = customDef(Tracks, design);
+  const orig = def.scenery;
+  let sv = null;
+  def.scenery = (api) => { sv = T.survey(api); orig(api); };
+  Tracks.build(def);
+  assert.ok(sv && sv.straights.length >= 1, "the survey ran");
+  // A run covers node 0 when it starts there or wraps past the end of the lap.
+  const covers0 = sv.straights.filter((s) => s.k0 === 0 || s.k1 < s.k0);
+  assert.equal(covers0.length, 1, "exactly one run holds the start line: " + JSON.stringify(sv.straights.map((s) => [s.k0, s.k1, Math.round(s.lenM)])));
+  for (let i = 0; i < sv.straights.length; i++) for (let j = i + 1; j < sv.straights.length; j++) {
+    const a = sv.straights[i], b = sv.straights[j];
+    const inA = (k) => (a.k0 <= a.k1 ? k >= a.k0 && k < a.k1 : k >= a.k0 || k < a.k1);
+    assert.ok(!inA(b.k0), `runs ${i} and ${j} overlap`);
+  }
+  // City gaps: none up to cityM; past it the five windows drop (1 − cityM / L) of the lap.
+  assert.equal(T.cityGaps(3500, 3600), null);
+  const g = T.cityGaps(7000, 3600);
+  assert.equal(g.length, 5);
+  const drop = g.reduce((a, w) => a + (w.s1 - w.s0), 0);
+  assert.ok(Math.abs(drop - (1 - 3600 / 7000)) < 1e-3, `drops ${drop.toFixed(3)} of the lap`);
+  assert.ok(g.every((w) => w.kind === "city" && w.s0 > 0.04 && w.s1 < 0.96), "clear of the pit straight");
+  assert.equal(T.defFields("harbour").dressingExclusions, undefined, "no design, no gaps");
+  assert.equal(T.defFields("parkland", { lengthM: 7000 }).dressingExclusions, undefined, "no city, no gaps");
+});
+
+test("one dresser that throws is logged and skipped; the others still dress", { timeout: 300000 }, () => {
+  const { Tracks, ctx } = boot();
+  const T = ctx.TrackThemes;
+  const design = designFor(ctx, 23, "parkland");
+  const steps = T.DRESS.parkland;
+  const belts = steps.find((st) => st[0] === "belts");
+  const keep = belts[1];
+  belts[1] = () => { throw new Error("test: belts down"); };
+  try {
+    const before = Tracks._vmConsole.length;
+    const def = customDef(Tracks, design);
+    const withOthers = Tracks.build(def).meshes.props.verts;
+    const bare = Object.assign({}, def, { scenery: () => {} });
+    Object.defineProperty(bare, "points", { value: def.points, enumerable: true });
+    const bareProps = Tracks.build(bare).meshes.props.verts;
+    const warned = Tracks._vmConsole.slice(before).filter((l) => /custom scenery parkland failed \(belts\)/.test(l));
+    assert.equal(warned.length, 1, "the failure is logged once, by name");
+    assert.ok(withOthers > bareProps, `stands + horizon still dressed (${withOthers} vs bare ${bareProps})`);
+  } finally { belts[1] = keep; }
 });
