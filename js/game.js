@@ -1965,7 +1965,7 @@ function makeCars() {
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
-    const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
+    const factoryParts = Parts.resolveSetup((Career.inCareer() && Career.aiSetup && Career.aiSetup(team)) || Parts.getFactorySetup(team), team);
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
@@ -2390,20 +2390,24 @@ function currentCarGroundMat(c, out) {
 const sessionDarkFor = (def) => raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
   raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && !!def.night);
 const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots, retainGraph: wantAgentSurface() });
+// The world freed: the old one before a stepped rebuild, or one the player picked away from (scheduleFlybyTrack).
+function dropTrackWorld() {
+  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0; _menuFly = null;
+  shadowPass.reset(); freeTrackMeshes(track);
+  track = null; builtTrackId = null;
+  if (typeof LampBake !== "undefined") LampBake.reset();
+}
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
 // drive-out keeps animating. Frees the old world first, adopts the new one whole; a
 // newer build or live() going false abandons it and frees its partial uploads.
 async function loadTrackStepped(idx, live) {
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
-  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const prevId = builtTrackId;
   try { PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   let built = null;
   try {
-    shadowPass.reset(); freeTrackMeshes(track);
-    track = null; builtTrackId = null;
-    if (typeof LampBake !== "undefined") LampBake.reset();
+    dropTrackWorld();
     // apex26.buildWorker (PROTOTYPE, default OFF): built off the main thread and
     // replayed here; null (off, failed) falls back to the stepped build.
     const opts = trackBuildOpts(sessionDark, wantSlots);
@@ -2639,6 +2643,8 @@ function scheduleFlybyTrack(settle) {
   const generation = ++_menuGate.generation;
   _menuGate.warm = 0;
   if (!(trackIdx >= 0)) return;
+  // ANOTHER CIRCUIT PICKED: the last one's world is freed now, not when this one's build starts.
+  if (state === "menu" && track && Tracks.LIST[trackIdx] && builtTrackId !== Tracks.LIST[trackIdx].id) dropTrackWorld();
   const want = trackIdx, tod = raceTimeOfDay, weather = raceWeather;
   const key = menuKey(want);
   const current = () => generation === _menuGate.generation && state === "menu" &&
@@ -2658,11 +2664,10 @@ function scheduleFlybyTrack(settle) {
       if (_menuGate.ready === key && _menuGate.track === track) {
         await menuFinish(current, key); await garagePrewarm(current); return;
       }
-      // The build holds the main thread for 1-3 s: never start it while the
-      // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
-      // that crosses dark rebuilds, and every tap then froze the sheet).
-      if (!(await menuIdle(current))) return;
-      if (!(await loadTrackStepped(want, current))) return;   // in steps: a tap on the sheet mid-build is answered
+      // AT ONCE, NOT AFTER MENU_IDLE_MS: the build is stepped (~8 ms a frame), so a
+      // tap on the picker or RACE SETTINGS is answered mid-build, and RACE! finds the
+      // world built sooner. The warms (menuFinish) still wait for idle: they block.
+      if (!(await loadTrackStepped(want, current))) return;
       _menuGate.ready = key; _menuGate.track = track;
       // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
       await menuSlice();
@@ -2672,9 +2677,9 @@ function scheduleFlybyTrack(settle) {
       await garagePrewarm(current);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
-  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build itself waits
-  // for MENU_IDLE_MS of quiet inside prepare (menuIdle), which is what keeps
-  // the 1-3 s main-thread build off a player still tapping. A longer settle
+  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build is stepped,
+  // so it starts at once; the blocking warms wait for MENU_IDLE_MS of quiet
+  // (menuFinish -> menuIdle), off a player still tapping. A longer settle
   // (1.5 s) only delays the download and everything queued behind it, so a
   // RACE! tap soon after the picker meets the build card. 400 ms: a tile
   // browsed past in under half a second still fetches nothing.
@@ -2850,18 +2855,9 @@ function dropRaceWake() {
 // caller is a click handler that ignores the result and makes startRace() its
 // last statement, and the specs already poll `__apex.info().track != null`
 // rather than assuming race() returns built, so nothing downstream changes.
-// RACE-ENTRY PROFILE — the same stopwatch tracks.js keeps over the build, one
-// level out. Run 128/129 measured race entry on real hardware at 2193 ms of
-// contiguous main-thread block on the default backend and found the track
-// build is only 23 % of it; the other three-and-a-half seconds have no name
-// (docs/notes/MULTITHREADING-PLAN-2026-09-16.md §8). Two candidates were ruled
-// out by reading rather than by measuring — shader compilation, because glx.js
-// already takes KHR_parallel_shader_compile, and the lazy scenery fetch,
-// because the largest circuit module in the tree is 58 KB — so the rest has to
-// be attributed rather than guessed. Anything optimised before this row exists
-// is aimed at a quarter of the problem.
-let _raceProfile = [];
-function raceProfile() { return _raceProfile; }
+// Race-entry stopwatch + longtask ring: js/perf/race-entry-profile.js
+// (PERF-OPTIONS-2026-09-16.md — build is ~23 % of the freeze; attribute the rest).
+function raceProfile() { return RaceEntryProfile.legs(); }
 // DEFECT-LEDGER's un-awaited-startRace family: six fire-and-forget callers
 // (closeQualiToGrid, q-drive, pm-restart, the season/quali continue button,
 // RaceSettings' RACE! route, DailyChallenge.open) never awaited this, so a double-click or a second
@@ -2869,8 +2865,7 @@ function raceProfile() { return _raceProfile; }
 // startRace() wrapper below latches concurrent calls onto the one in-flight
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
-  _raceProfile = []; let _rt = performance.now();
-  const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
+  const rlap = (n) => RaceEntryProfile.lap(n);
   rlap("scenery");
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -3010,7 +3005,7 @@ async function startRaceBody() {
   // TLX links programs synchronously on first draw — warm them during the LIGHTS,
   // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
   // Optimisation only; GLX/WGX have no warm and no-op.
-  try { if (gfx.warm && _warmKey !== menuKey(trackIdx)) gfx.warm(); } catch (_) { /* as above */ }
+  try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
@@ -3018,7 +3013,7 @@ async function startRaceBody() {
   // lowers it with the first frame the backend presents (LoadingScreen.handoff).
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build") && !!player;   // "build": startRaceCovered's card
   clearMenuScreens();
-  if (handoff) loadingScreen.handoff();
+  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -3033,8 +3028,7 @@ async function startRaceBody() {
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
-  dbgCam = null;              // fresh race — drop any leftover debug free-cam
-  replayBuf.onRaceStart(cars); // solo instant-replay ring (js/camera/replay-buf.js)
+  dbgCam = null; replayBuf.onRaceStart(cars); // fresh race — drop free-cam; arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
@@ -3045,8 +3039,8 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
-  warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
-  DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
+  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -3066,8 +3060,8 @@ function entrySettings() {
 }
 function startRace() {
   const key = entrySettings(), idx = trackIdx;
-  const request = sessionEntry.begin("race", key, () => ensureScenery(idx),
-    () => startRaceBody(), () => key === entrySettings(),
+  const request = RaceEntryProfile.runSession(sessionEntry, key,
+    () => ensureScenery(idx), () => startRaceBody(), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); });
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
@@ -3203,8 +3197,7 @@ function netOrder(order) {
 }
 
 function endRace(forcedOrder) {
-  Ghost.flush();
-  if (replayBuf.isScrubbing()) return;   // scrub must not settle career / open results
+  Ghost.flush(); if (replayBuf.isScrubbing()) return; // scrub: no career settle / results
   try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
@@ -3780,8 +3773,7 @@ const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
-const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
-const replayBuf = ReplayBuf.create(G);    // solo 20 s instant-replay ring (js/camera/replay-buf.js)
+const onboard = Onboard.create(G), replayBuf = ReplayBuf.create(G); // coach + solo replay ring
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -8257,9 +8249,7 @@ function render(dt) {
   }
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
-  // The pre-race screen comes down with the race's FIRST PRESENTED frame
-  // (LoadingScreen.handoff): a present that only started the warm painted nothing.
-  if (loadingScreen.phase() === "handoff" && !(gfx.warming && gfx.warming())) loadingScreen.stop();
+  RaceEntryProfile.afterPresent(loadingScreen, gfx);
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
   // reverts on the next boot, which is the whole point of it.
@@ -8359,13 +8349,12 @@ function tickBody(now) {
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
-      if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20));   // fly-cam integrates before the held frame
-      replayBuf.tickScrub(Math.min(dt, 1 / 20));             // no-op unless scrubbing
+      if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
       render(Math.min(dt, 1 / 20));
     }
     return;
   }
-  replayBuf.onTick(raceT, cars, state);   // 30 Hz solo ring — never under netplay / scrub
+  replayBuf.onTick(raceT, cars, state); // 30 Hz solo ring — never under netplay / scrub
   if (announceT > 0) {
     announceT -= dt;
     if (_annFloor > 0) _annFloor -= dt;
@@ -9034,8 +9023,7 @@ function setPaused(p, why) {
   // expires and DONE then charges nothing. Its own DONE/BACK are the only way out.
   if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
-  paused = p;
-  replayBuf.onPause(!!p);   // show REPLAY when paused; restore live field on resume
+  paused = p; replayBuf.onPause(!!p); // REPLAY overlay while paused
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
     // closeSettings disarms key/pad slots AND the wheel wizard (beginAxisCapture
@@ -9093,6 +9081,22 @@ $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
+
+// BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
+// own, so a stale shell (or a service worker serving a cached generation) can run
+// old JS with nothing on screen to say so — during one camera-bug hunt a fix was
+// deployed three times while the reporter kept testing the previous build, and
+// neither side could tell. Read from the stylesheet's ?v=, which is the build
+// whose assets ACTUALLY loaded, rather than a constant compiled into the markup:
+// a string in the HTML would go stale with the HTML and confirm the wrong thing.
+{
+  const tag = $("pm-build");
+  if (tag) {
+    const meta = document.querySelector('meta[name="apex-build"]');
+    const build = meta && meta.content;
+    tag.textContent = build ? `build ${build}` : "build unknown";
+  }
+}
 
 // STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
 const STEER_MODES = ["tilt", "buttons", "touch"];
