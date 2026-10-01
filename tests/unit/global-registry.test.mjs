@@ -86,7 +86,8 @@ const GROWABLE_GLOBALS = {
 // Known reads of names NO manifest file assigns — each with its story. A new
 // external name is a red flag (an undeclared dependency or a typo'd global).
 const KNOWN_EXTERNAL_READS = {
-  "js/track/tracks.js": ["CircuitElevations"],  // future tools/gen/bake-elevation.mjs output; typeof-guarded feature probe
+  "js/track/core/def.js": ["CircuitElevations"],  // tools/gen/bake-elevation.mjs output; typeof-guarded feature probe (moved from tracks.js with elevationAt)
+  "js/editor/custom-tracks.js": ["TrackDesigner"], // the LAZY_EDITOR designer screen (lands with the designer UI); typeof-guarded, reached only after the bundle loads
   "js/audio/spotify.js": [
     "Spotify",                      // the Spotify Web Playback SDK, injected at connect time
     "onSpotifyWebPlaybackSDKReady", // the SDK's own window callback contract

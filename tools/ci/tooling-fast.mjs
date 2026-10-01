@@ -174,6 +174,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-token-adoption.test.mjs",
   "tests/unit/css-tokens.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
+  // The track designer's registry (js/editor/custom-tracks.js + track-themes.js):
+  // stored designs become Tracks.LIST entries through TrackDef.fromRaw, after
+  // the 52 and never in SEASON; hostile stored input is repaired or dropped.
+  // Runs the TRACK_VM engine over a stub store, ~3 s.
+  "tests/unit/custom-tracks.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
@@ -551,6 +556,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-build-vm-release.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/track-centerline-seam.test.mjs",
+  // js/track/core/def.js (TrackDef) is the ONE raw-def → LIST-entry path for the
+  // 52 shipped circuits and the designer's runtime defs: a golden hash per
+  // circuit (metadata + materialised points) pins the extraction byte-for-byte.
+  "tests/unit/track-def-factory.test.mjs",
   "tests/unit/track-foundation.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
