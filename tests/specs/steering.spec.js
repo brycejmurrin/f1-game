@@ -408,6 +408,7 @@ test.describe("Apex 26 — steering", () => {
     const storedDefault = await page.evaluate(() => GameStore.store.get("raceLine", 0));
     expect(storedDefault).toBe(0);
     await setRaceLine(page, 0);
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     const assist = await page.evaluate(() => window.__apex.tuning().raceLineAssist);
     expect(assist).toBe(0);
     // ...and with the assist explicitly off, the car's line through a corner is
@@ -419,10 +420,33 @@ test.describe("Apex 26 — steering", () => {
     // Slow enough that the car stays mid-track (away from the edges, where the
     // projection is non-linear and amplifies tiny float differences): the two
     // identical-config runs must then land in the same place.
-    const a = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
-    await setRaceLine(page, 0);
-    const b = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
-    expect(Math.abs((a.after.x - a.before.x) - (b.after.x - b.before.x))).toBeLessThan(0.5);
+    // FROZEN + ONE EVALUATE (same class as the symmetry recipe). Bound stays
+    // 0.5 m — without freeze, run()'s multi-evaluate gaps let the page loop
+    // insert uncounted ticks between the two identical bursts (CI 36830854397:
+    // |Δdx|=0.533 vs 0.5 on llvmpipe selected).
+    await page.evaluate(() => window.__apex.freeze(true));
+    let deltaDx;
+    try {
+      deltaDx = await page.evaluate((f) => {
+        const burst = () => {
+          window.__apex.jump(f, 16, 0);
+          window.__apex.setInput({ steer: 0, throttle: false, brake: false });
+          window.__apex.step(1 / 60, 3);
+          const before = window.__apex.probe().x;
+          window.__apex.setInput({ steer: 0, throttle: false, brake: false });
+          window.__apex.step(1 / 60, 60);
+          window.__apex.clearInput();
+          return window.__apex.probe().x - before;
+        };
+        return Math.abs(burst() - burst());
+      }, frac);
+    } finally {
+      await page.evaluate(() => {
+        window.__apex.freeze(false);
+        window.__apex.setPhysics({ roadFollow: 0 });
+      });
+    }
+    expect(deltaDx).toBeLessThan(0.5);
   });
 
   test("racing-line assist: PULL eases toward the line, PUSH sends it wider", async ({ page }) => {
