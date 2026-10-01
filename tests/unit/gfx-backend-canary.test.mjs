@@ -237,7 +237,7 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   const game = code("js/game.js");
   const present = game.search(/gfx\.present\(\s*po\s*\)/);
   const before = game.slice(Math.max(0, present - 200), present);
-  const after = game.slice(present, present + 400);
+  const after = game.slice(present, present + 900);
   // XR Phase 0: present goes through XrBoot.present(…) || gfx.present(po). The
   // canary must still arm immediately before that gate — nothing else may sit
   // between armBackendProbe() and the present call.
@@ -3384,7 +3384,8 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
   // .test.mjs) around startRaceBody(), which still carries this whole flow.
   const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
-  assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
+  assert.match(sr, /RaceEntryProfile\.span\("warmCarAssets", \(\) => warmCarAssets\(\)\);[\s\S]{0,160}?RaceEntryProfile\.span\("debrisPrime"/,
+    "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
@@ -4523,7 +4524,9 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // render context, hence the program cache, on the MRT node's id), the MRT is
   // nulled only after it, and the casters compile under null (sunPass runs before
   // present(), with the MRT restored).
-  let shadowCalls = 0, postCalls = 0, fxCalls = 0;
+  let shadowCalls = 0, postCalls = 0, fxCalls = 0, mirrorCalls = 0;
+  let _mirUsed = false; const mirRT = { texture: "mirrorTex" };
+  const wantMirrorWarm = () => true, prepareMirrorTarget = () => {};
   // The FX warm (particles, skid marks — PERF-FINDINGS §2ah) runs after the
   // scene warm, under the SAME target and ssrTag MRT the scene compiled with.
   const warmFxPrograms = async () => {
@@ -4552,11 +4555,19 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
     compileAsync: async () => {
       await Promise.resolve(); // r185 builds later objects after yielding
+      if (target === mirRT) {
+        assert.equal(mrt, null); assert.equal(tag, false, "mirror world compiles without the scene MRT");
+        return;
+      }
       assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(tag, true);
       if (_warmAttempts === 1) await new Promise((_, reject) => { rejectMain = reject; });
     },
   };
-  const post = { enabled: () => true, sceneTarget: () => "HDR", warm: async () => {
+  const post = { enabled: () => true, sceneTarget: () => "HDR", warmMirror: async tex => {
+    mirrorCalls++; await Promise.resolve();
+    assert.equal(tex, "mirrorTex"); assert.equal(mrt, "tag", "mirror composite compiles under the main MRT");
+    assert.equal(shadowCalls, 1); assert.equal(tag, false);
+  }, warm: async () => {
     postCalls++; await Promise.resolve();
     assert.equal(shadowCalls, 0, "the post warm runs before the caster warm");
     assert.equal(mrt, "tag", "the post warm runs under the scene MRT, the variant present() draws");
@@ -4580,11 +4591,11 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   assert.equal(_warmRequested, true); assert.equal(_warmPending, null);
   warm({}); await _warmPending;
-  assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1); assert.equal(fxCalls, 1);
+  assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1); assert.equal(fxCalls, 1); assert.equal(mirrorCalls, 1); assert.equal(_mirUsed, true);
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   // Two attempts, one failed; every stage of the successful one is a number.
   assert.equal(_warmStages.attempts, 2); assert.equal(_warmStages.failed, 1);
-  for (const k of ["scene", "fx", "post", "shadow", "total"]) assert.ok(Number.isFinite(_warmStages[k]) && _warmStages[k] >= 0, k + " stage timed");
+  for (const k of ["scene", "fx", "post", "shadow", "mirror", "total"]) assert.ok(Number.isFinite(_warmStages[k]) && _warmStages[k] >= 0, k + " stage timed");
   assert.ok(_warmStages.at > 0, "warm start stamped");
 });
 
@@ -4736,7 +4747,8 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   let playerVisualKey = "previous-setup", carModelBuf = null, builds = 0;
   const playerBodies = {}, playerBodyOrder = [], PLAYER_BODY_CACHE_MAX = 3;
   const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
-  const CockpitOpts = { halo: () => true, haloSize: () => 2 }, Parts = { getVisualTiers: () => ({}) };
+  let cockpitStyle = "standard";
+  const CockpitOpts = { halo: () => true, haloSize: () => 2, body: () => cockpitStyle }, Parts = { getVisualTiers: () => ({}) };
   const Car3D = { build: () => { builds++; return {}; } };
   // js/car/car-draw.js reads the backend and the parts through the G façade and the livery through deps.
   const G = { gfx: { createMesh: x => x }, getTeamParts: () => ({}) };
@@ -4751,6 +4763,11 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   playerVisualKey = "selected-setup";
   assert.equal(body(team, car), preparedBody); assert.equal(cockpit(team, car), preparedCockpit);
   assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
+  cockpitStyle = "wide";
+  assert.notEqual(cockpit(team, car), preparedCockpit, "a body change selects a distinct mesh cache entry");
+  assert.equal(builds, 3);
+  cockpitStyle = "standard";
+  assert.equal(cockpit(team, car), preparedCockpit, "switching back reuses the original body");
 });
 
 test("selector car assets yield for costly work, skip cached waits, and cancel stale settings", async () => {
@@ -4821,8 +4838,8 @@ test("selector preparation waits for the player's hands before the build and the
   assert.match(body, /return;\s*\}\s*(\/\/[^\n]*\s*)*if \(!\(await loadTrackStepped\(want, current\)\)\) return;/,
     "the build starts at once, in steps (a tap on the sheet mid-build is answered)");
   assert.ok(!/menuIdle/.test(body.slice(0, body.indexOf("loadTrackStepped("))), "no idle wait before the build");
-  assert.match(body, /if \(state === "menu" && track && Tracks\.LIST\[trackIdx\] && builtTrackId !== Tracks\.LIST\[trackIdx\]\.id\) dropTrackWorld\(\);/,
-    "picking another circuit frees the last one's world at once");
+  assert.match(body, /if \(!\(gfx\.warming && gfx\.warming\(\)\) && state === "menu" && track && Tracks\.LIST\[trackIdx\] && builtTrackId !== Tracks\.LIST\[trackIdx\]\.id\) dropTrackWorld\(\);/,
+    "picking another circuit frees the last world immediately only after compilation releases it");
   assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
     "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
   const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
@@ -4894,6 +4911,40 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   trackIdx = 0; schedule(); assert.deepEqual(drops, [0], "nothing built: nothing to free");
   trackIdx = 1; els.select.hidden = false; schedule(); const changed = fire(); raceWeather = "rain";
   requests.shift().resolve(); await changed; assert.deepEqual(builds, [0, 0]);
+});
+
+test("selector retains a different circuit during compilation, then releases it and starts the stepped build without an idle wait", async () => {
+  const src = read("js/game.js"), previous = { id: "a", meshes: {} }, freed = [], builds = [];
+  let track = previous, builtTrackId = "a", builtTrackNight = false, builtGridSlots = 22, compiling = true, _menuFly = {};
+  const _menuGate = { generation: 0, warm: 0, track, ready: "0|default|dry|22" };
+  const state = "menu", setupPreviewOn = false, trackIdx = 1, raceTimeOfDay = "default", raceWeather = "dry";
+  const gfx = { warming: () => compiling }, els = { select: { hidden: false } }, $ = () => ({ hidden: true });
+  const menuKey = idx => [idx, raceTimeOfDay, raceWeather, 22].join("|"), fieldSize = () => 22;
+  const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false;
+  const PerfGov = { sentinelArm() {} }, Log = { warn() {} };
+  const freeTrackMeshes = t => { assert.equal(compiling, false, "compileAsync still owns the old geometries"); freed.push(t); };
+  const shadowPass = { reset() { assert.equal(compiling, false, "shadow programs also retain ownership until compile settles"); } };
+  const Tracks = { LIST: [{ id: "a" }, { id: "b" }], buildPaced: async def => { builds.push(def.id); return { id: def.id, meshes: {} }; } };
+  const _loadTrackBody = (idx, def, built) => { track = built; builtTrackId = def.id; };
+  const dropTrackWorld = eval("(function(){" + fnBody(src, "dropTrackWorld") + "})");
+  const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
+  const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
+  const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
+  let flybyBuildTimer = 0, timerId = 0;
+  const timers = new Map(), setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout = id => timers.delete(id);
+  const schedule = eval("(function(settle){" + fnBody(src, "scheduleFlybyTrack") + "})");
+  const fire = async () => { const [id, timer] = [...timers][0]; timers.delete(id); await timer.fn(); };
+  schedule();
+  assert.strictEqual(track, previous, "changing circuit preserves resources while compilation is pending");
+  assert.deepEqual(freed, []);
+  await fire();
+  assert.strictEqual(track, previous); assert.deepEqual(builds, []); assert.deepEqual(freed, []);
+  assert.equal([...timers.values()][0].ms, 100, "only the compile retry is queued");
+  compiling = false; await fire();
+  assert.deepEqual(freed, [previous], "the real stepped loader releases the previous world once");
+  assert.deepEqual(builds, ["b"], "the next compile retry starts the stepped build directly");
+  assert.equal(_menuGate.ready, menuKey(1)); assert.strictEqual(_menuGate.track, track);
+  assert.equal(track.id, "b"); assert.equal(_menuFly, null, "old flyby plans retire with their circuit");
 });
 
 test("TLX bounds GPU error history and preserves resize context at receipt", () => {
@@ -5228,4 +5279,57 @@ test("the mirror composite's flip reaches every backend: default flipped (the mi
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /_mirData\[1\] = _mirFlip \? 1 : 0/, "WGX: the shader already branches on params.y");
   assert.match(wgx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);
+});
+
+
+test("TLX mirror preparation skips software AUTO and off settings, but honours forced mirror or PiP", () => {
+  const _warmFx = true, post = { enabled: () => true }, _mirDead = false, lit = {}, vizMat = null;
+  let mode = "auto", pip = "auto", softwareGL = false, soft = false;
+  const GameStore = { store: { get: key => key === "hudMirror" ? mode : pip } };
+  const softGpu = () => soft;
+  const want = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "wantMirrorWarm") + "})");
+  assert.equal(want(), true, "hardware AUTO prepares the race-only passes");
+  softwareGL = true; assert.equal(want(), false);
+  softwareGL = false; soft = true; assert.equal(want(), false);
+  mode = "on"; assert.equal(want(), true);
+  mode = "off"; pip = "on"; assert.equal(want(), true);
+  pip = "off"; soft = false; assert.equal(want(), false);
+});
+
+test("TLX mirror composite warm holds its destination and real texture across awaits and restores on failure", async () => {
+  let target = "mirrorWorld", active = 0;
+  const realTex = {}, previousTex = {}, P = { mirror: { mat: {}, tex: { value: previousTex } } }, viz = null;
+  const quad = { material: null, camera: {} }, ctx = { softDest: () => "present" };
+  const renderer = {
+    getRenderTarget: () => target, setRenderTarget: v => { target = v; },
+    compileAsync: async q => {
+      assert.equal(++active, 1); await Promise.resolve();
+      assert.equal(q, quad); assert.equal(q.material, P.mirror.mat);
+      assert.equal(target, "present"); assert.equal(P.mirror.tex.value, realTex);
+      active--; throw new Error("rejected mirror pipeline");
+    },
+  };
+  const warm = eval("(async function(tex){" + fnBody(code("js/render/three/tlx-post.js"), "warmMirror") + "})");
+  await assert.rejects(warm(realTex), /rejected mirror pipeline/);
+  assert.equal(target, "mirrorWorld"); assert.equal(P.mirror.tex.value, previousTex);
+});
+
+
+test("TLX mirror honours software readback backpressure and resumes when the read finishes", () => {
+  let _softBlit = true, _softReadPending = true, opened = 0;
+  const _mirDead = false, _warmPending = null, _envActive = false, lit = {};
+  const body = fnBody(code("js/render/three/tlx.js"), "mirrorBegin");
+  const setup = body.indexOf("w = Math.max");
+  assert.ok(setup > 0, "the mirror entry guard precedes target setup");
+  // Execute the entry guard itself, replacing the allocation/submission tail
+  // with a counter: a blocked frame must never reach that work.
+  const begin = eval("(function(frame,w,h){" + body.slice(0, setup) + "opened++; return true;})");
+  const frame = { proj: [], view: [], viewProj: [] };
+  for (let i = 0; i < 120; i++) assert.equal(begin(frame, 320, 100), false);
+  assert.equal(opened, 0, "a pending read cannot accumulate second-world submissions");
+  _softReadPending = false; assert.equal(begin(frame, 320, 100), true);
+  assert.equal(opened, 1, "the mirror resumes when the previous visible frame drains");
+  _softBlit = false; _softReadPending = true;
+  assert.equal(begin(frame, 320, 100), true, "hardware mirrors retain their normal cadence");
+  assert.equal(opened, 2);
 });

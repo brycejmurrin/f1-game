@@ -229,6 +229,7 @@ test("compound-corner brake limits exactly match the tightest individual sample"
     }));
     const ctx = { traits: { ...mid, skill: 0.8 + rnd() * 0.2 }, samples,
       aeroLoad: rnd(), latMax: 22, brake: 22, grip: 0.4 + rnd(),
+      pace: [0.05, 0.5, 1, 2, undefined][run % 5], vmax: [1, 72, 120, undefined][run % 4],
       blocker: run % 2 === 0, blockerGap: 8, blockerSpeed: 50, speed: 55,
       roomL: 3, roomR: 1, errMul: run % 3 === 0 ? 1.05 : 1 };
     const expected = Math.min(...samples.map(s => A.brakeTarget({ ...ctx, samples: [s] })));
@@ -236,6 +237,17 @@ test("compound-corner brake limits exactly match the tightest individual sample"
     assert.equal(A.brakeTarget({ ...ctx, samples: samples.slice().reverse() }), expected);
   }
   assert.equal(A.brakeTarget({ traits: mid, samples: [] }), 1e6);
+});
+
+test("brake planner carries the public corner envelope across consecutive pace settings", () => {
+  for (const pace of [undefined, 0.05, 0.5, 1, 2, 0.5]) {
+    for (const vmax of [undefined, 1, 72, 120]) {
+      const sample = { d: 4, k: 0.03, bank: 0.2 };
+      const corner = A.cornerSpeed(sample.k, 22 * (1 + Math.sin(sample.bank) * 0.8), pace, vmax) * mid.skill;
+      const expected = Math.sqrt(corner * corner + 2 * 22 * 0.85 * sample.d);
+      assert.equal(A.brakeTarget({ traits: mid, samples: [sample], latMax: 22, brake: 22, pace, vmax }), expected);
+    }
+  }
 });
 
 test("adaptLane nudges toward the freer side under density", () => {
