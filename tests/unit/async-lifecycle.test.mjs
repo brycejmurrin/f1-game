@@ -44,6 +44,7 @@ function audioPanelHarness({ voiceUI = false } = {}) {
     setEnabled(v) { calls.push(`enabled:${v}`); },
     setMusicEnabled(v) { calls.push(`music:${v}`); },
     setSfxEnabled(v) { calls.push(`sfx:${v}`); },
+    setUiEnabled(v) { calls.push(`ui:${v}`); },
     setMusicVolume(v) { return v; }, setSfxVolume(v) { return v; },
     startMusic(v) { calls.push(`start:${v}`); },
     stopMusic() { calls.push("stopMusic"); }, stopEngine() { calls.push("stopEngine"); },
@@ -144,6 +145,16 @@ test("music and SFX enable clicks also unlock a saved-off master synchronously",
     assert.deepEqual(calls.slice(0, 2), ["enabled:true", "init"],
       `${id} should enable before synchronously unlocking WebAudio`);
   }
+});
+
+test("MENU SOUNDS row persists apex26.menuSfx and gates the engine's ui blips", () => {
+  const { panel, wired, calls } = audioPanelHarness();
+  panel.init();
+  assert.ok(calls.includes("ui:true"), "boot restores the saved (default ON) switch");
+  calls.length = 0;
+  wired.get("as-ui").write("off");
+  assert.equal(wired.get("as-ui").read(), "off");
+  assert.ok(calls.includes("ui:false"));
 });
 
 test("a stopped QR attempt disposes a camera stream that arrives late", async () => {
