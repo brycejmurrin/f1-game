@@ -556,10 +556,17 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-build-vm-release.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/track-centerline-seam.test.mjs",
+  "tests/unit/track-codec.test.mjs",
   // js/track/core/def.js (TrackDef) is the ONE raw-def → LIST-entry path for the
   // 52 shipped circuits and the designer's runtime defs: a golden hash per
   // circuit (metadata + materialised points) pins the extraction byte-for-byte.
   "tests/unit/track-def-factory.test.mjs",
+  // The track designer's pure core (js/editor/shape|stamps|randomise|validate|codec.js)
+  // over the real engine: Dubins lands on its goal for all six words, stamps
+  // build as the requested turn, the randomiser is deterministic and valid, the
+  // validator reads the engine's centreline; the share code round-trips on the
+  // lattice and refuses every bad code with a reason. ~15 s together.
+  "tests/unit/track-editor-geometry.test.mjs",
   "tests/unit/track-foundation.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",

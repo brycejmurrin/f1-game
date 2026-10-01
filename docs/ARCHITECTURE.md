@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_248 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_253 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -269,6 +269,11 @@ _248 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `track-themes.js` | `TrackThemes` | tag | TrackThemes: the custom track designer's THEME PRESETS. |
 | `custom-tracks.js` | `CustomTracks` | tag | CustomTracks: the registry of the player's OWN circuits. |
+| `shape.js` | `TrackShape` | LAZY_EDITOR | TrackShape: the track designer's 2D geometry kit. |
+| `stamps.js` | `TrackStamps` | LAZY_EDITOR | TrackStamps: the designer's STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND tools. |
+| `randomise.js` | `TrackRandom` | LAZY_EDITOR | TrackRandom: the RANDOMISE button. |
+| `validate.js` | `TrackValidate` | LAZY_EDITOR | TrackValidate: WYSIWYG validation for the track designer. |
+| `codec.js` | `TrackCodec` | LAZY_EDITOR | TrackCodec: the share code for a custom circuit. |
 
 **`js/car/`**
 

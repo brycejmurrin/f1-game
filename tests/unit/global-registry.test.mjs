@@ -100,6 +100,7 @@ const KNOWN_EXTERNAL_READS = {
   ],
   "js/ui/select-screen.js": ["__APEX_BUILD"],          // exportRecovery stamps the shell build id
   "js/career/career-backup.js": ["__APEX_BUILD"],     // backup envelope stamps the shell build id
+  "js/editor/codec.js": ["__APEX_BUILD"],             // the track file envelope stamps the shell build id, like the backup
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag

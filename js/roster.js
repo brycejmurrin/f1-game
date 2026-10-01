@@ -265,6 +265,27 @@
     LAZY_WORKER: [
     "js/track/build-worker.js"
   ],
+    LAZY_EDITOR: [
+    "js/editor/shape.js",
+    "js/editor/stamps.js",
+    "js/editor/randomise.js",
+    "js/editor/validate.js",
+    "js/editor/codec.js"
+  ],
+    LAZY_EDITOR_EDGES: [
+    [
+      "js/editor/shape.js",
+      "js/editor/stamps.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/randomise.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/validate.js"
+    ]
+  ],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/mat4.js",

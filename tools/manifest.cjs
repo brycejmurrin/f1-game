@@ -763,6 +763,27 @@ const LAZY_DATA = [
 const LAZY_DATA_EDGES = LAZY_DATA.filter((f) => f !== "js/data/hub.js")
   .map((f) => [f, "js/data/hub.js"]);
 
+// THE TRACK DESIGNER (js/editor/*, the part behind the TRACK DESIGNER door).
+// The boot half — TrackThemes and the CustomTracks registry — is FULL (the
+// picker needs the saved circuits at eval); everything that only matters once
+// the designer opens lifts off the boot wall as one bundle: the geometry kit,
+// the stamp tools, the randomiser, the validator, the share codec, and (PR4)
+// the canvas and the screen. js/editor/custom-tracks.js ensureEditor() loads
+// it through game.js's loadBackendScripts, exactly as the DATA door loads
+// LAZY_DATA. Order IS the eval order: shape.js first (the others destructure
+// TrackShape at eval), the screen last.
+const LAZY_EDITOR = [
+  "js/editor/shape.js",       // TrackShape: arcs, Dubins, RDP, resample, Menger, crossing + clearance scans
+  "js/editor/stamps.js",      // TrackStamps: STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND + the Dubins rejoin
+  "js/editor/randomise.js",   // TrackRandom: hull + displacement + fixAngles (Maciel), seeded
+  "js/editor/validate.js",    // TrackValidate: WYSIWYG rules over Tracks.buildCenterline
+  "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
+];
+// stamps / randomise / validate destructure TrackShape at eval — the same meaning
+// HARD_EDGES carries for FULL, derived so it cannot drift from the roster.
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js")
+  .map((f) => ["js/editor/shape.js", f]);
+
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS
 // FRIEND lobby — that a solo session never runs a byte of. The biggest single
@@ -1144,7 +1165,7 @@ module.exports = {
   MOVED,
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
-  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER,
+  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };
