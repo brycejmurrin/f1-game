@@ -148,6 +148,8 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // tip engine grounding (tyre footings, marshal boards, hoarding legs, cable
 // posts, pit exit signal): ship merge had restored the pre-audit STRIP
 // numbers; tip then moved both circuits again.
+// Re-measured 2026-10-01: venue facilities, supported crowd heads and camera
+// guard panels; secondary facade panes reduced to pay for nearby detail.
 const STRIP = {
   // ship 293659/258313 → audit 287677/252433 → tip 287821/258089
   // → fix-top-counts 285112/256710 (yachts/pontoons under the quay land no
@@ -155,14 +157,14 @@ const STRIP = {
   // → merged follow-ups 286489/257979 (yachts moored in open water, not
   // dropped; engine-helpers plinth sink)
   // → track limits 285994/257518 (two moored hulls over the road hole dropped)
-  monaco: { before: 285994, after: 257518 },
+  monaco: { before: 263812, after: 241460 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
   // → bahrain hollow-stand guard: grandstandEx suppresses when crowdBank
   // places 0 risers, so monza's fold-site shells (no seating) no longer emit
   // → back to ship emission 342395; strip after 315572
-  monza: { before: 342395, after: 315572 },
+  monza: { before: 342527, after: 315651 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

@@ -67,7 +67,8 @@ const SceneryCity = (function () {
       const fh = sh / rows, frameT = 0.30, railH = Math.max(0.4, fh * 0.24), winH = Math.max(0.5, fh - railH);
       const drawFace = (nAxis, nSign, nHalf, wAxis, faceW, sOff, simple) => {
         const nVec = bb[nAxis], wVec = bb[wAxis];
-        const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.4))) : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.3))), 2);
+        // Spend the secondary-face detail budget on nearby venue facilities.
+        const cols = simple ? 2 : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.3))), 2);
         const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
         const fhh = sh / rowN, winHH = Math.max(0.5, fhh - railH);
         const fBase = vadd(mid, nVec, nSign * (nHalf + 0.34));
@@ -444,7 +445,7 @@ const SceneryCity = (function () {
         const rows = lod(Math.max(4, Math.min(10, Math.round(sh / 4.4))), 3);   // perf: cap + coarser (was uncapped / 3.4); mobile LOD via lod()
         const dface = (nAxis, nSign, nHalf, wAxis, faceW, simple) => {
           // perf: fewer panes per face (was simple 4/4.0, full 7/2.4; rowN 9/5.0)
-          const cols = simple ? Math.max(2, Math.min(3, Math.round(faceW / 5.2))) : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.1))), 2);
+          const cols = simple ? 2 : lod(Math.max(2, Math.min(6, Math.round(faceW / 3.1))), 2);
           const rowN = simple ? lod(Math.max(2, Math.min(6, Math.round(sh / 6.4))), 2) : rows;
           const PANE_STANDOFF = 0.05;
           const gBase = (thick) => vadd(cen, b[nAxis], nSign * (nHalf + PANE_STANDOFF + thick / 2));

@@ -365,7 +365,9 @@
       hut(K(0.300), -1, 24, WALL_2);
 
       // 9. s 0.3342 +1 15 — OLD HAIRPIN, the lowest point of the lap
-      spectatorHill(0.318, 0.372, 1, 17, { h: 8.0, col: GRASS });
+      // Leave a planting strip behind the full hedge, while preserving the
+      // marshal post and guardrail in the narrower foreground corridor.
+      spectatorHill(0.318, 0.372, 1, 18, { h: 8.0, col: GRASS });
       hedge(0.314, 0.378, 1, 15, 1.9, HEDGE_C);
       guardrail(0.310, 0.380, 1, 12, ARMCO);
       marshalPost(K(0.3342), 1, 13);

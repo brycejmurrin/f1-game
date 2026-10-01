@@ -1189,3 +1189,7 @@ Use one isolated track-scoped change at a time.
 - Day/night driver-eye and orbit captures.
 - `__apex.geometryDiagnostics()` contains only `ok:true` entries.
 - No non-finite geometry, unintended road intrusion, floating/sunk hero model, incomplete required model, or unsafe overhead span.
+
+The shared venue pass places up to six small race-day facilities on clear, level terrain after bespoke scenery and before foliage: a marshal shelter, recovery pickup, concession booth, service awning, medical response van and spectator shade with seating. It uses atomic model groups and reserves their footprints without changing driving limits. Circuit dressing exclusions can target `venue` or `all`; the public scenery API remains unchanged.
+
+Shared spectator-hill treads fit the spacing of the offset verge on bends. Narrow upper treads without a lower row receive a small ground-reaching pier within their footprint. Fence posts extend to rendered terrain or the underlying floor while their panels and tops retain the authored line. Palm assemblies check their emitted footprints against reserved scenery masses and try nearby clear sites before suppression. Relocations also yield to existing palms and require foliage vertices above known rendered terrain. Bush forms emit foliage material and restore the caller’s material.

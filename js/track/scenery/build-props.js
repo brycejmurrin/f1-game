@@ -2035,6 +2035,8 @@ const TrackBuildProps = (function () {
       sceneryFn(sceneryApi);
     }
 
+    SceneryVenue.build(ctx, sceneryTheme, dressingExcluded);
+
     // Foliage runs LAST, once every barrier on the circuit is registered, so the
     // world-XZ guard in clearTreeDist() sees the finished set: the per-track
     // treelines queued by forestEdge() during scenery, then the generic roadside

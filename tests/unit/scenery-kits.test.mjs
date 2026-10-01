@@ -546,3 +546,345 @@ test("CircuitKit fails closed when dependencies are missing or invalid", () => {
     }
   }
 });
+
+function venueHarness({ excluded = false, occupied = false, barrier = false, terrain = () => 0, road = false, shift = 0 } = {}) {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Models = load("js/track/scenery/models.js", "TrackModels");
+  const Venue = load("js/track/scenery/venue.js", "SceneryVenue", {
+    TrackGeom: Geom, TrackSpace: { sceneryOriginDelta: () => shift },
+  });
+  const out = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+  const diagnostics = { emitted: [], suppressed: [], invalid: [], unsafe: [] };
+  const reservations = [], notes = [];
+  const track = { barL: Array(100).fill(12), barR: Array(100).fill(12) };
+  const ctx = {
+    out, track, def: {}, n: 100, ds: 40, hw: Array(100).fill(6),
+    anchor: (k, side, dist) => ({ c: [side * (6 + dist), 0, k * 40], r: [1, 0, 0], t: [0, 0, 1] }),
+    terrainYAt: terrain, barrierClear: () => !barrier, massBlocked: () => occupied,
+    massAdd: (...args) => reservations.push(args), indexSolidAt: () => {},
+    RAW: Geom, MAT: Geom.MAT, note: (...args) => notes.push(args),
+    models: Models.create({ out, diagnostics, emitBox: Geom.addBox, preflight: () => !road }),
+  };
+  const facilities = Venue.build(ctx, null, () => excluded);
+  return { facilities, out, track, diagnostics, reservations, notes };
+}
+
+test("venue facilities are deterministic, bounded, finite and preserve driving limits", () => {
+  const a = venueHarness(), b = venueHarness();
+  assert.deepEqual(Array.from(a.facilities, (f) => f.kind),
+    ["marshalShelter", "recoveryTruck", "concessionBooth", "serviceAwning", "medicalVan", "spectatorShade"]);
+  assert.equal(JSON.stringify(a.out), JSON.stringify(b.out));
+  assert.equal(a.reservations.length, 6);
+  assert.equal(a.notes.length, 6);
+  assert.deepEqual(Array.from(a.facilities, (f) => f.k), [10, 27, 43, 60, 77, 93]);
+  assert.ok(a.notes.every(([, center, size]) => center.every(Number.isFinite) && Array.isArray(size) && size.length === 3 && size.every(Number.isFinite)));
+  assert.ok(a.out.pos.every(Number.isFinite));
+  assert.ok(a.diagnostics.emitted.every((d) => d.vertices <= 288));
+  assert.equal(a.diagnostics.invalid.length, 0);
+  assert.equal(a.diagnostics.unsafe.length, 0);
+  assert.equal((a.diagnostics.escaped || []).length, 0);
+  assert.deepEqual(a.track.barL, Array(100).fill(12));
+  assert.deepEqual(a.track.barR, Array(100).fill(12));
+  const shifted = venueHarness({ shift: 0.25 });
+  assert.deepEqual(Array.from(shifted.facilities, (f) => f.k), Array.from(a.facilities, (f) => (f.k + 25) % 100));
+});
+
+test("venue guards reject excluded, occupied, fenced, unknown, steep and on-road sites atomically", () => {
+  for (const options of [{ excluded: true }, { occupied: true }, { barrier: true },
+                         { terrain: () => null }, { terrain: (x) => x }, { road: true }]) {
+    const r = venueHarness(options);
+    assert.equal(r.facilities.length, 0);
+    assert.equal(r.out.pos.length, 0);
+    assert.equal(r.reservations.length, 0);
+    assert.equal(r.notes.length, 0);
+  }
+});
+
+test("fence footings reach terrain or the universal floor without moving tilted panel tops", () => {
+  function fenceFixture(terrain, floorY) {
+    const Geom = load("js/track/core/geom.js", "TrackGeom");
+    const Structures = load("js/track/scenery/structures.js", "SceneryStructures", {
+      TrackSceneryData: {}, Tracks: { terrainY: () => terrain }, M4: { vadd: Geom.vadd },
+    });
+    const u = [0.08, Math.sqrt(1 - 0.08 ** 2), 0], r = [u[1], -u[0], 0], t = [0, 0, 1];
+    const records = [];
+    const track = { surface: { floorY } };
+    const ctx = {
+      out: {}, track, def: {}, n: 100, ds: 1, hw: [], px: [], py: [], pz: [], MAT: {},
+      kitOf: () => "chainlink", indexBarrier: () => {}, noteSpan: () => {},
+      noteSuppressed: () => {}, onTrack: () => false,
+      anchor: () => ({ c: [0, 4, 0], r, u, t }), vadd: Geom.vadd,
+      instance: (key, placement, build) => {
+        const ops = [];
+        build({ cyl: (...args) => ops.push(["cyl", ...args]), box: (...args) => ops.push(["box", ...args]) });
+        records.push({ key, placement, ops });
+      },
+    };
+    Structures.create(ctx).fence(0, 0, 1, 3, 3.4, [0.6, 0.7, 0.8]);
+    return { post: records[0], panel: records[1], u };
+  }
+  const nominal = fenceFixture(4, -6), extended = fenceFixture(-2, -6);
+  const floor = fenceFixture(null, -6), unknown = fenceFixture(null, undefined);
+  const top = (r) => r.post.placement.o.map((v, i) => v + r.u[i] * r.post.placement.s[1]);
+  for (const fixture of [extended, floor]) {
+    top(fixture).forEach((v, i) => assert.ok(Math.abs(v - top(nominal)[i]) < 1e-10));
+    assert.equal(JSON.stringify(fixture.panel), JSON.stringify(nominal.panel));
+    assert.equal(fixture.post.key, nominal.post.key, "variable footings share one model template");
+  }
+  assert.ok(Math.abs(extended.post.placement.o[1] + 2) < 1e-10);
+  assert.ok(Math.abs(floor.post.placement.o[1] + 6) < 1e-10);
+  assert.equal(JSON.stringify(unknown), JSON.stringify(nominal));
+});
+
+function spectatorHillFixture(radius = 64, jitter = 0.25, orphaned = false) {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Nature = load("js/track/scenery/nature.js", "SceneryNature", {
+    TrackGeom: Geom, TrackGraph: { NODE_COLOR: [1, 1, 1] },
+    TrackSceneryData: { CROWD_DAY: [[1, 1, 1]] },
+  });
+  const n = 100, ds = Math.PI * 2 * radius / n;
+  const track = { rx: [], ry: [], rz: [], tx: [], ty: [], tz: [] }, px = [], pz = [];
+  for (let k = 0; k < n; k++) {
+    const angle = k * Math.PI * 2 / n;
+    px.push(radius * Math.cos(angle)); pz.push(radius * Math.sin(angle));
+    track.rx.push(-Math.cos(angle)); track.ry.push(0); track.rz.push(-Math.sin(angle));
+    track.tx.push(-Math.sin(angle)); track.ty.push(0); track.tz.push(Math.cos(angle));
+  }
+  const boxes = [], spectators = [], footings = [];
+  Nature.create({
+    out: {}, track, n, ds, hw: Array(n).fill(6), px, py: Array(n).fill(0), pz,
+    def: {}, MAT: {}, vadd: Geom.vadd, norm: Geom.norm, hash: () => jitter,
+    terrainYAt: () => 0, upOf: () => [0, 1, 0], bankOffsetAt: () => 0,
+    indexSolid: () => {}, rejBox: (center, size) => orphaned && size[0] > 1 && center[1] < 1.7,
+    along: (a, b, step, fn) => { fn(25, ds * 2); fn(27, ds * 2); },
+    addBox: (out, center, size, color, basis) => boxes.push({ center, size, basis }),
+    instance: (key, placement) => (key === "spectator-hill-footing" ? footings : spectators).push(placement),
+  }).spectatorHill(0.25, 0.27, 1, 24, { rows: 3, rise: 1.1, depth: 1.9, step: 8, density: 1 });
+  return { boxes, spectators, footings };
+}
+
+test("orphaned upper spectator treads retain crowds on ground-reaching piers within their footprint", () => {
+  const { boxes, spectators, footings } = spectatorHillFixture(64, 0.25, true);
+  assert.equal(boxes.length, 2, "both upper treads remain");
+  assert.equal(spectators.length, 8, "all spectators on the retained rows remain");
+  assert.equal(footings.length, 2, "one pier per unsupported island");
+  for (let i = 0; i < boxes.length; i++) {
+    const tread = boxes[i], pier = footings[i];
+    const lower = pier.o[1] - pier.s[1] / 2, upper = pier.o[1] + pier.s[1] / 2;
+    assert.ok(lower < 0, "pier enters actual ground");
+    assert.ok(upper >= tread.center[1] - tread.size[1] / 2, "pier reaches tread underside");
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const dx = pier.o[0] + sx * pier.s[0] / 2 * pier.r[0] + sz * pier.s[2] / 2 * pier.t[0] - tread.center[0];
+      const dz = pier.o[2] + sx * pier.s[0] / 2 * pier.r[2] + sz * pier.s[2] / 2 * pier.t[2] - tread.center[2];
+      assert.ok(Math.abs(dx * tread.basis[0][0] + dz * tread.basis[0][2]) < tread.size[0] / 2);
+      assert.ok(Math.abs(dx * tread.basis[2][0] + dz * tread.basis[2][2]) < tread.size[2] / 2);
+    }
+  }
+  assert.equal(spectatorHillFixture().footings.length, 0, "ordinary complete banks need no added piers");
+});
+
+test("inside-bend terrace treads meet separating planes and retain every spectator", () => {
+  const { boxes, spectators } = spectatorHillFixture();
+  assert.equal(boxes.length, 6, "every terrace row remains");
+  assert.equal(spectators.length, 24, "every authored spectator remains");
+  for (let row = 0; row < 3; row++) {
+    const a = boxes[row], b = boxes[row + 3];
+    const delta = a.center.map((v, i) => b.center[i] - v), distance = Math.hypot(...delta);
+    const support = (box) => box.basis.reduce((s, axis, j) => s + box.size[j] / 2 * Math.abs(axis.reduce((d, v, i) => d + v * delta[i], 0)) / distance, 0);
+    assert.ok(support(a) + support(b) <= distance + 1e-9, "rotated neighbouring solids do not overlap");
+    assert.ok(a.size[2] > 3 && b.size[2] > 3, "the occupied inside verge controls the chord span");
+  }
+});
+
+test("short terrace chords support the entire crowd footprint at both jitter extremes", () => {
+  // Independent box SAT: face normals and pairwise edge cross-products,
+  // rather than the emitter's neighbour-bisector calculation.
+  const separated = (a, b) => {
+    const cross = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const axes = [...a.basis, ...b.basis, ...a.basis.flatMap(u => b.basis.map(v => cross(u, v)))];
+    const delta = b.center.map((v, i) => v - a.center[i]);
+    return axes.some(axis => {
+      const length = Math.hypot(...axis);
+      if (length < 1e-10) return false;
+      const dot = v => v.reduce((sum, x, i) => sum + x * axis[i], 0) / length;
+      const support = box => box.basis.reduce((sum, v, i) => sum + box.size[i] / 2 * Math.abs(dot(v)), 0);
+      return Math.abs(dot(delta)) >= support(a) + support(b) - 1e-9;
+    });
+  };
+  for (const jitter of [0, 1]) {
+    const { boxes, spectators } = spectatorHillFixture(38, jitter);
+    assert.ok(spectators.length > 0 && spectators.length < 24, "short rows retain only whole bodies that fit");
+    for (const p of spectators) {
+      assert.ok(boxes.some(box => {
+        const delta = p.o.map((v, i) => v - box.center[i]);
+        const dot = axis => axis.reduce((sum, v, i) => sum + v * delta[i], 0);
+        return Math.abs(dot(box.basis[0])) + 0.25 <= box.size[0] / 2 - 0.03 + 1e-9
+          && Math.abs(dot(box.basis[2])) + 0.23 <= box.size[2] / 2 - 0.03 + 1e-9
+          && dot(box.basis[1]) - p.s[1] / 2 <= box.size[1] / 2 + 1e-9
+          && dot(box.basis[1]) + p.s[1] / 2 >= box.size[1] / 2;
+      }), "body, not just its centre, rests inside a tread");
+    }
+    for (const radius of [32.2, 30.017]) {
+      const narrow = spectatorHillFixture(radius, jitter);
+      assert.equal(narrow.spectators.length, 0, "narrow treads cannot carry a 46 cm body");
+      assert.ok(narrow.boxes.length > 0 && narrow.boxes.length < 6, "retain positive spans and omit unplaceable rows");
+      assert.ok(narrow.boxes.some(box => box.size[2] > 0 && box.size[2] < 0.25), "no minimum length may exceed the allowed span");
+      for (let i = 0; i < narrow.boxes.length; i++) for (let j = i + 1; j < narrow.boxes.length; j++)
+        assert.ok(separated(narrow.boxes[i], narrow.boxes[j]), `short terrace solids ${i}/${j} intersect at radius ${radius}`);
+    }
+  }
+});
+
+test("Sector M fascia attaches to track-facing walls and canopy fits its declared envelope", () => {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const circuits = load("js/circuits/scenery/interlagos.js", "TrackScenery");
+  const n = 100, parts = [], stage = {}, anchors = [];
+  let spec;
+  const api = new Proxy({
+    n, px: Array(n).fill(0), pz: Array(n).fill(0), pyMin: 0, out: {}, MAT: Geom.MAT,
+    K: s => Math.round(s * n) % n, hash: () => 0.25, onTrack: () => false,
+    vadd: Geom.vadd, groundYAt: () => 0, terrainYAt: () => 0,
+    anchor: (k, side, gap) => {
+      anchors.push({ k, side, gap });
+      return { c: [side * (6 + gap), 0, k * 4], r: [1, 0, 0], u: [0, 1, 0], t: [0, 0, 1] };
+    },
+    seat: new Proxy({}, { get: () => () => {} }),
+    modelGroup: (id, box, build) => { if (id === "interlagos-main-tribuna") { spec = box; build(stage); } return true; },
+    addBox: (out, center, size, color) => { if (out === stage) parts.push({ center, size, color }); },
+  }, { get: (target, name) => name in target ? target[name] : () => {} });
+  circuits.interlagos(api);
+  assert.equal(parts.length, 5, "all authored facade parts remain");
+  const [lower, upper, yellow, green, canopy] = parts;
+  assert.ok(anchors.some(a => a.k === 1 && a.side === -1 && a.gap === 62));
+  for (const [wall, band] of [[lower, yellow], [upper, green]]) {
+    const face = wall.center[0] + wall.size[0] / 2;
+    assert.ok(band.center[0] - band.size[0] / 2 < face && band.center[0] + band.size[0] / 2 > face);
+    for (const axis of [1, 2]) assert.ok(Math.abs(band.center[axis] - wall.center[axis]) + band.size[axis] / 2 <= wall.size[axis] / 2);
+  }
+  assert.equal(canopy.center[1] - canopy.size[1] / 2, upper.center[1] + upper.size[1] / 2);
+  for (const part of parts) for (let axis = 0; axis < 3; axis++)
+    assert.ok(Math.abs(part.center[axis] - spec.center[axis]) + part.size[axis] / 2 <= spec.size[axis] / 2 + 1e-10,
+      "every part fits the declared group envelope");
+});
+
+test("every bush form emits foliage and restores its caller material", () => {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Nature = load("js/track/scenery/nature.js", "SceneryNature", {
+    TrackGeom: Geom, TrackSceneryData: {},
+  });
+  for (const form of ["clump", "grass", "agave"]) {
+    for (const callerMat of [Geom.MAT.FLAT, Geom.MAT.METAL, Geom.MAT.FABRIC]) {
+      const out = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: callerMat };
+      let blocked = false;
+      const nature = Nature.create({
+        out, track: { rx: [1], ry: [0], rz: [0], tx: [0], ty: [0], tz: [1] },
+        n: 1, ds: 4, hw: [6], px: [0], py: [0], pz: [0], def: {}, MAT: Geom.MAT,
+        hash: () => 0.5, norm: Geom.norm, vadd: Geom.vadd,
+        terrainYAt: () => 0, upOf: () => [0, 1, 0], bankOffsetAt: () => 0,
+        onTrack: () => blocked, note: () => {}, noteSuppressed: () => {},
+        addCone: Geom.addCone,
+      });
+      nature.bush(0, 1, 20, [0.2, 0.4, 0.2], { form });
+      assert.ok(out.pos.length > 0, form);
+      assert.equal(out.mat.length, out.pos.length / 3);
+      assert.ok(out.mat.every(mat => mat === Geom.MAT.FOLIAGE), `${form}: foliage vertices`);
+      assert.equal(out._mat, callerMat, `${form}: caller material restored`);
+      const verts = out.pos.length;
+      blocked = true;
+      nature.bush(0, 1, 20, [0.2, 0.4, 0.2], { form });
+      assert.equal(out.pos.length, verts, `${form}: no blocked emissions`);
+      assert.equal(out._mat, callerMat, `${form}: suppressed call preserves material`);
+    }
+  }
+});
+
+function palmOccupancyHarness(blocked, fenced = false, terrain = () => 0) {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Nature = load("js/track/scenery/nature.js", "SceneryNature", {
+    TrackGeom: Geom, TrackSceneryData: {},
+  });
+  const out = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+  const queries = [], notes = [], suppressed = [], pieces = [];
+  const grade = 0.2, right = [0.8, 0, -0.6];
+  const tangent = [0.6 * Math.cos(grade), -Math.sin(grade), 0.8 * Math.cos(grade)];
+  const up = [0.6 * Math.sin(grade), Math.cos(grade), 0.8 * Math.sin(grade)];
+  const ctx = {
+    out, track: {}, def: { id: "palm-fixture" }, n: 100, ds: 4, hw: [],
+    px: [], py: [], pz: [], NIGHT: false, MAT: Geom.MAT,
+    hash: (seed) => { const v = Math.sin(seed * 12.9898) * 43758.5453; return v - Math.floor(v); },
+    norm: Geom.norm, vadd: Geom.vadd, onTrack: () => false,
+    barrierClear: () => !fenced,
+    massBlocked: (center, width, depth, basis) => {
+      queries.push({ center: Array.from(center), width, depth, basis });
+      return blocked(center);
+    },
+    note: (...args) => notes.push(args), noteSuppressed: (...args) => suppressed.push(args),
+    groundYAt: () => 0, terrainYAt: terrain, bankOffsetAt: () => 0,
+  };
+  for (const key of ["addBox", "addCyl", "addCone", "addFrustum", "addPrism", "addPyramid", "addMountain", "emit"]) ctx[key] = (buffer, ...args) => {
+    const start = buffer.pos.length;
+    const result = Geom[key](buffer, ...args);
+    pieces.push(Array.from(buffer.pos.slice(start)));
+    return result;
+  };
+  // Exercise Nature's real anchor with a sloping, rotated track frame.
+  Object.assign(ctx.track, { rx: Array(100).fill(right[0]), ry: Array(100).fill(right[1]), rz: Array(100).fill(right[2]),
+    tx: Array(100).fill(tangent[0]), ty: Array(100).fill(tangent[1]), tz: Array(100).fill(tangent[2]) });
+  ctx.upOf = () => up;
+  ctx.px = Array(100).fill(0); ctx.py = Array(100).fill(0); ctx.pz = Array(100).fill(0); ctx.hw = Array(100).fill(6);
+  const complete = Nature.create(ctx);
+  complete.palm(10, 1, 20, 12, [0.2, 0.4, 0.2]);
+  return { out, queries, notes, suppressed, pieces, palm: complete.palm };
+}
+
+test("palm occupancy footprints contain every tilted trunk, crown and frond vertex", () => {
+  const h = palmOccupancyHarness(() => false);
+  assert.ok(h.out.pos.length > 0);
+  assert.equal(h.queries.length, h.pieces.length);
+  h.pieces.forEach((piece, index) => {
+    const q = h.queries[index];
+    for (let i = 0; i < piece.length; i += 3) {
+      const dx = piece[i] - q.center[0], dz = piece[i + 2] - q.center[2];
+      assert.ok(Math.abs(dx * q.basis[0][0] + dz * q.basis[0][2]) <= q.width / 2 + 1e-6 &&
+        Math.abs(dx * q.basis[2][0] + dz * q.basis[2][2]) <= q.depth / 2 + 1e-6,
+        `palm primitive ${index} vertex ${i / 3} escaped its tested footprint`);
+    }
+  });
+});
+
+test("palm occupancy moves to nearby clear ground and drops an entirely blocked tree atomically", () => {
+  const moved = palmOccupancyHarness((center) => center[0] < 23);
+  assert.ok(moved.queries.length > 1);
+  assert.ok(moved.out.pos.length > 0);
+  assert.equal(moved.notes.length, 1);
+  assert.ok(moved.notes[0][3].dist > moved.notes[0][3].initialDist);
+  for (const h of [palmOccupancyHarness(() => true), palmOccupancyHarness((center) => center[0] < 23, true)]) {
+    assert.equal(h.out.pos.length, 0);
+    assert.equal(h.notes.length, 0);
+    assert.equal(h.suppressed.length, 1);
+  }
+});
+
+test("palm relocation yields to already placed crowns and rejects hillside or unknown foliage sites", () => {
+  const moved = palmOccupancyHarness((center) => center[0] < 23);
+  let occupied = false;
+  const prior = palmOccupancyHarness((center) => occupied && center[0] < 23);
+  const originalVertices = prior.out.pos.length;
+  occupied = true;
+  prior.palm(10, 1, 20, 12, [0.2, 0.4, 0.2]);
+  assert.ok(prior.notes.length === 1 || prior.notes[1][3].dist > moved.notes[0][3].dist,
+    "a relocated crown cannot reuse space occupied by an authored palm");
+  assert.ok(prior.out.pos.length >= originalVertices, "the authored palm is retained");
+  let reverseOccupied = true;
+  const reverse = palmOccupancyHarness((center) => reverseOccupied && center[0] < 23);
+  reverseOccupied = false;
+  reverse.palm(10, 1, 20, 12, [0.2, 0.4, 0.2]);
+  assert.ok(reverse.notes.length === 1 || reverse.notes[1][3].dist > 20,
+    "a later authored site yields when an earlier relocated palm owns its crown space");
+  for (const terrain of [() => null, (x, z) => Math.abs(x * 0.6 + z * 0.8) > 0.2 ? 100 : 0]) {
+    const rejected = palmOccupancyHarness((center) => center[0] < 23, false, terrain);
+    assert.equal(rejected.out.pos.length, 0, "no partial tree remains on an invalid relocation");
+    assert.equal(rejected.notes.length, 0);
+    assert.equal(rejected.suppressed.length, 1);
+  }
+});
