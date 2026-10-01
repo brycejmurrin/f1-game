@@ -260,7 +260,7 @@ window.PhysicsConsts.BAND_CEIL = (() => {
  * close-spacing ceiling). See docs/PHYSICS.md §Slipstream. */
 window.PhysicsConsts.DirtyAir = (function () {
   "use strict";
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const clamp = M4.clamp;
   const LOSS = { off: 0, classic: 0.35, cfd: 0.67 };
   // CFD starters to tune: streamwise λ (m) and lateral sigma (m).
   const CFD_LAMBDA = 12;
