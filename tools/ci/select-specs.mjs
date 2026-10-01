@@ -542,6 +542,24 @@ export const DOCS_ONLY = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//];
 export const isDocsOnly = (changed) =>
   changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f)));
 
+// SOURCE → SPEC pins that must run as AFFECTED (rank 2), not merely routed.
+// career.spec.js declares 540 s/test, so the modes-group path rule alone puts
+// it in overBudgetSpecs and the selected gate never runs it — PR #611's
+// EXPORT/IMPORT reuse of .cr-slot-del shipped green for that reason. A pin
+// here elevates the spec to oversize when its UI / backup module changes.
+export const SOURCE_AFFECTED = [
+  [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career.spec.js"],
+];
+export function specsAffectedBySource(changed, root = ROOT) {
+  const hit = new Set();
+  for (const f of changed) {
+    for (const [re, spec] of SOURCE_AFFECTED) {
+      if (re.test(f) && fs.existsSync(path.join(root, spec))) hit.add(spec);
+    }
+  }
+  return [...hit];
+}
+
 // ─── import graph (Playwright's --only-changed, computed here) ────────────────
 //
 // Playwright ships `--only-changed=<ref>`, which walks the suite's IMPORT graph
@@ -656,11 +674,14 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // The touched circuits' own foundation specs are AFFECTED, like an import;
   // on a circuit-scoped diff another circuit's foundation is not a candidate.
   const ownFoundations = circ.ids.map(foundationSpec).filter((f) => fs.existsSync(path.join(ROOT, f)));
+  // Source modules whose browser gate is over-budget when merely routed (see
+  // SOURCE_AFFECTED) — same rank-2 elevation as an import / own foundation.
+  const sourceAffected = specsAffectedBySource(changed);
   const otherCircuit = (f) => {
     const m = FOUNDATION.exec(f);
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
   };
-  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...specs])]
+  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
   const candidates = routed;
@@ -669,7 +690,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
-    : (imported.includes(f) || ownFoundations.includes(f)) ? 2 : 3;
+    : (imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f)) ? 2 : 3;
   const cut = fit(candidates, budgetMin, { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst });
   // "infra" no longer EMPTIES the selection. A tracked-path change (the shell,
   // a fixture every spec imports, this selector) can affect any spec, which is

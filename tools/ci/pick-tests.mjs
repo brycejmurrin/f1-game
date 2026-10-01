@@ -165,6 +165,12 @@ export const RULES = [
   // ── modes and their screens ─────────────────────────────────────────────
   // `ui` on the season files because the SETUP screen is DOM the menu specs
   // click through; `modes` is season+career+TT+quali.
+  // career-ui / career-backup: modes alone is not enough — career.spec.js
+  // declares over the selected-gate budget, so select-specs' SOURCE_AFFECTED
+  // elevates it to oversize when these two change (PR #611 shipped green
+  // without it). Keep this rule so pick-tests names the reason.
+  [/^js\/career\/(career-ui|career-backup)\.js/, ["modes", "state-unit"],
+   "career.spec.js — SOURCE_AFFECTED in select-specs elevates it past overBudget"],
   [/^js\/career\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
   [/^js\/career\//, ["modes", "state-unit"], ""],
 
