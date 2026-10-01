@@ -139,18 +139,30 @@ async function firstCorner(page, min = 0.02) {
   return { frac: corners[0], k: 0 };
 }
 
-// A reasonably straight stretch: the lap fraction with the smallest |k|.
-async function findStraight(page) {
-  return page.evaluate(() => {
-    let best = 0, bestK = Infinity;
-    for (let i = 0; i < 50; i++) {
-      const f = i / 50;
-      window.__apex.jump(f, 20, 0);
-      const k = Math.abs(window.__apex.probe().k);
-      if (k < bestK) { bestK = k; best = f; }
+// A reasonably straight stretch: minimise INTEGRATED zero-steer yaw drift over
+// the same window the symmetry case measures (6 ticks @ 30 m/s), not just the
+// instantaneous |k| at the jump. Instantaneous |k| can still leave a signed
+// heading creep that eats into the 15 % bound once left/right are compared.
+async function findStraight(page, { speed = 30, settle = 3, ticks = 6 } = {}) {
+  return page.evaluate(({ speed, settle, ticks }) => {
+    let best = 0, bestDrift = Infinity, bestK = Infinity;
+    for (let i = 0; i < 100; i++) {
+      const f = i / 100;
+      window.__apex.jump(f, speed, 0);
+      window.__apex.setInput({ steer: 0, throttle: false, brake: false });
+      window.__apex.step(1 / 60, settle);
+      const before = window.__apex.probe();
+      window.__apex.step(1 / 60, ticks);
+      const after = window.__apex.probe();
+      window.__apex.clearInput();
+      const drift = Math.abs(after.angle - before.angle);
+      const k = Math.abs(before.k);
+      if (drift < bestDrift || (drift === bestDrift && k < bestK)) {
+        bestDrift = drift; bestK = k; best = f;
+      }
     }
-    return { frac: best, k: bestK };
-  });
+    return { frac: best, k: bestK, drift: bestDrift };
+  }, { speed, settle, ticks });
 }
 
 test.describe("Apex 26 — steering", () => {
