@@ -5,17 +5,17 @@
       "lines": 2515
     },
     "js/agent/apex.js": {
-      "codeLines": 2277,
-      "lines": 3219
+      "codeLines": 2276,
+      "lines": 3217
     },
     "js/car/car3d.js": {
-      "lines": 4108
+      "lines": 4115
     },
     "js/game.js": {
-      "codeLines": 5145,
+      "codeLines": 5143,
       "gMembers": 280,
-      "lines": 9581,
-      "topLets": 159
+      "lines": 9569,
+      "topLets": 158
     },
     "js/lighting/presets.js": {
       "lines": 17260
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2069,
+      "ceiling": 2075,
       "slack": 25
     },
     "subFloorFontSize": {
