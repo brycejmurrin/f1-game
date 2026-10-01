@@ -53,7 +53,8 @@ uniform float uInstanced;   // 0 = use uModel (default), 1 = use the instance co
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform vec3 uEye;
-uniform float uTime;   // seconds (shared with the FS cloud-drift clock) — drives the FLAG wave
+uniform float uTime;   // seconds (shared with the FS cloud-drift clock) — drives the FLAG wave + foliage sway
+uniform vec3 uWind;    // xy = unit wind direction in world xz, z = speed scale (knobs windDir / windSpeed)
 out vec3 vNrm;
 out vec3 vCol;
 out vec3 vWorldPos;
@@ -72,13 +73,34 @@ void main() {
   // neighbouring id that decoded a hair low, and fract() of that is ~1.0 — a
   // full-amplitude wave on a building or the road. int(aMat + 0.5) is the same
   // rounding the fragment shader already uses for every material lookup.
-  if (int(aMat + 0.5) == 15) {
-    float fw = clamp(aMat - 15.0, 0.0, 1.0) * 2.5;
+  int mid = int(aMat + 0.5);
+  float mfr = clamp(aMat - float(mid), 0.0, 1.0);
+  if (mid == 15) {
+    float fw = mfr * 2.5;
     float ph = uTime * 5.5 + aPos.x * 1.9 + aPos.z * 1.9;
     pos += aNrm * ((sin(ph) * 0.085 + sin(ph * 2.17 + 1.3) * 0.045) * fw);
   }
   mat4 M = uInstanced > 0.5 ? mat4(aInst0, aInst1, aInst2, aInst3) : uModel;
   vec4 wp = M * vec4(pos, 1.0);
+  // FOLIAGE (id 6, aMat 6.0..6.45): wind sway. The fraction is a per-vertex
+  // HEIGHT weight (TrackGeom.SWAY_FRAC = 0.45, js/track/core/geom.js: 0 at the
+  // crown's foot, 1 at the tip). GPU Gems 3 ch.16-style main bending in WORLD
+  // space — a downwind lean plus a gust front travelling along uWind.xy — scaled
+  // by weight^2 so the foot stays on the trunk, plus a small flutter along the
+  // world normal. Bare FOLIAGE (fraction 0) keeps the exact static path. Mirrored
+  // constant for constant in js/render/three/tsl-lit.js vertexMotionNode; WGX
+  // has no per-vertex mat attribute (docs/research/WEBGPU-PARITY.md).
+  if (mid == 6 && mfr > 0.002) {
+    float w = clamp(mfr / 0.45, 0.0, 1.0);
+    float spd = uWind.z;
+    float along = wp.x * uWind.x + wp.z * uWind.y;
+    float gust = uTime * (spd * 1.1 + 0.6) - along * 0.07;
+    float bend = sin(gust) * 0.55 + sin(gust * 2.31 + along * 0.19 + 1.7) * 0.25 + 0.45;
+    float amp = spd * 0.32 * w * w;
+    vec3 wn = mat3(M) * aNrm;
+    float flPh = uTime * (spd * 3.2 + 1.5) + wp.x * 1.3 + wp.z * 1.1 + wp.y * 0.7;
+    wp.xyz += vec3(uWind.x, 0.0, uWind.y) * (bend * amp) + wn * (sin(flPh) * spd * 0.05 * w);
+  }
   vWorldPos = wp.xyz;
   vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
                                   // is glued to the panels, not streaming in world.
