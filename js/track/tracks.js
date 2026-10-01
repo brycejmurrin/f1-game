@@ -313,7 +313,7 @@ const Tracks = (function () {
       lap("props", "geo"); yield track; _t = _now();
       // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
       // opening the driving boundary across it puts nothing in a car's path.
-      TrackPit.openBoundary(track);
+      TrackPit.openBoundary(track); TrackBuildProps.featherAfterOpen(track);
       const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;
       // The tallest prop above its own ground: what the sun shadow map's depth
