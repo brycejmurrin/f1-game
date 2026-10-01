@@ -669,6 +669,20 @@
       }
     }
 
+    async function warmMirror(tex) {
+      if (!P.mirror || viz) return;
+      const target = renderer.getRenderTarget(), previousTex = P.mirror.tex.value;
+      try {
+        P.mirror.tex.value = tex;   // use the live mipmapped mirror sampling state
+        quad.material = P.mirror.mat;
+        renderer.setRenderTarget((typeof ctx.softDest === "function" ? ctx.softDest() : null) || null);
+        await renderer.compileAsync(quad, quad.camera);
+      } finally {
+        P.mirror.tex.value = previousTex;
+        renderer.setRenderTarget(target);
+      }
+    }
+
     try { Log.info("gfx", "TLX post init"); } catch (_) { /* harness */ }
     return {
       enabled: () => true,
@@ -685,6 +699,7 @@
       spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
       resize,
       warm,
+      warmMirror,
       present,
       dispose,
       viz,

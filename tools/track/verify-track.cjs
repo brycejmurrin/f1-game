@@ -64,10 +64,26 @@ if (args[0] === "--all") {
     console.log(`\nAll ${uniqueIds.length} tracks OK`);
     process.exit(0);
   }
+} else if (args[0] === "--custom") {
+  // A CUSTOM circuit: an APXT1 share code, or an apex26.track JSON file (the
+  // designer's export), built by the same guard the 52 shipped circuits pass.
+  const arg = args[1];
+  if (!arg) { console.error("Usage: node tools/track/verify-track.cjs --custom <APXT1 code | design.apextrack.json> [--quiet]"); process.exit(1); }
+  const Tracks = buildContext(null, { quiet });
+  const ctx = customContext(Tracks);
+  const text = /^APXT\d+\./.test(arg) ? arg : fs.readFileSync(arg, "utf8");
+  const fromFile = text === arg ? null : ctx.TrackCodec.fromFile(JSON.parse(text));
+  const decode = fromFile && fromFile.design ? Promise.resolve({ ok: true, design: fromFile.design })
+    : ctx.TrackCodec.decode(fromFile ? fromFile.code : text);
+  decode.then((r) => {
+    if (!r.ok) { console.error(`FAIL --custom: share code rejected (${r.reason})`); process.exit(1); }
+    try { verifyDef(Tracks, customDef(Tracks, r.design), { quiet }); process.exit(0); }
+    catch (e) { console.error(`FAIL custom: ${e.message}`); if (process.env.VERBOSE) console.error(e.stack); process.exit(1); }
+  });
 } else {
   const id = args[0];
   if (!id) {
-    console.error("Usage: node tools/track/verify-track.cjs <trackId>  |  --all   [--quiet]");
+    console.error("Usage: node tools/track/verify-track.cjs <trackId>  |  --all  |  --custom <code|file>   [--quiet]");
     process.exit(1);
   }
   try {
@@ -205,6 +221,47 @@ function verifyTrack(id, opts) {
   if (!def) {
     throw new Error(`track id "${id}" not found — available: ${Tracks.LIST.map(d => d.id).join(", ")}`);
   }
+  return verifyDef(Tracks, def, opts);
+}
+
+// THE EDITOR MODULES, into an existing VM context: the registry's boot half
+// (hash32, TrackThemes, CustomTracks over a stub store) and the LAZY_EDITOR
+// bundle (TrackCodec for a share code), so a custom circuit — a design that was
+// never a script tag — can be built by this same guard. `--custom` below and
+// tests/unit/track-themes-build.test.mjs share it.
+function customContext(Tracks) {
+  const ctx = Tracks._vmContext;
+  if (ctx.CustomTracks) return ctx;
+  const data = {};
+  ctx.GameStore = { store: {
+    get: (k, d) => (k in data ? JSON.parse(JSON.stringify(data[k])) : d), set: (k, v) => { data[k] = v; },
+    write: (k, v) => { data[k] = v; return { ok: true, durable: true }; }, rawDel: (k) => { delete data[k]; },
+  } };
+  for (const g of ["TextEncoder", "TextDecoder", "CompressionStream", "DecompressionStream", "Response", "Uint8Array", "Map", "Set"])
+    if (typeof globalThis[g] !== "undefined") ctx[g] = globalThis[g];
+  // The editor's PURE core only: the screen pair (canvas.js, designer.js) binds
+  // Dom at eval and needs a page; this is the headless gate, so it stays out.
+  const files = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/custom-tracks.js"]
+    .concat((MANIFEST.LAZY_EDITOR || []).filter((f) => !/\/(canvas|designer)\.js$/.test(f)));
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");
+    vm.runInContext(src, ctx, { filename: path.join(ROOT, f) });
+  }
+  return ctx;
+}
+
+/** A design (the stored record, or a decoded share code) → the LIST-shaped def. */
+function customDef(Tracks, design) {
+  const ctx = customContext(Tracks);
+  const it = ctx.CustomTracks.sanitize(design);
+  if (!it) throw new Error("custom design rejected by CustomTracks.sanitize (geometry)");
+  return ctx.TrackDef.fromRaw(ctx.CustomTracks.toRaw(it));
+}
+
+/** The guard proper, on a LIST-shaped def (shipped or custom). Throws on any failure. */
+function verifyDef(Tracks, def, opts) {
+  opts = opts || {};
+  const id = def.id;
 
   // Run the full build — exercises buildRoad, buildTerrain, buildProps, buildGate
   // via the GLX stub.  Any throw here means the game strands on the menu.
@@ -264,6 +321,7 @@ function verifyTrack(id, opts) {
     (inst ? ` — ${inst} instanced` : "") + ` — ${total} total`);
   if (folds) console.log(folds);
   if (!opts.quiet) reportDiagnostics(diagnostics, Tracks._vmConsole || []);
+  return { id, road, terrain, props, inst, total, folds, diagnostics, track };
 }
 
 // Circuits whose CENTRELINE kinks tighter than the half-width somewhere (turn
@@ -367,4 +425,4 @@ function reportDiagnostics(diagnostics, consoleLines) {
 }
 
 // Reusable VM harness — consumed by tests (scenery-api-contract, foundation).
-module.exports = { buildContext, loadTrackIds, verifyTrack };
+module.exports = { buildContext, loadTrackIds, verifyTrack, verifyDef, customContext, customDef };

@@ -53,7 +53,8 @@ uniform float uInstanced;   // 0 = use uModel (default), 1 = use the instance co
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform vec3 uEye;
-uniform float uTime;   // seconds (shared with the FS cloud-drift clock) — drives the FLAG wave
+uniform float uTime;   // seconds (shared with the FS cloud-drift clock) — drives the FLAG wave + foliage sway
+uniform vec3 uWind;    // xy = unit wind direction in world xz, z = speed scale (knobs windDir / windSpeed)
 out vec3 vNrm;
 out vec3 vCol;
 out vec3 vWorldPos;
@@ -72,13 +73,34 @@ void main() {
   // neighbouring id that decoded a hair low, and fract() of that is ~1.0 — a
   // full-amplitude wave on a building or the road. int(aMat + 0.5) is the same
   // rounding the fragment shader already uses for every material lookup.
-  if (int(aMat + 0.5) == 15) {
-    float fw = clamp(aMat - 15.0, 0.0, 1.0) * 2.5;
+  int mid = int(aMat + 0.5);
+  float mfr = clamp(aMat - float(mid), 0.0, 1.0);
+  if (mid == 15) {
+    float fw = mfr * 2.5;
     float ph = uTime * 5.5 + aPos.x * 1.9 + aPos.z * 1.9;
     pos += aNrm * ((sin(ph) * 0.085 + sin(ph * 2.17 + 1.3) * 0.045) * fw);
   }
   mat4 M = uInstanced > 0.5 ? mat4(aInst0, aInst1, aInst2, aInst3) : uModel;
   vec4 wp = M * vec4(pos, 1.0);
+  // FOLIAGE (id 6, aMat 6.0..6.45): wind sway. The fraction is a per-vertex
+  // HEIGHT weight (TrackGeom.SWAY_FRAC = 0.45, js/track/core/geom.js: 0 at the
+  // crown's foot, 1 at the tip). GPU Gems 3 ch.16-style main bending in WORLD
+  // space — a downwind lean plus a gust front travelling along uWind.xy — scaled
+  // by weight^2 so the foot stays on the trunk, plus a small flutter along the
+  // world normal. Bare FOLIAGE (fraction 0) keeps the exact static path. Mirrored
+  // constant for constant in js/render/three/tsl-lit.js vertexMotionNode; WGX
+  // has no per-vertex mat attribute (docs/research/WEBGPU-PARITY.md).
+  if (mid == 6 && mfr > 0.002) {
+    float w = clamp(mfr / 0.45, 0.0, 1.0);
+    float spd = uWind.z;
+    float along = wp.x * uWind.x + wp.z * uWind.y;
+    float gust = uTime * (spd * 1.1 + 0.6) - along * 0.07;
+    float bend = sin(gust) * 0.55 + sin(gust * 2.31 + along * 0.19 + 1.7) * 0.25 + 0.45;
+    float amp = spd * 0.32 * w * w;
+    vec3 wn = mat3(M) * aNrm;
+    float flPh = uTime * (spd * 3.2 + 1.5) + wp.x * 1.3 + wp.z * 1.1 + wp.y * 0.7;
+    wp.xyz += vec3(uWind.x, 0.0, uWind.y) * (bend * amp) + wn * (sin(flPh) * spd * 0.05 * w);
+  }
   vWorldPos = wp.xyz;
   vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
                                   // is glued to the panels, not streaming in world.
@@ -132,6 +154,7 @@ uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specu
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
 uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
+uniform float uRain;        // 0..1 rain FALLING (frame.rain): drives the puddle ripples
 // ── Baked PBR material maps (js/render/shared/assets.js) ────────────────────────────
 // TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID (js/track/core/geom.js MAT). No
 // UV channel exists anywhere on the lit path and none is needed: the sample
@@ -370,8 +393,15 @@ void applyMaterialTexNormal(int mid, inout vec3 N, float vd) {
   float aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
   if (aa <= 0.005) return;
   vec2 dxy = (texture(uMatNormalTex, vec3(uv, float(mid))).xy - 0.5) * 2.0;
-  vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N) + vec3(1e-5));
-  vec3 B = cross(N, T);
+  // Tangent frame = the WORLD AXES the tile coordinate maps to (matTexUV, same
+  // vNrm plane pick): wall-like (hc, y) -> T along hc's axis, B = up; ground
+  // (x, z) -> T = +x, B = +z. The old up-cross-N frame was degenerate on the
+  // ground (N ~ up, so T was whatever tilt the procedural bump left) and
+  // mirrored on +x / -z faces (graphics-detail survey note, 2026-10-01).
+  vec3 an = abs(normalize(vNrm));
+  bool wall = matWallLike(mid);
+  vec3 T = wall ? (an.x > an.z ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) : vec3(1.0, 0.0, 0.0);
+  vec3 B = wall ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
   // ASPHALT stays deliberately the weakest in the table — see the MAT.ASPHALT
   // note in js/track/core/geom.js: the road is viewed edge-on for the whole race and
   // anything with real relief crawls.
@@ -404,7 +434,10 @@ void applyMaterialNormal(int mid, inout vec3 N, float vd) {
     float fp = max(fwidth(hc), fwidth(y));
     float aaFade = clamp(1.0 - (fp - 0.04) / 0.22, 0.0, 1.0);
     if (aaFade <= 0.005) return;
-    vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N) + vec3(1e-5));
+    // T = the world axis hc runs along (+z on +-x faces, +x on +-z faces), so a
+    // seam reads as a groove on every face; the old up-cross-N frame pointed the other way
+    // on +x and -z walls and turned mortar into ridges there.
+    vec3 T = an.x > an.z ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
     float e = 0.05;
     float h0 = matBumpHeight(mid, vec2(hc, y));
     float hx = matBumpHeight(mid, vec2(hc + e, y));
@@ -1150,6 +1183,30 @@ void main() {
     puddle = smoothstep(0.48, 0.88, pn) * wet;        // only low spots pool
     // Porous ground cannot hold standing water — no pooling, and no sheen below.
     puddle *= 1.0 - porous;
+    // RAIN RIPPLES (2026-10-01): expanding rings from drop impacts, keyed to the
+    // game clock, as a normal perturbation on the POOLED water only. N is read
+    // below by the sun/lamp GGX lobes and the sky reflection, never by the
+    // diffuse NoL computed above — right for a ripple, a specular event. Two
+    // cell grids of random impact points; each cell spawns one ring per cycle
+    // at its own phase, the ring is sin((r - v·t)·k) damped by radius and age,
+    // and the normal tilt is that sine's gradient (cos·k·r̂). Mirrored constant
+    // for constant in js/render/three/tsl-lit.js and js/render/webgpu/wgsl-chunks.js.
+    if (puddle > 0.001 && uRain > 0.001) {
+      vec2 rg = vec2(0.0);
+      for (int k = 0; k < 2; k++) {
+        float fk = float(k);
+        float sc = k == 0 ? 1.7 : 2.9;                        // ~0.6 m and ~0.35 m cells
+        vec2 rp = vWorldPos.xz * sc + fk * 7.3;
+        vec2 ci = floor(rp), cf = fract(rp) - 0.5;
+        float hh = hash21(ci + fk * 19.0);
+        float t = fract(uTime * (0.8 + 0.5 * fk) + hh);       // 0..1 ring life, staggered per cell
+        float r = length(cf) + 1e-4;
+        float ph = (r - t * 0.45) * 40.0;
+        float amp = (1.0 - t) * t * 4.0 * exp(-r * 5.0) * step(r, t * 0.45 + 0.08);   // rises, spreads, dies
+        rg += cos(ph) * (cf / r) * amp;
+      }
+      N = normalize(N + vec3(rg.x, 0.0, rg.y) * (0.10 * uRain * puddle));
+    }
     // Water absorbs light: wet asphalt reads notably darker, puddles a touch darker
     // (not stark, so they don't read as flat dark blobs). WET ROAD DARKEN knob
     // scales the absorption (uWetDark 1 = shipped 0.42 floor, 0 = no darkening).

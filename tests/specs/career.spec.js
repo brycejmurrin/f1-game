@@ -1843,7 +1843,10 @@ test.describe("Career — new and deleted", () => {
     await boot(page);
     await fillDriver(page);
     await toModes(page);
-    const del = () => page.locator("#cr-left .cr-slot").nth(1).locator(".cr-slot-del");
+    // Career backup reuses .cr-slot-del for EXPORT/IMPORT/DELETE — pin DELETE
+    // via aria-label (getByRole name), not the shared class alone.
+    const del = () => page.locator("#cr-left .cr-slot").nth(1)
+      .getByRole("button", { name: /^(Confirm: )?delete /i });
     await del().click();
     await expect(del()).toHaveText("DELETE?");     // the first press only arms it
     expect(await page.evaluate(() => window.__apex.careerSlots("driver")[1].used)).toBe(true);
@@ -1865,9 +1868,13 @@ test.describe("Career — new and deleted", () => {
       window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 3 });
     });
     await toModes(page);
-    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-del").click();
-    await expect(page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-del")).toHaveText("DELETE?");
-    await expect(page.locator("#cr-right .cr-slot").nth(0).locator(".cr-slot-del")).toHaveText("DELETE");
+    const leftDel = () => page.locator("#cr-left .cr-slot").nth(0)
+      .getByRole("button", { name: /^(Confirm: )?delete /i });
+    const rightDel = () => page.locator("#cr-right .cr-slot").nth(0)
+      .getByRole("button", { name: /^(Confirm: )?delete /i });
+    await leftDel().click();
+    await expect(leftDel()).toHaveText("DELETE?");
+    await expect(rightDel()).toHaveText("DELETE");
   });
 
   test("deleting everything leaves a screen you can still start from", async ({ page }) => {
@@ -1878,7 +1885,8 @@ test.describe("Career — new and deleted", () => {
     });
     await toModes(page);
     for (const pane of ["#cr-left", "#cr-right"]) {
-      const del = () => page.locator(pane + " .cr-slot").nth(0).locator(".cr-slot-del");
+      const del = () => page.locator(pane + " .cr-slot").nth(0)
+        .getByRole("button", { name: /^(Confirm: )?delete /i });
       await del().click();
       await del().click();
     }

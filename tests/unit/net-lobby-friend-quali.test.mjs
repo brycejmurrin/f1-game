@@ -4,7 +4,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -63,7 +65,7 @@ for (const [name, startRace] of [
   });
 }
 
-test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliability are race rules; a paused friend race brakes the car; no garage in MP", async () => {
+test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliability are race rules; a paused friend race brakes the car", async () => {
   const { readFileSync } = await import("node:fs");
   const r = (f) => readFileSync(new URL("../../" + f, import.meta.url), "utf8");
   const game = r("js/game.js");
@@ -76,7 +78,37 @@ test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliabil
   // Applied in memory only (roomOnly puts the guest's save back) — behaviour
   // pinned in net-authority.test.mjs "never overwrite the guest's SAVED choice".
   assert.match(lobby, /if \(own\(next, "tyres"\)\) roomOnly\("tyreWear", \(\) => \{ G\.raceTyreWear = next\.tyres; \}\);/);
-  assert.match(r("js/ui/hud.js"), /workBtn\.hidden = [^\n]*G\.netPlay\.active\(\)/);
+});
+
+test("the HUD hides eligible garage work during a friend race and restores it when solo", () => {
+  const dom = makeDom(), els = {};
+  for (const key of ["minimap", "tyre", "workBtn", "gapA", "gapB"]) els[key] = dom.byId("hud-" + key);
+  els.minimap.getContext = () => ({});
+  const player = { rank: 1, lap: 1, lapTime: 1, best: Infinity, speed: 50, energy: 1, gear: 1, rpm: 5000, pitState: "box" };
+  let networked = true, eligible = true;
+  const G = {
+    els, player, cars: [player], ranked: [player], state: "race", lapsTarget: 3,
+    track: { total: 100, def: {} }, fmtTime: String, dashKph: (v) => v * 3.6, vTop: () => 90,
+    tyres: { on: () => true, spent: () => 0.2 },
+    pits: { commitFrac: () => 0, cue: () => null, canWork: () => eligible },
+    netPlay: { active: () => networked },
+  };
+  const sb = { document: dom.document, innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
+    performance: { now: () => 1000 }, Log: globalThis.Log, M4: globalThis.M4,
+    PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 } };
+  sb.window = sb;
+  const hud = vm.runInNewContext(src("js/ui/hud.js") + ";GameHud", sb).create(G);
+  const tick = () => hud.updateHud(true);
+  tick();
+  assert.equal(els.workBtn.hidden, true, "an eligible pit-box car cannot open the pausing garage in multiplayer");
+  networked = false; tick();
+  assert.equal(els.workBtn.hidden, false, "the same eligible car regains WORK ON CAR when the friend race ends");
+  eligible = false; tick();
+  assert.equal(els.workBtn.hidden, true, "solo still needs pit-work eligibility");
+  eligible = true; tick();
+  assert.equal(els.workBtn.hidden, false, "solo work returns when eligibility returns");
+  networked = true; tick();
+  assert.equal(els.workBtn.hidden, true, "rejoining a friend race hides the previously visible control");
 });
 
 test("a networked race clock is anchored to the SHARED green, so a peer that lost frames is not classified ahead", async () => {

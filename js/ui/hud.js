@@ -47,6 +47,14 @@ function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m)
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
+// Compare the actual DOM so an external edit is repaired on the next tick.
+// Avoid repeated attribute mutations; hidden writes feed the visibility observer.
+function hHidden(el, on) { if (el && el.hidden !== !!on) el.hidden = !!on; }
+function hData(el, name, value) {
+  if (!el || !el.dataset) return;
+  if (value === null) { if (name in el.dataset) delete el.dataset[name]; }
+  else { const v = String(value); if (el.dataset[name] !== v) el.dataset[name] = v; }
+}
 function replayGhost() { return GhostShare.hasGuest() ? GhostShare : Ghost; }
 let _lastRank = 0, _posFlashT = 0;   // POS box flash state, ms left (see the tick)
 // Team colours are static — compute once per team, the minimap's idiom.
@@ -838,12 +846,12 @@ function updateHud(force, dtMs) {
   // radio: fine, think about a stop, you are past it.
   const tyres = G.tyres;
   const tyreOn = !!(tyres && tyres.on());
-  if (els.tyre) els.tyre.hidden = !tyreOn;
+  hHidden(els.tyre, !tyreOn);
   if (tyreOn) {
     const spent = tyres.spent(player);
     hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
     hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
-    els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
+    hData(els.tyre, "wear", spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok");
     // …and how many LAPS that is, at the rate this driver has been using it:
     // a percentage says how worn, only laps say whether it reaches the flag.
     // An attribute read by the bar's ::after (css/hud.css), not a new node.
@@ -861,7 +869,7 @@ function updateHud(force, dtMs) {
     const pit = G.pits;
     const state = pit ? (player.pitState === "lane" || player.pitState === "box" ? player.pitState
                          : pit.commitFrac(player) > 0 ? "commit" : "") : "";
-    if (state) els.tyre.dataset.pit = state; else delete els.tyre.dataset.pit;
+    hData(els.tyre, "pit", state || null);
     if (state === "commit") hStyle(els.tyre, "--pit-commit", pit.commitFrac(player).toFixed(2));
     // THE PIT CUE. The chip above says the gesture is REGISTERING; this says
     // where and which way — without it the steer-in control is undiscoverable,
@@ -870,10 +878,10 @@ function updateHud(force, dtMs) {
     // only paints what it returns.
     const c = pit && pit.cue(player);
     if (els.pitCue) {
-      els.pitCue.hidden = !c;
+      hHidden(els.pitCue, !c);
       if (c) {
         hText(els.pitCueText, c.text);
-        els.pitCue.dataset.phase = c.phase;
+        hData(els.pitCue, "phase", c.phase);
         // The distance BAR under the words: a driver at 300 km/h reads a bar
         // faster than a number. `frac` is the cue's own fill, 0 → 1.
         hStyle(els.pitCue, "--pit-dist", clamp(c.frac || 0, 0, 1).toFixed(2));
@@ -887,17 +895,17 @@ function updateHud(force, dtMs) {
     // driving.
     // Never in a friend race: the garage "pauses" the race, and a networked race
     // does not stop — the box timer ran out behind it and the work was free.
-    if (els.workBtn) els.workBtn.hidden = !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active());
+    if (els.workBtn) hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active()));
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
     const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
-    if (pl && pl.state) els.tyre.dataset.plan = pl.state; else delete els.tyre.dataset.plan;
+    hData(els.tyre, "plan", pl && pl.state || null);
   } else {
     // Both are written only above: a pit cue or WORK ON CAR up when a wear race was quit stayed up through a no-wear session.
-    if (els.pitCue) els.pitCue.hidden = true;
-    if (els.workBtn) els.workBtn.hidden = true;
+    hHidden(els.pitCue, true);
+    hHidden(els.workBtn, true);
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);
@@ -1030,7 +1038,7 @@ function updateHud(force, dtMs) {
     hText(els.gapB, b ? gap("▼", b.code, gapSec(1, b, (player.prog - b.prog) / vFloor)) : "");
     // WHO: the neighbour's team colour as the chip's left bar (css/hud.css).
     hStyle(els.gapA, "--gap-team", a ? teamCss(a) : "");
-    if (a && (player.towing || 0) > 0.5) els.gapA.dataset.tow = "1"; else delete els.gapA.dataset.tow;   // in the tow
+    hData(els.gapA, "tow", a && (player.towing || 0) > 0.5 ? "1" : null);   // in the tow
     hStyle(els.gapB, "--gap-team", b ? teamCss(b) : "");
     // THE RIVALS' WINDOWS: "P12" when the neighbour's planned stop is within
     // three laps, "IN" while it is stopping (PitLane.windowOf) — a suffix the
@@ -1138,8 +1146,8 @@ function drawMinimap() {
   if (!player || !track || !track.map) return;
   // hud-hide-map is display:none (cockpit/onboard cams, MINIMAL, map OFF): a
   // map nobody can see was sized, cached, blitted and dotted every HUD tick.
-  // The next visible draw re-measures (syncHudVisClasses clears _fitKey).
-  if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) return;
+  // Forget its measurement key so the next visible draw measures afresh.
+  if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) { _mmKey = null; return; }
   // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
   // the same convention js/ui/sheet-shape.js relies on). Bitmap = local x effective
   // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu
@@ -1147,12 +1155,18 @@ function drawMinimap() {
   // currentCSSZoom, not the raw --hud-scale: the element rides the CAPPED
   // --hud-z, and the raw slider would over-allocate on a capped band. Ratio
   // capped at 3 to bound fill/memory on a DPR-3 phone at HUD SIZE 200%.
-  // Measure only when layout could have moved — same key discipline as
-  // fitHud (resize / HUD-scale), plus a track change (minimapBg null). A
-  // clientWidth read here lands right after the HUD's own DOM writes, so per
-  // frame it was a forced reflow ~10×/s for numbers that never change mid-race.
-  if (_mmKey !== _fitKey || _fitKey === "" || !minimapBg) {
-    _mmKey = _fitKey;
+  // The fit key includes changing gap spelling/sector rows. Those cannot
+  // resize this explicit CSS box unless fitHud changes the band's scale, so
+  // keep a separate layout-free key rather than measuring after HUD writes.
+  // Density selects the 96/140px CSS box; DPR can change without a resize.
+  // Keep the bounded retry while the fit has no laid-out box, and the track
+  // invalidation path (minimapBg null) so a newly visible map measures afresh.
+  const root = document.documentElement, body = document.body;
+  const measureKey = window.innerWidth + "x" + window.innerHeight + "|" + body.className
+    + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
+    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1);
+  if (_mmKey !== measureKey || _fitKey === "" || !minimapBg) {
+    _mmKey = measureKey;
     _mmCssW = els.minimap.clientWidth || 140;
     _mmCssH = els.minimap.clientHeight || 140;
     _mmRatio = Math.min(3, Math.max(1,
