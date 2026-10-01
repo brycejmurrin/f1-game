@@ -329,11 +329,15 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
   assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;/,
     "startRaceBody still decides handoff from the screen that was up before the sweep");
-  assert.match(body, /clearMenuScreens\(\);\s*if \(handoff\) \{[^}]*loadingScreen\.handoff\(\);/,
+  assert.match(body, /clearMenuScreens\(\);\s*if \(handoff\) RaceEntryProfile\.raiseHandoff\(loadingScreen\);/,
     "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
-  assert.match(render, /gfx\.present\(po\);[\s\S]{0,500}?loadingScreen\.phase\(\) === "handoff"[\s\S]{0,300}?loadingScreen\.stop\(\)/,
-    "render() lowers it after a present that painted, never one that only started the warm");
+  assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx\);/,
+    "render() lowers it via afterPresent after a present that painted");
+  assert.match(read("js/perf/race-entry-profile.js"), /function raiseHandoff\(screen\) \{[\s\S]*?screen\.handoff\(\);/,
+    "raiseHandoff still calls loadingScreen.handoff()");
+  assert.match(read("js/perf/race-entry-profile.js"), /function afterPresent\(screen, gfx\) \{[\s\S]*?screen\.phase\(\) === "handoff"[\s\S]{0,300}?screen\.stop\(\)/,
+    "afterPresent still stops the card only when not warming");
   assert.match(read("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
 });
 
@@ -773,8 +777,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
   const game = read("js/game.js");
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
-  assert.match(intro, /info\.warmReady\s*=/);
-  assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
+  assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady = !\(gfx && gfx\.warming && gfx\.warming\(\)\)\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
   assert.match(intro, /loadingScreen\.run\(info, go\);/);
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");

@@ -324,6 +324,7 @@ const FULL = [
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
   "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
+  "js/physics/wall-clamp.js", // barrier / pit / gantry hard clamp + human writeback (WallClamp.apply), carve-headroom B
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
@@ -624,6 +625,8 @@ const HARD_EDGES = [
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
+  ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
+  ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];

@@ -3384,7 +3384,8 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
   // .test.mjs) around startRaceBody(), which still carries this whole flow.
   const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
-  assert.match(sr, /warmCarAssets\(\);[\s\S]{0,160}?DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
+  assert.match(sr, /RaceEntryProfile\.span\("warmCarAssets", \(\) => warmCarAssets\(\)\);[\s\S]{0,160}?RaceEntryProfile\.span\("debrisPrime"/,
+    "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
