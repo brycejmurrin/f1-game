@@ -127,7 +127,7 @@ test("OFF: the engineer is silent, because there is nothing to be legible about"
 
 const sense = (over) => Object.assign({
   wear: 0, step: -1, axle: 0, front: true, graining: 0, blistering: 0,
-  belowWindow: 0, outLap: false, wrongTread: false, freeStop: false,
+  belowWindow: 0, outLap: false, wrongTread: false, cheapStop: false,
   wet: false, rainInLaps: null,
   lap: 5, lapsToStop: null, nextCode: null, rivalBoxed: null, marginS: null,
 }, over);
@@ -139,13 +139,13 @@ test("the wrong tread outranks everything — it is the one that costs whole sec
 });
 
 test("ONE COMPOUND with five laps left is called after the tread and before everything else (FIA 2026 SR B6.3.6)", () => {
-  assert.match(line({ oneCompound: true, freeStop: true, wear: 1.5, lapsToStop: 0 }), /ONE COMPOUND ONLY .* DISQUALIFIED/);
+  assert.match(line({ oneCompound: true, cheapStop: true, wear: 1.5, lapsToStop: 0 }), /ONE COMPOUND ONLY .* DISQUALIFIED/);
   assert.match(line({ oneCompound: true, wrongTread: true, wet: true }), /BOX FOR WETS/, "the weather still comes first");
   assert.equal(E.create({}).callFor(sense({ oneCompound: true }))[1], "compound");
 });
 
 test("a reduced-cost stop under caution outranks tyre complaints without promising a free stop", () => {
-  assert.match(line({ freeStop: true, wear: 0.9, graining: 1, axle: 1 }), /CHEAPER STOP/);
+  assert.match(line({ cheapStop: true, wear: 0.9, graining: 1, axle: 1 }), /CHEAPER STOP/);
 });
 
 test("graining and blistering say DIFFERENT things, and that is the point", () => {
@@ -293,8 +293,10 @@ test("the plan lines sit between the tread and the tyre complaints, and each nam
   assert.match(line({ rainInLaps: 2, lapsToStop: 4, lap: 10 }), /^RAIN BEFORE THE STOP — BOX LAP 12 FOR WETS$/);
   assert.match(line({ rainInLaps: 5, lapsToStop: 4, lap: 10 }), /^RAIN IN 5 LAPS — BE READY$/);
   // A caution that fits the plan with margin says so; without margin, the cost.
-  assert.match(line({ freeStop: true, marginS: 3, pitLoss: 20 }), /STOP NOW LOSES NOTHING/);
-  assert.match(line({ freeStop: true, marginS: -3, pitLoss: 20 }), /CHEAPER STOP/);
+  assert.match(line({ cheapStop: true, marginS: 3, pitLoss: 20 }), /CHEAPER STOP, ABOUT 20s LOST/);
+  assert.match(line({ cheapStop: true, marginS: -3, pitLoss: 20 }), /CHEAPER STOP, ABOUT 20s LOST/);
+  assert.match(line({ cheapStop: true }), /CHEAPER STOP — CONSIDER BOXING/);
+  assert.equal(/FREE STOP|LOSES NOTHING/.test(line({ cheapStop: true, marginS: 3, pitLoss: 20 })), false);
   // …and a stop already called silences all of it (senseOf nulls lapsToStop).
   assert.equal(line({ lapsToStop: null, rivalBoxed: null }), "");
 });
@@ -367,7 +369,7 @@ test("the last lap (and a one-lap qualifying run) gets no call to stop: the flag
   G.pits = { estimate: () => ({ lossS: 22, gapS: 2, marginS: 5, caution: true }), lastCue: () => null };
   const s = eng.senseOf(c);
   assert.equal(s.wrongTread, false, "BOX FOR WETS on the last lap");
-  assert.equal(s.freeStop, false, "a cheaper stop on the last lap");
+  assert.equal(s.cheapStop, false, "a cheaper stop on the last lap");
   assert.equal(s.lapsToStop, null, "BOX BOX BOX on the last lap");
   eng.update(c, 1);
   assert.ok(!said.some((m) => /BOX|STOP|GONE/.test(m)), said.join(" | "));
