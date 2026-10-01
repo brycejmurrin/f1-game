@@ -481,6 +481,7 @@ const GameAudio = (function () {
     applySessionType();
 
     ctx = new AC();
+    _loopNoise.clear();
     ctxGen++;   // buffers decoded on the old context are stale (js/audio/voice-pack.js)
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
     // player never makes the gesture the listeners below wait for. Our own
@@ -543,6 +544,7 @@ const GameAudio = (function () {
       .then((e) => {
         engBuf = e; samplesReady = true;
         enginePeriod = detectPeriod(e);
+        findStableLoop(e);   // prime the memoized scan before a pending race-frame upgrade
         Log.debug("audio", "engine sample decoded, period=" + enginePeriod);
       })
       .catch((err) => {
@@ -764,12 +766,21 @@ const GameAudio = (function () {
      White noise is stationary, so one buffer played from a RANDOM OFFSET is
      indistinguishable from a freshly-generated one — and two hits in a row
      still differ, which a fixed offset would not give. The looping sources
-     (harv, skid, rain) keep their own buffers: those allocate once per start,
-     and rain in particular needs a seamless 4 s loop.
+     keep independent buffers; engine loops reuse theirs within this context,
+     while rain in particular needs its own seamless 4 s loop.
 
      Context-bound like engBuf, so rebuildCtx() must clear it. */
   const NOISE_POOL_S = 3;
   let noisePoolBuf = null;
+  // Separate layer keys preserve independent noise even at equal durations.
+  // Buffers are immutable after generation; sources remain single-use. Cleared
+  // with every new context so a resume rebuild never retains the old PCM.
+  const _loopNoise = new Map();
+  function loopNoise(name, seconds) {
+    let buf = _loopNoise.get(name);
+    if (!buf) { buf = noiseBuf(seconds); _loopNoise.set(name, buf); }
+    return buf;
+  }
   function noisePool() {
     if (!noisePoolBuf) noisePoolBuf = noiseBuf(NOISE_POOL_S);
     return noisePoolBuf;
@@ -798,6 +809,7 @@ const GameAudio = (function () {
 
   function startEngineBody() {
     flushDying();   // kill the fading previous graph before building another
+    if (sfxOk()) noisePool();   // existing one-shot buffer, prepared before green
 
     // shared lowpass + master gain for the engine core (samples or synth).
     // The per-manufacturer voice inserts one peaking EQ (its formant) between
@@ -1035,7 +1047,7 @@ const GameAudio = (function () {
 
     // MGU-K harvest whirr: resonant noise, gated in by deceleration
     harvSrc = ctx.createBufferSource();
-    harvSrc.buffer = noiseBuf(0.7);
+    harvSrc.buffer = loopNoise("harvest", 0.7);
     harvSrc.loop = true;
     harvFilter = ctx.createBiquadFilter();
     harvFilter.type = "bandpass";
@@ -1079,7 +1091,7 @@ const GameAudio = (function () {
 
     // tire screech: looped noise through a bandpass, silent until setSkid
     skidSrc = ctx.createBufferSource();
-    skidSrc.buffer = noiseBuf(0.5);
+    skidSrc.buffer = loopNoise("skid", 0.5);
     skidSrc.loop = true;
     skidFilter = ctx.createBiquadFilter();
     skidFilter.type = "bandpass";
@@ -1094,7 +1106,7 @@ const GameAudio = (function () {
     // narrow, high squeal for a locked wheel. The surface rumble is its own
     // low-passed loop. All silent until setCarSfx drives them.
     scrubSrc = ctx.createBufferSource();
-    scrubSrc.buffer = noiseBuf(0.5);
+    scrubSrc.buffer = loopNoise("scrub", 0.5);
     scrubSrc.loop = true;
     scrubFilter = ctx.createBiquadFilter();
     scrubFilter.type = "bandpass"; scrubFilter.frequency.value = 520; scrubFilter.Q.value = 0.9;
@@ -1105,7 +1117,7 @@ const GameAudio = (function () {
     scrubSrc.connect(scrubFilter).connect(scrubGain).connect(sfxBus);
     scrubSrc.connect(lockFilter).connect(lockGain).connect(sfxBus);
     surfSrc = ctx.createBufferSource();
-    surfSrc.buffer = noiseBuf(0.5);
+    surfSrc.buffer = loopNoise("surface", 0.5);
     surfSrc.loop = true;
     surfFilter = ctx.createBiquadFilter();
     surfFilter.type = "lowpass"; surfFilter.frequency.value = 180; surfFilter.Q.value = 0.7;
@@ -1118,7 +1130,7 @@ const GameAudio = (function () {
     // speed: own buffer, because a LOOPING source needs one (the shared
     // noisePool is for one-shots — see its comment).
     windSrc = ctx.createBufferSource();
-    windSrc.buffer = noiseBuf(0.5);
+    windSrc.buffer = loopNoise("wind", 0.5);
     windSrc.loop = true;
     windFilter = ctx.createBiquadFilter();
     windFilter.type = "bandpass";
@@ -1135,7 +1147,7 @@ const GameAudio = (function () {
     // in. Looped noise through a bandpass that gain-follows deceleration
     // (setEngine's brakeFrac), own buffer because it loops.
     brakeSrc = ctx.createBufferSource();
-    brakeSrc.buffer = noiseBuf(0.6);
+    brakeSrc.buffer = loopNoise("brakes", 0.6);
     brakeSrc.loop = true;
     brakeFilter = ctx.createBiquadFilter();
     brakeFilter.type = "bandpass";
