@@ -804,7 +804,7 @@ test("RACE! before the menu's build: build under the garage drive-out (or the ca
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.match(body, /if \(!built && !menuWorld\(\) && introBuild\(go\)\) return;/, "no world: raceIntro diverts to the build");
   const j = game.indexOf("function introBuild(go)"), ib = game.slice(j, game.indexOf("\n}\n", j));
-  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("await loadTrackStepped(idx, live)"), p = ib.indexOf("FlybySeq.planSteps"), r = ib.indexOf("raceIntro(go)");
+  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("await loadTrackStepped(idx, live)"), p = ib.indexOf("await introPlan("), r = ib.indexOf("raceIntro(go)");
   assert.ok(b > 0 && l > b && p > l && r > p, "the garage (or the card) up, then build, then plan, then the flyby");
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
   assert.match(ib, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
@@ -812,7 +812,7 @@ test("RACE! before the menu's build: build under the garage drive-out (or the ca
   assert.match(game, /_mq = [^;]*matchMedia\("\(prefers-reduced-motion: reduce\)"\)/, "…and motionReduced still reads the OS flag");
   assert.match(game, /function motionReduced\(\) \{\s*return !!\(_mq && _mq\.matches\)/);
   const pa = ib.indexOf("prepareMenuCarAssets("), wa = ib.indexOf("_menuGate.warm = 2");
-  assert.ok(pa > l && wa > pa && p > wa, "under the card, like menuFinish: car assets, then hidden warm frames, then plans — the flyby's first frame compiles nothing");
+  assert.ok(pa > l && p > pa && wa > p, "car assets, then plans during the garage animation, then hidden shader warm frames");
   assert.match(ib, /try \{ _introKey = key; raceIntro\(go\); \} catch \(e\) \{[^}]*loadingScreen\.stop\(\); go\(\); \}/, "a throw in raceIntro never strands the timer-less build card");
   assert.equal((ib.match(/await awaitIntroWarm\(live\)/g) || []).length, 2, "both compilation boundaries retain scene ownership");
 });
@@ -825,7 +825,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
   for (const mode of ["ready", "slow", "quit", "supersede", "settings", "plan-cancel", "timeout", "old-timeout", "fetch-fail"]) {
     let resolveScenery, rejectScenery, now = 0, warming = mode === "old-timeout", slices = 0;
     const events = [];
-    const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _menuFly: null,
+    const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null, flybyShots: null, reloadFlybyShots() {},
       _menuGate: { generation: 0, warm: 0 }, flybyBuildTimer: 0, settings: "one",
       entrySettings: () => c.settings, menuKey: () => "world", motionReduced: () => false, titleIfBare: () => {},
       clearTimeout() {}, setTimeout: f => f(), requestAnimationFrame: f => f(),
@@ -869,6 +869,60 @@ test("intro builds cancel at async boundaries and never fly over pending compila
   }
   for (const name of ["quitToMenu", "clearMenuScreens"]) {
     assert.match(game.slice(game.indexOf("function " + name + "()"), game.indexOf("function " + name + "()") + 100), /cancelIntro\(\)/);
+  }
+});
+
+test("all intro paths plan during the drive-out, preserve authored shots, and cancel before handoff", async () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const planStart = game.indexOf("async function introPlan(");
+  for (const flow of ["introBuild", "introWarm", "introGarage"]) for (const cancel of [false, true]) for (const authored of [false, true]) {
+    const start = game.indexOf("function " + flow + "(go)");
+    const source = game.slice(planStart, game.indexOf("\n}\n", planStart) + 2) + game.slice(start, game.indexOf("\n}\n", start) + 2);
+    let finishGarage, steps = 0, now = 0, warming = false;
+    const events = [], savedShots = [{ id: "authored" }];
+    const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null, flybyShots: null, reloadFlybyShots() {},
+      _menuGate: { generation: 0, warm: 0 }, flybyBuildTimer: 0, _studio: { held: true }, _warmKey: "", gfx: { warm() {}, warming: () => warming },
+      entrySettings: () => "settings", menuKey: () => "world", motionReduced: () => false,
+      clearTimeout() {}, setTimeout: f => f(), performance: { now: () => now },
+      requestAnimationFrame: f => { c._menuGate.warm--; warming = c._menuGate.warm > 0; f(); },
+      loadingInfo: () => ({}), loadingScreen: { nextFlyMs: () => 24000, stop() {} },
+      studioOpen() {}, studioDone: () => new Promise(r => { finishGarage = r; }), studioClose() { if (c._studio) { events.push("close"); c._studio = null; } },
+      ensureScenery: async () => {}, loadTrackStepped: async () => true, prepareMenuCarAssets: async () => {},
+      awaitIntroWarm: async live => { assert.equal(warming, false); return live(); },
+      warmPrograms: () => { events.push("warm"); warming = true; return true; },
+      menuSlice: async () => { assert.equal(events.includes("warm"), false, "planning runs before the shader warm"); now += 32; },
+      FlybySeq: { reset() {}, setDuration() {}, DEFAULT: [], vary: () => [],
+        planSteps: (track, shots) => { if (authored) assert.strictEqual(shots, savedShots); return () => { events.push("plan"); return ++steps >= 3; }; } },
+      raceIntro: () => events.push("intro"), titleIfBare() {}, quitToMenu() {}, announce() {}, Log: { warn() {} } };
+    c.reloadFlybyShots = () => { c.flybyShots = authored ? savedShots : null; };
+    vm.createContext(c); vm.runInContext(source, c);
+    assert.equal(c[flow](() => {}), true);
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    assert.equal(steps, 3, "the flyby is planned while the car is still driving out");
+    assert.equal(events.includes("warm"), false, "compilation keeps waiting for renderer ownership");
+    assert.equal(c._menuFly, null, "the plan is not published before the handoff is safe");
+    if (cancel) c._introRun++;
+    finishGarage();
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    assert.equal(events.includes("intro"), !cancel);
+    assert.equal(!!c._menuFly, !cancel, "a cancelled garage never commits its prepared shots");
+    if (cancel) assert.equal(events.includes("warm"), false, "cancellation prevents stale shader work");
+    else { assert.equal(events.at(-1), "intro", "no planning slices follow the warm"); assert.ok(events.lastIndexOf("plan") < events.indexOf("close"), "the opening shots are planned before the garage closes"); }
+  }
+});
+
+test("raceIntro reuses identically authored prepared shots but honours edits made after planning", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const body = game.slice(game.indexOf("function raceIntro(go)"));
+  const start = body.indexOf("  reloadFlybyShots();"), end = body.indexOf("  _menuFly = null;", start);
+  const source = body.slice(start, end);
+  for (const edited of [false, true]) {
+    const shots = [{ id: "authored", dur: 1 }], track = {};
+    const c = { world: true, track, _menuGate: { ready: "world" }, _menuFly: { key: "world", track, shots }, flybyShots: null };
+    c.reloadFlybyShots = () => { c.flybyShots = JSON.parse(JSON.stringify(shots)); if (edited) c.flybyShots[0].dur = 2; };
+    vm.createContext(c); vm.runInContext(source, c);
+    assert.equal(c.flybyShots === shots, !edited, "unchanged authored lists retain their plan cache identity");
+    assert.equal(c.flybyShots[0].dur, edited ? 2 : 1, "the latest authored settings remain authoritative");
   }
 });
 
@@ -957,4 +1011,3 @@ test("withoutGrid: a real race joined mid-race or watched back films no standing
     return null;
   });
 });
-

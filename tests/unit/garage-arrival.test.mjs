@@ -119,9 +119,9 @@ test('game.js plays the studio drive-out AT ONCE on every RACE!, with no card, a
   assert.match(build, /  studioOpen\(n, info0\);\n  const out = studioDone\(live, n\);/, 'the watcher starts with the car: a build that outlasts it gets the card when the car is out');
   assert.ok(build.indexOf('await out;') > 0 && build.indexOf('await out;') < build.indexOf('warmPrograms()'), 'the warm waits for the car to be out');
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
-  assert.match(warm, /  studioOpen\(n, loadingInfo\(\)\);/);
+  assert.match(warm, /const info = loadingInfo\(\); studioOpen\(n, info\);/);
   assert.match(game, /if \(!built && !motionReduced\(\) && introGarage\(go\)\) return;/, 'a ready, warm world opens on it too');
-  assert.ok(warm.indexOf('await studioDone(live, n)') < warm.indexOf('warmPrograms()'));
+  assert.ok(warm.indexOf('await out;') < warm.indexOf('warmPrograms()'));
   assert.match(game, /if \(built && _introSkip === _introRun\) \{ _introSkip = 0; go\(\); return; \}/, 'a skip in the garage goes to the race, not the flyby');
   assert.match(game, /if \(gfx\.warming && gfx\.warming\(\)\) return;\n  if \(_studio\) studioShown\(\);/, 'the garage replaces a pending warm\'s card on its first frame');
   assert.match(game, /\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, 'the studio shows through the build card');
@@ -139,7 +139,8 @@ test('the garage drive-out owns the screen with no card, and the card arrives on
   for (const mode of ['ready', 'quit', 'off', 'watched', 'skipper', 'hidden', 'skip', 'warming']) {
     let now = 0;
     const events = [];
-    const c = { state: 'menu', trackIdx: 0, _introRun: 0, _introKey: '', setupPreviewOn: false, settings: 'one',
+    const c = { state: 'menu', trackIdx: 0, track: {}, _introRun: 0, _introKey: '', _introSkip: 0, _menuFly: null, flybyShots: null, setupPreviewOn: false, settings: 'one',
+      reloadFlybyShots() {}, FlybySeq: { DEFAULT: [], setDuration() {}, vary: () => [], planSteps: () => () => true },
       entrySettings: () => c.settings, menuKey: () => 'world', performance: { now: () => now },
       loadingInfo: () => ({ track: {}, real: mode === 'watched' ? { watch: true } : null }),
       loadingScreen: { garage: (inf, onSkip) => { c._ph = 'garage'; c._skip = onSkip; events.push('garage'); }, building: () => { c._ph = 'build'; events.push('card'); },

@@ -834,7 +834,8 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   // The build path plans the flyby for the length it will run (a real race's read).
   const build = game.slice(game.indexOf("function introBuild(go)"), game.indexOf("function introWarm(go)"));
   assert.match(build, /const info0 = loadingInfo\(\);/);
-  assert.match(build, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info0\.readMs\)\);/);
+  assert.match(build, /await introPlan\(live, key, info0, n\)/);
+  assert.match(game, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
   assert.match(build, /await awaitIntroWarm\(live\)/, "introBuild waits via awaitIntroWarm, not the race-start introWarm(go)");
 });
 

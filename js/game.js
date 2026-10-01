@@ -3064,7 +3064,7 @@ function entrySettings() {
 }
 function startRace() {
   const key = entrySettings(), idx = trackIdx;
-  const request = sessionEntry.begin("race", key, () => ensureScenery(idx),
+  const request = sessionEntry.begin("race", key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     () => startRaceBody(), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); });
   // Menu buttons fire and forget. Observe rejection on a separate branch so
@@ -3998,15 +3998,28 @@ async function studioDone(live, n) {
   if (_studio && _studio.n === n && gfx.warm && !_studio.skip && live()) _studio.held = true;
   else studioClose(n);
 }
+// Plan while the garage animates, rather than holding its last pose to plan the
+// opening flyby. This only reads the circuit; shader work retains renderer ownership.
+async function introPlan(live, key, info, n) {
+  if (!live() || _introSkip === n) return null;
+  reloadFlybyShots();
+  if (!flybyShots && _menuFly && _menuFly.key === key && _menuFly.track === track) return _menuFly;
+  FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));
+  const fly = { key, track, shots: flybyShots || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), at = performance.now();
+  while (live() && _introSkip !== n && !step() && performance.now() - at < 800) await menuSlice();
+  return live() ? fly : null;
+}
 // A READY, WARM WORLD STILL OPENS ON THE GARAGE: introBuild and introWarm play the
 // drive-out over their own work; with nothing left to build it plays alone, then flies.
 function introGarage(go) {
-  const key = menuKey(trackIdx), n = ++_introRun, settings = entrySettings();
+  const key = menuKey(trackIdx), n = ++_introRun, settings = entrySettings(), info = loadingInfo();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
-  studioOpen(n, loadingInfo());
+  studioOpen(n, info);
   if (!_studio) { loadingScreen.stop(); return false; }   // no drive-out (tuner off, a watched race): fly at once, as before
+  const out = studioDone(live, n);
   (async () => {
-    try { await studioDone(live, n); }
+    try { const fly = await introPlan(live, key, info, n); await out; if (live() && fly) _menuFly = fly; }
+    catch (e) { Log.warn("gfx", "intro planning failed", e); await out; }
     finally {
       studioClose(n);
       if (n === _introRun) {
@@ -4038,17 +4051,15 @@ function introBuild(go) {
       // under the held garage — so the flyby's first frame compiles nothing.
       const t1 = performance.now();
       await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
+      const fly = await introPlan(live, key, info0, n);
       await out;   // the warm would freeze the drive-out: it waits for the car to be out
       if (!live()) return;
       FlybySeq.reset(); if (warmPrograms() || !(_studio && _studio.held)) _menuGate.warm = 2;   // held: a world frame only to kick a warm (it paints nothing)
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
       // Never start the cinematic clock while render() is blocked on compilation.
       if (!(await awaitIntroWarm(live)) || !live()) return;
-      // Plan the flyby here too, up to a budget: whatever is left plans mid-flyby.
-      FlybySeq.setDuration(loadingScreen.nextFlyMs(info0.readMs));
-      const fly = { key, track, shots: FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (idx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), t0 = performance.now();
-      while (live() && !step() && performance.now() - t0 < 800) await menuSlice();
-      if (live()) _menuFly = fly;
+      // Publish only after compilation: cancellation cannot leave a stale plan.
+      if (live() && fly) _menuFly = fly;
     } catch (e) {
       if (live()) { Log.warn("gfx", "intro build failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); }
     }
@@ -4076,14 +4087,18 @@ function introWarm(go) {
   if (!gfx.warm || (_warmKey === key && !(gfx.warming && gfx.warming()))) return false;
   const n = ++_introRun, settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
-  studioOpen(n, loadingInfo());
+  const info = loadingInfo(); studioOpen(n, info);
+  const out = studioDone(live, n);
   (async () => { try {
-      await studioDone(live, n);   // the drive-out first: a warm now would freeze it
+      const fly = await introPlan(live, key, info, n);
+      await out;   // a shader warm before the drive-out ends would freeze it
+      if (!live()) return;
       if (_warmKey !== key) {   // warm frames: hidden under "build", or kicking the warm under the held garage (render())
         if (warmPrograms() || !(_studio && _studio.held)) _menuGate.warm = 2;
         for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
       }
       if (!(await awaitIntroWarm(live)) || !live()) return;
+      if (fly) _menuFly = fly;
       studioClose(n);   // the held garage hands straight to the flyby
       try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
@@ -4129,6 +4144,7 @@ function raceIntro(go) {
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
   const planned = world && _menuFly && _menuFly.track === track && _menuFly.key === _menuGate.ready ? _menuFly.shots : null;   // planned in the menu (menuFinish)
+  if (planned && flybyShots && JSON.stringify(planned) === JSON.stringify(flybyShots)) flybyShots = planned;   // loadSaved parses again: reuse identical authored shots and their plans
   _menuFly = null;   // one load's flyby: the next one varies again
   if (!flybyShots) flybyShots = planned || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0);   // a different flyby each load (never the sim RNG); an editor-saved list plays as authored
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
