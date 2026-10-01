@@ -94,7 +94,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bahrain-grandstand-rake.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/baku-migration.test.mjs",
-  // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / feather probe + monza characterisation until Slice 2 feathers termini. Pure helper + one track-build-vm build, ~1 s.
+  // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / featherBarrierEnds + fleet caps (monza/spa/bahrain/silverstone/monaco maxOver < 3). Pure helper + a few track-build-vm builds, ~6 s.
   "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/behind-ship.test.mjs",
@@ -121,6 +121,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
+  "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
@@ -423,6 +424,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/prepush-gate-coverage.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
+  "tests/unit/race-entry-profile.test.mjs",
   "tests/unit/race-insights.test.mjs",
   // ...and the race radio: every phrasebook line fits its card when spoken,
   // pools deal like a deck, gaps come from the timing loop, a pass must hold,

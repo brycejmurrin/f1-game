@@ -237,7 +237,7 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   const game = code("js/game.js");
   const present = game.search(/gfx\.present\(\s*po\s*\)/);
   const before = game.slice(Math.max(0, present - 200), present);
-  const after = game.slice(present, present + 400);
+  const after = game.slice(present, present + 900);
   // XR Phase 0: present goes through XrBoot.present(…) || gfx.present(po). The
   // canary must still arm immediately before that gate — nothing else may sit
   // between armBackendProbe() and the present call.
@@ -3384,7 +3384,8 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
   // .test.mjs) around startRaceBody(), which still carries this whole flow.
   const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
-  assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
+  assert.match(sr, /RaceEntryProfile\.span\("warmCarAssets", \(\) => warmCarAssets\(\)\);[\s\S]{0,160}?RaceEntryProfile\.span\("debrisPrime"/,
+    "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
@@ -4739,7 +4740,8 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   let playerVisualKey = "previous-setup", carModelBuf = null, builds = 0;
   const playerBodies = {}, playerBodyOrder = [], PLAYER_BODY_CACHE_MAX = 3;
   const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
-  const CockpitOpts = { halo: () => true, haloSize: () => 2 }, Parts = { getVisualTiers: () => ({}) };
+  let cockpitStyle = "standard";
+  const CockpitOpts = { halo: () => true, haloSize: () => 2, body: () => cockpitStyle }, Parts = { getVisualTiers: () => ({}) };
   const Car3D = { build: () => { builds++; return {}; } };
   // js/car/car-draw.js reads the backend and the parts through the G façade and the livery through deps.
   const G = { gfx: { createMesh: x => x }, getTeamParts: () => ({}) };
@@ -4754,6 +4756,11 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   playerVisualKey = "selected-setup";
   assert.equal(body(team, car), preparedBody); assert.equal(cockpit(team, car), preparedCockpit);
   assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
+  cockpitStyle = "wide";
+  assert.notEqual(cockpit(team, car), preparedCockpit, "a body change selects a distinct mesh cache entry");
+  assert.equal(builds, 3);
+  cockpitStyle = "standard";
+  assert.equal(cockpit(team, car), preparedCockpit, "switching back reuses the original body");
 });
 
 test("selector car assets yield for costly work, skip cached waits, and cancel stale settings", async () => {
@@ -4820,8 +4827,12 @@ test("selector preparation waits for the player's hands before the build and the
   // the player's next tap (2026-09-24). Both now wait for MENU_IDLE_MS of quiet.
   const src = read("js/game.js");
   const body = fnBody(src, "scheduleFlybyTrack");
-  assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*if \(!\(await loadTrackStepped\(want, current\)\)\) return;/,
-    "the build waits for an idle menu, and runs in steps (a tap on the sheet mid-build is answered)");
+  // The build no longer waits for idle (2026-10): it is stepped, so it starts at once.
+  assert.match(body, /return;\s*\}\s*(\/\/[^\n]*\s*)*if \(!\(await loadTrackStepped\(want, current\)\)\) return;/,
+    "the build starts at once, in steps (a tap on the sheet mid-build is answered)");
+  assert.ok(!/menuIdle/.test(body.slice(0, body.indexOf("loadTrackStepped("))), "no idle wait before the build");
+  assert.match(body, /if \(state === "menu" && track && Tracks\.LIST\[trackIdx\] && builtTrackId !== Tracks\.LIST\[trackIdx\]\.id\) dropTrackWorld\(\);/,
+    "picking another circuit frees the last one's world at once");
   assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
     "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
   const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
@@ -4846,7 +4857,9 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
   const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, 22].join("|");   // the real one adds fieldSize()
-  let state = "menu", setupPreviewOn = false, track = null, compiling = false;
+  let state = "menu", setupPreviewOn = false, track = null, compiling = false, builtTrackId = null;
+  const Tracks = { LIST: [{ id: 0 }, { id: 1 }] }, drops = [];
+  const dropTrackWorld = () => { drops.push(track && track.id); track = null; builtTrackId = null; _menuGate.track = null; _menuGate.ready = ""; };
   const els = { select: { hidden: false } }, settings = { hidden: true }, $ = () => settings;
   const timers = new Map(), requests = [], builds = [];
   let timerId = 0;
@@ -4864,7 +4877,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   // here the player is idle and a slice is immediate.
   const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
-  const loadTrack = id => { builds.push(id); track = { id }; };
+  const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -4884,9 +4897,12 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   assert.deepEqual(builds, [0], "no scene replacement during compilation");
   compiling = false; const night = fire(); requests.shift().resolve(); await night;
   assert.deepEqual(builds, [0, 0], "time-of-day changes prepare again");
-  trackIdx = 1; schedule(); const leaving = fire(); els.select.hidden = true;
+  assert.deepEqual(drops, [], "a time-of-day change on the same circuit frees nothing up front");
+  trackIdx = 1; schedule(); assert.deepEqual(drops, [0], "another circuit frees the last world the moment it is picked");
+  const leaving = fire(); els.select.hidden = true;
   requests.shift().resolve(); await leaving; assert.deepEqual(builds, [0, 0]);
-  els.select.hidden = false; schedule(); const changed = fire(); raceWeather = "rain";
+  trackIdx = 0; schedule(); assert.deepEqual(drops, [0], "nothing built: nothing to free");
+  trackIdx = 1; els.select.hidden = false; schedule(); const changed = fire(); raceWeather = "rain";
   requests.shift().resolve(); await changed; assert.deepEqual(builds, [0, 0]);
 });
 
