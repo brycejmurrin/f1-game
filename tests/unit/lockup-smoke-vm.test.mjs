@@ -42,7 +42,7 @@ test("a straight-line stop from speed locks a front and the lock reads as skid i
 test("the smoke site reads the lock and picks a front wheel for it", () => {
   const fs = require("node:fs"), path = require("node:path");
   const game = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../../js/game.js"), "utf8");
-  assert.match(game, /const locked = !c\.offroad && c\.speed > 8 && \(c\.wheelLock \|\| 0\) > 0\.3;/);
+  assert.match(game, /const locked = !c\.offroad && vStd\(c\.speed\) > 8 && \(c\.wheelLock \|\| 0\) > 0\.3;/);
   assert.match(game, /if \(locked\) smokeI = Math\.max\(smokeI, c\.wheelLock\);/);
   assert.match(game, /carDraw\.WHEELS\[\(locked \? 0 : 2\) \+ \(\(Math\.random\(\) \* 2\) \| 0\)\]/, "a locked car smokes from a front wheel (indices 0-1), else a rear (2-3)");
   assert.match(game, /Math\.max\(clamp\(\(slipAng - 0\.10\) \/ 0\.20, 0, 1\), \(c\.wheelLock \|\| 0\) \* 0\.9\)/);

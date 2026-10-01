@@ -7923,7 +7923,7 @@ function render(dt) {
         // A lock-up smokes from the LOCKED axle — the fronts — and for every
         // car: an AI's braking mistake (AiDrive.mistakePhase) is read as a
         // puff of white from its front wheel, which is how a lock-up is seen.
-        const locked = !c.offroad && c.speed > 8 && (c.wheelLock || 0) > 0.3;
+        const locked = !c.offroad && vStd(c.speed) > 8 && (c.wheelLock || 0) > 0.3;   // vStd: PACE scales speeds (vstd-invariant)
         if (locked) smokeI = Math.max(smokeI, c.wheelLock);
         if (c.isPlayer && !c.offroad) {
           const _pax = c.axEstSm || 0, _pvl = Math.abs(c.vLat || 0);
