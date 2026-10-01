@@ -1,8 +1,8 @@
 // branch-audit — "is this branch's code already in the deploy branch?", the
 // verdicts prune-branches.mjs deletes by (absorbed) and a person reads
 // (superseded, post-merge, pr-closed). The pure parts are pinned on fixtures;
-// the git evidence — ancestry, the merge-tree dry merge, line presence through
-// an old base — is pinned against REAL git in a throwaway repo under
+// the git evidence — ancestry, the merge-tree dry merge, line presence, an
+// unrelated history — is pinned against REAL git in a throwaway repo under
 // artifacts/ (never /tmp, AGENTS.md), because a verdict built on a misread
 // merge-tree would delete work. Importing the module runs nothing. ~1 s.
 import test from "node:test";
@@ -66,13 +66,13 @@ test("verdict precedence: open PR, merged, too recent, absorbed, no history, sup
 test("renderMarkdown tallies the verdicts and lists every branch with its evidence", () => {
   const md = renderMarkdown([
     { name: "a", verdict: "absorbed", ageDays: 3, ahead: 2, absorbed: true, from: "dep", pr: null, ci: null },
-    { name: "b", verdict: "unmerged", ageDays: 4, ahead: 5, samePct: 10, anyPct: 40, lines: 50, from: "main", pr: { number: 7, state: "closed" }, ci: { workflow: "CI", conclusion: "failure" } },
+    { name: "b", verdict: "unmerged", ageDays: 4, ahead: 5, samePct: 10, anyPct: 40, lines: 50, from: "dep", pr: { number: 7, state: "closed" }, ci: { workflow: "CI", conclusion: "failure" } },
   ], "dep");
   assert.match(md, /\| \*\*absorbed\*\* \| 1 \|/);
-  assert.match(md, /\| `b` \| 4 \| 5 \(from main\) \| 10% \/ 40% of 50 \| #7 closed \| CI: failure \|/);
+  assert.match(md, /\| `b` \| 4 \| 5 \| 10% \/ 40% of 50 \| #7 closed \| CI: failure \|/);
 });
 
-test("against real git: ancestor, absorbed, unmerged and an old-base branch are told apart", () => {
+test("against real git: ancestor, absorbed, unmerged and an unrelated branch are told apart", () => {
   const dir = path.join(ROOT, "artifacts", `branch-audit-test-${process.pid}`);
   fs.rmSync(dir, { recursive: true, force: true });
   const origin = path.join(dir, "origin.git"), work = path.join(dir, "work");
@@ -81,15 +81,10 @@ test("against real git: ancestor, absorbed, unmerged and an old-base branch are 
   try {
     fs.mkdirSync(work, { recursive: true });
     g(dir, "init", "-q", "--bare", origin);
-    g(work, "init", "-q", "-b", "main");
+    g(work, "init", "-q", "-b", "deploy");
     const write = (f, body) => fs.writeFileSync(path.join(work, f), body);
     const commit = (msg) => { g(work, "add", "-A"); g(work, "commit", "-q", "-m", msg); };
-    // OLD history (main), then a RESTARTED deploy branch sharing none of it.
-    write("game.js", "function oldDrive() { return 1; }\n"); commit("old");
-    g(work, "checkout", "-q", "-b", "old-feature");
-    write("game.js", "function oldDrive() { return 1; }\nfunction carriedOver() { return 42; }\n"); commit("old feature");
-    g(work, "checkout", "-q", "--orphan", "deploy");
-    write("game.js", "function newDrive() { return 2; }\nfunction carriedOver() { return 42; }\n"); commit("restart");
+    write("game.js", "function drive() { return 2; }\n"); commit("base");
     g(work, "checkout", "-q", "-b", "merged-one");
     write("a.txt", "a merged change line\n"); commit("m");
     g(work, "checkout", "-q", "deploy"); g(work, "merge", "-q", "--no-ff", "-m", "merge", "merged-one");
@@ -97,8 +92,10 @@ test("against real git: ancestor, absorbed, unmerged and an old-base branch are 
     write("a.txt", "a merged change line\n"); commit("same change, own commit");   // deploy already has it
     g(work, "checkout", "-q", "-b", "real-work", "deploy");
     write("b.txt", "work nobody merged yet\n"); commit("w");
+    g(work, "checkout", "-q", "--orphan", "unrelated");
+    write("c.txt", "a history of its own\n"); commit("orphan");
     g(work, "remote", "add", "origin", origin);
-    g(work, "push", "-q", "origin", "main", "old-feature", "deploy", "merged-one", "absorbed-one", "real-work");
+    g(work, "push", "-q", "origin", "deploy", "merged-one", "absorbed-one", "real-work", "unrelated");
     g(work, "fetch", "-q", "origin");
     const cwd = process.cwd();
     process.chdir(work);
@@ -112,9 +109,7 @@ test("against real git: ancestor, absorbed, unmerged and an old-base branch are 
     assert.equal(by["absorbed-one"].verdict, "absorbed", "merging it changes nothing: deploy already has the line");
     assert.equal(by["real-work"].verdict, "unmerged");
     assert.equal(by["real-work"].anyPct, 0);
-    assert.equal(by["old-feature"].from, "main", "a pre-restart branch is measured from its old base");
-    assert.equal(by["old-feature"].anyPct, 100, "its one added line was carried into the restarted history");
-    assert.equal(by["old-feature"].verdict, "superseded");
+    assert.equal(by["unrelated"].verdict, "no-history");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
