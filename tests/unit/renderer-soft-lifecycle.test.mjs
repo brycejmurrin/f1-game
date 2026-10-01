@@ -126,6 +126,17 @@ test("TLX soft present serializes reads, coalesces newest, and rejects stale siz
   assert.match(resize, /_softReadQueued = null/);
 });
 
+test("TLX voiding an in-flight soft read releases its gate", () => {
+  // The voided completion skips _finishSoftBlitRead (epoch mismatch), so a gate
+  // left held wedges presentation until the stale guard: 60 s+ under load, which
+  // timed out image-grade-visual "blacks" twice on the llvmpipe render shard.
+  const src = read("js/render/three/tlx.js");
+  const cancel = src.slice(src.indexOf("function _cancelSoftBlits()"), src.indexOf("// the backend object"));
+  assert.match(cancel, /_softReadEpoch\+\+;\s*_softReadQueued = null;\s*_softReadPending = false;/);
+  const resize = src.slice(src.indexOf("function resize()"), src.indexOf("const noopMesh"));
+  assert.match(resize, /_softReadEpoch\+\+;\s*_softReadQueued = null;\s*_softReadPending = false;/);
+});
+
 test("TLX post fallback invalidates reads and disposes the retained chain", () => {
   const src = read("js/render/three/tlx.js");
   const at = src.indexOf("// Post-only death:");

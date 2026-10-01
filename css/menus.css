@@ -1224,6 +1224,47 @@ body { --compact-at: 600px; --wide-at: 620px; }
 #sel-inner[data-density="compact"] #sel-tracks { padding-block: calc(var(--gap) * 0.2); }
 #sel-inner[data-density="compact"] #sel-shelf { gap: calc(var(--gap) * 0.35); }
 
+/* SCREEN LOOKS — TRACK SELECTOR (js/ui/screen-looks.js; the core knobs are in
+   css/responsive.css). Each rule keys on an <html data-look-select-*> the
+   engine writes only off the default, so the shipped strip above is the
+   absence of all of them. The :root prefix is the specificity that beats the
+   strip's #sel-tracks rules; the compact lines repeat the #sel-inner density
+   hook because the compact rules above outrank a bare :root[…] #sel-tracks.
+
+   TILE SIZE multiplies the SHIPPED expressions rather than restating a size,
+   so the tile keeps tracking --chip-h / --tap across pointer and UI SIZE, and
+   100% is exactly the strip above. */
+:root[data-look-select-tile] #sel-tracks .track-row {
+  min-width: calc(var(--chip-h) * 2 * var(--look-select-tile, 1));
+  min-height: calc(var(--tap) * var(--look-select-tile, 1));
+}
+:root[data-look-select-tile] #sel-tracks .track-row-meta { width: calc(var(--chip-h) * 1.45 * var(--look-select-tile, 1)); }
+:root[data-look-select-tile] #sel-tracks .track-row-name { max-width: calc(var(--chip-h) * 2.6 * var(--look-select-tile, 1)); }
+:root[data-look-select-tile] #sel-inner[data-density="compact"] #sel-tracks .track-row-meta { width: calc(var(--chip-h) * 1.2 * var(--look-select-tile, 1)); }
+/* STRIP ROWS: still ONE sideways scroller — a column-flow grid fills each
+   column top to bottom, so the strip pans exactly as before and every tile
+   keeps its scroll-snap-align. The dividers span every row (an explicit
+   template makes 1 / -1 mean "all of them") and lose their one-tile height cap,
+   which existed only so a divider never stretched a single-row strip. The
+   empty-search line spans too, or it would sit in one cell. */
+:root[data-look-select-rows] #sel-tracks {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: stretch;
+}
+:root[data-look-select-rows="2"] #sel-tracks { grid-template-rows: repeat(2, auto); }
+:root[data-look-select-rows="3"] #sel-tracks { grid-template-rows: repeat(3, auto); }
+:root[data-look-select-rows] #sel-tracks > :is(.track-group-head, #sel-track-empty) { grid-row: 1 / -1; max-height: none; }
+/* TILE NAMES: flags only, as compact already does on a short phone; the name
+   still reads in the hero caption. */
+:root[data-look-select-names="hide"] #sel-tracks .track-row-name { display: none; }
+/* STRIP POSITION: #sel-body is a flex column of shelf then hero, so order
+   moves the shelf under the hero without touching the DOM. Visual only — the
+   tab and gamepad walk still meets the strip first, which keeps the screen's
+   focus entry point where js/ui/select-screen.js expects it. */
+:root[data-look-select-strip="bottom"] #sel-shelf { order: 1; }
+
 /* THE HERO SECTION: the rest of the body, scrolling only when the caption
    does not fit. .pane supplies the scroll region recipe. */
 #sel-track-section {
@@ -1929,6 +1970,27 @@ h3.sel-label {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
   #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
+/* SCREEN LOOKS — RACE SETTINGS (js/ui/screen-looks.js; core knobs in
+   css/responsive.css). COLUMNS overrides the 440px container query above in
+   both directions: the body and its folds share one lattice, so both are
+   forced together or a fold's rows would start a new rhythm. TWO on a narrow
+   sheet wraps each row's ‹ select › under its label — the player's call; the
+   7rem value rule below keeps that as tidy as it can be. */
+:root[data-look-race-cols="one"] :is(#rs-body, #rs-body > details) { grid-template-columns: minmax(0, 1fr); }
+:root[data-look-race-cols="two"] :is(#rs-body, #rs-body > details) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--pad);
+}
+/* PRESETS. COMPACT drops the captions and the card padding, so a preset is one
+   chip-height label and more of them share a line; HIDE removes the row, and
+   the rows under it are unchanged (each is still settable one by one). */
+:root[data-look-race-presets="compact"] #rs-presets { --balance-basis: 6rem; --balance-min: 4.5rem; }
+:root[data-look-race-presets="compact"] #rs-presets > .preset-btn {
+  min-height: var(--chip-h);
+  padding-block: calc(var(--gap) * 0.3);
+}
+:root[data-look-race-presets="compact"] #rs-presets > .preset-btn small { display: none; }
+:root[data-look-race-presets="hide"] #rs-presets { display: none; }
 /* The Settings pages' steel italic label (css/components.css) restated here:
    that rule is scoped to #pmsettings-inner .pm-group. */
 #rs-body .tune-label {
