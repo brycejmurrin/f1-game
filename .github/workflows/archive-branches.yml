@@ -1,0 +1,153 @@
+name: Archive branches
+
+# Shrink every full clone: archive, then delete, the branches that share NO
+# history with the deploy branch.
+#
+# The deploy branch's history was restarted on 2026-09-29. On 2026-10-01 a full
+# clone was 1.1 GB against 193 MB for the post-restart branches: the rest was
+# old history held by `main` and ~130 pre-restart branches, which all share it,
+# so deleting some frees nothing (`main` alone: 0 B). 80 of them had no PR, so
+# nothing is deleted before it is ARCHIVED: one `git bundle` holding every
+# branch at its exact sha (refs/archive/<name>), checked to contain exactly the
+# list, attached to a GitHub Release (per-file limit just under 2 GiB,
+# https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases),
+# and the uploaded size confirmed BEFORE the first delete. Restore a branch:
+#   gh release download <tag> -p archive.bundle
+#   git fetch archive.bundle 'refs/archive/<name>:refs/heads/<name>'
+#
+# DISPATCH ONLY. Unticked `apply` = a dry run that still builds and verifies
+# the bundle and uploads the index as an artifact; nothing is released or
+# deleted. `main` = reset (default) points main at the deploy tip after
+# archiving it; delete removes it; keep leaves it. Open-PR heads, recent
+# branches, gh-pages, claude/claims/* and the deploy branch are never touched.
+# The rule: tools/ci/archive-branches.mjs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Release the archive and delete the branches (unticked = dry run)"
+        type: boolean
+        required: false
+        default: false
+      main:
+        description: "What happens to main after it is archived"
+        type: choice
+        options: [reset, delete, keep]
+        default: reset
+      min_age_days:
+        description: "Only branches whose last commit is at least this many days old"
+        required: false
+        default: "1"
+      keep:
+        description: "Regex of branch names to keep (blank = none)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write        # the release, the deletes, the main reset
+  pull-requests: read    # open-PR heads are never archived
+
+concurrency:
+  group: archive-branches
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DEPLOY: claude/f1-game-project-26h3ng
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          fetch-depth: 0    # every branch, full history: the bundle must be complete
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_MODE: ${{ inputs.main }}
+          MIN_AGE: ${{ inputs.min_age_days }}
+          KEEP: ${{ inputs.keep }}
+        run: |
+          OUT="$RUNNER_TEMP/archive"; echo "OUT=$OUT" >> "$GITHUB_ENV"; mkdir -p "$OUT"
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json headRefName --jq '.[].headRefName' > "$OUT/open-heads.txt"
+          args=(plan --base "$DEPLOY" --open-heads "$OUT/open-heads.txt" --min-age-days "${MIN_AGE:-1}" --main "${MAIN_MODE:-reset}" --out "$OUT")
+          if [ -n "$KEEP" ]; then args+=(--keep "$KEEP"); fi
+          set -o pipefail
+          node tools/ci/archive-branches.mjs "${args[@]}" | tee "$OUT/plan.log"
+      - name: Bundle and verify
+        run: |
+          if [ ! -s "$OUT/archive.txt" ]; then echo "nothing to archive"; exit 0; fi
+          while IFS=$'\t' read -r name sha; do git update-ref "refs/archive/$name" "$sha"; done < "$OUT/archive.txt"
+          cut -f1 "$OUT/archive.txt" | sed 's|^|refs/archive/|' | git bundle create "$OUT/archive.bundle" --stdin
+          set -o pipefail
+          node tools/ci/archive-branches.mjs verify --bundle "$OUT/archive.bundle" --list "$OUT/archive.txt" | tee -a "$OUT/plan.log"
+      - name: Upload the index
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: archive-index
+          path: |
+            ${{ runner.temp }}/archive/index.md
+            ${{ runner.temp }}/archive/index.json
+            ${{ runner.temp }}/archive/archive.txt
+            ${{ runner.temp }}/archive/delete.txt
+            ${{ runner.temp }}/archive/plan.log
+          if-no-files-found: warn
+      - name: Release the archive
+        if: inputs.apply
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -s "$OUT/archive.txt" ]; then echo "nothing to archive"; exit 0; fi
+          TAG="archive-pre-restart-$(date -u +%F)-${GITHUB_RUN_NUMBER}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          {
+            echo "Branches that shared no history with $DEPLOY, archived before deletion ($(wc -l < "$OUT/archive.txt") branches)."
+            echo
+            echo "Restore one:"
+            echo
+            echo "    gh release download $TAG -p archive.bundle"
+            echo "    git fetch archive.bundle 'refs/archive/<name>:refs/heads/<name>'"
+            echo
+            echo "The full list is index.md."
+          } > "$OUT/notes.md"
+          gh release create "$TAG" "$OUT/archive.bundle" "$OUT/index.md" "$OUT/index.json" \
+            --repo "$GITHUB_REPOSITORY" --target "$(git rev-parse "origin/$DEPLOY")" \
+            --title "Branch archive $(date -u +%F)" --notes-file "$OUT/notes.md"
+          # Nothing is deleted until GitHub holds the whole bundle.
+          want=$(stat -c %s "$OUT/archive.bundle")
+          got=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | select(.name == "archive.bundle") | .size')
+          if [ "$got" != "$want" ]; then echo "::error::uploaded archive.bundle is '$got' bytes, expected $want — not deleting"; exit 1; fi
+          echo "released $TAG: archive.bundle $got bytes"
+      - name: Delete the archived branches
+        if: inputs.apply
+        run: |
+          if [ ! -s "$OUT/delete.txt" ]; then echo "nothing to delete"; exit 0; fi
+          failed=0
+          mapfile -t names < "$OUT/delete.txt"
+          for ((i = 0; i < ${#names[@]}; i += 50)); do
+            git push origin --delete "${names[@]:i:50}" || failed=$((failed + 1))
+          done
+          echo "= archive deleted ${#names[@]} listed, failed batches $failed" | tee -a "$OUT/plan.log"
+          [ "$failed" -eq 0 ]
+      - name: Point main at the deploy tip
+        if: inputs.apply && inputs.main == 'reset'
+        run: |
+          old=$(awk -F'\t' '$1 == "main" { print $2 }' "$OUT/archive.txt")
+          if [ -z "$old" ]; then echo "main was not archived — left alone"; exit 0; fi
+          new=$(git rev-parse "origin/$DEPLOY")
+          git push --force-with-lease="refs/heads/main:$old" origin "$new:refs/heads/main"
+          echo "main: $old -> $new" | tee -a "$OUT/plan.log"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Archive branches'; echo; echo '```'; cat "$OUT/plan.log" 2>/dev/null || echo "no plan"; echo '```'
+            if [ -n "${TAG:-}" ]; then echo; echo "Release: \`$TAG\`"; fi
+            echo; cat "$OUT/index.md" 2>/dev/null || true
+          } >> "$GITHUB_STEP_SUMMARY"
