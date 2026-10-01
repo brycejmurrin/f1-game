@@ -74,6 +74,7 @@ const SWEEPS_ONLY = new Map([
   ["scenery-ground-audit.test.mjs", "test:sweeps — per-circuit geometry"],
   ["shared-track-foundation-characterization.test.cjs", "test:sweeps — per-circuit geometry"],
   ["track-validate-fleet.test.mjs", "test:sweeps — per-circuit geometry (the designer's validator judged on all 52 centrelines)"],
+  ["track-themes-build.test.mjs", "test:sweeps — per-circuit geometry (eight theme presets × two seeds, full custom-circuit builds)"],
   ["spline-project-height.test.mjs", "test:sweeps — per-circuit geometry"],
 ]);
 
