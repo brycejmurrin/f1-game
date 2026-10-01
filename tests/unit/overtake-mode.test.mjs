@@ -244,4 +244,7 @@ test("SAFETY CAR QUEUE (B5.13): the leader runs SC pace, a car > 1 s adrift clos
   // Pace-free: the same field at half the OVERALL SPEED gives the same fractions.
   const half = cars.map((c) => ({ prog: leader.prog - (leader.prog - c.prog) / 2 }));
   assert.equal(RC.scQueueFrac(half[2], half, 5000, half[0], vTop / 2), RC.SC_CATCH);
+  const bumper = { prog: p3.prog + 0.4 };
+  const far = { prog: p3.prog + 3 * q };
+  assert.equal(RC.scQueueFrac(p3, [p3, bumper, far], 5000, leader, vTop), RC.SC_PACE, "0.4 m ahead: already queued");
 });

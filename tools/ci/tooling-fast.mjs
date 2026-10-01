@@ -57,10 +57,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // name, manifest display_override. VM-executed
   // source, no browser, ~0.2 s.
   "tests/unit/a11y-pwa-pass.test.mjs",
-  // Every AUTHORED activation-zone turn table resolves against the BUILT
-  // centreline. One unresolvable pair discards a circuit's whole table and
-  // falls through to ZONE_COUNT — silently, which is how monza shipped a
-  // table nobody read. Node-side via verify-track.cjs, so it is cheap.
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
@@ -84,6 +80,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
+  // Every AUTHORED activation-zone turn table resolves against the BUILT
+  // centreline. One unresolvable pair discards a circuit's whole table and
+  // falls through to ZONE_COUNT — silently, which is how monza shipped a
+  // table nobody read. Node-side via verify-track.cjs, so it is cheap.
+  // archive-branches.yml's archive-then-delete: the selection, the exact
+  // bundle check, and a real-git restore round trip. ~1 s.
+  "tests/unit/archive-branches.test.mjs",
   "tests/unit/assert-audit.test.mjs",
   "tests/unit/assets-pack.test.mjs",
   "tests/unit/audio-recovery.test.mjs",
@@ -594,6 +597,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/trim-comments.test.mjs",
+  // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
+  // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
+  "tests/unit/tumftm-import.test.mjs",
   "tests/unit/twin-drift.test.mjs",
   "tests/unit/twin-fidelity.test.mjs",
   "tests/unit/twinned-specs.test.mjs",
