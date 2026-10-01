@@ -73,6 +73,9 @@ export function makeDom(opts = {}) {
       hidden: false, disabled: false, checked: false, tabIndex: -1,
       textContent: "", value: "", title: "", type: "",
       dataset: {}, children: [], parentNode: null, parentElement: null,
+      // Element children only (no text nodes here): enough for the
+      // `while (el.firstChild) el.removeChild(el.firstChild)` clear idiom.
+      get firstChild() { return el.children[0] || null; },
       style: (() => { const st = {}; return { getPropertyValue: (k) => st[k] || "", setProperty: (k, v) => { st[k] = String(v); }, removeProperty: (k) => { delete st[k]; }, _decls: st }; })(),
       _listeners: listeners,
       classList: {

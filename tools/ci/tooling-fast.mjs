@@ -188,6 +188,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // cost under a second and belong where the rule they guard is edited.
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  "tests/unit/data-hub-offline.test.mjs",
   "tests/unit/data-lazy-loader.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
@@ -320,8 +321,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
@@ -587,6 +590,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-maps-corners.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   "tests/unit/track-preview-plan.test.mjs",
+  // RANDOMISE builds clockwise (Σk < 0 through the engine) with the grid side
+  // of the start straight ≥ the exit side, over 30 seeds; ~3 s.
+  "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   "tests/unit/twin-drift.test.mjs",
