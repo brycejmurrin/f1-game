@@ -360,7 +360,7 @@ test.describe("TLX — boot", () => {
     // skidVerts stayed 0 for 60 s on both attempts, and the timeout's apex-state
     // dump is cut before any field that could tell (a) the stamp gate in
     // js/game.js — `state === "race"`, `(skid > 0.25 || c.offroad) && speed > 10`,
-    // where offroad is |x| > hw && !onKerb (js/game.js:4136) — from (b) a
+    // where offroad is |x| > hw && !onKerb && !inPitLane (`updateCar` in js/game.js) — from (b) a
     // stamped ring buffer the TLX batch never drew (drawSkidBatch returns
     // early on a null fx). `cam` is there because the cockpit rig `continue`s
     // past the stamp (js/game.js, cockpitRigOnly) — a persisted camera choice

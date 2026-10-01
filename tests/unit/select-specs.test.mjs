@@ -177,7 +177,7 @@ test("TRACKED covers the paths that make a selection meaningless", () => {
 
 test("every TRACKED pattern matches a file that exists", () => {
   // THE LINT THAT WOULD HAVE CAUGHT IT, and the reason pick-tests has no dead
-  // rules: tests/unit/pick-tests.test.mjs:120 has run exactly this check over
+  // rules: tests/unit/pick-tests.test.mjs ("no rule is dead") has run exactly this check over
   // RULES for months. TRACKED never had it, so four dead alternatives sat in
   // one regex, silently, while the hand-listed examples above all passed —
   // they only ever probed the members someone thought to name.
