@@ -1969,7 +1969,7 @@ function makeCars() {
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
-    const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
+    const factoryParts = Parts.resolveSetup((Career.inCareer() && Career.aiSetup && Career.aiSetup(team)) || Parts.getFactorySetup(team), team);
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
