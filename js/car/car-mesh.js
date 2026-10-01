@@ -954,10 +954,10 @@ function _rigLiner(out, rings, col) {
 function _cockpitLowerTub(out, kind, accent) {
   const carbon=[0.065,0.070,0.080], edge=[0.16,0.17,0.19], metal=[0.32,0.34,0.36];
   const pad=kind === "classic" ? [0.14,0.085,0.05] : kind === "suede" ? [0.14,0.13,0.12] : [0.09,0.095,0.105];
-  _rigBox(out,0,0.245,0.20,0.66,0.040,1.80,carbon); // continuous opaque floor
+  _rigBox(out,0,0.245,-0.725,0.66,0.040,3.65,carbon); // continuous opaque floor
   _rigBox(out,0,0.450,1.08,0.66,0.450,0.040,carbon); // closed footwell end
   for (const side of [-1,1]) {
-    const rings=[[-0.70,0.326,0.690],[0.22,0.313,0.677],[1.10,0.300,0.655]].map(([z,x,y])=>{
+    const rings=[[-2.55,0.326,0.690],[0.22,0.313,0.677],[1.10,0.300,0.655]].map(([z,x,y])=>{
       const ring=[[side*0.230,0.265,z],[side*0.255,0.245,z],[side*x,y,z],[side*(x-0.016),y-0.008,z],
         [side*(x-0.027),y-0.035,z],[side*(x-0.037),y-0.115,z],[side*0.244,0.410,z]];
       return side>0 ? ring : ring.reverse();
@@ -974,6 +974,8 @@ function _cockpitLowerTub(out, kind, accent) {
       _rigBar(out,side*0.267,y,side*0.273,y,1.051,0.0015,0.001,[0.025,0.03,0.035]);
     }
   }
+  _rigRounded(out,0,0.56,-0.79,0.66,0.63,0.10,0.025,carbon); // sealed rear bulkhead
+  _rigRounded(out,0,0.79,-0.72,0.48,0.20,0.09,0.04,pad); // rear headrest
   _rigRounded(out,0,0.345,-0.025,0.44,0.085,0.37,0.018,pad); // seat base
   _rigBeam(out,[-0.20,0.382,0.10],[0.20,0.382,0.10],0.004,edge);
   _rigBox(out,0,0.320,0.76,0.34,0.050,0.16,carbon); // raised pedal heel rest
@@ -984,22 +986,23 @@ function _cockpitLowerTub(out, kind, accent) {
 function _teamCabin(out, pad, stitch) {
   const CARB = [0.08,0.085,0.095];
   for (const side of [-1,1]) {
-    _rigTube(out,[[side*0.298,0.719,-0.16],[side*0.296,0.716,-0.04],[side*0.291,0.708,0.10],
+    _rigTube(out,[[side*0.302,0.739,-0.80],[side*0.300,0.729,-0.55],[side*0.298,0.719,-0.16],[side*0.296,0.716,-0.04],[side*0.291,0.708,0.10],
       [side*0.281,0.694,0.24],[side*0.262,0.682,0.36],[side*0.231,0.687,0.42]],0.024,pad);
     _rigBeam(out,[side*0.288,0.730,-0.04],[side*0.274,0.698,0.31],0.003,stitch);
     _rigRounded(out,side*0.281,0.704,0.21,0.035,0.044,0.07,0.008,CARB);
     _rigDisc(out, side*0.281, 0.713, 0.172, 0.009, 12, [0.26,0.28,0.30]);
     _rigDisc(out, side*0.281, 0.713, 0.171, 0.004, 8, [0.035,0.04,0.045]);
   }
+  _rigTube(out,[[-0.302,0.739,-0.80],[-0.20,0.754,-0.82],[0,0.765,-0.82],[0.20,0.754,-0.82],[0.302,0.739,-0.80]],0.024,pad);
   _rigTube(out,[[-0.231,0.687,0.42],[-0.15,0.704,0.44],[0,0.709,0.45],[0.15,0.704,0.44],[0.231,0.687,0.42]],0.024,CARB);
   _rigRounded(out,0,0.721,0.400,0.44,0.012,0.008,0.005,pad);
   _rigBar(out,-0.18,0.728,0.18,0.728,0.394,0.002,0.002,stitch);
 }
 function _classicCabin(out, paint) {
   const LEATHER = [0.13, 0.075, 0.045], CHROME = [0.62, 0.62, 0.65], FACE = [0.55, 0.53, 0.48];
-  // Padded scuttle round the front of the opening. It starts just ahead of the
-  // eye (z -0.20): run back past it, the rails filled the lower corners.
-  const rim = [[-0.30, 0.69, -0.05], [-0.30, 0.69, 0.25], [-0.18, 0.71, 0.40], [0.18, 0.71, 0.40], [0.30, 0.69, 0.25], [0.30, 0.69, -0.05]];
+  // Leather coaming follows the entire opening, including behind the driver.
+  const rim = [[0,0.75,-0.82],[-0.30,0.72,-0.80],[-0.30,0.69,-0.05],[-0.30,0.69,0.25],[-0.18,0.71,0.40],
+    [0.18,0.71,0.40],[0.30,0.69,0.25],[0.30,0.69,-0.05],[0.30,0.72,-0.80],[0,0.75,-0.82]];
   _rigTube(out,rim,0.020,LEATHER);
   _rigRounded(out, 0, 0.745, 0.47, 0.50, 0.13, 0.03, 0.038, paint);        // painted dash panel
   _rigGauge(out, 0, 0.75, 0.453, 0.045, 0.62, FACE, CHROME);     // rev counter, centre

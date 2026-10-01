@@ -244,6 +244,27 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
 @keyframes dh-spin { to { transform: rotate(360deg); } }
 .dh-loading-text { font-size: var(--fs-2); letter-spacing: 0.2em; }
 .dh-error-msg { font-size: var(--fs-4); text-align: center; max-width: 360px; }
+.dh-error-msg[data-role="title"] {
+  font-family: var(--font-hud);
+  font-size: var(--fs-5);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.dh-error-msg[data-role="hint"] {
+  font-size: var(--fs-micro);
+  color: var(--dim);
+  max-width: 420px;
+}
+.dh-error[data-reason="offline"],
+.dh-error[data-reason="offline-cached"] {
+  outline: 1px solid color-mix(in oklab, var(--sec-slow) 50%, transparent);
+  outline-offset: -1px;
+}
+.dh-error[data-reason="upstream"],
+.dh-error[data-reason="upstream-cached"] {
+  outline: 1px solid color-mix(in oklab, var(--you) 45%, transparent);
+  outline-offset: -1px;
+}
 /* ON THE LADDER. Measured 91x42 on a 393px phone — the only control in the hub
    that was short of the 52px touch floor (.dh-tab is already on it, and the
    chips take --chip-h deliberately). It is the recovery button on an error

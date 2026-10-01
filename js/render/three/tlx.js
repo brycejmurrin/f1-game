@@ -3204,6 +3204,7 @@ const TLX = (function () {
             return;
           }
           _poolBatch++;
+          _instAlive.clear();
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -3224,8 +3225,7 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
-          const prevSky = scene.backgroundNode;
-          const prevSkyVis = skyMesh ? skyMesh.visible : false;
+          _hideUndrawnInstanced();
           // Baseline at the first face of each probe pass.
           if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
           // Per-FACE window. The old cycle-wide compare (face 0 .. face 5 is
@@ -3236,13 +3236,7 @@ const TLX = (function () {
           let faceOk = true;
           try {
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
-            // Software GL: the procedural sky is a second full TSL compile+
-            // fill per face. Reflections stay road/terrain; the 64px cube
-            // never resolved the sky disc anyway.
-            if (softContent("env")) {
-              scene.backgroundNode = null;
-              if (skyMesh) skyMesh.visible = false;
-            } else pinSkyMaterial();
+            pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
             _gpuLastOperation = "render-env";
             renderer.render(scene, faceCam);
@@ -3263,10 +3257,6 @@ const TLX = (function () {
             // site. Keep the first STACK too: on real hardware this throws on
             // every face and there is no console to read it out of.
             if (!_envFailStack) _envFailStack = String((e && e.stack) || "").slice(0, 600);
-          }
-          if (softContent("env")) {
-            scene.backgroundNode = prevSky;
-            if (skyMesh) skyMesh.visible = prevSkyVis;
           }
           renderer.setRenderTarget(softOutRT());
           if (lit && lit.setEnvCube) {
