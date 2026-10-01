@@ -154,6 +154,8 @@ test("Live uses the hub content as its only stacked scroll owner", async ({ page
   await dataReady(page);
   await page.getByRole("tab", { name: "LIVE" }).click();
   await expect(page.locator(".dh-class-rows .dh-row")).toHaveCount(20);
+  // Swap-loaded fonts change glyph overflow; measure the settled layout.
+  await page.evaluate(() => document.fonts.ready);
 
   const overflow = await page.evaluate(() => {
     const content = document.querySelector(".dh-content");
