@@ -219,6 +219,26 @@ const CustomTracks = (function () {
     });
     return _editorLoad;
   }
+  /** A #track=<APXT1 code> link (TrackCodec.shareUrl): load the designer and
+   *  open the shared design in it, then strip the fragment so a reload does not
+   *  re-open it. Mid-race it waits, fragment intact, for the menu (game.js
+   *  re-reads it on quit, as it does the #ghost= link). Resolves true when a
+   *  design opened, false when the link was refused or absent, null when deferred. */
+  function consumeTrackHash() {
+    const hash = typeof location !== "undefined" ? String(location.hash || "") : "";
+    if (!/[#&]track=/.test(hash)) return Promise.resolve(false);
+    if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) { Log.info("track", "share link deferred: racing"); return Promise.resolve(null); }
+    return ensureEditor().then(async (ok) => {
+      if (!ok || typeof TrackCodec === "undefined" || typeof TrackDesigner === "undefined") return false;
+      const code = TrackCodec.fromHash(location.hash);
+      const r = await TrackCodec.decode(code);
+      try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(location.hash)); } catch (_) { /* a sandboxed page */ }
+      if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); return false; }
+      Log.info("track", "share link opened " + r.id);
+      TrackDesigner.open({ design: r.design, shared: true });
+      return true;
+    });
+  }
   function create(G, hooks) {
     _G = G; _hooks = hooks || {};
     // The TRACK DESIGNER title door is handed in as an element (game.js `$()`),
@@ -229,11 +249,12 @@ const CustomTracks = (function () {
       if (G.soundOn && typeof GameAudio !== "undefined") GameAudio.uiSelect();
       ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open(); });
     };
-    return { ensureEditor };
+    if (typeof window !== "undefined" && window.addEventListener) { consumeTrackHash(); window.addEventListener("hashchange", consumeTrackHash); }
+    return { ensureEditor, consumeTrackHash };
   }
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { KEY, DRAFT_KEY, LIMITS, sanitize, sanitizeName, idOf, canonical, toRaw, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, ensureEditor, create };
+  return { KEY, DRAFT_KEY, LIMITS, sanitize, sanitizeName, idOf, canonical, toRaw, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, ensureEditor, consumeTrackHash, create };
 })();
 Object.freeze(CustomTracks);

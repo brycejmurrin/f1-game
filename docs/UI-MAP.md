@@ -30,7 +30,7 @@ generated row.
 ├─ RACE A FRIEND ─> #vsfriend
 ├─ SEASON ────────> #season-setup ──> customise ──> #race-settings ─> race
 ├─ DATA HUB ──────> #datahub
-├─ TRACK DESIGNER > #trackdesigner (canvas + rail + MY CIRCUITS; SAVE / RACE / TIME TRIAL → #select)
+├─ TRACK DESIGNER > #trackdesigner (canvas + rail + MY CIRCUITS; SAVE / RACE / TIME TRIAL → #select; SHARE / EXPORT / IMPORT; a #track=<code> link opens it at boot, and #select's EDIT IN DESIGNER chip reopens a saved circuit)
 ├─ GARAGE ────────> #carsetup / #customize
 ├─ SETTINGS ──────> #pmsettings (→ #tl-editor, #garrival)
 └─ HOW TO PLAY ───> #howtoplay

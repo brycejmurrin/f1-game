@@ -31,7 +31,7 @@ const TrackThemes = (function () {
       swatch: ["#1b5e20", "#cfd8dc"],
       theme: "green", sceneryTheme: "park", night: false, street: false,
       pal: pal(ATM.alpineGreen),
-      terrainOuter: 160, flatTerrain: false, elevStyle: "hilly",
+      terrainOuter: 160, flatTerrain: false, elevStyle: "hilly", terrainMat: "SNOW",
       furniture: { tree: "fir", fol: [0.16, 0.32, 0.18], lamp: "none" },
       standSet: ["darkSteel", "alu", "scaffold"],
     },
@@ -40,7 +40,7 @@ const TrackThemes = (function () {
       swatch: ["#c9a35b", "#f4e3b2"],
       theme: "desert", sceneryTheme: "desert", night: false, street: false,
       pal: pal(ATM.dustyBowl, { runoff: COL.desertSand }),
-      terrainOuter: 120, flatTerrain: true, elevStyle: "flat",
+      terrainOuter: 120, flatTerrain: true, elevStyle: "flat", terrainMat: "SAND",
       furniture: { tree: "palm", fol: [0.28, 0.40, 0.18], lamp: "arm", lc: [1.0, 0.80, 0.45], sparse: true },
       standSet: ["sandstone", "concrete", "alu"],
     },
@@ -49,7 +49,7 @@ const TrackThemes = (function () {
       swatch: ["#3e2723", "#ffb74d"],
       theme: "desert", sceneryTheme: "night-event", night: true, street: false,
       pal: pal(ATM.warmNight, { runoff: [0.30, 0.26, 0.20] }),
-      terrainOuter: 120, flatTerrain: true, elevStyle: "flat",
+      terrainOuter: 120, flatTerrain: true, elevStyle: "flat", terrainMat: "SAND",
       furniture: { tree: "palm", fol: [0.26, 0.38, 0.18], lamp: "arm", lc: [1.0, 0.82, 0.50], sparse: true },
       standSet: ["sandstone", "darkSteel", "alu"],
     },
@@ -113,6 +113,7 @@ const TrackThemes = (function () {
     };
     if (p.cityStyle) out.cityStyle = clone(p.cityStyle);
     if (p.pit) out.pit = clone(p.pit);
+    if (p.terrainMat) out.terrainMat = p.terrainMat;   // "SAND" / "SNOW": the ground beyond the verge (js/track/core/mesh.js)
     return out;
   }
 

@@ -4467,6 +4467,7 @@ function quitToMenu() {
   $("mb-standings").hidden = !hasSeason;
   refreshCareerButton();
   consumeGhostHash();   // a #ghost= link deferred while racing lands now (no-op without one)
+  CustomTracks.consumeTrackHash();   // same for a #track= share link (opens the designer; no-op without one)
   // ...and so does a #vs= invite link the lobby deferred (racing / in a room).
   if (/[#&]vs=/.test(location.hash)) ensureNet().then((ok) => { if (ok) netLobby.openFromUrl(); });
 }
