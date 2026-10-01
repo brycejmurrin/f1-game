@@ -213,9 +213,11 @@ test("a changed key carries its value, the default it replaced and the source th
     "apex26.cockpitHalo": "0", "apex26.metricsSize": "l",
     "apex26.lightTune": JSON.stringify({ "monza|day|dry": { sunI: 1.2 } }),
     "apex26.camTune": JSON.stringify({ chase: { dist: 2 } }),
+    "apex26.camTuneGlobal": JSON.stringify({ fov: 4 }),
+    "apex26.camComfort": JSON.stringify({ bob: 0.3 }),
   } });
   const f = collect("changes");
-  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camTune", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
+  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneGlobal", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
   assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
@@ -225,6 +227,8 @@ test("a changed key carries its value, the default it replaced and the source th
   assert.equal(f.defaults.camera.cockpitHalo, "1");
   assert.deepEqual(f.settings.lighting.lightTune, { "monza|day|dry": { sunI: 1.2 } });
   assert.deepEqual(f.settings.camera.camTune, { chase: { dist: 2 } });
+  assert.deepEqual(f.settings.camera.camTuneGlobal, { fov: 4 });
+  assert.deepEqual(f.settings.camera.camComfort, { bob: 0.3 });
   for (const name of f.changed) assert.match(f.where[name], /^js\//, name + " names its source");
   assert.equal(f.settings.driving.reliability, undefined, "an untouched key is absent from CHANGES");
 });
