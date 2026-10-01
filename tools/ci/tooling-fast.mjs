@@ -111,6 +111,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
   // and line presence, pinned against real git in a throwaway repo. ~1 s.
   "tests/unit/branch-audit.test.mjs",
+  "tests/unit/cam-avoid.test.mjs",
+  "tests/unit/cam-comfort.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
@@ -419,6 +421,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // transport — same VM harness, no browser, ~0.3 s.
   "tests/unit/phone-pad.test.mjs",
   "tests/unit/phone-touch-surface.test.mjs",
+  "tests/unit/photo-kit.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   // The physics baseline's provenance stamp (_blessed): reason, data hash,
   // blessing commit. One file read and one git call, well under a second, and
@@ -602,6 +605,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // of the start straight ≥ the exit side, over 30 seeds; ~3 s.
   "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
+  "tests/unit/trackside.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
   // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
