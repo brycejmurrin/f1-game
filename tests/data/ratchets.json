@@ -12,9 +12,9 @@
       "lines": 4118
     },
     "js/game.js": {
-      "codeLines": 5230,
+      "codeLines": 5139,
       "gMembers": 280,
-      "lines": 9752,
+      "lines": 9570,
       "topLets": 159
     },
     "js/lighting/presets.js": {
