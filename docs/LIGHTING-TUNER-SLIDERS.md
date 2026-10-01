@@ -684,7 +684,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `rainShearWind` | RAIN SPEED SLANT | 0 … 2.25 | 0.9 | — |   | particles.js×2 |
 | `rainShearLen` | RAIN SPEED STRETCH | 0 … 5 | 2 | — |   | particles.js×2 |
 | `windSpeed` | WIND | 0 … 3 | 1 | `uWind` |   | live.js×2, glx.js×2 |
-| `windDir` | WIND DIRECTION | 0 … 360 | 35 | — |   | glx.js×2 |
+| `windDir` | WIND DIRECTION | -180 … 180 | 35 | — |   | glx.js×2 |
 | `lightning` | LIGHTNING FREQ | 0 … 2.75 | 1 | — | ✓ | game.js×4, glx.js×2 |
 | `lightningFlash` | LIGHTNING FLASH | 0 … 2 | 1 | — |   | game.js×2 |
 | `lightningDecay` | LIGHTNING DECAY | 0.4 … 19.35 | 8 | — |   | game.js×4 |
