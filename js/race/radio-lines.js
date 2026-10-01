@@ -100,8 +100,9 @@ const RadioLines = (function () {
     "tv.charge": ["{a} IS ON A CHARGE. P{pos} FROM P{grid}", "{a} CARVING THROUGH, UP TO P{pos}"],
     "tv.fastest": ["FASTEST LAP FOR {a}. {time}", "{a} GOES FASTEST, A {time}"],
     "tv.retire": ["{a} IS OUT OF THE RACE. {why}", "HEARTBREAK FOR {a}. {why}"],
-    "tv.mistake": ["{a} RUNS WIDE!", "{a} LOCKS UP INTO THE CORNER", "MISTAKE FROM {a}",
-      "{a} MISSES THE BRAKING POINT"],
+    // Pack-safe (assets/voice/fable.json): no "runs wide"/"locks up" clips yet —
+    // "OH" + surname is the closest committed reaction without regenerating the pack.
+    "tv.mistake": ["OH! {a}", "{a}. OH!", "OH! {a}!"],
     "tv.pit": ["{a} PITS FROM P{pos}", "PIT STOP FOR {a}, RUNNING P{pos}"],
     "tv.sc": ["THE SAFETY CAR IS OUT!", "SAFETY CAR! THE FIELD BUNCHES UP"],
     "tv.vsc": ["VIRTUAL SAFETY CAR. THE FIELD SLOWS", "VSC DEPLOYED"],

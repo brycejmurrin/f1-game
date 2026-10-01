@@ -381,7 +381,8 @@ test("a nearby AI mistake triggers engineer + commentary radio lines", () => {
   // eng.rivalErr stays inside the recorded voice pack ("AHEAD. PUSH NOW" etc.).
   const eng = after.filter((s) => s.kind === "info" && /AHEAD|PUSH NOW|ATTACK|GO FOR IT|LINE IT UP/i.test(s.msg)
     && /AAA|Driver AAA/i.test(s.msg));
-  const tv = after.filter((s) => s.kind === "comm" && /RUNS WIDE|LOCKS UP|MISTAKE FROM|MISSES THE BRAKING/i.test(s.msg));
+  // TV lines stay inside the commentator pack ("OH! {name}" — see radio-lines.js).
+  const tv = after.filter((s) => s.kind === "comm" && /\bOH\b/i.test(s.msg) && /AAA|Driver AAA/i.test(s.msg));
   assert.ok(eng.length >= 1, `engineer silent on rival mistake: ${JSON.stringify(after)}`);
   assert.ok(tv.length >= 1, `commentary silent on rival mistake: ${JSON.stringify(after)}`);
 });
