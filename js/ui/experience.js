@@ -22,8 +22,8 @@ const UiExperience = (function () {
         shot: shots.includes(camera) ? camera : shots[index % shots.length] };
     }
     return {
-      enter(mode, camera) {
-        if (!visiting) {
+      enter(mode, camera, retainScene = false) {
+        if (!visiting && !retainScene) {
           const saved = store.get("homeVisit", 0);
           index = Number.isSafeInteger(saved) && saved >= 0 ? saved % 20 : 0;
           store.set("homeVisit", (index + 1) % 20); visiting = true;
@@ -172,7 +172,7 @@ const UiExperience = (function () {
       const covered = overlay.inert && !photoOpen;
       if (!visible || covered || failure) { variation.leave(); stopHome(); return false; }
       const selected = AppearanceStudio.scene();
-      s = { ...selected, ...variation.enter(selected.mode, AppearanceStudio.homeCamera()) };
+      s = { ...selected, ...variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen) };
       const motion = s.motion === "ambient" && TitleFx.mode() !== "reduce" && !photoOpen ? "ambient" : "still";
       const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
       const pane = rect ? [rect.left, rect.top, rect.width, rect.height].map(Math.round).join(":") : "full";

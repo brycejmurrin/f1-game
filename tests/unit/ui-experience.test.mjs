@@ -47,3 +47,12 @@ test('an unready outdoor Photo request retains its caller instead of acquiring a
   assert.equal(ctx.api.openPhoto(G,deps),false);
   assert.equal(opened,0);assert.equal(waiting,1);assert.equal(settings.hidden,false);assert.equal(pause.hidden,false);assert.equal(G.paused,false);
 });
+
+test('Photo retains the selected mixed environment after Settings covers Home, then the next Home visit advances once', () => {
+  let next=0,writes=0;const picker=ctx.api.homeVariation({get:()=>next,set:(_key,value)=>{next=value;writes++;}});
+  const original=picker.enter('auto','auto');picker.leave();
+  for(let i=0;i<4;i++)assert.deepEqual(JSON.parse(JSON.stringify(picker.enter('auto','auto',true))),JSON.parse(JSON.stringify(original)));
+  assert.equal(writes,1,'opening Photo or resizing it cannot select a different renderer owner');
+  picker.leave();assert.equal(picker.enter('auto','auto').mode,'track');assert.equal(writes,2);
+  picker.enter('auto','auto');assert.equal(writes,2,'the normal Home redraw still holds its visit');
+});
