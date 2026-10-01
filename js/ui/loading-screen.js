@@ -299,7 +299,7 @@ const LoadingScreen = (function () {
     /** Record how the flyby ended. Only a FLYBY counts — the no-world card is
      *  700 ms and nobody is choosing anything by letting it run. */
     function noteFlyby(skipped) {
-      if (phase !== "run" && phase !== "garage") return;   // a skip of the garage drive-out is a skip of the cinematic
+      if (phase !== "run" && phase !== "garage" && phase !== "build") return;   // preparation and drive-out skips both count toward the cinematic
       try { if (store && store.set) store.set("flySkips", nextSkips(readSkips(), skipped)); }
       catch (_) { /* storage refused: the streak just does not build */ }
     }
@@ -583,7 +583,7 @@ const LoadingScreen = (function () {
       if (e && e.type === "keydown" && e.repeat) return;
       // THE GARAGE PHASE skips too, straight to the race: the drive-out and the
       // flyby are one cinematic, and a skip is a verdict on it (the streak counts it).
-      if (phase === "garage") {
+      if (phase === "garage" || (phase === "build" && skipCb)) {
         if (!skipCb || Date.now() - flyT0 < SKIP_GRACE_MS) return;
         if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
         const cb = skipCb; skipCb = null;
@@ -710,11 +710,9 @@ const LoadingScreen = (function () {
       return true;
     }
 
-    /* THE BUILD. RACE! before the menu built the world: the card goes up over the
-     * usual scrim while game.js builds it, then run() takes over. No timer, no
-     * skip (nothing to skip to yet), and not active(): the canvas stays hidden,
-     * so the previous circuit never shows through. */
-    function building(info) {
+    /* THE BUILD. The canvas stays hidden until preparation settles. An optional
+     * skip callback skips the cinematic afterward, without interrupting the build. */
+    function building(info, onSkipCb) {
       stop();
       const r = root();
       if (!r || !info || !info.track) return false;
@@ -722,14 +720,16 @@ const LoadingScreen = (function () {
       applyCard();
       r.hidden = false;
       setPhase("build");
+      armSkip(onSkipCb);
       return true;
     }
 
     /* THE GARAGE. RACE! opens on the car driving out of the setup screen's
-     * garage (js/garage/setup-camera.js startDriveOut), and that shot is the
+     * garage (js/garage/setup-camera.js startDriveOut), after cold preparation,
+     * and that shot is the
      * car's alone: no card, no scrim, no letterbox — the card arrives with the
      * flyby and the announcer. Up only to own the screen while game.js draws
-     * the garage (and builds the circuit behind it); no timer, and not active().
+     * the garage; no timer, and not active().
      * A tap, key or pad press calls `onSkip` (the race, not the flyby, is next).
      * Painted now, so building() or run() only has to fade it in. */
     function garage(info, onSkipCb) {
@@ -740,6 +740,10 @@ const LoadingScreen = (function () {
       applyCard();
       r.hidden = false;
       setPhase("garage");
+      armSkip(onSkipCb);
+      return true;
+    }
+    function armSkip(onSkipCb) {
       skipCb = typeof onSkipCb === "function" ? onSkipCb : null;
       if (skipCb) {
         flyT0 = Date.now();   // SKIP_GRACE_MS: the second click of a double-click on START is not a skip
@@ -749,7 +753,6 @@ const LoadingScreen = (function () {
         padButtons((k, down) => { if (down) padHeld.add(k); });   // held from the menu: not a skip
         if (typeof setInterval === "function") padTimer = setInterval(pollPad, 100);
       }
-      return true;
     }
 
     /* THE HANDOFF. run() fires `go` (startRace) and the race owns the screen

@@ -28,6 +28,7 @@ const RaceEntryProfile = (() => {
   let sawWarming = false;
   let sawReady = false;
   let endAfterReady = 0;
+  let generation = 0, presentationEnabled = true;
 
   function now() {
     try { return performance.now(); } catch (_) { return Date.now(); }
@@ -59,7 +60,8 @@ const RaceEntryProfile = (() => {
     try {
       const types = PerformanceObserver.supportedEntryTypes;
       if (types && types.indexOf && types.indexOf("longtask") < 0) return;
-      observer = new PerformanceObserver(onLongTask);
+      const mine = generation;
+      observer = new PerformanceObserver((list) => { if (mine === generation) onLongTask(list); });
       observer.observe({ type: "longtask", buffered: true });
       supported = true;
     } catch (_) {
@@ -76,6 +78,7 @@ const RaceEntryProfile = (() => {
 
   function begin(tag) {
     disarmObserver();
+    generation++; presentationEnabled = true;
     legs = [];
     marks = [];
     longTasks = [];
@@ -134,6 +137,7 @@ const RaceEntryProfile = (() => {
   }
 
   function raiseHandoff(screen) {
+    presentationEnabled = true;
     mark("handoff:raise");
     screen.handoff();
   }
@@ -152,21 +156,34 @@ const RaceEntryProfile = (() => {
 
   /** Lower the handoff card on the first painted present; tick the window. */
   function afterPresent(screen, gfx) {
-    if (screen.phase() === "handoff") {
+    const handoff = screen.phase() === "handoff", watching = armed && presentationEnabled;
+    if (handoff || watching) {
       const warming = !!(gfx.warming && gfx.warming());
-      notePresent(warming);
-      if (!warming) { mark("handoff:lower"); screen.stop(); }
+      if (watching) notePresent(warming);
+      if (handoff && !warming) { mark("handoff:lower"); screen.stop(); }
     }
     tickFrame();
   }
 
-  /** sessionEntry.begin wrapped so begin/end/scenery marks stay out of game.js. */
+  /** Latch identity and profiler ownership survive duplicate/superseded starts. */
   function runSession(sessionEntry, key, scenery, body, stillWanted, onFail) {
-    begin("startRace");
-    return sessionEntry.begin("race", key,
-      () => spanAsync("ensureScenery", scenery),
-      body, stillWanted,
-      (e) => { end(); onFail(e); });
+    let owner = 0;
+    const owns = () => owner !== 0 && owner === generation;
+    const request = sessionEntry.begin("race", key, async () => {
+      begin("startRace"); owner = generation; presentationEnabled = false;
+      mark("ensureScenery:start");
+      try { return await scenery(); }
+      finally { if (owns()) mark("ensureScenery:end"); }
+    }, body, stillWanted, (e) => {
+      if (owns()) end();
+      onFail(e);
+    });
+    request.then((result) => {
+      if (!owns()) return;
+      if (result === false || (result && result.kind === "canceled")) end();
+      else { mark("session:committed"); presentationEnabled = true; }
+    }, () => { if (owns()) end(); });
+    return request;
   }
 
   function blockMs() {

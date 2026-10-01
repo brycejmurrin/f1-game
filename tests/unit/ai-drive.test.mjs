@@ -67,11 +67,27 @@ test("awareness shortens the stuck dig-out threshold", () => {
   assert.ok(A.stuckThreshold(mid) > 0.4 && A.stuckThreshold(mid) < 1.2);
 });
 
-test("awareness widens the following pad", () => {
-  assert.ok(A.followPad(ace) > A.followPad(rook));
-  assert.ok(A.followPad(ace, true) < A.followPad(ace, false));
+test("the follow gap is a time headway: s0 + v·T, awareness widens T", () => {
   assert.equal(A.followBase(false), 6);
   assert.equal(A.followBase(true), 8);
+  assert.ok(A.followTime(ace) > A.followTime(rook), "awareness leaves more time");
+  const T = A.followTime(mid, false);
+  assert.ok(T >= 0.15 && T <= 0.30, `T ${T} s outside the 0.15..0.30 s band`);
+  // IN SECONDS AT SPEED: the gap grows with speed (it was a flat ~7.5 m, 0.1 s at 75 m/s)
+  const g40 = A.followGap(mid, false, 40), g20 = A.followGap(mid, false, 20);
+  assert.ok(Math.abs(g40 - (6 + 40 * T)) < 1e-9 && g40 > g20, `gap at 40 m/s ${g40}`);
+  assert.ok((g40 - 6) / 40 > 0.15, "more than 0.15 s of headway at racing speed (the old pad was ~0.04 s)");
+  // a latched/armed pass or a tow tightens it to 0.05 s; `extra` adds seconds
+  assert.ok(Math.abs(A.followGap(mid, false, 40, 1) - (6 + 40 * 0.05)) < 1e-9);
+  // STREETS keep the metre gap (8 m + the old awareness pad, halved), only the first-lap `extra` is time
+  assert.ok(Math.abs(A.followGap(mid, true, 40, 1) - (8 + (-0.8 + 3 * 0.75) * 0.5)) < 1e-9, "street: the old gap, tight or not");
+  assert.equal(A.followGap(mid, true, 40, 0), A.followGap(mid, true, 20, 1), "street: not a headway");
+  assert.ok(Math.abs(A.followGap(mid, true, 40, 0, null, 0, null, null, 0.2) - A.followGap(mid, true, 40, 0) - 8) < 1e-9, "street: the first lap still adds time");
+  assert.ok(A.followGap(ace, true, 30) > A.followGap(rook, true, 30), "street: awareness still widens it");
+  assert.ok(Math.abs(A.followGap(mid, false, 40, 0, null, 0, null, null, 0.1) - (6 + 40 * (T + 0.1))) < 1e-9);
+  // ...and it stays inside the tow's reach (TOW_RANGE 34 m) at any speed
+  assert.ok(A.followGap(ace, false, 95) <= 28, `capped: ${A.followGap(ace, false, 95)}`);
+  assert.equal(A.followGap(mid, false, 0), 6, "at a standstill it is s0");
 });
 
 test("aware drivers yield more on contact", () => {
@@ -229,6 +245,7 @@ test("compound-corner brake limits exactly match the tightest individual sample"
     }));
     const ctx = { traits: { ...mid, skill: 0.8 + rnd() * 0.2 }, samples,
       aeroLoad: rnd(), latMax: 22, brake: 22, grip: 0.4 + rnd(),
+      pace: [0.05, 0.5, 1, 2, undefined][run % 5], vmax: [1, 72, 120, undefined][run % 4],
       blocker: run % 2 === 0, blockerGap: 8, blockerSpeed: 50, speed: 55,
       roomL: 3, roomR: 1, errMul: run % 3 === 0 ? 1.05 : 1 };
     const expected = Math.min(...samples.map(s => A.brakeTarget({ ...ctx, samples: [s] })));
@@ -236,6 +253,17 @@ test("compound-corner brake limits exactly match the tightest individual sample"
     assert.equal(A.brakeTarget({ ...ctx, samples: samples.slice().reverse() }), expected);
   }
   assert.equal(A.brakeTarget({ traits: mid, samples: [] }), 1e6);
+});
+
+test("brake planner carries the public corner envelope across consecutive pace settings", () => {
+  for (const pace of [undefined, 0.05, 0.5, 1, 2, 0.5]) {
+    for (const vmax of [undefined, 1, 72, 120]) {
+      const sample = { d: 4, k: 0.03, bank: 0.2 };
+      const corner = A.cornerSpeed(sample.k, 22 * (1 + Math.sin(sample.bank) * 0.8), pace, vmax) * mid.skill;
+      const expected = Math.sqrt(corner * corner + 2 * 22 * 0.85 * sample.d);
+      assert.equal(A.brakeTarget({ traits: mid, samples: [sample], latMax: 22, brake: 22, pace, vmax }), expected);
+    }
+  }
 });
 
 test("adaptLane nudges toward the freer side under density", () => {
@@ -509,8 +537,8 @@ test("houseStyle: Mercedes attacks more than Cadillac; missing stats are neutral
     roomL: 1.2, roomR: 3.4, street: false,
   };
   assert.ok(A.otPull({ ...openOt, team: mer }) > A.otPull(openOt));
-  assert.ok(A.followPad(ace, false, mcl) > A.followPad(ace, false),
-    "hold-car teams leave a wider follow pad");
+  assert.ok(A.followTime(ace, false, mcl) > A.followTime(ace, false),
+    "hold-car teams leave a wider follow gap");
 });
 
 test("seat 0 attacks more than seat 1; omitted seat stays the factory card", () => {
@@ -552,7 +580,7 @@ test("team orders: #2 holds vs #1; #1 may pass #2", () => {
   const vsRival = A.otFireRate({ ...midOpen, seat: 1, other: rival });
   assert.ok(vsLead < vsRival, `#2 vs #1 ${vsLead} should be colder than vs rival ${vsRival}`);
   assert.ok(vsSecond > vsRival, `#1 vs #2 ${vsSecond} should be hotter than vs rival ${vsRival}`);
-  assert.ok(A.followPad(mid, false, team, 1, lead) > A.followPad(mid, false, team, 0, second),
+  assert.ok(A.followTime(mid, false, team, 1, lead) > A.followTime(mid, false, team, 0, second),
     "#2 leaves #1 more space than #1 leaves #2");
   const cover = {
     traits: ace, chaser: true, chaserGap: 6, chaserSpeed: 58, speed: 54,
@@ -798,6 +826,24 @@ test("attackOK: a straight is always a place to pass; a corner entry only at its
   assert.equal(A.sideLevel(), 2.4);
 });
 
+// THE FIRST LAP (2026-10-01): a launching car, and for 20 s from the green,
+// leaves more headway and attacks at half the quality; nothing after.
+test("startCalm: full while launching, fades out by 20 s from the green, never for a car that did not launch", () => {
+  assert.equal(A.startCalm(true, undefined, 1), 1);
+  assert.equal(A.startCalm(false, 20, 5), 1, "well inside the window");
+  const fade = A.startCalm(false, 20, 16);
+  assert.ok(fade > 0 && fade < 1, `fading: ${fade}`);
+  assert.equal(A.startCalm(false, 20, 20), 0, "and gone at 20 s");
+  assert.equal(A.startCalm(false, undefined, 3), 0, "placed at speed, no launch: no calm");
+  assert.equal(A.startCalmS(), 20);
+  assert.ok(A.startGapT(1) > 0.1 && A.startGapT(0) === 0);
+  const t = { craft: 0.75 };
+  const zone = { traits: t, speed: 46, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 80, attackQ: 0.55 };
+  assert.equal(A.attackOK(zone), true, "a good zone on lap 20");
+  assert.equal(A.attackOK({ ...zone, calm: 1 }), false, "the same zone into turn 1");
+  assert.equal(A.attackOK({ ...zone, attackQ: 1, calm: 1 }), true, "a prime one is still on");
+});
+
 test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
   const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
   // Hard / default errMul=1 keeps the 0.004 base (Slice 4 lift is em>1 only).
@@ -913,6 +959,26 @@ test("the straight branch respects the gates the corner branch already had", () 
   assert.equal(A.defendPull({ ...onStraight, street: true, roomR: 1.5, other: { x: 1.4 } }), 0);
 });
 
+// ── DEFENDING (2026-10-01) ───────────────────────────────────────────────────
+test("mid-train: a car defends when the attack behind is nearer than the car ahead", () => {
+  const near = { ...onStraight, chaserGap: 6, other: { x: 1.4 } };
+  assert.ok(A.defendPull({ ...near, blocker: {}, blockerGap: 20 }) > 0, "attacker 6 m back, car ahead 20 m: cover");
+  assert.equal(A.defendPull({ ...near, blocker: {}, blockerGap: 5 }), 0, "the car ahead is the nearer business");
+});
+
+test("dead behind, the cover goes to the inside of the next corner it will attack into", () => {
+  const behind = { ...onStraight, other: { x: 0 } };
+  assert.equal(A.defendPull({ ...behind, kTurn: 0.01, toTurnIn: 400 }), 0, "the corner is far: hold the line");
+  assert.ok(A.defendPull({ ...behind, kTurn: 0.01, toTurnIn: 90 }) < 0, "left-hander near: cover the inside (-x)");
+  assert.ok(A.defendPull({ ...behind, kTurn: -0.01, toTurnIn: 90 }) > 0, "right-hander near: cover +x");
+});
+
+test("the cover leaves a car's width at the road edge", () => {
+  const p = A.defendPull({ ...onStraight, kA: 0.01, other: { x: 1.4 }, roadL: 2.9 });
+  assert.ok(p < 0 && -p <= 0.4 + 1e-9, `cover ${p} must stop 2.5 m from the edge`);
+  assert.equal(A.defendPull({ ...onStraight, kA: 0.01, other: { x: 1.4 }, roadL: 2.0 }), -0, "no room for a car: no move");
+});
+
 /* THE HUMAN-YIELD GRACE.
  *
  * sideYieldsA elects exactly ONE car of an alongside pair to concede, and only
@@ -989,6 +1055,110 @@ test("the intrusion band leaves a settled pair settled", () => {
   const band = A.humanYieldBand();
   assert.ok(band > 0.05 && band < A.minLatGap(5, false),
     `band ${band} must be a real margin inside the clear gap`);
+});
+
+// HOLDING IS NOT YIELDING (2026-10-01): a held line inside the band arms the
+// timer too — at a quarter rate, so a player's lean is a contest (1.2 s) and
+// not a free lane, but the pair is never left with nobody yielding.
+test("a held line inside the band arms the human-yield timer at a quarter rate", () => {
+  const A = load();
+  const dt = 1 / 60, G = A.humanYieldGrace();
+  // at the gap (not inside the band) and not intruding: settled, holds
+  assert.equal(A.humanYieldT(0.1, true, false, true, false, dt, false), 0.1);
+  // inside the band, holding: arms, slower than an intrusion
+  const hold = A.humanYieldT(0, true, false, true, false, dt, true);
+  const lean = A.humanYieldT(0, true, false, true, true, dt, true);
+  assert.ok(hold > 0 && hold < lean, `hold ${hold} must arm, slower than an intrusion ${lean}`);
+  let t = 0, n = 0;
+  while (!A.humanYieldTakes(t) && n < 600) { t = A.humanYieldT(t, true, false, true, false, dt, true); n++; }
+  assert.ok(n * dt > 3 * G && n * dt < 2, `a held lean concedes after ${(n * dt).toFixed(2)} s`);
+});
+
+// A HUMAN'S PACE (AiDrive.paceSample): AI cars in free air teach speed/vmax per
+// node; a human is judged by its own speed/vmax against that — not by the
+// live speed a corner gives it.
+test("paceSample: the field teaches the profile, a human is judged against it", () => {
+  const A = load();
+  const ref = new Float32Array(4), dt = 1 / 60;
+  const ai = { speed: 40, human: false };
+  A.paceSample(ref, 1, ai, 80, true, dt);
+  assert.ok(Math.abs(ref[1] - 0.5) < 1e-6, "the first sample seeds the node");
+  A.paceSample(ref, 1, { speed: 60, human: false }, 80, false, dt);
+  assert.ok(Math.abs(ref[1] - 0.5) < 1e-6, "a car in traffic does not teach");
+  // a human as quick as the field at this metre: paceF stays 1; 10 % slower: falls toward 0.9
+  const same = { speed: 40, human: true }, slow = { speed: 36, human: true };
+  for (let i = 0; i < 60 * 30; i++) { A.paceSample(ref, 1, same, 80, true, dt); A.paceSample(ref, 1, slow, 80, true, dt); }
+  assert.ok(Math.abs(same.paceF - 1) < 0.01, `same pace read as ${same.paceF}`);
+  assert.ok(Math.abs(slow.paceF - 0.9) < 0.01, `10 % slow read as ${slow.paceF}`);
+  // an unlearned node never moves a human's estimate
+  const fresh = { speed: 10, human: true };
+  A.paceSample(ref, 3, fresh, 80, true, dt);
+  assert.equal(fresh.paceF, undefined);
+});
+
+// ── TACTICAL PASSING (2026-10-01) ────────────────────────────────────────────
+test("repassLock: twice the cooldown for an equal car, shorter with a pace edge, never under 30 %", () => {
+  const base = A.repassLock(mid, 0);
+  assert.ok(Math.abs(base - 2 * A.passCooldown(mid)) < 1e-9);
+  assert.ok(A.repassLock(mid, 0.03) < base && A.repassLock(mid, 0.03) > A.repassLock(mid, 0.06));
+  assert.ok(Math.abs(A.repassLock(mid, 0.5) - 0.3 * base) < 1e-9, "floored");
+  assert.equal(A.repassLock(mid, -0.05), base, "a slower car gets the full lockout");
+});
+
+test("attemptRoll: deterministic, uniform-ish, and a fresh roll per zone and lap", () => {
+  assert.equal(A.attemptRoll(12345, 2, 800), A.attemptRoll(12345, 2, 800));
+  assert.notEqual(A.attemptRoll(12345, 2, 800), A.attemptRoll(12345, 2, 1600));
+  assert.notEqual(A.attemptRoll(12345, 2, 800), A.attemptRoll(12345, 3, 800));
+  let sum = 0, lo = 0, n = 2000;
+  for (let i = 0; i < n; i++) { const r = A.attemptRoll(987654321, i % 7, i * 37); assert.ok(r >= 0 && r < 1); sum += r; if (r < 0.25) lo++; }
+  assert.ok(Math.abs(sum / n - 0.5) < 0.03, `mean ${sum / n}`);
+  assert.ok(Math.abs(lo / n - 0.25) < 0.04, `lower quartile share ${lo / n}`);
+  // a car is no longer timid in EVERY attempt: some zones roll high, some low
+  const rolls = Array.from({ length: 20 }, (_, z) => A.attemptRoll(42, 1, z * 300));
+  assert.ok(Math.min(...rolls) < 0.3 && Math.max(...rolls) > 0.7);
+});
+
+test("get a run: hang back through the corner onto a passing straight, pull out late", () => {
+  assert.ok(A.runExtra(0.02, 0.6, true) > 0, "in the corner before a good zone, wanting the move");
+  assert.equal(A.runExtra(0.02, 0.6, false), 0, "not wanting the move");
+  assert.equal(A.runExtra(0.001, 0.6, true), 0, "already on the straight");
+  assert.equal(A.runExtra(0.02, 0.2, true), 0, "a poor zone is not worth a run");
+  assert.equal(A.runExtra(0.02, 0.6, true, true), 0, "never on a street");
+  assert.equal(A.latchLate({ traits: mid, toTurnIn: 400, kAhead: 0, vTop: 72, speed: 70, blockerSpeed: 70, blockerGap: 20, street: true }), true, "a street latches as before");
+  const st = { traits: mid, toTurnIn: 400, kAhead: 0, vTop: 72, speed: 70, blockerSpeed: 70, blockerGap: 20, queueT: 0 };
+  assert.equal(A.latchLate(st), false, "far down a straight with no closing rate: wait");
+  assert.equal(A.latchLate({ ...st, speed: 72 }), true, "closing in the tow: go");
+  assert.equal(A.latchLate({ ...st, blockerGap: 10 }), true, "on the gearbox (the tight gap): go");
+  assert.equal(A.latchLate({ ...st, toTurnIn: 120 }), true, "the braking zone is near: as before");
+  assert.equal(A.latchLate({ ...st, kAhead: 0.01 }), true, "not a straight: as before");
+  assert.equal(A.latchLate({ ...st, queueT: 60 }), true, "held for its whole patience: go");
+  assert.equal(A.latchLate({ ...st, blockerGap: 6 + 0.08 * 70 - 0.1 }), true, "the tight gap in the tow");
+  assert.equal(A.cornerK(0.0003, 0.012, 0.009), 0.012, "the corner, not its entry spiral");
+  assert.equal(A.cornerK(-0.001, 0.0005, -0.02), -0.02);
+});
+
+test("sideYieldsA: level, the car on the OUTSIDE of the next corner concedes (kTurn)", () => {
+  // +k = LEFT turn: inside is -x, outside +x
+  assert.equal(A.sideYieldsA(0, 1, -1, 0.01), true, "right of the other car into a left-hander: outside");
+  assert.equal(A.sideYieldsA(0, -1, 1, 0.01), false);
+  assert.equal(A.sideYieldsA(0, 1, -1, -0.01), false, "into a right-hander the right car is inside");
+  // behind / ahead are untouched by the corner, and no kTurn is the old rule
+  assert.equal(A.sideYieldsA(-5, -1, 1, 0.01), true);
+  assert.equal(A.sideYieldsA(5, 1, -1, 0.01), false);
+  assert.equal(A.sideYieldsA(0, 3, 1), true);
+  assert.equal(A.sideYieldsA(0, 3, 1, 0.001), true, "a straight is no corner");
+});
+
+test("commit or yield is a couple of seconds and a small lift", () => {
+  assert.ok(A.sbsCommitT() >= 1.5 && A.sbsCommitT() <= 3);
+  assert.ok(A.sbsEase() > 0.9 && A.sbsEase() < 1);
+});
+
+test("otSide breaks a tie toward the inside of the corner the pass is for", () => {
+  const tie = { roomL: 3, roomR: 3, kAhead: 0, lane: 0.3 };
+  assert.equal(A.otSide({ ...tie, kTurn: 0.01 }), -1);
+  assert.equal(A.otSide({ ...tie, kTurn: -0.01 }), 1);
+  assert.equal(A.otSide({ ...tie, kTurn: 0 }), 1, "no corner: the car's own lane, as before");
 });
 
 // --- difficulty's second dimension -----------------------------------------

@@ -13,7 +13,7 @@ const Tracks = (function () {
   const { cross, norm, addBox } = TrackGeom;
   const { cr, sample, curvatureRaw, curvature, project, wallAt, postLimits } = TrackSpline;
   const { upOf, bankingProfile, onKerb, bankAngle, banking,
-          buildRoad, buildTerrain, buildFloor } = TrackMesh;
+          buildRoad, buildTerrainSteps, buildFloor } = TrackMesh;
   const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;
   // The def factory (js/track/core/def.js): palettes, SRTM readers, realPoints
   // and the LIST field copy all live there, so a runtime def (the track
@@ -247,7 +247,15 @@ const Tracks = (function () {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const _prof = []; let _t = _now();
     const lap = (n, k) => { const now = _now(); _prof.push({ n, k, ms: +(now - _t).toFixed(2) }); _t = now; };
-    function* inner(it) { for (;;) { const r = it.next(); if (r.done) return r.value; const p = _now(); yield; _t += _now() - p; } }
+    function* inner(it) {
+      let done = false;
+      try {
+        for (;;) {
+          const r = it.next(); if (r.done) { done = true; return r.value; }
+          const p = _now(); yield; _t += _now() - p;
+        }
+      } finally { if (!done && typeof it.return === "function") it.return(); }
+    }
     const track = buildCenterline(def);
     track.buildProfile = _prof;
     lap("centerline", "geo"); yield track; _t = _now();
@@ -308,7 +316,7 @@ const Tracks = (function () {
       const roadGeo = safe("road", buildRoad(track)); roadGeo._keepPositions = true; roadGeo._keepFullGeometry = keepGeometry;
       lap("road", "geo"); yield track; _t = _now();
       track.roadGeo = roadGeo; buildRibbon(roadGeo, "road"); lap("road", "up"); yield track; _t = _now();
-      const terrainGeo = buildTerrain(track);
+      const terrainGeo = yield* inner(buildTerrainSteps(track));
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
       lap("terrain", "geo"); yield track; _t = _now();
       track.terrainGeo = terrainSafe; buildRibbon(terrainSafe, "terrain"); // raw geometry kept for groundY/debug

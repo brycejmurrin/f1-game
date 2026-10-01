@@ -16,6 +16,8 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { fullPhrases } from "../../tools/gen/voicepack.mjs";
+import { SAMPLES, requestFor } from "../../tools/gen/voice-audition.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -61,10 +63,18 @@ test("compose takes the LONGEST key at each step and refuses a line it cannot co
   assert.equal(VoicePack.compose("", has), null);
 });
 
+test("a complete performance wins over fragments, including internal pauses and long circuit lore", () => {
+  const text = "Welcome to Apex 26. This is Silverstone, home of the British Grand Prix.";
+  const full = VoicePack.lineKey(text);
+  const keys = new Set([full, ...VoicePack.norm(text).filter((t) => typeof t === "string")]);
+  assert.deepEqual(J(VoicePack.compose(text, (k) => keys.has(k))), [{ k: full }]);
+  assert.equal(VoicePack.compose("Welcome to a different circuit", (k) => keys.has(k)), null);
+});
+
 // ── 2. The committed packs cover what each channel says ─────────────────────
 
 const PACKS = {};
-for (const id of Object.values(J(RadioVoice.PACK_VOICE))) {
+for (const id of Object.keys(J(VoicePack.VOICES))) {
   PACKS[id] = { man: JSON.parse(read(`assets/voice/${id}.json`)), bin: fs.statSync(path.join(ROOT, `assets/voice/${id}.bin`)).size };
 }
 const hasIn = (id) => (k) => Object.prototype.hasOwnProperty.call(PACKS[id].man.clips, k);
@@ -80,16 +90,48 @@ test("every pack is one contiguous, licensed, small file", () => {
     for (const [k, [o, len, secs]] of Object.entries(man.clips).sort((a, b) => a[1][0] - b[1][0])) {
       assert.equal(o, off, `${id}: ${k} starts where the last clip ended`);
       assert.ok(len > 100, `${id}: ${k} has audio`);
-      assert.ok(secs > 0.05 && secs < 6, `${id}: ${k} lasts ${secs}s`);
+      assert.ok(secs > 0.05 && secs < (k.startsWith("@line:") ? 20 : 6), `${id}: ${k} lasts ${secs}s`);
       off += len;
     }
     assert.equal(off, bin, `${id}: the index accounts for every byte of the .bin`);
     // Fetched only while that channel is switched on (never precached), but a
     // phone on a cellular link still pays for every megabyte of it.
-    assert.ok(bin < 4 * 1024 * 1024, `${id} is ${(bin / 1048576).toFixed(2)} MB — a radio voice is not worth more than 4 MB`);
+    // Circuit lore is now a full performance, not word clips. Only the selected
+    // voice is fetched: alternatives must never double the player's download.
+    assert.ok(bin < 8 * 1024 * 1024, `${id} exceeds the 8 MB complete-recording budget`);
     total += bin;
   }
-  assert.ok(total < 12 * 1024 * 1024, `all voices together are ${(total / 1048576).toFixed(2)} MB`);
+  assert.ok(total < 32 * 1024 * 1024, `the six selectable packs total ${(total / 1048576).toFixed(2)} MB`);
+  const defaults = Object.values(J(RadioVoice.PACK_VOICE)).reduce((n, id) => n + PACKS[id].bin, 0);
+  assert.ok(defaults < 18 * 1024 * 1024, "selected defaults stay within an 18 MB race download; alternatives load only when selected");
+});
+
+test("every selectable pack includes its complete calls and the same fallback vocabulary as its channel", () => {
+  for (const [id, spec] of Object.entries(J(VoicePack.VOICES))) {
+    const base = RadioVoice.PACK_VOICE[spec.speaker];
+    for (const key of Object.keys(PACKS[base].man.clips)) {
+      if (!key.startsWith("@line:")) assert.ok(hasIn(id)(key), id + ": " + key);
+    }
+    for (const { key, text } of fullPhrases(id)) {
+      assert.ok(hasIn(id)(key), id + ": " + text);
+      assert.deepEqual(J(VoicePack.compose(text, hasIn(id))), [{ k: key }]);
+    }
+  }
+});
+
+test("provider auditions use the same 12 race calls and checked speech APIs", () => {
+  assert.equal(SAMPLES.length, 12);
+  for (const s of SAMPLES) {
+    const openai = requestFor("openai", "cedar", "gpt-4o-mini-tts-2025-12-15", s);
+    assert.equal(openai.url, "https://api.openai.com/v1/audio/speech");
+    assert.equal(openai.body.input, s.text);
+    assert.ok(openai.body.instructions.includes(s.delivery));
+    const eleven = requestFor("elevenlabs", "chosen-voice", "eleven_v4", s);
+    assert.equal(eleven.url, "https://api.elevenlabs.io/v1/text-to-dialogue");
+    assert.equal(eleven.body.inputs[0].voice_id, "chosen-voice");
+    assert.ok(eleven.body.inputs[0].text.endsWith(s.text));
+    assert.equal(eleven.body.model_id, "eleven_v4");
+  }
 });
 
 test("every commentary line composes from the commentator's pack, for every driver on the grid", () => {
@@ -179,7 +221,7 @@ test("the positions, gaps and spotter calls a line can carry are all recorded", 
 
 // ── 3. RadioVoice hands a covered line to the pack ──────────────────────────
 
-function radio({ covers = true, packOn, spotterLeft = 0 } = {}) {
+function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTune = null } = {}) {
   const spoken = [], packCalls = [];
   const synth = { speaking: false, speak(u) { spoken.push(u.text); }, cancel() {}, resume() {}, getVoices: () => [] };
   let onEnd = null;
@@ -187,18 +229,21 @@ function radio({ covers = true, packOn, spotterLeft = 0 } = {}) {
     ensure() { return "ready"; }, stop() { packCalls.push("stop"); }, busy: () => false, remaining: (ch) => (ch === "spotter" ? spotterLeft : 0),
     speak(id, text, o) { packCalls.push({ id, text, leadS: o.leadS, fx: o.fx }); if (!covers) return false; onEnd = o.onEnd; return true; },
     debug: () => ({}),
+    ready: () => !loading,
   };
+  if (loading) fakePack.load = () => loading;
   const ducks = [];
   const sb = sandbox(["js/audio/radio-voice.js"], {
     window: { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } },
     GameAudio: { setRadioDuck: (b) => ducks.push(b), radioStingStop() {} },
-    VoicePack: { create: () => fakePack },
+    VoicePack: { create: () => fakePack, choices: VoicePack.choices },
   });
   const saved = new Map(packOn == null ? [] : [["radioPack", packOn]]);
+  if (voiceTune) saved.set("voiceTune", voiceTune);
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
   const v = sb.RadioVoice.create(G);
   v.setEnabled(true);
-  return { v, spoken, packCalls, ducks, end: () => onEnd && onEnd() };
+  return { v, spoken, packCalls, ducks, saved, reload: () => sb.RadioVoice.create(G), end: () => onEnd && onEnd() };
 }
 
 test("a line the pack covers is played from it, after the courtesy figure, and synthesis stays quiet", () => {
@@ -211,6 +256,47 @@ test("a line the pack covers is played from it, after the courtesy figure, and s
   assert.equal(r.ducks.at(-1), true, "the music ducks under the recorded voice too");
   r.end();
   assert.equal(r.ducks.at(-1), false, "and comes back when it ends");
+});
+
+test("a selected engineer is persisted, prepared and played; invalid or cross-channel choices are refused", () => {
+  const r = radio();
+  assert.equal(r.v.setRecordedVoice("radio", "michael"), true);
+  assert.equal(r.v.recordedVoice("radio"), "michael");
+  assert.equal(r.saved.get("voiceTune").radio.pack, "michael");
+  assert.equal(r.reload().recordedVoice("radio"), "michael", "the selected pack survives reload");
+  assert.equal(r.v.setRecordedVoice("radio", "bella"), false);
+  assert.equal(r.v.setRecordedVoice("radio", "missing"), false);
+  assert.equal(r.v.say("BOX BOX BOX", 3, "info"), true);
+  assert.equal(r.packCalls.find((c) => c.id).id, "michael");
+});
+
+test("pre-race announcer source is independent of the recorded race radio", () => {
+  const old = radio({ voiceTune: { announcer: { name: "Samantha", rate: 1.1 } } });
+  assert.equal(old.v.announcerPackOn(), false, "existing system announcer choices survive the upgrade");
+  assert.equal(old.v.packOn(), true);
+  const r = radio();
+  assert.equal(r.v.announcerPackOn(), true);
+  r.v.setTune("announcer", { name: "System presenter" });
+  assert.equal(r.v.announcerPackOn(), false);
+  assert.equal(r.v.packOn(), true);
+  r.v.setPackOn(false);
+  r.v.setRecordedVoice("announcer", "bella");
+  assert.equal(r.v.packOn(), false, "a recorded presenter does not change race-radio source");
+  assert.equal(r.v.announcerPackOn(), true);
+  assert.equal(r.v.preview("announcer"), true);
+  assert.equal(r.packCalls.find((c) => c.id).id, "bella");
+  assert.equal(r.reload().announcerPackOn(), true, "the independent presenter source survives reload");
+});
+
+test("a cancelled recorded audition cannot start after its download; no platform speech while waiting", async () => {
+  let resolve;
+  const loading = new Promise((r) => { resolve = r; });
+  const r = radio({ loading });
+  assert.equal(r.v.preview("radio"), true);
+  assert.deepEqual(r.spoken, []);
+  r.v.stop();
+  resolve(true); await loading; await Promise.resolve();
+  assert.equal(r.packCalls.filter((c) => c.id).length, 0);
 });
 
 test("RECORDED never hands a race line to speech synthesis: a line no clip covers stays written; SYSTEM never asks the pack", async () => {
@@ -281,14 +367,16 @@ test("occupancy: side by sign of lateral, across the start/finish wrap, pit-lane
 
 test("the spotter speaks only from the pack, and not over the engineer", () => {
   const said = [];
-  const pack = { ensure() {}, busy: () => false, speak: (id, t) => { said.push(t); return true; } };
+  const ids = [];
+  const pack = { ensure() {}, busy: () => false, speak: (id, t) => { ids.push(id); said.push(t); return true; } };
   const store = new Map();
   const me = { s: 500, x: 0, speed: 60 };
   const G = { state: "race", soundOn: true, player: me, cars: [me, { s: 501, x: -2.5 }], track: { total: 5000 },
-    vTop: () => 90, radio: { pack, volume: () => 1 }, store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) } };
+    vTop: () => 90, radio: { pack, recordedVoice: () => "michael", volume: () => 1 }, store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) } };
   const s = Spotter.create(G);
   for (let i = 0; i < 30; i++) s.update(1 / 60);
   assert.deepEqual(said, ["Car left."]);
+  assert.deepEqual(ids, ["michael"], "the spotter uses the selected engineer");
   store.set("spotter", false);
   G.cars[1].x = 2.5;
   for (let i = 0; i < 30; i++) s.update(1 / 60);
@@ -508,6 +596,20 @@ test("recorded engineer and spotter packs do not depend on speechSynthesis exist
   v.stop();
   assert.equal(v.say('KEEP INPUTS SMOOTH', 4, 'coach'), true, 'the coach has a recorded voice too');
   assert.equal(calls.length, 2);
+});
+
+test("loading a selected pack is shared and never fetches the alternatives", async () => {
+  const requested = [];
+  const sb = sandbox(["js/audio/voice-pack.js"], { fetch: (url) => {
+    requested.push(url);
+    return Promise.resolve({ ok: true, json: async () => ({ clips: { hello: [0, 4, 1] } }),
+      arrayBuffer: async () => new ArrayBuffer(4) });
+  } });
+  const pack = sb.VoicePack.create({});
+  assert.deepEqual(await Promise.all([pack.load("michael"), pack.load("michael")]), [true, true]);
+  assert.deepEqual(requested.sort(), ["assets/voice/michael.bin", "assets/voice/michael.json"]);
+  assert.equal(pack.ready("george"), false);
+  assert.equal(pack.ready("bella"), false);
 });
 
 test("VoicePack drops a spotter warning whose situation changed during decoding", async () => {

@@ -1,12 +1,14 @@
 Recorded radio voices
 ---------------------
-One pack per race radio channel (js/audio/radio-voice.js PACK_VOICE), each
+Selectable packs per race radio channel (js/audio/voice-pack.js VOICES), each
 <id>.bin / <id>.json rendered offline by tools/gen/voicepack.mjs with
 Kokoro-82M v1.0 (hexgrad) through the ONNX export
 (onnx-community/Kokoro-82M-v1.0-ONNX) and kokoro-js:
 
   george — the race engineer and the spotter   voice "bm_george"
-  fable  — the in-race commentator             voice "bm_fable"
+  michael — alternative engineer and spotter  voice "am_michael"
+  fable  — circuit intros and race commentary  voice "bm_fable"
+  bella  — alternative intros and commentary  voice "af_bella"
   emma   — race control                        voice "bf_emma"
   heart  — the driving coach                   voice "af_heart"
 
@@ -18,3 +20,5 @@ Licence: Apache-2.0 (model weights and voices).
 The clips are synthetic speech, not a recording of any person. Regenerate
 with: node tools/gen/voicepack.mjs --kokoro <dir with kokoro-js + ffmpeg-static> --id <voice>
 (after node tools/gen/voice-corpus.mjs refreshes what the channels say).
+Whole calls and circuit introductions retain sentence-level delivery;
+dynamic names and numbers can fall back to the channel's existing fragments.

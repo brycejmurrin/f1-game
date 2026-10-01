@@ -58,11 +58,16 @@ const TrackHiddenFaces = (function () {
     if (nrm[o] !== nrm[o + 3] || nrm[o] !== nrm[o + 9] || nrm[o + 1] !== nrm[o + 7]) return null;
     if (abs(nrm[o] + nrm[o + 12]) > 1e-6 || abs(nrm[o + 1] + nrm[o + 13]) > 1e-6 ||
         abs(nrm[o + 2] + nrm[o + 14]) > 1e-6) return null;
-    const m0 = mat ? mat[v] : 0;
+    // Compare the ROUNDED id: a FOLIAGE box (palm frond block, acacia slab)
+    // carries a per-vertex wind-sway weight in its id's fraction (geom.js
+    // swayMatAt), and the heuristic is "one primitive", not "one weight".
+    // Exact equality here dropped 151 of Monaco's 4113 boxes and kept 5574
+    // enclosed triangles the camera can never see (track-build-vm-release).
+    const m0 = mat ? Math.round(mat[v]) : 0;
     if ((m0 >= MAT_GLASS - 0.5 && m0 < MAT_GLASS + 0.5) || isFlag(m0)) return null;
     for (let k = 0; k < 24; k++) {
       const q = (v + k) * 3;
-      if (mat && mat[v + k] !== m0) return null;
+      if (mat && Math.round(mat[v + k]) !== m0) return null;
       if (col && (col[q] > 1 || col[q + 1] > 1 || col[q + 2] > 1)) return null;
       const f = (k >> 2) * 12 + o;             // this face's first normal
       if (nrm[q] !== nrm[f] || nrm[q + 1] !== nrm[f + 1] || nrm[q + 2] !== nrm[f + 2]) return null;
