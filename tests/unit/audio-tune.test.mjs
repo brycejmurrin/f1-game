@@ -146,6 +146,80 @@ function synthEngine() {
 
 const REVS = [0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95, 1];
 
+// Observe ownership/allocation at the API boundary, without exposing caches.
+function observeBuffers(ctx) {
+  const buffers = [], create = ctx.createBuffer;
+  ctx.createBuffer = (...args) => { const b = create(...args); buffers.push(b); return b; };
+  const loops = () => [...live].filter((n) => n.kind === "src" && n.loop && n.stopAt == null &&
+    n.buffer && n.buffer.numberOfChannels === 1 && n.buffer.duration < 1);
+  return { buffers, loops };
+}
+
+test("engine restarts reuse six independent noise buffers through fresh source nodes", async () => {
+  for (const samples of [false, true]) {
+    const { GameAudio: A, ctx, release } = boot();
+    const { buffers, loops } = observeBuffers(ctx);
+    A.init();
+    if (samples) await release();
+    A.startEngine();
+    assert.equal(A.debug().usingSamples, samples);
+    const first = loops();
+    assert.equal(first.length, 6, "harvest, skid, scrub, surface, wind and brake each have a loop");
+    assert.equal(new Set(first.map((n) => n.buffer)).size, 6, "equal durations must not share waveforms");
+    assert.deepEqual(first.map((n) => n.buffer.length), [0.7, 0.5, 0.5, 0.5, 0.5, 0.6].map((s) => Math.ceil(SR * s)));
+    const before = buffers.length;
+    A.stopEngine(); A.startEngine();
+    const second = loops();
+    assert.equal(buffers.length, before, "restart does not generate fresh PCM buffers");
+    assert.equal(second.length, 6);
+    assert.ok(second.every((n, i) => n.buffer === first[i].buffer), "each layer retains its own buffer");
+    assert.ok(second.every((n, i) => n !== first[i]), "single-use source nodes are recreated");
+    assert.ok(first.every((n) => n.stopAt != null), "the previous sources were stopped");
+  }
+});
+
+test("the radio noise pool is prepared before the first lights-out announcement", () => {
+  const { GameAudio: A, ctx } = boot();
+  const { buffers } = observeBuffers(ctx);
+  A.setUiEnabled(false);   // upstream MENU SOUNDS OFF does not silence race SFX
+  A.init(); A.startEngine();
+  const pool = buffers.find((b) => b.numberOfChannels === 1 && b.length === SR * 3);
+  assert.ok(pool, "the existing three-second one-shot pool is already prepared before green");
+  const before = buffers.length;
+  assert.equal(A.radioSting("radio", 1.9), true);
+  A.lightsOut();
+  assert.equal(buffers.length, before, "lights-out radio and blips allocate no PCM buffers");
+  assert.ok([...live].some((n) => n.kind === "src" && n.loop && n.buffer === pool), "the radio bed uses the prepared pool");
+});
+
+test("delayed sample upgrade reuses noise and prepared loop metadata on the first race update", async () => {
+  const { GameAudio: A, ctx, release, counts } = boot();
+  const { buffers, loops } = observeBuffers(ctx);
+  let sampleReads = 0;
+  const decode = ctx.decodeAudioData;
+  ctx.decodeAudioData = (ab, resolve, reject) => decode(ab, (b) => {
+    const read = b.getChannelData;
+    b.getChannelData = (...args) => { sampleReads++; return read(...args); };
+    resolve(b);
+  }, reject);
+  A.init(); A.startEngine();
+  assert.equal(A.debug().usingSamples, false, "held decoding preserves the synth fallback");
+  const oldNoise = loops().map((n) => n.buffer);
+  await release();
+  assert.equal(A.debug().samplesReady, true);
+  assert.equal(A.debug().usingSamples, false, "decode completion does not restart the audible graph");
+  const before = { buffers: buffers.length, sampleReads, sources: counts.src };
+  A.setEngine(0.6, 0, false, 0.6, 4, {});
+  assert.equal(A.debug().usingSamples, true, "the first race update still consumes the pending upgrade");
+  assert.equal(buffers.length, before.buffers, "upgrade does not generate noise again");
+  assert.equal(sampleReads, before.sampleReads, "upgrade does not scan the decoded sample again");
+  assert.ok(loops().every((n, i) => n.buffer === oldNoise[i]), "sample upgrade retains every layer buffer");
+  assert.ok(counts.src > before.sources, "the sample graph has new source nodes");
+  const sources = counts.src;
+  A.setEngine(0.7, 0, false, 0.7, 5, {});
+  assert.equal(counts.src, sources, "the upgrade occurs only once");
+});
+
 // The tune layer is a MULTIPLIER over the sample core, and until 2026-09-08 its
 // shipped value was 1 on every knob, so "the default" and "neutral" were the
 // same number and the knob tests below could use either. They are not the same

@@ -109,12 +109,21 @@ const GameAudioSignal = (function () {
        White noise is stationary, so one buffer played from a RANDOM OFFSET is
        indistinguishable from a freshly-generated one — and two hits in a row
        still differ, which a fixed offset would not give. The looping sources
-       (harv, skid, rain) keep their own buffers: those allocate once per start,
-       and rain in particular needs a seamless 4 s loop.
+       keep independent buffers; engine loops reuse theirs within this context,
+       while rain in particular needs its own seamless 4 s loop.
 
        Context-bound like engBuf, so rebuildCtx() must clear it. */
     const NOISE_POOL_S = 3;
     let noisePoolBuf = null;
+    // Separate layer keys preserve independent noise even at equal durations.
+    // Buffers are immutable after generation; sources remain single-use. Cleared
+    // with every new context so a resume rebuild never retains the old PCM.
+    const _loopNoise = new Map();
+    function loopNoise(name, seconds) {
+      let buf = _loopNoise.get(name);
+      if (!buf) { buf = noiseBuf(seconds); _loopNoise.set(name, buf); }
+      return buf;
+    }
     function noisePool() {
       if (!noisePoolBuf) noisePoolBuf = noiseBuf(NOISE_POOL_S);
       return noisePoolBuf;
@@ -158,9 +167,9 @@ const GameAudioSignal = (function () {
       noiseBurst(peak, decay, { type: "bandpass", frequency: 2600, q: 1.2, attack: 0.02 });
     }
 
-    return { env, blip, noiseBuf, noisePool, bindNoise, noise, hiss, scrapeNoise,
+    return { env, blip, noiseBuf, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise,
       noisePoolSeconds: NOISE_POOL_S,
-      resetContext() { noisePoolBuf = null; },
+      resetContext() { noisePoolBuf = null; _loopNoise.clear(); },
     };
   }
   return { create, detectPeriod, findStableLoop };

@@ -18,17 +18,23 @@ function boot(opts = {}) {
   const node = (kind) => { const n = { kind, connect: (t) => t, disconnect() {}, start(...args) { n.startArgs = args; started.push(n); }, stop() {}, type: "", loop: false, loopStart: 0, loopEnd: 0, buffer: null, onended: null,
     gain: param(1), frequency: param(440), detune: param(0), Q: param(1), playbackRate: param(1), pan: param(0) }; return n; };
   let resumes = 0;
-  const ctx = { currentTime: 0, state: opts.state || "running", sampleRate: 8000, destination: node("dest"),
-    createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"), createBufferSource: () => node("src"),
-    createDynamicsCompressor: () => Object.assign(node("comp"), { threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) }),
-    createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
-    decodeAudioData: (ab, res, rej) => (opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
-    resume: () => { resumes++; return Promise.resolve(); }, suspend: () => { ctx.state = "suspended"; return Promise.resolve(); }, close: () => Promise.resolve() };
+  const contexts = [];
+  function createContext() {
+    const buffers = [];
+    const ctx = { currentTime: 0, state: opts.state || "running", sampleRate: 8000, destination: node("dest"), buffers,
+      createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"), createBufferSource: () => node("src"),
+      createDynamicsCompressor: () => Object.assign(node("comp"), { threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) }),
+      createBuffer: (ch, len, sr) => { const b = { sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }; buffers.push(b); return b; },
+      decodeAudioData: (ab, res, rej) => (opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
+      resume: () => { resumes++; return Promise.resolve(); }, suspend: () => { ctx.state = "suspended"; return Promise.resolve(); }, close: () => { ctx.state = "closed"; return Promise.resolve(); } };
+    contexts.push(ctx);
+    return ctx;
+  }
   const fetched = [];
-  const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error, parseFloat, parseInt, isFinite, Float32Array,
+  const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date: opts.Date || Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
     document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
-    setTimeout: () => 0, clearTimeout() {}, navigator: {}, AudioContext: function () { return ctx; },
+    setTimeout: () => 0, clearTimeout() {}, navigator: {}, AudioContext: function () { return createContext(); },
     fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(8), { _url: url })) }); } };
   if (opts.perf) sb.performance = opts.perf;
   sb.window = sb;
@@ -36,13 +42,46 @@ function boot(opts = {}) {
   const v = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v);
   vm.runInContext(SRC, v);
-  return { A: vm.runInContext("GameAudio", v), started, fetched, resumes: () => resumes, ctx, document: sb.document, listeners };
+  return { A: vm.runInContext("GameAudio", v), started, fetched, resumes: () => resumes, contexts, document: sb.document, listeners };
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
 
+test("a context rebuild replaces cached noise and keeps the delayed sample fallback", async () => {
+  let now = 10000;
+  class ClockDate extends Date { static now() { return now; } }
+  const { A, started, contexts } = boot({ Date: ClockDate });
+  A.setMusicEnabled(false);
+  A.setUiEnabled(false);
+  A.init(); await flush(); A.startEngine();
+  assert.equal(A.debug().usingSamples, true);
+  const old = contexts[0];
+  const oldBuffers = new Set(old.buffers);
+  old.state = "interrupted";
+  A.init();                 // first trusted gesture attempts resume
+  now += 1000;
+  A.init();                 // a later gesture rebuilds the still-stalled context
+  assert.equal(contexts.length, 2);
+  assert.equal(old.state, "closed");
+  assert.equal(A.uiEnabled(), false, "context replacement preserves upstream menu-sound preference");
+  const fresh = contexts[1];
+  const noise = started.filter((n) => n.kind === "src" && n.loop && fresh.buffers.includes(n.buffer) && n.buffer.duration < 1);
+  assert.equal(noise.length, 6);
+  assert.equal(new Set(noise.map((n) => n.buffer)).size, 6);
+  assert.ok(fresh.buffers.every((b) => !oldBuffers.has(b)), "all prepared PCM belongs to the new context");
+  assert.equal(A.debug().engineOn, true);
+  assert.equal(A.debug().usingSamples, false, "the new context starts on the synth while decoding is pending");
+  const buffers = fresh.buffers.length;
+  await flush();
+  A.setEngine(0.6, 0, false, 0.6, 4, {});
+  assert.equal(A.debug().usingSamples, true);
+  assert.equal(fresh.buffers.length, buffers, "new-context upgrade also reuses its prepared noise");
+  assert.ok(started.filter((n) => n.kind === "src" && n.loop && fresh.buffers.includes(n.buffer)).every((n) => !oldBuffers.has(n.buffer)));
+});
+
 test("hiding resumes a track from its position; an explicit stop starts it fresh", async () => {
-  const { A, started, fetched, ctx, document, listeners } = boot();
+  const { A, started, fetched, contexts, document, listeners } = boot();
   A.init(); A.startMusic(); await flush();
+  const ctx = contexts[0];
   const musicSources = () => started.filter((n) => n.kind === "src" && !n.loop);
   assert.equal(musicSources().at(-1).startArgs[1], 0);
   ctx.currentTime = 1.25;
@@ -57,10 +96,11 @@ test("hiding resumes a track from its position; an explicit stop starts it fresh
 
 test("gesture recovery clears the soundtrack cache and restores the running track", async () => {
   let clock = 1000;
-  const { A, fetched, ctx } = boot({ clock: () => clock });
+  const { A, fetched, contexts } = boot({ clock: () => clock });
   A.init(); A.startMusic(); await flush();
   A.playTrackId("builtin:song3"); await flush();
   const generation = A.ctxGen();
+  const ctx = contexts[0];
   ctx.state = "interrupted";
   A.init(); await flush();
   clock += 1000;
