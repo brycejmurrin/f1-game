@@ -842,6 +842,9 @@ test("intro builds cancel at async boundaries and never fly over pending compila
       menuSlice: async () => {
         now += 1000; slices++;
         if (mode === "slow" && now >= 20000) warming = false;
+        // Model render's successful garage present after compilation releases
+        // the backend; merely opening the studio no longer uncovers it.
+        if (c.setupPreviewOn && !warming) c.studioShown();
         if (mode === "supersede" || mode === "plan-cancel") c.cancelIntro();
         if (mode === "settings") c.settings = "two";
       },
