@@ -531,7 +531,9 @@ function parseTeams(arg) {
   for (const raw of arg.split(",").map((s) => s.trim()).filter(Boolean)) {
     if (raw === "all") picked.push(...ROSTER);
     else if (raw === "all+custom" || raw === "*") picked.push(...ROSTER, "custom");
-    else if (raw === "custom" || ROSTER.includes(raw)) picked.push(raw);
+    // `legends` joins Teams.LIST at boot (CustomTeam.syncLegendsTeam pushes it
+    // last), so the static roster cannot list it; `--driver=N` picks the legend.
+    else if (raw === "custom" || raw === "legends" || ROSTER.includes(raw)) picked.push(raw);
     else {
       console.error(`no team "${raw}" — grid: ${ROSTER.join(", ")}, custom, or all/all+custom`);
       process.exit(1);
@@ -540,7 +542,7 @@ function parseTeams(arg) {
   return [...new Set(picked)];
 }
 function teamIndex(id) {
-  if (id === "custom") return ROSTER.length;
+  if (id === "custom" || id === "legends") return ROSTER.length;
   const i = ROSTER.indexOf(id);
   if (i < 0) {
     console.error(`no team "${id}" — available: ${ROSTER.join(", ")}, custom`);
