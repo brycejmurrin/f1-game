@@ -1048,6 +1048,15 @@ const GLXPost = (function () {
     let mirFBO = null, mirTex = null, mirDepthRB = null, mirW = 0, mirH = 0, mirHdr = false;
     let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null, mirFlip = true;
     let mirRenders = 0, mirComposites = 0;
+    // MIPMAPPED: the target is supersampled (js/render/shared/mirror-pass.js SS)
+    // and minified into the HUD rect, so a plain LINEAR read skipped texels and
+    // the image still shimmered. The chain is rebuilt lazily at composite time
+    // (mirMipsDirty), when the OUTPUT framebuffer is bound — never while the
+    // texture is the draw target. generateMipmap needs a colour-renderable,
+    // filterable level 0: RGBA8 always is, RGBA16F is filterable in WebGL2 core
+    // and mirrorTarget's completeness check has already proved it renderable —
+    // so no getError probe (drainGlErrors owns that queue for the GPU gate).
+    let mirMipsDirty = false;
     function mirrorFree() {
       if (mirFBO) gl.deleteFramebuffer(mirFBO);
       if (mirDepthRB) gl.deleteRenderbuffer(mirDepthRB);
@@ -1063,7 +1072,7 @@ const GLXPost = (function () {
       gl.bindTexture(gl.TEXTURE_2D, mirTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, hdr ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA,
         hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -1119,6 +1128,7 @@ const GLXPost = (function () {
       bindVAO(core.skyVAO);   // POST_VS is a gl_VertexID triangle; WebGL2 still wants a VAO
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, mirTex);
+      if (mirMipsDirty) { gl.generateMipmap(gl.TEXTURE_2D); mirMipsDirty = false; }
       gl.uniform1i(mirU.uTex, 0);
       gl.uniform1f(mirU.uHdr, mirHdr ? 1 : 0);
       gl.uniform1f(mirU.uExposure, opts && opts.exposure !== undefined ? opts.exposure : 1.0);
@@ -1137,7 +1147,7 @@ const GLXPost = (function () {
     }
     const mirror = {
       begin(w, h) { if (!mirrorTarget(w, h)) return false; mirActive = true; return true; },
-      end() { if (!mirActive) return; mirActive = false; mirRenders++; },
+      end() { if (!mirActive) return; mirActive = false; mirRenders++; mirMipsDirty = true; },
       active: () => mirActive,
       bindTarget: bindMirrorTarget,
       rect(r, flip) { mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; mirFlip = flip !== false; },

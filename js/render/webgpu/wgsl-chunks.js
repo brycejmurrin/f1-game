@@ -1163,6 +1163,27 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     wet = wetness * upFace;
     let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
     let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
+    // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
+    // constant for constant: two cell grids of impact rings as a normal tilt
+    // on the pooled water; the GGX lobes and the sky reflection below read N.
+    // params4.z = frame.rain (rain FALLING, 0..1), params0.z = time.
+    if (puddle > 0.001 && F.params4.z > 0.001) {
+      var rg = vec2<f32>(0.0);
+      for (var k: i32 = 0; k < 2; k++) {
+        let fk = f32(k);
+        let sc = select(2.9, 1.7, k == 0);
+        let rp = in.wpos.xz * sc + vec2<f32>(fk * 7.3);
+        let ci = floor(rp);
+        let cf = fract(rp) - vec2<f32>(0.5);
+        let hh = hash21(ci + vec2<f32>(fk * 19.0));
+        let t = fract(F.params0.z * (0.8 + 0.5 * fk) + hh);
+        let r = length(cf) + 1e-4;
+        let ph = (r - t * 0.45) * 40.0;
+        let amp = (1.0 - t) * t * 4.0 * exp(-r * 5.0) * step(r, t * 0.45 + 0.08);
+        rg += cos(ph) * (cf / r) * amp;
+      }
+      N = normalize(N + vec3<f32>(rg.x, 0.0, rg.y) * (0.10 * F.params4.z * puddle));
+    }
     // POROUS MUST BE DARKER THAN THE ROAD, not lighter. Two independently
     // clamped coefficients transpose the order: 0.42 fades SLOWER than 0.58, so
     // at wetDark 1.0 porous sat at 0.58 against the road's 0.42 — verges and
@@ -1660,7 +1681,7 @@ fn vs_main(@location(0) aPos : vec3<f32>,
   //    stand-in for the full Phase-4 post chain (bloom/SSAO/godray/SSR/grade/
   //    flare/FXAA). Fullscreen triangle; uv flips Y into texture space.
   const BLIT = `
-struct BlitU { params : vec4<f32> };   // x = exposure, y > 0.5 = flip left-right (the rear-view mirror)
+struct BlitU { params : vec4<f32> };   // x = exposure, y > 0.5 = flip left-right, z = mip level (both the rear-view mirror; 0 elsewhere)
 @group(0) @binding(0) var srcTex  : texture_2d<f32>;
 @group(0) @binding(1) var srcSamp : sampler;
 @group(0) @binding(2) var<uniform> B : BlitU;
@@ -1681,7 +1702,7 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let uv = vec2<f32>(select(in.uv.x, 1.0 - in.uv.x, B.params.y > 0.5), in.uv.y);
-  let hdr = textureSampleLevel(srcTex, srcSamp, uv, 0.0).rgb * B.params.x;
+  let hdr = textureSampleLevel(srcTex, srcSamp, uv, B.params.z).rgb * B.params.x;
   // Stand-in resolve: fixed shipped ACES coefficients (the TONE CURVE knobs only
   // reach the full composite path, not this fallback blit).
   return vec4<f32>(acesTonemap(hdr, 2.51, 0.03, 2.43, 0.59, 0.14), 1.0);

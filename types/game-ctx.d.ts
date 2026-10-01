@@ -714,7 +714,7 @@ interface GameCtx {
   readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
   /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */
   readonly weather: (w?: Weather) => Weather;
-  readonly snapGameCam: () => void;
+  readonly snapGameCam: (paint?: number | true) => void;
   readonly setCarRole: (c: CarState, human: boolean, local: boolean) => void;
   readonly modsFor: (team: TeamDef, setup: PartsSetup) => CarMods;
   readonly swapGridSlots: (a: number, b: number) => boolean;
@@ -798,6 +798,8 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
    NetSession (js/net/session.js takes {transport}) — same `create()` spelling,
    different contract. */
 declare const AeroZones: GameModuleFactory;
+// js/editor/custom-tracks.js — create(G, { load, door? }): the TRACK DESIGNER door + its lazy bundle.
+declare const CustomTracks: GameModuleFactory;
 declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
 declare const ShadowPass: GameModuleFactory;
@@ -807,6 +809,7 @@ declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
 declare const RadioVoice: GameModuleFactory;
+declare const RecordedAnnouncer: GameModuleFactory;
 declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const PlayerForces: GameModuleFactory;

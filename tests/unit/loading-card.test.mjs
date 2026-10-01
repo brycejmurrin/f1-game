@@ -194,8 +194,8 @@ test("the card paints ABOVE the letterbox, so the bottom bar never covers it", (
 
 test("the streak: a skip extends it, a watched flyby clears it, hostile input is no streak", () => {
   const { flyMsFor, nextSkips, FLY_MS, SHORT_FLY_MS, SKIP_STREAK } = LS;
-  assert.equal(FLY_MS, 24000);
-  assert.equal(SHORT_FLY_MS, 12000);
+  assert.equal(FLY_MS, 20000);
+  assert.equal(SHORT_FLY_MS, 10000);
   assert.equal(SKIP_STREAK, 3);
   for (const n of [0, 1, 2, null, undefined, "x", NaN, -5, {}]) assert.equal(flyMsFor(n), FLY_MS, String(n));
   for (const n of [3, 4, 99, "3"]) assert.equal(flyMsFor(n), SHORT_FLY_MS, String(n));
@@ -268,7 +268,7 @@ test("SETTINGS › MOTION: REDUCED skips the flyby for the card, as the OS flag 
   assert.equal(on.els.loading.dataset.phase, "run", "motion ON keeps the flyby");
 });
 
-test("three skips in a row shorten the next flyby — and its announcer budget — to 12 s", () => {
+test("three skips in a row shorten the next flyby — and its announcer budget — to SHORT_FLY_MS", () => {
   const h = harness();
   for (let k = 0; k < 3; k++) {
     h.run();
@@ -280,12 +280,12 @@ test("three skips in a row shorten the next flyby — and its announcer budget �
   }
   h.run();
   assert.equal(h.plays.at(-1), LS.SHORT_FLY_MS, "the announcer is fitted to the SHORT budget");
-  assert.equal(h.els.loading.style.props["--ld-fly"], "12000ms", "the letterbox is timed to it too");
+  assert.equal(h.els.loading.style.props["--ld-fly"], LS.SHORT_FLY_MS + "ms", "the letterbox is timed to it too");
   // The shots follow: progress() is a fraction of THIS run's length.
-  h.tick(6000);
-  assert.ok(Math.abs(h.screen.progress() - 0.5) < 1e-9, `progress ${h.screen.progress()} at 6 s of 12`);
-  // …and the race starts when the short flyby ends, not at 24 s.
-  h.tick(6000);
+  h.tick(LS.SHORT_FLY_MS / 2);
+  assert.ok(Math.abs(h.screen.progress() - 0.5) < 1e-9, `progress ${h.screen.progress()} halfway through the short cut`);
+  // …and the race starts when the short flyby ends, not at FLY_MS.
+  h.tick(LS.SHORT_FLY_MS / 2);
   assert.equal(h.races.length, 4, "every run handed over to the race");
 });
 
@@ -327,11 +327,17 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // first countdown present on TLX starts the program warm and paints nothing.
   const game = read("js/game.js");
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
-  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;[^\n]*\n\s*clearMenuScreens\(\);\s*if \(handoff\) loadingScreen\.handoff\(\);/,
+  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;/,
+    "startRaceBody still decides handoff from the screen that was up before the sweep");
+  assert.match(body, /clearMenuScreens\(\);\s*if \(handoff\) RaceEntryProfile\.raiseHandoff\(loadingScreen\);/,
     "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
-  assert.match(render, /gfx\.present\(po\);[\s\S]{0,400}?if \(loadingScreen\.phase\(\) === "handoff" && !\(gfx\.warming && gfx\.warming\(\)\)\) loadingScreen\.stop\(\);/,
-    "render() lowers it after a present that painted, never one that only started the warm");
+  assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx\);/,
+    "render() lowers it via afterPresent after a present that painted");
+  assert.match(read("js/perf/race-entry-profile.js"), /function raiseHandoff\(screen\) \{[\s\S]*?screen\.handoff\(\);/,
+    "raiseHandoff still calls loadingScreen.handoff()");
+  assert.match(read("js/perf/race-entry-profile.js"), /function afterPresent\(screen, gfx\) \{[\s\S]*?screen\.phase\(\) === "handoff"[\s\S]*?screen\.stop\(\)/,
+    "afterPresent still stops the card only when not warming");
   assert.match(read("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
 });
 
@@ -357,7 +363,7 @@ test("a flyby that plays out resets the streak, and the full cut comes back", ()
   h.screen.stop();
   h.run();
   assert.equal(h.plays.at(-1), LS.FLY_MS);
-  assert.equal(h.els.loading.style.props["--ld-fly"], "24000ms");
+  assert.equal(h.els.loading.style.props["--ld-fly"], LS.FLY_MS + "ms");
 });
 
 test("only a FLYBY counts: the no-world card and a stop() before the end leave the streak alone", () => {
@@ -645,10 +651,10 @@ test("the radio check never talks over the announcer: it waits, and gives up whe
   let talking = true;
   const h = gridHarness({ speaking: () => talking });
   h.run();
-  h.tickTo(0.89);
+  h.tickTo(0.882);
   assert.equal(h.said.length, 0, "the announcer is still reading");
   talking = false;
-  h.tickTo(0.895);
+  h.tickTo(0.886);
   assert.equal(h.said.length, 1, "…and the line goes the moment it stops");
 
   const g = gridHarness({ speaking: () => true });
@@ -745,12 +751,12 @@ test("with the radio check coming, the announcer's read is budgeted to end befor
 });
 
 test("the radio check's hiss is held for the line, not for the rest of the flyby", () => {
-  const h = gridHarness({ radioOn: 1.9 });   // sayPreRace -> the line's length, cue included
+  const h = gridHarness({ radioOn: 1.6 });   // sayPreRace -> the line's length, cue included
   h.run();
   h.tickTo(0.885);
   assert.equal(h.said.length, 1);
   assert.equal(h.stings.length, 1);
-  assert.ok(Math.abs(h.stings[0] - 2.5) < 1e-9, `bed ${h.stings[0]} s: the words plus a beat`);
+  assert.ok(Math.abs(h.stings[0] - 2.2) < 1e-9, `bed ${h.stings[0]} s: the words plus a beat`);
   assert.ok(h.stings[0] < h.said[0].life, "shorter than the shot it plays over");
   // …and the real RadioVoice reports that length: plan() carries the words' own seconds.
   const sb = modules(["js/audio/radio-voice.js"]);
@@ -801,7 +807,7 @@ test("metaRows: a circuit gets its facts; a real race joined mid-race gets the l
 });
 
 // ── THE LOADING-SCREEN HUNT (2026-09-29) ─────────────────────────────────────
-test("a habitual skipper's 12 s cut leaves no room for the radio check, so the announcer keeps the whole flyby", () => {
+test("a habitual skipper's short cut leaves no room for the radio check, so the announcer keeps the whole flyby", () => {
   const h = gridHarness({ radioOn: true, stored: { flySkips: LS.SKIP_STREAK } });
   h.run();
   assert.equal(h.plays[0], LS.SHORT_FLY_MS, "grid-mine gets ~1.4 s of 12 — under the check's 2.2 s floor, so nothing waits on it");
@@ -823,7 +829,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   const intro = game.slice(game.indexOf("function introWarm(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
-  assert.match(intro, /if \(_warmKey !== key\) \{[^\n]*\n\s*warmPrograms\(\); _menuGate\.warm = 2;/, "a built but UNWARMED world is warmed under the card, as introBuild does");
+  assert.match(intro, /if \(cold\) \{[^\n]*\n\s*warmPrograms\(\); _menuGate\.warm = 2;/, "a built but unwarmed world warms under the card before outgoing motion");
   assert.match(intro, /await awaitIntroWarm\(live\)/, "same 30 s compile bound as introBuild — never fly over a pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
   assert.match(intro, /if \(!built && menuWorld\(\) && introWarm\(go\)\) return;/, "raceIntro routes a built world with a pending warm through it");
@@ -834,7 +840,8 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   // The build path plans the flyby for the length it will run (a real race's read).
   const build = game.slice(game.indexOf("function introBuild(go)"), game.indexOf("function introWarm(go)"));
   assert.match(build, /const info0 = loadingInfo\(\);/);
-  assert.match(build, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info0\.readMs\)\);/);
+  assert.match(build, /await introPlan\(live, key, info0, n\)/);
+  assert.match(game, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
   assert.match(build, /await awaitIntroWarm\(live\)/, "introBuild waits via awaitIntroWarm, not the race-start introWarm(go)");
 });
 
@@ -876,6 +883,14 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   h.tick(LS.SKIP_GRACE_MS + 10); h.skip();
   assert.equal(late, 0, "the build card has no skip of its own");
   assert.equal((h.listeners.keydown || new Set()).size, 0, "stop() took the garage's listeners down");
+  h.screen.building(info, () => late++);
+  h.skip(); assert.equal(late, 0, "the preparation skip retains the double-click grace");
+  h.tick(LS.SKIP_GRACE_MS + 10); h.skip(); h.skip();
+  assert.equal(late, 1, "a preparation skip marks the cinematic once, without lowering its card");
+  assert.equal(h.saved.get("flySkips"), 2, "a preparation skip also counts toward the shorter cinematic");
+  assert.equal(h.screen.phase(), "build", "preparation continues safely after the skip");
+  h.screen.stop();
+  assert.equal((h.listeners.keydown || new Set()).size, 0, "cancellation removes preparation skip listeners");
   const css = read("css/overlays.css");
   assert.match(css, /#loading\[data-phase="garage"\] \{ background: none; \}/, "no scrim over the car");
   assert.match(css, /#loading\[data-phase="garage"\] #ld-card \{ visibility: hidden; \}/, "the card is out of the accessibility tree, not just transparent");

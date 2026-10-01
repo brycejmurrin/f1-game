@@ -1079,6 +1079,27 @@ const TLX = (function () {
       // attribute mirrors (the releases below hold on it).
       let _mirUsed = false;
       const _mirVP = new Float32Array(16), _mirProjGpu = new Float32Array(16);
+      const _mirRectScratch = [0, 0, 0, 0];   // reused every mirror/PiP frame
+      // The mirror uses no MRT; warming only the main HDR/MRT scene leaves
+      // both its world and composite programs to link on the first race frame.
+      function wantMirrorWarm() {
+        if (!_warmFx || !post || !post.enabled() || _mirDead || !lit || vizMat) return false;
+        let mode = "auto", pip = "auto";
+        try { mode = GameStore.store.get("hudMirror", "auto"); pip = GameStore.store.get("bcPip", "auto"); } catch (_) { /* defaults */ }
+        return mode === "on" || pip === "on" || ((mode !== "off" || pip !== "off") && !softGpu() && !softwareGL);
+      }
+      function prepareMirrorTarget(w, h) {
+        if (!mirRT) {
+          mirRT = new THREE.RenderTarget(w, h, {
+            type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
+            format: THREE.RGBAFormat, depthBuffer: true,
+            generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
+          });
+          mirRT.texture.colorSpace = THREE.NoColorSpace;
+          mirCam = new THREE.PerspectiveCamera();
+          mirCam.matrixAutoUpdate = false; mirCam.matrixWorldAutoUpdate = false;
+        } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
+      }
       try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
@@ -2061,7 +2082,21 @@ const TLX = (function () {
             // now castScene holds the grid's casters and the warm compiles the
             // real ones.
             if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
-            _warmStages.shadow = Math.round(performance.now() - _tStage);
+            _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
+            _warmStages.mirror = null;
+            if (wantMirrorWarm()) {
+              prepareMirrorTarget(16, 8);
+              _mirUsed = true;   // future mirror compiles still need CPU attributes
+              if (lit.setSsrMrt) lit.setSsrMrt(false);
+              if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+              renderer.setRenderTarget(mirRT);
+              _gpuLastOperation = "compile-mirror";
+              await renderer.compileAsync(scene, camera);
+              // The composite, like all post quads, draws under the main MRT.
+              renderer.setMRT(usePost ? _ssrMrtNode() : null);
+              if (post.warmMirror) await post.warmMirror(mirRT.texture);
+              _warmStages.mirror = Math.round(performance.now() - _tStage);
+            }
           } catch (e) {
             _warmStages.failed++;
             _warmRequested = _warmAttempts < 2;
@@ -2529,9 +2564,11 @@ const TLX = (function () {
           (renderer.domElement && (renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf));
         if (sizeChanged) {
           // An old-size async read may finish after the visible canvas changes.
-          // It is allowed to drain, but must never repaint the resized canvas.
+          // It is allowed to drain, but must never repaint the resized canvas
+          // or hold the gate (see _cancelSoftBlits).
           _softReadEpoch++;
           _softReadQueued = null;
+          _softReadPending = false;
           W = rw; H = rh;
           _gpuLastOperation = "resize";
           _gpuLastResize = { at: performance.now(), width: rw, height: rh };
@@ -2694,9 +2731,16 @@ const TLX = (function () {
         }
         _startSoftBlitRead(req);
       }
+      // Voiding the in-flight read must also release its gate: the voided
+      // completion no longer calls _finishSoftBlitRead (epoch mismatch), so a
+      // gate left held wedged presentation until the stale guard fired —
+      // max(20 s, 3x the last read), 60 s+ on a loaded llvmpipe runner, which
+      // timed out every awaitSoftPresent issued through snapCam/invalidate
+      // (image-grade-visual "blacks", browser-group runs 36752751997 x2).
       function _cancelSoftBlits() {
         _softReadEpoch++;
         _softReadQueued = null;
+        _softReadPending = false;
       }
 
       // the backend object (the ~40-member seam contract)
@@ -3224,20 +3268,13 @@ const TLX = (function () {
           _restoreEnvFrame();
         },
         mirrorBegin(frame, w, h) {
+          // The second world pass shares the soft-present queue. Submitting it
+          // while a read waits defeats present()'s backpressure and starves it.
+          if (_softBlit && _softReadPending) return false;
           if (_mirDead || _warmPending || _envActive || !lit || !frame || !frame.proj || !frame.view || !frame.viewProj) return false;
           w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
           try {
-            if (!mirRT) {
-              mirRT = new THREE.RenderTarget(w, h, {
-                type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
-                format: THREE.RGBAFormat, depthBuffer: true,
-                generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
-              });
-              mirRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant, as the probe
-              mirCam = new THREE.PerspectiveCamera();
-              mirCam.matrixAutoUpdate = false;
-              mirCam.matrixWorldAutoUpdate = false;
-            } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
+            prepareMirrorTarget(w, h);
           } catch (e) {
             _mirDead = true; _mirErr = (e && e.message) || String(e);
             try { Log.warn("gfx", "TLX mirror target failed — mirror off:", _mirErr); } catch (_) { /* harness */ }
@@ -3301,7 +3338,7 @@ const TLX = (function () {
           _instAlive.clear();
           _poolBatch++;
         },
-        mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
+        mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
@@ -4424,7 +4461,7 @@ const TLX = (function () {
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
-            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow,
+            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count

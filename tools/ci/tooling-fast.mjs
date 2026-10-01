@@ -69,11 +69,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
-  // Mistake-rate formula: monotone in (1−consistency) and pressure; DIFF.err
-  // ladder easy>normal>hard; Optimism reshape. Pure AiDrive VM, no browser.
-  "tests/unit/ai-mistake-chance-vm.test.mjs",
   // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
-  // dial census. No VM. Authored craft-cluster |r| must stay < 0.5.
+  // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
   "tests/unit/ai-ratings-math.test.mjs",
   // ...and the field's strategy: the plan scales with the distance, a 20-car
   // grid does not converge on one plan, strategies mix, and the reactive
@@ -97,6 +94,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bahrain-grandstand-rake.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/baku-migration.test.mjs",
+  // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / featherBarrierEnds + fleet caps (monza/spa/bahrain/silverstone/monaco maxOver < 3). Pure helper + a few track-build-vm builds, ~6 s.
+  "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/behind-ship.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
@@ -122,6 +121,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
+  "tests/unit/career-ai-dev.test.mjs",
+  "tests/unit/career-backup.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
@@ -173,6 +174,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-token-adoption.test.mjs",
   "tests/unit/css-tokens.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
+  // The track designer's registry (js/editor/custom-tracks.js + track-themes.js):
+  // stored designs become Tracks.LIST entries through TrackDef.fromRaw, after
+  // the 52 and never in SEASON; hostile stored input is repaired or dropped.
+  // Runs the TRACK_VM engine over a stub store, ~3 s.
+  "tests/unit/custom-tracks.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
@@ -273,6 +279,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Every freezable module surface stays frozen (pure file read; < 1 s).
   "tests/unit/frozen-globals.test.mjs",
   "tests/unit/frustum-buckets.test.mjs",
+  // Seeded fuzz over every door that decodes player-shaped data (ghost hash,
+  // invite paste, peer snapshot, settings/garage import, career migrate,
+  // store reads). Hash32-seeded, N=2000/surface, <10 s; a red prints the seed.
+  "tests/unit/fuzz-untrusted-inputs.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/game-ctx-surface.test.mjs",
   // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in
@@ -282,6 +292,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-arrival.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
+  "tests/unit/garage-panel-side.test.mjs",
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.
@@ -375,6 +386,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/nontext-contrast.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
+  "tests/unit/pad-haptics.test.mjs",
   // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
@@ -417,6 +429,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/prepush-gate-coverage.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
+  "tests/unit/race-entry-profile.test.mjs",
   "tests/unit/race-insights.test.mjs",
   // ...and the race radio: every phrasebook line fits its card when spoken,
   // pools deal like a deck, gaps come from the timing loop, a pass must hold,
@@ -457,6 +470,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
+  "tests/unit/screen-looks.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
   "tests/unit/select-budget.test.mjs",
@@ -543,6 +557,22 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-build-vm-release.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/track-centerline-seam.test.mjs",
+  "tests/unit/track-codec.test.mjs",
+  // js/track/core/def.js (TrackDef) is the ONE raw-def → LIST-entry path for the
+  // 52 shipped circuits and the designer's runtime defs: a golden hash per
+  // circuit (metadata + materialised points) pins the extraction byte-for-byte.
+  "tests/unit/track-def-factory.test.mjs",
+  // The track designer SCREEN (js/editor/designer.js + canvas.js) booted over the
+  // engine and a minimal DOM: init builds the rail before a design exists, the
+  // rail's edits keep the verdict coherent, SAVE / RACE land, the canvas routes a
+  // nudge back on the lattice. The 300 ms twin of tests/specs/track-designer.spec.js.
+  "tests/unit/track-designer-dom.test.mjs",
+  // The track designer's pure core (js/editor/shape|stamps|randomise|validate|codec.js)
+  // over the real engine: Dubins lands on its goal for all six words, stamps
+  // build as the requested turn, the randomiser is deterministic and valid, the
+  // validator reads the engine's centreline; the share code round-trips on the
+  // lattice and refuses every bad code with a reason. ~15 s together.
+  "tests/unit/track-editor-geometry.test.mjs",
   "tests/unit/track-foundation.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
@@ -570,6 +600,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-polling.test.mjs",
+  "tests/unit/wall-clamp.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)

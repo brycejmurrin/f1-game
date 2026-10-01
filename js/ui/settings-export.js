@@ -1,5 +1,5 @@
 /* Apex 26 — SettingsExport: SETTINGS › BACKUP & RESTORE,
-   which carries a player's state OUT of the browser and back IN. TWO files,
+   which carries a player's state OUT of the browser and back IN. THREE files,
    deliberately separate:
 
      SETTINGS  preferences, tuners and control bindings — how you like the game
@@ -10,10 +10,14 @@
      GARAGE    parts, liveries, setup sheets and an invented team — what you
                BUILT. A new phone wants the first file; a friend wants the
                second.
+     CAREER    the six save slots (driver.0..2, myteam.0..2) and the live
+               slot pointer — what a long championship is. Mounted from the
+               CAREER MODES screen the way GARAGE injects its row, so shell
+               node count does not grow.
 
-   Loading either one overwrites what is stored and reloads the page, so the
-   button asks twice. Neither file carries career or season saves, lap records,
-   ghosts, or anything account-shaped, in either direction.
+   Loading any one overwrites what is stored and reloads the page, so the
+   button asks twice. SETTINGS and GARAGE still never carry career or season
+   saves, lap records, ghosts, or anything account-shaped, in either direction.
 
    SPEC below is the allowlist — every player-facing preference, tuner and
    control binding under the `apex26.` prefix, grouped the way SETTINGS is.
@@ -59,6 +63,7 @@ const SPEC = [
   { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
     subsystem: "ships the game MUTED for every new player — an export from a silenced phone looks exactly like this" },
   { k: "sfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
+  { k: "menuSfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
   { k: "music", lane: "json", group: "audio", def: true, src: "js/game.js" },
   { k: "volMusic", lane: "json", group: "audio", def: 0.6, src: "js/audio/panel.js" },
   { k: "volSfx", lane: "json", group: "audio", def: 0.2, src: "js/audio/panel.js" },
@@ -66,6 +71,7 @@ const SPEC = [
   { k: "announcer", lane: "json", group: "audio", def: true, src: "js/audio/announcer.js" },
   { k: "volRadio", lane: "json", group: "audio", def: 0.8, src: "js/audio/panel.js" },
   { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
+  { k: "radioPreset", lane: "json", group: "audio", def: "modern", oneOf: ["modern", "clean", "vintage"], src: "js/audio/panel.js" },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
@@ -89,11 +95,18 @@ const SPEC = [
   { k: "titleIntro", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js TITLE INTRO (full | quick | off)", oneOf: ["full", "quick", "off"] },
   { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | soft | off)", oneOf: ["full", "soft", "off"] },
   { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | soft | off)", oneOf: ["on", "soft", "off"] },
-  { k: "pauseLayout", lane: "json", group: "appearance", def: "grid", src: "js/ui/pause-opts.js PAUSE MENU › LAYOUT (grid | list)", oneOf: ["grid", "list"] },
+  { k: "pauseLayout", lane: "json", group: "appearance", def: "grid", src: "js/ui/pause-opts.js PAUSE MENU › LAYOUT (grid | list | compact | wide | sidebar)", oneOf: ["grid", "list", "compact", "wide", "sidebar"] },
   { k: "pauseSide", lane: "json", group: "appearance", def: "centre", src: "js/ui/pause-opts.js PAUSE MENU › SIDE (centre | left | right)", oneOf: ["centre", "left", "right"] },
   { k: "pauseDim", lane: "json", group: "appearance", def: "full", src: "js/ui/pause-opts.js PAUSE MENU › BACKGROUND (full | soft | off)", oneOf: ["full", "soft", "off"] },
   { k: "pauseConfirm", lane: "json", group: "appearance", def: "on", src: "js/ui/pause-opts.js PAUSE MENU › CONFIRM QUIT (on | off; two presses on QUIT / RESTART)", oneOf: ["on", "off"] },
   { k: "titleLayout", lane: "json", group: "appearance", def: null, src: "js/ui/title-layout.js TITLE LAYOUT (null = shipped; else {v:2, wide, tall}, one {btns,title,art,layout,side} per shape — a missing shape is shipped; a v1 object is both)" },
+  { k: "lookPause", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js PAUSE MENU buttons & card (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
+  { k: "lookDatahub", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js DATA HUB (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
+  { k: "lookSelect", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js TRACK SELECTOR (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
+  { k: "lookRace", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js RACE SETTINGS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
+  { k: "lookCareer", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js CAREER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
+  { k: "lookGarage", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js GARAGE (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
+  { k: "lookPopups", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js POPUPS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
@@ -118,10 +131,11 @@ const SPEC = [
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
   { k: "camMode", lane: "json", group: "camera", def: 3, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (every def 0; the file holds {mode:{knob:value}} edits)" },
-  { k: "cockpitHalo", lane: "raw", group: "camera", def: "1", src: "js/camera/cockpit-opts.js HALO_VALUES (\"1\" = standard, \"0\" = off)", oneOf: ["0", "slim", "1", "thick"] },
-  { k: "cockpitWheel", lane: "raw", group: "camera", def: "f1", src: "js/camera/cockpit-opts.js CHOICES.wheel", oneOf: ["f1", "retro", "round", "none"] },
+  { k: "cockpitHalo", lane: "raw", group: "camera", def: "1", src: "js/camera/cockpit-opts.js HALO_VALUES (\"1\" = standard, \"0\" = off)", oneOf: ["0", "slim", "1", "thick", "fairing"] },
+  { k: "cockpitWheel", lane: "raw", group: "camera", def: "f1", src: "js/camera/cockpit-opts.js CHOICES.wheel", oneOf: ["f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"] },
+  { k: "cockpitBody", lane: "raw", group: "camera", def: "standard", src: "js/camera/cockpit-opts.js CHOICES.body", oneOf: ["standard", "sculpted", "wide", "tapered", "stepped"] },
   { k: "cockpitSeat", lane: "raw", group: "camera", def: "std", src: "js/camera/cockpit-opts.js CHOICES.seat", oneOf: ["std", "low", "high", "fwd"] },
-  { k: "cockpitInterior", lane: "raw", group: "camera", def: "carbon", src: "js/camera/cockpit-opts.js CHOICES.interior", oneOf: ["carbon", "team", "classic"] },
+  { k: "cockpitInterior", lane: "raw", group: "camera", def: "carbon", src: "js/camera/cockpit-opts.js CHOICES.interior", oneOf: ["carbon", "team", "suede", "ribbed", "classic"] },
   { k: "cockpitTurnChaseLead", lane: "raw", group: "camera", def: "0.4", src: "js/camera/cockpit-opts.js LEAD_DEFAULT" },
   // LIGHTING TUNER (js/lighting)
   { k: "lightTune", lane: "json", group: "lighting", def: {}, src: "js/lighting/knobs.js TUNE_DEFS (the file holds {\"track|tod|weather\":{knob:value}} edits)" },
@@ -140,6 +154,7 @@ const SPEC = [
   { k: "digitalRate", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js steerRateFromSlider (KEY_RAMP_IN)" },
   { k: "analogSpeedSteer", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js analogSpeedFromSlider (1 = off)" },
   { k: "haptics", lane: "json", group: "driving", def: 6, src: "js/input/steer-tuning.js (scales Input.vibrate and Input.rumble)" },
+  { k: "triggerHaptics", lane: "json", group: "driving", def: true, src: "js/input/steer-tuning.js (L2/R2 trigger-rumble; falls back to dual-rumble when off or unsupported)" },
   { k: "padDeadzone", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js (percent of stick travel)" },
   { k: "padSaturation", lane: "json", group: "driving", def: 0, src: "js/input/steer-tuning.js (percent short of the rim that is full lock)" },
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
@@ -469,6 +484,85 @@ function applyGarage(file) {
   return { ok: true, applied, skipped, failed, reason: null };
 }
 
+// THE CAREER FILE: the six championship slots and the live pointer. Same
+// allowlist discipline as the garage — only career.<flavour>.<i> and
+// careerSlot leave or enter the namespace. Every slot value runs through
+// migrateCareer on the way out and on the way in so a hand-edited or
+// older-build file cannot crash Career.load().
+const CAREER_FORMAT = "apex26-career-v1";
+const CAREER_FLAVOURS = ["driver", "myteam"];
+const CAREER_SLOT_N = 3;
+const CAREER_EXCLUDED = "settings, garage (parts, liveries, setups), standalone season, lap records, ghosts, daily challenge, accounts";
+const CAREER_SLOT_RE = /^career\.(driver|myteam)\.([0-2])$/;
+function isCareerKey(k) {
+  return k === "careerSlot" || CAREER_SLOT_RE.test(k);
+}
+function migrateSlot(raw) {
+  if (raw == null) return null;
+  // Clone before migrateCareer: it mutates in place, and export must not
+  // rewrite the live Career.data() object sitting in the store cache.
+  let copy = raw;
+  try { copy = JSON.parse(JSON.stringify(raw)); } catch (_) { return null; }
+  if (typeof GameStore !== "undefined" && GameStore.migrateCareer) return GameStore.migrateCareer(copy);
+  return copy && typeof copy === "object" && !Array.isArray(copy) ? copy : null;
+}
+function collectCareer() {
+  const out = {};
+  let n = 0;
+  const store = typeof GameStore !== "undefined" ? GameStore.store : null;
+  for (const f of CAREER_FLAVOURS) {
+    for (let i = 0; i < CAREER_SLOT_N; i++) {
+      const k = "career." + f + "." + i;
+      let raw = null;
+      if (store && store.get) raw = store.get(k, null);
+      else {
+        try {
+          const s = localStorage.getItem("apex26." + k);
+          if (s != null) raw = JSON.parse(s);
+        } catch (_) { raw = null; }
+      }
+      const c = migrateSlot(raw);
+      if (!c) continue;
+      out[k] = c;
+      n++;
+    }
+  }
+  let live = null;
+  if (store && store.get) live = store.get("careerSlot", null);
+  else {
+    try {
+      const s = localStorage.getItem("apex26.careerSlot");
+      if (s != null) live = JSON.parse(s);
+    } catch (_) { live = null; }
+  }
+  if (typeof live === "string" && /^((driver|myteam):[0-2])$/.test(live)) {
+    out.careerSlot = live;
+    n++;
+  }
+  let build = null;
+  try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) { /* no DOM */ }
+  return { format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
+           excluded: CAREER_EXCLUDED, count: n, careers: out };
+}
+function applyCareer(file) {
+  if (!file || file.format !== CAREER_FORMAT) return { ok: false, reason: `not an ${CAREER_FORMAT} file`, applied: 0, skipped: 0 };
+  const bag = file.careers || {};
+  let applied = 0, skipped = 0, failed = 0;
+  for (const k of Object.keys(bag)) {
+    if (!isCareerKey(k)) { skipped++; continue; }
+    if (k === "careerSlot") {
+      const v = bag[k];
+      if (typeof v !== "string" || !/^((driver|myteam):[0-2])$/.test(v)) { skipped++; continue; }
+      try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { failed++; }
+      continue;
+    }
+    const c = migrateSlot(bag[k]);
+    if (!c) { skipped++; continue; }
+    try { if (GameStore.store.set(k, c) !== false) applied++; else failed++; } catch (_) { failed++; }
+  }
+  return { ok: true, applied, skipped, failed, reason: null };
+}
+
 function download(obj, name) {
   const blob = new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" });
   const a = document.createElement("a");
@@ -637,15 +731,35 @@ function create(G) {
         applyGarage, "THE GARAGE"));
     return wrap;
   }
+  // CAREER MODES mounts this the same way GARAGE mounts garageRow: fresh
+  // nodes each call, no static shell tags, id-guard against a double append.
+  function careerRow() {
+    if (typeof document === "undefined") return null;
+    const wrap = document.createElement("div");
+    wrap.id = "cr-career-file";
+    wrap.className = "sel-edit-row";
+    wrap.append(
+      saveBtn("cr-career-save", "SAVE CAREER FILE",
+        "All six career slots and which one is live. Settings, garage builds and accounts stay out.",
+        collectCareer, () => `apex26-career-${stamp()}.json`),
+      loadBtn("cr-career-load", "LOAD CAREER FILE",
+        "Read an apex26-career file back in. Only career slots are written; settings and the garage are never touched.",
+        applyCareer, "CAREER SAVES"));
+    return wrap;
+  }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", mount, { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");
-  _ui = { collect: (mode) => collect(mode, G), collectGarage, applySettings: (o) => applySettings(o, G), applyGarage, garageRow, mount };
+  _ui = { collect: (mode) => collect(mode, G), collectGarage, collectCareer,
+          applySettings: (o) => applySettings(o, G), applyGarage, applyCareer,
+          garageRow, careerRow, mount };
   return _ui;
 }
 
-return { FORMAT, GARAGE_FORMAT, SPEC, collect, collectGarage, applySettings, applyGarage, isGarageKey, create,
-         garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null) };
+return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
+         applySettings, applyGarage, applyCareer, isGarageKey, isCareerKey, create,
+         garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
+         careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();
 Object.freeze(SettingsExport);
