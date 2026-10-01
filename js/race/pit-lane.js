@@ -1529,7 +1529,11 @@ const PitLane = (function () {
       const busy = !!c.pitArmed || (c.pitState && c.pitState !== "none");
       let state = "", text = "PLAN " + label + " · BOX L" + next + (code ? " " + code : "");
       if (busy) state = "";
-      else if (est && est.marginS > 0 && lapsToStop <= (typeof AiDrive !== "undefined" && AiDrive.STRAT ? AiDrive.STRAT.CAUTION_REACH : 6)) { state = "free"; text = "FREE STOP · BOX NOW" + (code ? " " + code : ""); }
+      else if (est && est.marginS > 0 && lapsToStop <= (typeof AiDrive !== "undefined" && AiDrive.STRAT ? AiDrive.STRAT.CAUTION_REACH : 6)) {
+        state = "cheap";
+        const loss = est.lossS != null ? Math.round(est.lossS) : null;
+        text = "CHEAPER STOP" + (loss != null ? " · ~" + loss + "s" : "") + " · BOX NOW" + (code ? " " + code : "");
+      }
       else if (lapsToStop <= 0) { state = "now"; text = "BOX BOX BOX" + (code ? " · " + code : ""); }
       else if (lapsToStop === 1) { state = "soon"; text = "BOX NEXT LAP" + (code ? " · " + code : ""); }
       return { text, state, stops, next, lapsToStop, code };
