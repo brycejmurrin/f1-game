@@ -140,3 +140,31 @@ test("the baked normal map's tangent frame is the tile's world axes on every bac
       `${name}: the tangent frame must be built from the world axes (+x, +y, +z), not derived from N`);
   }
 });
+
+test("the sun disc sits behind the cloud deck on every backend", () => {
+  // The cloud pass hoists the coverage along the ray (GLX cityCov, TLX cityCov,
+  // WGX covRay) and the stars and the moon already fade by it; until 2026-10-01
+  // the sun corona and disc were ADDED after the clouds with only the global
+  // overcast damp, so a cumulus passing over the sun never hid the disc (the
+  // second graphics-detail survey, item 12). The disc and the tight ring must
+  // carry the full (1 − coverage); the aureole most of it.
+  const block = (file, start) => {
+    const src = read(file);
+    const i = src.indexOf(start);
+    assert.ok(i >= 0, `${file}: ${start} not found`);
+    return src.slice(i, i + 3200);
+  };
+  const b = {
+    GLX: block("js/render/glx/shaders/glsl-sky.js", "float coronaDamp = "),
+    TLX: block("js/render/three/tsl-sky.js", "const coronaDamp = "),
+    WGX: block("js/render/webgpu/wgsl-chunks.js", "let coronaDamp = "),
+  };
+  const discLine = (s, re) => { const m = re.exec(s); assert.ok(m, "no disc line"); return m[0]; };
+  assert.match(discLine(b.GLX, /float disc = [^\n]*/), /\* sunClear;/, "GLX: the disc must be scaled by the ray's cloud coverage");
+  assert.match(b.GLX, /float sunClear = 1\.0 - cityCov;/);
+  assert.match(discLine(b.GLX, /uSunCorona[^\n]*/), /\* sunClear/, "GLX: the tight ring too");
+  assert.match(discLine(b.TLX, /const disc = [\s\S]*?toVar\(\);/), /cityCov\.oneMinus\(\)/, "TLX: the disc must be scaled by cityCov");
+  assert.match(discLine(b.TLX, /U\.sunCorona[^\n]*/), /cityCov\.oneMinus\(\)/, "TLX: the tight ring too");
+  assert.match(discLine(b.WGX, /let disc = [^\n]*/), /\(1\.0 - covRay\)/, "WGX: the disc must be scaled by covRay");
+  assert.match(discLine(b.WGX, /sunCorona \* coronaDamp[^\n]*/), /\(1\.0 - covRay\)/, "WGX: the tight ring too");
+});

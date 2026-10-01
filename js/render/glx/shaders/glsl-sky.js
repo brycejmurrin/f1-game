@@ -315,13 +315,20 @@ void main() {
   // uStars is a uniform, so the branch is uniform control flow — no divergence.
   if (nightSky < 0.5) {
     float coronaDamp = (1.0 - overcast * 0.92) * (1.0 - nightSky);
+    // The sun sits BEHIND the cloud deck like the stars and the moon: cityCov
+    // (coverage along this ray, hoisted from the cloud pass) hides the disc and
+    // the tight ring outright and most of the aureole, so a passing cumulus
+    // covers the sun instead of the disc painting through it. Until 2026-10-01
+    // only the global overcast damp applied; the disc showed through every
+    // cloud (the second graphics-detail survey, item 12).
+    float sunClear = 1.0 - cityCov;
     float golden = 1.0 - smoothstep(0.0, 0.45, sunE);
     vec3 sunWarm = mix(uSunColor, uSunColor * vec3(1.18, 0.52, 0.24), golden);
     // Wide aureole: broader (lower exponent) and stronger at golden hour.
     // CORONA AUREOLE knob (def 1.0 = as-shipped) scales the broad sun halo glow.
-    c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * uCoronaAureole;
+    c += sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * (1.0 - cityCov * 0.6) * uCoronaAureole;
     // SUN CORONA RING knob (def 1.0 = as-shipped) scales the tight inner ring.
-    c += sunWarm * pow(sd, 300.0) * 0.95 * uSunCorona * coronaDamp;   // tight inner ring
+    c += sunWarm * pow(sd, 300.0) * 0.95 * uSunCorona * coronaDamp * sunClear;   // tight inner ring
     // Flatten the disc near the horizon (atmospheric refraction squashes it).
     // SUN HORIZON SQUASH knob (def 1.0 = as-shipped): scales the golden-hour vertical
     // squash of the disc (1.0 = round, higher = more oval near the horizon).
@@ -329,7 +336,7 @@ void main() {
     float perp = length(vec2(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), uSunSquash)));
     // SUN DISC SIZE knob (def 1.0 = as-shipped): scales the disc's angular radius by
     // widening the smoothstep edge. Larger = a bigger, brighter sun.
-    float disc = smoothstep(mix(0.018, 0.028, golden) * uSunDiscSize, 0.006 * uSunDiscSize, perp) * coronaDamp;
+    float disc = smoothstep(mix(0.018, 0.028, golden) * uSunDiscSize, 0.006 * uSunDiscSize, perp) * coronaDamp * sunClear;
     // Bright HDR core (>1) so it blooms into glare; warm-white high, deep amber low.
     vec3 discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
     c += discCore * disc;

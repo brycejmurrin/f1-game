@@ -1994,13 +1994,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
     let coronaDamp = (1.0 - overcast * 0.92) * (1.0 - nightSky);   // overcast <= 1 keeps the first factor >= 0.08
     let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
-    c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
-    c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp;   // SUN CORONA RING knob
+    c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * (1.0 - covRay * 0.6) * coronaAureole;   // SUN AUREOLE knob; behind the deck (GLX sunClear)
+    c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp * (1.0 - covRay);   // SUN CORONA RING knob
     let dd = dir - sunDir * sd;
     // SUN HORIZON SQUASH knob: scales the golden-hour vertical squash of the disc.
     let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), sunSquash)));
     // SUN DISC SIZE knob: scale both smoothstep edges to grow/shrink the disc.
-    let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp;
+    let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp * (1.0 - covRay);
     let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
     c = c + discCore * disc;
   }
