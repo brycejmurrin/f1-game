@@ -29,9 +29,22 @@ const TrackRandom = (function () {
     }
     return moved;
   }
-  /** Index of the control point where the longest low-curvature run begins + the run's length (m). */
+  /** The engine's two Laplacian passes over the controls (TrackDef.realPoints,
+   *  weight 0.25): the built road is that much straighter than the raw loop. */
+  function engineSmooth(pts) {
+    let p = pts.map((q) => [q[0], q[1]]);
+    const N = p.length;
+    for (let it = 0; it < 2; it++) {
+      const src = p;
+      p = src.map((q, i) => { const a = src[S.wrapI(i - 1, N)], b = src[S.wrapI(i + 1, N)]; return [q[0] + 0.25 * ((a[0] + b[0]) / 2 - q[0]), q[1] + 0.25 * ((a[1] + b[1]) / 2 - q[1])]; });
+    }
+    return p;
+  }
+  /** Where the longest low-curvature run begins on a 4 m loop (`dense`, index
+   *  0 at control 0) + the run's length (m), measured on the road the engine
+   *  would build (its smoothing, its ±12 m window, TrackPit.PIT_K). */
   function longestStraight(pts, kMax = 0.0035) {
-    const dense = S.resample(S.catmull(pts, 8), 4, true), n = dense.length;
+    const dense = S.resample(S.catmull(engineSmooth(pts), 8), 4, true), n = dense.length;
     const flat = new Uint8Array(n);
     for (let i = 0; i < n; i++) flat[i] = 1 / S.menger(dense[S.wrapI(i - 3, n)], dense[i], dense[S.wrapI(i + 3, n)]) <= kMax ? 1 : 0;
     let best = { start: 0, len: 0 }, run = 0, start = 0;
@@ -70,15 +83,28 @@ const TrackRandom = (function () {
     const L = S.polyLen(dense, true), k = targetL / L;
     const c = S.centroid(dense);
     dense = dense.map((p) => [(p[0] - c[0]) * k, (p[1] - c[1]) * k]);
-    let ctrl = S.resample(dense, 30, true);
-    // Start line on the longest straight, 60 % along it (grid behind, pit entry ahead).
-    const ls = longestStraight(ctrl);
-    const sIdx = S.project(ctrl, ls.dense[(ls.start + Math.round(Math.min(Math.max(ls.lenM * 0.6, 240), Math.max(ls.lenM - 140, 0)) / 4)) % ls.dense.length][0],
-      ls.dense[(ls.start + Math.round(Math.min(Math.max(ls.lenM * 0.6, 240), Math.max(ls.lenM - 140, 0)) / 4)) % ls.dense.length][1]).i;
-    ctrl = S.rotate(ctrl, sIdx);
-    // Drive direction: a clockwise lap (as most F1 circuits) — flip when the area says left-turning.
-    if (S.signedArea(ctrl) > 0) ctrl = [ctrl[0]].concat(ctrl.slice(1).reverse());
-    return { pts: ctrl.map((p) => [Math.round(p[0] * 4) / 4, Math.round(p[1] * 4) / 4]), seed: seed >>> 0, targetL: Math.round(targetL), straightM: ls.lenM };
+    // On the storage lattice (0.25 m) BEFORE the start is measured, so the loop
+    // the straight was judged on is the loop that is returned.
+    let ctrl = S.resample(dense, 30, true).map((p) => [Math.round(p[0] * 4) / 4, Math.round(p[1] * 4) / 4]);
+    // Drive direction FIRST: a clockwise lap (as most F1 circuits), i.e. the
+    // BUILT curvature sums to −2π (+k = LEFT turn). In this (x, z) frame a
+    // left-turning loop has a NEGATIVE signedArea (TrackShape.signedArea), so
+    // flip when it is negative. Flipping before the start is placed keeps the
+    // "60 % along" measured in the direction the cars drive.
+    if (S.signedArea(ctrl) < 0) ctrl = ctrl.slice().reverse();
+    // Start line on the longest straight, 60 % along it (grid behind, pit entry
+    // ahead). Twice: the 4 m resample starts at control 0, so rotating the loop
+    // re-phases it, and a straight whose curvature sits near PIT_K can read as
+    // one run from the new origin where it read as two from the old.
+    let ls = null;
+    for (let pass = 0; pass < 2; pass++) {
+      ls = longestStraight(ctrl);
+      const at = ls.dense[(ls.start + Math.round(Math.min(Math.max(ls.lenM * 0.6, 240), Math.max(ls.lenM - 140, 0)) / 4)) % ls.dense.length];
+      const j = S.project(ctrl, at[0], at[1]).i;
+      if (!j) break;
+      ctrl = S.rotate(ctrl, j);
+    }
+    return { pts: ctrl, seed: seed >>> 0, targetL: Math.round(targetL), straightM: ls.lenM };
   }
 
   /** Generate until `accept(pts)` is true (≤ tries seeds); returns the last attempt either way. */
