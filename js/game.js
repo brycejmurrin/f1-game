@@ -149,7 +149,7 @@ function sceneryResident(id) {
 const _sceneryLoads = new Map();
 function ensureScenery(idx) {
   const def = Tracks.LIST[idx];
-  if (!def || sceneryResident(def.id)) return Promise.resolve();
+  if (!def || def.scenery || sceneryResident(def.id)) return Promise.resolve();   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
   let p = _sceneryLoads.get(def.id);
   if (!p) {
     p = loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []).then(() => { _sceneryLoads.delete(def.id); });
@@ -8719,6 +8719,7 @@ $("mb-data").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
 };
+CustomTracks.create(G, { load: loadBackendScripts });   // TRACK DESIGNER door (LAZY_EDITOR) + the saved-circuit registry
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 // USE AS CONTROLLER (this phone): a plain navigation to the wheel page beside
 // index.html — no net stack, no room; the code is typed there (or arrives by

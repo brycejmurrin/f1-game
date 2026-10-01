@@ -1330,6 +1330,8 @@ what it covers.
 | `track-accuracy-validator.test.mjs` | the accuracy validator tool itself |
 | `quick-validate.test.mjs` | the quick-probe validator tool itself |
 | `map-hooks.spec.js` | minimap polyline (`mapPts()`) + orientation + `trackBounds()` |
+| `track-def-factory.test.mjs` | `js/track/core/def.js` (`TrackDef`) is the one raw-def → `Tracks.LIST`-entry path: a golden hash per shipped circuit (metadata + materialised `points`, `tests/data/def-factory-golden.json`) pins the extraction from tracks.js byte-for-byte; `fromRaw` of a raw def equals its LIST entry; a runtime def with no script tag and an inline `scenery` closure builds a centreline (hwZones narrow, elevations copy, `custom`/`gpLaps`/`palette` set); no `path` still throws naming the circuit |
+| `custom-tracks.test.mjs` | `js/editor/custom-tracks.js` + `track-themes.js`: stored designs (`apex26.customTracks`) become `custom: true` LIST entries after the 52 through `TrackDef.fromRaw`, never in SEASON, idempotent `sync()`; upsert / remove / select round-trip (content-hash id on the 0.25 m lattice, theme in the hash, 24-item cap, TT board dropped with the design); hostile stored shapes are repaired or dropped, never thrown; `toRaw` spreads the preset's def fields and snaps hwZones to the control grid; the picker's MY CIRCUITS chip, the season shelf and the lobby guard, and `ensureScenery`'s inline-closure short-circuit, as source contracts |
 
 ### Render
 

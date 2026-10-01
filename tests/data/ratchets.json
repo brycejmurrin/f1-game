@@ -12,22 +12,22 @@
       "lines": 4097
     },
     "js/game.js": {
-      "codeLines": 5225,
+      "codeLines": 5226,
       "gMembers": 280,
-      "lines": 9660,
+      "lines": 9661,
       "topLets": 159
     },
     "js/lighting/presets.js": {
       "lines": 17260
     },
     "js/net/lobby.js": {
-      "lines": 1868
+      "lines": 1872
     },
     "js/render/glx/glx.js": {
       "lines": 2777
     },
     "js/track/tracks.js": {
-      "lines": 940
+      "lines": 688
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
@@ -39,7 +39,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 612,
+      "ceiling": 613,
       "slack": 5
     },
     "dynamicIdReads": {

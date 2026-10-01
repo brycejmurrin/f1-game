@@ -171,6 +171,7 @@ const FULL = [
   "js/track/core/line.js",
   "js/track/core/mesh.js",
   "js/track/core/hidden-faces.js",
+  "js/track/core/def.js",   // TrackDef: raw def → LIST entry (palettes, realPoints, fromRaw); tracks.js destructures it at eval
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
   "js/track/scenery/city.js",
@@ -187,6 +188,11 @@ const FULL = [
   "js/track/tracks.js",
   "js/track/build-client.js", // TrackBuildClient: the build Worker's page side (apex26.buildWorker, default OFF)
   "js/ui/track-maps.js",
+  // THE TRACK DESIGNER'S BOOT HALF (js/editor/): the theme presets and the
+  // registry that appends the player's saved circuits to Tracks.LIST at eval,
+  // before game.js resolves the stored trackId. The editor itself is LAZY.
+  "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
+  "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
@@ -428,6 +434,7 @@ const TRACK_VM = [
   "js/track/core/line.js",
   "js/track/core/mesh.js",
   "js/track/core/hidden-faces.js",
+  "js/track/core/def.js",   // TrackDef: raw def → LIST entry (palettes, realPoints, fromRaw); tracks.js destructures it at eval
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
   "js/track/scenery/city.js",
@@ -518,6 +525,8 @@ const HARD_EDGES = [
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/core/mesh.js"],               // mesh destructures TrackSpline at eval
   ["js/track/core/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
+  ["js/track/core/geom.js", "js/track/core/def.js"],             // def destructures TrackGeom.norm at eval (palettes)
+  ["js/track/core/def.js", "js/track/tracks.js"],                // tracks destructures TrackDef at eval (LIST = DEFS.map(fromRaw))
   // build-props.js owns Tracks.buildProps orchestration (Phase 1 peel).
   ["js/core/mat4.js", "js/track/scenery/build-props.js"],        // destructures M4.lerp at eval
   ["js/track/core/geom.js", "js/track/scenery/build-props.js"],  // destructures TrackGeom at eval
@@ -592,6 +601,16 @@ const HARD_EDGES = [
   ["js/car/liveries.js", "js/car/custom-liveries.js"], // resolve/getLiveries read Liveries at call time; keep ordered
   ["js/data/teams.js", "js/career/custom-team.js"], // DEFAULT_CUSTOM + Teams.LIST
   ["js/career/custom-team.js", "js/game.js"],      // game.js calls CustomTeam.create(hooks) after Menus
+  // The track designer's boot half: presets read the ATM/COL packs at eval; the
+  // registry binds the store, the engine and the factory at eval and appends the
+  // stored customs to Tracks.LIST before game.js reads the saved trackId.
+  ["js/track/scenery/data.js", "js/editor/track-themes.js"],
+  ["js/core/store.js", "js/editor/custom-tracks.js"],
+  ["js/core/hash32.js", "js/editor/custom-tracks.js"],
+  ["js/track/tracks.js", "js/editor/custom-tracks.js"],
+  ["js/track/core/def.js", "js/editor/custom-tracks.js"],
+  ["js/editor/track-themes.js", "js/editor/custom-tracks.js"],
+  ["js/editor/custom-tracks.js", "js/game.js"],    // game.js calls CustomTracks.create(G, { load }) after the DATA door
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval

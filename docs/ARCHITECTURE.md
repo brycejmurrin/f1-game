@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_247 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_250 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -202,6 +202,7 @@ _247 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `line.js` | `TrackLine` | tag | TrackLine: the baked RACING LINE, a lateral offset per centreline node, computed once at track build beside track.curv. |
 | `mesh.js` | `TrackMesh` | tag | TrackMesh: the kerb/banking band + the road/terrain/floor mesh builders for the tracks engine. upOf() is the shared per-node up-basis, hash() the dete… |
 | `hidden-faces.js` | `TrackHiddenFaces` | tag | build-time strip of prop triangles no camera can see (enclosed in an opaque box, buried under terrain, down-facing on the ground), then compaction of the… |
+| `def.js` | `TrackDef` | tag | TrackDef: the def FACTORY. |
 
 **`js/track/scenery/`**
 
@@ -261,6 +262,13 @@ _247 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `circuit-elevations.js` | `—` | tag | surveyed circuit elevation profiles (metres relative to the start/finish line, 64 samples by arc-fraction around the lap). |
 | `tracks.js` | `Tracks` | tag | track engine shell: LIST / build() / centerline / pit helpers / terrainY. |
 | `build-client.js` | `TrackBuildClient` | tag | the page side of the track build Worker (js/track/build-worker.js). |
+
+**`js/editor/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `track-themes.js` | `TrackThemes` | tag | TrackThemes: the custom track designer's THEME PRESETS. |
+| `custom-tracks.js` | `CustomTracks` | tag | CustomTracks: the registry of the player's OWN circuits. |
 
 **`js/car/`**
 

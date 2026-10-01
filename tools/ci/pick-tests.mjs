@@ -106,6 +106,9 @@ export const RULES = [
    ["circuits", "physics-core", "sweeps"],
    "surveyed road elevation: re-shapes the road surface of every circuit listed in it"],
   [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
+  // The track designer: its def factory parity and registry tests are Node-only
+  // and run in the edit loop; the screen's browser spec (PR4) joins `modes`.
+  [/^js\/editor\//, ["tooling-fast"], "the custom track designer: track-def-factory + custom-tracks unit tests"],
 
   // ── DIRECTORY rules (Phase 2b) ──────────────────────────────────────────
   // js/game/ dissolved into domain directories in the 2026-09-03 move window,
