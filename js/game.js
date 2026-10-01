@@ -5483,10 +5483,10 @@ function updateCar(c, dt, ranked) {
 
   // --- kerbs (drivable, unlike walls): riding one rumbles and costs a little
   // grip + speed, but you can stay on it. Distinct from going off into grass.
-  if (c.onKerb) {
-    c.speed = Math.sign(c.speed) * Math.max(0, Math.abs(c.speed) - 6 * dt);
-    if (c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
-  }
+  // Speed cut follows kerbGripSm (λ=12), not raw onKerb — that flag flickers ~20 Hz.
+  c.kerbGripSm = damp(c.kerbGripSm ?? 1, c.onKerb ? 0.7 : 1, 12, dt);
+  if (c.kerbGripSm < 0.999) c.speed = Math.sign(c.speed) * Math.max(0, Math.abs(c.speed) - 6 * (1 - c.kerbGripSm) / 0.3 * dt);
+  if (c.onKerb && c.isPlayer) c.kerbCueT = KERB_CUE_HOLD;
   // The raw onKerb flag is a floor-indexed per-node lookup (TrackMesh.onKerb)
   // and flickers at the ~4 m node rate at speed (≈20 Hz at 300 km/h) when the
   // car straddles the kerb line. Run the CUES on a short sticky hold so
@@ -5822,13 +5822,7 @@ function updateCar(c, dt, ranked) {
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
   if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX);
-  // Riding a kerb loses a little grip — damped continuous instead of a binary
-  // 1↔0.7 flip: the raw flag flickers at the ~4 m node rate at speed, and a
-  // 30% lateral-grip square wave at ~20 Hz was genuine yaw dither in the
-  // physics. λ=12 (τ≈83 ms): a solid kerb ride reaches the full 0.7 penalty in
-  // ~0.25 s (handling penalty preserved); a one-tick flicker moves grip <2%.
-  // Deterministic (damp is exp-based, dt here is the fixed PHYS_DT).
-  const kerbGrip = (c.kerbGripSm = damp(c.kerbGripSm ?? 1, c.onKerb ? 0.7 : 1, 12, dt));
+  const kerbGrip = c.kerbGripSm ?? 1;
   // Banking: computed once, shared between player and AI so both get grip boost.
   const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
   const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
