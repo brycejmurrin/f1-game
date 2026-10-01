@@ -2862,6 +2862,7 @@ function raceProfile() { return RaceEntryProfile.legs(); }
 async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
   rlap("scenery");
+  radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
   const seasonSaveConflict = flow === "season" && SeasonCal.conflicted();
