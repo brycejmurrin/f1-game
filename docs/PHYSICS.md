@@ -396,6 +396,22 @@ tyre call worth ~35% more grip than every other car on track and turned a whole
 weather condition into a walkover. As it stands a correct call roughly matches
 the field and a wrong one costs about a quarter of your cornering.
 
+Each AI car's free pace is `VMAX × PACE × tierV × skill × DIFF.ai`, then a
+zero-mean `pacePhase` wobble so equal cars do not lockstep. Driver skill is
+bounded (~0.90–1.0 from `DriverRatings.skill`); difficulty scales the whole
+field, not the gap to the player.
+
+**AI PACE** (`apex26.aiPace`, Race Settings › FIELD):
+
+| mode | behaviour |
+|---|---|
+| `scripted` (default) | No live boost from how far the player is ahead. Fair racing driven by car/driver data — Pure / Black Rock race-scripted intent ([Pure Advantage](https://www.gamedeveloper.com/design/the-pure-advantage-advanced-racing-game-ai), [GI: rubber banding](https://www.gamesindustry.biz/rubber-banding-is-not-fair-and-not-fun-black-rock)). |
+| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead (and not a lap clear), AI vmax and corner authority rise by up to `DIFF.band`, gated off the start (8 s) and once lapped. Melder / Game AI Pro ch.42. |
+
+`DIFF.band` magnitudes stay frozen; catch-up reuses them. AI-only benches
+(`ai-pace` / `ai-field` / `ai-line`) have no human, so the band never fires
+there either way. Measure catch-up with `node tools/check/ai-race.mjs band`.
+
 ### The racing line the AI drives
 
 `js/track/core/line.js` (`TrackLine`) bakes a lateral offset per centreline

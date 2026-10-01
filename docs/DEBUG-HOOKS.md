@@ -569,8 +569,8 @@ whatever object happened to sit in the guessed frame.
 
 ### `camTune(mode?, obj?) → {…} | false`
 The **CAMERA TUNER**'s per-camera-mode framing offsets (`js/camera/offsets.js`) —
-the camera counterpart of `lightTune()`. Six knobs per mode, all defaulting to
-`0` = the framing `js/camera/vantage.js` ships:
+the camera counterpart of `lightTune()`. Six geometric knobs per mode default to
+`0` = the framing `js/camera/vantage.js` ships; `cornerLead` ships at **0.54**:
 
 | knob | unit | effect |
 |---|---|---|
@@ -589,6 +589,15 @@ the slider range, and are applied inside `vantage()` — so the live camera,
 `snapCam()` and `previewCam()` all agree. The eye is still caught by the terrain
 ground clamp after tuning.
 
+A **global baseline** (`apex26.camTuneGlobal`, same knob ids) layers under every
+mode; per-mode edits win on a shared knob. **COMFORT** knobs
+(`apex26.camComfort`: `fovBias`, `speedFov`, `bob`, `rollLean`) are independent of
+MOTION: REDUCED — `camComfort()` still hard-gates shake / buzz / roll when motion
+is reduced; the comfort sliders scale those effects when motion is allowed, and
+FOV bias always applies. The panel COPY VALUES export includes a pack JSON and an
+`APXC1.…` share code; IMPORT accepts that pack, the share code, or a legacy
+`window.CameraEdits = {…}` snippet.
+
 ```js
 __apex.camTune();                                  // → {defs:[{id,min,max,def,unit},…], tuned:{chase:{…}}}
 // Every knob resolved, defaults filled in — so cornerLead reads the shipped
@@ -600,7 +609,7 @@ __apex.camTune("chase", null);                     // reset this camera to shipp
 ```
 In-game the same values live behind PAUSE → SETTINGS → **CAMERA TUNER**: a chip
 per camera mode (which also switches the live camera) plus a slider per knob,
-with RESET CAM / RESET ALL.
+comfort rows, THIS CAM / ALL CAMS scope, presets, copy-from, and IMPORT.
 
 ### `freeCam(opts) → {open, eye, target, fov, roll, lens, speed, corner, anchor, poseErr} | false`
 Drives the player-facing **FREE CAMERA** panel (the flyby editor's sub-mode:

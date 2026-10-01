@@ -280,6 +280,9 @@ function vantage(track, mode, s, x, spd, now, extra) {
   const bankDy = extra.bankDy || 0;
   const dep = extra.deploy ? 1 : 0;
   const spN = clamp(spd / VMAX, 0, 1);
+  // COMFORT › SPEED FOV scales only the FOV speed blend; look-ahead / broadcast
+  // curvature still use full spN. Default 1 = shipped. (js/camera/offsets.js)
+  const spFov = spN * (typeof CamTune !== "undefined" && CamTune.speedFov ? CamTune.speedFov() : 1);
   Tracks.sample(track, wrapS(s), cvA);
   // WHICH ELEVATION A CAMERA READS. Tracks.sample lerps py between the ~4 m
   // nodes, which is only C0 — the height is continuous but its slope jumps at
@@ -364,7 +367,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
         aimZ = aimZ * (1 - tcL) + lp[2] * tcL;
       }
       tgt[0] = aimX; tgt[1] = p[1] + aimUp + t[1] * 30; tgt[2] = aimZ;
-      fov = lerp(64, 78, spN) + dep * 3;
+      fov = lerp(64, 78, spFov) + dep * 3;
     } else {
       eye[0] = p[0] + t[0] * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = p[2] + t[2] * eyeFwd;
       if (driver) {
@@ -379,7 +382,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
         const av = aheadPt(30, eyeUp + 1.2, x * 0.6);
         tgt[0] = av[0]; tgt[1] = av[1]; tgt[2] = av[2];
       }
-      fov = lerp(64, 78, spN) + dep * 3;             // wider = faster feel
+      fov = lerp(64, 78, spFov) + dep * 3;             // wider = faster feel
     }
   } else if (mode === "overhead") {
     eye[0] = p[0] - t[0] * 9; eye[1] = p[1] + 34; eye[2] = p[2] - t[2] * 9;
@@ -401,7 +404,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   } else if (mode === "reverse") {
     eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
     tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
-    fov = lerp(60, 72, spN);
+    fov = lerp(60, 72, spFov);
   } else if (mode === "side") {
     // TV trackside: sits on the OUTSIDE of the bend looking across the apex.
     const sgn = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
@@ -423,13 +426,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
     eye[0] = p[0] + dir[0] * od; eye[1] = p[1] + 6.5 + (22 - od) * 0.45; eye[2] = p[2] + dir[2] * od;
     const cinAim = aheadPt(lerp(12, 22, spN), 0.85, x * 0.15);
     tgt[0] = cinAim[0]; tgt[1] = cinAim[1]; tgt[2] = cinAim[2];
-    fov = lerp(50, 60, spN);
+    fov = lerp(50, 60, spFov);
   } else if (mode === "low") {
     Tracks.sample(track, wrapS(s - 10), cvB);
     const cx = x * 0.3;
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 10) + 0.45 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.6; tgt[2] = p[2];
-    fov = lerp(55, 68, spN);
+    fov = lerp(55, 68, spFov);
   } else if (mode === "trackside") {
     // Fixed corner cameras that auto-switch as the subject passes (js/camera/trackside.js).
     const ts = typeof TracksideCams !== "undefined" ? TracksideCams.pose(track, s, x, extra) : null;
@@ -453,7 +456,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   } else if (mode === "rear") {
     eye[0] = p[0] - t[0] * 0.95; eye[1] = p[1] + 1.38; eye[2] = p[2] - t[2] * 0.95;
     tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.7; tgt[2] = p[2] - t[2] * 26;
-    fov = lerp(58, 70, spN) + dep * 2;
+    fov = lerp(58, 70, spFov) + dep * 2;
   } else if (mode === "drift") {
     // Action chase that swings to the OUTSIDE of the slide so the car's flank faces
     // camera under oversteer, then settles directly behind once the car hooks up.
@@ -462,7 +465,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const cx = x * 0.5 - slipN * 6.5;
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 6.2) + 2.4 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.75; tgt[2] = p[2];
-    fov = lerp(55, 70, spN) + dep * 3;
+    fov = lerp(55, 70, spFov) + dep * 3;
   } else {
     const far = mode === "far";
     // CHASE's shipped framing bakes a CAMERA TUNER profile (height -0.75,
@@ -489,12 +492,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const side = back * CHASE_SIDE_FRAC;
       eye[0] = extra.carPos[0] - hx * back + rx * side; eye[1] = rideEye + eyeUp + bankDy; eye[2] = extra.carPos[1] - hz * back + rz * side;
       tgt[0] = extra.carPos[0] + hx * lead; tgt[1] = rideC + bankDy + tgtUp; tgt[2] = extra.carPos[1] + hz * lead;
-      // CORNER LEAD (CAMERA TUNER, opt-in, shipped 0.18). Blend the whole rig toward
-      // the road-frame chase below — eye an arc-distance back along the ROAD, aim
-      // at the curved centreline ahead — so the camera leads and swings INTO the
-      // bend, the classic chase feel. This is the one place the arc is allowed to
-      // reach the chase view, and only because the player asked for it on a slider:
-      // it moves where the camera looks, never the car (px/pz/(s,x) are untouched).
+      // CORNER LEAD (CAMERA TUNER, opt-in, shipped 0.54 — was 0.18 before
+      // 2026-09-08). Blend the whole rig toward the road-frame chase below —
+      // eye an arc-distance back along the ROAD, aim at the curved centreline
+      // ahead — so the camera leads and swings INTO the bend, the classic chase
+      // feel. This is the one place the arc is allowed to reach the chase view,
+      // and only because the player asked for it on a slider: it moves where
+      // the camera looks, never the car (px/pz/(s,x) are untouched).
       const leadStored = (typeof CamTune !== "undefined" && typeof CamTune.cornerLead === "function")
         ? CamTune.cornerLead(mode) : null;
       const lead2 = clamp(leadStored != null ? leadStored : CHASE_CORNER_LEAD_DEFAULT, 0, 1);
@@ -524,7 +528,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const avC = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one
       tgt[0] = avC[0]; tgt[1] = rideTgtAhead + tgtUp; tgt[2] = avC[2];
     }
-    fov = lerp(57, 63, spN) + (far ? 4 : 0) + dep * 3;
+    fov = lerp(57, 63, spFov) + (far ? 4 : 0) + dep * 3;
   }
   // Per-mode HEIGHT/DISTANCE/SIDE/PITCH/YAW/FOV nudges from js/camera/offsets.js,
   // applied to the solved rig rather than baked into each branch — one place to
