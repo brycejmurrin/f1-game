@@ -25,24 +25,25 @@
 const LoadingScreen = (function () {
   // The whole sequence's budget. js/camera/flyby-seq.js spends it across eight
   // shots as FRACTIONS, so retuning this number rebalances them all rather than
-  // truncating the last one. 24 s is 3 s a shot, which is what a pan needs to
-  // read as a move rather than a jerk. Skippable with any pointer or key.
-  const FLY_MS = 24000;
+  // truncating the last one. 20 s is ~2.5 s a shot (24 s until 2026-10: the race
+  // came too late); not lower, or grid-mine's window (~12% of it) drops under
+  // RADIO_MIN_S and the radio check never plays. Skippable with any pointer or key.
+  const FLY_MS = 20000;
   // With nothing to fly over, just long enough for the card's fade to land
   // before the build takes the main thread.
   const CARD_MS = 700;
   /* THE HABITUAL SKIPPER. A player who has skipped the last SKIP_STREAK flybys
-   * in a row has told us what they think of 24 s; they get SHORT_FLY_MS instead.
+   * in a row has told us what they think of the full cut; they get SHORT_FLY_MS instead.
    * The shots are fractions of the budget and the announcer is fitted to it, so
    * both follow without a second sequence. One flyby left to play out resets
    * the streak — the long cut comes back for anyone who watched it again.
    * Stored as `apex26.flySkips` through the game's store. */
-  const SHORT_FLY_MS = 12000;
+  const SHORT_FLY_MS = 10000;
   const SKIP_GRACE_MS = 400;
   const SKIP_STREAK = 3;
   /* A READ THAT NEEDS LONGER. A real race joined from the Data Hub has a story
    * to tell (the order, the gaps, your tyres, the flags so far) that does not
-   * fit 24 s; `wantMs` is the announcer's own estimate of its full read, and the
+   * fit FLY_MS; `wantMs` is the announcer's own estimate of its full read, and the
    * flyby stretches to it, up to FLY_MAX_MS. Still skippable, and a habitual
    * skipper keeps the short cut: they have told us what they think of waiting. */
   const FLY_MAX_MS = 60000;   // the Baku lap-40 read needs 54 s for its flags and retirements (announcer.test.mjs); still skippable

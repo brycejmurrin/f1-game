@@ -4827,8 +4827,12 @@ test("selector preparation waits for the player's hands before the build and the
   // the player's next tap (2026-09-24). Both now wait for MENU_IDLE_MS of quiet.
   const src = read("js/game.js");
   const body = fnBody(src, "scheduleFlybyTrack");
-  assert.match(body, /if \(!\(await menuIdle\(current\)\)\) return;\s*if \(!\(await loadTrackStepped\(want, current\)\)\) return;/,
-    "the build waits for an idle menu, and runs in steps (a tap on the sheet mid-build is answered)");
+  // The build no longer waits for idle (2026-10): it is stepped, so it starts at once.
+  assert.match(body, /return;\s*\}\s*(\/\/[^\n]*\s*)*if \(!\(await loadTrackStepped\(want, current\)\)\) return;/,
+    "the build starts at once, in steps (a tap on the sheet mid-build is answered)");
+  assert.ok(!/menuIdle/.test(body.slice(0, body.indexOf("loadTrackStepped("))), "no idle wait before the build");
+  assert.match(body, /if \(!\(gfx\.warming && gfx\.warming\(\)\) && state === "menu" && track && Tracks\.LIST\[trackIdx\] && builtTrackId !== Tracks\.LIST\[trackIdx\]\.id\) dropTrackWorld\(\);/,
+    "picking another circuit frees the last world immediately only after compilation releases it");
   assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
     "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
   const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
@@ -4853,7 +4857,9 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
   const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, 22].join("|");   // the real one adds fieldSize()
-  let state = "menu", setupPreviewOn = false, track = null, compiling = false;
+  let state = "menu", setupPreviewOn = false, track = null, compiling = false, builtTrackId = null;
+  const Tracks = { LIST: [{ id: 0 }, { id: 1 }] }, drops = [];
+  const dropTrackWorld = () => { drops.push(track && track.id); track = null; builtTrackId = null; _menuGate.track = null; _menuGate.ready = ""; };
   const els = { select: { hidden: false } }, settings = { hidden: true }, $ = () => settings;
   const timers = new Map(), requests = [], builds = [];
   let timerId = 0;
@@ -4871,7 +4877,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   // here the player is idle and a slice is immediate.
   const menuIdle = async (current) => current(), menuSlice = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
-  const loadTrack = id => { builds.push(id); track = { id }; };
+  const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -4891,10 +4897,47 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   assert.deepEqual(builds, [0], "no scene replacement during compilation");
   compiling = false; const night = fire(); requests.shift().resolve(); await night;
   assert.deepEqual(builds, [0, 0], "time-of-day changes prepare again");
-  trackIdx = 1; schedule(); const leaving = fire(); els.select.hidden = true;
+  assert.deepEqual(drops, [], "a time-of-day change on the same circuit frees nothing up front");
+  trackIdx = 1; schedule(); assert.deepEqual(drops, [0], "another circuit frees the last world the moment it is picked");
+  const leaving = fire(); els.select.hidden = true;
   requests.shift().resolve(); await leaving; assert.deepEqual(builds, [0, 0]);
-  els.select.hidden = false; schedule(); const changed = fire(); raceWeather = "rain";
+  trackIdx = 0; schedule(); assert.deepEqual(drops, [0], "nothing built: nothing to free");
+  trackIdx = 1; els.select.hidden = false; schedule(); const changed = fire(); raceWeather = "rain";
   requests.shift().resolve(); await changed; assert.deepEqual(builds, [0, 0]);
+});
+
+test("selector retains a different circuit during compilation, then releases it and starts the stepped build without an idle wait", async () => {
+  const src = read("js/game.js"), previous = { id: "a", meshes: {} }, freed = [], builds = [];
+  let track = previous, builtTrackId = "a", builtTrackNight = false, builtGridSlots = 22, compiling = true, _menuFly = {};
+  const _menuGate = { generation: 0, warm: 0, track, ready: "0|default|dry|22" };
+  const state = "menu", setupPreviewOn = false, trackIdx = 1, raceTimeOfDay = "default", raceWeather = "dry";
+  const gfx = { warming: () => compiling }, els = { select: { hidden: false } }, $ = () => ({ hidden: true });
+  const menuKey = idx => [idx, raceTimeOfDay, raceWeather, 22].join("|"), fieldSize = () => 22;
+  const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false;
+  const PerfGov = { sentinelArm() {} }, Log = { warn() {} };
+  const freeTrackMeshes = t => { assert.equal(compiling, false, "compileAsync still owns the old geometries"); freed.push(t); };
+  const shadowPass = { reset() { assert.equal(compiling, false, "shadow programs also retain ownership until compile settles"); } };
+  const Tracks = { LIST: [{ id: "a" }, { id: "b" }], buildPaced: async def => { builds.push(def.id); return { id: def.id, meshes: {} }; } };
+  const _loadTrackBody = (idx, def, built) => { track = built; builtTrackId = def.id; };
+  const dropTrackWorld = eval("(function(){" + fnBody(src, "dropTrackWorld") + "})");
+  const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
+  const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
+  const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
+  let flybyBuildTimer = 0, timerId = 0;
+  const timers = new Map(), setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout = id => timers.delete(id);
+  const schedule = eval("(function(settle){" + fnBody(src, "scheduleFlybyTrack") + "})");
+  const fire = async () => { const [id, timer] = [...timers][0]; timers.delete(id); await timer.fn(); };
+  schedule();
+  assert.strictEqual(track, previous, "changing circuit preserves resources while compilation is pending");
+  assert.deepEqual(freed, []);
+  await fire();
+  assert.strictEqual(track, previous); assert.deepEqual(builds, []); assert.deepEqual(freed, []);
+  assert.equal([...timers.values()][0].ms, 100, "only the compile retry is queued");
+  compiling = false; await fire();
+  assert.deepEqual(freed, [previous], "the real stepped loader releases the previous world once");
+  assert.deepEqual(builds, ["b"], "the next compile retry starts the stepped build directly");
+  assert.equal(_menuGate.ready, menuKey(1)); assert.strictEqual(_menuGate.track, track);
+  assert.equal(track.id, "b"); assert.equal(_menuFly, null, "old flyby plans retire with their circuit");
 });
 
 test("TLX bounds GPU error history and preserves resize context at receipt", () => {

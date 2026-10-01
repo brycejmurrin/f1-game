@@ -955,7 +955,7 @@ test("the world key includes the grid size, and a failed build does not keep the
 test("plans are reused when they still hold, and re-planned when they do not", async () => {
   await withTrack("monaco", (track, g) => {
     const F = g.sandbox.FlybySeq;
-    F.setDuration(24000); F.setPlayerSlot(11, 22);
+    F.setDuration(20000); F.setPlayerSlot(11, 22);
     const list = F.bindCorners(track, F.DEFAULT), total = list.reduce((a, s) => a + s.dur, 0);
     const plain = list.find((s) => !JSON.stringify(s).includes('"slot"') && !JSON.stringify(s).includes('"grid"'));
     const slotShot = list.find((s) => JSON.stringify(s).includes('"slot"'));
@@ -963,9 +963,9 @@ test("plans are reused when they still hold, and re-planned when they do not", a
     F.setPlayerSlot(3, 22);
     assert.equal(F.planShot(track, plain, plain.dur / total), a, "a shot aimed at no slot keeps its plan when the player's slot moves");
     assert.equal(F.planShot(track, plain, plain.dur / (total * 0.9)), a, "more screen time (a dropped shot) keeps a plan squeezed for less");
-    F.setDuration(12000);
-    assert.notEqual(F.planShot(track, plain, plain.dur / total), a, "the 12 s cut re-plans: half the seconds, the pans are held to PAN_MAX again");
-    F.setDuration(24000);
+    F.setDuration(10000);
+    assert.notEqual(F.planShot(track, plain, plain.dur / total), a, "the 10 s cut re-plans: half the seconds, the pans are held to PAN_MAX again");
+    F.setDuration(20000);
     if (slotShot) {
       const b = F.planShot(track, slotShot, slotShot.dur / total);
       F.setPlayerSlot(7, 22);
