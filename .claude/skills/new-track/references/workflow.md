@@ -23,6 +23,18 @@ Load from the SKILL.md index when the task needs this detail.
    for street/modern circuits — `barrier` / `cityStyle`; copy a sibling's rows
    as the starting point.
 
+   **Designer presets from TUMFTM (optional, not a shipped def).** For layouts
+   Apex does not carry (Norisring, Moscow Raceway, Oschersleben, Nürburgring
+   DTM), convert the LGPL [racetrack-database](https://github.com/TUMFTM/racetrack-database)
+   CSV into a TRACK DESIGNER import envelope — do **not** paste it into
+   `js/circuits/` without a full authoring pass:
+   ```sh
+   node tools/track/tumftm-import.mjs --missing
+   node tools/track/tumftm-import.mjs Norisring --fetch -o artifacts/tumftm/
+   ```
+   Licence, overlap table, and why racelines stay offline:
+   `docs/notes/TUMFTM-RACETRACK-DATABASE.md`.
+
 2. **Register it** (new tracks only): add the id to the `CIRCUITS` array in
    `tools/manifest.cjs` (load-order source of truth), then run
    `node tools/gen/gen-shell.mjs` so the `@gen-shell` script block in `index.html`
