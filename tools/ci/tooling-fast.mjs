@@ -226,6 +226,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/digital-steer.test.mjs",
+  // Dirty-air wake shapes (js/physics/consts.js DirtyAir): classic linear
+  // fade stays bit-compatible; CFD is exp×Gaussian; OFF is identity mul.
+  "tests/unit/dirty-air.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   // Decorrelated DriverRatings.BASE + skill()/overall personality pins.
   "tests/unit/driver-ratings-personality.test.mjs",
