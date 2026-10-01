@@ -5920,26 +5920,26 @@ function updateCar(c, dt, ranked) {
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
     const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * kPath * yawEase * offAssistFade;
-    // --- RACING LINE assist (pause-menu slider; 0 = off, the default). Two
-    // things deliberately set it apart from the line the AI drives.
-    //   1. It is the PLAYER's line. The AI aims at `-k·130` — the inside of
-    //      whichever corner it is in right now — so it sits mid-track on entry
-    //      and exit and only ever finds the apex. This samples the corner AHEAD
-    //      and the one just BEHIND as well, so the car is opened out wide before
-    //      turn-in and allowed to run wide on exit: the out-in-out arc, which the
-    //      AI's formula cannot express.
-    //   2. It acts through the FRONT TYRE like every other steering input. The
-    //      old version added straight to c.x, sliding the car across the road
-    //      without turning it — the chassis crabbed, and the assist could drag
-    //      the car sideways through grip it did not have (or into a wall).
+    // --- RACING LINE assist (pause-menu slider; 0 = off, the default).
+    // The target is TrackLine, the baked out-in-out the AI already drives
+    // (TrackLine.at). The previous target, -k*170 + (kAhead+kBehind)*85, was
+    // written when the AI still aimed at -k*130. The field moved to the LUT;
+    // the slider did not, so an assisted car was herded onto a different arc
+    // from every car it was racing. It still acts through the FRONT TYRE —
+    // adding it straight to c.x crabbed the chassis through grip it did not have.
+    // A track with no LUT keeps the curvature stand-in.
     let lineDelta = 0;
     if (raceLineAssist !== 0) {
       const look = clamp(Math.abs(c.speed) * 0.9, 25, 90);
-      const kAhead = Tracks.curvature(track, wrapS(c.s + look));
-      const kBehind = Tracks.curvature(track, wrapS(c.s - look * 0.7));
-      // k > 0 curves toward screen-left, so the inside is -x: -k pulls to the
-      // apex of this corner, +kAhead/+kBehind push wide for the next/last one.
-      const lineX = clamp(-k * 170 + (kAhead + kBehind) * 85, -0.72, 0.72) * Math.max(0, hw - 0.6);
+      let lineX;
+      if (track.line) {
+        // .x immediately: TrackLine.at returns one shared object.
+        lineX = TrackLine.at(track, wrapS(c.s + look)).x;
+      } else {
+        const kAhead = Tracks.curvature(track, wrapS(c.s + look));
+        const kBehind = Tracks.curvature(track, wrapS(c.s - look * 0.7));
+        lineX = clamp(-k * 170 + (kAhead + kBehind) * 85, -0.72, 0.72) * Math.max(0, hw - 0.6);
+      }
       // Pure pursuit: closing a lateral error e over a look-ahead distance Ld
       // needs a path curvature of about 2e/Ld², and a road-wheel angle of
       // WHEELBASE × that. Speed-scaling falls out of Ld, so the correction stays
