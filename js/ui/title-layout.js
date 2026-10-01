@@ -32,8 +32,8 @@
 
    PEEK: the title screen is faded out under the settings dialog, so a slider
    would move things nobody can see. While a layout slider is held (or just
-   moved), body[data-tl-peek] shows the title screen through a near-transparent
-   settings page.
+   moved), js/ui/screen-looks.js's html[data-appearance-peek="title"] shows the
+   title screen through a near-transparent settings page.
 
    EDIT ON TITLE SCREEN: the fold's button hides the settings page and lets
    the player drag the three pieces where they want them (#tl-editor, a small
@@ -160,12 +160,14 @@ const TitleLayout = (function () {
   }
 
   // ---- the APPEARANCE fold -------------------------------------------------
-  let peekT = 0;
+  // PEEK is js/ui/screen-looks.js's (html[data-appearance-peek="title"]), the
+  // one see-through preview every APPEARANCE fold shares. ScreenLooks loads
+  // after this file and is read at call time; without it (a bare unit VM)
+  // nothing peeks.
   function peek(on, holdMs) {
-    if (typeof document === "undefined" || !document.body) return;
-    clearTimeout(peekT);
-    if (on) document.body.setAttribute("data-tl-peek", "");
-    if (!on || holdMs) peekT = setTimeout(() => document.body.removeAttribute("data-tl-peek"), on ? holdMs : 0);
+    if (typeof ScreenLooks === "undefined") return;
+    if (on) ScreenLooks.peek("title", holdMs || 0);
+    else ScreenLooks.endPeek();
   }
 
   const pctTxt = (k, n) => {

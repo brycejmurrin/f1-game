@@ -40,6 +40,9 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
     dom.byId("tl-editor").hidden = true;
     dom.byId("tl-editor").appendChild(dom.byId("tl-done"));
   }
+  // The settings page and the title screen, so ScreenLooks' PEEK (which only
+  // runs while SETTINGS is open, and only for a title screen that is up) has both.
+  dom.byId("pmsettings"); dom.byId("overlay");
   // mini-dom's getElementById creates on a miss; the module's mount-once
   // guard needs a real miss, so only ids that exist are found.
   const get = dom.document.getElementById;
@@ -60,7 +63,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
   if (fx) sb.TitleFx = fx;   // js/ui/title-fx.js's three title looks (loads first in the shell)
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/ui/setting-row.js", "js/ui/title-layout.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
+  for (const f of ["js/ui/setting-row.js", "js/ui/title-layout.js", "js/ui/screen-looks.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
   const M = vm.runInContext("TitleLayout", ctx);
   /** Flip body[data-shape] the way sheet-shape.js does, and run the observer. */
   const rotate = (to) => {
@@ -333,14 +336,14 @@ test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, slider
   assert.equal(dom.byId("pm-tl-btns-width-v").textContent, "AUTO");
   const x = dom.byId("pm-tl-btns-x");
   dom.dispatch(x, { type: "pointerdown" });
-  assert.ok(dom.body.hasAttribute("data-tl-peek"), "holding a slider shows the title screen");
+  assert.equal(html.dataset.appearancePeek, "title", "holding a slider shows the title screen (ScreenLooks' peek)");
   x.value = "-25"; dom.dispatch(x, { type: "input" });
   assert.equal(data.titleLayout.wide.btns.x, -25, "stored for the shape the screen is in");
   assert.equal(html.style.getPropertyValue("--tl-btns-x"), "-25vw");
   assert.equal(dom.byId("pm-tl-btns-x-v").textContent, "25% left");
   assert.equal(sum.textContent, "TITLE LAYOUT · CUSTOM");
   timers.at(-1).fn();
-  assert.equal(dom.body.hasAttribute("data-tl-peek"), false, "and lets go of it after");
+  assert.equal(html.dataset.appearancePeek, undefined, "and lets go of it after");
   const side = dom.byId("pm-tl-side-sel");
   side.value = "swap"; dom.dispatch(side, { type: "change" });
   assert.equal(data.titleLayout.wide.side, "swap");
@@ -355,14 +358,17 @@ test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, slider
 
 test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and lives in the overlays layer", () => {
   const start = CSS.indexOf("/* ---------- TITLE LAYOUT player setting");
-  const end = CSS.indexOf("} /* @layer overlays */");
+  // The block runs to the SCREEN LOOKS block (js/ui/screen-looks.js), which
+  // tests/unit/screen-looks.test.mjs gates; both sit inside @layer overlays.
+  const end = CSS.indexOf("/* ---------- SCREEN LOOKS");
+  assert.ok(end < CSS.indexOf("} /* @layer overlays */"), "SCREEN LOOKS is in the overlays layer too");
   assert.ok(start > 0 && end > start, "the block sits inside @layer overlays");
   const block = CSS.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, "");
   const sels = [...block.matchAll(/(^|\})\s*([^{}@]+)\{/g)].map((m) => m[2].trim()).filter(Boolean);
   assert.ok(sels.length >= 12, "rules found");
   // Gated at the front, or (inside the large-landscape block, whose selectors
   // must START with the density guard) by a :where(:root[data-title-side]) clause.
-  for (const s of sels) assert.match(s, /^(:root\[data-title-(layout|btnw|btns|side)|:root\[data-tl-edit\]|body\[data-tl-peek\]|:where\(body:not\(\[data-density="compact"\]\)\):where\(:root\[data-title-side="swap"\] \*\))/, `gated: ${s}`);
+  for (const s of sels) assert.match(s, /^(:root\[data-title-(layout|btnw|btns|side)|:root\[data-tl-edit\]|:root\[data-appearance-peek(="title")?\]|:where\(body:not\(\[data-density="compact"\]\)\):where\(:root\[data-title-side="swap"\] \*\))/, `gated: ${s}`);
   assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*translate: var\(--tl-btns-x, 0\) var\(--tl-btns-y, 0\)/);
   assert.match(block, /zoom: calc\(var\(--ui-scale\) \* var\(--tl-btns-size, 1\)\)/);
   assert.match(block, /#title-car \{[^}]*scale: var\(--tl-art-size, 1\)/);
