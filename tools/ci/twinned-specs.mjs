@@ -103,6 +103,10 @@ export const TWINNED = {
  *  was reverted; move one only when its browser copy has been re-run green
  *  under the fixtures, in the same change that adapts it. */
 export const ADAPTED = {
+  "tests/specs/albert-park-foundation.spec.js":
+    "Albert Park runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter in 4.5 s; m-albert-hero-fountain proves the required fountain count is watched",
+  "tests/specs/cota-foundation.spec.js":
+    "COTA runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter; m-cota-amphi-renamed proves the required amphitheater id is watched",
   "tests/specs/imola-foundation.spec.js":
     "Imola runtime foundation through __apex model/geometry/elevation diagnostics; 2/2 under the adapter; m-imola-senna-renamed proves the required memorial id is watched",
   "tests/specs/physics-fixes.spec.js":
@@ -119,12 +123,15 @@ export const ADAPTED = {
     "agentview's corner facts and the bench policies against game-vm; 5/5 in 48 s; m-straight-exit-threshold proves the exitsOntoStraight derivation is watched",
   "tests/specs/pit-lane.spec.js":
     "the pit lane's limiter, box and lane geometry through __apex; 6/6 in 91 s; m-box-lat-swallows-line proves the box-vs-racing-line distinction is watched",
+  "tests/specs/autopilot.spec.js":
+    "closed-loop __apex driver (direct + tilt) through runLap metrics; 3/3 under the adapter (~168 s); m-tilt-gain-dead proves the tilt map's steer variance is watched",
 };
 
 /** Portable by every static measure and deliberately NOT adapted: the
  *  reason is the whole entry. twinDebt() excludes these, so the ratchet can
  *  reach zero without asking for a substitution that would be a hole. */
 export const BROWSER_ONLY = {
+  "tests/specs/pit-signs.spec.js": "APEX_VM_PAGE=1 boots Albert Park but pitSigns().drawn stays 0 through TRACK_MS (waitForFunction 45 s) — the decal draw needs a real renderer frame, not a structural flake (measured 2026-09-30)",
   "tests/specs/smoke.spec.js": "the boot gate: it proves a real Chromium boots the shell, which is the one thing no VM can",
   "tests/specs/physics-characterization.spec.js": "tests/data/physics-baseline.json is a real-Chromium measurement; the VM twin asserts parity WITH it, so the browser copy is the reference",
   // Measured 2026-09-22 by RUNNING every statically portable spec under the

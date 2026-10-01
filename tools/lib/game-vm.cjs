@@ -353,6 +353,7 @@ function makeGlx(record) {
 // ---------------------------------------------------------------------------
 
 function buildSandbox(opts) {
+  const vmSearch = opts && opts.search != null ? opts.search : "?seed=1";
   const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [], carMeshes: "real", carMeshStubs: 0 };
   const timers = makeTimers();
   const rafQueue = [];
@@ -378,9 +379,12 @@ function buildSandbox(opts) {
     innerWidth: 1280, innerHeight: 720, outerWidth: 1280, outerHeight: 720, devicePixelRatio: 1,
     scrollX: 0, scrollY: 0, pageXOffset: 0, pageYOffset: 0, name: "", isSecureContext: true,
     origin: "http://localhost:3456",
-    location: { href: "http://localhost:3456/", protocol: "http:", host: "localhost:3456", hostname: "localhost",
-      port: "3456", pathname: "/", search: "", hash: "", origin: "http://localhost:3456",
-      reload: noop, replace: noop, assign: noop, toString: () => "http://localhost:3456/" },
+    // ?seed=1 by default: a real session boots from a fresh seed (js/game.js
+    // bootSeed) unless automated or pinned, and this stub reports webdriver
+    // false — every VM run stays reproducible. opts.search overrides.
+    location: { href: "http://localhost:3456/" + vmSearch, protocol: "http:", host: "localhost:3456", hostname: "localhost",
+      port: "3456", pathname: "/", search: vmSearch, hash: "", origin: "http://localhost:3456",
+      reload: noop, replace: noop, assign: noop, toString: () => "http://localhost:3456/" + vmSearch },
     history: { state: null, length: 1, pushState: noop, replaceState: noop, back: noop, forward: noop, go: noop, scrollRestoration: "auto" },
     navigator: {
       userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36 apex-game-vm",
@@ -490,8 +494,8 @@ function safeStr(x) { try { return typeof x === "object" ? JSON.stringify(x) : S
 // real-Chromium baseline number for number, must never set it.
 //
 // A wrong opt-in fails LOUDLY rather than reporting a 0-vertex car: the one
-// caller that reads geometry back (`measure: true` — __apex.carMesh via
-// js/agent/agentview.js:982) throws.
+// caller that reads geometry back (`measure: true` — `carView` in
+// js/agent/agentview.js) throws.
 // ---------------------------------------------------------------------------
 function stubCarMeshes(ctx, record) {
   const C = ctx.Car3D;
@@ -539,7 +543,7 @@ async function settle(pred, maxTurns) {
  *           first manifest file — the VM's equivalent of page.addInitScript
  *   carMeshes false stubs Car3D's builders (~1 s a process; see stubCarMeshes)
  *           — OPT-IN, and never on a parity twin
- *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx, opts),
+ *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx, opts), aiOnly(),
  *             settle(pred), flushTimers(), record, bootMs, trackMs }
  */
 async function createGame(opts) {
@@ -645,6 +649,20 @@ async function createGame(opts) {
       return r;
     },
     step: (n, dt) => apex.step(dt != null ? dt : 1 / 60, n != null ? n : 1),
+    // AI-ONLY FIELD. A VM race has a player with no input: it sat PARKED on its
+    // grid box all race, a blocker the AI attacked 7-10 times a race (11-21 % of
+    // passes within 60 m of it) and the leading human the rubber band banded
+    // the field toward. Hand the car to the AI (finishDelay then waits for the
+    // first finisher, not the human) and RETIRE it: a retired car is out of
+    // `ranked`, so out of every traffic scan, collision and tow. Call after
+    // race(); returns the removed car (null when there is no player).
+    aiOnly() {
+      const i = G ? G.cars.findIndex((c) => c.isPlayer || c.human) : -1;
+      if (i < 0) return null;
+      apex.carRole(i, { human: false });
+      apex.retire(i, "bench");
+      return G.cars[i];
+    },
     settle,
     flushTimers: (onlyDue) => timers.flush(onlyDue),
     pumpFrame: (now) => { const q = world.rafQueue.splice(0); for (const fn of q) fn(now != null ? now : performance.now()); return q.length; },

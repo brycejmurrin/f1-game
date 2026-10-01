@@ -2,10 +2,10 @@
 // exactly one float per vertex.
 //
 // This is a silent-failure guard, not a style check. GLX wires the material
-// attribute ONLY when `data.mat.length === vCount` (js/render/glx/glx.js:741) — a
+// attribute ONLY when `data.mat.length === vCount` (js/render/glx/glx.js) — a
 // short array, a long one, or a missing one is dropped with no warning, every
 // vertex falls back to the generic default `aMat = 0 = MAT.FLAT`, and
-// `applyMaterial` early-outs on `mid <= 0` (js/render/glx/shaders/glsl-lit.js:294). The
+// `applyMaterial` early-outs on `mid <= 0` (js/render/glx/shaders/glsl-lit.js). The
 // garage shipped that way: the whole room was untextured flat vertex colour
 // while the car standing in it sampled the baked PBR arrays, and nothing said
 // so. One primitive that forgets to push its ids puts it straight back, and the
@@ -65,7 +65,7 @@ test("every garage mesh carries exactly one material id per vertex", () => {
 
 test("no horizontal surface carries a wall-keyed material", () => {
   // The trap that cost this file its first bug. matWallLike()
-  // (js/render/glx/shaders/glsl-lit.js:287) is true for CONCRETE / BRICK / METAL / WOOD /
+  // (js/render/glx/shaders/glsl-lit.js) is true for CONCRETE / BRICK / METAL / WOOD /
   // FABRIC / ROOF / STONE / RUST, and for those the triplanar UV is
   // `(an.x > an.z ? worldZ : worldX, worldY)`. On a floor the normal is (0,1,0)
   // and worldY is constant, so the UV collapses to a 1-D function of x and the
@@ -255,4 +255,17 @@ test("arrival moves the reflected car and shutter without rebuilding geometry", 
   draws.length = 0;
   GarageScene.draw(TEAM, LIV, [0,2,0], null, 0, null, car);
   assert.equal(draws.find(d => d.mesh === closed.mesh).matrix[5], 1, "normal garage resets shutter");
+});
+
+test("the LEGENDS bay rebuilds when the legend changes, even on the same paint", () => {
+  // The Legends row keeps team id "legends" across all twelve legends, and two
+  // tribute liveries can share every colour (Schumacher's and Senna's reds):
+  // keyed on id + paint, the wall kept the previous legend's crest — a Ferrari
+  // horse over Senna (garage-angles, 2026-10-01).
+  const { GarageScene } = harness();
+  const row = (legend) => ({ id: "legends", legends: true, legend, name: "Legends", short: "LGD", drivers: TEAM.drivers });
+  GarageScene.draw(row("schumacher"), LIV, [0, 1.6, 0], null, 0);
+  const a = GarageScene.debug().geomKey;
+  GarageScene.draw(row("senna"), LIV, [0, 1.6, 0], null, 0);
+  assert.notEqual(GarageScene.debug().geomKey, a, "a new legend is a new bay");
 });

@@ -97,7 +97,7 @@ export async function waitNoPolling() {
  *  the `async waitForTimeout(_ms)` method on tests/helpers/vm-page.js's page
  *  adapter — which sleeps for nothing, it only exists so an unmodified spec
  *  compiles against the VM — and a `waitForTimeout(300)` inside the comment at
- *  menu-keyboard.spec.js:414 that explains why that sleep was DELETED. Both
+ *  tests/specs/menu-keyboard.spec.js that explains why that sleep was DELETED. Both
  *  pushed the ceiling the wrong way. A real sleep is always `page.` or
  *  `racePage.`-qualified, so requiring the dot counts sleeps and nothing else;
  *  the ceiling came DOWN by two when this landed. */
@@ -256,7 +256,7 @@ export function zeroRefModulesReport(corpus) {
   const manifest = createRequire(import.meta.url)("../manifest.cjs");
   const mods = new Set();
   for (const list of [manifest.FULL, ...Object.values(manifest.DEFERRED), manifest.LAZY_AGENT,
-    manifest.LAZY_RACE, manifest.LAZY_DATA, manifest.LAZY_NET])
+    manifest.LAZY_RACE, manifest.LAZY_DATA, manifest.LAZY_NET, manifest.LAZY_EDITOR || []])
     for (const f of list) if (typeof f === "string" && f.startsWith("js/") && !f.startsWith("js/circuits/")) mods.add(f);
   if (corpus === undefined) {
     const files = [];

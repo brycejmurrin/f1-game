@@ -9,7 +9,8 @@ team) and **MY TEAM** (you own the twelfth team) — share one core.
 - **Screens:** `js/career/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
 - **Qualifying:** `js/race/quali-model.js` (global `Quali`) — the model: session timing, ordering, the persisted grid; `js/ui/quali-sheet.js` (global `QualiSheet`) — `#quali`, the sheet that paints `quali.rows()`.
 - **Ratings:** `js/data/driver-ratings.js` (global `DriverRatings`).
-- **Persistence + migration:** `GameStore.migrateCareer` in `js/core/store.js`.
+- **Persistence + migration:** `GameStore.migrateCareer` / `SaveMigrate` in `js/career/save-migrate.js`.
+- **Backup (export / import):** `js/career/career-backup.js` (global `CareerBackup`).
 - **Styles:** `css/career.css`.
 
 ---
@@ -79,6 +80,17 @@ written would otherwise read as lost progress. `useSlot(flavour, i)` **saves the
 career being left first**: `settleRound()` already persists, but a garage edit or an
 accepted offer lives on the object until something calls `save()`, and switching away
 is exactly when that would be lost.
+
+### Career backup (export / import)
+
+`SettingsExport` deliberately excludes saves. The broken-storage banner's
+`exportRecovery` only appears when localStorage is already failing. The deliberate
+backup path is `js/career/career-backup.js` (`CareerBackup`):
+
+- **Format** `apex26-career-backup-v1` — `{ format, exportedAt, build, slots[{flavour,i,data}], season?, badges?, daily?, records? }`. Ghosts are refused on import and never written on export.
+- **Export** dumps all six slots (empty ones as `data: null`) through `NativeDownload` so Capacitor Share works on Android/iOS.
+- **Import** validates (wrong format, NaN money, array-where-object, >5 MB blob → reject, change nothing) → runs `SaveMigrate.migrateCareer` per slot → writes through `store.write` (IndexedDB mirror included). A newer live revision is refused the same way `Career.save()` refuses a stale tab. Importing from a DRIVER card does not touch MY TEAM slots until the player confirms **ALL MODES?** (and the reverse).
+- **UI** — EXPORT / IMPORT on each slot card in the CAREER MODES picker (`career-ui.js`); no new screen.
 
 ### The durable mirror (IndexedDB)
 

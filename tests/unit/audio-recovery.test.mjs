@@ -16,25 +16,64 @@ function boot(opts = {}) {
   const node = (kind) => { const n = { kind, connect: (t) => t, disconnect() {}, start() { started.push(n); }, stop() {}, type: "", loop: false, loopStart: 0, loopEnd: 0, buffer: null, onended: null,
     gain: param(1), frequency: param(440), detune: param(0), Q: param(1), playbackRate: param(1), pan: param(0) }; return n; };
   let resumes = 0;
-  const ctx = { currentTime: 0, state: opts.state || "running", sampleRate: 8000, destination: node("dest"),
-    createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"), createBufferSource: () => node("src"),
-    createDynamicsCompressor: () => Object.assign(node("comp"), { threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) }),
-    createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
-    decodeAudioData: (ab, res, rej) => (opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
-    resume: () => { resumes++; return Promise.resolve(); }, close: () => Promise.resolve() };
+  const contexts = [];
+  function createContext() {
+    const buffers = [];
+    const ctx = { currentTime: 0, state: opts.state || "running", sampleRate: 8000, destination: node("dest"), buffers,
+      createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"), createBufferSource: () => node("src"),
+      createDynamicsCompressor: () => Object.assign(node("comp"), { threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) }),
+      createBuffer: (ch, len, sr) => { const b = { sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }; buffers.push(b); return b; },
+      decodeAudioData: (ab, res, rej) => (opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
+      resume: () => { resumes++; return Promise.resolve(); }, close: () => { ctx.state = "closed"; return Promise.resolve(); } };
+    contexts.push(ctx);
+    return ctx;
+  }
   const fetched = [];
-  const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error, parseFloat, parseInt, isFinite, Float32Array,
+  const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date: opts.Date || Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
     document: { addEventListener() {}, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
-    setTimeout: () => 0, clearTimeout() {}, navigator: {}, AudioContext: function () { return ctx; },
+    setTimeout: () => 0, clearTimeout() {}, navigator: {}, AudioContext: function () { return createContext(); },
     fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(8), { _url: url })) }); } };
+  if (opts.perf) sb.performance = opts.perf;
   sb.window = sb;
   const v = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v);
   vm.runInContext(SRC, v);
-  return { A: vm.runInContext("GameAudio", v), started, fetched, resumes: () => resumes };
+  return { A: vm.runInContext("GameAudio", v), started, fetched, contexts, resumes: () => resumes };
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+
+test("a context rebuild replaces cached noise and keeps the delayed sample fallback", async () => {
+  let now = 10000;
+  class ClockDate extends Date { static now() { return now; } }
+  const { A, started, contexts } = boot({ Date: ClockDate });
+  A.setMusicEnabled(false);
+  A.setUiEnabled(false);
+  A.init(); await flush(); A.startEngine();
+  assert.equal(A.debug().usingSamples, true);
+  const old = contexts[0];
+  const oldBuffers = new Set(old.buffers);
+  old.state = "interrupted";
+  A.init();                 // first trusted gesture attempts resume
+  now += 1000;
+  A.init();                 // a later gesture rebuilds the still-stalled context
+  assert.equal(contexts.length, 2);
+  assert.equal(old.state, "closed");
+  assert.equal(A.uiEnabled(), false, "context replacement preserves upstream menu-sound preference");
+  const fresh = contexts[1];
+  const noise = started.filter((n) => n.kind === "src" && n.loop && fresh.buffers.includes(n.buffer) && n.buffer.duration < 1);
+  assert.equal(noise.length, 6);
+  assert.equal(new Set(noise.map((n) => n.buffer)).size, 6);
+  assert.ok(fresh.buffers.every((b) => !oldBuffers.has(b)), "all prepared PCM belongs to the new context");
+  assert.equal(A.debug().engineOn, true);
+  assert.equal(A.debug().usingSamples, false, "the new context starts on the synth while decoding is pending");
+  const buffers = fresh.buffers.length;
+  await flush();
+  A.setEngine(0.6, 0, false, 0.6, 4, {});
+  assert.equal(A.debug().usingSamples, true);
+  assert.equal(fresh.buffers.length, buffers, "new-context upgrade also reuses its prepared noise");
+  assert.ok(started.filter((n) => n.kind === "src" && n.loop && fresh.buffers.includes(n.buffer)).every((n) => !oldBuffers.has(n.buffer)));
+});
 
 
 test("turning SOUND EFFECTS on mid-race starts the rain the race asked for", async () => {
@@ -126,4 +165,25 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
   assert.match(g, /function tiltSay\(msg\) \{ els\.audiostate\.textContent = msg; if \(msg\) announce\(/, "tilt fallbacks reach the banner, not only the title line");
   assert.match(g, /if \(state === "race" && !camComfort\(\) && _buzzWet > 0\.01/, "REDUCE MOTION / XR comfort drops the onboard speed buzz");
   assert.match(g, /_vantExtra\.reduceMotion = camComfort\(\);/, "…and the kerb shiver (js/camera/vantage.js)");
+});
+
+// MENU SOUNDS (apex26.menuSfx) and ONE CLICK, ONE SOUND: the track tile once
+// played uiSelect then tickUi's uiTick — two blips for one tap.
+test("ui blips: one per click, and MENU SOUNDS OFF silences them without touching SFX", async () => {
+  const clock = { t: 1000 };
+  const { A, started } = boot({ perf: { now: () => clock.t } });
+  A.init(); await flush();
+  const oscs = () => started.filter((n) => n.kind === "osc").length;
+  let n = oscs();
+  A.uiSelect(); A.uiTick();
+  assert.equal(oscs() - n, 1, "a second ui blip on the same click is dropped");
+  clock.t += 200; n = oscs();
+  A.uiTick();
+  assert.equal(oscs() - n, 1, "the next click still sounds");
+  A.setUiEnabled(false); clock.t += 200; n = oscs();
+  A.uiTick(); A.uiSelect(); A.uiReject();
+  assert.equal(oscs() - n, 0, "MENU SOUNDS OFF");
+  assert.equal(A.uiEnabled(), false);
+  A.lap();
+  assert.ok(oscs() - n > 0, "race sfx are not menu sounds");
 });

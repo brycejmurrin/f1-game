@@ -1,10 +1,15 @@
 // Garage turntable frame quality gate — rejects uniform team-tint "wall" frames.
 // @doc PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture.
 
-/** Sample the visible car gap (left of the docked #cs-inner panel). Returns [{rgb, ny}]. */
+/** Sample the visible car gap beside the docked #cs-inner panel. panelFrac is
+ *  SIGNED (js/garage/setup-camera.js panelCover): positive = panel docked right
+ *  (APPEARANCE › GARAGE › PANEL SIDE RIGHT, shipped), negative = docked left, so
+ *  the band is mirrored onto the free side. Returns [{rgb, ny}]. */
 export function sampleGarageGapPixels(imageData, canvasW, canvasH, panelFrac = 0) {
-  const x0 = Math.floor(canvasW * 0.04);
-  const x1 = Math.floor(canvasW * Math.max(0.58 - panelFrac * 0.5, 0.35));
+  const f = Math.abs(panelFrac);
+  const a = 0.04, b = Math.max(0.58 - f * 0.5, 0.35);
+  const x0 = Math.floor(canvasW * (panelFrac < 0 ? 1 - b : a));
+  const x1 = Math.floor(canvasW * (panelFrac < 0 ? 1 - a : b));
   const y0 = Math.floor(canvasH * 0.18);
   const y1 = Math.floor(canvasH * 0.82);
   const stepX = Math.max(6, Math.floor((x1 - x0) / 14));
