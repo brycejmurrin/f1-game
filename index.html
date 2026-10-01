@@ -111,6 +111,7 @@
 <link rel="stylesheet" href="css/track-detail.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/editor.css?v=dev" media="print" onload="this.media='all'">
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -2018,6 +2019,7 @@
     <div id="menu-secondary" class="balanced-row">
     <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/></svg>STANDINGS</button>
     <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>DATA HUB</button>
+    <button id="mb-designer" class="bigbtn alt minibtn" aria-label="Track designer — build and race your own circuits"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14c0-4 3-6 7-6s4 3 7 3 3 3 1 5-5 3-9 2-6-1-6-4z"/><circle cx="7" cy="14" r="1"/><circle cx="17" cy="11" r="1"/></svg>TRACK DESIGNER</button>
     <button id="mb-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
     <button id="mb-settings" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>SETTINGS</button>
     <!-- Unhidden (2026-08): the handler was live the whole time while the
@@ -3289,6 +3291,19 @@
        "every data-esc-close names a real control" check runs on the title
        screen. hub.js adopts this button into its header when it builds. -->
   <button id="dh-close-btn" class="dh-close" type="button" aria-label="Close data hub" hidden>✕</button>
+</dialog>
+
+<!-- TRACK DESIGNER (js/editor/designer.js, LAZY_EDITOR): the same shape as
+     #datahub — a real <dialog> whose chrome is built at runtime behind the
+     title door (#mb-designer). The HEADING and the Escape target ship in the
+     shell: the dialog's accessible name (aria-labelledby) and UiLayers'
+     "every data-esc-close names a real control" check both run on the title
+     screen, before the bundle has loaded. designer.js adopts #td-close. -->
+<dialog id="trackdesigner" class="screen" aria-labelledby="td-title" data-esc-close="td-close" hidden>
+  <div class="sheet-head">
+    <h2 id="td-title">TRACK DESIGNER</h2>
+    <button id="td-close" class="dh-close" type="button" aria-label="Close track designer" hidden>&#x2715;</button>
+  </div>
 </dialog>
 
 

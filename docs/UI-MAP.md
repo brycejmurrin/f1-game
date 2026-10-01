@@ -30,6 +30,7 @@ generated row.
 ├─ RACE A FRIEND ─> #vsfriend
 ├─ SEASON ────────> #season-setup ──> customise ──> #race-settings ─> race
 ├─ DATA HUB ──────> #datahub
+├─ TRACK DESIGNER > #trackdesigner (canvas + rail + MY CIRCUITS; SAVE / RACE / TIME TRIAL → #select)
 ├─ GARAGE ────────> #carsetup / #customize
 ├─ SETTINGS ──────> #pmsettings (→ #tl-editor, #garrival)
 └─ HOW TO PLAY ───> #howtoplay
@@ -409,6 +410,7 @@ driving/menu input unless its definition explicitly sets `gate: false`.
 | `#tl-editor` | yes | Title layout editor bar (title screen) |
 | `#photo-controls` | yes | Free-camera controls |
 | `#datahub` | yes | Data and telemetry hub |
+| `#trackdesigner` | yes | Track designer (custom circuits) |
 
 `#overlay` is non-gating because no car is being driven while the title is
 open. `#rotate-device` is non-gating so Escape and driving keys still reach the
@@ -480,6 +482,7 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#garriva
 | `#flyby` | `#flyby-inner`, `#fb-rail`, `#fb-rows` |
 | `#freecam` | Runtime-built `#freecam-inner` (`#fc-status`, `#fc-rows`: `#fc-speed`, `#fc-roll`, `#fc-fov`, `#fc-snap-car`, `#fc-corner-prev`/`-next`, `#fc-lens-race`/`-flyby`, `#fc-copy-view`, `#fc-copy-pose`, `#fc-out`); `#fc-close` is the boot-time Escape target |
 | `#datahub` | Runtime-built inner UI; `#dh-close-btn` is the boot-time Escape target |
+| `#trackdesigner` | Runtime-built body and foot (`js/editor/designer.js`); the shell ships `#td-title` (its accessible name) and `#td-close` (the boot-time Escape target) |
 
 The tuner `*-rail` roots hold fixed headers/mode controls; `*-rows` receive
 generated controls.

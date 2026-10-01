@@ -124,6 +124,8 @@
   "TrackStamps",
   "TrackSurface",
   "TrackValidate",
+  "TrackDesigner",
+  "DesignerCanvas",
   "TunerPanel",
   "WallClamp",
   "WeatherArc",
