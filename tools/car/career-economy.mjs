@@ -25,6 +25,15 @@
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`career-economy — sim one career season per starter team (Playwright)
+
+  node tools/car/career-economy.mjs [--years 1]
+
+Owned by career-mode.`);
+  process.exit(0);
+}
+
 const YEARS = Math.max(1, parseInt((process.argv.find((a) => a.startsWith("--years=")) || "").split("=")[1]
   || (process.argv[process.argv.indexOf("--years") + 1] || ""), 10) || 1);
 
