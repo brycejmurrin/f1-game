@@ -6,16 +6,24 @@
  * this writes, and both use VoicePack.norm, so a key written here is exactly a
  * key the game looks up.
  *
- * THE PHRASES are harvested, not hand-listed, so a new radio line is covered by
- * re-running this:
- *   - every literal run of every `eng.*` template in js/race/radio-lines.js,
- *     cut at its {slots} and its punctuation;
- *   - every ALL-CAPS string literal in js/race/engineer.js, cut the same way;
- *   - the slot values a line can carry: P1-P22, 1-60, gaps 0.1-9.9, "seconds",
- *     the surnames of the 2026 grid (js/data/teams.js) and the legends;
- *   - the spotter's calls (js/race/spotter.js Spotter.KEYS).
+ * ONE PACK PER RACE CHANNEL (VOICES below; js/audio/radio-voice.js PACK_VOICE):
+ * with RADIO VOICE: RECORDED a race never touches speech synthesis, so every
+ * channel needs its own (docs/notes/VOICE-LAG-IPHONE-2026-10-01.md).
  *
- * THE VOICE is Kokoro-82M (Apache-2.0, weights and voices), rendered on CPU by
+ * THE PHRASES are harvested, not hand-listed, so a new radio line is covered by
+ * re-running this (phrases(id) says exactly how):
+ *   - the channel's phrasebook pools in js/race/radio-lines.js (eng.* for the
+ *     engineer, tv.* for the commentator), cut at their {slots} and punctuation;
+ *   - the card literals of the files that emit the channel's cards;
+ *   - what the channel was heard saying in races (tools/gen/voice-corpus.json,
+ *     written by tools/gen/voice-corpus.mjs), cut at its slot values;
+ *   - the slot values a line can carry: P1-P22, 0-100, gaps 0.1-9.9, "seconds",
+ *     "point" and "oh" for lap times, the surnames of the 2026 grid
+ *     (js/data/teams.js) and the legends, key labels for the coach;
+ *   - every word any card literal can carry, on its own: the safety net;
+ *   - the spotter's calls (js/race/spotter.js Spotter.KEYS), in the engineer's.
+ *
+ * THE VOICES are Kokoro-82M (Apache-2.0, weights and voices), rendered on CPU by
  * kokoro-js, trimmed of its lead-in and tail silence and encoded as 24 kHz mono
  * MP3 by ffmpeg — MP3 because every browser's decodeAudioData takes it, where
  * Ogg Opus is still missing on older Safari. Neither tool ships: they live in a
@@ -23,8 +31,8 @@
  * node_modules/ffmpeg-static; ~1 GB, never committed).
  *
  * Usage:
- *   node tools/gen/voicepack.mjs --list
- *   node tools/gen/voicepack.mjs --kokoro scratch/voicepack [--voice bm_george] [--id george] [--dtype q4] [--speed 1.08]
+ *   node tools/gen/voicepack.mjs --list [--id george|fable|emma|heart]
+ *   node tools/gen/voicepack.mjs --kokoro scratch/voicepack --id <voice> [--voice bm_george] [--dtype q4] [--speed 1.08]
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -45,8 +53,51 @@ function sandbox(files) {
   return sb;
 }
 
-/** Every phrase the pack should hold: [{ key, text }], de-duplicated by key. */
-export function phrases() {
+/* THE VOICES, one pack per radio channel (js/audio/radio-voice.js SPEAKERS →
+ * PACK_VOICE). Each speaks only its own channel's lines, so each pack holds
+ * only what that channel says. Kokoro grades its voices; these are the best
+ * graded of the ones that keep the four channels apart by ear: the engineer
+ * (British male), the commentator (a second British male, the broadcast's),
+ * race control (flat, official) and the coach (the highest-graded voice, calm). */
+// `runs`: the files whose card literals this channel speaks, recorded as whole
+// phrases (game.js: only its announce() lines). The phrasebook is the
+// engineer's and the commentator's source on top (phrases below).
+export const VOICES = Object.freeze({
+  george: { voice: "bm_george", speaker: "radio", speed: 1.12,
+    runs: ["js/game.js", "js/race/pit-lane.js", "js/race/weather-arc.js", "js/race/race-insights.js", "js/race/session-records.js"] },
+  fable: { voice: "bm_fable", speaker: "announcer", speed: 1.12, runs: [] },
+  emma: { voice: "bf_emma", speaker: "control", speed: 1.06,
+    runs: ["js/game.js", "js/race/race-control.js", "js/race/sporting-regs.js"] },
+  heart: { voice: "af_heart", speaker: "coach", speed: 1.02,
+    runs: ["js/game.js", "js/race/driving-coach.js", "js/race/race-insights.js"] },
+});
+
+/* THE FILES THAT FEED THE RADIO CARD: every module that calls announce(), plus
+ * the phrasebook and the engineer. Their ALL-CAPS literals are the words a
+ * card can carry, so every word in them is recorded on its own — the safety
+ * net that lets a line nobody harvested still splice whole. game.js is the one
+ * exception: most of its literals are menus, so only literals on an announce()
+ * line count there. */
+export function feedFiles() {
+  const out = new Set(["js/race/radio-lines.js", "js/race/engineer.js"]);
+  const walk = (d) => {
+    for (const e of fs.readdirSync(path.join(ROOT, d), { withFileTypes: true })) {
+      const rel = d + "/" + e.name;
+      if (e.isDirectory()) { if (!/^(vendor|three)$/.test(e.name)) walk(rel); continue; }
+      if (rel.endsWith(".js") && /\b(G\.)?announce\(|showAnnounce\(/.test(fs.readFileSync(path.join(ROOT, rel), "utf8"))) out.add(rel);
+    }
+  };
+  walk("js");
+  return [...out].sort();
+}
+
+/** The lines the game actually spoke, by speaker (tools/gen/voice-corpus.mjs). */
+export const CORPUS = "tools/gen/voice-corpus.json";
+
+/** Every phrase pack `id` should hold: [{ key, text }], de-duplicated by key. */
+export function phrases(id = "george") {
+  const spec = VOICES[id];
+  if (!spec) throw new Error("unknown voice " + id + " (" + Object.keys(VOICES).join(", ") + ")");
   const sb = sandbox(["js/core/mat4.js", "js/audio/voice-pack.js", "js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/spotter.js", "js/data/teams.js", "js/data/legends.js"]);
   const { norm, keyOf } = sb.VoicePack;
   const speakable = sb.RadioVoice.speakable;
@@ -66,34 +117,89 @@ export function phrases() {
     // "P{pos}" is one spoken unit ("P seven"), recorded whole as a value below,
     // so the bare P in front of a position slot is not a phrase of its own.
     const parts = String(tpl).replace(/P\{(pos|grid)\}/g, "{$1}").split(/\{\w+\}/);
-    for (const part of parts) for (const r of runs(part)) add(keyOf(r));
+    // A log or store id ("aidrive.strat.caution_reach") is a literal on an
+    // announce() line, never a word on the card.
+    for (const part of parts) for (const r of runs(part)) if (!r.some((w) => /[_]|[a-z]\.[a-z]/.test(w))) add(keyOf(r));
   };
-  for (const [k, pool] of Object.entries(sb.RadioLines.POOLS)) if (k.startsWith("eng.")) for (const t of pool) literalRuns(t);
-  const eng = fs.readFileSync(path.join(ROOT, "js/race/engineer.js"), "utf8");
-  // Every string literal carrying an upper-case word, including the pieces a
-  // line is concatenated from (", ABOUT ", " LAP"). A leading "s" is the
-  // seconds suffix of a number before it ("21s LOST"), which speakable()
-  // already turns into the word "seconds".
-  for (const m of eng.matchAll(/"([^"\n]*[A-Z]{2,}[^"\n]*)"/g)) {
-    literalRuns(m[1].replace(/^s\b/, "").replace(/\d+/g, "{n}").replace(/%/g, " PERCENT"));
-  }
+  // ── THE SLOT VALUES every channel's lines carry ──
   add("percent", "percent");
   for (let n = 1; n <= 22; n++) add("p " + n, "P " + n);
-  for (let n = 0; n <= 100; n++) add(String(n), String(n));   // laps, laps to go, tyre percent
+  for (let n = 0; n <= 100; n++) add(String(n), String(n));   // laps, laps to go, tyre percent, lap-time minutes and seconds
   for (let d = 1; d < 100; d++) { const g = (d / 10).toFixed(1); add(g, g); }
   add("seconds", "seconds");
+  add("point", "point"); add("oh", "oh");                      // a lap time (VoicePack.norm reads "1:05.3" as "1 oh 5 point 3")
   const names = [];
+  const slot = new Set();
   for (const t of sb.TEAMS || sb.Teams?.LIST || []) for (const d of t.drivers || []) {
     names.push(d.name);
     // The engineer names a rival by timing-screen code ("VER HAS BOXED"); on
     // the radio that is the surname, never the three letters read as a word.
-    if (d.code) add(String(d.code).toLowerCase(), String(d.name).trim().split(/\s+/).pop());
+    if (d.code) { add(String(d.code).toLowerCase(), String(d.name).trim().split(/\s+/).pop()); slot.add(String(d.code).toLowerCase()); }
   }
-  // The next compound, which the pit call gives by its letter ("BOX BOX BOX — M").
-  for (const [k, t] of Object.entries({ s: "Softs", m: "Mediums", h: "Hards", i: "Inters", w: "Wets" })) add(k, t);
+  // The next compound, which the pit call gives by its letter ("BOX BOX BOX — M"):
+  // the engineer's alone. The coach and race control name the player's KEYS
+  // instead ("ACTIVE AERO, Z, YOU CAN OPEN IT NOW", js/input/input.js keyLabel),
+  // so there a letter is the letter — except "a" and "i", which are words first.
+  if (id === "george") for (const [k, t] of Object.entries({ s: "Softs", m: "Mediums", h: "Hards", i: "Inters", w: "Wets" })) add(k, t);
+  else if (id !== "fable") {
+    for (const c of "bcdefghjklmnopqrstuvwxyz") add(c, c.toUpperCase());
+    for (const k of ["shift", "space", "enter", "tab", "control", "alt", "up", "down", "left", "right", "num"]) add(k, k);
+  }
   for (const l of sb.Legends?.LIST || sb.LEGENDS || []) names.push(l.name);
-  for (const n of names) { const s = String(n).trim().split(/\s+/).pop(); if (s) add(s.toLowerCase(), s); }
-  for (const [key, text] of Object.entries(sb.Spotter.KEYS)) add(key, text);
+  for (const n of names) {
+    const s = String(n).trim().split(/\s+/).pop();
+    if (!s) continue;
+    // RadioLines.surname is what a line carries; norm lowercases it the same way.
+    const k = norm(speakable(s.toUpperCase())).filter((t) => typeof t === "string").join(" ");
+    add(k, s); slot.add(k);
+  }
+  // ── THE CHANNEL'S OWN PHRASES ──
+  const P = sb.RadioLines.POOLS;
+  if (id === "george") {
+    for (const [k, pool] of Object.entries(P)) if (k.startsWith("eng.")) for (const t of pool) literalRuns(t);
+    const eng = fs.readFileSync(path.join(ROOT, "js/race/engineer.js"), "utf8");
+    // Every string literal carrying an upper-case word, including the pieces a
+    // line is concatenated from (", ABOUT ", " LAP"). A leading "s" is the
+    // seconds suffix of a number before it ("21s LOST"), which speakable()
+    // already turns into the word "seconds".
+    for (const m of eng.matchAll(/"([^"\n]*[A-Z]{2,}[^"\n]*)"/g)) {
+      literalRuns(m[1].replace(/^s\b/, "").replace(/\d+/g, "{n}").replace(/%/g, " PERCENT"));
+    }
+    for (const [key, text] of Object.entries(sb.Spotter.KEYS)) add(key, text);
+  }
+  if (id === "fable") {
+    for (const [k, pool] of Object.entries(P)) if (k.startsWith("tv.")) for (const t of pool) literalRuns(t);
+    for (const why of Object.values(sb.RadioLines.WHY || {})) literalRuns(why);
+  }
+  const cardLiterals = (f) => {
+    let src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    if (f === "js/game.js") src = src.split("\n").filter((l) => /announce\(/.test(l)).join("\n");
+    return [...src.matchAll(/["`]([^"`\n]*[A-Z]{2,}[^"`\n]*)["`]/g)].map((m) => m[1].replace(/\$\{[^}]*\}/g, "{x}"));
+  };
+  for (const f of spec.runs) for (const lit of cardLiterals(f)) literalRuns(lit.replace(/\d+/g, "{n}").replace(/%/g, " PERCENT"));
+  // What the channel was heard saying in real races, cut at its slot values
+  // (numbers, positions, names), so the fixed wording records as whole phrases.
+  const corpusPath = path.join(ROOT, CORPUS);
+  const corpus = fs.existsSync(corpusPath) ? JSON.parse(fs.readFileSync(corpusPath, "utf8")) : {};
+  const isSlot = (w, next) => /^\d/.test(w) || slot.has(w) || (w === "p" && /^\d/.test(next || ""));
+  for (const line of corpus[spec.speaker] || []) {
+    let cur = [];
+    const toks = norm(line);
+    toks.forEach((t, i) => {
+      if (typeof t === "string" && !isSlot(t, toks[i + 1]) && !(i > 0 && toks[i - 1] === "p" && /^\d/.test(t))) cur.push(t);
+      else { if (cur.length) add(keyOf(cur)); cur = []; }
+    });
+    if (cur.length) add(keyOf(cur));
+  }
+  // THE SAFETY NET: every word a card can carry, on its own (feedFiles above).
+  // The commentator's lines are all phrasebook templates, which the runs above
+  // already cover whole.
+  if (id !== "fable") {
+    for (const f of feedFiles()) {
+      for (const lit of cardLiterals(f)) for (const t of norm(speakable(lit.replace(/\{x\}/g, " ")))) if (typeof t === "string" && /^[a-z][a-z']*$/.test(t)) add(t);
+    }
+    for (const line of corpus[spec.speaker] || []) for (const t of norm(line)) if (typeof t === "string" && /^[a-z][a-z']*$/.test(t)) add(t);
+  }
   return [...out].map(([key, text]) => ({ key, text }));
 }
 
@@ -102,8 +208,10 @@ async function build() {
   const req = createRequire(path.join(kdir, "package.json"));
   const { KokoroTTS } = await import(req.resolve("kokoro-js"));
   const ffmpeg = req("ffmpeg-static");
-  const voice = arg("voice", "bm_george"), id = arg("id", "george"), dtype = arg("dtype", "q4");
-  const speed = +arg("speed", "1.12");
+  const id = arg("id", "george"), dtype = arg("dtype", "q4");
+  if (!VOICES[id]) throw new Error("unknown voice " + id);
+  const voice = arg("voice", VOICES[id].voice);
+  const speed = +arg("speed", String(VOICES[id].speed));
   // A word said on its own gets a whole sentence's prosody, which is slow:
   // Kokoro gave "to" half a second. Short fragments are rendered faster so a
   // spliced line runs at an engineer's pace; numbers stay a touch clearer.
@@ -117,7 +225,7 @@ async function build() {
   const cache = path.join(ROOT, "artifacts", "voicepack", id);
   fs.mkdirSync(cache, { recursive: true });
   fs.mkdirSync(outDir, { recursive: true });
-  const list = phrases();
+  const list = phrases(id);
   const tts = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", { dtype, device: "cpu" });
   const safe = (k) => k.replace(/[^a-z0-9]+/gi, "_").slice(0, 60) + "_" + Buffer.from(k).toString("hex").slice(0, 8);
   const clips = {};
@@ -153,6 +261,6 @@ async function build() {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  if (flag("list")) for (const p of phrases()) console.log(p.key + (p.text !== p.key ? "\t" + p.text : ""));
+  if (flag("list")) for (const p of phrases(arg("id", "george"))) console.log(p.key + (p.text !== p.key ? "\t" + p.text : ""));
   else await build();
 }
