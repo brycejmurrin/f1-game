@@ -808,17 +808,18 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.match(body, /if \(!built && !menuWorld\(\) && introBuild\(go\)\) return;/, "no world: raceIntro diverts to the build");
   const j = game.indexOf("function introBuild(go)"), ib = game.slice(j, game.indexOf("\n}\n", j));
-  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("await loadTrackStepped(idx, live)"), p = ib.indexOf("await introPlan("), r = ib.indexOf("raceIntro(go)");
+  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("await loadTrackStepped(idx, live)"), p = ib.indexOf("await introPrepare("), r = ib.indexOf("raceIntro(go)");
   assert.ok(l > 0 && p > l && b > p && r > b, "build and plans precede the outgoing animation and flyby");
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
   assert.match(ib, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
   assert.match(ib, /motionReduced\(\)/, "reduced motion (the OS flag or SETTINGS › MOTION) has no flyby to build for");
   assert.match(game, /_mq = [^;]*matchMedia\("\(prefers-reduced-motion: reduce\)"\)/, "…and motionReduced still reads the OS flag");
   assert.match(game, /function motionReduced\(\) \{\s*return !!\(_mq && _mq\.matches\)/);
-  const pa = ib.indexOf("prepareMenuCarAssets("), wa = ib.indexOf("_menuGate.warm = 2");
-  assert.ok(pa > l && p > pa && wa > p && b > wa, "assets, plans and shaders settle before the drive-out");
+  const pa = ib.indexOf("prepareMenuCarAssets(");
+  assert.ok(pa > l && p > pa && b > p, "assets precede overlapping plans/shaders, both settle before drive-out");
   assert.match(ib, /try \{ _introKey = key; raceIntro\(go\); \} catch \(e\) \{[^}]*loadingScreen\.stop\(\); go\(\); \}/, "a throw in raceIntro never strands the timer-less build card");
-  assert.equal((ib.match(/await awaitIntroWarm\(live\)/g) || []).length, 2, "both compilation boundaries retain scene ownership");
+  assert.equal((ib.match(/await awaitIntroWarm\(live\)/g) || []).length, 1, "the old scene releases compilation before rebuilding");
+  assert.match(ib, /await introPrepare\(live, key, info0, n, true\)/, "new-world compilation settles through the shared preparation barrier");
 });
 
 test("intro builds cancel at async boundaries and never fly over pending compilation", async () => {
@@ -837,7 +838,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
       loadingScreen: { building: () => { c._ph = "build"; events.push("build"); }, garage: () => { c._ph = "garage"; events.push("garage"); },
         stop: () => { c._ph = ""; events.push("stop"); }, phase: () => c._ph || "", nextFlyMs: () => 24000 },
       ensureScenery: () => new Promise((r, j) => { resolveScenery = r; rejectScenery = j; }),
-      loadTrackStepped: async (idx, liveNow) => { events.push("load"); return liveNow(); }, prepareMenuCarAssets: async () => {},
+      loadTrackStepped: async (idx, liveNow) => { events.push("load"); return liveNow(); }, prepareMenuCarAssets: async () => {}, _atmo: { prebakeLamps: () => null },
       warmPrograms: () => { warming = mode !== "ready" && mode !== "plan-cancel"; }, gfx: { warming: () => warming },
       menuSlice: async () => {
         now += 1000; slices++;
@@ -849,7 +850,8 @@ test("intro builds cancel at async boundaries and never fly over pending compila
         if (mode === "settings") c.settings = "two";
       },
       FlybySeq: { reset() {}, setDuration: () => events.push("duration"), DEFAULT: [], vary: () => [],
-        planSteps: () => () => mode !== "plan-cancel" || slices > 0 },
+        // A real planner step consumes CPU before the async cancellation boundary.
+        planSteps: () => () => { now += 4; return mode !== "plan-cancel" || slices > 0; } },
       raceIntro: () => { assert.equal(warming, false, mode + ": never start unseen shots"); events.push("intro"); },
       quitToMenu: () => { c.cancelIntro(); c.loadingScreen.stop(); events.push("recover"); },
       announce: () => events.push("message"), Log: { warn() {} },
@@ -884,7 +886,7 @@ test("cold intros await compilation before drive-out and cut directly afterward;
   const planStart = game.indexOf("async function introPlan(");
   for (const flow of ["introBuild", "introWarm"]) for (const mode of ["ready", "cancel", "skip", "fail"]) for (const authored of [false, true]) {
     const start = game.indexOf("function " + flow + "(go)");
-    const source = game.slice(planStart, game.indexOf("\n}\n", planStart) + 2) + game.slice(start, game.indexOf("\n}\n", start) + 2);
+    const source = game.slice(planStart, game.indexOf("// A ready, warm world", planStart)) + game.slice(start, game.indexOf("\n}\n", start) + 2);
     let finishGarage, finishWarm, failWarm, warmWait, steps = 0, now = 0, warming = false;
     const events = [], savedShots = [{ id: "authored" }];
     const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null, flybyShots: null,
@@ -895,7 +897,7 @@ test("cold intros await compilation before drive-out and cut directly afterward;
       studioSkip: n => { c._introSkip = n; }, introCover: (info, n) => c.loadingScreen.building(info, () => c.studioSkip(n)),
       studioOpen() { assert.equal(warming, false, "no outgoing motion before compilation settles"); c._studio = {}; events.push("out"); },
       studioDone: () => new Promise(r => { finishGarage = r; }), studioClose() { if (c._studio) { events.push("close"); c._studio = null; } },
-      ensureScenery: async () => {}, loadTrackStepped: async () => true, prepareMenuCarAssets: async () => {},
+      ensureScenery: async () => {}, loadTrackStepped: async () => true, prepareMenuCarAssets: async () => {}, _atmo: { prebakeLamps: () => null },
       awaitIntroWarm: async live => { if (warming) await warmWait; return live(); },
       warmPrograms: () => { events.push("warm"); warming = true; warmWait = new Promise((r, j) => { finishWarm = () => { warming = false; r(); }; failWarm = j; }); return true; },
       menuSlice: async () => { assert.equal(events.includes("out"), false, "plans complete before outgoing motion"); now += 32; },
@@ -1027,4 +1029,433 @@ test("withoutGrid: a real race joined mid-race or watched back films no standing
     assert.match(li, /\n\s*real,/, "and the announcer is handed the descriptor");
     return null;
   });
+});
+
+function introOverlapDeferred() {
+  let resolve, reject;
+  const promise = new Promise((r, j) => { resolve = r; reject = j; });
+  return { promise, resolve, reject };
+}
+function introOverlapHarness({ cold = true, planThrows = false, cancelDuringPlan = false, lampSlices = 0, lampThrows = false, existingWarm = false, lampFactory = null } = {}) {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const start = game.indexOf("async function introPrepare(");
+  assert.ok(start >= 0, "production preparation barrier exists");
+  const source = game.slice(start, game.indexOf("\n}\n", start) + 2);
+  const plan = introOverlapDeferred(), warm = introOverlapDeferred(), events = [];
+  let wanted = true, result, error, settled = false, planCurrent, warmCurrent, pendingWarm = existingWarm, lampSteps = 0;
+  const lampWaits = [];
+  const fly = { key: "world", shots: [{ id: "test-shot" }] };
+  const c = {
+    _menuGate: { warm: 0 }, gfx: { warming: () => pendingWarm },
+    _atmo: { prebakeLamps() {
+      assert.equal(pendingWarm, false, "light inputs cannot mutate while an old compile owns the scene");
+      events.push("lamps:inputs");
+      if (lampFactory) return lampFactory();
+      if (!lampSlices) return null;
+      return budget => {
+        assert.equal(budget, 3, "lamp CPU work is sliced");
+        events.push("lamps:step"); lampSteps++;
+        if (lampThrows) throw new Error("lamp slice failed");
+        return lampSteps >= lampSlices;
+      };
+    } },
+    setTimeout(fn, ms) { assert.equal(ms, 8); lampWaits.push(fn); },
+    introPlan: async current => {
+      events.push("plan:start"); planCurrent = current;
+      if (cancelDuringPlan) wanted = false;
+      if (planThrows) throw new Error("planning failed immediately");
+      return plan.promise;
+    },
+    warmPrograms() { events.push("warm:request"); },
+    FlybySeq: { reset() { events.push("camera:reset"); } },
+    requestAnimationFrame(fn) { c._menuGate.warm--; fn(); },
+    awaitIntroWarm: async current => { events.push("warm:wait"); warmCurrent = current; await warm.promise; return current(); },
+  };
+  vm.createContext(c); vm.runInContext(source, c);
+  const done = c.introPrepare(() => wanted, "world", {}, 1, cold).then(
+    value => { settled = true; result = value; },
+    reason => { settled = true; error = reason; });
+  const drain = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+  return { c, plan, warm, fly, events, done, drain,
+    cancel() { wanted = false; }, result: () => result, error: () => error,
+    lampSteps: () => lampSteps, lampWaits, releaseExistingWarm() { pendingWarm = false; warm.resolve(); },
+    settled: () => settled, planLive: () => planCurrent(), warmLive: () => warmCurrent && warmCurrent() };
+}
+
+test("cold intro planning and compilation overlap and both must finish before readiness", async () => {
+  for (const first of ["plan", "warm"]) {
+    const h = introOverlapHarness();
+    await h.drain();
+    assert.equal(h.events.filter(e => e === "warm:request").length, 1,
+      "shader preparation starts while planning remains unresolved");
+    assert.equal(h.events.includes("warm:wait"), true);
+    assert.equal(h.settled(), false);
+    h[first].resolve(first === "plan" ? h.fly : undefined); await h.drain();
+    assert.equal(h.settled(), false, first + " alone cannot open the garage");
+    h[first === "plan" ? "warm" : "plan"].resolve(h.fly); await h.done;
+    assert.equal(h.error(), undefined);
+    assert.strictEqual(h.result().fly, h.fly);
+    assert.equal(h.events.filter(e => e === "warm:request").length, 1);
+  }
+});
+
+test("intro preparation that already owns compilation does not request another warm", async () => {
+  const h = introOverlapHarness({ cold: false });
+  await h.drain();
+  assert.equal(h.events.includes("warm:request"), false);
+  assert.equal(h.events.includes("camera:reset"), false);
+  assert.equal(h.events.includes("warm:wait"), true);
+  h.plan.resolve(h.fly); h.warm.resolve(); await h.done;
+  assert.strictEqual(h.result().fly, h.fly);
+});
+
+test("an intro canceled before shader kickoff never requests a stale warm", async () => {
+  const h = introOverlapHarness({ cancelDuringPlan: true });
+  await h.drain();
+  assert.equal(h.events.includes("warm:request"), false);
+  assert.equal(h.events.includes("warm:wait"), false);
+  h.plan.resolve(h.fly); await h.done;
+  assert.equal(h.result(), null);
+});
+
+test("cancellation during overlapped preparation retires both continuations", async () => {
+  const h = introOverlapHarness();
+  await h.drain(); h.cancel();
+  assert.equal(h.planLive(), false);
+  assert.equal(h.warmLive(), false);
+  h.plan.resolve(h.fly); h.warm.resolve(); await h.done;
+  assert.equal(h.result(), null);
+  assert.equal(h.events.filter(e => e === "warm:request").length, 1);
+});
+
+test("immediate planning failure prevents shader kickoff and is handled", async () => {
+  const h = introOverlapHarness({ planThrows: true });
+  await h.done;
+  assert.match(h.error().message, /planning failed immediately/);
+  assert.equal(h.events.includes("warm:request"), false);
+  assert.equal(h.events.includes("warm:wait"), false);
+});
+
+test("failure in either preparation branch retires its sibling and handles late rejection", async () => {
+  for (const failed of ["plan", "warm"]) {
+    const h = introOverlapHarness();
+    await h.drain();
+    h[failed].reject(new Error(failed + " failed")); await h.done;
+    assert.equal(h.error().message, failed + " failed");
+    assert.equal(h.planLive(), false);
+    assert.equal(h.warmLive(), false);
+    // Promise.all must keep a rejection handler on the abandoned sibling.
+    h[failed === "plan" ? "warm" : "plan"].reject(new Error("late sibling failure"));
+    await h.drain();
+    assert.equal(h.error().message, failed + " failed");
+    assert.equal(h.events.filter(e => e === "warm:request").length, 1);
+  }
+});
+
+test("skipped shot planning still waits for required shader preparation", async () => {
+  const h = introOverlapHarness();
+  await h.drain(); h.plan.resolve(null); await h.drain();
+  assert.equal(h.settled(), false);
+  h.warm.resolve(); await h.done;
+  assert.equal(h.result().fly, null, "a skip omits shots but preserves readiness");
+});
+
+test("night lamp preparation overlaps shaders but readiness waits for its final slice", async () => {
+  const h = introOverlapHarness({ lampSlices: 3 });
+  await h.drain();
+  assert.ok(h.events.indexOf("lamps:inputs") < h.events.indexOf("warm:request"), "resolve light inputs before the new shader warm");
+  assert.equal(h.lampSteps(), 1);
+  assert.equal(h.events.includes("warm:wait"), true);
+  h.plan.resolve(h.fly); h.warm.resolve(); await h.drain();
+  assert.equal(h.settled(), false, "finished plans and shaders do not skip a partial night bake");
+  h.lampWaits.shift()(); await h.drain();
+  assert.equal(h.lampSteps(), 2); assert.equal(h.settled(), false);
+  h.lampWaits.shift()(); await h.done;
+  assert.strictEqual(h.result().fly, h.fly);
+  assert.equal(h.lampSteps(), 3);
+  assert.equal(h.events.filter(e => e === "warm:request").length, 1, "lamp completion does not request another traversal");
+});
+
+test("warm-ready garage preparation finishes partial lamps without another shader request", async () => {
+  const h = introOverlapHarness({ cold: false, lampSlices: 2 });
+  await h.drain(); h.plan.resolve(h.fly); h.warm.resolve(); await h.drain();
+  assert.equal(h.events.includes("warm:request"), false);
+  assert.equal(h.settled(), false);
+  h.lampWaits.shift()(); await h.done;
+  assert.equal(h.lampSteps(), 2); assert.strictEqual(h.result().fly, h.fly);
+});
+
+test("existing compilation releases the scene before lamp inputs are resolved", async () => {
+  const h = introOverlapHarness({ existingWarm: true, lampSlices: 1 });
+  await h.drain();
+  assert.equal(h.events.includes("lamps:inputs"), false);
+  assert.equal(h.events.includes("plan:start"), false);
+  assert.equal(h.events.includes("warm:request"), false);
+  h.releaseExistingWarm(); await h.drain();
+  assert.equal(h.events.includes("lamps:inputs"), true);
+  h.plan.resolve(h.fly); await h.done;
+  assert.equal(h.lampSteps(), 1);
+});
+
+test("canceling a lamp slice cannot run or install its queued continuation", async () => {
+  const h = introOverlapHarness({ lampSlices: 3 });
+  await h.drain(); h.cancel();
+  h.plan.resolve(h.fly); h.warm.resolve(); h.lampWaits.shift()(); await h.done;
+  assert.equal(h.lampSteps(), 1, "no stale second step is executed");
+  assert.equal(h.result(), null);
+});
+
+test("lamp failure retires planning and shader continuations with no unhandled late failure", async () => {
+  const h = introOverlapHarness({ lampSlices: 3, lampThrows: true });
+  await h.done;
+  assert.match(h.error().message, /lamp slice failed/);
+  assert.equal(h.planLive(), false);
+  h.plan.reject(new Error("late planner failure")); h.warm.reject(new Error("late compile failure"));
+  await h.drain();
+  assert.equal(h.lampSteps(), 1);
+});
+
+test("prepared night lamps make the actual synchronous flyby bake a cache hit", async () => {
+  let now = 0;
+  const track = {}, lights = [0, 8, 0, 1, 1, 1, 8, 0, -1, 0, 1, 0.5, 0.1, 0, 0];
+  const context = vm.createContext({
+    Log: { info() {}, warn() {} }, performance: { now: () => ++now },
+    G: { track, gfx: { hasLampBake: true, mobileTier: true } },
+    LT: { lampBake: 1, tailLightEmit: 0, lampNearClamp: 4, floodDay: 0 },
+    applyLightTune() {}, isFloodActiveSession: () => true, buildTrackLights: () => lights,
+  });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/lighting/lamp-bake.js"), "utf8"), context);
+  const atmo = fs.readFileSync(path.join(ROOT, "js/lighting/atmosphere.js"), "utf8");
+  const start = atmo.indexOf("function prebakeLamps()");
+  vm.runInContext(atmo.slice(start, atmo.indexOf("\n}\n", start) + 2), context);
+  const lamps = vm.runInContext("LampBake", context);
+  const h = introOverlapHarness({ lampFactory: () => context.prebakeLamps() });
+  await h.drain(); h.plan.resolve(h.fly); h.warm.resolve(); await h.drain();
+  for (let i = 0; i < 100 && !h.settled(); i++) {
+    assert.ok(h.lampWaits.length, "unfinished lamp work has a scheduled slice");
+    h.lampWaits.shift()(); await h.drain();
+  }
+  assert.equal(h.settled(), true); assert.equal(h.error(), undefined);
+  assert.strictEqual(track._lights, lights);
+  const before = lamps.gen(); assert.equal(before, 1, "sliced preparation installed exactly one bake");
+  const baked = lamps.forTrack(track, track._lights, 4, undefined, true, lamps.budget(context.G.gfx));
+  assert.ok(baked);
+  assert.equal(lamps.gen(), before, "flyby settings reuse the prepared bake without rebuilding");
+  assert.equal(h.events.filter(e => e === "warm:request").length, 1);
+});
+
+function introPlanBudgetHarness({ stepMs = 20, yieldMs = 10000, shotCount = 11, interrupt = null, interruptAtStep = 0 } = {}) {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const start = game.indexOf("async function introPlan(");
+  const source = game.slice(start, game.indexOf("\n}\n", start) + 2);
+  let now = 0, steps = 0, yields = 0, wanted = true;
+  const c = {
+    _introSkip: 0, _menuFly: null, track: {}, trackIdx: 0, flybyShots: null,
+    performance: { now: () => now }, reloadFlybyShots() {},
+    loadingScreen: { nextFlyMs: () => 24000 },
+    FlybySeq: {
+      DEFAULT: [], vary: () => Array.from({ length: shotCount }, (_, i) => ({ id: 'shot-' + i })), setDuration() {},
+      planSteps: () => () => {
+        steps++; now += stepMs;
+        if (steps === interruptAtStep) {
+          if (interrupt === "cancel") wanted = false;
+          if (interrupt === "skip") c._introSkip = 1;
+        }
+        return steps >= shotCount;
+      },
+    },
+    menuSlice: async () => {
+      yields++; now += yieldMs;
+      if (interrupt === "cancel") wanted = false;
+      if (interrupt === "skip") c._introSkip = 1;
+    },
+  };
+  vm.createContext(c); vm.runInContext(source, c);
+  return { run: () => c.introPlan(() => wanted, "world", {}, 1),
+    steps: () => steps, yields: () => yields, elapsed: () => now };
+}
+
+test("intro planning completes every cheap shot despite long compiler delays between slices", async () => {
+  const h = introPlanBudgetHarness();
+  const fly = await h.run();
+  assert.ok(fly);
+  assert.equal(h.steps(), 11, "all 11 shot plans finish; shader waits do not exhaust planner CPU budget");
+  assert.equal(h.yields(), 10);
+  assert.equal(h.elapsed(), 100220, "100 seconds of artificial waiting cost only 220ms of planning");
+});
+
+test("intro planning retains an 800ms active work budget and yields only when more work is allowed", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 200, shotCount: 20 });
+  assert.ok(await h.run(), "a partial plan remains usable by the later flyby warmer");
+  assert.equal(h.steps(), 4, "800ms of active work stops further planning");
+  assert.equal(h.yields(), 3, "no unnecessary timer after the CPU budget is exhausted");
+});
+
+test("one indivisible expensive shot cannot trigger another step beyond the planning budget", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 1000, shotCount: 20 });
+  assert.ok(await h.run());
+  assert.equal(h.steps(), 1);
+  assert.equal(h.yields(), 0);
+});
+
+test("intro planning rechecks cancellation and skip after a delayed yield", async () => {
+  for (const interrupt of ["cancel", "skip"]) {
+    const h = introPlanBudgetHarness({ interrupt });
+    assert.equal(await h.run(), null, interrupt);
+    assert.equal(h.steps(), 1, interrupt + ": obsolete work stops before another shot");
+    assert.equal(h.yields(), 1);
+  }
+});
+
+// Append beside the existing introOverlapHarness tests. No fixture edits needed.
+test("finished cold compilation retires hidden frames while shot planning is still pending", async () => {
+  const h = introOverlapHarness();
+  // Simulate RAF callbacks while compilation withholds actual world renders.
+  h.c.requestAnimationFrame = fn => fn();
+  await h.drain();
+  assert.equal(h.c._menuGate.warm, 2);
+  h.warm.resolve(); await h.drain();
+  assert.equal(h.c._menuGate.warm, 0, "no expensive hidden world frame while the remaining planner finishes");
+  assert.equal(h.settled(), false, "retiring warm frames does not bypass planning readiness");
+  h.plan.resolve(h.fly); await h.done;
+  assert.strictEqual(h.result().fly, h.fly);
+});
+
+test("an obsolete cold compilation cannot retire its successor's hidden frame allowance", async () => {
+  const h = introOverlapHarness();
+  h.c.requestAnimationFrame = fn => fn();
+  await h.drain(); h.cancel();
+  h.c._menuGate.warm = 2; // a newer owner has queued its own hidden frames
+  h.warm.resolve(); await h.drain();
+  assert.equal(h.c._menuGate.warm, 2);
+  h.plan.resolve(h.fly); await h.done;
+  assert.equal(h.result(), null);
+  assert.equal(h.c._menuGate.warm, 2);
+});
+
+test("a noncold preparation branch cannot retire another owner's hidden frames", async () => {
+  const h = introOverlapHarness({ cold: false });
+  h.c._menuGate.warm = 2;
+  await h.drain(); h.warm.resolve(); await h.drain();
+  assert.equal(h.c._menuGate.warm, 2);
+  h.plan.resolve(h.fly); await h.done;
+  assert.equal(h.c._menuGate.warm, 2);
+});
+
+
+test("intro planning batches cheap shots without per-shot timer latency", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 0.25, yieldMs: 32 });
+  assert.ok(await h.run());
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 0, "eleven cheap steps fit in one 3ms slice");
+  assert.equal(h.elapsed(), 2.75);
+});
+
+test("intro planning yields after 3ms active batches, excluding delayed timers", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 1, yieldMs: 10000 });
+  assert.ok(await h.run());
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 3, "three batches of three and one final batch of two");
+  assert.equal(h.elapsed(), 30011, "yield time spends neither active budget");
+});
+
+test("intro planning checks ownership and skip between cheap steps in one batch", async () => {
+  for (const interrupt of ["cancel", "skip"]) {
+    const h = introPlanBudgetHarness({ stepMs: 0.25, interrupt, interruptAtStep: 2 });
+    assert.equal(await h.run(), null, interrupt);
+    assert.equal(h.steps(), 2);
+    assert.equal(h.yields(), 0, "cancellation needs no additional work or timer");
+  }
+});
+
+test("intro planning still yields after every indivisible 50ms cold shot", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 50, yieldMs: 32 });
+  assert.ok(await h.run());
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 10);
+  assert.equal(h.elapsed(), 870);
+});
+
+function menuPlanBatchHarness({ stepMs = 1, yieldMs = 32, shotCount = 11, cancelAtStep = 0, cancelAtYield = 0 } = {}) {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const start = game.indexOf("async function menuFinish(");
+  const source = game.slice(start, game.indexOf("\n}\n", start) + 2);
+  let now = 0, steps = 0, yields = 0, wanted = true, warms = 0;
+  const c = {
+    track: {}, trackIdx: 0, _menuFly: null, _menuGate: { warm: 0 },
+    performance: { now: () => now }, prepareMenuCarAssets: async () => {},
+    menuIdle: async current => current(), menuLampBake: async () => false,
+    warmPrograms: () => { warms++; return false; },
+    loadingScreen: { nextFlyMs: () => 24000 },
+    FlybySeq: {
+      DEFAULT: [], vary: () => Array.from({ length: shotCount }, (_, i) => ({ id: 'shot-' + i })),
+      reset() {}, setDuration() {},
+      planSteps: () => () => {
+        steps++; now += stepMs;
+        if (steps === cancelAtStep) wanted = false;
+        return steps >= shotCount;
+      },
+    },
+    menuSlice: async () => {
+      yields++; now += yieldMs;
+      if (yields === cancelAtYield) wanted = false;
+    },
+  };
+  vm.createContext(c); vm.runInContext(source, c);
+  return { run: () => c.menuFinish(() => wanted, "world"), c,
+    steps: () => steps, yields: () => yields, elapsed: () => now, warms: () => warms };
+}
+
+test("menu planning batches cheap shots but gives queued world warming one render opportunity", async () => {
+  const h = menuPlanBatchHarness({ stepMs: 0.25 });
+  await h.run();
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 1, "one render opportunity, not a timer per shot");
+  assert.equal(h.elapsed(), 34.75);
+  assert.equal(h.c._menuFly.shots.length, 11);
+  assert.equal(h.warms(), 1);
+  assert.equal(h.c._menuGate.warm, 2, "existing hidden-frame allowance is preserved even when no compile is requested");
+});
+
+test("menu planning yields at 3ms active batches despite long timer delays", async () => {
+  const h = menuPlanBatchHarness({ yieldMs: 10000 });
+  await h.run();
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 3);
+  assert.equal(h.elapsed(), 30011);
+  assert.equal(h.c._menuFly.shots.length, 11);
+});
+
+test("menu planning checks ownership between cheap steps and never publishes abandoned plans", async () => {
+  const h = menuPlanBatchHarness({ stepMs: 0.25, cancelAtStep: 2 });
+  await h.run();
+  assert.equal(h.steps(), 2);
+  assert.equal(h.yields(), 0);
+  assert.equal(h.c._menuFly, null);
+});
+
+test("menu planning rechecks ownership after yielding before any more shot work", async () => {
+  const h = menuPlanBatchHarness({ cancelAtYield: 1 });
+  await h.run();
+  assert.equal(h.steps(), 3);
+  assert.equal(h.yields(), 1);
+  assert.equal(h.c._menuFly, null);
+});
+
+test("menu planning retains full completion beyond the intro's 800ms active budget", async () => {
+  const h = menuPlanBatchHarness({ stepMs: 200 });
+  await h.run();
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 10, "each indivisible expensive shot yields on its own");
+  assert.equal(h.elapsed(), 2520);
+  assert.equal(h.c._menuFly.shots.length, 11);
+});
+
+
+test("menu planning rechecks ownership after its final warm rendering opportunity", async () => {
+  const h = menuPlanBatchHarness({ stepMs: 0.25, cancelAtYield: 1 });
+  await h.run();
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 1);
+  assert.equal(h.c._menuFly, null, "the old plan is not published after a new request takes ownership");
 });

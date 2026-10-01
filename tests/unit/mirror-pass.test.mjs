@@ -385,3 +385,18 @@ test("the sun's view-dependent terms stay out of the mirror, and the main frame 
   h.render();
   assert.equal(h.calls.filter((c) => c[0] === "world").pop()[3].keyMul, 0.9);
 });
+
+test("standDown (the GARAGE preview frame) hides the mirror and clears the composite rect; the race brings it back", () => {
+  const b = boot({ cam: "cockpit" });
+  b.render();
+  assert.equal(b.frameEl.hidden, false);
+  b.calls.length = 0;
+  b.mp.standDown();
+  assert.equal(b.mp.state().shown, false);
+  assert.equal(b.frameEl.hidden, true);
+  assert.ok(!b.classes.has("hud-mirror-on"));
+  assert.deepEqual(b.calls.filter((c) => c[0] === "rect").map((c) => c[1]), [null], "no stale mirror composited over the car");
+  b.render();
+  assert.equal(b.mp.state().shown, true, "the next race frame shows it again");
+  assert.equal(b.frameEl.hidden, false);
+});

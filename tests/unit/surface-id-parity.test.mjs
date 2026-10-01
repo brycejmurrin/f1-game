@@ -109,3 +109,34 @@ test("the visor's dielectric reflection constants agree across the three backend
   assert.ok(g1 < 0.72 * 0.5,
     `the visor's live-probe mirror term is ${g1}, not meaningfully below glass's 0.72 — this is chrome again, which is the defect`);
 });
+
+test("the baked normal map's tangent frame is the tile's world axes on every backend", () => {
+  // Three copies of applyMaterialTexNormal perturbed N along
+  // `cross(up, N)` until 2026-10-01 — a frame that is degenerate on the ground
+  // (N is up, so T was whatever tilt the procedural bump had left) and
+  // mirrored on +x / -z walls. The tile coordinate is world (x, z) on the
+  // ground and (hc, y) on walls, so the frame must be those axes, picked by
+  // the same an.x > an.z test matTexUV uses — in every language, or the same
+  // brick wall lights differently per backend
+  // (the graphics-detail survey note of 2026-10-01, PR #656).
+  const body = (file, start) => {
+    const src = read(file);
+    const i = src.indexOf(start);
+    assert.ok(i >= 0, `${file}: ${start} not found`);
+    return src.slice(i, i + 4000);
+  };
+  const fns = {
+    GLX: body("js/render/glx/shaders/glsl-lit.js", "void applyMaterialTexNormal("),
+    WGX: body("js/render/webgpu/wgsl-chunks.js", "fn applyMaterialTexNormal("),
+    TLX: body("js/render/three/tsl-lit.js", "const applyMaterialTexNormal ="),
+  };
+  for (const [name, s] of Object.entries(fns)) {
+    const fn = s.slice(0, s.indexOf("\n}\n") > 0 ? s.indexOf("\n}\n") : s.length);
+    assert.ok(!/cross\(/.test(fn),
+      `${name}: applyMaterialTexNormal builds its tangent frame with cross() again — degenerate on the ground, mirrored on two wall faces`);
+    assert.ok(/an\.x\s*>\s*an\.z|an\.x\.greaterThan\(an\.z\)/.test(fn),
+      `${name}: the tangent frame must pick the wall axis with the same an.x > an.z test as matTexUV`);
+    assert.ok(/\(0\.0,\s*0\.0,\s*1\.0\)/.test(fn) && /\(1\.0,\s*0\.0,\s*0\.0\)/.test(fn) && /\(0\.0,\s*1\.0,\s*0\.0\)/.test(fn),
+      `${name}: the tangent frame must be built from the world axes (+x, +y, +z), not derived from N`);
+  }
+});
