@@ -4445,8 +4445,8 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 
 function quitToMenu() {
   Ghost.flush();
-  if (typeof InputGhost !== "undefined") InputGhost.flush();
   cancelIntro();
+  if (typeof InputGhost !== "undefined") InputGhost.flush();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
