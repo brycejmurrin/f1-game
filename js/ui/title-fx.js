@@ -61,7 +61,13 @@ const TitleFx = (function () {
   // summary (js/ui/title-layout.js) repaints when one of them moves.
   const subs = [];
   function onChange(fn) { if (typeof fn === "function") subs.push(fn); }
-  const changed = () => { for (const fn of subs) fn(); };
+  // A title look changed: tell the subscribers (TitleLayout's TITLE SCREEN
+  // summary), and show the title screen through the settings page for a
+  // moment (js/ui/screen-looks.js; it peeks only while SETTINGS is open).
+  const changed = () => {
+    for (const fn of subs) fn();
+    if (typeof ScreenLooks !== "undefined") ScreenLooks.peek("title", ScreenLooks.PEEK_MS);
+  };
 
   const osReduce = () => !!(osQuery && osQuery.matches);
   // The OS asking for reduced motion always wins — the setting can only ADD

@@ -1579,4 +1579,57 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
   font: inherit;
 }
 
+/* ---------- SETTINGS › APPEARANCE › GARAGE (js/ui/screen-looks.js) ----------
+   The garage-only knobs. DENSITY, BUTTON HEIGHT, CORNERS and HEADINGS are the
+   shared core and live in css/responsive.css's SCREEN LOOKS block. Each rule
+   leads with `:root[attr] #carsetup` so it outweighs the shipped rule it
+   replaces, mode rules included (the livery editor's thinned panel is two ids
+   and a pseudo-class; these are two ids and two). No attribute = shipped. */
+
+/* PANEL WIDTH — scales only the CAP. The 410px floor (what --pair-at needs to
+   keep the rail) and the car's 320 / 420 visual-px reserve are untouched, so a
+   wider panel can never take the car below what it already keeps: on a narrow
+   screen the reserve binds first and 150% simply changes nothing. */
+:root[data-look-garage-pw] #carsetup {
+  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 320px / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+}
+:root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
+  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 420px / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+}
+
+/* PANEL SIDE: LEFT. The dock is `place-items` alone, so mirroring it is one
+   word. The camera stack hugs the sheet's inner edge, so it mirrors with the
+   same scaled-width expression the shipped `right:` uses (see #cs-stack for
+   why it multiplies by the effective scale). LANDSCAPE ONLY: portrait is a
+   full-width sheet with the stack spanning the car band, and that rule must
+   keep winning there. The 3D framing follows on its own — renderSetupPreview
+   reads which side of the canvas the panel's centre is on (setup-camera.js
+   panelCover), so the car moves into the free half. Nothing on the sheet is
+   edge-specific (the head's red rail is the brand's leading edge, not the
+   dock's), so there is nothing else to mirror. */
+:root[data-look-garage-side="left"] #carsetup { place-items: stretch start; }
+@media (orientation: landscape) {
+  :root[data-look-garage-side="left"] #carsetup #cs-stack {
+    right: auto;
+    left: calc(var(--safe-l) + var(--cs-sheet-w) * var(--sheet-eff-scale, var(--ui-scale)) + var(--gap));
+  }
+}
+
+/* PANEL: SOLID / GLASS. Shipped is --panel (~88% carbon). SOLID is the carbon
+   itself, fully opaque in both themes — --plate-opaque is 74%, which would be
+   MORE see-through than shipped. GLASS thins --panel the way the livery editor
+   already does, a step further; reduced transparency and HIGH CONTRAST keep
+   the shipped plate, as they do for that editor. */
+:root[data-look-garage-glass="solid"] #carsetup #cs-inner { background: var(--carbon); }
+:root[data-look-garage-glass="glass"]:not([data-ui-contrast="high"]) #carsetup #cs-inner {
+  background: color-mix(in oklab, var(--panel) 70%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-look-garage-glass="glass"]:not([data-ui-contrast="high"]) #carsetup #cs-inner { background: var(--panel); }
+}
+
+/* STAT BARS: HIDE. The block is an item in #cs-header's flex column, so its
+   gap goes with it; the head simply gets shorter and the list taller. */
+:root[data-look-garage-stats="hide"] #carsetup #cs-stats-inner { display: none; }
+
 } /* @layer components */
