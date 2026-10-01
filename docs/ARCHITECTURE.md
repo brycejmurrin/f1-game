@@ -1500,6 +1500,19 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
+- **SUN GLINT RANGE (2026-10-01):** on all three. The sun specular's soft clip
+  is a knee with an asymptote (`specCol / (1 + specCol / K)`, K the
+  `specKnee` knob, def 4; GLX `uSpecKnee`, TLX `U.specKnee`, WGX `params4.w`)
+  instead of the hard Reinhard cap at 1.0 that held every glint under the day
+  bloom threshold. K = 1 is the old look.
+- **WORLD ENV-PROBE REFLECTIONS (2026-10-01):** on all three. Inside each lit
+  shader's `envBlend` block (wet road, glass, metal — anything glossy that is
+  not the car's clearcoat), the live 64 px env probe (GLX `uEnvStr`/`uEnvCube`,
+  TLX `U.envStr`/the cube node, WGX `params5.x`/`envCube`) replaces the
+  two-colour horizon→zenith gradient, weighted by the probe's strength and
+  faded with eye distance over 60–150 m (one cube is parallax-wrong far from
+  the car). The gradient stays the fallback wherever the probe is off (perf
+  tier ≥ 1, or before its first six faces), so nothing regresses there.
 - **FOLIAGE WIND SWAY (2026-10-01):** GLX + TLX; **WGX gap** (the same gap as the
   FLAG wave — WGX has no per-vertex `mat` attribute, `docs/research/WEBGPU-PARITY.md`).
   Tree emitters in `js/track/scenery/nature.js` stamp FOLIAGE vertices with a
