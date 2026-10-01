@@ -260,7 +260,7 @@ const favList = () => {
   return Array.isArray(v) ? v.filter((id) => Tracks.LIST.some((t) => t.id === id)) : [];
 };
 let trackFilter = store.get("trackFilter", "all");
-if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic" && trackFilter !== "daily-open" && trackFilter !== "fav" && trackFilter !== "custom") trackFilter = "all";
+if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic" && trackFilter !== "daily-open" && trackFilter !== "custom" && trackFilter !== "fav") trackFilter = "all";
 // MY CIRCUITS: the player's own designs (js/editor/custom-tracks.js, `custom: true`,
 // appended after the 52). Like FAVOURITES the chip exists only once there is one.
 const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"], ["custom", "MY CIRCUITS"], ["fav", "♥ FAVOURITES"], ["daily-open", "DAILY OPEN"]];

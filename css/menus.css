@@ -1772,8 +1772,10 @@ h3.sel-label {
 .trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; }
 .trb-classic { background: rgba(180,150,90,0.14); color: #c8a862; }
 /* CUSTOM (the player's own circuit, js/editor/custom-tracks.js) wears the
-   team accent — the one colour that already means "yours" on this screen. */
-.trb-custom { background: var(--accent-dim); color: var(--accent-ink); }
+   podium gold token: the badge is information, so it stays off --accent
+   (nontext-contrast keeps every accent consumer decorative) and off a new raw
+   colour (the rawColor ratchet). */
+.trb-custom { background: color-mix(in oklab, var(--gold) 14%, transparent); color: var(--gold); }
 /* Section header inside the picker list (CURRENT SEASON / CLASSIC CIRCUITS).
    Sticky so the group stays identifiable while the list scrolls under it. */
 .track-group-head {
