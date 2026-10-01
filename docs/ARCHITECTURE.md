@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_257 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_258 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -326,6 +326,7 @@ _257 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `tyre-model.js` | `TyreModel` | tag | TYRE MODEL: wear, the grip it costs, and the fuel burn that argues with it. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
+| `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
@@ -1266,7 +1267,9 @@ from the battery and fires on a flat one; the allowance is the only limiter. Gra
 Walls sit at the per-node barrier limit from `Tracks.wallAt`: soft push back.
 Cars collide as ~4.8 × 2.0 m oriented boxes: lateral push + small speed loss.
 AI: follow racing-line offset = -curvatureAhead * k, brake by curvature, tier
-speed + rubber-band by difficulty (EASY/NORMAL/HARD). Start: grid 22 (player P12
+speed × skill × difficulty (`DIFF.ai`). Default AI pace is SCRIPTED (no
+gap-to-player rubber band; `js/physics/ai-band.js`); CATCH-UP restores the
+legacy reverse-only band. Start: grid 22 (player P12
 default, tier order), five red lights (1 s apart) then out. Race =
 `GAME_LAPS` (3). HUD (DOM): pos/lap/laptime/best, speed km/h, energy bar, OT
 indicator, gaps, minimap canvas 2D. Penalty: a repeating ladder — three

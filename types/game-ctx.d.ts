@@ -582,6 +582,8 @@ interface GameCtx {
   // ── Menus: selection state + the screens game.js still owns ───────────────
   driverIdx: number;
   difficulty: string;
+  /** AI pace mode: scripted (fixed car/driver pace) or catchup (legacy rubber band). */
+  aiPace: "scripted" | "catchup";
   readonly store: StoreApi;
   readonly tickUi: () => void;
   readonly scheduleFlybyTrack: (settle?: boolean) => void;

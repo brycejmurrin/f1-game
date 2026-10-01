@@ -177,7 +177,9 @@ window.PhysicsConsts = {
   IDLE_RPM: 5000, MAX_RPM: 15000,
 
   // DIFFICULTY presets — the AI field's pace scale (`ai`, a ground-speed
-  // multiplier on TIER_V) and the rubber-band tolerance (`band`). Keyed by the
+  // multiplier on TIER_V) and the catch-up rubber-band tolerance (`band`,
+  // used only when Race Settings › AI PACE is CATCH-UP; scripted mode ignores
+  // it). Keyed by the
   // settings value; read by game.js (makeCars), js/race/quali-model.js (the modelled
   // field's lap) and js/career/career-ui.js (the guide lists the keys).
   // The AI reads the racing line's own curvature for its corner speed when it
