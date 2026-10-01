@@ -136,18 +136,30 @@ async function firstCorner(page, min = 0.02) {
   return { frac: corners[0], k: 0 };
 }
 
-// A reasonably straight stretch: the lap fraction with the smallest |k|.
-async function findStraight(page) {
-  return page.evaluate(() => {
-    let best = 0, bestK = Infinity;
-    for (let i = 0; i < 50; i++) {
-      const f = i / 50;
-      window.__apex.jump(f, 20, 0);
-      const k = Math.abs(window.__apex.probe().k);
-      if (k < bestK) { bestK = k; best = f; }
+// A reasonably straight stretch: minimise INTEGRATED zero-steer yaw drift over
+// the same window the symmetry case measures (6 ticks @ 30 m/s), not just the
+// instantaneous |k| at the jump. Instantaneous |k| can still leave a signed
+// heading creep that eats into the 15 % bound once left/right are compared.
+async function findStraight(page, { speed = 30, settle = 3, ticks = 6 } = {}) {
+  return page.evaluate(({ speed, settle, ticks }) => {
+    let best = 0, bestDrift = Infinity, bestK = Infinity;
+    for (let i = 0; i < 100; i++) {
+      const f = i / 100;
+      window.__apex.jump(f, speed, 0);
+      window.__apex.setInput({ steer: 0, throttle: false, brake: false });
+      window.__apex.step(1 / 60, settle);
+      const before = window.__apex.probe();
+      window.__apex.step(1 / 60, ticks);
+      const after = window.__apex.probe();
+      window.__apex.clearInput();
+      const drift = Math.abs(after.angle - before.angle);
+      const k = Math.abs(before.k);
+      if (drift < bestDrift || (drift === bestDrift && k < bestK)) {
+        bestDrift = drift; bestK = k; best = f;
+      }
     }
-    return { frac: best, k: bestK };
-  });
+    return { frac: best, k: bestK, drift: bestDrift };
+  }, { speed, settle, ticks });
 }
 
 test.describe("Apex 26 — steering", () => {
@@ -341,21 +353,42 @@ test.describe("Apex 26 — steering", () => {
     await setRaceLine(page, 0);
     const { frac } = await findStraight(page);
 
-    // Compare heading change over a short burst (pre-saturation). Residual
+    // FROZEN + ONE EVALUATE (same class as the authority recipe). Residual
     // track curvature adds the SAME signed drift to both directions — subtract
     // a zero-steer control so the 15 % bound measures input symmetry, not the
     // straight's leftover k (CI 36807856916: |aR+aL|=0.016 vs max*0.15=0.012).
-    const zero = await run(page, { frac, speed: 30, steer: 0, ticks: 6 });
-    const right = await run(page, { frac, speed: 30, steer: 1, ticks: 6 });
-    const left = await run(page, { frac, speed: 30, steer: -1, ticks: 6 });
+    // Without freeze, run()'s multi-evaluate gaps let the page loop insert
+    // uncounted ticks; on a loaded selected shard left and right see different
+    // extras and zero-steer alone is not enough (CI 36817162914: |aR+aL|=0.017
+    // vs 0.15·max=0.011 AFTER that subtraction). Bound unchanged.
+    await page.evaluate(() => window.__apex.freeze(true));
+    let measured;
+    try {
+      measured = await page.evaluate((f) => {
+        const burst = (steer) => {
+          window.__apex.jump(f, 30, 0);
+          window.__apex.setInput({ steer: 0, throttle: false, brake: false });
+          window.__apex.step(1 / 60, 3);
+          const before = window.__apex.probe().angle;
+          window.__apex.setInput({ steer, throttle: false, brake: false });
+          window.__apex.step(1 / 60, 6);
+          window.__apex.clearInput();
+          return window.__apex.probe().angle - before;
+        };
+        const a0 = burst(0);
+        return { aR: burst(1) - a0, aL: burst(-1) - a0 };
+      }, frac);
+    } finally {
+      await page.evaluate(() => {
+        window.__apex.freeze(false);
+        window.__apex.setPhysics({ roadFollow: 0 });
+      });
+    }
 
-    const a0 = zero.after.angle - zero.before.angle;
-    const aR = (right.after.angle - right.before.angle) - a0;
-    const aL = (left.after.angle - left.before.angle) - a0;
-    expect(aR).toBeGreaterThan(0);
-    expect(aL).toBeLessThan(0);
+    expect(measured.aR).toBeGreaterThan(0);
+    expect(measured.aL).toBeLessThan(0);
     // Within 15 % of each other.
-    expect(Math.abs(aR + aL)).toBeLessThan(Math.max(aR, -aL) * 0.15);
+    expect(Math.abs(measured.aR + measured.aL)).toBeLessThan(Math.max(measured.aR, -measured.aL) * 0.15);
   });
 
   test("racing-line assist off by default", async ({ page }) => {
