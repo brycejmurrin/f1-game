@@ -154,6 +154,7 @@ const FULL = [
   // reason. Pure data with no dependencies of its own.
   "js/data/settings-defaults.js",
   "js/core/store.js",
+  "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
   "js/track/core/geom.js",
@@ -232,6 +233,7 @@ const FULL = [
   "js/fx/particles.js",
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
+  "js/career/ai-dev.js",
   "js/career/career.js",
   "js/career/season-cal.js",
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
@@ -294,6 +296,7 @@ const FULL = [
   "js/ui/appearance-opts.js",
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
+  "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
@@ -321,6 +324,7 @@ const FULL = [
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
   "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
+  "js/physics/wall-clamp.js", // barrier / pit / gantry hard clamp + human writeback (WallClamp.apply), carve-headroom B
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
@@ -460,6 +464,7 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
   ["js/core/store.js", "js/ui/title-layout.js"],  // binds GameStore.store and applies the title layout at eval
   ["js/core/store.js", "js/ui/pause-opts.js"],    // binds GameStore.store and applies data-pause-* at eval
+  ["js/core/store.js", "js/ui/screen-looks.js"],  // binds GameStore.store and applies data-look-* at eval
   ["js/core/store.js", "js/career/badges.js"],    // binds GameStore.store at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
@@ -535,7 +540,15 @@ const HARD_EDGES = [
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
+  ["js/car/parts.js", "js/career/ai-dev.js"],       // AI winter develops catalog options through Parts
+  ["js/data/teams.js", "js/career/ai-dev.js"],
+  ["js/core/mat4.js", "js/career/ai-dev.js"],         // aliases M4.clamp at eval
+  ["js/career/ai-dev.js", "js/career/career.js"],     // rolloverTeams calls CareerAiDev.developWinter
   ["js/career/save-migrate.js", "js/core/store.js"],
+  ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
+  ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
+  ["js/core/native-download.js", "js/career/career-backup.js"], // Capacitor Share download path
+  ["js/career/career-backup.js", "js/career/career-ui.js"],     // EXPORT/IMPORT on slot cards
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
@@ -616,6 +629,8 @@ const HARD_EDGES = [
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
+  ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
+  ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];

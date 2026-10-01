@@ -905,6 +905,21 @@ function simSeed(v) {
   }
   return _simSeed;
 }
+// A PLAYER'S SESSION starts from a fresh seed: at a fixed 1 the first race after
+// every page load was the same race (retirements, weather arc, mistakes,
+// strategies). Kept at 1 under automation (navigator.webdriver: Playwright, the
+// Chrome MCP), pinned by ?seed=N (the game-vm harness passes ?seed=1); daily,
+// career and net play set their own. It resets the stream and draws nothing.
+(function bootSeed() {
+  try {
+    const q = typeof location !== "undefined" ? new URLSearchParams(location.search || "").get("seed") : null;
+    if (q) { simSeed(+q); return; }
+    if (typeof navigator !== "undefined" && navigator.webdriver) return;
+    const a = new Uint32Array(1);
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(a); else a[0] = Math.random() * 4294967296;
+    simSeed(a[0]);
+  } catch (_) { /* keep 1 */ }
+})();
 // uniform [0,1) — the drop-in for Math.random() on sim paths
 function simRnd() {
   _simRngState = (Math.imul(_simRngState, 1103515245) + 12345) >>> 0;
@@ -1906,29 +1921,15 @@ function driverSkill(team, d, di) {
   // for attack/defence/OT/ERS/lane (see updateCar + js/physics/ai-drive.js). Still
   // exactly ONE simRnd() draw — the stream-position contract reliability.js and
   // career.spec.js depend on.
+  // Style −1..+1 (excluded from skill / overall / vmax product).
   return {
     skill: DriverRatings.skill(r, roll),
     craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
     experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
+    aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism),
   };
 }
-
-// The pace an AI car gets from running a DEVELOPED build instead of its
-// team's works car — MY TEAM's hire, and nothing else on the grid.
-//
-// It rides in `tierV`, the number the tier has always contributed, so the
-// per-car update at `c.tierV * c.skill * dd.ai` is unchanged in shape and no
-// AI gains a parts branch on the physics path. The mean of the four axes
-// because a human car spends its mods across four channels and an AI has
-// exactly one scalar — one axis alone would rate a cornering upgrade as no
-// upgrade at all. Pure: consumes no RNG, so the stream-position contract
-// makeCars() lives under is untouched.
-function buildPace(built, works) {
-  const b = built.mods, w = works.mods;
-  let sum = 0;
-  for (const k of ["speed", "accel", "cornering", "braking"]) sum += (b[k] || 1) / (w[k] || 1);
-  return sum / 4;
-}
+const buildPace = DriverRatings.buildPace;
 
 // The teams that will actually grid, and how many cars they field. Shared by
 // makeCars() and the track build so the PAINT cannot disagree with the CARS —
@@ -1964,7 +1965,7 @@ function makeCars() {
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
-    const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
+    const factoryParts = Parts.resolveSetup((Career.inCareer() && Career.aiSetup && Career.aiSetup(team)) || Parts.getFactorySetup(team), team);
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
@@ -2389,20 +2390,24 @@ function currentCarGroundMat(c, out) {
 const sessionDarkFor = (def) => raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
   raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && !!def.night);
 const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots, retainGraph: wantAgentSurface() });
+// The world freed: the old one before a stepped rebuild, or one the player picked away from (scheduleFlybyTrack).
+function dropTrackWorld() {
+  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0; _menuFly = null;
+  shadowPass.reset(); freeTrackMeshes(track);
+  track = null; builtTrackId = null;
+  if (typeof LampBake !== "undefined") LampBake.reset();
+}
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
 // drive-out keeps animating. Frees the old world first, adopts the new one whole; a
 // newer build or live() going false abandons it and frees its partial uploads.
 async function loadTrackStepped(idx, live) {
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
-  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const prevId = builtTrackId;
   try { PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   let built = null;
   try {
-    shadowPass.reset(); freeTrackMeshes(track);
-    track = null; builtTrackId = null;
-    if (typeof LampBake !== "undefined") LampBake.reset();
+    dropTrackWorld();
     // apex26.buildWorker (PROTOTYPE, default OFF): built off the main thread and
     // replayed here; null (off, failed) falls back to the stepped build.
     const opts = trackBuildOpts(sessionDark, wantSlots);
@@ -2609,7 +2614,7 @@ let _warmKey = "";
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
 // garage drive-out waited behind the card and the flyby played instead.
 const _warmed = new Set();
-const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); } } } catch (_) { /* optimisation only */ } };
+const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); return true; } } } catch (_) { /* optimisation only */ } return false; };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
   if (!current()) return;
@@ -2638,6 +2643,8 @@ function scheduleFlybyTrack(settle) {
   const generation = ++_menuGate.generation;
   _menuGate.warm = 0;
   if (!(trackIdx >= 0)) return;
+  // ANOTHER CIRCUIT PICKED: the last one's world is freed now, not when this one's build starts.
+  if (state === "menu" && track && Tracks.LIST[trackIdx] && builtTrackId !== Tracks.LIST[trackIdx].id) dropTrackWorld();
   const want = trackIdx, tod = raceTimeOfDay, weather = raceWeather;
   const key = menuKey(want);
   const current = () => generation === _menuGate.generation && state === "menu" &&
@@ -2657,11 +2664,10 @@ function scheduleFlybyTrack(settle) {
       if (_menuGate.ready === key && _menuGate.track === track) {
         await menuFinish(current, key); await garagePrewarm(current); return;
       }
-      // The build holds the main thread for 1-3 s: never start it while the
-      // player is still working the picker or RACE SETTINGS (a TIME OF DAY step
-      // that crosses dark rebuilds, and every tap then froze the sheet).
-      if (!(await menuIdle(current))) return;
-      if (!(await loadTrackStepped(want, current))) return;   // in steps: a tap on the sheet mid-build is answered
+      // AT ONCE, NOT AFTER MENU_IDLE_MS: the build is stepped (~8 ms a frame), so a
+      // tap on the picker or RACE SETTINGS is answered mid-build, and RACE! finds the
+      // world built sooner. The warms (menuFinish) still wait for idle: they block.
+      if (!(await loadTrackStepped(want, current))) return;
       _menuGate.ready = key; _menuGate.track = track;
       // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
       await menuSlice();
@@ -2671,9 +2677,9 @@ function scheduleFlybyTrack(settle) {
       await garagePrewarm(current);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
-  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build itself waits
-  // for MENU_IDLE_MS of quiet inside prepare (menuIdle), which is what keeps
-  // the 1-3 s main-thread build off a player still tapping. A longer settle
+  // THE SETTLE IS FOR THE SCENERY FETCH, NOT THE BUILD. The build is stepped,
+  // so it starts at once; the blocking warms wait for MENU_IDLE_MS of quiet
+  // (menuFinish -> menuIdle), off a player still tapping. A longer settle
   // (1.5 s) only delays the download and everything queued behind it, so a
   // RACE! tap soon after the picker meets the build card. 400 ms: a tile
   // browsed past in under half a second still fetches nothing.
@@ -2733,7 +2739,7 @@ function isFloodActiveSession() {
 // takes a second-plus to converge, during which a broken projection renders the
 // cockpit bodywork as a black box across the frame at the start ("clips until I
 // throttle past the start"). Shared by startRace() and __apex.snapCam().
-function snapGameCam() {
+function snapGameCam(paint) {
   if (!player || !track) return;
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
@@ -2754,7 +2760,7 @@ function snapGameCam() {
   // from the grid) would otherwise carry the grid's look OFFSET across, so the cockpit
   // opened facing the way the grid faced and swung round over the next half second.
   camAncX = null;
-  try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* GLX */ }
+  try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); if (paint) { headlessMode = false; render(paint === true ? 1 / 60 : Math.min(+paint || 1 / 60, 1 / 20)); } } catch (_) { /* GLX */ }
 }
 
 // Races started this session. It is the round number a one-off Grand Prix hashes
@@ -2871,6 +2877,7 @@ async function startRaceBody() {
   _raceProfile = []; let _rt = performance.now();
   const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   rlap("scenery");
+  radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
   const seasonSaveConflict = flow === "season" && SeasonCal.conflicted();
@@ -3990,7 +3997,12 @@ async function studioDone(live, n) {
   // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length,
   // from the garage's first frame — a card held for a pending warm is not the car's time, and has its own ceiling).
   while (_studio && _studio.n === n && !_studio.skip && live() && setupCam.driveOutLeft() > 0 && performance.now() - _studio.at < (_studio.cardUp ? 30000 : _studio.ms * 3)) await menuSlice();
-  studioClose(n);
+  // HELD, NOT CLOSED, where the backend warms (TLX): the car is out and its last pose stays on
+  // screen through the build's tail and the program warm (a pending warm paints nothing, so the
+  // frame just stays) until the intro closes it at the flyby — no black card between them.
+  // GLX/WGX draw their warm frames for real: close, card, as before. A skip closes too.
+  if (_studio && _studio.n === n && gfx.warm && !_studio.skip && live()) _studio.held = true;
+  else studioClose(n);
 }
 // A READY, WARM WORLD STILL OPENS ON THE GARAGE: introBuild and introWarm play the
 // drive-out over their own work; with nothing left to build it plays alone, then flies.
@@ -4027,14 +4039,14 @@ function introBuild(go) {
       // In steps, a few ms per frame: the garage drive-out keeps animating over the build.
       if (!(await loadTrackStepped(idx, live)) || !live()) return;
       _menuGate.ready = key; _menuGate.track = track;
-      // What menuFinish does, under the card: car assets (bounded), then hidden warm
-      // frames — "build" is not active(), so they draw with the canvas hidden and
-      // the flyby's first frame is not the one that compiles every shader.
+      // What menuFinish does, under the card (or the held garage, studioDone): car assets
+      // (bounded), then the warm frames — hidden under "build", or kicking TLX's warm
+      // under the held garage — so the flyby's first frame compiles nothing.
       const t1 = performance.now();
       await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
       await out;   // the warm would freeze the drive-out: it waits for the car to be out
       if (!live()) return;
-      FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
+      FlybySeq.reset(); if (warmPrograms() || !(_studio && _studio.held)) _menuGate.warm = 2;   // held: a world frame only to kick a warm (it paints nothing)
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
       // Never start the cinematic clock while render() is blocked on compilation.
       if (!(await awaitIntroWarm(live)) || !live()) return;
@@ -4073,11 +4085,12 @@ function introWarm(go) {
   studioOpen(n, loadingInfo());
   (async () => { try {
       await studioDone(live, n);   // the drive-out first: a warm now would freeze it
-      if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
-        warmPrograms(); _menuGate.warm = 2;
+      if (_warmKey !== key) {   // warm frames: hidden under "build", or kicking the warm under the held garage (render())
+        if (warmPrograms() || !(_studio && _studio.held)) _menuGate.warm = 2;
         for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
       }
       if (!(await awaitIntroWarm(live)) || !live()) return;
+      studioClose(n);   // the held garage hands straight to the flyby
       try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
     finally { studioClose(n); if (n === _introRun && !live()) { loadingScreen.stop(); titleIfBare(); } }   // abandoned: "build" has no timer or skip, so never leave it up
@@ -4678,7 +4691,7 @@ function collideFx(a, b, impact) {
   // Never read by physics — headless runs are unaffected.
   pc.fxSparkI = Math.max(pc.fxSparkI || 0, impact);
   Input.vibrate(18 + impact * 50);
-  Input.rumble(0.4 + impact * 0.6, 120);
+  Input.rumble(0.4 + impact * 0.6, 120, "handles");
 }
 
 function updateCar(c, dt, ranked) {
@@ -5390,7 +5403,7 @@ function updateCar(c, dt, ranked) {
     shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90, "handles"); c.kerbHapT = 0.12; }
   }
 
   // Signed observed acceleration, including braking/grass, for AI lane
@@ -5448,6 +5461,7 @@ function updateCar(c, dt, ranked) {
     c.passFailT = Math.max(0, (c.passFailT || 0) - dt);
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
+    // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking
     // point, from a hash (never simRnd), and never while alongside a car.
     c.pressT = clamp((c.pressT || 0) + (chaser && chaserGap < 0.6 * Math.max(c.speed, 10) ? dt : -dt * 0.5), 0, 6);
@@ -5941,183 +5955,14 @@ function updateCar(c, dt, ranked) {
     c.skidIntensity = c.offroad ? 0.5
       : clamp((slipAng - 0.10) / 0.20, 0, 1);
   }
-  // wall
-  // The driving boundary is per-side and derived from where solid barriers were
-  // actually placed (Tracks.wallAt), so the car always stops just before a model
-  // instead of clipping through it — consistent across street and open circuits.
-  let wallR = Tracks.wallAt(track, c.s, 1);
-  let wallL = Tracks.wallAt(track, c.s, -1);
-  // THE PIT WALL. TrackPit.openBoundary opens the boundary to the garages
-  // across the window so a car can reach the lane, which left the wall itself
-  // as scenery a car running wide drove straight through. Where the wall
-  // stands (v >= 0.98) a car on the ROAD side keeps to its track-side face,
-  // and a car on the LANE side to the lane's own barrier at the platform's
-  // edge (SceneryPits sweeps both from the same bands).
-  let laneMin = 0, pitSd = 0;
-  {
-    const p = track.pit;
-    if (p && !p.painted) {
-      const k = ((Math.round(c.s / track.total * track.n) % track.n) + track.n) % track.n;
-      if (p.v[k] >= 0.98) {
-        pitSd = p.side;
-        const face = track.hw[k] + p.bands.verge;
-        if (c.x * pitSd < face + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, face - 1.1); else wallL = Math.min(wallL, face - 1.1); }
-        else laneMin = track.hw[k] + p.off.fastIn + 1.0;
-      } else if (p.w[k] >= TrackPit.EXIT_WALL_W && ((c.s - p.sOut) % track.total + track.total) % track.total < p.exitRoadM) {
-        // THE EXIT WALL (SceneryPits): from the platform's line at the exit
-        // line to the road edge as the wall fades (verge · v), then along
-        // the edge while the exit road keeps EXIT_WALL_W of its width — a
-        // serviced car rejoins where the wall ends, not through it.
-        pitSd = p.side;
-        const wallLat = track.hw[k] + p.bands.verge * p.v[k];
-        if (c.x * pitSd < wallLat + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, wallLat - 1.15); else wallL = Math.min(wallL, wallLat - 1.15); }
-        else laneMin = wallLat + 0.30 + 1.0;
-      }
-    }
-  }
-  // GANTRY LEGS (Tracks.postLimits): a footprint on each side of the leg,
-  // never a wall line — a car on the run-off stays out there, one on the road
-  // stops at the leg's face. The outside case rides the pit wall's lane clamp.
-  if (track.posts && track.posts.length) {
-    Tracks.postLimits(track, c.s, c.x, postLim);
-    if (postLim.r < wallR) wallR = postLim.r;
-    if (postLim.l < wallL) wallL = postLim.l;
-    if (postLim.minOut > laneMin) { laneMin = postLim.minOut; pitSd = postLim.side; }
-  }
-  let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
-  if (c.x > wallR || c.x < -wallL) {
-    const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
-    // Debris hook (render-only side-world): the pre-clamp overshoot is the
-    // lateral speed into the wall × dt — the impact severity. First frame only.
-    if (!c.wasOnWall && DebrisWorld.active()) {
-      const xOver = into > 0 ? c.x - wallR : -wallL - c.x;
-      DebrisWorld.wallImpact(c, into, xOver);
-      // B2 (breakable barriers, flag apex26.breakBarriers): a hard hit promotes
-      // nearby BARRIER panels to jointed Rapier bodies that scatter. COSMETIC —
-      // the bespoke xPinned clamp below is UNCHANGED; broken panels are never a
-      // collision surface for the car (that would be R3). promoteBarrier gates
-      // on its own severity minimum and is a no-op when the flag is off.
-      const _wallSev = xOver * 60 + Math.abs(c.speed || 0) * 0.15;
-      DebrisWorld.promoteBarrier(c, into, _wallSev);
-      // Incident sim (R2 airborne): a GENUINELY hard wall strike launches this
-      // car into a bounded 6-DoF Rapier tumble (queued now, promoted in preStep).
-      // Only clears R2_WALL_SEV — ordinary scrapes never trigger. The bespoke
-      // xPinned clamp below still runs this trigger frame; the takeover begins
-      // next tick from the resulting pose. Self-guarding no-op otherwise.
-      incidentSim.notifyWall(c, into, _wallSev);
-    }
-    c.x = into > 0 ? wallR : -wallL;
-    xPinned = true;
-    if (c.human) {
-      // Slide along the barrier instead of stopping dead. Decompose the car's
-      // heading into the part running ALONG the wall (kept) and the part driving
-      // INTO it (killed): a shallow scrape barely slows you and you keep sliding,
-      // a head-on hit scrubs hard. The nose is rotated toward the wall tangent so
-      // the car runs parallel rather than re-pinning every frame.
-      Tracks.sample(track, c.s, smp);
-      // The BARRIER's own tangent, not the centreline's: anywhere the barrier
-      // diverges from the road (a run-off funnel, an escape road, a pit entry)
-      // the road tangent is a direction the wall does not run in. wallAt() gives the boundary's lateral offset, so its
-      // slope in s IS the barrier's heading in the road frame.
-      const dW = 3, wSd = into > 0 ? 1 : -1;   // ±wallAt(side) folded to a sign — no per-contact closure
-      const wSlope = clamp((Tracks.wallAt(track, wrapS(c.s + dW), wSd)
-                          - Tracks.wallAt(track, wrapS(c.s - dW), wSd)) * wSd / (2 * dW), -2, 2);
-      const wtx = smp.t[0] + smp.r[0] * wSlope, wtz = smp.t[2] + smp.r[2] * wSlope;
-      const tHead = Math.atan2(wtx, wtz);
-      let rel = c.head - tHead;
-      while (rel > Math.PI) rel -= 2 * Math.PI;
-      while (rel < -Math.PI) rel += 2 * Math.PI;
-      // Sign per the file's own psi convention ("+ = nose turned right (+x)",
-      // psi = tHead − head, so rel = −psi): nose toward the +x wall ⟺ rel < 0.
-      // The old `into > 0 ? rel > 0 : rel < 0` was inverted on BOTH sides —
-      // measured live (30° nose-in at 47 m/s, either wall): no first-frame
-      // incidence scrub, no straightening; the car ground along pinned at
-      // speed. Flipped and re-measured: the
-      // ~14% bite at the pin frame and the nose walks onto the wall tangent,
-      // on both walls.
-      const noseIn = into > 0 ? rel < 0 : rel > 0;        // nose pointing into wall?
-      const incidence = Math.min(1, Math.abs(Math.sin(rel)));  // 0 graze … 1 head-on
-      // Kill the slip while scraping a barrier, in BOTH directions.
-      //
-      // A previous pass made this directional — zeroing only slip heading INTO
-      // the wall — reasoning that erasing slip away from it stopped the car
-      // rotating out of a scrape. Sound in isolation, wrong in effect: a car at
-      // full lock washes wide into the barrier, and letting it keep lateral
-      // velocity there means the slide never decays. Bisected to this line:
-      // tests/specs/drift.spec.js went 6/0 -> 4/2, with "full lock washes wide, never
-      // spins" reaching 82 deg of slip against its 45 deg limit, and "slide
-      // self-aligns" failing alongside it. The wall is a hard constraint; slip
-      // against it is not something the car gets to keep.
-      if (c.vLat) c.vLat = 0;
-      if (noseIn) {
-        // first-frame impact: lose only the normal component — a graze is nearly
-        // free, a head-on hit bites hard.
-        if (!c.wasOnWall) c.speed *= 1 - incidence * AiDrive.wallHitLoss(!!track.street);
-        // straighten the nose toward the wall tangent so the car slides along it
-        // Exponential, not a raw rate*dt: Math.min(1, ...) SNAPPED the heading
-        // exactly onto the tangent in a single step at any dt >= 0.083 s (a 12 fps
-        // frame, or a headless step()), making the rotation frame-rate dependent.
-        // Scaled by speed as well — a car sitting still against a barrier has no
-        // velocity to justify being turned (unscaled, a stopped car snaps
-        // parallel in ~0.2 s).
-        const wallAlign = (1 - Math.exp(-(4 + incidence * 8) * dt))
-                        * clamp(Math.abs(c.speed) / 8, 0, 1);
-        c.head -= rel * wallAlign;
-        if (c.isPlayer && !c.wasOnWall && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
-        if (c.isPlayer && track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {   // THIS screen's car only: a VS FRIEND is c.human too (setCarRole)
-          shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
-          if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
-          Input.vibrate(15 + incidence * 35);
-          Input.rumble(0.35 + incidence * 0.5, 100);
-        }
-      }
-      // Steering held INTO the barrier while pinned = the wall denies that turn,
-      // which scrubs speed — you can't ride the wall for free. `steer` is the
-      // driver input (sign = turn direction); `into` is ±1 for the wall side.
-      const pushIn = Math.max(0, into * steer);
-      if (pushIn > 0.02) {
-        const scrub = pushIn * AiDrive.wallSteerScrub(!!track.street) * dt;
-        if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);
-        else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);
-        c.wallT = 0.35;     // brief auto-throttle suppress
-      }
-      // Nose/steer pointing AWAY = peeling off: speed and heading left alone so
-      // the player just drives off the barrier — no sticky pin, no auto-rescue.
-    } else {
-      // AI has no world-space heading to slide; clamp + gentle scrub.
-      c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub(!!track.street) * dt);
-    }
-    c.wasOnWall = true;
-  } else {
-    c.wasOnWall = false;
-    if (c.human) c.wallT = Math.max(0, (c.wallT || 0) - dt);
-  }
-  // The lane side of the pit wall: a car on the lane is kept off the platform
-  // and its barrier — it cannot rejoin the track through the wall either.
-  if (laneMin > 0 && c.x * pitSd < laneMin) {
-    c.x = laneMin * pitSd; xPinned = true;
-    if (c.vLat) c.vLat = 0;
-    if (c.human) Tracks.sample(track, c.s, smp);
-  }
-  // Re-sample at the NEW c.s — the yawVis block below reads the tangent here.
-  //
-  // The barrier is the ONE thing allowed to move the player in ROAD coordinates,
-  // because it is a hard constraint rather than a suggestion: when it clamps c.x,
-  // that has to be pushed back into the authoritative world position. Every other
-  // frame the arrow points the other way (world → (s, x)), so this rebuild is
-  // CONDITIONAL: done every frame it would overwrite the car's own integration
-  // with a point reconstructed from the road, putting the car back on rails.
-  if (c.human && c.px != null) {
-    if (xPinned) {
-      const w = worldFromTrack(c.s, c.x, smp);   // exact inverse of trackFrom
-      c.px = w.x;
-      c.pz = w.z;
-    } else {
-      Tracks.sample(track, c.s, smp);            // yawVis below needs the tangent
-    }
-  }
-  // (An AI's yaw leans from steer + curvature and never reads smp; the rescue
-  // and the world mirror below both re-sample at the advanced s.)
+  // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
+  // human slide-along scrub + conditional road→world writeback when xPinned.
+  // Collide keeps the post-contact soft clamp; peers editing walls own this file.
+  WallClamp.apply(c, {
+    track, dt, steer, postLim, smp,
+    wrapS, worldFromTrack, soundOn, incidentSim,
+    addShake(d) { shake = Math.min(1, shake + d); },
+  });
   c.brakeDemand = braking ? brakeLvl : 0; c.throttleDemand = onThrottle ? throttleLvl : 0; c.steerCommand = steer;
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   // Visual nose yaw. The player uses its REAL heading relative to the track
@@ -6922,8 +6767,12 @@ function render(dt) {
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
   if (state === "results") return;
-  if (setupPreviewOn) _menuGate.garageReady = true;
-  if (setupPreviewOn) { renderSetupPreview(dt); return; }
+  // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
+  // garage's last frame stays up — no hidden canvas, no black card before the flyby.
+  const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0);
+  if (heldWarm) _menuGate.warm--;
+  if (setupPreviewOn && !heldWarm) _menuGate.garageReady = true;
+  if (setupPreviewOn && !heldWarm) { renderSetupPreview(dt); return; }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
   // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas
@@ -9375,8 +9224,13 @@ const VISOR_CAM = CAM_MODES.findIndex((c) => c.id === "visor");
 // The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
 function phonePadDash() {
   const p = player;
-  if (!p) return null;
-  const D = PhonePad.DASH, xOpen = (p.aeroX || 0) > 0.05;
+  const D = PhonePad.DASH;
+  // NO PLAYER IS A DASH TOO — the menus before a first race. The phone swaps its wheel for the
+  // MENU PAD only on a dash packet (!inRace || paused); a null here sent nothing, so a phone
+  // paired from the title stayed on the wheel's placeholder LCD with no arrows/SELECT/BACK.
+  if (!p) return { gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0,
+    flags: paused ? D.paused : 0, caution: 0, lastLapMs: 0, state, team: "" };
+  const xOpen = (p.aeroX || 0) > 0.05;
   const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
     | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (isTimeTrial() ? D.timeTrial : 0)
     | (paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0)

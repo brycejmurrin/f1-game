@@ -105,6 +105,60 @@
   border-right: 1px solid var(--card-line);
 }
 
+/* ---------- SCREEN LOOKS: the CAREER fold (SETTINGS › APPEARANCE) ----------
+   js/ui/screen-looks.js stamps <html> only while a knob is off its default, so
+   with none set every rule below is inert and the screen is the shipped one.
+   Width, density, buttons, corners, backdrop and headings are the shared core
+   knobs in css/responsive.css; only the pair geometry, which is this screen's,
+   lives here. Each rule is led by `:root[...]` so it outweighs the shipped
+   `#cr-inner…` rule it adjusts by specificity, not by source order.
+
+   COLUMNS feeds the two numbers js/ui/sheet-shape.js classifyPair() reads off
+   the sheet — nothing here sets `data-pair` itself, so the stacked/paired CSS
+   above stays the single answer. SPLIT: `--pair-at: 1px` (0 or empty would mean
+   "no pair attribute at all") so any width pairs, and `--pair-compact: on` so a
+   compact sheet keeps reading --pair-at instead of being forced to stack.
+   STACKED: a threshold no sheet reaches. The engine reclassifies on change. */
+:root[data-look-career-layout="split"] #cr-inner { --pair-at: 1px; --pair-compact: on; }
+:root[data-look-career-layout="stacked"] #cr-inner { --pair-at: 99999px; }
+
+/* COLUMN ORDER: SWAPPED mirrors the pair — the calendar/championship pane takes
+   the left track and the contract pane, with the action bar still under it as
+   `.pane-pair` places it, takes the right. The tracks swap too, so each pane
+   keeps its shipped share (1.05fr for the main pane), and the divider and the
+   outer-edge padding move to the facing edges. Placement is grid-column only, so
+   DRIVER CAREER and MY TEAM (one markup, js/career/career-ui.js) both follow,
+   and the stacked layout is untouched: there is no side to swap. */
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"] {
+  --pair-split: minmax(0, 1.05fr);
+  --pair-main: minmax(0, 1fr);
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"] #cr-left {
+  grid-column: 2;
+  border-right: 0;
+  border-left: 1px solid var(--card-line);
+  padding: calc(var(--pad) * 0.25) var(--pad) 0 calc(var(--pad) * 0.6);
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"] #cr-right {
+  grid-column: 1;
+  padding: calc(var(--pad) * 0.25) 0 calc(var(--pad) * 0.5) var(--pad);
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"] > .sheet-foot {
+  grid-column: 2;
+  border-right: 0;
+  border-left: 1px solid var(--card-line);
+}
+
+/* LEFT COLUMN is the VISUAL left track, whichever pane COLUMN ORDER put there,
+   so the slider means what its label says in both orders. The token is a
+   percent of the sheet ("40%"); the right track takes what is left after the
+   gutter as 1fr, so the two can never overflow the sheet. Declared after the
+   swapped tracks at the same weight, so a custom width wins in both orders. */
+:root[data-look-career-split] #cr-inner[data-pair="on"] {
+  --pair-split: minmax(0, var(--look-career-split, 49%));
+  --pair-main: minmax(0, 1fr);
+}
+
 /* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
    scroller. Measured 852×393 @115%: pair-on left SLOT 3 and the guide CTAs
    ~83px past #cr-inner. */
@@ -415,7 +469,8 @@
    a slot is one more card in a column full of them — it just happens to be the
    one that changes which career you are in. */
 .cr-slot {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  /* main | EXPORT | IMPORT | DELETE — trailing autos collapse when a button is absent */
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: stretch; gap: 6px; margin-bottom: 6px;
 }
 .cr-slot-main {

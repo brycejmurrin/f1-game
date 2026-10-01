@@ -2529,9 +2529,11 @@ const TLX = (function () {
           (renderer.domElement && (renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf));
         if (sizeChanged) {
           // An old-size async read may finish after the visible canvas changes.
-          // It is allowed to drain, but must never repaint the resized canvas.
+          // It is allowed to drain, but must never repaint the resized canvas
+          // or hold the gate (see _cancelSoftBlits).
           _softReadEpoch++;
           _softReadQueued = null;
+          _softReadPending = false;
           W = rw; H = rh;
           _gpuLastOperation = "resize";
           _gpuLastResize = { at: performance.now(), width: rw, height: rh };
@@ -2694,9 +2696,16 @@ const TLX = (function () {
         }
         _startSoftBlitRead(req);
       }
+      // Voiding the in-flight read must also release its gate: the voided
+      // completion no longer calls _finishSoftBlitRead (epoch mismatch), so a
+      // gate left held wedged presentation until the stale guard fired —
+      // max(20 s, 3x the last read), 60 s+ on a loaded llvmpipe runner, which
+      // timed out every awaitSoftPresent issued through snapCam/invalidate
+      // (image-grade-visual "blacks", browser-group runs 36752751997 x2).
       function _cancelSoftBlits() {
         _softReadEpoch++;
         _softReadQueued = null;
+        _softReadPending = false;
       }
 
       // the backend object (the ~40-member seam contract)
@@ -3228,10 +3237,13 @@ const TLX = (function () {
           w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
           try {
             if (!mirRT) {
+              // MIPMAPPED: the target is supersampled (mirror-pass.js SS) and the
+              // composite minifies it into the HUD rect; three rebuilds the chain
+              // after every render into it (both of its backends).
               mirRT = new THREE.RenderTarget(w, h, {
                 type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
                 format: THREE.RGBAFormat, depthBuffer: true,
-                generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+                generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
               });
               mirRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant, as the probe
               mirCam = new THREE.PerspectiveCamera();

@@ -9,6 +9,7 @@ const { $, store, clamp } = G;
 if ((typeof BrakeCue !== "undefined") && BrakeCue.create) BrakeCue.create(G);
 
 let hapRepaintWired = false;   // the gamepadconnected repaint is wired once
+let trigHapWired = false;      // TRIGGER HAPTICS row paint + gamepadconnected
 const SLIDER_MIN = 1, SLIDER_MAX = 10;
 const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 
@@ -517,6 +518,10 @@ function applySteerTuning() {
   Input.setKeyRampIn(steerRateFromSlider(steerRate2));
   Input.setAnalogSpeedMix(analogSpeedFromSlider(analogSpd));
   Input.setHaptics(haptics <= 1 ? 0 : (haptics - 1) / 9);
+  // TRIGGER HAPTICS defaults ON. Absent key = fresh install; no STEER_SCHEMA
+  // step owed (changing a default reaches fresh installs only).
+  const trigHap = store.get("triggerHaptics", true) !== false;
+  if (Input.setTriggerHaptics) Input.setTriggerHaptics(trigHap);
   Input.setPadDeadzone(padDz / 100);
   Input.setPadSaturation(padSat / 100);
   G.raceLineAssist = line / 5;
@@ -561,9 +566,11 @@ function applySteerTuning() {
       hapRepaintWired = true;
       window.addEventListener("gamepadconnected", () => {
         hapItem.hidden = !Input.hapticsSupported();
+        paintTriggerHapRow();
       });
     }
   }
+  paintTriggerHapRow();
   paintRow("pm-paddz", padDz, pctLabel(padDz));
   paintRow("pm-padsat", padSat, pctLabel(padSat));
   refreshPresetButtons();
@@ -669,6 +676,29 @@ wireTune("pm-analogspeed", "analogSpeedSteer", 1, SLIDER_MIN, SLIDER_MAX, (v) =>
 wireTune("pm-haptics", "haptics", 6, SLIDER_MIN, SLIDER_MAX, (v) => Input.setHaptics(v <= 1 ? 0 : (v - 1) / 9), adaptLabel);
 wireTune("pm-paddz", "padDeadzone", 5, 0, 30, (v) => Input.setPadDeadzone(v / 100), pctLabel);
 wireTune("pm-padsat", "padSaturation", 0, 0, 30, (v) => Input.setPadSaturation(v / 100), pctLabel);
+
+function paintTriggerHapRow() {
+  const item = $("pm-triggerhap-item");
+  if (!item || typeof Input === "undefined") return;
+  const ok = !!(Input.triggerRumbleSupported && Input.triggerRumbleSupported());
+  item.hidden = !ok;
+  if (!ok || typeof SettingRow === "undefined") return;
+  const on = store.get("triggerHaptics", true) !== false;
+  SettingRow.paint($("pm-triggerhap"), on ? "on" : "off", SettingRow.labels(["off", "on"]));
+  if (!trigHapWired) {
+    trigHapWired = true;
+    SettingRow.wire("pm-triggerhap", {
+      values: SettingRow.labels(["off", "on"]),
+      read: () => (store.get("triggerHaptics", true) !== false ? "on" : "off"),
+      write: (v) => {
+        const want = v === "on";
+        store.set("triggerHaptics", want);
+        if (Input.setTriggerHaptics) Input.setTriggerHaptics(want);
+        if (G.soundOn) GameAudio.uiSelect();
+      },
+    });
+  }
+}
 
 $("pm-tiltsimple").oninput = (e) => {
   store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();

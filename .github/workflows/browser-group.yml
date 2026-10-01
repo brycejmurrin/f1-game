@@ -39,7 +39,7 @@ on:
         type: choice
         options: [llvmpipe, swiftshader]
       workers:
-        description: "Playwright workers per shard; empty means 1 (a runner has 4 vCPUs: render's own --workers=4 starved llvmpipe into 60 s capture timeouts and ran slower)"
+        description: "Playwright workers per shard; empty means 1 (a runner has 4 vCPUs: render's own --workers=4 starved llvmpipe into 60 s capture timeouts)"
         required: false
         default: ""
         type: string
@@ -109,8 +109,8 @@ jobs:
           GROUP: ${{ inputs.group }}
           SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
           # Default 1, like APEX_WORKERS above: render's script pins --workers=4,
-          # which on a 4-vCPU runner timed out image-grade-visual "blacks" 3/3 and
-          # took 19-21 min for shard 1; at 1 worker it passed first try in 12.6 min
+          # which on a 4-vCPU runner timed out image-grade-visual "blacks" 3/3;
+          # at 1 worker it passed first try, twice
           # (docs/notes/TESTING-FIELD-NOTES.md 2026-09-30).
           WORKERS: ${{ inputs.workers || '1' }}
         # A later --workers overrides the group script's own (last flag wins).
@@ -124,8 +124,8 @@ jobs:
           GROUP: ${{ inputs.group }}
           SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
           # Default 1, like APEX_WORKERS above: render's script pins --workers=4,
-          # which on a 4-vCPU runner timed out image-grade-visual "blacks" 3/3 and
-          # took 19-21 min for shard 1; at 1 worker it passed first try in 12.6 min
+          # which on a 4-vCPU runner timed out image-grade-visual "blacks" 3/3;
+          # at 1 worker it passed first try, twice
           # (docs/notes/TESTING-FIELD-NOTES.md 2026-09-30).
           WORKERS: ${{ inputs.workers || '1' }}
         # A later --workers overrides the group script's own (last flag wins).

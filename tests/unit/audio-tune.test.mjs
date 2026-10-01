@@ -1316,7 +1316,7 @@ test("setCarSfx and pitGun are safe with the engine off, and drive their layers 
   assert.equal(A.carSfx().pitGuns, before + 1);
 });
 
-test("recorded radio voice: clips play back to back through the radio band, and every node is released", async () => {
+test("recorded radio voice: clips play back to back through the radio band; a line's nodes are released, the band is built once per sound", async () => {
   const { GameAudio, release, ctx, liveNodes } = boot();
   GameAudio.init();
   await release();
@@ -1331,11 +1331,19 @@ test("recorded radio voice: clips play back to back through the radio band, and 
   // stop() schedules the teardown; fire it the way the harness fires timers.
   for (const n of [...pendingTimers.splice(0)]) n();
   assert.equal(GameAudio.radioVoicesLive(), 0, "the transmission is released");
-  assert.equal(liveNodes(), before, "no filter, shaper or gain is left rendering");
+  // What stays is the SOUND, not the line: one filter pair, soft-clip and
+  // compressor per voice sound, built once and shared by every line after it.
+  const chain = liveNodes() - before;
+  assert.equal(chain, 4, "only the shared band (highpass, lowpass, shaper, compressor) outlives the line");
   const joined = GameAudio.radioVoice([clip(0.5), clip(0.3)], 10, {});
   assert.ok(Math.abs(joined.end - 10.75) < 1e-9, `back-to-back clips overlap by 50 ms: ${joined.end}`);
   joined.stop();
   for (const n of [...pendingTimers.splice(0)]) n();
+  assert.equal(liveNodes() - before, chain, "a second line on the same sound reuses the band: nothing new is left");
+  const comm = GameAudio.radioVoice([clip(0.4)], 10, { channel: "radio", fx: "announcer" });
+  comm.stop();
+  for (const n of [...pendingTimers.splice(0)]) n();
+  assert.equal(liveNodes() - before, 2 * chain, "the commentator is a different sound (the broadcast band): its own chain, once");
   assert.equal(GameAudio.radioVoice([], 0, {}), null, "nothing to play is not a transmission");
   assert.equal(GameAudio.radioVoice([clip(0.2)], 0, { volume: 0 }), null, "volume 0 is off");
 });

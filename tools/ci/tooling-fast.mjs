@@ -94,6 +94,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/bahrain-grandstand-rake.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/baku-migration.test.mjs",
+  // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / featherBarrierEnds + fleet caps (monza/spa/bahrain/silverstone/monaco maxOver < 3). Pure helper + a few track-build-vm builds, ~6 s.
+  "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/behind-ship.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
@@ -119,6 +121,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
+  "tests/unit/career-ai-dev.test.mjs",
+  "tests/unit/career-backup.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
@@ -211,6 +215,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
+  // Decorrelated DriverRatings.BASE + skill()/overall personality pins.
+  "tests/unit/driver-ratings-personality.test.mjs",
   "tests/unit/driving-coach.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
   // named legend has to round-trip through two setters, and the inert VM DOM
@@ -268,6 +274,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Every freezable module surface stays frozen (pure file read; < 1 s).
   "tests/unit/frozen-globals.test.mjs",
   "tests/unit/frustum-buckets.test.mjs",
+  // Seeded fuzz over every door that decodes player-shaped data (ghost hash,
+  // invite paste, peer snapshot, settings/garage import, career migrate,
+  // store reads). Hash32-seeded, N=2000/surface, <10 s; a red prints the seed.
+  "tests/unit/fuzz-untrusted-inputs.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/game-ctx-surface.test.mjs",
   // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in
@@ -277,6 +287,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-arrival.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
+  "tests/unit/garage-panel-side.test.mjs",
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.
@@ -370,6 +381,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/nontext-contrast.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
+  "tests/unit/pad-haptics.test.mjs",
   // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
@@ -452,6 +464,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
+  "tests/unit/screen-looks.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
   "tests/unit/select-budget.test.mjs",
@@ -565,6 +578,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-polling.test.mjs",
+  "tests/unit/wall-clamp.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)

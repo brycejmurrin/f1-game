@@ -256,3 +256,16 @@ test("arrival moves the reflected car and shutter without rebuilding geometry", 
   GarageScene.draw(TEAM, LIV, [0,2,0], null, 0, null, car);
   assert.equal(draws.find(d => d.mesh === closed.mesh).matrix[5], 1, "normal garage resets shutter");
 });
+
+test("the LEGENDS bay rebuilds when the legend changes, even on the same paint", () => {
+  // The Legends row keeps team id "legends" across all twelve legends, and two
+  // tribute liveries can share every colour (Schumacher's and Senna's reds):
+  // keyed on id + paint, the wall kept the previous legend's crest — a Ferrari
+  // horse over Senna (garage-angles, 2026-10-01).
+  const { GarageScene } = harness();
+  const row = (legend) => ({ id: "legends", legends: true, legend, name: "Legends", short: "LGD", drivers: TEAM.drivers });
+  GarageScene.draw(row("schumacher"), LIV, [0, 1.6, 0], null, 0);
+  const a = GarageScene.debug().geomKey;
+  GarageScene.draw(row("senna"), LIV, [0, 1.6, 0], null, 0);
+  assert.notEqual(GarageScene.debug().geomKey, a, "a new legend is a new bay");
+});
