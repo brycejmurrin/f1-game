@@ -1575,10 +1575,10 @@
           </div>
         </div>
         <p id="as-chat-note" class="as-note"></p>
-        <!-- RECORDED VOICE (js/audio/voice-pack.js): the engineer's lines spliced
-             from recorded clips through the radio filter, speech synthesis for
-             whatever the pack cannot cover. SYSTEM keeps every line on the voice
-             picked under VOICES. -->
+        <!-- RECORDED VOICE (js/audio/voice-pack.js): every race channel spliced
+             from its own recorded clips — never speech synthesis in a race, which
+             held the game up on iPhone; a line no clip covers stays written.
+             SYSTEM keeps every line on the voice picked under VOICES. -->
         <div id="as-rpack" class="set-row" role="group" aria-labelledby="as-rpack-label">
           <span class="tune-label" id="as-rpack-label">RADIO VOICE</span>
           <div>
@@ -1597,7 +1597,7 @@
              them — which is exactly what the voice volume above cannot do. -->
         <label class="tune-row"><span class="tune-label">RADIO FX <b id="as-rfx-v">10</b></span>
           <input id="as-rfx" type="range" min="0" max="15" step="1" value="10" aria-label="Team radio effect level"></label>
-        <p class="as-note">RADIO VOICE: RECORDED uses real recorded lines where it has them and the browser's voice for the rest; SYSTEM uses the browser's voice for everything. VOICE VOLUME sets every spoken line, the spotter and announcer included. RADIO FX is the click, hiss and squelch around each message, spoken or not.</p>
+        <p class="as-note">RADIO VOICE: RECORDED gives your engineer, race control, the coach and the commentator their own recorded voices, and never uses the browser's voice in a race — the smoothest choice on a phone; SYSTEM uses the browser's voice for everything. VOICE VOLUME sets every spoken line, the spotter and announcer included. RADIO FX is the click, hiss and squelch around each message, spoken or not.</p>
 
         <!-- PER-CHANNEL VOICES. js/audio/radio-voice.js already partitions every
              announcement into three speakers — RACE CONTROL, the COACH and the
