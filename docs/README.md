@@ -178,3 +178,4 @@ For day-to-day workflows, see the **skills** in `.claude/skills/`
 - [Refactor readability plan](plans/2026-09-24-refactor-readability.md): ranked hotspots (game.js, tracks buildProps, WGX, presets, …), Phase 0–2 sequence, explicit non-goals; supersedes [CLEANUP-ROADMAP](plans/CLEANUP-ROADMAP.md) as the backlog.
 - [Barrier run-off lateral teleports](plans/2026-09-30-barrier-runoff-teleports.md): open 2026-09-26 ledger defect — `wallAt`/`bar*` jumps ~7.9 m at tyre-stack termini; feather + end-face clamp plan with per-circuit probes.
 - [Carve headroom](plans/2026-09-30-carve-headroom.md): saturated size ratchets → extract player-forces / wall-clamp / grip / band / cam leftovers from `game.js` (helpers, not a megafunction split); lower ceilings only.
+- [Wetness and lighting](plans/2026-09-30-wetness-lighting.md): shared continuous track wetness (look=drive) then tod×weather preset grids for the twelve `"*"`-fallback circuits.
