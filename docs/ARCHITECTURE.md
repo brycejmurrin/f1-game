@@ -1498,6 +1498,12 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
+- **CROWN ROUNDING (2026-10-01):** data-side, so on all three for free. Every
+  primitive carries flat per-face normals; a tree crown (cone stacks) lit as a
+  faceted lantern. `TrackGeom.roundNormals` blends a crown's normals toward the
+  radial from its axis (`ROUND_K` 0.6) — run by the emitters' `swayOff()` and by
+  the graph's replay and canonical bake for a swaying op (`track-graph.test.mjs`
+  pins bake == replay). Positions, counts, colours and ids are untouched.
 - **FOLIAGE WIND SWAY (2026-10-01):** GLX + TLX; **WGX gap** (the same gap as the
   FLAG wave — WGX has no per-vertex `mat` attribute, `docs/research/WEBGPU-PARITY.md`).
   Tree emitters in `js/track/scenery/nature.js` stamp FOLIAGE vertices with a
