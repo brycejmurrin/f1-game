@@ -92,6 +92,26 @@ test('studio drive-out (poseOut): shutter up, parked a beat, then nose first out
   }
   assert.ok(Arrival.poseOut(0, Arrival.settings({ angle: 'right' })).eye[0] > 0 && Arrival.poseOut(0, Arrival.settings({})).eye[0] < 0, 'RIGHT stands on the other side');
 });
+test('once out of the door the car turns into the pit lane, away from the camera', () => {
+  for (const [angle, side] of [['cut', 1], ['left', 1], ['right', -1]]) {
+    const cfg = Arrival.settings({ angle });
+    let px = 0, pyaw = 0;
+    for (let t = 0; t <= Arrival.OUT_DURATION + 0.5; t += 0.02) {
+      const p = Arrival.poseOut(t, cfg);
+      if (p.z < 6.4) assert.ok(Math.abs(p.x) < 1e-9 && Math.abs(p.yaw) < 1e-9, 'straight out of the door: no turn inside the garage');
+      assert.ok(side * p.x >= side * px - 1e-9 && side * p.yaw >= side * pyaw - 1e-9, 'the turn only ever tightens one way');
+      px = p.x; pyaw = p.yaw;
+    }
+    const end = Arrival.poseOut(Arrival.OUT_DURATION, cfg);
+    assert.ok(side * end.yaw > 1.0 && side * end.yaw < Math.PI / 2, 'turned roughly 60-90 degrees, never back on itself');
+    assert.ok(side * end.x > 2, 'and off to the side, away from the camera (the eye stands at x ' + Math.sign(cfg.angle === 'right' ? 1 : -1) + ')');
+    assert.ok(Math.sign(end.aim[0]) === side, 'the camera follows it round');
+  }
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  assert.match(cam, /arrivalCar\[0\] = -ac; arrivalCar\[2\] = as; arrivalCar\[8\] = as; arrivalCar\[10\] = ac;/, 'the car matrix carries the yaw, over the preview\'s X mirror');
+  const scene = readFileSync(new URL('../../js/garage/scene.js', import.meta.url), 'utf8');
+  assert.match(scene, /arrivalMirror\.set\(carMat\); arrivalMirror\[1\] = -carMat\[1\]; arrivalMirror\[5\] = -carMat\[5\]/, 'the floor reflection turns with it');
+});
 test('game.js plays the studio drive-out AT ONCE on every RACE!, with no card, and the warm waits for it', () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
@@ -179,7 +199,7 @@ test('race settings pre-builds the garage, hidden, so the drive-out\'s first fra
   const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4000);
   const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');
   assert.ok(gate > 0 && hidden > gate, 'drawn after the visibility gate: the canvas stays hidden under race settings');
-  assert.match(render, /if \(setupPreviewOn\) _menuGate\.garageReady = true;/, 'the real garage screen counts as pre-built');
+  assert.match(render, /if \(setupPreviewOn && !heldWarm\) _menuGate\.garageReady = true;/, 'the real garage screen counts as pre-built');
 });
 
 // ── #garrival's PREVIEW IN / OUT (js/garage/setup-camera.js startArrivalPreview) ──
@@ -274,4 +294,33 @@ test('a circuit already raced opens RACE! on the garage: its programs are not wa
   assert.equal(calls.length, 3, 'another world warms');
   ctx.gfx = {}; warmPrograms();
   assert.equal(calls.length, 3, 'a backend with no warm() is not asked');
+});
+
+test('the car out, the garage HOLDS until the flyby where the backend warms (TLX): no black card between them', async () => {
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const src = game.slice(game.indexOf('function studioClose(n) {'), game.indexOf('// A READY, WARM WORLD STILL OPENS ON THE GARAGE'));
+  const run = async (gfx, extra = {}) => {
+    const calls = [];
+    const ctx = { _studio: { n: 1, skip: false, at: 0, ms: 5300, cardUp: false, info: {}, ...extra }, setupPreviewOn: true, gfx,
+      setupCam: { driveOutLeft: () => 0, stopDriveOut: () => calls.push('stop') },
+      loadingScreen: { phase: () => 'garage', building: () => calls.push('card') },
+      menuSlice: async () => {}, performance: { now: () => 0 } };
+    const { studioDone } = new Function('ctx', 'with (ctx) {' + src + '; return { studioDone }; }')(ctx);
+    await studioDone(() => true, 1);
+    return { ctx, calls };
+  };
+  const tlx = await run({ warm() {} });
+  assert.equal(tlx.ctx._studio && tlx.ctx._studio.held, true, 'held, not closed');
+  assert.equal(tlx.ctx.setupPreviewOn, true, 'the garage keeps drawing (its last pose)');
+  assert.deepEqual(tlx.calls, [], 'no build card, the drive-out not stopped');
+  const glx = await run({});
+  assert.equal(glx.ctx._studio, null, 'GLX/WGX (no warm): closed as before');
+  assert.equal(glx.ctx.setupPreviewOn, false);
+  assert.deepEqual(glx.calls, ['stop', 'card'], 'the card covers the rest, as before');
+  const skipped = await run({ warm() {} }, { skip: true });
+  assert.equal(skipped.ctx._studio, null, 'a skip closes too');
+  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 5000);
+  assert.match(render, /const heldWarm = !!\(_studio && _studio\.held && track && _menuGate\.warm > 0\);/, 'a held warm frame takes the world path with the canvas left visible (TLX paints nothing while it kicks the warm)');
+  assert.match(game, /FlybySeq\.reset\(\); if \(warmPrograms\(\) \|\| !\(_studio && _studio\.held\)\) _menuGate\.warm = 2;/, 'held: world frames only when a warm was really requested, else the world would paint over the garage');
+  assert.match(game, /studioClose\(n\);   \/\/ the held garage hands straight to the flyby\n\s*try \{ _introKey = key; raceIntro\(go\); \}/, 'introWarm closes the held garage at the handoff');
 });

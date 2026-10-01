@@ -3514,10 +3514,10 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
     "endRace clears the 2D rain overlay the way quitToMenu already did");
   const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn) { renderSetupPreview(dt); return; }"),
+  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) { renderSetupPreview(dt); return; }"),
     "the visibility gate precedes the garage-preview return");
   const resultsGate = renderBody.search(/if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/);
-  assert.ok(resultsGate >= 0 && resultsGate < renderBody.indexOf("if (setupPreviewOn)"),
+  assert.ok(resultsGate >= 0 && resultsGate < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
     "results freeze precedes the garage-preview return");
   assert.match(renderBody, /!resultsCam\.live\(\)/,
     "ResultsCam.live() keeps redrawing chequered/orbit/highlights");

@@ -1921,29 +1921,15 @@ function driverSkill(team, d, di) {
   // for attack/defence/OT/ERS/lane (see updateCar + js/physics/ai-drive.js). Still
   // exactly ONE simRnd() draw — the stream-position contract reliability.js and
   // career.spec.js depend on.
+  // Style −1..+1 (excluded from skill / overall / vmax product).
   return {
     skill: DriverRatings.skill(r, roll),
     craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
     experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
+    aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism),
   };
 }
-
-// The pace an AI car gets from running a DEVELOPED build instead of its
-// team's works car — MY TEAM's hire, and nothing else on the grid.
-//
-// It rides in `tierV`, the number the tier has always contributed, so the
-// per-car update at `c.tierV * c.skill * dd.ai` is unchanged in shape and no
-// AI gains a parts branch on the physics path. The mean of the four axes
-// because a human car spends its mods across four channels and an AI has
-// exactly one scalar — one axis alone would rate a cornering upgrade as no
-// upgrade at all. Pure: consumes no RNG, so the stream-position contract
-// makeCars() lives under is untouched.
-function buildPace(built, works) {
-  const b = built.mods, w = works.mods;
-  let sum = 0;
-  for (const k of ["speed", "accel", "cornering", "braking"]) sum += (b[k] || 1) / (w[k] || 1);
-  return sum / 4;
-}
+const buildPace = DriverRatings.buildPace;
 
 // The teams that will actually grid, and how many cars they field. Shared by
 // makeCars() and the track build so the PAINT cannot disagree with the CARS —
@@ -2624,7 +2610,7 @@ let _warmKey = "";
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
 // garage drive-out waited behind the card and the flyby played instead.
 const _warmed = new Set();
-const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); } } } catch (_) { /* optimisation only */ } };
+const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); return true; } } } catch (_) { /* optimisation only */ } return false; };
 async function menuFinish(current, key) {
   await prepareMenuCarAssets(current);
   if (!current()) return;
@@ -2886,6 +2872,7 @@ async function startRaceBody() {
   _raceProfile = []; let _rt = performance.now();
   const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   rlap("scenery");
+  radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
   const seasonSaveConflict = flow === "season" && SeasonCal.conflicted();
@@ -4009,7 +3996,12 @@ async function studioDone(live, n) {
   // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length,
   // from the garage's first frame — a card held for a pending warm is not the car's time, and has its own ceiling).
   while (_studio && _studio.n === n && !_studio.skip && live() && setupCam.driveOutLeft() > 0 && performance.now() - _studio.at < (_studio.cardUp ? 30000 : _studio.ms * 3)) await menuSlice();
-  studioClose(n);
+  // HELD, NOT CLOSED, where the backend warms (TLX): the car is out and its last pose stays on
+  // screen through the build's tail and the program warm (a pending warm paints nothing, so the
+  // frame just stays) until the intro closes it at the flyby — no black card between them.
+  // GLX/WGX draw their warm frames for real: close, card, as before. A skip closes too.
+  if (_studio && _studio.n === n && gfx.warm && !_studio.skip && live()) _studio.held = true;
+  else studioClose(n);
 }
 // A READY, WARM WORLD STILL OPENS ON THE GARAGE: introBuild and introWarm play the
 // drive-out over their own work; with nothing left to build it plays alone, then flies.
@@ -4046,14 +4038,14 @@ function introBuild(go) {
       // In steps, a few ms per frame: the garage drive-out keeps animating over the build.
       if (!(await loadTrackStepped(idx, live)) || !live()) return;
       _menuGate.ready = key; _menuGate.track = track;
-      // What menuFinish does, under the card: car assets (bounded), then hidden warm
-      // frames — "build" is not active(), so they draw with the canvas hidden and
-      // the flyby's first frame is not the one that compiles every shader.
+      // What menuFinish does, under the card (or the held garage, studioDone): car assets
+      // (bounded), then the warm frames — hidden under "build", or kicking TLX's warm
+      // under the held garage — so the flyby's first frame compiles nothing.
       const t1 = performance.now();
       await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
       await out;   // the warm would freeze the drive-out: it waits for the car to be out
       if (!live()) return;
-      FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
+      FlybySeq.reset(); if (warmPrograms() || !(_studio && _studio.held)) _menuGate.warm = 2;   // held: a world frame only to kick a warm (it paints nothing)
       for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
       // Never start the cinematic clock while render() is blocked on compilation.
       if (!(await awaitIntroWarm(live)) || !live()) return;
@@ -4092,11 +4084,12 @@ function introWarm(go) {
   studioOpen(n, loadingInfo());
   (async () => { try {
       await studioDone(live, n);   // the drive-out first: a warm now would freeze it
-      if (_warmKey !== key) {   // hidden warm frames: "build" blanks the canvas, and render() draws while _menuGate.warm > 0
-        warmPrograms(); _menuGate.warm = 2;
+      if (_warmKey !== key) {   // warm frames: hidden under "build", or kicking the warm under the held garage (render())
+        if (warmPrograms() || !(_studio && _studio.held)) _menuGate.warm = 2;
         for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
       }
       if (!(await awaitIntroWarm(live)) || !live()) return;
+      studioClose(n);   // the held garage hands straight to the flyby
       try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
     finally { studioClose(n); if (n === _introRun && !live()) { loadingScreen.stop(); titleIfBare(); } }   // abandoned: "build" has no timer or skip, so never leave it up
@@ -5466,6 +5459,7 @@ function updateCar(c, dt, ranked) {
     c.passFailT = Math.max(0, (c.passFailT || 0) - dt);
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
+    // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking
     // point, from a hash (never simRnd), and never while alongside a car.
     c.pressT = clamp((c.pressT || 0) + (chaser && chaserGap < 0.6 * Math.max(c.speed, 10) ? dt : -dt * 0.5), 0, 6);
@@ -6941,8 +6935,12 @@ function render(dt) {
   // last race present and return. Race-settings flyby and live race still draw.
   // ResultsCam (chequered / orbit / highlights) is the exception: it owns dbgCam.
   if (state === "results" && !resultsCam.live()) return;
-  if (setupPreviewOn) _menuGate.garageReady = true;
-  if (setupPreviewOn) { renderSetupPreview(dt); return; }
+  // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
+  // garage's last frame stays up — no hidden canvas, no black card before the flyby.
+  const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0);
+  if (heldWarm) _menuGate.warm--;
+  if (setupPreviewOn && !heldWarm) _menuGate.garageReady = true;
+  if (setupPreviewOn && !heldWarm) { renderSetupPreview(dt); return; }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
   // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas

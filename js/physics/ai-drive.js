@@ -9,13 +9,19 @@ const AiDrive = (function () {
   // ratings on the car (0..1), with a mid-grid default
   // Reused scratch — same contract as game.js pairContact/_ct. Callers must
   // read fields before the next traits() call (updateCar does; tests do).
-  const _traits = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75 };
+  // aggression / optimism are signed style traits (−1..+1), default neutral.
+  const _traits = {
+    craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75,
+    aggression: 0, optimism: 0,
+  };
   function traits(c) {
     _traits.craft = c.craft != null ? c.craft : 0.75;
     _traits.awareness = c.awareness != null ? c.awareness : 0.75;
     _traits.experience = c.experience != null ? c.experience : 0.75;
     _traits.skill = c.skill != null ? c.skill : 0.97;
     _traits.consistency = c.consistency != null ? c.consistency : 0.75;
+    _traits.aggression = c.aggression != null ? c.aggression : 0;
+    _traits.optimism = c.optimism != null ? c.optimism : 0;
     return _traits;
   }
 
@@ -287,9 +293,12 @@ const AiDrive = (function () {
     const craftMul = lerp(0.45, 1.55, t.craft);
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
     const expMul = lerp(0.75, 1.15, t.experience);      // rookies hesitate
+    // Aggression (Slice 3 fire half): ±35 % around the craft/awareness window.
+    // Spacing half (followPad / contactGive) stays out — stuck/bunching workstream.
+    const aggrMul = 1 + clamp(t.aggression != null ? t.aggression : 0, -1, 1) * 0.22;
     const house = houseMulCtx(ctx, 0.88, 1.12, "attack");
     const orders = ordersMul(ctx.team, ctx.seat, ctx.other, "ot");
-    return clamp(0.55 * situ * craftMul * awareMul * expMul * house * orders, 0.08, 2.4);
+    return clamp(0.55 * situ * craftMul * awareMul * expMul * aggrMul * house * orders, 0.08, 2.4);
   }
 
   // roll is the caller's simRnd() — only invoke when otArmed (short-circuit).
@@ -399,6 +408,12 @@ const AiDrive = (function () {
     if (attacking && room > 1.6) {
       vLim *= lerp(1.0, 1.07, t.craft) * houseMulCtx(ctx, 0.99, 1.03, "attack");
     }
+    // Optimism (Slice 3): over-confidence carries a little more speed into the
+    // marker. Signed, zero-mean across the grid — not a top-speed product term.
+    // Kept small (±1.2 %): a 3 % always-on term moved field median >1 % despite
+    // zero-mean (nonlinear with who sits at the median).
+    const opt = clamp(t.optimism != null ? t.optimism : 0, -1, 1);
+    if (opt) vLim *= 1 + opt * 0.012;
     if (ctx.errMul) vLim *= ctx.errMul;   // a missed braking point (mistakeBrakeMul)
     return vLim;
   }
@@ -484,7 +499,10 @@ const AiDrive = (function () {
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     // QUEUE PRESSURE lowers the bar: a car held behind the same car for its
     // patience window will take a 2 % edge (the tow alone is 4.5 %), not 7 %.
-    const margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx));
+    // Aggression shrinks the pace edge needed to want the move (fire half).
+    const aggr = clamp(ctx.traits && ctx.traits.aggression != null ? ctx.traits.aggression : 0, -1, 1);
+    const margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx))
+      * lerp(1.10, 0.88, (aggr + 1) * 0.5);
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
     // A car under ~12 % of the top speed is an OBSTACLE whatever its pace: the
     // follower behind it sits on the queue crawl floor, which is below the
@@ -577,7 +595,9 @@ const AiDrive = (function () {
   // Craft commits longer; experience retries sooner. Both are per-car, which is
   // also what stops twenty cars deciding the same thing on the same frame.
   function passHold(t) {
-    return lerp(2.4, 4.2, t.craft);
+    // Aggression commits a touch longer once the move is on (attacker patience).
+    const aggr = clamp(t && t.aggression != null ? t.aggression : 0, -1, 1);
+    return lerp(2.4, 4.2, t.craft) * (1 + aggr * 0.12);
   }
   function passCooldown(t) {
     return lerp(3.5, 1.8, t.experience);
@@ -668,7 +688,11 @@ const AiDrive = (function () {
   function queueTime(prevT, held, dt) {
     return held ? (prevT || 0) + dt : Math.max(0, (prevT || 0) - 2 * dt);
   }
-  function queuePatience(t) { return lerp(7, 3.5, t ? t.craft : 0.75); }
+  function queuePatience(t) {
+    // High aggression burns patience faster → higher queuePress sooner → otWant.
+    const aggr = clamp(t && t.aggression != null ? t.aggression : 0, -1, 1);
+    return lerp(7, 3.5, t ? t.craft : 0.75) * lerp(1.12, 0.88, (aggr + 1) * 0.5);
+  }
   function queuePress(ctx) {
     return clamp((ctx.queueT || 0) / queuePatience(ctx.traits), 0, 1);
   }
@@ -1051,9 +1075,21 @@ const AiDrive = (function () {
   // fired; this one scales whether it fires at all). >0 multiplies the base
   // rate; undefined/0/negative leaves it at 1 so every existing caller and
   // test is unchanged.
+  //
+  // Slice 4: short races need visible late-brake/gather on easy/normal without
+  // editing DIFF.err. Hard (errMul≈1) keeps the 0.004 base; easy/normal get a
+  // visibility lift from (em−1). Optimism adds under pressure only (zero-mean
+  // when unpressured).
   function mistakeChance(t, pressure, errMul) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
-    return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons) * (errMul > 0 ? errMul : 1);
+    const em = errMul > 0 ? errMul : 1;
+    const press = clamp(pressure || 0, 0, 1);
+    // Cap 8× once em≥2.5 (easy); normal (~1.8) gets ~5.7×. Hard (em=1)
+    // stays on the 0.004 base so DIFF.err alone sets the hard rate.
+    const base = 0.004 * (1 + 7.0 * clamp((em - 1) / 1.2, 0, 1));
+    const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
+    const optMul = 1 + 0.25 * opt * press;
+    return base * (1 + 2 * press) * (1.3 - cons) * em * optMul;
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
