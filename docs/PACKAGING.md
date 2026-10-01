@@ -17,7 +17,11 @@ records **desktop packaging + icons** and the **Android sideload APK** path.
 **Do not change `appId` (`io.github.brycejmurrin.apex26`) or `productName`
 (`Apex 26`).** Those identifiers plus the `app://apex/` origin are frozen:
 changing them orphans localStorage / IndexedDB / `userData` (career, garage,
-music). Single source: `desktop/lib/identity.cjs`.
+music). Single source: `desktop/lib/identity.cjs`. **Known gap closed for
+career:** if a wrapper origin / app-id change does wipe the buckets, the player
+can restore via CAREER BACKUP (`js/career/career-backup.js` — EXPORT / IMPORT
+on the slot cards; format `apex26-career-backup-v1`). Garage / music still have
+no equivalent dump.
 
 ### Version
 
@@ -107,7 +111,9 @@ device evidence.
 
 Changing `appId` or `androidScheme` after a player has saves **orphans**
 localStorage and IndexedDB. Tests pin the committed config to the identity
-file. `server.url` must never ship (live-reload).
+file. `server.url` must never ship (live-reload). Career saves can be restored
+from a CAREER BACKUP file (`CareerBackup` / slot-card EXPORT·IMPORT); garage
+and music still cannot.
 
 ### Dev loop
 
@@ -148,7 +154,7 @@ SystemBars `insetsHandling: "css"` is bundled with `@capacitor/core` 8
 
 Export buttons use `URL.createObjectURL` + `<a download>` (`settings-export.js`,
 `results-sheet.js`, `driving-coach.js`, `data/export.js`, `select-screen.js`,
-`agent/apex.js`). Android WebView commonly ignores that. `NativeDownload`
+`agent/apex.js`, `career/career-backup.js`). Android WebView commonly ignores that. `NativeDownload`
 intercepts those clicks when `Native.platform()` is `android`/`ios` **and**
 `window.Capacitor.Plugins.Filesystem` + `Share` exist (no bundler — Capacitor
 injects the Plugins proxy). Writes `Directory.CACHE` (`"CACHE"`) then Share.

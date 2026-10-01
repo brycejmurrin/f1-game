@@ -469,7 +469,8 @@
    a slot is one more card in a column full of them — it just happens to be the
    one that changes which career you are in. */
 .cr-slot {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  /* main | EXPORT | IMPORT | DELETE — trailing autos collapse when a button is absent */
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: stretch; gap: 6px; margin-bottom: 6px;
 }
 .cr-slot-main {

@@ -147,6 +147,7 @@ const SPEC = [
   { k: "digitalRate", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js steerRateFromSlider (KEY_RAMP_IN)" },
   { k: "analogSpeedSteer", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js analogSpeedFromSlider (1 = off)" },
   { k: "haptics", lane: "json", group: "driving", def: 6, src: "js/input/steer-tuning.js (scales Input.vibrate and Input.rumble)" },
+  { k: "triggerHaptics", lane: "json", group: "driving", def: true, src: "js/input/steer-tuning.js (L2/R2 trigger-rumble; falls back to dual-rumble when off or unsupported)" },
   { k: "padDeadzone", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js (percent of stick travel)" },
   { k: "padSaturation", lane: "json", group: "driving", def: 0, src: "js/input/steer-tuning.js (percent short of the rim that is full lock)" },
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },

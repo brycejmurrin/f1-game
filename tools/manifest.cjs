@@ -154,6 +154,7 @@ const FULL = [
   // reason. Pure data with no dependencies of its own.
   "js/data/settings-defaults.js",
   "js/core/store.js",
+  "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
   "js/track/core/geom.js",
@@ -538,6 +539,10 @@ const HARD_EDGES = [
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
   ["js/career/save-migrate.js", "js/core/store.js"],
+  ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
+  ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
+  ["js/core/native-download.js", "js/career/career-backup.js"], // Capacitor Share download path
+  ["js/career/career-backup.js", "js/career/career-ui.js"],     // EXPORT/IMPORT on slot cards
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
