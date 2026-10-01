@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_261 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_263 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -180,6 +180,8 @@ _261 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
+| `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
+| `hud-tyres.js` | `HudTyres` | tag | HUD tyre corner paint helpers. |
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
@@ -1504,6 +1506,19 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
+- **SUN GLINT RANGE (2026-10-01):** on all three. The sun specular's soft clip
+  is a knee with an asymptote (`specCol / (1 + specCol / K)`, K the
+  `specKnee` knob, def 4; GLX `uSpecKnee`, TLX `U.specKnee`, WGX `params4.w`)
+  instead of the hard Reinhard cap at 1.0 that held every glint under the day
+  bloom threshold. K = 1 is the old look.
+- **WORLD ENV-PROBE REFLECTIONS (2026-10-01):** on all three. Inside each lit
+  shader's `envBlend` block (wet road, glass, metal — anything glossy that is
+  not the car's clearcoat), the live 64 px env probe (GLX `uEnvStr`/`uEnvCube`,
+  TLX `U.envStr`/the cube node, WGX `params5.x`/`envCube`) replaces the
+  two-colour horizon→zenith gradient, weighted by the probe's strength and
+  faded with eye distance over 60–150 m (one cube is parallax-wrong far from
+  the car). The gradient stays the fallback wherever the probe is off (perf
+  tier ≥ 1, or before its first six faces), so nothing regresses there.
 - **FOLIAGE WIND SWAY (2026-10-01):** GLX + TLX; **WGX gap** (the same gap as the
   FLAG wave — WGX has no per-vertex `mat` attribute, `docs/research/WEBGPU-PARITY.md`).
   Tree emitters in `js/track/scenery/nature.js` stamp FOLIAGE vertices with a

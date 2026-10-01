@@ -117,7 +117,7 @@ test("randomise: deterministic per seed, scaled to its target, start on the long
   assert.notDeepEqual(a.pts, c.pts);
   assert.ok(a.pts.length >= 60 && a.pts.length <= 200);
   assert.ok(Math.abs(S.polyLen(a.pts) - a.targetL) / a.targetL < 0.03, `length ${S.polyLen(a.pts).toFixed(0)} ≈ target ${a.targetL}`);
-  assert.ok(S.signedArea(a.pts) < 0, "clockwise lap");
+  assert.ok(S.signedArea(a.pts) > 0, "clockwise lap (a right-turning loop has a POSITIVE signedArea in this frame; built Σk < 0 in tests/unit/track-randomise.test.mjs)");
   let green = 0, builds = 0;
   for (let seed = 1; seed <= 30; seed++) {
     const g = TR.generateValid(seed, (pts) => { builds++; return V.check(design({ pts, seed })).red === 0; }, 12);
@@ -162,4 +162,92 @@ test("validate: the rules read the engine's centreline (length, radius, start st
   assert.ok(tightEnd.issues.some((i) => i.code === "start"), "a start on the tight end of the ellipse is flagged: " + JSON.stringify(tightEnd.issues.map((i) => i.code)));
   const longSide = V.check(design({ pts: S.rotate(ellipse(36, 900, 350), 9) }));
   assert.ok(!longSide.issues.some((i) => i.code === "start" && i.level === "red"), "…and the long side is not: " + JSON.stringify(longSide.issues.map((i) => i.code + ":" + i.level)));
+});
+
+// ── exact stamp arcs + the fast preview build (2026-10-01) ──────────────────
+// The engine build of a spliced loop from its UNQUANTISED control points: the
+// 0.25 m save lattice (CustomTracks.sanitize) adds a curvature ripple of its own
+// (±2·10⁻⁴ /m, ~7 % of R at 300 m) that is not the stamp's geometry.
+function rawBuild(ctx, C, pts) {
+  const raw = C.toRaw(C.sanitize(design({ pts })));
+  raw.id = "__stamp-test"; raw.path.pts = pts.map((p) => [p[0], p[1]]);
+  return ctx.Tracks.buildCenterline(ctx.TrackDef.fromRaw(raw));
+}
+/** Built radius under a stamp: 1 / peak |curv| over the middle 60 % of the arc a → b. */
+function midArcRadius(tr, a, b) {
+  const near = (p) => { let best = Infinity, k0 = 0; for (let k = 0; k < tr.n; k++) { const d = Math.hypot(tr.px[k] - p[0], tr.pz[k] - p[1]); if (d < best) { best = d; k0 = k; } } return k0; };
+  const k0 = near(a), span = ((near(b) - k0) % tr.n + tr.n) % tr.n;
+  let peak = 0;
+  for (let s = Math.round(span * 0.2); s <= Math.round(span * 0.8); s++) peak = Math.max(peak, Math.abs(tr.curv[(k0 + s) % tr.n]));
+  return 1 / peak;
+}
+
+test("stamps: arcs are sampled exactly — 8-25 m chords, compensated at their own step, landing on the end pose", () => {
+  const { ST, S } = bootEditor();
+  for (const R of [15, 18, 30, 45, 100, 300, 600]) for (const deg of [10, 35, 90, 180, 270]) {
+    const A = deg * Math.PI / 180, { Rc, n } = ST.arcFor(R, A), phi = A / n, chord = 2 * Rc * Math.sin(phi / 2);
+    assert.ok(chord >= ST.SPACING - 1e-9 || n === 1, `R ${R} ${deg}°: chord ${chord.toFixed(2)} ≥ 8 m`);
+    assert.ok(chord <= 25 + 1e-9 || 2 * Rc * Math.sin(A / (2 * (n + 1))) < ST.SPACING, `R ${R} ${deg}°: chord ${chord.toFixed(2)} ≤ 25 m unless one step more breaks the 8 m rule`);
+    const f = 1 - 0.25 * (1 - Math.cos(phi));
+    assert.ok(Math.abs(Rc * f * f - R) < 1e-6 * R, `R ${R} ${deg}°: two Laplacian passes at φ ${(phi * 180 / Math.PI).toFixed(1)}° land on R`);
+    const pose = { x: 10, z: -20, th: 0.7 }, arc = S.arcPts(pose, Rc, A, 0, n), e = arc.pts[n - 1];
+    // +sweep is a LEFT turn: heading (sin θ, cos θ) rotates toward +x, centre at pose + Rc (cos θ, −sin θ)
+    const cx = pose.x + Rc * Math.cos(pose.th), cz = pose.z - Rc * Math.sin(pose.th);
+    for (const p of arc.pts) assert.ok(Math.abs(Math.hypot(p[0] - cx, p[1] - cz) - Rc) < 1e-9 * Rc, "every point on the circle");
+    const th1 = pose.th + A;
+    assert.ok(Math.hypot(e[0] - (cx - Rc * Math.cos(th1)), e[1] - (cz + Rc * Math.sin(th1))) < 1e-9 * Rc, "the last point is the analytic end");
+    assert.ok(Math.abs(arc.end.th - th1) < 1e-12 && arc.end.x === e[0] && arc.end.z === e[1], "end pose = last point, heading + sweep");
+  }
+});
+
+test("stamps: a CORNER spliced into a 25 m loop BUILDS at the requested radius (±3 %, R 30-300)", () => {
+  const { ST, S, C, ctx } = bootEditor();
+  const base = S.resample(ellipse(36, 900, 500), 25);
+  for (const R of [30, 45, 100, 300]) for (const dir of [1, -1]) {
+    const r = ST.splice(base, 40, 46, "corner", { R, deg: 90, dir });
+    assert.equal(r.ok, true, r.reason);
+    const tr = rawBuild(ctx, C, r.pts);
+    const built = midArcRadius(tr, r.pts[r.sel[0] - 1], r.pts[r.sel[1]]);
+    assert.ok(Math.abs(built / R - 1) < 0.03, `R ${R} dir ${dir}: built ${built.toFixed(1)} m (was −5 %…−6 % at R 30/45/300 before exact arcs)`);
+  }
+});
+
+test("splice: ≥ 8 m spacing, ≤ 200 points, index 0 stays the start; a 400-stamp fuzz rarely runs out of points", () => {
+  const { ST, S, TR } = bootEditor();
+  const rnd = S.rng(11), kinds = Object.keys(ST.KINDS);
+  let ok = 0, many = 0;
+  const other = {};
+  for (let t = 0; t < 400; t++) {
+    const base = t % 2 ? ellipse(36 + (t % 40), 700, 450) : TR.generate(t).pts;
+    const N = base.length, i0 = Math.floor(rnd() * N), ins = rnd() < 0.5, i1 = ins ? i0 : (i0 + 1 + Math.floor(rnd() * 6)) % N;
+    const kind = kinds[Math.floor(rnd() * kinds.length)];
+    const p = { L: 30 + rnd() * 1400, R: 15 + rnd() * 200, deg: 10 + rnd() * 200, dir: rnd() < 0.5 ? 1 : -1 };
+    const r = ST.splice(base, i0, i1, kind, p);
+    if (!r.ok) { if (/too many/.test(r.reason)) many++; else other[r.reason] = (other[r.reason] || 0) + 1; continue; }
+    ok++;
+    assert.ok(r.pts.length <= 200, `t ${t}: ${r.pts.length} points`);
+    for (let i = 0; i < r.pts.length; i++) {
+      const a = r.pts[i], b = r.pts[(i + 1) % r.pts.length];
+      assert.ok(Number.isFinite(a[0]) && Number.isFinite(a[1]), `t ${t}: finite`);
+      assert.ok(Math.hypot(b[0] - a[0], b[1] - a[1]) >= ST.SPACING - 1e-9, `t ${t} ${kind}: spacing ${Math.hypot(b[0] - a[0], b[1] - a[1]).toFixed(2)} at ${i}`);
+    }
+    // Index 0 (the start line) moves only when the replaced span wraps past it.
+    if (!(i1 < i0)) assert.equal(r.pts[0], base[0], `t ${t}: index 0 is still the start`);
+    assert.ok(r.sel[0] > 0 && r.sel[0] <= r.sel[1] && r.sel[1] < r.pts.length, `t ${t}: the selection names the stamp`);
+  }
+  console.log(`splice fuzz: ${ok}/400 ok, ${many} "too many points" (67 before the 60 m fill + two-sided thinning)`, other);
+  assert.ok(many <= 8, `${many}/400 stamps ran out of points (≤ 2 %)`);
+});
+
+test("buildCenterline(def, { line: false }) is the default build minus the racing line", () => {
+  const { Tracks, V } = bootEditor();
+  for (const def of [Tracks.LIST.find((d) => d.id === "monza"), V.previewDef(design())]) {
+    const a = Tracks.buildCenterline(def), b = Tracks.buildCenterline(def, { line: false });
+    assert.equal(a.n, b.n); assert.equal(a.total, b.total);
+    for (const k of ["px", "py", "pz", "tx", "tz", "curv", "hw", "bank"]) assert.deepEqual(Array.from(b[k]), Array.from(a[k]), `${def.id}: ${k}`);
+    assert.deepEqual(b.bankP, a.bankP, `${def.id}: banking profile`);
+    assert.ok(a.line && a.line.length === a.n, "the default build bakes the racing line");
+    assert.equal(b.line, null, "line: false leaves tr.line null");
+    assert.equal(b.lineW, undefined);
+  }
 });
