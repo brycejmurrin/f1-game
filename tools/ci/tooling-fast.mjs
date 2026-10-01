@@ -215,6 +215,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/deploy-tool.test.mjs",
+  // The track designer's drawing surface (js/editor/canvas.js) alone: long-press
+  // → onContext, the stamp tool's ghost polyline, the drag / span measurement
+  // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
+  "tests/unit/designer-canvas.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-builder-config.test.mjs",
   "tests/unit/desktop-native.test.mjs",
