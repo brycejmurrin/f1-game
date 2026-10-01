@@ -89,7 +89,7 @@ test("the driving model produces the same numbers it did before", async ({ page,
     a.weather("dry");
     a.step(0, 1);
     // weather() returns the discrete chip; physState has no wetness field —
-    // grip pin is asserted in the VM twin via G.roadWetness / gripMult.
+    // grip pin is asserted in the VM twin via G.trackWetness / gripMult.
     return { weather: a.weather(), arc: a.weatherArc() };
   });
   expect(pin.weather, "characterization must pin dry weather").toBe("dry");
