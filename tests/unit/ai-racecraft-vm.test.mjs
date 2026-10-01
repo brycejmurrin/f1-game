@@ -345,3 +345,43 @@ test("under VSC and safety car no pass latch engages and no queue pressure build
     }
   }
 });
+
+// ONE YIELDER ALONGSIDE THE PLAYER (2026-10-01). The rule elects the car behind
+// to concede — here the PLAYER, a few metres back, who runs no yield protocol
+// and holds a lane inside the AI's clear gap. The AI merely HOLDING its line
+// was never armed to concede (only an AI steering INTO the player was), so the
+// pair sat inside the gap with nobody yielding: ai-tactics --mode human
+// measured contact in 11-22 % of alongside frames. A held line now arms the
+// grace at a quarter rate (AiDrive.humanYieldT), so the AI opens the gap.
+test("an AI alongside a player who will not yield opens the gap itself", async () => {
+  const A = g.apex;
+  await g.race("monza");
+  A.reset(0, 45, -1.2);
+  A.headless(true);
+  A.go();
+  const r = A.rivals([{ dProg: 3.2, dx: 2.2, speed: 45 }])[0];
+  const c = g.G.cars[r], p = g.G.player;
+  c.lane = c.lanePref = c.x / (g.G.track.hw[0] - 1.2);   // its own lane is inside the gap
+  A.act({ steer: 0, throttle: true, brake: false }, DT, 1);
+  const tierV0 = c.tierV;
+  c.tierV *= 45.5 / c._vmaxNow;                            // the player's pace, so the pair stays alongside
+  const steer = () => { const q = A.probe(); return Math.max(-1, Math.min(1, 2.2 * (Math.atan2(-1.2 - q.x, 20) - q.angle))); };
+  let insideT = 0, alongT = 0, lateMin = Infinity;
+  try {
+    for (let i = 0; i < 4 / DT; i++) {
+      const dp = c.prog - p.prog;   // the player holds x = -1.2 and keeps station 3 m behind
+      A.act({ steer: steer(), throttle: dp > 3.2, brake: dp < 1.5 }, DT, 1);
+      const dx = Math.abs(c.x - p.x);
+      if (Math.abs(c.prog - p.prog) < 5.5) {
+        alongT += DT;
+        if (dx < CLEAR - 0.3) insideT += DT;
+        if (i * DT > 1.5) lateMin = Math.min(lateMin, dx);
+      }
+    }
+  } finally { c.tierV = tierV0; A.headless(false); }
+  assert.ok(alongT > 3.5, `the pair was not kept alongside (${alongT.toFixed(1)} s) — wrong scenario`);
+  // Measured before: 2.5 s inside the gap with nobody yielding, then a concession
+  // that was dropped at the gap and re-armed. After: conceded inside ~0.6 s, held.
+  assert.ok(insideT < 1.2, `nobody yielded for ${insideT.toFixed(2)} s inside the clear gap`);
+  assert.ok(lateMin >= CLEAR - 0.3, `the concession was not held: dx fell to ${lateMin.toFixed(2)} m`);
+});

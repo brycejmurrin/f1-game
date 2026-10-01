@@ -991,6 +991,45 @@ test("the intrusion band leaves a settled pair settled", () => {
     `band ${band} must be a real margin inside the clear gap`);
 });
 
+// HOLDING IS NOT YIELDING (2026-10-01): a held line inside the band arms the
+// timer too — at a quarter rate, so a player's lean is a contest (1.2 s) and
+// not a free lane, but the pair is never left with nobody yielding.
+test("a held line inside the band arms the human-yield timer at a quarter rate", () => {
+  const A = load();
+  const dt = 1 / 60, G = A.humanYieldGrace();
+  // at the gap (not inside the band) and not intruding: settled, holds
+  assert.equal(A.humanYieldT(0.1, true, false, true, false, dt, false), 0.1);
+  // inside the band, holding: arms, slower than an intrusion
+  const hold = A.humanYieldT(0, true, false, true, false, dt, true);
+  const lean = A.humanYieldT(0, true, false, true, true, dt, true);
+  assert.ok(hold > 0 && hold < lean, `hold ${hold} must arm, slower than an intrusion ${lean}`);
+  let t = 0, n = 0;
+  while (!A.humanYieldTakes(t) && n < 600) { t = A.humanYieldT(t, true, false, true, false, dt, true); n++; }
+  assert.ok(n * dt > 3 * G && n * dt < 2, `a held lean concedes after ${(n * dt).toFixed(2)} s`);
+});
+
+// A HUMAN'S PACE (AiDrive.paceSample): AI cars in free air teach speed/vmax per
+// node; a human is judged by its own speed/vmax against that — not by the
+// live speed a corner gives it.
+test("paceSample: the field teaches the profile, a human is judged against it", () => {
+  const A = load();
+  const ref = new Float32Array(4), dt = 1 / 60;
+  const ai = { speed: 40, human: false };
+  A.paceSample(ref, 1, ai, 80, true, dt);
+  assert.ok(Math.abs(ref[1] - 0.5) < 1e-6, "the first sample seeds the node");
+  A.paceSample(ref, 1, { speed: 60, human: false }, 80, false, dt);
+  assert.ok(Math.abs(ref[1] - 0.5) < 1e-6, "a car in traffic does not teach");
+  // a human as quick as the field at this metre: paceF stays 1; 10 % slower: falls toward 0.9
+  const same = { speed: 40, human: true }, slow = { speed: 36, human: true };
+  for (let i = 0; i < 60 * 30; i++) { A.paceSample(ref, 1, same, 80, true, dt); A.paceSample(ref, 1, slow, 80, true, dt); }
+  assert.ok(Math.abs(same.paceF - 1) < 0.01, `same pace read as ${same.paceF}`);
+  assert.ok(Math.abs(slow.paceF - 0.9) < 0.01, `10 % slow read as ${slow.paceF}`);
+  // an unlearned node never moves a human's estimate
+  const fresh = { speed: 10, human: true };
+  A.paceSample(ref, 3, fresh, 80, true, dt);
+  assert.equal(fresh.paceF, undefined);
+});
+
 // --- difficulty's second dimension -----------------------------------------
 // Until 2026-09-15 difficulty was ONE number: every level braked, defended,
 // deployed and erred identically and differed only in top speed. `corner`

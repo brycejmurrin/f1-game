@@ -1142,13 +1142,45 @@ const AiDrive = (function () {
   //
   // Without it the fix for "the AI drives into my side" silently becomes "the
   // AI yields to any contact", which is the pushover outcome, not this one.
-  function humanYieldT(prevT, close, aiElected, otherHuman, intruding, dt) {
+  //
+  // HOLDING IS NOT YIELDING EITHER (2026-10-01). With the rule electing the
+  // human and the AI only HOLDING its line inside the band (`inside`), the
+  // pair still had no yielder at all: tools/check/ai-tactics.mjs --mode human
+  // measured contact in 11-22 % of the frames an AI ran alongside the player.
+  // A held line now arms the timer at HOLD_RATE, so a player leaning on an AI
+  // gets grace / HOLD_RATE (1.2 s) of rub — a contest, not a free lane at
+  // 0.3 s — and then the AI concedes, so ONE car always yields in the end.
+  // `close` is STILL BESIDE THEM (game.js: the clear gap plus a metre), so a
+  // concession is held while the pair stays alongside: released at the gap it
+  // drifted straight back to its lane and re-armed, a 1.5 s in-out cycle.
+  const HOLD_RATE = 0.25;
+  function humanYieldT(prevT, close, aiElected, otherHuman, intruding, dt, inside) {
     if (!close || !otherHuman) return 0;
     if (aiElected) return 0;          // the normal path already has it; start clean
-    if (!intruding) return prevT;     // their move, not ours — hold, do not arm
-    return prevT + dt;
+    if (intruding) return prevT + dt;
+    return inside ? prevT + dt * HOLD_RATE : prevT;   // their lean: slower; at the gap: settled
   }
   function humanYieldTakes(t) { return (t || 0) > humanYieldGrace(); }
+
+  // A HUMAN'S PACE. otWant / attackOK / the lunge rule compare our free pace
+  // with the blocker's PACE (its vmax). An AI's vmax is its pace; a human's is
+  // only the CAR's, so the old read for a human was its LIVE speed — and that
+  // is low in every corner and braking zone, exactly where a pass cannot
+  // complete: the AI attacked a player where it would never attack an AI
+  // (2026-10-01 investigation). The like-for-like read is the human's speed
+  // against what an AI does at the same metre of road: AI cars in free air
+  // teach a per-node profile of speed / own vmax (paceRef, `ref` is a
+  // Float32Array of track.n), and a human's paceF is its own speed / vmax
+  // against that profile, smoothed over ~7 s. The human's pace vmax is then
+  // vmax x paceF — 1 for a driver who drives like the field.
+  // AI-only: it decides what the AI does about the player, never the car.
+  function paceSample(ref, i, c, vmax, free, dt) {
+    if (!(vmax > 1) || !(c.speed > 1)) return;
+    const f = c.speed / vmax;
+    if (!c.human) { if (free) ref[i] = ref[i] > 0 ? ref[i] + (f - ref[i]) * 0.2 : f; return; }
+    const r = ref[i];
+    if (r > 0.05) c.paceF = damp(c.paceF > 0 ? c.paceF : 1, clamp(f / r, 0.6, 1.25), 0.15, dt);
+  }
 
   // THE AIM, NOT THE CONTACT. Every side-by-side rule above keys on where the
   // two cars ARE (|dx| inside the clear gap), while the AI steers toward a
@@ -1335,7 +1367,7 @@ const AiDrive = (function () {
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
-    otWant, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
+    otWant, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

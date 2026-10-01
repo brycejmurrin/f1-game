@@ -708,6 +708,10 @@ function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
 // trade each way. Exactly 1 on a slick track, so the dry car is untouched.
 function aeroWetK() { return raceCtl && raceCtl.lowGrip() ? 0.5 : 1; }
 function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
+// A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample).
+function paceVmax(o) { return (o._vmaxNow || 0) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
+let _paceRef = null;   // per-node AI speed/vmax profile for paceSample, one per field
+function paceRef() { if (!_paceRef || _paceRef.cars !== cars) { _paceRef = new Float32Array(track.n); _paceRef.cars = cars; } return _paceRef; }
 function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
 function xCoastCut(c) { return aeroWetK() * lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
@@ -4892,6 +4896,9 @@ function updateCar(c, dt, ranked) {
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);
+    // PASSED BY A PLAYER: the car alongside went from behind to ahead. The same re-pass lockout an AI's completed pass leaves (the PAST branch below).
+    if (alongO && alongO.human && alongO === c._alPrev && c._alPrevDp < 0 && alongDprog >= 0) { c.passFailOf = alongO; c.passFailT = Math.max(c.passFailT || 0, 2 * AiDrive.passCooldown(aiT)); }
+    c._alPrev = alongO; c._alPrevDp = alongDprog;
   }
 
   // --- electric deploy ---
@@ -5198,6 +5205,7 @@ function updateCar(c, dt, ranked) {
   // function. Driving the car to measure it does not work — full lock at 78 m/s
   // puts it 30 m into a field, which closes the flaps and measures nothing.
   c._vmaxNow = vmax;
+  if (state === "race" && cautionLevel() < 2 && !pits.inLane(c)) AiDrive.paceSample(paceRef(), Math.floor(c.s / track.total * track.n) % track.n, c, vmax, !blocker || blockerGap > 30, dt);
 
   // --- gearbox (player) ---
   // accelCeil: the speed a car ABOVE it is bled toward (never a teleport) and
@@ -5516,7 +5524,7 @@ function updateCar(c, dt, ranked) {
       // at the apex). Abandon it, and remember the car: the same car is not
       // re-attacked for twice the cooldown (rFactor 2's "threshold endured").
       // A car with 12 % of pace in hand keeps the move: it will be alongside under braking.
-      else if (_atk.toTurnIn < 6 && dp > AiDrive.sideLevel() && Math.max(aiFreeSpeed, blocker === po ? 0 : vmax) < (po.human ? po.speed : (po._vmaxNow || 0)) + 0.12 * vTop()) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); c.passFailOf = po; c.passFailT = 2 * AiDrive.passCooldown(aiT); }
+      else if (_atk.toTurnIn < 6 && dp > AiDrive.sideLevel() && Math.max(aiFreeSpeed, blocker === po ? 0 : vmax) < paceVmax(po) + 0.12 * vTop()) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); c.passFailOf = po; c.passFailT = 2 * AiDrive.passCooldown(aiT); }
       else {
         // Patience refreshes while we GAIN on the car; it runs down while we do not.
         if (dp < c.passBest - 0.3) { c.passBest = dp; c.passT = AiDrive.passHold(aiT); }
@@ -5532,13 +5540,12 @@ function updateCar(c, dt, ranked) {
       // Side-pick + incentive inputs. kA is the same AI-only curvature read the
       // racing line above already makes — the arc reaches the AI's choice of
       // side, never the driver. blockerVmax is the car's PACE, not its speed
-      // this instant (AiDrive.otWant says why that matters). A HUMAN has no
-      // pace ceiling to read — _vmaxNow is the model's top speed for every car,
-      // so a player doing 40 read as "pace 60" and was never attacked; their
-      // speed is their pace, so the fallback (0 -> blockerSpeed) is the read.
+      // this instant (AiDrive.otWant says why that matters). A HUMAN's vmax is
+      // only its CAR's, and its live speed is low in every corner — so it is
+      // judged by its paceF against the field (paceVmax, AiDrive.paceSample).
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
-      _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0) / (1 + xVmaxGain(blocker) * (blocker.aeroX || 0)); _aiOtPull.vTop = vTop(); _aiOtPull.queueT = c.queueT || 0;
+      _aiOtPull.blockerVmax = paceVmax(blocker); _aiOtPull.vTop = vTop(); _aiOtPull.queueT = c.queueT || 0;
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
@@ -5640,9 +5647,9 @@ function updateCar(c, dt, ranked) {
     // AiDrive.humanYieldGrace; this end only carries the per-car timer.
     // Are WE steering into them (aim vs where we already are), and is there
     // still room left to concede? Both halves matter — AiDrive.humanYieldT.
-    const intruding = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand()
-      && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
-    c.hYieldT = AiDrive.humanYieldT(c.hYieldT, alongClose, yieldMine, !!(alongO && alongO.human), intruding, dt);
+    const inBand = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand();
+    const intruding = inBand && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
+    c.hYieldT = AiDrive.humanYieldT(c.hYieldT, !!alongO && Math.abs(alongDx) < CLEAR + 1, yieldMine, !!(alongO && alongO.human), intruding, dt, inBand);
     if (!yieldMine && AiDrive.humanYieldTakes(c.hYieldT)) yieldMine = true;
     // A HUMAN neighbour: an aim into their gap is conceded at once. Nobody else
     // in the pair will, and a clear gap held at the aim point IS the clean
