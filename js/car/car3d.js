@@ -2236,7 +2236,6 @@ const Car3D = (function () {
     part("bolsters");
     if (ckpt) {
       for (const s of [-1, 1]) {
-        // Continue the closed shoulders past the eye, into the rear bulkhead.
         const shoulder = [
           [[s*0.30,0.34,1.50],[s*0.56,0.26,1.50],[s*0.54,0.585,1.46],[s*0.30,0.62,1.46]],
           [[s*0.285,0.37,0.94],[s*0.565,0.29,0.94],[s*0.535,0.655,0.91],[s*0.285,0.69,0.91]],
