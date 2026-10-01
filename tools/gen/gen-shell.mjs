@@ -108,7 +108,7 @@ export function swOptionalFiles() {
   return [
     ...Object.values(MANIFEST.DEFERRED).flat(),
     ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
-    ...MANIFEST.LAZY_WORKER,
+    ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR,
   ];
 }
 
@@ -119,6 +119,7 @@ function swOptionalBlock() {
     ["LAZY_DATA — the data hub bundle behind the DATA button", MANIFEST.LAZY_DATA],
     ["LAZY_NET — the multiplayer stack behind VS FRIEND", MANIFEST.LAZY_NET],
     ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
+    ["LAZY_EDITOR — the track designer behind the TRACK DESIGNER door", MANIFEST.LAZY_EDITOR],
   ];
   const out = [];
   for (const [title, files] of groups) {
@@ -141,6 +142,7 @@ function rosterSource() {
     ["LAZY_DATA", MANIFEST.LAZY_DATA], ["LAZY_DATA_EDGES", MANIFEST.LAZY_DATA_EDGES],
     ["LAZY_NET", MANIFEST.LAZY_NET], ["LAZY_NET_EDGES", MANIFEST.LAZY_NET_EDGES],
     ["LAZY_WORKER", MANIFEST.LAZY_WORKER],
+    ["LAZY_EDITOR", MANIFEST.LAZY_EDITOR], ["LAZY_EDITOR_EDGES", MANIFEST.LAZY_EDITOR_EDGES],
     // The build Worker's importScripts list, "@circuits" expanded in page order
     // so the worker's Tracks.LIST indexes exactly as the page's does.
     ["TRACK_VM", MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.CIRCUITS.map(MANIFEST.circuitPath) : [e]))],

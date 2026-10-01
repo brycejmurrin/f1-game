@@ -48,3 +48,13 @@ angular wing housings and accent rails with an open top. Both share the original
 live instruments and shift lights with F1 2026. GT RIM is a stylistic alternative,
 not a claim that current F1 cars use a closed GT rim. The existing 2000s, CLASSIC
 and NONE choices remain available.
+
+### Additional cockpit combinations
+
+OPEN YOKE uses a lower curved bridge with an open upper sightline; ENDURANCE
+uses a shallow rectangular closed rim and diagonal lower spokes. Both retain
+the shared live speed, gear, battery and shift-light layout. TAPERED shoulders
+narrow toward the nose; STEPPED shoulders build a raised middle shelf while
+keeping the rear opening below the low-seat eye. SUEDE adds contrasting seam
+lines; RIBBED adds transverse raised padding. These are selectable design
+interpretations, rather than replicas of a named team's car.

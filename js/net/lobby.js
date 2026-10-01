@@ -594,8 +594,12 @@ const NetLobby = (function () {
 
     function publishSettings() {
       if (!sessions.size || role !== "host") return false;
+      // A CUSTOM circuit lives only in this player's storage: the guest cannot
+      // build it from an index. Publish the first shipped circuit instead.
+      const customPick = Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].custom;
+      if (customPick) say("Custom circuits can't be raced online yet — pick a built-in circuit.");
       return broadcast(NetPlay.EV.SETTINGS, {
-        track: G.trackIdx,
+        track: customPick ? 0 : G.trackIdx,
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
         quali: !!G.raceQuali, grid: G.raceGrid,
         difficulty: G.difficulty,
@@ -630,7 +634,7 @@ const NetLobby = (function () {
       if (!d || typeof d !== "object" || Array.isArray(d)) return null;
       const out = {};
       if (own(d, "track")) {
-        if (!Number.isInteger(d.track) || d.track < 0 || !Tracks.LIST || d.track >= Tracks.LIST.length) return null;
+        if (!Number.isInteger(d.track) || d.track < 0 || !Tracks.LIST || d.track >= Tracks.LIST.length || Tracks.LIST[d.track].custom) return null;
         out.track = d.track;
       }
       if (own(d, "laps")) {

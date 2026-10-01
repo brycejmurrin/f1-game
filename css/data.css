@@ -482,9 +482,26 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 .dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) / 6); white-space: normal; overflow-wrap: anywhere; }
 .dh-live-team { color: var(--dim); font-size: var(--fs-2); }
-.dh-live-gapwrap { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 1; min-width: 100px; justify-content: flex-end; }
-.dh-live-gapbar { height: 4px; border-radius: var(--r-xs); max-width: 80px; }
-.dh-live-gaplbl { font-size: var(--fs-1); color: var(--dim); font-variant-numeric: tabular-nums; width: 45px; text-align: right; }
+/* Gap column: the label used to be a fixed 45px with overflow:visible.
+   Titillium "+1.500" already wants ~50px, and larger race gaps ("+28.500")
+   more — the spill grew .dh-split-R's scrollWidth past the stacked scroll-
+   owner gate (browser-ui-hunt) whenever font metrics landed a pixel over.
+   Size the label in ch under tabular-nums, let the wrap shrink (name
+   ellipsizes), and clip so nothing can grow the pane sideways. */
+.dh-live-gapwrap {
+  display: flex; align-items: center; gap: calc(var(--gap) * 0.5);
+  flex: 1 1 auto; min-width: 0; justify-content: flex-end;
+  overflow: hidden;
+}
+.dh-live-gapbar {
+  height: 4px; border-radius: var(--r-xs); max-width: 80px;
+  flex: 0 1 auto; min-width: 0;
+}
+.dh-live-gaplbl {
+  font-size: var(--fs-1); color: var(--dim); font-variant-numeric: tabular-nums;
+  flex: 0 0 auto; width: 8ch; /* +###.### */
+  text-align: right; white-space: nowrap; overflow: hidden;
+}
 
 /* weather */
 .dh-weather { margin: calc(var(--gap) * 0.5) 0 var(--gap); }
