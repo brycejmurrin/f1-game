@@ -427,6 +427,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  // The branch-prune rule behind prune-branches.yml: merged-only, never an
+  // open PR's head, claims on age; pure fixtures, under a second.
+  "tests/unit/prune-branches.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
