@@ -1248,7 +1248,7 @@ function motionReduced() {
   return !!(_mq && _mq.matches)
     || (typeof document !== "undefined" && document.documentElement && document.documentElement.dataset.motion === "reduce");
 }
-function camComfort() { return XrBoot.camComfort(motionReduced()); }   // XR presenting ≡ reduce-motion
+function camComfort() { return XrBoot.camComfort(motionReduced()) || (typeof CamComfort !== "undefined" && CamComfort.active()); }   // XR / OS reduce-motion / touch auto-comfort
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage

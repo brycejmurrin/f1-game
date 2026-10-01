@@ -90,7 +90,11 @@ jobs:
             head -c 1 _dl/pack.bin | grep -q "{" && EXT=gltf
             cp _dl/pack.bin _extract/model.$EXT
           fi
-          echo "extracted:"; find _extract -maxdepth 3 -type f | head -50
+          # List a sample of what landed. sed, not `head -50`: under pipefail a
+          # pack with more than 50 files made head close the pipe early, find took
+          # SIGPIPE and the step failed on the LISTING (Kenney Racing Kit, 2026-10-01,
+          # 5 formats x 112 models). sed reads the whole stream.
+          echo "extracted: $(find _extract -type f | wc -l) files"; find _extract -maxdepth 3 -type f | sed -n '1,50p'
 
       - name: Bake models
         env:
