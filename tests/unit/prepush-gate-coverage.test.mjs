@@ -57,6 +57,7 @@ const UNIT = path.join(ROOT, "tests/unit");
 const SWEEPS_ONLY = new Map([
   ["car-front-wing-width.test.mjs", "test:sweeps — per-circuit geometry"],
   ["coplanar-faces.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["kerb-stripes.test.mjs", "test:sweeps — per-circuit geometry (kerb stripe edges, the line-following rubber band)"],
   ["debris-hazard-hint.test.mjs", "test:sweeps — per-circuit geometry"],
   ["driving-line-opts.test.mjs", "test:sweeps — per-circuit geometry"],
   ["driving-line.test.mjs", "test:sweeps — per-circuit geometry"],
