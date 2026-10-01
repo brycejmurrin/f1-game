@@ -1351,7 +1351,10 @@ function rebuild(team, liv, info, ctx) {
                  + `/${kc(liv && liv.c2)}/${kc(liv && liv.logo)}`
                  + `/${kc(liv && liv.logo2)}/${kc(liv && liv.logo3)}`
                  + `/${(liv && liv.sponsors) || "-"}`;   // the bay banners paint the sponsor pack (scene-live.js)
-  const gKey = `${team && team.id}|${livKey}`
+  // `legend`: the LEGENDS row keeps its id across legends, and two tribute
+  // liveries can share every colour (Schumacher's and Senna's reds), so the
+  // wall kept the previous legend's crest — a Ferrari horse over Senna.
+  const gKey = `${team && team.id}|${(team && team.legend) || ""}|${livKey}`
                + `|${logoGen}|${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`
                + `|${ctxKey(ctx)}`;
   const key = `${gKey}|${boardKey(info)}`;
@@ -1474,7 +1477,9 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
   // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
   if (carMesh) {
-    arrivalMirror[14] = carMat ? carMat[14] : 0;
+    // The car's own matrix mirrored in y = 0 (its y row negated): it turns and moves with the car.
+    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
+    else arrivalMirror.set(MAT_MIRROR);
     _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
   }
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);

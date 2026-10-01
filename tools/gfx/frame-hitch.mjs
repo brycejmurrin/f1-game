@@ -782,7 +782,7 @@ async function main() {
         // it. It changes the loop being measured in two ways that swamp the
         // signal:
         //   1. The read never completes on a software adapter, so the
-        //      back-pressure branch (tlx.js:3455) draws NOTHING while one is
+        //      back-pressure branch (`_softReadPending` in tlx.js) draws NOTHING while one is
         //      in flight. Measured: 8,946 rendered frames out of 17,892 rAF
         //      callbacks — half the samples are no-ops, and the p50 they set
         //      is the cost of doing nothing.

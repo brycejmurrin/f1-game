@@ -416,7 +416,13 @@ test("THE DIRECTIONS, FOLLOWED, MAKE THE STOP: every cue fires at the model's ow
   assert.equal(box.q.stops, 1);
 
   // 8. THE RELEASE: GO for servedS, then the exit road's metres, counting down to its end — and then silence.
-  const go = run(a, pits, () => ({ x: a.pit().laneX, throttle: true }), (c, q) => q.state === "out", 6);
+  //    The field OUT of it: fresh() sent it 800 m back half a minute ago, and by
+  //    now it has driven round to the pit exit — the AI's lap-1 getaway left two
+  //    stragglers 38 and 80 m behind it, and MERGE named them, correctly. A
+  //    second rivals([]) only moves whoever was ~800 m ahead to just behind, so
+  //    the field is retired (closingCar skips a retired car).
+  g.G.cars.forEach((o, i) => { if (!o.isPlayer) a.retire(i, "bench"); });
+  const go =run(a, pits, () => ({ x: a.pit().laneX, throttle: true }), (c, q) => q.state === "out", 6);
   assert.ok(go, "the hold never released");
   assert.equal(go.c.phase, "served"); assert.equal(go.c.text, "GO GO GO");
   const out = run(a, pits, (ps, q) => ({ x: q.driveX != null ? q.driveX : ps.x }), (c) => c && c.phase !== "served", 4);

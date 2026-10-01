@@ -61,6 +61,83 @@ function create(G) {
 
   let picking = false;
   let armedDelete = "";
+  let armedImport = "";   // `${flavour}:${i}` or `${flavour}:${i}:other` for cross-mode confirm
+  let pendingImport = null; // { envelope, focusFlavour, revisions }
+  let backupPicker = null;
+
+  function announce(msg) { if (G.announce) G.announce(msg); }
+
+  function pickBackupFile(onJson) {
+    if (!backupPicker) {
+      backupPicker = document.createElement("input");
+      backupPicker.type = "file";
+      backupPicker.accept = "application/json,.json";
+      backupPicker.hidden = true;
+      document.body.appendChild(backupPicker);
+    }
+    backupPicker.onchange = () => {
+      const f = backupPicker.files && backupPicker.files[0];
+      if (!f) return;
+      if (f.size > CareerBackup.MAX_BYTES) {
+        onJson(null, "too-large");
+        return;
+      }
+      const done = (text) => {
+        let obj = null;
+        try { obj = JSON.parse(text); } catch (_) { obj = null; }
+        onJson(obj, null, text);
+      };
+      const fail = () => onJson(null, "read-failed");
+      if (typeof f.text === "function") f.text().then(done, fail);
+      else {
+        const r = new FileReader();
+        r.onload = () => done(String(r.result || ""));
+        r.onerror = fail;
+        r.readAsText(f);
+      }
+    };
+    backupPicker.value = "";
+    backupPicker.click();
+  }
+
+  function expectedRevisions() {
+    const out = {};
+    for (const row of Career.slots()) {
+      out[`${row.flavour}:${row.i}`] = Career.slotRevision(row.flavour, row.i);
+    }
+    return out;
+  }
+
+  function runImport(envelope, focusFlavour, otherConfirmed, rawText) {
+    const result = CareerBackup.apply(envelope, {
+      focusFlavour,
+      otherFlavourConfirmed: !!otherConfirmed,
+      expectedRevisions: expectedRevisions(),
+      rawText,
+    });
+    if (result.ok) {
+      Career.load();
+      G.refreshCareerButton();
+      if (result.needsConfirm && !otherConfirmed) {
+        pendingImport = { envelope, focusFlavour, rawText };
+        armedImport = `${focusFlavour}:other`;
+        announce("CAREER RESTORED — CONFIRM OTHER MODE?");
+        build();
+        return result;
+      }
+      armedImport = "";
+      pendingImport = null;
+      announce("CAREER RESTORED");
+      build();
+      return result;
+    }
+    armedImport = "";
+    pendingImport = null;
+    announce(result.reason === "conflict" ? "SAVE CONFLICT — IMPORT REFUSED"
+      : ("IMPORT FAILED — " + String(result.reason || "error").toUpperCase()));
+    build();
+    return result;
+  }
 
   function slotCard(s) {
     const live = s.used && s.live;
@@ -88,6 +165,8 @@ function create(G) {
     open.onclick = () => {
       if (G.soundOn) GameAudio.uiSelect();
       armedDelete = "";
+      armedImport = "";
+      pendingImport = null;
       picking = false;
       if (s.used) { Career.useSlot(s.flavour, s.i); G.openCareer(); return; }
       // Opening an EMPTY slot repoints the live pointer at it; backing out
@@ -102,6 +181,62 @@ function create(G) {
       build();
     };
     card.appendChild(open);
+    // EXPORT dumps ALL six slots (the backup envelope). Same action on every
+    // used card so a player never has to hunt for a separate toolbar. Style via
+    // [data-cr-act] (same rules as .cr-slot-del) — never reuse cr-slot-del; that
+    // class selects DELETE in career.spec.js and must stay unambiguous.
+    if (s.used && typeof CareerBackup !== "undefined") {
+      const exp = el("button", "", "EXPORT");
+      exp.type = "button";
+      exp.setAttribute("data-cr-act", "export");
+      exp.setAttribute("aria-label", `Export all career saves (backup from ${modeName} slot ${s.i + 1})`);
+      exp.onclick = (ev) => {
+        ev.stopPropagation();
+        if (G.soundOn) GameAudio.uiTick();
+        armedDelete = "";
+        CareerBackup.exportAll().then((r) => {
+          announce(r && r.ok === false ? "EXPORT FAILED" : "CAREER BACKUP SAVED");
+        }).catch(() => announce("EXPORT FAILED"));
+      };
+      card.appendChild(exp);
+    }
+    if (typeof CareerBackup !== "undefined") {
+      const id = `${s.flavour}:${s.i}`;
+      const otherArmed = armedImport === `${s.flavour}:other` && pendingImport
+        && pendingImport.focusFlavour === s.flavour;
+      const armed = armedImport === id || otherArmed;
+      const imp = el("button", armed ? "armed" : "",
+        otherArmed ? "ALL MODES?" : (armedImport === id ? "IMPORT?" : "IMPORT"));
+      imp.type = "button";
+      imp.setAttribute("data-cr-act", "import");
+      const what = `${modeName} slot ${s.i + 1}`;
+      imp.setAttribute("aria-label", otherArmed
+        ? `Confirm: import the other career mode too`
+        : (armedImport === id ? `Confirm: import backup into ${what}` : `Import career backup into ${what}`));
+      imp.onclick = (ev) => {
+        ev.stopPropagation();
+        if (G.soundOn) GameAudio.uiTick();
+        armedDelete = "";
+        if (otherArmed && pendingImport) {
+          runImport(pendingImport.envelope, pendingImport.focusFlavour, true, pendingImport.rawText);
+          return;
+        }
+        if (armedImport === id && pendingImport && pendingImport.focusFlavour === s.flavour) {
+          runImport(pendingImport.envelope, s.flavour, false, pendingImport.rawText);
+          return;
+        }
+        pickBackupFile((obj, err, text) => {
+          if (err === "too-large") { announce("IMPORT FAILED — TOO LARGE"); return; }
+          if (!obj) { announce("IMPORT FAILED — BAD FILE"); return; }
+          const v = CareerBackup.validate(obj, text);
+          if (!v.ok) { announce("IMPORT FAILED — " + String(v.reason || "error").toUpperCase()); return; }
+          pendingImport = { envelope: obj, focusFlavour: s.flavour, rawText: text };
+          armedImport = id;
+          build();
+        });
+      };
+      card.appendChild(imp);
+    }
     if (s.used) {
       const id = `${s.flavour}:${s.i}`;
       const revision = Career.slotRevision(s.flavour, s.i);
@@ -114,6 +249,8 @@ function create(G) {
       del.onclick = (ev) => {
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
+        armedImport = "";
+        pendingImport = null;
         if (!armed) { armedDelete = id; build(); return; }
         armedDelete = "";
         if (!Career.deleteSlot(s.flavour, s.i, revision).ok) { build(); return; }
@@ -160,6 +297,19 @@ function create(G) {
 
     modeColumn(left, "driver");
     modeColumn(right, "myteam");
+
+    // CAREER FILE: inject from SettingsExport so shellNodes does not grow.
+    // buildSlotPanes clears both panes every open, so a fresh row each time.
+    if (typeof SettingsExport !== "undefined" && SettingsExport.careerRow) {
+      const row = SettingsExport.careerRow();
+      if (row) {
+        left.appendChild(head("BACKUP"));
+        left.appendChild(el("div", "cr-note",
+          "Save or restore every career slot as one JSON file. Settings and "
+          + "garage builds are not included — use SETTINGS › FILES and GARAGE › TEAM for those."));
+        left.appendChild(row);
+      }
+    }
 
     $("cr-go").hidden = true;
     $("cr-go").disabled = false;
@@ -467,6 +617,8 @@ function create(G) {
       ["Progress saves", "after every round"],
       "The two modes keep SEPARATE slots, so a driver career and a team can run "
       + "side by side and neither costs the other room.",
+      "SAVE CAREER FILE on the CAREER MODES screen backs up all six slots and "
+      + "which one is live. Settings and garage builds stay in their own files.",
       "RELIABILITY is a race setting, and it ships off. Turn it on and cars retire "
       + "— an engine, a gearbox, an accident. Developing the team and spending on "
       + "the engine and gearbox both buy the risk down, so money buys finishes as "
@@ -1299,6 +1451,7 @@ function create(G) {
     Log.info("ui", "CareerUI.openHub");
     picking = false;
     armedDelete = "";
+    armedImport = ""; pendingImport = null;
     build();
     $("career").hidden = false;
   }
@@ -1306,6 +1459,7 @@ function create(G) {
     Log.info("ui", "CareerUI.openSlots");
     picking = true;
     armedDelete = "";
+    armedImport = ""; pendingImport = null;
     build();
     $("career").hidden = false;
   }
@@ -1320,6 +1474,7 @@ function create(G) {
     Log.info("ui", "CareerUI.close");
     $("career").hidden = true;
     draft = null; draftFrom = null; armedDelete = "";
+    armedImport = ""; pendingImport = null;
   }
 
   $("cr-back").onclick = () => {
@@ -1327,7 +1482,10 @@ function create(G) {
     // career was just DELETED, Career.load() re-homed to another save, and
     // G.season / trackIdx / teamIdx still pointed at the deleted one — the
     // next GO RACING raced it and settled against the wrong round.
-    if (picking && Career.active()) { picking = false; armedDelete = ""; G.openCareer(); return; }
+    if (picking && Career.active()) {
+      picking = false; armedDelete = ""; armedImport = ""; pendingImport = null;
+      G.openCareer(); return;
+    }
     if (draft && draftFrom && !Career.active()) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
     // (build() retitles this button per state — see buildSlotPanes/buildHubPanes.)
     close();

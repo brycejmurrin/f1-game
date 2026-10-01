@@ -195,6 +195,7 @@ const GLXBackend = (function () {
   let frameSunColor = null;
   let frameDecalSun = null;   // keyMul-scaled sun for the decal pass (raw frameSunColor feeds god rays)
   const _decalSunScr = [0, 0, 0];
+  const _windScr = [0.819, 0.574, 1.0];   // uWind upload scratch (begin())
   let frameAmbSky = [0.3, 0.32, 0.36], frameAmbGround = [0.2, 0.19, 0.18];   // for decal lighting
   let decalProg = null, decalU = null;   // textured car-decal (logo/sponsor) pass
   let frameTime = 0, frameCloud = 0, frameCloudSpeed = 1;
@@ -787,7 +788,7 @@ const GLXBackend = (function () {
     // floor does not, and until now the only symptom was init() returning
     // false with a 100 KB shader dumped to the console. Say the two numbers
     // side by side so a "no WebGL" report on a phone names its cause.
-    const LIT_FS_ROWS = 285;
+    const LIT_FS_ROWS = 287;   // +uRain, +uSpecKnee (2026-10-01)
     try {
       const rows = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) | 0;
       if (rows && rows < LIT_FS_ROWS) {
@@ -909,11 +910,11 @@ const GLXBackend = (function () {
     _envUnitSet = false;   // uEnvCube's sampler unit is program state: re-point it once after this link
     litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
-      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
+      "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uRain", "uSpecKnee", "uEnvCube", "uEnvStr",
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
       "uCarShadowMap", "uCarLightVP", "uCarShadowOn", "uCarBiasScale",
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uPitBox", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uPitBox", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uWind", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
@@ -1769,6 +1770,15 @@ const GLXBackend = (function () {
     uf1(litU.uMistHeight,  _litUf, "mistHeight",  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
     uf1(litU.uShadowTintAmt, _litUf, "shadowTintAmt", T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
     uf1(litU.uWetDark,     _litUf, "wetDark",     T && T.wetDark     != null ? T.wetDark     : 1.0);
+    // WIND knobs → LIT_VS uWind (foliage sway): xy = unit direction in world xz
+    // from WIND DIRECTION (degrees), z = WIND speed scale. Defaults mirror
+    // TUNE_DEFS (35°, 1.0); same vector as TLX U.wind.
+    {
+      const wd = (T && T.windDir != null ? T.windDir : 35) * (Math.PI / 180);
+      _windScr[0] = Math.cos(wd); _windScr[1] = Math.sin(wd);
+      _windScr[2] = T && T.windSpeed != null ? T.windSpeed : 1.0;
+      uf3(litU.uWind, _litUf, "wind", _windScr);
+    }
     // BAKED MATERIALS knob. Ships at 1.0 (mirrors TUNE_DEFS matTexMix def);
     // __apex.matTex(0) is the A/B off-switch back to pure procedural. A missing
     // pack still renders procedural — bindMaterialMaps forces uMatTexMix to 0
@@ -1912,6 +1922,8 @@ const GLXBackend = (function () {
     uf1(litU.uAmbContactDark, _litUf, "ambContactDark", T && T.ambContactDark != null ? T.ambContactDark : 1.0);
     uf1(litU.uLampWallSpill,  _litUf, "lampWallSpill",  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
     uf1(litU.uWetness, _litUf, "wetness", frame.wetness != null ? frame.wetness : 0.0);
+    uf1(litU.uRain,    _litUf, "rain",    frame.rain != null ? frame.rain : 0.0);     // puddle ripples (falling rain only)
+    uf1(litU.uSpecKnee, _litUf, "specKnee", T && T.specKnee != null ? T.specKnee : 4.0);   // SUN GLINT RANGE (TUNE_DEFS def 4.0)
     // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE
     // cube must ALWAYS be bound here with uEnvCube pointed at it — even with no
     // probe (menu / setup viewer / tools) — otherwise the samplerCube defaults to

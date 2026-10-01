@@ -467,7 +467,8 @@ test("a same-circuit rebuild does not re-key the ghost (sameCircuit reads the id
   assert.ok(a > 0 && a < b, "prevTrackId is captured before the reset");
   // ...and the stepped build (loadTrackStepped) captures it before ITS reset, for _loadTrackBody's builtPrevId.
   const st = src.slice(src.indexOf("async function loadTrackStepped("), src.indexOf("function loadTrack(idx)"));
-  assert.ok(st.indexOf("prevId = builtTrackId;") > 0 && st.indexOf("prevId = builtTrackId;") < st.indexOf("track = null; builtTrackId = null;"), "the stepped build captures it before its own reset");
+  assert.ok(st.indexOf("prevId = builtTrackId;") > 0 && st.indexOf("prevId = builtTrackId;") < st.indexOf("dropTrackWorld();"), "the stepped build captures it before its own reset");
+  assert.match(src, /function dropTrackWorld\(\) \{[\s\S]{0,200}track = null; builtTrackId = null;/, "…which is dropTrackWorld's");
   assert.match(st, /_loadTrackBody\(idx, def, built, prevId\);/);
   assert.match(src, /const sameCircuit = prevTrackId === def\.id;/);
 });

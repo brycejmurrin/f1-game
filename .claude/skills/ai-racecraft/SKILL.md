@@ -41,6 +41,21 @@ low `vC` (k, grip, `diffCorner`, `skill`), too small `0.85`, or `errMul`/`hold`.
 point itself: `ai-race.mjs pace` (lap time) and `line` (approach/apex) are the closest VM
 proxies; for the exact point probe `__apex` live (browser, `mcp-probe`).
 
+## Traffic tactics (bunching, passing, defending, the player)
+
+All in `ai-drive.js` / `ai-corridor.js`, state in `updateCar` (2026-10-01, PHYSICS.md
+§Racecraft tactics): follow gap is a TIME (`followGap` s0 + v·T, T 0.15-0.30 s, tight 0.05 s when a pass is
+latched/armed or towing; queue window `max(16, follow+6)`); pass side = inside of the NEXT corner (`c.kTurn`,
+`passSideBonus`); get a run (`runExtra`/`latchLate`); lane look-ahead (AiCorridor);
+per-zone attack roll (`attemptRoll`, never `simRnd`); level pair: outside of the next
+corner yields, commit-or-yield after 2 s (`sbsCommitT`); any flip -> `repassLock` and
+the passer is a wide blocker; defending mid-train / adjacent lane / predicted side
+(`defendPull`); first 20 s calm (`startCalm`). A human blocker is judged by `paceVmax`
+(`paceSample` profile), and a held line arms `humanYieldT` at a quarter rate.
+`kTurn` never reaches a human pair in collide.js. STREETS (`track.street`) keep the metre
+gap and the old pass gates (no look-ahead / latchLate / runExtra / 0.8 side bonus / wide
+lockout blocker): they cost monaco passes. Measure: `ai-race.mjs tactics`.
+
 ## Stuck / unstuck (AI wedged, never recovers)
 
 Two timers, both in `updateCar` (`game.js`, grep `stuckT` / `rescueT`): `stuckT` grows while
@@ -58,15 +73,19 @@ No CLI counts stuck/rescue: `ai-field.mjs` reports dwell/contact only (`--second
 Record: track, seed, car, `stuckT`/`rescueT` at freeze, pitState, inLane, roomL/R.
 
 ```sh
-node --test tests/unit/ai-drive.test.mjs      # 75 tests, ~1 s
+node --test tests/unit/ai-drive.test.mjs      # ~100 tests, ~1 s
 node --test tests/unit/ai-racecraft-vm.test.mjs   # VM shape gate (jitter/approach/line); read its header first
 node tools/ci/test-bg.mjs collisions   # BROWSER group (background, AGENTS rule 4/5); racecraft lives in the contact specs
 
-# Field instruments (VM, no browser) — one dispatcher, three measurements:
-node tools/check/ai-race.mjs pace  [--track monza] [--diff normal]
-node tools/check/ai-race.mjs field [--track monza] [--seconds 240] [--runs 5]
-node tools/check/ai-race.mjs line  [--track monza]
-node tools/check/ai-race.mjs human [--track monza] [--runs 3]   # vs a PLAYER, not itself
-# All take --wear off|light|real (default off: no pits/deg). Direct: ai-pace/ai-field/ai-line/ai-human.mjs;
+# Field instruments (VM, no browser) — one dispatcher:
+node tools/check/ai-race.mjs pace    [--track monza] [--diff normal]
+node tools/check/ai-race.mjs field   [--track monza] [--seconds 240] [--runs 5]
+node tools/check/ai-race.mjs tactics [--track monza] [--laps 8] [--runs 5] [--mode human --pace 0.97]  # intervals (s), stuck, swap-backs, lap 1
+node tools/check/ai-race.mjs line    [--track monza]
+node tools/check/ai-race.mjs human   [--track monza] [--runs 3]   # vs a PLAYER, not itself
+node tools/check/ai-race.mjs ratings [--json]                     # Pearson / style zero-mean (no race)
+node tools/check/ai-race.mjs band    [--track monza] [--diff normal] [--seconds 90]  # rubber-band profile
+# Race subcommands take --wear off|light|real (default off: no pits/deg).
+# Direct: ai-pace/ai-field/ai-line/ai-human/ai-ratings/ai-band.mjs;
 # tyre strategy over a race: node tools/check/ai-strategy-census.mjs (wear real).
 ```
