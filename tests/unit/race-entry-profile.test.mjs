@@ -113,3 +113,32 @@ test("manifest lists the module before quality-preset (load order)", () => {
   const b = man.indexOf('"js/perf/quality-preset.js"');
   assert.ok(a > 0 && b > a, "race-entry-profile must be in FULL ahead of quality-preset");
 });
+
+test("requestWarm / raiseHandoff / span / afterPresent keep game.js thin", () => {
+  const P = load();
+  P.begin("startRace");
+  let warmed = 0;
+  P.requestWarm({ warm() { warmed++; } }, false);
+  assert.equal(warmed, 1);
+  assert.ok(P.snapshot().marks.some((m) => m.n === "warm:request"));
+  P.requestWarm({ warm() { warmed++; } }, true);
+  assert.equal(warmed, 1);
+  assert.ok(P.snapshot().marks.some((m) => m.n === "warm:skipped-menu"));
+  let handoffs = 0, stops = 0;
+  const screen = {
+    phase: () => "handoff",
+    handoff() { handoffs++; },
+    stop() { stops++; },
+  };
+  P.raiseHandoff(screen);
+  assert.equal(handoffs, 1);
+  let ran = 0;
+  P.span("warmCarAssets", () => { ran++; });
+  assert.equal(ran, 1);
+  const names = P.snapshot().marks.map((m) => m.n);
+  assert.ok(names.includes("warmCarAssets:start"));
+  assert.ok(names.includes("warmCarAssets:end"));
+  P.afterPresent(screen, { warming: () => false });
+  assert.equal(stops, 1);
+  assert.ok(P.snapshot().marks.some((m) => m.n === "handoff:lower"));
+});

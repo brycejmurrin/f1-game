@@ -127,6 +127,48 @@ const RaceEntryProfile = (() => {
     if (endAfterReady > 0 && --endAfterReady === 0) end();
   }
 
+  /** TLX warm request (or skipped/noop) — one call site in startRaceBody. */
+  function requestWarm(gfx, alreadyWarmed) {
+    if (gfx && gfx.warm && !alreadyWarmed) { mark("warm:request"); gfx.warm(); }
+    else mark(alreadyWarmed ? "warm:skipped-menu" : "warm:noop");
+  }
+
+  function raiseHandoff(screen) {
+    mark("handoff:raise");
+    screen.handoff();
+  }
+
+  function span(name, fn) {
+    mark(name + ":start");
+    try { return fn(); }
+    finally { mark(name + ":end"); }
+  }
+
+  async function spanAsync(name, fn) {
+    mark(name + ":start");
+    try { return await fn(); }
+    finally { mark(name + ":end"); }
+  }
+
+  /** Lower the handoff card on the first painted present; tick the window. */
+  function afterPresent(screen, gfx) {
+    if (screen.phase() === "handoff") {
+      const warming = !!(gfx.warming && gfx.warming());
+      notePresent(warming);
+      if (!warming) { mark("handoff:lower"); screen.stop(); }
+    }
+    tickFrame();
+  }
+
+  /** sessionEntry.begin wrapped so begin/end/scenery marks stay out of game.js. */
+  function runSession(sessionEntry, key, scenery, body, stillWanted, onFail) {
+    begin("startRace");
+    return sessionEntry.begin("race", key,
+      () => spanAsync("ensureScenery", scenery),
+      body, stillWanted,
+      (e) => { end(); onFail(e); });
+  }
+
   function blockMs() {
     let s = 0;
     for (const t of longTasks) s += t.ms;
@@ -153,7 +195,9 @@ const RaceEntryProfile = (() => {
   }
 
   return {
-    begin, end, lap, mark, notePresent, tickFrame, snapshot,
+    begin, end, lap, mark, notePresent, tickFrame,
+    requestWarm, raiseHandoff, span, spanAsync, afterPresent, runSession,
+    snapshot,
     legs: () => legs.slice(),
     armed: () => armed,
     supported: () => supported,

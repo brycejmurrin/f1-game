@@ -3000,10 +3000,7 @@ async function startRaceBody() {
   // TLX links programs synchronously on first draw — warm them during the LIGHTS,
   // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
   // Optimisation only; GLX/WGX have no warm and no-op.
-  try {
-    if (gfx.warm && _warmKey !== menuKey(trackIdx)) { RaceEntryProfile.mark("warm:request"); gfx.warm(); }
-    else RaceEntryProfile.mark(_warmKey === menuKey(trackIdx) ? "warm:skipped-menu" : "warm:noop");
-  } catch (_) { /* as above */ }
+  try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
@@ -3011,7 +3008,7 @@ async function startRaceBody() {
   // lowers it with the first frame the backend presents (LoadingScreen.handoff).
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build") && !!player;   // "build": startRaceCovered's card
   clearMenuScreens();
-  if (handoff) { RaceEntryProfile.mark("handoff:raise"); loadingScreen.handoff(); }
+  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -3037,8 +3034,8 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
-  RaceEntryProfile.mark("warmCarAssets:start"); warmCarAssets(); RaceEntryProfile.mark("warmCarAssets:end"); // meshes HERE, not first countdown frame
-  RaceEntryProfile.mark("debrisPrime:start"); DebrisWorld.prime(); updateHud(true); RaceEntryProfile.mark("debrisPrime:end");
+  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -3058,14 +3055,9 @@ function entrySettings() {
 }
 function startRace() {
   const key = entrySettings(), idx = trackIdx;
-  RaceEntryProfile.begin("startRace");
-  const request = sessionEntry.begin("race", key, async () => {
-      RaceEntryProfile.mark("ensureScenery:start");
-      try { return await ensureScenery(idx); }
-      finally { RaceEntryProfile.mark("ensureScenery:end"); }
-    },
-    () => startRaceBody(), () => key === entrySettings(),
-    (e) => { if (e) Log.error("game", "startRace failed", e); RaceEntryProfile.end(); quitToMenu(); });
+  const request = RaceEntryProfile.runSession(sessionEntry, key,
+    () => ensureScenery(idx), () => startRaceBody(), () => key === entrySettings(),
+    (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); });
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
   // still receives the original rejecting promise and its original error.
@@ -8422,12 +8414,7 @@ function render(dt) {
   }
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
-  if (loadingScreen.phase() === "handoff") {
-    const warming = !!(gfx.warming && gfx.warming());
-    RaceEntryProfile.notePresent(warming);
-    if (!warming) { RaceEntryProfile.mark("handoff:lower"); loadingScreen.stop(); }
-  }
-  RaceEntryProfile.tickFrame();
+  RaceEntryProfile.afterPresent(loadingScreen, gfx);
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
   // reverts on the next boot, which is the whole point of it.
