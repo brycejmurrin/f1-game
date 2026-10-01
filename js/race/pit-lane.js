@@ -1468,7 +1468,7 @@ const PitLane = (function () {
     }
     function twoCompoundRule(laps) {
       return laps >= TWO_COMPOUND_MIN_LAPS
-        && TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness()) === 0
+        && TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness()) === 0
         && !sprintLeg();
     }
     const COMPOUND_WARN_LAPS = 5;
