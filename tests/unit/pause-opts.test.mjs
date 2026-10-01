@@ -36,7 +36,7 @@ function button(id, text) {
   };
 }
 
-function load({ stored = {}, readyState = "complete" } = {}) {
+function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   const timers = new Map();
   let nextTimer = 1;
   const written = {};
@@ -106,7 +106,10 @@ function load({ stored = {}, readyState = "complete" } = {}) {
     },
     document,
   });
+  // ScreenLooks loads AFTER pause-opts.js, so a stub is installed after eval
+  // too — the module must read it at call time, never capture it.
   vm.runInContext(SRC, ctx, { filename: FILE });
+  if (looks) ctx.ScreenLooks = looks;
   // A click as the browser dispatches it: capture listeners on #pausemenu
   // first; unless one stopped it, the button's own handler (js/game.js) runs.
   const handled = [];
@@ -193,6 +196,8 @@ test("boot parity: index.html's inline stamp matches the module for every answer
   const cases = [
     {},
     { pauseLayout: "list" }, { pauseLayout: "grid" }, { pauseLayout: "tiles" },
+    { pauseLayout: "compact" }, { pauseLayout: "wide" }, { pauseLayout: "sidebar" },
+    { pauseLayout: "sidebar", pauseSide: "right" }, { pauseLayout: "wide", pauseDim: "soft" },
     { pauseSide: "left" }, { pauseSide: "right" }, { pauseSide: "centre" }, { pauseSide: "top" },
     { pauseDim: "soft" }, { pauseDim: "off" }, { pauseDim: "full" }, { pauseDim: 0 },
     { pauseLayout: "list", pauseSide: "left", pauseDim: "off", pauseConfirm: "off" },
@@ -341,7 +346,7 @@ test("CSS: BACKGROUND feeds both scrim layers through tokens; LIST, SIDE and the
 
 test("export rows, boot keys and the load order", () => {
   for (const [k, def, oneOf] of [
-    ["pauseLayout", "grid", '["grid", "list"]'],
+    ["pauseLayout", "grid", '["grid", "list", "compact", "wide", "sidebar"]'],
     ["pauseSide", "centre", '["centre", "left", "right"]'],
     ["pauseDim", "full", '["full", "soft", "off"]'],
     ["pauseConfirm", "on", '["on", "off"]'],
@@ -355,4 +360,78 @@ test("export rows, boot keys and the load order", () => {
   for (const k of ["pauseLayout", "pauseSide", "pauseDim"]) assert.ok(SHELL.includes(`apex26.${k}`), k + " in the boot script");
   assert.match(MANIFEST, /"js\/ui\/pause-opts\.js",/);
   assert.match(MANIFEST, /\["js\/core\/store\.js", "js\/ui\/pause-opts\.js"\]/);
+});
+
+test("LAYOUT: COMPACT / WIDE / SIDEBAR round-trip, stamp and read back", () => {
+  const { M, html, written, wired, summary } = load();
+  assert.deepEqual(JSON.parse(JSON.stringify(M.LAYOUTS)).map(([id]) => id), ["grid", "list", "compact", "wide", "sidebar"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(wired.get("pm-pauselayout").values)).map(([id]) => id),
+    ["grid", "list", "compact", "wide", "sidebar"]);
+  for (const v of ["compact", "wide", "sidebar"]) {
+    assert.equal(M.setLayout(v), v);
+    assert.equal(written.pauseLayout, v);
+    assert.equal(html.dataset.pauseLayout, v);
+    assert.equal(summary.textContent, "PAUSE MENU · CUSTOM");
+    assert.equal(load({ stored: { pauseLayout: v } }).M.layoutMode(), v, v + " survives a reload");
+  }
+  assert.equal(M.setLayout("grid"), "grid");
+  assert.equal(html.dataset.pauseLayout, undefined);
+  assert.equal(summary.textContent, "PAUSE MENU · SHIPPED");
+  const help = load().bodyKids[0].textContent;
+  for (const w of ["COMPACT", "WIDE", "SIDEBAR"]) assert.ok(help.includes(w), "fold help names " + w);
+});
+
+test("SHIPPED composes with ScreenLooks' lookPause knobs; absent ScreenLooks reads as shipped", () => {
+  let lookShipped = false;
+  const looks = { PEEK_MS: 1800, isShipped: (id) => (assert.equal(id, "pause"), lookShipped), peek() {} };
+  const a = load({ looks });
+  assert.equal(a.M.shipped(), false, "a custom lookPause knob makes the fold CUSTOM");
+  a.M.apply();
+  assert.equal(a.summary.textContent, "PAUSE MENU · CUSTOM");
+  lookShipped = true;
+  assert.equal(a.M.shipped(), true);
+  a.M.apply();
+  assert.equal(a.summary.textContent, "PAUSE MENU · SHIPPED");
+  // Own knob off its default still reads CUSTOM whatever ScreenLooks says.
+  assert.equal(load({ looks, stored: { pauseSide: "left" } }).M.shipped(), false);
+  assert.equal(load().M.shipped(), true, "no ScreenLooks global: own four decide");
+});
+
+test("every setter peeks the pause card through ScreenLooks, read at call time", () => {
+  const peeks = [];
+  const looks = { PEEK_MS: 1800, isShipped: () => true, peek: (id, ms) => peeks.push([id, ms]) };
+  const { M } = load({ looks });
+  M.setLayout("wide"); M.setSide("left"); M.setDim("soft"); M.setConfirm("off");
+  assert.deepEqual(peeks, [["pause", 1800], ["pause", 1800], ["pause", 1800], ["pause", 1800]]);
+  // Without ScreenLooks the setters still work and throw nothing.
+  assert.equal(load().M.setLayout("compact"), "compact");
+});
+
+test("CSS: each new LAYOUT and every lookPause knob has a rule in the pause block", () => {
+  const rule = (sel) => new RegExp(sel.replace(/[[\]().*+?^$|]/g, "\\$&") + "[^{]*\\{");
+  // COMPACT: three columns, chip-height doors, the info lines keep the full row.
+  assert.match(COMP, /:root\[data-pause-layout="compact"\] #pausemenu \.sheet-body\.stack \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); \}/);
+  assert.match(COMP, /:root\[data-pause-layout="compact"\] #pausemenu \.sheet-body\.stack > button \{ min-height: var\(--chip-h\); \}/);
+  assert.match(COMP, /:root\[data-pause-layout="compact"\] :is\(#pm-quit, #pm-standings, #pm-howto\) \{ grid-column: auto; \}/);
+  // WIDE: along the bottom, one wrapping flex row.
+  assert.match(COMP, /:root\[data-pause-layout="wide"\] #pausemenu \{[^}]*align-items: end/);
+  assert.match(COMP, /:root\[data-pause-layout="wide"\] #pausemenu \.sheet-body\.stack \{ display: flex; flex-wrap: wrap; \}/);
+  assert.match(COMP, /:root\[data-pause-layout="wide"\] :is\(#pm-now-card, #pm-build\) \{ flex-basis: 100%; \}/);
+  // SIDEBAR: full height on the start edge, the end edge for SIDE RIGHT.
+  assert.match(COMP, /:root\[data-pause-layout="sidebar"\] #pausemenu \{[^}]*justify-items: start;[^}]*align-items: stretch/);
+  assert.match(COMP, /:root\[data-pause-layout="sidebar"\]\[data-pause-side="right"\] #pausemenu \{ justify-items: end; \}/);
+  assert.match(COMP, /:root\[data-pause-layout="sidebar"\] #pausemenu \.sheet \{ height: 100%; \}/);
+  // VERTICAL POSITION wins over WIDE's bottom edge: same specificity, later.
+  assert.ok(COMP.indexOf(':root[data-look-pause-vpos="top"] #pausemenu') > COMP.indexOf(':root[data-pause-layout="wide"] #pausemenu {'));
+  for (const sel of [
+    ":root[data-look-pause-btn]", ":root[data-look-pause-w]", ":root[data-look-pause-gap]",
+    ':root[data-look-pause-style="outline"]', ':root[data-look-pause-align="left"]',
+    ':root[data-look-pause-vpos="top"]', ':root[data-look-pause-vpos="bottom"]',
+    ':root[data-look-pause-music="hide"]', ':root[data-look-pause-build="hide"]',
+  ]) assert.match(COMP, rule(sel), sel + " has a rule");
+  for (const k of ["btn", "w", "gap"]) assert.ok(COMP.includes(`var(--look-pause-${k})`), k + " reads its token");
+  // BUTTON HEIGHT stays off the transport squares (direct children only).
+  assert.match(COMP, /:root\[data-look-pause-btn\] #pausemenu \.sheet \.sheet-body\.stack > button \{ min-height: calc\(var\(--tap-0\) \* var\(--look-pause-btn\)\); \}/);
+  // OUTLINE never repaints an armed door.
+  assert.match(COMP, /:root\[data-look-pause-style="outline"\] #pausemenu \.sheet-body\.stack > button:is\([^)]*\):not\(#pm-resume\):not\(\.armed\)/);
 });

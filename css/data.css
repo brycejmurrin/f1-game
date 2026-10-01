@@ -408,6 +408,57 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-table tbody tr.dh-lr-p2 { color: var(--silver); background: color-mix(in srgb, var(--silver) 5%, transparent); border-left: 3px solid var(--silver); }
 .dh-table tbody tr.dh-lr-p3 { color: var(--bronze); background: color-mix(in srgb, var(--bronze) 5%, transparent); border-left: 3px solid var(--bronze); }
 
+/* ---------- SCREEN LOOKS: DATA HUB fold (js/ui/screen-looks.js) ----------
+   SETTINGS › APPEARANCE › DATA HUB. Each rule keys on an <html data-look-
+   datahub-*> attribute the engine writes ONLY off the default, so the shipped
+   hub is every rule here not matching. The shared core knobs (BUTTON HEIGHT,
+   CORNERS, BACKGROUND, HEADINGS) live in css/responsive.css; WIDTH lives here
+   because the card is a .dh-card, not the .sheet the core WIDTH rule scales.
+   Every selector carries #datahub so it outranks the body[data-density] and
+   body[data-width] tiers above without depending on source order — and so the
+   telemetry popup (a separate dialog appended inside the hub) keeps its own
+   sizing: it has no .dh-card, .dh-tabs or standings rows of its own. */
+
+/* WIDTH — a share of the card's own 760px cap, never past the overlay. The
+   foldable-hinge max-width (css/components.css) still clamps it. */
+:root[data-look-datahub-w] #datahub .dh-card { width: min(calc(760px * var(--look-datahub-w, 1)), 100%); }
+
+/* ROW HEIGHT — one answer for the three row kinds the tabs draw: standings /
+   live / telemetry rows (.dh-row), schedule rows (.dh-race) and the results
+   tables. TIGHT trims only the block padding (the inline padding carries the
+   team-colour edge); ROOMY floors each row at the tap height, so a row reads
+   as a target. A table row takes `height` as its minimum (min-height does not
+   apply to table rows). The cut band and the lap board are rules and drawers,
+   not data rows, so they keep their shipped size. */
+:root[data-look-datahub-rows="tight"] #datahub .dh-row { padding-block: calc(var(--gap) / 6); }
+:root[data-look-datahub-rows="tight"] #datahub .dh-race { padding-block: calc(var(--gap) * 0.3); }
+:root[data-look-datahub-rows="tight"] #datahub .dh-table tbody tr:not(.dh-cut, .dh-lap-board) > td { padding-block: calc(var(--gap) / 6); }
+:root[data-look-datahub-rows="roomy"] #datahub :is(.dh-row, .dh-race) { min-height: var(--tap); }
+:root[data-look-datahub-rows="roomy"] #datahub .dh-table tbody tr:not(.dh-cut, .dh-lap-board) { height: var(--tap); }
+
+/* TAB STYLE — FILLED is the button base the tabs ship with. UNDERLINE drops
+   the plate entirely and marks the active tab with a red rule on the strip's
+   own hairline, the broadcast-graphics tab; PILL keeps the plate and rounds
+   it fully, and outranks CORNERS on purpose (the player asked for pills). */
+:root[data-look-datahub-tabs="underline"] #datahub .dh-tab {
+  background: transparent; border-color: transparent; border-radius: 0; box-shadow: none;
+}
+:root[data-look-datahub-tabs="underline"] #datahub .dh-tab.active { box-shadow: inset 0 -2px 0 var(--red); }
+:root[data-look-datahub-tabs="pill"] #datahub .dh-tab { border-radius: var(--r-pill); }
+
+/* ROW STRIPES — every other row on the plate surface, at half strength so a
+   striped row stays quieter than a hovered one. Rows that already carry a
+   meaning-bearing wash (leader, next race, podium, cut band, an open lap) keep
+   it, and a hovered list row keeps its hover. Parity counts siblings, so a lap
+   board opened inside a table shifts the stripes below it — acceptable for a
+   reading aid, and cheaper than a JS-written parity class. */
+:root[data-look-datahub-stripes="on"] #datahub :is(.dh-row:not(.dh-row-lead), .dh-race:not(.dh-race-next)):nth-child(even):not(:hover) {
+  background: color-mix(in oklab, var(--plate) 50%, transparent);
+}
+:root[data-look-datahub-stripes="on"] #datahub .dh-table tbody tr:nth-child(even):not(.dh-cut, .dh-lap-board, .dh-lr-p1, .dh-lr-p2, .dh-lr-p3, [aria-expanded="true"]) {
+  background: color-mix(in oklab, var(--plate) 50%, transparent);
+}
+
 /* live */
 .dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: calc(var(--gap) / 3); }
 .dh-live-title { display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--gap) * 0.5); font-size: 17px; font-weight: 800; font-style: italic; color: var(--text); }

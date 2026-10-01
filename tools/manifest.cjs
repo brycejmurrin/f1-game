@@ -294,6 +294,7 @@ const FULL = [
   "js/ui/appearance-opts.js",
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
+  "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
@@ -460,6 +461,7 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
   ["js/core/store.js", "js/ui/title-layout.js"],  // binds GameStore.store and applies the title layout at eval
   ["js/core/store.js", "js/ui/pause-opts.js"],    // binds GameStore.store and applies data-pause-* at eval
+  ["js/core/store.js", "js/ui/screen-looks.js"],  // binds GameStore.store and applies data-look-* at eval
   ["js/core/store.js", "js/career/badges.js"],    // binds GameStore.store at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is

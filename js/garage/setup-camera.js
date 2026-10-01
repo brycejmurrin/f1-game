@@ -7,6 +7,22 @@ const SetupCamera = (function () {
 // one source for them. See the HARD_EDGES pair in tools/manifest.cjs.
 const { X_OPEN_RATE, X_CLOSE_RATE } = PhysicsConsts;
 
+// WHERE THE DOCKED PANEL LEAVES THE CAR ITS ROOM — pure, so it is testable
+// without a canvas (tests/unit/garage-panel-side.test.mjs). `pr` is the
+// panel's visual rect, `cr` the canvas rect, cw/ch the canvas size, `camTop` a
+// thunk for the open camera panel's top (read only on the portrait axis).
+// Returns { x, y } as fractions of the canvas: x is SIGNED by which half the
+// panel's centre sits in (+ right, the shipped dock, - left), so a right dock
+// returns exactly the unsigned number it always did; y is the portrait band.
+function panelCover(pr, cr, cw, ch, camTop) {
+  const lim = (v) => (v < 0 ? 0 : v > 0.85 ? 0.85 : v);   // M4.clamp(v, 0, 0.85), the clamp this replaced
+  if (cw - pr.width >= ch - pr.height) {
+    const f = lim(pr.width / cw);
+    return { x: f > 0 && pr.left + pr.right < cr.left + cr.right ? -f : f, y: 0 };
+  }
+  return { x: 0, y: lim((pr.bottom + Math.min(camTop(), ch) - ch) / ch) };
+}
+
 /** @param {*} G the js/game.js ctx façade.
  *  @param {*} deps car-drawing helpers that stay in game.js (the garage and the
  *  race share them) — the same seam js/car/car-draw.js and
@@ -408,9 +424,12 @@ function renderSetupPreview(dt) {
   // The orbit radius is horizontal, so raising the camera does not walk it away
   // from the car: at el 0 this is the turntable ring, at el 1.2 it is overhead.
   const spCe = Math.cos(setupPreviewEl), spSe = Math.sin(setupPreviewEl);
-  // The docked #cs-inner panel covers the right portion of the canvas, so the
-  // car only ever gets (1 - panelFrac) of the frustum. Read the panel's live
-  // pixel width so this tracks every breakpoint/viewport automatically.
+  // The docked #cs-inner panel covers one side of the canvas, so the car only
+  // ever gets (1 - |panelFrac|) of the frustum. Read the panel's live pixel
+  // width so this tracks every breakpoint/viewport automatically. SIGNED: the
+  // panel docks RIGHT (+) by default and LEFT (-) under APPEARANCE › GARAGE ›
+  // PANEL SIDE; the lens shift and GarageScene.recentre take the sign as is
+  // (the car lands at -panelFrac either way), the fit takes the magnitude.
   // WHICH WAY DOES THE PANEL LEAVE ROOM? It docks to the RIGHT on a wide screen
   // and to the TOP on a tall one, because a portrait phone has no width to give
   // and plenty of height — so the gap the car gets is either beside the panel or
@@ -423,15 +442,15 @@ function renderSetupPreview(dt) {
     // Visual coverage vs the unzoomed canvas (A13). viewportRect scales up on
     // engines where gBCR is still local under CSS zoom.
     const pr = (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect();
-    const cw = canvasEl.clientWidth, ch = canvasEl.clientHeight;
-    if (cw - pr.width >= ch - pr.height) panelFrac = clamp(pr.width / cw, 0, 0.85);
-    else {
-      // Portrait: centre the car in what is left between the sheet and the OPEN
-      // camera panel (bottom of the same gap), not behind the buttons that aim it.
-      const cam = $("cs-cam-panel"), camTop = cam && !cam.hidden && cam.offsetParent !== null
-        ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top : ch;
-      panelFracY = clamp((pr.bottom + Math.min(camTop, ch) - ch) / ch, 0, 0.85);
-    }
+    // Portrait: centre the car in what is left between the sheet and the OPEN
+    // camera panel (bottom of the same gap), not behind the buttons that aim it.
+    const camTop = () => {
+      const cam = $("cs-cam-panel");
+      return cam && !cam.hidden && cam.offsetParent !== null
+        ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top : canvasEl.clientHeight;
+    };
+    const cover = panelCover(pr, canvasEl.getBoundingClientRect(), canvasEl.clientWidth, canvasEl.clientHeight, camTop);
+    panelFrac = cover.x; panelFracY = cover.y;
   }
   // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF clears the full
   // frustum — but a third of that frustum is behind the panel, so there the
@@ -442,7 +461,7 @@ function renderSetupPreview(dt) {
   // keeps that inside it. Only the AUTOMATIC view self-frames — picking a preset
   // or zooming clears setupPreviewSpin, and from there the distance is theirs.
   // THIS BACKS OFF WITHOUT BOUND. The visible half-angle is
-  // atan(tan18 * aspect * (1 - panelFrac)), so as the region narrows the
+  // atan(tan18 * aspect * (1 - |panelFrac|)), so as the region narrows the
   // distance diverges, and otherwise only the MANUAL zoom's SP_DIST_MAX stops
   // it. Measured at 900x820 with the panel over half the width: the
   // fit asks for 17.6 m and pins on 15 — outside the bay's 5.4 m side wall, the
@@ -458,7 +477,7 @@ function renderSetupPreview(dt) {
   // against the vertical half-angle was tried and measured wrong — a constant
   // 10.31 m floor that pushed 1440x900 from 9.10 to 10.31.
   const spFitD = Math.min(SP_FIT_DIST_MAX,
-    SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - panelFrac), 0.05));
+    SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - Math.abs(panelFrac)), 0.05));
   const spDist = setupPreviewSpin
     ? clamp(Math.max(setupPreviewDist, spFitD), SP_DIST_MIN, SP_DIST_MAX) : setupPreviewDist;
   // Publish what the camera USES: garageCam() reported setupPreviewDist, which
@@ -721,6 +740,6 @@ return {
 };
 }
 
-return { create };
+return { create, panelCover };
 })();
 Object.freeze(SetupCamera);
