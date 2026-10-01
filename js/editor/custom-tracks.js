@@ -34,7 +34,9 @@ const CustomTracks = (function () {
   // both ends of a code, and the TT board and ghosts that key on it line up.
   const q = (v) => Math.round(v * 4) / 4;
   const num = (v, lo, hi, dflt) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt);
-  const frac = (v) => (Number.isFinite(v) ? Math.round((v - Math.floor(v)) * 65535) / 65535 : null);
+  // A fraction that rounds up to 1.0 wraps to 0 (the loop is closed), so a
+  // stored design's id is the same after upsert() and after the next load().
+  const frac = (v) => (Number.isFinite(v) ? (Math.round((v - Math.floor(v)) * 65535) % 65535) / 65535 : null);
   const dm = (v) => Math.round(v * 10) / 10, mil = (v) => Math.round(v * 1000) / 1000;
 
   function sanitizeName(s) {
@@ -182,7 +184,7 @@ const CustomTracks = (function () {
 
   /** Design record → the raw def shape js/circuits/<id>.js authors, ready for TrackDef.fromRaw. */
   function toRaw(it) {
-    const theme = TrackThemes.defFields(it.theme);
+    const theme = TrackThemes.defFields(it.theme, it);   // the design: the street presets thin their city past cityM of lap
     const raw = Object.assign({
       id: it.id, custom: true, name: it.name, gp: it.name + " GP", country: "",
       lengthKm: Math.round(it.lengthM / 100) / 10 || 0.1, classic: false,
