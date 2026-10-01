@@ -14,7 +14,7 @@
 const CarDraw = (function () {
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
-    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass,
+    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass,
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
     // ── cache-helpers ───────────────────────────────────────────────
@@ -353,7 +353,7 @@ const CarDraw = (function () {
     // Deferred wheel/ring queues for drawPlayerWheels — the _shadowMats/_decalMats
     // shape (parallel arrays, Float32Array(16) pool grown on demand, counter reset
     // by the consumer). Bounded at 4 each: one car's wheels, drained before return.
-    const _wq = [], _wqMesh = [], _rq = [], _rqEmis = [], _rqAlpha = [];
+    const _wq = [], _wqMesh = [], _rq = [], _rqEmis = [], _rqAlpha = [], _rqMesh = [];
     let _wqN = 0, _rqN = 0;
     // ── decal-queue ─────────────────────────────────────────────────
     // Deferred car-decal batch (same pattern as the blob shadows above):
@@ -650,6 +650,13 @@ const CarDraw = (function () {
         camD2 = dx * dx + dy * dy + dz * dz;
       }
       const tyreCol = camD2 < 60 * 60 && c.tyre && c.tyre.colour ? c.tyre.colour : null;
+      // SPIN BLUR (CarMesh.getSpinDisc): how far the rim turns THIS frame. Past
+      // ~0.6 rad the spokes start to strobe, by 1.8 rad they alias outright, so
+      // the disc fades in over that band. Per frame on purpose: a low frame
+      // rate aliases sooner, and the blur has to cover what the display shows.
+      // Within 120 m of a rival; the player always.
+      const spinRate = (c.speed / PhysicsConsts.WHEEL_R) * dt;
+      const blur = camD2 < 120 * 120 ? Math.min(1, Math.max(0, (Math.abs(spinRate) - 0.6) / 1.2)) : 0;
       for (let w = 0; w < WHEELS.length; w++) {
         const wd = WHEELS[w];
         if (frontsOnly && wd.rear) continue;   // cockpit: rears sit beside the camera and blob the corners
@@ -697,6 +704,17 @@ const CarDraw = (function () {
           _cqMesh[_cqN] = getCompoundRing(tyreCol);
           _cqN++;
         }
+        if (blur > 0.01) {
+          // The disc sits just inside the brake ring's plane so the hot ring
+          // still reads over it; same queue, no emissive.
+          const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.020);
+          _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
+          const Wd = _rq[_rqN];
+          Wd.set(_wheelWorld);
+          Wd[12] += Wd[0] * tx; Wd[13] += Wd[1] * tx; Wd[14] += Wd[2] * tx;
+          _rqEmis[_rqN] = 0; _rqAlpha[_rqN] = 0.72 * blur; _rqMesh[_rqN] = getSpinDisc();
+          _rqN++;
+        }
         if (ringOk) {
           const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
           const W = _ringWorld;
@@ -715,6 +733,7 @@ const CarDraw = (function () {
           _rq[_rqN].set(W);
           _rqEmis[_rqN] = 0.30 + 0.70 * heat;
           _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
+          _rqMesh[_rqN] = null;   // the brake ring
           _rqN++;
         }
       }
@@ -727,7 +746,7 @@ const CarDraw = (function () {
       const ro = _ringOpts;
       for (let i = 0; i < _rqN; i++) {
         ro.emissive = _rqEmis[i]; ro.alpha = _rqAlpha[i];
-        G.gfx.draw(getBrakeRing(), _rq[i], ro);
+        G.gfx.draw(_rqMesh[i] || getBrakeRing(), _rq[i], ro);
       }
       _wqN = 0; _rqN = 0;
     }

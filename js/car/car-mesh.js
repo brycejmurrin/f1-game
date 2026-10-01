@@ -357,6 +357,37 @@ function getBrakeRing() {
   return brakeRingMesh;
 }
 
+// WHEEL SPIN BLUR (2026-10-01). The rim is a rotation matrix: at 80 m/s it
+// turns ~3.7 rad per frame at 60 fps, past pi, so the spokes alias — they
+// stall, strobe or run backwards, the one thing a real wheel never does on
+// camera. Above ~0.6 rad/frame drawPlayerWheels lays this translucent disc
+// over the rim face (the brake ring's queue, alpha by spin rate): a radial
+// gradient from the dark hub to the lit lip, the time-average of spokes over
+// gaps, which is what a motion-blurred rim looks like. One shared mesh; the
+// rotating rim still draws under it, so the blend reads as blur, not a cap.
+let spinDiscMesh = null;
+function getSpinDisc() {
+  if (spinDiscMesh) return spinDiscMesh;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const SEG = 24, R0 = 0.075, R1 = 0.228;        // hub cap .. rim lip (rimR = 0.34 * 0.68)
+  const C0 = [0.26, 0.27, 0.30], C1 = [0.56, 0.57, 0.60];
+  for (let i = 0; i < SEG; i++) {
+    const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+    const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+    const base = out.pos.length / 3;
+    out.pos.push(0, R0 * c0, R0 * s0,  0, R1 * c0, R1 * s0,
+                 0, R1 * c1, R1 * s1,  0, R0 * c1, R0 * s1);
+    for (let v = 0; v < 4; v++) {
+      const C = (v === 1 || v === 2) ? C1 : C0;
+      out.nrm.push(1, 0, 0); out.col.push(C[0], C[1], C[2]);
+    }
+    out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3,
+                 base, base + 2, base + 1, base, base + 3, base + 2);
+  }
+  spinDiscMesh = _gfx.createMesh(out);
+  return spinDiscMesh;
+}
+
 // THE COMPOUND'S STRIPE on the sidewall, from the tyre record the car runs
 // on (js/physics/tyre-model.js AI_CLASS colour): one flat ring per colour,
 // cached by its rgb, laid on each wheel's outer face like the brake ring —
@@ -1211,6 +1242,6 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
 })();
 Object.freeze(CarMesh);
