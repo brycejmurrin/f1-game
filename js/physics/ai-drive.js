@@ -671,11 +671,26 @@ const AiDrive = (function () {
   function runExtra(kHere, qNext, want) {
     return want && Math.abs(kHere || 0) > 0.004 && qNext >= 0.4 ? RUN_T : 0;
   }
+  // "On the gearbox" is the tight follow gap (FOLLOW_TIGHT) plus a little. A
+  // car held for its whole patience goes anyway: at racing speed two cars
+  // accelerate alike, so a 4 % car may never close the last metres in the tow
+  // (measured: requiring it, a 4 % faster car never passed in 50 s at monza).
   function latchLate(ctx) {
     if (!(ctx.toTurnIn > 150) || Math.abs(ctx.kAhead || 0) > 0.004) return true;   // the zone is near, or not a straight
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     if ((ctx.blockerSpeed || 0) < 0.12 * ref || queuePress(ctx) >= 1) return true;
-    return (ctx.speed || 0) - (ctx.blockerSpeed || 0) >= 0.015 * ref || (ctx.blockerGap || 0) <= 10;
+    return (ctx.speed || 0) - (ctx.blockerSpeed || 0) >= 0.015 * ref
+      || (ctx.blockerGap || 0) <= 6 + (FOLLOW_TIGHT + 0.03) * (ctx.speed || 0);
+  }
+  // THE NEXT CORNER'S DIRECTION: the curvature with the largest magnitude of
+  // three samples into it (10 / 30 / 55 m past the turn-in). One sample just
+  // past the turn-in read a near-zero entry spiral on long corners (monza's
+  // Lesmo approach read 0.0003 where the corner runs at 0.014).
+  function cornerK(k1, k2, k3) {
+    let k = k1 || 0;
+    if (Math.abs(k2 || 0) > Math.abs(k)) k = k2;
+    if (Math.abs(k3 || 0) > Math.abs(k)) k = k3;
+    return k;
   }
 
   // COMMIT OR YIELD. A side-by-side the rule has decided (sideYieldsA) was
@@ -1260,8 +1275,9 @@ const AiDrive = (function () {
   // vmax x paceF — 1 for a driver who drives like the field.
   // AI-only: it decides what the AI does about the player, never the car.
   function paceSample(ref, i, c, vmax, free, dt) {
-    if (!(vmax > 1) || !(c.speed > 1)) return;
-    const f = c.speed / vmax;
+    if (!(vmax > 1)) return;
+    const f = c.speed / vmax;   // a ratio: the same at every OVERALL SPEED
+    if (!(f > 0.02)) return;
     if (!c.human) { if (free) ref[i] = ref[i] > 0 ? ref[i] + (f - ref[i]) * 0.2 : f; return; }
     const r = ref[i];
     if (r > 0.05) c.paceF = damp(c.paceF > 0 ? c.paceF : 1, clamp(f / r, 0.6, 1.25), 0.15, dt);
@@ -1318,7 +1334,7 @@ const AiDrive = (function () {
   // so every car in a train was a free pass. It defends when the attack
   // behind is nearer than the car ahead (blockerGap) — the threat that matters.
   function defendPull(ctx) {
-    if (!ctx.chaser || (ctx.blocker && !(ctx.chaserGap < ctx.blockerGap))) return 0;
+    if (!ctx.chaser || (ctx.blocker && (ctx.street || !(ctx.chaserGap < ctx.blockerGap)))) return 0;
     const gT = (ctx.chaserGap == null ? 99 : ctx.chaserGap) / Math.max(ctx.speed || 0, 10);
     const winT = defendWindowT(ctx.traits);
     if (gT >= winT) return 0;
@@ -1346,7 +1362,7 @@ const AiDrive = (function () {
       const dx = ox - (ctx.x || 0);
       const kT = ctx.kTurn || 0;
       if (Math.abs(dx) >= 0.35) coverSide = dx > 0 ? 1 : -1;
-      else if (Math.abs(kT) > 0.004 && ctx.toTurnIn < 2 * Math.max(ctx.speed || 0, 10)) coverSide = -Math.sign(kT);
+      else if (!ctx.street && Math.abs(kT) > 0.004 && ctx.toTurnIn < 2 * Math.max(ctx.speed || 0, 10)) coverSide = -Math.sign(kT);
       else return 0;
       straight = true;
     }
@@ -1483,7 +1499,7 @@ const AiDrive = (function () {
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
-    otWant, repassLock, attemptRoll, runExtra, latchLate, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

@@ -1107,13 +1107,16 @@ test("get a run: hang back through the corner onto a passing straight, pull out 
   assert.equal(A.runExtra(0.02, 0.6, false), 0, "not wanting the move");
   assert.equal(A.runExtra(0.001, 0.6, true), 0, "already on the straight");
   assert.equal(A.runExtra(0.02, 0.2, true), 0, "a poor zone is not worth a run");
-  const st = { traits: mid, toTurnIn: 400, kAhead: 0, vTop: 72, speed: 70, blockerSpeed: 70, blockerGap: 14, queueT: 0 };
+  const st = { traits: mid, toTurnIn: 400, kAhead: 0, vTop: 72, speed: 70, blockerSpeed: 70, blockerGap: 20, queueT: 0 };
   assert.equal(A.latchLate(st), false, "far down a straight with no closing rate: wait");
   assert.equal(A.latchLate({ ...st, speed: 72 }), true, "closing in the tow: go");
-  assert.equal(A.latchLate({ ...st, blockerGap: 9 }), true, "on the gearbox: go");
+  assert.equal(A.latchLate({ ...st, blockerGap: 12 }), true, "on the gearbox (the tight gap): go");
   assert.equal(A.latchLate({ ...st, toTurnIn: 120 }), true, "the braking zone is near: as before");
   assert.equal(A.latchLate({ ...st, kAhead: 0.01 }), true, "not a straight: as before");
-  assert.equal(A.latchLate({ ...st, queueT: 60 }), true, "held for its whole patience");
+  assert.equal(A.latchLate({ ...st, queueT: 60 }), true, "held for its whole patience: go");
+  assert.equal(A.latchLate({ ...st, blockerGap: 6 + 0.15 * 70 - 0.1 }), true, "the tight gap in the tow");
+  assert.equal(A.cornerK(0.0003, 0.012, 0.009), 0.012, "the corner, not its entry spiral");
+  assert.equal(A.cornerK(-0.001, 0.0005, -0.02), -0.02);
 });
 
 test("sideYieldsA: level, the car on the OUTSIDE of the next corner concedes (kTurn)", () => {

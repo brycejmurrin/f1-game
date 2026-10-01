@@ -387,8 +387,8 @@ test("an AI alongside a player who will not yield opens the gap itself", async (
   assert.ok(lateMin >= CLEAR - 0.3, `the concession was not held: dx fell to ${lateMin.toFixed(2)} m`);
 });
 
-// A PASS STICKS (2026-10-01). Two AI cars 4 % apart on pace (the faster the
-// same car as the slower, 4 % up), the faster 12 m behind on the run to the
+// A PASS STICKS (2026-10-01). Two AI cars 5 % apart on pace (the faster the
+// same car as the slower, 5 % up), the faster 12 m behind on the run to the
 // Curva Grande. It completes the pass (a car length and a half clear), and the
 // passed car does not take the place straight back: the re-pass lockout
 // (AiDrive.repassLock) on any order flip, with the passer as its blocker across
@@ -411,7 +411,7 @@ test("a faster AI completes a pass and the pair does not swap back", async () =>
     A.go();
     const c = g2.G.cars[idx];
     c.tierV = pc.tierV; c.skill = pc.skill;   // the same car...
-    pc.tierV *= 0.96;                         // ...4 % up on the one ahead
+    pc.tierV *= 0.95;                         // ...5 % up on the one ahead
     let doneAt = null, regained = null;
     for (let i = 0; i < 50 / DT; i++) {
       A.step(DT, 1);
