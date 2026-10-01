@@ -117,6 +117,9 @@ const PlayerForces = (function () {
     // model above is untouched — this is what the wheels SHOW.
     c.wheelLock = braking && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code
     c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
+    // LOCK-UP HAPTIC: left-trigger rumble when the pad supports trigger-rumble
+    // (falls back to dual-rumble). Cadence matches the slide cues below.
+    if (c.isPlayer && c.wheelLock > 0.25 && (c.lockHapT = (c.lockHapT || 0) - dt) <= 0) { Input.rumble(0.25 + c.wheelLock * 0.45, 90, "brake"); c.lockHapT = 0.14; }
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
     // Aero load (rises with v²) sets the speed dependence, and the surface the
@@ -241,7 +244,7 @@ const PlayerForces = (function () {
       if (pastR > 1 && pastR > pastF && (c.oslipHapT = (c.oslipHapT || 0) - dt) <= 0) {
         const bite = clamp(pastR - 1, 0, 1);
         Input.vibrate(18 + (bite * 22) | 0);
-        Input.rumble(0.30 + bite * 0.40, 110);
+        Input.rumble(0.30 + bite * 0.40, 110, "throttle");
         c.oslipHapT = 0.24 - bite * 0.08;
       }
     }
