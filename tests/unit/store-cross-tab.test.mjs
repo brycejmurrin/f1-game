@@ -505,3 +505,21 @@ test("a restored newer row that LANDED makes this session its owner: its later s
   await next.store.mirror.ready;
   assert.equal(next.store.get("career.driver.0").money, 3, "the next boot keeps the progress");
 });
+
+// Fuzz-found 2026-09-30: JSON.parse turns an oversized numeric literal into
+// Infinity without throwing, and store.get returned it into live state
+// (career money / season points). Same shape as treating player input as a
+// promise — refuse non-finite top-level numbers like a SyntaxError.
+test("an oversized numeric literal on disk is refused, not returned as Infinity", () => {
+  const { store, disk } = load();
+  disk.set("apex26.career.money", "8".repeat(400));
+  assert.equal(store.get("career.money", 0), 0,
+    "digit overflow must fall back to the call-site default, not Infinity");
+  disk.set("apex26.career.money", "1e309");
+  store._cache.delete("apex26.career.money");
+  assert.equal(store.get("career.money", 7), 7,
+    "1e309 (JSON Infinity) must also fall back");
+  disk.set("apex26.career.money", "42");
+  store._cache.delete("apex26.career.money");
+  assert.equal(store.get("career.money", 0), 42, "a finite number still loads");
+});

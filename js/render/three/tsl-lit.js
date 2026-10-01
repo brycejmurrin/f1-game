@@ -75,7 +75,7 @@
       float, int, vec2, vec3, vec4, mrt,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
       cameraPosition, frontFacing,
-      fract, floor, mod, dot, cross, mix, smoothstep, clamp, pow, exp, sqrt,
+      fract, floor, mod, dot, cross, mix, smoothstep, step, clamp, pow, exp, sqrt,
       abs, max, min, normalize, length, reflect, select, sin, cos,
       dFdx, dFdy, fwidth,
     } = TSL;
@@ -169,7 +169,12 @@
       pitBox:      uniform(new THREE.Vector4(0, 0, 0, 0)),
       lampFog:     uniform(0.0),      // frame.lampFog (0 = day/off)
       wetness:     uniform(0.0),
+      rain:        uniform(0.0),      // frame.rain — rain FALLING (0..1): the puddle ripples. GLX uRain.
+      specKnee:    uniform(4.0),      // SUN GLINT RANGE knob: sun-specular soft-clip asymptote. GLX uSpecKnee.
       time:        uniform(0.0),      // frame.time — drives FLAG wave + cloud drift (deterministic with the game clock)
+      // WIND (knobs windDir / windSpeed): xy = unit direction in world xz, z =
+      // speed scale. Read by vertexMotionNode — the foliage sway. GLX uWind.
+      wind:        uniform(new THREE.Vector3(0.819, 0.574, 1.0)),
       cloudCover:  uniform(0.0),
       cloudSpeed:  uniform(1.0),
       // LIGHTING TUNER knobs (TUNE_DEFS defs in comments)
@@ -330,10 +335,16 @@
       }
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
+      U.rain.value = frame.rain != null ? frame.rain : 0;
       U.time.value = frame.time != null ? frame.time : 0;
+      {
+        const wd = k("windDir", 35) * (Math.PI / 180);
+        U.wind.value.set(Math.cos(wd), Math.sin(wd), k("windSpeed", 1.0));
+      }
       U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
       U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
       uf1(U.bounceK, k("bounceK", 0.04));
+      uf1(U.specKnee, k("specKnee", 4.0));
       uf1(U.mistShare, k("mistShare", 1.5));
       uf1(U.lampFogClip, k("fogClip", 0.7));
       uf1(U.glowAmp, k("glowAmp", 2.3));
@@ -763,7 +774,9 @@
           const y = y0;
           const aaFade = clamp(fwWall.sub(0.04).div(0.22).oneMinus(), 0.0, 1.0).toVar();
           If(aaFade.greaterThan(0.005), () => {
-            const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
+            // T = the world axis hc runs along (GLX applyMaterialNormal): a seam
+            // is a groove on every face, where the old up-cross-N frame mirrored +x / -z walls.
+            const T = select(an0.x.greaterThan(an0.z), vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0));
             const e = 0.05;
             const h0 = matBumpHeight(mid, vec2(hc0, y0));
             const hx = matBumpHeight(mid, vec2(hc0.add(e), y0));
@@ -922,15 +935,19 @@
       vec2(select(abs(N).x.greaterThan(abs(N).z), wp.z, wp.x), wp.y),
       wp.xz).div(max(matTexScaleOf(mid), float(0.0001)));
 
-    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd]) => {
+    // nGeoIn: the PRE-BUMP normal — the tile plane (matTexUV) and the tangent
+    // frame are picked from it, as GLX picks from vNrm; picking from the bumped
+    // N was a parity gap on walls near 45 degrees.
+    const applyMaterialTexNormal = matNormalNode ? Fn(([mid, Nin, wpIn, vd, nGeoIn]) => {
       const N = vec3(Nin).toVar();
       const wp = vec3(wpIn).toVar();
+      const nGeo = normalize(vec3(nGeoIn)).toVar();
       const fade = clamp(vd.sub(22.0).div(58.0).oneMinus(), 0.0, 1.0).toVar();
       const live = U.matTexMix.greaterThan(0.001)
         .and(matTexInPack(mid))
         .and(matTexScaleOf(mid).greaterThan(0.0));
       // UV + fwidth BEFORE the live/fade gate (non-uniform CF hazard on WGSL).
-      const uv = matTexUV(mid, N, wp).toVar();
+      const uv = matTexUV(mid, nGeo, wp).toVar();
       const fp = max(fwidth(uv.x), fwidth(uv.y)).toVar();
       const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
       // Sample BEFORE the live/fade/aa gates — implicit tex derivatives
@@ -941,8 +958,16 @@
       If(live.and(fade.greaterThan(0.005)), () => {
         If(aa.greaterThan(0.005), () => {
           const dxy = nt.xy.sub(0.5).mul(2.0).toVar();
-          const T = normalize(cross(vec3(0.0, 1.0, 0.0), N).add(vec3(1e-5)));
-          const B = cross(N, T);
+          // Tangent frame = the world axes the tile coordinate maps to (GLX
+          // applyMaterialTexNormal): wall-like (hc, y) -> T along hc, B = up;
+          // ground (x, z) -> T = +x, B = +z. The old up-cross-N frame was degenerate on the
+          // ground and mirrored on +x / -z faces.
+          const an = abs(nGeo);
+          const wall = matWallLike(matTexLayer(mid));
+          const T = select(wall,
+            select(an.x.greaterThan(an.z), vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0)),
+            vec3(1.0, 0.0, 0.0));
+          const B = select(wall, vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
           // ASPHALT stays the weakest — the road is viewed edge-on all race.
           const amt = select(mid.equal(16.0), float(0.10), float(0.55))
             .mul(U.matTexMix).mul(fade).mul(aa);
@@ -1384,7 +1409,7 @@
         // per-material procedural bump (before V/L/H/NoL — js/render/glx/shaders/glsl-lit.js)
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
-        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd));
+        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd, Nsaa));
 
         const L = vec3(U.sunDir).toVar();
         const H = normalize(L.add(V).add(vec3(1e-5))).toVar();   // +eps: V==-L NaN guard
@@ -1503,6 +1528,23 @@
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
           puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
+          // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
+          // two cell grids of impact rings, a normal tilt on the pooled water that
+          // the GGX lobes and the sky reflection below read (N is a toVar).
+          If(puddle.greaterThan(0.001).and(U.rain.greaterThan(0.001)), () => {
+            const ring = (sc, seed, hseed, rate) => {
+              const rp = wp.xz.mul(sc).add(seed);
+              const ci = floor(rp), cf = fract(rp).sub(0.5);
+              const hh = hash21(ci.add(hseed));
+              const t = fract(U.time.mul(rate).add(hh));
+              const r = length(cf).add(1e-4);
+              const ph = r.sub(t.mul(0.45)).mul(40.0);
+              const amp = t.oneMinus().mul(t).mul(4.0).mul(exp(r.mul(-5.0))).mul(step(r, t.mul(0.45).add(0.08)));
+              return cos(ph).mul(cf.div(r)).mul(amp);
+            };
+            const rg = ring(1.7, 0.0, 0.0, 0.8).add(ring(2.9, 7.3, 19.0, 1.3)).toVar();
+            N.assign(normalize(N.add(vec3(rg.x, 0.0, rg.y).mul(U.rain.mul(puddle).mul(0.10)))));
+          });
           // Porous as a FRACTION of the road result — mirrors js/render/glx/shaders/glsl-lit.js.
           // The two coefficients were transposed here as they were in GLX: mix(a,b,t)
           // returns a for porous=0 (tarmac) and b for porous=1, so tarmac absorbed
@@ -1743,7 +1785,8 @@
           const Vis = V_SmithGGX(NoV, NoL, a);
           const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
           const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
-          specCol.assign(specCol.div(specCol.add(1.0)));
+          // soft knee, asymptote U.specKnee (def 4): sun glints can reach bloom (GLX)
+          specCol.assign(specCol.div(specCol.div(U.specKnee).add(1.0)));
           color.addAssign(specCol);
         });
 
@@ -1844,6 +1887,17 @@
           const R = reflect(V.negate(), N).toVar();
           const skyT = pow(max(R.y, 1e-4), 0.40);
           const envColor = mix(vec3(U.skyHorizon), vec3(U.skyZenith), skyT).toVar();
+          // the live env probe replaces the gradient near the car (GLX; faded
+          // with eye distance — one cube is parallax-wrong far from its centre)
+          if (envCubeNode) {
+            If(U.envStr.greaterThan(0.001), () => {
+              const probeW = clamp(U.envStr, 0.0, 1.0)
+                .mul(clamp(vd.sub(60.0).div(90.0).oneMinus(), 0.0, 1.0)).toVar();
+              If(probeW.greaterThan(0.001), () => {
+                envColor.assign(mix(envColor, cubeTexture(envCubeNode, R, rough.mul(2.5)).rgb, probeW));
+              });
+            });
+          }
           const envSunAlign = max(dot(R, U.sunDir), 0.0).toVar();
           envColor.assign(mix(envColor, envColor.mul(U.sunColor).mul(1.15),
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));
@@ -1942,17 +1996,59 @@
       })();
     }
 
-    /* FLAG cloth-wave vertex displacement (LIT_VS — js/render/glx/shaders/glsl-lit.js)
-     * mat in [15,16): fract(aMat)*2.5 = per-vertex wave weight; a travelling
-     * two-sine ripple displaces along the face normal. U.time (frame.time) is
-     * the clock — deterministic with the game. */
-    function flagPositionNode() {
+    /* Vertex motion (LIT_VS — js/render/glx/shaders/glsl-lit.js main()): the two
+     * materials whose vertices move, keyed on the ROUNDED id with the per-vertex
+     * weight in the id's fraction. U.time (frame.time) is the clock —
+     * deterministic with the game. The maths is GLX's, constant for constant.
+     *  FLAG (15, fraction 0..0.4 = wave weight × 0.4): a travelling two-sine
+     *    cloth ripple along the face normal, in object space.
+     *  FOLIAGE (6, fraction 0..SWAY_FRAC = height weight, js/track/core/geom.js):
+     *    GPU Gems 3 ch.16-style main bending — a downwind lean plus a gust that
+     *    travels across the forest along U.wind — scaled by weight², so the
+     *    crown's foot stays on the trunk; plus a small per-vertex flutter along
+     *    the normal. Bare FOLIAGE (fraction 0: hedges, bushes, mountains) and
+     *    every other id take the exact static path.
+     * positionLocal is read AFTER three applied the instance matrix (r186
+     * NodeMaterial.setupPosition: instance → positionNode), and every world mesh
+     * here draws at an identity model matrix, so the sway direction is world
+     * xz on baked props and instanced pines alike — the same frame GLX uses. */
+    function vertexMotionNode() {
       const matA = attribute("mat", "float");
-      const isFlag = matA.greaterThanEqual(15.0).and(matA.lessThan(16.0));
-      const fw = fract(matA).mul(2.5);
+      const mid = floor(matA.add(0.5));
+      const mfr = clamp(matA.sub(mid), 0.0, 1.0);
+      // FLAG — unchanged maths; the gate is the rounded id, not a half-open range
+      // (GLX's own comment: a neighbour decoding a hair low has fract ~1.0).
+      const fw = mfr.mul(2.5);
       const ph = U.time.mul(5.5).add(positionGeometry.x.mul(1.9)).add(positionGeometry.z.mul(1.9));
       const wave = sin(ph).mul(0.085).add(sin(ph.mul(2.17).add(1.3)).mul(0.045)).mul(fw);
-      return positionLocal.add(normalLocal.mul(select(isFlag, wave, float(0.0))));
+      // FOLIAGE sway
+      const w = clamp(mfr.div(0.45), 0.0, 1.0);
+      const p = positionLocal;
+      const spd = U.wind.z;
+      const along = p.x.mul(U.wind.x).add(p.z.mul(U.wind.y));          // metres downwind
+      const gust = U.time.mul(spd.mul(1.1).add(0.6)).sub(along.mul(0.07));
+      const bend = sin(gust).mul(0.55)
+        .add(sin(gust.mul(2.31).add(along.mul(0.19)).add(1.7)).mul(0.25))
+        .add(0.45);                                                      // downwind lean bias
+      const amp = spd.mul(0.32).mul(w).mul(w);
+      const sway = vec3(U.wind.x, 0.0, U.wind.y).mul(bend.mul(amp));
+      const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7));
+      const flutter = sin(flPh).mul(spd.mul(0.05)).mul(w);          // scalar, along the normal
+      const isFlag = mid.equal(15.0);
+      const isLeaf = mid.equal(6.0).and(mfr.greaterThan(0.002));
+      // normalLocal is multiplied at the TOP LEVEL, never first inside a select
+      // branch. three r186 emits a VarNode's assignment (`normalLocal = normal;`)
+      // where the node is first built; built inside `select(isFlag, normalLocal
+      // .mul(wave), ...)` that assignment landed inside the flag/foliage `if`
+      // blocks only, and every other vertex (every non-instanced lit mesh — the
+      // whole garage, the world soup) sent an UNINITIALISED normal varying to
+      // the fragment stage: zero or garbage N, lit surfaces black while decals
+      // and glare drew (shipped 2026-10-01 as acdf1fed; the TLX gate passes on a
+      // blank readback, so no probe saw it). Same standing rule as the fragment
+      // anchors at the top of sharedFragment: build shared nodes before any
+      // conditional use.
+      const alongNormal = select(isFlag, wave, select(isLeaf, flutter, float(0.0)));
+      return positionLocal.add(normalLocal.mul(alongNormal)).add(select(isLeaf, sway, vec3(0.0)));
     }
 
     /* material factory
@@ -2088,7 +2184,7 @@
       // here is what made three.js cars invisible (see factory comment).
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
-      m.positionNode = _sharedPos || (_sharedPos = flagPositionNode());
+      m.positionNode = _sharedPos || (_sharedPos = vertexMotionNode());
       pinProgram(m, o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit"));
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).

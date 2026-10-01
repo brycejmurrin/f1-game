@@ -204,7 +204,7 @@
   /* compact centred stack so it never collides with the corner buttons */
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 3);
 }
-#hud-speed { font-family: var(--font-hud); font-size: 34px; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.9); }
+#hud-speed { font-family: var(--font-hud); font-size: calc(34px * var(--hud-text-boost, 1)); font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.9); }
 /* A FIXED SLOT FOR THE DIGITS. tabular-nums makes every digit the same width
    but not every NUMBER: "99" -> "100" is a whole digit, and this block is
    centred in its column, so each crossing of 100 km/h (several a lap) shifted
@@ -421,6 +421,89 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
    caught at merge by the guard in tests/unit/css-layers.test.mjs. */
 #hud-tyre[hidden] { display: none; }
 #hud-tyre { width: 130px; display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3); }
+/* FOUR CORNER TEMP CELLS + ΔT (js/ui/hud-tyres.js). Runtime DOM under #hud-tyre.
+   Bands use existing semantic tokens — COLOUR VISION (data-cvd) remaps them. */
+#hud-tyre-corners {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) / 6);
+  width: 100%;
+  order: 3;
+  flex: 1 1 100%;
+}
+#hud-tyre-corners > span {
+  font-family: var(--font-hud);
+  font-size: calc(var(--fs-micro) * 0.85 * var(--hud-text-boost, 1));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1.2;
+  padding: calc(var(--gap) / 12) calc(var(--gap) / 6);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklab, var(--faster) 35%, var(--carbon));
+  color: var(--look-hud-ink);
+  text-shadow: var(--hud-halo);
+}
+#hud-tyre-corners > span[data-band="cold"] {
+  background: color-mix(in oklab, var(--sec-best) 55%, var(--carbon));
+}
+#hud-tyre-corners > span[data-band="ok"] {
+  background: color-mix(in oklab, var(--faster) 45%, var(--carbon));
+}
+#hud-tyre-corners > span[data-band="hot"] {
+  background: color-mix(in oklab, var(--slower) 55%, var(--carbon));
+}
+#hud-tyre-delta {
+  order: 4;
+  flex: 1 1 100%;
+  text-align: center;
+  font-family: var(--font-hud);
+  font-size: calc(var(--fs-micro) * var(--hud-text-boost, 1));
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+  text-shadow: var(--hud-halo);
+}
+#hud-tyre-delta:empty { display: none; }
+#hud-tyre-delta[data-sign="cold"] { color: var(--sec-best); }
+#hud-tyre-delta[data-sign="ok"] { color: var(--faster); }
+#hud-tyre-delta[data-sign="hot"] { color: var(--slower); }
+/* Live lap DELTA chip (runtime #hud-delta in .hud-top). */
+#hud-delta .hud-value { font-variant-numeric: tabular-nums; }
+#hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
+#hud-delta[data-sign="slow"] .hud-value { color: var(--slower); }
+#hud-delta[hidden] { display: none !important; }
+/* Per-element HUD toggles (js/ui/hud-elements.js). body[data-hud-hide~=id]. */
+body[data-hud-hide~="pos"] .hud-top .hud-box:nth-child(1),
+body[data-hud-hide~="lap"] .hud-top .hud-box:nth-child(2) { display: none !important; }
+body[data-hud-hide~="time"] .hud-top .hud-box:nth-child(3),
+body[data-hud-hide~="best"] .hud-top .hud-box:nth-child(4) { display: none !important; }
+body[data-hud-hide~="delta"] #hud-delta,
+body[data-hud-hide~="sectors"] #hud-sectors { display: none !important; }
+body[data-hud-hide~="speed"] #hud-speed,
+body[data-hud-hide~="gear"] #hud-gearbox { display: none !important; }
+body[data-hud-hide~="energy"] #hud-energy,
+body[data-hud-hide~="tyre"] #hud-tyre { display: none !important; }
+body[data-hud-hide~="ot"] #hud-ot,
+body[data-hud-hide~="aero"] #hud-aero,
+body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
+/* SETTINGS checklist for the toggles above (runtime #pm-hud-elements). */
+#pm-hud-elements-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) / 3) calc(var(--gap) * 5 / 6);
+  margin: calc(var(--gap) / 2) 0 calc(var(--gap) * 5 / 6);
+}
+#pm-hud-elements-list label {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) / 2);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+#pm-hud-elements-list input { accent-color: var(--accent, var(--red)); }
 /* THE PLAN LINE (js/race/pit-lane.js planInfo): the reference plan under the
    bar, its own row of the wrap — the stops and the next box lap. Amber the
    lap before (the timing screen's "slower" yellow, as the sector row uses it),
@@ -434,7 +517,7 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 #hud-plan:empty { display: none; }
 #hud-tyre[data-plan="soon"] #hud-plan { color: var(--sec-slow); }
 #hud-tyre[data-plan="now"] #hud-plan,
-#hud-tyre[data-plan="free"] #hud-plan { color: var(--you); }
+#hud-tyre[data-plan="cheap"] #hud-plan { color: var(--you); }
 /* THE RIVALS' WINDOWS on the gap chips (PitLane.windowOf): "P12" when the
    neighbour's planned stop is within three laps, "IN" while it is stopping —
    a suffix painted here, so the spellings gapForm learns stay whole. */
@@ -719,6 +802,23 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
   #hud-tach.redline #hud-rpm-fill,
   #hud-ot.ot-armed { animation: none; }
   .sec-row.sec-flash { animation: none; }
+}
+/* MOTION: REDUCED reaches the race too. html[data-motion="reduce"]
+   (js/ui/title-fx.js) is the player's choice, and its css/responsive.css
+   backstop is scoped to the menus — so every pulse above (redline, pit arrow,
+   OVERTAKE, VSC flag, limits, sector flash, the POS pop) ran on for a player
+   who had asked for less motion, and only the OS query stopped them. The same
+   instant-and-non-repeating shape as the css/tokens.css backstop: one-shots
+   still land on their end state, nothing throbs. The touch buttons are named
+   on their own because the dock groups live outside the HUD until
+   layoutDocks() moves them in. */
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn),
+:root[data-motion="reduce"] :is(#hud, #announce) *,
+:root[data-motion="reduce"] :is(#hud, #announce) *::before,
+:root[data-motion="reduce"] :is(#hud, #announce) *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
    below it is the clearance the old pair of literals (62 / 132) encoded. */

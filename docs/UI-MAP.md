@@ -30,6 +30,7 @@ generated row.
 ├─ RACE A FRIEND ─> #vsfriend
 ├─ SEASON ────────> #season-setup ──> customise ──> #race-settings ─> race
 ├─ DATA HUB ──────> #datahub
+├─ TRACK DESIGNER > #trackdesigner (canvas + rail + MY CIRCUITS; SAVE / RACE / TIME TRIAL → #select; SHARE / EXPORT / IMPORT; a #track=<code> link opens it at boot, and #select's EDIT IN DESIGNER chip reopens a saved circuit)
 ├─ GARAGE ────────> #carsetup / #customize
 ├─ SETTINGS ──────> #pmsettings (→ #tl-editor, #garrival)
 └─ HOW TO PLAY ───> #howtoplay
@@ -107,22 +108,44 @@ the same pairing (`js/input/phone-pad.js`; the protocol is in
 - `#pm-display-adv` holds Advanced Visuals. Lighting Tuner, Camera Tuner and
   Flyby Shot Editor are disabled outside a race and open separate docks.
 
-**Appearance.** A live preview, then:
+**Appearance.** One help line, then closed folds whose summaries read
+`SHIPPED` or `CUSTOM`. Every fold but GENERAL previews by PEEK
+(`js/ui/screen-looks.js`): while a knob changes, `html[data-appearance-peek]`
+ghosts the settings page and shows the real screen behind it (a closed dialog
+is displayed without touching `hidden`/`open`; an empty screen gets a
+stand-in). PEEK holds it; a tap or Esc returns.
 
-- COLOURS: Theme, Menu Accent (swatches, custom hex), HUD Accent.
-- READABILITY: UI Size `100%` (`#pm-uiscale`, moved here from Display), Text
-  Size, High Contrast, Speed Units, Help Text `SHOW` (`#pm-helptext`; HIDE drops
-  the grey `.adv-help` lines in Settings and race setup, keeping status lines,
-  live regions and `data-help="keep"` warnings/readouts).
-- MOTION: Motion `ON` (global: menus, camera shake, flyby).
-- `#pm-pausemenu`, a closed PAUSE MENU fold whose summary reads `SHIPPED` or
-  `CUSTOM` (`js/ui/pause-opts.js`; the four SettingRows mount into
-  `#pm-pausemenu-body` at runtime, like TITLE LAYOUT): Layout `GRID`, Side
-  `CENTRE`, Background `FULL`, Confirm Quit `ON`.
-- `#pm-titlescreen`, a closed TITLE SCREEN fold whose summary reads `SHIPPED`
-  or `CUSTOM` (`js/ui/title-layout.js`): Title Intro `FULL`, Menu Wash `FULL`,
-  Title Art `ON`, the TITLE LAYOUT sub-fold (`#pm-titlelayout`, built at
-  runtime) and Replay Intro.
+- `#pm-general`, GENERAL (the shell's), with the live menu / HUD preview:
+  - COLOURS: Theme, Menu Accent (swatches, custom hex), HUD Accent.
+  - READABILITY: UI Size `100%` (`#pm-uiscale`, moved here from Display), Text
+    Size, High Contrast, Speed Units, Help Text `SHOW` (`#pm-helptext`; HIDE
+    drops the grey `.adv-help` lines in Settings and race setup, keeping status
+    lines, live regions and `data-help="keep"` warnings/readouts).
+  - MOTION: Motion `ON` (global: menus, camera shake, flyby).
+- `#pm-pausemenu`, PAUSE MENU (`js/ui/pause-opts.js` + `lookPause`; rows mount
+  into `#pm-pausemenu-body` at runtime): Layout `GRID` (LIST, COMPACT, WIDE,
+  SIDEBAR), Side `CENTRE`, Background `FULL`, Confirm Quit `ON`, then Button
+  Height `100%`, Card Width `100%`, Button Gap `100%`, Corners `ROUND`, Button
+  Style `FILLED`, Text Align `CENTRE`, Vertical Position `MIDDLE`, Music Card
+  `SHOW`, Build Tag `SHOW`; RESET PAUSE MENU, PEEK.
+- `#pm-titlescreen`, TITLE SCREEN (`js/ui/title-layout.js`): Title Intro
+  `FULL`, Menu Wash `FULL`, Title Art `ON`, the TITLE LAYOUT sub-fold
+  (`#pm-titlelayout`, built at runtime), Replay Intro, PEEK (title screen only).
+- Built by `js/ui/screen-looks.js` (`#pm-look-<screen>`), each with the shared
+  core — Width `100%`, Density `AUTO`, Button Height `100%`, Corners `ROUND`,
+  Background `FULL`, Headings `LEFT` — where it applies, plus its own, RESET and
+  PEEK:
+  - DATA HUB (`#datahub`): Row Height `SHIPPED`, Tab Style `FILLED`, Row
+    Stripes `OFF` (no Density: the card is fit-managed).
+  - TRACK SELECTOR (`#select`): Tile Size `100%`, Strip Rows `1`, Tile Names
+    `SHOW`, Strip Position `TOP`.
+  - RACE SETTINGS (`#race-settings`): Columns `AUTO`, Presets `CARDS`.
+  - CAREER (`#career`, Driver Career and My Team): Columns `AUTO`, Left Column
+    `49%`, Column Order `SHIPPED`.
+  - GARAGE (`#carsetup`; no Width / Background): Panel Side `RIGHT` (LEFT moves
+    the car to the right), Panel Width `100%`, Panel `SHIPPED`, Stat Bars `SHOW`.
+  - POPUPS (every `dialog.screen.dim` except settings, pause and race
+    settings): Position `MIDDLE`, Table Rows `SHIPPED`.
 
 **Steering & Assists.** Preset `STANDARD`; Overall Speed `84%`; Feel `NORMAL`;
 Tilt `8`; Aids `OFF`; Driving Help `LOW`; Racing Line `OFF`, plus an Advanced
@@ -387,6 +410,7 @@ driving/menu input unless its definition explicitly sets `gate: false`.
 | `#tl-editor` | yes | Title layout editor bar (title screen) |
 | `#photo-controls` | yes | Free-camera controls |
 | `#datahub` | yes | Data and telemetry hub |
+| `#trackdesigner` | yes | Track designer (custom circuits) |
 
 `#overlay` is non-gating because no car is being driven while the title is
 open. `#rotate-device` is non-gating so Escape and driving keys still reach the
@@ -458,6 +482,7 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#garriva
 | `#flyby` | `#flyby-inner`, `#fb-rail`, `#fb-rows` |
 | `#freecam` | Runtime-built `#freecam-inner` (`#fc-status`, `#fc-rows`: `#fc-speed`, `#fc-roll`, `#fc-fov`, `#fc-snap-car`, `#fc-corner-prev`/`-next`, `#fc-lens-race`/`-flyby`, `#fc-copy-view`, `#fc-copy-pose`, `#fc-out`); `#fc-close` is the boot-time Escape target |
 | `#datahub` | Runtime-built inner UI; `#dh-close-btn` is the boot-time Escape target |
+| `#trackdesigner` | Runtime-built body and foot (`js/editor/designer.js`); the shell ships `#td-title` (its accessible name) and `#td-close` (the boot-time Escape target) |
 
 The tuner `*-rail` roots hold fixed headers/mode controls; `*-rows` receive
 generated controls.

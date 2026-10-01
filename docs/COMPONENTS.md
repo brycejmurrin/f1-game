@@ -98,6 +98,7 @@ not.
 | family | rules | owner | also in |
 |---|---|---|---|
 | `dh-` | 368 | `data.css` | `components.css` |
+| `td-` | 27 | `editor.css` | — |
 | *(unprefixed)* | 226 | `overlays.css` | components, carsetup, career, menus, tuner, hud, responsive, tokens |
 | `cs-` | 132 | `carsetup.css` | components, menus, responsive |
 | `cr-` | 75 | `career.css` | — |
@@ -402,6 +403,7 @@ found a real WCAG failure in the lighting tuner within a minute.
 | `garage` | `#carsetup` | `#mb-garage` → ENGINE tab |
 | `career` | `#career` | `#mb-career` (new-career SETUP state) |
 | `datahub` | `#datahub` | `#mb-data` |
+| `trackdesigner` | `#trackdesigner` | `#mb-designer` |
 | `howtoplay` | `#howtoplay` | `#mb-help` |
 | `settings` | `#pmsettings` | `#mb-settings` |
 | `vsfriend` | `#vsfriend` | `#mb-vs` |

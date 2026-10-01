@@ -93,7 +93,7 @@ const moduleFiles = () => {
   const data = new Set([...MANIFEST.CIRCUITS.map(MANIFEST.circuitPath), ...MANIFEST.LAZY_SCENERY]);
   const rostered = [
     ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
-    ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
+    ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET, ...(MANIFEST.LAZY_EDITOR || []),
   ];
   moduleCache = rostered.filter((rel) => rel !== GAME && !data.has(rel) && CREATE_DEF.test(read(rel)));
   return moduleCache;
