@@ -630,3 +630,21 @@ test("D-pad Left/Right on a focused slider steps by its step within min/max; a b
   assert.equal(dispatched[0].key, "ArrowRight");
   assert.equal(dispatched[0].type, "keydown", "a button's arrow is an ordinary move");
 });
+
+test("an open menu still takes a key that was already down, and the on-screen pedals are gated", () => {
+  const { Input, key, navOpen } = boot();
+  key("KeyW", true);
+  navOpen.on = true;
+  assert.equal(Input.throttle(), true, "a key held before the menu is not the touch path");
+  assert.equal(Input.throttleLevel(), 1);
+  // A keydown WHILE the menu is open was already refused (menuOverlayOpen).
+  key("KeyS", true);
+  assert.equal(Input.braking(), false, "keyboard keydowns stay gated; this change is the touch path");
+  const src = read("js/input/input.js");
+  assert.match(src, /function navBlocksTouch\(\) \{ return !!\(window\.UiLayers && window\.UiLayers\.navOpen\(\)\); \}/);
+  assert.match(src, /navBlocksTouch\(\) \? 0 : buttonSteering\(\)/);
+  assert.match(src, /navBlocksTouch\(\) \? 0 : analogShape\(touchSteering\(\), "touch"\)/);
+  assert.match(src, /keyThrottle \|\| \(!navBlocksTouch\(\) && btnThrottle\)/);
+  assert.match(src, /if \(btnThrottle && !navBlocksTouch\(\)\)/);
+  assert.match(src, /if \(btnBrake && !navBlocksTouch\(\)\)/);
+});
