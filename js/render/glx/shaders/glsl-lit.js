@@ -393,8 +393,15 @@ void applyMaterialTexNormal(int mid, inout vec3 N, float vd) {
   float aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
   if (aa <= 0.005) return;
   vec2 dxy = (texture(uMatNormalTex, vec3(uv, float(mid))).xy - 0.5) * 2.0;
-  vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N) + vec3(1e-5));
-  vec3 B = cross(N, T);
+  // Tangent frame = the WORLD AXES the tile coordinate maps to (matTexUV, same
+  // vNrm plane pick): wall-like (hc, y) -> T along hc's axis, B = up; ground
+  // (x, z) -> T = +x, B = +z. The old up-cross-N frame was degenerate on the
+  // ground (N ~ up, so T was whatever tilt the procedural bump left) and
+  // mirrored on +x / -z faces (graphics-detail survey note, 2026-10-01).
+  vec3 an = abs(normalize(vNrm));
+  bool wall = matWallLike(mid);
+  vec3 T = wall ? (an.x > an.z ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) : vec3(1.0, 0.0, 0.0);
+  vec3 B = wall ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
   // ASPHALT stays deliberately the weakest in the table — see the MAT.ASPHALT
   // note in js/track/core/geom.js: the road is viewed edge-on for the whole race and
   // anything with real relief crawls.
@@ -427,7 +434,10 @@ void applyMaterialNormal(int mid, inout vec3 N, float vd) {
     float fp = max(fwidth(hc), fwidth(y));
     float aaFade = clamp(1.0 - (fp - 0.04) / 0.22, 0.0, 1.0);
     if (aaFade <= 0.005) return;
-    vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N) + vec3(1e-5));
+    // T = the world axis hc runs along (+z on +-x faces, +x on +-z faces), so a
+    // seam reads as a groove on every face; the old up-cross-N frame pointed the other way
+    // on +x and -z walls and turned mortar into ridges there.
+    vec3 T = an.x > an.z ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
     float e = 0.05;
     float h0 = matBumpHeight(mid, vec2(hc, y));
     float hx = matBumpHeight(mid, vec2(hc + e, y));
