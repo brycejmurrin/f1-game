@@ -80,6 +80,7 @@ test("the follow gap is a time headway: s0 + v·T, awareness widens T", () => {
   assert.ok((g40 - 6) / 40 > 0.25, "more than a quarter second of headway at racing speed");
   // a latched/armed pass or a tow tightens it to 0.12 s; `extra` adds seconds
   assert.ok(Math.abs(A.followGap(mid, false, 40, 1) - (6 + 40 * 0.12)) < 1e-9);
+  assert.ok(Math.abs(A.followGap(mid, true, 40, 1) - (8 + 40 * 0.06)) < 1e-9, "a street attack starts closer");
   assert.ok(Math.abs(A.followGap(mid, false, 40, 0, null, 0, null, null, 0.1) - (6 + 40 * (T + 0.1))) < 1e-9);
   // ...and it stays inside the tow's reach (TOW_RANGE 34 m) at any speed
   assert.ok(A.followGap(ace, false, 95) <= 28, `capped: ${A.followGap(ace, false, 95)}`);

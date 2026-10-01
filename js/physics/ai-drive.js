@@ -111,7 +111,9 @@ const AiDrive = (function () {
     return street ? T * 0.8 : T;
   }
   function followGap(t, street, speed, tight, team, seat, other, stats, extra) {
-    const T = lerp(followTime(t, street, team, seat, other, stats), FOLLOW_TIGHT, clamp(tight || 0, 0, 1)) + (extra || 0);
+    // Streets tighten to HALF of it: an attack at monaco starts from s0 (8 m) + a
+    // few metres, or the narrow zones are out of reach by the turn-in.
+    const T = lerp(followTime(t, street, team, seat, other, stats), street ? FOLLOW_TIGHT * 0.5 : FOLLOW_TIGHT, clamp(tight || 0, 0, 1)) + (extra || 0);
     return Math.min(followBase(street) + Math.max(speed || 0, 0) * T, FOLLOW_MAX);
   }
 
@@ -773,7 +775,9 @@ const AiDrive = (function () {
     if (gain <= 0) return true;
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
     const dv = Math.max((ctx.speed || 0) - (ctx.blockerSpeed || 0), (ctx.freeSpeed || 0) - bv, ref / 72);
-    return (ctx.speed || 0) * gain / dv <= 1.25 * to;
+    // Streets get no late-brake allowance: the zones are short and narrow, and
+    // a marginal move there was an attack that failed (monaco conversion 3-4 %).
+    return (ctx.speed || 0) * gain / dv <= (ctx.street ? 1 : 1.25) * to;
   }
 
   // QUEUE PRESSURE. THE TRAIN: the queue cap holds a follower at the blocker's
