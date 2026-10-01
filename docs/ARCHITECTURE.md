@@ -148,6 +148,7 @@ _245 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
 | `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
+| `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
 | `badges.js` | `Badges` | tag | LICENCE BADGES: local achievements unlocked from facts the game already computes (a classified result, a pole, a daily streak), persisted at `apex26.badges`. |
