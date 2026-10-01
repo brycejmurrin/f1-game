@@ -189,3 +189,28 @@ test("import-models samples indexed (colour-type 3) Kenney-style colormaps", asy
     process.on("exit", () => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {} });
   }
 });
+
+test("--scale keeps a kit's relative sizes: a uniform metres-per-unit factor when --height is 0", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-"));
+  const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
+  fs.mkdirSync(src, { recursive: true }); fs.mkdirSync(out, { recursive: true });
+  try {
+    buildFixture(src);
+    const run = (args) => cp.spawnSync(process.execPath,
+      [path.join(ROOT, "tools", "gen", "import-models.mjs"), src, "--mat", "CONCRETE", ...args, "--prefix", "s_"],
+      { env: { ...process.env, APEX_PACK_DIR: out }, encoding: "utf8" });
+    const height = async (r) => {
+      assert.equal(r.status, 0, r.stderr);
+      const man = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));
+      const geo = await readAX26(path.join(out, man.models.s_building.file));
+      let mny = 1e9, mxy = -1e9;
+      for (let i = 1; i < geo.pos.length; i += 3) { mny = Math.min(mny, geo.pos[i]); mxy = Math.max(mxy, geo.pos[i]); }
+      return mxy - mny;
+    };
+    const h1 = await height(run(["--height", "0", "--scale", "1"]));
+    const h5 = await height(run(["--height", "0", "--scale", "5"]));
+    assert.ok(h1 > 0 && Math.abs(h5 - h1 * 5) < 1e-3, `scale 5 should be five times scale 1: ${h5} vs ${h1}`);
+    const hb = await height(run(["--height", "12", "--scale", "5"]));
+    assert.ok(Math.abs(hb - 12) < 1e-3, `--height wins over --scale: ${hb}`);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});

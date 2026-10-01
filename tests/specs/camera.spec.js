@@ -17,7 +17,7 @@ test.describe("Apex 26 — player camera modes", () => {
       const bad = window.__apex.camera("banana");
       return { init, byId, byIdx, bad };
     });
-    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor"]);
+    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside"]);
     expect(r.byId.mode).toBe("cockpit");
     expect(r.byIdx.mode).toBe("chase");
     expect(r.bad).toBe(false);            // unknown mode is rejected, not crashed
@@ -36,7 +36,7 @@ test.describe("Apex 26 — player camera modes", () => {
       }
       return out;
     });
-    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "chase"]);
+    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "chase"]);
   });
 
   test("camera choice persists across a reload", async ({ page, loadTrack }) => {
@@ -54,21 +54,21 @@ test.describe("Apex 26 — player camera modes", () => {
     await loadTrack();
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const MODES = ["chase", "far", "drift", "cockpit", "hood", "overhead", "heli",
-                   "reverse", "side", "cinematic", "low", "tcam", "rear", "visor"];
+                   "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside"];
     // MEASURED: locator.screenshot() costs ~21.9 s per call on this SwiftShader
-    // box (camera switch 4 ms, 30 physics steps 32 ms). Capturing all 13 modes was
+    // box (camera switch 4 ms, 30 physics steps 32 ms). Capturing all modes was
     // ~284 s of screenshots alone, which is what pushed this past its 120 s budget
     // and made it the slowest test in the suite by 3x. It is the compositor frame
     // that is expensive, not the encode — JPEG q60 was tried and came out WORSE.
     //
     // So distinctness is asserted on the CAMERA STATE, which is what "a distinct
-    // frame" actually means here: 13 different eye/target/fov vantages cannot
+    // frame" actually means here: different eye/target/fov vantages cannot
     // render the same image. Pixels are still captured for a representative few,
     // so a mode that produces a valid vantage but fails to DRAW is still caught.
     //
     // snapCam() is REQUIRED here: the rig only moves during render(), and step()
     // does not render — without it every mode reports the PREVIOUS vantage and all
-    // 13 read identical.
+    // modes read identical.
     const vantages = {};
     for (const mode of MODES) {
       await page.evaluate((m) => { window.__apex.camera(m); window.__apex.snapCam(); }, mode);
