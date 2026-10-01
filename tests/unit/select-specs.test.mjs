@@ -13,7 +13,7 @@ import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
-  scopeCarryForward } from "../../tools/ci/select-specs.mjs";
+  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
@@ -657,6 +657,23 @@ test("an over-budget spec the diff EDITS still runs; one merely routed still doe
   assert.ok(jobs.every((j) => j.perTest === own && j.timeout === shardCapMin(j.sec, own)),
     "each job is capped at the spec's own per-test timeout");
   if (jobs.length > 1) assert.ok(jobs.every((j) => /^\d+\/\d+$/.test(j.shard)), "a split plan carries --shard tokens");
+});
+
+test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {
+  // PR #611: modes-group routing alone left career.spec.js in overBudgetSpecs
+  // (declares 540 s), so EXPORT/IMPORT reusing .cr-slot-del shipped green.
+  const over = "tests/specs/career.spec.js";
+  assert.ok(SOURCE_AFFECTED.some(([re, spec]) =>
+    re.test("js/career/career-ui.js") && re.test("js/career/career-backup.js") && spec === over));
+  assert.deepEqual(specsAffectedBySource(["js/career/career-ui.js"]), [over]);
+  assert.deepEqual(specsAffectedBySource(["js/career/career-backup.js"]), [over]);
+  assert.deepEqual(specsAffectedBySource(["js/career/career.js"]), [],
+    "other career modules stay merely routed");
+  // Rank 2 (import / foundation / SOURCE_AFFECTED) must put it in oversize.
+  const pinned = fit([over], 30, { rank: (f) => (f === over ? 2 : 3), db: EMPTY });
+  assert.deepEqual(pinned.oversize.map((s) => s.file), [over],
+    "SOURCE_AFFECTED rank runs the over-budget career.spec as oversize");
+  assert.equal(pinned.overBudgetSpecs.length, 0);
 });
 
 test("a spec this tool cannot READ is reported, never silently dropped", () => {

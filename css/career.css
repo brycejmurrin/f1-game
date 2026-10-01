@@ -465,8 +465,12 @@
 }
 /* DELETE is deliberately quiet until it is armed. The first press turns it red
    and relabels it DELETE?, which is the whole confirmation — a modal for this
-   would be a screen, and a single-tap delete would be unforgivable. */
-.cr-slot-del {
+   would be a screen, and a single-tap delete would be unforgivable.
+   [data-cr-act] is EXPORT / IMPORT on the same card: same quiet chrome, no new
+   class token (cssClasses ratchet), and .cr-slot-del stays DELETE-only so
+   career.spec.js's `.cr-slot .cr-slot-del` stays a single match. */
+.cr-slot-del,
+[data-cr-act] {
   align-self: stretch; min-width: 62px; cursor: pointer;
   font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   color: var(--dim); background: transparent;
@@ -474,10 +478,13 @@
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 @media (hover: hover) {
-  .cr-slot-del:hover { color: var(--red); border-color: var(--red); }
+  .cr-slot-del:hover,
+  [data-cr-act]:hover { color: var(--red); border-color: var(--red); }
 }
-.cr-slot-del:focus-visible { color: var(--red); border-color: var(--red); }
-.cr-slot-del.armed {
+.cr-slot-del:focus-visible,
+[data-cr-act]:focus-visible { color: var(--red); border-color: var(--red); }
+.cr-slot-del.armed,
+[data-cr-act].armed {
   color: #fff; border-color: var(--red); background: var(--armed-fill);
 }
 

@@ -182,12 +182,13 @@ function create(G) {
     };
     card.appendChild(open);
     // EXPORT dumps ALL six slots (the backup envelope). Same action on every
-    // used card so a player never has to hunt for a separate toolbar. Buttons
-    // reuse .cr-slot-del (quiet until armed) so cssClasses / rawSpacing stay
-    // inside the tree ratchets — no new class tokens.
+    // used card so a player never has to hunt for a separate toolbar. Style via
+    // [data-cr-act] (same rules as .cr-slot-del) — never reuse cr-slot-del; that
+    // class selects DELETE in career.spec.js and must stay unambiguous.
     if (s.used && typeof CareerBackup !== "undefined") {
-      const exp = el("button", "cr-slot-del", "EXPORT");
+      const exp = el("button", "", "EXPORT");
       exp.type = "button";
+      exp.setAttribute("data-cr-act", "export");
       exp.setAttribute("aria-label", `Export all career saves (backup from ${modeName} slot ${s.i + 1})`);
       exp.onclick = (ev) => {
         ev.stopPropagation();
@@ -204,9 +205,10 @@ function create(G) {
       const otherArmed = armedImport === `${s.flavour}:other` && pendingImport
         && pendingImport.focusFlavour === s.flavour;
       const armed = armedImport === id || otherArmed;
-      const imp = el("button", `cr-slot-del${armed ? " armed" : ""}`,
+      const imp = el("button", armed ? "armed" : "",
         otherArmed ? "ALL MODES?" : (armedImport === id ? "IMPORT?" : "IMPORT"));
       imp.type = "button";
+      imp.setAttribute("data-cr-act", "import");
       const what = `${modeName} slot ${s.i + 1}`;
       imp.setAttribute("aria-label", otherArmed
         ? `Confirm: import the other career mode too`
