@@ -21,7 +21,7 @@
  * with a reason, never a crash — a pack is dozens of models and one bad file
  * must not sink the rest.
  *
- *   node tools/gen/import-models.mjs <dir> [--mat CONCRETE] [--height 12] [--prefix q_]
+ *   node tools/gen/import-models.mjs <dir> [--mat CONCRETE] [--height 12 | --scale 5] [--prefix q_]
  *
  * Writes assets/pack/models/<name>.bin (the format js/render/shared/assets.js parses)
  * and updates the manifest. --height normalises each model to that many metres
@@ -246,8 +246,12 @@ function importFile(file, opts) {
   if (!pos.length || !idx.length) throw new Error("no triangle geometry");
 
   // Normalise: centre on the ground footprint (x/z centred, y min at 0), then
-  // scale so the model is --height metres tall. Pack authors use every unit
-  // convention going, so an un-normalised import lands the wrong size or buried.
+  // scale so the model is --height metres tall — or, for a KIT whose pieces
+  // must keep their relative sizes (a grandstand beside a cone), by a uniform
+  // --scale (metres per source unit; measured 2026-10-01: Kenney's Racing Kit is
+  // a toy scale, a 1.49-unit car and 0.9–1.4-unit grandstands, so ×5 lands
+  // 4.5–7 m stands). --height wins when both are given. Pack authors use every
+  // unit convention going, so an un-normalised import lands the wrong size or buried.
   let mnx = 1e9, mny = 1e9, mnz = 1e9, mxx = -1e9, mxy = -1e9, mxz = -1e9;
   for (let i = 0; i < pos.length; i += 3) {
     mnx = Math.min(mnx, pos[i]); mxx = Math.max(mxx, pos[i]);
@@ -256,7 +260,7 @@ function importFile(file, opts) {
   }
   const cx = (mnx + mxx) / 2, cz = (mnz + mxz) / 2;
   const rawH = Math.max(1e-4, mxy - mny);
-  const s = opts.height ? opts.height / rawH : 1;
+  const s = opts.height ? opts.height / rawH : (opts.scale > 0 ? opts.scale : 1);
   for (let i = 0; i < pos.length; i += 3) {
     pos[i] = (pos[i] - cx) * s; pos[i + 1] = (pos[i + 1] - mny) * s; pos[i + 2] = (pos[i + 2] - cz) * s;
   }
@@ -279,12 +283,13 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i >= 0 && proc
 function main() {
   const dir = process.argv[2];
   if (!dir || dir.startsWith("--")) {
-    console.error("usage: node tools/gen/import-models.mjs <dir> [--mat CONCRETE] [--height 12] [--prefix q_] [--max-verts 40000]");
+    console.error("usage: node tools/gen/import-models.mjs <dir> [--mat CONCRETE] [--height 12 | --scale 5] [--prefix q_] [--max-verts 40000]");
     process.exit(1);
   }
   const matName = (arg("--mat", "CONCRETE")).toUpperCase();
   if (!(matName in MAT)) { console.error(`--mat must be one of ${Object.keys(MAT)}`); process.exit(1); }
   const height = parseFloat(arg("--height", "0")) || 0;
+  const scale = parseFloat(arg("--scale", "0")) || 0;   // uniform metres per source unit (--height wins)
   const prefix = arg("--prefix", "");
   const maxVerts = parseInt(arg("--max-verts", "40000"), 10);
 
@@ -302,7 +307,7 @@ function main() {
   for (const f of files) {
     const id = prefix + path.basename(f).replace(/\.(glb|gltf)$/i, "").replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
     try {
-      const mesh = importFile(f, { height });
+      const mesh = importFile(f, { height, scale });
       const nv = mesh.pos.length / 3;
       if (nv > maxVerts) { rows.push({ id, verts: nv, skipped: `over --max-verts ${maxVerts}` }); continue; }
       const buf = writeAX26(mesh, MAT[matName]);
