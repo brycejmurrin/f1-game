@@ -117,7 +117,7 @@ test("randomise: deterministic per seed, scaled to its target, start on the long
   assert.notDeepEqual(a.pts, c.pts);
   assert.ok(a.pts.length >= 60 && a.pts.length <= 200);
   assert.ok(Math.abs(S.polyLen(a.pts) - a.targetL) / a.targetL < 0.03, `length ${S.polyLen(a.pts).toFixed(0)} ≈ target ${a.targetL}`);
-  assert.ok(S.signedArea(a.pts) < 0, "clockwise lap");
+  assert.ok(S.signedArea(a.pts) > 0, "clockwise lap (a right-turning loop has a POSITIVE signedArea in this frame; built Σk < 0 in tests/unit/track-randomise.test.mjs)");
   let green = 0, builds = 0;
   for (let seed = 1; seed <= 30; seed++) {
     const g = TR.generateValid(seed, (pts) => { builds++; return V.check(design({ pts, seed })).red === 0; }, 12);
