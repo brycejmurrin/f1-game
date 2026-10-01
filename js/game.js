@@ -444,9 +444,10 @@ if (typeof Assets !== "undefined") {
   Assets.loadModels();
 }
 
-// ---------- rain overlay ----------
-// The 2D falling-streak overlay lives in js/fx/particles.js (Particles.rain*).
-// game.js decides the weather tier and hands booleans/speed in.
+// ---------- rain ----------
+// The falling-streak field lives in js/fx/particles.js (Particles.rain*): drops
+// in a box around the camera, drawn through the alpha particle batch, depth-
+// tested in the frame. game.js decides the weather tier and hands booleans in.
 let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug: lightState)
 function initRainDrops() {
   // DRIZZLE tier: "wet" (damp track, no storm) — sparse/short/slow streaks.
@@ -708,6 +709,10 @@ function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
 // trade each way. Exactly 1 on a slick track, so the dry car is untouched.
 function aeroWetK() { return raceCtl && raceCtl.lowGrip() ? 0.5 : 1; }
 function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
+// A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample).
+function paceVmax(o) { return (o._vmaxNow || 0) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
+// The per-node AI speed/vmax profile paceSample learns, one per field (kept on the function: no new top-level state).
+function paceRef() { let r = paceRef.r; if (!r || r.cars !== cars) { r = paceRef.r = new Float32Array(track.n); r.cars = cars; } return r; }
 function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
 function xCoastCut(c) { return aeroWetK() * lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
@@ -2243,7 +2248,7 @@ function gridUp(preOrder) {
     const hRound = isChampionship() ? SeasonCal.drawRound(season) : raceIndex;
     const h = DriverRatings.hash32(hSeed + ":" + hRound + ":" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
-    c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
+    c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536; c.raceHash = h;
     c.tyreClass = c.human ? null : AiDrive.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
     // A fresh set for the start. The player's comes from the fitted catalog row
     // (the row IS the compound); an AI car's from the class it just drew. No RNG
@@ -2297,6 +2302,7 @@ function seedPlayerPose() {
 function clearRacingScratch(c) {
   c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null;
   c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.queueT = 0; c._qOf = null;
+  c.calmUntil = 0; c.calm = 0; c.sbsT = 0; c.atkOn = c.atkWant = false; c.runT = 0; c._alPrev = null; c.paceF = 0;   // racecraft state (AiDrive startCalm / sbs / runExtra / repassLock / paceSample)
   // errCount is NOT cleared here — a red-flag re-grid is the SAME race, so the
   // mistakes counted before the flag stay on the car (as energy and tyreClass
   // do). gridUp zeroes it beside c.hits/c.cuts, where a new race's counters live.
@@ -3225,9 +3231,9 @@ function endRace(forcedOrder) {
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
-  // quitToMenu clears the 2D rain overlay; endRace must too — otherwise
-  // rainDraw keeps stroking every present on the results sheet (audio alone
-  // stopped). Particles.rainActive() is the overlay gate, not the audio flag.
+  // quitToMenu hides the rain field; endRace must too — otherwise it keeps
+  // drawing into every frame behind the results sheet (audio alone stopped).
+  // Particles.rainActive() is the seed gate, not the audio flag.
   Particles.rainShow(false);
   if (soundOn) GameAudio.finish();
   // Qualifying ends in its own sheet: the player's flying lap is measured
@@ -3858,7 +3864,7 @@ qualiNet = QualiNet.create({
 raceSettings = RaceSettings.create(G, {
   GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
   qualiResults: () => quali.results(), openQuali, enableTilt,
-  getSteerMode: () => steerMode, buildStandings, raceIntro,
+  getSteerMode: () => steerMode, buildStandings, raceIntro: raceIntroFromSheet,
 });
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, and startRaceBody keeps
@@ -3931,7 +3937,7 @@ function flybyGridOrder() {
 // RACE! before the menu's idle build: prepare under the card, then drive out
 // and fly. The race reuses this build; its outgoing shot never waits for shaders.
 let _introKey = "", _introRun = 0, _introSkip = 0;
-function cancelIntro() { _introRun++; _introKey = ""; _introSkip = 0; }
+function cancelIntro() { _introRun++; _introKey = ""; _introSkip = 0; sheetRelease(false); }
 async function awaitIntroWarm(current) {
   const at = performance.now();
   while (current() && gfx.warming && gfx.warming()) {
@@ -3945,7 +3951,20 @@ async function awaitIntroWarm(current) {
 // compilation owns the renderer, so it must finish before the car starts moving.
 // A tap skips the cinematic once preparation settles. Only its intro run closes it.
 let _studio = null;
+// RACE SETTINGS COVERS ITS OWN START (raceIntroFromSheet): the sheet stays up, START
+// reading PREPARING… and BACK (Escape's door) off, not the build card over a black canvas
+// before the garage. studioOpen or raceIntro lowers it; titleIfBare/cancelIntro give the buttons back.
+let _introSheet = null;
+function sheetRelease(hide) {
+  const h = _introSheet; if (!h) return;
+  _introSheet = null; h.btn.disabled = false; if (h.back) h.back.disabled = false;
+  if (h.btn.textContent === "PREPARING…") h.btn.textContent = h.label;   // unless the sheet relabelled it meanwhile
+  if (hide) h.sheet.hidden = true;
+}
+/** Cold preparation's cover: the build card, unless race settings already covers it. */
+function introCover(info, n) { if (!_introSheet) loadingScreen.building(info, () => studioSkip(n)); }
 function studioOpen(n, info) {
+  sheetRelease(true);   // the car moves: the sheet gives way to it
   if (_studio) studioClose(_studio.n);
   const real = info && info.real;
   // None for: a race joined mid-way or watched (not your car leaving the garage), a
@@ -4023,7 +4042,7 @@ function introBuild(go) {
   if (!(idx >= 0) || motionReduced()) return false;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
-  loadingScreen.building(info0, () => studioSkip(n));
+  introCover(info0, n);
   (async () => {
     try {
       await ensureScenery(idx);
@@ -4073,7 +4092,7 @@ function introWarm(go) {
   const n = ++_introRun, settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
   const info = loadingInfo(), cold = _warmKey !== key;
-  if (cold) loadingScreen.building(info, () => studioSkip(n)); else studioOpen(n, info);
+  if (cold) introCover(info, n); else studioOpen(n, info);
   const out = cold ? null : studioDone(live, n);
   (async () => { try {
       const fly = await introPlan(live, key, info, n);
@@ -4104,7 +4123,25 @@ function startRaceCovered() {
   return startRace();
 }
 // An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
-function titleIfBare() { if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
+function titleIfBare() { sheetRelease(false); if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
+// START RACE FROM RACE SETTINGS (_introSheet). A warm compiling at the tap owns the renderer
+// (TLX presents nothing, 1-4 s on a real GPU): waited out under the sheet, bounded as
+// awaitIntroWarm is. The menu's own build and warms stand down, as when the sheet closed.
+function raceIntroFromSheet(go, sheet, btn) {
+  if (_introSheet) return;   // already preparing (START is disabled: a synthetic second press)
+  if (!sheet || !btn) { if (sheet) sheet.hidden = true; raceIntro(go); return; }
+  const back = $("rs-cancel"); _introSheet = { sheet, btn, back, label: btn.textContent };
+  btn.disabled = true; btn.textContent = "PREPARING…"; if (back) back.disabled = true;
+  clearTimeout(flybyBuildTimer); _menuGate.generation++;
+  const intro = () => { try { raceIntro(go); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); sheetRelease(true); go(); } };
+  if (!(gfx.warming && gfx.warming())) { intro(); return; }
+  const n = ++_introRun, settings = entrySettings(), at = performance.now();
+  const live = () => n === _introRun && state === "menu" && settings === entrySettings();
+  (async () => {
+    while (live() && gfx.warming() && performance.now() - at < 30000) await menuSlice();
+    if (live()) intro(); else if (n === _introRun) sheetRelease(false);
+  })();
+}
 function raceIntro(go) {
   // The card is the whole screen: the Data Hub's JUMP IN closes a dialog that sat OVER the title, which then showed round the card.
   els.overlay.hidden = true;
@@ -4112,6 +4149,7 @@ function raceIntro(go) {
   if (!built && !menuWorld() && introBuild(go)) return;
   if (!built && menuWorld() && introWarm(go)) return;
   if (!built && !motionReduced() && introGarage(go)) return;
+  sheetRelease(true);   // no drive-out to give way to (or it was skipped): the flyby or the race does
   if (built && _introSkip === _introRun) { _introSkip = 0; go(); return; }   // skipped in the garage: the race, not the flyby, is next
   const world = menuWorld();
   if (world) menuGridCars();
@@ -4663,8 +4701,8 @@ const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separa
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5, queueT: 0 };
-const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, x: 0 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0 };
+const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0 };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
@@ -4876,9 +4914,10 @@ function updateCar(c, dt, ranked) {
         const deficit = MIN_GAP - (dx < 0 ? -dx : dx);
         if (deficit > 0) sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);   // push AWAY from o
       }
-      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < BLOCKER_HALF_W) { blocker = o; blockerGap = dprog; }
+      // A car that just passed us (or that we just gave up on) is our blocker across the lane too, until the lockout ends: concede the place, do not run parallel and swap back (AiDrive.repassLock).
+      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 && !track.street ? 6 : BLOCKER_HALF_W)) { blocker = o; blockerGap = dprog; }
       if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < TOW_HALF_W) { towCar = o; towGap = dprog; }   // wake giver
-      if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }  // attacker behind
+      if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < (!track.street && -dprog < 0.5 * Math.max(c.speed, 10) ? 5.5 : 3)) { chaser = o; chaserGap = -dprog; }  // attacker behind: our lane, or the next one inside half a second
     }
     roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
     _aiBoxed.contactT = c.contactT; _aiBoxed.roomL = roomL; _aiBoxed.roomR = roomR;
@@ -4897,6 +4936,9 @@ function updateCar(c, dt, ranked) {
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);
+    // PASSED: the car alongside went from behind to ahead — by a player or an AI, latched or not. The re-pass lockout (AiDrive.repassLock), shorter with a pace edge.
+    if (alongO && alongO === c._alPrev && c._alPrevDp < 0 && alongDprog >= 0) { c.passFailOf = alongO; c.passFailT = Math.max(c.passFailT || 0, AiDrive.repassLock(aiT, (vmax - paceVmax(alongO)) / vTop())); }
+    c._alPrev = alongO; c._alPrevDp = alongDprog;
   }
 
   // --- electric deploy ---
@@ -5096,15 +5138,21 @@ function updateCar(c, dt, ranked) {
     if (pitV >= 0) vmax = Math.min(vmax, pitV);
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
     // cap our pace to it, braking if closing fast, so we tuck behind not ram.
-    // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
+    // The follow distance is a TIME HEADWAY (AiDrive.followGap: s0 + v·T),
+    // tightened while a pass is latched or armed, or in a tow on a straight.
     // NOT against the car we are committed to passing once we are laterally
     // clear of it: the cap re-binding at |dx| < 2.2 is exactly what turned every
     // pull-out into a re-queue (the pass latch below owns that decision). 1.8 is
     // inside the 2.2 blocker box on purpose — hysteresis, so the two edges
     // cannot chatter against each other.
-    const capBlocks = blocker && blockerGap < 16 &&
+    // THE QUEUE WINDOW REACHES PAST THE FOLLOW GAP: a 16 m window under a 20-28 m
+    // headway never held the car (it hovered at the edge, uncapped), so queue
+    // pressure never built and a stuck car never got impatient.
+    const followR = blocker ? AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : c.atkWant ? 0.6 : 0, c.team, c.seat, blocker, c.houseStats, (c.runT || 0) + AiDrive.startGapT(c.calm = AiDrive.startCalm(c.launchOn, c.calmUntil, raceT))) : 0;
+    const qWin = Math.max(16, followR + 6);
+    const capBlocks = blocker && blockerGap < qWin &&
       !(blocker === c.passOf && Math.abs(c.x - blocker.x) >= 1.8);
-    if (blocker && blockerGap < 16) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
+    if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
     c.queueT = AiDrive.queueTime(c.queueT, capBlocks && blocker === c._qOf && cautionLevel() < 2, dt); c._qOf = capBlocks ? blocker : null;   // held behind the SAME car (AiDrive.queuePress)
     if (capBlocks) {
       // Held behind a car SERVING A STOP (or queued for one), not by the ground
@@ -5116,8 +5164,7 @@ function updateCar(c, dt, ranked) {
       // instead of being commanded into its gearbox. BOTH ends must be pit-held,
       // so nothing about racing traffic changes.
       const onLane = queued && pits.held(c);
-      const follow = onLane ? AiDrive.laneFollow()
-        : AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
+      const follow = onLane ? AiDrive.laneFollow() : followR;
       // Floored (AiDrive.queueFloor): the cap may match the blocker's pace but
       // must never command a STANDSTILL — which it did behind a stopped car,
       // and a stopped AI can never steer out. The crawl is itself capped at the
@@ -5134,7 +5181,8 @@ function updateCar(c, dt, ranked) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x) &&
+    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO.speed >= c.speed - 0.5) vmax = Math.min(vmax, alongO.speed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
+    squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
     if (squeezed) {
       vmax = Math.min(vmax, alongO.speed * AiDrive.squeezeEase(!!track.street));
@@ -5203,6 +5251,7 @@ function updateCar(c, dt, ranked) {
   // function. Driving the car to measure it does not work — full lock at 78 m/s
   // puts it 30 m into a field, which closes the flaps and measures nothing.
   c._vmaxNow = vmax;
+  if (state === "race" && cautionLevel() < 2 && !pits.inLane(c)) AiDrive.paceSample(paceRef(), Math.floor(c.s / track.total * track.n) % track.n, c, vmax, !blocker || blockerGap > 30, dt);
 
   // --- gearbox (player) ---
   // accelCeil: the speed a car ABOVE it is bled toward (never a teleport) and
@@ -5271,7 +5320,7 @@ function updateCar(c, dt, ranked) {
     // its own getaway for three seconds. A grid that accelerated as one held its
     // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
     const launch = c.launchOn ? AiDrive.launchMul(raceT - launchT0, c.launch) : 1;
-    if (c.launchOn && AiDrive.launchDone(raceT - launchT0, c.launch)) c.launchOn = false;
+    if (c.launchOn && AiDrive.launchDone(raceT - launchT0, c.launch)) { c.launchOn = false; c.calmUntil = launchT0 + AiDrive.startCalmS(); }
     const a = (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu * (state === "race" ? 1 : 0);
     if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // A ceiling that drops under the car (VSC vmax cut, limiter downshift) bleeds
@@ -5459,6 +5508,9 @@ function updateCar(c, dt, ranked) {
     c.passCool = Math.max(0, (c.passCool || 0) - dt);
     c.passFailT = Math.max(0, (c.passFailT || 0) - dt);
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
+    // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
+    c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
+    c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking
@@ -5508,7 +5560,7 @@ function updateCar(c, dt, ranked) {
              own comment states the contract ("callers must read fields before
              the next traits() call"); this was the one site that broke it.
              Take po's number, then put c's ratings back. */
-          const poCool = 2 * AiDrive.passCooldown(AiDrive.traits(po));
+          const poCool = AiDrive.repassLock(AiDrive.traits(po), (paceVmax(po) - paceVmax(c)) / vTop());
           if (!c.human) AiDrive.traits(c);
           po.passFailT = Math.max(po.passFailT || 0, poCool);
           if (po.passOf === c) { po.passOf = null; po.passCool = po.passFailT; }
@@ -5521,7 +5573,7 @@ function updateCar(c, dt, ranked) {
       // at the apex). Abandon it, and remember the car: the same car is not
       // re-attacked for twice the cooldown (rFactor 2's "threshold endured").
       // A car with 12 % of pace in hand keeps the move: it will be alongside under braking.
-      else if (_atk.toTurnIn < 6 && dp > AiDrive.sideLevel() && Math.max(aiFreeSpeed, blocker === po ? 0 : vmax) < (po.human ? po.speed : (po._vmaxNow || 0)) + 0.12 * vTop()) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); c.passFailOf = po; c.passFailT = 2 * AiDrive.passCooldown(aiT); }
+      else if (_atk.toTurnIn < 6 && dp > AiDrive.sideLevel() && Math.max(aiFreeSpeed, blocker === po ? 0 : vmax) < paceVmax(po) + 0.12 * vTop()) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); c.passFailOf = po; c.passFailT = 2 * AiDrive.passCooldown(aiT); }
       else {
         // Patience refreshes while we GAIN on the car; it runs down while we do not.
         if (dp < c.passBest - 0.3) { c.passBest = dp; c.passT = AiDrive.passHold(aiT); }
@@ -5537,23 +5589,24 @@ function updateCar(c, dt, ranked) {
       // Side-pick + incentive inputs. kA is the same AI-only curvature read the
       // racing line above already makes — the arc reaches the AI's choice of
       // side, never the driver. blockerVmax is the car's PACE, not its speed
-      // this instant (AiDrive.otWant says why that matters). A HUMAN has no
-      // pace ceiling to read — _vmaxNow is the model's top speed for every car,
-      // so a player doing 40 read as "pace 60" and was never attacked; their
-      // speed is their pace, so the fallback (0 -> blockerSpeed) is the read.
+      // this instant (AiDrive.otWant says why that matters). A HUMAN's vmax is
+      // only its CAR's, and its live speed is low in every corner — so it is
+      // judged by its paceF against the field (paceVmax, AiDrive.paceSample).
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
-      _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0) / (1 + xVmaxGain(blocker) * (blocker.aeroX || 0)); _aiOtPull.vTop = vTop(); _aiOtPull.queueT = c.queueT || 0;
+      _aiOtPull.blockerVmax = paceVmax(blocker); _aiOtPull.vTop = vTop(); _aiOtPull.queueT = c.queueT || 0;
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
       // attack zone at its baked quality), and not on a car we just gave up on.
-      _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
+      _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.kTurn = c.kTurn; _aiOtPull.calm = c.calm || 0;
+      _aiOtPull.roll = AiDrive.attemptRoll(c.raceHash, c.lap, Math.round(c.s + _atk.toTurnIn));   // a fresh roll per braking zone
+      c.atkWant = AiDrive.otWant(_aiOtPull);
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
       // No passing under the safety car or VSC (FIA Sporting Regs): the
       // caution capped speed but the pass logic ran on, 27 moves in 60 s.
-      const moveOn = raceCtl.level < 2 && !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
-      if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M) {
+      const moveOn = c.atkOn = raceCtl.level < 2 && !sameCar && c.atkWant && AiDrive.attackOK(_aiOtPull);
+      if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M && AiDrive.latchLate(_aiOtPull)) {
         const side = AiCorridor.choose(_aiOtPull, c, blocker, cars, track.total, CLEAR, c.passPlan || (c.passPlan = {})).side;
         if (side && (side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
@@ -5564,6 +5617,7 @@ function updateCar(c, dt, ranked) {
       // 0 -> 6 in the bench with the zone gate alone).
       if (!c.passOf) overtake = moveOn && (!c.passPlan || c.passPlan.side) ? AiDrive.otPull(_aiOtPull) : 0;
     }
+    else c.atkOn = c.atkWant = false;
     if (c.passOf && raceCtl.level >= 2) c.passOf = null;   // a move under way when the SC/VSC comes out is abandoned
     if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what
@@ -5575,16 +5629,17 @@ function updateCar(c, dt, ranked) {
       if (freeRoom > 1.6) yieldPull = freeSide * AiDrive.letPassPull(aiT, !!track.street) * clamp(freeRoom / 2.4, 0, 1);
     }
     let defend = 0;
-    if (chaser && !blocker && !letPass) {
+    if (chaser && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser.speed;
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x;
+      _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
       defend = AiDrive.defendPull(_aiDefend);
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in
     // the braking zone, where defending is over anyway (holdLine below).
-    if (braking) c.defendSide = 0;
+    if (braking) { c.defendSide = 0; defend = 0; }   // NO MOVE UNDER BRAKING (FIA), the cover included
     else { AiDrive.defendOnce(defend, c.defendSide || 0, _aiDefOnce); defend = _aiDefOnce.defend; c.defendSide = _aiDefOnce.side; }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
@@ -5640,19 +5695,20 @@ function updateCar(c, dt, ranked) {
     // election below stays; a human runs no election at all, which is why
     // the aim is the right moment there (AiDrive.aimIntrudes).
     const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO.x, CLEAR);
-    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x);
+    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x, c.kTurn);
     // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
     // AiDrive.humanYieldGrace; this end only carries the per-car timer.
     // Are WE steering into them (aim vs where we already are), and is there
     // still room left to concede? Both halves matter — AiDrive.humanYieldT.
-    const intruding = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand()
-      && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
-    c.hYieldT = AiDrive.humanYieldT(c.hYieldT, alongClose, yieldMine, !!(alongO && alongO.human), intruding, dt);
+    const inBand = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand();
+    const intruding = inBand && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
+    c.hYieldT = AiDrive.humanYieldT(c.hYieldT, !!alongO && Math.abs(alongDx) < CLEAR + 1, yieldMine, !!(alongO && alongO.human), intruding, dt, inBand);
     if (!yieldMine && AiDrive.humanYieldTakes(c.hYieldT)) yieldMine = true;
     // A HUMAN neighbour: an aim into their gap is conceded at once. Nobody else
     // in the pair will, and a clear gap held at the aim point IS the clean
     // side-by-side the grace protects — the grace stays for the contact case.
     if (!yieldMine && aimClose && alongO.human) yieldMine = true;
+    c.sbsT = yieldMine ? (c.sbsT || 0) + dt : 0;   // read by COMMIT OR YIELD above, next frame
     if (yieldMine) {
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
@@ -8083,6 +8139,13 @@ function render(dt) {
   // with the RENDER dt and drawn into the HDR scene before present, so smoke
   // and spray tone-map with the world and the HDR spark tints feed bloom.
   // Render-path only — headless physics never touches the pool.
+  // Falling rain: the streak field around the camera, drawn inside the alpha
+  // particle batch (depth-tested, fogged by nothing, in the frame — never an
+  // overlay). Full storm streaks when raining, the sparse DRIZZLE tier when
+  // merely WET (rainSeed picked which). Open-cockpit cars have no windscreen,
+  // so onboard views get the same field as the chase cam — no water-on-glass
+  // beading and no wiper (there is nothing to wipe).
+  if (isWetRoad() && Particles.rainActive()) Particles.rainUpdate(dt, camEye, isRaining());
   Particles.update(dt);
   Particles.draw();
 
@@ -8278,17 +8341,6 @@ function render(dt) {
     // this, one kill months ago plus one today retires the pick on what looks
     // like a first failure.
     try { localStorage.removeItem("apex26.gfxProbeStrikes"); } catch (_) { /* blocked storage */ }
-  }
-  if (isWetRoad() && Particles.rainActive()) {
-    // Falling-streak precipitation, identical in every camera: full storm
-    // streaks when raining, the sparse DRIZZLE tier when merely WET (the
-    // storm flag below picks which). Open-cockpit cars have no windscreen,
-    // so onboard views get the same streaks as the chase cam — no
-    // water-on-glass beading and no wiper (there is nothing to wipe).
-    Particles.rainDraw(dt, (player && player.speed) || 0, isRaining());
-    // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
-    // Stronger bleach (was 0.18) so a strike is a real concussive sky-flash.
-    if (_ltFlash > 0.001) Particles.rainFlash(Math.min(0.55, _ltFlash * 0.40));
   }
 }
 

@@ -889,7 +889,7 @@ test("cold intros await compilation before drive-out and cut directly afterward;
       entrySettings: () => "settings", menuKey: () => "world", motionReduced: () => false,
       clearTimeout() {}, setTimeout: f => f(), performance: { now: () => now }, requestAnimationFrame: f => { c._menuGate.warm--; f(); },
       loadingInfo: () => ({}), loadingScreen: { nextFlyMs: () => 24000, stop() {}, building: (info, skip) => { c.skip = skip; } },
-      studioSkip: n => { c._introSkip = n; },
+      studioSkip: n => { c._introSkip = n; }, introCover: (info, n) => c.loadingScreen.building(info, () => c.studioSkip(n)),
       studioOpen() { assert.equal(warming, false, "no outgoing motion before compilation settles"); c._studio = {}; events.push("out"); },
       studioDone: () => new Promise(r => { finishGarage = r; }), studioClose() { if (c._studio) { events.push("close"); c._studio = null; } },
       ensureScenery: async () => {}, loadTrackStepped: async () => true, prepareMenuCarAssets: async () => {},
