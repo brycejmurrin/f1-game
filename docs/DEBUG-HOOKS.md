@@ -450,11 +450,13 @@ display label such as `"TV SIDE"` — returns `false`.
 | `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
 | `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
 | `visor` | VISOR | The cockpit without its steering wheel: the same eye, tub, halo, mirrors and front wheels as `cockpit`, with the wheel and its dash left out; a linked phone wheel switches to it |
+| `trackside` | TRACKSIDE | Fixed cameras at each measured corner (outside the fence); auto-switches as the subject car passes (`js/camera/trackside.js`) |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:["chase","far","drift","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear","visor"] }
+__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
 __apex.camera("tcam");      // → { mode:"tcam", index:11 }
+__apex.camera("trackside"); // → { mode:"trackside", index:14 }
 __apex.camera(3);           // switch by index → cockpit
 ```
 
