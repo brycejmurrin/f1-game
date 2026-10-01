@@ -1017,9 +1017,30 @@ body:not(.desktop) {
 }
 :root[data-text-size="large"] {
   --fs-micro: 16px; --fs-2: 17px; --fs-3: 18px; --fs-4: 20px; --fs-5: 21px; --fs-6: 23px;
+  --hud-text-boost: 1.10;
 }
 :root[data-text-size="larger"] {
   --fs-micro: 18px; --fs-2: 20px; --fs-3: 21px; --fs-4: 22px; --fs-5: 23px; --fs-6: 26px;
+  --hud-text-boost: 1.18;
+}
+/* COLOUR VISION (js/ui/appearance-opts.js): remap semantic ink used by the HUD
+   and menus. IBM-safe triples — matches the driving-line COLOUR-BLIND palette
+   intent without filtering the 3D canvas. */
+:root[data-cvd="deutan"],
+:root[data-cvd="protan"] {
+  --faster: #0077bb;
+  --slower: #ee7733;
+  --sec-slow: #ee7733;
+  --sec-best: #33bbee;
+  --you: #cc3311;
+  --red: #cc3311;
+}
+:root[data-cvd="tritan"] {
+  --faster: #009988;
+  --slower: #cc3311;
+  --sec-slow: #ee7733;
+  --sec-best: #0077bb;
+  --you: #ee3377;
 }
 /* HIGH CONTRAST: solid plates instead of see-through ones, secondary text near
    full strength, lines that read as lines. Theme-relative, so LIGHT + HIGH
