@@ -5920,36 +5920,14 @@ function updateCar(c, dt, ranked) {
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
     const assistDelta = -ROAD_FOLLOW * (WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * kPath * yawEase * offAssistFade;
-    // --- RACING LINE assist (pause-menu slider; 0 = off, the default).
-    // The target is TrackLine, the baked out-in-out the AI already drives
-    // (TrackLine.at). The previous target, -k*170 + (kAhead+kBehind)*85, was
-    // written when the AI still aimed at -k*130. The field moved to the LUT;
-    // the slider did not, so an assisted car was herded onto a different arc
-    // from every car it was racing. It still acts through the FRONT TYRE —
-    // adding it straight to c.x crabbed the chassis through grip it did not have.
-    // A track with no LUT keeps the curvature stand-in.
+    // Racing-line slider. TrackLine.at is the AI's line; lineW is 0 on a
+    // straight so the raw offset there is not a target. Front tyre, not c.x.
     let lineDelta = 0;
-    if (raceLineAssist !== 0) {
+    if (raceLineAssist !== 0 && track.line) {
       const look = clamp(Math.abs(c.speed) * 0.9, 25, 90);
-      let lineX;
-      if (track.line) {
-        // .x and .w immediately: TrackLine.at returns one shared object.
-        // lineW is 0 on a straight (the line has no opinion) and 1 through a
-        // corner — the blend the AI already uses. The raw offset is still the
-        // relaxed seed on a straight (~6 m at Monza's grid); chasing it pulls
-        // the car off the road and the pursuit does not come back. Clamp to
-        // the tarmac so an apex on the edge cannot demand the grass.
-        const ln = TrackLine.at(track, wrapS(c.s + look));
-        lineX = clamp(ln.x * ln.w, -(hw - 0.6), hw - 0.6);
-      } else {
-        const kAhead = Tracks.curvature(track, wrapS(c.s + look));
-        const kBehind = Tracks.curvature(track, wrapS(c.s - look * 0.7));
-        lineX = clamp(-k * 170 + (kAhead + kBehind) * 85, -0.72, 0.72) * Math.max(0, hw - 0.6);
-      }
-      // Pure pursuit: closing a lateral error e over a look-ahead distance Ld
-      // needs a path curvature of about 2e/Ld², and a road-wheel angle of
-      // WHEELBASE × that. Speed-scaling falls out of Ld, so the correction stays
-      // gentle at 300 km/h and still finds the line in a slow corner.
+      const ln = TrackLine.at(track, wrapS(c.s + look));
+      const edge = Math.max(0, hw - 0.6);
+      const lineX = clamp(ln.x * ln.w, -edge, edge);
       const Ld = clamp(Math.abs(c.speed) * 1.2, 22, 70);
       lineDelta = raceLineAssist * LINE_PURSUIT * WHEELBASE * 2 * (lineX - c.x) / (Ld * Ld) * offAssistFade;
     }
