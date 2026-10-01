@@ -474,7 +474,11 @@ test("TrackCodec.decode and CustomTracks.sanitize never throw or leak NaN (N=200
   await fuzz("TrackCodec.decode", "track-decode-v1", N, async (rng) => {
     const input = mutate(rng.pick(corpus), rng);
     let r;
-    try { r = typeof input === "string" ? await CD.decode(input) : { ok: !!C.sanitize(input), design: C.sanitize(input) }; }
+    try {
+      // The URL fragment is untrusted too: a stray % must read as "no code", not a URIError.
+      if (typeof input === "string") { const h = CD.fromHash("#track=" + input + (input.length % 2 ? "%" : "%E0%A4%A")); assert.ok(h === null || typeof h === "string"); }
+      r = typeof input === "string" ? await CD.decode(input) : { ok: !!C.sanitize(input), design: C.sanitize(input) };
+    }
     catch (err) { assert.fail(`track decode threw: ${(err && err.message) || err} for ${JSON.stringify(input).slice(0, 80)}`); }
     assert.ok(r && typeof r.ok === "boolean", "ok-reason shape");
     if (!r.ok) { if (typeof input === "string") assert.equal(typeof r.reason, "string"); return; }
