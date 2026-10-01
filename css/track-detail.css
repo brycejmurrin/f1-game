@@ -287,5 +287,15 @@ body.cockpit-cam #hud-aero { display: none; }
    and the gearbox chip is the HUD's widest element. */
 @media not all and (min-width: 900px) and (min-height: 600px) {
   body.cockpit-cam #hud-speed { display: block; }
+  /* Phone landscape (844×390 class): LCD digits are a few px tall — boost the
+     floating speed so cockpit (touch default) stays readable. */
+  body.cockpit-cam #hud-speed {
+    font-size: calc(42px * var(--hud-text-boost, 1));
+    letter-spacing: 0.02em;
+    text-shadow: var(--hud-halo), 0 0 1px var(--carbon);
+  }
+  body.cockpit-cam #hud-speed .hud-unit {
+    font-size: calc(var(--fs-micro) * 1.15 * var(--hud-text-boost, 1));
+  }
 }
 } /* @layer overlays */

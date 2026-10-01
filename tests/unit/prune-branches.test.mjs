@@ -47,6 +47,25 @@ test("claims markers are pruned on age alone, a day at least, and an open PR sti
   assert.deepEqual(kept.map((k) => k.why), ["live claim", "open PR"]);
 });
 
+test("an ABSORBED verdict prunes; a judgement verdict only when opted in, and the reason is kept", () => {
+  const branches = [b("abs", 30), b("sup", 30), b("closed", 30), b("work", 30)];
+  const verdicts = new Map([["abs", "absorbed"], ["sup", "superseded"], ["closed", "pr-closed"], ["work", "unmerged"]]);
+  const plain = selectPrunable(branches, { now: NOW, isMerged: () => false, verdicts });
+  assert.deepEqual(plain.prune, ["abs"]);
+  assert.equal(plain.reasons.get("abs"), "absorbed");
+  assert.deepEqual(plain.kept.map((k) => [k.name, k.why]), [["sup", "superseded"], ["closed", "pr-closed"], ["work", "unmerged"]]);
+  const opted = selectPrunable(branches, { now: NOW, isMerged: () => false, verdicts, allow: new Set(["absorbed", "superseded"]) });
+  assert.deepEqual(opted.prune, ["abs", "sup"]);
+});
+
+test("--also refuses a verdict that is not a judgement call (merged/unmerged/active)", async () => {
+  const { main } = await import("../../tools/ci/prune-branches.mjs");
+  const err = console.error; let said = "";
+  console.error = (m) => { said += m; };
+  try { assert.equal(main(["--also", "unmerged"]), 2); } finally { console.error = err; }
+  assert.match(said, /--also takes/);
+});
+
 test("a branch with no readable commit time is kept, never read as old", () => {
   const { prune, kept } = selectPrunable([{ name: "m-old", sha: "m-old", time: NaN }], { now: NOW, isMerged });
   assert.deepEqual(prune, []);
@@ -63,7 +82,7 @@ test("--apply without the open-PR list refuses (an unknown PR set is not an empt
   const err = console.error; let said = "";
   console.error = (m) => { said += m; };
   try { assert.equal(main(["--apply"]), 2); } finally { console.error = err; }
-  assert.match(said, /--open-heads/);
+  assert.match(said, /--prs or --open-heads/);
 });
 
 test("the workflow is dispatch-only, dry-run by default, and passes --apply only when ticked", () => {
@@ -73,8 +92,10 @@ test("the workflow is dispatch-only, dry-run by default, and passes --apply only
   assert.doesNotMatch(on, /\n  (push|pull_request|schedule):/, "nothing may delete branches on its own");
   assert.match(on, /apply:[\s\S]*?default: false/);
   assert.match(yml, /if \[ "\$APPLY" = "true" \]; then args\+=\(--apply\); fi/);
-  assert.match(yml, /--open-heads "\$RUNNER_TEMP\/open-heads.txt" --merged-heads "\$RUNNER_TEMP\/merged-heads.txt"/);
-  assert.match(yml, /--state merged [^\n]*headRefName,headRefOid/);
+  assert.match(yml, /--prs "\$RUNNER_TEMP\/prs.json" --runs "\$RUNNER_TEMP\/runs.json"/);
+  assert.match(yml, /--state all [^\n]*headRefName,headRefOid/);
+  assert.match(yml, /if \[ -n "\$ALSO" \]; then args\+=\(--also "\$ALSO"\); fi/);
+  assert.match(on, /also:[\s\S]*?default: ""/, "no verdict beyond merged/absorbed is deleted unless a person names it");
   assert.match(yml, /contents: write/);
   assert.match(yml, /fetch-depth: 0/);
 });
