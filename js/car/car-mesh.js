@@ -584,119 +584,149 @@ function _rigArc(out, r, a0, a1, n, w, d, col) {
     _rigBar(out, x0 - ex, y0 - ey, x1 + ex, y1 + ey, 0, w, d, col);
   }
 }
-// The centre DISPLAY BLOCK of a wheel with a screen: fascia, LCD with its speed
-// and gear cells, ERS slot, OT lamp, buttons and knobs. Every live readout
-// (car-draw.js drawCockpitRig: gear, LEDs, speed digits, ERS bar, OT lamp,
-// aero lamp) is placed against THESE offsets, so a wheel that has a screen
-// carries exactly this block and the telemetry lands on it unchanged.
+// Convex, bevel-cornered fascia / glove panels. Unlike boxes, their silhouette
+// stays rounded when the wheel rolls. Front is -z, toward the driver.
+function _rigPlate(out, pts, z, depth, col) {
+  let area = 0;
+  for (let i=0;i<pts.length;i++) { const a=pts[i], b=pts[(i+1)%pts.length]; area += a[0]*b[1]-b[0]*a[1]; }
+  if (area < 0) pts = pts.slice().reverse();
+  const front = z - depth / 2, back = z + depth / 2;
+  const cx = pts.reduce((n, p) => n + p[0], 0) / pts.length;
+  const cy = pts.reduce((n, p) => n + p[1], 0) / pts.length;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
+    _rigQuad(out, [a[0], a[1], front], [b[0], b[1], front], [b[0], b[1], back], [a[0], a[1], back], [dy/L, -dx/L, 0], col);
+    for (const [zz, normal, order] of [[front, -1, [b, a]], [back, 1, [a, b]]]) {
+      const base = out.pos.length / 3;
+      for (const q of [[cx, cy], ...order]) { out.pos.push(q[0], q[1], zz); out.nrm.push(0, 0, normal); out.col.push(...col); }
+      out.idx.push(base, base + 1, base + 2);
+    }
+  }
+}
+function _rigRounded(out, x, y, z, w, h, d, r, col) {
+  const a = w/2, b = h/2, c = Math.min(r, a, b);
+  _rigPlate(out, [[x-a+c,y-b],[x+a-c,y-b],[x+a,y-b+c],[x+a,y+b-c],
+    [x+a-c,y+b],[x-a+c,y+b],[x-a,y+b-c],[x-a,y-b+c]], z, d, col);
+}
+// A circular button / rotary / quick-release boss, with real depth rather
+// than a square painted block. The face is slightly proud of its bezel.
+function _rigButton(out, x, y, z, r, col, rotary = false) {
+  _rigRing(out, x, y, z + 0.002, r * 1.16, 12, r * 0.24, 0.007, [0.12, 0.13, 0.15]);
+  _rigDisc(out, x, y, z - 0.003, r, 12, col);
+  if (rotary) {
+    _rigBar(out, x-r*0.48, y-r*0.35, x+r*0.48, y+r*0.35, z-0.005, r*0.32, 0.003, [0.035, 0.04, 0.05]);
+    _rigBar(out, x, y+r*0.62, x, y+r*0.90, z-0.005, r*0.12, 0.003, [0.85, 0.86, 0.80]);
+  }
+}
+// Swept elliptical tube in the wheel plane: continuous silicone grips and
+// leather rims. Shared radial normals avoid a chain of visible square joints.
+function _rigGrip(out, path, radius, depth, col) {
+  const N = 8, start = out.pos.length / 3;
+  for (let i = 0; i < path.length; i++) {
+    const a = path[Math.max(0, i-1)], b = path[Math.min(path.length-1, i+1)];
+    const L = Math.hypot(b[0]-a[0], b[1]-a[1]), nx = -(b[1]-a[1])/L, ny = (b[0]-a[0])/L;
+    for (let j = 0; j < N; j++) {
+      const t = j/N*Math.PI*2, c = Math.cos(t), sn = Math.sin(t);
+      out.pos.push(path[i][0]+nx*radius*c, path[i][1]+ny*radius*c, depth*sn);
+      const len = Math.hypot(c/radius, sn/depth);
+      out.nrm.push(nx*c/radius/len, ny*c/radius/len, sn/depth/len); out.col.push(...col);
+    }
+  }
+  for (let i = 0; i < path.length-1; i++) for (let j = 0; j < N; j++) {
+    const a = start+i*N+j, b = start+i*N+(j+1)%N, c = b+N, d = a+N;
+    out.idx.push(a,b,c,a,c,d);
+  }
+  // Caps bury in the fascia or the glove, but close the ends for all angles.
+  for (const i of [0, path.length-1]) for (let j = 1; j < N-1; j++) {
+    const a = start+i*N, b = a+j, c = b+1;
+    out.idx.push(...(i === 0 ? [a,c,b] : [a,b,c]));
+  }
+}
+// Modern wheels are open-bottom control yokes, not rectangular hoops.
+// References: Mercedes cockpit photograph / McLaren wheel history (see
+// docs/notes/COCKPIT-MODEL-REFERENCES.md). Telemetry still uses the same LCD plane.
 function _wheelScreen(out, c2) {
-  const CARB = [0.04, 0.04, 0.05], KNOB = [0.75, 0.72, 0.15];
-  _rigBox(out, 0, 0.0, 0.014, 0.215, 0.16, 0.042, CARB);       // fascia plate
-  if (c2) {
-    _rigBox(out, -0.104, 0.0, 0.010, 0.010, 0.155, 0.044, c2); // fascia edge trim
-    _rigBox(out,  0.104, 0.0, 0.010, 0.010, 0.155, 0.044, c2);
+  const CARB = [0.09, 0.095, 0.105], DARK = [0.022, 0.028, 0.036];
+  _rigPlate(out, [[-0.090,-0.090],[0.090,-0.090],[0.112,-0.065],[0.116,0.068],
+    [0.101,0.095],[-0.101,0.095],[-0.116,0.068],[-0.112,-0.065]], 0.014, 0.042, CARB);
+  _rigRounded(out, 0, 0.024, -0.016, 0.125, 0.080, 0.020, 0.008, [0.16,0.17,0.19]);
+  _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, DARK);
+  // Original aligned LCD cells: cyan speed, orange gear, green battery charge.
+  _rigBox(out, 0.048, 0.024, -0.0295, 0.012, 0.050, 0.003, [0.03,0.04,0.045]);
+  _rigRounded(out, -0.034, 0.022, -0.0292, 0.052, 0.040, 0.003, 0.002, [0.10,0.11,0.13]);
+  _rigRounded(out, -0.034, 0.022, -0.0296, 0.047, 0.035, 0.003, 0.001, [0.010,0.016,0.026]);
+  _rigRounded(out, 0.014, 0.022, -0.0292, 0.034, 0.044, 0.003, 0.002, [0.38,0.07,0.06]);
+  _rigRounded(out, 0.014, 0.022, -0.0296, 0.029, 0.039, 0.003, 0.001, [0.16,0.025,0.03]);
+  const BTN = [[0.83,0.12,0.09],[0.16,0.43,0.85],[0.12,0.65,0.30],[0.88,0.70,0.12]];
+  for (const side of [-1,1]) {
+    for (let i = 0; i < 3; i++) _rigButton(out, side*0.096, 0.055-i*0.037, -0.027, 0.008, BTN[(i+(side>0?1:0))%4]);
+    _rigButton(out, side*0.132, 0.079, -0.023, 0.010, BTN[side<0?2:0]);
+    _rigButton(out, side*0.126, 0.045, -0.025, 0.008, BTN[side<0?1:3]);
   }
-  _rigBox(out, 0, 0.024, -0.016, 0.125, 0.080, 0.02, [0.025, 0.025, 0.035]);  // display bezel
-  _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, [0.012, 0.018, 0.028]); // LCD
-  _rigBox(out, 0.048, 0.024, -0.0295, 0.012, 0.050, 0.003, [0.03, 0.035, 0.04]); // energy slot (vertical, centred)
-  // Aligned display cells on one line: speed (navy) | gear (DARK RED box)
-  _rigBox(out, -0.034, 0.022, -0.0292, 0.052, 0.040, 0.003, [0.10, 0.11, 0.13]); // speed cell frame
-  _rigBox(out, -0.034, 0.022, -0.0296, 0.047, 0.035, 0.003, [0.010, 0.016, 0.026]); // speed cell face
-  _rigBox(out, 0.014, 0.022, -0.0292, 0.034, 0.044, 0.003, [0.38, 0.07, 0.06]);  // gear cell frame (red)
-  _rigBox(out, 0.014, 0.022, -0.0296, 0.029, 0.039, 0.003, [0.16, 0.025, 0.03]); // gear cell face (dark red)
-  // Button clusters flanking the screen (bright HDR; glow slightly at night).
-  const BTN = [[1.5, 0.15, 0.10], [0.15, 0.5, 1.5], [0.15, 1.3, 0.35], [1.35, 1.1, 0.12]];
-  let bi = 0;
-  for (const bx of [-0.096, 0.096]) for (const by of [0.045, 0.008])
-    _rigBox(out, bx, by, -0.026, 0.02, 0.02, 0.012, BTN[bi++]);
-  _rigBox(out, -0.05, -0.058, -0.026, 0.028, 0.028, 0.014, KNOB);  // rotary knobs
-  _rigBox(out,  0.05, -0.058, -0.026, 0.028, 0.028, 0.014, KNOB);
-  _rigBox(out, -0.082, 0.024, -0.0290, 0.024, 0.024, 0.003, [0.10, 0.11, 0.13]); // OT lamp bezel
-  _rigBox(out, -0.082, 0.024, -0.0294, 0.019, 0.019, 0.003, [0.06, 0.05, 0.08]);  // OT lamp (off)
-  // Shift paddles: wide blades poking out past the rim behind the wheel.
-  const PADL = [0.11, 0.11, 0.125];
-  _rigBox(out, -0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
-  _rigBox(out,  0.150, -0.01, 0.052, 0.085, 0.135, 0.015, PADL);
+  // Three lower multifunction rotaries, with index marks and raised selectors.
+  for (const [x,col] of [[-0.064,BTN[3]],[0,BTN[1]],[0.064,BTN[2]]])
+    _rigButton(out, x, -0.063, -0.026, 0.017, col, true);
+  // Fasteners, separate from controls; no fake HDR glow on physical buttons.
+  for (const x of [-0.104,0.104]) for (const y of [-0.072,0.084])
+    _rigDisc(out, x, y, -0.009, 0.003, 8, [0.40,0.42,0.44]);
+  _rigRounded(out, -0.082, 0.024, -0.0290, 0.024, 0.024, 0.003, 0.004, [0.10,0.11,0.13]);
+  _rigBox(out, -0.082, 0.024, -0.0294, 0.019, 0.019, 0.003, [0.06,0.05,0.08]);
 }
-// DRIVER HANDS at 9-and-3, gripping the rim at x ±0.165. They live in the wheel
-// mesh so they ride _rigB and turn 1:1 with the wheel for free — no extra draw,
-// and the 1500-tri cockpit ceiling never sees them (it measures the body build
-// only). Driver side is -z (the LCD faces that way); fingers wrap the +z far
-// side, thumbs sit inboard, and a short wrist stub angles down toward the
-// driver — kept shallow so it never nears the 0.3 m cockpit near plane. Base
-// glove is a clear grey so hands read as hands against the dark rig; knuckle
-// pads take the team accent and the wrist strap takes team c1, so the gloves
-// also say WHOSE hands they are.
+function _wheelPaddles(out, wide) {
+  for (const s of [-1,1]) {
+    _rigRounded(out, s*0.140, 0.006, 0.052, wide?0.075:0.060, 0.105, 0.012, 0.018, [0.13,0.14,0.16]);
+    _rigRounded(out, s*0.078, -0.082, 0.047, 0.077, 0.022, 0.010, 0.007, [0.17,0.18,0.20]); // clutch paddles
+  }
+}
+// Curved backs, individual finger pads, an inboard thumb and tapered cuffs.
+// All styles use the same nine-and-three grip points and rotate with the wheel.
 function _wheelHands(out, acc, c1) {
-  const GLOVE = [0.17, 0.16, 0.16], PAD = acc || [0.24, 0.23, 0.23];
-  const STRAP = c1 || [0.12, 0.11, 0.11];
-  for (const s of [-1, 1]) {
-    _rigBox(out, s * 0.192, 0.0, -0.010, 0.052, 0.145, 0.052, GLOVE);   // palm/back
-    _rigBox(out, s * 0.168, 0.0, 0.030, 0.048, 0.165, 0.026, GLOVE);    // fingers over the rim
-    _rigBox(out, s * 0.132, 0.024, -0.022, 0.030, 0.058, 0.034, GLOVE); // thumb, inboard
-    _rigBox(out, s * 0.196, 0.012, -0.030, 0.040, 0.050, 0.016, PAD);   // knuckle pad
-    _rigBox(out, s * 0.196, -0.100, -0.042, 0.052, 0.115, 0.055, GLOVE); // wrist stub
-    _rigBox(out, s * 0.196, -0.052, -0.043, 0.054, 0.020, 0.057, STRAP); // wrist strap
+  const GLOVE = [0.22,0.23,0.245], EDGE = [0.13,0.14,0.16], PAD = acc || EDGE;
+  for (const s of [-1,1]) {
+    _rigRounded(out, s*0.185, -0.004, -0.010, 0.060, 0.118, 0.048, 0.020, GLOVE);
+    for (let i=0;i<4;i++) _rigRounded(out, s*0.163, 0.040-i*0.027, 0.027, 0.041, 0.023, 0.022, 0.007, GLOVE);
+    _rigBar(out, s*0.155, 0.045, s*0.128, 0.013, -0.019, 0.024, 0.031, GLOVE);
+    _rigRounded(out, s*0.185, 0.014, -0.036, 0.039, 0.035, 0.007, 0.010, PAD);
+    _rigPlate(out, [[s*0.160,-0.044],[s*0.211,-0.044],[s*0.210,-0.146],[s*0.163,-0.146]], -0.025, 0.044, GLOVE);
+    _rigRounded(out, s*0.186, -0.057, -0.026, 0.052, 0.015, 0.046, 0.005, c1 || EDGE);
   }
 }
-// The COCKPIT INTERIORS (js/camera/cockpit-opts.js WHEEL). All share the hub
-// point, the 9-and-3 grip line (x ±0.165) and the hands, so the eye, the rig
-// transform and the steering roll are the same whichever is fitted:
-//   f1    — the 2026 wheel: squared rim around the display block.
-//   retro — the 2000s butterfly: raked grips, a small LCD; no big screen.
-//   round — CLASSIC: a full round rim, three metal spokes, a horn boss; no screen.
 const COCKPIT_WHEELS = ["f1", "retro", "round"];
 function _wheelRimF1(out, CARB, RUB, GRIP, acc) {
-  _rigBox(out, -0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);        // hand grips
-  _rigBox(out,  0.165, 0.0, 0, 0.05, 0.20, 0.062, RUB);
-  _rigBox(out, -0.165, 0.0, -0.002, 0.054, 0.09, 0.062, GRIP); // grip sleeves, team c1
-  _rigBox(out,  0.165, 0.0, -0.002, 0.054, 0.09, 0.062, GRIP);
-  _rigBox(out, -0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);     // upper corners
-  _rigBox(out,  0.118, 0.112, 0, 0.06, 0.045, 0.05, CARB);
-  _rigBox(out, 0, 0.128, 0, 0.18, 0.038, 0.05, CARB);          // top bar
-  if (acc) _rigBox(out, 0, 0.130, -0.004, 0.05, 0.040, 0.05, acc); // 12-o'clock marker stripe
-  _rigBox(out, -0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);   // lower corners
-  _rigBox(out,  0.122, -0.118, 0, 0.055, 0.045, 0.05, CARB);
-  _rigBox(out, 0, -0.138, 0, 0.17, 0.038, 0.05, CARB);         // bottom bar
-}
-// The 2000s wheel: a butterfly — grips raked outward toward the top, a compact
-// centre body with a small green LCD and a row of shift lights, buttons down both
-// sides. No big screen, so the live readouts go to the HUD.
-function _wheelRimRetro(out, CARB, RUB, GRIP, acc) {
-  const LCD = [0.10, 0.17, 0.10], BTN = [[1.4, 0.15, 0.10], [0.15, 0.5, 1.4], [1.3, 1.1, 0.12], [0.8, 0.8, 0.85]];
-  for (const s of [-1, 1]) {
-    _rigBar(out, s * 0.13, -0.07, s * 0.175, 0.06, 0, 0.05, 0.062, RUB);           // raked grip
-    _rigBar(out, s * 0.142, -0.035, s * 0.165, 0.030, -0.002, 0.054, 0.062, GRIP);  // grip sleeve, team c1
-    _rigBar(out, s * 0.10, 0.07, s * 0.17, 0.065, 0, 0.03, 0.045, CARB);            // top wing to the grip
-    for (let i = 0; i < 3; i++) _rigBox(out, s * 0.078, 0.028 - i * 0.03, -0.012, 0.018, 0.018, 0.012, BTN[(i + (s > 0 ? 1 : 0)) % 4]);
+  for (const s of [-1,1]) {
+    _rigGrip(out, [[s*0.151,0.103],[s*0.169,0.084],[s*0.179,0.038],[s*0.176,-0.022],[s*0.155,-0.099]], 0.022, 0.029, RUB);
+    _rigBar(out, s*0.093, 0.080, s*0.151, 0.090, 0.010, 0.042, 0.039, CARB);
   }
-  _rigBox(out, 0, 0.0, 0.012, 0.20, 0.14, 0.04, CARB);           // centre body
-  _rigBox(out, 0, -0.095, 0.012, 0.12, 0.05, 0.04, CARB);        // chin
-  _rigBox(out, 0, 0.042, -0.010, 0.08, 0.034, 0.006, [0.02, 0.02, 0.025]);   // LCD bezel
-  _rigBox(out, 0, 0.042, -0.014, 0.068, 0.024, 0.003, LCD);       // small LCD
-  const LED = [[0.2, 1.6, 0.4], [0.2, 1.6, 0.4], [1.6, 1.2, 0.15], [1.7, 0.2, 0.15], [0.9, 0.4, 2.0]];
-  for (let i = 0; i < 5; i++) _rigBox(out, -0.036 + i * 0.018, 0.070, -0.010, 0.011, 0.011, 0.008, LED[i]);
-  _rigBox(out, -0.035, -0.045, -0.012, 0.026, 0.026, 0.014, [0.75, 0.72, 0.15]);   // rotaries
-  _rigBox(out, 0.035, -0.045, -0.012, 0.026, 0.026, 0.014, [0.75, 0.72, 0.15]);
-  if (acc) _rigBox(out, 0, 0.078, -0.004, 0.04, 0.012, 0.04, acc);   // 12-o'clock marker
-  const PADL = [0.11, 0.11, 0.125];                               // shift paddles behind
-  _rigBox(out, -0.140, 0.0, 0.052, 0.07, 0.11, 0.015, PADL);
-  _rigBox(out, 0.140, 0.0, 0.052, 0.07, 0.11, 0.015, PADL);
+  _wheelPaddles(out, true);
+}
+// 2000s butterfly: compact monochrome LCD, sparse controls, mechanical paddles.
+function _wheelRimRetro(out, CARB, RUB, GRIP, acc) {
+  const BTN = [[0.85,0.13,0.10],[0.16,0.4,0.85],[0.82,0.68,0.12],[0.55,0.58,0.61]];
+  _rigPlate(out, [[-0.085,-0.089],[0.085,-0.089],[0.102,-0.045],[0.127,0.055],
+    [0.111,0.082],[-0.111,0.082],[-0.127,0.055],[-0.102,-0.045]], 0.012, 0.038, CARB);
+  for (const s of [-1,1]) {
+    _rigGrip(out, [[s*0.135,-0.091],[s*0.166,-0.045],[s*0.178,0.020],[s*0.165,0.081],[s*0.135,0.099]], 0.023, 0.027, RUB);
+    for(let i=0;i<3;i++) _rigButton(out, s*0.079, 0.025-i*0.030, -0.015, 0.008, BTN[(i+(s>0?1:0))%4]);
+    _rigButton(out, s*0.120, 0.064, -0.014, 0.009, BTN[s<0?2:0]);
+    _rigButton(out, s*0.043, -0.058, -0.012, 0.015, BTN[2], true);
+  }
+  _rigRounded(out, 0, 0.042, -0.010, 0.084, 0.034, 0.006, 0.004, [0.02,0.02,0.025]);
+  _rigBox(out, 0, 0.042, -0.014, 0.070, 0.024, 0.003, [0.16,0.22,0.12]);
+  // An era-correct small monochrome display: no simulated telemetry on it.
+  for(const x of [-0.020,0,0.020]) _rigBar(out,x,0.036,x+0.008,0.048,-0.017,0.003,0.001,[0.055,0.075,0.045]);
+  for(let i=0;i<7;i++) _rigDisc(out, -0.042+i*0.014, 0.071, -0.016, 0.0035, 8, [0.12,0.15,0.10]);
+  _wheelPaddles(out, false);
 }
 function _wheelRimRound(out, GRIP, acc) {
-  // Polished alloy spokes and a leather rim: the rig's 0.30 grey read as black
-  // in the cockpit's shade (measured 2026-09-29), and spokes you cannot see
-  // make the classic wheel look like a bare hoop.
-  const R = 0.165, MET = [0.62, 0.62, 0.66], LEATHER = [0.11, 0.075, 0.05], HORN = acc || [0.20, 0.20, 0.22];
-  _rigArc(out, R, 0, Math.PI * 2, 28, 0.030, 0.034, LEATHER);    // the rim
-  _rigBox(out, -R, 0.0, -0.002, 0.036, 0.09, 0.040, GRIP);       // grip wraps, team c1
-  _rigBox(out,  R, 0.0, -0.002, 0.036, 0.09, 0.040, GRIP);
-  _rigBox(out, 0, R, -0.004, 0.030, 0.036, 0.040, [0.85, 0.85, 0.82]); // 12-o'clock marker
-  _rigBar(out, 0.030, -0.006, R - 0.010, -0.016, 0.018, 0.036, 0.008, MET);   // three spokes, dished away from the driver
-  _rigBar(out, -0.030, -0.006, -(R - 0.010), -0.016, 0.018, 0.036, 0.008, MET);
-  _rigBar(out, 0, -0.034, 0, -(R - 0.010), 0.018, 0.036, 0.008, MET);
-  _rigBox(out, 0, 0, 0.024, 0.074, 0.074, 0.024, [0.04, 0.04, 0.05]);    // boss
-  _rigBox(out, 0, 0, 0.008, 0.050, 0.050, 0.010, HORN);                  // horn push, team accent
+  const R=0.165, MET=[0.46,0.48,0.50], LEATHER=[0.14,0.095,0.065];
+  const path=Array.from({length:41},(_,i)=>[R*Math.cos(i/40*Math.PI*2),R*Math.sin(i/40*Math.PI*2)]);
+  _rigGrip(out,path,0.016,0.019,LEATHER);
+  for(const s of [-1,1]) _rigPlate(out, [[s*0.025,-0.020],[s*0.146,-0.026],[s*0.151,0.007],[s*0.027,0.018]],0.018,0.009,MET);
+  _rigPlate(out,[[-0.020,-0.026],[0.020,-0.026],[0.015,-0.151],[-0.015,-0.151]],0.018,0.009,MET);
+  _rigButton(out,0,0,0.004,0.032,[0.18,0.20,0.22]); // compact mechanical boss; no road-car horn
+  for(let i=0;i<6;i++){const a=i/6*Math.PI*2;_rigDisc(out,Math.cos(a)*0.022,Math.sin(a)*0.022,-0.006,0.003,8,[0.63,0.65,0.67]);}
+  _rigRounded(out,0,R,-0.002,0.013,0.026,0.042,0.004,acc||[0.55,0.52,0.42]);
 }
 // Keyed like _cockpitDecalMesh: the chosen wheel and the player's livery colours
 // join the key, so a garage livery edit (resolveLivery is store.rev-invalidated
@@ -721,7 +751,7 @@ function getCockpitWheel(liv, style) {
   if (cockpitWheelMesh) return cockpitWheelMesh;
   _cockpitWheelKey = wantKey;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  const CARB = [0.04, 0.04, 0.05], RUB = [0.085, 0.085, 0.095];
+  const CARB = [0.09, 0.095, 0.105], RUB = [0.11, 0.115, 0.12];
   const GRIP = c1 || RUB;
   if (st === "round") _wheelRimRound(out, GRIP, acc);
   else if (st === "retro") _wheelRimRetro(out, CARB, RUB, GRIP, acc);
@@ -810,18 +840,27 @@ function _rigRing(out, cx, cy, cz, r, n, w, d, col) {
 function _rigGauge(out, cx, cy, cz, r, turn, face, bezel) {
   _rigRing(out, cx, cy, cz, r, 20, r * 0.16, 0.008, bezel);
   _rigDisc(out, cx, cy, cz + 0.002, r * 0.94, 20, face);
+  for (let i=0;i<=10;i++) {
+    const t = Math.PI*(1.25-1.5*i/10), c = Math.cos(t), s = Math.sin(t);
+    _rigBar(out,cx+c*r*0.70,cy+s*r*0.70,cx+c*r*0.86,cy+s*r*0.86,cz-0.001,r*0.035,0.001,[0.11,0.12,0.13]);
+  }
   const a = Math.PI * (1.25 - 1.5 * turn);
   _rigBar(out, cx, cy, cx + Math.cos(a) * r * 0.8, cy + Math.sin(a) * r * 0.8, cz - 0.002, r * 0.08, 0.002, [1.4, 0.22, 0.08]);
 }
-// TEAM: padding in the team's colours along the tub walls and across the front
-// of the opening, with a stitched accent line — the carbon tub, dressed.
+// Modern tub trim: rounded removable pads, a carbon scuttle, moulded seam
+// lines and recessed fasteners. TEAM adds accents to the same shaped trim.
 function _teamCabin(out, pad, stitch) {
-  for (const s of [-1, 1]) {
-    _rigBox(out, s * 0.285, 0.655, -0.12, 0.05, 0.09, 0.62, pad);        // side pads along the walls
-    _rigBox(out, s * 0.285, 0.702, -0.12, 0.052, 0.005, 0.62, stitch);   // their stitch line
+  const CARB = [0.08,0.085,0.095];
+  for (const side of [-1,1]) {
+    _rigBeam(out,[side*0.298,0.719,-0.10],[side*0.280,0.684,0.38],0.032,pad);
+    _rigBeam(out,[side*0.288,0.730,-0.04],[side*0.274,0.698,0.31],0.003,stitch);
+    _rigRounded(out,side*0.281,0.704,0.21,0.035,0.044,0.07,0.008,CARB);
+    _rigDisc(out, side*0.281, 0.713, 0.172, 0.009, 12, [0.26,0.28,0.30]);
+    _rigDisc(out, side*0.281, 0.713, 0.171, 0.004, 8, [0.035,0.04,0.045]);
   }
-  _rigBox(out, 0, 0.645, 0.43, 0.52, 0.05, 0.06, pad);                   // front rim pad under the wheel
-  _rigBox(out, 0, 0.672, 0.43, 0.50, 0.005, 0.062, stitch);
+  _rigRounded(out,0,0.704,0.425,0.49,0.036,0.046,0.012,CARB);
+  _rigRounded(out,0,0.721,0.400,0.44,0.012,0.008,0.005,pad);
+  _rigBar(out,-0.18,0.728,0.18,0.728,0.394,0.002,0.002,stitch);
 }
 function _classicCabin(out, paint) {
   const LEATHER = [0.13, 0.075, 0.045], CHROME = [0.62, 0.62, 0.65], FACE = [0.55, 0.53, 0.48];
@@ -854,7 +893,8 @@ function getCockpitCabin(kind, liv) {
   if (_cabinMesh) return _cabinMesh;
   _cabinKey = key;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  if (kind === "team") _teamCabin(out, col, acc); else _classicCabin(out, col);
+  if (kind === "classic") _classicCabin(out, col);
+  else _teamCabin(out, kind === "team" ? col : [0.095,0.10,0.11], kind === "team" ? acc : [0.18,0.19,0.20]);
   _cabinMesh = _gfx.createMesh(out);
   return _cabinMesh;
 }
@@ -876,10 +916,11 @@ const _ledMeshes = {};
 function getLedStrip(lit) {
   if (_ledMeshes[lit]) return _ledMeshes[lit];
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  const COLS = [[0.2,1.8,0.4],[0.2,1.8,0.4],[0.2,1.8,0.4],[1.8,0.9,0.15],[1.8,0.9,0.15],[1.9,0.2,0.15],[1.9,0.2,0.15],[0.9,0.4,2.2]];
-  for (let i = 0; i < 8; i++) {
-    const col = lit === 9 ? [0.85, 0.45, 2.4] : i < lit ? COLS[i] : [0.05, 0.05, 0.06];
-    _rigBox(out, -0.070 + i * 0.020, 0.082, -0.026, 0.013, 0.013, 0.010, col);
+  const COLS = [[0.2,1.3,0.35],[1.2,0.82,0.12],[0.35,0.55,1.5]];
+  const count = Math.round(Math.max(0, Math.min(8, lit)) / 8 * 15);
+  for (let i = 0; i < 15; i++) {
+    const col = lit === 9 ? [0.35,0.55,1.5] : i < count ? COLS[Math.floor(i/5)] : [0.055,0.06,0.065];
+    _rigDisc(out, -0.070 + i*0.010, 0.082, -0.030, 0.0034, 8, col);
   }
   _ledMeshes[lit] = _gfx.createMesh(out);
   return _ledMeshes[lit];
@@ -900,7 +941,7 @@ const _gearMeshes = {};
 function getGearDigit(g) {
   if (_gearMeshes[g]) return _gearMeshes[g];
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  const GRN = [2.2, 0.85, 0.12];   // orange, like the real gear readout
+  const GRN = [1.3, 0.65, 0.12];   // original orange gear, with gentler bloom
   const h = 0.026, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.022, cz = -0.0335;
   const L = _seg7Layout(h, w, t, q);
   const seg = _SEG7[g % 10];
@@ -913,8 +954,8 @@ const _spdMeshes = {};
 function getSpeedDigit(d) {
   if (_spdMeshes[d]) return _spdMeshes[d];
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  const CYN = [0.3, 1.6, 2.0];
-  const h = 0.017, w = h * 0.55, t = h * 0.18, q = h / 4;
+  const CYN = [0.20, 1.2, 1.2];
+  const h = 0.017, w = h * 0.55, t = h * 0.16, q = h / 4;
   const L = _seg7Layout(h, w, t, q);
   const seg = _SEG7[d % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
