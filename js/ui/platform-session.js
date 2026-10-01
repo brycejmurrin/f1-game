@@ -106,8 +106,13 @@ const VISOR_CAM = CamModes.CAM_MODES.findIndex((c) => c.id === "visor");
 // The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
 function phonePadDash() {
   const p = G.player;
-  if (!p) return null;
-  const D = PhonePad.DASH, xOpen = (p.aeroX || 0) > 0.05;
+  const D = PhonePad.DASH;
+  // NO PLAYER IS A DASH TOO — the menus before a first race. The phone swaps its wheel for the
+  // MENU PAD only on a dash packet (!inRace || paused); a null here sent nothing, so a phone
+  // paired from the title stayed on the wheel's placeholder LCD with no arrows/SELECT/BACK.
+  if (!p) return { gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0,
+    flags: G.paused ? D.paused : 0, caution: 0, lastLapMs: 0, state: G.state, team: "" };
+  const xOpen = (p.aeroX || 0) > 0.05;
   const controls = G.recordControls();
   const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
     | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (G.timeTrial ? D.timeTrial : 0)

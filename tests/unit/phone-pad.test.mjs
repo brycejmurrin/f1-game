@@ -942,3 +942,34 @@ test('a phone connecting before hostRoom returns still closes the late room with
   assert.equal(stopped,1); assert.equal(h.ctl.state().phase,'linked');
   assert.equal(h.ui.linkedN,1); h.ctl.cancel();
 });
+
+test("PlatformSession: out of a race (no player) the dash still goes out, so the phone shows its MENU PAD", async () => {
+  // The sampler returned null with no player, and a null sends nothing (the test above), so a
+  // phone paired from the title menu never left the wheel's placeholder LCD.
+  const elements = new Map();
+  const G = { player: null, paused: false, state: "menu", els: {}, store: {},
+    $(id) { if (!elements.has(id)) elements.set(id, {}); return elements.get(id); } };
+  let sample;
+  const context = vm.createContext({ G,
+    PhysicsConsts: { MAX_RPM: 15000, IDLE_RPM: 3000 },
+    CamModes: { CAM_MODES: [{ id: "visor" }] },
+    PhonePad: { ...PhonePad, padUrl: () => "https://apex.test/controller.html",
+      host(options) { sample = options.hud; return { cancel() {} }; } },
+  });
+  const source = fs.readFileSync(new URL("../../js/ui/platform-session.js", import.meta.url), "utf8");
+  vm.runInContext(source, context);
+  vm.runInContext("PlatformSession.create(G, { ensureNet: () => Promise.resolve(true) }).wirePhone();", context);
+  G.$("pm-phonepad").onclick();
+  await Promise.resolve();
+  assert.equal(typeof sample, "function", "phone pairing receives the live dash sampler");
+  for (const [state, paused, why] of [["menu", false, "the title menu"], ["select", false, "car select"], ["race", true, "a pause before the car exists"]]) {
+    G.state = state; G.paused = paused;
+    const h = sample();
+    assert.ok(h, why + ": a dash, not null");
+    const back = PhonePad.decodeHud(PhonePad.encodeHud(h));
+    assert.ok(back && back.state === state, why + ": it survives the wire");
+    const el = lcd();
+    PhonePad.paintHud(el, back);
+    assert.ok(el.body.classes.has("menu"), why + ": the phone shows the MENU PAD");
+  }
+});

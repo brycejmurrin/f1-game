@@ -1265,6 +1265,18 @@ function rolloverTeams(tStand) {
     const next = clamp(Math.round((career.tdev[team.id] || 0) * 0.5 + shove), -TDEV_MAX, TDEV_MAX);
     if (next) career.tdev[team.id] = next; else delete career.tdev[team.id];
   }
+  // Catalog steps for AI constructors (one legal option per developing team).
+  // Kept beside tdev so a winter moves both the ±2 % pace wobble and the works
+  // shelf. Saves without aiParts stay on factory until the first developWinter.
+  if (typeof CareerAiDev !== "undefined" && CareerAiDev.developWinter) {
+    CareerAiDev.developWinter(career, tStand, expect, rnd);
+  }
+}
+
+/** Fitted setup an AI car should resolve in career, or null → factory. */
+function aiSetup(team) {
+  if (!inCareer() || !team || typeof CareerAiDev === "undefined") return null;
+  return CareerAiDev.fittedOf(career, team);
 }
 
 const TOP_TIER = 1;      // tier 0-1: the seats worth taking
@@ -1643,7 +1655,7 @@ return {
   GOAL_KINDS, GOAL_ORDER, goalFor, goalLabel, goalNow, goalOnTrack, goalTypeFor,
   era, eraSeasonsLeft, seasonsElapsed, applyRegs,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
-  paceMult, teamStats,
+  paceMult, teamStats, aiSetup,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked,

@@ -309,4 +309,80 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   border-color: var(--red);
   color: var(--text);
 }
+/* LAYOUT: COMPACT / WIDE / SIDEBAR (js/ui/pause-opts.js → data-pause-layout).
+   COMPACT spends the least height: three doors to a row at chip height, so a
+   short landscape phone sees every door without the card scrolling. Only
+   RESUME (the one primary) and the two info lines keep the full row; QUIT
+   drops its rule-above too, because in a cell the hairline floats over a gap
+   that belongs to the doors beside it. The quit margin selector repeats
+   .sheet + an id so it outranks the compact-DENSITY quit rule above. */
+:root[data-pause-layout="compact"] #pausemenu .sheet-body.stack { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+:root[data-pause-layout="compact"] #pausemenu .sheet-body.stack > button { min-height: var(--chip-h); }
+:root[data-pause-layout="compact"] :is(#pm-quit, #pm-standings, #pm-howto) { grid-column: auto; }
+:root[data-pause-layout="compact"] #pausemenu .sheet #pm-quit { margin-top: 0; }
+:root[data-pause-layout="compact"] #pm-quit::before { content: none; }
+/* WIDE lays the doors along the bottom edge in one wrapping row — the race
+   keeps the whole top of the screen. Flex, not more grid columns: the door
+   count changes (STANDINGS is hidden outside a season) and every visible door
+   should share the row evenly. The floor is three tap-heights so a label
+   wraps to a second row of doors before it wraps inside its own button.
+   1020px is the same cap the other wide sheets use (css/menus.css). */
+:root[data-pause-layout="wide"] #pausemenu { --sheet-w: 1020px; align-items: end; }
+:root[data-pause-layout="wide"] #pausemenu .sheet-body.stack { display: flex; flex-direction: row; flex-wrap: wrap; }   /* .stack is a column: a row is the point */
+:root[data-pause-layout="wide"] #pausemenu .sheet-body.stack > button { flex: 1 1 0; min-width: calc(var(--tap-0) * 3); }
+:root[data-pause-layout="wide"] :is(#pm-now-card, #pm-build) { flex-basis: 100%; }
+:root[data-pause-layout="wide"] #pausemenu .sheet #pm-quit { margin-top: 0; }
+:root[data-pause-layout="wide"] #pm-quit::before { content: none; }
+/* VERTICAL POSITION (ScreenLooks, the lookPause vpos knob). Declared after
+   WIDE at the same specificity, so a player who asks for TOP gets it in WIDE. */
+:root[data-look-pause-vpos="top"] #pausemenu { align-items: start; }
+:root[data-look-pause-vpos="bottom"] #pausemenu { align-items: end; }
+/* SIDEBAR is a full-height strip on one edge, the race beside it. After the
+   position rules on purpose: a strip that fills the height has no vertical
+   position to take. SIDE picks the edge; CENTRE has no meaning for a strip, so
+   it reads as LEFT (the start edge). 320px: a door label's width plus the
+   plate, the same column the narrow phone sheets settle on. */
+:root[data-pause-layout="sidebar"] #pausemenu { --sheet-w: 320px; justify-items: start; align-items: stretch; }
+:root[data-pause-layout="sidebar"][data-pause-side="right"] #pausemenu { justify-items: end; }
+:root[data-pause-layout="sidebar"] #pausemenu .sheet { height: 100%; }
+:root[data-pause-layout="sidebar"] #pausemenu .sheet-body.stack { grid-template-columns: minmax(0, 1fr); align-content: start; }
+
+/* PAUSE MENU's BUTTONS & CARD knobs (js/ui/screen-looks.js, store
+   key lookPause). Each attribute exists only while its knob is off the
+   shipped value, and a range knob's token is a unitless ratio, so every rule
+   below is "shipped number × ratio" and the default card matches none of them.
+   CORNERS lives with the other screens' corners in css/responsive.css. */
+/* BUTTON HEIGHT scales the door floor from the frozen --tap-0. Direct children
+   only, so the NOW PLAYING transport keeps its --chip-h square; the selector
+   carries one more class than the compact-DENSITY floor so a player's choice
+   still wins on a short screen. COMPACT layout scales its own chip floor. */
+:root[data-look-pause-btn] #pausemenu .sheet .sheet-body.stack > button { min-height: calc(var(--tap-0) * var(--look-pause-btn)); }
+:root[data-look-pause-btn][data-pause-layout="compact"] #pausemenu .sheet .sheet-body.stack > button { min-height: calc(var(--chip-h) * var(--look-pause-btn)); }
+/* CARD WIDTH scales whichever cap the layout picked (420 shipped, WIDE 1020,
+   SIDEBAR 320); .sheet's min(100%, …) still keeps it inside the safe box. */
+:root[data-look-pause-w] #pausemenu { --sheet-w: calc(420px * var(--look-pause-w)); }
+:root[data-look-pause-w][data-pause-layout="wide"] #pausemenu { --sheet-w: calc(1020px * var(--look-pause-w)); }
+:root[data-look-pause-w][data-pause-layout="sidebar"] #pausemenu { --sheet-w: calc(320px * var(--look-pause-w)); }
+/* BUTTON GAP: the shipped 0.6 gap × ratio; outranks the compact-density gap. */
+:root[data-look-pause-gap] #pausemenu .sheet-body.stack { gap: calc(var(--gap) * 0.6 * var(--look-pause-gap)); }
+/* BUTTON STYLE: OUTLINE drops every door's fill to a hairline over the card.
+   The id list and the redundant :not(#pm-resume) are specificity: the
+   secondary-door fill rule above carries three ids. :not(.armed) keeps the
+   CONFIRM QUIT fill, so a door about to quit still looks armed. RESUME keeps
+   its red as the outline — still the one primary. */
+:root[data-look-pause-style="outline"] #pausemenu .sheet-body.stack > button:is(#pm-restart, #pm-settings, #pm-howto, #pm-standings, #pm-quit):not(#pm-resume):not(.armed) {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--steel) 70%, transparent);
+  box-shadow: none;
+}
+:root[data-look-pause-style="outline"] #pausemenu #pm-resume { background: transparent; border-color: var(--red); box-shadow: none; }
+/* TEXT ALIGN: LEFT reads like a list — labels and the PAUSED heading on the
+   start edge. */
+:root[data-look-pause-align="left"] #pausemenu .sheet-body.stack > button { justify-content: flex-start; text-align: start; }
+:root[data-look-pause-align="left"] #pausemenu .sheet-head { justify-content: flex-start; text-align: start; }
+/* MUSIC CARD / BUILD TAG: HIDE removes the line outright (the card is
+   otherwise shown whenever music plays; the build tag always). */
+:root[data-look-pause-music="hide"] #pm-now-card { display: none; }
+:root[data-look-pause-build="hide"] #pm-build { display: none; }
+
 } /* @layer components */

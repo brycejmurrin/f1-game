@@ -715,3 +715,49 @@ test("an uploaded emblem offers no picker it cannot paint", () => {
   }
   assert.equal(rowsFor(), "logo,logo2,logo3", "the monogram row did not come back");
 });
+
+// ── LEGENDS wear their marque, not their slot id ───────────────────────────
+// The player's Legends row is team id "legends" and a duel rival is
+// "legend_<id>": neither is a CRESTS key, so the car, the garage wall and the
+// livery cards all drew a monogram of the id — LGD and LEG — while only the
+// TEAM picker tile read the legend's marque. Every per-mark table is now read
+// through LiveryTex's crestKey; the paint stays the legend's own.
+test("a legend's car wears its marque crest; a wordmark marque is lettered with the team's name", async () => {
+  const vm = await import("node:vm");
+  const { RecCtx: Rec } = loadCrests();
+  const sb = {
+    console, Math, Object, Array, String, Number, JSON, Map, Set, isNaN, parseInt, parseFloat,
+    document: { querySelector: () => null, createElement: () => ({ getContext: () => new Rec(), width: 0, height: 0 }) },
+  };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/data/legends.js", "js/car/liveries.js",
+                   "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
+  const L = vm.runInContext("LiveryTex", sb), Lg = vm.runInContext("Legends", sb), T = vm.runInContext("Teams", sb);
+  const R = L.REGIONS.crest;
+  const draw = (id, P) => { const c = new Rec(); L.drawCrest(c, id, R, { palette: P, bare: false }); return c.ops; };
+  const shape = (ops) => JSON.stringify(ops.filter((o) => o.kind !== "text").map((o) => o.kind));
+  const texts = (ops) => ops.filter((o) => o.kind === "text").map((o) => o.text);
+
+  // A duel rival: Senna's McLaren, Schumacher's Ferrari — the same geometry
+  // the team's own crest draws, given the same palette.
+  for (const [lid, marque] of [["senna", "mclaren"], ["schumacher", "ferrari"], ["fangio", "mercedes"]]) {
+    const P = L.markPalette(marque, null, [[0.2, 0.2, 0.22]], false);
+    assert.equal(shape(draw("legend_" + lid, P)), shape(draw(marque, P)), `${lid} draws the ${marque} crest`);
+    assert.ok(!texts(draw("legend_" + lid, P)).some((t) => /LEG|LGD/.test(t)), `${lid}: no slot monogram`);
+  }
+  // The player's row follows the legend seated in it.
+  const row = Lg.team("vettel");
+  T.LIST.push(row);
+  const P = L.markPalette("redbull", null, [[0.2, 0.2, 0.22]], false);
+  assert.equal(shape(draw("legends", P)), shape(draw("redbull", P)), "Vettel's Legends car wears the Red Bull crest");
+  T.LIST.pop();
+  // A wordmark marque has no trace: the monogram names the TEAM, not the slot.
+  const PG = L.markPalette("legend_clark", null, [[0.2, 0.2, 0.22]], false);
+  // (drawWordmark sets one glyph at a time, so the word is the joined run.)
+  for (const [lid, word] of [["clark", "LOTUS"], ["moss", "VANWALL"], ["stewart", "TYRRELL"]]) {
+    const run = texts(draw("legend_" + lid, PG)).join("");
+    assert.ok(run.includes(word) && !/LEG|LGD/.test(run), `${lid}: "${run}"`);
+  }
+});

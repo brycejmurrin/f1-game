@@ -105,6 +105,8 @@ export const TWINNED = {
 export const ADAPTED = {
   "tests/specs/albert-park-foundation.spec.js":
     "Albert Park runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter in 4.5 s; m-albert-hero-fountain proves the required fountain count is watched",
+  "tests/specs/cota-foundation.spec.js":
+    "COTA runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter; m-cota-amphi-renamed proves the required amphitheater id is watched",
   "tests/specs/physics-fixes.spec.js":
     "pure __apex physics reads (wall scrub, lap-distance continuity); 2/2 under the adapter in 27 s vs 110 s of browser; mutant m-wall-scrub-flat proves it bites",
   "tests/specs/logging.spec.js":
@@ -119,6 +121,8 @@ export const ADAPTED = {
     "agentview's corner facts and the bench policies against game-vm; 5/5 in 48 s; m-straight-exit-threshold proves the exitsOntoStraight derivation is watched",
   "tests/specs/pit-lane.spec.js":
     "the pit lane's limiter, box and lane geometry through __apex; 6/6 in 91 s; m-box-lat-swallows-line proves the box-vs-racing-line distinction is watched",
+  "tests/specs/autopilot.spec.js":
+    "closed-loop __apex driver (direct + tilt) through runLap metrics; 3/3 under the adapter (~168 s); m-tilt-gain-dead proves the tilt map's steer variance is watched",
 };
 
 /** Portable by every static measure and deliberately NOT adapted: the

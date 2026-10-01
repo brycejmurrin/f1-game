@@ -1,4 +1,4 @@
-/* GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use the SFX bus, recorded voices use master. resetContext forgets the old bed without touching closed nodes. */
+/* GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use the SFX bus, recorded voices use master. resetContext drops the shared voice-chain cache and old bed without touching closed nodes. */
 "use strict";
 
 const GameAudioRadioFx = (function () {
@@ -220,10 +220,35 @@ const GameAudioRadioFx = (function () {
      * does not silence the engineer, the same as speech synthesis, which never
      * went through WebAudio at all. `spotter` keys its own mic (a click in, a
      * squelch out) because it has no card, and so no radioSting, to open it. */
+    // `fx` picks the sound, `channel` the transmission slot: the commentator,
+    // race control and the coach are all on the card's slot (one line at a time)
+    // but do not all sound like a team radio. The commentator is the broadcast —
+    // full band, barely driven — and race control a cleaner radio than the pit wall's.
     const VOICE_CH = Object.freeze({
-      radio:   { hi: RADIO_HI, drive: 2.2, level: 0.95, click: 0 },
-      spotter: { hi: RADIO_HI, drive: 2.8, level: 1.0,  click: 0.07 },
+      radio:     { lo: RADIO_LO, hi: RADIO_HI, drive: 2.2, level: 0.95, click: 0 },
+      spotter:   { lo: RADIO_LO, hi: RADIO_HI, drive: 2.8, level: 1.0,  click: 0.07 },
+      control:   { lo: RADIO_LO, hi: RADIO_HI, drive: 1.6, level: 0.9,  click: 0 },
+      coach:     { lo: RADIO_LO, hi: RADIO_HI, drive: 1.6, level: 0.9,  click: 0 },
+      announcer: { lo: 90,       hi: 9000,     drive: 1.1, level: 0.85, click: 0 },
     });
+    /* ONE CHAIN PER SOUND, built once per context and shared by every line: a
+     * filter pair, the soft-clip and a compressor were built (and torn down) per
+     * LINE, and on a phone a DynamicsCompressor is not a free node. A line now
+     * adds only its buffer sources and one gain, its own so that cutting it off
+     * fades this line and not the one that replaced it. */
+    const _voiceChains = new Map();   // fx -> { ctx, input }
+    function voiceChain(fx, ch) {
+      const have = _voiceChains.get(fx);
+      if (have && have.ctx === host.context()) return have.input;
+      const hp = host.context().createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = ch.lo;
+      const lp = host.context().createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
+      const ws = host.context().createWaveShaper(); ws.curve = softClip(ch.drive);
+      const comp = host.context().createDynamicsCompressor();
+      comp.threshold.value = -26; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.12;
+      hp.connect(lp).connect(ws).connect(comp).connect(host.master());
+      _voiceChains.set(fx, { ctx: host.context(), input: hp });
+      return hp;
+    }
     const _shapes = new Map();
     function softClip(k) {
       let c = _shapes.get(k);
@@ -248,17 +273,13 @@ const GameAudioRadioFx = (function () {
       // A suspended context (an iOS interruption, no gesture yet) keeps its
       // clock still: lines scheduled on it all play at once when it resumes.
       if (host.context().state && host.context().state !== "running") return null;
-      const ch = VOICE_CH[o && o.channel] || VOICE_CH.radio;
+      const fx = VOICE_CH[o && o.fx] ? o.fx : VOICE_CH[o && o.channel] ? o.channel : "radio";
+      const ch = VOICE_CH[fx];
       const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
       if (!(vol > 0)) return null;
       const t0 = Math.max(host.now(), +at || 0);
-      const hp = host.context().createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = RADIO_LO;
-      const lp = host.context().createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
-      const ws = host.context().createWaveShaper(); ws.curve = softClip(ch.drive);
-      const comp = host.context().createDynamicsCompressor();
-      comp.threshold.value = -26; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.12;
       const g = host.context().createGain(); g.gain.value = ch.level * vol;
-      hp.connect(lp).connect(ws).connect(comp).connect(g).connect(host.master());
+      g.connect(voiceChain(fx, ch));
       const srcs = [];
       let t = t0, joined = false;
       for (const p of parts) {
@@ -270,13 +291,13 @@ const GameAudioRadioFx = (function () {
         if (joined) t = Math.max(t0, t - CLIP_OVERLAP_S);
         const s = host.context().createBufferSource();
         s.buffer = p;
-        s.connect(hp);
+        s.connect(g);
         s.start(t);
         srcs.push(s);
         t += p.duration;
         joined = true;
       }
-      const nodes = [hp, lp, ws, comp, g];
+      const nodes = [g];
       let dead = false;
       const teardown = () => {
         if (dead) return;
@@ -327,7 +348,7 @@ const GameAudioRadioFx = (function () {
       },
       radioFxMax: () => RADIO_FX_MAX,
       radioChannels: () => Object.keys(RADIO_CH),
-      resetContext() { radioBed = null; },
+      resetContext() { _voiceChains.clear(); radioBed = null; },
     };
   }
   return { create };

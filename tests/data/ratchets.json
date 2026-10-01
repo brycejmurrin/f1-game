@@ -9,16 +9,16 @@
       "lines": 3219
     },
     "js/car/car3d.js": {
-      "lines": 3439
+      "lines": 3429
     },
     "js/game.js": {
-      "codeLines": 4710,
+      "codeLines": 4627,
       "gMembers": 280,
-      "lines": 8995,
+      "lines": 8829,
       "topLets": 148
     },
     "js/lighting/presets.js": {
-      "lines": 17318
+      "lines": 17260
     },
     "js/net/lobby.js": {
       "lines": 1868
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2066,
+      "ceiling": 2069,
       "slack": 25
     },
     "subFloorFontSize": {
@@ -71,7 +71,7 @@
       "slack": 0
     },
     "twinDebt": {
-      "ceiling": 5,
+      "ceiling": 3,
       "slack": 0
     },
     "waitForTimeout": 127,

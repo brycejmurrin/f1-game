@@ -790,7 +790,7 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
   // the lights finds its programs built (17 s of held card after the flyby
   // under SwiftShader before this; see warmPrograms).
   assert.match(body, /if \(await menuIdle\(current\)\) \{ warmPrograms\(\); FlybySeq\.reset\(\); _menuGate\.warm = 2; \}/, "the first warm pair requests the program warm first");
-  assert.match(game, /const warmPrograms = \(tag = ""\) => \{ try \{ if \(gfx\.warm\) \{ const k = menuKey\(trackIdx\); _warmKey = k; if \(!_warmed\.has\(k \+ tag\)\) \{ _warmed\.add\(k \+ tag\); gfx\.warm\(\); \} \} \}/, "warmPrograms is the guarded request (GLX/WGX have no warm), remembers the world it was for, and asks once per world per session");
+  assert.match(game, /const warmPrograms = \(tag = ""\) => \{ try \{ if \(gfx\.warm\) \{ const k = menuKey\(trackIdx\); _warmKey = k; if \(!_warmed\.has\(k \+ tag\)\) \{ _warmed\.add\(k \+ tag\); gfx\.warm\(\); return true; \} \} \}/, "warmPrograms is the guarded request (GLX/WGX have no warm), remembers the world it was for, and asks once per world per session");
   // …and the lights skip their own request for that world: with every program
   // built, compileAsync(scene) still walked the race scene for 7.5 s and linked
   // nothing (scratch/ld-link-probe.mjs, 2026-09-28).
@@ -891,7 +891,7 @@ test("the world key includes the grid size, and a failed build does not keep the
 test("plans are reused when they still hold, and re-planned when they do not", async () => {
   await withTrack("monaco", (track, g) => {
     const F = g.sandbox.FlybySeq;
-    F.setDuration(24000); F.setPlayerSlot(11, 22);
+    F.setDuration(20000); F.setPlayerSlot(11, 22);
     const list = F.bindCorners(track, F.DEFAULT), total = list.reduce((a, s) => a + s.dur, 0);
     const plain = list.find((s) => !JSON.stringify(s).includes('"slot"') && !JSON.stringify(s).includes('"grid"'));
     const slotShot = list.find((s) => JSON.stringify(s).includes('"slot"'));
@@ -899,9 +899,9 @@ test("plans are reused when they still hold, and re-planned when they do not", a
     F.setPlayerSlot(3, 22);
     assert.equal(F.planShot(track, plain, plain.dur / total), a, "a shot aimed at no slot keeps its plan when the player's slot moves");
     assert.equal(F.planShot(track, plain, plain.dur / (total * 0.9)), a, "more screen time (a dropped shot) keeps a plan squeezed for less");
-    F.setDuration(12000);
-    assert.notEqual(F.planShot(track, plain, plain.dur / total), a, "the 12 s cut re-plans: half the seconds, the pans are held to PAN_MAX again");
-    F.setDuration(24000);
+    F.setDuration(10000);
+    assert.notEqual(F.planShot(track, plain, plain.dur / total), a, "the 10 s cut re-plans: half the seconds, the pans are held to PAN_MAX again");
+    F.setDuration(20000);
     if (slotShot) {
       const b = F.planShot(track, slotShot, slotShot.dur / total);
       F.setPlayerSlot(7, 22);

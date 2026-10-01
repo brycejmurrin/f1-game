@@ -494,13 +494,18 @@ test('voice volume and auditions remain available with automatic radio and annou
   nodes.get('as-v-coach-test').onclick(); assert.ok(calls.includes('preview:coach'));
 });
 
-test('choosing an engineer system voice switches source, but coach tuning leaves it alone', () => {
-  const {G,nodes,wired,tunes}=audioPanelHarness({voiceUI:true});
-  G.soundOn=true; wired.get('as-radio').write('off');
-  const coach=nodes.get('as-v-coach');coach.value='First';coach.onchange();
-  assert.equal(G.radio.packOn(),true);
-  const engineer=nodes.get('as-v-radio');engineer.value='First';engineer.onchange();
-  assert.equal(G.radio.packOn(),false); assert.equal(tunes.radio.name,'First');
+test('choosing a system voice for a race channel switches source, but the announcer pick leaves it alone', () => {
+  // Every race channel has a recorded voice (RadioVoice.PACK_VOICE), so a pick
+  // for any of them is choosing SYSTEM; the announcer's pick reads the pre-race
+  // show, and RECORDED keeps the recorded commentator in the race.
+  for (const ch of ['radio','coach','control']) {
+    const {G,nodes,wired,tunes}=audioPanelHarness({voiceUI:true});
+    G.soundOn=true; wired.get('as-radio').write('off');
+    const ann=nodes.get('as-v-announcer');ann.value='First';ann.onchange();
+    assert.equal(G.radio.packOn(),true, 'announcer pick keeps RECORDED');
+    const sel=nodes.get('as-v-'+ch);sel.value='First';sel.onchange();
+    assert.equal(G.radio.packOn(),false, ch+' pick selects SYSTEM'); assert.equal(tunes[ch].name,'First');
+  }
 });
 
 test('same-size voice-list replacements refresh both settings selectors', () => {

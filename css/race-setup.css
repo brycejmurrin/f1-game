@@ -321,6 +321,27 @@
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
   #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
+/* SCREEN LOOKS — RACE SETTINGS (js/ui/screen-looks.js; core knobs in
+   css/responsive.css). COLUMNS overrides the 440px container query above in
+   both directions: the body and its folds share one lattice, so both are
+   forced together or a fold's rows would start a new rhythm. TWO on a narrow
+   sheet wraps each row's ‹ select › under its label — the player's call; the
+   7rem value rule below keeps that as tidy as it can be. */
+:root[data-look-race-cols="one"] :is(#rs-body, #rs-body > details) { grid-template-columns: minmax(0, 1fr); }
+:root[data-look-race-cols="two"] :is(#rs-body, #rs-body > details) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--pad);
+}
+/* PRESETS. COMPACT drops the captions and the card padding, so a preset is one
+   chip-height label and more of them share a line; HIDE removes the row, and
+   the rows under it are unchanged (each is still settable one by one). */
+:root[data-look-race-presets="compact"] #rs-presets { --balance-basis: 6rem; --balance-min: 4.5rem; }
+:root[data-look-race-presets="compact"] #rs-presets > .preset-btn {
+  min-height: var(--chip-h);
+  padding-block: calc(var(--gap) * 0.3);
+}
+:root[data-look-race-presets="compact"] #rs-presets > .preset-btn small { display: none; }
+:root[data-look-race-presets="hide"] #rs-presets { display: none; }
 /* The Settings pages' steel italic label (css/components.css) restated here:
    that rule is scoped to #pmsettings-inner .pm-group. */
 #rs-body .tune-label {

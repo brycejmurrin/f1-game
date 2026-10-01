@@ -352,6 +352,14 @@
   gap: calc(var(--gap) / 3);
   padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
 }
+/* Every other APPEARANCE fold — GENERAL (the shell's), PAUSE MENU and the
+   per-screen folds js/ui/screen-looks.js builds — takes the same column. */
+#pm-panel-appearance > details > [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
+}
 #pm-display-adv-body > button,
 #pm-visual-tuners-body > button {
   width: 100%;
