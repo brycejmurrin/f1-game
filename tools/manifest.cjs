@@ -207,6 +207,7 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
+  "js/audio/announcer-recorded.js",
   "js/audio/announcer.js",
   "js/audio/panel.js",
   "js/car/parts.js",
@@ -293,6 +294,7 @@ const FULL = [
   "js/input/steer-tuning.js",
   "js/perf/governor.js",
   "js/perf/loop-health.js",
+  "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/perf/gfx-debug-overlay.js",

@@ -136,7 +136,7 @@ function boot(opts = {}) {
     cssCol: () => "#f00",
   };
   const hud = sb.GameHud.create(G);
-  return { dom, els, player, G, sb, bgLog, mapLog, timers, tick: () => hud.updateHud(true) };
+  return { dom, els, player, G, sb, hud, bgLog, mapLog, timers, tick: () => hud.updateHud(true) };
 }
 
 test("the tach redline latches with hysteresis instead of flickering on the 92 % line", () => {
@@ -667,4 +667,95 @@ test("minimap sector arcs are the podium metals from tokens — no purple, no re
   assert.match(tmSrc, /SC = sectorColors\(\)/); assert.match(tmSrc, /g\.strokeStyle = SC\[s\];/);
   assert.doesNotMatch(hudSrc, /= the sector labels/);
   assert.doesNotMatch(hudSrc + tmSrc, /192,\s*132,\s*252|#c084fc/i, "the purple literal is gone from both drawers");
+});
+
+function measuredHud() {
+  const b = boot({ tokens: true }), reads = { width: 0, height: 0 };
+  const top = b.dom.document.createElement("div"); top.className = "hud-top";
+  top._rect = { left: 490, right: 790, top: 8, bottom: 62, width: 300, height: 54 };
+  b.dom.body.appendChild(top); b.dom.body.classList.add("desktop");
+  const root = b.dom.documentElement;
+  const zoom = () => +root.style.getPropertyValue("--hud-z-top") || +root.style.getPropertyValue("--hud-scale") || 1;
+  const css = () => b.dom.body.dataset.density === "compact" ? 96 : 140;
+  Object.defineProperties(b.els.minimap, {
+    clientWidth: { get: () => { reads.width++; return css(); }, configurable: true },
+    clientHeight: { get: () => { reads.height++; return css(); }, configurable: true },
+    currentCSSZoom: { get: zoom, configurable: true },
+  });
+  b.els.minimap._rect = { left: 10, right: 150, top: 8, bottom: 148, width: 140, height: 140 };
+  b.G.hudMapVis = "on";
+  for (let i = 0; i < 3; i++) b.tick();
+  const reset = () => { reads.width = reads.height = 0; };
+  const bitmap = () => Math.round(css() * Math.min(3, Math.max(1, zoom() * b.sb.devicePixelRatio)));
+  return { ...b, reads, reset, bitmap };
+}
+
+test("minimap measures actual raster/layout changes, not changing gap spelling", () => {
+  const b = measuredHud(), rival = { s: 20, prog: 110, code: "AHD", team: { id: "t2", color: [0, 1, 0] } };
+  b.G.cars.unshift(rival); b.G.ranked = [rival, b.player]; b.player.rank = 2;
+  b.tick(); b.tick();
+  const initial = b.els.gapA.textContent;
+  b.reset(); rival.prog = b.player.prog + 10000; b.tick(); b.tick();
+  assert.ok(b.els.gapA.textContent.length > initial.length, "the gap really acquired another digit");
+  assert.deepEqual(b.reads, { width: 0, height: 0 }, "a spelling change without a new cap cannot resize the canvas");
+  const change = (edit) => {
+    b.reset(); edit(); b.tick();
+    assert.deepEqual(b.reads, { width: 1, height: 1 }, "a real raster/layout change measures once");
+    assert.deepEqual([b.els.minimap.width, b.els.minimap.height], [b.bitmap(), b.bitmap()]);
+  };
+  change(() => { b.sb.innerWidth = 1440; });
+  change(() => { b.dom.documentElement.style.setProperty("--hud-scale", "1.25"); });
+  b.tick(); b.tick();
+  change(() => { b.dom.documentElement.style.setProperty("--hud-z-top", "2"); });
+  change(() => { b.sb.devicePixelRatio = 2; });
+  change(() => { b.dom.body.dataset.density = "compact"; });
+  change(() => { b.G.hudProfile = "broadcast"; });
+  b.reset(); b.G.hudMapVis = "off"; b.tick();
+  assert.deepEqual(b.reads, { width: 0, height: 0 }, "a hidden map never measures");
+  change(() => { b.G.hudMapVis = "on"; });
+  change(() => { b.G.track = { ...b.G.track, map: [[0, 1], [1, 0]] }; b.hud.invalidateMap(); });
+});
+
+test("HUD conditional widgets skip stable attribute writes and repair external DOM edits", () => {
+  const b = boot(), { els, G, player, dom, tick } = b;
+  for (const key of ["tyre", "tyreCode", "tyreFill", "pitCue", "pitCueText", "pitCueArrow", "workBtn", "plan"])
+    els[key] = dom.byId("probe-" + key);
+  let writes = 0;
+  for (const el of [els.tyre, els.pitCue, els.workBtn, els.gapA]) {
+    let hidden = el.hidden;
+    Object.defineProperty(el, "hidden", { get: () => hidden, set: (v) => { writes++; hidden = !!v; }, configurable: true });
+    el.dataset = new Proxy(el.dataset, {
+      set: (o, k, v) => { writes++; o[k] = String(v); return true; },
+      deleteProperty: (o, k) => { writes++; delete o[k]; return true; },
+    });
+  }
+  let wear = false, spent = 0.2, cue = null, work = false, plan = null;
+  G.tyres = { on: () => wear, spent: () => spent, lapsLeft: () => 8 };
+  G.pits = { commitFrac: () => 0, cue: () => cue, canWork: () => work, planInfo: () => plan,
+    info: () => ({ side: 1 }), windowOf: () => "" };
+  const steady = () => { writes = 0; for (let i = 0; i < 30; i++) tick(); assert.equal(writes, 0); };
+  tick(); steady();
+  assert.deepEqual([els.tyre.hidden, els.pitCue.hidden, els.workBtn.hidden], [true, true, true]);
+  wear = true; tick(); steady(); assert.equal(els.tyre.dataset.wear, "ok");
+  spent = 0.75; tick(); assert.equal(els.tyre.dataset.wear, "warn");
+  const rival = { s: 20, prog: 20, code: "AHD", team: { id: "t2", color: [0, 1, 0] } };
+  G.cars.unshift(rival); G.ranked = [rival, player]; player.rank = 2; player.towing = 0.7; player.pitState = "box";
+  cue = { text: "WORK ON CAR", phase: "box", frac: 1 }; work = true; plan = { text: "BOX LAP 4", state: "due" };
+  tick(); steady();
+  assert.deepEqual([els.tyre.hidden, els.pitCue.hidden, els.workBtn.hidden], [false, false, false]);
+  assert.equal(els.pitCueText.textContent, "WORK ON CAR"); assert.equal(els.pitCueArrow.textContent, "▶");
+  for (const el of [els.tyre, els.pitCue, els.workBtn]) el.hidden = true;
+  els.tyre.dataset.wear = "wrong"; els.tyre.dataset.pit = "wrong"; els.tyre.dataset.plan = "wrong";
+  els.pitCue.dataset.phase = "wrong"; delete els.gapA.dataset.tow;
+  writes = 0; tick(); assert.equal(writes, 8, "exactly the eight stale actual DOM values are repaired");
+  assert.deepEqual([els.tyre.hidden, els.pitCue.hidden, els.workBtn.hidden], [false, false, false]);
+  assert.deepEqual([els.tyre.dataset.wear, els.tyre.dataset.pit, els.tyre.dataset.plan, els.pitCue.dataset.phase, els.gapA.dataset.tow],
+    ["warn", "box", "due", "box", "1"]);
+  player.pitState = "none"; player.towing = 0; cue = null; work = false; plan = null; tick(); steady();
+  assert.deepEqual([els.pitCue.hidden, els.workBtn.hidden, els.tyre.dataset.pit, els.tyre.dataset.plan, els.gapA.dataset.tow],
+    [true, true, undefined, undefined, undefined]);
+  wear = false; tick();
+  for (const el of [els.tyre, els.pitCue, els.workBtn]) el.hidden = false;
+  writes = 0; tick(); assert.equal(writes, 3);
+  assert.deepEqual([els.tyre.hidden, els.pitCue.hidden, els.workBtn.hidden], [true, true, true]);
 });

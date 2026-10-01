@@ -599,3 +599,32 @@ test("god-ray lamp arrays are sized to the ONE bound the beam march walks", () =
       `${name} is ${len} floats; GR_MAX_LIGHTS ${N} x ${comps} components needs ${N * comps}`);
   }
 });
+
+
+// ── puddle ripples (2026-10-01): one ring model on three backends ───────────
+// The wet block's RAIN RIPPLES are hand-mirrored in GLSL, TSL and WGSL. A
+// constant that drifts on one backend is a different look there and nothing
+// else notices; a rain amount that stops being packed leaves that backend's
+// puddles flat forever. Pin both.
+test("puddle ripples: the ring constants and the rain uniform match on GLX, TLX and WGX", () => {
+  const glx = read("js/render/glx/shaders/glsl-lit.js");
+  const tlx = read("js/render/three/tsl-lit.js");
+  const wgx = read("js/render/webgpu/wgsl-chunks.js");
+  const block = (src, from) => { const i = src.indexOf(from); assert.ok(i >= 0, `ripple block in ${from.slice(0, 20)}`); return src.slice(i, i + 2200); };
+  const g = block(glx, "RAIN RIPPLES (2026-10-01)"), t = block(tlx, "RAIN RIPPLES — js/render/glx"), w = block(wgx, "RAIN RIPPLES — mirrors GLX");
+  // cell scales, seeds, ring speed, wavenumber, damping, tilt — every literal, each backend
+  for (const c of ["1.7", "2.9", "7.3", "19.0", "0.45", "40.0", "5.0", "4.0", "0.08", "0.10"]) {
+    for (const [name, src] of [["GLX", g], ["TLX", t], ["WGX", w]])
+      assert.ok(src.includes(c), `${name} ripple block carries the constant ${c}`);
+  }
+  // the ring life rates 0.8 and 1.3 (GLX/WGX write 0.8 + 0.5·k; TLX passes both)
+  assert.match(g, /0\.8 \+ 0\.5 \* fk/); assert.match(w, /0\.8 \+ 0\.5 \* fk/);
+  assert.ok(t.includes("0.8)") && t.includes("1.3)"), "TLX ring rates 0.8 and 1.3");
+  // the rain amount reaches every backend from the same frame field
+  assert.match(read("js/game.js"), /frame\.rain = cur \+ \(rainTarget - cur\)/, "game.js ramps frame.rain");
+  assert.match(read("js/render/glx/glx.js"), /uf1\(litU\.uRain,\s*_litUf,\s*"rain",\s*frame\.rain/, "GLX uploads uRain");
+  assert.match(glx, /uniform float uRain;/);
+  assert.match(tlx, /U\.rain\.value = frame\.rain/, "TLX updates U.rain");
+  assert.match(read("js/render/webgpu/wgx.js"), /d\[82\] = f\.rain/, "WGX packs params4.z");
+  assert.match(w, /F\.params4\.z/);
+});

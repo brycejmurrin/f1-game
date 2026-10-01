@@ -481,6 +481,7 @@ const GameAudio = (function () {
     applySessionType();
 
     ctx = new AC();
+    _loopNoise.clear();
     ctxGen++;   // buffers decoded on the old context are stale (js/audio/voice-pack.js)
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
     // player never makes the gesture the listeners below wait for. Our own
@@ -543,6 +544,7 @@ const GameAudio = (function () {
       .then((e) => {
         engBuf = e; samplesReady = true;
         enginePeriod = detectPeriod(e);
+        findStableLoop(e);   // prime the memoized scan before a pending race-frame upgrade
         Log.debug("audio", "engine sample decoded, period=" + enginePeriod);
       })
       .catch((err) => {
@@ -764,12 +766,21 @@ const GameAudio = (function () {
      White noise is stationary, so one buffer played from a RANDOM OFFSET is
      indistinguishable from a freshly-generated one — and two hits in a row
      still differ, which a fixed offset would not give. The looping sources
-     (harv, skid, rain) keep their own buffers: those allocate once per start,
-     and rain in particular needs a seamless 4 s loop.
+     keep independent buffers; engine loops reuse theirs within this context,
+     while rain in particular needs its own seamless 4 s loop.
 
      Context-bound like engBuf, so rebuildCtx() must clear it. */
   const NOISE_POOL_S = 3;
   let noisePoolBuf = null;
+  // Separate layer keys preserve independent noise even at equal durations.
+  // Buffers are immutable after generation; sources remain single-use. Cleared
+  // with every new context so a resume rebuild never retains the old PCM.
+  const _loopNoise = new Map();
+  function loopNoise(name, seconds) {
+    let buf = _loopNoise.get(name);
+    if (!buf) { buf = noiseBuf(seconds); _loopNoise.set(name, buf); }
+    return buf;
+  }
   function noisePool() {
     if (!noisePoolBuf) noisePoolBuf = noiseBuf(NOISE_POOL_S);
     return noisePoolBuf;
@@ -798,6 +809,7 @@ const GameAudio = (function () {
 
   function startEngineBody() {
     flushDying();   // kill the fading previous graph before building another
+    if (sfxOk()) noisePool();   // existing one-shot buffer, prepared before green
 
     // shared lowpass + master gain for the engine core (samples or synth).
     // The per-manufacturer voice inserts one peaking EQ (its formant) between
@@ -1035,7 +1047,7 @@ const GameAudio = (function () {
 
     // MGU-K harvest whirr: resonant noise, gated in by deceleration
     harvSrc = ctx.createBufferSource();
-    harvSrc.buffer = noiseBuf(0.7);
+    harvSrc.buffer = loopNoise("harvest", 0.7);
     harvSrc.loop = true;
     harvFilter = ctx.createBiquadFilter();
     harvFilter.type = "bandpass";
@@ -1079,7 +1091,7 @@ const GameAudio = (function () {
 
     // tire screech: looped noise through a bandpass, silent until setSkid
     skidSrc = ctx.createBufferSource();
-    skidSrc.buffer = noiseBuf(0.5);
+    skidSrc.buffer = loopNoise("skid", 0.5);
     skidSrc.loop = true;
     skidFilter = ctx.createBiquadFilter();
     skidFilter.type = "bandpass";
@@ -1094,7 +1106,7 @@ const GameAudio = (function () {
     // narrow, high squeal for a locked wheel. The surface rumble is its own
     // low-passed loop. All silent until setCarSfx drives them.
     scrubSrc = ctx.createBufferSource();
-    scrubSrc.buffer = noiseBuf(0.5);
+    scrubSrc.buffer = loopNoise("scrub", 0.5);
     scrubSrc.loop = true;
     scrubFilter = ctx.createBiquadFilter();
     scrubFilter.type = "bandpass"; scrubFilter.frequency.value = 520; scrubFilter.Q.value = 0.9;
@@ -1105,7 +1117,7 @@ const GameAudio = (function () {
     scrubSrc.connect(scrubFilter).connect(scrubGain).connect(sfxBus);
     scrubSrc.connect(lockFilter).connect(lockGain).connect(sfxBus);
     surfSrc = ctx.createBufferSource();
-    surfSrc.buffer = noiseBuf(0.5);
+    surfSrc.buffer = loopNoise("surface", 0.5);
     surfSrc.loop = true;
     surfFilter = ctx.createBiquadFilter();
     surfFilter.type = "lowpass"; surfFilter.frequency.value = 180; surfFilter.Q.value = 0.7;
@@ -1118,7 +1130,7 @@ const GameAudio = (function () {
     // speed: own buffer, because a LOOPING source needs one (the shared
     // noisePool is for one-shots — see its comment).
     windSrc = ctx.createBufferSource();
-    windSrc.buffer = noiseBuf(0.5);
+    windSrc.buffer = loopNoise("wind", 0.5);
     windSrc.loop = true;
     windFilter = ctx.createBiquadFilter();
     windFilter.type = "bandpass";
@@ -1135,7 +1147,7 @@ const GameAudio = (function () {
     // in. Looped noise through a bandpass that gain-follows deceleration
     // (setEngine's brakeFrac), own buffer because it loops.
     brakeSrc = ctx.createBufferSource();
-    brakeSrc.buffer = noiseBuf(0.6);
+    brakeSrc.buffer = loopNoise("brakes", 0.6);
     brakeSrc.loop = true;
     brakeFilter = ctx.createBiquadFilter();
     brakeFilter.type = "bandpass";
@@ -2181,7 +2193,26 @@ const GameAudio = (function () {
     });
   }
 
+  // MENU SOUNDS (apex26.menuSfx, js/audio/panel.js): the three ui* blips have
+  // their own switch, because a player who wants the engine and the tyres can
+  // still want silent menus. ONE CLICK, ONE SOUND: a handler that blips and then
+  // calls a helper that blips again (the track tile's uiSelect + tickUi) is a
+  // double click in the ear, so a second ui blip inside UI_GAP_MS is dropped.
+  // performance.now(), not ctx.currentTime: a suspended context's clock stands
+  // still and would swallow every blip after the first.
+  let uiEnabled = true, uiLast = -1e9;
+  const UI_GAP_MS = 60;
+  function uiOk() {
+    if (!uiEnabled || !sfxOk()) return false;
+    const t = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (t - uiLast < UI_GAP_MS) return false;
+    uiLast = t;
+    return true;
+  }
+  function setUiEnabled(b) { uiEnabled = !!b; }
+
   function uiTick() {
+    if (!uiOk()) return;
     blip(660, "square", 0.08, 0.004, 0.05);
   }
 
@@ -2216,6 +2247,7 @@ const GameAudio = (function () {
   }
 
   function uiSelect() {
+    if (!uiOk()) return;
     blip(880, "square", 0.13, 0.005, 0.09);
   }
 
@@ -2224,6 +2256,7 @@ const GameAudio = (function () {
   // fitted one. A short low sawtooth (the penalty() family's timbre, UI-
   // sized) is unmistakably not a confirmation.
   function uiReject() {
+    if (!uiOk()) return;
     blip(220, "sawtooth", 0.12, 0.006, 0.14);
   }
 
@@ -2466,6 +2499,17 @@ const GameAudio = (function () {
   });
   const RADIO_FX_MAX = 1.5;
   let radioFx = 1;        // the player's level; 0 is off
+  const RADIO_PRESETS = Object.freeze({
+    modern: { name: "MODERN RADIO", lo: 300, hi: 3400, drive: 2.2, noise: 1, cue: true },
+    clean: { name: "CLEAN HEADSET", lo: 100, hi: 9000, drive: 1.1, noise: 0, cue: false },
+    vintage: { name: "VINTAGE RADIO", lo: 450, hi: 2800, drive: 3.2, noise: 1.5, cue: true },
+  });
+  let radioPreset = "modern";
+  function setRadioPreset(id) {
+    if (!Object.prototype.hasOwnProperty.call(RADIO_PRESETS, id)) return radioPreset;
+    radioStingStop(); radioPreset = id;
+    return radioPreset;
+  }
   let radioBed = null;    // the live hiss, or null
 
   /* THE COURTESY TONE — the beep before the message.
@@ -2592,7 +2636,13 @@ const GameAudio = (function () {
    *  is a case this game produces on its own. */
   function radioSting(channel, seconds) {
     radioStingStop();
-    const ch = RADIO_CH[channel];
+    const preset = RADIO_PRESETS[radioPreset];
+    const base = RADIO_CH[channel];
+    const ch = base && channel === "radio" ? Object.assign({}, base, {
+      lo: preset.lo, hi: preset.hi, click: base.click * preset.noise, hiss: base.hiss * preset.noise,
+      tail: base.tail * preset.noise, toneAmp: preset.cue ? base.toneAmp : 0,
+    }) : base;
+    if (channel === "radio" && !preset.cue) return false;
     if (!sfxOk() || !ch || radioFx <= 0) return false;
     const t0 = now();
     // KEY, THEN THE FIGURE, THEN THE LINE — the order the ear expects: the mic
@@ -2609,7 +2659,7 @@ const GameAudio = (function () {
     const src = ctx.createBufferSource();
     src.loop = true;
     src.buffer = noisePool();
-    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = RADIO_LO;
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = ch.lo || RADIO_LO;
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
     const g = ctx.createGain();
     const peak = ch.hiss * radioFx;
@@ -2644,7 +2694,7 @@ const GameAudio = (function () {
     radio:     { lo: RADIO_LO, hi: RADIO_HI, drive: 2.2, level: 0.95, click: 0 },
     spotter:   { lo: RADIO_LO, hi: RADIO_HI, drive: 2.8, level: 1.0,  click: 0.07 },
     control:   { lo: RADIO_LO, hi: RADIO_HI, drive: 1.6, level: 0.9,  click: 0 },
-    coach:     { lo: RADIO_LO, hi: RADIO_HI, drive: 1.6, level: 0.9,  click: 0 },
+    coach:     { lo: 90,       hi: 9000,     drive: 1.1, level: 0.9,  click: 0 },
     announcer: { lo: 90,       hi: 9000,     drive: 1.1, level: 0.85, click: 0 },
   });
   /* ONE CHAIN PER SOUND, built once per context and shared by every line: a
@@ -2691,12 +2741,16 @@ const GameAudio = (function () {
     // clock still: lines scheduled on it all play at once when it resumes.
     if (ctx.state && ctx.state !== "running") return null;
     const fx = VOICE_CH[o && o.fx] ? o.fx : VOICE_CH[o && o.channel] ? o.channel : "radio";
-    const ch = VOICE_CH[fx];
+    const preset = RADIO_PRESETS[radioPreset];
+    const isRadio = fx === "radio" || fx === "spotter";
+    const ch = isRadio ? Object.assign({}, VOICE_CH[fx], {
+      lo: preset.lo, hi: preset.hi, drive: preset.drive * (fx === "spotter" ? 2.8 / 2.2 : 1), click: VOICE_CH[fx].click * preset.noise,
+    }) : VOICE_CH[fx];
     const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
     if (!(vol > 0)) return null;
     const t0 = Math.max(now(), +at || 0);
     const g = ctx.createGain(); g.gain.value = ch.level * vol;
-    g.connect(voiceChain(fx, ch));
+    g.connect(voiceChain(isRadio ? fx + ":" + radioPreset : fx, ch));
     const srcs = [];
     let t = t0, joined = false;
     for (const p of parts) {
@@ -2915,6 +2969,9 @@ const GameAudio = (function () {
     radioSting,
     radioStingStop,
     setRadioFx,
+    setRadioPreset,
+    radioPreset: () => radioPreset,
+    radioPresets: () => Object.entries(RADIO_PRESETS).map(([id, p]) => [id, p.name]),
     radioFxLevel: () => radioFx,
     /** How long `channel`'s courtesy figure runs, in seconds, at the current
      *  level — 0 when it would not play at all. The VOICE waits this out so the
@@ -2923,6 +2980,7 @@ const GameAudio = (function () {
      *  the two cannot drift. */
     radioLeadS(channel) {
       const ch = RADIO_CH[channel];
+      if (channel === "radio" && !RADIO_PRESETS[radioPreset].cue) return 0;
       if (!ch || radioFx <= 0 || !Array.isArray(ch.tune)) return 0;
       return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
     },
@@ -2984,6 +3042,8 @@ const GameAudio = (function () {
     brakeCue,
     uiSelect,
     uiReject,
+    setUiEnabled,
+    uiEnabled() { return uiEnabled; },
     penalty,
     startRain,
     stopRain,
