@@ -1075,9 +1075,21 @@ const AiDrive = (function () {
   // fired; this one scales whether it fires at all). >0 multiplies the base
   // rate; undefined/0/negative leaves it at 1 so every existing caller and
   // test is unchanged.
+  //
+  // Slice 4: short races need visible late-brake/gather on easy/normal without
+  // editing DIFF.err. Hard (errMul≈1) keeps the 0.004 base; easy/normal get a
+  // visibility lift from (em−1). Optimism adds under pressure only (zero-mean
+  // when unpressured).
   function mistakeChance(t, pressure, errMul) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
-    return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons) * (errMul > 0 ? errMul : 1);
+    const em = errMul > 0 ? errMul : 1;
+    const press = clamp(pressure || 0, 0, 1);
+    // Cap 8× once em≥2.5 (easy); normal (~1.8) gets ~5.7×. Hard (em=1)
+    // stays on the 0.004 base so DIFF.err alone sets the hard rate.
+    const base = 0.004 * (1 + 7.0 * clamp((em - 1) / 1.2, 0, 1));
+    const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
+    const optMul = 1 + 0.25 * opt * press;
+    return base * (1 + 2 * press) * (1.3 - cons) * em * optMul;
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
