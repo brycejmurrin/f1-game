@@ -2005,11 +2005,22 @@
       const amp = spd.mul(0.32).mul(w).mul(w);
       const sway = vec3(U.wind.x, 0.0, U.wind.y).mul(bend.mul(amp));
       const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7));
-      const flutter = normalLocal.mul(sin(flPh).mul(spd.mul(0.05)).mul(w));
-      const leaf = sway.add(flutter);
+      const flutter = sin(flPh).mul(spd.mul(0.05)).mul(w);          // scalar, along the normal
       const isFlag = mid.equal(15.0);
       const isLeaf = mid.equal(6.0).and(mfr.greaterThan(0.002));
-      return positionLocal.add(select(isFlag, normalLocal.mul(wave), select(isLeaf, leaf, vec3(0.0))));
+      // normalLocal is multiplied at the TOP LEVEL, never first inside a select
+      // branch. three r186 emits a VarNode's assignment (`normalLocal = normal;`)
+      // where the node is first built; built inside `select(isFlag, normalLocal
+      // .mul(wave), ...)` that assignment landed inside the flag/foliage `if`
+      // blocks only, and every other vertex (every non-instanced lit mesh — the
+      // whole garage, the world soup) sent an UNINITIALISED normal varying to
+      // the fragment stage: zero or garbage N, lit surfaces black while decals
+      // and glare drew (shipped 2026-10-01 as acdf1fed; the TLX gate passes on a
+      // blank readback, so no probe saw it). Same standing rule as the fragment
+      // anchors at the top of sharedFragment: build shared nodes before any
+      // conditional use.
+      const alongNormal = select(isFlag, wave, select(isLeaf, flutter, float(0.0)));
+      return positionLocal.add(normalLocal.mul(alongNormal)).add(select(isLeaf, sway, vec3(0.0)));
     }
 
     /* material factory
