@@ -897,6 +897,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
   let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
+  // The puddle shape's lateral direction (wet block below): the world xz
+  // direction of increasing track x, from derivatives — taken HERE, before the
+  // first branch, because WGSL derivatives must sit in uniform control flow.
+  let trkRightXZ = dpdx(in.wpos.xz) * dpdx(vTrk.y) + dpdy(in.wpos.xz) * dpdy(vTrk.y);
   let vDist = length(in.wpos - F.eye.xyz);
   // ONE dynamic-layer sample, not a 30-sample hoist (13 albedo + 13 normal +
   // 2 road layers sampled, 28 discarded per fragment). WGSL only
@@ -1179,9 +1183,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     var pool = 1.0;
     if (vTrk.z > 0.5) {
       let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
-      let rightXZ = dpdx(in.wpos.xz) * dpdx(vTrk.y) + dpdy(in.wpos.xz) * dpdy(vTrk.y);
-      let rl = length(rightXZ);
-      let downhill = select(0.0, -dot(rightXZ / rl, Ngeo.xz), rl > 1e-6);
+      let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
+      let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
       pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
     }
     let puddle = smoothstep(0.48, 0.88, pn * pool) * wet * (1.0 - porous);

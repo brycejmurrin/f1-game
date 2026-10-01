@@ -907,6 +907,9 @@ float sampleShadow(vec3 wpos) {
 
 void main() {
   vec3 N = normalize(vNrm);
+  // Puddle shape (wet block): the world xz direction of increasing track x, from
+  // derivatives taken here in uniform control flow (WGX parity; see wgsl-chunks).
+  vec2 trkRightXZ = dFdx(vWorldPos.xz) * dFdx(vTrk.y) + dFdy(vWorldPos.xz) * dFdy(vTrk.y);
   // Two-sided lighting: cull-off single-face geometry (the wheels — tyre bands,
   // sidewall discs, hub fans — are drawn double-sided with one face per wall)
   // shows its BACK side through spoke gaps and on the car's far wheels. Without
@@ -1193,9 +1196,8 @@ void main() {
     float pool = 1.0;
     if (vTrk.z > 0.5) {
       float lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
-      vec2 rightXZ = dFdx(vWorldPos.xz) * dFdx(vTrk.y) + dFdy(vWorldPos.xz) * dFdy(vTrk.y);
-      float rl = length(rightXZ);
-      float downhill = rl > 1e-6 ? -dot(rightXZ / rl, Ngeo.xz) : 0.0;   // +: the +x side lies lower
+      float rl = length(trkRightXZ);   // derivatives hoisted next to N (uniform control flow)
+      float downhill = rl > 1e-6 ? -dot(trkRightXZ / rl, Ngeo.xz) : 0.0;   // +: the +x side lies lower
       pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
     }
     // Wide, soft puddle edges so pools BLEND into the wet sheet rather than reading
