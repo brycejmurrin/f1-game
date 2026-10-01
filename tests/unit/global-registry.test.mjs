@@ -101,7 +101,9 @@ const KNOWN_EXTERNAL_READS = {
   "js/career/career-backup.js": ["__APEX_BUILD"],     // backup envelope stamps the shell build id
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
-  "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
+  "js/game.js": ["__apexReportError"], // the shell owns the error-report callback
+  "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
+  "js/core/lazy-bundles.js": ["__TEST_MODE"], // Playwright init-script flag enabling the agent surface
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
   "js/render/three/tlx.js": ["__apexReportError", "XRWebGLLayer"], // shell error card; WebXR immersive layer (browser API)

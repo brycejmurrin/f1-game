@@ -313,13 +313,17 @@ test("LAZY_RACE files have no <script> tag", () => {
 
 // hub.js calls Data*.create() at EVAL time, so these pairs are the difference
 // between a working hub and a TypeError on the tab modules. The manifest
-// DERIVES them ("everything, then the hub") and js/roster.js carries the
-// result to game.js; assert the derivation actually orders every tab module.
+// DERIVES the hub predecessors and adds dependencies between extracted
+// transport/telemetry modules. Assert both parts of the runtime DAG.
 test("the data-hub DAG orders every tab module before hub.js", () => {
   const want = MANIFEST.LAZY_DATA.filter((f) => f !== "js/data/hub.js").map((f) => [f, "js/data/hub.js"]);
-  assert.deepEqual(MANIFEST.LAZY_DATA_EDGES, want);
+  assert.deepEqual(MANIFEST.LAZY_DATA_EDGES.filter(([, to]) => to === "js/data/hub.js"), want);
   assert.equal(want.length, MANIFEST.LAZY_DATA.length - 1,
     "every LAZY_DATA file except the hub itself must be ordered before it");
+  for (const [from, to] of MANIFEST.LAZY_DATA_EDGES) {
+    const before = MANIFEST.LAZY_DATA.indexOf(from), after = MANIFEST.LAZY_DATA.indexOf(to);
+    assert.ok(before >= 0 && after > before, `${from} must precede ${to} within the data bundle`);
+  }
 });
 
 test("sw.js optional precache does not include LAZY_AGENT", () => {

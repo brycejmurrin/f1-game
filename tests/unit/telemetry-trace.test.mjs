@@ -12,13 +12,19 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ctx = vm.createContext({});
 seedLog(ctx);
 seedDom(ctx);   // telemetry.js formats lap times through Dom.fmtLap
 // js/core/mat4.js first — the shared scalar helpers (M4.clamp) telemetry.js binds at eval.
 vm.runInContext(readFileSync("js/core/mat4.js", "utf8"), ctx, { filename: "mat4.js" });
-vm.runInContext(readFileSync("js/data/telemetry.js", "utf8"), ctx, { filename: "telemetry.js" });
+for (const file of [
+  "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+  "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
+]) {
+  vm.runInContext(readFileSync(file, "utf8"), ctx, { filename: file });
+}
 const T = vm.runInContext("DataTelemetry", ctx);
 
 // A closed, oval-ish lap in track-local units at ~3.7 Hz, like the real feed.
@@ -106,7 +112,9 @@ test("F1API.locationData drops origin rows and unparseable timestamps", async ()
   });
   api.window = api;
   seedLog(api);
-  vm.runInContext(readFileSync("js/data/api.js", "utf8"), api, { filename: "api.js" });
+  for (const name of ["api-transport", "api"]) {
+    vm.runInContext(readFileSync(`js/data/${name}.js`, "utf8"), api, { filename: `${name}.js` });
+  }
   const F1API = vm.runInContext("F1API", api);
   const out = await F1API.locationData(9999, 4, null, null);
   assert.equal(out.length, 2);
@@ -198,4 +206,123 @@ test("a driver with no GPS of their own rides the path on THEIR lap, not the oth
   const s = sweep(view, fast, 60);   // over ITS OWN 60 s lap
   assert.ok(Math.abs(s.total - 2 * Math.PI) < 0.12,
     `borrowed-path dot swept ${s.total.toFixed(3)} rad over its own lap, want 2pi`);
+});
+
+// Exercise the real controller -> view -> player -> renderer wiring with a
+// synthetic feed. Canvas methods are inert: this checks state and lifecycle,
+// while the browser telemetry-compare spec owns layout and visible pixels.
+test("telemetry lanes retain their colors and scrub/playback teardown survives a popup close", async () => {
+  const dom = makeDom();
+  const timers = new Map(), frames = new Map(), observers = [];
+  let nextId = 0;
+  const makeElement = dom.document.createElement;
+  dom.document.createElement = (tag) => {
+    const node = makeElement(tag);
+    if (tag === "canvas") {
+      const drawing = new Proxy({}, { get: (target, key) => target[key] || (() => {}) });
+      node.getContext = () => drawing;
+      node.currentCSSZoom = 2;
+      node._rect = { left: 0, top: 0, width: 330, height: 100 };
+    }
+    if (tag === "dialog") {
+      node.showModal = () => { node.open = true; };
+      node.close = () => { node.open = false; dom.dispatch(node, { type: "close" }); };
+    }
+    return node;
+  };
+  dom.document.createTextNode = (text) => {
+    const node = makeElement("text");
+    node.nodeType = 3; node.textContent = text;
+    return node;
+  };
+  const el = (tag, cls, text) => {
+    const node = dom.document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = String(text);
+    return node;
+  };
+  const drivers = [
+    { num: 1, name: "Primary Driver", code: "PRI", color: "ff0000" },
+    { num: 2, name: "Missing Driver", code: "MIS", color: "00ff00" },
+    { num: 3, name: "Comparison Driver", code: "CMP", color: "0000ff" }
+  ];
+  const trace = driver(80);
+  trace.car.forEach((sample) => Object.assign(sample, { gear: 7, throttle: 80, brake: 0, rpm: 10000, drs: 12 }));
+  const meta = { sessionKey: 7, meetingKey: 1, name: "Race", type: "Race" };
+  const context = vm.createContext({
+    document: dom.document,
+    window: { innerHeight: 800, innerWidth: 600, devicePixelRatio: 2 },
+    setTimeout(fn) { const id = ++nextId; timers.set(id, fn); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    requestAnimationFrame(fn) { const id = ++nextId; frames.set(id, fn); return id; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+    ResizeObserver: class {
+      constructor() { this.disconnected = false; observers.push(this); }
+      observe() {}
+      disconnect() { this.disconnected = true; }
+    },
+    F1API: {
+      sessionDrivers: async () => drivers,
+      fastestLap: async () => ({ dateStart: new Date(1e12).toISOString(), lapDuration: 80, lapNumber: 3, s1: 25, s2: 25, s3: 30 }),
+      carData: async (_session, num) => num === 2 ? [] : trace.car,
+      locationData: async (_session, num) => num === 2 ? [] : trace.loc,
+      stints: async () => [], pits: async () => []
+    }
+  });
+  seedDom(context);
+  for (const file of [
+    "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+    "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
+  ]) {
+    vm.runInContext(readFileSync(file, "utf8"), context, { filename: file });
+  }
+  const api = vm.runInContext("DataTelemetry", context).create({
+    el, clear: (node) => node.replaceChildren(), emptyMsg: (text) => el("div", "dh-empty", text),
+    spinner: () => el("div", "dh-spinner"), sel: { sessionKey: 7, meta },
+    ensureSession: async () => {}, buildPicker: () => el("div"), invalidateOther() {},
+    findTeam: () => null, cssColor: (color) => JSON.stringify(color), textColorOn: () => "white", COMPOUND: {}, NO_TELEM_MSG: "No data"
+  });
+  const body = await api.loadTelemetry();
+  dom.byId("datahub").appendChild(body);
+  const chips = body.querySelectorAll(".dh-dchip");
+  assert.equal(chips.length, 3);
+  chips.forEach((chip) => chip.click());
+  body.querySelector(".dh-livebtn").click();
+  for (let i = 0; i < 12; i++) await Promise.resolve();
+  for (const [id, fn] of timers) { timers.delete(id); fn(); }
+
+  const popup = dom.document.querySelector(".dh-tpopup");
+  assert.ok(popup && popup.open);
+  const chart = popup.querySelector(".dh-canvas");
+  assert.equal(chart.width, 990, "DPR and CSS zoom are capped at a ratio of three");
+  const summary = popup.querySelector("#dh-telem-summary");
+  assert.match(summary.textContent, /PRI \(primary trace\), CMP \(comparison trace\)/);
+  assert.match(summary.textContent, /speed 200 km\/h, gear G7/);
+  const legend = popup.querySelector(".dh-legend").querySelectorAll(".dh-codechip");
+  assert.equal(legend[0].style.background, "[1,0,0]");
+  assert.equal(legend[1].style.background, "[0,0,1]", "a missing middle lane must not shift the following lane's color");
+
+  const play = popup.querySelector(".dh-tplay");
+  play.click();
+  assert.equal(frames.size, 1);
+  const tick = (ts) => {
+    const [id, fn] = frames.entries().next().value;
+    frames.delete(id); fn(ts);
+  };
+  tick(100); tick(1100);
+  assert.equal(popup.querySelector(".dh-gspeed").querySelector(".dh-gval").textContent, 200);
+  dom.dispatch(chart, { type: "pointerdown", pointerId: 1, clientX: 160 });
+  assert.equal(frames.size, 0, "scrubbing cancels playback");
+  dom.dispatch(chart, { type: "pointercancel", pointerId: 1 });
+  const firstTime = summary.textContent;
+  dom.dispatch(chart, { type: "pointerdown", pointerId: 2, clientX: 240 });
+  dom.dispatch(chart, { type: "pointerup", pointerId: 2 });
+  assert.notEqual(summary.textContent, firstTime, "a canceled pointer must release ownership for the next scrub");
+  play.click();
+  assert.equal(frames.size, 1);
+  api.closeTelemPopup();
+  assert.equal(frames.size, 0, "closing the popup cancels its active animation");
+  assert.ok(observers.every((observer) => observer.disconnected));
+  assert.equal(dom.document.querySelector(".dh-tpopup"), null);
+  assert.equal(dom.document.activeElement, chips[0], "close restores focus to the selected driver");
 });

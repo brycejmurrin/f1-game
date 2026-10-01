@@ -19,6 +19,7 @@
  *
  * Run: node --test tests/unit/ui-improve-pass.test.mjs
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -35,7 +36,7 @@ const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 // JS/HTML with comments stripped: a pin can only match code, never a comment.
 const code = (name) => read(name).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 const cssCache = new Map();
-const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(read(name))); return cssCache.get(name); };
+const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(readCssSource(name))); return cssCache.get(name); };
 /** Brace-matched body of `function name(` in src. */
 function fnBody(src, name, file) {
   const m = src.match(new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`));
@@ -510,7 +511,7 @@ test("generated lighting and camera tabs carry the complete tab contract", () =>
 });
 
 test("VS Friend text uses the menu type scale instead of sub-floor rem literals", () => {
-  const raw = read("css/overlays.css");
+  const raw = readCssSource("css/overlays.css");
   const start = raw.indexOf("/* ── VS FRIEND lobby");
   assert.notEqual(start, -1, "VS Friend CSS section missing");
   const section = cssRules(raw.slice(start));
@@ -739,7 +740,7 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-shape="wide"\] > #htp-contents/));
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-density="compact"\] > #htp-contents/));
   assert.match(html, /id="vsfriend-inner"/);
-  assert.ok(rulesFor(overlays, /^#howtoplay:has\(#htp-friends:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-friends:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
   assert.ok(decl(overlays, "#howtoplay dt[id]", "scroll-margin-block-start"));
   assert.ok(!rulesFor(overlays, "#howtoplay dl").some((r) => /max-content minmax\(0, 1fr\) max-content/.test(r.decls.get("grid-template-columns") || "")),
     "help rows must not synchronize two unrelated answers");
@@ -808,7 +809,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   assert.ok(rulesFor(components, /#pmsettings-inner\[data-shape="wide"\] #advanced-inner \.adv-sec/).some((r) =>
     r.decls.get("grid-column") === "1 / -1"),
     "advanced section headings still span the wide body grid");
-  const all = [html, read("css/components.css"), read("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
+  const all = [html, readCssSource("css/components.css"), readCssSource("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
   assert.doesNotMatch(all, /no-orphan-[235]/, "column-count-specific orphan patches must not return");
   assert.ok(!rulesFor(css("css/menus.css"), /#rs-(?:laps|weather|diff|time)\b/).some((r) => /^repeat\([235]/.test(r.decls.get("grid-template-columns") || "")));
 });
@@ -844,7 +845,7 @@ function bootInput() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
   const pad = (ax, buttons = [], ax2 = 0) => ({
     connected: true, axes: [ax, 0, ax2, 0],
@@ -1277,7 +1278,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
   assert.match(read("index.html"), /id="pm-visual-tuners" class="pm-renderer-sub"/,
     "ADVANCED VISUALS joins the same compact Display fold family as RENDERER");
-  const componentsSrc = read("css/components.css");
+  const componentsSrc = readCssSource("css/components.css");
   assert.match(componentsSrc,
     /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
     "ADVANCED VISUALS shares the borderless transparent summary rule");

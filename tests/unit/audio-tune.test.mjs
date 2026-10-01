@@ -26,7 +26,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8").replace(/^const\b/gm, "var");
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+  fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 // A REAL device rate. The sub-octave layer derives its frequency from
 // ctx.sampleRate, so the 8 kHz stand-in this harness used to fake put it under
 // the 25 Hz floor at every rev — the layer read as a fixed drone that no actual
@@ -1227,9 +1228,9 @@ test("the hiss bed outlasts the figure, however short the card", () => {
   // A short card is shorter than four notes. Scheduling the squelch tail off
   // the card's life alone closed the mic while the cue was still playing —
   // the tail is the END of a transmission the figure has only just opened.
-  const src = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
-  const fn = src.match(/function radioSting\([\s\S]*?\n  \}/);
-  assert.ok(fn, "could not find radioSting in js/audio/engine.js");
+  const src = fs.readFileSync(path.join(ROOT, "js/audio/radio-fx.js"), "utf8");
+  const fn = src.match(/function radioSting\([\s\S]*?\n    \}/);
+  assert.ok(fn, "could not find radioSting in js/audio/radio-fx.js");
   assert.match(fn[0], /const hold = Math\.max\(0\.25, tuneS \+ [\d.]+,/,
     "hold must be floored by the figure's own length, not just the card's");
   // ...and the figure has to be measured, not assumed: radioTune returns it.

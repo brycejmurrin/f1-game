@@ -1,0 +1,312 @@
+@layer components {
+/* Apex 26 — dialogs styles. Load order: tools/manifest.cjs CSS. */
+/* ---------- dialog sheets (pause menu, settings, results, …) ---------- */
+/* Every one of these is `.screen > .sheet`. --sheet-w is the width cap;
+   --fit-at (where set) inherits onto the inner .sheet so classifyFit can
+   shrink the sheet at 200% UI size. Landscape is a viewport fact. */
+#pausemenu   { --sheet-w: 420px; --fit-at: 260px; }
+#pmsettings  { --sheet-w: 760px; }
+/* The HUD SIZE sample: a picture of a hud-box that zooms by the same RAW
+   --hud-scale the dock takes, so the slider's drag visibly resizes it —
+   every real cluster is hidden while this .dim sheet is open (css/hud.css's
+   measured overlap rule, deliberately untouched), and from the title there
+   is no HUD at all: the slider had zero feedback. Inside the sheet's own
+   --ui-scale zoom the multiplication is constant during a HUD drag, so the
+   relative change reads true. pointer-events none: it is not a control. */
+#pm-hud-sample {
+  zoom: var(--hud-scale);
+  align-self: start;
+  pointer-events: none;
+  margin-top: calc(var(--gap) * 0.5);
+  /* Caption on its own line, then the readout box and the button pad side by
+     side: BUTTON SIZE has the same no-feedback problem HUD SIZE had, and a
+     second sample element would have cost four shell nodes for a picture. */
+  display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * 0.5);
+}
+/* Say what it is. A bare SPEED 312 box under the slider read as a real,
+   stuck readout ("why does the pause menu show speed?"). The caption is a
+   ::before so it costs no shell node; dividing by the zoom keeps its painted
+   size constant while the sample itself scales with the slider. */
+#pm-hud-sample::before {
+  content: "SIZE PREVIEW";
+  display: block; flex-basis: 100%;
+  font-size: calc(var(--fs-micro) / var(--hud-scale));
+  font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
+  margin-bottom: calc(var(--gap) / 3 / var(--hud-scale));
+}
+/* The BUTTON SIZE half of the same picture: a pad at the dock's own diameter.
+   This block already zooms by --hud-scale, so the pad divides it back out and
+   multiplies by --hud-btn-scale — what the drag shows is the true RATIO of the
+   two sliders, which is the whole point of having them apart. 54px is the
+   dock's base --tap (css/overlays.css); the two move together or the picture
+   lies. Pseudo-element, so it costs no shell node — same trick as the caption. */
+#pm-hud-sample::after {
+  content: "GAS";
+  --pad: calc(54px * var(--hud-btn-scale) / var(--hud-scale));
+  width: var(--pad); height: var(--pad);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--card-line);
+  background: var(--plate-opaque);
+  font-family: var(--font-hud); font-weight: 800;
+  font-size: calc(var(--fs-micro) / var(--hud-scale));
+  letter-spacing: var(--ls-4); color: var(--dim);
+}
+#results     { --sheet-w: 760px; --fit-at: 300px; }
+#standings   { --sheet-w: 760px; --fit-at: 300px; }
+/* Help uses a term rail beside a readable description column. At the old 700px
+   cap long explanations wrapped heavily; 1000px uses available desktop width
+   while viewport fitting still protects constrained/high-scale sheets. */
+#howtoplay   { --sheet-w: 1000px; }
+#spotifypanel { --sheet-w: 760px; --fit-at: 300px; }
+/* 760, not 560: on an 852 landscape phone the old cap left ~200px of
+   safe width unused while CLOUDY / 57 (FULL) wrapped inside a 180px
+   column. min(100%, …) still shrinks to the safe box; this only spends
+   room that exists (same number as settings / customize / vsfriend). */
+#race-settings { --sheet-w: 760px; --fit-at: 300px; }
+/* 760, not the 380 default. Seven chip rows at normal density overflow a
+   720-local portrait sheet and a 473-local 860×560 @115% window — REAL
+   sat under BACK/RACE (measured). Compact chrome + the 3-col pin need
+   to fire on those short-in-own-units sheets. inherits:false, so the
+   sheet node, not the dialog.
+   Measured against the ROOM the sheet has (sheetshape.js roomOwn), not
+   its content height: this sheet is content-sized, and its compact grid is
+   358 own px, so measuring the content kept a 1280×800 desktop (776 px of
+   room; the normal two-column layout is 514) on the phone layout for good.
+   Room 776 ≥ 760 → normal; a 390-tall landscape phone (366) stays compact. */
+#race-settings .sheet { --compact-at: 760px; }
+/* --fit-at on wide-shaped sheets (zoom-corrected), not viewport orientation. */
+#results .sheet:not([data-shape="tall"])     { --fit-at: 220px; }
+#standings .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
+#race-settings .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
+#spotifypanel .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
+#customize .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
+#pausemenu .sheet:not([data-shape="tall"])   { --fit-at: 180px; }
+/* Wide enough for three columns of rows on a landscape phone. At 560px the form
+   was two narrow columns and still ran 171px past the fold; the sheet is capped
+   by the safe-area width anyway, so this only ever spends room that exists. */
+#customize   { --sheet-w: 760px; --fit-at: 300px; }
+/* THE ONE THAT WAS MISSING. #vsfriend was the only dialog in the game with no
+   --sheet-w, so it fell through to the generic 520px fallback in `.sheet` — the
+   second-narrowest number in this table, on the screen with a TWO-COLUMN layout
+   (`#vs-two` goes 1fr 1fr at 620px, css/overlays.css). 61% of an 852px landscape
+   phone, with the rest black. 760px matches #pmsettings and #customize, which
+   are the other two that carry a form in two columns. */
+#vsfriend    { --sheet-w: 760px; }
+#vsfriend-inner { --fit-at: 280px; --compact-at: 480px; }
+#vsfriend-inner:not([data-shape="tall"]) { --fit-at: 200px; }
+#results .sheet,
+#standings .sheet,
+#customize .sheet { --compact-at: 480px; }
+
+/* Dialogs stack over a full screen (the team picker sits on the select screen),
+   so the scrim has to actually separate them — 0.6 left the sheet looking
+   washed with the menu behind it reading through. The fix is to fade the
+   UNDERLYING MENU chrome (rules just below), not to black out #game. */
+.screen.dim {
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    rgba(0, 0, 0, 0.42);
+}
+
+/* Fade the menu under a dim dialog — not the canvas. opacity, not hidden,
+   so layer queries and tests still match the open attribute. */
+body:has(dialog.screen:not([hidden])) #overlay {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#teampicker:not([hidden])) #select,
+body:has(#race-settings:not([hidden])) #select,
+body:has(#track-detail:not([hidden])) #select {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#customize:not([hidden])) #select,
+body:has(#season-setup:not([hidden])) #select {
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#career-offers:not([hidden])) #career,
+body:has(#career-history:not([hidden])) #career,
+body:has(#career-guide:not([hidden])) #career,
+body:has(#teampicker:not([hidden])) #career {
+  opacity: 0;
+  pointer-events: none;
+}
+/* The garage was the one host this family missed: CUSTOMIZE and the team
+   picker open OVER #carsetup, whose own chrome (unlike the race scene the
+   sheet translucency is tuned for) composited straight through the panel —
+   "DRIVER" ghosting inside the paint dialog's CODE field was this rule's
+   absence. opacity, not hidden, so the turntable canvas keeps its frustum. */
+body:has(#customize:not([hidden])) #carsetup,
+body:has(#teampicker:not([hidden])) #carsetup {
+  opacity: 0;
+  pointer-events: none;
+}
+/* #datahub is dialog.screen since round 11, so the generic rule above owns
+   fading the title under it — its bespoke copy of that rule left with the
+   migration. */
+body:has(#howtoplay:not([hidden])) #pmsettings {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Z-INDEX IS ONLY FOR THE SCREENS STILL IN NORMAL FLOW.
+   A screen migrated to `<dialog>.showModal()` (js/game/topmodal.js) renders in
+   the TOP LAYER, where z-index is not consulted at all — nothing in the document
+   can paint over it and no `overflow: hidden` or transformed ancestor can clip
+   it. Every migrated screen once carried a value here (#pausemenu 30,
+   #pmsettings 35, #race-settings 30, #spotifypanel 42, #advanced 41 …) and
+   every one of them was dead: inert numbers that still LOOK like a working
+   ladder, which is worse than a ladder, because the next person maintains them.
+   Deleted — this file declares no screen z-index at all. The screens still in
+   normal flow because they own or gate a flow are the `<div>`s #select and
+   #career (z 25, css/menus.css / css/career.css) and #carsetup (z 35,
+   css/carsetup.css); their values live beside the screens they order. */
+
+/* One-per-line stacks (pause menu, settings groups, results actions). */
+.stack { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
+.stack button { width: 100%; margin: 0; }
+
+/* ONE primary, and it is RESUME.
+   This stack used to carry four different visual languages: RESUME filled red,
+   RESTART plain, SETTINGS outlined red, STANDINGS outlined yellow. Three
+   competing accents in five buttons means none of them reads as "the one you
+   want", and the outlined-red SETTINGS in particular looked like a second
+   primary sitting under the real one. Everything that is not RESUME is now the
+   same neutral secondary, so the eye lands in one place.
+   QUIT is the exception the other way: it is the only destructive item here, so
+   it gets a rule above it and a muted red label — visibly apart from the two
+   harmless ones, without shouting louder than RESUME. */
+/* RESUME IS A FULL-WIDTH PRIMARY IN THE STACK, not a control in the title bar.
+   It spent a spell in .sheet-head paired with the PAUSED heading, on the
+   reasoning that it "stays in the fixed head while the pause actions scroll".
+   Measured, that never bit: RESUME is the FIRST item in the stack, so it is
+   visible without scrolling at every viewport and UI SIZE the sheet supports
+   (852x393 / 667x375 / 1000x456 / 1280x720 at 40, 100, 150 and 200 %). What the
+   pairing did cost was the read — the primary action sat in a red title bar on
+   its own red fill, at --tap-sm rather than a full row, competing with the
+   heading instead of leading the list it belongs to. */
+#pm-resume {
+  background: var(--grad-primary); color: var(--text) !important; border-color: transparent;
+  font-weight: 700; font-size: var(--fs-5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+    0 6px 20px color-mix(in oklab, var(--red) 42%, transparent);
+}
+#pm-quit {
+  color: color-mix(in oklab, var(--red) 62%, #fff);
+  margin-top: calc(var(--gap) * 0.5);
+  border-top-color: var(--plate-line);
+  position: relative;
+}
+#pm-quit::before {
+  content: ""; position: absolute; left: 10%; right: 10%;
+  top: calc(var(--gap) * -0.5 - 1px); height: 1px;
+  background: rgba(255, 255, 255, 0.10);
+}
+/* Compact pause stack: on a short landscape phone at UI SIZE 150% four
+   --tap-tall buttons + head overflow the sheet (measured stack 330 / sheet
+   373, quit past vh). Beat `.sheet-body > button { min-height: var(--tap) }`
+   with a lower floor in own units — 36×1.5 zoom still paints ≥54px, well
+   above the 24px WCAG floor. Type size untouched; HUD hide in css/hud.css
+   clears the bottom telemetry behind the scrim. */
+#pausemenu .sheet[data-density="compact"] .stack {
+  gap: 4px;
+}
+#pausemenu .sheet[data-density="compact"] .stack button {
+  /* max() with the WCAG floor: the flat 36px was derived for scales >=100%
+     ("36 x 1.5 zoom still paints >=54px") and never considered <100% — the
+     pause sheet is compact by its own units at 40% too, where 36 local
+     painted RESUME at 14-18px (2026-08-21 sweep, pause @40, every
+     viewport). --tap-min only wins below 100%, so the 150% rationale above
+     is untouched. */
+  min-height: max(36px, var(--tap-min));
+  padding-block: 6px;
+}
+#pausemenu .sheet[data-density="compact"] #pm-quit {
+  margin-top: 4px;
+}
+#pausemenu .sheet[data-density="compact"] .build-tag {
+  margin: 2px 0 0;
+}
+/* Opaque enough that leftover HUD cannot read through the card. Color is
+   the original dim wash, not carnival inks.
+   --pause-wash / --pause-scrim are the PAUSE MENU › BACKGROUND setting
+   (js/ui/pause-opts.js → html[data-pause-dim], rules below). Unset, the
+   fallbacks ARE the shipped numbers, so the default card is unchanged. */
+#pausemenu.screen.dim {
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--pause-wash, 14%), transparent), transparent 58%),
+    rgba(6, 6, 10, var(--pause-scrim, 0.58));
+}
+/* PAUSE MENU player settings (APPEARANCE › PAUSE MENU, js/ui/pause-opts.js).
+   Each lands on <html> only when it differs from the shipped look.
+   BACKGROUND sets the two tokens on BOTH layers that paint the scrim — the
+   card's own box above, and its ::backdrop (dialog.screen.dim::backdrop
+   below reads the same pair). Declared on the ::backdrop itself, not left to
+   inherit: older engines give ::backdrop no parent to inherit from. The
+   reduced-transparency backdrop rule still wins: same specificity, later. */
+:root[data-pause-dim="soft"] #pausemenu { --pause-wash: 7%; --pause-scrim: 0.29; }
+:root[data-pause-dim="soft"] #pausemenu::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
+:root[data-pause-dim="off"] #pausemenu,
+:root[data-pause-dim="off"] #pausemenu::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
+/* SIDE: the dialog is a one-column grid (.screen) — move its one item. */
+:root[data-pause-side="left"] #pausemenu { justify-items: start; }
+:root[data-pause-side="right"] #pausemenu { justify-items: end; }
+/* Two-up secondary doors. A 420×232 card on 852×393 spent its height on four
+   full-width --tap rows; RESTART | SETTINGS share a row so RESUME stays the
+   one full-width primary and QUIT stays the one full-width destructive. */
+#pausemenu .sheet-body.stack {
+  display: grid;
+  /* minmax(0,1fr), not bare 1fr: a bare 1fr floors at min-content, so at
+     UI SIZE 200% on a portrait phone the RESTART|SETTINGS row forced both
+     tracks to ~222px inside a 175px pane and every spanning button ran 105px
+     past the sheet (measured 2026-08-21). The 0 floor lets labels wrap
+     instead — same bug family as the auto-fill grids. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: calc(var(--gap) * 0.6);
+  align-items: start;
+}
+/* LAYOUT: LIST — every door gets its own full-width row. */
+:root[data-pause-layout="list"] #pausemenu .sheet-body.stack { grid-template-columns: minmax(0, 1fr); }
+#pm-resume,
+#pm-quit,
+#pm-standings,
+#pm-howto,
+#pm-build,
+#pm-now-card { grid-column: 1 / -1; }   /* the NOW PLAYING card spans the pair grid like the build tag */
+#pm-quit { margin-top: calc(var(--gap) * 0.65); }
+/* The card's transport keeps the --chip-h square every other small control
+   has (css/tuner.css .as-tbtn): the stack's own button rules — full width,
+   compact padding — must not reshape it. */
+#pausemenu .sheet .stack .as-tbtn {
+  width: var(--chip-h);
+  min-width: var(--chip-h);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  flex: 0 0 var(--chip-h);
+  padding: 0;
+  margin: 0;
+}
+#pausemenu .sheet-body.stack > button:not(#pm-resume):not(#pm-quit) {
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+#pausemenu .bigbtn.alt {
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+/* CONFIRM QUIT: the first press ARMS the button (js/ui/pause-opts.js) — the
+   same armed fill as every other two-press guard. The extra :not(#pm-resume)
+   is specificity, not logic: it has to outrank the three-id secondary-door
+   rule above, which would otherwise repaint an armed RESTART as a plain plate. */
+#pausemenu .sheet-body.stack > button:is(#pm-quit, #pm-restart):not(#pm-resume).armed {
+  background: var(--armed-fill);
+  border-color: var(--red);
+  color: var(--text);
+}
+} /* @layer components */

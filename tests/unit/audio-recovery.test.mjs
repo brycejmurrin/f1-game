@@ -9,11 +9,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8").replace(/^const\b/gm, "var");
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+  fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const param = (v) => ({ value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, cancelScheduledValues() {} });
 function boot(opts = {}) {
   const started = [];
-  const node = (kind) => { const n = { kind, connect: (t) => t, disconnect() {}, start() { started.push(n); }, stop() {}, type: "", loop: false, loopStart: 0, loopEnd: 0, buffer: null, onended: null,
+  const listeners = {};
+  const node = (kind) => { const n = { kind, connect: (t) => t, disconnect() {}, start(...args) { n.startArgs = args; started.push(n); }, stop() {}, type: "", loop: false, loopStart: 0, loopEnd: 0, buffer: null, onended: null,
     gain: param(1), frequency: param(440), detune: param(0), Q: param(1), playbackRate: param(1), pan: param(0) }; return n; };
   let resumes = 0;
   const ctx = { currentTime: 0, state: opts.state || "running", sampleRate: 8000, destination: node("dest"),
@@ -21,20 +23,51 @@ function boot(opts = {}) {
     createDynamicsCompressor: () => Object.assign(node("comp"), { threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) }),
     createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
     decodeAudioData: (ab, res, rej) => (opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
-    resume: () => { resumes++; return Promise.resolve(); }, close: () => Promise.resolve() };
+    resume: () => { resumes++; return Promise.resolve(); }, suspend: () => { ctx.state = "suspended"; return Promise.resolve(); }, close: () => Promise.resolve() };
   const fetched = [];
   const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
-    document: { addEventListener() {}, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
+    document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {}, navigator: {}, AudioContext: function () { return ctx; },
     fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(8), { _url: url })) }); } };
   sb.window = sb;
+  if (opts.clock) sb.Date = { now: opts.clock };
   const v = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v);
   vm.runInContext(SRC, v);
-  return { A: vm.runInContext("GameAudio", v), started, fetched, resumes: () => resumes };
+  return { A: vm.runInContext("GameAudio", v), started, fetched, resumes: () => resumes, ctx, document: sb.document, listeners };
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+
+test("hiding resumes a track from its position; an explicit stop starts it fresh", async () => {
+  const { A, started, fetched, ctx, document, listeners } = boot();
+  A.init(); A.startMusic(); await flush();
+  const musicSources = () => started.filter((n) => n.kind === "src" && !n.loop);
+  assert.equal(musicSources().at(-1).startArgs[1], 0);
+  ctx.currentTime = 1.25;
+  document.hidden = true; listeners.visibilitychange(); await flush();
+  assert.equal(ctx.state, "suspended");
+  document.hidden = false; listeners.visibilitychange(); await flush();
+  assert.equal(musicSources().at(-1).startArgs[1], 1.25, "hide carries the soundtrack resume position across teardown");
+  assert.equal(fetched.filter((url) => /music/.test(url)).length, 1, "show reuses the decoded buffer");
+  A.stopMusic(); A.startMusic(); await flush();
+  assert.equal(musicSources().at(-1).startArgs[1], 0, "a deliberate stop discards the resume position");
+});
+
+test("gesture recovery clears the soundtrack cache and restores the running track", async () => {
+  let clock = 1000;
+  const { A, fetched, ctx } = boot({ clock: () => clock });
+  A.init(); A.startMusic(); await flush();
+  A.playTrackId("builtin:song3"); await flush();
+  const generation = A.ctxGen();
+  ctx.state = "interrupted";
+  A.init(); await flush();
+  clock += 1000;
+  A.init(); await flush();
+  assert.equal(A.ctxGen(), generation + 1, "a later gesture rebuilds the stalled context");
+  assert.equal(A.currentTrackId(), "builtin:song3", "the soundtrack remembers its playlist position");
+  assert.equal(fetched.filter((url) => /song3/.test(url)).length, 2, "the replacement context decodes its own buffer");
+});
 
 
 test("turning SOUND EFFECTS on mid-race starts the rain the race asked for", async () => {
@@ -95,7 +128,7 @@ test("a race started in a HIDDEN tab never wakes the context the hide path suspe
 });
 
 test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume restores music + rain", () => {
-  const g = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const g = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8") + fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   // keydown is activation-triggering (html.spec.whatwg.org/multipage/interaction.html#activation-triggering-input-event); Escape is not.
   assert.match(g, /const GESTURE_EVTS = \["pointerdown", "pointerup", "touchend", "keydown", "click"\];/);
   assert.match(g, /if \(gestured \|\| !isActivation\(e\)\) return;/);

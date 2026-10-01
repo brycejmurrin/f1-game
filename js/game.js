@@ -71,359 +71,20 @@ let _backendBound = false;
 // Renderer/optional groups keep their graceful fallback; data's eval-time
 // dependencies request strict loading so a failed predecessor never executes
 // hub.js and poisons its top-level lexical binding for the entire page.
-const BACKEND_FILES = ApexRoster.DEFERRED;
-const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
-function loadBackendScripts(files, edges, opts) {
-  const strict = !!(opts && opts.strict);
-  const loaded = opts && opts.loaded;
-  const pending = new Set(files.filter((f) => !loaded || !loaded.has(f)));
-  const done = new Set(loaded || []), inflight = new Set();
-  const preds = new Map(files.map((f) => [f, []]));
-  for (const [a, b] of (edges || BACKEND_EDGES)) {
-    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
-  }
-  const inject = (src) => new Promise((resolve) => {
-    const el = document.createElement("script");
-    el.src = src + "?v=" + (window.__APEX_BUILD || 0);
-    el.crossOrigin = "anonymous";
-    // MARKED so index.html's broken-install repair (sweeps every SW cache and
-    // reloads) leaves it alone: that repair is right for a shell tag the CDN
-    // has not published yet, but a load error here already RESOLVES (a missing
-    // global IS the fallback), so a reload would throw away a working
-    // degradation path — and loop, since the one-shot guard already cleared.
-    if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
-    el.onload = () => {
-      let ready = true;
-      try { if (opts && opts.ready) ready = !!opts.ready(src); }
-      catch (e) { ready = false; }
-      resolve(ready);
-    };
-    el.onerror = () => { if (el.remove) el.remove(); resolve(false); };
-    document.head.appendChild(el);
-  });
-  return new Promise((finish) => {
-    let failed = false;
-    const pump = () => {
-      if (failed && strict) { if (!inflight.size) finish(false); return; }
-      if (!pending.size && !inflight.size) { finish(!failed); return; }
-      for (const src of files) {
-        if (!pending.has(src)) continue;
-        if (!preds.get(src).every((p) => done.has(p))) continue;
-        pending.delete(src);
-        inflight.add(src);
-        inject(src).then((ok) => {
-          inflight.delete(src);
-          if (ok) { done.add(src); if (loaded) loaded.add(src); }
-          else { failed = true; if (!strict) done.add(src); }
-          pump();
-        });
-      }
-    };
-    pump();
-  });
-}
-// LAZY_AGENT. Not SW-optional (V8 full-compiles install puts). Players on
-// github.io skip this; tests and localhost inject.
-const AGENT_FILES = ApexRoster.LAZY_AGENT;
-const AGENT_EDGES = ApexRoster.LAZY_EDGES;
-// LAZY_RACE — the race payload, fetched before the first race.
-const RACE_FILES = ApexRoster.LAZY_RACE;
-// LAZY_SCENERY (tools/manifest.cjs): one file per circuit, ~27 KB each, holding
-// that circuit's bespoke scenery() closure — all 40 were 1,083 KB of boot
-// script for a session that builds ONE of them.
-//
-// This one needs a real gate, unlike the presets: Tracks.build() is
-// synchronous and every loadTrack() caller uses `track` on the next line, so
-// the closure must be resident BEFORE loadTrack runs. Hence a promise at each
-// of the three entries that can reach a circuit not yet loaded: the menu
-// flyby, startRace(), and openQuali(). Everything else only ever re-loads the
-// circuit already on screen.
-const SCENERY_DIR = ApexRoster.SCENERY_DIR;
-function sceneryResident(id) {
-  return !!(window.TrackScenery && window.TrackScenery[id]);
-}
-// Memoised on the in-flight PROMISE (the ensureDataHub idiom below): several
-// callers ask for the same circuit before sceneryResident() goes true and
-// would each inject their own copy (28-58 KB, up to four times). Cleared on
-// settle so a dropped fetch retries.
-const _sceneryLoads = new Map();
-function ensureScenery(idx) {
-  const def = Tracks.LIST[idx];
-  if (!def || sceneryResident(def.id)) return Promise.resolve();
-  let p = _sceneryLoads.get(def.id);
-  if (!p) {
-    p = loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []).then(() => { _sceneryLoads.delete(def.id); });
-    _sceneryLoads.set(def.id, p);
-  }
-  return p;
-}
-// LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
-// menu button, which a session that never opens DATA runs no byte of. Unlike
-// the scenery closures, nothing outside reads a Data* global, so this needs
-// no gate beyond the button itself.
-const DATA_FILES = ApexRoster.LAZY_DATA;
-// hub.js calls Data*.create() at EVAL time, so every tab module lands first —
-// the manifest derives "everything, then the hub" and the roster carries it.
-const DATA_EDGES = ApexRoster.LAZY_DATA_EDGES;
-// Keep successfully evaluated script-level consts across a failed attempt:
-// reinjecting one on retry throws "Identifier has already been declared".
-const dataScriptsLoaded = new Set();
-const DATA_READY = {
-  "js/data/api.js": () => typeof F1API !== "undefined",
-  "js/data/telemetry.js": () => typeof DataTelemetry !== "undefined",
-  "js/data/export.js": () => typeof DataExport !== "undefined",
-  "js/data/schedule.js": () => typeof DataSchedule !== "undefined",
-  "js/data/standings.js": () => typeof DataStandings !== "undefined",
-  "js/data/results.js": () => typeof DataResults !== "undefined",
-  "js/data/live.js": () => typeof DataLive !== "undefined",
-  "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
-  "js/data/hub.js": () => typeof DataHub !== "undefined",
-};
-// Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
-// inject the bundle twice, and the second tap has to await the first load
-// rather than call DataHub.open() while hub.js is still in flight.
-let dataHubLoad = null;
-function ensureDataHub() {
-  if (dataHubLoad) return dataHubLoad;
-  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES, {
-    strict: true, loaded: dataScriptsLoaded,
-    ready: (src) => DATA_READY[src] && DATA_READY[src](),
-  }).then((complete) => {
-    // Bare global, not window.DataHub: hub.js is a script-level `const`, a
-    // lexical binding that is never a window property. Null the memo on an
-    // incomplete group so a later tap retries instead of latching failure.
-    // A failed sibling must not even START hub.js. The binding can be in its
-    // temporal dead zone after a script exception, so do not probe it on an
-    // incomplete load (even typeof throws in that case).
-    if (!complete) {
-      Log.warn("data", "the data hub bundle did not load — DATA stays closed");
-      dataHubLoad = null;
-      return false;
-    }
-    DataHub.init(els.datahub);
-    return true;
-  });
-  return dataHubLoad;
-}
-
-// LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack. Loaded from the ONE
-// player-facing entry (VS FRIEND) and, at boot, whenever the agent surface is
-// wanted: js/agent/apex.js reads NetTransport / NetSession / NetSnapshot and 22
-// netLobby methods directly and drives the multiplayer specs, so tying the two
-// together keeps every test and dev session behaving exactly as before and
-// confines this change to players, who load neither.
-const NET_FILES = ApexRoster.LAZY_NET;
-const NET_EDGES = ApexRoster.LAZY_NET_EDGES;
-let netLoad = null;
-function ensureNet() {
-  if (netLoad) return netLoad;
-  netLoad = loadBackendScripts(NET_FILES, NET_EDGES).then(() => {
-    if (typeof NetPlay === "undefined" || typeof NetLobby === "undefined") {
-      // inject() resolves on error, so this is the only place a miss shows.
-      // Keep the stubs (the game stays playable solo) and null the memo so a
-      // second attempt can succeed rather than latching for the session.
-      Log.warn("net", "the multiplayer bundle did not load — VS FRIEND unavailable");
-      netLoad = null;
-      return false;
-    }
-    netPlay = NetPlay.create(G);
-    netLobby = NetLobby.create(G);
-    // The real lobby binds #vsfriend here — the boot position the stub's inert
-    // wire() stood in for. Once, because ensureNet() memoises on the promise.
-    netLobby.wire();
-    return true;
-  });
-  return netLoad;
-}
-
-function wantAgentSurface() {
-  if (typeof window !== "undefined" && window.__TEST_MODE) return true;
-  try { if (localStorage.getItem("apex26.devApi") === "1") return true; } catch (_) { /* blocked */ }
-  const q = typeof location !== "undefined" ? location.search : "";
-  if (/[?&](apex|debug|report)(=|&|$)/.test(q)) return true;
-  if (typeof navigator !== "undefined" && navigator.webdriver) return true;
-  const h = typeof location !== "undefined" ? location.hostname : "";
-  return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
-}
-// Warm the vendored three island for the default or a stored THREE pick, so TLX is not
-// waiting on a cold module fetch after the roster injects it.
-function preloadThreeVendor() {
-  for (const href of ["vendor/three-0.186.0/three.webgpu.min.js", "vendor/three-0.186.0/three.tsl.min.js"]) {
-    const el = document.createElement("link");
-    el.rel = "modulepreload";
-    el.href = href;
-    el.crossOrigin = "anonymous";
-    document.head.appendChild(el);
-  }
-}
-function backendPreference() {
-  try {
-    if (typeof ApexXR !== "undefined" && ApexXR.bootPick) {
-      const xrPick = ApexXR.bootPick();
-      if (xrPick) return xrPick; // VR arm: non-persisted; never writes gfxBackend
-    }
-  } catch (_) { /* plan advisory */ }
-  try {
-    const pref = localStorage.getItem("apex26.gfxBackend");
-    const normalized = pref == null ? "three" : pref;
-    if (normalized === "webgl2" || normalized === "three" || normalized === "webgpu") return normalized;
-    localStorage.setItem("apex26.gfxBackend", "webgl2");
-    return "webgl2";
-  } catch (_) {
-    return "three";
-  }
-}
-function showGraphicsUnavailable() {
-  RendererPicker.showUnavailable({
-    panel: $("nogl"), hud: els.hud, overlay: els.overlay,
-    helpDialog: els.howtoplay, helpClose: $("htp-close"),
-    dataDialog: els.datahub, dataClose: $("dh-close-btn"),
-    ensureDataHub, openDataHub: () => DataHub.open(),
-  });
-}
-let _claimSkipped = false;   // this boot consumed a claim-fail latch
-try {
-  // Refresh apex26.xrCaps before sync bootPick (ms); first armed boot may still be 2D.
-  if (typeof ApexXR !== "undefined" && ApexXR.detect) {
-    try { await ApexXR.detect(); } catch (_) { /* caps stay cached */ }
-  }
-  let pref = backendPreference();
-  // Unset means THREE on every device; the boot canary below protects the
-  // default as well as stored THREE/WEBGPU picks.
-  // Last load claimed the canvas then died — skip opt-in THIS tab only
-  // (sessionStorage). Do not wipe the pick: Safari's navigator.gpu can be on
-  // while WGX/TLX still refuse, and writing webgl2 bounced the RENDERER
-  // button back every refresh.
-  let skipClaim = false;
-  try { _claimSkipped = skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
-    if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { skipClaim = _claimSkipped = true; /* cannot persist a skip: never claim the canvas */ }
-  // THE BOOT CANARY — lets a phone hold a non-default backend past an iOS
-  // jetsam kill, which leaves no JS error or contextlost to recover from (the
-  // recovery below fires only when GLX.init FAILS). A probe arms before
-  // handing over the canvas and clears once the alternate is bound and has
-  // re-armed around the first world present(), so a jetsam on that frame
-  // still reverts; a probe still armed at the NEXT boot means create() or
-  // present() never completed last time.
-  const PROBE_KEY = "apex26.gfxBackendProbe";
-  let armed = null;
-  try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
-  // skipClaim = this tab already claimed-and-died; the probe is leftover from
-  // that load. Do not persist webgl2 over the pick — attach GLX this boot and
-  // retry the alternate on the next cold start.
-  // ONE STRIKE IS A MEMORY KILL, NOT A VERDICT: an iOS jetsam can be unrelated
-  // to the renderer, so persisting "webgl2" over the pick on the first armed
-  // probe silently retired a working choice forever. The first strike reverts
-  // THIS BOOT ONLY and leaves the pick alone; only a SECOND consecutive strike
-  // retires it (bounding a genuinely broken device to two attempts, no reload loop).
-  const STRIKE_KEY = "apex26.gfxProbeStrikes";
-  if (armed && !skipClaim) {
-    pref = "webgl2";
-    let strikes = 2;   // unreadable storage cannot count strikes: treat as final
-    try { strikes = (+localStorage.getItem(STRIKE_KEY) || 0) + 1; } catch (_) { /* blocked storage */ }
-    const retire = strikes >= 2;
-    Log.warn("gfx", "backend", armed, retire
-      ? "never presented a frame twice — WebGL2 is now the pick"
-      : "never presented a frame — WebGL2 for this boot; the pick survives one more try");
-    try {
-      localStorage.removeItem(PROBE_KEY);
-      if (retire) {
-        localStorage.setItem("apex26.gfxBackend", "webgl2");
-        localStorage.removeItem(STRIKE_KEY);
-      } else localStorage.setItem(STRIKE_KEY, String(strikes));
-    } catch (_) { /* the in-memory revert above still holds for this load */ }
-  }
-  // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
-  // self-falls-back to WebGL2 inside three so no capability gate here).
-  // A pick can only be honoured while its DEFERRED group still exists: without
-  // this guard, an absent group threw on `files.map` in loadBackendScripts
-  // after the probe had already armed, and the next boot warned about a
-  // backend that had never even been fetched.
-  const group = pref === "three" ? BACKEND_FILES.three
-              : pref === "webgpu" ? BACKEND_FILES.webgpu : null;
-  const optIn = !skipClaim && !!(group && group.length) &&
-    (pref === "three" || (pref === "webgpu" && navigator.gpu));
-  if (optIn && typeof Gfx !== "undefined") {
-    // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
-    try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
-    // FETCH THE BACKEND ONLY NOW: neither alternate has a <script> tag, so the
-    // ~550 KB is fetched only for the resolved deferred pick — `optIn` resolves
-    // synchronously from localStorage. The list is DEFERRED in
-    // tools/manifest.cjs (load-order.test.mjs
-    // asserts loader/manifest/sw.js precache agree); eval-time edges
-    // (BACKEND_EDGES === DEFERRED_EDGES) are the only waits. No error path is
-    // needed beyond this: a failed fetch leaves the backend global absent,
-    // which Gfx.create treats as unavailable and falls through to GLX.
-    if (pref === "three") preloadThreeVendor();
-    await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
-    const backend = await Gfx.create(canvas, {});
-    if (backend) {
-      // game.js and tracks.js take the backend by injection (the `gfx` handle
-      // / Tracks.build's opts.gfx) and need no patch. The descriptor-copy
-      // below is only for spec files that monkey-patch GLX.* by object
-      // identity and read the page-scope GLX global directly — identity IS
-      // their compatibility contract. Copy the backend's methods + live
-      // getters (width/height/aspect) onto GLX so `GLX.foo()` delegates.
-      // GLX's own WebGL context is never initialised here.
-      try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
-      catch (_) { gfx = null; }
-      // Bound and live. Title has no track yet (deferred flyby), so present()
-      // will not run — disarm here or a refresh on SETTINGS reverts the pick.
-      if (gfx) { _backendBound = true;
-        // The descriptor copy is the bind commit point. Clear any GLX latch
-        // left by an earlier same-tab fallback even if a deferred backend
-        // forgets to clear its own failure marker.
-        try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
-        try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no event surface */ }
-        try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ }
-      }
-    }
-  }
-} catch (_) { gfx = null; }
-if (!gfx) {
-  // Load GLX only when selected or needed after TLX/WGX refuses. A missing
-  // script must not trigger the claim-failure reload loop while offline.
-  if (typeof GLX.init !== "function") await loadBackendScripts(BACKEND_FILES.webgl2);
-  if (typeof GLX.init !== "function") { showGraphicsUnavailable(); return; }
-  if (!GLX.init(canvas)) {
-    // A failed backend opt-in (WGX or TLX) may have already claimed the
-    // canvas (getContext "webgpu"/"webgl2" succeeded before init died), so
-    // getContext("webgl2") can never attach on this load. Reload once with a
-    // session skip so THIS tab attaches GLX; keep the pick and disarm the
-    // canary or the next boot writes webgl2 (Safari WebGPU's usual path).
-    let backendTried = false;
-    const p = backendPreference();
-    backendTried = p === "webgpu" || p === "three";
-    let skipped = false;
-    if (backendTried) {
-      // Read the skip back before reloading — with sessionStorage blocked the
-      // write fails silently and the reload replays this claim-and-die boot
-      // forever. And reload ONCE: a latch already set when this boot started
-      // means the previous reload's GLX.init failed too and WebGL2 is gone
-      // from this tab (measured 236 reloads/64 s on a Vulkan-only config
-      // before this cap). Fall through to #nogl instead.
-      try { if (!_claimSkipped) {
-        sessionStorage.setItem("apex26.gfxClaimFail", "1");
-        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
-    }
-    if (skipped) {
-      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* storage blocked (private mode): the probe just stays armed */ }
-      try { location.reload(); } catch (_) { /* a reload that throws leaves the page as it is; nothing to recover */ }
-      return;
-    }
-    showGraphicsUnavailable(); return;
-  }
-  gfx = GLX;
-  // Every path above converges here after GLX successfully attaches: an
-  // explicit WEBGL2 pick, claim-fail recovery, a canary first strike, or an
-  // alternate whose create() returned null. Publish what is actually drawing
-  // so SETTINGS and metrics never keep labelling the stored THREE/WGX pick.
-  try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick */ }
-  try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window/event surface */ }
-  // Live tab, create() refused. Keep the pick and disarm the canary so a
-  // refresh retries instead of reverting to WEBGL2. Jetsam during create()
-  // never reaches here — the probe stays armed and the next boot reverts.
-  try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
-}
+const { load: loadBackendScripts } = ScriptLoader.create();
+const lazyBundles = LazyBundles.create({
+  els, loadBackendScripts, getContext: () => G,
+  applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
+  createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
+  bindAgent: () => { if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G); },
+});
+const { SCENERY_DIR, sceneryResident, ensureScenery, ensureDataHub, ensureNet, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
+const { backendPreference } = rendererBoot;
+const backendBoot = await rendererBoot.start();
+if (!backendBoot) return;
+gfx = backendBoot.gfx;
+_backendBound = backendBoot.bound;
 // Baked asset pack (js/render/shared/assets.js). Bind the resolved backend, then kick
 // the material-array load WITHOUT awaiting it: a pack is optional, the load is
 // feature-detected per backend, and every failure path inside leaves the game
@@ -2831,34 +2492,8 @@ function launchFlyingLap() {
   announce("QUALIFYING LAP", 1.6, "info");
 }
 
-// SCREEN WAKE LOCK for a race; browsers release it whenever the page hides.
-let raceWake = null;
-let raceWakePending = null;
-let raceWakeWanted = false;
-function holdRaceWake() {
-  raceWakeWanted = true;
-  try {
-    if (!navigator.wakeLock || raceWake || raceWakePending) return;
-    const pending = navigator.wakeLock.request("screen");
-    raceWakePending = pending;
-    pending.then((lock) => {
-      if (raceWakePending === pending) raceWakePending = null;
-      if (!raceWakeWanted || document.hidden) {
-        try { lock.release(); } catch (e) { Log.info("game", "late wake-lock release failed"); }
-        return;
-      }
-      raceWake = lock;
-      // An old sentinel may release after a replacement exists: compare identity.
-      lock.addEventListener("release", () => { if (raceWake === lock) raceWake = null; });
-    }).catch(() => { if (raceWakePending === pending) raceWakePending = null; });
-  } catch (e) { /* unsupported or refused: the screen just sleeps as normal */ }
-}
-function dropRaceWake() {
-  raceWakeWanted = false;
-  const held = raceWake;
-  raceWake = null;
-  try { if (held) held.release(); } catch (e) { Log.info("game", "wake lock was already released"); }
-}
+const raceWakeLock = RaceWakeLock.create();
+const { hold: holdRaceWake, drop: dropRaceWake } = raceWakeLock;
 
 // ASYNC only to await ensureScenery() — see the LAZY_SCENERY note above. Every
 // caller is a click handler that ignores the result and makes startRace() its
@@ -8648,42 +8283,12 @@ function enableTilt() {
 // fallback the player did not choose must also reach the banner.
 function tiltSay(msg) { els.audiostate.textContent = msg; if (msg) announce(msg.toUpperCase(), 3, "info"); }
 
-function firstGesture() {
-  GameAudio.setEnabled(soundOn);
-  GameAudio.setMusicEnabled(musicEnabled);
-  // Tilt permission is requested at race start (rs-go click), not here — so the
-  // gyro prompt and button fallback don't appear on the title screen.
-  if (soundOn) { GameAudio.init(); GameAudio.startMusic(-1); }
-  // Unconditional, not gated on soundOn: unlock() is silent and idempotent, and
-  // the alternative means a player who turns the radio on from a KEYBOARD-driven
-  // pause menu never gets the priming gesture iOS wants.
-  radioVoice.unlock();
-}
-// A keyboard-only player never sends pointerdown: keydown (bar Escape, which is not
-// activation-triggering — html.spec.whatwg.org/#activation-triggering-input-event) and
-// click unlock audio too. One shared one-shot flag; every listener unhooks together.
-// ACTIVATION, NOT FIRST CONTACT: a FINGER's pointerdown is not activation-triggering
-// (only a mouse's is; touch activates on pointerup / touchend). Spending the one-shot
-// on it ran radioVoice.unlock() outside a user activation, so WebKit refused the
-// priming speak() and the tap's own click, arriving after the listeners had
-// unhooked, never retried: every phone flyby, radio call and race-control line was
-// then silent (WebAudio kept working — engine.js resumes on its own touchend).
-let gestured = false;
-const GESTURE_EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
-function isActivation(e) {
-  if (e.type === "keydown") return e.key !== "Escape";
-  if (e.type === "pointerdown") return e.pointerType === "mouse";
-  if (e.type === "pointerup") return e.pointerType !== "mouse";
-  return true;   // touchend, click
-}
-function onFirstGesture(e) {
-  if (gestured || !isActivation(e)) return;
-  gestured = true;
-  for (const t of GESTURE_EVTS) document.removeEventListener(t, onFirstGesture, true);
-  firstGesture();
-}
-for (const t of GESTURE_EVTS) document.addEventListener(t, onFirstGesture, true);
-
+// Install at the original UI-wiring point; callbacks read live preferences through G.
+const platformSession = PlatformSession.create(G, {
+  canvas, raceWakeLock, disarmProbeOnLeave: () => _disarmProbeOnLeave(),
+  setPaused, ensureNet, settingsBack: () => settingsNav.back(), closeSettings, showTouchControls, refreshGearsBtn,
+});
+platformSession.wireFirstGesture();
 
 // UI SIZE / HUD SIZE + RESOLUTION live in js/ui/scale.js (UiScale.create(G)
 // — wired after Menus). Bug-explaining comments moved with the block.
@@ -8697,80 +8302,10 @@ for (const t of GESTURE_EVTS) document.addEventListener(t, onFirstGesture, true)
 // It self-inits at DOMContentLoaded, so there is nothing to call from here.
 
 
-$("mb-race").onclick = () => {
-  setFlow("gp"); session = "race";
-  restoreFreePlaySelection();
-  buildSelect();
-  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-  if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
-};
-// Optional markup must not turn one missing screen into a whole-app boot failure.
-if ($("mb-vs")) $("mb-vs").onclick = () => {
-  // The peer-to-peer lobby starts the race once both sides agree.
-  setFlow("gp"); session = "race";
-  restoreFreePlaySelection();
-  // The bundle lands before the screen does; ensureNet() wires the real lobby.
-  ensureNet().then((ok) => { if (ok) netLobby.open(); });
-  if (soundOn) GameAudio.uiSelect();
-};
-function openTimeTrial(selectDaily) {
-  setFlow("gp"); session = "tt";
-  if (selectDaily) daily.select();
-  else restoreFreePlaySelection();
-  buildSelect();
-  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-  if (soundOn) GameAudio.uiSelect();
-  // Daily selection already names the exact circuit/weather/time. Do not first
-  // arm a free-play scene that is immediately discarded.
-  if (!selectDaily) scheduleFlybyTrack(true);
-}
-$("mb-tt").onclick = () => openTimeTrial(false);
-async function consumeGhostHash() {
-  // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
-  if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
-    notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
-  });
-  if (!shared || !shared.ok) return shared;
-  setFlow("gp"); session = "tt";
-  const today = DailyChallenge.dayKey();
-  if (shared.day && shared.day === today) {
-    daily.select(shared.day);
-  } else {
-    daily.stop();
-    restoreFreePlaySelection();
-    const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
-    if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
-    trackIdx = idx;
-  }
-  buildSelect();
-  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-  scheduleFlybyTrack(true);
-  return shared;
-}
-consumeGhostHash();
-window.addEventListener("hashchange", consumeGhostHash);
-$("mb-season").onclick = () => {
-  setFlow("season"); session = "race";
-  // Replace any career alias with the repaired standalone save; finished stays readable.
-  season = SeasonCal.load();
-  // Finished championship: trackIndex(rounds()) is -1 — park the flyby on the
-  // last raced circuit instead of crashing loadTrack.
-  let ti = SeasonCal.trackIndex(season.round);
-  if (ti < 0) {
-    const last = SeasonCal.rounds() - 1;
-    ti = last >= 0 ? SeasonCal.trackIndex(last) : 0;
-  }
-  trackIdx = ti;
-  buildSelect();
-  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-  if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
-};
-// Career's calendar is fixed, so its hub replaces the circuit picker.
-function openCareer() {
-  setFlow("career"); session = "race";
+const { openTimeTrial, consumeGhostHash, openCareer, openCareerSlots, refreshCareerButton } = TitleFlow.create(G, {
+  vt, restoreFreePlaySelection, careerUi, ensureNet,
+  refreshTitle: () => { seasonUi.refreshTitle(); titleMenu.refresh(); },
+  selectCareer: () => {
   const c = Career.data() || Career.load();
   if (c) {
     season = c.season;               // the SAME object — see endRace()
@@ -8781,22 +8316,8 @@ function openCareer() {
     driverIdx = c.seat;
     recomputePlayerMods();
   }
-  // vt: the same crossfade RACE / SEASON / GARAGE already take off the title.
-  vt(() => { careerUi.openHub(); els.overlay.hidden = true; });
-  if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack(true);   // the hub's next round, pre-built behind it
-}
-// The same entry, stopping at the slot picker. Deliberately does NOT engage the
-// career flow: nothing has been chosen yet, so a save's rules must not be live —
-// the picker's own handler calls openCareer() once a slot is taken.
-function openCareerSlots() {
-  vt(() => { careerUi.openSlots(); els.overlay.hidden = true; });
-  if (soundOn) GameAudio.uiSelect();
-}
-function refreshCareerButton() {
-  seasonUi.refreshTitle();
-  titleMenu.refresh();
-}
+  },
+});
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => {
@@ -9260,21 +8781,7 @@ $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) r
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
-// BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
-// own, so a stale shell (or a service worker serving a cached generation) can run
-// old JS with nothing on screen to say so — during one camera-bug hunt a fix was
-// deployed three times while the reporter kept testing the previous build, and
-// neither side could tell. Read from the stylesheet's ?v=, which is the build
-// whose assets ACTUALLY loaded, rather than a constant compiled into the markup:
-// a string in the HTML would go stale with the HTML and confirm the wrong thing.
-{
-  const tag = $("pm-build");
-  if (tag) {
-    const meta = document.querySelector('meta[name="apex-build"]');
-    const build = meta && meta.content;
-    tag.textContent = build ? `build ${build}` : "build unknown";
-  }
-}
+platformSession.paintBuild();
 
 // STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
 const STEER_MODES = ["tilt", "buttons", "touch"];
@@ -9311,132 +8818,10 @@ SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "latch",
 SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
   read: () => (mirrorControls ? "on" : "off"),
   write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });
-/* FULLSCREEN, AND THE REASON IT EXISTS HERE IS ESCAPE.
-   In fullscreen the browser spends the Escape key on leaving fullscreen, so a
-   pause handler never sees it. navigator.keyboard.lock(['Escape']) is the
-   sanctioned way to claim the key back — and it is only callable while the
-   document is in ELEMENT fullscreen, which this game had no way to enter at
-   all, so the fix had nothing to attach to until now.
-   Chromium honours the lock (the escape hatch is a 2-second Escape hold, so no
-   page can trap anyone); Firefox and Safari ship no Keyboard Lock, and there
-   Escape keeps leaving fullscreen — which is the other half of why PAUSE
-   became a rebindable key rather than staying welded to P.
-   iPhone Safari has no element fullscreen at all, so the row hides itself
-   rather than offering a control that cannot work. */
-const fsOk = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
-function paintFullscreenRow() {
-  const row = $("pm-fullscreen");
-  if (!row) return;
-  row.hidden = !fsOk();
-  const note = $("pm-fullscreen-note");
-  if (note) note.hidden = !fsOk();
-  SettingRow.paint(row, document.fullscreenElement ? "on" : "off");
-}
-if ($("pm-fullscreen")) {
-  SettingRow.wire("pm-fullscreen", { values: SettingRow.labels(["off", "on"]),
-    read: () => (document.fullscreenElement ? "on" : "off"),
-    write: (v) => {
-      if (v === "on") {
-        const el = document.documentElement;
-        const req = el.requestFullscreen || el.webkitRequestFullscreen;
-        if (req) Promise.resolve(req.call(el)).then(() => { Input.lockEscape(); if (state === "race" || state === "count") Input.lockLandscape(); }).catch(() => paintFullscreenRow());
-      } else if (document.fullscreenElement) {
-        Input.unlockEscape(); Input.unlockLandscape();
-        if (document.exitFullscreen) document.exitFullscreen().catch(() => { /* already gone */ });
-      }
-    } });
-  // The player can leave fullscreen without us (Esc, F11, the OS), so the row
-  // follows the DOCUMENT rather than remembering what it last asked for.
-  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) { Input.unlockEscape(); Input.unlockLandscape(); } paintFullscreenRow(); });
-  paintFullscreenRow();
-}
-/* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS. Element fullscreen
-   has never shipped on iPhone Safari (iPad only, and there the browser draws an
-   overlay button you cannot remove), so the row above is hidden on iOS and this
-   takes its place. Standalone also gives what a race actually needs: a viewport
-   that does not move, because there are no toolbars to collapse mid-corner.
-   As of iOS 26 every site added to the Home Screen opens as a web app with no
-   manifest metadata required, so this is a one-tap suggestion rather than a
-   setup guide. Shown once, ever. */
-(function iosInstallNudge() {
-  const el = $("ios-install");
-  if (!el) return;
-  const nav = navigator;
-  const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
-    (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
-  const standalone = !!(nav.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
-  if (!ios || standalone || store.get("iosInstallSeen", false)) return;
-  const dismiss = () => { el.hidden = true; store.set("iosInstallSeen", true); };
-  el.hidden = false;
-  const x = $("ios-install-x");
-  if (x) x.onclick = dismiss;
-  // It is a suggestion, not a gate: the first title-menu choice dismisses it,
-  // or it sat over the next screen's BACK/DONE and the HUD's speed readout.
-  const ov = $("overlay");
-  if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) dismiss(); });
-  setTimeout(dismiss, 15000);
-})();
+platformSession.wireInstall();
 applyMirrorControls();
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false, "recalibrate"); };
-// PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
-// multiplayer stack the pairing rides on, then the module owns the pairing and
-// feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
-let phonePad = null;
-// The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
-// screen shows VISOR (the cockpit without its steering wheel — js/camera/vantage.js) while
-// it drives, and goes back when the phone is gone, unless the player cycled away meanwhile.
-let phonePadCam = -1;
-const VISOR_CAM = CAM_MODES.findIndex((c) => c.id === "visor");
-// The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
-function phonePadDash() {
-  const p = player;
-  if (!p) return null;
-  const D = PhonePad.DASH, xOpen = (p.aeroX || 0) > 0.05;
-  const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
-    | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (isTimeTrial() ? D.timeTrial : 0)
-    | (paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0)
-    // The control modes, so the wheel offers only what the driver operates.
-    | (gearsManual() ? 0 : D.gearsAuto) | (autoThrottle() ? D.throttleAuto : 0)
-    | (raceAeroMode === "auto" ? D.aeroAuto : 0) | (aeroZ && aeroZ.zones && aeroZ.zones.length ? 0 : D.aeroNone);
-  return { gear: p.gear, kmh: dashKph(p.speed), rpm: (p.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), lap: p.lap, laps: lapsTarget,
-    pos: p.rank, cars: cars.length, ers: p.energy, flags, caution: cautionLevel(), lastLapMs: (p.lastLap || 0) * 1000,
-    state, team: PhonePad.teamHex(p.team && p.team.color) };
-}
-$("pm-phonepad").onclick = () => {
-  const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad) {
-    phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
-    if (phonePadCam >= 0 && camMode === VISOR_CAM) setCamMode(phonePadCam);   // what lost() does: cancel() closes the link without calling it
-    phonePadCam = -1;
-    return;
-  }
-  box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
-  ensureNet().then((ok) => {
-    if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
-    $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
-    phonePad = PhonePad.host({
-      hud: phonePadDash,
-      say: (t) => { status.textContent = t; },
-      qr: (url, code) => {
-        LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
-        $("pm-phonepad-code").textContent = code || "";
-        $("pm-phonepad-pair").hidden = !code;
-        // The code appears below the button: bring it into view on the sheet,
-        // or a short screen shows "scan the code" with nothing to scan.
-        if (code && box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
-      },
-      linked: () => {
-        btn.textContent = "UNPAIR PHONE"; announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
-        if (VISOR_CAM >= 0 && camMode !== VISOR_CAM) { phonePadCam = camMode; setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
-      },
-      lost: () => {
-        btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; announce("PHONE DISCONNECTED", 3, "warn");
-        if (phonePadCam >= 0 && camMode === VISOR_CAM) setCamMode(phonePadCam);
-        phonePadCam = -1;
-      },
-    });
-  });
-};
+platformSession.wirePhone();
 keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)
 
@@ -9511,42 +8896,7 @@ function _disarmProbeOnLeave() {
   _probeArmed = false;
   try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage: nothing was armed */ }
 }
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) _disarmProbeOnLeave();
-  if (document.hidden && (state === "race" || state === "count")) setPaused(true, "hidden-tab");
-  // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
-  // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
-  // return to a live session.
-  if (document.hidden) PerfGov.sentinelArm(false);
-  else if (state === "race" || state === "count") PerfGov.sentinelResume();
-  // The platform releases a wake lock on every hide and does not give it
-  // back — re-request it here rather than a fourth listener elsewhere.
-  if (!document.hidden && raceWakeWanted) holdRaceWake();
-  // VS FRIEND: netPlay.tick runs only from rAF, which a hidden tab stops, so the
-  // rival timed us out after 6 s. Hidden timers still fire ~1 Hz (and WebRTC
-  // pages are exempt from intensive throttling): keep pinging while hidden.
-  // https://developer.chrome.com/blog/timer-throttling-in-chrome-88
-  clearInterval(_netHiddenPump); _netHiddenPump = 0;
-  if (document.hidden && netPlay.active()) _netHiddenPump = setInterval(() => netPlay.tick(performance.now()), 500);
-});
-let _netHiddenPump = 0;
-window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); });
-// LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
-// the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
-// or an overlay taking focus, left the car coasting off-line while the field
-// lapped. Settled for 250 ms (a focus hop inside the page is not a leave), never
-// in a friend race (the rival cannot be paused) and never under automation.
-window.addEventListener("blur", () => {
-  setTimeout(() => {
-    if (document.hidden || document.hasFocus() || navigator.webdriver || netPlay.active()) return;
-    if (state === "race" || state === "count") setPaused(true, "blur");
-  }, 250);
-});
-// …and the platform taking the AUDIO (an iOS call answered from the compact
-// banner keeps the page visible and focused): the race stops with the sound.
-if (GameAudio.onInterrupted) GameAudio.onInterrupted(() => {
-  if ((state === "race" || state === "count") && !netPlay.active()) setPaused(true, "audio-interrupted");
-});
+platformSession.wireLifecycle();
 
 // ---------- boot ----------
 // (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag
@@ -9577,59 +8927,7 @@ if (Tracks.LIST[trackIdx]) {
 Career.load();            // resolve + migrate the career save once at boot
 clampDriverIdx();         // MY TEAM gridDrivers() is 2 after load; team.drivers may still be 1
 refreshCareerButton();
-// `state` is closure-local, and js/ui/layers.js is what decides whether
-// Escape means PAUSE or BACK — hand it the answer rather than have it guess one
-// from the DOM. Same pair setPaused() gates on.
-UiLayers.setRaceGetter(() => state === "race" || state === "count");
-// Pause key: when the settings sub-menu is open it presses the same BACK
-// path (pop a page, then close); otherwise it toggles pause as usual.
-Input.init(canvas, { onPause: () => {
-  // Innermost sheet first: HOW TO PLAY lays OVER the settings menu, so a pause
-  // press there has to close the help sheet, not the menu underneath it (which
-  // would leave the help sheet floating over the race with no way back). Reached
-  // via the pause BUTTON / gamepad Start — a keyboard Esc never gets here while a
-  // menu sheet is up (onKey returns early on menuOverlayOpen(), js/input/input.js).
-  if (paused && els.howtoplay && !els.howtoplay.hidden) { els.howtoplay.hidden = true; return; }
-  if (paused && els.pmsettings && !els.pmsettings.hidden) {
-    if (settingsNav.back()) closeSettings();
-    return;
-  }
-  setPaused(!paused, "key");
-},
-/* A CONTROLLER LEAVING MID-RACE PAUSES THE RACE. Input already zeroes every
-   latch when the last pad goes (so a stale axis snapshot cannot leave the
-   throttle pinned), but the sim kept running — a flat battery at 300 km/h
-   meant watching the car coast into a wall with nothing to press. Pausing is
-   the convention for the same reason console certification tests it.
-   Only while actually racing: a pad unplugged at the title screen is not an
-   interruption, and pausing there would open the pause menu over the menus. */
-onPadLost: () => {
-  if (!UiLayers.inRace() || paused) return;
-  setPaused(true, "pad-lost");
-  announce("CONTROLLER DISCONNECTED — RECONNECT OR PRESS RESUME", 4, "coach");
-  Log.info("input", "paused: last gamepad disconnected");
-} });
-/* body.desktop IS A LIVE ANSWER, NOT A BOOT-TIME ONE: `(pointer: coarse)` flips
-   whenever an iPad is docked to or undocked from a keyboard, and
-   showTouchControls() reads the LIVE query. A stale body.desktop leaves GAS/BRAKE/
-   BOOST shown but unpressable — their tap size and `pointer-events: auto` are
-   `body:not(.desktop)` rules (css/overlays.css) — with #pm-steer and #pm-calib
-   hidden (css/responsive.css). Re-run everything that reads the query, in the
-   order boot does. */
-function syncPointerKind() {
-  const touch = Input.touchControlsNeeded();
-  document.body.classList.toggle("desktop", !touch);
-  // The phone's own door to the wheel page: a coarse pointer is the device
-  // that can BE the controller, so only it gets the buttons (title + CONTROLS).
-  $("mb-phonepad").hidden = !touch;
-  $("pm-phonepad-go").hidden = !touch;
-  if (state === "race" || state === "count") showTouchControls(true);
-  refreshGearsBtn();   // GEARS is enabled by thumbs being free, i.e. by this
-}
-syncPointerKind();
-Input.onPointerKindChange(syncPointerKind);
-Input.setSteerMode(steerMode);
-Input.setThrottleLatch(throttleLatchOpt);
+platformSession.initInput({ steerMode, throttleLatchOpt });
 // No DataHub.init here: js/data is LAZY_DATA, so ensureDataHub() (awaited by
 // the DATA button) initialises it.
 paintSteer();
@@ -9663,28 +8961,6 @@ requestAnimationFrame(tick);
 // a call-time read: an eval-time ApexApi.create is a ReferenceError on the
 // player path and a FULL toposort miss in scan-globals.
 window.__apex = null;
-// The INJECT, split from the boot GATE below so a player-facing consumer can
-// ask for it later. Memoised on the in-flight promise (the ensureScenery /
-// ensureDataHub idiom): boot and a METRICS toggle must never fetch it twice.
-let _agentLoad = null;
-function loadAgentSurface() {
-  if (!_agentLoad) _agentLoad = (async () => {
-    // js/net comes WITH the agent surface. apex.js reads NetTransport /
-    // NetSession / NetSnapshot at eval-adjacent call sites and drives 22
-    // netLobby methods the stub does not carry, so a dev session or a spec that
-    // got __apex without the real net would fail on the multiplayer hooks
-    // instead of on anything this change is about. Awaited BEFORE apex.js so
-    // ApexApi.create(G) sees the real objects through the G getters.
-    await ensureNet();
-    await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
-    if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
-  })();
-  return _agentLoad;
-}
-async function bootAgentSurface() {
-  if (!wantAgentSurface()) return;
-  await loadAgentSurface();
-}
 await bootAgentSurface();
 // SETTINGS > DISPLAY > METRICS reads CAR and PHYS entirely through __apex, so
 // on a Pages build — where wantAgentSurface() is false by design — those two
@@ -9699,29 +8975,7 @@ if (typeof GameMetrics !== "undefined" && GameMetrics.setTelemetryLoader)
 // fetches only when a player actually opens the panel.
 if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurface);
 
-// THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on
-// purpose: awaiting it here would put the 338 KB straight back on the
-// critical path. Nothing in a menu resolves lighting — applyRaceSettings()
-// first runs inside startRace() — so the fetch has the entire time a player
-// spends picking a circuit to land.
-//
-// No gate is needed because an ABSENT file is already a legal state:
-// light-store reads window.LightPresets at call time (`|| null`), so until it
-// arrives every knob resolves to its TUNE_DEFS default, and when it does
-// arrive applyLightTune() re-walks TUNE_DEFS and fires liveEffects only for
-// knobs that moved. Worst case is a frame of default lighting, not a wrong
-// scene that stays wrong.
-raceAssets();
-async function raceAssets() {
-  // The circuit already selected (persisted trackIdx, or the default) is the
-  // one a player is most likely to race and the one the __apex no-track
-  // fallback would build, so fetch its scenery up front rather than making the
-  // first GO wait for it.
-  ensureScenery(trackIdx);
-  if (window.LightPresets) return;
-  await loadBackendScripts(RACE_FILES, []);
-  if (window.LightPresets && ltStore) applyLightTune();
-}
+lazyBundles.raceAssets();
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
 // binds to exists and the G facade is fully built. This is the STUB's no-op

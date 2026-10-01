@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_265 rows over 29 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -89,6 +89,9 @@ _242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
 | `native-download.js` | `NativeDownload` | tag | blob:<a download> → Capacitor Filesystem + Share (no bundler). |
+| `script-loader.js` | `ScriptLoader` | tag | ScriptLoader: extracted runtime orchestration. |
+| `lazy-bundles.js` | `LazyBundles` | tag | LazyBundles: extracted runtime orchestration. |
+| `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
 | `store.js` | `GameStore` | tag | persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels… |
 
 **`js/`**
@@ -121,6 +124,7 @@ _242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `gfx.js` | `Gfx` | tag | Gfx: the renderer backend seam. |
+| `renderer-boot.js` | `RendererBoot` | tag | RendererBoot: extracted runtime orchestration. |
 
 **`js/data/`**
 
@@ -131,8 +135,14 @@ _242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
 | `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
-| `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica (Ergast) + OpenF1 clients. |
-| `telemetry.js` | `DataTelemetry` | LAZY_DATA | the data hub's TELEMETRY tab (trace viewer, delta, map, playback). |
+| `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
+| `api-transport.js` | `F1Transport` | LAZY_DATA | serialized API transport: cache, rate limits, timeouts, retries and cancellation. |
+| `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
+| `telemetry-model.js` | `DataTelemetryModel` | LAZY_DATA | telemetry channels, lane identities and GPS/distance interpolation. |
+| `telemetry-render.js` | `DataTelemetryRender` | LAZY_DATA | telemetry canvas layers, frame compositing, delta chart and track map. |
+| `telemetry-player.js` | `DataTelemetryPlayer` | LAZY_DATA | telemetry transport, scrub interaction, playback, gauges and accessible summary. |
+| `telemetry-view.js` | `DataTelemetryView` | LAZY_DATA | telemetry DOM layout, lane legends, stint tables and responsive canvas sizing. |
+| `telemetry.js` | `DataTelemetry` | LAZY_DATA | telemetry tab controller: selection, async lap loading and popup lifecycle. |
 | `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |
 | `schedule.js` | `DataSchedule` | LAZY_DATA | — (no header comment) |
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
@@ -185,8 +195,10 @@ _242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
+| `title-flow.js` | `TitleFlow` | tag | TitleFlow: title-menu session entry and shared ghost links. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
+| `platform-session.js` | `PlatformSession` | tag | PlatformSession: platform UI, phone controller and session interruptions. create(G, deps) exposes staged wiring so entry boot order stays explicit. |
 
 **`js/track/core/`**
 
@@ -265,11 +277,14 @@ _242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `helmets.js` | `Helmets` | tag | Helmets: one painted helmet design per driver. |
+| `car-geometry.js` | `CarGeometry` | tag | shared car mesh primitives and foil surfaces; create receives the owner’s surface and palette identities. |
+| `car-wheels.js` | `CarWheels` | tag | wheel geometry and rotating/fixed layers; create receives shared primitive builders and palette references. |
 | `car3d.js` | `Car3D` | tag | procedural 2026 F1 car. |
 | `parts.js` | `Parts` | tag | Parts catalog and stat helpers. |
 | `liveries.js` | `Liveries` | tag | custom paint jobs (liveries). |
 | `custom-liveries.js` | `CustomLiveries` | tag | CustomLiveries: persist / resolve / live-draft paint jobs out of js/game.js. |
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
+| `livery-graphics.js` | `LiveryGraphics` | tag | cover crown/tail and fin graphic painters; create receives atlas drawing and paint-selection helpers. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
@@ -281,6 +296,10 @@ _242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `tilt-roll.js` | `TiltRoll` | tag | TiltRoll — the one roll-from-orientation function, in degrees, shared by input.js and controller.html. deviceorientation reports beta (front-back) and gamma… |
+| `bindings.js` | `InputBindings` | tag | InputBindings: keyboard and controller maps, conflict resolution and device-aware labels. |
+| `pad-menu.js` | `InputPadMenu` | tag | InputPadMenu: gamepad/phone menu navigation, focus seeding and held-direction repeats. |
+| `haptics.js` | `InputHaptics` | tag | InputHaptics: device/remote vibration, controller rumble and capability checks. |
+| `hold-buttons.js` | `InputHoldButtons` | tag | InputHoldButtons: multi-pointer hold/tap buttons, analog travel and teardown safety nets. |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
 | `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). |
 | `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |
@@ -289,6 +308,10 @@ _242 rows over 29 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `signal.js` | `GameAudioSignal` | tag | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the… |
+| `soundtrack.js` | `GameAudioSoundtrack` | tag | GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live… |
+| `radio-fx.js` | `GameAudioRadioFx` | tag | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
+| `tone-model.js` | `GameAudioToneModel` | tag | GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite… |
 | `engine.js` | `GameAudio` | tag | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
 | `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
@@ -968,12 +991,18 @@ wing on endplates, 4 wheel boxes (dark `[0.05,0.05,0.05]`, slightly rounded
 via chamfer prisms ok). color = livery body, color2 = wings/accents. Flat
 shading (duplicated verts, face normals).
 
+`CarGeometry.create(context)` owns mesh emission primitives, foil sections and
+tubes; `CarWheels.create(context)` owns rotating/fixed wheel layers. `Car3D`
+retains model assembly, caches and the public build API. Contexts pass shared
+palette/geometry values explicitly, preserving reference identity.
+
 ## js/car/ — the rest of the car domain
 
 | File | Global | Owns |
 |---|---|---|
 | `liveries.js` | `Liveries` | custom paint jobs — `{id, name, c1, c2, stripe?, noseStripe?, …}` |
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
+| `livery-graphics.js` | `LiveryGraphics` | cover/fin graphic recipes; shared stripe, twin and ridge painters; atlas/cache ownership stays in `LiveryTex` |
 | `driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
 | `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
@@ -985,6 +1014,11 @@ translucent replay and delta slots and is labelled `RIVAL GHOST`; otherwise
 those paths continue to read `Ghost` (`YOUR PB`).
 
 ## js/input/input.js — `Input`
+
+`Input` owns device state, channel priority and the public API. It creates
+`InputBindings`, `InputPadMenu`, `InputHaptics` and `InputHoldButtons` with live
+callbacks to the state each helper needs. Factories add no event listeners at
+evaluation; initialization and control wiring retain their original order.
 
 Steering priority: keyboard > tilt > touch.
 
@@ -1008,6 +1042,13 @@ left/right steer halves on the lower screen when tilt off; `#btn-boost`,
 `{passive:false}` + preventDefault on the canvas only.
 
 ## js/audio/engine.js — `GameAudio`
+
+`GameAudio` retains unlock/rebuild/visibility orchestration and the continuous
+engine graph. `GameAudioToneModel` owns manufacturer/tune/profile definitions;
+`GameAudioSignal` owns loop analysis and noise/envelope primitives.
+`GameAudioSoundtrack` owns playlist/cache/playback state and
+`GameAudioRadioFx` owns radio decode/effect nodes. Factories receive live
+context/bus/service callbacks; context-bound state resets with the engine.
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.
@@ -1053,6 +1094,10 @@ GameAudio.startMusic(trackIdx) / stopMusic()   // menu uses startMusic(-1)
 ```
 
 ## js/data/api.js — `F1API`
+
+`F1Transport.create(openF1Base)` owns the serialized request queue, bounded
+cache, retry/timeout/cancellation state. `F1API` retains endpoint-specific
+mapping and its public methods. Both are part of the lazy data roster.
 
 Jolpica `https://api.jolpi.ca/ergast/f1/` + OpenF1 `https://api.openf1.org/v1`.
 All methods return Promises of SIMPLIFIED plain objects (not raw API shapes).
@@ -1102,6 +1147,14 @@ chips use `Teams.LIST` colors matched by name substring.
 DataHub.init(rootEl)   DataHub.open()   DataHub.close()   DataHub.isOpen() -> bool
 ```
 Styles in `css/data.css` only (prefix all classes `dh-`).
+
+`DataTelemetry` is the tab/request controller. `DataTelemetryModel` owns trace
+math, channel definitions and lane identity; `DataTelemetryRender` paints the
+charts; `DataTelemetryPlayer` owns playback/scrubbing; `DataTelemetryView`
+owns cards, popup lifecycle and teardown. `DataTabUtils` shares driver colors
+and duplicate-lane counts across telemetry and live timing. The lazy roster's
+dependency edges order these helpers before their consumers and the hub;
+successful partial loads remain resident when another helper fails and retries.
 
 ## Where the old `tables.js` rows live
 
@@ -1208,6 +1261,12 @@ not a per-file list).
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
 `tests/data/ratchets.json`; loop, physics, AI, race logic — the subsystems
 above are extracted). Player + 21 AI.
+
+The remaining coordinator composes `ScriptLoader`, `LazyBundles`, `RendererBoot`,
+`RaceWakeLock`, `PlatformSession` and `TitleFlow`. Startup helpers use explicit
+callbacks because renderer boot precedes construction of `G`; menu/platform
+factories use the existing live façade. Physics and frame integration stay in
+the coordinator.
 
 **States** are `menu | count | race | results` — those are the only four values
 ever assigned to `state`. (This previously listed `select` and `seasonEnd` as

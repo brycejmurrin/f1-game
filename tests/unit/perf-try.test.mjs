@@ -24,6 +24,7 @@
 
    Run: node --test tests/unit/perf-try.test.mjs   (~4 s: one shared game-vm boot)
 */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -306,7 +307,7 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = \(\) => \{/);
   assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}\)/);  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
-  const rules = cssRules(read("css/components.css"));
+  const rules = cssRules(readCssSource("css/components.css"));
   assert.ok(ruleFor(rules, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/), "the balanced-row child rule exists");
   // Scoped to the settings TAB strip: Appearance's accent swatches are also a
   // four-column grid (two even rows of four pills), which is not a tab row.

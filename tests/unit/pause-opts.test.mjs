@@ -5,6 +5,7 @@
  * answer cannot disagree.
  *
  * Run: node --test tests/unit/pause-opts.test.mjs */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -16,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const FILE = "js/ui/pause-opts.js";
 const SRC = fs.readFileSync(path.join(ROOT, FILE), "utf8").replace(/^const\b/gm, "var");
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-const COMP = fs.readFileSync(path.join(ROOT, "css/components.css"), "utf8");
+const COMP = readCssSource("css/components.css");
 const EXPORT = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
 const MANIFEST = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
 const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");

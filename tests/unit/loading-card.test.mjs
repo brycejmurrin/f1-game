@@ -17,6 +17,7 @@
  *
  * Run: node --test tests/unit/loading-card.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -111,7 +112,7 @@ test("the stylesheet reads exactly the custom properties this module writes, and
   // the other. A renamed property fails SILENTLY — CSS drops an unknown var()
   // and the card renders at its fallback, which looks exactly like "the player
   // never moved it".
-  const css = read("css/overlays.css");
+  const css = readCssSource("css/overlays.css");
   for (const name of Object.keys(cardVars(null))) {
     assert.ok(css.includes(name), `css/overlays.css never reads ${name}`);
     assert.match(css, new RegExp(`var\\(${name},\\s*[^)]+\\)`),
@@ -148,7 +149,7 @@ function mediaBody(css, re) {
 }
 
 test("letterbox bars run over the flyby only, in landscape, and never under reduced motion", () => {
-  const css = read("css/overlays.css");
+  const css = readCssSource("css/overlays.css");
   assert.match(css, /#loading::before,\s*#loading::after\s*\{[^}]*content:\s*none/,
     "the bars must be OFF by default — only the run phase turns them on");
   assert.match(css, /#loading::before,\s*#loading::after\s*\{[^}]*height:[^;]*2\.35/, "a 2.35:1 frame");
@@ -173,7 +174,7 @@ test("letterbox bars run over the flyby only, in landscape, and never under redu
 });
 
 test("the card paints ABOVE the letterbox, so the bottom bar never covers it", () => {
-  const css = read("css/overlays.css");
+  const css = readCssSource("css/overlays.css");
   const card = css.match(/\n#ld-card\s*\{([\s\S]*?)\n\}/);
   assert.ok(card, "#ld-card rule not found");
   assert.match(card[1], /position:\s*relative/);
@@ -302,7 +303,7 @@ test("building(): the card over the scrim, no timer, no skip, not active — the
   assert.equal(h.els.loading.dataset.phase, "run");
   h.tick(LS.FLY_MS);
   assert.equal(h.races.length, 1);
-  assert.match(read("css/overlays.css"), /#loading\[data-phase="build"\] #ld-card/, "the build phase shows the card");
+  assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="build"\] #ld-card/, "the build phase shows the card");
 });
 
 test("handoff(): the card stays up, disarmed, until render() lowers it with the race's first PRESENTED frame", () => {
@@ -332,7 +333,7 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   const render = game.slice(game.indexOf("function render(dt) {"));
   assert.match(render, /gfx\.present\(po\);[\s\S]{0,400}?if \(loadingScreen\.phase\(\) === "handoff" && !\(gfx\.warming && gfx\.warming\(\)\)\) loadingScreen\.stop\(\);/,
     "render() lowers it after a present that painted, never one that only started the warm");
-  assert.match(read("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
+  assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
 });
 
 test("a skip inside SKIP_GRACE_MS is ignored (a double-click on RACE!), and a real skip stops the event", () => {
@@ -389,7 +390,7 @@ test("a store that throws never stops the flyby", () => {
 });
 
 test("the skip hint is a run-phase pseudo-element that waits ~3 s — no new shell node", () => {
-  const css = read("css/overlays.css");
+  const css = readCssSource("css/overlays.css");
   const rule = css.match(/#loading\[data-phase="run"\] #ld-card::after\s*\{([^}]*)\}/);
   assert.ok(rule, "the hint rule is keyed on the run phase");
   assert.match(rule[1], /content:\s*"[^"]*RACE[^"]*"/i);
@@ -839,7 +840,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
 });
 
 test("the card over the scene: black bars and a light hint in every theme, an undistorted map, a real fade, no bars under MENU ANIMATIONS: REDUCED", () => {
-  const css = read("css/overlays.css");
+  const css = readCssSource("css/overlays.css");
   const bars = css.match(/#loading::before,\s*#loading::after\s*\{([^}]*)\}/)[1];
   assert.match(bars, /background:\s*#000/, "cinema bars — the LIGHT theme's --bg made them white");
   const hint = css.match(/#loading\[data-phase="run"\] #ld-card::after\s*\{([^}]*)\}/)[1];
@@ -876,7 +877,7 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   h.tick(LS.SKIP_GRACE_MS + 10); h.skip();
   assert.equal(late, 0, "the build card has no skip of its own");
   assert.equal((h.listeners.keydown || new Set()).size, 0, "stop() took the garage's listeners down");
-  const css = read("css/overlays.css");
+  const css = readCssSource("css/overlays.css");
   assert.match(css, /#loading\[data-phase="garage"\] \{ background: none; \}/, "no scrim over the car");
   assert.match(css, /#loading\[data-phase="garage"\] #ld-card \{ visibility: hidden; \}/, "the card is out of the accessibility tree, not just transparent");
 });

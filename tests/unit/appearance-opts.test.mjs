@@ -4,6 +4,7 @@
  * swatch/hex UI, contrast ink, SYSTEM theme, and the tokens.css contract.
  *
  * Run: node --test tests/unit/appearance-opts.test.mjs */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -16,7 +17,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/appearance-opts.js"), "utf8")
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const TOKENS = fs.readFileSync(path.join(ROOT, "css/tokens.css"), "utf8");
 const EXPORT = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
-const COMPONENTS = fs.readFileSync(path.join(ROOT, "css/components.css"), "utf8");
+const COMPONENTS = readCssSource("css/components.css");
 
 function load({
   stored = {},

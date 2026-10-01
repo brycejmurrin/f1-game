@@ -1,3 +1,4 @@
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -122,7 +123,7 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
 
 test("HUD layout options live in a full-width pause submenu", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const css = fs.readFileSync(path.join(root, "css/components.css"), "utf8");
+  const css = readCssSource("css/components.css");
   assert.match(html, /id="pm-hud-details"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hidehud"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);

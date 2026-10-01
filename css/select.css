@@ -1,0 +1,586 @@
+@layer components {
+/* Apex 26 — select styles. Load order: tools/manifest.cjs CSS. */
+/* ---------- select screen ---------- */
+/* THE CIRCUIT PICKER IS A BROADCAST GRAPHIC. A strip of national flags across
+   the top (#sel-shelf: the filter/search toolbar, then #sel-tracks, the one
+   sideways scroller), and under it the HERO (#sel-track-section): the in-game
+   still of the chosen circuit, its lap outline drawn over it, the flag and
+   name on the image, the numbers beside it. Redesigned 2026-09 from the
+   two-pane list/preview layout; the .pane-pair primitive is no longer used
+   here, so none of the data-pair branches remain. The sheet still classifies
+   density (--compact-at) and fit (--fit-at) through js/ui/sheet-shape.js. */
+#select {
+  z-index: 25;
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    var(--scrim);
+}
+@media (prefers-reduced-transparency: reduce) {
+  #select { background: var(--scrim-heavy); }
+}
+#sel-inner {
+  --sheet-w: 1020px;
+  --fit-at: 260px;
+  /* The stats grid and the caption on the still start colliding under this
+     width; compact hides the extras and shrinks the tiles to flags. */
+  --compact-at: 480px;
+  /* Fill the screen so the body row is definite: the hero is a flex remainder
+     and a content-sized sheet would collapse it to its min-height. */
+  height: 100%;
+}
+#sel-car { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.15); }
+#sel-car small { font-size: var(--fs-micro); font-style: normal; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sel-track-count { letter-spacing: var(--ls-2); }
+/* The body is a flex column that does NOT scroll: shelf, then hero section.
+   The section is the vertical scroller when its caption does not fit. */
+#sel-body {
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.7);
+  min-height: 0; overflow: hidden;
+}
+#sel-shelf {
+  flex: 0 0 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
+}
+/* Toolbar: ALL / SEASON / CLASSICS (+ TODAY in time trial, CUSTOMISE SEASON in
+   season) with the search box taking the slack. One pan-x row at every
+   width — the chips keep their intrinsic width and the search keeps a
+   readable floor, so a 200% phone pans the row instead of wrapping it into
+   the hero's height. Reuses .sel-chip chrome already shared with race-settings. */
+#sel-track-filter {
+  display: flex; flex-wrap: nowrap; align-items: center;
+  gap: calc(var(--gap) * 0.5);
+  min-width: 0;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+#sel-track-filter::-webkit-scrollbar { display: none; }
+#sel-track-filter .sel-chip {
+  flex: 0 0 auto;
+  min-width: max-content;
+  justify-content: center;
+  font-size: var(--fs-micro);
+  padding-inline: calc(var(--gap) * 0.83);
+  letter-spacing: var(--ls-3);
+}
+/* Daily challenge is a banner chip, not a fourth filter: first on the row. */
+#sel-daily { flex: 0 0 auto; }
+#sel-track-search {
+  flex: 1 1 12rem;
+  min-width: 12rem;
+  margin-left: auto;
+  min-height: var(--chip-h);
+  box-sizing: border-box;
+  padding: 0 calc(var(--gap) * 0.7);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  background: var(--plate);
+  color: var(--text);
+  font: inherit;
+  /* 16px, not --fs-2 (15): the iOS focused-input auto-zoom floor stated at
+     the customize/tuner input rules applies to every typeable field, and a
+     sticky page zoom from tapping the circuit SEARCH box is the worst
+     possible trade for one type rung. */
+  font-size: 16px;
+}
+#sel-track-search::placeholder { color: var(--dim); opacity: 1; }
+/* Compact: the TODAY chip drops its weather/tod/best span so ALL / SEASON /
+   CLASSICS stay on screen; the search yields to the chips. */
+#sel-inner[data-density="compact"] #sel-daily > span { display: none; }
+#sel-inner[data-density="compact"] #sel-track-search { flex-basis: 9rem; min-width: 9rem; }
+
+/* THE STRIP. One .track-row per circuit — a flag over a name — in a single
+   row that pans sideways; snap so a flick settles on whole tiles. Group
+   dividers (CURRENT SEASON / CLASSIC CIRCUITS) stand between them as
+   vertical labels. In season mode the strip is the calendar: raced rounds
+   dimmed, the next race lit, nothing tappable. */
+#sel-tracks {
+  display: flex; align-items: stretch;
+  gap: calc(var(--gap) * 0.3);
+  min-width: 0;
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.4);
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--pad);
+  scrollbar-width: thin;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-md);
+  background: var(--plate);
+}
+#sel-tracks .track-row {
+  flex: 0 0 auto; width: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: calc(var(--gap) * 0.3);
+  min-width: calc(var(--chip-h) * 2);
+  /* Padding, not a 3px inset bar + 9px: the selected mark here is the ring
+     around the flag, so the active rule below needs no geometry of its own. */
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.45);
+  border: none; border-radius: var(--r-sm);
+  scroll-snap-align: center;
+  text-align: center;
+}
+#sel-tracks .track-row:last-child { border-bottom: none; }
+#sel-tracks .track-row.active {
+  border-left: none;
+  padding-left: calc(var(--gap) * 0.45);
+  background: var(--plate-on);
+}
+/* .track-row-meta is the FLAG box in the strip (the list rows in season setup
+   still use it for the country text — the tile look is scoped here). */
+#sel-tracks .track-row-meta {
+  display: block; flex: none;
+  width: calc(var(--chip-h) * 1.45);
+  aspect-ratio: 3 / 2;
+  border-radius: var(--r-xs);
+  overflow: hidden;
+  box-shadow: var(--edge);
+  /* the ring is the selected mark — an outline paints outside the border box
+     and is not sliced here, because the tile has padding around the flag */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.14s ease;
+}
+#sel-tracks .track-row-meta > svg,
+#sel-preview-flag > svg { display: block; width: 100%; height: 100%; }
+#sel-tracks .track-row.active .track-row-meta { outline-color: var(--red); }
+#sel-tracks .track-row-name {
+  flex: none;
+  max-width: calc(var(--chip-h) * 2.6);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--dim);
+  letter-spacing: var(--ls-1);
+}
+#sel-tracks .track-row[data-kind="classic"] .track-row-name { color: var(--bronze); }
+/* The type badges ride the tile for the SEASON-filter contract (no .trb-classic
+   shown) but the tile has no room for them; the hero caption shows them. */
+#sel-tracks .trb { display: none; }
+#sel-tracks .track-row-rec { flex: none; font-size: var(--fs-micro); }
+#sel-tracks .track-group-head {
+  position: static; flex: 0 0 auto;
+  writing-mode: vertical-rl;
+  display: flex; align-items: center;
+  /* Never taller than a tile: the label is a divider, and a divider that
+     stretches the row it divides is the bug the short text above avoids. */
+  max-height: calc(var(--chip-h) * 1.9);
+  overflow: hidden;
+  padding: 0 calc(var(--gap) * 0.15);
+  border-bottom: none;
+  border-right: 1px solid var(--card-line);
+  background: none;
+  letter-spacing: var(--ls-3);
+  white-space: nowrap;
+}
+/* FAVOURITE CIRCUITS: a ♥ in the tile's own padding corner (★ is the TT
+   record). A pseudo-element on [data-fav] only, so a strip with no favourites
+   paints exactly as it always has — position: relative included. */
+#sel-tracks .track-row[data-fav] { position: relative; }
+#sel-tracks .track-row[data-fav]::after {
+  content: "♥"; position: absolute; top: 2px; right: 4px;
+  font-size: var(--fs-micro); line-height: 1; color: var(--red);
+  pointer-events: none;
+}
+#sel-track-empty { padding: var(--pad); text-align: center; align-self: center; margin: 0; }
+/* Season: the calendar strip is read-only. */
+#sel-tracks[data-mode="season"] .track-row { cursor: default; }
+#sel-tracks .track-row[data-done] { opacity: 0.45; }
+#sel-tracks .sur-rnd { min-width: 0; }
+/* Compact: flags only — the name moves to the hero — and the strip drops to
+   one tap-height row so the hero under it keeps its still (a 393px-tall phone
+   has ~200px of body to split between the two). */
+#sel-inner[data-density="compact"] #sel-tracks .track-row-name { display: none; }
+#sel-inner[data-density="compact"] #sel-tracks .track-row { min-width: 0; min-height: 0; padding-block: calc(var(--gap) * 0.2); }
+#sel-inner[data-density="compact"] #sel-tracks .track-row-meta { width: calc(var(--chip-h) * 1.2); }
+/* No tracking and no cap in compact: CLASSICS needed 64px against a 1.2-chip
+   divider and lost its last letters (fit-audit 852x393; 52px on a mouse, where
+   --chip-h is smaller). Untracked it is 57px, inside the strip's own height. */
+#sel-inner[data-density="compact"] #sel-tracks .track-group-head { max-height: none; letter-spacing: 0; }
+#sel-inner[data-density="compact"] #sel-tracks { padding-block: calc(var(--gap) * 0.2); }
+#sel-inner[data-density="compact"] #sel-shelf { gap: calc(var(--gap) * 0.35); }
+
+/* THE HERO SECTION: the rest of the body, scrolling only when the caption
+   does not fit. .pane supplies the scroll region recipe. */
+#sel-track-section {
+  flex: 1 1 0; min-height: 0; min-width: 0;
+  display: flex; flex-direction: column;
+  padding: 0;
+}
+#sel-circuit-label { margin: 0 0 calc(var(--gap) * 0.35); flex: none; }
+#sel-inner[data-density="compact"] #sel-circuit-label { display: none; }
+/* THREE ARRANGEMENTS, KEYED ON THE SHEET'S MEASURED SHAPE AND DENSITY
+   (js/ui/sheet-shape.js writes data-shape / data-density in the sheet's own
+   zoom-corrected units, so UI SIZE and orientation both land here):
+   1. STACKED (the default; every tall sheet, every narrow one): a 16:9 still
+      across the full width, the numbers in a two-column grid under it, the
+      section scrolling when they do not fit. An upright phone or tablet.
+   2. BESIDE (wide-shaped AND >= 620 local px): the still fills the left 3/5
+      of the section, the numbers the right 2/5 in their own scroll column.
+      A desktop, a laptop, a landscape tablet.
+   3. LOWER THIRD (compact AND wide-shaped, at any width): a short landscape
+      phone — or any sheet at a raised UI SIZE — has no height for a stack
+      and no width for a column. The still takes the whole section and the
+      numbers run as ONE pan-x row under it, like a broadcast lower third. */
+#sel-track-preview {
+  flex: 1 1 auto; min-height: 0; min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: var(--gap);
+  align-content: start;
+}
+#sel-hero {
+  /* 1. STACKED: a 16:9 band (52cqw ≈ 9/16 of the sheet's inline size less its
+     padding), capped so a short sheet keeps the numbers in reach — --svhz is
+     the zoom-corrected small-viewport unit. A DEFINITE height, not
+     aspect-ratio + max-height: the grid sized its row from the ratio and the
+     cap then shrank the box... or the other way round — measured 2026-09-05,
+     the still painted 38px over the numbers under it on a 390x844 phone at
+     UI SIZE 200%. */
+  aspect-ratio: auto;
+  width: 100%;
+  height: min(52cqw, max(calc(var(--chip-h) * 3), calc(46 * var(--svhz))));
+  align-self: start;
+}
+@container sheet (min-width: 620px) {
+  /* 2. BESIDE — wide-shaped only; a tall 800px tablet keeps the stack. */
+  #sel-inner:not([data-shape="tall"]) #sel-track-preview {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: minmax(0, 1fr);
+    align-content: stretch;
+  }
+  #sel-inner:not([data-shape="tall"]) #sel-hero {
+    aspect-ratio: auto; max-height: none; height: 100%; align-self: stretch;
+  }
+  /* The numbers scroll in their own column if they must, so the still never
+     shrinks to make room for a long list. */
+  #sel-inner:not([data-shape="tall"]) #sel-preview-info {
+    min-height: 0;
+    overflow-y: auto; overscroll-behavior-y: contain;
+    padding-right: calc(var(--gap) * 0.4);
+  }
+  /* The door spans its column so that ArrowDown from a flag tile above the
+     numbers lands on it (MenuNav scores a candidate whose box spans your
+     position as directly below); tiles above the still land on the map
+     button. Without this the only control under the strip's right half was
+     NEXT in the foot. */
+  #sel-inner:not([data-shape="tall"]) #sel-detail-chip { align-self: stretch; }
+}
+/* 3. LOWER THIRD. (1,2,1) beats the beside rules' (1,1,1) at any width. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-preview {
+  grid-template-columns: minmax(0, 1fr);
+  /* The FLOOR IS ON THE ROW, not the hero: a min-height on the item let it
+     paint past a row the grid had already sized smaller (the still over the
+     numbers at 852x393 @150%). A floored row overflows the section instead,
+     and the section scrolls. */
+  /* The numbers row is a scroll container here (pan-x), and a scroll
+     container's minimum contribution is 0 — so `auto` alone collapsed it the
+     same way the stacked case's min-height did. A floor of one chip row plus
+     its label keeps it a lower third. */
+  grid-template-rows: minmax(calc(var(--chip-h) * 2.1), 1fr) minmax(calc(var(--chip-h) * 1.35), auto);
+  align-content: stretch;
+  gap: calc(var(--gap) * 0.5);
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-hero {
+  aspect-ratio: auto; max-height: none; height: auto; align-self: stretch;
+  min-height: 0;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info {
+  flex-direction: row; align-items: center; flex-wrap: nowrap;
+  gap: var(--gap);
+  padding: 0 0 calc(var(--gap) * 0.2);
+  overflow: hidden;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta {
+  display: flex; flex: 1 1 auto; min-width: 0; gap: var(--gap);
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div { display: none; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(2),
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(3) {
+  display: flex; flex: 0 1 auto; align-items: baseline; gap: calc(var(--gap) * 0.4);
+  white-space: nowrap; overflow: hidden;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-rec { display: none; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-detail-chip { flex: 0 0 auto; align-self: center; }
+#sel-hero {
+  position: relative; min-height: 0; min-width: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--card-line);
+  /* The fallback for a circuit with no still: the team-accent wash over a
+     dark plate, which is what the old preview card wore. */
+  background: var(--grad-accent),
+    linear-gradient(160deg in oklab, var(--surf-3), var(--carbon));
+  box-shadow: var(--edge);
+}
+#sel-still {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  display: block;
+}
+#sel-still[hidden] { display: none; }
+/* Legibility scrim: dark up from the caption edge and down from the top, the
+   middle left clear for the outline. Drawn over the image, under the caption. */
+#sel-hero::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(to top, var(--scrim-heavy), transparent 48%),
+    linear-gradient(to bottom, var(--scrim), transparent 40%);
+}
+/* THE MAP BUTTON COVERS THE STILL: tapping anywhere on the image opens
+   CIRCUIT DETAIL, and the outline canvas is centred inside it. A real button
+   (focusable, labelled) — the base :focus-visible ring in css/tokens.css
+   paints on it. */
+.sel-map-btn {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; border: none; border-radius: 0;
+  background: none;
+  cursor: pointer;
+}
+#sel-preview-map { display: block; max-width: 100%; max-height: 100%; }
+@media (hover: hover) {
+  .sel-map-btn:hover > #sel-preview-map { filter: brightness(1.25); }
+}
+/* Caption ON the still — flag, name, grand prix — top-left; the type badges
+   bottom-left. Both sit above the button and pass pointer events through. */
+#sel-hero-cap {
+  position: absolute; left: var(--pad); right: var(--pad); top: calc(var(--pad) * 0.7);
+  z-index: 2; pointer-events: none;
+  display: flex; align-items: center; gap: calc(var(--gap) * 0.7);
+  min-width: 0;
+}
+#sel-preview-flag {
+  display: block; flex: none;
+  width: calc(var(--chip-h) * 1.5);
+  aspect-ratio: 3 / 2;
+  border-radius: var(--r-xs);
+  overflow: hidden;
+  box-shadow: var(--edge);
+}
+#sel-preview-title { min-width: 0; }
+#sel-preview-name {
+  font-size: var(--fs-5); font-weight: 800; font-style: italic;
+  color: var(--text); letter-spacing: var(--ls-1); line-height: 1.05;
+  text-shadow: 0 1px 2px var(--carbon);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#sel-preview-gp {
+  font-size: var(--fs-micro); color: var(--red); font-weight: 700;
+  letter-spacing: var(--ls-3); text-transform: uppercase;
+  margin-top: calc(var(--gap) * 0.15);
+  text-shadow: 0 1px 2px var(--carbon);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#sel-preview-facts {
+  position: absolute; left: var(--pad); bottom: calc(var(--pad) * 0.7);
+  z-index: 2; pointer-events: none;
+  display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.35);
+}
+#sel-preview-facts .trb { margin-left: 0; padding: calc(var(--gap) * 0.15) calc(var(--gap) * 0.45); }
+/* THE NUMBERS. A definition list of label-over-value pairs in two columns
+   (each pair is a <div> inside the <dl>, which HTML allows), then the record
+   line, the elevation strip and the CIRCUIT DETAIL door. */
+#sel-preview-info {
+  /* NO min-height: 0 HERE. In the stacked arrangements the numbers sit in an
+     `auto` grid row, and an auto track's base size is the item's MINIMUM
+     contribution — which `min-height: 0` makes zero, so with the section
+     shorter than the content the row resolved to 0px and the numbers vanished
+     (measured 390x844 @150%: rows "126px 0px", content 267px). Left at auto,
+     the row takes the content's min height, the grid overflows the section,
+     and the section scrolls. The beside branch sets min-height: 0 itself,
+     because there the row is minmax(0, 1fr) and the column scrolls instead. */
+  min-width: 0;
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.6);
+}
+#sel-preview-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.55) var(--gap);
+  margin: 0;
+}
+#sel-preview-meta > div { min-width: 0; }
+#sel-preview-meta dt {
+  font-size: var(--fs-micro); color: var(--dim);
+  letter-spacing: var(--ls-3); font-weight: 600;
+}
+#sel-preview-meta dd {
+  margin: 0;
+  font-size: var(--fs-3); font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+#sel-preview-rec {
+  font-size: var(--fs-2); color: var(--gold); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+#sel-preview-rec:empty { display: none; }
+#sel-preview-elev {
+  display: block; width: 100%;
+  height: calc(var(--chip-h) * 0.9);
+  border-radius: var(--r-sm);
+  background: var(--plate);
+  opacity: 0.85;
+}
+#sel-detail-chip { align-self: flex-start; }
+/* Compact: the extras go — the badges, the elevation strip, the label — and
+   the caption steps down a rung so a 393px-tall phone keeps the still. */
+#sel-inner[data-density="compact"] #sel-preview-facts { display: none; }
+#sel-inner[data-density="compact"] #sel-preview-elev { display: none; }
+#sel-inner[data-density="compact"] #sel-preview-gp { display: none; }
+#sel-inner[data-density="compact"] #sel-preview-name { font-size: var(--fs-3); }
+/* Compact: the caption moves to the BOTTOM of a short still, over the
+   scrim, so the outline has the clear upper half to itself. */
+#sel-inner[data-density="compact"] #sel-hero-cap { top: auto; bottom: calc(var(--pad) * 0.6); }
+#sel-inner[data-density="compact"] .sel-map-btn { align-items: flex-start; padding-top: calc(var(--gap) * 0.5); }
+#sel-inner[data-density="compact"] #sel-preview-flag { width: calc(var(--chip-h) * 1.1); }
+#sel-inner[data-density="compact"] #sel-preview-meta dd { font-size: var(--fs-2); }
+#sel-inner[data-density="compact"] #sel-track-preview { gap: calc(var(--gap) * 0.6); }
+
+/* ---------- team card + team picker ----------
+   The card is the YOUR CAR summary on the select screen (tap to open the
+   garage); the twelve-way team choice lives in its own sheet (#teampicker),
+   opened from the garage's TEAM & DRIVER tab. One large target instead of a
+   four-row grid of 60px chips.
+   The picker is opened FROM the garage (#carsetup); it is a top-layer
+   <dialog>, so showModal() stacks it above the garage without a z-index —
+   the old "z-index 36 clears #carsetup's 35" dance is retired. */
+/* --fit-at like its siblings: this was the ONE --sheet-w sheet with no fit
+   threshold — head + 12-tile listbox is exactly the head-plus-scroller shape
+   the mechanism exists for, and a short window at high UI SIZE starved the
+   list while every other dialog auto-shrank. Values mirror #customize. */
+#teampicker { --sheet-w: 760px; --fit-at: 300px; }
+#teampicker .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
+.team-card, .team-tile {
+  display: flex; align-items: center; gap: var(--gap);
+  width: 100%; text-align: left; cursor: pointer;
+  padding: calc(var(--gap) * 0.7) var(--gap);
+  border-radius: var(--r-md);
+  /* both are <button>s: plate fill + line come from the base; the card then
+     tints both red below, and hover/press fills are the base's too */
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.team-card { border-color: color-mix(in srgb, var(--red) 55%, transparent); background: color-mix(in srgb, var(--red) 10%, transparent); }
+.team-tile.active {
+  border-color: var(--red); background: var(--plate-on-strong);
+  box-shadow: var(--lift-sel);
+}
+/* Two-tone block: several 2026 liveries are near-black, so the accent stripe is
+   what actually tells them apart at a glance. */
+.tm-colour { flex: none; width: 32px; height: 32px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.28); overflow: hidden; }
+.tm-colour canvas { display: block; width: 100%; height: 100%; }
+.tm-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.tm-name {
+  font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-1);
+  color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tm-sub {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-2); color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* PICKER TILES WRAP INSTEAD OF ELLIPSIZING — the driver pairing IS the
+   information, and at UI SIZE 150% on a portrait phone the tile body is
+   ~151 local px against ~210 of text, so "#63 Russell · #12 Antonelli" lost
+   its second driver (2026-08-21 sweep: trunc 5 @150, 13 @200). Wrapping is
+   structurally free here: #sel-teams has implicit auto rows, no height
+   caps, and the pane already scrolls. Scoped to .team-tile so the select
+   screen's .team-card summary keeps its one-line ellipsis. Same precedent
+   as the narrow standings names in css/data.css. */
+.team-tile .tm-name, .team-tile .tm-sub {
+  white-space: normal; overflow: visible; text-overflow: clip;
+  overflow-wrap: break-word;
+}
+.tm-chev { flex: none; color: var(--red); font-size: var(--fs-micro); }
+.team-tile.active .tm-name { color: var(--text); }
+/* Tiles fill the picker in as many columns as fit; each stays a big target.
+ *
+ * `min(240px, 100%)` IS THE FLOOR, NOT A BARE 240px. `repeat(auto-fill,
+ * minmax(240px, 1fr))` reads as "at least 240 wide, as many as fit", and the
+ * first half of that is unconditional: when the container is NARROWER than
+ * 240px auto-fill still emits one column and minmax still floors it at 240, so
+ * the track is wider than the box that holds it and every tile hangs out of the
+ * right edge. `overflow-x: hidden` on the pane then slices them rather than
+ * letting them scroll, which is the worst of the three possible outcomes — no
+ * scrollbar to hint at it, just missing content.
+ *
+ * MEASURED, iPhone 15 Pro portrait at UI SIZE 150%: #sel-teams' content box is
+ * 215px in its own units, the column stayed 240px, and all twelve team tiles
+ * overflowed by 25px — the chevron and the right of every team name gone. It is
+ * a zoom bug in the same family as everything else in this pass: the 240 is a
+ * literal in the sheet's own units, and raising UI SIZE shrinks the box those
+ * units are measured against without touching the literal.
+ *
+ * `min(240px, 100%)` resolves against the grid container's content box, so it
+ * is exactly 240 whenever 240 fits — identical behaviour at every size that was
+ * already correct — and collapses to the container when it does not. Use this
+ * form for EVERY auto-fill/auto-fit floor; a bare px floor is the bug. */
+#sel-teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: calc(var(--gap) * 0.7);
+  align-content: start;
+}
+.team-tile { min-height: var(--tap); }
+
+/* ---------- chips ---------- */
+.chip-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); }
+.sel-chip {
+  /* on the height ladder (css/tokens.css) rather than sized by padding alone */
+  min-height: var(--chip-h);
+  display: inline-flex; align-items: center; justify-content: center;
+  /* Leading-edge bias under the shared -6deg skew so labels sit optically
+     centred in the parallelogram. */
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.7) calc(var(--gap) * 0.5) calc(var(--gap) * 1);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-1);
+  color: var(--text);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  /* Same dark plate as the settings tab headers — one family of keys. */
+  background: var(--plate);
+  box-shadow: none;
+  transition: background 0.12s, box-shadow 0.12s;
+  cursor: pointer;
+}
+/* hover/press fills come from the button base (css/tokens.css) */
+/* Selected mark is the settings-tab recipe (left inset bar + glow), never an
+   `outline`. An outline paints outside the border box, and these chips sit
+   flush against the inline-start edge of a hidden-overflow scroller — so an
+   outset ring on the leftmost chip gets sliced. The inset bar cannot. */
+.sel-chip.active {
+  border-color: var(--red);
+  background: var(--plate-on);
+  color: var(--text);
+}
+.sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
+.sel-edit {
+  min-height: var(--chip-h);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--fs-micro); padding: calc(var(--gap) / 2) var(--gap);
+  border: 1px solid var(--red); background: var(--plate-on); border-radius: var(--r-sm);
+  transition: background 0.12s, box-shadow 0.12s; cursor: pointer;
+}
+@media (hover: hover) {
+  .sel-edit:hover { background: var(--plate-on-strong); box-shadow: var(--lift-sel); }
+}
+.sel-edit:active { background: color-mix(in oklab, var(--red) 30%, transparent); }
+h3.sel-label {
+  font-size: var(--label); font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-4); color: var(--steel); text-transform: uppercase;
+}
+
+/* Season calendar rows (SEASON SETUP's list; the select strip carries .sur-rnd
+   on its tiles). No hover: the row declares cursor:default and nothing happens
+   on click. LIST GRAMMAR, NOT BUTTON CHROME — full-bleed rows split by a
+   hairline, the .track-row model. */
+.season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5); color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
+.season-upcoming-row { display: flex; align-items: baseline; gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6); border-bottom: 1px solid var(--card-line); cursor: default; }
+.season-upcoming-row:last-child { border-bottom: none; }
+.sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
+.sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
+.sur-country { font-size: var(--fs-micro); color: var(--dim); }
+} /* @layer components */

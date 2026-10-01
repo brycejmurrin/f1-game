@@ -1,0 +1,498 @@
+@layer components {
+/* Apex 26 — race setup styles. Load order: tools/manifest.cjs CSS. */
+/* ---------- season setup (#season-setup) ----------
+   ZERO NEW CLASSES, deliberately: tests/unit/css-class-ratchet.test.mjs sits at
+   its ceiling and its failure message asks for "a custom property on a context
+   selector instead of a new class". Everything below is an ID scoping a class
+   that already exists — the calendar rows are .season-upcoming-row (above), the
+   circuit shelf is .track-row (below), the format groups are .chip-row/.sel-chip
+   (shared with #race-settings), and the panes are .pane-pair from
+   css/components.css. Only the two behavioural deltas are written here. */
+#season-setup { z-index: 26; }              /* over #select, which is 25 */
+/* --pair-at IS WHAT MAKES THE PANES SCROLL, and leaving it out is why they did
+   not. js/ui/sheet-shape.js reads this property to decide `data-pair`, and
+   with no value it deletes the attribute and returns — so .pane-pair never
+   turned on, the two panes stacked at their FULL natural height, and .pane's
+   own `overflow-y: auto` had nothing to scroll against because nothing ever
+   capped them. Measured at 844x390 before this line: the calendar pane was
+   1417px tall, ADD A CIRCUIT started 1063px below the fold, and the whole sheet
+   was one 2526px scroll with the foot buried at the bottom of it.
+   620px matches #sel-inner and #cr-inner — the same list-detail shape, so the
+   same threshold. `data-pair="on"` is what puts both panes in a
+   `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
+   scroll region needs. */
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; --pair-compact: wide; --compact-at: 480px; }
+#ss-inner:not([data-shape="tall"]) { --fit-at: 220px; }
+/* Compact WIDE keeps the calendar + pool pair (same as #sel-inner). Compact
+   TALL still stacks — `--pair-compact: wide` only holds the pair on a wide
+   shape. `.pane-pair` still defaults `off` for garage / career. */
+/* Stacked season setup owns ONE vertical scroll region. Without this branch the
+   two `.pane` children take their full natural height, #ss-body overflows while
+   remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844
+   viewport that made ~1,900px of calendar/pool controls unreachable. The child
+   panes also return overscroll chaining to the body: `.pane` normally contains
+   it, which is correct only while each pane has a bounded, scrollable height. */
+#ss-inner:not([data-pair="on"]) > #ss-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+#ss-inner:not([data-pair="on"]) > #ss-body > .pane {
+  flex: 0 0 auto;
+  overflow: visible;
+  overscroll-behavior: auto;
+}
+/* Both columns are .pane, so the scrolling, the overscroll containment and the
+   reserved gutter come with the primitive — nothing to restate here.
+   The move/remove controls: .sel-chip is sized for a thumb on a chip ROW, and
+   three of them inside a list row need to be square and quiet. Height stays on
+   the ladder (min-height: var(--chip-h) from .sel-chip); only the horizontal
+   padding comes in, off --gap so it still answers the density ladder. */
+#ss-cal .sel-chip {
+  padding-inline: calc(var(--gap) * 0.6);
+  min-width: var(--chip-h);
+  justify-content: center;
+}
+#ss-cal .sel-chip:disabled { opacity: 0.3; cursor: default; }
+/* The calendar rows are not tappable (their CONTROLS are), so they keep
+   .season-upcoming-row's default cursor — but they need centred alignment so a
+   chip and a baseline-aligned label sit on the same line. */
+#ss-cal .season-upcoming-row { align-items: center; gap: calc(var(--gap) * 0.5); }
+#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row { flex-wrap: wrap; }
+#ss-inner[data-density="compact"] #ss-cal .sur-name {
+  flex: 1 1 calc(100% - 34px); min-width: 0; overflow-wrap: anywhere;
+}
+#ss-note { display: block; margin-block: calc(var(--gap) * 0.5); line-height: 1.4; }
+/* Armed APPLY on a live season — the career DELETE? treatment: the second
+   press is the one that wipes up to 23 raced rounds, so the first must
+   read as danger, not as the same primary button. */
+#ss-apply.armed { color: var(--text); border-color: var(--red); background: var(--armed-fill); }
+
+/* ---------- track picker rows ---------- */
+/* The LIST form of .track-row: the season-setup circuit shelf (#ss-pool) and
+   any other vertical catalogue. The select screen's strip restyles these same
+   classes as flag tiles under #sel-tracks (see the select-screen section). */
+/* Compact keeps the meta: it rides the SAME flex line as the name (baseline
+   row, right-aligned), so hiding it saved no height — it only cost the
+   country and length on the screens players pick circuits from most. The
+   row already dims it (--dim at micro size); nothing tighter to trade. */
+.sheet[data-density="compact"] .track-row { padding-block: 7px; }
+.track-row {
+  display: flex; align-items: baseline; gap: 8px;
+  /* ON THE TOUCH LADDER, like every other primary control. This family was the
+     one that opted out: padding alone gave 45px, measured at 852x393, against a
+     --tap of 52 on a coarse pointer — and it is the longest list in the game
+     (40 rows) on the screen players use most. It is also absent from the
+     tap-target group in css/components.css, which is how it stayed 7px short.
+     A full-bleed row clears WCAG 2.2 SC 2.5.8's 24px floor either way; this is
+     the house comfort floor, which is the one the density ladder exists for. */
+  min-height: var(--tap);
+  width: 100%; padding: 9px 12px;
+  text-align: left; cursor: pointer;
+  border: none; border-radius: 0;
+  border-bottom: 1px solid var(--card-line);
+  background: none;
+  transition: background 0.1s;
+}
+.track-row:last-child { border-bottom: none; }
+/* (Full-bleed rows used to need their own negative outline-offset so the ring
+   was not sliced by #sel-tracks. The base ring is inset for every control now,
+   so that override is redundant — see :focus-visible in css/tokens.css.) */
+@media (hover: hover) {
+  .track-row:hover { background: var(--plate); }
+}
+.track-row:active { background: var(--plate-hover); }
+.track-row.active { background: var(--plate-on); border-left: 3px solid var(--red); padding-left: 9px; }
+.track-row-name {
+  flex: 1;
+  font-size: var(--fs-micro); font-weight: 800; font-style: italic;
+  color: var(--text); letter-spacing: var(--ls-1);
+}
+.track-row.active .track-row-name { color: var(--text); }
+.track-row-meta { font-size: var(--fs-micro); color: var(--dim); }
+.track-row-rec { font-size: var(--fs-micro); color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
+.trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
+/* Borderless: these sit INSIDE the .track-row button, and fill+border+radius
+   is the app's button recipe — a bordered badge read as a nested control on a
+   control. The tint alone says night/street/classic. */
+.trb-night { background: rgba(129,140,248,0.15); color: #818cf8; }
+.trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.trb-classic { background: rgba(180,150,90,0.14); color: #c8a862; }
+/* Section header inside the picker list (CURRENT SEASON / CLASSIC CIRCUITS).
+   Sticky so the group stays identifiable while the list scrolls under it. */
+.track-group-head {
+  position: sticky; top: 0; z-index: 1;
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5);
+  color: var(--dim); padding: 7px 12px 5px;
+  background: var(--surf-1);
+  border-bottom: 1px solid var(--card-line);
+}
+
+/* ---------- race settings ---------- */
+/* Eight SETTING ROWS (css/components.css .set-row, js/ui/setting-row.js) —
+   the same control as pause > SETTINGS, so the two screens a player sees
+   before and during every race share one grammar. One column on a tall
+   sheet; two once the sheet is 440px wide, the width at which LAPS and
+   WEATHER used to pair up. The ~130 lines of data-shape / data-density
+   grid-row placement that used to fit seven CHIP groups on a landscape phone
+   went with the chips: eight rows at --tap pitch are ~210px in two columns,
+   inside the ~285px of body a landscape phone gives this sheet, so nothing
+   sits below the fold at any shape (measured 852x393 / 393x852, 2026-09-05).
+   The body keeps overflow-y for the one case that still scrolls: UI SIZE
+   200% on a landscape phone. */
+#rs-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* max-content, not auto: a row whose ‹ select › cluster has wrapped under
+     its label is 64px tall, but Chromium sizes an `auto` track from the
+     row's single-line height (44px) and the wrapped rows painted over each
+     other (measured 852x393 at UI SIZE 150%, 2026-09-05). */
+  grid-auto-rows: max-content;
+  row-gap: calc(var(--gap) * 0.5);
+  align-content: start;
+  overflow-y: auto; overscroll-behavior-y: contain;
+}
+#rs-presets {
+  grid-column: 1 / -1;
+  --balance-basis: 8rem;
+  --balance-min: 6rem;
+  margin: 0;
+}
+#rs-presets > .preset-btn { min-height: var(--chip-h); }
+.session-summary {
+  margin: 0; min-width: 0; max-width: 100%;
+  color: var(--dim); font-size: var(--fs-micro); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* THE FOLDS (2026-09-18). Twelve rows all at one weight was a wall: it fit the
+   desktop sheet at 396px and SCROLLED on both phone shapes (373 into 295
+   landscape, 743 into 685 portrait, measured on the deploy tip). The four rows
+   that describe the SESSION — LAPS, WEATHER, CONDITIONS, TIME OF DAY — stay
+   flat behind the presets, and the eight that describe the FIELD and the
+   ASSISTS fold, which is the shape docs/research/PAUSE-SETTINGS-IA.md locked
+   for STEERING & ASSISTS ("presets + … stacked folds. Folds start closed.
+   Summaries … carry the live choice"). A two-row fold was not worth its tap:
+   CONDITIONS and TIME OF DAY belong to the race you are setting up, so they
+   read flat. The summary primitive is the settings one, not a copy: its three
+   duplicate definitions in components.css are now one, and #rs-body joined
+   that. */
+/* The <details> IS the grid — no wrapper div inside it. A fold's rows then sit
+   on the same two-column lattice as LAPS and WEATHER above, rather than
+   starting a new rhythm one indent in, and two folds cost four shell nodes
+   instead of six. */
+#rs-body > details {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: max-content;
+  row-gap: calc(var(--gap) * 0.5);
+}
+#rs-body > details > summary { grid-column: 1 / -1; }
+#rs-body > details[open] > summary { margin-block-end: calc(var(--gap) * 0.25); }
+
+/* DUEL opens a picker instead of stepping a list, so it is one button where
+   every other row is `‹ select ›`. It should still READ as the same row: it was
+   a lone 7rem control at --fs-micro, so against its neighbours' 197.6px cluster
+   it started 85.6px further right and its value was two rungs smaller
+   (measured 844px wide, 2026-09-18).
+   So the button is built out of the cluster's own parts rather than a width:
+   a ::before phantom stands in for the `‹` chip, #rs-duel-value sits on the
+   select's 7rem column, and the trailing glyph carries the `›` chip's terms.
+   NOT a fixed `calc(...)` width, and not rigid padding for the phantom: the
+   selects are 7rem here (the #rs-body override further down), and at UI SIZE
+   200% on a 393px phone the cluster's chips shrink to their --tap-min floor —
+   a constant width matches at one viewport and rigid padding put the value
+   12.8px off at that zoom (both measured 2026-09-18).
+
+   Swept 393 / 600 / 760 / 844 / 1024 / 1440 and three UI sizes, and all 14 DUEL
+   values: both plate edges and the `›` column land within 1px everywhere, and
+   the value's centre on the selects' everywhere except a 393px phone at UI SIZE
+   >= 150%, where the real chips are at --tap-min and the value's 7rem floor
+   cannot follow them down (-6.7px at 150%, -26.6px at 200%). Edges and the
+   glyph column still hold there, so it still reads as the same row. And the
+   wider column pays for the bigger type twice over: 11 of the 14 values
+   ellipsised in the old 7rem button, 2 do now — only MICHAEL SCHUMACHER (179px)
+   and JUAN MANUEL FANGIO (170px). */
+#rs-body #rs-duel-open {
+  /* display, not just the flex terms: the base button rule leaves this
+     `block`, and an inline value + chevron then centre as one run of text —
+     which is how the value ended up 15.6px right of the selects' centre. */
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  /* The cluster's natural total as a BASIS, not a width: it is the same number
+     the three real boxes add up to, so the button meets row pressure exactly as
+     they do — but a long value then squeezes ::before instead of pushing the
+     plate's left edge out past the column (it ran 43px wide on the longest
+     legend name before this basis was pinned). */
+  flex: 0 1 calc(7rem + 2 * var(--chip-h) + var(--gap) * 0.7);
+  /* The shared chip rule's `width: var(--chip-h)` still applies here and the
+     button collapsed to one 40px square without this. */
+  width: auto;
+  padding: 0;
+  /* The plate's own border, named rather than a literal: the tree's rawSpacing
+     ratchet asserts exact equality on px inside padding/margin/gap, and a bare
+     `- 1px` here is precisely the un-tokenised spacing it is counting. */
+  --duel-edge: 1px;
+  /* One edge off each gap: the cluster is three bordered boxes and this is one,
+     so the 2px the other two borders would have spent has to come back out of
+     the run or the plate sits 2px wider than its column. */
+  gap: calc(var(--gap) * 0.35 - var(--duel-edge));
+  /* The select's type, not the chevrons': this button IS the value. */
+  font-size: var(--fs-3);
+  letter-spacing: var(--ls-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* The `‹` chip's square, with nothing drawn in it: DUEL has no step-back, but
+   the column it would sit in is what puts the value under the selects. It is
+   also the row's SLACK — shrink 200 against the value's 0, so a label too long
+   for a 7rem column eats this square instead of an ellipsis. Its floor is the
+   select's own padding-inline, so the text never touches the plate edge. */
+#rs-body #rs-duel-open::before {
+  content: "";
+  flex: 0 200 var(--chip-h);
+  width: var(--chip-h);
+  min-width: calc(var(--gap) * 0.3);
+}
+#rs-duel-value {
+  /* 7rem is the floor and the common case — matching the #rs-body select
+     override further down this file, NOT the shared component's 8rem — so OFF
+     sits dead centre of the selects' column. The basis is the CONTENT above
+     that, capped at one borrowed chip square: FASTEST RIVAL, the ON label, is
+     115px against a 112px column and was the one value the row shows most
+     (measured 2026-09-18). Shrink 0, capped at exactly what ::before can
+     release (its square less its floor): flex shrink is PROPORTIONAL, so even
+     at 1-against-200 the text still gave up its last 0.9px and ellipsised while
+     the blank square had 37px in hand. A cap plus no shrink orders it properly
+     — the square empties first, and only a value too long for even that
+     truncates. */
+  flex: 0 0 auto;
+  min-width: 7rem;
+  max-width: calc(7rem + var(--chip-h) - var(--gap) * 0.3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+/* …and the trailing chevron matches the `›` chip it stands in for. */
+#rs-duel-open > [aria-hidden="true"] {
+  flex: 0 1 var(--chip-h);
+  width: var(--chip-h);
+  min-width: var(--tap-min);
+  text-align: center;
+  font-size: calc(var(--fs-5) * 1.3);
+  line-height: 1;
+}
+/* Every row's help line wraps to its own full-width line under the row
+   (DUEL's first, deploy branch e43f0700e). Inside the row, not after it: the
+   body is a two-column grid, and a row that hides in a time trial takes its
+   help with it. */
+#rs-body .set-row > .adv-help {
+  flex: 1 0 100%;
+  margin: 0;
+}
+#duel-picker { --sheet-w: 620px; }
+#duel-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  gap: calc(var(--gap) * 0.6);
+}
+.duel-option {
+  min-height: var(--tap);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: calc(var(--gap) * 0.7) var(--gap);
+  text-align: left;
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+}
+.duel-option.active { background: var(--plate-on); border-color: var(--red); }
+.duel-option-name { font-weight: 800; letter-spacing: var(--ls-3); }
+.duel-option-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
+@container sheet (min-width: 440px) {
+  #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
+  #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
+}
+/* The Settings pages' steel italic label (css/components.css) restated here:
+   that rule is scoped to #pmsettings-inner .pm-group. */
+#rs-body .tune-label {
+  color: var(--steel); font-weight: 700; font-style: italic;
+  /* --ls-3 ("label — dim uppercase labels, chips"), not --ls-5 ("display —
+     section labels, eyebrows"). These ARE dim uppercase row labels, so this is
+     the rung they belong on; --ls-5 also spent ~13px of pure tracking on
+     CONDITIONS, which is what pushed the label past its share of the row. */
+  letter-spacing: var(--ls-3); text-transform: uppercase;
+}
+/* RACE SETTINGS ONLY: a 7rem value, against the shared component's 8rem.
+   #rs-body is the one place .set-row lives in a TWO-COLUMN grid, so its rows
+   get half the sheet each and the one-line budget actually binds: at 8rem the
+   hypothetical row is ~309px, it shares a line while a column is >= 305px and
+   WRAPS below that (measured 2026-09-16: an 800px viewport gives 305px columns
+   and 0/10 wrap, 760px gives 285px and 10/10 wrap at 63px a row). A notched
+   landscape iPhone gives #rs-body 598px — 299px a column — so every row wrapped
+   and five of ten sat below the fold. At 7rem, 0/10 wrap and nothing is hidden.
+
+   SCOPED, not global: the same narrowing applied to the shared rule clipped
+   "PLAYSTATION" (102px into 99px) on the controls settings page, which has no
+   two-column grid and no budget problem. The tighter padding is the slack that
+   keeps the longest RACE-SETTINGS value, PACE ORDER, inside 7rem (95px into 98).
+   The label's own share comes from the --ls-3 tracking above. */
+#rs-body .set-row > div > select {
+  flex-basis: 7rem;
+  width: 7rem;
+  padding-inline: calc(var(--gap) * 0.3);
+}
+
+/* The row's own 8rem value, NOT wider for the long GRID names: at 9rem every
+   row on a 393px portrait phone dropped its ‹ select › cluster to a second
+   line (measured 2026-09-05, sheet 369px). The names were shortened to fit
+   instead — see the rules list in game.js buildRaceSettings. */
+
+/* ---------- customize my team ---------- */
+#customize .cz-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--gap); margin: 6px 0;
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
+}
+#customize .cz-row label { flex: 1 1 auto; min-width: 0; }
+/* The LEGEND select needs the same shrink contract as the text inputs below.
+   Without it the row is flex with no rule for a <select>, so the control takes
+   its INTRINSIC width from the longest driver name, overflows the row and
+   pushes the APPLY button outside the clipped pane — where it is still in the
+   DOM and still resolves, but can never be clicked. */
+#customize input[type="text"], #customize input[type="number"] {
+  /* flex-basis, not a fixed 56% width: the panel is sized by the sheet now, and
+     a percentage width fought the shrink-to-fit box it used to live in — the
+     rows overflowed the dialog and were clipped. */
+  flex: 1 1 56%; min-width: 0; max-width: 60%;
+  min-height: var(--chip-h);
+  /* 16px floor: iOS Safari auto-zooms the whole page when a focused input's
+     font-size is under 16px, and the zoom sticks after the keyboard closes. */
+  font: inherit; font-size: 16px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm); padding: 7px 10px;
+}
+/* ONE well size for all eleven. PRIMARY/ACCENT were 56px and the seven paint
+   layers 48px, so in the multi-column form the right edge of every row landed
+   in a different place and the columns read as misaligned rather than as a
+   grid. */
+#customize input[type="color"] {
+  /* Height was deliberately put on the floored token; the width literal was
+     the gap — eleven colour wells painted 19.2px wide at UI SIZE 40%. The
+     max() arm only wins below 100%. */
+  width: max(48px, var(--tap-min)); height: var(--chip-h); padding: 0; border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm); background: none; cursor: pointer; flex: none;
+}
+/* NONE'd colour well (game.js toggles cz-off) dims like its inline-livery twin
+   `.cs-liv-off` (carsetup.css) — without this the stale colour showed at full
+   strength with only the NONE chip to say it was off. */
+#customize input[type="color"].cz-off { opacity: 0.35; }
+#cz-preview {
+  display: flex; align-items: center; gap: 8px; margin-top: var(--gap);
+  padding: 10px; border-radius: var(--r-md); background: var(--plate);
+}
+#cz-swatch1, #cz-swatch2 { width: 26px; height: 26px; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,0.3); }
+#cz-pvtext { font-weight: 800; font-style: italic; letter-spacing: var(--ls-2); }
+#customize .cz-sep {
+  margin: var(--gap) 0 6px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
+  /* var(--dim), not white at 0.4 alpha: over the darkest ground the sheet can
+     sit on (#0c0c14) that was 3.75:1 — below AA for 14px text. --dim is 7:1. */
+  color: var(--dim); text-transform: uppercase;
+  border-top: 1px solid var(--card-line); padding-top: var(--gap);
+}
+/* EXTRA PAINT's <summary> keeps the .cz-sep look (the class carries over onto
+   any tag) — display:block/list-style:none only replace the parts a <summary>
+   would otherwise supply itself, same split as .adv-more-btn in css/tuner.css. */
+#customize summary.cz-sep {
+  display: flex; align-items: center; justify-content: space-between;
+  list-style: none; cursor: pointer;
+}
+#customize summary.cz-sep::-webkit-details-marker { display: none; }
+#customize summary.cz-sep::after { content: "\25BE"; font-size: var(--fs-micro); opacity: 0.7; }
+#cz-paint[open] > summary.cz-sep::after { content: "\25B4"; }
+.cz-liv-none {
+  /* width:auto is stated with the id prefix in the container query below too —
+     a bare class loses to any `... button { width: 100% }` rule. */
+  /* --chip-h, not a bare 32: these sit beside the colour wells in a row of
+     fifteen and were the one control in the form under the chip height. */
+  /* max() with --tap-min: 56 painted 22.4px at UI SIZE 40%; only the
+     sub-100% arm ever wins. */
+  flex: none; width: auto; min-width: max(56px, var(--tap-min)); min-height: var(--chip-h);
+  font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
+  padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: var(--text);
+  background: var(--plate); border: 1px solid var(--plate-line);
+}
+/* Engaged = a lighter SURFACE, not a colour. This was a blue fill, and blue
+   already means "stat gain" in this UI (the ▲ACCEL badges on CAR SETUP), so
+   seven blue NONE buttons read as seven upgrades. Nothing here is a gain and
+   nothing here is a selection in the red sense either — it is a pressed
+   toggle, so it steps up the elevation ladder and brightens its label. */
+.cz-liv-none.active {
+  background: var(--surf-3);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+/* FINISH is a MATERIAL, not a colour, so its row carries a 3-way choice made of
+   the same pill buttons instead of a colour well + NONE. Exactly one is active. */
+.cz-finish { display: flex; gap: 6px; flex: none; }
+.cz-finish .cz-liv-none { min-width: max(52px, var(--tap-min)); }
+/* Columns of rows once the sheet is wide, so all fifteen fit without the dialog
+   becoming a long scroll. auto-fill rather than a hard two, so the count follows
+   the room the sheet was given — on a landscape phone the sheet is now wide
+   enough for three, which is what finally gets the whole form above the fold
+   (it was 442px of rows in a 271px window). */
+#customize .sheet[data-shape="wide"] #cz-body,
+#customize .sheet[data-shape="wide"] #cz-paint-rows {
+  display: grid;
+  /* min(...) floor — see #sel-teams above for why a bare px floor overflows */
+  grid-template-columns: repeat(auto-fill, minmax(min(205px, 100%), 1fr));
+  column-gap: var(--pad); align-content: start;
+}
+/* #cz-paint (the <details> now wrapping the paint rows) has to be the grid
+   item that spans full width, not the .cz-sep summary or #cz-paint-rows
+   inside it — display:contents on the <details> looks like the fix but
+   Chromium does not promote a <details>'s children out of the box tree for
+   grid placement even with it (see the identical dead end in
+   css/components.css for #advanced), so the wrapper stays a real box and
+   grids its OWN children instead, same as #cz-body does for its own. */
+#customize .sheet[data-shape="wide"] #cz-body .cz-sep,
+#customize .sheet[data-shape="wide"] #cz-body #cz-preview,
+#customize .sheet[data-shape="wide"] #cz-body #cz-paint { grid-column: 1 / -1; }
+
+/* ---------- THE TOUCH TYPE FLOOR ----------------------------------------
+   css/tokens.css says --label is "the smallest type this UI has" and sets it
+   to 13px on touch. These are the menu classes that sat under it on a phone —
+   8-11px labels, badges and metadata on the three screens you actually read:
+   the flag strip, the circuit hero, and the season calendar.
+
+   PLACED LAST, ON PURPOSE. The phone media queries higher up this file cannot
+   raise any of these: the same selectors are re-declared afterwards at equal
+   specificity, and a media query contributes none, so source order wins and
+   the later declaration always did. A whole block of preview sizes up there
+   was inert for exactly that reason (see the note where it used to be). Last
+   in the file, with body:not(.desktop) to keep the pointer UI untouched, is
+   the one position that cannot lose that race.
+
+   Desktop is deliberately excluded: it reads these at a desk, not at arm's
+   length, and its rows are already dense by choice. */
+body:not(.desktop) #sel-preview-gp { font-size: var(--fs-micro); }
+body:not(.desktop) #sel-preview-meta dt { font-size: var(--fs-micro); }
+body:not(.desktop) .track-row-meta,
+body:not(.desktop) .track-row-rec { font-size: var(--fs-micro); }
+body:not(.desktop) .trb { font-size: var(--fs-micro); }
+body:not(.desktop) .track-group-head { font-size: var(--fs-micro); }
+body:not(.desktop) .season-upcoming-head,
+body:not(.desktop) .sur-rnd,
+body:not(.desktop) .sur-country { font-size: var(--fs-micro); }
+body:not(.desktop) #disclaimer,
+body:not(.desktop) #audiostate { font-size: var(--fs-micro); }
+body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
+} /* @layer components */

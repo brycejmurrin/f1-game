@@ -19,6 +19,7 @@
  *
  * Run: node --test tests/unit/gfx-backend-canary.test.mjs
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -36,10 +37,14 @@ import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+// These guards span boot and frame-loop ownership; load the extracted owners explicitly.
+const read = (p) => p === "js/game.js"
+  ? ["js/render/renderer-boot.js", "js/core/lazy-bundles.js", "js/ui/platform-session.js", p].map(readFile).join("\n")
+  : readFile(p);
 // Comment-stripped source: a pin can only match code, and a comment can
 // neither fail nor satisfy it.
-const code = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const code = (p) => (p.startsWith("css/") ? readCssSource(p) : read(p)).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 /** The span between two source needles, ASSERTING BOTH EXIST FIRST.
  *
  * `src.slice(src.indexOf(a), src.indexOf(b))` is the shape that disarmed this
@@ -718,7 +723,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   // a merged check and never be cleared. Computed keys (`setItem(_rk, …)`) are
   // invisible to the literal regex and are named here so a new one is noticed.
   const lsResettable = new Set(G.RENDERER_LS_KEYS), ssResettable = new Set(G.RENDERER_SS_KEYS);
-  const COMPUTED_OK = new Set(["_rk", "rk"]);   // apex26.ctxLostReloads via a local (glx.js, tlx.js) — in RENDERER_SS_KEYS
+  const COMPUTED_OK = new Set(["_rk", "rk", "PROBE_KEY", "STRIKE_KEY"]);   // apex26.ctxLostReloads via a local (glx.js, tlx.js) — in RENDERER_SS_KEYS
   const written = new Set();   // "ls:key" / "ss:key"
   const renderDir = path.join(ROOT, "js/render");
   const stack = [renderDir];
@@ -1671,7 +1676,7 @@ test("terminal graphics failure hides interactive game UI and offers recovery co
 test("terminal graphics recovery works before the late menu wiring", async () => {
   const src = read("js/game.js");
   const from = src.indexOf("function showGraphicsUnavailable()");
-  const to = src.indexOf("let _claimSkipped", from);
+  const to = src.indexOf("async function start()", from);
   assert.ok(from >= 0 && to > from, "early graphics-recovery block found");
 
   function element(tag, id) {
@@ -2091,7 +2096,7 @@ test("latches come down BEFORE early returns — the shape that bricked the GLX 
   // A tab RETURN is not a race start: it must re-arm the sentinel without
   // resetting the derived frame budget (sentinelArm(true) does both).
   const game = read("js/game.js");
-  assert.match(game, /else if \(state === "race" \|\| state === "count"\) PerfGov\.sentinelResume\(\);/,
+  assert.match(game, /else if \(G.state === "race" \|\| G.state === "count"\) PerfGov\.sentinelResume\(\);/,
     "the visibilitychange handler re-arms with sentinelResume(), not sentinelArm(true)");
   assert.match(read("js/perf/governor.js"), /function sentinelResume\(\)/);
   // The env-probe latch has the same player-reachable reset as the chunk latch.
@@ -3032,9 +3037,9 @@ test("the boot probe disarms on hide and on a clean exit", () => {
   // quits inside those 5 s is silently reverted to WebGL2 on their next boot.
   assert.match(g, /function _disarmProbeOnLeave\(\)/,
     "there must be one place that drops the probe when the tab leaves");
-  assert.match(g, /if \(document\.hidden\) _disarmProbeOnLeave\(\)/,
+  assert.match(g, /if \(document\.hidden\) disarmProbeOnLeave\(\)/,
     "a hidden tab disarms: a background kill is housekeeping, not a crash");
-  assert.match(g, /pagehide[\s\S]{0,120}_disarmProbeOnLeave\(\)/,
+  assert.match(g, /pagehide[\s\S]{0,120}disarmProbeOnLeave\(\)/,
     "and a clean exit disarms, which visibilitychange does not always precede");
 });
 
@@ -5020,11 +5025,11 @@ const lazyRequire = createRequire(import.meta.url);
 const LAZY_ROOT = new URL("../../", import.meta.url);
 const source = (path) => fs.readFileSync(new URL(path, LAZY_ROOT), "utf8");
 const manifest = lazyRequire("../../tools/manifest.cjs");
-const game = source("js/game.js");
+const game = source("js/render/renderer-boot.js");
 const begin = game.indexOf("\nif (!gfx) {");
-const end = game.indexOf("\n// Baked asset pack", begin);
+const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
-const fallback = `(async function () { let gfx = null; ${game.slice(begin, end)} return gfx; })()`;
+const fallback = `(async function () { let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);

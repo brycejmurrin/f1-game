@@ -68,7 +68,8 @@ function bootInput() {
   const src = (f) => read(f).replace(/^const\b/gm, "var");
   vm.runInContext(src("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
   vm.runInContext(src("js/input/tilt-roll.js"), ctx, { filename: "js/input/tilt-roll.js" });
-  vm.runInContext(src("js/input/input.js"), ctx, { filename: "js/input/input.js" });
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+    vm.runInContext(src(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
   let paused = 0;
   Input.init(el(), { onPause: () => { paused++; } });
@@ -450,7 +451,7 @@ test("the control modes reach the wheel's layout: no paddles on AUTO gears, no G
   for (const rule of ["body.gears-auto .shift", "body.gears-auto .tap { display: flex; }", "body.throttle-auto #gas", "body.aero-auto #b-aero, body.aero-none #b-aero"]) {
     assert.ok(page.includes(rule), `controller.html styles ${rule}`);
   }
-  assert.match(read("js/game.js"), /gearsManual\(\) \? 0 : D\.gearsAuto[\s\S]*autoThrottle\(\) \? D\.throttleAuto[\s\S]*raceAeroMode === "auto" \? D\.aeroAuto[\s\S]*D\.aeroNone/,
+  assert.match(read("js/ui/platform-session.js"), /controls\.gearsManual \? 0 : D\.gearsAuto[\s\S]*controls\.autoThrottle \? D\.throttleAuto[\s\S]*G\.raceAeroMode === "auto" \? D\.aeroAuto[\s\S]*D\.aeroNone/,
     "the sampler reads the game's own mode functions");
 });
 
@@ -828,7 +829,7 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   // The phone's own door: a touch device opens controller.html from the title
   // and from CONTROLS; a mouse never sees either button (live with the pointer
   // kind, next to body.desktop). Plain navigation — no net stack on the phone.
-  const idx = read("index.html"), gameJs = read("js/game.js");
+  const idx = read("index.html"), gameJs = read("js/ui/platform-session.js") + read("js/game.js");
   assert.match(idx, /<button id="mb-phonepad" class="bigbtn alt minibtn" hidden /, "title door, hidden until the pointer is coarse");
   assert.match(idx, /<button id="pm-phonepad-go" type="button" hidden>/, "CONTROLS door, hidden until the pointer is coarse");
   assert.match(gameJs, /function syncPointerKind\(\) \{[\s\S]*?\$\("mb-phonepad"\)\.hidden = !touch;[\s\S]*?\$\("pm-phonepad-go"\)\.hidden = !touch;/,
@@ -836,10 +837,10 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(gameJs, /location\.assign\(new URL\("controller\.html", location\.href\)\.href\)/, "the door is a navigation beside index.html");
   // A linked phone is the wheel, so the screen shows VISOR (the cockpit eye past the drawn wheel)
   // while it drives, and the player's own camera comes back when the phone is gone.
-  assert.match(gameJs, /const VISOR_CAM = CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
-  assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && camMode !== VISOR_CAM\) \{ phonePadCam = camMode; setCamMode\(VISOR_CAM, \{ persist: false \}\); \}/, "linking switches to VISOR (not saved as the player's camera) and remembers the camera it left");
-  assert.match(gameJs, /phonePad\.cancel\(\); phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && camMode === VISOR_CAM\) setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
-  assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && camMode === VISOR_CAM\) setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
+  assert.match(gameJs, /const VISOR_CAM = CamModes\.CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
+  assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && G.camMode !== VISOR_CAM\) \{ phonePadCam = G.camMode; G\.setCamMode\(VISOR_CAM, \{ persist: false \}\); \}/, "linking switches to VISOR (not saved as the player's camera) and remembers the camera it left");
+  assert.match(gameJs, /phonePad\.cancel\(\); phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
+  assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
   assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
   // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
   // never under a 48px tap target, growing with the phone's height; the
@@ -885,9 +886,9 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     assert.ok(page.includes(`id="${id}"`), `controller.html declares #${id}, which its inline script hands to PhonePad.pad`);
   }
   assert.equal((page.match(/<div id="leds"[^>]*>((?:<span><\/span>)+)/) || [])[1]?.length, 15 * "<span></span>".length, "fifteen rev LEDs");
-  const game = read("js/game.js");
+  const game = read("js/ui/platform-session.js");
   assert.match(game, /hud: phonePadDash/, "game.js hands the dash sampler to PhonePad.host");
-  assert.match(game, /function phonePadDash\(\)[\s\S]*dashKph\(p\.speed\)[\s\S]*cautionLevel\(\)/, "the sampler reads the HUD's own fields");
+  assert.match(game, /function phonePadDash\(\)[\s\S]*G\.dashKph\(p\.speed\)[\s\S]*G\.cautionLevel\(\)/, "the sampler reads the HUD's own fields");
 });
 
 test('host cancellation wins over a late answer, successful or rejected', async () => {
