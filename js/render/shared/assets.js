@@ -57,11 +57,15 @@ const Assets = (function () {
 
   // ── material arrays ────────────────────────────────────────────────────────
 
-  async function _decodeStrip(file, size, present) {
+  async function _fetchStrip(file) {
     const res = await fetch(PACK_DIR + file);
     if (!res.ok) throw new Error("fetch " + file);
     const blob = await res.blob();
     _bytes += blob.size;
+    return blob;
+  }
+
+  async function _decodeStrip(blob, size, present) {
     const out = new Array(MAT_LAYERS);
     try {
       for (let i = 0; i < MAT_LAYERS; i++) {
@@ -158,7 +162,15 @@ const Assets = (function () {
 
     let albedo = null, normal = null, albedoTex = null, normalTex = null;
     try {
-      albedo = await _decodeStrip(variant.albedo, size, present);
+      // Start both downloads together; decode and upload remain sequential.
+      // Promise.all observes either rejection immediately, including a normal
+      // fetch that fails while the albedo request is still pending.
+      const [albedoBlob, normalBlob] = await Promise.all([
+        _fetchStrip(variant.albedo),
+        variant.normal ? _fetchStrip(variant.normal) : null,
+      ]);
+      if (generation !== _loadGeneration) return false;
+      albedo = await _decodeStrip(albedoBlob, size, present);
       if (generation !== _loadGeneration) {
         _discardLoad(albedo, normal, albedoTex, normalTex);
         return false;
@@ -166,7 +178,7 @@ const Assets = (function () {
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) throw new Error("albedo-upload");
       if (variant.normal) {
-        normal = await _decodeStrip(variant.normal, size, present);
+        normal = await _decodeStrip(normalBlob, size, present);
         if (generation !== _loadGeneration) {
           _discardLoad(albedo, normal, albedoTex, normalTex);
           return false;

@@ -13,6 +13,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { makeRng } from "../helpers/seeded-fuzz.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/fx/skidmarks.js"), "utf8");
@@ -51,8 +52,16 @@ test("rain re-seeds only newly visible drops when the governor sheds less", () =
   // context has no document, so a canvas path would throw here.
   let shed = 1;
   const calls = [];
+  // SEEDED: the field scatters drops with Math.random, and rainFill skips a
+  // drop whose alpha falls under 0.004 — one scattered within ~2 m of the eye
+  // (the lens fade) with a low per-drop alpha. With two shown drops that is a
+  // few percent of runs, and it failed CI's guards on 2026-10-01 ("shed level
+  // 1 draws half the seeded rain": 60 of 120 floats) on a branch that never
+  // touched the rain. A fixed seed makes the scatter the same every run.
+  const rng = makeRng(0x5eed7a1);
+  const seededMath = Object.assign(Object.create(Math), { random: () => rng.unit() });
   const ctx = vm.createContext({
-    Float32Array, Uint8Array, Array, Math, Object,
+    Float32Array, Uint8Array, Array, Math: seededMath, Object,
     LightTune: { LT: { rainCount: 4, rainStreak: 1, rainWind: 0, windDir: 0 } },
     PerfGov: { autoShed: () => shed },
   });
