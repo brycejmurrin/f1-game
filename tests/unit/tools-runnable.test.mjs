@@ -265,6 +265,17 @@ test("the MCP-facing entry points answer without touching a browser or a network
     { cmd: "python3", args: [tool("cdmcp-cli.py"), "--help"], want: /list-tools/ },
     { cmd: process.execPath, args: [tool("report-server.mjs"), "--help"], want: /--port/ },
     { cmd: process.execPath, args: [tool("garage-angles.mjs"), "--help"], want: /--plan/ },
+    { cmd: process.execPath, args: [tool("loading-probe.mjs"), "--help"], want: /PHASE ORDER|loading-probe/ },
+    { cmd: process.execPath, args: [tool("garage-frame.mjs"), "--help"], want: /garage-frame/ },
+    { cmd: process.execPath, args: [tool("flyby.mjs"), "--help"], want: /flyby/ },
+    { cmd: process.execPath, args: [tool("profile-gameloop.mjs"), "--help"], want: /cpuprofile|profile-gameloop/ },
+    { cmd: process.execPath, args: [tool("backend-compare.mjs"), "--help"], want: /backend-compare/ },
+    { cmd: process.execPath, args: [tool("apex-capture.mjs"), "--help"], want: /apex-capture/ },
+    { cmd: process.execPath, args: [tool("pit-shots.mjs"), "--help"], want: /--plan/ },
+    { cmd: process.execPath, args: [tool("motion-capture.mjs"), "--help"], want: /motion-capture|flicker/ },
+    { cmd: process.execPath, args: [tool("frame-report.mjs"), "--help"], want: /frame-report|--fleet/ },
+    { cmd: process.execPath, args: [tool("fit-audit.mjs"), "--help"], want: /fit-audit|--only/ },
+    { cmd: process.execPath, args: [tool("menu-fit.mjs"), "--help"], want: /--safe/ },
     // Prefer an explicit path so the assertion is independent of a clean vs
     // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
     // either shape is fine — the path form also exercises RULES → test:gfx.
