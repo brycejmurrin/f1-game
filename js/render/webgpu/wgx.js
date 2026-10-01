@@ -3863,13 +3863,20 @@ const WGX = (function () {
     // variants, the FX ones do not, and the mirror draws world + car bodies only.
     // _mirrorComposite draws it, flipped (BLIT params.y), into the HUD rect.
     let mirTex = null, mirView = null, mirDepthTex = null, mirDepthView = null, mirW = 0, mirH = 0;
+    // MIPMAPPED: the target is supersampled (mirror-pass.js SS) and minified into
+    // the HUD rect; BLIT's level-0 read skipped texels and the image shimmered.
+    // mirView is the render attachment (level 0 only), mirSampleView the chain
+    // the composite reads at the level params.z names, through _mirSamp
+    // (mipmapFilter linear — linearSampler has none). _generateMips rebuilds the
+    // chain after each mirror submit.
+    let mirSampleView = null, _mirSamp = null;
     let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
     let _mirUBO = null, _mirBG = null;
     const _mirData = new Float32Array(4);
     function _mirrorFree() {
       try { if (mirTex) mirTex.destroy(); } catch (_) { /* already invalid */ }
       try { if (mirDepthTex) mirDepthTex.destroy(); } catch (_) { /* already invalid */ }
-      mirTex = mirView = mirDepthTex = mirDepthView = null; _mirBG = null; mirW = mirH = 0; _mirRenders = 0;
+      mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; mirW = mirH = 0; _mirRenders = 0;
     }
     function mirrorBegin(frame, w, h) {
       // litPass/encoder set = begin() already ran this frame (or a probe face
@@ -3880,8 +3887,10 @@ const WGX = (function () {
         _mirrorFree();
         try {
           mirTex = device.createTexture({ size: [w, h], format: SCENE_FORMAT,
+            mipLevelCount: Math.floor(Math.log2(Math.max(w, h))) + 1,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-          mirView = mirTex.createView();
+          mirView = mirTex.createView({ baseMipLevel: 0, mipLevelCount: 1 });
+          mirSampleView = mirTex.createView();
           mirDepthTex = device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT });
           mirDepthView = mirDepthTex.createView();
           mirW = w; mirH = h;
@@ -3912,6 +3921,7 @@ const WGX = (function () {
         if (litPass) { _flushLitRings(); litPass.end(); }
         device.queue.submit([_mirEncoder.finish()]);
         _mirRenders++;
+        _generateMips(mirTex, 1);   // its own submit, after the pass that wrote level 0
       } finally {
         litPass = null; encoder = null; _mirEncoder = null;
       }
@@ -3920,15 +3930,18 @@ const WGX = (function () {
     // the soft-display and capture copies read it. Its own UBO: blitUBO is
     // queue-written by the fallback blit in this same submit.
     function _mirrorComposite(exposure) {
-      if (!_mirRect || !mirView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
+      if (!_mirRect || !mirSampleView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
       const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
       const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
       const w = Math.min(cw - x, Math.round(_mirRect[2] * cw)), h = Math.min(ch - y, Math.round(_mirRect[3] * ch));
       if (w < 2 || h < 2 || x < 0 || y < 0) return;
       if (!_mirUBO) _mirUBO = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      if (!_mirSamp) _mirSamp = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" });
       if (!_mirBG) _mirBG = device.createBindGroup({ layout: blitPipeline.getBindGroupLayout(0), entries: [
-        { binding: 0, resource: mirView }, { binding: 1, resource: linearSampler }, { binding: 2, resource: { buffer: _mirUBO } }] });
-      _mirData[0] = exposure; _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = 0; _mirData[3] = 0;   // y = flip left-right (0: the broadcast PiP)
+        { binding: 0, resource: mirSampleView }, { binding: 1, resource: _mirSamp }, { binding: 2, resource: { buffer: _mirUBO } }] });
+      // z = the mip level for this minification (target texels per rect pixel, log2).
+      const lod = Math.max(0, Math.log2(Math.max(mirW / w, mirH / h)));
+      _mirData[0] = exposure; _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = lod; _mirData[3] = 0;   // y = flip left-right (0: the broadcast PiP)
       device.queue.writeBuffer(_mirUBO, 0, _mirData);
       const mp = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "load", storeOp: "store" }] });
       mp.setViewport(x, y, w, h, 0, 1);
