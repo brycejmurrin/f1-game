@@ -9,7 +9,7 @@
       "lines": 3217
     },
     "js/car/car3d.js": {
-      "lines": 4115
+      "lines": 4097
     },
     "js/game.js": {
       "codeLines": 5160,
@@ -27,7 +27,7 @@
       "lines": 2766
     },
     "js/track/tracks.js": {
-      "lines": 932
+      "lines": 940
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
