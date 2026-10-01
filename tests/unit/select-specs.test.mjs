@@ -14,7 +14,7 @@ import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
-  scopeCarryForward } from "../../tools/ci/select-specs.mjs";
+  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
@@ -695,6 +695,23 @@ test("mega-sweep over-budget specs never overflow into a shared selected job", (
   assert.match(plan[0].name, /^oversize-props-over-road/);
 });
 
+test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {
+  // PR #611: modes-group routing alone left career.spec.js in overBudgetSpecs
+  // (declares 540 s), so EXPORT/IMPORT reusing .cr-slot-del shipped green.
+  const over = "tests/specs/career.spec.js";
+  assert.ok(SOURCE_AFFECTED.some(([re, spec]) =>
+    re.test("js/career/career-ui.js") && re.test("js/career/career-backup.js") && spec === over));
+  assert.deepEqual(specsAffectedBySource(["js/career/career-ui.js"]), [over]);
+  assert.deepEqual(specsAffectedBySource(["js/career/career-backup.js"]), [over]);
+  assert.deepEqual(specsAffectedBySource(["js/career/career.js"]), [],
+    "other career modules stay merely routed");
+  // Rank 2 (import / foundation / SOURCE_AFFECTED) must put it in oversize.
+  const pinned = fit([over], 30, { rank: (f) => (f === over ? 2 : 3), db: EMPTY });
+  assert.deepEqual(pinned.oversize.map((s) => s.file), [over],
+    "SOURCE_AFFECTED rank runs the over-budget career.spec as oversize");
+  assert.equal(pinned.overBudgetSpecs.length, 0);
+});
+
 test("a spec this tool cannot READ is reported, never silently dropped", () => {
   // It used to `continue` into no bucket at all, in a file whose entire
   // contract is that nothing leaves the selection unaccounted for. Reachable
@@ -787,7 +804,9 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.equal(foundationSpec("albert_park"), "tests/specs/albert-park-foundation.spec.js");
   assert.ok(fs.existsSync(path.join(ROOT, foundationSpec("imola"))));
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /ownFoundations\.includes\(f\)\) \? 2 : 3/, "own foundation specs rank as affected (2)");
+  // ownFoundations share rank 2 with imports and SOURCE_AFFECTED pins.
+  assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\)\) \? 2 : 3/,
+    "own foundation specs rank as affected (2)");
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
 });
 
