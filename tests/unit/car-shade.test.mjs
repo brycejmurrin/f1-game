@@ -77,6 +77,49 @@ test("the loft is closed and every face points out", () => {
   for (const [k, n] of edges) assert.equal(n, 2, "open edge " + k);
 });
 
+test("the rounded sidepod is closed, faces out, and keeps the flank flat where the sponsor decal sits", () => {
+  const st = [
+    { z: 0.62, inner: 0.30, outer: 0.66, innerBottom: 0.235, outerBottom: 0.258, innerTop: 0.45, outerTop: 0.46 },
+    { z: 0.22, inner: 0.29, outer: 0.70, innerBottom: 0.20, outerBottom: 0.208, innerTop: 0.49, outerTop: 0.475 },
+    { z: -1.48, inner: 0.23, outer: 0.38, innerBottom: 0.13, outerBottom: 0.134, innerTop: 0.30, outerTop: 0.27 },
+  ];
+  for (const side of [-1, 1]) {
+    for (const p of st) {
+      const ring = CarShade.podRing(p, side);
+      let area = 0;
+      for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; area += a[0] * b[1] - b[0] * a[1]; }
+      assert.ok(area > 0, "counter-clockwise from +Z on either side");
+      // The flank between 10 % and 88 % of its height is the straight outer
+      // edge, x = outer: the decal (32-80 %) and flank details stay on it.
+      const h = p.outerTop - p.outerBottom;
+      const flank = ring.filter((q) => Math.abs(Math.abs(q[0]) - p.outer) < 1e-9);
+      assert.ok(flank.length >= 2, "a straight flank survives");
+      const ys = flank.map((q) => q[1]);
+      assert.ok(Math.min(...ys) <= p.outerBottom + 0.10 * h + 1e-9 && Math.max(...ys) >= p.outerTop - 0.12 * h - 1e-9);
+      for (const q of ring) assert.ok(Math.abs(q[0]) <= p.outer + 1e-9 && q[1] <= Math.max(p.innerTop, p.outerTop) + 1e-9, "inside the old section");
+    }
+  }
+  const out = { tris: [] };
+  CarShade.podLoft(out, st, [1, 0, 0], [0, 0, 0], (o, a, b, c) => o.tris.push([a, b, c]));
+  const key = (p) => p.map((v) => v.toFixed(6)).join(",");
+  const edges = new Map();
+  for (const [a, b, c] of out.tris) for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+    const k = [key(p), key(q)].sort().join("|");
+    edges.set(k, (edges.get(k) || 0) + 1);
+  }
+  for (const [k, n] of edges) assert.equal(n, 2, "open edge " + k);
+  // Outward: every face points away from its own pod's centre line.
+  for (const [a, b, c] of out.tris) {
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    const m = [(a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3, (a[2] + b[2] + c[2]) / 3];
+    const s = Math.sign(m[0]), cx = s * 0.45, cy = 0.30;
+    const d = [m[0] - cx, m[1] - cy, 0];
+    if (Math.abs(n[2]) > Math.hypot(n[0], n[1])) continue;   // the end caps
+    assert.ok(n[0] * d[0] + n[1] * d[1] > 0, "outward");
+  }
+});
+
 function meshOf(tris, mat = 20) {
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   for (const [a, b, c] of tris) {
@@ -151,11 +194,11 @@ test("Car3D: OFF is the build that never heard of CarShade; ON is finite, unit-n
     return b; };
   const bOn = bounds(on), bRef = bounds(ref);
   for (let k = 0; k < 6; k++) assert.ok(Math.abs(bOn[k] - bRef[k]) < 1e-6, "same overall bounds: the round section stays inside the trapezoid");
-  // Only the body sections change; every other part is vertex-for-vertex the same.
+  // Only the body sections (nose/tub, deck, sidepods) change; every other part is vertex-for-vertex the same.
   const byName = (m) => Object.fromEntries(m.parts.map((p) => [p.name, p]));
   const pOn = byName(on), pRef = byName(ref);
   for (const name of Object.keys(pRef)) {
-    if (name === "chassis" || name === "hood") continue;
+    if (name === "chassis" || name === "hood" || name === "sidepods") continue;
     assert.equal(pOn[name].vertices, pRef[name].vertices, name + " untouched");
   }
   assert.ok(ms < 1500, `a smoothed build stays cheap enough for a garage pick (${ms} ms)`);
@@ -163,4 +206,21 @@ test("Car3D: OFF is the build that never heard of CarShade; ON is finite, unit-n
   const ck = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], { teamId: "mclaren", smooth: true, cockpit: true });
   const ck0 = Plain.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], { teamId: "mclaren", cockpit: true });
   assert.deepEqual(A(ck.pos), A(ck0.pos)); assert.deepEqual(A(ck.nrm), A(ck0.nrm));
+});
+
+test("tyres, with the switch on for any car: the tread shoulder is shaded from its real shape, same geometry, unit normals", () => {
+  const store = new Map([["apex26.carSmooth", "mclaren"]]);
+  const ls = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem() {}, removeItem() {} };
+  const { Car3D: On } = load(true, ls), { Car3D: Off } = load(false);
+  const a = Off.buildWheel(0.34, [0.9, 0.9, 0.9]), b = On.buildWheel(0.34, [0.9, 0.9, 0.9]);
+  assert.notDeepEqual(Array.from(b.nrm), Array.from(a.nrm), "the wheel changes");
+  for (let i = 0; i < b.nrm.length; i += 3) {
+    const l = Math.hypot(b.nrm[i], b.nrm[i + 1], b.nrm[i + 2]);
+    assert.ok(Math.abs(l - 1) < 1e-4, "unit normal");
+  }
+  assert.deepEqual(Array.from(b.pos), Array.from(a.pos), "no vertex moves: the compound band and lettering stay where they were");
+  // The tread shoulder now leans out along the axle: a radial-only normal has x = 0.
+  assert.ok(b.nrm.some((v, i) => i % 3 === 0 && Math.abs(v) > 0.05 && b.mat[i / 3] === On.SURFACES.rubber), "shoulder normals tilt");
+  const layers = On.buildWheelLayers(0.34, [0.9, 0.9, 0.9]);
+  assert.ok(layers.rotating.pos.length > 0 && layers.fixed.pos.length > 0, "the layered wheel builds too");
 });

@@ -20,6 +20,14 @@
  *   shades round; a real edge (a box corner, a wing trailing edge) stays
  *   sharp. Normals only: no vertex moves, so every placement datum holds.
  *
+ *   ROUNDED SIDEPODS (podLoft): the same seven pod stations, with the two
+ *   OUTER corners rounded (top and underside); the flank stays flat where the
+ *   sponsor decal and flank details sit.
+ *
+ *   SHADED TYRE SHOULDERS (vertexNormals): the tread's ring normals were
+ *   purely radial, so its rounded shoulder never caught the light; they now
+ *   come from the tread's real shape. No vertex moves.
+ *
  * THE SWITCH. `apex26.carSmooth` in storage, or `?carsmooth=` in the URL
  * (the URL wins for that page load): "1" / "all" for every car, a team id
  * ("mclaren") for that team's car only, anything else off. Read once per
@@ -56,6 +64,8 @@ const CarShade = (function () {
   }
   /** Is it on for this team's car? */
   function on(teamId) { const p = pref(); return p === "*" || (!!p && p === teamId); }
+  /** On for ANY car: wheels are built and cached apart from teams, so they follow the switch whenever it is on. */
+  function any() { return !!pref(); }
 
   // Points round a ROUNDED TRAPEZOID: |u|^p + |v|^p = 1, then the half-width
   // tapers from w/2 at the bottom to t*w/2 at the top exactly as frame() does.
@@ -89,6 +99,77 @@ const CarShade = (function () {
     }
   }
 
+  // A SIDEPOD section (car3d sidepodStations: inner/outer x, bottom/top y at
+  // each edge) with its two OUTER corners rounded. The radii bite mostly into
+  // the top and the underside and only the outer 12 % / 10 % of the flank, so
+  // the flank decal (32-80 % of its height, js/car/car-mesh.js podDecal) and
+  // every flank detail stay on flat skin; parts that sit on the pod top near
+  // its edge (ERS intakes, chimneys, ducts: 8-18 mm proud) see the surface
+  // drop by under 1 cm. CCW seen from +Z for either side.
+  const POD_ARC = 4;
+  function podRing(st, side) {
+    const w = st.outer - st.inner, hO = st.outerTop - st.outerBottom;
+    const rxT = Math.min(0.07, 0.25 * w), ryT = Math.min(0.05, 0.12 * hO);
+    const rxB = Math.min(0.06, 0.22 * w), ryB = Math.min(0.035, 0.10 * hO);
+    const pts = [[st.inner, st.innerBottom]];
+    for (let k = 0; k <= POD_ARC; k++) {   // underside -> flank
+      const a = -Math.PI / 2 + (k / POD_ARC) * Math.PI / 2;
+      pts.push([st.outer - rxB + rxB * Math.cos(a), st.outerBottom + ryB + ryB * Math.sin(a)]);
+    }
+    for (let k = 0; k <= POD_ARC; k++) {   // flank -> top
+      const a = (k / POD_ARC) * Math.PI / 2;
+      pts.push([st.outer - rxT + rxT * Math.cos(a), st.outerTop - ryT + ryT * Math.sin(a)]);
+    }
+    pts.push([st.inner, st.innerTop]);
+    const ring = pts.map(([x, y]) => [side * x, y, st.z]);
+    return side < 0 ? ring.reverse() : ring;
+  }
+  /** Loft closed rings front -> rear (each CCW from +Z, same count), capped:
+   *  the front cap in `frontCol`, the rear in `col`. */
+  function loftRings(out, rings, col, frontCol, tri) {
+    const n = rings[0].length;
+    for (let r = 0; r < rings.length - 1; r++) {
+      const F = rings[r], R = rings[r + 1];
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        tri(out, F[i], R[i], R[j], col);
+        tri(out, F[i], R[j], F[j], col);
+      }
+    }
+    const cap = (ring, c, flip) => {
+      const m = [0, 0, 0];
+      for (const p of ring) { m[0] += p[0] / n; m[1] += p[1] / n; m[2] += p[2] / n; }
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        if (flip) tri(out, m, ring[j], ring[i], c); else tri(out, m, ring[i], ring[j], c);
+      }
+    };
+    cap(rings[0], frontCol || col, false);
+    cap(rings[rings.length - 1], col, true);
+  }
+  /** Both sidepods from car3d's station list, rounded. */
+  function podLoft(out, stations, col, frontCol, tri) {
+    for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side)), col, frontCol, tri);
+  }
+
+  /** Smooth vertex normals from the faces of an INDEXED vertex range [from, to):
+   *  the tyre tread, whose ring normals were purely radial, so its rounded
+   *  shoulder never caught the light. Only triangles wholly inside the range. */
+  function vertexNormals(out, from, to) {
+    const P = out.pos, N = out.nrm, I = out.idx, acc = new Float64Array((to - from) * 3);
+    for (let t = 0; t + 2 < I.length; t += 3) {
+      const a = I[t], b = I[t + 1], c = I[t + 2];
+      if (a < from || a >= to || b < from || b >= to || c < from || c >= to) continue;
+      const ux = P[b * 3] - P[a * 3], uy = P[b * 3 + 1] - P[a * 3 + 1], uz = P[b * 3 + 2] - P[a * 3 + 2];
+      const wx = P[c * 3] - P[a * 3], wy = P[c * 3 + 1] - P[a * 3 + 1], wz = P[c * 3 + 2] - P[a * 3 + 2];
+      const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;   // area-weighted
+      for (const v of [a, b, c]) { const k = (v - from) * 3; acc[k] += nx; acc[k + 1] += ny; acc[k + 2] += nz; }
+    }
+    for (let v = from; v < to; v++) {
+      const k = (v - from) * 3, l = Math.hypot(acc[k], acc[k + 1], acc[k + 2]);
+      if (l > 0) { N[v * 3] = acc[k] / l; N[v * 3 + 1] = acc[k + 1] / l; N[v * 3 + 2] = acc[k + 2] / l; }
+    }
+  }
   /** Crease-angle normal smoothing over a Car3D mesh, in place, read through
    *  `idx`: most of car3d emits three fresh vertices per triangle with a face
    *  normal, but tubes (halo, harness) share ring vertices that already carry
@@ -165,6 +246,6 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, on, set, pref, ring, loft, smooth, _norm: norm };
+  return { KEY, RING_N, EXP, on, any, set, pref, ring, loft, podRing, loftRings, podLoft, vertexNormals, smooth, _norm: norm };
 })();
 Object.freeze(CarShade);
