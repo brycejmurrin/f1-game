@@ -22,12 +22,12 @@ const InputGhost = (function () {
   let accessClock = Date.now();
   const pending = new Map();
   let _enc = null;
+  const clamp = M4.clamp;
 
   function round(v, places) {
     const m = Math.pow(10, places);
     return Math.round(v * m) / m;
   }
-  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
   function byteLength(json) {
     if (typeof TextEncoder === "function") {
       if (!_enc) _enc = new TextEncoder();

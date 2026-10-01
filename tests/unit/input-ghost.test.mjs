@@ -36,6 +36,7 @@ function createHarness(opts = {}) {
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
   seedSaveMigrate(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js", "core", "mat4.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js", "core", "store.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js", "car", "input-ghost.js"), "utf8"), ctx);
   return {
