@@ -17,11 +17,11 @@ Ship tip at start of work: `cd4ec4c6f` (later advanced; fix PRs branched from th
 
 | PR | Concern | Status |
 |---|---|---|
-| [#675](https://github.com/brycejmurrin/f1-game/pull/675) | `occlusion-estimate.mjs` ROOT one level too shallow (`MODULE_NOT_FOUND`) | ready when CI green on head |
+| [#675](https://github.com/brycejmurrin/f1-game/pull/675) | `occlusion-estimate.mjs` ROOT one level too shallow (`MODULE_NOT_FOUND`) | ready-for-review (full-tier CI after draft→ready) |
 | [#676](https://github.com/brycejmurrin/f1-game/pull/676) | `twin-fidelity.mjs --help` ran the full mutant suite (~5 min) | draft until CI green |
 | [#680](https://github.com/brycejmurrin/f1-game/pull/680) | env scripts + `live-run.py` ignored `--help` / bare argv | draft until CI green |
 | [#685](https://github.com/brycejmurrin/f1-game/pull/685) | `quick-validate` required deferred `GLXShaders` under TLX default | draft until CI green |
-| (this) | docs report | draft |
+| [#689](https://github.com/brycejmurrin/f1-game/pull/689) | this docs report | draft until docs guards green |
 
 ## Table
 
