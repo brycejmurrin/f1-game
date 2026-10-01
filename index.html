@@ -1549,7 +1549,15 @@
         </div>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
           <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
-        <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
+        <div id="as-ui" class="set-row" role="group" aria-labelledby="as-ui-label">
+          <span class="tune-label" id="as-ui-label">MENU SOUNDS</span>
+          <div>
+            <button id="as-ui-prev" type="button" data-step="-1" aria-label="Previous menu sounds">&lsaquo;</button>
+            <select id="as-ui-sel" aria-labelledby="as-ui-label"></select>
+            <button id="as-ui-next" type="button" data-step="1" aria-label="Next menu sounds">&rsaquo;</button>
+          </div>
+        </div>
+        <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music. MENU SOUNDS turns off just the button clicks.</p>
       </details>
 
       <!-- THE RADIO, SPOKEN. The same cards, read out by the browser's own voice
@@ -3505,6 +3513,7 @@
 <script defer crossorigin="anonymous" src="js/input/steer-tuning.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/governor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/loop-health.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/perf/race-entry-profile.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/quality-preset.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/renderer-picker.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/gfx-debug-overlay.js?v=dev"></script>

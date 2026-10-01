@@ -866,12 +866,10 @@ const Car3D = (function () {
   // ~100 mm inboard of the tyre face on each side (1800 mm against a 2000 mm
   // car in 2022-25; ~1700 against 1900 for 2026), and that gap is the whole
   // point of the endplate — the wake is pushed AROUND the outside of the tyre.
-  //
   // The widest vertex is the endplate footplate, which grows outboard as
   // `epX + s*(PLATE.footW * 0.23)`: uncapped, every endplate spec clears the
   // 0.95 tyre face (1.016 / 1.045 / 1.089 / 1.067), a 2.09 m wing on a 1.90 m
   // car that reads head-on like a wing bolted to a narrower car.
-  //
   // 0.715 is set by the WIDEST option, not the default: sweeping all 31 aero
   // options, `outwash_max` and `reg26_concept` reach span + 0.240 (the spec-3
   // endplate's outboard kick plus its curled outwash lip, which is more than
@@ -928,12 +926,10 @@ const Car3D = (function () {
   // baked angle. Without it the travel is only the element's natural 12-16 deg,
   // which is accurate but barely reads; with it a downforce wing is visibly
   // steeper AND has real angle to give back when it opens.
-  //
   // Per wing, because the two do not do the same job. A 2026 rear wing runs
   // 30-40 deg of flap in its downforce setting and gives essentially all of it
   // back in X-mode — that is where the lap time is. The front wing only trims
   // enough to keep the balance, and is boxed in by the nose above it besides.
-  //
   // The front is ZERO, and that is a fix rather than a shrug. A front cascade is
   // designed to nest: each element's trailing edge passes ~12 mm under the
   // leading edge of the one above it. Adding bite rotates every element steeper
@@ -945,7 +941,6 @@ const Car3D = (function () {
   const Z_BITE = { front: 0, rear: 0.34 };
   // Where each element pivots, as a fraction of its own chord: 0 = leading edge,
   // 1 = trailing edge.
-  //
   // This is the thing that makes an opening wing read as opening. Rotating about
   // the LEADING edge (which is what this did) changes incidence but leaves the
   // hinge line — the point nearest the element ahead — exactly where it was, so
@@ -953,7 +948,6 @@ const Car3D = (function () {
   // DRS/X-mode flap pivots near its TRAILING edge: the leading edge swings up and
   // away from the element in front of it and daylight appears through the wing,
   // which is both the mechanism and the visual.
-  //
   // The rear goes almost fully trailing-edge-pivoted, as the real actuator does.
   // The front stays near its LEADING edge, which is both what the real hardware
   // does (a front flap pivots on the slot-gap brackets at its nose, not on an
@@ -1127,26 +1121,22 @@ const Car3D = (function () {
     }
   }
   // SOLVED ONCE PER (level, recipe), NEVER PER FRAME.
-  //
   // aeroFlapsGeom is not a table lookup — hinged() SEARCHES for each element's
   // pivot: up to 9 candidate hinges, each solving two end poses, each backing
   // off in up to 121 steps, each step sampling 41 points against the nose
   // underside and the element below. That is per element, and a wing has five
   // to eight of them.
-  //
   // drawAeroFlaps (js/game.js) calls this for EVERY CAR, EVERY FRAME, because a
   // rival's wings opening is the point of the feature. At one car — a time
   // trial — the solver is merely expensive. At twenty-two it is the frame, and
   // that is exactly how it presented: time trial fine, a race slow enough that
   // the resolution governor bottomed out and started shedding features, which
   // read as a broken renderer rather than a slow one.
-  //
   // Nothing in the result depends on the car or on the blend: the records carry
   // both end poses (zAngle/xAngle) and drawAeroFlaps interpolates between them
   // at draw time. So the whole search is a pure function of (aLvl, recipe), and
   // memoising it is not an optimisation so much as fixing a category error.
   // Bounded by five levels times the handful of aero recipes in the catalog.
-  //
   // Callers MUST treat the records as immutable — they are shared now.
   const _flapSpecs = new Map();
   const _flapSig = new WeakMap();
@@ -1281,7 +1271,6 @@ const Car3D = (function () {
   // parked car and buries itself ~30 mm with the wing open. A guard against
   // the element's axis-aligned BOUNDING BOX cannot see that: the rotation
   // makes the box tall enough to swallow the error.
-  //
   // It cannot FOLLOW the flap — baked into the static decal mesh, flap drawn
   // separately with no atlas UVs of its own — so rest is the pose it is authored
   // for and it lifts off as the wing opens, as the sponsor does on the real
@@ -1782,7 +1771,6 @@ const Car3D = (function () {
     // on the car rather than in it. addLoft emits all six faces and there is no CSG here,
     // so the hole has to come from HOW the span is built: a tub capped at the
     // seat floor, a rail either side, and the well closed behind.
-    //
     // Every number below is measured off the span's own stations, not styled:
     // the tub bottom is 0.195 the whole way, the deck top runs 0.635 -> 0.660
     // and the top half-width 0.197 -> 0.150. Rails come out ~4.5 cm across at
@@ -2112,7 +2100,6 @@ const Car3D = (function () {
     };
   }
 
-
   function applyBodySplit(out, i0, i1, leftC, rightC) {
     for (let i = i0; i < i1; i++) {
       if (out.mat[i] !== SURFACES.paint) continue;
@@ -2226,8 +2213,11 @@ const Car3D = (function () {
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
     // The cowl stays ahead of the wheel and rises to its surround, beneath
     // the raised hand position; the exterior aperture keeps its own datums.
+    const bodyShape = ckpt && ["sculpted", "wide"].includes(opts.cockpitBody) ? opts.cockpitBody : "standard";
     const hR = ckpt ? { z: 0.58, y: 0.59, w: 0.66, h: 0.13, t: 0.58 }
                     : { z: 0.30, y: 0.545, w: 0.42, h: 0.13, t: 0.58 };   // stops at the aperture (0.28), top 0.610 onto the tub line
+    if (bodyShape === "wide") hR.w += 0.10;
+    if (bodyShape === "sculpted") { hR.w -= 0.06; hR.y -= 0.015; }
     // The cockpit cowl rounds into the opening rather than forming one wedge.
     const deck = ckpt ? [hF, { z: 0.86, y: 0.56, w: 0.58, h: 0.12, t: 0.62 }, hR] : [hF, hR];
     for (let i = 0; i < deck.length - 1; i++) {
@@ -2256,6 +2246,10 @@ const Car3D = (function () {
           [[s*0.285,0.37,0.94],[s*0.565,0.29,0.94],[s*0.535,0.655,0.91],[s*0.285,0.69,0.91]],
           [[s*0.32,0.40,-0.04],[s*0.55,0.32,-0.04],[s*0.53,0.73,-0.10],[s*0.32,0.755,-0.10]],
         ];
+        for (let i=0;i<3;i++) for (const j of [1,2]) {
+          shoulder[i][j][0] += s * (bodyShape === "wide" ? [0.025,0.075,0.070][i] : bodyShape === "sculpted" ? [-0.015,-0.045,0.015][i] : 0);
+          if (j === 2) shoulder[i][j][1] += bodyShape === "wide" ? 0.020 : bodyShape === "sculpted" ? [0,0.035,-0.012][i] : 0;
+        }
         for (let i=0;i<2;i++) addBlock(out, shoulder[i].concat(shoulder[i+1]), c1);
         // Rolled carbon edge follows the opening back beside the driver's hands.
         addTube(out,[[s*0.315,0.745,-0.10],[s*0.280,0.680,0.91],[s*0.295,0.610,1.46]],0.012,4,CARBON,SURFACES.carbon);
@@ -2882,13 +2876,11 @@ const Car3D = (function () {
     // real cars carry no nose DRL, and the only mandated lamp is the rear rain
     // light modelled elsewhere. This is a styling read — the >1 albedo blooms at
     // night and gives the car a forward-facing signature at grid distance.
-    //
     // Restored, not invented. The original pass placed it at literal z 2.62 and
     // 2.70; the tip is now styledTipZ (~2.60) after the nose was cut back 580 mm,
     // so those literals sit AHEAD of the car and the geometry was silently lost.
     // Re-expressed off noseAt() like every other nose graphic here, which is also
     // what lets the drlNoseMaxGap assertion mean something.
-    //
     // glass, never SURFACES.emissive: id 25 is functionalEmissive, contractually
     // RESERVED for the rain light (parts-physics "reserves emissive surfaces for
     // the FIA rain light" treats any other position as an offender), and paint is
@@ -3153,14 +3145,12 @@ const Car3D = (function () {
     // the seat, arms reaching forward and a wheel under the hands are what say
     // "someone is sitting in there" — three shapes, 0 textures, and they do
     // more for the look than every millimetre of rim geometry did.
-    //
     // Sized off the opening rather than styled: the coaming abreast of the
     // driver sits at ~0.626 and the seat floor at 0.47, so the shoulders top
     // out at 0.585 — 4 cm proud of the floor's far side and 4 cm UNDER the
     // rail, which is what leaves a visible gap of tub either side instead of
     // a shoulder line jammed against the coaming. Half-width 0.145 against an
     // opening half-width of 0.184 keeps the suit clear of the rails.
-    //
     // EXTERIOR ONLY. The first-person build draws the driver's own wheel
     // (getCockpitWheel) and must not also carry a torso, which would sit in
     // the camera; noDriver drops the lot for the studio's empty-car shots.
@@ -3717,7 +3707,6 @@ const Car3D = (function () {
       // grey slab the full width of the car with the brake light floating on it.
       // The diffuser is the most
       // recognisable thing about the back of an F1 car and none of it was there.
-      //
       // Built as two tunnels either side of the crash structure: a ramped
       // ceiling, an outer wall, strakes, and a gurney across the trailing edge.
       // Every piece is a thin CLOSED solid rather than an open quad, so the

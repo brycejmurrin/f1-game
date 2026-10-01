@@ -2860,18 +2860,9 @@ function dropRaceWake() {
 // caller is a click handler that ignores the result and makes startRace() its
 // last statement, and the specs already poll `__apex.info().track != null`
 // rather than assuming race() returns built, so nothing downstream changes.
-// RACE-ENTRY PROFILE — the same stopwatch tracks.js keeps over the build, one
-// level out. Run 128/129 measured race entry on real hardware at 2193 ms of
-// contiguous main-thread block on the default backend and found the track
-// build is only 23 % of it; the other three-and-a-half seconds have no name
-// (docs/notes/MULTITHREADING-PLAN-2026-09-16.md §8). Two candidates were ruled
-// out by reading rather than by measuring — shader compilation, because glx.js
-// already takes KHR_parallel_shader_compile, and the lazy scenery fetch,
-// because the largest circuit module in the tree is 58 KB — so the rest has to
-// be attributed rather than guessed. Anything optimised before this row exists
-// is aimed at a quarter of the problem.
-let _raceProfile = [];
-function raceProfile() { return _raceProfile; }
+// Race-entry stopwatch + longtask ring: js/perf/race-entry-profile.js
+// (PERF-OPTIONS-2026-09-16.md — build is ~23 % of the freeze; attribute the rest).
+function raceProfile() { return RaceEntryProfile.legs(); }
 // DEFECT-LEDGER's un-awaited-startRace family: six fire-and-forget callers
 // (closeQualiToGrid, q-drive, pm-restart, the season/quali continue button,
 // RaceSettings' RACE! route, DailyChallenge.open) never awaited this, so a double-click or a second
@@ -2879,8 +2870,7 @@ function raceProfile() { return _raceProfile; }
 // startRace() wrapper below latches concurrent calls onto the one in-flight
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
-  _raceProfile = []; let _rt = performance.now();
-  const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
+  const rlap = (n) => RaceEntryProfile.lap(n);
   rlap("scenery");
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -3020,7 +3010,7 @@ async function startRaceBody() {
   // TLX links programs synchronously on first draw — warm them during the LIGHTS,
   // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
   // Optimisation only; GLX/WGX have no warm and no-op.
-  try { if (gfx.warm && _warmKey !== menuKey(trackIdx)) gfx.warm(); } catch (_) { /* as above */ }
+  try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
@@ -3028,7 +3018,7 @@ async function startRaceBody() {
   // lowers it with the first frame the backend presents (LoadingScreen.handoff).
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build") && !!player;   // "build": startRaceCovered's card
   clearMenuScreens();
-  if (handoff) loadingScreen.handoff();
+  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -3054,8 +3044,8 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
-  warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
-  DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
+  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -3075,8 +3065,8 @@ function entrySettings() {
 }
 function startRace() {
   const key = entrySettings(), idx = trackIdx;
-  const request = sessionEntry.begin("race", key, () => ensureScenery(idx),
-    () => startRaceBody(), () => key === entrySettings(),
+  const request = RaceEntryProfile.runSession(sessionEntry, key,
+    () => ensureScenery(idx), () => startRaceBody(), () => key === entrySettings(),
     (e) => { if (e) Log.error("game", "startRace failed", e); quitToMenu(); });
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
@@ -8283,9 +8273,7 @@ function render(dt) {
   }
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
-  // The pre-race screen comes down with the race's FIRST PRESENTED frame
-  // (LoadingScreen.handoff): a present that only started the warm painted nothing.
-  if (loadingScreen.phase() === "handoff" && !(gfx.warming && gfx.warming())) loadingScreen.stop();
+  RaceEntryProfile.afterPresent(loadingScreen, gfx);
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
   // reverts on the next boot, which is the whole point of it.
