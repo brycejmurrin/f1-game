@@ -348,6 +348,12 @@
   --tap: max(44px, calc(24px / var(--ui-scale)));      /* minimum interactive box */
   --chip-h: max(40px, calc(24px / var(--ui-scale)));   /* chips are secondary */
   --tap-sm: max(30px, calc(24px / var(--ui-scale)));   /* paired micro-toggles */
+  /* The shipped --tap / --chip-h, frozen (the touch ladder below re-freezes
+     its own), so APPEARANCE ›
+     BUTTON HEIGHT can rescale them on one screen without a self-reference
+     (css/responsive.css SCREEN LOOKS, js/ui/screen-looks.js). */
+  --tap-0: var(--tap);
+  --chip-h-0: var(--chip-h);
   /* THE WCAG FLOOR, AND THE ONE LENGTH HERE THAT DIVIDES BY THE SCALE.
      The note below is right that a size token must NOT pre-multiply — a zoomed
      subtree already scales what it inherits, and doing both double-counts. A
@@ -740,6 +746,8 @@ body:not(.desktop) {
   --tap: max(52px, calc(24px / var(--ui-scale)));
   --chip-h: max(46px, calc(24px / var(--ui-scale)));
   --tap-sm: max(36px, calc(24px / var(--ui-scale)));
+  --tap-0: var(--tap);         /* the touch values, frozen here too (see :root) */
+  --chip-h-0: var(--chip-h);
   /* Same ≥14 CSS floor as :root — 13px under .sheet zoom 0.9 paints 11.7. */
   --label: 14px;
 }

@@ -80,9 +80,15 @@ const RadioVoice = (function () {
    * announcer's whole preference chain (js/audio/announcer.js PREFERRED) matched
    * nothing at all. */
   const REMOTE_OK = Object.freeze({ announcer: true });
-  // Speakers with a RECORDED voice (js/audio/voice-pack.js): the pack is tried
-  // first and speech synthesis speaks only what it cannot cover whole.
-  const PACK_VOICE = Object.freeze({ radio: "george" });
+  /* EVERY RACE CHANNEL HAS A RECORDED VOICE (js/audio/voice-pack.js), and with
+   * RADIO VOICE: RECORDED a race never touches speech synthesis: a line no pack
+   * can say whole stays written on its card. Speech synthesis is synchronous IPC
+   * on the main thread, and on iPhone Safari each line held the game up (and
+   * took the audio session from the race) — every commentary, race control and
+   * coach line went that way while only the engineer had clips
+   * (docs/notes/VOICE-LAG-IPHONE-2026-10-01.md). SYSTEM keeps every line on
+   * speech synthesis, for a player who chose a system voice. */
+  const PACK_VOICE = Object.freeze({ radio: "george", announcer: "fable", control: "emma", coach: "heart" });
 
   const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
   const RATE_MIN = 0.6;
@@ -181,7 +187,7 @@ const RadioVoice = (function () {
   function inert() {
     return Object.freeze({
       say: () => false, sayPreRace: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
-      setPackOn: () => {}, packOn: () => false, busy: () => false, yieldToSpotter: () => false,
+      setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
       debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
@@ -327,6 +333,14 @@ const RadioVoice = (function () {
     }
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
     function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
+    /** Start fetching the pack of every channel that will speak, so the first
+     *  line of each is not lost to the download. Idempotent and cheap: ensure()
+     *  is a state check once a voice is loading or ready. */
+    function ensureVoices() {
+      if (!pack || !packOn) return;
+      const ann = !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
+      for (const sp of Object.keys(PACK_VOICE)) if (sp === "announcer" ? ann : enabled) pack.ensure(PACK_VOICE[sp]);
+    }
     function stop() {
       stopVoice();
       // The hiss bed belongs to the line, so it goes when the line does —
@@ -358,9 +372,17 @@ const RadioVoice = (function () {
       // hiss bed). Not the words' sting — that is already the new card's.
       if (!p.speak) { if (!preRace && (current || pending != null)) stopVoice(); return false; }
       p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
+      ensureVoices();
       stop();
       activeKind = kind || "race";
       if (speakPack(p)) return true;
+      // RECORDED: the card carries a line its pack cannot say (or is still
+      // fetching) — never speech synthesis in a race (PACK_VOICE above).
+      if (pack && packOn && PACK_VOICE[p.speaker]) {
+        activeKind = "";
+        last.reason = pack.ready && !pack.ready(PACK_VOICE[p.speaker]) ? "pack-loading" : "not-recorded";
+        return false;
+      }
       if (!api) { last.reason = "no-api"; return false; }
       // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
       // keep their own rate and simply start when the figure has finished.
@@ -380,7 +402,9 @@ const RadioVoice = (function () {
       pack.ensure(id);
       const tok = { pack: true };
       const ok = pack.speak(id, p.text, {
-        leadS: p.leadMs / 1000, budgetS: p.budgetMs / 1000, channel: "radio", volume,
+        // `fx`: the channel's sound (js/audio/engine.js VOICE_CH) — the
+        // commentator is a broadcast, not a team radio.
+        leadS: p.leadMs / 1000, budgetS: p.budgetMs / 1000, channel: "radio", fx: p.speaker, volume,
         onEnd: () => {
           if (tok !== current) return;
           current = null;
@@ -577,10 +601,12 @@ const RadioVoice = (function () {
         G.store.set("voiceTune", tune);
         return true;
       },
-      setEnabled(b) { enabled = !!b; if (!enabled) stop(); else if (pack && packOn) pack.ensure(PACK_VOICE.radio); },
+      setEnabled(b) { enabled = !!b; if (!enabled) stop(); else ensureVoices(); },
       pack,
       volume: () => volume,
-      setPackOn(b) { packOn = !!b; G.store.set("radioPack", packOn); if (packOn && enabled && pack) pack.ensure(PACK_VOICE.radio); },
+      setPackOn(b) { packOn = !!b; G.store.set("radioPack", packOn); ensureVoices(); },
+      /** Fetch the recorded voices now (a race is about to start). */
+      prepare: ensureVoices,
       packOn: () => !!(pack && packOn),
       /** Is the radio talking, or about to (a line waiting out its cue)? The spotter asks before it keys up. */
       busy: () => !!(current || pending != null),
