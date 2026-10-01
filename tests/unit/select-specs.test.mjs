@@ -768,7 +768,9 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.equal(foundationSpec("albert_park"), "tests/specs/albert-park-foundation.spec.js");
   assert.ok(fs.existsSync(path.join(ROOT, foundationSpec("imola"))));
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /ownFoundations\.includes\(f\)\) \? 2 : 3/, "own foundation specs rank as affected (2)");
+  // ownFoundations share rank 2 with imports and SOURCE_AFFECTED pins.
+  assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\)\) \? 2 : 3/,
+    "own foundation specs rank as affected (2)");
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
 });
 
