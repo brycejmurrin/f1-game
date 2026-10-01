@@ -538,9 +538,10 @@ const TrackDesigner = (function () {
     const li = el("div", "td-issue", lead + "Drag the white points, add corners with the tools, then SAVE and RACE. Open HOW TO for the full guide.");
     li.dataset.level = "info";
     const row = el("div", "td-chips");
-    row.append(btn("HOW TO", "sel-chip", () => showPane("howto")), btn("GOT IT", "sel-chip", () => dismissCoach(true)));
+    const howTo = btn("HOW TO", "sel-chip", () => showPane("howto"));
+    row.append(howTo, btn("GOT IT", "sel-chip", () => dismissCoach(true)));
     card.append(li, row);
-    ui.coach = card;
+    ui.coach = card; ui.coachFirst = howTo;   // open() focuses this, so the rail stays scrolled to the card
     ui.paneDesign.insertBefore(card, ui.paneDesign.firstChild);
   }
   function dismissCoach(focusRail) {
@@ -901,7 +902,13 @@ const TrackDesigner = (function () {
     // Boxes exist only once TopModal's observer has opened the dialog (a
     // microtask after the hidden flip): size and fit the canvas then.
     requestAnimationFrame(() => { if (openFlag && cv) { cv.resize(); cv.fit(); } });
-    queueMicrotask(() => { if (openFlag && ui.tools && ui.tools.firstChild) ui.tools.firstChild.focus(); });
+    // Focus the first-open card's HOW TO while the card is up: focusing the first
+    // tool chip scrolled a phone's rail past the card (portrait, 412x915, measured).
+    queueMicrotask(() => {
+      if (!openFlag) return;
+      const first = ui.coach && ui.coachFirst ? ui.coachFirst : (ui.tools && ui.tools.firstChild);
+      if (first) first.focus();
+    });
     schedulePreview();
     return true;
   }
