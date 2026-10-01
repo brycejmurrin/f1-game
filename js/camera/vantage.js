@@ -1,4 +1,4 @@
-/* Apex 26 — the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/ reverse) as… */
+/* Apex 26 — the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus ExtraRigs rival/pitwall/drone) as… */
 const GameCams = (function () {
   "use strict";
 
@@ -324,7 +324,18 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // height — a crane-over-the-circuit shot. Open circuits keep the full framing.
   const corr = track.def && track.def.street ? Math.max(cvA.hw - 1.0, 4) : Infinity;
   let eye = _vantEyeW, tgt = _vantTgtW, fov;   // pooled; every branch below writes IN PLACE
-  if (mode === "cockpit" || mode === "hood" || mode === "visor") {
+  // RIVAL / PIT WALL / DRONE — solvers live in js/camera/extra-rigs.js so this
+  // file stays under the ratchet. They write eye/tgt and return fov; CamTune
+  // and the ground clamp below still apply exactly as for the built-ins.
+  if (mode === "rival" || mode === "pitwall" || mode === "drone") {
+    if (typeof ExtraRigs !== "undefined") {
+      fov = ExtraRigs.solve(mode, track, s, x, spd, now, extra, eye, tgt);
+    } else {
+      eye[0] = p[0] - t[0] * 8; eye[1] = p[1] + 3.5; eye[2] = p[2] - t[2] * 8;
+      tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+      fov = 50;
+    }
+  } else if (mode === "cockpit" || mode === "hood" || mode === "visor") {
     const driver = mode === "cockpit" || mode === "visor";   // a driver's eye (visor = cockpit, further forward)
     const eyeFwd = driver ? seatFwd(mode) : 0.55;   // the cockpit INTERIOR's seat (CockpitOpts.layout)
     const eyeUp  = driver ? seatUp(mode) : 0.95;

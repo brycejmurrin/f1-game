@@ -1,4 +1,4 @@
-/* Apex 26 — the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the 14 cameras carries its own… */
+/* Apex 26 — the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the player cameras carries its own… */
 const CamTunerPanel = (function () {
   "use strict";
 

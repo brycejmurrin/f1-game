@@ -257,6 +257,7 @@ const FULL = [
   "js/race/spotter.js",
   "js/race/race-radio.js",
   "js/camera/offsets.js",
+  "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
   "js/camera/flyby-seq.js",
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",

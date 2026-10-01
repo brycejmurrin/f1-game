@@ -42,8 +42,8 @@ const CAM_TUNE_DEFS = [
   // 0.54 and the ONE END OF THE RANGE THE HELP TEXT PROMISES ("0 locks flat
   // behind the car") was the one value unreachable. Defaulting to the shipped
   // amount also stops the panel opening on a lying 0 while 0.54 is live.
-  { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.02, def: 0.54, unit: "", modes: ["chase", "far"],
-    help: "Let the chase camera lead and swing INTO corners like the classic chase. Chase/far ship at 0.54; 0 locks the rig flat behind the car; 1 is the full corner-following chase. Purely visual — never affects the car." },
+  { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.02, def: 0.54, unit: "", modes: ["chase", "far", "drone"],
+    help: "Let the chase/drone camera lead and swing INTO corners. Chase/far ship at 0.54; drone ships its own look-ahead (~0.55) when unset. 0 locks flat behind the car; 1 is the full corner-following aim. Purely visual — never affects the car." },
 ];
 const DEF_BY_ID = {};
 for (const d of CAM_TUNE_DEFS) DEF_BY_ID[d.id] = d;
@@ -94,9 +94,9 @@ function stored(mode, id) {
   const prof = _store[mode];
   return !!(prof && typeof prof[id] === "number");
 }
-// Resolved chase/far corner lead: null = use js/camera/vantage.js shipped default.
+// Resolved chase/far/drone corner lead: null = use the rig's shipped default.
 function cornerLead(mode) {
-  if (mode !== "chase" && mode !== "far") return null;
+  if (mode !== "chase" && mode !== "far" && mode !== "drone") return null;
   return stored(mode, "cornerLead") ? clamp(get(mode, "cornerLead"), 0, 1) : null;
 }
 function exportEdits() {
