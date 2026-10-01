@@ -669,17 +669,19 @@ test("an over-budget spec the diff EDITS still runs; one merely routed still doe
 });
 
 test("mega-sweep over-budget specs never overflow into a shared selected job", () => {
-  // PR #604 / CI 36817164457: props-over-road and terrain-over-road declare
-  // 1500 s. As oversize they lose MAX_OVERSIZE_SHARDS to smaller-rank peers,
-  // spill to skipped, then overflow billed them at the 7.5 s fallback and
-  // packed them next to title-menu-rotation / qatar-foundation. The sweep
-  // then ran 5–10 min under llvmpipe and the next page.goto hung at 180 s
-  // (ERR_ABORTED / Navigate timeout); siblings on a fresh worker passed in ~8 s.
-  const mega = "tests/specs/props-over-road.spec.js";
+  // PR #604 / CI 36817164457: all-circuits mega-sweeps declare 1500 s. As
+  // oversize they lose MAX_OVERSIZE_SHARDS to smaller-rank peers, spill to
+  // skipped, then overflow billed them at the 7.5 s fallback and packed them
+  // next to title-menu-rotation / qatar-foundation. The sweep then ran 5–10
+  // min under llvmpipe and the next page.goto hung at 180 s (ERR_ABORTED /
+  // Navigate timeout); siblings on a fresh worker passed in ~8 s.
+  // props-over-road left the mega set on 2026-09-30 (one test per circuit at
+  // 120 s, PR #576); terrain-over-road is the remaining fixture.
+  const mega = "tests/specs/terrain-over-road.spec.js";
   const other = "tests/specs/career.spec.js";
   const victim = "tests/specs/output-paths.spec.js"; // undeclared, small, packable
   assert.ok(maxDeclaredTimeout(mega) / 1000 >= SOLO_OWN_TIMEOUT_SEC,
-    `props-over-road must stay above the solo threshold (${SOLO_OWN_TIMEOUT_SEC}s)`);
+    `terrain-over-road must stay above the solo threshold (${SOLO_OWN_TIMEOUT_SEC}s)`);
 
   // Many over-budget peers at rank 1 so mega loses the oversize lottery.
   const peers = [other, "tests/specs/ui-audit.spec.js", "tests/specs/hud-layout.spec.js", mega, victim];
@@ -700,7 +702,7 @@ test("mega-sweep over-budget specs never overflow into a shared selected job", (
   const plan = shards(alone, EMPTY);
   assert.equal(plan.length, 1);
   assert.equal(plan[0].specs, mega);
-  assert.match(plan[0].name, /^oversize-props-over-road/);
+  assert.match(plan[0].name, /^oversize-terrain-over-road/);
 });
 
 test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {

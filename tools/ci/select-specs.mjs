@@ -155,7 +155,8 @@ export const MAX_FAILURES = 3;
 // the last job to finish.
 export const TARGET_SHARD_SEC = 480;
 // Specs that declare this much (or more) per test NEVER share a selected job.
-// props-over-road / terrain-over-road declare 1500 s for an all-circuits walk;
+// terrain-over-road still declares 1500 s for an all-circuits walk (props-
+// over-road left that set on 2026-09-30 — one test per circuit at 120 s);
 // billed at the unmeasured fallback they look like 8–38 s and pack next to a
 // title-menu or foundation Navigate. Under llvmpipe that walk then runs for
 // 5–10 min, poisons Chromium, and the next page.goto hangs at the 180 s gate
