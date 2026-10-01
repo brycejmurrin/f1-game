@@ -84,9 +84,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // centreline. One unresolvable pair discards a circuit's whole table and
   // falls through to ZONE_COUNT — silently, which is how monza shipped a
   // table nobody read. Node-side via verify-track.cjs, so it is cheap.
-  // archive-branches.yml's archive-then-delete: the selection, the exact
-  // bundle check, and a real-git restore round trip. ~1 s.
-  "tests/unit/archive-branches.test.mjs",
   "tests/unit/assert-audit.test.mjs",
   "tests/unit/assets-pack.test.mjs",
   "tests/unit/audio-recovery.test.mjs",
@@ -226,6 +223,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/digital-steer.test.mjs",
+  // Dirty-air wake shapes (js/physics/consts.js DirtyAir): classic linear
+  // fade stays bit-compatible; CFD is exp×Gaussian; OFF is identity mul.
+  "tests/unit/dirty-air.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   // Decorrelated DriverRatings.BASE + skill()/overall personality pins.
   "tests/unit/driver-ratings-personality.test.mjs",
@@ -367,6 +367,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // clamped out of localStorage before they reach a CSS custom property, where
   // a NaN is not an error but a silently dropped declaration.
   "tests/unit/loading-card.test.mjs",
+  // answerInFlight serializes acceptAnswer so a second SDP does not start a parallel negotiation (and is not blacklisted — the guest retries).
+  "tests/unit/lobby-answer-flight.test.mjs",
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
   "tests/unit/lobby-codes.test.mjs",
   "tests/unit/log-namespaces.test.mjs",
@@ -474,6 +476,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
   "tests/unit/replay-buf.test.mjs",
+  // repo-size.yml's full-history size report: refuses a shallow clone (one
+  // sized this repo wrong on 2026-10-01), real-git fixture. ~1 s.
+  "tests/unit/repo-size.test.mjs",
   "tests/unit/report-server.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
