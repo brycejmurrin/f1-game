@@ -4736,7 +4736,8 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   let playerVisualKey = "previous-setup", carModelBuf = null, builds = 0;
   const playerBodies = {}, playerBodyOrder = [], PLAYER_BODY_CACHE_MAX = 3;
   const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
-  const CockpitOpts = { halo: () => true, haloSize: () => 2 }, Parts = { getVisualTiers: () => ({}) };
+  let cockpitStyle = "standard";
+  const CockpitOpts = { halo: () => true, haloSize: () => 2, body: () => cockpitStyle }, Parts = { getVisualTiers: () => ({}) };
   const Car3D = { build: () => { builds++; return {}; } };
   // js/car/car-draw.js reads the backend and the parts through the G façade and the livery through deps.
   const G = { gfx: { createMesh: x => x }, getTeamParts: () => ({}) };
@@ -4751,6 +4752,11 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   playerVisualKey = "selected-setup";
   assert.equal(body(team, car), preparedBody); assert.equal(cockpit(team, car), preparedCockpit);
   assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
+  cockpitStyle = "wide";
+  assert.notEqual(cockpit(team, car), preparedCockpit, "a body change selects a distinct mesh cache entry");
+  assert.equal(builds, 3);
+  cockpitStyle = "standard";
+  assert.equal(cockpit(team, car), preparedCockpit, "switching back reuses the original body");
 });
 
 test("selector car assets yield for costly work, skip cached waits, and cancel stale settings", async () => {

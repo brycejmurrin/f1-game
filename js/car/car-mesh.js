@@ -692,11 +692,23 @@ function _wheelHands(out, acc, c1) {
     _rigRounded(out, s*0.186, -0.057, -0.026, 0.052, 0.015, 0.046, 0.005, c1 || EDGE);
   }
 }
-const COCKPIT_WHEELS = ["f1", "retro", "round"];
-function _wheelRimF1(out, CARB, RUB, GRIP, acc) {
+const COCKPIT_WHEELS = ["f1", "gt", "butterfly", "retro", "round"];
+function _wheelRimF1(out, CARB, RUB, GRIP, acc, style) {
   for (const s of [-1,1]) {
     _rigGrip(out, [[s*0.151,0.103],[s*0.169,0.084],[s*0.179,0.038],[s*0.176,-0.022],[s*0.155,-0.099]], 0.022, 0.029, RUB);
     _rigBar(out, s*0.093, 0.080, s*0.151, 0.090, 0.010, 0.042, 0.039, CARB);
+  }
+  if (style === "gt") {
+    // A continuous flat-bottom rim around the modern display and hand grips.
+    _rigGrip(out, [[-0.155,-0.099],[-0.12,-0.123],[0,-0.128],[0.12,-0.123],[0.155,-0.099]],0.015,0.024,RUB);
+    _rigGrip(out, [[-0.151,0.103],[-0.11,0.124],[0,0.132],[0.11,0.124],[0.151,0.103]],0.014,0.022,RUB);
+    _rigRounded(out,0,0.132,-0.007,0.012,0.024,0.038,0.004,acc||GRIP);
+  } else if (style === "butterfly") {
+    // Angular wings and a tapered lower housing leave the top of the rim open.
+    for (const side of [-1,1]) {
+      _rigPlate(out,[[side*0.090,-0.091],[side*0.160,-0.080],[side*0.162,0.094],[side*0.120,0.133],[side*0.090,0.100]],0.020,0.022,CARB);
+      _rigBar(out,side*0.108,-0.080,side*0.148,-0.063,-0.006,0.009,0.008,acc||GRIP);
+    }
   }
   _wheelPaddles(out, true);
 }
@@ -756,7 +768,7 @@ function getCockpitWheel(liv, style) {
   if (st === "round") _wheelRimRound(out, GRIP, acc);
   else if (st === "retro") _wheelRimRetro(out, CARB, RUB, GRIP, acc);
   else {
-    _wheelRimF1(out, CARB, RUB, GRIP, acc);
+    _wheelRimF1(out, CARB, RUB, GRIP, acc, st);
     _wheelScreen(out, c2);
   }
   _wheelHands(out, acc, c1);
