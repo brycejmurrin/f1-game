@@ -890,7 +890,7 @@ function updateHud(force, dtMs) {
     if (els.workBtn) els.workBtn.hidden = !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active());
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
-    // lap before, --you on the lap, and FREE STOP under a caution that fits it.
+    // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
     const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     if (pl && pl.state) els.tyre.dataset.plan = pl.state; else delete els.tyre.dataset.plan;

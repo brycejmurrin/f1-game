@@ -144,7 +144,7 @@ test("street wall FX gates on isPlayer (VS FRIEND is human, not local)", () => {
   const { WallClamp } = load({
     onCollision: () => { audioHits++; },
     onVibrate: (n) => vibes.push(n),
-    onRumble: (a, b) => rumbles.push([a, b]),
+    onRumble: (...args) => rumbles.push(args),
   });
   const street = {
     track: { total: 1000, n: 100, hw: new Float64Array(100).fill(5), pit: null, posts: null, street: true },
@@ -174,5 +174,6 @@ test("street wall FX gates on isPlayer (VS FRIEND is human, not local)", () => {
   assert.ok(shakes.length >= 1, "local player street scrape shakes");
   assert.ok(vibes.length >= 1, "local player street scrape vibrates");
   assert.ok(rumbles.length >= 1, "local player street scrape rumbles");
+  assert.equal(rumbles[0][2], "handles", "pad-haptics v2 channels wall rumble to handles");
   assert.ok(audioHits >= 1, "local player street scrape plays collision");
 });

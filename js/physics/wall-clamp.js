@@ -166,7 +166,7 @@ const WallClamp = (function () {
             c.collideT = 0.35;
             if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
             Input.vibrate(15 + incidence * 35);
-            Input.rumble(0.35 + incidence * 0.5, 100);
+            Input.rumble(0.35 + incidence * 0.5, 100, "handles");
           }
         }
         // Steering held INTO the barrier while pinned = the wall denies that turn,
