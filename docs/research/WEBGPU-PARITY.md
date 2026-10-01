@@ -24,6 +24,11 @@ Remaining honest look deltas (audited 2026-08-18 against source):
   GLX remains `flat out float vMat`.
 - **WGX FLAG VS wave** has no 4th vertex attribute (Dawn zeroed it on large
   ribbon VBOs). Not portable without reopening that defect.
+- **WGX FOLIAGE wind sway (2026-10-01)** — the same mechanism as the flag wave
+  (a per-vertex weight in the `mat` fraction, read in the vertex stage), so the
+  same gap: GLX `LIT_VS` and TLX `vertexMotionNode` sway, WGX trees stand still.
+  Closing it means a per-vertex mat in WGX's vertex stream (the `matTrkArr`
+  storage LUT is per-draw/per-vertex-index, not a VBO attribute) — one fix for both.
 - **WGX road lift — REMOVED.** The old `wp.y += 0.08` software-GPU fallback
   is gone: it won the floor/terrain depth fight and then buried cars, AI and
   fence feet in the tarmac (`wgsl-chunks.js`, "Do not lift the ribbon").

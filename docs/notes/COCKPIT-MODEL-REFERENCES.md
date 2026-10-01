@@ -34,3 +34,17 @@ wheels keep their HUD readouts. Physical controls use display-range colours;
 only functioning indicator lights use HDR. Classic gauge needles are decorative.
 
 Browser screenshot API reference: <https://playwright.dev/docs/screenshots>.
+
+## Selectable design families
+
+STANDARD keeps the raised surround; SCULPTED narrows the mid-shoulder and adds
+an outward crest; WIDE broadens the painted shoulder deck and front cowl. The
+inner opening remains at the same hand clearance, and every body stays below
+the LOW-seat eye. Body shapes are cockpit-view styling, independent of garage
+performance parts and team paint.
+
+GT RIM adds a closed flat-bottom rim around the modern screen. BUTTERFLY adds
+angular wing housings and accent rails with an open top. Both share the original
+live instruments and shift lights with F1 2026. GT RIM is a stylistic alternative,
+not a claim that current F1 cars use a closed GT rim. The existing 2000s, CLASSIC
+and NONE choices remain available.

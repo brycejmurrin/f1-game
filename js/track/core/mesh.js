@@ -696,6 +696,12 @@ const TrackMesh = (function () {
   }
 
   function buildTerrain(track) {
+    const it = buildTerrainSteps(track);
+    for (;;) { const r = it.next(); if (r.done) return r.value; }
+  }
+
+  // Complete rows preserve the clip/face/normal order while yielding to paints.
+  function* buildTerrainSteps(track) {
     Log.info("track", "buildTerrain start " + (track.def && track.def.id));
     const { n, px, py, pz, hw, total } = track;
     const pos = [], nrm = [], col = [], mat = [];
@@ -732,7 +738,7 @@ const TrackMesh = (function () {
     const latsL = surface.rails.map((d) => -d);
     const latsR = surface.rails.slice();
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
-    function ribbon(lats, flip) {
+    function* ribbon(lats, flip) {
       const base = pos.length / 3;
       for (let k = 0; k < n; k++) {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -854,6 +860,7 @@ const TrackMesh = (function () {
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
           mat.push(gt < 0.22 ? MAT.ROCK : groundMat);
         }
+        if ((k + 1) % 32 === 0 || k + 1 === n) yield;
       }
       const faceSafe = (ia, ib, ic) => {
         const ax = pos[ia * 3], ay = pos[ia * 3 + 1], az = pos[ia * 3 + 2];
@@ -879,6 +886,7 @@ const TrackMesh = (function () {
             tri(a + v + 1, b + v, b + v + 1);
           }
         }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
       }
 
       // REAL NORMALS for the ribbon just emitted. Every terrain vertex used to
@@ -915,6 +923,7 @@ const TrackMesh = (function () {
           accumFaceN(nrm, pos, a + v, b + v, a + v + 1);
           accumFaceN(nrm, pos, a + v + 1, b + v, b + v + 1);
         }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
       }
       for (let k = 0; k < n; k++) {
         for (let v = 0; v < NTV; v++) {
@@ -925,9 +934,10 @@ const TrackMesh = (function () {
           if (l > 1e-6) { nrm[i3] = nx / l; nrm[i3 + 1] = ny / l; nrm[i3 + 2] = nz2 / l; }
           else { nrm[i3] = 0; nrm[i3 + 1] = 1; nrm[i3 + 2] = 0; }
         }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
       }
     }
-    ribbon(latsL, false); ribbon(latsR, true);
+    yield* ribbon(latsL, false); yield* ribbon(latsR, true);
     return { pos, nrm, col, mat, idx: idxArr };
   }
 
@@ -1315,7 +1325,7 @@ const TrackMesh = (function () {
 
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
-           nodeGrid, buildRoad, buildTerrain, buildFloor, gridSlot, buildGridBoxes,
+           nodeGrid, buildRoad, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
            buildPitLane, buildPitBoxes, buildPitGarages, pitHatch, buildPitHatch, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);

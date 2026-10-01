@@ -35,6 +35,19 @@ const TrackGraph = (function () {
   // is never UNDER-estimated (an under-estimate would let a prop reach tarmac).
   const radScale = (s) => (s ? __M.max(__M.abs(s[0]), __M.abs(s[2])) : 1);
   const upScale = (s) => (s ? __M.abs(s[1]) : 1);
+  // Mirrors TrackGeom.SWAY_FRAC (track-graph.test.mjs pins them equal): graph.js
+  // takes its emitters as a parameter and must not reach for the global.
+  const SWAY_FRAC = 0.45;
+  // Per-vertex material callback for a swaying op: base/up/scale place the
+  // canonical [y0, y1] range in the space the vertices are emitted in.
+  function swayAt(id, base, up, us, range) {
+    const y0 = range[0] * us, inv = 1 / __M.max(1e-6, (range[1] - range[0]) * us);
+    return (x, y, z) => {
+      const w = ((x - base[0]) * up[0] + (y - base[1]) * up[1] + (z - base[2]) * up[2] - y0) * inv;
+      return id + (w <= 0 ? 0 : w >= 1 ? 1 : w) * SWAY_FRAC;
+    };
+  }
+  const _ORIGIN = [0, 0, 0], _UP = [0, 1, 0];
 
   function create(ctx) {
     Log.info("track", "graph create");
@@ -49,11 +62,14 @@ const TrackGraph = (function () {
       // undefined = "inherit whatever out._mat holds at replay time". out._mat is
       // a persistent register, so a helper that never sets it (marshalPost) must
       // keep inheriting; forcing 0 here would silently untexture those props.
-      let mat;
-      const push = (op) => { op.mat = mat; ops.push(op); return true; };
+      let mat, sway;
+      const push = (op) => { op.mat = mat; if (sway) op.sway = sway; ops.push(op); return true; };
       return {
-        // out._mat equivalent — stamps every op recorded after it
-        mat(id) { mat = id || 0; },
+        // out._mat equivalent — stamps every op recorded after it. `sway`
+        // ([y0, y1], canonical-space heights) marks the ops after it as a wind-
+        // swaying crown: replay/bake stamp each vertex FOLIAGE + w * SWAY_FRAC
+        // (w = 0 at y0, 1 at y1) through out._matAt — js/track/core/geom.js.
+        mat(id, swayRange) { mat = id || 0; sway = swayRange || null; },
         box: (c, sz, col) => push({ op: "box", c, sz, col }),
         prism: (c, sz, col) => push({ op: "prism", c, sz, col }),
         pyramid: (c, sz, col) => push({ op: "pyramid", c, sz, col }),
@@ -68,9 +84,10 @@ const TrackGraph = (function () {
     // than by a per-primitive vertex-count formula that would drift from geom.js.
     function bakeCanonical(ops) {
       if (!raw) return null;
-      const buf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+      const buf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0, _matAt: null };
       for (const op of ops) {
         buf._mat = op.mat || 0;
+        buf._matAt = op.sway ? swayAt(buf._mat, _ORIGIN, _UP, 1, op.sway) : null;
         const col = op.col === NODE_COLOR ? WHITE : op.col;
         switch (op.op) {
           case "box": raw.addBox(buf, op.c, op.sz, col, null); break;
@@ -81,7 +98,7 @@ const TrackGraph = (function () {
           case "frustum": raw.addFrustum(buf, op.c, op.rB, op.rT, op.h, col, op.seg, null); break;
         }
       }
-      buf._mat = 0;
+      buf._mat = 0; buf._matAt = null;
       return buf;
     }
 
@@ -137,9 +154,15 @@ const TrackGraph = (function () {
       // Deliberately does NOT save/restore out._mat: the register's trailing state
       // is the migrated helper's business, exactly as it was when it emitted
       // inline (pine ends on 0; marshalPost never touches it).
+      let swayed = false;
       for (const op of m.ops) {
         const c = xform(place, op.c);
         if (op.mat !== undefined) out._mat = op.mat;
+        // Sway weight rides on out._matAt for this op only; cleared below so the
+        // next baked emitter never inherits a crown's callback (and the track
+        // record stays structured-cloneable — build-worker posts it whole).
+        out._matAt = op.sway ? swayAt(out._mat || 0, place.o, place.u, upScale(s), op.sway) : null;
+        if (op.sway) swayed = true;
         const col = colourOf(op, place);
         let ok = false;
         switch (op.op) {
@@ -168,6 +191,7 @@ const TrackGraph = (function () {
           break;
         }
       }
+      if (swayed) out._matAt = null;
       return landed;
     }
 
@@ -335,6 +359,6 @@ const TrackGraph = (function () {
     return { models, nodes, model, instance, replay, bake, batches, stats };
   }
 
-  return { create, xform, NODE_COLOR };
+  return { create, xform, NODE_COLOR, SWAY_FRAC };
 })();
 Object.freeze(TrackGraph);
