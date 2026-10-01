@@ -729,7 +729,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   `mistakeChance(t, p, errMul)` unit tests pin the multiplication itself
   (errMul 2 doubles the rate exactly, independent of sampling noise). Full
   artifacts: `artifacts/ai-mistakes-baseline/` (before) and
-  `artifacts/ai-mistakes-after/` (after, including the n=15 easy runs).
+  `artifacts/ai-mistakes-after/` (after, including the n=15 easy runs). A rising edge on `c.errCount` also emits a `mistake` race-fact so nearby rivals can trigger `eng.rivalErr` / `tv.mistake` radio (`js/race/race-facts.js`, `race-radio.js`); that path does not change the roll or the rate. `PhysicsConsts.REVISION` is `2026-09-ai-mistakes-1` so records/ghosts keyed on the post–Slice-4 formula do not compare against pre-raise laps.
 - **The aim, not the contact** (`AiDrive.aimIntrudes`, 2026-09-16). Every
   side-by-side rule keyed on where the cars ARE — the clear-gap election and
   the rub clamp began when the boxes were 0.8 m apart, and against a human
