@@ -33,7 +33,7 @@ window.AriaState = (function () {
     // the Spotify mode toggles on the MUSIC page (#audioset, inside #pmsettings).
     // #vsfriend / #season-setup are already in UiLayers; they were the two
     // DOM-built overlays this observer had never heard of.
-    "#race-settings,#customize,#datahub,#track-detail,#spotifypanel,#vsfriend,#season-setup";
+    "#race-settings,#customize,#datahub,#track-detail,#spotifypanel,#vsfriend,#season-setup,#trackdesigner";
 
   const isOn = (el) => ON.some((c) => el.classList.contains(c));
   // Groups whose semantics are already stated explicitly are left alone: a

@@ -83,6 +83,11 @@ const RadioLines = (function () {
     "eng.hit": ["BIG HIT. ARE YOU OKAY?", "THAT WAS A BIG ONE. CHECK THE CAR", "CONTACT. KEEP IT CALM"],
     "eng.rivalOut": ["{name} IS OUT. THAT'S P{pos}", "{name} HAS RETIRED. UP TO P{pos}"],
     "eng.rivalPit": ["{name} HAS PITTED. PUSH NOW", "{name} IN THE PITS. CLEAR AIR, GO"],
+    // A visible AI mistake near the player — push window. Phrasing stays inside
+    // the recorded voice pack (assets/voice/george.json); regenerating clips
+    // needs kokoro-js offline. TV lines below may use freer wording.
+    "eng.rivalErr": ["{name} AHEAD. PUSH NOW", "{name} AHEAD. ATTACK",
+      "{name} IS AHEAD. GO FOR IT", "{name} AHEAD. LINE IT UP"],
     "eng.battLow": ["BATTERY LOW. LIFT AND COAST", "ENERGY LOW, HARVEST THIS LAP"],
     "eng.battFull": ["BATTERY FULL. USE IT ON {ahead}", "FULL CHARGE. DEPLOY ON {ahead}"],
     "eng.hurt": ["STAY CALM. LONG RACE STILL", "KEEP YOUR HEAD. IT'S A LONG RACE"],
@@ -95,6 +100,9 @@ const RadioLines = (function () {
     "tv.charge": ["{a} IS ON A CHARGE. P{pos} FROM P{grid}", "{a} CARVING THROUGH, UP TO P{pos}"],
     "tv.fastest": ["FASTEST LAP FOR {a}. {time}", "{a} GOES FASTEST, A {time}"],
     "tv.retire": ["{a} IS OUT OF THE RACE. {why}", "HEARTBREAK FOR {a}. {why}"],
+    // Pack-safe (assets/voice/fable.json): no "runs wide"/"locks up" clips yet —
+    // "OH" + surname is the closest committed reaction without regenerating the pack.
+    "tv.mistake": ["OH! {a}", "{a}. OH!", "OH! {a}!"],
     "tv.pit": ["{a} PITS FROM P{pos}", "PIT STOP FOR {a}, RUNNING P{pos}"],
     "tv.sc": ["THE SAFETY CAR IS OUT!", "SAFETY CAR! THE FIELD BUNCHES UP"],
     "tv.vsc": ["VIRTUAL SAFETY CAR. THE FIELD SLOWS", "VSC DEPLOYED"],

@@ -49,6 +49,10 @@
  * Deliberately AI-ONLY: no player, so the rubber band (game.js, AI behind the
  * leading human) never fires and this measures the field's own behaviour. Add
  * a player and you are measuring the band as well, which is a separate test.
+ * Until 2026-10-01 it was not: the VM's input-less player sat PARKED on its
+ * grid box all race — a blocker attacked 7-10 times a race, and the leading
+ * human the band banded toward. game-vm's aiOnly() now takes it out of the
+ * field (AI-owned and retired, so out of every scan).
  *
  *   node tools/check/ai-field.mjs                 monza, normal, 240 s
  *   node tools/check/ai-field.mjs --track monaco --diff hard --seconds 300
@@ -116,6 +120,7 @@ async function measure(seed) {
   // unchanged from before this flag existed and older recorded numbers stay
   // comparable.
   if (g.apex && typeof g.apex.seed === "function") { g.apex.seed(seed); await g.race(TRACK); }
+  g.aiOnly();
   const cars = g.G.cars.filter((c) => !c.isPlayer && !c.human);
   if (cars.length < 2) { console.error("ai-field: fewer than two AI cars"); process.exit(1); }
 

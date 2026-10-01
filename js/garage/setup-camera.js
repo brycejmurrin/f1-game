@@ -57,10 +57,10 @@ function driveOutLeft() {
 // Stepped on the WALL clock, not the render dt the menu loop caps at 1/20 s: under
 // 20 fps that cap played the car in slow motion. A gap over 0.1 s (a synchronous
 // build) still only advances it 0.1 s, so a stall delays the car, never skips it.
-function stepDriveOut() {
+function stepDriveOut(held = false) {
   const now = performance.now(), gap = driveOut.last ? (now - driveOut.last) / 1000 : 0;
   driveOut.last = now;
-  driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
+  if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
   return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg), { active: true });
 }
 // THE ARRIVAL PREVIEW (#garrival's PREVIEW IN / OUT): the tuner's saved settings
@@ -415,9 +415,12 @@ const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on stor
 // subject. ssao needs the proj/invProj pair passed to begin(); contact shadows
 // would additionally need sunViewDir, and the sun is now only a fill.
 const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
-function renderSetupPreview(dt) {
+function renderSetupPreview(dt, holdDriveOut = false) {
+  // The race's HUD mirror: render() never reaches its slot on a garage frame,
+  // so its rect stayed set and present() composited it over the car.
+  if (typeof MirrorPass !== "undefined" && MirrorPass.instance()) MirrorPass.instance().standDown();
   gfx.resize();
-  const arriving = driveOut ? stepDriveOut() : preview ? stepPreview(dt) : arrival.step(dt);
+  const arriving = driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
   if (!arriving || !arriving.active) applyHeldSetupCam(dt);                               // held on-screen controls
   if (setupPreviewSpin && !(arriving && arriving.active)) setupPreviewAz += dt * 0.35;   // slow turntable
   stepSetupAero(dt);
@@ -529,7 +532,7 @@ function renderSetupPreview(dt) {
     fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), garageNow(), garageCtx()),
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
-  }) === false) return;
+  }) === false) return false;
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Matte preview: the glossy clear-coat + sharp speculars from the studio ring
@@ -566,6 +569,7 @@ function renderSetupPreview(dt) {
   // elevation the ceiling fixtures sit between the eye and the car.
   gfx.drawGlow(GarageScene.live(_spLiv(), garageNow(), garageCtx()), GarageScene.glareStr());
   gfx.present(SP_PRESENT);
+  return !(gfx.warming && gfx.warming());
 }
 
 // ---- the #cs-view / #cs-cam-panel controls ----
