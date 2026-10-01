@@ -16,8 +16,21 @@ const TrackMaps = (function () {
     return (def && THEME[def.theme]) || "#cfd2d8";
   }
 
-  // F1 sector colours (S1 = purple, S2 = red, S3 = yellow-green)
-  const SECTOR_COLORS = ["#c084fc", "#e10600", "#a3e635"];
+  // SECTOR IDENTITY — the podium metals in rank order: S1 gold, S2 silver,
+  // S3 bronze (--gold / --silver / --bronze, css/tokens.css). Read from the
+  // tokens by sectorColors(), which the in-race minimap (js/ui/hud.js) calls
+  // too, so CIRCUIT DETAIL and the map name a sector alike. They were purple /
+  // brand red / lime: purple is the timing screen's SESSION BEST and red
+  // against lime is the red-green colour-blind pair. The metals separate on
+  // lightness and chroma, which every colour-vision type keeps. The literals
+  // are only the fallback for a context with no computed style.
+  const SECTOR_TOKENS = ["--gold", "--silver", "--bronze"];
+  const SECTOR_COLORS = ["#ffd700", "#c0c0c0", "#cd9b5a"];
+  function sectorColors() {
+    const root = typeof document !== "undefined" && document.documentElement;
+    const cs = root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
+    return SECTOR_TOKENS.map((k, i) => (cs && String(cs.getPropertyValue(k) || "").trim()) || SECTOR_COLORS[i]);
+  }
 
   const CLASS_COLORS = {
     HAIRPIN: "#f87171",
@@ -423,14 +436,14 @@ const TrackMaps = (function () {
       g.closePath();
       g.stroke();
       // Draw three coloured sectors on top (curated splits when available)
-      const m = pts.length;
+      const m = pts.length, SC = sectorColors();
       const splits = (data.sectors && data.sectors.length === 2)
         ? [0, data.sectors[0], data.sectors[1], 1]
         : [0, 1 / 3, 2 / 3, 1];
       for (let s = 0; s < 3; s++) {
         const from = Math.floor(splits[s] * m);
         const to = s === 2 ? m - 1 : Math.max(from, Math.floor(splits[s + 1] * m));
-        g.strokeStyle = SECTOR_COLORS[s];
+        g.strokeStyle = SC[s];
         g.lineWidth = width;
         g.beginPath();
         for (let i = from; i <= to; i++) {
@@ -613,8 +626,8 @@ const TrackMaps = (function () {
   }
 
   return {
-    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw,
-    SECTOR_COLORS, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
+    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
+    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
   };
 })();
 Object.freeze(TrackMaps);

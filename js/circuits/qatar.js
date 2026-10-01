@@ -28,6 +28,7 @@
       { kind: "lamps", s0: 0, s1: 1 },
     ],
     lengthKm: 5.4,
+    tyreSeverity: 1.60,  // Pirelli hardest C1–C3; 'one of the toughest' on tyres — near Austria outlier
     sunAzimBias: -0.30,   // Losail's late-afternoon sun hangs low to the NE-facing main straight
     baseHW: 8,
     // Warm pal.runoff = tan sand beyond the green verge (brief / COL.desertSand)

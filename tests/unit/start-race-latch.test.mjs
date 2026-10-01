@@ -1,12 +1,12 @@
 /* start-race-latch.test.mjs — startRace() re-entrancy latch.
  *
- * startRace() has six fire-and-forget callers (js/game.js:8799, :8805, :9157,
- * :9209, js/race/daily-challenge.js:76, js/race/race-settings.js:393 — the
+ * startRace() has fire-and-forget callers (js/game.js's pm-restart and
+ * startRaceCovered, js/race/daily-challenge.js, js/race/race-settings.js — the
  * DEFECT-LEDGER un-awaited-startRace family) and no re-entry guard of its
  * own: a second trigger (double-click, a pm-restart while a start was still
  * building) could re-enter startRaceBody() mid-build. The fix renames the
  * body to startRaceBody() and wraps it in a startRace() that latches
- * concurrent callers onto the one in-flight promise (js/game.js ~2758).
+ * concurrent callers onto the one in-flight promise (`startRace` in js/game.js).
  *
  * This boots the REAL game.js in the Node VM harness (tools/lib/game-vm.cjs)
  * — one boot, shared by both tests below (~15 s, the same cost as
@@ -66,4 +66,21 @@ test("the latch releases once the in-flight start settles", async () => {
   const p2 = G.startRace();
   assert.notStrictEqual(p2, p1, "a call after the previous start settled must not reuse its stale promise");
   await Promise.allSettled([p2]);
+});
+
+test("a delayed optional-physics prerequisite cannot start a race after the player quits", async () => {
+  const { G, sandbox, apex } = g;
+  const orig = sandbox.DebrisWorld.ready;
+  let release, asked = 0;
+  sandbox.DebrisWorld.ready = () => { asked++; return new Promise((resolve) => { release = resolve; }); };
+  try {
+    const p = G.startRace();
+    await Promise.resolve();
+    assert.equal(asked, 1, "race entry waits for optional physics before committing");
+    G.quitToMenu();
+    release(true);
+    const result = await p;
+    assert.equal(result.kind, "canceled");
+    assert.equal(apex.info().state, "menu", "late readiness must not resurrect the abandoned countdown");
+  } finally { sandbox.DebrisWorld.ready = orig; }
 });

@@ -394,3 +394,79 @@ test("a malformed placement is dropped, not emitted as NaN geometry", () => {
   assert.equal(out.pos.length, 0);
   assert.equal(g.stats().dropped, 1);
 });
+
+// ── wind-sway weight (2026-10-01) ────────────────────────────────────────────
+// A FOLIAGE vertex may carry a per-vertex height weight in its id's FRACTION
+// (TrackGeom.swayMatAt / rec.mat(id, [y0, y1])); the lit vertex shaders read
+// fract(mat) / SWAY_FRAC. Three things must hold or trees break silently: the
+// weight stays below the 0.5 the fragment side rounds at, the recorder's replay
+// and canonical bake stamp the SAME weights (graph parity), and the callback
+// never outlives its emitter (the track record is structured-cloned by the
+// build worker).
+test("swayMatAt: weight 0 at the crown foot, 1 at the tip, never past SWAY_FRAC", () => {
+  const F = TrackGeom.SWAY_FRAC;
+  assert.ok(F > 0 && F < 0.5, `SWAY_FRAC ${F} must stay below the 0.5 rounding threshold`);
+  const out = buf();
+  out._mat = 6;
+  out._matAt = TrackGeom.swayMatAt(6, [3, 1, -2], [0, 1, 0], 2, 10);
+  RAW.addCone(out, [3, 3, -2], 1.5, 8, [0, 1, 0], 6);      // rim at height 2 (w 0), apex at 10 (w 1)
+  let saw0 = false, saw1 = false;
+  for (let i = 0; i < out.mat.length; i++) {
+    const m = out.mat[i], y = out.pos[i * 3 + 1] - 1;
+    assert.equal(Math.round(m), 6, "still FOLIAGE after rounding");
+    const w = (m - 6) / F, want = Math.min(1, Math.max(0, (y - 2) / 8));
+    assert.ok(Math.abs(w - want) < 1e-9, `vertex at height ${y}: weight ${w} != ${want}`);
+    if (want === 0) saw0 = true; if (want === 1) saw1 = true;
+  }
+  assert.ok(saw0 && saw1, "the cone spans both ends of the ramp");
+  out._matAt = null;
+  RAW.addBox(out, [0, 0, 0], [1, 1, 1], [1, 1, 1]);
+  assert.ok(out.mat.slice(-24).every((m) => m === 6), "without the callback the register id is stamped exactly");
+});
+
+test("rec.mat(id, [y0, y1]) stamps the same sway weights on replay and on the canonical bake", () => {
+  assert.equal(TrackGraph.SWAY_FRAC, TrackGeom.SWAY_FRAC, "graph.js mirrors geom.js's constant");
+  const g = TrackGraph.create({ raw: RAW });
+  const build = (rec) => {
+    rec.mat(5);
+    rec.cyl([0, 0, 0], 0.3, 4, [1, 1, 1], 6);
+    rec.mat(6, [4, 12]);
+    rec.cone([0, 4, 0], 2, 8, [0, 1, 0], 7);
+  };
+  const out = buf();
+  const place = Object.assign(AT([10, 5, -3]), { s: [1, 2, 1] });   // up-scale 2: the ramp is 8..24 m
+  g.instance("pine", place, build, null, RAW, out);
+  const F = TrackGeom.SWAY_FRAC;
+  let leaves = 0;
+  for (let i = 0; i < out.mat.length; i++) {
+    const m = out.mat[i], y = out.pos[i * 3 + 1] - 5;
+    if (Math.round(m) === 5) { assert.equal(m, 5, "WOOD carries no weight"); continue; }
+    assert.equal(Math.round(m), 6);
+    leaves++;
+    const want = Math.min(1, Math.max(0, (y - 8) / 16));
+    assert.ok(Math.abs((m - 6) / F - want) < 1e-9, `replayed vertex at ${y}: ${(m - 6) / F} != ${want}`);
+  }
+  assert.ok(leaves > 0, "the crown emitted");
+  assert.equal(out._matAt, null, "the callback is cleared after replay (the record must structured-clone)");
+  assert.equal(out._mat, 6, "out._mat itself is still the register (CPU audits read it)");
+
+  const geo = g.models.get("pine").geo;   // canonical bake, unscaled: ramp 4..12
+  let cn = 0;
+  for (let i = 0; i < geo.mat.length; i++) {
+    const m = geo.mat[i], y = geo.pos[i * 3 + 1];
+    if (Math.round(m) !== 6) continue;
+    cn++;
+    const want = Math.min(1, Math.max(0, (y - 4) / 8));
+    assert.ok(Math.abs((m - 6) / F - want) < 1e-9, `canonical vertex at ${y}: ${(m - 6) / F} != ${want}`);
+  }
+  assert.equal(cn, leaves, "bake and replay emit the same crown");
+  assert.equal(geo._matAt, null);
+});
+
+test("the lit vertex shaders decode the weight with the same SWAY_FRAC", () => {
+  const F = String(TrackGeom.SWAY_FRAC);
+  for (const rel of ["js/render/glx/shaders/glsl-lit.js", "js/render/three/tsl-lit.js"]) {
+    const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    assert.ok(src.includes(`/ ${F}`) || src.includes(`div(${F})`), `${rel} divides the fraction by ${F}`);
+  }
+});

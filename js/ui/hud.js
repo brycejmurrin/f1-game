@@ -4,6 +4,14 @@ const GameHud = (function () {
 
 const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins js/physics/consts.js first
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
+// REDUCED MOTION for the one HUD motion no stylesheet reaches — the canvas
+// minimap's armed pit-marker pulse. The same pair js/game.js motionReduced
+// reads: the OS flag, OR SETTINGS › APPEARANCE › MOTION: REDUCED
+// (html[data-motion], js/ui/title-fx.js), both live.
+const _rmq = (typeof window !== "undefined" && window.matchMedia)
+  ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+const motionReduced = () => !!(_rmq && _rmq.matches)
+  || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
 
 function create(G) {
 Log.info("ui", "GameHud.create");
@@ -20,6 +28,7 @@ let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
 let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
+let _flagSaid = "", _flagLiveT = 0;   // the caution text last sent to #announce-live, and its pending write
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 let _teamSkinRev = -1;        // …and the store rev it was written at (a CUSTOM team's colour is editable)
 let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
@@ -38,6 +47,14 @@ function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m)
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
+// Compare the actual DOM so an external edit is repaired on the next tick.
+// Avoid repeated attribute mutations; hidden writes feed the visibility observer.
+function hHidden(el, on) { if (el && el.hidden !== !!on) el.hidden = !!on; }
+function hData(el, name, value) {
+  if (!el || !el.dataset) return;
+  if (value === null) { if (name in el.dataset) delete el.dataset[name]; }
+  else { const v = String(value); if (el.dataset[name] !== v) el.dataset[name] = v; }
+}
 function replayGhost() { return GhostShare.hasGuest() ? GhostShare : Ghost; }
 let _lastRank = 0, _posFlashT = 0;   // POS box flash state, ms left (see the tick)
 // Team colours are static — compute once per team, the minimap's idiom.
@@ -133,23 +150,21 @@ function syncHudCamClasses() {
 }
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
 function buildSecRows() {
-  // S2 is NOT the brand #e10600: at 14px bold on the 72% plate that red measures
-  // ~4.2:1 on pure black and less over a bright scene (css/tokens.css records
-  // ~2.6:1 on the page) — under the 4.5:1 AA floor for text this size. The
-  // lighter red keeps the hue and clears ~5.9:1; the minimap stroke matches.
   // Sector labels carry no identity colour: .sec-lbl inherits the row's ink.
+  // (S2 once wore the brand #e10600, ~4.2:1 on black at 14px — under the
+  // 4.5:1 AA floor; no HUD text uses the brand red.)
   // Should they ever be coloured, they must NOT use the value palette's
-  // --sec-best #c084fc or --faster #a3e635, or purple would mean both
-  // "sector 1" and "session best". The minimap keeps its own
-  // copy (drawMinimap), where identity is the only thing distinguishing arcs.
+  // --sec-best or --faster, or purple would mean both "sector 1" and
+  // "session best". The minimap colours its arcs by sector (drawMinimap:
+  // the podium metals, TrackMaps.sectorColors), where identity is the only
+  // thing distinguishing them.
   const labels = ["S1", "S2", "S3"];
   els.hudSectors.textContent = "";
   _secRows = [];
   for (let i = 0; i < 3; i++) {
     const row = document.createElement("div"); row.className = "sec-row";
-    // The label keeps the row's dim ink: SC (sector identity) still colours
-    // the minimap, but a purple S1 label beside a purple "session best" value
-    // would read as two of the same thing.
+    // The label keeps the row's dim ink: sector identity colours only the
+    // minimap's arcs, so a label can never collide with a timing colour.
     const lbl = document.createElement("span"); lbl.className = "sec-lbl"; lbl.textContent = labels[i];
     const val = document.createElement("span"); val.className = "sec-val"; val.textContent = "--";
     row.appendChild(lbl); row.appendChild(val); els.hudSectors.appendChild(row);
@@ -831,12 +846,12 @@ function updateHud(force, dtMs) {
   // radio: fine, think about a stop, you are past it.
   const tyres = G.tyres;
   const tyreOn = !!(tyres && tyres.on());
-  if (els.tyre) els.tyre.hidden = !tyreOn;
+  hHidden(els.tyre, !tyreOn);
   if (tyreOn) {
     const spent = tyres.spent(player);
     hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
     hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
-    els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
+    hData(els.tyre, "wear", spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok");
     // …and how many LAPS that is, at the rate this driver has been using it:
     // a percentage says how worn, only laps say whether it reaches the flag.
     // An attribute read by the bar's ::after (css/hud.css), not a new node.
@@ -854,7 +869,7 @@ function updateHud(force, dtMs) {
     const pit = G.pits;
     const state = pit ? (player.pitState === "lane" || player.pitState === "box" ? player.pitState
                          : pit.commitFrac(player) > 0 ? "commit" : "") : "";
-    if (state) els.tyre.dataset.pit = state; else delete els.tyre.dataset.pit;
+    hData(els.tyre, "pit", state || null);
     if (state === "commit") hStyle(els.tyre, "--pit-commit", pit.commitFrac(player).toFixed(2));
     // THE PIT CUE. The chip above says the gesture is REGISTERING; this says
     // where and which way — without it the steer-in control is undiscoverable,
@@ -863,10 +878,10 @@ function updateHud(force, dtMs) {
     // only paints what it returns.
     const c = pit && pit.cue(player);
     if (els.pitCue) {
-      els.pitCue.hidden = !c;
+      hHidden(els.pitCue, !c);
       if (c) {
         hText(els.pitCueText, c.text);
-        els.pitCue.dataset.phase = c.phase;
+        hData(els.pitCue, "phase", c.phase);
         // The distance BAR under the words: a driver at 300 km/h reads a bar
         // faster than a number. `frac` is the cue's own fill, 0 → 1.
         hStyle(els.pitCue, "--pit-dist", clamp(c.frac || 0, 0, 1).toFixed(2));
@@ -880,17 +895,17 @@ function updateHud(force, dtMs) {
     // driving.
     // Never in a friend race: the garage "pauses" the race, and a networked race
     // does not stop — the box timer ran out behind it and the work was free.
-    if (els.workBtn) els.workBtn.hidden = !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active());
+    if (els.workBtn) hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active()));
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
-    // lap before, --you on the lap, and FREE STOP under a caution that fits it.
+    // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
     const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
-    if (pl && pl.state) els.tyre.dataset.plan = pl.state; else delete els.tyre.dataset.plan;
+    hData(els.tyre, "plan", pl && pl.state || null);
   } else {
     // Both are written only above: a pit cue or WORK ON CAR up when a wear race was quit stayed up through a no-wear session.
-    if (els.pitCue) els.pitCue.hidden = true;
-    if (els.workBtn) els.workBtn.hidden = true;
+    hHidden(els.pitCue, true);
+    hHidden(els.workBtn, true);
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);
@@ -1023,7 +1038,7 @@ function updateHud(force, dtMs) {
     hText(els.gapB, b ? gap("▼", b.code, gapSec(1, b, (player.prog - b.prog) / vFloor)) : "");
     // WHO: the neighbour's team colour as the chip's left bar (css/hud.css).
     hStyle(els.gapA, "--gap-team", a ? teamCss(a) : "");
-    if (a && (player.towing || 0) > 0.5) els.gapA.dataset.tow = "1"; else delete els.gapA.dataset.tow;   // in the tow
+    hData(els.gapA, "tow", a && (player.towing || 0) > 0.5 ? "1" : null);   // in the tow
     hStyle(els.gapB, "--gap-team", b ? teamCss(b) : "");
     // THE RIVALS' WINDOWS: "P12" when the neighbour's planned stop is within
     // three laps, "IN" while it is stopping (PitLane.windowOf) — a suffix the
@@ -1101,10 +1116,29 @@ function updateHud(force, dtMs) {
                 : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR";
       hText(els.flag, txt);
       hClass(els.flag, cn.level === 4 ? "flag-red" : cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
-    }
+      if (txt !== _flagSaid) { _flagSaid = txt; sayFlag(cn); }
+    } else _flagSaid = "";
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
   }
   drawMinimap();
+}
+
+// THE FLAG IS SPOKEN through #announce-live, the radio card's always-present
+// polite region (js/game.js showAnnounce), and ONLY there: #hud-flag carries no
+// live role. It used to be a role="alert" filled and unhidden in the same step
+// — the pattern NVDA, JAWS and macOS VoiceOver miss (index.html, above
+// #announce-live) — so a safety car reached a screen-reader user as nothing. Same beat as showAnnounce:
+// clear, then write a moment later, so a repeated flag is still a change. Once
+// per change of the chip's text, never per HUD tick; spelled out in full words
+// because "VSC" and "S2" are glyphs to the eye and noise to a voice.
+function sayFlag(cn) {
+  const live = els.announceLive;
+  if (!live) return;
+  const said = "RACE CONTROL: " + (cn.level === 1 ? "YELLOW FLAG" + (cn.sector >= 0 ? ", SECTOR " + (cn.sector + 1) : "")
+    : cn.level === 2 ? "VIRTUAL SAFETY CAR" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR");
+  live.textContent = "";
+  clearTimeout(_flagLiveT);
+  _flagLiveT = setTimeout(() => { live.textContent = said; }, 60);
 }
 
 function drawMinimap() {
@@ -1112,8 +1146,8 @@ function drawMinimap() {
   if (!player || !track || !track.map) return;
   // hud-hide-map is display:none (cockpit/onboard cams, MINIMAL, map OFF): a
   // map nobody can see was sized, cached, blitted and dotted every HUD tick.
-  // The next visible draw re-measures (syncHudVisClasses clears _fitKey).
-  if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) return;
+  // Forget its measurement key so the next visible draw measures afresh.
+  if (document.body.classList.contains("hud-hidden") || document.body.classList.contains("hud-hide-map")) { _mmKey = null; return; }
   // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
   // the same convention js/ui/sheet-shape.js relies on). Bitmap = local x effective
   // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu
@@ -1121,12 +1155,18 @@ function drawMinimap() {
   // currentCSSZoom, not the raw --hud-scale: the element rides the CAPPED
   // --hud-z, and the raw slider would over-allocate on a capped band. Ratio
   // capped at 3 to bound fill/memory on a DPR-3 phone at HUD SIZE 200%.
-  // Measure only when layout could have moved — same key discipline as
-  // fitHud (resize / HUD-scale), plus a track change (minimapBg null). A
-  // clientWidth read here lands right after the HUD's own DOM writes, so per
-  // frame it was a forced reflow ~10×/s for numbers that never change mid-race.
-  if (_mmKey !== _fitKey || _fitKey === "" || !minimapBg) {
-    _mmKey = _fitKey;
+  // The fit key includes changing gap spelling/sector rows. Those cannot
+  // resize this explicit CSS box unless fitHud changes the band's scale, so
+  // keep a separate layout-free key rather than measuring after HUD writes.
+  // Density selects the 96/140px CSS box; DPR can change without a resize.
+  // Keep the bounded retry while the fit has no laid-out box, and the track
+  // invalidation path (minimapBg null) so a newly visible map measures afresh.
+  const root = document.documentElement, body = document.body;
+  const measureKey = window.innerWidth + "x" + window.innerHeight + "|" + body.className
+    + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
+    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1);
+  if (_mmKey !== measureKey || _fitKey === "" || !minimapBg) {
+    _mmKey = measureKey;
     _mmCssW = els.minimap.clientWidth || 140;
     _mmCssH = els.minimap.clientHeight || 140;
     _mmRatio = Math.min(3, Math.max(1,
@@ -1152,7 +1192,17 @@ function drawMinimap() {
     mc.setTransform(ratio, 0, 0, ratio, 0, 0);
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
-    const SC = ["rgba(192,132,252,0.8)", "rgba(255,59,48,0.8)", "rgba(163,230,53,0.8)"];   // = the sector labels
+    // SECTOR IDENTITY: the podium metals in rank order (S1 gold, S2 silver,
+    // S3 bronze), from css/tokens.css via TrackMaps.sectorColors — the CIRCUIT
+    // DETAIL diagram draws the same three, so the menu and the map agree. It
+    // was purple / red / lime: purple is the timing screen's SESSION BEST
+    // (--sec-best) and red against lime is the red-green colour-blind pair.
+    // The metals separate on lightness and chroma, which every colour-vision
+    // type keeps, and none is the AERO blue, the ghost cyan or --you. The
+    // HUD's S1/S2/S3 labels carry no colour (buildSecRows), so this is the
+    // only place sector identity is a colour at all. 0.8 alpha, as before.
+    const SC = TrackMaps.sectorColors();
+    mc.globalAlpha = 0.8;
     // Same def.sectors splits as TrackMaps.draw / sectorAt (thirds if missing).
     const sec = track.def && track.def.sectors;
     const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
@@ -1172,6 +1222,7 @@ function drawMinimap() {
       }
       mc.stroke();
     }
+    mc.globalAlpha = 1;
     // Activation-zone highlight, slightly thicker, in the AERO chip's own blue
     // (#hud-aero.ax-armed / #btn-aero.armed), so the map and the chip name the
     // zone in one colour.
@@ -1292,7 +1343,7 @@ function drawMinimap() {
       mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
       mm.stroke();
     }
-    if (player.pitArmed) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
+    if (player.pitArmed && !motionReduced()) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
     mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, _mmYou);
     mm.globalAlpha = 1;
   }

@@ -114,13 +114,13 @@ test("a correction of numerical dust does not count as contact", async () => {
   // Every arm of contactT in the resolver sits behind that comparison. The
   // rear-end arm flags both cars; the side arm flags both ONLY with a human in
   // the pair (the human's flag gates their rescue, the AI's makes it compliant)
-  // and otherwise exactly the yielder (AiDrive.sideYieldsA), which is also the
+  // and otherwise exactly the yielder (AiDrive.sideYieldsA, with the next corner — kTurn — owning a level pair), which is also the
   // only car scrubbed — so an AI pair never mirrors each other into a standoff.
   const body = src.slice(src.indexOf("function _colResolvePair"), src.indexOf("function _colSepPair"));
   const both = body.match(/contactT = b\.contactT = 0\.22/g) || [];
   assert.equal(both.length, 2, `expected the rear-end and the human-pair both-car arms, found ${both.length}`);
   assert.ok(body.includes("if (a.human || b.human) a.contactT = b.contactT = 0.22;"), "the side branch lost its human-pair arm");
-  assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }"),
+  assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }"),
     "the side branch no longer scrubs (once a frame) and flags exactly the yielder");
   for (const guard of ["if (corr > CORR_EPS) {", "if (corr > CORR_EPS) a.contactT"])
     assert.ok(body.includes(guard), `_colResolvePair lost its guard: ${guard}`);

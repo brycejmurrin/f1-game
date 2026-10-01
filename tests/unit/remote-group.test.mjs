@@ -54,6 +54,8 @@ test("workers: empty keeps the group's own; an integer 1-8 overrides it; the pla
   // Validated before any runner is spent, and only ever passed as one quoted argument.
   assert.match(YML, /WORKERS: \$\{\{ inputs\.workers \}\}\n\s+run: node tools\/ci\/remote-group\.mjs --plan/);
   assert.match(YML, /\$\{WORKERS:\+"--workers=\$WORKERS"\}/);
+  // Both run steps default to ONE worker: render's own --workers=4 starves a 4-vCPU runner.
+  assert.equal((YML.match(/WORKERS: \$\{\{ inputs\.workers \|\| '1' \}\}/g) || []).length, 2);
 });
 
 test("pickRun: the newest dispatch of THIS group on THIS branch since the dispatch", () => {

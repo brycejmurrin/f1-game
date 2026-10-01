@@ -284,6 +284,17 @@ const RaceRadio = (function () {
           offer({ id: "rivalPit", ch: "eng", tier: 3, chat: 2, cd: 60, key: "eng.rivalPit", vars: { name: S(e.car) }, ttl: 8 });
           break;
         }
+        case "mistake": {
+          // Nearby rival only — a midfield lock-up the player cannot use is noise.
+          if (f.pitting || f.caution !== 0) break;
+          const near = e.car === f.ahead || e.car === f.behind;
+          const gap = e.car === f.ahead ? f.gapA : e.car === f.behind ? f.gapB : null;
+          if (!near || gap == null || gap > 3.5) break;
+          offer({ id: "rivalErr", ch: "eng", tier: 2, chat: 2, cd: 45,
+            cdKey: "rivalErr:" + S(e.car), key: "eng.rivalErr",
+            vars: { name: S(e.car) }, ttl: 6 });
+          break;
+        }
         case "caution": {
           const L = e.level;
           if (L === 4) offer({ id: "flag", ch: "eng", tier: 5, chat: 1, key: "eng.red", vars: {}, ttl: 8, still: () => f2().caution === 4 });
@@ -374,7 +385,7 @@ const RaceRadio = (function () {
     // ── COMMENTARY: events ──────────────────────────────────────────────────
     // In a WATCH the replay reports what happened (replayEvent); the facts' own
     // start / passes / stops / laps / flag are the puppets', not the race's.
-    const WATCH_SKIP = { start: 1, pass: 1, fastest: 1, retire: 1, pitIn: 1, finish: 1 };
+    const WATCH_SKIP = { start: 1, pass: 1, fastest: 1, retire: 1, pitIn: 1, finish: 1, mistake: 1 };
     function tvEvent(e, f) {
       if (watch && WATCH_SKIP[e.type]) return;
       switch (e.type) {
@@ -413,6 +424,15 @@ const RaceRadio = (function () {
           offer({ id: "retire", ch: "tv", tier: 3, key: "tv.retire",
             vars: { a: S(e.car), why: RadioLines.WHY[e.why] || RadioLines.WHY.mechanical }, ttl: 12 });
           break;
+        case "mistake": {
+          if (f.caution >= 2) break;
+          // Booth colour for top cars, or anyone in the player's battle.
+          if (e.pos > 6 && e.car !== f.ahead && e.car !== f.behind) break;
+          offer({ id: "mistake", ch: "tv", tier: 2, cd: 40,
+            cdKey: "mistake:" + S(e.car), key: "tv.mistake",
+            vars: { a: S(e.car) }, ttl: 5 });
+          break;
+        }
         case "pitIn":
           if (e.pos > 0 && e.pos <= 5) offer({ id: "pit", ch: "tv", tier: 2, key: "tv.pit", vars: { a: S(e.car), pos: e.pos }, ttl: 8 });
           break;

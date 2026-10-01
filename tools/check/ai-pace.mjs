@@ -12,7 +12,7 @@
  * approach, line), and neither prints a lap time. This does.
  *
  * It boots the real game in `tools/lib/game-vm.cjs` (no renderer, no browser),
- * races the AI field with the player parked out of the way, and times each
+ * races the AI field with the player OUT of it (game-vm aiOnly()), and times each
  * car's laps off its own lap counter at a fixed step. The number that matters
  * is the FIELD MEDIAN — one car can have a scruffy lap, the median cannot.
  *
@@ -71,6 +71,7 @@ const mmss = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(3).padStart(6, "0"
 /** Times every AI car's laps by watching its own lap counter tick. */
 async function paceOf(difficulty) {
   const g = await createGame({ track: TRACK, storage: { difficulty, tyreWear: WEAR } });
+  g.aiOnly();   // not a parked obstacle on the grid, not a human for the band to chase
   const cars = g.G.cars.filter((c) => !c.isPlayer && !c.human);
   if (!cars.length) throw new Error("ai-pace: no AI cars in the field");
   const seen = cars.map((c) => c.lap || 0), laps = cars.map(() => []);

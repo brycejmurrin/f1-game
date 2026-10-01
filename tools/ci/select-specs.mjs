@@ -154,6 +154,15 @@ export const MAX_FAILURES = 3;
 // fixed gate's own critical path (vm-a, ~6 min), so the selection is rarely
 // the last job to finish.
 export const TARGET_SHARD_SEC = 480;
+// Specs that declare this much (or more) per test NEVER share a selected job.
+// props-over-road / terrain-over-road declare 1500 s for an all-circuits walk;
+// billed at the unmeasured fallback they look like 8–38 s and pack next to a
+// title-menu or foundation Navigate. Under llvmpipe that walk then runs for
+// 5–10 min, poisons Chromium, and the next page.goto hangs at the 180 s gate
+// (PR #604 runs 36817164457 / 36815567820: ERR_ABORTED / Navigate 190 s on the
+// same worker; siblings on a fresh worker pass in ~8 s). menu-baseline is solo
+// for goldens; these are solo so nothing inherits their browser.
+export const SOLO_OWN_TIMEOUT_SEC = 3 * SELECTED_GATE.perTestTimeoutSec;
 // Minutes a job may take before the runner kills it: twice its expected work
 // (runner variance), plus MAX_FAILURES timeouts at the slowest per-test
 // timeout in it, plus setup (npm ci + chromium + Mesa) and margin. A ceiling,
@@ -324,9 +333,19 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
   // slot to three 11-test specs was CI run 36057109364).
   oversize.sort((a, b) => a.rank - b.rank || expectedSec(b, db) - expectedSec(a, db));
   const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
+  // An over-budget spill must NOT fall into skipped → overflow. Overflow bills
+  // at the measured/fallback rate, so a 1500 s all-circuits sweep looks like
+  // 8 s, packs into a shared selected job, and poisons the next Navigate
+  // (PR #604). Keep it SKIPPED by name; the overflow filter below also
+  // refuses it so a future order change cannot re-admit it.
   for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) skipped.push(r);
   // OVERFLOW: skipped specs that fit one job each, up to `overflowShards` jobs'
   // worth of expected seconds, in the same order as the budgeted cut.
+  // Never overflow a mega-sweep (overBudget with a solo-class declaration, or
+  // ownTimeoutSec past SOLO_OWN_TIMEOUT_SEC): its fallback bill is a lie about
+  // wall time, and packing it is how props/terrain-over-road reached selected
+  // next to a Navigate victim (PR #604). Ordinary gate-boundary declarations
+  // (180 s) may still overflow — they are not the all-circuits poison class.
   const overflow = [];
   {
     let room = overflowShards * TARGET_SHARD_SEC;
@@ -334,6 +353,8 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     skipped.sort(order);
     for (const r of skipped) {
       const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
+      const own = r.ownTimeoutSec || 0;
+      if (own >= SOLO_OWN_TIMEOUT_SEC) { left.push(r); continue; }
       if (sec <= TARGET_SHARD_SEC && sec <= room) { overflow.push(r); room -= sec; } else left.push(r);
     }
     skipped.length = 0;
@@ -355,11 +376,13 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  reach: a typical circuit PR asked for 3-7 selected jobs doing 0.2-1.5 min
  *  of work apiece, each holding one of 20 slots behind a 26-minute queue.
  *
- *  Two kinds of item never share a job: a `--shard` piece (the flag applies to
- *  the whole command) and a spec carrying menu-baseline (its goldens are
- *  SwiftShader captures, so ci.yml drops llvmpipe for any job naming it).
- *  The job holding the budgeted specs is named `selected` — ci.yml's
- *  carry-forward of failing specs keys on that name. */
+ *  Three kinds of item never share a job: a `--shard` piece (the flag applies
+ *  to the whole command), a spec carrying menu-baseline (its goldens are
+ *  SwiftShader captures, so ci.yml drops llvmpipe for any job naming it), and
+ *  a mega-sweep whose declared per-test budget is SOLO_OWN_TIMEOUT_SEC or more
+ *  (all-circuits props/terrain walks — see that constant). The job holding the
+ *  budgeted specs is named `selected` — ci.yml's carry-forward of failing
+ *  specs keys on that name. */
 export function shards(r, db = timings()) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
@@ -375,7 +398,8 @@ export function shards(r, db = timings()) {
       }
       continue;
     }
-    items.push({ solo: /menu-baseline/.test(s.file), budgeted: !!s.budgeted, name: `oversize-${base}`,
+    const solo = /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
+    items.push({ solo, budgeted: !!s.budgeted, name: `oversize-${base}`,
       files: [s.file], shard: "", tests: s.tests, sec, perTest });
   }
   const bins = [];
@@ -546,6 +570,24 @@ export const DOCS_ONLY = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//];
 export const isDocsOnly = (changed) =>
   changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f)));
 
+// SOURCE → SPEC pins that must run as AFFECTED (rank 2), not merely routed.
+// career.spec.js declares 540 s/test, so the modes-group path rule alone puts
+// it in overBudgetSpecs and the selected gate never runs it — PR #611's
+// EXPORT/IMPORT reuse of .cr-slot-del shipped green for that reason. A pin
+// here elevates the spec to oversize when its UI / backup module changes.
+export const SOURCE_AFFECTED = [
+  [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career.spec.js"],
+];
+export function specsAffectedBySource(changed, root = ROOT) {
+  const hit = new Set();
+  for (const f of changed) {
+    for (const [re, spec] of SOURCE_AFFECTED) {
+      if (re.test(f) && fs.existsSync(path.join(root, spec))) hit.add(spec);
+    }
+  }
+  return [...hit];
+}
+
 // ─── import graph (Playwright's --only-changed, computed here) ────────────────
 //
 // Playwright ships `--only-changed=<ref>`, which walks the suite's IMPORT graph
@@ -660,11 +702,14 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // The touched circuits' own foundation specs are AFFECTED, like an import;
   // on a circuit-scoped diff another circuit's foundation is not a candidate.
   const ownFoundations = circ.ids.map(foundationSpec).filter((f) => fs.existsSync(path.join(ROOT, f)));
+  // Source modules whose browser gate is over-budget when merely routed (see
+  // SOURCE_AFFECTED) — same rank-2 elevation as an import / own foundation.
+  const sourceAffected = specsAffectedBySource(changed);
   const otherCircuit = (f) => {
     const m = FOUNDATION.exec(f);
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
   };
-  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...specs])]
+  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
   const candidates = routed;
@@ -673,7 +718,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
-    : (imported.includes(f) || ownFoundations.includes(f)) ? 2 : 3;
+    : (imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f)) ? 2 : 3;
   const cut = fit(candidates, budgetMin, { rank, overflowShards: opts.overflowShards ?? MAX_OVERFLOW_SHARDS, staleFirst: !!opts.staleFirst });
   // "infra" no longer EMPTIES the selection. A tracked-path change (the shell,
   // a fixture every spec imports, this selector) can affect any spec, which is

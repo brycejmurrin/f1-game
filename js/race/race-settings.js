@@ -443,9 +443,12 @@ const RaceSettings = (function () {
       };
       $("rs-go").onclick = () => {
         if (G.soundOn) GameAudio.uiSelect();
-        $("race-settings").hidden = true;
+        // Every route closes the sheet now except the race intro's, which is handed
+        // it: the sheet stays up while the renderer finishes a shader warm.
+        const sheet = $("race-settings");
         const netLobby = G.netLobby;
         if (netRoom) {
+          sheet.hidden = true;
           $("vsfriend").hidden = false;
           netLobby.roomChanged("race");
           return;
@@ -462,12 +465,12 @@ const RaceSettings = (function () {
         // that ends on a grid earns the loading screen — and it is the route that
         // pays ~1.1 s of synchronous track build, which the screen covers.
         if ((isChampionship() && SeasonCal.qualiNext(season) && !qualiResults()) ||
-            (!isChampionship() && gridFromQuali() && !qualiResults())) openQuali();
+            (!isChampionship() && gridFromQuali() && !qualiResults())) { sheet.hidden = true; openQuali(); }
         else if (raceIntro) {
           // As every other raceIntro caller does: it hides the title first, so a throw here left no screen at all.
-          try { raceIntro(startRace); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); startRace(); }
+          try { raceIntro(startRace, sheet, $("rs-go")); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); sheet.hidden = true; startRace(); }
         }
-        else startRace();
+        else { sheet.hidden = true; startRace(); }
       };
     }
 

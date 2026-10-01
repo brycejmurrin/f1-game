@@ -45,34 +45,64 @@ test("two seconds of laying leaves the same trail at 30, 60 and 144 Hz", () => {
 });
 
 test("rain re-seeds only newly visible drops when the governor sheds less", () => {
-  const moves = [];
-  const c2d = {
-    clearRect() {}, beginPath() {}, moveTo(x, y) { moves.push([x, y]); },
-    lineTo() {}, stroke() {},
-  };
-  const canvas = { width: 0, height: 0, style: {}, getContext: () => c2d };
-  let shed = 1, random = 0.5;
-  const rngMath = Object.create(Math);
-  rngMath.random = () => random;
+  // The shower is a streak FIELD drawn through the alpha particle batch: six
+  // vertices of [cornerX, cornerY, x, y, z, r, g, b, size, alpha] a drop, size
+  // 0 (the corners are pre-expanded), inside a box around the eye. No DOM: the
+  // context has no document, so a canvas path would throw here.
+  let shed = 1;
+  const calls = [];
   const ctx = vm.createContext({
-    Math: rngMath, Float32Array, Uint8Array,
-    document: { createElement: () => canvas, body: { appendChild() {} } },
-    window: { innerWidth: 100, innerHeight: 100 },
-    LightTune: { LT: { rainCount: 4, rainStreak: 1, rainWind: 0 } },
+    Float32Array, Uint8Array, Array, Math, Object,
+    LightTune: { LT: { rainCount: 4, rainStreak: 1, rainWind: 0, windDir: 0 } },
     PerfGov: { autoShed: () => shed },
   });
   seedLog(ctx);
   const rain = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx);
+  rain.init({ drawParticles: (data, floats, additive) => calls.push({ data: Array.from(data.subarray(0, floats)), floats, additive }) });
   rain.rainSeed(false);
-  rain.rainDraw(0.01, 0, true);
-  assert.equal(moves.length, 2, "shed level 1 draws half the seeded rain");
-  moves.length = 0;
-  random = 0.75;
+  rain.rainShow(true);
+  assert.ok(rain.rainActive());
+  const eye = [100, 5, -30];
+  rain.rainUpdate(0.01, eye, true);
+  rain.draw();
+  assert.equal(calls.length, 1, "one alpha batch, no additive batch");
+  assert.equal(calls[0].floats, 2 * 6 * 10, "shed level 1 draws half the seeded rain");
+  const drops = (c) => { const out = []; for (let i = 0; i < c.floats; i += 60) out.push(c.data.slice(i, i + 60)); return out; };
+  for (const d of drops(calls[0])) {
+    for (let v = 0; v < 6; v++) {
+      const o = v * 10;
+      assert.equal(d[o + 8], 0, "size 0: the shader adds nothing to the expanded corner");
+      assert.ok(d[o + 9] > 0 && d[o + 9] <= 1, `alpha in (0, 1]: ${d[o + 9]}`);
+      assert.ok(Math.abs(d[o + 2] - eye[0]) <= 10 && Math.abs(d[o + 4] - eye[2]) <= 10 && d[o + 3] - eye[1] > -4 && d[o + 3] - eye[1] < 6,
+        `drop corner inside the box around the eye: ${d.slice(o + 2, o + 5)}`);
+      for (let k = 0; k < 10; k++) assert.ok(Number.isFinite(d[o + k]), "no NaN in the batch");
+    }
+  }
+  // Hidden drops do not advance while shedding; the returning tail is re-scattered.
+  for (let i = 0; i < 200; i++) rain.rainUpdate(0.05, eye, true);   // 10 s: every shown drop has wrapped at least once
+  calls.length = 0;
   shed = 0;
-  rain.rainDraw(0.01, 0, true);
-  assert.equal(moves.length, 4);
-  assert.ok(moves[2][1] > 70 && moves[3][1] > 70,
-    `returning drops used stale hidden positions: ${JSON.stringify(moves)}`);
+  rain.rainUpdate(0.01, eye, true);
+  rain.draw();
+  assert.equal(calls[0].floats, 4 * 6 * 10, "density returns when the governor recovers");
+  for (const d of drops(calls[0])) {
+    assert.ok(d[3] - eye[1] > -4 && d[3] - eye[1] < 6, `after 10 s every drop still sits inside the box (wrap): y ${d[3] - eye[1]}`);
+  }
+  // A moving camera: the apparent velocity rakes the streak toward the motion,
+  // so the quad's long axis gains a horizontal component.
+  calls.length = 0;
+  rain.rainUpdate(0.02, [eye[0] + 1.2, eye[1], eye[2]], true);   // 60 m/s along +x
+  rain.draw();
+  let raked = 0;
+  for (const d of drops(calls[0])) {
+    const dx = Math.abs(d[2 + 20] - d[2]), dy = Math.abs(d[3 + 20] - d[3]);   // corner (-1,-1) vs (1,1): the diagonal
+    if (dx > dy * 2) raked++;
+  }
+  assert.ok(raked >= 3, `at 60 m/s most streaks lie nearly horizontal (${raked}/4)`);
+  rain.rainShow(false);
+  calls.length = 0;
+  rain.draw();
+  assert.equal(calls.length, 0, "hidden: nothing drawn");
 });
 
 test("the first stamp of a slide lands at once, and lifting off re-arms it", () => {
