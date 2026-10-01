@@ -61,6 +61,7 @@ function load({ api = true, voices = [], stored = {}, soundOn = true, lore = tru
   // it; `lore: false` is how a test asks for the derived-only floor, which is
   // what a circuit with no row still gets.
   if (lore) vm.runInContext(read("js/data/circuit-lore.js"), ctx, { filename: "js/data/circuit-lore.js" });
+  vm.runInContext(read("js/audio/announcer-recorded.js"), ctx, { filename: "js/audio/announcer-recorded.js" });
   vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: "js/audio/announcer.js" });
   const A = vm.runInContext("Announcer", ctx);
   const RV = vm.runInContext("RadioVoice", ctx);
@@ -610,6 +611,75 @@ function fakeClock() {
   return c;
 }
 
+test("recorded introductions preserve voice identity, skip unknown stories and cancel pending downloads", async () => {
+  const clock = fakeClock(), calls = [];
+  let resolve;
+  const pending = new Promise((r) => { resolve = r; });
+  const G = { soundOn: true, radio: { recordedVoice: () => "bella", volume: () => 0.8, pack: {
+    load: () => pending, stop: (ch) => calls.push({ stop: ch }),
+    plan: (t, text) => text.includes("unknown") ? null : { secs: 1 },
+    speak: (id, text, o) => { calls.push({ id, text, o }); return true; },
+  } } };
+  const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document: { hidden: false } });
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  const a = sb.RecordedAnnouncer.create(G);
+  assert.equal(a.play(["Welcome", "unknown career detail", "Let's go racing"], 5000, true), true);
+  assert.equal(a.speaking(), true);
+  a.stop(); resolve(true); await pending; await Promise.resolve(); clock.tick(10000);
+  assert.equal(calls.filter((c) => c.id).length, 0, "skip retires the pending load");
+  a.play(["Welcome", "unknown career detail", "Let's go racing"], 5000, true);
+  await Promise.resolve(); clock.tick(0);
+  let spoken = calls.filter((c) => c.id);
+  assert.equal(spoken[0].id, "bella");
+  assert.equal(spoken[0].o.fx, "announcer");
+  spoken[0].o.onEnd(); clock.tick(250); clock.tick(3150);
+  spoken = calls.filter((c) => c.id);
+  assert.deepEqual(spoken.map((c) => c.text), ["Welcome", "Let's go racing"]);
+  assert.ok(spoken.every((c) => c.id === "bella"));
+  a.stop(); assert.equal(a.speaking(), false);
+});
+
+test("recorded introductions reserve the closing cue before adding optional colour", async () => {
+  const clock = fakeClock(), calls = [];
+  const duration = { welcome: 2, venue: 3, colour: 3, closing: 2 };
+  const G = { soundOn: true, radio: { recordedVoice: () => "bella", volume: () => 0.8, pack: {
+    load: () => Promise.resolve(true), stop() {}, plan: (_id, text) => ({ secs: duration[text] }),
+    speak: (_id, text, o) => { calls.push(text); return true; },
+  } } };
+  const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout });
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  // This fake finishes each clip at its recorded duration, just like WebAudio.
+  G.radio.pack.speak = (_id, text, o) => { calls.push(text); clock.setTimeout(o.onEnd, duration[text] * 1000); return true; };
+  const a = sb.RecordedAnnouncer.create(G);
+  a.play(["welcome", "venue", "colour", "closing"], 10000, true);
+  await Promise.resolve(); clock.tick(10000);
+  assert.deepEqual(calls, ["welcome", "venue", "closing"], "optional colour cannot consume the lights-out cue's time");
+  assert.equal(a.speaking(), false);
+});
+
+test("unrecorded numbered sprints and named duels retain a recorded closing cue and its timing", async () => {
+  const clock = fakeClock(), calls = [];
+  const generic = ["the sprint, flat out from the start. let's go racing.",
+    "a duel. just the two of you, and no one else on the road.", "let's go racing."];
+  const G = { soundOn: true, radio: { recordedVoice: () => "bella", volume: () => 0.8, pack: {
+    ensure() {}, ready: () => true, load: () => Promise.resolve(true), stop() {},
+    plan: (_id, text) => generic.includes(text) ? { secs: 2 } : null,
+    speak: (_id, text) => { calls.push({ text, at: clock.now() }); return true; },
+  } } };
+  const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout });
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  const a = sb.RecordedAnnouncer.create(G);
+  for (const [i, original] of ["the sprint. 5 laps, flat out from the start. let's go racing.",
+    "a duel with senna. just the two of you, and no one else on the road.", "120 laps. let's go racing."].entries()) {
+    assert.equal(a.readMs([original]), 2850);
+    const start = clock.now(); a.play([original], 5000, true);
+    await Promise.resolve(); clock.tick(2400);
+    assert.equal(calls.at(-1).text, generic[i]);
+    assert.equal(calls.at(-1).at, start + 2400, "the generic closing still lands before the flyby ends");
+    a.stop();
+  }
+});
+
 /** Finish every line as soon as it starts, recording WHEN each one started. */
 function readThrough(synth, clock, stepMs, untilMs) {
   const starts = [];
@@ -935,6 +1005,21 @@ test("a WATCH names the driver where a join says 'you', and a lap-1 join reads t
   for (const want of ["Russell is on pole, with you alongside.", "You start Charles Leclerc's car from second on the grid, on softs.", "22 cars take the start.",
     "Everyone else races it exactly as it really ran."]) assert.ok(g.includes(want), `missing: "${want}"\n${g.join("\n")}`);
   assert.match(g[g.length - 1], /laps\. Let's go racing\.$/);
+});
+
+test("recorded readMs only stretches the flyby for covered audio, with a bounded loading fallback", () => {
+  const b = load();
+  let ready = false;
+  const ids = [];
+  b.G.radio = { packOn: () => true, recordedVoice: () => "bella", pack: {
+    ensure: (id) => ids.push(id), ready: () => ready,
+    plan: (_id, text) => text === "welcome to apex 26." ? { secs: 2 } : null,
+  } };
+  const a = b.A.create(b.G);
+  assert.equal(a.readMs(bakuJoin()), 0, "loading keeps the ordinary flyby length");
+  ready = true;
+  assert.equal(a.readMs(bakuJoin()), 2850, "unrecorded story copy does not add silent waiting");
+  assert.deepEqual(ids, ["bella", "bella"]);
 });
 
 test("readMs is the full read's length at the channel's rate, and 0 when nothing will be said", () => {

@@ -15,7 +15,9 @@ const Menus = (function () {
 function create(G) {
 Log.info("ui", "Menus.create");
 // Stable helpers from the game.js closure.
-const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = G;
+// No tickUi: every handler here already plays uiSelect, and a tickUi after it
+// was a second blip on one click (the track and team tiles).
+const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
 
 // localStorage can be unavailable even while the game remains fully playable.
 // Surface that distinction globally: the in-memory cache preserves this
@@ -234,7 +236,7 @@ function buildTeamPicker() {
       setTeamPicker(false);
       // The garage (the one host) repaints its own 3D car for free —
       // getSetupPreviewMesh() is keyed on the team id.
-      G.buildSetup(); tickUi();
+      G.buildSetup();
     };
     els.selTeams.appendChild(b);
   });
@@ -260,10 +262,20 @@ const favList = () => {
   return Array.isArray(v) ? v.filter((id) => Tracks.LIST.some((t) => t.id === id)) : [];
 };
 let trackFilter = store.get("trackFilter", "all");
-if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic" && trackFilter !== "daily-open" && trackFilter !== "fav") trackFilter = "all";
-const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"], ["fav", "♥ FAVOURITES"], ["daily-open", "DAILY OPEN"]];
+if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic" && trackFilter !== "daily-open" && trackFilter !== "custom" && trackFilter !== "fav") trackFilter = "all";
+// MY CIRCUITS: the player's own designs (js/editor/custom-tracks.js, `custom: true`,
+// appended after the 52). Like FAVOURITES the chip exists only once there is one.
+const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"], ["custom", "MY CIRCUITS"], ["fav", "♥ FAVOURITES"], ["daily-open", "DAILY OPEN"]];
 let trackQuery = "";
-const visibleTrackFilter = () => ((!G.timeTrial && trackFilter === "daily-open") || (trackFilter === "fav" && !favList().length) ? "all" : trackFilter);
+const hasCustom = () => Tracks.LIST.some((t) => t.custom);
+const visibleTrackFilter = () => {
+  if ((!G.timeTrial && trackFilter === "daily-open") || (trackFilter === "fav" && !favList().length) || (trackFilter === "custom" && !hasCustom())) return "all";
+  // The ACTIVE tile is never filtered out: RACE from the designer lands here on
+  // a custom circuit whatever chip the player last left pressed.
+  const cur = Tracks.LIST[G.trackIdx];
+  if (cur && cur.custom && trackFilter !== "all" && trackFilter !== "custom") return "all";
+  return trackFilter;
+};
 
 /** Star or unstar a circuit; the strip and its filter bar are rebuilt so the
  *  badge and the FAVOURITES chip follow. The last one out deletes the key (and
@@ -278,7 +290,7 @@ function toggleFav(id) {
     if (trackFilter === "fav") { trackFilter = "all"; store.set("trackFilter", "all"); }
   }
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
-  if (els.select && !els.select.hidden) { buildSelect(); tickUi(); }
+  if (els.select && !els.select.hidden) buildSelect();
   return on;
 }
 
@@ -317,7 +329,7 @@ function setTrackFilter(id, focus, keepDaily) {
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
   vt(() => {
-    buildSelect(); tickUi();
+    buildSelect();
     // THE BAR IS NOT INSIDE THE STRIP. mountToolbar puts it on the SHELF, as a
     // sibling of #sel-tracks and not a child, precisely so it does not scroll
     // sideways with the tiles — and this read searched the strip, found
@@ -338,7 +350,7 @@ function trackFilterBar() {
   bar.setAttribute("role", "group");
   bar.setAttribute("aria-label", "Circuit list controls");
   const hasFav = favList().length > 0;
-  const filters = trackFilters.filter(([id]) => (id !== "daily-open" || G.timeTrial) && (id !== "fav" || hasFav));
+  const filters = trackFilters.filter(([id]) => (id !== "daily-open" || G.timeTrial) && (id !== "fav" || hasFav) && (id !== "custom" || hasCustom()));
   filters.forEach(([id, label], index) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -424,7 +436,7 @@ function trackTile(t, i, opts) {
   if (!(opts && opts.readOnly)) row.type = "button";
   row.className = "track-row" + (opts && opts.active ? " active" : "");
   row.dataset.trackIdx = String(i);
-  row.dataset.kind = t.classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
+  row.dataset.kind = t.custom ? "custom" : t.classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
   row.setAttribute("aria-label", t.name);
   // The country is the tooltip: five USA tiles and three Italian ones need
   // it, and the strip has no room for a second line of text under each flag.
@@ -439,6 +451,7 @@ function trackTile(t, i, opts) {
   if (t.night) { const b = document.createElement("span"); b.className = "trb trb-night"; b.textContent = "NIGHT"; nm.appendChild(b); }
   if (t.street) { const b = document.createElement("span"); b.className = "trb trb-street"; b.textContent = "STREET"; nm.appendChild(b); }
   if (t.classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
+  if (t.custom) { const b = document.createElement("span"); b.className = "trb trb-custom"; b.textContent = "CUSTOM"; nm.appendChild(b); }
   row.appendChild(nm);
   return row;
 }
@@ -542,11 +555,12 @@ function buildSelect() {
     const favs = favList();
     Tracks.LIST.forEach((t, i) => {
       const filter = visibleTrackFilter();
-      if (filter === "season" && t.classic) return;
+      if (filter === "season" && (t.classic || t.custom)) return;
       if (filter === "classic" && !t.classic) return;
+      if (filter === "custom" && !t.custom) return;
       if (filter === "fav" && !favs.includes(t.id)) return;
       if (filter === "daily-open" && (!G.daily || t.id !== G.daily.plan().trackId)) return;
-      const g = t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
+      const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       if (g !== group) {
         group = g;
         const head = document.createElement("div");
@@ -556,12 +570,12 @@ function buildSelect() {
         // groups: the full "CLASSIC CIRCUITS" stood taller than the tiles and
         // stretched the whole strip (measured 131px at 852x393). The filter
         // chips beside the strip carry the long names.
-        head.textContent = t.classic ? "CLASSICS" : "SEASON";
+        head.textContent = t.custom ? "MINE" : t.classic ? "CLASSICS" : "SEASON";
         els.selTracks.appendChild(head);
       }
       const row = trackTile(t, i, { active: i === G.trackIdx });
       row.dataset.trackGroup = g;
-      row.dataset.search = [t.name, t.country, t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
+      row.dataset.search = [t.name, t.country, t.custom ? "custom mine" : t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
         .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
       if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
@@ -600,7 +614,6 @@ function buildSelect() {
           r.setAttribute("aria-pressed", on ? "true" : "false");
         });
         updateTrackPreview();
-        tickUi();
         // The still IS the preview — nothing is shown behind the sheet. But once
         // the player settles on a tile the circuit is PRE-BUILT hidden, so NEXT
         // opens race settings onto a ready world (js/game.js scheduleFlybyTrack).
@@ -750,6 +763,9 @@ let stillToken = 0;
 function showStill(t) {
   const img = document.getElementById("sel-still");
   if (!img) return;
+  // A custom circuit has no still (nothing to fetch, nothing to 404): the hero
+  // keeps its gradient and the outline carries the preview.
+  if (t.custom) { img.hidden = true; img.dataset.id = t.id; stillToken++; return; }
   const src = "assets/stills/" + t.id + ".webp";
   if (img.dataset.id === t.id && !img.hidden) return;
   const token = ++stillToken;
@@ -781,10 +797,22 @@ function updateTrackPreview() {
     if (t.night) kinds.push(["trb trb-night", "NIGHT RACE"]);
     if (t.street) kinds.push(["trb trb-street", "STREET CIRCUIT"]);
     if (t.classic) kinds.push(["trb trb-classic", "CLASSIC"]);
+    if (t.custom) kinds.push(["trb trb-custom", "CUSTOM CIRCUIT"]);
     if (t.banked) kinds.push(["trb", "BANKED"]);
     factsEl.textContent = "";
     for (const [cls, label] of kinds) {
       const b = document.createElement("span"); b.className = cls; b.textContent = label; factsEl.appendChild(b);
+    }
+    if (t.custom) {
+      // Straight from the picker into the designer with THIS design; the
+      // LAZY_EDITOR bundle loads on the first click (CustomTracks.ensureEditor).
+      const e = document.createElement("button"); e.type = "button"; e.className = "sel-chip"; e.textContent = "EDIT IN DESIGNER";
+      e.setAttribute("aria-label", "Edit " + t.name + " in the track designer");
+      e.onclick = () => {
+        if (G.soundOn) GameAudio.uiSelect();
+        CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id) }); });
+      };
+      factsEl.appendChild(e);
     }
   }
   // The numbers beside the still, as a definition list (label over value).
