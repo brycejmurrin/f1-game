@@ -1494,6 +1494,16 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01):** on all three. On the road
+  ribbon the puddle noise is weighted by where water stands: 0.7 at the crown →
+  1.2 at the gutters, and by the lateral downhill of the geometry (the world
+  direction of increasing lateral x from the screen derivatives of the track
+  coordinate, dotted with the geometric normal's tilt; ±4 per unit, clamped
+  0.5–1.5), so a camber pools its inside and dries its outside without
+  per-circuit data. GLX `LIT_FS` wet block (`vTrk`, `Ngeo`), TLX the same on
+  `trkA` (null only on the chunked city-prop variant, which has no road), WGX
+  on `vTrk`. Before, value noise on a flat threshold pooled the crown and the
+  high side alike. `tests/unit/surface-id-parity.test.mjs` pins the three.
 - **PUDDLE RIPPLES (2026-10-01):** on all three. Inside each lit shader's wet
   block, where `puddle > 0` and rain is FALLING (`frame.rain`, ramped like
   wetness: GLX `uRain`, TLX `U.rain`, WGX `params4.z`), two cell grids of

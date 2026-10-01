@@ -1173,7 +1173,18 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let porous = select(0.0, 1.0, wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11);
     wet = wetness * upFace;
     let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
-    let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
+    // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
+    // drains to the gutters (0.7 → 1.2), the low side of a banked turn holds
+    // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
+    var pool = 1.0;
+    if (vTrk.z > 0.5) {
+      let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+      let rightXZ = dpdx(in.wpos.xz) * dpdx(vTrk.y) + dpdy(in.wpos.xz) * dpdy(vTrk.y);
+      let rl = length(rightXZ);
+      let downhill = select(0.0, -dot(rightXZ / rl, Ngeo.xz), rl > 1e-6);
+      pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+    }
+    let puddle = smoothstep(0.48, 0.88, pn * pool) * wet * (1.0 - porous);
     // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
     // constant for constant: two cell grids of impact rings as a normal tilt
     // on the pooled water; the GGX lobes and the sky reflection below read N.

@@ -1179,9 +1179,28 @@ void main() {
     float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
     wet = uWetness * upFace;
     float pn = vnoise(vWorldPos.xz * 0.13 + 4.7);
+    // PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01). On the road ribbon (vTrk.z is
+    // the half-width, > 0 only there) the noise is weighted by where water
+    // actually stands: the crown drains to the gutters (0.7 at the centre,
+    // 1.2 at the edges), and the LOW side of a banked turn holds it. The
+    // lateral downhill is read from the geometry — the world direction of
+    // increasing lateral x, from the screen-space derivatives of vTrk.y and
+    // vWorldPos.xz, dotted with the geometric normal's tilt — so a camber
+    // pools the inside and dries the outside without any per-circuit data.
+    // Before, water pooled equally on the crown and in the gutter, and a banked
+    // turn held standing water on its high side (the second graphics-detail
+    // survey, item 13). Mirrored constant for constant on TLX and WGX.
+    float pool = 1.0;
+    if (vTrk.z > 0.5) {
+      float lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+      vec2 rightXZ = dFdx(vWorldPos.xz) * dFdx(vTrk.y) + dFdy(vWorldPos.xz) * dFdy(vTrk.y);
+      float rl = length(rightXZ);
+      float downhill = rl > 1e-6 ? -dot(rightXZ / rl, Ngeo.xz) : 0.0;   // +: the +x side lies lower
+      pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+    }
     // Wide, soft puddle edges so pools BLEND into the wet sheet rather than reading
     // as hard painted ovals.
-    puddle = smoothstep(0.48, 0.88, pn) * wet;        // only low spots pool
+    puddle = smoothstep(0.48, 0.88, pn * pool) * wet;        // only low spots pool
     // Porous ground cannot hold standing water — no pooling, and no sheen below.
     puddle *= 1.0 - porous;
     // RAIN RIPPLES (2026-10-01): expanding rings from drop impacts, keyed to the
