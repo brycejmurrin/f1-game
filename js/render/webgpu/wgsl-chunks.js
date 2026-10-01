@@ -173,13 +173,16 @@ fn matTexLod(fwUv: vec2<f32>) -> f32 {
   let sy = max(fwUv.y, 1e-6) * 256.0;
   return clamp(log2(sqrt(sx * sy)) - 0.35, 0.0, 8.0);
 }
-fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>, litNrm: vec4<f32>, packOn: bool) {
+// nGeo: the PRE-BUMP normal — the tile plane (matTexUV) and the tangent frame
+// are picked from it, as GLX picks from vNrm; the bumped N was a parity gap
+// on walls near 45 degrees.
+fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>, litNrm: vec4<f32>, packOn: bool, nGeo: vec3<f32>) {
   var uv = vec2<f32>(0.0);
-  if (!matTexUV(mid, *N_ptr, wpos, &uv)) { return; }
+  if (!matTexUV(mid, nGeo, wpos, &uv)) { return; }
   let fade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (fade <= 0.005) { return; }
   let sc = matScale(mid);
-  let an = abs(normalize(*N_ptr));
+  let an = abs(normalize(nGeo));
   let fwUv = select(fwWpos.xz, vec2<f32>(select(fwWpos.x, fwWpos.z, an.x > an.z), fwWpos.y), matWallLike(mid)) / max(sc, 1e-4);
   let fp = max(fwUv.x, fwUv.y);
   let aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
@@ -196,8 +199,13 @@ fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wp
     nrmSample = textureSampleLevel(matNormalTex, matSamp, uv, mid, matTexLod(fwUv));
   }
   let dxy = (nrmSample.xy - 0.5) * 2.0;
-  let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), *N_ptr) + vec3<f32>(1e-5, 0.0, 0.0));
-  let B = cross(*N_ptr, T);
+  // Tangent frame = the world axes the tile coordinate maps to (GLX
+  // applyMaterialTexNormal): wall-like (hc, y) -> T along hc, B = up; ground
+  // (x, z) -> T = +x, B = +z. The old up-cross-N frame was degenerate on the ground and
+  // mirrored on +x / -z faces.
+  let wall = matWallLike(mid);
+  let T = select(vec3<f32>(1.0, 0.0, 0.0), select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), an.x > an.z), wall);
+  let B = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.0, 1.0, 0.0), wall);
   let amt = select(0.55, 0.10, mid == 16) * F.params8.w * fade * aa;
   *N_ptr = normalize(*N_ptr + (T * dxy.x + B * dxy.y) * amt);
 }
@@ -206,6 +214,7 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
   let bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (bumpFade <= 0.005) { return; }
   var N = *N_ptr;
+  let N0 = N;   // pre-bump: the baked map's plane + tangent frame come from it
   if (matWallLike(mid)) {
     let an = abs(N);
     let hc = select(wpos.x, wpos.z, an.x > an.z);
@@ -215,7 +224,9 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
     let fp = max(fwHc, fwY);
     let aaFade = clamp(1.0 - (fp - 0.04) / 0.22, 0.0, 1.0);
     if (aaFade <= 0.005) { return; }
-    let T = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), N) + vec3<f32>(1e-5, 0.0, 0.0));
+    // T = the world axis hc runs along (GLX applyMaterialNormal): a seam is a
+    // groove on every face, where the old up-cross-N frame mirrored +x / -z walls.
+    let T = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), an.x > an.z);
     let e = 0.05;
     let h0 = matBumpHeight(mid, vec2<f32>(hc, y));
     let hx = matBumpHeight(mid, vec2<f32>(hc + e, y));
@@ -235,7 +246,7 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
     N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
   }
   *N_ptr = N;
-  applyMaterialTexNormal(mid, N_ptr, vd, wpos, fwWpos, litNrm, packOn);
+  applyMaterialTexNormal(mid, N_ptr, vd, wpos, fwWpos, litNrm, packOn, N0);
 }
 fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>, fwWpos: vec3<f32>, litPack: vec4<f32>, packOn: bool) {
   if (mid == 0) { return; }

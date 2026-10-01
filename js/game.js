@@ -4025,9 +4025,42 @@ async function introPlan(live, key, info, n) {
   reloadFlybyShots();
   if (!flybyShots && _menuFly && _menuFly.key === key && _menuFly.track === track) return _menuFly;
   FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));
-  const fly = { key, track, shots: flybyShots || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots), at = performance.now();
-  while (live() && _introSkip !== n && !step() && performance.now() - at < 800) await menuSlice();
+  const fly = { key, track, shots: flybyShots || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
+  // Compilation can delay a yielded timer for seconds; budget only planner CPU.
+  for (let spent = 0; live() && _introSkip !== n && spent < 800;) {
+    const at = performance.now(), done = step();
+    spent += performance.now() - at;
+    if (done || spent >= 800) break;
+    await menuSlice();
+  }
   return live() && _introSkip !== n ? fly : null;
+}
+// Prepare lamp inputs before compilation owns the scene; their CPU-only
+// slices and shot planning can then run alongside the hidden shader warm.
+async function introPrepare(live, key, info, n, cold) {
+  let failed = false;
+  const current = () => !failed && live();
+  if (gfx.warming && gfx.warming() && !(await awaitIntroWarm(current))) return null;
+  if (!current()) return null;
+  const lamps = _atmo.prebakeLamps();
+  const plan = introPlan(current, key, info, n).catch((e) => { failed = true; throw e; });
+  try {
+    const [fly] = await Promise.all([plan, (async () => {
+      // Let immediate planning failure/cancellation retire the request first.
+      await Promise.resolve();
+      if (!current()) return;
+      if (cold) {
+        FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
+        for (let f = 0; f < 3 && current() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
+      }
+      if (await awaitIntroWarm(current) && cold && current()) _menuGate.warm = 0;
+    })(), (async () => {
+      await Promise.resolve();
+      // Same resumable bake as menuLampBake; smaller slices preserve input responsiveness.
+      while (lamps && current() && !lamps(3)) await new Promise((r) => setTimeout(r, 8));
+    })()]);
+    return current() ? { fly } : null;
+  } catch (e) { failed = true; throw e; }
 }
 // A ready, warm world opens on the garage immediately; planning overlaps its motion.
 function introGarage(go) {
@@ -4037,7 +4070,7 @@ function introGarage(go) {
   if (!_studio) { loadingScreen.stop(); return false; }   // no drive-out (tuner off, a watched race): fly at once, as before
   let prepared = false;
   (async () => {
-    try { const fly = await introPlan(live, key, info, n); await studioDone(live, n); if (live() && fly) _menuFly = fly; prepared = true; }
+    try { const ready = await introPrepare(live, key, info, n, false); if (!ready) return; await studioDone(live, n); if (live() && ready.fly) _menuFly = ready.fly; prepared = true; }
     catch (e) { if (live()) { Log.warn("gfx", "intro garage failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } }
     finally {
       studioClose(n);
@@ -4068,12 +4101,9 @@ function introBuild(go) {
       // Assets, plans and shader warm all settle before the outgoing animation.
       const t1 = performance.now();
       await prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500);
-      const fly = await introPlan(live, key, info0, n);
-      if (!live()) return;
-      FlybySeq.reset(); warmPrograms(); _menuGate.warm = 2;
-      for (let f = 0; f < 3 && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
-      // Never start the cinematic clock while render() is blocked on compilation.
-      if (!(await awaitIntroWarm(live)) || !live()) return;
+      const ready = await introPrepare(live, key, info0, n, true);
+      if (!ready) return;
+      const fly = ready.fly;
       // Publish only after compilation: cancellation cannot leave a stale plan.
       if (live() && fly) _menuFly = fly;
       _menuGate.warm = 0;
@@ -4109,13 +4139,9 @@ function introWarm(go) {
   const info = loadingInfo(), cold = _warmKey !== key;
   if (cold) introCover(info, n); else studioOpen(n, info);
   (async () => { try {
-      const fly = await introPlan(live, key, info, n);
-      if (!live()) return;
-      if (cold) {   // hidden world frames start compilation before the car moves
-        warmPrograms(); _menuGate.warm = 2;
-        for (let f = 0; f < 3 && live() && _menuGate.warm > 0; f++) await new Promise((r) => requestAnimationFrame(r));
-      }
-      if (!(await awaitIntroWarm(live)) || !live()) return;
+      const ready = await introPrepare(live, key, info, n, cold);
+      if (!ready) return;
+      const fly = ready.fly;
       if (fly) _menuFly = fly;
       _menuGate.warm = 0;
       if (cold && _introSkip !== n) { studioOpen(n, info); await studioDone(live, n); }
@@ -5478,7 +5504,7 @@ function updateCar(c, dt, ranked) {
   c.corridorAccel = damp(c.corridorAccel || 0, (c.speed - longitudinalSpeed) / Math.max(dt, 1e-6), 6, dt);
 
   // --- lateral ---
-  let steer;
+  let steer, gripScale;
   if (c.human) {
     steer = inp ? (inp.steer ?? 0) : Input.steer();
   }
@@ -5779,11 +5805,14 @@ function updateCar(c, dt, ranked) {
       // lateral speed is v·sin(heading); `steer` is that as a fraction of the
       // full-lock authority, so every existing multiplier on the step below
       // (grip taper, kerb, contact give, off-track fade) still applies.
+      // These inputs stay fixed through the heading and lateral-authority calculations.
+      const steeringGrip = gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);
       const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
-      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
+      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, steeringGrip, PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
-      steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX), 1), -1, 1);
+      gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, PACE, VMAX);
+      steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * gripScale, 1), -1, 1);
       c.steerSm = steer;
     }
   }
@@ -5792,7 +5821,7 @@ function updateCar(c, dt, ranked) {
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
-  const gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX);
+  if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX);
   // Riding a kerb loses a little grip — damped continuous instead of a binary
   // 1↔0.7 flip: the raw flag flickers at the ~4 m node rate at speed, and a
   // 30% lateral-grip square wave at ~20 Hz was genuine yaw dither in the

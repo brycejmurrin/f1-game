@@ -1,0 +1,82 @@
+name: Prune branches
+
+# Delete remote branches that are already MERGED into the deploy branch.
+#
+# Agent sessions cannot do this themselves: the remote containers' git proxy
+# refuses ref deletion (403), and 475 branches had piled up by 2026-10-01. The
+# Actions token can (`contents: write`,
+# https://docs.github.com/en/rest/git/refs#delete-a-reference), so the rule
+# lives in tools/ci/prune-branches.mjs and this workflow runs it.
+#
+# DISPATCH ONLY, and a DRY RUN unless `apply` is ticked: the run log and the
+# step summary list what would go. A branch is deleted only when it is MERGED
+# (its tip is an ancestor of the deploy branch, or exactly the head of a merged
+# PR — nothing on it is lost), no open PR has it as its head, and it has been
+# quiet for `min_age_days`. claude/claims/* markers (who-is-on-it.mjs) go once
+# quiet for a day. The deploy branch, the default branch and gh-pages are never
+# touched.
+#
+# Settings > General > "Automatically delete head branches" stops new merged
+# branches piling up; this clears the backlog and the squash-free leftovers.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Delete for real (unticked = list only)"
+        type: boolean
+        required: false
+        default: false
+      min_age_days:
+        description: "Only branches whose last commit is at least this many days old"
+        required: false
+        default: "1"
+      keep:
+        description: "Regex of extra branch names to keep (blank = none)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write        # delete refs
+  pull-requests: read    # the open-PR heads that are never pruned
+
+concurrency:
+  group: prune-branches
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          fetch-depth: 0    # every branch, full history: the ancestry test needs both
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Open PR heads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json headRefName --jq '.[].headRefName' > "$RUNNER_TEMP/open-heads.txt"
+          echo "open PRs: $(wc -l < "$RUNNER_TEMP/open-heads.txt")"
+          gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 5000 --json headRefName,headRefOid --jq '.[] | "\(.headRefName)\t\(.headRefOid)"' > "$RUNNER_TEMP/merged-heads.txt"
+          echo "merged PRs: $(wc -l < "$RUNNER_TEMP/merged-heads.txt")"
+      - name: Prune
+        env:
+          APPLY: ${{ inputs.apply }}
+          MIN_AGE: ${{ inputs.min_age_days }}
+          KEEP: ${{ inputs.keep }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          args=(--base claude/f1-game-project-26h3ng --default "$DEFAULT_BRANCH" --min-age-days "${MIN_AGE:-1}" --open-heads "$RUNNER_TEMP/open-heads.txt" --merged-heads "$RUNNER_TEMP/merged-heads.txt")
+          if [ -n "$KEEP" ]; then args+=(--keep "$KEEP"); fi
+          if [ "$APPLY" = "true" ]; then args+=(--apply); fi
+          set -o pipefail
+          node tools/ci/prune-branches.mjs "${args[@]}" | tee "$RUNNER_TEMP/prune.log"
+      - name: Summary
+        if: always()
+        run: |
+          { echo '### Prune branches'; echo; echo '```'; cat "$RUNNER_TEMP/prune.log" 2>/dev/null || echo "no log"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
