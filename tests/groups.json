@@ -1119,6 +1119,7 @@
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/grid-boxes.test.mjs",
+        "tests/unit/kerb-stripes.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/pit-complex.test.mjs",
         "tests/unit/pit-signs.test.mjs",
