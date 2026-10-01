@@ -278,6 +278,17 @@ test("the MCP-facing entry points answer without touching a browser or a network
   assert.deepEqual(failed, [], "an MCP-facing entry point does not answer");
 });
 
+test("offline-precache-check --help prints usage and does not launch Chromium", () => {
+  // Measured 2026-10-01: `--help` was taken as the warm circuit id and the
+  // check booted Playwright against warm=--help. A new agent following the
+  // PWA skill's "run it" line must get usage, not a browser.
+  const r = spawnSync(process.execPath, [tool("offline-precache-check.cjs"), "--help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /usage:.*offline-precache-check\.cjs/);
+  assert.doesNotMatch(r.stdout, /\(raced online\)/, "must exit before the server/Chromium path");
+});
+
 test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => {
   // `status` is the one command that must work on a box where the local clone
   // was never built — it is how you find out that is the case.
