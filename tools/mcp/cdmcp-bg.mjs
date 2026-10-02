@@ -137,14 +137,19 @@ function start(argv) {
   );
 }
 
+const USAGE =
+  "usage: node tools/mcp/cdmcp-bg.mjs <boot|ui|full> [--port N] [--url URL] [--force]\n" +
+  "       node tools/mcp/cdmcp-bg.mjs --status | --wait | --stop\n" +
+  "       node tools/mcp/cdmcp-bg.mjs --help";
+
 const argv = process.argv.slice(2);
 if (argv.includes("--status")) status();
 else if (argv.includes("--wait")) await wait();
 else if (argv.includes("--stop")) stop();
-else if (!argv.length) {
-  console.error(
-    "usage: node tools/mcp/cdmcp-bg.mjs <boot|ui|full> [--port N] [--url URL] [--force]\n" +
-      "       node tools/mcp/cdmcp-bg.mjs --status | --wait | --stop"
-  );
-  process.exit(2);
+else if (!argv.length || argv.includes("--help") || argv.includes("-h")) {
+  // --help must NOT fall into start(): start() rewrites a leading `--…` as
+  // `boot --…`, so `cdmcp-bg.mjs --help` used to detach a full Chromium measure.
+  const out = !argv.length ? console.error : console.log;
+  out(USAGE);
+  process.exit(!argv.length ? 2 : 0);
 } else start(argv);

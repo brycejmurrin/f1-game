@@ -20,6 +20,11 @@ window.CamModes = (function () {
     { id: "tcam",      label: "T-CAM",     cut: 0 },
     { id: "rear",      label: "REAR CAM",  cut: 0.15 },
     { id: "visor",     label: "VISOR",     cut: 0 },        // the cockpit without its steering wheel (a linked phone is the wheel)
+    { id: "trackside", label: "TRACKSIDE", cut: 0.5 },      // fixed corner cams that auto-switch as the car passes (append-only)
+    // Append-only: apex26.camMode is an index. New player cams land HERE (after TRACKSIDE).
+    { id: "rival",     label: "RIVAL LOCK", cut: 0.4 },     // frames the nearest battle rival (Broadcast.battles)
+    { id: "pitwall",   label: "PIT WALL",   cut: 0.45 },    // pit-lane / pit-exit wall cam (optional auto-cut)
+    { id: "drone",     label: "DRONE",      cut: 0.5 },     // smoothed tether with corner look-ahead (heli alternative)
   ];
   const HOLD_MS = 340;   // CAM button hold before the picker opens
 
@@ -62,6 +67,7 @@ window.CamModes = (function () {
       if (G.camMode !== prev) {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut || 0.35;
         Log.info("game", `CamModes.setCamMode ${CAM_MODES[prev].id} -> ${CAM_MODES[G.camMode].id}`);
+        if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(CAM_MODES[G.camMode].id);
       }
       if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);   // onboard / chase / TV mix
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
@@ -205,6 +211,9 @@ window.CamModes = (function () {
     // so a session that starts in the cockpit heard the chase mix until the
     // first camera change.
     if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);
+    // AUTO COMFORT on first touch/XR boot (js/camera/cam-comfort.js) — no-op
+    // when the player already chose a preference.
+    if (typeof CamComfort !== "undefined" && G.store) CamComfort.boot(G.store);
 
     return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camPicker.hide };
   }

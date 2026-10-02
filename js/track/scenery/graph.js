@@ -57,6 +57,12 @@ const TrackGraph = (function () {
     const models = new Map();   // key -> { key, ops, geo, verts, aabb }
     const nodes = [];
     let dropped = 0;
+    // BAKED-MESH placements (build-props bakedModel): a pack model placed N
+    // times used to be N copies in the props soup. Here it is one compacted
+    // geometry per key plus [x, y, z, yaw, scale] records, and batches() turns
+    // those into one instanced batch per key — the same record shape the
+    // backends already upload for the primitive models above.
+    const meshes = new Map();   // key -> { key, geo, verts, tris, places: [], tinted }
 
     function recorder(ops) {
       // undefined = "inherit whatever out._mat holds at replay time". out._mat is
@@ -89,6 +95,7 @@ const TrackGraph = (function () {
         buf._mat = op.mat || 0;
         buf._matAt = op.sway ? swayAt(buf._mat, _ORIGIN, _UP, 1, op.sway) : null;
         const col = op.col === NODE_COLOR ? WHITE : op.col;
+        const v0 = buf.pos.length / 3;
         switch (op.op) {
           case "box": raw.addBox(buf, op.c, op.sz, col, null); break;
           case "prism": raw.addPrism(buf, op.c, op.sz, col, null); break;
@@ -97,6 +104,9 @@ const TrackGraph = (function () {
           case "cone": raw.addCone(buf, op.c, op.rad, op.h, col, op.seg, null); break;
           case "frustum": raw.addFrustum(buf, op.c, op.rB, op.rT, op.h, col, op.seg, null); break;
         }
+        // a swaying op is a crown: round its normals toward the canonical axis
+        // (the same pass nature.js's swayOff() runs on inline emission)
+        if (op.sway && raw.roundNormals) raw.roundNormals(buf, v0, _ORIGIN, _UP);
       }
       buf._mat = 0; buf._matAt = null;
       return buf;
@@ -165,6 +175,7 @@ const TrackGraph = (function () {
         if (op.sway) swayed = true;
         const col = colourOf(op, place);
         let ok = false;
+        const v0 = out.pos.length / 3;
         switch (op.op) {
           case "box":
           case "prism":
@@ -179,6 +190,10 @@ const TrackGraph = (function () {
           case "cone": ok = emit.addCone(out, c, op.rad * rs, op.h * us, col, op.seg, basis); break;
           case "frustum": ok = emit.addFrustum(out, c, op.rB * rs, op.rT * rs, op.h * us, col, op.seg, basis); break;
         }
+        // a swaying op is a crown: round its normals toward the placed axis
+        // (bakeCanonical does the same in canonical space — graph parity).
+        // Keyed on vertices landing, not `ok`: the raw emitter returns nothing.
+        if (op.sway && emit.roundNormals && out.pos.length / 3 > v0) emit.roundNormals(out, v0, place.o, place.u);
         if (ok) landed++;
         // A model is ONE object: a cylinder the PIT COMPLEX kept out is its
         // footing (a pine's trunk, a mast), and nothing of it stands without
@@ -260,6 +275,68 @@ const TrackGraph = (function () {
       return landed;
     }
 
+    // Register a pack mesh once per key: a COMPACTED copy (only the vertices its
+    // indices reference, remapped in first-use order — an imported kit shares
+    // one accessor across primitives and can carry 3x unreferenced vertices),
+    // with `mat` forced to one id when the placement asks. Returns the record.
+    function meshModel(key, mesh, mat) {
+      let m = meshes.get(key);
+      if (m) return m;
+      const si = mesh.idx, nv = mesh.pos.length / 3;
+      const remap = new Int32Array(nv).fill(-1);
+      const idx = new Uint32Array(si.length);
+      let n = 0;
+      for (let i = 0; i < si.length; i++) {
+        const v = si[i];
+        if (remap[v] < 0) remap[v] = n++;
+        idx[i] = remap[v];
+      }
+      const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), col = new Float32Array(n * 3);
+      const mt = new Float32Array(n);
+      for (let v = 0; v < nv; v++) {
+        const d = remap[v];
+        if (d < 0) continue;
+        pos[d * 3] = mesh.pos[v * 3]; pos[d * 3 + 1] = mesh.pos[v * 3 + 1]; pos[d * 3 + 2] = mesh.pos[v * 3 + 2];
+        if (mesh.nrm) { nrm[d * 3] = mesh.nrm[v * 3]; nrm[d * 3 + 1] = mesh.nrm[v * 3 + 1]; nrm[d * 3 + 2] = mesh.nrm[v * 3 + 2]; }
+        else nrm[d * 3 + 1] = 1;
+        if (mesh.col) { col[d * 3] = mesh.col[v * 3]; col[d * 3 + 1] = mesh.col[v * 3 + 1]; col[d * 3 + 2] = mesh.col[v * 3 + 2]; }
+        else { col[d * 3] = col[d * 3 + 1] = col[d * 3 + 2] = 0.7; }
+        mt[d] = mat != null ? mat : (mesh.mat ? mesh.mat[v] : 0);
+      }
+      m = { key, geo: { pos, nrm, col, mat: mt, idx }, verts: n, tris: idx.length / 3, places: [], tinted: false };
+      meshes.set(key, m);
+      return m;
+    }
+    // One placement of a registered mesh: the transform TrackGeom.addMesh applies
+    // (yaw about +Y, uniform scale, then translate) and an optional [r,g,b] tint.
+    function meshPlace(key, x, y, z, yaw, scale, tint) {
+      const m = meshes.get(key);
+      if (!m) return false;
+      m.places.push({ x, y, z, yaw, s: scale != null ? scale : 1, tint: tint || null });
+      if (tint) m.tinted = true;
+      return true;
+    }
+    function meshBatches(out) {
+      for (const m of meshes.values()) {
+        const count = m.places.length;
+        if (!count) continue;
+        const matrices = new Float32Array(count * 16);
+        const colors = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          const p = m.places[i], cs = __M.cos(p.yaw), sn = __M.sin(p.yaw), s = p.s, b = i * 16;
+          // addMesh: x' = px*cs + pz*sn + x; z' = -px*sn + pz*cs + z (column-major).
+          matrices[b] = cs * s;      matrices[b + 2] = -sn * s;
+          matrices[b + 5] = s;
+          matrices[b + 8] = sn * s;  matrices[b + 10] = cs * s;
+          matrices[b + 12] = p.x;    matrices[b + 13] = p.y;    matrices[b + 14] = p.z;
+          matrices[b + 15] = 1;
+          const c = p.tint || WHITE;
+          colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
+        }
+        out.push({ model: "mesh:" + m.key, geo: m.geo, verts: m.verts, count, matrices, colors });
+      }
+    }
+
     // Plain, this answers "what COULD be instanced" — a capability report, which
     // is what the unit tests and tools/track/graph-parity.cjs ask for, and it is
     // deliberately independent of whether the fuse was actually skipped.
@@ -316,6 +393,7 @@ const TrackGraph = (function () {
         }
         out.push({ model: key, geo: m.geo, verts: m.verts, count, matrices, colors });
       }
+      meshBatches(out);   // in BOTH sets: a mesh placement is recorded only when its triangles were withheld
       // Deterministic order: a backend uploading these must not have its draw
       // list reshuffle between builds of the same track.
       out.sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
@@ -345,10 +423,16 @@ const TrackGraph = (function () {
         const e = byKind[kind];
         e.reuse = e.uniqueVerts > 0 ? e.fusedVerts / e.uniqueVerts : 0;
       }
+      let mModels = 0, mInst = 0, mUnique = 0, mFused = 0;
+      for (const m of meshes.values()) {
+        if (!m.places.length) continue;
+        mModels++; mInst += m.places.length; mUnique += m.verts; mFused += m.verts * m.places.length;
+      }
       return {
         models: models.size,
         nodes: nodes.length,
         dropped,
+        mesh: { models: mModels, instances: mInst, uniqueVerts: mUnique, fusedVerts: mFused },
         uniqueVerts: unique,          // what an instanced renderer uploads
         fusedVerts: fused,            // what the soup costs today
         reuse: unique > 0 ? fused / unique : 0,
@@ -356,7 +440,7 @@ const TrackGraph = (function () {
       };
     }
 
-    return { models, nodes, model, instance, replay, bake, batches, stats };
+    return { models, nodes, meshes, model, instance, replay, bake, batches, stats, meshModel, meshPlace };
   }
 
   return { create, xform, NODE_COLOR, SWAY_FRAC };

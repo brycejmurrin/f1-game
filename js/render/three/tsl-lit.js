@@ -170,6 +170,7 @@
       lampFog:     uniform(0.0),      // frame.lampFog (0 = day/off)
       wetness:     uniform(0.0),
       rain:        uniform(0.0),      // frame.rain — rain FALLING (0..1): the puddle ripples. GLX uRain.
+      specKnee:    uniform(4.0),      // SUN GLINT RANGE knob: sun-specular soft-clip asymptote. GLX uSpecKnee.
       time:        uniform(0.0),      // frame.time — drives FLAG wave + cloud drift (deterministic with the game clock)
       // WIND (knobs windDir / windSpeed): xy = unit direction in world xz, z =
       // speed scale. Read by vertexMotionNode — the foliage sway. GLX uWind.
@@ -343,6 +344,7 @@
       U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
       U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
       uf1(U.bounceK, k("bounceK", 0.04));
+      uf1(U.specKnee, k("specKnee", 4.0));
       uf1(U.mistShare, k("mistShare", 1.5));
       uf1(U.lampFogClip, k("fogClip", 0.7));
       uf1(U.glowAmp, k("glowAmp", 2.3));
@@ -1280,6 +1282,9 @@
         // standing rule, because roadMarkings() takes derivatives of it.
         const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
+        // Puddle shape (wet block): derivatives taken here, in uniform control flow
+        // (the WebGPU path compiles this graph to WGSL, which requires it).
+        const trkRightXZ = trkA ? dFdx(wp.xz).mul(dFdx(trkA.y)).add(dFdy(wp.xz).mul(dFdy(trkA.y))).toVar() : null;
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
         // Two-sided lighting: flip N toward the viewer on back fragments
@@ -1333,6 +1338,15 @@
         const satinMetalSurface = surfaceId.equal(29.0).toVar();
         const iriSurface = surfaceId.equal(30.0).toVar();
         const carbonFinish = surfaceId.equal(31.0).toVar();   // bare weave OVER the livery colour
+        // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its
+        // mean over 8-16 m so the 3.3 cm cross-hatch cannot moire at range.
+        // Computed here, ahead of the roughness ripple and the albedo twill.
+        const weave = float(0.5).toVar();
+        If(carbonFinish.or(carbonSurface), () => {
+          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
+          const wvFade = clamp(vd.sub(8.0).div(8.0).oneMinus(), 0.0, 1.0);
+          weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
+        });
         // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
         // clearcoat, dielectric env response — mirrors the GLX/WGSL split.
         const visorSurface = surfaceId.equal(32.0).toVar();
@@ -1444,7 +1458,7 @@
 
         // roughness resolution + car-surface clamps (js/render/glx/shaders/glsl-lit.js)
         const rough = clamp(matU.roughness, 0.04, 1.0).toVar();
-        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56)); });
+        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56).add(weave.sub(0.5).mul(0.10))); });   // the twill's roughness ripple
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
         If(metalSurface, () => { rough.assign(min(rough, 0.16)); });
         If(glassSurface.or(visorSurface), () => { rough.assign(min(rough, 0.13)); });
@@ -1460,10 +1474,10 @@
         // colour face-on. No derivative, so it is safe in any control flow.
         // CARBON FINISH (mirrors js/render/glx/shaders/glsl-lit.js).
         If(carbonFinish, () => {
-          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
-          const weave = wv.x.sin().mul(wv.y.sin()).mul(0.5).add(0.5).toVar();
           albedo.assign(mix(albedo.mul(0.16).add(vec3(0.030, 0.031, 0.035)), albedo.mul(0.28), 0.25));
           albedo.assign(albedo.mul(weave.mul(0.28).add(0.86)));
+        }).ElseIf(carbonSurface, () => {
+          albedo.assign(albedo.mul(weave.mul(0.14).add(0.93)));
         });
         If(iriSurface, () => {
           const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
@@ -1525,7 +1539,21 @@
             float(1.0), float(0.0));
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
-          puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
+          // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
+          // crown drains to the gutters (0.7 centre → 1.2 edge) and the low side
+          // of a banked turn holds the water (lateral downhill from the screen
+          // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
+          // chunked (city prop) variant, which has no road.
+          const pool = float(1.0).toVar();
+          if (trkA) {
+            If(trkA.z.greaterThan(0.5), () => {
+              const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
+              const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
+              const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
+              pool.assign(mix(float(0.7), float(1.2), abs(lat)).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
+            });
+          }
+          puddle.assign(smoothstep(0.48, 0.88, pn.mul(pool)).mul(wet).mul(porous.oneMinus()));
           // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
           // two cell grids of impact rings, a normal tilt on the pooled water that
           // the GGX lobes and the sky reflection below read (N is a toVar).
@@ -1783,7 +1811,8 @@
           const Vis = V_SmithGGX(NoV, NoL, a);
           const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
           const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
-          specCol.assign(specCol.div(specCol.add(1.0)));
+          // soft knee, asymptote U.specKnee (def 4): sun glints can reach bloom (GLX)
+          specCol.assign(specCol.div(specCol.div(U.specKnee).add(1.0)));
           color.addAssign(specCol);
         });
 
@@ -1884,6 +1913,17 @@
           const R = reflect(V.negate(), N).toVar();
           const skyT = pow(max(R.y, 1e-4), 0.40);
           const envColor = mix(vec3(U.skyHorizon), vec3(U.skyZenith), skyT).toVar();
+          // the live env probe replaces the gradient near the car (GLX; faded
+          // with eye distance — one cube is parallax-wrong far from its centre)
+          if (envCubeNode) {
+            If(U.envStr.greaterThan(0.001), () => {
+              const probeW = clamp(U.envStr, 0.0, 1.0)
+                .mul(clamp(vd.sub(60.0).div(90.0).oneMinus(), 0.0, 1.0)).toVar();
+              If(probeW.greaterThan(0.001), () => {
+                envColor.assign(mix(envColor, cubeTexture(envCubeNode, R, rough.mul(2.5)).rgb, probeW));
+              });
+            });
+          }
           const envSunAlign = max(dot(R, U.sunDir), 0.0).toVar();
           envColor.assign(mix(envColor, envColor.mul(U.sunColor).mul(1.15),
             envSunAlign.mul(envSunAlign).mul(rough.oneMinus())));

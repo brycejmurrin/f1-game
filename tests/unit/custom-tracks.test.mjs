@@ -138,8 +138,8 @@ test("stored input is player input: hostile shapes are dropped or repaired, neve
   assert.equal(it.baseHW, 8, "baseHW clamps to 5–8");
   assert.equal(it.seed, (-4) >>> 0, "seed is floored into a u32");
   const g = (v) => Math.round(v * 65535) / 65535;   // the share code's u16 fraction grid
-  assert.deepEqual(plain(it.hwZones), [{ s0: g(0.5), s1: g(0.9), hw: 3 }, { s0: g(0.1), s1: g(0.2), hw: 6, ease: 0.2 }],
-    "fractions wrap onto the u16 grid, hw and ease clamp, junk rows drop — repair over discard where the geometry is sound");
+  assert.deepEqual(plain(it.hwZones), [{ s0: g(0.5), s1: g(0.9), hw: 5, ease: 0.025 }, { s0: g(0.1), s1: g(0.2), hw: 6, ease: 0.2 }],
+    "fractions wrap onto the u16 grid, hw floors at the registry's 5 m, ease is always stored and clamps, junk rows drop — repair over discard where the geometry is sound");
   assert.deepEqual(plain(it.bankZones), [{ frac: g(0.3), angleDeg: 30, widthM: 20 }], "bank angle and width clamp to their limits");
   assert.deepEqual(plain(it.elevations), [{ s: g(0.5), halfM: 20, rise: 1 }], "a 1e9 m spike over 40 m is held to the 8 % grade cap (halfM / 19.6, on the 0.25 m rise grid)");
   assert.equal(it.bridges, null, "null stays null");
@@ -175,7 +175,13 @@ test("toRaw hands the factory what a circuit file would author", () => {
   assert.ok(raw.cityStyle && raw.cityStyle.neon.includes("gold"));
   assert.equal(raw.path.pts.length, 36);
   assert.ok(raw.path.len > 3000);
-  assert.deepEqual(plain(raw.hwZones), [{ s0: 18 / 36, s1: 22 / 36, hw: 5 }], "arc fractions snap to the control grid (applyHwZones keys i/N)");
+  // applyHwZones keys i/N: the ellipse's control points are evenly spaced in
+  // ANGLE, not arc, so 0.5 (the far vertex, by symmetry) is index 18 exactly
+  // and 0.6 is wherever the cumulative chord length says — not 21.6.
+  assert.equal(raw.hwZones.length, 1);
+  assert.ok(Math.abs(raw.hwZones[0].s0 - 18 / 36) < 1e-4, "arc 0.5 → index 18/36: " + raw.hwZones[0].s0);
+  assert.ok(Math.abs(raw.hwZones[0].s1 - C.arcToIndexFrac(it.pts, it.hwZones[0].s1)) < 1e-12);
+  assert.equal(raw.hwZones[0].hw, 5); assert.equal(raw.hwZones[0].ease, 0.025);
   assert.equal(raw.turns, null, "no turns stored → the engine's curvature peaks");
   assert.equal(typeof raw.scenery, "function");
   for (const id of T.ORDER) {
@@ -196,4 +202,87 @@ test("the picker knows the custom tail (source contract)", () => {
   assert.match(read("js/career/season-ui.js"), /!t\.custom && !used\.has/, "the season shelf never offers a custom");
   assert.match(read("js/net/lobby.js"), /Tracks\.LIST\[d\.track\]\.custom\) return null/, "the guest refuses a custom index");
   assert.match(read("js/game.js"), /def\.scenery \|\| sceneryResident/, "ensureScenery fetches nothing for an inline closure");
+});
+
+test("sanitize: bank angle in [1, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {
+  const { C } = boot();
+  const banks = C.sanitize(design({ bankZones: [{ frac: 0.1, angleDeg: 0, widthM: 100 }, { frac: 0.2, angleDeg: -12, widthM: 100 }, { frac: 0.3, angleDeg: 45, widthM: 100 }, { frac: 0.4, angleDeg: 12.3, widthM: 100 }] })).bankZones;
+  // mesh.js reads (angleDeg || 18): 0 would build 18°, a negative adverse camber.
+  assert.deepEqual(plain(banks.map((z) => z.angleDeg)), [1, 1, 30, 12.25]);
+  const hz = C.sanitize(design({ hwZones: [{ s0: 0.1, s1: 0.2, hw: 2 }, { s0: 0.3, s1: 0.4, hw: 6, ease: 0 }, { s0: 0.5, s1: 0.6, hw: 6.5, ease: 0.04 }] })).hwZones;
+  assert.deepEqual(plain(hz.map((z) => [z.hw, z.ease])), [[5, 0.025], [6, 0.005], [6.5, 0.04]], "hw floors at LIMITS.hwMin; a zero ease (a step) floors at 0.005; absent → the engine's 0.025");
+  // The id must not depend on whether the author wrote the default ease: the
+  // share code always carries one, so the receiver's id has to match.
+  assert.equal(C.sanitize(design({ hwZones: [{ s0: 0.2, s1: 0.3, hw: 6 }] })).id, C.sanitize(design({ hwZones: [{ s0: 0.2, s1: 0.3, hw: 6, ease: 0.025 }] })).id);
+});
+
+test("sanitize refuses a loop the engine cannot build: coincident / sub-8 m points, a polygon under 1 km", () => {
+  const { C, Tracks } = boot({ customTracks: { v: 1, items: [{ name: "dot", pts: Array.from({ length: 8 }, () => [5, 5]) }, design()] } });
+  assert.equal(Tracks.LIST.length, 53, "8 coincident points never register as a raceable circuit");
+  assert.equal(C.sanitize({ pts: Array.from({ length: 8 }, () => [5, 5]) }), null);
+  const close = ellipse(); close[4] = [close[3][0] + 7.75, close[3][1]];
+  assert.equal(C.sanitize(design({ pts: close })), null, "two consecutive points 7.75 m apart");
+  assert.equal(C.sanitize(design({ pts: ellipse(36, 120, 80) })), null, "a ~630 m polygon");
+  assert.ok(C.sanitize(design({ pts: ellipse(36, 200, 120) })), "a ~1.0 km polygon is a (red) design, not garbage");
+  // The designer's own autosave is a work in progress: it restores loosely.
+  assert.ok(C.sanitize(design({ pts: close }), { loose: true }), "opts.loose keeps a red draft");
+  assert.ok(C.sanitize(design({ pts: ellipse(36, 120, 80) }), { loose: true }));
+});
+
+test("remove() / a replacing upsert re-resolve the selection by id and rewrite both stored keys", () => {
+  const { Tracks, C, data } = boot();
+  const G = { trackIdx: 0 };
+  C.create(G, {});
+  const a = C.upsert(design({ pts: ellipse(36, 700, 450) })).id;
+  const b = C.upsert(design({ pts: ellipse(36, 720, 450) })).id;
+  const c = C.upsert(design({ pts: ellipse(36, 740, 450) })).id;
+  G.trackIdx = C.select(b);
+  assert.equal(G.trackIdx, 53);
+  C.remove(b);
+  assert.equal(G.trackIdx, 0, "the removed selection falls back to index 0, not its successor");
+  assert.equal(data.trackId, Tracks.LIST[0].id); assert.equal(data.track, 0);
+  G.trackIdx = C.select(c);
+  assert.equal(G.trackIdx, 53);
+  C.remove(a);
+  assert.equal(Tracks.LIST[G.trackIdx].id, c, "a custom ahead of it went: the selection follows its id down one slot");
+  assert.equal(G.trackIdx, 52); assert.equal(data.trackId, c); assert.equal(data.track, 52);
+  // Without the façade (before game.js hands it over) the stored id is the selection.
+  const s2 = boot();
+  const x = s2.C.upsert(design({ pts: ellipse(36, 700, 450) })).id, y = s2.C.upsert(design({ pts: ellipse(36, 720, 450) })).id;
+  s2.C.select(y);
+  s2.C.remove(x);
+  assert.equal(s2.data.trackId, y); assert.equal(s2.data.track, 52);
+  // EDIT → SAVE after a geometry change replaces the circuit it came from.
+  data["ttlb." + c] = [{ t: 80 }];
+  const before = C.list().length;
+  const r = C.upsert(design({ pts: ellipse(36, 760, 455) }), { replace: c });
+  assert.equal(r.ok, true); assert.equal(r.replaced, c); assert.notEqual(r.id, c);
+  assert.equal(C.list().length, before, "replaced in place, not duplicated");
+  assert.equal(C.get(c), null);
+  assert.equal(data["ttlb." + c], undefined, "the old geometry's board goes with it");
+  assert.equal(Tracks.LIST[G.trackIdx].id, r.id, "the selection follows the edit");
+  assert.equal(data.trackId, r.id);
+  // …and a full library still accepts the replacing save.
+  for (let i = 0; C.list().length < C.LIMITS.items; i++) C.upsert(design({ pts: ellipse(36, 800 + i * 3, 450) }));
+  assert.equal(C.upsert(design({ pts: ellipse(36, 999, 450) })).reason, "full");
+  const r2 = C.upsert(design({ pts: ellipse(36, 999, 450) }), { replace: r.id });
+  assert.equal(r2.ok, true, "replacing needs no free slot");
+  assert.equal(C.list().length, C.LIMITS.items);
+});
+
+test("toRaw maps hwZone ARC fractions to INDEX fractions exactly on unequal spacing", () => {
+  const { C } = boot();
+  // A 1000 × 500 rectangle (perimeter 3000 m) with its control points bunched
+  // on the first side: equal-spacing algebra would be badly wrong here.
+  const pts = [[0, 0], [50, 0], [100, 0], [1000, 0], [1000, 250], [1000, 500], [500, 500], [0, 500]];
+  const f = (a) => C.arcToIndexFrac(pts, a);
+  assert.equal(f(0), 0);
+  assert.ok(Math.abs(f(1000 / 3000) - 3 / 8) < 1e-12, "the corner at 1000 m is control 3");
+  assert.ok(Math.abs(f(0.5) - 5 / 8) < 1e-12, "1500 m is control 5");
+  assert.ok(Math.abs(f(550 / 3000) - 2.5 / 8) < 1e-12, "halfway along the 900 m segment 2 → 3");
+  assert.ok(Math.abs(f(2750 / 3000) - 7.5 / 8) < 1e-12, "halfway along the closing chord");
+  const it = C.sanitize({ name: "rect", pts, hwZones: [{ s0: 1 / 3, s1: 0.5, hw: 6 }] });
+  assert.ok(it, "the rectangle is a storable loop");
+  const z = C.toRaw(it).hwZones[0];
+  assert.ok(Math.abs(z.s0 - 3 / 8) < 1e-4 && Math.abs(z.s1 - 5 / 8) < 1e-4, JSON.stringify(z));
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // prune-branches.mjs — delete remote branches that are already merged into the deploy branch.
-// @doc Lists or deletes merged branches with no open PR, and expired claude/claims/* markers (prune-branches.yml).
-// Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head), has no open pull request and has been quiet for --min-age-days, plus claude/claims/* markers quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
+// @doc Lists or deletes merged/absorbed branches with no open PR and expired claims, by branch-audit (prune-branches.yml).
+// Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head) or absorbed (branch-audit.mjs: a dry merge changes nothing), or whose audit verdict is opted into with --also, that has no open pull request and has been quiet for --min-age-days, plus claude/claims/* markers quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. Writes the branch-audit report. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
 // @skill check-changes
 //
 // WHY A WORKFLOW AND NOT AN AGENT. The remote containers' git proxy refuses
@@ -13,10 +13,12 @@
 //
 // WHAT IS PRUNABLE — all of these, or the branch is kept with a reason:
 //   * it is MERGED: its tip is an ancestor of the deploy branch, OR its tip is
-//     exactly the head commit of a MERGED pull request (--merged-heads; covers a
-//     PR whose commits reached the deploy branch by squash or a rewritten
-//     history). Either way nothing on it is lost; an abandoned branch, or one
-//     pushed to after its PR merged, is neither and stays;
+//     exactly the head commit of a MERGED pull request (--prs; covers a PR
+//     whose commits reached the deploy branch by squash or a rewritten
+//     history), OR branch-audit.mjs calls it ABSORBED (a dry merge into the
+//     deploy branch changes nothing). Nothing on any of them is lost;
+//   * or its branch-audit verdict is one a person opted into with --also
+//     (superseded, post-merge, pr-closed, no-history) after reading the report;
 //   * no OPEN pull request has it as its head;
 //   * its last commit is at least --min-age-days old (a just-merged branch
 //     someone is still about to push a follow-up to is left alone);
@@ -30,14 +32,23 @@
 //
 // Usage (in a full clone, every remote branch fetched):
 //   node tools/ci/prune-branches.mjs [--base <branch>] [--min-age-days N]
-//        [--keep <regex>] [--open-heads <file>] [--merged-heads <file>]
-//        [--default <branch>] [--apply]
-// --merged-heads: `<branch>\t<head sha>` per merged PR (`gh pr list --state merged`).
-// --open-heads: one open-PR head branch per line (the workflow writes it with
-// `gh pr list`). Without it the tool refuses --apply: an unknown PR set is not
-// an empty one.
+//        [--keep <regex>] [--prs <json>] [--runs <json>] [--also <verdicts>]
+//        [--report <md>] [--json <file>] [--default <branch>] [--apply]
+// --prs: `gh pr list --state all --json number,state,headRefName,headRefOid,
+// title,mergedAt,closedAt,createdAt` — open heads are kept, merged heads are
+// merged. --runs: `gh run list --json headSha,conclusion,status,workflowName,
+// createdAt`, the report's CI column. (--open-heads / --merged-heads, plain
+// line files, still work.) Without a PR list the tool refuses --apply: an
+// unknown PR set is not an empty one.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { audit, indexPrs, indexRuns, inSurvey, parseRefs, readJson, renderMarkdown, surveyScope, SURVEY_QUIET_HOURS, VERDICTS } from "./branch-audit.mjs";
+
+export { parseRefs };
+// The branch-audit verdicts --also may opt into. "absorbed" is always on: merging
+// such a branch changes nothing, so deleting it loses nothing. The rest are
+// judgement calls and need a person to tick them.
+export const OPT_IN = ["superseded", "post-merge", "pr-closed", "no-history"];
 
 export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const ALWAYS_KEEP = [/^gh-pages$/];
@@ -46,11 +57,13 @@ export const CLAIM_MIN_DAYS = 1;
 
 /** Decide, per branch, prune or keep. Pure: git and the clock come in.
  *  branches: [{ name, sha, time }] (time = committer unix seconds).
- *  isMerged(sha) -> boolean; openHeads: Set of branch names. */
+ *  isMerged(sha) -> boolean; openHeads: Set of branch names; verdicts: Map(name ->
+ *  branch-audit verdict) and allow: the verdicts that may be pruned when not merged.
+ *  reasons: Map(name -> why it goes). */
 export function selectPrunable(branches, { base = DEPLOY, defaultBranch = null, openHeads = new Set(), keep = null,
-  minAgeDays = 1, now = Math.floor(Date.now() / 1000), isMerged, mergedHeads = new Map() }) {
+  minAgeDays = 1, now = Math.floor(Date.now() / 1000), isMerged, mergedHeads = new Map(), verdicts = new Map(), allow = new Set(["absorbed"]) }) {
   const quiet = (b, days) => Number.isFinite(b.time) && now - b.time >= days * 86400;
-  const prune = [], kept = [];
+  const prune = [], kept = [], reasons = new Map();
   for (const b of branches) {
     let why = null;
     if (b.name === base) why = "deploy branch";
@@ -60,25 +73,16 @@ export function selectPrunable(branches, { base = DEPLOY, defaultBranch = null, 
     else if (openHeads.has(b.name)) why = "open PR";
     else if (CLAIMS.test(b.name)) why = quiet(b, Math.max(minAgeDays, CLAIM_MIN_DAYS)) ? null : "live claim";
     else if (!quiet(b, minAgeDays)) why = "recent";
-    else if (!isMerged(b.sha) && !(mergedHeads.get(b.name) || new Set()).has(b.sha)) why = "not merged";
+    else if (!isMerged(b.sha) && !(mergedHeads.get(b.name) || new Set()).has(b.sha)) {
+      const v = verdicts.get(b.name);
+      if (v && allow.has(v)) reasons.set(b.name, v);
+      else why = v ? v : "not merged";
+    }
     if (why) kept.push({ name: b.name, why });
-    else prune.push(b.name);
+    else { prune.push(b.name); if (!reasons.has(b.name)) reasons.set(b.name, CLAIMS.test(b.name) ? "expired claim" : "merged"); }
   }
   prune.sort();
-  return { prune, kept };
-}
-
-/** `git for-each-ref` lines (name\tsha\ttime) of refs/remotes/origin -> branches. */
-export function parseRefs(text) {
-  const out = [];
-  for (const line of String(text).split("\n")) {
-    const [ref, sha, time] = line.split("\t");
-    if (!ref || !sha) continue;
-    const name = ref.replace(/^refs\/remotes\/origin\//, "");
-    if (name === "HEAD" || name === ref) continue;
-    out.push({ name, sha, time: Number(time) });
-  }
-  return out;
+  return { prune, kept, reasons };
 }
 
 /** `<branch>\t<sha>` lines (merged PR heads) -> Map(branch -> Set(sha)). */
@@ -104,25 +108,50 @@ export function main(argv = process.argv.slice(2)) {
   const minAgeDays = Number(arg(argv, "--min-age-days", "1"));
   const keepSrc = arg(argv, "--keep", "");
   const headsFile = arg(argv, "--open-heads", null);
+  const prsFile = arg(argv, "--prs", null);
   const apply = argv.includes("--apply");
+  const also = (arg(argv, "--also", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const bad = also.filter((v) => !OPT_IN.includes(v));
+  if (bad.length) { console.error(`prune-branches: --also takes ${OPT_IN.join(", ")}; not ${bad.join(", ")}`); return 2; }
   if (!Number.isFinite(minAgeDays) || minAgeDays < 0) { console.error("prune-branches: --min-age-days must be a number >= 0"); return 2; }
-  if (apply && !headsFile) { console.error("prune-branches: --apply needs --open-heads (an unknown PR set is not an empty one)"); return 2; }
+  if (apply && !headsFile && !prsFile) { console.error("prune-branches: --apply needs --prs or --open-heads (an unknown PR set is not an empty one)"); return 2; }
+  const prs = indexPrs(readJson(prsFile));
   const openHeads = new Set(headsFile ? fs.readFileSync(headsFile, "utf8").split("\n").map((s) => s.trim()).filter(Boolean) : []);
+  const mergedHeads = new Map();
+  for (const [name, p] of prs) {
+    if (p.state === "open") openHeads.add(name);
+    if (p.state === "merged" && p.headSha) mergedHeads.set(name, new Set([p.headSha]));
+  }
   const mergedFile = arg(argv, "--merged-heads", null);
-  const mergedHeads = parseHeads(mergedFile ? fs.readFileSync(mergedFile, "utf8") : "");
+  for (const [n, set] of parseHeads(mergedFile ? fs.readFileSync(mergedFile, "utf8") : "")) mergedHeads.set(n, new Set([...(mergedHeads.get(n) || []), ...set]));
   const baseRef = "refs/remotes/origin/" + base;
   try { git("rev-parse", "--verify", "--quiet", baseRef); } catch (_) { console.error(`prune-branches: ${baseRef} not found — fetch every branch first`); return 2; }
   const branches = parseRefs(git("for-each-ref", "--format=%(refname)\t%(objectname)\t%(committerdate:unix)", "refs/remotes/origin"));
-  const isMerged = (sha) => { try { git("merge-base", "--is-ancestor", sha, baseRef); return true; } catch (_) { return false; } };
-  const { prune, kept } = selectPrunable(branches, {
+  // THE AUDIT (branch-audit.mjs): every branch that is not a claims marker gets
+  // a verdict. It is the report, and its "absorbed" verdict is a prune rule.
+  // The audit surveys only branches with NO PR ever and no commit for
+  // --quiet-hours (default 48; branch-audit.mjs inSurvey). --audit-all widens it.
+  const quietHours = Number(arg(argv, "--quiet-hours", String(SURVEY_QUIET_HOURS)));
+  const auditAll = argv.includes("--audit-all");
+  const rows = argv.includes("--no-audit") ? [] : audit(branches, { base, prs, runs: indexRuns(readJson(arg(argv, "--runs", null))), minAgeDays,
+    skip: (n) => CLAIMS.test(n), survey: auditAll ? null : (b) => inSurvey(b, { prs, quietHours }) });
+  const verdicts = new Map(rows.map((r) => [r.name, r.verdict]));
+  const ancestor = new Map(rows.map((r) => [r.sha, r.ancestor]));
+  const isMerged = (sha) => {
+    if (ancestor.has(sha)) return ancestor.get(sha);
+    try { git("merge-base", "--is-ancestor", sha, baseRef); return true; } catch (_) { return false; }
+  };
+  const { prune, kept, reasons } = selectPrunable(branches, {
     base, defaultBranch: arg(argv, "--default", null), openHeads, keep: keepSrc ? new RegExp(keepSrc) : null, minAgeDays, isMerged, mergedHeads,
+    verdicts, allow: new Set(["absorbed", ...also]),
   });
-  const tally = {};
-  for (const k of kept) tally[k.why] = (tally[k.why] || 0) + 1;
-  const claims = prune.filter((n) => CLAIMS.test(n)).length;
-  console.log(`prune-branches: ${branches.length} remote branches; ${prune.length} prunable — ${prune.length - claims} merged (into ${base} or as a merged PR's head, no open PR, quiet ${minAgeDays}+ days), ${claims} expired claims`);
-  console.log("kept: " + (Object.entries(tally).map(([k, n]) => `${n} ${k}`).join(", ") || "none"));
-  for (const n of prune) console.log((apply ? "delete " : "would delete ") + n);
+  if (arg(argv, "--report", null)) fs.writeFileSync(arg(argv, "--report"), renderMarkdown(rows, base, { scope: auditAll ? "" : surveyScope(quietHours) }));
+  if (arg(argv, "--json", null)) fs.writeFileSync(arg(argv, "--json"), JSON.stringify(rows, null, 1));
+  const count = (list, key) => { const t = {}; for (const x of list) { const k = key(x); t[k] = (t[k] || 0) + 1; } return Object.entries(t).map(([k, n]) => `${n} ${k}`).join(", ") || "none"; };
+  console.log(`prune-branches: ${branches.length} remote branches; ${prune.length} prunable (${count(prune, (n) => reasons.get(n))}; no open PR, quiet ${minAgeDays}+ days)`);
+  console.log("kept: " + count(kept, (k) => k.why));
+  if (also.length) console.log("opted in: " + also.map((v) => `${v} (${VERDICTS[v]})`).join("; "));
+  for (const n of prune) console.log(`${apply ? "delete" : "would delete"} ${n}  [${reasons.get(n)}]`);
   if (!apply) { console.log("= prune dry-run " + prune.length); return 0; }
   // Batches of 50 refs per push: one push per branch is ~475 round trips.
   let failed = 0;

@@ -628,3 +628,33 @@ test("puddle ripples: the ring constants and the rain uniform match on GLX, TLX 
   assert.match(read("js/render/webgpu/wgx.js"), /d\[82\] = f\.rain/, "WGX packs params4.z");
   assert.match(w, /F\.params4\.z/);
 });
+
+test("the sun-glint knee and the world env-probe reflection reach every backend", () => {
+  // 2026-10-01: the sun specular's hard Reinhard cap (specCol/(1+specCol))
+  // became a knee with an asymptote (the SUN GLINT RANGE knob), and the glossy
+  // world env block samples the live probe near the car. Both are three
+  // hand-written copies; one backend keeping the cap or the gradient would
+  // show a different wet race per renderer (docs/ARCHITECTURE.md §Parity).
+  const glx = read("js/render/glx/shaders/glsl-lit.js");
+  const tlx = read("js/render/three/tsl-lit.js");
+  const w = read("js/render/webgpu/wgsl-chunks.js");
+  assert.match(glx, /specCol = specCol \/ \(1\.0 \+ specCol \/ uSpecKnee\);/, "GLX knee");
+  assert.match(tlx, /specCol\.assign\(specCol\.div\(specCol\.div\(U\.specKnee\)\.add\(1\.0\)\)\)/, "TLX knee");
+  assert.match(w, /specCol = specCol \/ \(1\.0 \+ specCol \/ max\(F\.params4\.w, 0\.5\)\);/, "WGX knee");
+  assert.doesNotMatch(glx, /specCol = specCol \/ \(1\.0 \+ specCol\);/, "GLX still hard-caps the sun specular");
+  // the knob reaches each backend
+  const knob = defs().find((d) => d.id === "specKnee");
+  assert.ok(knob && knob.def === 4.0 && knob.min === 1 && knob.u === "uSpecKnee", "specKnee knob: def 4, min 1 (= the old cap), u uSpecKnee");
+  assert.match(read("js/render/glx/glx.js"), /uf1\(litU\.uSpecKnee,\s*_litUf,\s*"specKnee",\s*T && T\.specKnee != null \? T\.specKnee : 4\.0\)/, "GLX uploads uSpecKnee");
+  assert.match(tlx, /uf1\(U\.specKnee, k\("specKnee", 4\.0\)\)/, "TLX updates U.specKnee");
+  assert.match(read("js/render/webgpu/wgx.js"), /d\[83\] = \(T && T\.specKnee != null\) \? T\.specKnee : 4\.0;/, "WGX packs params4.w");
+  // the probe in the world env block, faded over the same 60..150 m on all three
+  for (const [name, src, re] of [
+    ["GLX", glx, /probeW = clamp\(uEnvStr, 0\.0, 1\.0\) \* clamp\(1\.0 - \(vDist - 60\.0\) \/ 90\.0, 0\.0, 1\.0\)/],
+    ["TLX", tlx, /probeW = clamp\(U\.envStr, 0\.0, 1\.0\)\s*\.mul\(clamp\(vd\.sub\(60\.0\)\.div\(90\.0\)\.oneMinus\(\), 0\.0, 1\.0\)\)/],
+    ["WGX", w, /probeW = clamp\(F\.params5\.x, 0\.0, 1\.0\) \* clamp\(1\.0 - \(vDist - 60\.0\) \/ 90\.0, 0\.0, 1\.0\)/],
+  ]) assert.match(src, re, `${name}: the world env block weights the live probe by strength x eye-distance fade`);
+  assert.match(glx, /envColor = mix\(envColor, textureLod\(uEnvCube, R, rough \* 2\.5\)\.rgb, probeW\)/, "GLX samples the probe at rough*2.5");
+  assert.match(tlx, /cubeTexture\(envCubeNode, R, rough\.mul\(2\.5\)\)\.rgb, probeW\)/, "TLX samples the probe at rough*2.5");
+  assert.match(w, /textureSampleLevel\(envCube, envCubeSamp, Rw, rough \* 2\.5\)\.rgb, probeW\)/, "WGX samples the probe at rough*2.5");
+});

@@ -154,7 +154,8 @@ uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specu
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
 uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
-uniform float uRain;        // 0..1 rain FALLING (frame.rain): drives the puddle ripples
+uniform float uRain;
+uniform float uSpecKnee;       // SUN GLINT RANGE knob: the sun specular's soft-clip asymptote (1 = the old hard cap at 1.0)        // 0..1 rain FALLING (frame.rain): drives the puddle ripples
 // ── Baked PBR material maps (js/render/shared/assets.js) ────────────────────────────
 // TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID (js/track/core/geom.js MAT). No
 // UV channel exists anywhere on the lit path and none is needed: the sample
@@ -906,6 +907,9 @@ float sampleShadow(vec3 wpos) {
 
 void main() {
   vec3 N = normalize(vNrm);
+  // Puddle shape (wet block): the world xz direction of increasing track x, from
+  // derivatives taken here in uniform control flow (WGX parity; see wgsl-chunks).
+  vec2 trkRightXZ = dFdx(vWorldPos.xz) * dFdx(vTrk.y) + dFdy(vWorldPos.xz) * dFdy(vTrk.y);
   // Two-sided lighting: cull-off single-face geometry (the wheels — tyre bands,
   // sidewall discs, hub fans — are drawn double-sided with one face per wall)
   // shows its BACK side through spoke gaps and on the car's far wheels. Without
@@ -1113,11 +1117,22 @@ void main() {
   // CARBON FINISH: bodywork in bare weave. Crush the livery colour toward the
   // dark resin and lay a fine cross-hatch over it, keeping a trace of the team
   // tint so a red car is still identifiably that team's car in carbon.
-  if (carbonFinish) {
+  // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
+  // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 8-16 m so it
+  // cannot moire at range (it had no fade: a sin*sin at 190/m crawled on every
+  // wing at 30 m). The parts get a subtler twill and a roughness ripple so
+  // they read as carbon in cockpit and close-up instead of flat dark paint.
+  float weave = 0.5;
+  if (carbonFinish || carbonSurface) {
     vec2 wv = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
-    float weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y);
+    float wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+  }
+  if (carbonFinish) {
     albedo = mix(albedo * 0.16 + vec3(0.030, 0.031, 0.035), albedo * 0.28, 0.25);
     albedo *= 0.86 + 0.28 * weave;
+  } else if (carbonSurface) {
+    albedo *= 0.93 + 0.14 * weave;
   }
   if (iriSurface) {
     float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
@@ -1129,7 +1144,7 @@ void main() {
     albedo *= mix(vec3(1.0), 0.60 + 0.80 * shift, smoothstep(0.30, 0.92, fres) * 0.40);
   }
   float rough = clamp(uRoughness, 0.04, 1.0);
-  if (carbonSurface || carbonFinish) rough = max(rough, 0.56);
+  if (carbonSurface || carbonFinish) rough = max(rough, 0.56) + (weave - 0.5) * 0.10;   // the twill's roughness ripple
   if (rubberSurface) rough = max(rough, 0.90);
   if (metalSurface) rough = min(rough, 0.16);
   if (glassSurface || visorSurface) rough = min(rough, 0.13);
@@ -1178,9 +1193,27 @@ void main() {
     float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
     wet = uWetness * upFace;
     float pn = vnoise(vWorldPos.xz * 0.13 + 4.7);
+    // PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01). On the road ribbon (vTrk.z is
+    // the half-width, > 0 only there) the noise is weighted by where water
+    // actually stands: the crown drains to the gutters (0.7 at the centre,
+    // 1.2 at the edges), and the LOW side of a banked turn holds it. The
+    // lateral downhill is read from the geometry — the world direction of
+    // increasing lateral x, from the screen-space derivatives of vTrk.y and
+    // vWorldPos.xz, dotted with the geometric normal's tilt — so a camber
+    // pools the inside and dries the outside without any per-circuit data.
+    // Before, water pooled equally on the crown and in the gutter, and a banked
+    // turn held standing water on its high side (the second graphics-detail
+    // survey, item 13). Mirrored constant for constant on TLX and WGX.
+    float pool = 1.0;
+    if (vTrk.z > 0.5) {
+      float lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+      float rl = length(trkRightXZ);   // derivatives hoisted next to N (uniform control flow)
+      float downhill = rl > 1e-6 ? -dot(trkRightXZ / rl, Ngeo.xz) : 0.0;   // +: the +x side lies lower
+      pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+    }
     // Wide, soft puddle edges so pools BLEND into the wet sheet rather than reading
     // as hard painted ovals.
-    puddle = smoothstep(0.48, 0.88, pn) * wet;        // only low spots pool
+    puddle = smoothstep(0.48, 0.88, pn * pool) * wet;        // only low spots pool
     // Porous ground cannot hold standing water — no pooling, and no sheen below.
     puddle *= 1.0 - porous;
     // RAIN RIPPLES (2026-10-01): expanding rings from drop impacts, keyed to the
@@ -1469,7 +1502,11 @@ void main() {
     float Vis = V_SmithGGX(NoV, NoL, a);
     vec3 F = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
     vec3 specCol = (D * Vis) * F * uSunColor * litNoL;
-    specCol = specCol / (1.0 + specCol);
+    // Soft knee with an asymptote of uSpecKnee (def 4), not a hard Reinhard
+    // cap at 1.0: a raw GGX of 10+ used to come out at ~0.91, UNDER the day
+    // bloom threshold (0.78 is the knee, not the ceiling), so a sun glint off
+    // wet tarmac, chrome or a visor could never bloom. 1.0 restores the old cap.
+    specCol = specCol / (1.0 + specCol / uSpecKnee);
     color += specCol;
   }
 
@@ -1646,6 +1683,17 @@ void main() {
     // Tint env sample by sky gradient; also pick up a gentle sun-horizon blush
     // when the reflected direction aligns with the sun (warm chrome/paint sheen).
     vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
+    // The LIVE env probe (the 64 px cube around the player car, uEnvStr > 0
+    // once its six faces are in; shed with the probe at perf tier >= 1) replaces
+    // the two-colour gradient near the car: clouds, stands and the sun disc in
+    // wet tarmac, glass and metal, where the gradient read as a flat sheen.
+    // Faded with distance from the eye (the probe sits at the car), because a
+    // single cube is parallax-wrong far from its centre. The gradient stays
+    // the fallback everywhere the probe is off, so the look never regresses.
+    if (uEnvStr > 0.001) {
+      float probeW = clamp(uEnvStr, 0.0, 1.0) * clamp(1.0 - (vDist - 60.0) / 90.0, 0.0, 1.0);
+      if (probeW > 0.001) envColor = mix(envColor, textureLod(uEnvCube, R, rough * 2.5).rgb, probeW);
+    }
     float envSunAlign = max(dot(R, uSunDir), 0.0);
     envColor = mix(envColor, envColor * uSunColor * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
     // (Wet-road sun-glitter removed — SSR now reflects the real sky/sun on wet roads.)

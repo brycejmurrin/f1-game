@@ -451,17 +451,32 @@ test.describe("Apex 26 — steering", () => {
 
   test("racing-line assist: PULL eases toward the line, PUSH sends it wider", async ({ page }) => {
     await startLiveRace(page);
+    // Assists other than the racing-line slider must stay off: roadFollow
+    // compounds the line, and without freeze run()'s multi-evaluate gaps let
+    // the page loop drive the car into the verge where offAssistFade crushes
+    // PUSH (CI 36943859283: (dxPush-dxOff)*inside = -0.1275 vs -0.2; apex-state
+    // x≈-8.1). Same freeze + roadFollow:0 isolation as the sibling cases.
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     const { frac, k } = await firstCorner(page);
     expect(Math.abs(k)).toBeGreaterThan(0.02);
     const inside = -Math.sign(k);   // apex is on the -sign(k) side
 
-    await setRaceLine(page, 0);
-    const off = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
-    await setRaceLine(page, 5);
-    const pull = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
-    await setRaceLine(page, -5);
-    const push = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
-    await setRaceLine(page, 0); // restore
+    await page.evaluate(() => window.__apex.freeze(true));
+    let off, pull, push;
+    try {
+      await setRaceLine(page, 0);
+      off = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      await setRaceLine(page, 5);
+      pull = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      await setRaceLine(page, -5);
+      push = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      await setRaceLine(page, 0); // restore
+    } finally {
+      await page.evaluate(() => {
+        window.__apex.freeze(false);
+        window.__apex.setPhysics({ roadFollow: 0 });
+      });
+    }
 
     const dxOff = off.after.x - off.before.x;
     const dxPull = pull.after.x - pull.before.x;
