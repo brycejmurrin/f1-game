@@ -17,7 +17,7 @@ test.describe("Apex 26 — player camera modes", () => {
       const bad = window.__apex.camera("banana");
       return { init, byId, byIdx, bad };
     });
-    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "tv"]);
+    expect(r.init.modes).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "rival", "pitwall", "drone", "tv"]);
     expect(r.byId.mode).toBe("cockpit");
     expect(r.byIdx.mode).toBe("chase");
     expect(r.bad).toBe(false);            // unknown mode is rejected, not crashed
@@ -36,7 +36,7 @@ test.describe("Apex 26 — player camera modes", () => {
       }
       return out;
     });
-    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "tv", "chase"]);
+    expect(seq).toEqual(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "rival", "pitwall", "drone", "tv", "chase"]);
   });
 
   test("camera choice persists across a reload", async ({ page, loadTrack }) => {
@@ -54,7 +54,8 @@ test.describe("Apex 26 — player camera modes", () => {
     await loadTrack();
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const MODES = ["chase", "far", "drift", "cockpit", "hood", "overhead", "heli",
-                   "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside"];
+                   "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside",
+                   "rival", "pitwall", "drone"];
     // `tv` is a director meta-mode (dbgCam cuts); excluded from distinct-vantage
     // sampling — it has no fixed framing of its own.
     // MEASURED: locator.screenshot() costs ~21.9 s per call on this SwiftShader
