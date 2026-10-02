@@ -89,6 +89,7 @@ const TrackGraph = (function () {
         buf._mat = op.mat || 0;
         buf._matAt = op.sway ? swayAt(buf._mat, _ORIGIN, _UP, 1, op.sway) : null;
         const col = op.col === NODE_COLOR ? WHITE : op.col;
+        const v0 = buf.pos.length / 3;
         switch (op.op) {
           case "box": raw.addBox(buf, op.c, op.sz, col, null); break;
           case "prism": raw.addPrism(buf, op.c, op.sz, col, null); break;
@@ -97,6 +98,9 @@ const TrackGraph = (function () {
           case "cone": raw.addCone(buf, op.c, op.rad, op.h, col, op.seg, null); break;
           case "frustum": raw.addFrustum(buf, op.c, op.rB, op.rT, op.h, col, op.seg, null); break;
         }
+        // a swaying op is a crown: round its normals toward the canonical axis
+        // (the same pass nature.js's swayOff() runs on inline emission)
+        if (op.sway && raw.roundNormals) raw.roundNormals(buf, v0, _ORIGIN, _UP);
       }
       buf._mat = 0; buf._matAt = null;
       return buf;
@@ -165,6 +169,7 @@ const TrackGraph = (function () {
         if (op.sway) swayed = true;
         const col = colourOf(op, place);
         let ok = false;
+        const v0 = out.pos.length / 3;
         switch (op.op) {
           case "box":
           case "prism":
@@ -179,6 +184,10 @@ const TrackGraph = (function () {
           case "cone": ok = emit.addCone(out, c, op.rad * rs, op.h * us, col, op.seg, basis); break;
           case "frustum": ok = emit.addFrustum(out, c, op.rB * rs, op.rT * rs, op.h * us, col, op.seg, basis); break;
         }
+        // a swaying op is a crown: round its normals toward the placed axis
+        // (bakeCanonical does the same in canonical space — graph parity).
+        // Keyed on vertices landing, not `ok`: the raw emitter returns nothing.
+        if (op.sway && emit.roundNormals && out.pos.length / 3 > v0) emit.roundNormals(out, v0, place.o, place.u);
         if (ok) landed++;
         // A model is ONE object: a cylinder the PIT COMPLEX kept out is its
         // footing (a pine's trunk, a mast), and nothing of it stands without

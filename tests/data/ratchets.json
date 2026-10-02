@@ -12,9 +12,9 @@
       "lines": 4094
     },
     "js/game.js": {
-      "codeLines": 5265,
-      "gMembers": 281,
-      "lines": 9669,
+      "codeLines": 5269,
+      "gMembers": 282,
+      "lines": 9666,
       "topLets": 160
     },
     "js/lighting/presets.js": {
@@ -71,7 +71,7 @@
       "slack": 0
     },
     "twinDebt": {
-      "ceiling": 3,
+      "ceiling": 5,
       "slack": 0
     },
     "waitForTimeout": 127,

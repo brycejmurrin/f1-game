@@ -507,6 +507,7 @@ function restoreFreePlaySelection() {
 // in js/data/settings-defaults.js from that file, so the literal only mirrors
 // it (tests/unit/settings-defaults.test.mjs fails the build if they disagree).
 let difficulty = store.get("difficulty", "hard");
+AiBand.setMode(store.get("aiPace", "scripted"));
 // RELIABILITY — "off" | "low" | "real" (js/race/reliability.js), a standing
 // preference like difficulty. Ships OFF: this key is new for every existing
 // save, so OFF is the only default that does not silently start retiring cars
@@ -1298,7 +1299,8 @@ function inputOf(c) {
   if (c.local) return _testInput;              // null => live Input
   return c.netInput || NEUTRAL_INPUT;
 }
-// The human the AI rubber-bands against — recomputed once per update() rather
+// The human AiBand catch-up (aiPace=catchup) bands toward — once per update().
+// Scripted mode ignores it. Recomputed once per update() rather than once per AI car. Scripted mode ignores it.
 // than per AI car. Null when the field has no human at all.
 let _leadHuman = null;
 // Set by NetPlay while a session's countdown is pending: {at, hold, now()}.
@@ -3590,6 +3592,8 @@ const G = {
   // Mutable state + helpers consumed by js/ui/select-screen.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { setDriverIdxAt(v); },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
+  get aiPace() { return AiBand.mode(); },
+  set aiPace(v) { store.set("aiPace", AiBand.setMode(v)); },
   store, tickUi, scheduleFlybyTrack,
   // Same deferred-arrow trick for the garage <-> select plumbing: js/garage/setup-sheet.js is
   // created before js/ui/select-screen.js, and openGarage/openCustomize are declared further
@@ -4644,9 +4648,9 @@ function update(dt) {
   }
   if (!isPractice() && !isQuali()) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
 
-  // Leading human, for the AI rubber-band. Once per step, not once per AI car.
+  // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
   _leadHuman = null;
-  // !finished: a flagged human coasts on advancing prog — don't rubber-band toward it.
+  // !finished: a flagged human coasts on advancing prog — don't band toward it.
   for (const c of cars) if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
 
   for (const c of cars) updateCar(c, dt, ranked);
@@ -4822,21 +4826,14 @@ function updateCar(c, dt, ranked) {
 
   // --- speed targets ---
   let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
-  // asymmetric rubber band — boost only when player is ahead; no artificial slow-down when behind
-  // Rubber-band against the LEADING human, not "the" player: with a second
-  // driver on track, banding off whoever happens to be the local car would let
-  // the slower human drag the whole field back. One human => identical.
-  // ...and the band never lifts a level past the TOP OF THE LADDER. Without the
-  // cap easy's 0.851 x 1.18 = 1.004 beats hard's own 0.980: a lapped car on the
-  // easiest setting outran the fastest car on the hardest one, which makes the
-  // difficulty dial non-monotonic in the only place a player would notice it
-  // (a rival closing from a lap down). The ceiling is DIFF's own top scale, so
-  // it moves with the table rather than pinning a literal here.
+  // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
+  // restores the reverse-only rubber band via AiBand (start + lapping gates).
   if (!c.human && _leadHuman) {
-    const gap = _leadHuman.prog - c.prog;
-    const bandFactor = gap > 0 && gap < track.total * 0.5 && raceT - launchT0 > 8 ? Math.min(gap / 700, 1) * dd.band : 0;   // never off the START LINE (a P22 grid slot is 182 m back by itself = +4.7 % vmax on easy into T1, "the antithesis of what we want" — Game AI Pro ch.42) and never once LAPPED (the gap clamps the band to full, so an easy car a lap down took min(1, 0.93 x 1.18) = hard's corner authority and un-lapped itself). Both only ever REMOVE a boost, so the DIFF ladder cannot move.
-    const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
-    vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
+    const applied = AiBand.applyVmax(vmax, AiBand.factor({
+      leadProg: _leadHuman.prog, carProg: c.prog,
+      trackTotal: track.total, raceT, launchT0, bandAuth: dd.band,
+    }), c.tierV * c.skill * dd.ai, BAND_CEIL);
+    vmax = applied.vmax; c._bandNow = applied.bandNow;
   } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans included, not only the AI.
