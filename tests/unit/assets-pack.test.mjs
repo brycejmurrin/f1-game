@@ -106,6 +106,177 @@ test("asset loader shares an in-flight manifest failure and retries a later requ
   assert.equal(requests, 2, "a successful manifest remains cached");
 });
 
+function deferredAssetDownload() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+test("material strips download together, then preserve sequential decode and upload inputs", async () => {
+  const requests = [], events = [], bitmaps = [], installed = [];
+  const downloads = { "a.png": deferredAssetDownload(), "n.png": deferredAssetDownload() };
+  const albedo = { size: 18, pixels: [10, 20, 30, 255] };
+  const normal = { size: 24, pixels: [128, 128, 255, 255] };
+  const assets = assetLoader({
+    async fetch(url) {
+      if (url.endsWith("manifest.json")) return { ok: true, json: async () => ({ materials: {
+        size: 4, albedo: "a.png", normal: "n.png",
+        layers: [{ mat: 1, scale: 2 }, { mat: 3, scale: 5 }],
+      } }) };
+      requests.push(url);
+      return downloads[url.split("/").pop()].promise;
+    },
+    async createImageBitmap(blob, ...crop) {
+      const kind = blob === albedo ? "albedo" : blob === normal ? "normal" : "unexpected";
+      assert.notEqual(kind, "unexpected", "the downloaded blob reaches decoding unchanged");
+      events.push(`decode:${kind}`);
+      const b = { kind, crop, pixels: blob.pixels, closed: 0, close() { this.closed++; } };
+      bitmaps.push(b);
+      return b;
+    },
+  });
+  assets.init({
+    createTextureArray(size, images, layers) {
+      const kind = images[1].kind;
+      events.push(`upload:${kind}`);
+      assert.equal(size, 4);
+      assert.equal(layers, 17);
+      assert.equal(images.length, 17);
+      assert.deepEqual(Object.keys(images), ["1", "3"]);
+      for (const id of [1, 3]) {
+        assert.equal(images[id].closed, 0, "upload must precede bitmap release");
+        assert.deepEqual(images[id].crop, [0, id * 4, 4, 4]);
+        assert.strictEqual(images[id].pixels, kind === "albedo" ? albedo.pixels : normal.pixels);
+      }
+      return { kind };
+    },
+    setMaterialMaps(v) { installed.push(v); },
+  });
+  const pending = assets.load();
+  assert.strictEqual(assets.load(), pending, "concurrent loads still share all work");
+  await new Promise(setImmediate);
+  assert.deepEqual(requests, ["assets/pack/a.png", "assets/pack/n.png"], "both requests start before either response");
+  downloads["n.png"].resolve({ ok: true, blob: async () => normal });
+  await new Promise(setImmediate);
+  assert.deepEqual(events, [], "normal download finishing first cannot reorder decode or upload");
+  assert.equal(assets.state().bytes, normal.size, "bytes record completed compressed downloads");
+  downloads["a.png"].resolve({ ok: true, blob: async () => albedo });
+  assert.equal(await pending, true);
+  assert.deepEqual(events, ["decode:albedo", "decode:albedo", "upload:albedo", "decode:normal", "decode:normal", "upload:normal"]);
+  assert.deepEqual(bitmaps.map(b => b.closed), [1, 1, 1, 1]);
+  assert.equal(installed.length, 1);
+  assert.equal(installed[0].albedo.kind, "albedo");
+  assert.equal(installed[0].normal.kind, "normal");
+  assert.equal(installed[0].scales[1], 2);
+  assert.equal(installed[0].scales[3], 5);
+  assert.equal(assets.state().bytes, albedo.size + normal.size);
+});
+
+test("an albedo-only material variant never requests or decodes a normal strip", async () => {
+  const requests = [], blob = { size: 12 };
+  let decoded = 0, uploaded = 0, installed;
+  const assets = assetLoader({
+    async fetch(url) {
+      requests.push(url);
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", layers: [{ mat: 1, scale: 1 }] } }) }
+        : { ok: true, blob: async () => blob };
+    },
+    async createImageBitmap(source, ...crop) {
+      assert.strictEqual(source, blob);
+      assert.deepEqual(crop, [0, 2, 2, 2]);
+      decoded++;
+      return { close() {} };
+    },
+  });
+  assets.init({ createTextureArray() { uploaded++; return {}; }, setMaterialMaps(v) { installed = v; } });
+  assert.equal(await assets.load(), true);
+  assert.deepEqual(requests, ["assets/pack/manifest.json", "assets/pack/a.png"]);
+  assert.equal(decoded, 1);
+  assert.equal(uploaded, 1);
+  assert.equal(installed.normal, null);
+  assert.equal(assets.state().bytes, blob.size);
+});
+
+test("an early normal fetch failure observes a later albedo rejection without decoding", async () => {
+  const downloads = { "a.png": deferredAssetDownload(), "n.png": deferredAssetDownload() };
+  let decodes = 0, uploads = 0;
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) }
+        : downloads[url.split("/").pop()].promise;
+    },
+    async createImageBitmap() { decodes++; return { close() {} }; },
+  });
+  assets.init({ createTextureArray() { uploads++; return {}; }, setMaterialMaps() {} });
+  const pending = assets.load();
+  await new Promise(setImmediate);
+  downloads["n.png"].resolve({ ok: false });
+  assert.equal(await pending, false);
+  assert.equal(assets.state().error, "fetch n.png");
+  downloads["a.png"].reject(Error("albedo offline after normal failure"));
+  await new Promise(setImmediate); // node:test reports an unhandled rejection as a failure
+  assert.equal(decodes, 0);
+  assert.equal(uploads, 0);
+  assert.equal(assets.state().uploaded, false);
+  assert.equal(assets.state().bytes, 0);
+});
+
+test("a normal decode failure frees the albedo upload and closes its bitmaps", async () => {
+  const bitmaps = [], freed = [], maps = [];
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) }
+        : { ok: true, blob: async () => ({ size: 16, normal: url.endsWith("n.png") }) };
+    },
+    async createImageBitmap(blob) {
+      if (blob.normal) throw Error("normal decode failed"); // crop and full-strip fallback both reject
+      const b = { closed: 0, close() { this.closed++; } };
+      bitmaps.push(b);
+      return b;
+    },
+  });
+  assets.init({
+    createTextureArray() { return { id: "albedo" }; },
+    freeTexture(t) { freed.push(t.id); },
+    setMaterialMaps(v) { maps.push(v); },
+  });
+  assert.equal(await assets.load(), false);
+  assert.equal(assets.state().error, "normal decode failed");
+  assert.equal(assets.state().bytes, 32);
+  assert.deepEqual(freed, ["albedo"]);
+  assert.deepEqual(bitmaps.map(b => b.closed), [1]);
+  assert.deepEqual(maps, []);
+});
+
+test("unload during parallel downloads rejects the stale generation before any decode", async () => {
+  const downloads = { "a.png": deferredAssetDownload(), "n.png": deferredAssetDownload() };
+  let decodes = 0, uploads = 0;
+  const maps = [];
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) }
+        : downloads[url.split("/").pop()].promise;
+    },
+    async createImageBitmap() { decodes++; return { close() {} }; },
+  });
+  assets.init({ createTextureArray() { uploads++; return {}; }, setMaterialMaps(v) { maps.push(v); } });
+  const pending = assets.load();
+  await new Promise(setImmediate);
+  assets.unload();
+  for (const d of Object.values(downloads)) d.resolve({ ok: true, blob: async () => ({ size: 16 }) });
+  assert.equal(await pending, false);
+  assert.equal(decodes, 0);
+  assert.equal(uploads, 0);
+  assert.deepEqual(maps, [null]);
+  assert.equal(assets.state().tier, "off");
+  assert.equal(assets.state().uploaded, false);
+  assert.equal(assets.state().bytes, 32, "finished downloads still count as fetched bytes");
+});
+
 test("material and model loads recover after a temporarily unavailable pack", async () => {
   let online = false, manifestGets = 0, modelGets = 0;
   const assets = assetLoader({

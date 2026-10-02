@@ -117,11 +117,11 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
   assert.match(build, /introCover\(info0, n\);/, 'cold preparation is covered: by the race-settings sheet, else the skippable cinematic card');
   assert.match(game, /function introCover\(info, n\) \{ if \(!_introSheet\) loadingScreen\.building\(info, \(\) => studioSkip\(n\)\); \}/);
-  assert.ok(build.indexOf('warmPrograms()') < build.indexOf('studioOpen(n, info0)'), 'compilation precedes outgoing motion');
+  assert.ok(build.indexOf('await introPrepare(') >= 0 && build.indexOf('await introPrepare(') < build.indexOf('studioOpen(n, info0)'), 'preparation finishes before outgoing motion');
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/);
   assert.match(game, /if \(!built && !motionReduced\(\) && introGarage\(go\)\) return;/, 'a ready, warm world opens on it too');
-  assert.ok(warm.indexOf('await awaitIntroWarm(live)') < warm.indexOf('if (cold && _introSkip !== n) { studioOpen'), 'cold motion starts only after compilation settles');
+  assert.ok(warm.indexOf('await introPrepare(') >= 0 && warm.indexOf('await introPrepare(') < warm.indexOf('if (cold && _introSkip !== n) { studioOpen'), 'cold motion starts only after compilation settles');
   assert.match(game, /if \(built && _introSkip === _introRun\) \{ _introSkip = 0; go\(\); return; \}/, 'a skip in the garage goes to the race, not the flyby');
   assert.match(game, /\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, 'the studio shows through the build card');
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
@@ -137,7 +137,7 @@ test('the first presented garage frame takes over its preparation cover, then ha
   for (const mode of ['ready', 'quit', 'off', 'watched', 'skipper', 'hidden', 'skip', 'warming']) {
     let now = 0;
     const events = [];
-    const c = { state: 'menu', trackIdx: 0, track: {}, _introRun: 0, _introKey: '', _introSkip: 0, _menuFly: null, flybyShots: null, setupPreviewOn: false, settings: 'one',
+    const c = { _atmo: { prebakeLamps: () => null }, awaitIntroWarm: async current => { while (current() && c.gfx.warming()) await c.menuSlice(); return current(); }, state: 'menu', trackIdx: 0, track: {}, _introRun: 0, _introKey: '', _introSkip: 0, _menuFly: null, flybyShots: null, setupPreviewOn: false, settings: 'one',
       reloadFlybyShots() {}, FlybySeq: { DEFAULT: [], setDuration() {}, vary: () => [], planSteps: () => () => true },
       entrySettings: () => c.settings, menuKey: () => 'world', performance: { now: () => now },
       loadingInfo: () => ({ track: {}, real: mode === 'watched' ? { watch: true } : null }),
@@ -427,7 +427,7 @@ function garageEntryRegressionHarness() {
   const btn = { disabled: true, textContent: 'PREPARING…' };
   const back = { disabled: true };
   const c = {
-    state: 'menu', trackIdx: 0, track: {}, setupPreviewOn: false,
+    _atmo: { prebakeLamps: () => null }, state: 'menu', trackIdx: 0, track: {}, setupPreviewOn: false,
     headlessMode: false, settings: 'same-entry', flybyShots: null,
     _menuFly: null, _menuGate: { warm: 0, garageWarm: 0, garageReady: false, generation: 0 },
     _warmKey: 'world', flybyBuildTimer: 0,
