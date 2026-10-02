@@ -1205,7 +1205,9 @@ const WGX = (function () {
     const quadFxRing = new Float32Array(FX_QUAD_SLOTS * FX_F32_STRIDE);
     const decalFxRing = new Float32Array(FX_DECAL_SLOTS * FX_F32_STRIDE), _DECAL_SUN = [1, 0.95, 0.9], _DECAL_ASKY = [0.3, 0.32, 0.36], _DECAL_AGR = [0.2, 0.19, 0.18];
     const _fxQuadDynOff = [0], _fxDecalDynOff = [0];
-    const fxScratch = new Float32Array(56);   // >= DECAL 224 B / 4 — glow still uses this scratch
+    const fxScratch = new Float32Array(56);   // >= DECAL 224 B / 4 (PARTICLE 144 B / 4 = 36) — glow still uses this scratch
+    // The particle pass's frame light + fog, captured where the lit frame block is packed.
+    const _particleFrame = { sun: [1, 0.98, 0.9], ambSky: [0.3, 0.32, 0.36], ambGround: [0.2, 0.19, 0.18], fogColor: [0.5, 0.6, 0.7], fogDensity: 0 };
     // Camera-facing glow billboard corner template (mirror GLX _glowCorners).
     const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
 
@@ -3124,6 +3126,9 @@ const WGX = (function () {
       const L = f.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       d[48]=fogDensity; d[49]=fogHeight; d[50]=f.time != null ? f.time : 0; d[51]=nL;
+      // The particle pass reads the same frame light and fog (drawParticles).
+      _particleFrame.sun = sc; _particleFrame.ambSky = [as[0]*ambM, as[1]*ambM, as[2]*ambM];
+      _particleFrame.ambGround = [ag[0]*ambM, ag[1]*ambM, ag[2]*ambM]; _particleFrame.fogColor = fc; _particleFrame.fogDensity = fogDensity;
       d[52]=T && T.keyMul != null ? T.keyMul : 1;
       d[53]=T && T.glowAmp != null ? T.glowAmp : 2.3;
       d[54]=f.wetness != null ? f.wetness : 0;
@@ -4881,7 +4886,13 @@ const WGX = (function () {
       s.set(frameVPGpu, 0);
       const eye = frameEye || [0, 0, 0];
       s[16] = eye[0]; s[17] = eye[1]; s[18] = eye[2]; s[19] = additive ? 1 : 0;
-      device.queue.writeBuffer(particleUBO[i], 0, s, 0, 20);
+      // Lit + fogged (PARTICLE fs_main): the decals' frame light and the lit pass's fog.
+      const pf = _particleFrame;
+      s[20] = pf.sun[0]; s[21] = pf.sun[1]; s[22] = pf.sun[2]; s[23] = pf.fogDensity;
+      s[24] = pf.ambSky[0]; s[25] = pf.ambSky[1]; s[26] = pf.ambSky[2]; s[27] = 0;
+      s[28] = pf.ambGround[0]; s[29] = pf.ambGround[1]; s[30] = pf.ambGround[2]; s[31] = 0;
+      s[32] = pf.fogColor[0]; s[33] = pf.fogColor[1]; s[34] = pf.fogColor[2]; s[35] = 0;
+      device.queue.writeBuffer(particleUBO[i], 0, s, 0, 36);
       _setPipe(litPass, additive && pParticleAdd ? pParticleAdd : pParticle);
       if (_particleBG[i]) _setBG0(litPass, _particleBG[i]);
       _setVB0(litPass, particleVBO[i]);

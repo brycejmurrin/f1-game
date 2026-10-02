@@ -1524,6 +1524,15 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **LIT, FOGGED PARTICLES (2026-10-01):** on all three. The alpha particle
+  group (tyre smoke, dust, spray, rain) is shaded as a small sphere — the frame
+  hemisphere ambient read on the quad's up plus 0.45 of the key, floored at
+  0.18 so a night puff still reads under lamps the shader cannot see; the
+  additive group (sparks, the start-gantry lamps) stays emissive. Both take the
+  lit pass's exp² fog on the eye distance (alpha → fog colour, additive → out).
+  GLX `PARTICLE_FS` (five new uniforms), TLX `particleMaterial` (the fx U block
+  gains fogColor/fogDensity), WGX `ParticleU` 80 → 144 B. Before, every
+  particle was unlit and unfogged. `tests/unit/surface-id-parity.test.mjs` pins the three.
 - **SUN BEHIND THE CLOUDS (2026-10-01):** on all three. The sky's sun disc and
   tight corona ring are scaled by the cloud coverage along the ray (GLX
   `sunClear = 1 − cityCov`, TLX `cityCov.oneMinus()`, WGX `1 − covRay`), the
