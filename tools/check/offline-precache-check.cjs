@@ -28,8 +28,34 @@ const TY = { ".html":"text/html", ".js":"text/javascript", ".css":"text/css", ".
 // and the browser agreed on cota once (8665) but not since (2026-09-28: Node
 // 6536, browser 6685), and browser-vs-browser needs no tolerance. The Node
 // number is still printed, as information.
-const WARM = process.argv[2] || "spa";
-const TRACK = process.argv[3] || "cota";
+const WARM_ARG = process.argv[2];
+const TRACK_ARG_RAW = process.argv[3];
+const USAGE = "usage: node tools/check/offline-precache-check.cjs [warmCircuit] [coldCircuit]\n"
+  + "  Defaults: warm=spa cold=cota. Launches Chromium (~1 min). Do not pass flags.";
+
+function isCircuitId(s) {
+  return typeof s === "string" && /^[a-z][a-z0-9_]*$/i.test(s);
+}
+
+// --help / -h / any dash-flag must NOT become a circuit id and boot Chromium
+// (skilltest 2026-10-01: `--help` was raced as warm=--help and left a hung page).
+if (process.argv.includes("--help") || process.argv.includes("-h")
+    || (WARM_ARG && WARM_ARG.startsWith("-"))
+    || (TRACK_ARG_RAW && TRACK_ARG_RAW.startsWith("-"))) {
+  console.log(USAGE);
+  process.exit(0);
+}
+if (WARM_ARG && !isCircuitId(WARM_ARG)) {
+  console.error(`offline-precache: not a circuit id: ${JSON.stringify(WARM_ARG)}\n${USAGE}`);
+  process.exit(2);
+}
+if (TRACK_ARG_RAW && !isCircuitId(TRACK_ARG_RAW)) {
+  console.error(`offline-precache: not a circuit id: ${JSON.stringify(TRACK_ARG_RAW)}\n${USAGE}`);
+  process.exit(2);
+}
+
+const WARM = WARM_ARG || "spa";
+const TRACK = TRACK_ARG_RAW || "cota";
 const TRACK_ARG = WARM;
 
 const srv = http.createServer((req, rep) => {
