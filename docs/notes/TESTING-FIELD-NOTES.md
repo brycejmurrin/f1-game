@@ -2170,3 +2170,50 @@ Also measured, for the record: the restructure's landscape doors paint at
 * var(--ui-compact-text))` is later at equal specificity — and every phone
 screenshot in that commit was taken at 17 px. Fixed in f1d581065b by removing
 the dead declaration rather than keeping a value that never applied.
+
+## 2026-09-30 — render on a 4-vCPU runner: four workers were red, one was not
+
+`image-grade-visual.spec.js › blacks visibly change the deepest image detail`
+failed on the render group's shard 1 in three of three browser-group.yml runs
+(llvmpipe; run 36752751997, its re-run, and 36758100445): one
+`pageScreenshot` capture waited out its 60 s `softTimeout`, and the retry
+passed, so `APEX_FAIL_ON_FLAKY=1` made the run red. `test:render` pins
+`--workers=4`, which overrode the workflow's `APEX_WORKERS: 1`, so four
+llvmpipe browsers shared a 4-vCPU `ubuntu-latest` runner.
+
+The same shard at `--workers 1` (run 36783558304, deploy-tip code): 85/85,
+no retry, "blacks" 69 s, shard 12.6 min. NOT a speed claim: the confirming
+run at the new default (36793298522) took 18.3 min for the same shard, every
+test ~1.5x slower on that runner, so one data point each way says nothing
+about wall time against four workers' 19-21 min. What held both times is the
+verdict — green, no retry.
+Contention, not a GLX capture bug (the spec pins GLX; a TLX soft-read gate
+theory was falsified by the 4-worker re-run on a patched tree, 36758100445).
+browser-group.yml now defaults `workers` to 1; `remote-group.mjs --workers N`
+overrides it. The group script's `--workers=4` still suits a many-core local box.
+
+## 2026-10-01 — a black TLX page capture in this container is the capture, not the frame
+
+Three wet-weather probes on the SwiftShader WebGL2 TLX leg (`gfx-probe --backend
+three`, `apex26.tlxForceGL=1`) and two dry ones all reported `ok:true,
+gpuErrors 0, canvas: visible presented`, yet `page-hud.png` and ten CDP
+captures of the presented canvas 350 ms apart showed only the HUD, the 2D
+overlays and the rear-view mirror over a black `#game` — PNG sizes 22-77 KB,
+all DOM. The same page on GLX (`--backend webgl2`) captures a 530 KB full wet
+scene through `#game-soft`, because GLX soft-presents under SwiftShader while
+TLX's WebGL2 leg short-circuits the soft blit off (render-tlx.md), and the
+GPU readback (`capturePixels`) reports `maxLuma=0` on this leg dry or wet.
+One earlier capture on the same leg (the rain-streaks probe) did land a full
+scene, so it is intermittent, not impossible, and nothing to retry for.
+
+What this means for a TLX look change here: a black page capture is not a
+NaN or compile verdict — the dry baseline is black the same way. Positive
+TLX evidence in this container comes from (a) the rear-view mirror in the
+page capture, a readable 2D canvas drawn by the mirror pass through the same
+TLX lit program with the previous frame's uniforms (so a rain-gated branch IS
+active there once the amount has ramped), (b) `tlx-probes.spec.js`'s
+non-blank-frame heuristic, and (c) the macOS census's two TLX legs, which are
+the real sign-off anyway. The GLX leg's `#game-soft` capture stays the way to
+SEE a wet-weather frame locally (`scratchpad` script: race → `weather("rain")`
+AFTER the build, since `race()` applies the race settings' weather → `go` →
+`jump` → 7 s for the 0.8/s rain ramp → `screenshotPresentedCanvas`).

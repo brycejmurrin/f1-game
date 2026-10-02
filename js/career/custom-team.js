@@ -116,9 +116,13 @@ const CustomTeam = (function () {
     // Which legend the team is fielding: driverIdx when Legends is the selected
     // team, otherwise whatever it was last built with — so browsing other teams
     // does not silently repaint the Legends car.
+    // AT BOOT the entry is not in the list yet: it is about to be appended, at
+    // the index the SAVED team already names. Reading only a present entry
+    // built legend 0 on every load, so a saved Fangio came back as Fangio's
+    // chip and sheet in Schumacher's paint, crest, car name and stats.
     function legendSeat() {
       const i = legendsTeamIndex();
-      if (i >= 0 && getTeamIdx() === i) return getDriverIdx ? getDriverIdx() : 0;
+      if (getTeamIdx() === (i >= 0 ? i : Teams.LIST.length)) return getDriverIdx ? getDriverIdx() : 0;
       const cur = i >= 0 ? Teams.LIST[i] : null;
       const was = cur && typeof Legends !== "undefined" ? Legends.seatOf(cur.legend) : -1;
       return was >= 0 ? was : 0;

@@ -43,11 +43,18 @@ const SceneryStructures = (function () {
       // A run that ENDS on the lap boundary (s1 = 1.0) ends at 1, not 0: read as
       // `1 % 1`, montreal's [0.59, 1.0] wall looks contained in its [0.0, 0.05]
       // run and is skipped along with its barrier.
-      const a = s0 % 1, b = s1 > s0 && s1 % 1 === 0 ? 1 : s1 % 1;
-      const full = Math.abs(s1 - s0) >= 0.999;
+      // A span that WRAPS the line ([0.98, 0.06]) is the run 0.98..1.06, and a
+      // stored run may itself extend past 1, so containment is tested at a lap
+      // offset of 0 and ±1. Compared raw, a >= ra && b <= rb read madrid's
+      // [0.98, 0.06] guardrail as contained in its [0.48, 0.88] run and dropped
+      // it, barrier and all.
+      const a = s0 % 1, full = Math.abs(s1 - s0) >= 0.999;
+      let b = s1 > s0 && s1 % 1 === 0 ? 1 : s1 % 1;
+      if (!full && b < a) b += 1;
+      const within = (ra, rb) => [0, 1, -1].some((o) => a + o >= ra - 1e-6 && b + o <= rb + 1e-6);
       for (const [ra, rb] of runs) {
         const rFull = Math.abs(rb - ra) >= 0.999;
-        if (rFull || (!full && a >= ra - 1e-6 && b <= rb + 1e-6)) {
+        if (rFull || (!full && within(ra, rb))) {
           if (!reLaidWarned) {
             reLaidWarned = true;
             Log.warn("scenery", `${def && def.id}: ${kind} re-laid over ${ra.toFixed(3)}..${rb.toFixed(3)} ` +
@@ -369,14 +376,14 @@ const SceneryStructures = (function () {
         thickness: 0.9, depth: 1.4, span: hw[k] * 2 + 5,
         color: c,
       });
-      const gl = NIGHT ? [1.28, 1.30, 1.38] : [0.80, 0.81, 0.85];
-      const r0 = [track.rx[k], track.ry[k], track.rz[k]];
-      for (const lat of [-hw[k] * 0.55, 0, hw[k] * 0.55]) {
-        RAW.addBox(out, [beam[0] + r0[0] * lat - u[0] * 0.62,
-                         beam[1] + u[1] * (-0.62),
-                         beam[2] + r0[2] * lat - u[2] * 0.62],
-                   [1.1, 0.35, 1.0], gl, b);
-      }
+      // One dark housing bar under the beam's centre: the five lamps
+      // js/race/start-lights.js lights during the countdown sit proud of its
+      // grid-facing face (5 × 0.9 m pitch, 0.62 m below the beam top — the
+      // module's DROP/SPACING). Before 2026-10-01 these were three spread grey
+      // boxes with nothing driving them.
+      const gl = NIGHT ? [0.30, 0.31, 0.34] : [0.16, 0.16, 0.19];
+      RAW.addBox(out, [beam[0] - u[0] * 0.62, beam[1] + u[1] * (-0.62), beam[2] - u[2] * 0.62],
+                 [4.9, 0.45, 0.5], gl, b);
     };
     const flagQuad = (c, t, u, w, h, col) => {
       const nv = norm(cross(t, u));   // face normal (shared by both sides)

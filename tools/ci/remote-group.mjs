@@ -14,6 +14,7 @@
 //
 //   node tools/ci/remote-group.mjs ui                  # dispatch on this branch, 4 shards, watch to the verdict
 //   node tools/ci/remote-group.mjs input --shards 2
+//   node tools/ci/remote-group.mjs render --workers 2  # workers per shard (default 1: a runner has 4 vCPUs)
 //   node tools/ci/remote-group.mjs ui --gl swiftshader  # reproduce a local-only (SwiftShader) red on CI
 //   node tools/ci/remote-group.mjs ui --no-wait         # dispatch, print the run URL, exit
 //   node tools/ci/remote-group.mjs --watch <run-id>     # watch a run already dispatched
@@ -24,14 +25,15 @@
 // NOT A GATE: nothing requires this workflow; the PR's own ci.yml run decides
 // merge. Exit: 0 green, 1 red, 2 cancelled, 3 API/usage error, 124 --timeout.
 //
-// Auth: GH_TOKEN or GITHUB_TOKEN via curl's stdin config (never in argv), as
-// ci-watch.mjs does. The dispatch is the one write; the rest are GETs.
+// Auth: GH_TOKEN or GITHUB_TOKEN, else `gh auth token`, via curl's stdin config
+// (never in argv), as ci-watch.mjs does. The dispatch is the one write; the rest are GETs.
 // API: https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
 //      (200 with workflow_run_id on current API versions; a 204 falls back to finding the run)
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -48,6 +50,14 @@ export function browserGroups(scripts) {
 }
 
 /** Validate a dispatch and return its shard matrix, or {error}. Pure. */
+// browser-group.yml's `workers`: empty means the workflow's default of 1 per shard.
+export function parseWorkers(w) {
+  if (w == null || w === "") return { workers: "" };
+  const n = Number(w);
+  if (!Number.isInteger(n) || n < 1 || n > 8) return { error: `workers must be an integer 1-8, not ${w}` };
+  return { workers: String(n) };
+}
+
 export function planMatrix(group, shards, scripts) {
   const g = String(group || "").trim();
   if (!/^[a-z0-9][a-z0-9-]*$/.test(g)) return { error: `not a group name: ${JSON.stringify(group)}` };
@@ -94,8 +104,8 @@ export function groupVerdict(run, jobs) {
 }
 
 function api(method, pathQs, body, { raw = false } = {}) {
-  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-  if (!token) return { error: "no GH_TOKEN / GITHUB_TOKEN" };
+  const token = githubToken();
+  if (!token) return { error: NO_TOKEN_HINT };
   const args = ["-sS", "-L", "--max-time", "60", "-K", "-", "-w", "\n%{http_code}", "-X", method,
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28"];
   // The token rides curl's stdin config, so a JSON body goes through a temp file.
@@ -153,10 +163,22 @@ async function watch(runId, { interval, deadline }) {
   }
 }
 
+/** Printed for `--help` / a missing group — never `not a group name: undefined`. */
+export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--timeout <min>]
+       node tools/ci/remote-group.mjs --plan          # GROUP=/SHARDS= env (workflow step)
+       node tools/ci/remote-group.mjs --watch <run-id>
+       node tools/ci/remote-group.mjs --help`;
+
 async function main() {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(USAGE);
+    return 0;
+  }
   if (argv.includes("--plan")) {   // the workflow's plan step: validate, print the matrix
     const p = planMatrix(process.env.GROUP, process.env.SHARDS, scripts());
     if (p.error) { console.error("remote-group --plan: " + p.error); return 3; }
+    const w = parseWorkers(process.env.WORKERS);
+    if (w.error) { console.error("remote-group --plan: " + w.error); return 3; }
     console.log(`matrix=${JSON.stringify(p.matrix)}`);
     return 0;
   }
@@ -165,11 +187,18 @@ async function main() {
   const deadline = tmin > 0 ? Date.now() + tmin * 60_000 : Infinity;
   if (argv.includes("--watch")) return watch(opt("--watch"), { interval, deadline });
 
-  const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout"].includes(argv[i - 1]));
+  const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout", "--workers"].includes(argv[i - 1]));
+  // Bare invoke used to fall through to planMatrix(undefined) → "not a group name: undefined".
+  if (!group) {
+    console.error(USAGE);
+    return 3;
+  }
   const p = planMatrix(group, opt("--shards", "4"), scripts());
   if (p.error) { say("refused: " + p.error); return 3; }
   const gl = opt("--gl", "llvmpipe");
   if (!["llvmpipe", "swiftshader"].includes(gl)) { say(`refused: --gl is llvmpipe or swiftshader, not ${gl}`); return 3; }
+  const w = parseWorkers(opt("--workers", ""));
+  if (w.error) { say("refused: " + w.error); return 3; }
   const branch = opt("--ref", git("rev-parse", "--abbrev-ref", "HEAD"));
   if (!branch || branch === "HEAD") { say("refused: detached HEAD — pass --ref <pushed branch>"); return 3; }
   // The runner tests origin/<branch>: an unpushed commit would silently not be tested.
@@ -185,7 +214,11 @@ async function main() {
     return 3;
   }
   const since = Date.now();
-  const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, { ref: branch, inputs: { group: p.group, shards: String(p.shards), gl } });
+  const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
+    ref: branch,
+    // Sent only when set: a ref whose browser-group.yml predates `workers` would 422 on it.
+    inputs: { group: p.group, shards: String(p.shards), gl, ...(w.workers ? { workers: w.workers } : {}) },
+  });
   if (d.error) { say(`= group unknown — dispatch failed: ${d.error}`); return 3; }
   let runId = d.json?.workflow_run_id || null;
   for (let tries = 0; !runId && tries < 20; tries++) {   // a 204 (older API behaviour): find it
@@ -194,7 +227,7 @@ async function main() {
     runId = pickRun(r.json?.workflow_runs, { branch, group: p.group, sinceMs: since })?.id || null;
   }
   if (!runId) { say("= group unknown — dispatched, but no run appeared within 60 s; check the Actions tab"); return 3; }
-  say(`dispatched ${p.group} on ${branch} (${p.shards} shards, ${gl}) — run ${runId}`);
+  say(`dispatched ${p.group} on ${branch} (${p.shards} shards, ${gl}${w.workers ? `, ${w.workers} workers` : ""}) — run ${runId}`);
   if (argv.includes("--no-wait")) { say(`watch: node tools/ci/remote-group.mjs --watch ${runId}`); return 0; }
   return watch(runId, { interval, deadline });
 }

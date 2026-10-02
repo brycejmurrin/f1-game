@@ -2,10 +2,10 @@
 // exactly one float per vertex.
 //
 // This is a silent-failure guard, not a style check. GLX wires the material
-// attribute ONLY when `data.mat.length === vCount` (js/render/glx/glx.js:741) — a
+// attribute ONLY when `data.mat.length === vCount` (js/render/glx/glx.js) — a
 // short array, a long one, or a missing one is dropped with no warning, every
 // vertex falls back to the generic default `aMat = 0 = MAT.FLAT`, and
-// `applyMaterial` early-outs on `mid <= 0` (js/render/glx/shaders/glsl-lit.js:294). The
+// `applyMaterial` early-outs on `mid <= 0` (js/render/glx/shaders/glsl-lit.js). The
 // garage shipped that way: the whole room was untextured flat vertex colour
 // while the car standing in it sampled the baked PBR arrays, and nothing said
 // so. One primitive that forgets to push its ids puts it straight back, and the
@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -35,7 +36,7 @@ function harness() {
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                   "js/garage/scene-live.js", "js/garage/scene.js"])
+                   "js/garage/scene-live.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
@@ -45,6 +46,133 @@ function harness() {
 const TEAM = { id: "mclaren", name: "McLaren", short: "MCL",
                drivers: [{ name: "A", code: "AAA", num: 4 }, { name: "B", code: "BBB", num: 81 }] };
 const LIV = { c1: [0.95, 0.45, 0.05], c2: [0.05, 0.05, 0.06], accent: [0.1, 0.7, 0.9] };
+
+test("garage ambient clock freezes fans and light time without a resume jump", () => {
+  const { ctx } = harness();
+  const clock = vm.runInContext("GarageExperience.clock(1000)", ctx);
+  assert.equal(clock.step(1050, true), 1050);
+  assert.equal(clock.step(2050, false), 1050);
+  assert.equal(clock.step(3050, false), 1050);
+  assert.equal(clock.step(3075, true), 1075);
+});
+
+test("home camera owns one reversible session and respects effective reduced motion", () => {
+  const { ctx } = harness();
+  const Experience = vm.runInContext("GarageExperience", ctx);
+  const saved = { az: 2.1, spin: true, aim: [0, 1, 2] };
+  const restored = [], views = []; let reducing = false, captures = 0;
+  const home = Experience.homeSession({ capture() { captures++; return saved; },
+    restore(s) { restored.push(s); }, view(v) { views.push(v); } }, () => reducing);
+  assert.equal(home.begin("invalid"), false);
+  assert.equal(home.begin("garage", { motion: "ambient" }), true);
+  assert.equal(home.moving, true);
+  reducing = true; assert.equal(home.moving, false);
+  home.begin("studio", { motion: "still" });
+  assert.equal(captures, 1, "changing a scene must not replace the original owner snapshot");
+  assert.equal(home.moving, false); assert.equal(home.mode, "studio");
+  assert.deepEqual(views, ["hero", "side"]);
+  assert.equal(home.end(), true); assert.equal(restored[0], saved);
+  assert.equal(home.active, false); assert.equal(home.end(), false);
+});
+
+test("selected home shots stay composed under reduced motion and restore the original camera", () => {
+  const { ctx } = harness(), Experience = vm.runInContext("GarageExperience", ctx);
+  const original = { az: 1.2, el: 0.4, dist: 6.8, spin: true, pan: [1, 0, 2] };
+  let pose = original, snapshots = 0;
+  const home = Experience.homeSession({ capture() { snapshots++; return original; },
+    restore(s) { pose = s; }, view(name, shot) { pose = { name, ...shot }; } }, () => true);
+  const angles = new Set();
+  for (const name of ["hero", "front", "side", "rear"]) {
+    assert.equal(home.begin("night", { shot: name, motion: "ambient" }), true);
+    assert.equal(home.state().shot, name);
+    assert.equal(home.state().motion, "still", "effective reduced motion keeps the selected shot still");
+    assert.equal(home.moving, false);
+    assert.equal(pose.name, name); angles.add(pose.az);
+    assert.ok(pose.dist >= 6.4 && pose.dist <= 10.2, "whole-car shots keep a safe orbit distance");
+    const fixed = pose; home.state(); home.state();
+    assert.equal(pose, fixed, "reading state never rotates or reselects a shot");
+  }
+  assert.equal(angles.size, 4, "every selected view has a distinct azimuth");
+  assert.equal(snapshots, 1, "changing a shot never replaces the original owner");
+  home.end(); assert.equal(pose, original);
+  assert.equal(Experience.homeShot("garage", "invalid").name, "hero");
+  assert.equal(Experience.homeShot("studio", "invalid").name, "side");
+});
+
+test("first home framing fits the real car silhouette into the current visible pane", () => {
+  const { ctx, GarageScene } = harness(), Experience = vm.runInContext("GarageExperience", ctx);
+  vm.runInContext(read("js/core/mat4.js"), ctx);
+  const M4 = vm.runInContext("M4", ctx), M = loadParts(), team = M.Teams.LIST[0];
+  const liv = { c1: [0.9, 0.1, 0.1], c2: [1, 1, 1] };
+  const mesh = M.Car3D.build(liv.c1, liv.c2, { livery: liv, teamId: team.id, num: 1,
+    parts: M.Parts.getVisualTiers({}, team) });
+  const hull = GarageScene.framingHull(mesh), center = [0, 0.45, 0.245];
+  const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const views = [
+    [rect(0, 0, 1440, 900), rect(775, 307, 653, 521)],
+    [rect(0, 0, 852, 393), rect(459, 155, 385, 238)],
+    [rect(0, 0, 393, 852), rect(8, 440, 377, 404)],
+  ];
+  for (const [canvas, panel] of views) for (const name of ["hero", "front", "side", "rear"]) {
+    const shot = Experience.homeShot("garage", name).pose, pane = Experience.freePane(panel, canvas);
+    const fov = canvas.width < canvas.height ? 72 : shot.fov || 36, aspect = canvas.width / canvas.height;
+    const fit = Experience.fitHome(hull, { ...shot, center, fov, aspect, minDist: 4.6, maxDist: shot.maxDist || 11 }, pane);
+    const eye = [center[0] + Math.sin(shot.az) * fit.dist * Math.cos(shot.el),
+      center[1] + fit.dist * Math.sin(shot.el), center[2] + Math.cos(shot.az) * fit.dist * Math.cos(shot.el)];
+    const p = new Float32Array(16), v = new Float32Array(16), vp = new Float32Array(16);
+    M4.perspectiveTo(p, fov * Math.PI / 180, aspect, 0.1, 60); p[8] = fit.shiftX; p[9] = fit.shiftY;
+    M4.lookAtTo(v, eye, center, [0, 1, 0]); M4.mulTo(vp, p, v);
+    for (let i = 0; i < hull.length; i += 3) {
+      const x = hull[i], y = hull[i + 1], z = hull[i + 2], w = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
+      const px = ((vp[0] * x + vp[4] * y + vp[8] * z + vp[12]) / w + 1) / 2;
+      const py = (1 - (vp[1] * x + vp[5] * y + vp[9] * z + vp[13]) / w) / 2;
+      assert.ok(px > pane.left && px < pane.right, `${name} ${canvas.width}x${canvas.height}: car enters menu or viewport edge`);
+      assert.ok(py > pane.top && py < pane.bottom, `${name} ${canvas.width}x${canvas.height}: car enters menu or vertical edge`);
+    }
+    assert.ok(fit.dist <= 11 && fit.dist >= 4.6, "home fit retains bay orbit bounds");
+    if (name === "front") assert.ok(eye[2] < 6.1, "front Home camera stays inside the door reveal instead of filming through a jamb");
+  }
+});
+
+test("only the home photo owner can orbit the menu scene; panels and staged arrivals keep input", () => {
+  const { ctx } = harness(), Experience = vm.runInContext("GarageExperience", ctx);
+  assert.equal(Experience.canOrbit(false, true, true, false), true, "photo dock owns the home camera");
+  assert.equal(Experience.canOrbit(false, true, false, false), false, "ordinary home background never grabs pointer input");
+  assert.equal(Experience.canOrbit(false, false, true, false), false, "race photo mode is not a garage camera");
+  assert.equal(Experience.canOrbit(true, false, false, false), true, "garage remains manually inspectable");
+  assert.equal(Experience.canOrbit(false, true, true, true), false, "photo dock interaction cannot move the scene");
+  assert.equal(Experience.canOrbit(true, false, false, true), false, "staged arrival retains its camera");
+});
+
+test("earned career facility levels add material-complete workstations", () => {
+  const { ctx } = harness();
+  const Experience = vm.runInContext("GarageExperience", ctx);
+  const data = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
+  const empty = { back: data() }, base = { back: data() }, advanced = { back: data() };
+  Experience.buildFacility(empty, LIV, { achievements: { active: false, facility: 8, wins: 5 } });
+  Experience.buildFacility(base, LIV, { achievements: { active: true, facility: 1, wins: 0 } });
+  Experience.buildFacility(advanced, LIV, { achievements: { active: true, facility: 8, wins: 5 } });
+  assert.equal(empty.back.pos.length, 0);
+  assert.ok(advanced.back.pos.length > base.back.pos.length);
+  assert.equal(advanced.back.mat.length, advanced.back.pos.length / 3);
+  assert.equal(advanced.back.nrm.length, advanced.back.pos.length);
+});
+
+test("part comparison reports the fitted-to-candidate tradeoff without fitting it", () => {
+  const { ctx } = harness();
+  vm.runInContext(read("js/car/parts.js"), ctx);
+  const Parts = vm.runInContext("Parts", ctx), Experience = vm.runInContext("GarageExperience", ctx);
+  const cat = Parts.CATALOG.find((c) => c.id === "engine");
+  const current = cat.options.find((o) => o.id === "performance");
+  const candidate = cat.options.find((o) => o.id === "turbo");
+  const parts = { engine: current.id };
+  const team = { ...TEAM, stats: { speed: 80, accel: 80, cornering: 80, braking: 80 } };
+  const result = Experience.compare(team, parts, cat, current, candidate, null, 780);
+  assert.equal(result.cost, 20, "comparison quotes replacement difference, not full 80 cr price");
+  assert.ok(result.deltas.find((d) => d.key === "speed").value > 0);
+  assert.ok(result.deltas.find((d) => d.key === "accel").value < 0);
+  assert.equal(parts.engine, "performance", "preview does not buy or fit the hovered option");
+});
 
 test("every garage mesh carries exactly one material id per vertex", () => {
   const { GarageScene, meshes } = harness();
@@ -65,7 +193,7 @@ test("every garage mesh carries exactly one material id per vertex", () => {
 
 test("no horizontal surface carries a wall-keyed material", () => {
   // The trap that cost this file its first bug. matWallLike()
-  // (js/render/glx/shaders/glsl-lit.js:287) is true for CONCRETE / BRICK / METAL / WOOD /
+  // (js/render/glx/shaders/glsl-lit.js) is true for CONCRETE / BRICK / METAL / WOOD /
   // FABRIC / ROOF / STONE / RUST, and for those the triplanar UV is
   // `(an.x > an.z ? worldZ : worldX, worldY)`. On a floor the normal is (0,1,0)
   // and worldY is constant, so the UV collapses to a 1-D function of x and the
@@ -164,7 +292,7 @@ test("a failed trace upload preserves its decal and retries after recovery", () 
     Log: { info() {}, warn: (_t, m) => warns.push(m), error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                   "js/garage/scene-live.js", "js/garage/scene.js"])
+                   "js/garage/scene-live.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
@@ -214,7 +342,7 @@ test("garage dress upload retries after a transient failure, and a new team clea
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                   "js/garage/scene-live.js", "js/garage/scene.js"])
+                   "js/garage/scene-live.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const garage = vm.runInContext("GarageScene", ctx);
   garage.init(gfx);
@@ -255,4 +383,17 @@ test("arrival moves the reflected car and shutter without rebuilding geometry", 
   draws.length = 0;
   GarageScene.draw(TEAM, LIV, [0,2,0], null, 0, null, car);
   assert.equal(draws.find(d => d.mesh === closed.mesh).matrix[5], 1, "normal garage resets shutter");
+});
+
+test("the LEGENDS bay rebuilds when the legend changes, even on the same paint", () => {
+  // The Legends row keeps team id "legends" across all twelve legends, and two
+  // tribute liveries can share every colour (Schumacher's and Senna's reds):
+  // keyed on id + paint, the wall kept the previous legend's crest — a Ferrari
+  // horse over Senna (garage-angles, 2026-10-01).
+  const { GarageScene } = harness();
+  const row = (legend) => ({ id: "legends", legends: true, legend, name: "Legends", short: "LGD", drivers: TEAM.drivers });
+  GarageScene.draw(row("schumacher"), LIV, [0, 1.6, 0], null, 0);
+  const a = GarageScene.debug().geomKey;
+  GarageScene.draw(row("senna"), LIV, [0, 1.6, 0], null, 0);
+  assert.notEqual(GarageScene.debug().geomKey, a, "a new legend is a new bay");
 });

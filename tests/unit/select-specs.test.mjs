@@ -10,10 +10,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
+  SOLO_OWN_TIMEOUT_SEC,
+  partitionMegaSweepArgs, shouldRunMegaOnThisShard, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
-  scopeCarryForward } from "../../tools/ci/select-specs.mjs";
+  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
@@ -177,7 +179,7 @@ test("TRACKED covers the paths that make a selection meaningless", () => {
 
 test("every TRACKED pattern matches a file that exists", () => {
   // THE LINT THAT WOULD HAVE CAUGHT IT, and the reason pick-tests has no dead
-  // rules: tests/unit/pick-tests.test.mjs:120 has run exactly this check over
+  // rules: tests/unit/pick-tests.test.mjs ("no rule is dead") has run exactly this check over
   // RULES for months. TRACKED never had it, so four dead alternatives sat in
   // one regex, silently, while the hand-listed examples above all passed —
   // they only ever probed the members someone thought to name.
@@ -659,6 +661,83 @@ test("an over-budget spec the diff EDITS still runs; one merely routed still doe
   if (jobs.length > 1) assert.ok(jobs.every((j) => /^\d+\/\d+$/.test(j.shard)), "a split plan carries --shard tokens");
 });
 
+test("mega-sweep over-budget specs never overflow into a shared selected job", () => {
+  // PR #604 / CI 36817164457: props-over-road and terrain-over-road declare
+  // 1500 s. As oversize they lose MAX_OVERSIZE_SHARDS to smaller-rank peers,
+  // spill to skipped, then overflow billed them at the 7.5 s fallback and
+  // packed them next to title-menu-rotation / qatar-foundation. The sweep
+  // then ran 5–10 min under llvmpipe and the next page.goto hung at 180 s
+  // (ERR_ABORTED / Navigate timeout); siblings on a fresh worker passed in ~8 s.
+  const mega = "tests/specs/props-over-road.spec.js";
+  const other = "tests/specs/career.spec.js";
+  const victim = "tests/specs/output-paths.spec.js"; // undeclared, small, packable
+  assert.ok(maxDeclaredTimeout(mega) / 1000 >= SOLO_OWN_TIMEOUT_SEC,
+    `props-over-road must stay above the solo threshold (${SOLO_OWN_TIMEOUT_SEC}s)`);
+
+  // Many over-budget peers at rank 1 so mega loses the oversize lottery.
+  const peers = [other, "tests/specs/ui-audit.spec.js", "tests/specs/hud-layout.spec.js", mega, victim];
+  const cut = fit(peers, 10, {
+    rank: (f) => (f === victim ? 3 : 1),
+    db: EMPTY,
+    overflowShards: 12,
+  });
+  assert.ok(!cut.overflow.some((s) => s.file === mega),
+    "a gate-over-declared mega-sweep must not ride as overflow");
+  assert.ok(cut.skipped.some((s) => s.file === mega) || cut.oversize.some((s) => s.file === mega),
+    "it stays oversize or skipped by name — never silently packed");
+
+  // When it DOES run (edited → oversize slot), shards() gives it a solo job so
+  // nothing inherits its Chromium after the all-circuits walk.
+  const alone = fit([mega], 30, { rank: () => 0, db: EMPTY });
+  assert.equal(alone.oversize.length, 1);
+  const plan = shards(alone, EMPTY);
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].specs, mega);
+  assert.match(plan[0].name, /^oversize-props-over-road/);
+});
+
+test("partitionMegaSweepArgs peels props/terrain-over-road out of a packed circuits argv", () => {
+  // browser-group.yml shards the whole circuits group with Playwright --shard;
+  // without this peel the mega-sweep shares a Chromium with qatar-foundation
+  // (run 36911235525). Helpers live next to SOLO_OWN_TIMEOUT_SEC so both gates
+  // use the same threshold.
+  const mega = "tests/specs/props-over-road.spec.js";
+  const terrain = "tests/specs/terrain-over-road.spec.js";
+  const qatar = "tests/specs/qatar-foundation.spec.js";
+  assert.equal(isMegaSweepSpec(mega), true);
+  assert.equal(isMegaSweepSpec(terrain), true);
+  assert.equal(isMegaSweepSpec(qatar), false);
+  assert.equal(isMegaSweepSpec("tests/specs/*-foundation.spec.js"), false);
+
+  const packed = ["--timeout=900000", "--shard=2/4", "--workers=1", mega, qatar, terrain];
+  const { mega: peeled, rest, peeled: did } = partitionMegaSweepArgs(packed);
+  assert.equal(did, true);
+  assert.deepEqual(peeled.sort(), [mega, terrain].sort());
+  assert.deepEqual(rest, ["--timeout=900000", "--shard=2/4", "--workers=1", qatar]);
+  assert.deepEqual(playwrightShard(packed), { index: 2, total: 4 });
+  assert.equal(shouldRunMegaOnThisShard(packed), false, "shard 2 must not re-run megas");
+  assert.equal(shouldRunMegaOnThisShard(["--shard=1/4", mega, qatar]), true);
+  assert.equal(shouldRunMegaOnThisShard([mega, qatar]), true, "unsharded runs megas once");
+  assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
+});
+
+test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {
+  // PR #611: modes-group routing alone left career.spec.js in overBudgetSpecs
+  // (declares 540 s), so EXPORT/IMPORT reusing .cr-slot-del shipped green.
+  const over = "tests/specs/career.spec.js";
+  assert.ok(SOURCE_AFFECTED.some(([re, spec]) =>
+    re.test("js/career/career-ui.js") && re.test("js/career/career-backup.js") && spec === over));
+  assert.deepEqual(specsAffectedBySource(["js/career/career-ui.js"]), [over]);
+  assert.deepEqual(specsAffectedBySource(["js/career/career-backup.js"]), [over]);
+  assert.deepEqual(specsAffectedBySource(["js/career/career.js"]), [],
+    "other career modules stay merely routed");
+  // Rank 2 (import / foundation / SOURCE_AFFECTED) must put it in oversize.
+  const pinned = fit([over], 30, { rank: (f) => (f === over ? 2 : 3), db: EMPTY });
+  assert.deepEqual(pinned.oversize.map((s) => s.file), [over],
+    "SOURCE_AFFECTED rank runs the over-budget career.spec as oversize");
+  assert.equal(pinned.overBudgetSpecs.length, 0);
+});
+
 test("a spec this tool cannot READ is reported, never silently dropped", () => {
   // It used to `continue` into no bucket at all, in a file whose entire
   // contract is that nothing leaves the selection unaccounted for. Reachable
@@ -751,7 +830,9 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.equal(foundationSpec("albert_park"), "tests/specs/albert-park-foundation.spec.js");
   assert.ok(fs.existsSync(path.join(ROOT, foundationSpec("imola"))));
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /ownFoundations\.includes\(f\)\) \? 2 : 3/, "own foundation specs rank as affected (2)");
+  // ownFoundations share rank 2 with imports and SOURCE_AFFECTED pins.
+  assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\)\) \? 2 : 3/,
+    "own foundation specs rank as affected (2)");
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
 });
 

@@ -17,6 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const manifestFiles = () => [
   ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
   ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
+  ...(MANIFEST.LAZY_EDITOR || []),
 ];
 const run = (...args) =>
   execFileSync("node", ["tools/ci/pick-tests.mjs", "--json", ...args],

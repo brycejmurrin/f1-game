@@ -1161,6 +1161,20 @@ test("planInfo reads the plan for the HUD: the stops, the next box lap, and the 
   assert.equal(pits.planInfo({ local: true }), null, "no plan, nothing to paint");
 });
 
+test("planInfo paints a cheaper estimated stop, never FREE STOP", () => {
+  // A caution with margin used to say FREE STOP — that oversold a point
+  // estimate. The HUD must name the measured loss with a tilde.
+  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  assert.equal(/FREE STOP/.test(src), false, "FREE STOP must not remain in pit-lane.js");
+  assert.match(src, /state = "cheap"/);
+  assert.match(src, /CHEAPER STOP/);
+  assert.match(src, /~.*s/);
+  const eng = readFileSync(join(ROOT, "js/race/engineer.js"), "utf8");
+  assert.equal(/FREE STOP|LOSES NOTHING/.test(eng), false,
+    "engineer must not promise a free / zero-cost stop");
+  assert.match(eng, /cheapStop/);
+});
+
 // FIA 2026 SR Section B Iss. 07, Art. B6.3.6: "each driver must use at least
 // two (2) different specifications of dry-weather tyres during the Race" — the
 // Race, not the Sprint. The planner forced the rule onto a season's sprint leg.
@@ -1365,4 +1379,12 @@ test("held is the lane's own states, and never a position on the road", () => {
   assert.equal(pits.held(at("out", zone.sIn + 20)), true, "served, still inside the window");
   const half = ((zone.sIn + 5386 / 2) % 5386 + 5386) % 5386;
   assert.equal(pits.held(at("out", half)), false, "half a lap away, the stop is over");
+});
+
+test("stuck is the nearest car ahead, not any car inside the window", () => {
+  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  const fn = src.slice(src.indexOf("function rivalsOf"), src.indexOf("function think"));
+  assert.match(fn, /aheadGap = -gap/);
+  assert.match(fn, /ahead && aheadGap < S\.STUCK_GAP_S/);
+  assert.doesNotMatch(fn, /-gap < S\.STUCK_GAP_S && !inLane/);
 });

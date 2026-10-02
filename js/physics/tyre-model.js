@@ -5,8 +5,9 @@
  * WHY A MODULE AND NOT LINES IN game.js: tests/data/ratchets.json ratchets
  * game.js at its current size, and the grip seam there already takes external
  * scalars (DebrisWorld.marbleGrip). This follows js/race/reliability.js: a
- * small, mostly stateless rules module with an explicit LEVELS scale that
- * SHIPS OFF, plus a create(G) for the session-bound reads.
+ * small, mostly stateless rules module with an explicit LEVELS scale. The
+ * shipped default is "real" (js/data/settings-defaults.js); create(G) seeds
+ * from G.raceTyreWear so cold boot matches the store.
  *
  * THE NUMBER THAT MATTERS MOST IS NOT A PHYSICS NUMBER. Lap options are
  * 3/5/10/25/FULL, and a full Monza is 53 laps of ~124 s — 110 minutes. Real
@@ -37,10 +38,9 @@ const TyreModel = (function () {
   // and it lives in js/data/settings-defaults.js, NOT at the call site:
   // store.get's _def() makes SettingsDefaults outrank the fallback argument, so
   // the `store.get("tyreWear", ...)` literal in js/game.js decides nothing.
-  // The assertion at the foot of tests/unit/tyre-model.test.mjs does NOT guard
-  // the shipped default: it checks that the setter calls tyres.setLevel. The browser
-  // fixtures still pin OFF so a physics baseline measures the driving model
-  // rather than this month's default, which is why no spec would notice.
+  // create(G) seeds `level` from G.raceTyreWear; the G setter also pushes on
+  // write. The browser fixtures still pin OFF so a physics baseline measures
+  // the driving model rather than this month's default.
   // A set's life is nominal / LEVELS[level] laps — see planLaps().
   const LEVELS = { off: 0, light: 0.55, real: 1 };
   function isLevel(v) { return Object.prototype.hasOwnProperty.call(LEVELS, v); }
@@ -140,10 +140,11 @@ const TyreModel = (function () {
   // floor clears the SHORTEST race the lap ladder offers (3 laps) with margin,
   // so a 3-lap blast on the softest compound finishes on one set however the
   // fraction works out — which is the failure the whole distance-fraction idea
-  // exists to prevent. It is deliberately only just clear: at 5 laps the softest
-  // compound is spent right at the flag, so the extreme end of the catalog still
-  // costs something even in a sprint.
-  const MIN_LIFE_LAPS = 4;
+  // exists to prevent. Five, not four: the fuel load (FUEL_LOAD, +22 % on a full
+  // tank) took every car in a 5-lap race at a severe circuit past the cliff at
+  // 4 (1.13-1.26 at the flag, measured); at 5 the softest set ends a 5-lap race
+  // at ~0.95 — used up, not off the cliff.
+  const MIN_LIFE_LAPS = 5;
   function lifeLaps(life, lapsTarget) {
     return Math.max(MIN_LIFE_LAPS, (life || LIFE_MID) * Math.max(1, lapsTarget || 1));
   }
@@ -358,17 +359,30 @@ const TyreModel = (function () {
   function optTemp(life) { return T_OPT_MID + T_OPT_SPAN * ((life == null ? LIFE_MID : life) - LIFE_MID); }
 
   // Heating is slip power: how hard the tyre is working times how fast the car
-  // is going. Cooling is airflow, so it rises with speed too — which is why a
-  // tyre cools on a straight and heats in a corner rather than simply tracking
-  // pace. Calibrated so a clean racing lap settles inside the window from a
-  // 30 C ambient, and a blanket-warm set reaches it in about a lap.
-  // Calibrated so a car at racing load settles INSIDE its window and a cruising
-  // one sits below it. COOL_V is deliberately small: cooling rises with airflow,
-  // but heating rises with speed too, and a large COOL_V makes them cancel until
-  // temperature stops depending on pace at all. At 1.5 a flat-out lap equilibrated
-  // at 144 C against a 100 C optimum — measured, and the reason both this and
-  // HEAT_K came down.
-  const HEAT_K = 7.8, COOL_K = 0.06, COOL_V = 0.8;
+  // is going. Cooling is airflow toward ambient AND conduction toward the
+  // track surface — asphalt runs warmer than air in the dry and near air when
+  // wet (oxiphysics: Q_gen = slip_force·slip_speed, Q_cool = k·(T − T_sink);
+  // docs.rs/oxiphysics-vehicle tire.rs TireTemperatureModel). Calibrated so a
+  // clean racing lap settles inside the window from a 30 C ambient, and a
+  // blanket-warm set reaches it in about a lap.
+  //
+  // HEAT_ROLL is the free-rolling / load·speed term that kept clean-lap
+  // equilibria; HEAT_SLIP adds the oxiphysics slip_force·slip_speed term on top
+  // (slide × load × vFrac). Both are starters to tune. COOL_V is deliberately
+  // small: cooling rises with airflow, but heating rises with speed too, and a
+  // large COOL_V makes them cancel until temperature stops depending on pace
+  // at all. At 1.5 a flat-out lap equilibrated at 144 C against a 100 C
+  // optimum — measured, and the reason both this and HEAT_K came down.
+  const HEAT_K = 7.8, HEAT_ROLL = 1.0, HEAT_SLIP = 0.55;
+  const COOL_K = 0.06, COOL_V = 0.8;
+  // Fraction of the thermal sink that is the asphalt (rest is air). oxiphysics
+  // cools toward one ambient; we blend air + track so a hot dry surface holds
+  // heat and a wet/cold one pulls it down, without a second coefficient that
+  // would break the coolFor equilibrium solve.
+  const SINK_TRACK = 0.45;
+  // Track surface above air temperature by weather. Dry asphalt under sun is
+  // the biggest delta; rain closes the gap.
+  const T_TRACK_DELTA = { dry: 18, overcast: 10, fog: 5, wet: 3, rain: 1 };
   // The carcass follows the surface slowly and sheds heat slowly: a ~35 s time
   // constant against the surface's ~9 s. That gap IS the graining/blistering
   // distinction — the surface can be cold while the core is fine, and the core
@@ -387,20 +401,34 @@ const TyreModel = (function () {
   // together), which is exactly the "softs switch on in a lap, hards in three"
   // the research describes.
   //
-  // The reference AMBIENT is fixed at dry on purpose: solving against the live
-  // ambient would put every compound on its optimum in every weather, and a
-  // cold track is supposed to give you a cold tyre.
+  // The reference SINK is fixed at dry air+track on purpose: solving against
+  // the live weather would put every compound on its optimum in every weather,
+  // and a cold track is supposed to give you a cold tyre. Reference assumes a
+  // clean lap (slide ≈ 0) so HEAT_ROLL alone sets the equilibrium; HEAT_SLIP
+  // only fires when the car is actually sliding.
   const T_REF_LOAD = 1.10, T_REF_V = 0.95;
+  function sinkOf(amb, track) {
+    const tr = track != null && isFinite(track) ? track : amb;
+    return (1 - SINK_TRACK) * amb + SINK_TRACK * tr;
+  }
   function coolFor(life) {
-    const rise = Math.max(20, optTemp(life) - T_AMBIENT.dry);
-    return HEAT_K * warmRate(life) * T_REF_LOAD * T_REF_V / ((1 + COOL_V * T_REF_V) * rise);
+    const refAmb = T_AMBIENT.dry;
+    const refSink = sinkOf(refAmb, refAmb + T_TRACK_DELTA.dry);
+    const rise = Math.max(20, optTemp(life) - refSink);
+    return HEAT_K * warmRate(life) * HEAT_ROLL * T_REF_LOAD * T_REF_V / ((1 + COOL_V * T_REF_V) * rise);
   }
 
-  /** One tick of the two-state thermal model. Returns [surface, bulk] in C. */
-  function stepTemp(ts, tb, { load, vFrac, amb, life, dt }) {
+  /** One tick of the two-state thermal model. Returns [surface, bulk] in C.
+   *  `slide` is body-slip intensity 0..1 (human only); `track` is asphalt °C. */
+  function stepTemp(ts, tb, { load, vFrac, amb, track, life, slide, dt }) {
     const w = warmRate(life);
-    const heat = HEAT_K * w * Math.max(0, load) * clamp(vFrac, 0, 1);
-    const cool = coolFor(life) * (1 + COOL_V * clamp(vFrac, 0, 1)) * (ts - amb);
+    const v = clamp(vFrac, 0, 1);
+    const ld = Math.max(0, load);
+    const sl = clamp(slide || 0, 0, 1);
+    // Q_gen ≈ rolling (load·v) + slip_force·slip_speed (slide·load·v).
+    const heat = HEAT_K * w * (HEAT_ROLL * ld * v + HEAT_SLIP * sl * ld * v);
+    const sink = sinkOf(amb, track);
+    const cool = coolFor(life) * (1 + COOL_V * v) * (ts - sink);
     const ns = ts + (heat - cool - EXCH * (ts - tb)) * dt;
     const nb = tb + (EXCH * (ts - tb) - COOL_B * (tb - amb)) * dt;
     // Clamped well outside anything the model produces, purely so a pathological
@@ -584,7 +612,12 @@ const TyreModel = (function () {
   // ── SESSION ───────────────────────────────────────────────────────────────
   function create(G) {
     Log.info("game", "TyreModel.create");
-    let level = "off";
+    // Cold-boot sync: G.raceTyreWear already holds the store / shipped default
+    // (SettingsDefaults "real"). Starting at "off" left planLaps() on the
+    // whole-race branch until the next setter write or gridUp — so the
+    // STRATEGY preview on a fresh boot claimed "NO STOP" while the UI said
+    // wear was on. The setter still pushes on write; this is the create half.
+    let level = (G && isLevel(G.raceTyreWear)) ? G.raceTyreWear : "off";
 
     function on() { return LEVELS[level] > 0; }
     function setLevel(v) { if (isLevel(v)) level = v; return level; }
@@ -664,11 +697,17 @@ const TyreModel = (function () {
     // The circuit's own tyre severity, 1.0 at the median. Authored per circuit
     // in js/circuits/<id>.js beside the other per-circuit tables; the real
     // spread is 0.022-0.097 s/lap (Austria highest, China lowest), normalised.
+    // Circuits without an authored value use SEVERITY_DEFAULT (1.0) — the
+    // calendar-neutral placeholder, NOT a guessed surface class. Authoring
+    // more circuits is docs/notes/TYRE-SEVERITY-AUTHORING-2026-09-30.md; do not
+    // invent per-track numbers here.
+    const SEVERITY_DEFAULT = 1.0;
     /** Track/air temperature for the current conditions. While a weather arc
      *  runs it moves WITH the arc, as the road's wetness does (TyreModel
      *  wetness): read off raceWeather alone it jumped 30 -> 13 C on the tick
      *  the weather flipped, minutes before the road was wet. */
     function tAmb(w) { const t = T_AMBIENT[w]; return t == null ? T_AMBIENT.dry : t; }
+    function tTrackDelta(w) { const d = T_TRACK_DELTA[w]; return d == null ? T_TRACK_DELTA.dry : d; }
     function ambient() {
       const arc = G.weatherArc;
       if (arc && arc.dur > 0 && arc.from && arc.to) {
@@ -677,12 +716,30 @@ const TyreModel = (function () {
       }
       return tAmb(G.raceWeather);
     }
+    /** Asphalt temperature (°C): ambient plus a weather-keyed surface delta. */
+    function trackTemp() {
+      const arc = G.weatherArc;
+      if (arc && arc.dur > 0 && arc.from && arc.to) {
+        const f = clamp(arc.t / arc.dur, 0, 1);
+        const a = ambient();
+        const d = tTrackDelta(arc.from) + (tTrackDelta(arc.to) - tTrackDelta(arc.from)) * f;
+        return a + d;
+      }
+      return ambient() + tTrackDelta(G.raceWeather);
+    }
 
     function severity() {
       const def = G.track && G.track.def;
       const v = def && def.tyreSeverity;
-      return v != null && isFinite(v) ? clamp(+v, 0.4, 2.0) : 1;
+      return v != null && isFinite(v) ? clamp(+v, 0.4, 2.0) : SEVERITY_DEFAULT;
     }
+
+    // Wear from load × slip speed (oxiphysics TireWearModel): rolling load still
+    // wears through lapFrac·load; sliding adds W_SLIP_SPD · slide on top. Slide
+    // is already a soft term inside humanLoad (W_SLIDE); this is the explicit
+    // slip-speed factor on the wear integral, kept modest so clean-lap life
+    // stays near the planLaps numbers.
+    const W_SLIP_SPD = 0.35;
 
     // Integrate one physics tick. Distance-based, not time-based: wear reaches
     // 1.0 after `lifeLaps` laps at load 1.0, which is what makes the constant
@@ -701,21 +758,26 @@ const TyreModel = (function () {
       // ran after the distance early-return at first, which meant a stationary
       // car's tyres never changed temperature at all — measured.
       const amb = ambient();
+      const trk = trackTemp();
       if (c.tyreTs == null) { c.tyreTs = amb; c.tyreTb = amb; }
       const vFrac = Math.abs(c.speed || 0) / Math.max(1, G.vTop());
-      const t = stepTemp(c.tyreTs, c.tyreTb, { load, vFrac, amb, life: c.tyre.life, dt });
-      c.tyreTs = t[0]; c.tyreTb = t[1];
       // Graining needs a measured slide, which only human cars have (the same
       // asymmetry the load model documents). An AI car still heats, cools and
       // blisters; it just never grains, and the field is scored on one curve
       // either way because blistering is the bulk-temperature failure.
       const slide = c.human ? (c.skidIntensity || 0) : 0;
+      const t = stepTemp(c.tyreTs, c.tyreTb, {
+        load, vFrac, amb, track: trk, life: c.tyre.life, slide, dt,
+      });
+      c.tyreTs = t[0]; c.tyreTb = t[1];
       c.tyreGrain = stepGrain(c.tyreGrain, { ts: c.tyreTs, life: c.tyre.life, slide, dt });
       c.tyreBlister = stepBlister(c.tyreBlister, { tb: c.tyreTb, life: c.tyre.life, dt });
-      // WEAR is distance, so it stops when the car does.
+      // WEAR is distance, so it stops when the car does. Slip-speed factor is
+      // 1 when rolling (slide 0) and rises with body slip.
       const lapFrac = Math.abs(c.speed || 0) * dt / track.total;
       if (!(lapFrac > 0)) return;
-      const dw = lapFrac * load * LEVELS[level] / effLifeLaps(c.tyre.life, G.lapsTarget);
+      const slipMul = 1 + W_SLIP_SPD * clamp(slide, 0, 1);
+      const dw = lapFrac * load * slipMul * LEVELS[level] / effLifeLaps(c.tyre.life, G.lapsTarget);
       c.tyreWear = (c.tyreWear || 0) + dw;
       const sh = axleShare(c, G.aTop());
       c.tyreWearF = (c.tyreWearF || 0) + dw * sh[0];
@@ -800,6 +862,7 @@ const TyreModel = (function () {
         tempOpt: t ? +optTemp(t.life).toFixed(1) : null,
         tempWindow: T_WINDOW,
         ambient: ambient(),
+        trackTemp: +trackTemp().toFixed(1),
         grain: +(c.tyreGrain || 0).toFixed(4),
         blister: +(c.tyreBlister || 0).toFixed(4),
         tempGrip: +tempGrip(c.tyreTs, t ? t.life : null).toFixed(4),
@@ -815,7 +878,7 @@ const TyreModel = (function () {
     return {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
-      lapsOn, spent, lapsLeft, info, severity,
+      lapsOn, spent, lapsLeft, info, severity, ambient, trackTemp,
       level: () => level, setLevel, on, planLaps,
       classRecord, optionRecord, applyCompound, startRecord,
     };
@@ -840,7 +903,8 @@ const TyreModel = (function () {
     gripFor, longFor, humanLoad, aiLoad, fuelFrac,
     optTemp, warmRate, coolFor, stepTemp, tempGrip, stepGrain, stepBlister, defectGrip,
     axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF, brakeBeta, brakeFront,
-    T_AMBIENT, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
+    T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
+    HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
     classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, classForTread, wetness, weatherGrip,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,

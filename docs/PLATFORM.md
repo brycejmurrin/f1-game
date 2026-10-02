@@ -58,10 +58,12 @@ Key implementation points (`js/input/input.js`):
 - **Edge-triggered buttons reuse the keyboard latches** (boost, overtake,
   shift, camera, pause) via rising-edge detection against the previous frame's
   snapshot — one press fires exactly once.
-- **Rumble is best-effort.** `Input.rumble()` drives `vibrationActuator`
-  ("dual-rumble") on contact and kerbs alongside the existing
-  `navigator.vibrate` calls. Most iOS controllers don't expose an actuator, so
-  it silently no-ops there — haptics degrade gracefully.
+- **Rumble is best-effort.** `Input.rumble(intensity, ms, channel)` drives
+  `vibrationActuator` ("dual-rumble" grips, or "trigger-rumble" on L2/R2 when
+  the pad advertises it and TRIGGER HAPTICS is on) on contact, kerbs, lock-up
+  and slides alongside `navigator.vibrate`. Safari/iOS has no pad rumble; Firefox
+  falls back to `hapticActuators[].pulse()`. Adaptive trigger *resistance* is
+  not reachable through the Gamepad API.
 
 Standard mapping used (defaults; rebindable on CONTROLS, which also binds btn 11 look back,
 btn 10 recover and btn 13 radio check):

@@ -385,12 +385,58 @@ if (!VM_PAGE) pwTest.afterEach(async ({ page }) => {
    existing spec files.
 
    WHAT IT RESETS between tests is deliberately SHALLOW — held input, headless
-   mode, the frozen flag, open dialogs, log level. It does NOT try to rewind
-   settings or `localStorage`: GameStore caches those in memory, so a truthful
-   reset there means a reload, which is the cost being removed. A spec that
-   needs a specific setting must set it, which is what `load()`-style helpers
-   already do.
+   mode, the frozen flag, open dialogs, log level, AND the two driving assists
+   that `__apex.setPhysics` / the racing-line slider can leave on for the next
+   test on the same worker (DEFECT-LEDGER 2026-09-22: restoring roadFollow to
+   0.7 instead of the shipped 0 made `racing-line assist` flake whenever an
+   earlier test skipped its finally). It does NOT try to rewind settings or
+   `localStorage`: GameStore caches those in memory, so a truthful reset there
+   means a reload, which is the cost being removed. A spec that needs a
+   specific setting must set it, which is what `load()`-style helpers already do.
    ───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Put a sharedTest page back to the shipped assist / input / camera defaults.
+ * The shared `page` fixture calls this before every test; specs that
+ * deliberately leak an assist (to prove the reset) call it too.
+ * Best-effort per hook: a missing one must not fail the RESET.
+ */
+export async function resetSharedPage(page) {
+  await page.evaluate(() => {
+    const a = window.__apex;
+    if (a) {
+      try { a.clearInput(); } catch (_) {}
+      try { a.headless(false); } catch (_) {}
+      try { a.logLevel("warn"); } catch (_) {}
+      // CAMERA STATE IS THE ONE THAT BIT. A raster/screenshot test reads
+      // whatever camera the PREVIOUS test left: park() sets G.frozen, and
+      // view()/orbit()/cinematic() install a G.dbgCam free-cam that outranks
+      // the game camera. Measured: "the road dominates the lower frame"
+      // wanted >0.7 and got 0.5, because an earlier camera test's free-cam
+      // was still installed. camera("chase") clears dbgCam (`camera` in js/agent/apex.js) and
+      // restores the default mode in one call.
+      try { a.freeze(false); } catch (_) {}
+      try { a.camera("chase"); } catch (_) {}
+      // DRIVING-HELP ships at 0 (steering.spec "by default nothing steers the
+      // car"). A wrong restore of 0.7 left the assist on for every later test
+      // on the worker — docs/notes/DEFECT-LEDGER.md 2026-09-22.
+      try { a.setPhysics({ roadFollow: 0 }); } catch (_) {}
+    }
+    // RACING LINE assist: the only public write path is the pause-menu slider
+    // (setRaceLine in steering.spec). Fire it to 0 when the node exists.
+    try {
+      const el = document.getElementById("pm-line");
+      if (el) {
+        el.value = "0";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    } catch (_) {}
+    try {
+      document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+    } catch (_) {}
+  });
+}
+
 const pwSharedTest = pwTest.extend({
   // Worker-scoped: created once, reused until the worker exits.
   _bootedPage: [async ({ browser }, use, workerInfo) => {
@@ -423,28 +469,7 @@ const pwSharedTest = pwTest.extend({
 
   page: async ({ _bootedPage, viewport }, use) => {
     if (viewport) await _bootedPage.setViewportSize(viewport);
-    await _bootedPage.evaluate(() => {
-      const a = window.__apex;
-      // Best-effort per hook: a missing one must not fail the RESET, or one
-      // renamed debug hook silently turns every later test in the file red.
-      if (a) {
-        try { a.clearInput(); } catch (_) {}
-        try { a.headless(false); } catch (_) {}
-        try { a.logLevel("warn"); } catch (_) {}
-        // CAMERA STATE IS THE ONE THAT BIT. A raster/screenshot test reads
-        // whatever camera the PREVIOUS test left: park() sets G.frozen, and
-        // view()/orbit()/cinematic() install a G.dbgCam free-cam that outranks
-        // the game camera. Measured: "the road dominates the lower frame"
-        // wanted >0.7 and got 0.5, because an earlier camera test's free-cam
-        // was still installed. camera("chase") clears dbgCam (apex.js:179) and
-        // restores the default mode in one call.
-        try { a.freeze(false); } catch (_) {}
-        try { a.camera("chase"); } catch (_) {}
-      }
-      try {
-        document.querySelectorAll("dialog[open]").forEach((d) => d.close());
-      } catch (_) {}
-    });
+    await resetSharedPage(_bootedPage);
     await use(_bootedPage);
   },
 

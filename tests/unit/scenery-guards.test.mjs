@@ -104,7 +104,7 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // The canary was redbull (295 drops). Its scenery file now asks the same
   // onTrack question BEFORE calling backdrop() (js/circuits/scenery/redbull.js,
   // also silverstone / shanghai / monaco), so it drops none; spa still asks for
-  // 53 backdrops the guard refuses and stands in.
+  // backdrops the guard refuses and stands in.
   const Tracks = buildContext();
   const c = counts(Tracks, "spa");
   assert.ok(c.backdrop > 0,
@@ -115,8 +115,12 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // not a side effect. Raise or lower it in the same commit that changes it.
   // (A drop the pit complex causes is counted on `supersededByPit`, not
   // here — this counter is the guard MARGIN's alone.)
-  assert.equal(c.backdrop, 53,
-    `spa backdrop drops = ${c.backdrop}, expected 53 — if you changed the ` +
+  // 53 → 47 (2026-10-01): transformSceneryApi now hands every() authored-frame
+  // k (same as along). Spa's every(64) backdrop pass no longer double-shifts,
+  // so six calls land where onTrack already clears them and the guard never
+  // sees them. Guard margin unchanged — placement frame only.
+  assert.equal(c.backdrop, 47,
+    `spa backdrop drops = ${c.backdrop}, expected 47 — if you changed the ` +
     `guard, re-measure and update this with the reason`);
   // And the pre-check must not have changed what redbull SHIPS: it skips the
   // 295 calls the engine refused, and only those (graph-parity proved it).
@@ -147,6 +151,37 @@ test("a linear run is not re-laid over a span it already covers", () => {
     ["fence", /alreadyLaid\("fence", s0, s1, side, gap/],
     ["tyreWall", /alreadyLaid\("tyreWall", s0, s1, side, gap/],
   ]) assert.match(src, needle, `${fn}() must return early on a re-laid span`);
+});
+
+test("a run that wraps the start line is not read as contained in an earlier run", () => {
+  // alreadyLaid compared a wrapping [0.98, 0.06] span raw against [0.48, 0.88]:
+  // 0.98 >= 0.48 and 0.06 <= 0.88, so it was "contained" and dropped with its
+  // barrier. Madrid lays scenery in racing fractions, so k / n is the span.
+  const Tracks = buildContext(null, { quiet: true });
+  const base = Tracks.LIST.find((d) => d.id === "madrid");
+  const def = Object.assign({}, base, {
+    scenery(api) {
+      for (const side of [-1, 1]) {
+        api.guardrail(0.48, 0.88, side, 4.8);
+        api.guardrail(0.98, 0.06, side, 4.8);
+      }
+    },
+  });
+  const t = Tracks.build(def), pit = t.pit;
+  let checked = 0;
+  const open = [];
+  for (let k = 0; k < t.n; k++) {
+    const f = k / t.n;
+    if (!(f > 0.985 || f < 0.055)) continue;
+    for (const side of [1, -1]) {
+      if (pit && pit.keep && pit.keep[k] > 0 && pit.side === side) continue;   // the pit wall owns it
+      checked++;
+      const bar = side > 0 ? t.barR[k] : t.barL[k];
+      if (!(bar < t.hw[k] + 8.99)) open.push(`k${k} side ${side}`);
+    }
+  }
+  assert.ok(checked > 50, `only ${checked} node sides checked`);
+  assert.deepEqual(open, [], "every non-pit node side inside the wrapping guardrail has a barrier");
 });
 
 test("one tree per spot", () => {
@@ -247,4 +282,8 @@ test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored
     "along must be wrapped");
   assert.match(chunk, /TrackSpace\.sceneryNodeToAuthored\(def, kEng, n\)/,
     "callback k must be converted back to authored frame before helpers see it");
+  assert.match(chunk, /w\.every = \(m, fn\) =>/,
+    "every must be wrapped the same way as along");
+  assert.match(chunk, /api\.every\(m, \(kEng\) => fn\(TrackSpace\.sceneryNodeToAuthored\(def, kEng, n\)\)\)/,
+    "every's callback k must be authored-frame before pine/marshalPost shift again");
 });

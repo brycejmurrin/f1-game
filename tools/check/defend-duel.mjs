@@ -3,6 +3,7 @@
  * defend-duel.mjs — DETERMINISTIC staged duel grid for defendPull's
  * straight branch (commit e9a9f56ca). Pure node, no browser.
  * @doc Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`).
+ * @skill ai-racecraft
  *
  * The 22-car field bench is chaotic: a 0.3 mm perturbation reshuffles it
  * (measured, scratch/defend-ab.mjs --arms off,sham --sham-eps 0.001). This
@@ -15,7 +16,8 @@
  * geometry, with the branch ON vs OFF. What it does NOT measure: whether that
  * makes a 22-car race better — use scratch/defend-ab.mjs for that.
  *
- *   node scratch/defend-duel.mjs --track monza --json artifacts/defend-duel-monza.json
+ *   node tools/check/defend-duel.mjs --track monza --json artifacts/defend-duel-monza.json
+ *   node tools/check/defend-duel.mjs --help
  */
 import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
@@ -27,6 +29,17 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, 
 const { createGame } = require(ROOT + "/tools/lib/game-vm.cjs");
 
 const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`defend-duel — staged two-car defendPull ON vs OFF (VM, no browser)
+
+  node tools/check/defend-duel.mjs [--track monza] [--diff normal] [--fracs 4]
+       [--gaps 2,4,6,8,10] [--dxs -1.6,-0.9,...] [--dvs 1.0,2.0] [--secs 8]
+       [--pair 0,1] [--json out.json]
+
+  --help / -h   this text (exits before the game VM boots)
+`);
+  process.exit(0);
+}
 const flag = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
 const TRACK = flag("track", "monza"), DIFF = flag("diff", "normal"), OUT = flag("json", "");
 const SECS = +flag("secs", 8), NFRAC = +flag("fracs", 4);
@@ -57,7 +70,7 @@ const Tracks = g.sandbox.Tracks, track = g.G.track, L = track.total;
 const wrapS = (s) => { s %= L; return s < 0 ? s + L : s; };
 
 // PICK THE STRAIGHTS the branch actually fires on: fracs whose whole
-// lookahead window (18-70 m, as game.js:4289 reads it) stays under defendPull's
+// lookahead window (18-70 m, as updateCar in js/game.js reads it) stays under defendPull's
 // own |kA| <= 0.004, for the length of the duel.
 const cand = [];
 for (let f = 0; f < 1; f += 1 / 400) {

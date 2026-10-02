@@ -1267,6 +1267,12 @@ function rolloverTeams(tStand) {
   }
 }
 
+/** Fitted setup an AI car should resolve in career, or null → factory. */
+function aiSetup(team) {
+  if (!inCareer() || !team || typeof CareerAiDev === "undefined") return null;
+  return CareerAiDev.fittedOf(career, team);
+}
+
 const TOP_TIER = 1;      // tier 0-1: the seats worth taking
 const MID_TIER = 3;      // tier 2-3: where the climbers are
 
@@ -1476,6 +1482,10 @@ function rollover() {
   if (!career || careerConflict) return null;
   const dStand = driverStandings();
   const tStand = teamStandings();
+  // Dice and the expected order belong to the year that just ended. year++
+  // and applyRegs() below can ban a step that was legal a line earlier.
+  const devYear = career.year;
+  const devExpect = expectedConstructor();
   const me = seasonDriverId(career.team, career.seat);
   const myRow = dStand.find((r) => r.id === me);
   const myTeam = tStand.find((r) => r.id === career.team);
@@ -1550,6 +1560,13 @@ function rollover() {
   // engage(): rollover() runs while the career is still the thing being played,
   // and budgetCap()/the garage read the era on the very next hub build.
   applyRegs();
+  // A step fitted under last year's rules can be illegal the moment the era
+  // flips. Strip those, then develop against the ruleset that is now in force.
+  // The dice stay on devYear so an existing save's winter stream does not jump.
+  if (typeof CareerAiDev !== "undefined") {
+    if (CareerAiDev.scrubFitted) CareerAiDev.scrubFitted(career);
+    if (CareerAiDev.developWinter) CareerAiDev.developWinter(career, tStand, devExpect, rnd, devYear);
+  }
   // MUTATED IN PLACE, never reassigned: game.js aliases this exact object as its
   // `season` (openCareer does `season = c.season`), and a fresh object would
   // orphan that alias so the next race wrote its points into a dead one.
@@ -1643,7 +1660,7 @@ return {
   GOAL_KINDS, GOAL_ORDER, goalFor, goalLabel, goalNow, goalOnTrack, goalTypeFor,
   era, eraSeasonsLeft, seasonsElapsed, applyRegs,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
-  paceMult, teamStats,
+  paceMult, teamStats, aiSetup,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked,

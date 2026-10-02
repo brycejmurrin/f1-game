@@ -772,15 +772,23 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await page.evaluate(() => { document.getElementById("mb-standings").hidden = false; });
   const title = await report("#menu-secondary");
   expect(title.display).toBe("flex");
-  // Six rooms: DATA HUB, GARAGE, SETTINGS, HOW TO PLAY, STANDINGS, USE AS
-  // CONTROLLER. Wrap count is flex + overlay zoom's business. What this guards
-  // is no leftover sliver: every visible door is present, and a lone last row
-  // fills the track.
-  const shownTitleDoors = await page.evaluate(() => ["mb-standings", "mb-data", "mb-garage", "mb-settings", "mb-phonepad", "mb-help"]
+  // Seven rooms: DATA HUB, TRACK DESIGNER, GARAGE, SETTINGS, HOW TO PLAY,
+  // STANDINGS, USE AS CONTROLLER. Wrap count is flex + overlay zoom's business.
+  // What this guards is no leftover sliver: every visible door is present, and
+  // a lone last row fills the track. Photo Studio lives in #menu-explore with
+  // Watch / Practice (H3), so it never inflates this secondary count.
+  const shownTitleDoors = await page.evaluate(() => ["mb-standings", "mb-data", "mb-designer", "mb-garage", "mb-settings", "mb-phonepad", "mb-help"]
     .filter((id) => !document.getElementById(id).hidden).length);
-  expect(shownTitleDoors, "the touch page shows the controller door").toBe(6);
+  expect(shownTitleDoors, "the touch page shows the controller door").toBe(7);
   expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(shownTitleDoors);
   expect(title.lastFill).toBeGreaterThan(0.9);
+
+  // Explore row keeps Watch / Practice / Photo discoverable without joining
+  // the secondary room lattice.
+  const explore = await report("#menu-explore");
+  expect(explore.display).toBe("flex");
+  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(3);
+  expect(explore.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full
   // rows with no sliver, which lastFill still holds.

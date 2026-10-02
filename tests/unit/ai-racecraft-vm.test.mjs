@@ -247,24 +247,38 @@ test("the AI drives a racing line: outside on the approach, inside at the apex, 
   }
 });
 
-// THE RUBBER BAND IS OFF THE START LINE AND OFF A LAPPED CAR. The band scales
-// an AI's vmax (and, since the corner-authority fix, its brake target) by how
-// far the leading human is up the road. `prog` is cumulative and the grid is
-// laid out at -(14 + i*8), so P22 begins 182 m back and was banded from the
-// first frame — +4.7 % of vmax into Turn 1 on easy, which Game AI Pro ch.42
-// names as exactly the wrong place for it. At the other end the gap clamps the
-// band to full, so an easy car a lap down took min(1, 0.93 * 1.18) = 1.0, i.e.
-// HARD's corner authority, and un-lapped itself in front of the player.
-// Both guards only ever REMOVE a boost, so no DIFF row can move; and the
-// AI-only benches (ai-pace/field/line) have no human at all, so the band never
-// fires there and their tables are untouched by construction.
-test("the rubber band never fires off the start line, and never for a lapped car", async () => {
+// THE RUBBER BAND IS OFF BY DEFAULT (scripted AI pace) AND, WHEN CATCH-UP IS
+// ON, STILL OFF THE START LINE AND OFF A LAPPED CAR. Scripted mode (the ship
+// default, Pure / Black Rock) keeps each AI on tierV × skill × DIFF.ai with
+// no gap-to-player boost. Catch-up restores the legacy reverse-only vmax band
+// against the leading human. `prog` is cumulative and the grid is laid out at
+// -(14 + i*8), so P22 begins 182 m back — banding that into T1 is what Game AI
+// Pro ch.42 names as exactly the wrong place. At the other end the gap clamps
+// the band to full, so an easy car a lap down took HARD's corner authority.
+// Both guards only ever REMOVE a boost. AI-only benches have no human, so the
+// band never fires there either way.
+test("scripted AI pace never rubber-bands; catch-up keeps start and lapping guards", async () => {
   const a = g.apex;
   await g.race("monza", "day", "dry");
   a.go();
   const ai = () => g.G.cars.filter((c) => !c.human);
   const banded = () => ai().filter((c) => (c._bandNow || 0) > 0).length;
 
+  // Default is scripted: even past the old 8 s guard with a huge chase gap,
+  // nothing bands.
+  g.G.aiPace = "scripted";
+  for (let i = 0; i < 60 * 12; i++) a.step(1 / 60, 1);
+  assert.ok(g.G.raceT > 8, "past the catch-up start guard");
+  const victim = ai()[0];
+  victim.prog = g.G.player.prog - 600;
+  a.step(1 / 60, 1);
+  assert.equal(victim._bandNow || 0, 0, "scripted mode must not boost from the player's gap");
+  assert.equal(banded(), 0, "no AI car may band under scripted pace");
+
+  // Catch-up: start guard and lapping quiet; a real chase still bands.
+  g.G.aiPace = "catchup";
+  await g.race("monza", "day", "dry");
+  a.go();
   for (let i = 0; i < 60; i++) a.step(1 / 60, 1);
   assert.equal(banded(), 0, `a car was banded ${g.G.raceT.toFixed(1)}s after green, off the grid`);
   for (let i = 0; i < 60 * 6; i++) a.step(1 / 60, 1);
@@ -272,14 +286,14 @@ test("the rubber band never fires off the start line, and never for a lapped car
   assert.equal(banded(), 0, `a car was banded ${g.G.raceT.toFixed(1)}s after green`);
 
   for (let i = 0; i < 60 * 4; i++) a.step(1 / 60, 1);   // past the guard
-  const victim = ai()[0], L = g.G.track.total;
-  victim.prog = g.G.player.prog - (L + 200);            // a full lap down
+  const v2 = ai()[0], L = g.G.track.total;
+  v2.prog = g.G.player.prog - (L + 200);            // a full lap down
   a.step(1 / 60, 1);
-  assert.equal(victim._bandNow || 0, 0, "a lapped car must not be handed the band's full clamp");
+  assert.equal(v2._bandNow || 0, 0, "a lapped car must not be handed the band's full clamp");
 
-  victim.prog = g.G.player.prog - 600;                  // a real chase, well inside half a lap
+  v2.prog = g.G.player.prog - 600;                  // a real chase, well inside half a lap
   a.step(1 / 60, 1);
-  assert.ok((victim._bandNow || 0) > 0, "the band must still work for a car the player is actually racing");
+  assert.ok((v2._bandNow || 0) > 0, "catch-up must still work for a car the player is actually racing");
 });
 
 // NO OVERTAKING UNDER VSC OR SAFETY CAR (FIA 2026 Sporting Regs). 16217f3c1: the
@@ -344,4 +358,82 @@ test("under VSC and safety car no pass latch engages and no queue pressure build
       A.headless(false);
     }
   }
+});
+
+// ONE YIELDER ALONGSIDE THE PLAYER (2026-10-01). The rule elects the car behind
+// to concede — here the PLAYER, a few metres back, who runs no yield protocol
+// and holds a lane inside the AI's clear gap. The AI merely HOLDING its line
+// was never armed to concede (only an AI steering INTO the player was), so the
+// pair sat inside the gap with nobody yielding: ai-tactics --mode human
+// measured contact in 11-22 % of alongside frames. A held line now arms the
+// grace at a quarter rate (AiDrive.humanYieldT), so the AI opens the gap.
+test("an AI alongside a player who will not yield opens the gap itself", async () => {
+  const A = g.apex;
+  await g.race("monza");
+  A.reset(0, 45, -1.2);
+  A.headless(true);
+  A.go();
+  const r = A.rivals([{ dProg: 3.2, dx: 2.2, speed: 45 }])[0];
+  const c = g.G.cars[r], p = g.G.player;
+  const lane0 = { lane: c.lane, lanePref: c.lanePref };
+  c.lane = c.lanePref = c.x / (g.G.track.hw[0] - 1.2);   // its own lane is inside the gap
+  A.act({ steer: 0, throttle: true, brake: false }, DT, 1);
+  const tierV0 = c.tierV;
+  c.tierV *= 45.5 / c._vmaxNow;                            // the player's pace, so the pair stays alongside
+  const steer = () => { const q = A.probe(); return Math.max(-1, Math.min(1, 2.2 * (Math.atan2(-1.2 - q.x, 20) - q.angle))); };
+  let insideT = 0, alongT = 0, lateMin = Infinity;
+  try {
+    for (let i = 0; i < 4 / DT; i++) {
+      const dp = c.prog - p.prog;   // the player holds x = -1.2 and keeps station 3 m behind
+      A.act({ steer: steer(), throttle: dp > 3.2, brake: dp < 1.5 }, DT, 1);
+      const dx = Math.abs(c.x - p.x);
+      if (Math.abs(c.prog - p.prog) < 5.5) {
+        alongT += DT;
+        if (dx < CLEAR - 0.3) insideT += DT;
+        if (i * DT > 1.5) lateMin = Math.min(lateMin, dx);
+      }
+    }
+  } finally { c.tierV = tierV0; c.lane = lane0.lane; c.lanePref = lane0.lanePref; A.headless(false); }
+  assert.ok(alongT > 3.5, `the pair was not kept alongside (${alongT.toFixed(1)} s) — wrong scenario`);
+  // Measured before: 2.5 s inside the gap with nobody yielding, then a concession
+  // that was dropped at the gap and re-armed. After: conceded inside ~0.6 s, held.
+  assert.ok(insideT < 1.2, `nobody yielded for ${insideT.toFixed(2)} s inside the clear gap`);
+  assert.ok(lateMin >= CLEAR - 0.3, `the concession was not held: dx fell to ${lateMin.toFixed(2)} m`);
+});
+
+// A PASS STICKS (2026-10-01). Two AI cars 5 % apart on pace (the faster the
+// same car as the slower, 5 % up), the faster 12 m behind on the run to the
+// Curva Grande. It completes the pass (a car length and a half clear), and the
+// passed car does not take the place straight back: the re-pass lockout
+// (AiDrive.repassLock) on any order flip, with the passer as its blocker across
+// the lane until it ends. 42-61 % of the field's flips were the same pair
+// swapping back before (ai-tactics swapBackPct).
+test("a faster AI completes a pass and the pair does not swap back", async () => {
+  // Its own boot: a pass is chaotic in the shared stream and the field state
+  // the tests above leave behind (measured: the same scenario passes alone and
+  // never completes after the racing-line lap).
+  const g2 = await createGame({ track: "monza" });
+  try {
+    const A = g2.apex;
+    await g2.race("monza");
+    A.headless(true);
+    A.reset(0.62, 60, 0);
+    const pIdx = A.cars().findIndex((x) => x.p);
+    A.carRole(pIdx, { human: false });
+    const pc = g2.G.cars[pIdx];
+    const idx = A.rival(-12, 0).rival;
+    A.go();
+    const c = g2.G.cars[idx];
+    c.tierV = pc.tierV; c.skill = pc.skill;   // the same car...
+    pc.tierV *= 0.95;                         // ...5 % up on the one ahead
+    let doneAt = null, regained = null;
+    for (let i = 0; i < 50 / DT; i++) {
+      A.step(DT, 1);
+      const dp = c.prog - pc.prog, t = i * DT;
+      if (doneAt == null && dp > LCAR + 1.5) doneAt = t;
+      if (doneAt != null && regained == null && t < doneAt + 15 && dp < 0) regained = t;
+    }
+    assert.ok(doneAt != null && doneAt < 35, `the faster car never completed the pass (${doneAt})`);
+    assert.equal(regained, null, `passed at ${doneAt && doneAt.toFixed(1)} s and swapped back at ${regained && regained.toFixed(1)} s`);
+  } finally { g2.close(); }
 });

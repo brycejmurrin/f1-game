@@ -471,11 +471,16 @@
         bakedModel("kenney_ind_chimney-medium", K(0.942), -1, 70, { scale: 0.65 });
       }
 
+      // Kenney Racing Kit (CC0) barriers and pylons where the synthetic
+      // construction props stood; the synthetic recipe stays the fallback for a
+      // build the pack has not reached (assets/pack, docs/plans/2026-10-01-models-life.md).
       along(0.028, 0.052, 5.0, (k) => {
-        bakedModel("kenney_construction-barrier", k, 1, 6.4, { scale: 1.2 });
+        if (!bakedModel("k_barrierwhite", k, 1, 6.4, { scale: 1.5 }))
+          bakedModel("kenney_construction-barrier", k, 1, 6.4, { scale: 1.2 });
       });
       along(0.030, 0.050, 7.0, (k) => {
-        bakedModel("kenney_construction-cone", k, 1, 5.0, { tint: [1.0, 0.42, 0.10] });
+        if (!bakedModel("k_pylon", k, 1, 5.0, { scale: 1.3 }))
+          bakedModel("kenney_construction-cone", k, 1, 5.0, { tint: [1.0, 0.42, 0.10] });
       });
 
       waterSurface(K(0.40), 1, 95, [180, 0.18, 230], [0.30, 0.50, 0.70],
