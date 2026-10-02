@@ -328,7 +328,7 @@ function open() {
 /** Exit restores: the game camera (dbgCam cleared by photo mode's exit), a
  *  level horizon and the race lens for the next photo mode, and — when asked
  *  and still paused — the settings page the panel was opened from. */
-function close(showPauseMenu) {
+function close(showPauseMenu, keepPhotoMode) {
   if (!st.open) return;
   Log.info("game", "FreeCam.close");
   const back = st.back;
@@ -343,7 +343,7 @@ function close(showPauseMenu) {
     window.removeEventListener("wheel", onWheel, { passive: true });
     window.removeEventListener("blur", releaseKeys);
   }
-  if (G.photoMode && photo && photo.exit) photo.exit();
+  if (!keepPhotoMode && G.photoMode && photo && photo.exit) photo.exit();
   // Opened as a tool's sub-mode: DONE goes back to that tool, not the menu.
   if (showPauseMenu && back) { back(); return; }
   if (showPauseMenu && G.paused) {
@@ -480,6 +480,8 @@ return Object.freeze({
   cmd: (opts) => (live ? live.cmd(opts) : false),
   /** The flyby editor's FREE CAMERA button — see enterFrom. */
   enterFrom: (opts) => (live ? live.enterFrom(opts) : false),
+  close: (showPauseMenu, keepPhotoMode) => { if (live) live.close(showPauseMenu, keepPhotoMode); },
+  panel: () => live ? live.panel() : null,
   speedFromSlider, sliderFromSpeed, clampSpeed, wheelSpeed, clampRoll, clampFov,
   viewSnippet, aim, carPose, cornerPose, anchorText,
   SPD_MIN, SPD_MAX, SPD_DEF, ROLL_MAX, BOOST,

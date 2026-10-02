@@ -72,6 +72,15 @@ function boot() {
   return { dom, G, FC, api, sb };
 }
 
+test("a temporary dock can close while preserving photo mode for its previous owner", () => {
+  const { G, api } = boot();
+  api.open(); api.cmd({ roll: 20, lens: "flyby" });
+  api.close(false, true);
+  assert.equal(api.isOpen(), false);
+  assert.equal(G.photoMode, true, "the owner retains photo mode until it exits itself");
+  assert.equal(api.state().roll, 0);
+});
+
 test("speed dial is logarithmic 5-200 m/s and round-trips; the wheel steps and clamps", () => {
   const { FC } = boot();
   assert.equal(FC.speedFromSlider(0), 5);
