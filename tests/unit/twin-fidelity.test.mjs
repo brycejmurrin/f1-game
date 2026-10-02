@@ -5,6 +5,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { MUTANTS, needleReport, parseTap, verdictFor } from "../../tools/check/twin-fidelity.mjs";
 
 const MATRIX = JSON.parse(fs.readFileSync(new URL("../data/mutants.json", import.meta.url), "utf8"));
@@ -50,4 +52,13 @@ test("the open questions keep their evidence rather than being deleted", () => {
     assert.ok(q.finding && q.measured && q.sowhat, `${q.id} must keep finding/measured/sowhat`);
     assert.ok(!MUTANTS.some((m) => m.id === q.id), `${q.id} cannot both gate and be open`);
   }
+});
+
+test("twin-fidelity --help exits 0 without running mutants", () => {
+  // --help used to fall through to the full mutation suite (~5 min of VM specs).
+  const TOOL = fileURLToPath(new URL("../../tools/check/twin-fidelity.mjs", import.meta.url));
+  const r = spawnSync(process.execPath, [TOOL, "--help"], { encoding: "utf8", timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /usage:.*twin-fidelity/);
+  assert.doesNotMatch(r.stdout, /^PASS /m);
 });
