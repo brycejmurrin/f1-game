@@ -1524,6 +1524,13 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **SUN BEHIND THE CLOUDS (2026-10-01):** on all three. The sky's sun disc and
+  tight corona ring are scaled by the cloud coverage along the ray (GLX
+  `sunClear = 1 − cityCov`, TLX `cityCov.oneMinus()`, WGX `1 − covRay`), the
+  aureole by 1 − 0.6·coverage — the same hoisted term the stars and the moon
+  already fade by. Before, the corona and disc were added after the cloud blend
+  with only the global overcast damp, so a cumulus over the sun never hid it.
+  `tests/unit/surface-id-parity.test.mjs` pins the three.
 - **MOON DIRECTION (2026-10-01):** on all three. The night sky's moon disc and
   halo hang on the sun-direction uniform (GLX `uSunDir`, TLX `U.sunDir`, WGX the
   sky function's `sunDir`), which at night IS the moon key light the lit pass,
@@ -1538,6 +1545,14 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   age, keyed to the game clock) before the sun/lamp GGX lobes and the sky
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
+  (`light-grid.test.mjs` pins the constants and the plumbing).
+- **SCENE MSAA (2026-10-01):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
+  4× on its desktop WebGL2 backend (`tlx.js` passes `sceneSamples` into
+  `tlx-post.js`'s scene target; r186's WebGL backend resolves the depth texture
+  by blit, so SSAO/SSR/godray read a resolved depth), **TLX-WebGPU and WGX gap**:
+  core WebGPU cannot resolve a depth attachment, so the native path stays
+  single-sample with FXAA alone (`docs/research/WEBGPU-PARITY.md`). Phones: no
+  scene MSAA on any backend (the mobile recipe).
   (`light-grid.test.mjs` pins the constants and the plumbing). Wet-road SSR
   itself is also live on all three (GLX/TLX composite, WGX half-res pass →
   composite); analytic `envBlend` is the plain-gloss fallback when SSR sheds

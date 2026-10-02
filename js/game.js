@@ -6067,8 +6067,11 @@ function updateCar(c, dt, ranked) {
     // includes what they hear. Body slip angle: ~6 deg starts to talk, ~17 deg is
     // a full slide.
     const slipAng = Math.abs(Math.atan2(c.vLat || 0, Math.max(4, Math.abs(c.speed))));
+    // A locked front (c.wheelLock, player-forces / the AI mistake phase) is a
+    // skid too: it squeals, marks and smokes like a slide, scaled by how locked.
+    // Until 2026-10-01 a lock-up only froze the wheel's spin (car-draw).
     c.skidIntensity = c.offroad ? 0.5
-      : clamp((slipAng - 0.10) / 0.20, 0, 1);
+      : Math.max(clamp((slipAng - 0.10) / 0.20, 0, 1), (c.wheelLock || 0) * 0.9);
   }
   // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
   // human slide-along scrub + conditional road→world writeback when xPinned.
@@ -7946,6 +7949,11 @@ function render(dt) {
         // floor is unreachable — the effect simply did not exist at the bottom
         // of the OVERALL SPEED slider (A16).
         let smokeI = (c.isPlayer && !c.offroad) ? (c.skidIntensity || 0) : 0;
+        // A lock-up smokes from the LOCKED axle — the fronts — and for every
+        // car: an AI's braking mistake (AiDrive.mistakePhase) is read as a
+        // puff of white from its front wheel, which is how a lock-up is seen.
+        const locked = !c.offroad && vStd(c.speed) > 8 && (c.wheelLock || 0) > 0.3;   // vStd: PACE scales speeds (vstd-invariant)
+        if (locked) smokeI = Math.max(smokeI, c.wheelLock);
         if (c.isPlayer && !c.offroad) {
           const _pax = c.axEstSm || 0, _pvl = Math.abs(c.vLat || 0);
           if (c.speed > 10) smokeI = Math.max(smokeI, clamp((_pvl - 3) / 5, 0, 1));
@@ -7953,7 +7961,7 @@ function render(dt) {
             smokeI = Math.max(smokeI, clamp((aStd(_pax) - 4.5) / 2.5, 0, 1) * clamp((12 - c.speed) / 9, 0, 1));
         }
         if (smokeI > 0.25) {
-          const wd = carDraw.WHEELS[2 + ((Math.random() * 2) | 0)];   // one rear wheel per event
+          const wd = carDraw.WHEELS[(locked ? 0 : 2) + ((Math.random() * 2) | 0)];   // one wheel per event: a front when locked, else a rear
           Particles.tyreSmoke(
             tmpMat[12] + tmpMat[0] * wd.x + tmpMat[8] * wd.z,
             tmpMat[13] + tmpMat[1] * wd.x + tmpMat[9] * wd.z + 0.10,
