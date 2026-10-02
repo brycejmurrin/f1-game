@@ -904,18 +904,9 @@ function updateHud(force, dtMs) {
       const txt = left == null || spent >= 1 ? "" : "~" + Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
-    // FOUR CORNER CELLS + ΔT (js/ui/hud-tyres.js). Axle model projected to
-    // FL/FR/RL/RR; colour = cold / working / hot vs the compound window.
-    if (typeof HudTyres !== "undefined" && tyres.info) {
-      const info = tyres.info(player);
-      // Lateral proxy for outer-tyre bias: steer (+ = right). skidIntensity
-      // alone has no sign; vLat is the bicycle model's signed lateral speed.
-      const lat = player.vLat != null
-        ? Math.max(-1, Math.min(1, player.vLat / 8))
-        : (player.steer || 0);
-      const practice = !!(timeTrial || G.session === "practice" || G.session === "quali");
-      HudTyres.paint(els.tyre, info, lat, { practice: false }); // plan cleared below
-    }
+    // TYRE TEMPERATURE (js/ui/hud-tyres.js): the compound letter turns blue
+    // when the set is below its window and red above it — one fact, no cells.
+    if (typeof HudTyres !== "undefined" && tyres.info) HudTyres.paint(els.tyre, tyres.info(player));
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
     // is called by holding the car on the pit side at the entry, so the dwell
     // has to be visible: without it a driver cannot tell the gesture is
@@ -954,7 +945,7 @@ function updateHud(force, dtMs) {
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
-    // Practice / TT / quali: hide the race strategy line (corners + ΔT stay).
+    // Practice / TT / quali: hide the race strategy line.
     const practice = !!(timeTrial || G.session === "practice" || G.session === "quali");
     const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");

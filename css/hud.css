@@ -421,53 +421,12 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
    caught at merge by the guard in tests/unit/css-layers.test.mjs. */
 #hud-tyre[hidden] { display: none; }
 #hud-tyre { width: 130px; display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3); }
-/* FOUR CORNER TEMP CELLS + ΔT (js/ui/hud-tyres.js). Runtime DOM under #hud-tyre.
-   Bands use existing semantic tokens — COLOUR VISION (data-cvd) remaps them. */
-#hud-tyre-corners {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: calc(var(--gap) / 6);
-  width: 100%;
-  order: 3;
-  flex: 1 1 100%;
-}
-#hud-tyre-corners > span {
-  font-family: var(--font-hud);
-  font-size: calc(var(--fs-micro) * 0.85 * var(--hud-text-boost, 1));
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-  line-height: 1.2;
-  padding: calc(var(--gap) / 12) calc(var(--gap) / 6);
-  border-radius: var(--r-sm);
-  background: color-mix(in oklab, var(--faster) 35%, var(--carbon));
-  color: var(--look-hud-ink);
-  text-shadow: var(--hud-halo);
-}
-#hud-tyre-corners > span[data-band="cold"] {
-  background: color-mix(in oklab, var(--sec-best) 55%, var(--carbon));
-}
-#hud-tyre-corners > span[data-band="ok"] {
-  background: color-mix(in oklab, var(--faster) 45%, var(--carbon));
-}
-#hud-tyre-corners > span[data-band="hot"] {
-  background: color-mix(in oklab, var(--slower) 55%, var(--carbon));
-}
-#hud-tyre-delta {
-  order: 4;
-  flex: 1 1 100%;
-  text-align: center;
-  font-family: var(--font-hud);
-  font-size: calc(var(--fs-micro) * var(--hud-text-boost, 1));
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--dim);
-  text-shadow: var(--hud-halo);
-}
-#hud-tyre-delta:empty { display: none; }
-#hud-tyre-delta[data-sign="cold"] { color: var(--sec-best); }
-#hud-tyre-delta[data-sign="ok"] { color: var(--faster); }
-#hud-tyre-delta[data-sign="hot"] { color: var(--slower); }
+/* TYRE TEMPERATURE (js/ui/hud-tyres.js): one state painted on the compound
+   letter — cold / working / hot vs the compound window. Semantic tokens, so
+   COLOUR VISION (data-cvd) remaps them. Declared before the pit rules below,
+   which win at equal specificity while the car is in the lane or the box. */
+#hud-tyre[data-temp="cold"] #hud-tyre-code { color: var(--sec-best); }
+#hud-tyre[data-temp="hot"] #hud-tyre-code { color: var(--slower); }
 /* Live lap DELTA chip (runtime #hud-delta in .hud-top). */
 #hud-delta .hud-value { font-variant-numeric: tabular-nums; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
