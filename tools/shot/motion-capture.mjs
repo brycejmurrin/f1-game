@@ -47,10 +47,17 @@ import {
 } from "../lib/output-paths.mjs";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
-const [trackArg = "monaco", secArg = "4", speedArg = "50", outArg] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+exitIfHelp(argv, `motion-capture — driven clip + per-frame flicker score
+
+  node tools/shot/motion-capture.mjs <track> [seconds] [speed] [outdir]
+
+Default: monaco 4 50 → scratch/captures/motion-capture/<track>/. Trust p90.`);
+const [trackArg = "monaco", secArg = "4", speedArg = "50", outArg] = argv;
 const track = assertSafePathToken(trackArg, "track");
 const SEC = +secArg, SPEED = +speedArg;
 const vdir = outArg
