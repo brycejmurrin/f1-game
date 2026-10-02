@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // prune-branches.mjs — delete remote branches that are already merged into the deploy branch.
-// @doc Lists or deletes merged/absorbed branches with no open PR and expired claims, by branch-audit (prune-branches.yml).
-// Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head) or absorbed (branch-audit.mjs: a dry merge changes nothing), or whose audit verdict is opted into with --also, that has no open pull request and has been quiet for --min-age-days, plus claude/claims/* markers quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. Writes the branch-audit report. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
+// @doc Lists or deletes merged/absorbed branches with no open PR and expired claims, by branch-audit; opted-in verdicts are archived as tags first (prune-branches.yml).
+// Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head) or absorbed (branch-audit.mjs: a dry merge changes nothing), or whose audit verdict is opted into with --also (archived first as the tag archive/<branch>), that has no open pull request and has been quiet for --min-age-days, plus claude/claims/* markers quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. Writes the branch-audit report. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
 // @skill check-changes
 //
 // WHY A WORKFLOW AND NOT AN AGENT. The remote containers' git proxy refuses
@@ -18,7 +18,11 @@
 //     history), OR branch-audit.mjs calls it ABSORBED (a dry merge into the
 //     deploy branch changes nothing). Nothing on any of them is lost;
 //   * or its branch-audit verdict is one a person opted into with --also
-//     (superseded, post-merge, pr-closed, no-history) after reading the report;
+//     (superseded, post-merge, pr-closed, no-history, unmerged) after reading
+//     the report. Such a branch may hold work deploy lacks, so --apply first
+//     pushes its tip as the tag archive/<branch> (archiveRefs) and deletes it
+//     only once that tag landed: `git fetch origin tag archive/<branch>` or
+//     `git push origin archive/<branch>:refs/heads/<branch>` brings it back;
 //   * no OPEN pull request has it as its head;
 //   * its last commit is at least --min-age-days old (a just-merged branch
 //     someone is still about to push a follow-up to is left alone);
@@ -48,7 +52,16 @@ export { parseRefs };
 // The branch-audit verdicts --also may opt into. "absorbed" is always on: merging
 // such a branch changes nothing, so deleting it loses nothing. The rest are
 // judgement calls and need a person to tick them.
-export const OPT_IN = ["superseded", "post-merge", "pr-closed", "no-history"];
+export const OPT_IN = ["superseded", "post-merge", "pr-closed", "no-history", "unmerged"];
+// Reasons that lose nothing on delete; every other reason is archived first.
+export const LOSSLESS = new Set(["merged", "absorbed", "expired claim"]);
+export const ARCHIVE_PREFIX = "refs/tags/archive/";
+
+/** The `<sha>:refs/tags/archive/<branch>` refspecs to push before deleting:
+ *  one per pruned branch whose reason is not LOSSLESS. shaOf(name) -> sha. */
+export function archiveRefs(prune, reasons, shaOf) {
+  return prune.filter((n) => !LOSSLESS.has(reasons.get(n))).map((n) => `${shaOf(n)}:${ARCHIVE_PREFIX}${n}`);
+}
 
 export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const ALWAYS_KEEP = [/^gh-pages$/];
@@ -153,10 +166,21 @@ export function main(argv = process.argv.slice(2)) {
   if (also.length) console.log("opted in: " + also.map((v) => `${v} (${VERDICTS[v]})`).join("; "));
   for (const n of prune) console.log(`${apply ? "delete" : "would delete"} ${n}  [${reasons.get(n)}]`);
   if (!apply) { console.log("= prune dry-run " + prune.length); return 0; }
+  // ARCHIVE FIRST: a lossy prune is deleted only after its tag landed.
+  const shaOf = new Map(branches.map((b) => [b.name, b.sha]));
+  const refs = archiveRefs(prune, reasons, (n) => shaOf.get(n));
+  const unarchived = new Set();
+  for (let i = 0; i < refs.length; i += 50) {
+    const batch = refs.slice(i, i + 50);
+    try { execFileSync("git", ["push", "origin", ...batch], { stdio: "inherit" }); }
+    catch (_) { for (const r of batch) unarchived.add(r.slice(r.indexOf(ARCHIVE_PREFIX) + ARCHIVE_PREFIX.length)); console.error(`prune-branches: archiving a batch of ${batch.length} failed — those branches are kept`); }
+  }
+  if (refs.length) console.log(`archived ${refs.length - unarchived.size} as ${ARCHIVE_PREFIX}<branch>`);
+  const doomed = prune.filter((n) => !unarchived.has(n));
   // Batches of 50 refs per push: one push per branch is ~475 round trips.
-  let failed = 0;
-  for (let i = 0; i < prune.length; i += 50) {
-    const batch = prune.slice(i, i + 50);
+  let failed = unarchived.size;
+  for (let i = 0; i < doomed.length; i += 50) {
+    const batch = doomed.slice(i, i + 50);
     try { execFileSync("git", ["push", "origin", "--delete", ...batch], { stdio: "inherit" }); }
     catch (_) { failed += batch.length; console.error(`prune-branches: a batch of ${batch.length} failed (a protected branch?) — re-run lists what is left`); }
   }
