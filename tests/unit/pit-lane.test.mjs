@@ -1380,3 +1380,11 @@ test("held is the lane's own states, and never a position on the road", () => {
   const half = ((zone.sIn + 5386 / 2) % 5386 + 5386) % 5386;
   assert.equal(pits.held(at("out", half)), false, "half a lap away, the stop is over");
 });
+
+test("stuck is the nearest car ahead, not any car inside the window", () => {
+  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  const fn = src.slice(src.indexOf("function rivalsOf"), src.indexOf("function think"));
+  assert.match(fn, /aheadGap = -gap/);
+  assert.match(fn, /ahead && aheadGap < S\.STUCK_GAP_S/);
+  assert.doesNotMatch(fn, /-gap < S\.STUCK_GAP_S && !inLane/);
+});

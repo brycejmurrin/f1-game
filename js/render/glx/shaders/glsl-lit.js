@@ -154,7 +154,8 @@ uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specu
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
 uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
-uniform float uRain;        // 0..1 rain FALLING (frame.rain): drives the puddle ripples
+uniform float uRain;
+uniform float uSpecKnee;       // SUN GLINT RANGE knob: the sun specular's soft-clip asymptote (1 = the old hard cap at 1.0)        // 0..1 rain FALLING (frame.rain): drives the puddle ripples
 // ── Baked PBR material maps (js/render/shared/assets.js) ────────────────────────────
 // TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID (js/track/core/geom.js MAT). No
 // UV channel exists anywhere on the lit path and none is needed: the sample
@@ -1113,11 +1114,22 @@ void main() {
   // CARBON FINISH: bodywork in bare weave. Crush the livery colour toward the
   // dark resin and lay a fine cross-hatch over it, keeping a trace of the team
   // tint so a red car is still identifiably that team's car in carbon.
-  if (carbonFinish) {
+  // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
+  // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 8-16 m so it
+  // cannot moire at range (it had no fade: a sin*sin at 190/m crawled on every
+  // wing at 30 m). The parts get a subtler twill and a roughness ripple so
+  // they read as carbon in cockpit and close-up instead of flat dark paint.
+  float weave = 0.5;
+  if (carbonFinish || carbonSurface) {
     vec2 wv = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
-    float weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y);
+    float wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+  }
+  if (carbonFinish) {
     albedo = mix(albedo * 0.16 + vec3(0.030, 0.031, 0.035), albedo * 0.28, 0.25);
     albedo *= 0.86 + 0.28 * weave;
+  } else if (carbonSurface) {
+    albedo *= 0.93 + 0.14 * weave;
   }
   if (iriSurface) {
     float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
@@ -1129,7 +1141,7 @@ void main() {
     albedo *= mix(vec3(1.0), 0.60 + 0.80 * shift, smoothstep(0.30, 0.92, fres) * 0.40);
   }
   float rough = clamp(uRoughness, 0.04, 1.0);
-  if (carbonSurface || carbonFinish) rough = max(rough, 0.56);
+  if (carbonSurface || carbonFinish) rough = max(rough, 0.56) + (weave - 0.5) * 0.10;   // the twill's roughness ripple
   if (rubberSurface) rough = max(rough, 0.90);
   if (metalSurface) rough = min(rough, 0.16);
   if (glassSurface || visorSurface) rough = min(rough, 0.13);
@@ -1469,7 +1481,11 @@ void main() {
     float Vis = V_SmithGGX(NoV, NoL, a);
     vec3 F = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
     vec3 specCol = (D * Vis) * F * uSunColor * litNoL;
-    specCol = specCol / (1.0 + specCol);
+    // Soft knee with an asymptote of uSpecKnee (def 4), not a hard Reinhard
+    // cap at 1.0: a raw GGX of 10+ used to come out at ~0.91, UNDER the day
+    // bloom threshold (0.78 is the knee, not the ceiling), so a sun glint off
+    // wet tarmac, chrome or a visor could never bloom. 1.0 restores the old cap.
+    specCol = specCol / (1.0 + specCol / uSpecKnee);
     color += specCol;
   }
 
@@ -1646,6 +1662,17 @@ void main() {
     // Tint env sample by sky gradient; also pick up a gentle sun-horizon blush
     // when the reflected direction aligns with the sun (warm chrome/paint sheen).
     vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
+    // The LIVE env probe (the 64 px cube around the player car, uEnvStr > 0
+    // once its six faces are in; shed with the probe at perf tier >= 1) replaces
+    // the two-colour gradient near the car: clouds, stands and the sun disc in
+    // wet tarmac, glass and metal, where the gradient read as a flat sheen.
+    // Faded with distance from the eye (the probe sits at the car), because a
+    // single cube is parallax-wrong far from its centre. The gradient stays
+    // the fallback everywhere the probe is off, so the look never regresses.
+    if (uEnvStr > 0.001) {
+      float probeW = clamp(uEnvStr, 0.0, 1.0) * clamp(1.0 - (vDist - 60.0) / 90.0, 0.0, 1.0);
+      if (probeW > 0.001) envColor = mix(envColor, textureLod(uEnvCube, R, rough * 2.5).rgb, probeW);
+    }
     float envSunAlign = max(dot(R, uSunDir), 0.0);
     envColor = mix(envColor, envColor * uSunColor * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
     // (Wet-road sun-glitter removed — SSR now reflects the real sky/sun on wet roads.)

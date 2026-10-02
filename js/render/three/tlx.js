@@ -1043,7 +1043,15 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
               softDest: function () { return softOutRT(); },
-              wantSpatialUpscale, getPresentSize });
+              wantSpatialUpscale, getPresentSize,
+              // SCENE MSAA (2026-10-01): 4 samples on the scene target on the
+              // desktop WebGL2 backend only — GLX's HIGH/ULTRA recipe. The
+              // WebGL backend resolves colour AND the depth texture by
+              // blitFramebuffer (resolveDepthBuffer), so SSAO/SSR/godray read a
+              // resolved depth. Phones keep the GLX mobile recipe (FXAA alone);
+              // the native-WebGPU TLX path stays single-sample: core WebGPU
+              // cannot resolve a depth attachment (docs/research/WEBGPU-PARITY.md).
+              sceneSamples: (forceWebGL && !isMobile) ? 4 : 0 });
           if (post && !post.enabled()) {
             try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
             post = null;
@@ -3204,6 +3212,7 @@ const TLX = (function () {
             return;
           }
           _poolBatch++;
+          _instAlive.clear();
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -3224,8 +3233,7 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
-          const prevSky = scene.backgroundNode;
-          const prevSkyVis = skyMesh ? skyMesh.visible : false;
+          _hideUndrawnInstanced();
           // Baseline at the first face of each probe pass.
           if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
           // Per-FACE window. The old cycle-wide compare (face 0 .. face 5 is
@@ -3236,13 +3244,7 @@ const TLX = (function () {
           let faceOk = true;
           try {
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
-            // Software GL: the procedural sky is a second full TSL compile+
-            // fill per face. Reflections stay road/terrain; the 64px cube
-            // never resolved the sky disc anyway.
-            if (softContent("env")) {
-              scene.backgroundNode = null;
-              if (skyMesh) skyMesh.visible = false;
-            } else pinSkyMaterial();
+            pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
             _gpuLastOperation = "render-env";
             renderer.render(scene, faceCam);
@@ -3263,10 +3265,6 @@ const TLX = (function () {
             // site. Keep the first STACK too: on real hardware this throws on
             // every face and there is no console to read it out of.
             if (!_envFailStack) _envFailStack = String((e && e.stack) || "").slice(0, 600);
-          }
-          if (softContent("env")) {
-            scene.backgroundNode = prevSky;
-            if (skyMesh) skyMesh.visible = prevSkyVis;
           }
           renderer.setRenderTarget(softOutRT());
           if (lit && lit.setEnvCube) {
@@ -4300,6 +4298,18 @@ const TLX = (function () {
               skidVerts: _fxLast.skidVerts, glow: _fxLast.glow,
               particles: _fxLast.particles, decals: _fxLast.decals,
             };
+          },
+          // Zero last-presented FX counters so a Home-garage present (glow
+          // without blob shadows / car decals) cannot satisfy a race probe
+          // while Metal is still warming and Singapore has not presented.
+          // stopHome / startRace call this; the next race present() rewrites
+          // _fxLast from a real frame.
+          clearFxState() {
+            _fxLast.shadows = 0; _fxLast.marks = 0; _fxLast.skidVerts = 0;
+            _fxLast.glow = 0; _fxLast.particles = 0; _fxLast.decals = 0;
+            _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
+            _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
+            if (post && typeof post.clearLast === "function") post.clearLast();
           },
           skyState() {
             return {

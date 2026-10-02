@@ -52,7 +52,7 @@ window.ScrollFade = (function () {
     // rather than riding on whichever other screen happened to close in the
     // same tick. tests/unit/menu-a11y-audit.test.mjs holds this list in step
     // with UiLayers.LAYER_IDS.
-    "#overlay";
+    "#overlay,#photo-studio";
 
   const EDGE = 2;              // px of slack: sub-pixel layout must not flicker
   // Strong Set, pruned in settle(): observers hold strong refs to observed
