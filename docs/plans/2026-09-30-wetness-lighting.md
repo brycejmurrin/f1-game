@@ -6,6 +6,23 @@ per-shard PRs in parallel with (a) once the wetness contract exists (or with
 explicit `wetness: -0.05` / AUTO so new grids cannot reintroduce the look≠drive
 bug).
 
+### Wet asphalt mirrors (SSR / puddles / ripples) — already shipped
+
+Do **not** rebuild a WGX-only wet SSR stack. As of 2026-10-01 tip:
+
+| Feature | GLX | TLX | WGX | Notes |
+|---|---|---|---|---|
+| Wet darken / polish / puddle mask | yes | yes | yes | Lit wet block; porous mats skip sheen |
+| Rain ripples (`frame.rain`) | yes | yes | yes | PR [#649](https://github.com/brycejmurrin/f1-game/pull/649) |
+| Wet-road SSR (half-res / composite) | yes | yes | yes | Strength `frame.wetness * ssrWetMul`; shed tier ≥ 2 / LITE |
+| Analytic envBlend (gloss fallback) | yes | yes | yes | When SSR sheds or a march misses |
+| World env-probe in `envBlend` + sun-glint knee | open [#660](https://github.com/brycejmurrin/f1-game/pull/660) | same | same | Lit shaders / `params4.w` — do not collide |
+
+Remaining look work that still belongs here is the **wetness contract** (A1–A3:
+look=drive), not another SSR pass. Optional later: puddle-weighted SSR cover in
+`*-post.js` only (post files are safe vs #660). Stale “Phase-4 SSR pending”
+comments in `wgsl-chunks.js` were scrubbed when this status landed.
+
 Ship base for this plan: tip of `claude/f1-game-project-26h3ng` at writing
 (`24c8fc534`). Workstream owner: this agent. Other agents own scenery,
 career/strategy, multiplayer, UI — do not edit their files beyond a one-line

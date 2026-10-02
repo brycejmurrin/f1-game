@@ -69,7 +69,10 @@ for (const [shapeName, viewport] of SHAPES) {
         // frame, so a baseline that includes it can never match. It also unblocks
         // Playwright's actionability checks, which wait on animation frames this
         // app's render loop starves under SwiftShader.
-        await page.evaluate(() => window.__apex.headless(true));
+        await page.evaluate(() => {
+          AppearanceStudio.setScene("static", "still");
+          window.__apex.headless(true);
+        });
         await page.emulateMedia({ reducedMotion: "reduce" });
         await open(page);
         // HIDE THE CANVAS, do not mask it. "A pixel or two of dither"
@@ -84,7 +87,9 @@ for (const [shapeName, viewport] of SHAPES) {
         // (survey-ui-matrix setup) — the menus render over the body's own
         // deterministic background and the suite finally measures what its
         // header claims: IDENTITY — colour, type, weight, spacing.
-        await page.evaluate(() => { document.getElementById("game").style.visibility = "hidden"; });
+        await page.evaluate(() => {
+          for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
+        });
         // Wait for the webfonts before shooting. css/tokens.css loads Titillium
         // Web and Rajdhani with `font-display: swap`, so the system fallback
         // paints first and the real faces swap in later with DIFFERENT metrics,

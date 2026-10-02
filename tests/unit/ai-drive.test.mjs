@@ -1371,3 +1371,79 @@ test("letPassCase: a lapping car closing on the gearbox is waved through; a same
   assert.match(game, /AiDrive\.letPassCase\([\s\S]{0,200}chaser\.prog - c\.prog > track\.total \* 0\.5\)/,
     "game.js asks the rule with LAPPING = a lap or more ahead in progress");
 });
+
+// The optimized controller shares grip only AFTER longitudinal speed and wake
+// settle. Exercise the actual game block against the original steering equations,
+// with exact comparisons and dependency counts: a source-shaped cache assertion
+// alone would miss a changed heading, or stale grip on the fallback paths.
+test("AI heading reuses current grip without changing normal or recovery steering", () => {
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const decl = game.match(/\/\/ --- lateral ---\s*(let steer[^;]*;)/);
+  const start = game.indexOf("    const err = desiredX - c.x;");
+  const end = game.indexOf("  // Riding a kerb loses a little grip", start);
+  assert.ok(decl && start > 0 && end > start, "the production controller is present");
+  const constants = { window: {} };
+  vm.runInNewContext(readFileSync(join(ROOT, "js/physics/consts.js"), "utf8"), constants);
+  const K = { ...constants.window.PhysicsConsts };
+  for (const name of ["AI_HEAD_VMIN", "AI_XTRACK_GAIN", "AI_HEAD_MAX", "AI_YAW_LAT", "AI_YAW_MAX"]) {
+    const m = game.match(new RegExp("const " + name + " = ([^;]+);"));
+    assert.ok(m, name); K[name] = Number(m[1]);
+  }
+  const clamp = (x, lo, hi) => x < lo ? lo : x > hi ? hi : x;
+  const damp = (a, b, rate, dt) => a + (b - a) * (1 - Math.exp(-rate * dt));
+  const control = new Function("v", "deps", `
+    const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer } = v;
+    const { AiDrive, gripMult, tyres, dirtyAirMul, clamp, damp, K, aiT } = deps;
+    const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
+    const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
+    ${decl[1]}
+    if (c.human) steer = inputSteer; else {
+    ${game.slice(start, end)}
+    return { steer, gripScale, latFac, aiHead: c.aiHead, steerSm: c.steerSm };
+  `);
+  let seed = 9271;
+  const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const modes = ["normal", "contact", "unstuck", "rub", "crawl", "stopped", "human"];
+  for (let i = 0; i < 280; i++) {
+    const mode = modes[i % modes.length], PACE = [0.05, 0.5, 1, 2][i % 4];
+    const speed = (mode === "stopped" ? 0 : mode === "crawl" ? 3 : 12 + 90 * rnd()) * PACE * (i % 9 ? 1 : -1);
+    const c = { human: mode === "human", x: rnd() * 8 - 4, speed, aeroLoad: rnd(),
+      wake: i % 3 ? rnd() : 0, aiHead: rnd() * 0.6 - 0.3, steerSm: i % 4 ? rnd() - 0.5 : undefined,
+      contactT: mode === "contact" ? 0.3 : 0 };
+    const original = { ...c };
+    const weatherGrip = [1, 0.72, 0.45][i % 3], tyreGrip = 0.4 + rnd() * 0.6;
+    const air = (wake, velocity) => 1 - 0.2 * wake * Math.min(1, Math.abs(velocity) / (K.VMAX * Math.max(PACE, 0.05))) ** 2;
+    const v = { c, PACE, dt: [1 / 120, 1 / 60, 1 / 30][i % 3], desiredX: rnd() * 10 - 5,
+      tanT: rnd() * 0.2 - 0.1, unstuckActive: mode === "unstuck", rubClamp: mode === "rub", inputSteer: 0.23 };
+    const calls = { weather: 0, tyre: 0, air: 0, lateral: 0, yaw: 0 };
+    const deps = { K, clamp, damp, aiT: mid,
+      AiDrive: { ...A,
+        yawScale(...args) { calls.yaw++; return A.yawScale(...args); },
+        lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },
+      gripMult() { calls.weather++; return weatherGrip; },
+      tyres: { gripMul() { calls.tyre++; return tyreGrip; } },
+      dirtyAirMul(wake, velocity) { calls.air++; return air(wake, velocity); } };
+    const got = control(v, deps);
+    const grip = weatherGrip * tyreGrip * air(original.wake, original.speed);
+    const lateral = A.lateralScale(speed, original.aeroLoad, grip, PACE, K.VMAX);
+    const vStd = speed * K.VMAX / (K.VMAX * Math.max(PACE, 0.05));
+    const latFac = clamp(Math.abs(vStd) / 18, 0, 1), err = v.desiredX - original.x, vAbs = Math.abs(speed);
+    let head = original.aiHead, sm = original.steerSm, steer = v.inputSteer;
+    const recovery = mode !== "normal" && mode !== "human";
+    if (!c.human && recovery) {
+      const e = Math.abs(err) < 0.3 ? err * (Math.abs(err) / 0.3) : err;
+      const want = clamp(e * 0.9, -1, 1);
+      steer = sm = damp(sm === undefined ? want : sm, want, A.steerDamp(mid), v.dt);
+      const vl = steer * K.STEER_VMAX * latFac;
+      head = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX) : 0;
+    } else if (!c.human) {
+      const want = clamp(Math.atan(v.tanT) + Math.atan(K.AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX);
+      const max = Math.min(K.AI_YAW_MAX, K.AI_YAW_LAT * K.LAT_MAX * A.yawScale(speed, original.aeroLoad, grip, PACE, K.VMAX) / vAbs);
+      head = (head || 0) + clamp(want - (head || 0), -max * v.dt, max * v.dt);
+      steer = sm = clamp(vAbs * Math.sin(head) / Math.max(K.STEER_VMAX * latFac * lateral, 1), -1, 1);
+    }
+    assert.deepEqual(got, { steer, gripScale: lateral, latFac, aiHead: head, steerSm: sm }, mode + " case " + i);
+    assert.deepEqual(calls, { weather: 1, tyre: 1, air: 1, lateral: 1, yaw: mode === "normal" ? 1 : 0 },
+      mode + ": one current grip calculation; yaw only for the normal AI controller");
+  }
+});

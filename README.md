@@ -36,6 +36,13 @@ Night races run under floodlights.
 - **Season mode**: all 24 rounds in order with persistent
   championship standings.
 
+**Build your own circuit** in the TRACK DESIGNER (title menu): RANDOMISE or
+draw a loop, drag its points, stamp corners, hairpins and chicanes, pick a
+theme, and let the designer's checks (and their FIX buttons) make it raceable —
+then SAVE it and race the full field or a time trial on it, or share it as a
+link. The designer's HOW TO tab walks through it; the long form is
+[docs/TRACK-DESIGNER.md](docs/TRACK-DESIGNER.md).
+
 ### Controls
 
 - **Mobile (tilt):** tilt the phone to steer — calibrates at the start
@@ -146,7 +153,7 @@ logic). Load order is defined in `tools/manifest.cjs`.
 ## Testing & development
 
 The project ships a **Playwright test suite** — 120+ Playwright specs — plus
-400+ `node --test` unit suites, covering rendering, physics, UI across screens,
+450+ `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.

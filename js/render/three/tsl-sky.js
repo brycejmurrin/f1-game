@@ -379,15 +379,16 @@
         const sunWarm = mix(U.sunColor, U.sunColor.mul(vec3(1.18, 0.52, 0.24)), golden).toVar();
         // Wide aureole: broader (lower exponent) + stronger at golden hour.
         c.addAssign(sunWarm.mul(pow(sd, mix(float(20.0), float(8.0), golden)))
-          .mul(golden.mul(0.55).add(0.55)).mul(coronaDamp).mul(U.coronaAureole));
+          .mul(golden.mul(0.55).add(0.55)).mul(coronaDamp).mul(cityCov.mul(0.6).oneMinus()).mul(U.coronaAureole));
         // Tight inner ring.
-        c.addAssign(sunWarm.mul(pow(sd, 300.0)).mul(0.95).mul(U.sunCorona).mul(coronaDamp));
+        // Behind the cloud deck (GLX sunClear): cityCov hides disc + ring, most of the aureole.
+        c.addAssign(sunWarm.mul(pow(sd, 300.0)).mul(0.95).mul(U.sunCorona).mul(coronaDamp).mul(cityCov.oneMinus()));
         // Disc, vertically squashed near the horizon (atmospheric refraction).
         const dd = dir.sub(U.sunDir.mul(sd)).toVar();
         const perp = length(vec2(length(dd.xz),
           dd.y.mul(mix(float(1.0), mix(float(1.0), float(1.6), golden), U.sunSquash)))).toVar();
         const disc = smoothstep(mix(float(0.018), float(0.028), golden).mul(U.sunDiscSize),
-          U.sunDiscSize.mul(0.006), perp).mul(coronaDamp).toVar();
+          U.sunDiscSize.mul(0.006), perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
         // Bright HDR core (>1) so it blooms; warm-white high, deep amber low.
         const discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm.mul(2.8), golden);
         c.addAssign(discCore.mul(disc));
@@ -417,9 +418,10 @@
         });
       });
 
-      // --- Moon disc + halo (night tracks; stable world-space direction) ---
+      // --- Moon disc + halo (night tracks). The disc hangs on sunDir, which at
+      // night IS the moon key light (GLX parity: the shadows fall toward it) ---
       If(U.moon.greaterThan(0.0).and(U.stars.greaterThan(0.5)), () => {
-        const moonDir = normalize(vec3(0.42, 0.72, 0.55));
+        const moonDir = normalize(U.sunDir);
         const md = dot(dir, moonDir).toVar();
         const moonPerp = length(dir.sub(moonDir.mul(max(md, 0.0)))).toVar();
         const moonDisc = smoothstep(U.moonDiscSize.mul(0.025), U.moonDiscSize.mul(0.010), moonPerp)

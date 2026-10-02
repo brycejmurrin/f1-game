@@ -21,6 +21,7 @@
  *         node tools/check/twin-fidelity.mjs m-wall-scrub-flat
  *         node tools/check/twin-fidelity.mjs --list
  *         node tools/check/twin-fidelity.mjs --dry       # patch/restore only
+ *         node tools/check/twin-fidelity.mjs --help
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -83,6 +84,13 @@ export function verdictFor(m, results) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log("usage: node tools/check/twin-fidelity.mjs [--list|--dry|--help] [mutant-id…]");
+    console.log("  (no args)   run every mutant against its VM twin");
+    console.log("  --list      print id / file / spec");
+    console.log("  --dry       verify needles only (no patch, no specs)");
+    process.exit(0);
+  }
   if (args.includes("--list")) {
     for (const m of MUTANTS) console.log(`${m.id}\t${m.file}\t${m.spec}`);
     process.exit(0);

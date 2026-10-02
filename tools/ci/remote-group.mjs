@@ -25,14 +25,15 @@
 // NOT A GATE: nothing requires this workflow; the PR's own ci.yml run decides
 // merge. Exit: 0 green, 1 red, 2 cancelled, 3 API/usage error, 124 --timeout.
 //
-// Auth: GH_TOKEN or GITHUB_TOKEN via curl's stdin config (never in argv), as
-// ci-watch.mjs does. The dispatch is the one write; the rest are GETs.
+// Auth: GH_TOKEN or GITHUB_TOKEN, else `gh auth token`, via curl's stdin config
+// (never in argv), as ci-watch.mjs does. The dispatch is the one write; the rest are GETs.
 // API: https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
 //      (200 with workflow_run_id on current API versions; a 204 falls back to finding the run)
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -103,8 +104,8 @@ export function groupVerdict(run, jobs) {
 }
 
 function api(method, pathQs, body, { raw = false } = {}) {
-  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-  if (!token) return { error: "no GH_TOKEN / GITHUB_TOKEN" };
+  const token = githubToken();
+  if (!token) return { error: NO_TOKEN_HINT };
   const args = ["-sS", "-L", "--max-time", "60", "-K", "-", "-w", "\n%{http_code}", "-X", method,
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28"];
   // The token rides curl's stdin config, so a JSON body goes through a temp file.

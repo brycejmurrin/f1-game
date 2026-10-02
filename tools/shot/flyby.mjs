@@ -38,11 +38,17 @@ import { fileURLToPath } from "node:url";
 import { installProbeInit, gotoGame, screenshotPresentedCanvas, chromiumArgsForBackend } from "./probe-page.mjs";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { readBlob, shotErrors } from "../gen/bake-flyby.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `flyby — contact sheet + JSON of the pre-race FLYBY shots
+
+  node tools/shot/flyby.mjs [--track monza] [--frames N] [--out DIR] [--u 0,0.5,1] [--shots file]
+
+Default: monza, 9 frames → artifacts/flyby/. Flags a camera inside scenery.`);
 const arg = (name, def) => {
   const i = argv.indexOf("--" + name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : def;

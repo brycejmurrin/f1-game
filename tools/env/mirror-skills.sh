@@ -14,6 +14,18 @@ SRC="$ROOT/.claude/skills"
 DST="$ROOT/.agents/skills"
 MODE="${1:-}"
 
+if [[ "$MODE" == "--help" || "$MODE" == "-h" ]]; then
+  cat <<'EOF'
+usage: bash tools/env/mirror-skills.sh [--check|--copy|--help]
+
+Repair the tracked .agents/skills/ Codex mirror (one symlink per skill dir).
+  (default)  create/refresh symlinks
+  --check    exit 1 if the mirror drifts; write nothing
+  --copy     materialise real copies (never commit those)
+EOF
+  exit 0
+fi
+
 want() { find "$SRC" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort; }
 have() { [[ -d "$DST" ]] && find "$DST" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort || true; }
 
