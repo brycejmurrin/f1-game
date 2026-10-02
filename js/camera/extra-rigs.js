@@ -199,11 +199,14 @@ const ExtraRigs = (function () {
   }
 
   /** Optional auto-cut onto PIT WALL around pit entry/exit. Returns the mode
-   *  id it switched to, or null. Reads apex26.pitCamAuto (default true). */
+   *  id it switched to, or null. Reads apex26.pitCamAuto — OFF unless the
+   *  player opts in: taking the camera away on every pit entry (and handing it
+   *  back on exit) was reported as unwanted on 2026-10-02, so the player's own
+   *  camera stays put; PIT WALL is still one press of the camera button away. */
   function tickPitAuto(G) {
     if (!G || !G.player || typeof CamModes === "undefined") return null;
     const store = G.store || (typeof GameStore !== "undefined" ? GameStore.store : null);
-    const enabled = !store || store.get("pitCamAuto", true) !== false;
+    const enabled = !!store && store.get("pitCamAuto", false) === true;
     const nowIn = inPit(G.player);
     const modes = CamModes.CAM_MODES;
     const pitIdx = modes.findIndex((m) => m.id === "pitwall");
@@ -245,8 +248,8 @@ const ExtraRigs = (function () {
 
   function pitCamAuto(store, v) {
     const st = store || (typeof GameStore !== "undefined" ? GameStore.store : null);
-    if (!st) return true;
-    if (v == null) return st.get("pitCamAuto", true) !== false;
+    if (!st) return false;
+    if (v == null) return st.get("pitCamAuto", false) === true;
     st.set("pitCamAuto", !!v);
     return !!v;
   }
