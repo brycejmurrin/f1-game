@@ -500,3 +500,27 @@ test("the STRATEGY row follows TYRE WEAR: hidden when wear is off, a pin persist
   }
   g.G.raceTyreWear = "off";
 });
+
+test("paintPlan hides STRATEGY when the live model is off, even if the store says wear is on", () => {
+  // Cold-boot desync: store/UI "real", model still at create's old "off".
+  // paintPlan must not claim a stop plan from planLaps' whole-race branch.
+  const src = readFileSync(new URL("../../js/race/race-settings.js", import.meta.url), "utf8");
+  const paint = fnSource(src, "function paintPlan(tt, laps)");
+  assert.match(paint, /tyres\.on\(\)/,
+    "paintPlan must gate on the live model, not only G.raceTyreWear");
+  const doc = g.sandbox.document, byId = (id) => doc.getElementById(id);
+  const prev = g.G.raceTyreWear;
+  try {
+    g.G.raceTyreWear = "real";
+    g.G.tyres.setLevel("off");
+    open("monza", false);
+    assert.equal(byId("rs-plan").hidden, true, "store on + model off → no STRATEGY row");
+    assert.equal(byId("rs-plan-bar").hidden, true);
+    g.G.tyres.setLevel("real");
+    open("monza", false);
+    assert.equal(byId("rs-plan").hidden, false, "store on + model on → STRATEGY shows");
+  } finally {
+    g.G.tyres.setLevel(prev === "off" || !prev ? "off" : prev);
+    g.G.raceTyreWear = prev;
+  }
+});

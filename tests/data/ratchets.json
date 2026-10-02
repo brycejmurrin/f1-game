@@ -12,9 +12,9 @@
       "lines": 4099
     },
     "js/game.js": {
-      "codeLines": 5312,
+      "codeLines": 5333,
       "gMembers": 283,
-      "lines": 9693,
+      "lines": 9729,
       "topLets": 160
     },
     "js/lighting/presets.js": {
@@ -24,7 +24,7 @@
       "lines": 1884
     },
     "js/render/glx/glx.js": {
-      "lines": 2778
+      "lines": 2787
     },
     "js/track/tracks.js": {
       "lines": 690
@@ -74,7 +74,7 @@
       "ceiling": 5,
       "slack": 0
     },
-    "waitForTimeout": 127,
+    "waitForTimeout": 95,
     "waitNoPolling": {
       "ceiling": 49,
       "slack": 39

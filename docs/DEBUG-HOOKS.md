@@ -452,7 +452,7 @@ display label such as `"TV SIDE"` — returns `false`.
 | `visor` | VISOR | The cockpit without its steering wheel: the same eye, tub, halo, mirrors and front wheels as `cockpit`, with the wheel and its dash left out; a linked phone wheel switches to it |
 | `trackside` | TRACKSIDE | Fixed cameras at each measured corner (outside the fence); auto-switches as the subject car passes (`js/camera/trackside.js`) |
 | `rival` | RIVAL LOCK | Frames the nearest battle rival (ahead or behind) — reuses `Broadcast.battles` when present; falls back to the nearest car within ~2.5 s |
-| `pitwall` | PIT WALL | Pit-lane / pit-exit wall cam on the garage side of the complex; optional auto-cut via `apex26.pitCamAuto` / `__apex.pitCamAuto()` (default ON) |
+| `pitwall` | PIT WALL | Pit-lane / pit-exit wall cam on the garage side of the complex; optional auto-cut via `apex26.pitCamAuto` / `__apex.pitCamAuto()` (default OFF — opt-in) |
 | `drone` | DRONE | Smoothed tether camera with corner look-ahead — a calmer, more usable alternative to HELI |
 
 ```js
@@ -462,8 +462,8 @@ __apex.camera("tcam");      // → { mode:"tcam", index:11 }
 __apex.camera("trackside"); // → { mode:"trackside", index:14 }
 __apex.camera("drone");     // → { mode:"drone", index:17 }
 __apex.camera(3);           // switch by index → cockpit
-__apex.pitCamAuto();        // → true (default): auto-cut to PIT WALL in the pits
-__apex.pitCamAuto(false);   // disable the auto-cut
+__apex.pitCamAuto();        // → false (default): the camera stays put in the pits
+__apex.pitCamAuto(true);    // opt in: auto-cut to PIT WALL on pit entry, restore on exit
 ```
 
 A camera cut eases in over ~0.35 s (a brief gentle glide); onboard cams

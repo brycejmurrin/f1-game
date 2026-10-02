@@ -21,6 +21,14 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`Usage: node tools/car/carshot.mjs [az] [tod] [teamIdx] [outPath]
+
+Cropped studio-orbit car JPEG via Chromium + __apex.studio().
+  az default 40; tod day|dusk|night|default; teamIdx Teams.LIST index; out → artifacts/tmp/carshot.jpg`);
+  process.exit(0);
+}
+
 const az = Number(process.argv[2] ?? 40);
 const tod = process.argv[3] || "day";
 const teamIdx = Number(process.argv[4] ?? 2);

@@ -1890,11 +1890,51 @@ const TrackBuildProps = (function () {
       const wsz = [(bb.w * __M.abs(cs) + bb.d * __M.abs(sn)) * sc, bb.h * sc,
                    (bb.w * __M.abs(sn) + bb.d * __M.abs(cs)) * sc];
       if (rejBox(wc, wsz)) { _culled++; return false; }
-      return TrackGeom.addMesh(out, mesh, {
-        x: a.c[0], y: a.c[1] + (o.lift || 0), z: a.c[2],
-        rotY: yaw, scale: o.scale != null ? o.scale : 1,
-        tint: o.tint || null, mat: o.mat,
-      });
+      // RECORD the placement (track.modelInstances, written either way); with
+      // instancing on, copy-vs-batch is decided once every call is in
+      // (flushModels). The guard above already ran, so a rejected stamp still
+      // degrades to nothing, never to a raw copy.
+      const key = o.mat != null ? id + "|m" + o.mat : id;
+      let rec = _pendingModels.get(key);
+      if (!rec) _pendingModels.set(key, (rec = { id, mesh, mat: o.mat != null ? o.mat : null, xf: [], tint: [], anyTint: false }));
+      const y = a.c[1] + (o.lift || 0), tn = o.tint || null;
+      rec.xf.push(a.c[0], y, a.c[2], yaw, sc);
+      rec.tint.push(tn ? tn[0] : 1, tn ? tn[1] : 1, tn ? tn[2] : 1);
+      if (tn) rec.anyTint = true;
+      if (INST_MODELS) return true;
+      return TrackGeom.addMesh(out, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc, tint: tn, mat: o.mat });
+    }
+    // A pack model placed N times is N copies of its triangles in the soup;
+    // when the backend draws instanced batches (G.createInstancedBatch — the
+    // graph's primitive models already go that way) the placements become one
+    // compacted geometry + N transforms instead. Off in the VM harnesses (no
+    // batch API), so every sweep still measures the copies; `apex26.modelInst=0`
+    // is the escape hatch. A key is batched only when it SAVES vertices: two
+    // placements of a 28-triangle barrier are cheaper copied than as a batch
+    // with its own draw, shadow caster and (TLX) ~64 KB padded instance block.
+    const MODEL_INST_MIN_SAVED = 1024;
+    const INST_MODELS = (() => {
+      if (!(G && G.createInstancedBatch)) return false;
+      try { if (localStorage.getItem("apex26.modelInst") === "0") return false; } catch (_) { /* no storage */ }
+      return true;
+    })();
+    const _pendingModels = new Map();
+    function flushModels() {
+      const rec = {};
+      for (const [key, m] of _pendingModels) {
+        const n = m.xf.length / 5;
+        const g = graph.meshModel(key, m.mesh, m.mat);
+        const inst = INST_MODELS && n >= 2 && (n - 1) * g.verts >= MODEL_INST_MIN_SAVED;
+        for (let i = 0; INST_MODELS && i < n; i++) {   // off: the copies were emitted at call time
+          const b = i * 5, t = m.anyTint ? [m.tint[i * 3], m.tint[i * 3 + 1], m.tint[i * 3 + 2]] : null;
+          if (inst) graph.meshPlace(key, m.xf[b], m.xf[b + 1], m.xf[b + 2], m.xf[b + 3], m.xf[b + 4], t);
+          else TrackGeom.addMesh(out, m.mesh, { x: m.xf[b], y: m.xf[b + 1], z: m.xf[b + 2], rotY: m.xf[b + 3], scale: m.xf[b + 4], tint: t, mat: m.mat });
+        }
+        rec[key] = { id: m.id, mat: m.mat, verts: g.verts, tris: g.tris, n, inst,
+                     xf: Float32Array.from(m.xf), tint: m.anyTint ? Float32Array.from(m.tint) : null };
+      }
+      track.modelInstances = rec;
+      _pendingModels.clear();
     }
 
     // Three lamp registries, one record shape (js/lighting/track-lights.js
@@ -2178,6 +2218,7 @@ const TrackBuildProps = (function () {
       if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
     }
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
+    flushModels();       // the recorded pack-model placements: batches, or copies into the soup
     flushAsm();          // the last anonymous run has no successor to close it
     // Swap every named record's guessed envelope for what it actually emitted.
     for (const rec of propList) {

@@ -94,6 +94,8 @@ test("the workflow is dispatch-only, dry-run by default, and passes --apply only
   assert.match(yml, /if \[ "\$APPLY" = "true" \]; then args\+=\(--apply\); fi/);
   assert.match(yml, /--prs "\$RUNNER_TEMP\/prs.json" --runs "\$RUNNER_TEMP\/runs.json"/);
   assert.match(yml, /--state all [^\n]*headRefName,headRefOid/);
+  assert.match(yml, /--quiet-hours "\$\{QUIET:-48\}"/, "the audit surveys no-PR branches quiet for 48 h");
+  assert.match(on, /quiet_hours:[\s\S]*?default: "48"/);
   assert.match(yml, /if \[ -n "\$ALSO" \]; then args\+=\(--also "\$ALSO"\); fi/);
   assert.match(on, /also:[\s\S]*?default: ""/, "no verdict beyond merged/absorbed is deleted unless a person names it");
   assert.match(yml, /contents: write/);

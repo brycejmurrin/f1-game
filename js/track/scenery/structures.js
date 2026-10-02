@@ -376,14 +376,14 @@ const SceneryStructures = (function () {
         thickness: 0.9, depth: 1.4, span: hw[k] * 2 + 5,
         color: c,
       });
-      const gl = NIGHT ? [1.28, 1.30, 1.38] : [0.80, 0.81, 0.85];
-      const r0 = [track.rx[k], track.ry[k], track.rz[k]];
-      for (const lat of [-hw[k] * 0.55, 0, hw[k] * 0.55]) {
-        RAW.addBox(out, [beam[0] + r0[0] * lat - u[0] * 0.62,
-                         beam[1] + u[1] * (-0.62),
-                         beam[2] + r0[2] * lat - u[2] * 0.62],
-                   [1.1, 0.35, 1.0], gl, b);
-      }
+      // One dark housing bar under the beam's centre: the five lamps
+      // js/race/start-lights.js lights during the countdown sit proud of its
+      // grid-facing face (5 × 0.9 m pitch, 0.62 m below the beam top — the
+      // module's DROP/SPACING). Before 2026-10-01 these were three spread grey
+      // boxes with nothing driving them.
+      const gl = NIGHT ? [0.30, 0.31, 0.34] : [0.16, 0.16, 0.19];
+      RAW.addBox(out, [beam[0] - u[0] * 0.62, beam[1] + u[1] * (-0.62), beam[2] - u[2] * 0.62],
+                 [4.9, 0.45, 0.5], gl, b);
     };
     const flagQuad = (c, t, u, w, h, col) => {
       const nv = norm(cross(t, u));   // face normal (shared by both sides)

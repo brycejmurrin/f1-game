@@ -25,6 +25,16 @@
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
+const HELP = `Usage: node tools/car/career-economy.mjs [--years N]
+
+Sims one career season per starting team through Career.settleRound() and
+reports what a year's income affords against the parts catalog. Boots Chromium.
+`;
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(HELP.trim());
+  process.exit(0);
+}
+
 const YEARS = Math.max(1, parseInt((process.argv.find((a) => a.startsWith("--years=")) || "").split("=")[1]
   || (process.argv[process.argv.indexOf("--years") + 1] || ""), 10) || 1);
 
