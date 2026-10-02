@@ -149,9 +149,7 @@ function sceneryResident(id) {
 const _sceneryLoads = new Map();
 function ensureScenery(idx) {
   const def = Tracks.LIST[idx];
-  // Also wait for the baked model pack (Assets.modelsReady: the boot prefetch,
-  // or a 4 s cap): prop placement is synchronous, so a build that ran before the
-  // models landed kept the box fallback for the whole session.
+  // Await Assets.modelsReady (boot / 4s cap): prop placement is sync.
   const models = (typeof Assets !== "undefined" && Assets.modelsReady) ? Assets.modelsReady() : Promise.resolve();
   if (!def || def.scenery || sceneryResident(def.id)) return models.then(() => {});   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
   let p = _sceneryLoads.get(def.id);
@@ -442,11 +440,9 @@ if (typeof Assets !== "undefined") {
   Assets.load();
   // Models also prefetch, but for a different reason: prop placement is SYNCHRONOUS
   // (buildProps -> the circuit's scenery() callback), so it must not depend on
-  // network timing — so ensureScenery() awaits Assets.modelsReady() (this same
-  // run, or a 4 s cap) before any build; a circuit that asks for a model that
-  // has not landed would otherwise keep the box fallback for the whole session.
-  // The manifest is a single small fetch and resolves to nothing when no models
-  // are baked.
+  // network timing — a circuit that asks for a model that has not landed gets
+  // nothing placed rather than a differently-built track. The manifest is a
+  // single small fetch and resolves to nothing when no models are baked.
   Assets.loadModels();
 }
 
