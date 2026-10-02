@@ -1492,7 +1492,8 @@ function announce(msg, dur, kind, still) {   // still(): false once a queued lin
   const pri = ANN_PRI[kind] || 2;
   if (hudProfile !== "broadcast") {
     const camId = CAM_MODES[camMode].id;
-    if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
+    if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead"
+        || camId === "rival" || camId === "pitwall" || camId === "drone") {
       // The cinematic cameras drop the two quiet channels so a film shot is not
       // captioned. That is a LOOK choice, and it must not silence the engineer:
       // the engineer's REPORTS are "info", so before this returned a verdict a
@@ -2322,13 +2323,15 @@ const _marbleArg = { lock: 0, slip: 0, speed: 0 };
 const _bankScratchCam = { dy: 0, roll: 0 };
 // Pooled camVantage extras + damp anchors — vantage() reads synchronously, keeps no reference.
 const _vantCarPos = [0, 0];
-const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: null, carHead: 0, reduceMotion: false };
+const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: null, carHead: 0, reduceMotion: false,
+  rival: null, playerProg: 0, snap: false };
 const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraFollowsBank(mode) {
   return mode === "chase" || mode === "far" || mode === "drift" ||
          mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "reverse" ||
-         mode === "low" || mode === "tcam" || mode === "rear";
+         mode === "low" || mode === "tcam" || mode === "rear" ||
+         mode === "rival" || mode === "drone";   // pitwall is a tripod on the wall
 }
 
 // Build the grounded transform needed by the pre-scene car-shadow pass. The main
@@ -2746,6 +2749,7 @@ function snapGameCam(paint) {
   if (!player || !track) return;
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
+  if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(mode);
   const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0, att: player,
     // Same car pose the live rig uses. Without it snapCam() silently fell back to
@@ -2753,6 +2757,9 @@ function snapGameCam(paint) {
     // which the comment above says they must not do.
     carPos: player.px != null ? [player.px, player.pz] : null,
     carHead: player.head || 0,
+    rival: (typeof ExtraRigs !== "undefined") ? ExtraRigs.pickRival(cars, player) : null,
+    playerProg: player.prog || 0,
+    snap: true, reduceMotion: camComfort(),
   });
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
@@ -6910,6 +6917,9 @@ function render(dt) {
     // ride the bank with the car so the camera doesn't sink into the banked road
     const bankCam = Tracks.banking(track, pS, px, _bankScratchCam, true);  // true = SMOOTH lift, camera only (mesh.js banking)
     const bankDy = bankCam ? bankCam.dy : 0;
+    // Optional pit-entry/exit auto-cut onto PIT WALL (ExtraRigs) — before we
+    // read camMode so this frame's vantage matches the cut.
+    if (typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
     const mode = CAM_MODES[camMode].id;
     roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
@@ -6930,6 +6940,11 @@ function render(dt) {
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
     _vantExtra.carHead = headInterp(player);
+    if (typeof ExtraRigs !== "undefined") {
+      _vantExtra.rival = (mode === "rival") ? ExtraRigs.pickRival(cars, player) : null;
+      _vantExtra.playerProg = player.prog || 0;
+      _vantExtra.snap = false;
+    }
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), _vantExtra);
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
@@ -6983,9 +6998,13 @@ function render(dt) {
   // corners) locking too made the head "snap" toward every apex instead of
   // panning — cockpit/hood ease the target gently, like a driver's eyes
   // leading into a corner rather than their whole head whipping around.
-  const lE = onboard ? 400 : (racing ? 14 : 1.6) * cutEase;
+  // DRONE carries its own tether smooth inside ExtraRigs; comfort softens the
+  // outer damp further. RIVAL / PIT WALL use the broadcast λ (calmer than chase).
+  const softCam = camId === "drone" || camId === "rival" || camId === "pitwall";
+  const raceLam = softCam ? (camComfort() ? 6 : (camId === "drone" ? 9 : 11)) : 14;
+  const lE = onboard ? 400 : (racing ? raceLam : 1.6) * cutEase;
   const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
-  const lT = gentleHead ? 7 : onboard ? 400 : (racing ? 16 : 10) * cutEase;
+  const lT = gentleHead ? 7 : onboard ? 400 : (racing ? (softCam ? raceLam + 1 : 16) : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
   // breathes with frame time: MEASURED, a 16-38 ms vsync wobble swings it

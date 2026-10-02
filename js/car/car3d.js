@@ -276,6 +276,9 @@ const Car3D = (function () {
       else          addQuad(out, ft, rt, rs, fs, col, surface);
     }
   }
+  // A BODY span: rounded when CarShade is on for this build (js/car/car-shade.js), else trapezoid + crease.
+  let _round = false;
+  function bodySpan(out, a, b, col, bevel) { if (_round) CarShade.loft(out, a, b, col, addTri); else { addSpan(out, a, b, col, col); addTopBevel(out, a, b, bevel, col); } }
   function addBeveledSpan(out, front, rear, b, col, colFront, surface, frontSurface) {
     addSpan(out, front, rear, col, colFront, surface, frontSurface);
     if (b > 0) addTopBevel(out, front, rear, b, col, surface);
@@ -423,7 +426,7 @@ const Car3D = (function () {
     // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
     // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
     // with the measurement (480 per wheel).
-    const SEG = 24;
+    const SEG = 24, rw = typeof CarShade !== "undefined" && CarShade.any();   // rw: tread normals from its real shape (js/car/car-shade.js)
     const x0 = cx - w/2, x1 = cx + w/2;
     const rimR = r * 0.68;
     const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
@@ -494,6 +497,7 @@ const Car3D = (function () {
         out.idx.push(A, B, C, A, C, D);
       }
     }
+    if (rw) CarShade.vertexNormals(out, i0, out.pos.length / 3);
     const outerR = r * edgeRm;
     for (let i = 0; i < SEG; i++) {
       const a0 = (i / SEG) * Math.PI * 2, a1 = ((i+1) / SEG) * Math.PI * 2;
@@ -1731,10 +1735,8 @@ const Car3D = (function () {
     addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
     const nose = noseStations || CHASSIS.nose;
-    addSpan(out, nose[0], nose[1], c1);
-    addTopBevel(out, nose[0], nose[1], 0.022, c1);
-    addSpan(out, nose[1], nose[2], c1);
-    addTopBevel(out, nose[1], nose[2], 0.028, c1);
+    bodySpan(out, nose[0], nose[1], c1, 0.022);
+    bodySpan(out, nose[1], nose[2], c1, 0.028);
     const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];
     // COCKPIT: this span is the tub the driver sits IN — the deck under the
     // wheel and the rear wall above it, 0.65 m from the eye. In body paint it
@@ -1760,8 +1762,7 @@ const Car3D = (function () {
       const f = (A.z - z) / (A.z - B.z), L = (a, b) => a + (b - a) * f;
       return { z, y: L(A.y, B.y), w: L(A.w, B.w), h: L(A.h, B.h), t: L(A.t, B.t) }; };
     const monoApex = monoAt(MONO_APEX_Z);
-    addSpan(out, CHASSIS.monocoque[0], ckpt ? monoR : monoApex, monoC);
-    addTopBevel(out, CHASSIS.monocoque[0], ckpt ? monoR : monoApex, 0.032, monoC);
+    bodySpan(out, CHASSIS.monocoque[0], ckpt ? monoR : monoApex, monoC, 0.032);
     if (ckpt) return;
     // SPLITTER / TEA-TRAY. The floor's leading edge is z 1.30 and there was
     // nothing at all ahead of it, so from any low front-three-quarter camera the
@@ -2028,7 +2029,8 @@ const Car3D = (function () {
   function buildSidepodBodywork(out, c1, eng, anchors) {
     const data = anchors || bodyAnchors({ engine: 1, _visual: { engine: eng } });
     const stations = data.podStations;
-    for (const side of [-1, 1]) {
+    if (_round) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
+    else for (const side of [-1, 1]) {
       addStationLoft(out, stations.map((p) => sidepodStation(side, p.z, p.inner, p.outer,
         p.innerBottom, p.outerBottom, p.innerTop, p.outerTop)), c1, INTAKE);
     }
@@ -2200,6 +2202,8 @@ const Car3D = (function () {
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
+    const shade = !ckpt && typeof CarShade !== "undefined" && (opts && opts.smooth != null ? !!opts.smooth : CarShade.on(teamId));
+    _round = shade;
     const bodySplitFrom = out.pos.length / 3;
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
@@ -2218,8 +2222,7 @@ const Car3D = (function () {
     hR.w += profile[0]; hR.y += profile[1];
     const deck = ckpt ? [hF, { z: 0.86, y: 0.56, w: 0.58, h: 0.12, t: 0.62 }, hR] : [hF, hR];
     for (let i = 0; i < deck.length - 1; i++) {
-      addSpan(out, deck[i], deck[i + 1], c1, c1);
-      addTopBevel(out, deck[i], deck[i + 1], 0.026, c1);
+      bodySpan(out, deck[i], deck[i + 1], c1, 0.026);
     }
     // Exterior crown stripe follows the deck. In cockpit it foreshortens into
     // a slab (a white accent hit the centre ray at 0.69 m), so it stays outside.
@@ -4038,6 +4041,8 @@ const Car3D = (function () {
       }
     }
 
+    _round = false;
+    if (shade) CarShade.smooth(out, { skip: [SURFACES.emissive] });
     // Close the last section and measure each from the vertices it emitted.
     if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
