@@ -24,8 +24,14 @@
  */
 import { chromium } from "playwright";
 import { installProbeInit, gotoGame, chromiumArgsForBackend } from "./probe-page.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `loading-probe — tap RACE! headless; record loading-screen phases
+
+  node tools/shot/loading-probe.mjs [--settle MS] [--invalidate] [--backend webgl2] [--url URL]
+
+Needs a server on :3456. Read PHASE ORDER, not SwiftShader milliseconds.`);
 const opt = (k, d) => { const i = argv.indexOf("--" + k); return i >= 0 ? argv[i + 1] : d; };
 const SETTLE = +opt("settle", 0), BACKEND = opt("backend", "webgl2"), URL = opt("url", "http://localhost:3456/");
 const INVALIDATE = argv.includes("--invalidate");

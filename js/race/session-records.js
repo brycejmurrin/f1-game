@@ -27,9 +27,21 @@ const SessionRecords = (function () {
         tyreWear: G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay };
     }
     function current() { return Ghost.contextKey(config()); }
+    function inputMeta() {
+      return {
+        seed: G.seed >>> 0 || 1,
+        physRev: PhysicsConsts.REVISION,
+        build: (typeof window !== "undefined" && window.__APEX_BUILD) || 0,
+        dt: PhysicsConsts.FIXED_DT,
+      };
+    }
     function begin() {
       key = current(); revision = G.store.rev; spoiled = false;
       Ghost.setTrack(G.track.def.id, key);
+      if (typeof InputGhost !== "undefined") {
+        InputGhost.setTrack(G.track.def.id, key);
+        InputGhost.startLap(inputMeta());
+      }
       const b = GameStore.ttBoard(G.track.def.id, key);
       G.ttRecord = b.length ? b[0].t : Infinity;
       return key;
@@ -39,12 +51,15 @@ const SessionRecords = (function () {
     // eligible for the ghost and the board. Practice spoils the session by
     // definition, whatever the session is.
     function invalidate() { if (G.practice) spoiled = true; }
-    function sample(c) {
+    function sample(c, inp) {
       if (revision !== G.store.rev) {
         revision = G.store.rev;
         if (current() !== key) spoiled = true;
       }
-      if (!spoiled && !c.incidentInvalidLap) Ghost.record(c.lapTime, c.s, c.x);
+      if (!spoiled && !c.incidentInvalidLap) {
+        Ghost.record(c.lapTime, c.s, c.x);
+        if (typeof InputGhost !== "undefined" && inp) InputGhost.record(inp);
+      }
     }
     function accept() {
       const daily = G.daily.current();
@@ -55,7 +70,9 @@ const SessionRecords = (function () {
       }
       if (!spoiled && current() === key) return true;
       G.announce("SETTINGS CHANGED — NEXT LAP STARTS A NEW CLASS", 3, "info");
-      begin(); Ghost.startLap(); return false;
+      begin(); Ghost.startLap();
+      if (typeof InputGhost !== "undefined") InputGhost.startLap(inputMeta());
+      return false;
     }
     function finish(lapTime, laps, pole) {
       if (!accept()) return;
@@ -65,6 +82,11 @@ const SessionRecords = (function () {
       const medal = Quali.medalFor(lapTime, pole), held = Ghost.medal();
       const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
         pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
+      if (typeof InputGhost !== "undefined") {
+        InputGhost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
+          pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
+        InputGhost.startLap(inputMeta());
+      }
       Ghost.startLap();
       // ONE CARD FOR ONE LAP. A good lap can earn a medal AND beat the record,
       // and these were two announce() calls: the banner showed the medal, then

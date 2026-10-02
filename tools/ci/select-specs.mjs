@@ -164,6 +164,71 @@ export const TARGET_SHARD_SEC = 480;
 // same worker; siblings on a fresh worker pass in ~8 s). menu-baseline is solo
 // for goldens; these are solo so nothing inherits their browser.
 export const SOLO_OWN_TIMEOUT_SEC = 3 * SELECTED_GATE.perTestTimeoutSec;
+
+/** True when a concrete spec file declares a solo-class per-test budget
+ *  (terrain-over-road's 1500 s all-circuits walk; props-over-road left that
+ *  set on 2026-09-30 — one test per circuit at 120 s). */
+export function isMegaSweepSpec(file) {
+  if (!file || typeof file !== "string") return false;
+  const rel = file.replace(/^\.\//, "");
+  if (!/\.spec\.js$/.test(rel) || rel.includes("*")) return false;
+  try {
+    if (!fs.existsSync(path.join(ROOT, rel))) return false;
+  } catch { return false; }
+  return maxDeclaredTimeout(rel) / 1000 >= SOLO_OWN_TIMEOUT_SEC;
+}
+
+/** Peel mega-sweep specs out of a Playwright argv so they never share a
+ *  Chromium with siblings. The selected gate already solos them (shards());
+ *  browser-group.yml / `npm run test:circuits -- --shard=i/n` still packs them
+ *  via Playwright's count shard — run 36911235525: props-over-road 410 s then
+ *  qatar-foundation Navigate hung 190 s on the same worker (retry on a fresh
+ *  worker: 23.6 s). `run-playwright.mjs` uses this so every group path inherits
+ *  the same isolation. Flags and globs stay in `rest`. */
+export function partitionMegaSweepArgs(args) {
+  const mega = [], rest = [];
+  for (const a of args || []) {
+    if (isMegaSweepSpec(a)) mega.push(a);
+    else rest.push(a);
+  }
+  return { mega, rest, peeled: mega.length > 0 };
+}
+
+/** Parse `--shard=i/n` or `--shard i/n` from argv. null when unsharded. */
+export function playwrightShard(args) {
+  const list = args || [];
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    let m = /^--shard=(\d+)\/(\d+)$/.exec(a);
+    if (!m && a === "--shard") m = /^(\d+)\/(\d+)$/.exec(list[i + 1] || "");
+    if (m) return { index: +m[1], total: +m[2] };
+  }
+  return null;
+}
+
+/** Mega solos run once: on shard 1 of a sharded group, or on any unsharded run.
+ *  Other shards peel them and do not re-run them. */
+export function shouldRunMegaOnThisShard(args) {
+  const s = playwrightShard(args);
+  return !s || s.index === 1;
+}
+
+/** Flags to keep when launching a peeled mega solo (drop --shard so Playwright
+ *  does not skip the only file). */
+export function megaSoloFlags(args) {
+  const out = [];
+  const list = args || [];
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    if (a === "--shard" || /^--shard=/.test(a)) {
+      if (a === "--shard") i++;
+      continue;
+    }
+    if (a.startsWith("-")) out.push(a);
+  }
+  return out;
+}
+
 // Minutes a job may take before the runner kills it: twice its expected work
 // (runner variance), plus MAX_FAILURES timeouts at the slowest per-test
 // timeout in it, plus setup (npm ci + chromium + Mesa) and margin. A ceiling,

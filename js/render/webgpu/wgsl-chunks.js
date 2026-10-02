@@ -897,6 +897,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
   let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
+  // The puddle shape's lateral direction (wet block below): the world xz
+  // direction of increasing track x, from derivatives — taken HERE, before the
+  // first branch, because WGSL derivatives must sit in uniform control flow.
+  let trkRightXZ = dpdx(in.wpos.xz) * dpdx(vTrk.y) + dpdy(in.wpos.xz) * dpdy(vTrk.y);
   let vDist = length(in.wpos - F.eye.xyz);
   // ONE dynamic-layer sample, not a 30-sample hoist (13 albedo + 13 normal +
   // 2 road layers sampled, 28 discarded per fragment). WGSL only
@@ -985,6 +989,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let satinMetalSurface = surfaceId == 29;
   let iriSurface = surfaceId == 30;
   let carbonFinish = surfaceId == 31;   // bare weave OVER the livery colour
+  // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its mean
+  // over 8-16 m so the 3.3 cm cross-hatch cannot moire at range. Computed
+  // here, ahead of the roughness ripple below and the albedo twill further on.
+  var weave = 0.5;
+  if (carbonFinish || carbonSurface) {
+    let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
+    let wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+  }
   // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
   // clearcoat, but a DIELECTRIC env response, not chrome — see baseRefl below.
   let visorSurface = surfaceId == 32;
@@ -1074,7 +1087,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (matteSurface) { specular = 0.16; }
     emissive = select(0.0, D.mat0.x, paintLike);
     if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
-    if (carbonSurface || carbonFinish) { rough = max(rough, 0.56); }
+    if (carbonSurface || carbonFinish) { rough = max(rough, 0.56) + (weave - 0.5) * 0.10; }   // the twill's roughness ripple
     if (rubberSurface) { rough = max(rough, 0.90); }
     if (metalSurface) { rough = min(rough, 0.16); }
     if (glassSurface || visorSurface) { rough = min(rough, 0.13); }
@@ -1117,10 +1130,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // toward dark resin and lay a fine cross-hatch over it, keeping a trace of
   // the team tint. sin*sin, so no derivative and no control-flow hazard.
   if (carbonFinish) {
-    let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
-    let weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y);
     albedo = mix(albedo * 0.16 + vec3<f32>(0.030, 0.031, 0.035), albedo * 0.28, vec3<f32>(0.25));
     albedo = albedo * (0.86 + 0.28 * weave);
+  } else if (carbonSurface) {
+    albedo = albedo * (0.93 + 0.14 * weave);
   }
   if (iriSurface) {
     let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
@@ -1161,8 +1174,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // [Block 5] WET-ROAD material response (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js). Rain
   // darkens + polishes up-facing ground; a value-noise mask pools puddles that go
   // near-mirror. Lowers effective roughness and lifts f0 toward a water film so the
-  // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Full
-  // SSR + puddle reflection is Phase-4 wgx-side; here just the material response.
+  // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Scene
+  // SSR is the half-res post pass (wgsl-post.js SSR → composite); rain ripples
+  // tilt N below when puddle*rain > 0. Analytic envBlend is the gloss fallback
+  // when SSR sheds (tier / LITE) or a march misses.
   var wet = 0.0;
   var wetSheen = 0.0;
   if (wetness > 0.001) {
@@ -1173,7 +1188,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let porous = select(0.0, 1.0, wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11);
     wet = wetness * upFace;
     let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
-    let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
+    // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
+    // drains to the gutters (0.7 → 1.2), the low side of a banked turn holds
+    // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
+    var pool = 1.0;
+    if (vTrk.z > 0.5) {
+      let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+      let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
+      let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
+      pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+    }
+    let puddle = smoothstep(0.48, 0.88, pn * pool) * wet * (1.0 - porous);
     // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
     // constant for constant: two cell grids of impact rings as a normal tilt
     // on the pooled water; the GGX lobes and the sky reflection below read N.
@@ -1525,10 +1550,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
   }
 
-  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js, reduced
-  // to the material response — full SSR is Phase-4 wgx-side). On wet up-facing ground
-  // a boosted grazing Fresnel tints the surface with the sky gradient reflected in the
-  // view ray, so the tarmac mirrors a faint sky band at the far grazing edge.
+  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js).
+  // On wet up-facing ground a boosted grazing Fresnel tints the surface with the sky
+  // gradient reflected in the view ray — the plain-gloss fallback beside the post SSR
+  // pass (and the only wet mirror when SSR is shed).
   var envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
   envBlend = max(envBlend, wetSheen * 0.55);
   if (envBlend > 0.001) {
@@ -1576,21 +1601,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color * mix(1.0 - 0.12 * F.params9.x, 1.0, ao);
   }
 
-  // [Block 8] SSR consumption — NOT in LIT (see the closing note). On up-facing WET ground
-  // blend in the screen-space-reflection result (computed by the Phase-4 post pass,
-  // wgsl-post.js) scaled by wetness * ssrStrength — a real mirror where puddles pool.
-  // Screen uv comes from the fragment framebuffer position / SSR texture size
-  // (textureDimensions), so it stays aligned without a resolution uniform. Reuses
-  // envSamp (clamped). Per the SSR pass's CONSUMER CONTRACT (wgsl-post.js) .a is
-  // the mix amount — 0 wherever the pass masked out or missed — and the blend is
-  // the darker-mirror substitution c*0.10 + rgb*0.92; honouring .a is what keeps
-  // masked-out texels (transparent black, incl. the 1×1 placeholder and the
-  // cleared texture) from darkening wet road toward black. ssrStrength=0 also
-  // makes this a no-op.
-  // SSR is consumed SAME-FRAME in COMPOSITE (wgsl-post.js), matching GLX
-  // COMPOSITE_FS; sampling last present()'s ssrTex here in LIT would lag wet
-  // road / lacquer by a frame. The texture stays bound so a 1×1 placeholder
-  // cannot poison unused bindings; the mix lives in post.
+  // [Block 8] SSR consumption — NOT in LIT (see the closing note). Wet-road /
+  // car-paint SSR is the half-res post pass in wgsl-post.js, consumed SAME-FRAME
+  // in COMPOSITE (matching GLX COMPOSITE_FS). Sampling last present()'s ssrTex
+  // here in LIT would lag wet road / lacquer by a frame. The texture stays bound
+  // so a 1×1 placeholder cannot poison unused bindings; the mix lives in post.
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
   // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/render/glx/shaders/glsl-lit.js).
@@ -1994,13 +2009,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
     let coronaDamp = (1.0 - overcast * 0.92) * (1.0 - nightSky);   // overcast <= 1 keeps the first factor >= 0.08
     let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
-    c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
-    c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp;   // SUN CORONA RING knob
+    c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * (1.0 - covRay * 0.6) * coronaAureole;   // SUN AUREOLE knob; behind the deck (GLX sunClear)
+    c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp * (1.0 - covRay);   // SUN CORONA RING knob
     let dd = dir - sunDir * sd;
     // SUN HORIZON SQUASH knob: scales the golden-hour vertical squash of the disc.
     let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), sunSquash)));
     // SUN DISC SIZE knob: scale both smoothstep edges to grow/shrink the disc.
-    let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp;
+    let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp * (1.0 - covRay);
     let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
     c = c + discCore * disc;
   }
@@ -2027,7 +2042,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   }
 
   if (moon > 0.0 && stars > 0.5) {
-    let moonDir = normalize(vec3<f32>(0.42, 0.72, 0.55));
+    // The disc hangs on sunDir: at night it IS the moon key light (GLX parity).
+    let moonDir = normalize(sunDir);
     let md = dot(dir, moonDir);
     let moonPerp = length(dir - moonDir * max(md, 0.0));
     let moonDisc = smoothstep(0.025 * moonDiscSize, 0.010 * moonDiscSize, moonPerp) * moon;   // MOON DISC SIZE knob

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { request } from "node:http";
@@ -119,4 +120,15 @@ test("concurrent report streams reserve quota before either one commits", async 
     await srv.close();
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("report-server --help exits 0 without binding a port", () => {
+  // Regression 2026-10-01: --help started the LAN server and hung forever.
+  const r = spawnSync(process.execPath, ["tools/mcp/report-server.mjs", "--help"], {
+    cwd: ROOT, encoding: "utf8", timeout: 5000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /--port/);
+  assert.match(r.stdout, /phone/i);
+  assert.doesNotMatch(r.stdout, /serving /);
 });

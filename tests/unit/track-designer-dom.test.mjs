@@ -562,3 +562,248 @@ test("DesignerCanvas: a drag stops at the storage bounds; a preview landing mid-
   const p = h.ev.changes[h.ev.changes.length - 1].pts[3];
   assert.deepEqual(plain(p), [h.b.C.LIMITS.coord, -h.b.C.LIMITS.coord], "clamped to ±10 km, so the design stays saveable");
 });
+
+// ── 2026-10-01 usability: FIX chips, HOW TO, the first-open card, hints, labels, the context row ──
+/** Every descendant of `root` (the mini DOM has no descendant selectors). */
+const walk = (n, out = []) => { for (const c of n.children || []) { out.push(c); walk(c, out); } return out; };
+const chipsIn = (n, text) => walk(n).filter((e) => e.tagName === "BUTTON" && (text == null || e.textContent === text));
+/** The rail's three panes in build order: design, library, howto. */
+const panes = (b) => b.root.querySelector(".td-rail").children.filter((c) => c.tagName === "SECTION");
+/** A ~1.6 km ellipse: RED on length and on the start straights. */
+function shortLoop(b) {
+  const d0 = openGreen(b);
+  const pts = [];
+  for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); }
+  b.D.load(Object.assign({}, d0, { pts }));
+  const v = b.D.preview();
+  assert.equal(v.ok, false);
+  return d0;
+}
+
+test("FIX chips: only on rows TrackFixes can repair; FIX commits one UNDO entry and says so; the press never reaches the row", () => {
+  const b = bootScreen();
+  const seen = [];
+  let green = null;
+  b.ctx.TrackFixes = {
+    canFix: (it) => it.code === "length",
+    apply: (d, it, built) => { seen.push({ code: it.code, built: !!(built && built.issues) }); return seen.length === 1 ? { design: Object.assign({}, d, { pts: green.pts }), msg: "lap stretched to 3.2 km" } : null; },
+    fixAll: () => null,
+  };
+  green = shortLoop(b);
+  const rows = b.root.querySelector(".td-issues").children;
+  const fixable = rows.filter((li) => chipsIn(li, "FIX").length);
+  assert.equal(fixable.length, 1, "one FIX chip, on the length row");
+  assert.match(fixable[0].textContent, /Lap is/);
+  assert.ok(rows.filter((li) => li.dataset.level === "red").length > 1, "the start rows are red too, and carry no chip");
+  const fixAll = chipsIn(b.root, "FIX ALL")[0];
+  assert.equal(fixAll.hidden, false, "FIX ALL shows while a red issue is fixable");
+  const u0 = b.D.state().undo;
+  const ev = { type: "click", bubbles: true };
+  b.dom.dispatch(chipsIn(fixable[0], "FIX")[0], ev);
+  assert.equal(ev.propagationStopped, true, "the chip's click stops at the chip (the row would refocus the canvas)");
+  assert.deepEqual(plain(seen), [{ code: "length", built: true }], "apply(design, issue, the current verdict)");
+  assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry");
+  assert.deepEqual(plain(b.D.state().design.pts), plain(green.pts));
+  assert.equal(msgText(b), "Fixed: lap stretched to 3.2 km — UNDO to revert");
+  assert.equal(b.D.preview().ok, true);
+  assert.equal(chipsIn(b.root, "FIX ALL")[0].hidden, true, "nothing red, no FIX ALL");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.preview().ok, false, "UNDO takes the fix back");
+  b.dom.dispatch(chipsIn(b.root.querySelector(".td-issues"), "FIX")[0], { type: "click", bubbles: true });
+  assert.equal(msgText(b), "No automatic fix for this one");
+  // No TrackFixes (the module did not load): no chips at all, never a throw.
+  delete b.ctx.TrackFixes;
+  b.D.preview();
+  assert.equal(chipsIn(b.root.querySelector(".td-issues"), "FIX").length, 0);
+  assert.equal(chipsIn(b.root, "FIX ALL")[0].hidden, true);
+});
+
+test("FIX ALL runs fixAll(design, TrackValidate.check) and commits once, naming the codes it applied", () => {
+  const b = bootScreen();
+  let green = null;
+  const calls = [];
+  b.ctx.TrackFixes = {
+    canFix: (it) => it.code === "length" || it.code === "start",
+    apply: () => null,
+    fixAll: (d, check) => { calls.push(check === b.V.check); return { design: Object.assign({}, d, { pts: green.pts }), applied: ["length", "start"] }; },
+  };
+  let fits = 0;
+  const real = b.DC;
+  b.ctx.DesignerCanvas = { create: (c, h) => { const api = real.create(c, h), fit = api.fit; api.fit = () => { fits++; return fit(); }; return api; } };
+  green = shortLoop(b);
+  assert.ok(chipsIn(b.root.querySelector(".td-issues"), "FIX").length >= 2, "every fixable row has its chip");
+  const u0 = b.D.state().undo, f0 = fits;
+  chipsIn(b.root, "FIX ALL")[0].click();
+  assert.deepEqual(calls, [true], "handed the validator's own check");
+  assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry for the whole batch");
+  assert.equal(b.D.state().sel, 0, "a start remedy selects the new point 0, as START HERE does");
+  assert.equal(fits, f0 + 1, "a length remedy rescales the loop, so the view refits");
+  assert.equal(msgText(b), "Fixed length, start — UNDO to revert");
+  assert.equal(b.D.preview().ok, true);
+  b.D.undo(); b.D.preview();
+  b.ctx.TrackFixes.fixAll = (d) => ({ design: d, applied: [], msgs: [] });   // nothing applies → the SAME object
+  chipsIn(b.root, "FIX ALL")[0].click();
+  assert.equal(b.D.state().undo, u0, "nothing applied, nothing committed");
+  assert.match(msgText(b), /Nothing here can be fixed automatically/);
+});
+
+test("HOW TO: a third tab lists every HOWTO step, every input and the limits; the limits match the registry", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const tabs = walk(b.root).filter((e) => e.classList.contains("td-tab"));
+  assert.deepEqual(tabs.map((t) => t.textContent), ["DESIGN", "MY CIRCUITS", "HOW TO"]);
+  for (const t of tabs) assert.equal(t.getAttribute("role"), "tab");
+  const [design, lib, how] = panes(b);
+  assert.equal(how.dataset.pane, "howto"); assert.equal(how.getAttribute("role"), "tabpanel");
+  assert.equal(how.hidden, true);
+  tabs[2].click();
+  assert.deepEqual([design.hidden, lib.hidden, how.hidden], [true, true, false]);
+  assert.deepEqual(tabs.map((t) => t.getAttribute("aria-selected")), ["false", "false", "true"]);
+  const H = b.D.HOWTO;
+  const rows = walk(how).filter((e) => e.classList.contains("td-issue"));
+  for (const r of rows) assert.equal(r.dataset.level, "info", "info rows, the CHECKS recipe");
+  const text = rows.map((r) => r.textContent).join("\n");
+  assert.equal(H.STEPS.length, 7);
+  H.STEPS.forEach((st, i) => {
+    assert.equal(st.n, i + 1);
+    assert.ok(text.includes(st.n + " · " + st.title.toUpperCase() + " — " + st.text), "step " + st.n + " is listed");
+    assert.ok(st.text.split(/(?<=[.?!])\s+(?=[A-Z])/).length <= 2, "≤ 2 sentences: " + st.title);
+  });
+  assert.deepEqual(plain(H.GESTURES.map((g) => g.input)), ["Touch", "Mouse", "Keyboard", "Gamepad"]);
+  for (const g of H.GESTURES) assert.ok(text.includes(g.input.toUpperCase() + " — " + g.text));
+  assert.ok(text.includes(H.LIMITS));
+  const L = b.C.LIMITS, VL = b.V.LIMITS;
+  assert.ok(H.LIMITS.includes(VL.lenMin / 1000 + "–" + VL.lenMax / 1000 + " km"), "lap length limits");
+  assert.ok(H.LIMITS.includes(L.ptsMin + "–" + L.ptsMax + " points"), "point limits");
+  assert.ok(H.LIMITS.includes(L.items + " saved circuits"), "library limit");
+  tabs[0].click();
+  assert.deepEqual([design.hidden, lib.hidden, how.hidden], [false, true, true]);
+});
+
+test("the first-open card: shown once, HOW TO switches tab, GOT IT stores apex26.designerCoached; a later open has none", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  const design = panes(b)[0];
+  const card = design.children[0];
+  assert.ok(card.classList.contains("td-group"), "the card is the design pane's first group");
+  const note = card.children[0];
+  assert.ok(note.classList.contains("td-issue")); assert.equal(note.dataset.level, "info");
+  assert.equal(note.textContent, "RANDOMISE gave you a circuit to start from. Drag the white points, add corners with the tools, then SAVE and RACE. Open HOW TO for the full guide.");
+  assert.deepEqual(chipsIn(card).map((c) => c.textContent), ["HOW TO", "GOT IT"]);
+  const u0 = b.D.state().undo;
+  chipsIn(card, "HOW TO")[0].click();
+  assert.equal(panes(b)[2].hidden, false, "HOW TO opens the guide");
+  assert.equal(b.data.designerCoached, undefined, "…without dismissing the card");
+  chipsIn(card, "GOT IT")[0].click();
+  assert.equal(b.data.designerCoached, true, "GOT IT stores the flag");
+  assert.ok(!design.children.includes(card), "…and removes the card");
+  assert.equal(b.D.state().undo, u0, "UNDO / REDO untouched");
+  b.D.close(); b.D.open();
+  assert.ok(!design.children[0].children.some((c) => /RANDOMISE gave you/.test(c.textContent)), "no card on a later open");
+  // Seen once is enough: a close without GOT IT stores the flag too.
+  const b2 = bootScreen();
+  b2.D.init(b2.G, { custom: b2.C, root: b2.root });
+  b2.D.open();
+  assert.ok(/RANDOMISE gave you/.test(panes(b2)[0].children[0].children[0].textContent));
+  b2.D.close();
+  assert.equal(b2.data.designerCoached, true);
+  // A player who was coached on another visit never sees it.
+  const b3 = bootScreen({ designerCoached: true });
+  b3.D.init(b3.G, { custom: b3.C, root: b3.root });
+  b3.D.open();
+  assert.equal(chipsIn(panes(b3)[0], "GOT IT").length, 0);
+});
+
+test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone), the status line says it once, and the group labels", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const rail = b.root.querySelector(".td-rail"), stage = b.root.querySelector(".td-stage");
+  const hint = rail.querySelector(".td-hint"), stageHint = stage.querySelector(".td-hint");
+  assert.ok(hint && stageHint && hint !== stageHint);
+  const toolsGroup = panes(b)[0].children.find((g) => g.children.includes(hint));
+  assert.ok(toolsGroup && toolsGroup.children.some((c) => c.classList.contains("td-chips") && c.children.every((t) => t.dataset.tool)), "the hint sits in the TOOLS group");
+  assert.match(hint.textContent, /^SELECT: drag points/);
+  // css/editor.css: the phone rules hide only the stage's copy; the rail's stays.
+  const css = read("css/editor.css");
+  assert.equal((css.match(/\.td-stage \.td-hint \{ display: none; \}/g) || []).length, 2, "narrow/portrait and short both hide the stage hint");
+  assert.doesNotMatch(css, /^\s*\.td-hint \{ display: none/m, "no rule hides every .td-hint");
+  for (const [tool, re] of [["draw", /^DRAW: draw one closed loop/], ["corner", /^CORNER: tap a point to stamp/], ["hairpin", /^HAIRPIN: tap a point/], ["straight", /^STRAIGHT: tap a point/], ["select", /^SELECT: /]]) {
+    b.D.setTool(tool);
+    assert.match(hint.textContent, re, tool);
+    assert.equal(stageHint.textContent, hint.textContent, "one string, two places");
+    assert.equal(msgText(b), hint.textContent, "the status line says it once on a change");
+  }
+  b.D.setTool("select");
+  const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
+  b.D.setTool("corner");
+  const all = labels();
+  assert.deepEqual([all[0]].concat(all.slice(2)), ["1 SHAPE", "3 LOOK", "4 DETAILS", "5 CHECKS", "SHARE CODE"]);
+  const m = all[1].match(/^2 CORNERS · CORNER R (\d+) m × 90° LEFT$/);
+  assert.ok(m, all[1]);
+  chipsIn(b.root, "TURNS RIGHT")[0].click();
+  const up = walk(b.root).find((e) => e.getAttribute && e.getAttribute("aria-label") === "RADIUS m up");
+  up.click();
+  assert.equal(labels()[1], "2 CORNERS · CORNER R " + (+m[1] + 5) + " m × 90° RIGHT", "live from the steppers");
+  b.D.setTool("straight");
+  assert.equal(labels()[1], "2 CORNERS · STRAIGHT 200 m");
+});
+
+test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that point, anchored at the press; a canvas press hides it; a stamp tool hands the canvas a ghost", () => {
+  const b = bootScreen();
+  let hooks = null;
+  const toolCalls = [];
+  const real = b.DC;
+  b.ctx.DesignerCanvas = {
+    create: (c, h) => {
+      hooks = h;
+      const api = real.create(c, h), set = api.setTool;
+      api.setTool = (name, fn) => { toolCalls.push([name, fn]); return set(name); };
+      return api;
+    },
+  };
+  const d0 = openGreen(b);
+  assert.equal(typeof hooks.onContext, "function", "the designer offers the hook");
+  const row = b.root.querySelector(".td-ctx"), stage = b.root.querySelector(".td-stage");
+  assert.ok(stage.children.includes(row), "anchored in the stage"); assert.equal(row.hidden, true);
+  assert.ok(row.classList.contains("td-chips"));
+  hooks.onContext(5, { x: 600, y: 50 });
+  assert.equal(row.hidden, false);
+  assert.equal(b.D.state().sel, 5, "the point is selected");
+  assert.deepEqual([row.style.right, row.style.top, row.style.left, row.style.bottom], ["40px", "50px", "", ""], "opens away from the right edge (canvas 640 × 400)");
+  assert.equal(row.getAttribute("aria-label"), "Point 6");
+  chipsIn(row, "DELETE")[0].click();
+  assert.equal(row.hidden, true);
+  assert.equal(b.D.state().design.pts.length, d0.pts.length - 1);
+  assert.deepEqual(plain(b.D.state().design.pts[5]), plain(d0.pts[6]), "point 6 (index 5) went");
+  const before = plain(b.D.state().design.pts);
+  hooks.onContext(4, { x: 10, y: 390 });
+  assert.deepEqual([row.style.left, row.style.bottom], ["10px", "10px"], "opens away from the bottom edge");
+  chipsIn(row, "START HERE")[0].click();
+  assert.deepEqual(plain(b.D.state().design.pts[0]), before[4], "START HERE on that point");
+  hooks.onContext(0, { x: 100, y: 100 });
+  assert.equal(chipsIn(row, "START HERE")[0].disabled, true, "the start itself cannot be the new start");
+  chipsIn(row, "CLOSE")[0].click();
+  assert.equal(row.hidden, true);
+  hooks.onContext(3, { x: 100, y: 100 });
+  const canvas = b.root.querySelector("canvas");
+  b.dom.dispatch(canvas, { type: "pointerdown", pointerId: 7, clientX: 5, clientY: 5 });
+  b.dom.dispatch(canvas, { type: "pointercancel", pointerId: 7 });
+  assert.equal(row.hidden, true, "the next press on the canvas hides it");
+  hooks.onContext(3, { x: 100, y: 100 });
+  b.D.close();
+  assert.equal(row.hidden, true, "closing the screen hides it");
+  hooks.onContext(999, { x: 1, y: 1 });
+  assert.equal(row.hidden, true, "an index off the loop is ignored");
+  // The ghost: a stamp tool passes previewFn(i) → absolute world points from point i.
+  b.D.open();
+  b.D.setTool("corner");
+  const [name, fn] = toolCalls[toolCalls.length - 1];
+  assert.equal(name, "corner"); assert.equal(typeof fn, "function");
+  const pts = b.D.state().design.pts, g = fn(3);
+  assert.deepEqual(plain(g.pts[0]), plain(pts[3]), "the ghost starts on the point");
+  assert.ok(g.pts.length > 3, "…and runs the corner");
+  assert.equal(fn(-1), null);
+  b.D.setTool("select");
+  assert.equal(toolCalls[toolCalls.length - 1][1], undefined, "SELECT clears the ghost");
+});
