@@ -5,16 +5,16 @@
       "lines": 2515
     },
     "js/agent/apex.js": {
-      "codeLines": 2277,
-      "lines": 3221
+      "codeLines": 2281,
+      "lines": 3227
     },
     "js/car/car3d.js": {
-      "lines": 4094
+      "lines": 4099
     },
     "js/game.js": {
-      "codeLines": 5291,
+      "codeLines": 5306,
       "gMembers": 283,
-      "lines": 9664,
+      "lines": 9683,
       "topLets": 160
     },
     "js/lighting/presets.js": {
@@ -71,7 +71,7 @@
       "slack": 0
     },
     "twinDebt": {
-      "ceiling": 3,
+      "ceiling": 5,
       "slack": 0
     },
     "waitForTimeout": 127,

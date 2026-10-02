@@ -194,6 +194,7 @@ const FULL = [
   "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
   "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
+  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=, default OFF)
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/input.js",
@@ -259,6 +260,7 @@ const FULL = [
   "js/race/spotter.js",
   "js/race/race-radio.js",
   "js/camera/offsets.js",
+  "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
   "js/camera/flyby-seq.js",
   "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
@@ -422,6 +424,7 @@ const CARVIEW = [
   "js/data/teams.js",
   "js/car/parts.js",
   "js/car/helmets.js",
+  "js/car/car-shade.js",
   "js/car/car3d.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
