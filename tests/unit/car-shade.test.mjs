@@ -55,6 +55,34 @@ test("the rounded section keeps the trapezoid's envelope: top, bottom and mid-fl
   }
 });
 
+test("the section is flat-topped (a real nose), rounder underneath, and sink() says where its top has fallen", () => {
+  const f = { z: 1, y: 0.4, w: 0.20, h: 0.12, t: 0.7 }, hh = 0.06, topSide = 0.1 * 0.7;
+  const fine = CarShade.ring(f, 4000);
+  const yAt = (x, upper) => fine.filter((p) => (upper ? p[1] > f.y : p[1] < f.y))
+    .reduce((m, p) => (Math.abs(p[0] - x) < Math.abs(m[0] - x) ? p : m))[1];
+  const k = 0.8, dropTop = f.y + hh - yAt(k * topSide, true), riseBottom = yAt(k * 0.1, false) - (f.y - hh);
+  assert.ok(dropTop / hh < 0.12, `flat top: ${(dropTop * 1000).toFixed(1)} mm down at 80 % of the top width`);
+  assert.ok(riseBottom > 2 * dropTop, "the underside stays rounder than the top");
+  const st = { top: f.y + hh, bottom: f.y - hh, topSide };
+  assert.ok(Math.abs(CarShade.sink(st, k * topSide) - dropTop) < 0.0015, "sink() matches the section within 1.5 mm");
+  assert.equal(CarShade.sink(st, 0), 0, "nothing to sink at the centre line");
+});
+
+test("a livery nose cap wraps the rounded nose: every point a few mm proud, none poking out", () => {
+  const nose = { top: 0.36, bottom: 0.25, side: 0.075, topSide: 0.052 };   // a car3d nose anchor
+  const body = { z: 2.5, y: (nose.top + nose.bottom) / 2, w: nose.side * 2, h: nose.top - nose.bottom, t: nose.topSide / nose.side };
+  const capSt = { z: 2.5, y: body.y, w: body.w + 0.010, h: body.h + 0.010, t: 0.70 };   // car3d's cap station (its own t is for the flat cap)
+  const out = { pos: [] };
+  CarShade.capLoft(out, capSt, Object.assign({}, capSt, { z: 2.1 }), nose, nose, [1, 0, 0], (o, a, b, c) => o.pos.push(a, b, c));
+  const ring = CarShade.ring(body), capRing = CarShade.ring(Object.assign({}, capSt, { t: body.t }));
+  for (let i = 0; i < ring.length; i++) {
+    const d = Math.hypot(capRing[i][0] - ring[i][0], capRing[i][1] - ring[i][1]);
+    const out_ = Math.hypot(capRing[i][0], capRing[i][1] - body.y) > Math.hypot(ring[i][0], ring[i][1] - body.y);
+    assert.ok(out_ && d > 0 && d <= 0.008, `cap point ${i} is ${(d * 1000).toFixed(1)} mm proud`);
+  }
+  assert.ok(out.pos.some((p) => p[2] === 2.5) && out.pos.some((p) => p[2] === 2.1), "the cap lofts end to end");
+});
+
 test("the loft is closed and every face points out", () => {
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   const tri = (o, a, b, c) => {
@@ -232,6 +260,21 @@ test("Car3D: OFF is the build that never heard of CarShade; ON (the default) is 
   const cw = ck.parts.find((p) => p.name === "wheels"), ckBody = ck.pos.length / 3 - (cw ? cw.vertices : 0);
   assert.deepEqual(A(ck.pos), A(ck0.pos), "cockpit pos");
   assert.deepEqual(A(ck.nrm).slice(0, ckBody * 3), A(ck0.nrm).slice(0, ckBody * 3), "cockpit body normals");
+});
+
+test("a shadow caster (silhouette build) keeps the rounded shape but skips the smoothing pass: depth never reads normals", () => {
+  const { Car3D: Plain } = load(false);
+  const c1 = [0.9, 0.5, 0.1], c2 = [0.1, 0.1, 0.1], opts = { teamId: "mclaren", silhouette: true };
+  // Triangles whose three normals differ: only a smoothing pass (or a tube) makes one.
+  const soft = (m) => { let n = 0; const N = m.nrm, I = m.idx;
+    for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+      if (N[a] !== N[b] || N[a + 1] !== N[b + 1] || N[a + 2] !== N[b + 2] || N[a] !== N[c] || N[a + 1] !== N[c + 1] || N[a + 2] !== N[c + 2]) n++; }
+    return n; };
+  const caster = Car3D.build(c1, c2, opts), plainCaster = Plain.build(c1, c2, opts);
+  const painted = Car3D.build(c1, c2, { teamId: "mclaren" }), plainPainted = Plain.build(c1, c2, { teamId: "mclaren" });
+  assert.notDeepEqual(Array.from(caster.pos), Array.from(plainCaster.pos), "the caster is the ROUNDED shape (its shadow matches the body)");
+  assert.equal(soft(caster), soft(plainCaster), "no smoothed triangles beyond the tubes a plain caster already has");
+  assert.ok(soft(painted) > soft(plainPainted) + 1000, "the painted car IS smoothed (its caster is the only build that skips it)");
 });
 
 test("tyres, with the switch on for any car: the tread shoulder is shaded from its real shape, same geometry, unit normals", () => {
