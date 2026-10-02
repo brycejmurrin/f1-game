@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 400+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 450+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1179,6 +1179,11 @@ what it covers.
 | `validation-cli.test.mjs` | Validation and planning CLIs reject invalid numeric inputs, account for unclaimed paths, preserve immutable plans, validate material integrity and bound lighting proposals. |
 | `skill-smoke.test.mjs` | Every canonical skill has a bounded recipe with expected results and prerequisites; skipped browser or credential work never reports as tested. |
 | `capture-tools-regressions.test.mjs` | Capture option and path bounds, plan immutability, black-scene rejection, renderer identity, and lifecycle evidence through actual cancellation and cleanup. |
+| `appearance-studio.test.mjs` | Visual-only preset/profile scopes, undo, normalization, durability and reduced motion. |
+| `career-experience.test.mjs` | Career facility/achievement context, calendar and canonical result story. |
+| `photo-studio.test.mjs` | Real frame crop/export metadata, library limits, input validation and stored background. |
+| `home-world.test.mjs` | Circuit and actual pit-ribbon camera framing, camera ownership, readiness and bounded/reduced-motion render cadence. |
+| `ui-experience.test.mjs` | Pause race context from actual session state and direct task door/layer contracts. |
 | `smoke.spec.js` | page loads, `__apex` available, race starts, no WebGL error |
 | `dev-tools.spec.js` | the `__apex` API contract (60+ tests) |
 | `headless-api.spec.js` | the headless control loop: `headless()`, `obs()`, `act()`, `reset()` |

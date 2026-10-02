@@ -435,7 +435,7 @@ const DataRealRace = (function () {
     return Float32Array.from(out);
   }
   /** The field's positions for a script: cached, else fetched car by car (onProgress(done, total)). */
-  function fetchTraces(script, onProgress) {
+  function fetchTraces(script, onProgress, previous) {
     if (!script || !script.t0 || !script.drivers) return Promise.reject(new Error("no timestamps in the script"));
     return traceGet(script.sessionKey).then((hit) => {
       if (hit) return hit;
@@ -443,12 +443,16 @@ const DataRealRace = (function () {
       let end = 0;
       for (const d of script.drivers) d.lapStart.forEach((ls, i) => { if (ls != null && d.laps[i] > 0 && ls + d.laps[i] > end) end = ls + d.laps[i]; });
       const startISO = new Date(t0 - TRACE_PAD_S * 1000).toISOString(), endISO = new Date(t0 + (end + TRACE_PAD_S) * 1000).toISOString();
-      const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ, cars: {} };
+      const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ, cars: {}, failed: [] };
+      if (previous && previous.sessionKey === script.sessionKey) {
+        for (const k in previous.cars || {}) if (!(previous.failed || []).includes(+k)) traces.cars[k] = previous.cars[k];
+      }
       let done = 0, failed = 0;
       const total = script.drivers.length;
-      return Promise.all(script.drivers.map((d) => F1API.locationData(script.sessionKey, d.num, startISO, endISO)
-        .then((rows) => { traces.cars[d.num] = packTrace(rows, t0); }, () => { failed++; traces.cars[d.num] = new Float32Array(0); })
-        .then(() => { done++; if (onProgress) onProgress(done, total); })))
+      return Promise.all(script.drivers.map((d) => (Object.prototype.hasOwnProperty.call(traces.cars, d.num)
+        ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO)
+          .then((rows) => { traces.cars[d.num] = packTrace(rows, t0); }, () => { failed++; traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
+        .then(() => { done++; if (onProgress) onProgress(done, total, traces); })))
         // A failed request is not "no positions": a hub closed mid-load (F1API.cancelAll) or a dropped
         // connection. Such a set is NEVER cached (it would read as loaded, and every WATCH replay nothing).
         .then(() => failed === total ? Promise.reject(new Error("the positions did not load"))
@@ -477,8 +481,9 @@ const DataRealRace = (function () {
     let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
     let traces = null;     // the real positions for the painted script, once loaded
     let loading = null;    // {done, total} while the positions load
-    let requestGen = 0;
-    function cancel() { ++bodyGen; ++requestGen; loading = null; }
+    let requestGen = 0, replayUi = null, traceError = "", partialTraces = null;
+    let driveAction = null;
+    function cancel() { ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; }
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
@@ -521,7 +526,7 @@ const DataRealRace = (function () {
 
     function renderBody(meta, body) {
       ++requestGen;
-      loading = null;
+      loading = null; replayUi = null; driveAction = null; traceError = "";
       const myGen = ++bodyGen;
       clear(body);
       if (!meta || meta.sessionKey == null) { body.appendChild(emptyMsg(NO_RACE_MSG)); return; }
@@ -541,7 +546,11 @@ const DataRealRace = (function () {
         if (myGen !== bodyGen) return;
         Log.warn("data", "real race script failed: " + (e && e.message ? e.message : e));
         clear(slot);
-        slot.appendChild(emptyMsg(FETCH_FAIL_MSG));
+        const failure = emptyMsg(FETCH_FAIL_MSG);
+        failure.setAttribute("role", "status");
+        const retry = el("button", "dh-retry", "RETRY"); retry.type = "button";
+        retry.addEventListener("click", () => renderBody(meta, body));
+        slot.append(failure, retry);
       });
     }
 
@@ -561,7 +570,7 @@ const DataRealRace = (function () {
     /** DRIVE AS: the seat every JUMP IN uses — the drivers with a roster seat, in grid order. */
     function seatPicker(script, seats) {
       const field = el("label", "dh-pick-field");
-      field.appendChild(el("span", "dh-pick-label", "DRIVE AS"));
+      field.appendChild(el("span", "dh-pick-label", "DRIVER"));
       const pick = el("select", "dh-pick-select");
       const seated = script.drivers.filter((d) => !seats || seats.has(d.num));
       if (!seated.some((d) => d.code === seatCode)) seatCode = seated.length ? seated[0].code : null;
@@ -571,7 +580,7 @@ const DataRealRace = (function () {
         if (d.code === seatCode) op.selected = true;
         pick.appendChild(op);
       });
-      pick.addEventListener("change", () => { seatCode = pick.value || seatCode; });
+      pick.addEventListener("change", () => { seatCode = pick.value || seatCode; if (driveAction) driveAction.textContent = "JUMP IN AS " + seatCode + " · L" + startLap; });
       field.appendChild(pick);
       return field;
     }
@@ -596,27 +605,57 @@ const DataRealRace = (function () {
       const have = traces && traces.sessionKey === script.sessionKey;
       const canReplay = !!script.t0 && typeof RealRace !== "undefined" && !!RealRace.replay;
       if (!canReplay) { row.appendChild(el("span", "dh-lr-meta", "Real positions need a script with timestamps — reopen the tab to refetch it.")); return row; }
-      const state = el("span", "dh-lr-meta", have ? "REAL POSITIONS LOADED · " + Object.keys(traces.cars).length + " CARS" : loading ? "LOADING REAL POSITIONS · " + loading.done + " / " + loading.total : "REAL POSITIONS · " + script.drivers.length + " CARS, ONE PULL EACH (≈ 60 MB, CACHED)");
+      const state = el("span", "dh-lr-meta"); state.setAttribute("role", "status");
       row.appendChild(state);
       // A race loaded on an earlier visit is in IndexedDB: say so once it answers (a repaint, not a fetch).
+      const progress = el("progress"); progress.max = script.drivers.length;
+      progress.setAttribute("aria-label", "Download real car positions"); progress.hidden = true; row.appendChild(progress);
+      const mk = (label, aria, fn) => { const b = el("button", "dh-pill", label); b.type = "button"; b.setAttribute("aria-label", aria); b.addEventListener("click", fn); row.appendChild(b); return b; };
+      const load = mk("LOAD POSITIONS", "Load the real positions of every car", () => loadTraces(script, slot, null));
+      const highlights = mk("HIGHLIGHTS", "Watch the highlights of the race, recreated", () => watch(script, slot, 1, true));
+      const full = mk("WATCH FROM L" + startLap, "Watch the race recreated from lap " + startLap, () => watch(script, slot, startLap, false));
+      const cancel = mk("CANCEL DOWNLOAD", "Cancel the real positions download", () => {
+        requestGen++; loading = null; traceError = "Download cancelled. RETRY keeps the cars already loaded.";
+        F1API.cancelAll(); updateReplayRow();
+      });
+      replayUi = { script, slot, state, progress, load, highlights, full, cancel };
+      updateReplayRow();
       const generation = requestGen;
-      if (!have && !loading) traceGet(script.sessionKey).then((hit) => { if (generation === requestGen && hit && !traces && slot && slot.isConnected !== false) { traces = hit; clear(slot); paint(script, slot); } });
-      const mk = (label, aria, fn) => { const b = el("button", "dh-pill", label); b.type = "button"; b.setAttribute("aria-label", aria); b.disabled = !!loading; b.addEventListener("click", fn); row.appendChild(b); return b; };
-      if (!have) mk("LOAD", "Load the real positions of every car", () => loadTraces(script, slot, null));
-      mk("HIGHLIGHTS", "Watch the highlights of the race, recreated", () => watch(script, slot, 1, true));
-      mk("WATCH FROM L" + startLap, "Watch the race recreated from lap " + startLap, () => watch(script, slot, startLap, false));
+      if (!have && !loading) traceGet(script.sessionKey).then((hit) => {
+        if (generation === requestGen && (!isOpen || isOpen()) && hit && replayUi && replayUi.slot === slot && replayUi.script.sessionKey === script.sessionKey && slot.isConnected !== false && !loading) { traces = hit; traceError = ""; updateReplayRow(); }
+      });
       return row;
+    }
+    function updateReplayRow() {
+      if (!replayUi) return;
+      const u = replayUi, sk = u.script.sessionKey, tr = traces && traces.sessionKey === sk ? traces : null;
+      const busy = loading && loading.sessionKey === sk, failed = tr && tr.failed ? tr.failed : [];
+      u.state.textContent = busy ? "LOADING REAL POSITIONS · " + loading.done + " / " + loading.total + " CARS"
+        : traceError || (tr ? failed.length ? "PARTIAL POSITIONS · RETRY " + failed.map((n) => (u.script.drivers.find((d) => d.num === n) || {}).code || n).join(", ") : "REAL POSITIONS READY · " + Object.keys(tr.cars).length + " CARS"
+          : "REAL POSITIONS · ABOUT 60 MB ON FIRST LOAD · SAVED ON THIS DEVICE");
+      u.progress.hidden = !busy; if (busy) u.progress.value = loading.done;
+      u.load.hidden = !!tr && !failed.length; u.load.disabled = !!loading;
+      u.load.textContent = traceError || failed.length ? "RETRY POSITIONS" : "LOAD POSITIONS";
+      u.highlights.disabled = u.full.disabled = !!loading; u.cancel.hidden = !busy;
     }
     function loadTraces(script, slot, then) {
       if (loading) return false;
-      const generation = ++requestGen;
-      const current = () => generation === requestGen && (!isOpen || isOpen()) && (!slot || slot.isConnected !== false);
-      loading = { done: 0, total: script.drivers.length };
-      const repaint = () => { if (current() && slot) { clear(slot); paint(script, slot); } };
-      repaint();
-      fetchTraces(script, (done, total) => { if (!current()) return; loading = { done, total }; repaint(); })
-        .then((tr) => { if (!current()) return; traces = tr; loading = null; repaint(); if (then) then(tr); },
-              (e) => { if (!current()) return; loading = null; Log.warn("data", "real positions: " + (e && e.message || e)); repaint(); });
+      const mine = ++requestGen;
+      const current = () => mine === requestGen && (!isOpen || isOpen()) && (!slot || slot.isConnected !== false);
+      loading = { done: 0, total: script.drivers.length, sessionKey: script.sessionKey }; traceError = ""; updateReplayRow();
+      fetchTraces(script, (done, total, tr) => {
+        if (!current()) return;
+        partialTraces = tr; loading = { done, total, sessionKey: script.sessionKey }; updateReplayRow();
+      }, traces && traces.sessionKey === script.sessionKey ? traces : partialTraces)
+        .then((tr) => {
+          if (!current()) return;
+          traces = tr; partialTraces = tr; loading = null; updateReplayRow();
+          if (then) then(tr);
+        }, (e) => {
+          if (!current()) return;
+          loading = null; traceError = "Could not load real positions. Check your connection and RETRY.";
+          Log.warn("data", "real positions: " + (e && e.message || e)); updateReplayRow();
+        });
       return true;
     }
     /** WATCH / HIGHLIGHTS: the positions first (if not yet), then the replay in the DRIVE AS seat. */
@@ -741,7 +780,17 @@ const DataRealRace = (function () {
       lapSession = script.sessionKey;
       const seats = seatsFor(script);
 
-      // Distance pills — the whole race, or a condensed one that keeps every stop and flag in proportion.
+      const watchCard = el("section", "dh-livecard");
+      watchCard.appendChild(el("h3", "dh-section", "WATCH THE REAL RACE"));
+      watchCard.appendChild(el("p", "dh-live-sub", "Follow any driver with the TV director, or choose your own camera. Highlights takes you straight to the race's key moments."));
+      const pickRow = el("div", "dh-pick-fields");
+      pickRow.appendChild(seatPicker(script, seats)); pickRow.appendChild(watchCameraPicker());
+      watchCard.appendChild(pickRow); watchCard.appendChild(replayRow(script, slot)); slot.appendChild(watchCard);
+
+      const driveCard = el("section", "dh-livecard");
+      driveCard.appendChild(el("h3", "dh-section", "DRIVE THIS RACE"));
+      driveCard.appendChild(el("p", "dh-live-sub", "Take the selected driver's seat. Choose your distance; real stops and flags stay in proportion. Open RACE STORY below to start from a particular lap."));
+      // Distance controls belong to driving; WATCH always uses the real race clock.
       const pills = el("div", "dh-rounds");
       DISTANCES.forEach((f) => {
         const n = Math.max(1, Math.round(script.laps * f));
@@ -751,15 +800,14 @@ const DataRealRace = (function () {
         b.addEventListener("click", () => { if (f !== distance) { distance = f; clear(slot); paint(script, slot); } });
         pills.appendChild(b);
       });
-      slot.appendChild(pills);
-      const pickRow = el("div", "dh-pick-fields");
-      pickRow.appendChild(seatPicker(script, seats));
-      pickRow.appendChild(watchCameraPicker());
-      slot.appendChild(pickRow);
-      slot.appendChild(replayRow(script, slot));
-      slot.appendChild(lapList(script));
+      driveCard.appendChild(pills);
+      driveAction = el("button", "dh-livebtn", "JUMP IN AS " + (seatCode || "—") + " · L" + startLap);
+      driveAction.type = "button"; driveAction.disabled = !seatCode;
+      driveAction.addEventListener("click", () => jumpIn(script, seatCode)); driveCard.appendChild(driveAction); slot.appendChild(driveCard);
+      const story = el("details"); story.appendChild(el("summary", "adv-more-btn", "RACE STORY · EVERY LAP, PASS & PIT STOP"));
+      story.appendChild(lapList(script)); slot.appendChild(story);
 
-      slot.appendChild(el("div", "dh-lr-name", "ENTRY LIST"));
+      const entry = el("details"); entry.appendChild(el("summary", "adv-more-btn", "ENTRY LIST · GRID, TYRES & RESULTS"));
       const table = el("table", "dh-table");
       const thead = el("thead"), hr = el("tr");
       ["GRID", "DRIVER", "TEAM", "TYRES", "RESULT", ""].forEach((h) => hr.appendChild(el("th", null, h)));
@@ -787,7 +835,7 @@ const DataRealRace = (function () {
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
-      slot.appendChild(table);
+      entry.appendChild(table); slot.appendChild(entry);
       slot.appendChild(el("div", "dh-footnote", DATA_CREDIT));
     }
 
