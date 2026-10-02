@@ -264,6 +264,38 @@ test.describe("Track designer", () => {
     expect(after.design.pts.slice(0, c.i0 + 1)).toEqual(st.design.pts.slice(0, c.i0 + 1));
   });
 
+  test("strip tap adds a hill; the preview's py rises there", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    const st = await randomiseGreen(page, 7);
+    expect(st.design.elevations).toEqual([]);
+    const strip = page.locator('#trackdesigner .td-stage > canvas[data-role="profile"]');
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute("tabindex", "0");
+    const box = await strip.boundingBox();
+    expect(box && box.height).toBeGreaterThan(10);
+    // A quarter of the way along the strip, near its floor (no grip there yet).
+    const flat = await page.evaluate(() => Array.from(TrackValidate.check(TrackDesigner.state().design).tr.py));
+    await strip.click({ position: { x: box.width / 4, y: box.height - 4 } });
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.design.elevations.length === 1; }, null, { polling: 100, timeout: 15_000 });
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.undo, "one UNDO entry").toBe(st.undo + 1);
+    const hill = after.design.elevations[0];
+    expect([hill.halfM, hill.rise]).toEqual([160, 6]);
+    expect(Math.abs(hill.s - 0.25)).toBeLessThan(0.02);
+    await expect(strip).toHaveAttribute("data-arrows", "own");
+    await expect(strip).toHaveAttribute("aria-label", /^Elevation profile\. Hill 1 of 1: \+6 m over 320 m at /);
+    // The engine-built preview carries it: py at the hill's top is ~6 m above the flat build.
+    const rise = await page.evaluate((f) => {
+      const tr = TrackValidate.check(TrackDesigner.state().design).tr, h = TrackDesigner.state().design.elevations[0];
+      const k = Math.round(h.s * tr.n) % tr.n;
+      return tr.py[k] - f[Math.round(h.s * f.length) % f.length];
+    }, flat);
+    expect(rise).toBeGreaterThan(5);
+    expect(rise).toBeLessThan(7);
+    await expect(page.locator("#trackdesigner .td-row", { hasText: "HILL m" })).toBeVisible();
+  });
+
   test("FIX ALL turns a deliberately short loop green and SAVE enables", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);

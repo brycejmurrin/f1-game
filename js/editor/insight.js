@@ -7,7 +7,8 @@
    heavy stop), and the FIA Grade 1 layout advice (Appendix O as Autosport and
    Motorsport.com summarise it: straights ≤ 2 km, the first corner ≥ 250 m from
    the line and ≥ 45° at R < 300 m, ≤ 2 % on the start straight, ≥ 12 m wide,
-   banking ≤ 5.7°). Every FIA issue is AMBER, coded fia-*, with no fix tag —
+   banking ≤ 5.7°), plus the crests that lift the car and the dips that
+   compress it (v²·κv). Every such issue is AMBER, coded fia-*, with no fix tag —
    advice, never a gate, and FIX ALL leaves it alone. Plus TRACK OF THE DAY's
    seed and START FROM's shipped-circuit trace. Pure; LAZY_EDITOR, after
    validate.js; needs TrackShape at eval, Tracks / TrackValidate at call time. */
@@ -24,6 +25,10 @@ const TrackInsight = (function () {
     bandK: 0.0035, bandFrac: 0.3, bandSteps: 100,     // TrackMaps.measureApex's corner band
     spanPadM: 20,                                     // a corner's control span reaches this far past its band
     fitRunM: 30,                                      // …and its fitted arc ends this far short of the rejoin point
+    // Crests and dips: the vertical acceleration v²·κv at the point-mass speed,
+    // κv a second difference over vertWindowM (a 20 m window reads the ±0.3 m
+    // ripple as a crest on 50 of the 52 circuits; 40 m sees real ones only).
+    crestG: 0.5, sagG: 2.5, vertWindowM: 40,          // g lost over a crest (the car goes light) / g added in a dip
   });
   const DEG = 180 / Math.PI;
   const wrapS = (s, L) => ((s % L) + L) % L;
@@ -177,7 +182,7 @@ const TrackInsight = (function () {
 
   /** The FIA Grade 1 layout advice over a built centreline: AMBER issues
    *  coded fia-straight | fia-t1 | fia-grade | fia-width | fia-bank |
-   *  fia-passing, each with a finite `s`, a one-line msg and no fix. `stats`
+   *  fia-passing | fia-crest | fia-sag, each with a finite `s`, a one-line msg and no fix. `stats`
    *  is judge()'s (startBackM / startFwdM); extra { v, turns } saves a recompute. */
   function fia(tr, design, stats, extra) {
     const out = [];
@@ -224,6 +229,41 @@ const TrackInsight = (function () {
     if (!passingZones(tr, v).length) {
       let vMax = 0, at = 0; for (let k = 0; k < n; k++) if (v[k] > vMax) { vMax = v[k]; at = k; }
       add("fia-passing", "No overtaking spot: no 400 m flat-out run into a heavy stop", at * ds);
+    }
+    // 7. Crests and dips: one per stretch over the limit, at its worst point.
+    for (const c of verticalG(tr, v)) {
+      const at = km1(c.s), kmh = Math.round(v[c.k] * 3.6);
+      add(c.code, c.code === "fia-crest" ? "Crest at " + at + ": the car goes light (" + c.g.toFixed(1) + " g) at " + kmh + " km/h"
+        : "Dip at " + at + ": " + c.g.toFixed(1) + " g compression at " + kmh + " km/h", c.s);
+    }
+    return out;
+  }
+  const km1 = (m) => (m / 1000).toFixed(1) + " km";
+
+  /** Crests and dips over a built centreline: the vertical acceleration
+   *  v²·κv, κv = (py[k+W] − 2·py[k] + py[k−W]) / (W·ds)² over a vertWindowM
+   *  window, against crestG (lift, κv < 0) and sagG (compression, κv > 0).
+   *  ONE entry per contiguous run of nodes over the limit (a run over the line
+   *  is one), at its peak: [{ code: "fia-crest" | "fia-sag", k, s, g }]. */
+  function verticalG(tr, v) {
+    const out = [];
+    if (!tr || !(tr.n > 2) || !tr.py) return out;
+    v = v || speedProfile(tr);
+    const n = tr.n, ds = tr.total / n, py = tr.py, T = THRESH, G = 9.81;
+    const W = Math.max(1, Math.round(T.vertWindowM / ds)), den = (W * ds) * (W * ds);
+    const a = new Float64Array(n);                    // m/s²: + compresses (a dip), − lifts (a crest)
+    for (let k = 0; k < n; k++) a[k] = v[k] * v[k] * (py[(k + W) % n] - 2 * py[k] + py[(k - W + n) % n]) / den;
+    for (const [code, sign, lim] of [["fia-crest", -1, T.crestG], ["fia-sag", 1, T.sagG]]) {
+      const on = (k) => sign * a[k] > lim * G;
+      let k0 = 0;
+      while (k0 < n && on(k0)) k0++;                  // start the walk outside a run, so a run over the line is one
+      if (k0 === n) k0 = 0;
+      for (let d = 0; d < n; d++) {
+        if (!on((k0 + d) % n)) continue;
+        let best = (k0 + d) % n;
+        for (; d < n && on((k0 + d) % n); d++) { const j = (k0 + d) % n; if (sign * a[j] > sign * a[best]) best = j; }
+        out.push({ code, k: best, s: best * ds, g: sign * a[best] / G });
+      }
     }
     return out;
   }
@@ -274,6 +314,6 @@ const TrackInsight = (function () {
     return { pts: pts.map((p) => [q(p[0] - cx), q(p[1] - cz)]), lengthM: Math.round(tr.total), baseHW, centre: [cx, cz] };
   }
 
-  return { THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit };
+  return { THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit, verticalG };
 })();
 Object.freeze(TrackInsight);

@@ -86,6 +86,27 @@ width, from 5 to 8 m. Two rows of chips live here too:
   **SPEED** colours the road by how fast a car takes it, yellow (slow) through
   orange and red to purple (flat out); press it again to turn it off.
 
+## Elevation — hills and dips
+
+The strip under the canvas is the circuit's height profile, start line on the
+left, as the game builds it. Its dots are the hills you added (each a smooth
+cosine bump), the short ticks along the bottom your points, the red line the
+point selected on the canvas, and amber dots the slope, crest and dip warnings.
+
+- **Add a hill** — tap the strip where it should go (or, on the strip, Enter
+  adds one at the point selected on the canvas). A new hill is 6 m high and
+  320 m long.
+- **Shape it** — drag its dot up or down for the height (a dip is a negative
+  height), sideways to move it, and with Shift held sideways to make it longer
+  or shorter. The road never gets steeper than 8 %: a short hill cannot be a
+  tall one, so the height stops at the limit.
+- **Remove it** — press and hold its dot, or Delete with it selected.
+- **On a phone or a pad** — with a hill selected, **HILL m**, **HILL LENGTH m**
+  and **REMOVE HILL** appear at the end of 4 DETAILS. On a phone held sideways
+  the strip is hidden to give the canvas the height.
+
+Every change is one UNDO step. Up to 24 hills per circuit.
+
 ## TURNS — every corner, tappable
 
 Under **5 CHECKS**, **TURNS** lists the corners in driving order, for example
@@ -110,7 +131,8 @@ and lists what it finds:
   first corner 250 m or more after the line and turning at least 45°, at most
   2 % of slope along the start straight, 12 m of road, at most 5.7° of
   banking), and *No overtaking spot* means no 400 m flat-out run into a heavy
-  braking zone. Many real circuits break one or two; they never block anything
+  braking zone. *Crest* rows are where the car goes light over the top of a
+  hill at speed, *Dip* rows where it is squashed into the bottom of one. Many real circuits break one or two; they never block anything
   and FIX ALL leaves them alone.
 - Tap a row to jump to the spot on the canvas.
 - **FIX** on a row repairs that one problem; **FIX ALL** (next to the 5 CHECKS
@@ -140,7 +162,7 @@ and lists what it finds:
 |---|---|
 | Touch | Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan. |
 | Mouse | Drag a point · click the road to add one · double-click a point to delete it · wheel to zoom, drag empty space to pan · shift-click a second point to select the stretch between them. |
-| Keyboard | Tab to the canvas · `[` and `]` step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it. |
+| Keyboard | Tab to the canvas · `[` and `]` step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it · on the elevation strip under the canvas, Enter adds a hill at the selected point, `[` and `]` pick one, Up/Down set its height (5 m with Shift), Left/Right move it 10 m (with Shift: 40 m shorter / longer), Delete removes it. |
 | Gamepad | The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer. |
 
 ## Limits
