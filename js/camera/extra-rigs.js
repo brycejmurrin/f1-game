@@ -151,7 +151,11 @@ const ExtraRigs = (function () {
     let side = 1.8;
     if (!comfort && typeof Tracks.curvature === "function") {
       const kA = Tracks.curvature(track, wrapS(track, s + lerp(20, 50, spN)));
-      if (Math.abs(kA) > 0.001) side = (kA > 0 ? 1 : -1) * 3.2;
+      const mag = Math.abs(kA) > 0.001 ? 3.2 : 1.8;
+      const sgn = Math.abs(kA) > 0.001 ? (kA > 0 ? 1 : -1) : 1;
+      side = (typeof CamFeel !== "undefined")
+        ? CamFeel.follow("droneSide", sgn * mag, 2.4, (extra && extra.dt) || 0)
+        : sgn * mag;
     }
     _idealEye[0] = cx - hx * DRONE_BACK + (-hz) * side;
     _idealEye[1] = cy + DRONE_UP;
@@ -166,7 +170,10 @@ const ExtraRigs = (function () {
     _idealTgt[0] = lerp(aimCarX, _smpB.p[0] + _smpB.r[0] * x * 0.3, lead);
     _idealTgt[1] = lerp(cy + 0.8, _smpB.p[1] + 0.9 + bankDy, lead);
     _idealTgt[2] = lerp(aimCarZ, _smpB.p[2] + _smpB.r[2] * x * 0.3, lead);
-    const a = comfort ? DRONE_SMOOTH_COMFORT : DRONE_SMOOTH;
+    const dt = (extra && extra.dt) || 0;
+    const a = dt > 0
+      ? (1 - Math.exp(-(comfort ? 3.2 : 9) * dt))
+      : (comfort ? DRONE_SMOOTH_COMFORT : DRONE_SMOOTH);
     if (!_droneLive || (extra && extra.snap)) {
       _droneEye[0] = _idealEye[0]; _droneEye[1] = _idealEye[1]; _droneEye[2] = _idealEye[2];
       _droneTgt[0] = _idealTgt[0]; _droneTgt[1] = _idealTgt[1]; _droneTgt[2] = _idealTgt[2];

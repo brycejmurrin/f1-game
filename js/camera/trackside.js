@@ -101,6 +101,7 @@ const TracksideCams = (function () {
     const idx = pick(cams, s, track.total, prev);
     track._tsIdx = idx;
     const c = cams[idx];
+    const cut = idx !== prev;
     _eye[0] = c.eye[0]; _eye[1] = c.eye[1]; _eye[2] = c.eye[2];
     if (extra && extra.carPos) {
       // vantage free-world path passes [px, pz]; keep a 3-vector path for tests.
@@ -115,7 +116,7 @@ const TracksideCams = (function () {
       Tracks.sample(track, wrapS(track, c.lookS), _smp);
       _tgt[0] = _smp.p[0]; _tgt[1] = _smp.p[1] + LOOK_UP; _tgt[2] = _smp.p[2];
     }
-    return { eye: _eye, tgt: _tgt, fov: c.fov, index: idx, count: cams.length, n: c.n };
+    return { eye: _eye, tgt: _tgt, fov: c.fov, index: idx, count: cams.length, n: c.n, cut: cut };
   }
 
   function status(track) {

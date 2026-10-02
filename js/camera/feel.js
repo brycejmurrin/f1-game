@@ -145,6 +145,23 @@ const CamFeel = (function () {
     return cur + (target - cur) * (1 - Math.exp(-lambda * dt));
   }
 
+  // Live framing offsets (corner side, drift swing, chase yaw). A one-shot
+  // solve (dt 0, the unit tests and snapCam) returns `target` unchanged so
+  // shipped framing stays exact. A racing frame eases toward it, so a bend
+  // that flips side pans instead of teleporting the eye across the circuit.
+  const _fol = Object.create(null);
+  function follow(key, target, lambda, dt) {
+    if (!(dt > 0)) { _fol[key] = target; return target; }
+    const cur = _fol[key];
+    const next = cur == null || cur !== cur ? target : dampToward(cur, target, lambda, dt);
+    _fol[key] = next;
+    return next;
+  }
+  function resetFollow(key) {
+    if (key) delete _fol[key];
+    else for (const k in _fol) delete _fol[k];
+  }
+
   /* opts: { mode, dt, comfort, racing, lookHeld, stickX, stickY, mouseDx, mouseDy, spN }
      Call once per rendered race frame from game.js BEFORE vantage so look-back
      and free-look offsets are current for that solve. */
@@ -293,6 +310,7 @@ const CamFeel = (function () {
     shouldLookBack, lookBackLatch, setLookBackLatch,
     speedVignette, setSpeedVignette,
     applyFreeLook, applyAim, tick, tickRace, freeLookState, resetFreeLook, resetLatch,
+    follow, resetFollow,
     initUI, loadSettings,
   };
 })();

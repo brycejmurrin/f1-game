@@ -27,6 +27,15 @@ function loadCamFeel(disk) {
   return { CamFeel: ctx.exported, store };
 }
 
+test("follow is exact with no dt and eases when a frame has one", () => {
+  const { CamFeel } = loadCamFeel();
+  CamFeel.resetFollow("t");
+  assert.equal(CamFeel.follow("t", 1, 2, 0), 1, "a one-shot solve is the target");
+  const mid = CamFeel.follow("t", -1, 2, 0.05);
+  assert.ok(mid < 1 && mid > -1, "a live frame moves toward the new target, got " + mid);
+  assert.ok(mid > 0, "it does not arrive in one short frame");
+});
+
 test("speedFov is one shared curve scaled per mode", () => {
   const { CamFeel } = loadCamFeel();
   assert.equal(CamFeel.speedFov(64, 14, 0, 1), 64);
