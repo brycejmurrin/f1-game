@@ -6936,6 +6936,12 @@ function render(dt) {
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
     _vantExtra.carHead = headInterp(player);
+    // CamFeel (free-look / look-back latch / speed vignette) ticks BEFORE the
+    // vantage solve so this frame's offsets land in the same eye/tgt.
+    if (typeof CamFeel !== "undefined") {
+      CamFeel.tickRace(mode, dt, camComfort(), state === "race" || state === "count",
+        clamp(player.speed / vTop(), 0, 1));
+    }
     if (typeof ExtraRigs !== "undefined") {
       _vantExtra.rival = (mode === "rival") ? ExtraRigs.pickRival(cars, player) : null;
       _vantExtra.playerProg = player.prog || 0;
@@ -6948,15 +6954,17 @@ function render(dt) {
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
       // OFFSET, not the trauma — shake still decays on its own clock, so cues
       // keyed to it are untouched. CamTune.shakeOffset also applies COMFORT › HEAD BOB.
+      // SCOPE: trauma shake applies to EVERY race camera (docs/notes/CAMERA-FEEL.md).
       const amt = CamTune.shakeOffset(shake, camComfort());
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
-    // Onboard speed vibration (cockpit/hood/tcam): grows with speed². Off on wet
-    // roads — the wet SSR is camera-dependent and the buzz flickered it. REDUCE
-    // MOTION and COMFORT › HEAD BOB both land in CamTune.buzzAmp.
+    // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/visor/tcam). Amp via
+    // CamTune.buzzAmp (REDUCE MOTION / COMFORT › HEAD BOB). Off when wet (SSR flicker).
     const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && _buzzWet > 0.01 && (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam")) {
+    if (state === "race" && _buzzWet > 0.01
+        && (typeof CamFeel !== "undefined" ? CamFeel.isBuzzMode(mode)
+          : (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam"))) {
       const spV = clamp(player.speed / vTop(), 0, 1);
       const vAmp = CamTune.buzzAmp(spV, player.deploying, camComfort(), _buzzWet);
       if (vAmp > 0.001) {

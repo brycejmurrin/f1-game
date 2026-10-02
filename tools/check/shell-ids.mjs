@@ -64,6 +64,7 @@ export const RUNTIME_IDS = {
   "pm-metrics-logns":  "metrics-overlay makeMetricsBtn()",
   "pm-metrics-loglvl": "metrics-overlay makeMetricsBtn()",
   "pm-halo":           "cockpit-opts builds its rows from a table whose entries carry `id`",
+  "pm-looklatch":      "CamFeel SettingRow.build LOOK BACK LATCH; getElementById is the mount-once guard",
   "pm-xr-mode":        "xr-opts SettingRow.build creates VR MODE / VR RENDERER rows; the getElementById is the mount-once guard",
   "fb-in-ease":        "flyby-panel selectRow() builds it from a concatenated id; the one read is null-guarded",
   // Runtime soft-present overlay: GLX (HeadlessChrome) and TLX (WebGPU soft
