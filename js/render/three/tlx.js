@@ -4291,6 +4291,18 @@ const TLX = (function () {
               particles: _fxLast.particles, decals: _fxLast.decals,
             };
           },
+          // Zero last-presented FX counters so a Home-garage present (glow
+          // without blob shadows / car decals) cannot satisfy a race probe
+          // while Metal is still warming and Singapore has not presented.
+          // stopHome / startRace call this; the next race present() rewrites
+          // _fxLast from a real frame.
+          clearFxState() {
+            _fxLast.shadows = 0; _fxLast.marks = 0; _fxLast.skidVerts = 0;
+            _fxLast.glow = 0; _fxLast.particles = 0; _fxLast.decals = 0;
+            _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
+            _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
+            if (post && typeof post.clearLast === "function") post.clearLast();
+          },
           skyState() {
             return {
               on: !!(sky && skyMesh && skyMesh.visible),

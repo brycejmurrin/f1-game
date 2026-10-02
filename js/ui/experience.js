@@ -161,6 +161,15 @@ const UiExperience = (function () {
       world.end();
       home = false; signature = ""; elapsed = 0; painted = false;
       overlay.removeAttribute("data-home-ready");
+      // Home garage presents drawGlow with no blob shadows / car decals. While
+      // TLX is still warming, render() can bail and leave that present's FX
+      // counters in __tlx.fxState() — M6 on Metal then waited on glow alone and
+      // passed on the stale garage frame (run 36951948980 / 36954047730). Clear
+      // so a race probe cannot see Home leftovers.
+      try {
+        const t = G.gfx && G.gfx.__tlx;
+        if (t && typeof t.clearFxState === "function") t.clearFxState();
+      } catch (_) { /* probe hygiene — never block leaving Home */ }
     }
     function renderHome(dt) {
       if (previewBusy) return false;

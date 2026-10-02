@@ -218,6 +218,7 @@ const FULL = [
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/car/ghost-share.js",
+  "js/car/input-ghost.js",
   "js/race/session-records.js",
   "js/race/race-insights.js",
   "js/race/driving-coach.js",
@@ -510,6 +511,7 @@ const HARD_EDGES = [
   // the 2nd tag so the order is never in doubt, but these are real eval-time
   // edges and the list is what records them; the toposort check derives the rest.
   ["js/core/mat4.js", "js/game.js"],
+  ["js/core/mat4.js", "js/car/input-ghost.js"],                 // aliases M4.clamp at eval
   ["js/core/mat4.js", "js/camera/photo-kit.js"],  // PhotoKit aliases M4.clamp at eval
   ["js/core/mat4.js", "js/camera/free-cam.js"],   // FreeCam aliases M4.clamp at eval
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval

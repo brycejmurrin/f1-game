@@ -1170,8 +1170,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // [Block 5] WET-ROAD material response (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js). Rain
   // darkens + polishes up-facing ground; a value-noise mask pools puddles that go
   // near-mirror. Lowers effective roughness and lifts f0 toward a water film so the
-  // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Full
-  // SSR + puddle reflection is Phase-4 wgx-side; here just the material response.
+  // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Scene
+  // SSR is the half-res post pass (wgsl-post.js SSR → composite); rain ripples
+  // tilt N below when puddle*rain > 0. Analytic envBlend is the gloss fallback
+  // when SSR sheds (tier / LITE) or a march misses.
   var wet = 0.0;
   var wetSheen = 0.0;
   if (wetness > 0.001) {
@@ -1534,10 +1536,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
   }
 
-  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js, reduced
-  // to the material response — full SSR is Phase-4 wgx-side). On wet up-facing ground
-  // a boosted grazing Fresnel tints the surface with the sky gradient reflected in the
-  // view ray, so the tarmac mirrors a faint sky band at the far grazing edge.
+  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js).
+  // On wet up-facing ground a boosted grazing Fresnel tints the surface with the sky
+  // gradient reflected in the view ray — the plain-gloss fallback beside the post SSR
+  // pass (and the only wet mirror when SSR is shed).
   var envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
   envBlend = max(envBlend, wetSheen * 0.55);
   if (envBlend > 0.001) {
@@ -1585,21 +1587,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color * mix(1.0 - 0.12 * F.params9.x, 1.0, ao);
   }
 
-  // [Block 8] SSR consumption — NOT in LIT (see the closing note). On up-facing WET ground
-  // blend in the screen-space-reflection result (computed by the Phase-4 post pass,
-  // wgsl-post.js) scaled by wetness * ssrStrength — a real mirror where puddles pool.
-  // Screen uv comes from the fragment framebuffer position / SSR texture size
-  // (textureDimensions), so it stays aligned without a resolution uniform. Reuses
-  // envSamp (clamped). Per the SSR pass's CONSUMER CONTRACT (wgsl-post.js) .a is
-  // the mix amount — 0 wherever the pass masked out or missed — and the blend is
-  // the darker-mirror substitution c*0.10 + rgb*0.92; honouring .a is what keeps
-  // masked-out texels (transparent black, incl. the 1×1 placeholder and the
-  // cleared texture) from darkening wet road toward black. ssrStrength=0 also
-  // makes this a no-op.
-  // SSR is consumed SAME-FRAME in COMPOSITE (wgsl-post.js), matching GLX
-  // COMPOSITE_FS; sampling last present()'s ssrTex here in LIT would lag wet
-  // road / lacquer by a frame. The texture stays bound so a 1×1 placeholder
-  // cannot poison unused bindings; the mix lives in post.
+  // [Block 8] SSR consumption — NOT in LIT (see the closing note). Wet-road /
+  // car-paint SSR is the half-res post pass in wgsl-post.js, consumed SAME-FRAME
+  // in COMPOSITE (matching GLX COMPOSITE_FS). Sampling last present()'s ssrTex
+  // here in LIT would lag wet road / lacquer by a frame. The texture stays bound
+  // so a 1×1 placeholder cannot poison unused bindings; the mix lives in post.
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
   // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/render/glx/shaders/glsl-lit.js).

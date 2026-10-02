@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_276 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_277 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -301,6 +301,7 @@ _276 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
+| `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, and replay them as a ghost car. |
 | `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
 | `car-draw.js` | `CarDraw` | tag | CarDraw: the car-drawing seam out of js/game.js — the bounded mesh / livery-atlas caches (team, body, player, cockpit, wheel pairs), the player's resolved… |
 
@@ -1017,6 +1018,7 @@ shading (duplicated verts, face normals).
 | `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 | `ghost-share.js` | `GhostShare` | APXG1 fragment/file codec plus the in-memory guest rival; `#ghost=` is consumed at boot/hashchange and removed from history without writing the guest to `apex26.ghost.v1` |
+| `input-ghost.js` | `InputGhost` | deterministic local ghost: per-`FIXED_DT` steer/throttle/brake + `seed` + `PhysicsConsts.REVISION` + `__APEX_BUILD`; `apex26.inputGhost.v1`; refuses replay on version mismatch; pose Ghost remains the translucent draw |
 
 Results export the current local PB as a fragment-only link, bare code, or
 `.apexghost.json` file. A guest on the matching circuit takes the existing
@@ -1535,7 +1537,10 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   age, keyed to the game clock) before the sun/lamp GGX lobes and the sky
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
-  (`light-grid.test.mjs` pins the constants and the plumbing).
+  (`light-grid.test.mjs` pins the constants and the plumbing). Wet-road SSR
+  itself is also live on all three (GLX/TLX composite, WGX half-res pass →
+  composite); analytic `envBlend` is the plain-gloss fallback when SSR sheds
+  or a march misses.
 - **CROWN ROUNDING (2026-10-01):** data-side, so on all three for free. Every
   primitive carries flat per-face normals; a tree crown (cone stacks) lit as a
   faceted lantern. `TrackGeom.roundNormals` blends a crown's normals toward the

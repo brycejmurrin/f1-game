@@ -982,6 +982,21 @@ function isRaining() { return raceWeather === "rain"; }
 function roadWetness() { return TyreModel.wetness(raceWeather, wxArc.arc); }
 function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, roadWetness()); }
 
+// Pose Ghost + InputGhost start together on every TT lap arm so an incident /
+// reverse-crossing / spoiled class cannot leave the input stream attached to a
+// dead pose recorder (or the reverse).
+function restartTTRecorders() {
+  Ghost.startLap();
+  if (typeof InputGhost !== "undefined") {
+    InputGhost.startLap({
+      seed: simSeed(),
+      physRev: PhysicsConsts.REVISION,
+      build: (typeof window !== "undefined" && window.__APEX_BUILD) || 0,
+      dt: PhysicsConsts.FIXED_DT,
+    });
+  }
+}
+
 // IncidentSim owns motion during a takeover, but the ordinary line-crossing
 // presentation still belongs here. Core lap/clock/finish state is advanced by
 // RaceControl.lineTransition for both callers; this hook handles only the local
@@ -991,7 +1006,7 @@ function onIncidentLineCross(c, cross, newS) {
   if (cross.direction < 0) {
     if (cross.changed && c.isPlayer) {
       sectorIdx = sectorAt(newS); sectorStartT = c.lapTime; sectorValid = false;
-      if (isTimeTrial()) Ghost.startLap();
+      if (isTimeTrial()) restartTTRecorders();
     }
     return;
   }
@@ -2975,7 +2990,7 @@ async function startRaceBody() {
   wxArc.startChangeable();
   recomputePlayerMods();
   rlap("finish");
-  if (isTimeTrial()) { records.begin(); Ghost.startLap(); }
+  if (isTimeTrial()) { records.begin(); Ghost.startLap(); /* InputGhost armed in records.begin */ }
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
   // js/game.js held ZERO Log calls before this one, despite `game` being the
@@ -3215,6 +3230,7 @@ function netOrder(order) {
 
 function endRace(forcedOrder) {
   Ghost.flush();
+  if (typeof InputGhost !== "undefined") InputGhost.flush();
   try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
@@ -4451,6 +4467,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 function quitToMenu() {
   Ghost.flush();
   cancelIntro();
+  if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();
   qualiSheet.close();
@@ -6234,9 +6251,9 @@ function updateCar(c, dt, ranked) {
           ? { lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: flagged ? c.finishT : undefined }   // finishT: the in-step crossing, as classified locally
           : { lap: c.lap, time: null, best: isFinite(c.best) ? c.best : null, code: c.code, fin: c.finishT, invalid: true });
       }
-      if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
+      if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else restartTTRecorders(); }
     } else if (c.isPlayer && isTimeTrial()) {
-      Ghost.startLap();
+      restartTTRecorders();
     }
     c.incidentInvalidLap = false;   // the new lap starts clean
     c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
@@ -6257,12 +6274,12 @@ function updateCar(c, dt, ranked) {
       // rejects DECREASING s, so the next forward-jump sample would be appended and
       // at() would interpolate the replay ghost crawling across the whole lap.
       // Restart the recording so the re-timed lap records cleanly from here.
-      if (c.isPlayer && isTimeTrial()) Ghost.startLap();
+      if (c.isPlayer && isTimeTrial()) restartTTRecorders();
     }
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
   // takeover jumps s/x — recording it would corrupt the ghost trace).
-  if (isTimeTrial() && c.isPlayer) records.sample(c);
+  if (isTimeTrial() && c.isPlayer) records.sample(c, inp);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.human && state === "race" && !c.finished) {
@@ -9145,7 +9162,7 @@ els.resNext.onclick = () => {
 
 function setPaused(p, why) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
-  if (p) Ghost.flush();   // paused: the frame budget is free for the ghost write
+  if (p) { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); }   // paused: the frame budget is free for the ghost write
   // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
   // #carsetup; a Start/P press or RESUME on a pause card stacked over it
   // (hidden tab) must not run the race UNDER the garage, where the box timer
