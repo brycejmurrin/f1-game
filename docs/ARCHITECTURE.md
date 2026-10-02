@@ -1523,6 +1523,13 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **SUN BEHIND THE CLOUDS (2026-10-01):** on all three. The sky's sun disc and
+  tight corona ring are scaled by the cloud coverage along the ray (GLX
+  `sunClear = 1 − cityCov`, TLX `cityCov.oneMinus()`, WGX `1 − covRay`), the
+  aureole by 1 − 0.6·coverage — the same hoisted term the stars and the moon
+  already fade by. Before, the corona and disc were added after the cloud blend
+  with only the global overcast damp, so a cumulus over the sun never hid it.
+  `tests/unit/surface-id-parity.test.mjs` pins the three.
 - **MOON DIRECTION (2026-10-01):** on all three. The night sky's moon disc and
   halo hang on the sun-direction uniform (GLX `uSunDir`, TLX `U.sunDir`, WGX the
   sky function's `sunDir`), which at night IS the moon key light the lit pass,
