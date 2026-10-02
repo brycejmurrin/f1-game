@@ -89,13 +89,17 @@ test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", async 
     // Read the .bin with the GAME'S reader, not a copy of it — tests/helpers/ax26.mjs.
     const binPath = path.join(out, man.models.q_building.file);
     const hdr = ax26Version(binPath);
-    // Two primitives, each copying the 6-vertex POSITION accessor -> 12 verts,
-    // 6 indices, 2 triangles. (Primitives do not share a vertex block.)
-    assert.equal(hdr.verts, 12); assert.equal(hdr.indices, 6);
+    // Two primitives sharing one 6-vertex POSITION accessor, each indexing three
+    // of its vertices -> 6 verts, 6 indices, 2 triangles. (Each primitive emits
+    // only the vertices it references; copying the accessor whole per primitive
+    // gave 12, and 3.4x on the Racing Kit's per-material primitives.)
+    assert.equal(hdr.verts, 6); assert.equal(hdr.indices, 6);
     assert.equal(hdr.version, 2, "an imported low-poly mesh must take the packed layout");
     const geo = await readAX26(binPath);
     assert.ok(geo, "the shipped reader must accept what the importer produced");
     const pos = geo.pos, col = geo.col, mat = geo.mat;
+    // Local indices in first-use order: primitive A's three, then B's three.
+    assert.deepEqual([...geo.idx], [0, 1, 2, 3, 4, 5]);
 
     // Height normalised to 12 m, base sitting on y=0.
     let mny = 1e9, mxy = -1e9;

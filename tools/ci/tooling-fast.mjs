@@ -75,12 +75,16 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ai-strategy.test.mjs",
   "tests/unit/albert-park-foundation.test.mjs",
   "tests/unit/all-lights-fill.test.mjs",
+  // The pack's wildcard environment fills in only what the palette did not author;
+  // an exact <track>|<tod> key still overrides. VM-executed atmosphere.js, ~0.1 s.
+  "tests/unit/ambient-env-override.test.mjs",
   // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
   // ladder on the platforms that do not have Daniel.
   "tests/unit/announcer.test.mjs",
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
+  "tests/unit/appearance-studio.test.mjs",
   // Every AUTHORED activation-zone turn table resolves against the BUILT
   // centreline. One unresolvable pair discards a circuit's whole table and
   // falls through to ZONE_COUNT — silently, which is how monza shipped a
@@ -93,6 +97,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/backend-surface-parity.test.mjs",
   "tests/unit/badges.test.mjs",
   "tests/unit/bahrain-grandstand-rake.test.mjs",
+  // A pack model placed N times is ONE instanced batch when the backend draws
+  // batches (TrackGraph.meshModel/meshPlace); the VM sweeps keep the copies.
+  // Four Monza builds with the batch API injected, ~15 s.
+  "tests/unit/baked-model-instancing.test.mjs",
   "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/baku-migration.test.mjs",
   // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / featherBarrierEnds + fleet caps (monza/spa/bahrain/silverstone/monaco maxOver < 3). Pure helper + a few track-build-vm builds, ~6 s.
@@ -114,6 +122,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
+  "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
@@ -130,6 +139,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
+  "tests/unit/career-experience.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
@@ -166,6 +176,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",
+  // No screenshot outside a *-snapshots/ baseline under tests/, no image over
+  // 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.
+  "tests/unit/committed-images.test.mjs",
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
@@ -216,6 +229,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/deploy-tool.test.mjs",
+  // The track designer's drawing surface (js/editor/canvas.js) alone: long-press
+  // → onContext, the stamp tool's ghost polyline, the drag / span measurement
+  // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
+  "tests/unit/designer-canvas.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-builder-config.test.mjs",
   "tests/unit/desktop-native.test.mjs",
@@ -323,6 +340,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/harness-display.test.mjs",
   "tests/unit/helmets.test.mjs",
+  "tests/unit/home-world.test.mjs",
   "tests/unit/hooks-documented.test.mjs",
   // ...and an HTML-sink audit over js/: every innerHTML/outerHTML/
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
@@ -336,6 +354,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
+  "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
@@ -377,6 +396,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
   "tests/unit/lobby-codes.test.mjs",
   "tests/unit/log-namespaces.test.mjs",
+  // The marshal posts' light panels show race control: a waved yellow in the
+  // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
+  "tests/unit/marshal-panels.test.mjs",
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
@@ -424,6 +446,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/phone-pad.test.mjs",
   "tests/unit/phone-touch-surface.test.mjs",
   "tests/unit/photo-kit.test.mjs",
+  "tests/unit/photo-studio.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   // The physics baseline's provenance stamp (_blessed): reason, data hash,
   // blessing commit. One file read and one git call, well under a second, and
@@ -532,6 +555,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // rewritten by a tool, so drift shows up as a commit nobody meant to make.
   "tests/unit/spec-timings.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
+  // The start gantry's five lamps follow the countdown: one additive glow per
+  // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
+  "tests/unit/start-lights.test.mjs",
   "tests/unit/start-race-latch.test.mjs",
   "tests/unit/steel-role.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
@@ -596,6 +622,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // validator reads the engine's centreline; the share code round-trips on the
   // lattice and refuses every bad code with a reason. ~15 s together.
   "tests/unit/track-editor-geometry.test.mjs",
+  // The designer's one-click remedies (js/editor/fixes.js) over the real engine:
+  // per code a design TrackValidate judges RED, the fix, the re-check; point 0
+  // and the zones stay put, apply never throws, fixAll clears a tiny loop and a
+  // figure-8 within three rounds and leaves a green RANDOMISE loop alone. ~2 s.
+  "tests/unit/track-fixes.test.mjs",
   "tests/unit/track-foundation.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
@@ -620,6 +651,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // is a usable strategy range, the thermal layer warms/grains/blisters, and
   // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
+  "tests/unit/ui-experience.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",
@@ -631,6 +663,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
+  // A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;
+  // a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.
+  "tests/unit/weather-blend.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)

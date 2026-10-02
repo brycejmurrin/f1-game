@@ -12,9 +12,9 @@
       "lines": 4099
     },
     "js/game.js": {
-      "codeLines": 5284,
-      "gMembers": 282,
-      "lines": 9683,
+      "codeLines": 5333,
+      "gMembers": 283,
+      "lines": 9727,
       "topLets": 160
     },
     "js/lighting/presets.js": {
@@ -24,7 +24,7 @@
       "lines": 1884
     },
     "js/render/glx/glx.js": {
-      "lines": 2778
+      "lines": 2787
     },
     "js/track/tracks.js": {
       "lines": 690
@@ -39,11 +39,11 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 635,
+      "ceiling": 640,
       "slack": 5
     },
     "dynamicIdReads": {
-      "ceiling": 66,
+      "ceiling": 70,
       "slack": 5
     },
     "implicitAsserts": {
@@ -59,11 +59,11 @@
       "slack": 0
     },
     "rawSpacing": {
-      "ceiling": 304,
+      "ceiling": 305,
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2098,
+      "ceiling": 2131,
       "slack": 25
     },
     "subFloorFontSize": {

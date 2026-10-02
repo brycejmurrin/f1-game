@@ -167,7 +167,9 @@ const MirrorPass = (function () {
       if (G.state !== "race") return false;
       if (!G.player || !G.track || G.dbgCam) return false;
       if (document.body.classList.contains("hud-hidden")) return false;
-      if (typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack()) return false;
+      if (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(camId(),
+            !!(typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack()))
+          : (typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack())) return false;
       if (_dead) return false;
       if (mode === "on") return true;
       return !!ONBOARD[camId()] && !softGpu();

@@ -152,6 +152,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
 | `badges.js` | `Badges` | tag | LICENCE BADGES: local achievements unlocked from facts the game already computes (a classified result, a pole, a daily streak), persisted at `apex26.badges`. |
+| `experience.js` | `CareerExperience` | tag | CareerExperience: race brief, real season story and management navigation. |
 | `career-ui.js` | `CareerUI` | tag | the CAREER screen (#career). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
@@ -177,6 +178,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › BACKUP & RESTORE, which carries a player's state OUT of the browser and back IN. |
+| `watch-transport.js` | `WatchTransport` | tag | Visible controls for the real-race replay. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
@@ -187,7 +189,12 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
+| `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `appearance-studio.js` | `AppearanceStudio` | tag | AppearanceStudio — visual presets, named profiles and a readable preview. |
+| `home-world.js` | `HomeWorld` | tag | Home's prepared circuit: camera ownership and a bounded render budget only. |
+| `photo-studio.js` | `PhotoStudio` | tag | Photo Studio captures only the renderer, then composes a cropped image. |
+| `experience.js` | `UiExperience` | tag | connected menu doors, race context and bounded live garage home. |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
@@ -252,6 +259,8 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
+| `start-lights.js` | `StartLights` | tag | the start gantry's lights. |
+| `marshal-panels.js` | `MarshalPanels` | tag | marshal light panels. |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
 | `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
 | `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
@@ -275,6 +284,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `stamps.js` | `TrackStamps` | LAZY_EDITOR | TrackStamps: the designer's STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND tools. |
 | `randomise.js` | `TrackRandom` | LAZY_EDITOR | TrackRandom: the RANDOMISE button. |
 | `validate.js` | `TrackValidate` | LAZY_EDITOR | TrackValidate: WYSIWYG validation for the track designer. |
+| `fixes.js` | `TrackFixes` | LAZY_EDITOR | TrackFixes: one-click remedies for the track designer's CHECKS (TrackValidate). |
 | `codec.js` | `TrackCodec` | LAZY_EDITOR | TrackCodec: the share code for a custom circuit. |
 | `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
@@ -293,6 +303,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
+| `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, and replay them as a ghost car. |
 | `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
 | `car-draw.js` | `CarDraw` | tag | CarDraw: the car-drawing seam out of js/game.js — the bounded mesh / livery-atlas caches (team, body, player, cockpit, wheel pairs), the player's resolved… |
 
@@ -357,6 +368,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `experience.js` | `GarageExperience` | tag | reversible garage/home cameras, ambient clock, and honest part comparisons. |
 | `scene-prims.js` | `GaragePrims` | tag | GaragePrims: the garage bay's mesh primitives and shared constants. |
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
@@ -389,6 +401,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
+| `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
@@ -1007,6 +1020,7 @@ shading (duplicated verts, face normals).
 | `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 | `ghost-share.js` | `GhostShare` | APXG1 fragment/file codec plus the in-memory guest rival; `#ghost=` is consumed at boot/hashchange and removed from history without writing the guest to `apex26.ghost.v1` |
+| `input-ghost.js` | `InputGhost` | deterministic local ghost: per-`FIXED_DT` steer/throttle/brake + `seed` + `PhysicsConsts.REVISION` + `__APEX_BUILD`; `apex26.inputGhost.v1`; refuses replay on version mismatch; pose Ghost remains the translucent draw |
 
 Results export the current local PB as a fragment-only link, bare code, or
 `.apexghost.json` file. A guest on the matching circuit takes the existing
@@ -1301,8 +1315,11 @@ drone), HELI (broadcast heli), REVERSE (mounted ahead looking back), TV SIDE
 RIVAL LOCK (frames the nearest battle rival), PIT WALL (pit-lane wall cam with optional auto-cut),
 DRONE (smoothed tether with corner look-ahead). Chase modes
 anchor a fixed arc-length behind the car so they never lag at speed; onboard
-modes ride ON the car with very high damping. fov widens with speed; a debug
-free camera (`__apex.view`) can override all of it.
+modes ride ON the car with very high damping. FOV widens with speed through one
+shared curve (`CamFeel.modeFov` in `js/camera/feel.js`); onboard cams also take
+free-look (right stick / RMB-drag) and mode-aware look-back. A debug free
+camera (`__apex.view`) can override all of it. Feel reference:
+[notes/CAMERA-FEEL.md](notes/CAMERA-FEEL.md).
 
 Debug & test API: `window.__apex` (built by `js/agent/apex.js`) drives the game
 from the console or a headless harness — loading/positioning
@@ -1508,6 +1525,39 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01):** on all three. On the road
+  ribbon the puddle noise is weighted by where water stands: 0.7 at the crown →
+  1.2 at the gutters, and by the lateral downhill of the geometry (the world
+  direction of increasing lateral x from the screen derivatives of the track
+  coordinate, dotted with the geometric normal's tilt; ±4 per unit, clamped
+  0.5–1.5), so a camber pools its inside and dries its outside without
+  per-circuit data. GLX `LIT_FS` wet block (`vTrk`, `Ngeo`), TLX the same on
+  `trkA` (null only on the chunked city-prop variant, which has no road), WGX
+  on `vTrk`. Before, value noise on a flat threshold pooled the crown and the
+  high side alike. `tests/unit/surface-id-parity.test.mjs` pins the three.
+- **LIT, FOGGED PARTICLES (2026-10-01):** on all three. The alpha particle
+  group (tyre smoke, dust, spray, rain) is shaded as a small sphere — the frame
+  hemisphere ambient read on the quad's up plus 0.45 of the key, floored at
+  0.18 so a night puff still reads under lamps the shader cannot see; the
+  additive group (sparks, the start-gantry lamps) stays emissive. Both take the
+  lit pass's exp² fog on the eye distance (alpha → fog colour, additive → out).
+  GLX `PARTICLE_FS` (five new uniforms), TLX `particleMaterial` (the fx U block
+  gains fogColor/fogDensity), WGX `ParticleU` 80 → 144 B. Before, every
+  particle was unlit and unfogged. `tests/unit/surface-id-parity.test.mjs` pins the three.
+- **SUN BEHIND THE CLOUDS (2026-10-01):** on all three. The sky's sun disc and
+  tight corona ring are scaled by the cloud coverage along the ray (GLX
+  `sunClear = 1 − cityCov`, TLX `cityCov.oneMinus()`, WGX `1 − covRay`), the
+  aureole by 1 − 0.6·coverage — the same hoisted term the stars and the moon
+  already fade by. Before, the corona and disc were added after the cloud blend
+  with only the global overcast damp, so a cumulus over the sun never hid it.
+  `tests/unit/surface-id-parity.test.mjs` pins the three.
+- **MOON DIRECTION (2026-10-01):** on all three. The night sky's moon disc and
+  halo hang on the sun-direction uniform (GLX `uSunDir`, TLX `U.sunDir`, WGX the
+  sky function's `sunDir`), which at night IS the moon key light the lit pass,
+  the wet-road glint and the shadow map use. Before, each sky shader drew the
+  disc at a literal `(0.42, 0.72, 0.55)` so the moon and its shadows disagreed on
+  any night palette with its own `sunDir`. `tests/unit/surface-id-parity.test.mjs`
+  pins the uniform read on every backend.
 - **PUDDLE RIPPLES (2026-10-01):** on all three. Inside each lit shader's wet
   block, where `puddle > 0` and rain is FALLING (`frame.rain`, ramped like
   wetness: GLX `uRain`, TLX `U.rain`, WGX `params4.z`), two cell grids of
@@ -1516,6 +1566,17 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
+- **SCENE MSAA (2026-10-01):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
+  4× on its desktop WebGL2 backend (`tlx.js` passes `sceneSamples` into
+  `tlx-post.js`'s scene target; r186's WebGL backend resolves the depth texture
+  by blit, so SSAO/SSR/godray read a resolved depth), **TLX-WebGPU and WGX gap**:
+  core WebGPU cannot resolve a depth attachment, so the native path stays
+  single-sample with FXAA alone (`docs/research/WEBGPU-PARITY.md`). Phones: no
+  scene MSAA on any backend (the mobile recipe).
+  (`light-grid.test.mjs` pins the constants and the plumbing). Wet-road SSR
+  itself is also live on all three (GLX/TLX composite, WGX half-res pass →
+  composite); analytic `envBlend` is the plain-gloss fallback when SSR sheds
+  or a march misses.
 - **CROWN ROUNDING (2026-10-01):** data-side, so on all three for free. Every
   primitive carries flat per-face normals; a tree crown (cone stacks) lit as a
   faceted lantern. `TrackGeom.roundNormals` blends a crown's normals toward the
