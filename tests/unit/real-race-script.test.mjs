@@ -355,3 +355,29 @@ test("the passes, the lap board and the race book read straight off the real tim
   D2.forgetRaw(11377);
   assert.deepEqual([...store.keys()], ["apex26.api.https://api.openf1.org/v1/weather?session_key=11373"]);
 });
+
+test("real position retries retain successful cars, report partial failures, and never mix race sessions", async () => {
+  const requested = [], progress = [];
+  let rejectSecond = true;
+  const t0 = Date.parse("2026-09-20T11:00:00Z");
+  const F1API = { locationData: async (session, num) => {
+    requested.push([session, num]);
+    if (num === 2 && rejectSecond) throw new Error("network interrupted");
+    return [{ date: t0, x: 100, y: 200 }, { date: t0 + 1000, x: 200, y: 300 }];
+  } };
+  const { D } = load({ F1API });
+  const script = { sessionKey: 7, t0, drivers: [{ num: 1, lapStart: [0], laps: [30] }, { num: 2, lapStart: [0], laps: [30] }] };
+  const partial = await D.fetchTraces(script, (done, total) => progress.push([done, total]));
+  assert.deepEqual(host(partial.failed), [2]);
+  assert.equal(partial.cars[1].length, 6); assert.equal(partial.cars[2].length, 0);
+  assert.deepEqual(progress, [[1, 2], [2, 2]], "progress reports stable totals despite a failed car request");
+  rejectSecond = false;
+  const ready = await D.fetchTraces(script, null, partial);
+  assert.deepEqual(requested, [[7, 1], [7, 2], [7, 2]], "retry downloads only the failed driver");
+  assert.equal(ready.cars[1], partial.cars[1], "the successful car's positions are retained");
+  assert.equal(ready.cars[2].length, 6); assert.deepEqual(host(ready.failed), []);
+  await D.fetchTraces({ ...script, sessionKey: 8 }, null, ready);
+  assert.deepEqual(requested.slice(-2), [[8, 1], [8, 2]], "another race gets its own positions");
+  rejectSecond = true;
+  await assert.rejects(D.fetchTraces({ ...script, drivers: [script.drivers[1]] }), /positions did not load/, "a completely failed load cannot masquerade as cached positions");
+});

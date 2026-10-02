@@ -372,6 +372,7 @@ interface GameCtx {
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
   readonly openDailyPicker: () => void;
+  readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
   readonly seasonRound: number;
@@ -584,6 +585,8 @@ interface GameCtx {
   // ── Menus: selection state + the screens game.js still owns ───────────────
   driverIdx: number;
   difficulty: string;
+  /** AI pace mode: scripted (fixed car/driver pace) or catchup (legacy rubber band). */
+  aiPace: "scripted" | "catchup";
   readonly store: StoreApi;
   readonly tickUi: () => void;
   readonly scheduleFlybyTrack: (settle?: boolean) => void;
@@ -842,11 +845,17 @@ declare const RaceControl: GameModuleFactory;
 // `interface WeatherArc` above is the arc OBJECT it hands back on G.weatherArc;
 // TypeScript keeps the two in separate declaration spaces.
 declare const WeatherArc: GameModuleFactory;
+declare const StartLights: GameModuleFactory;
+declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
+declare const UiExperience: GameModuleFactory;
+declare const HomeWorld: GameModuleFactory;
+declare const PhotoStudio: GameModuleFactory;
+declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;

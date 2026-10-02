@@ -46,10 +46,17 @@ import {
 } from "../lib/harness.mjs";
 import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 import { awaitPresentedFrame, screenshotPresentedCanvas } from "./probe-page.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `pit-shots — pit-lane shot set from resolved geometry
+
+  node tools/shot/pit-shots.mjs [trackId ...] [--out DIR] [--tod day] [--plan]
+    [--teams all|none|…] [--wait S] [--viewport WxH] [--full] [--no-models]
+
+--plan prints the frame list without launching Chromium.`);
 function flag(name, fallback) {
   const i = argv.indexOf(name);
   if (i < 0 || i + 1 >= argv.length) return fallback;

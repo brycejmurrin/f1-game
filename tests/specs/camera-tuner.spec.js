@@ -204,13 +204,16 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   // The #camtune wrapper is a zero-width fixed shell (the docked .sheet inside
   // it is what has a box), so assert on the inner panel.
   await expect(page.locator("#camtune-inner")).toBeVisible();
-  // One tab per CamModes mode: 15 since TRACKSIDE joined CAM_MODES in js/camera/mode-switch.js.
-  expect(await page.locator("#ct-modes .lt-tab").count()).toBe(15);
-  // 7 sliders exist; CORNER LEAD only applies to chase/far, so on HOOD its row
-  // is hidden and the six geometric knobs show.
-  expect(await page.locator("#ct-rows input[type=range]").count()).toBe(7);
+  // One tab per CamModes mode: 18 = 14 base + TRACKSIDE + RIVAL / PIT WALL / DRONE.
+  expect(await page.locator("#ct-modes .lt-tab").count()).toBe(18);
+  // 7 framing sliders exist (#ct-in-*); CORNER LEAD applies to chase/far/drone,
+  // so on HOOD its row is hidden and the six geometric knobs show. Comfort
+  // rows (#ct-cin-*) are separate and always visible.
+  expect(await page.locator("#ct-rows input[id^=ct-in-]").count()).toBe(7);
+  expect(await page.locator("#ct-rows input[id^=ct-cin-]").count()).toBe(4);
   await expect(page.locator("#ct-row-cornerLead")).toBeHidden();
   await expect(page.locator("#ct-row-height")).toBeVisible();
+  await expect(page.locator("#ct-comfort-row-fovBias")).toBeVisible();
   await expect(page.locator("#ct-profile")).toContainText("HOOD");
 
   // Dragging HEIGHT writes to the LIVE mode (hood), not to chase.
@@ -223,6 +226,26 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   expect((await page.evaluate(() => __apex.camTune("chase"))).height).toBe(0);
   await expect(page.locator("#ct-profile")).toContainText("1 tuned");
 
+  // Comfort FOV bias is global and independent of the live mode.
+  await page.evaluate(() => {
+    const inp = document.getElementById("ct-cin-fovBias");
+    inp.value = "-5";
+    inp.dispatchEvent(new Event("input"));
+  });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camComfort") || "{}").fovBias)).toBe(-5);
+
+  // ALL CAMS scope writes the global baseline, not the live mode.
+  await page.evaluate(() => document.querySelector('#ct-scope button[data-scope="global"]').click());
+  await expect(page.locator("#ct-profile")).toContainText("ALL CAMERAS");
+  await page.evaluate(() => {
+    const inp = document.getElementById("ct-in-fov");
+    inp.value = "3";
+    inp.dispatchEvent(new Event("input"));
+  });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camTuneGlobal") || "{}").fov)).toBe(3);
+  await page.evaluate(() => document.querySelector('#ct-scope button[data-scope="mode"]').click());
+  await expect(page.locator("#ct-profile")).toContainText("HOOD");
+
   // Picking another chip switches the live camera AND what the sliders edit.
   await page.locator('#ct-modes .lt-tab[data-mode="drift"]').click();
   expect(await page.evaluate(() => __apex.camera().mode)).toBe("drift");
@@ -231,9 +254,14 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   // The tuned mode keeps its marker while another mode is selected.
   await expect(page.locator('#ct-modes .lt-tab[data-mode="hood"]')).toHaveClass(/tuned/);
 
-  // RESET ALL clears every mode; DONE closes the panel.
+  // RESET ALL clears every mode, global baseline and comfort; DONE closes the panel.
   await page.locator("#ct-reset-all").click();
   expect(await page.evaluate(() => __apex.camTune().tuned)).toEqual({});
+  expect(await page.evaluate(() => {
+    const g = JSON.parse(localStorage.getItem("apex26.camTuneGlobal") || "{}");
+    const c = JSON.parse(localStorage.getItem("apex26.camComfort") || "{}");
+    return Object.keys(g).length + Object.keys(c).length;
+  })).toBe(0);
   await page.locator("#ct-close").click();
   await expect(page.locator("#camtune-inner")).toBeHidden();
 });
