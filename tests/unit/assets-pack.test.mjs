@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import cp from "node:child_process";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
@@ -1067,4 +1068,18 @@ test("ensureScenery awaits Assets.modelsReady before any build", () => {
   assert.match(fn, /Assets\.modelsReady\(\)/, "ensureScenery no longer waits for the baked model pack");
   assert.match(fn, /Promise\.all\(\[p, models\]\)/, "the scenery script and the model pack must be awaited together");
   assert.match(fn, /return models\.then/, "a resident or inline scenery must still wait for the pack");
+});
+
+test("unknown bake flag is refused before rewriting the pack", () => {
+  const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
+    { encoding: "utf8" });
+  assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
+  assert.match(r.stderr, /unknown flag --dry-run/, `expected unknown-flag error, got:\n${r.stderr}`);
+});
+
+test("assets.mjs --help prints usage and exits 0", () => {
+  const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "--help"],
+    { encoding: "utf8" });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /bake-synthetic/);
 });
