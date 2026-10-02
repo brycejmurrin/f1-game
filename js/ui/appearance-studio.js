@@ -8,7 +8,7 @@ const AppearanceStudio = (function () {
   const ENUMS = {
     uiTheme: ["dark", "light", "system"], menuAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"],
     hudAccent: ["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"], textSize: ["normal", "large", "larger"],
-    uiContrast: ["off", "high"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["on", "reduce"],
+    uiContrast: ["off", "high"], cvdMode: ["off", "deutan", "protan", "tritan"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["on", "reduce"],
     titleIntro: ["full", "quick", "off"], menuWash: ["full", "soft", "off"], titleArt: ["on", "soft", "off"],
     pauseLayout: ["grid", "list", "compact", "wide", "sidebar"], pauseSide: ["centre", "left", "right"], pauseDim: ["full", "soft", "off"],
     pauseConfirm: ["on", "off"], hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
@@ -17,7 +17,7 @@ const AppearanceStudio = (function () {
     homeCamera: ["auto", "hero", "front", "side", "rear"],
   };
   const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: "brand", hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
-    textSize: "normal", uiContrast: "off", speedUnits: "kmh", menuHelp: "on", motion: "on", uiScale: null,
+    textSize: "normal", uiContrast: "off", cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: "on", uiScale: null,
     hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
     titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",

@@ -651,13 +651,15 @@ const DataRealRace = (function () {
     }
     /** WATCH / HIGHLIGHTS: the positions first (if not yet), then the replay in the DRIVE AS seat. */
     function watch(script, slot, fromLap, reel) {
+      const myGen = bodyGen, seat = seatCode, camera = watchCamera;
       const go = (tr) => {
         if (typeof RealRace === "undefined" || !RealRace.launch) return false;
+        if (myGen !== bodyGen || (slot && slot.isConnected === false)) return false;
         if (isOpen && !isOpen()) return false;   // the positions landed after the hub closed (or a JUMP IN left it): nothing to watch from
         startLap = fromLap;
-        Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seatCode);
+        Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seat);
         if (close) close();
-        return !!RealRace.launch(script, { seat: seatCode, laps: script.laps, startLap: fromLap, watch: true, camera: watchCamera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
+        return !!RealRace.launch(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
       };
       if (traces && traces.sessionKey === script.sessionKey) return go(traces);
       loadTraces(script, slot, go);

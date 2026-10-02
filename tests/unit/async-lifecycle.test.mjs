@@ -11,6 +11,30 @@ const apiSource = await readFile(new URL("../../js/data/api.js", import.meta.url
 const liveSource = await readFile(new URL("../../js/data/live.js", import.meta.url), "utf8");
 const dataCss = await readFile(new URL("../../css/data.css", import.meta.url), "utf8");
 const audioPanelSource = await readFile(new URL("../../js/audio/panel.js", import.meta.url), "utf8");
+const menusSource = await readFile(new URL("../../js/ui/select-screen.js", import.meta.url), "utf8");
+
+test("a skipped View Transition cannot raise unhandled animation rejections or apply the screen twice", async () => {
+  const begin = menusSource.indexOf("const vtReduce ="), end = menusSource.indexOf("// Full-screen team picker", begin);
+  assert.ok(begin >= 0 && end > begin);
+  const callbacks = [], timers = [];
+  let swaps = 0;
+  const sandbox = { window: { matchMedia: () => ({ matches: false }) },
+    document: { documentElement: { dataset: { motion: "on" } }, startViewTransition(run) {
+      callbacks.push(run);
+      return { ready: Promise.reject(new Error("snapshot skipped")), finished: Promise.reject(new Error("transition aborted")),
+        updateCallbackDone: Promise.reject(new Error("DOM update timed out")) };
+    } }, setTimeout: run => timers.push(run) };
+  const context = vm.createContext(sandbox);
+  vm.runInContext(menusSource.slice(begin, end) + ";globalThis.swap=vt;", context);
+  context.swap(() => swaps++);
+  assert.equal(swaps, 0);
+  timers[0](); callbacks[0](); timers[0]();
+  assert.equal(swaps, 1, "the fallback and delayed native callback share one DOM change");
+  await new Promise(resolve => setImmediate(resolve)); // Node fails the test for any unhandled rejection.
+  sandbox.document.documentElement.dataset.motion = "reduce";
+  context.swap(() => swaps++);
+  assert.equal(swaps, 2); assert.equal(callbacks.length, 1, "reduced motion bypasses snapshots");
+});
 
 function deferred() {
   let resolve, reject;

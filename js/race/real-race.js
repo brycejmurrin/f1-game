@@ -391,7 +391,7 @@ const RealRace = (function () {
       if (!seat) { Log.warn("game", "RealRace.stage: no roster seat for " + (opts.seat || "the field")); return null; }
       const ti = Teams.LIST.findIndex((t) => t.id === seat.teamId);
       // Never past the seat's own retirement: its car would be parked at the wall and the race over in 2 s.
-      const lastRun = want.dnf ? Math.max(1, want.lapsDone | 0) : script.laps | 0 || 1;
+      const lastRun = !watch && want.dnf ? Math.max(1, want.lapsDone | 0) : script.laps | 0 || 1;
       const startLap = clamp(opts.startLap | 0 || 1, 1, lastRun);
       if (!active) {
         active = { saved: { teamIdx: G.teamIdx, driverIdx: G.driverIdx, raceLaps: G.raceLaps, raceWeather: G.raceWeather,

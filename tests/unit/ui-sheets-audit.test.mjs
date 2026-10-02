@@ -67,8 +67,10 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
+  seedDom(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
   vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: "js/career/season-cal.js" });
+  vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: "js/ui/results-story.js" });
   vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: "js/ui/results-sheet.js" });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
   const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next") };
@@ -99,6 +101,25 @@ function tiedSeason() {
 const clear = (el) => { el.children.length = 0; };
 const rowsOf = (el) => el.children.filter((c) => c.classList.contains("res-row"));
 const nameOf = (row) => row.children.find((c) => c.classList.contains("res-name")).textContent;
+
+test("unscored practice results suppress points in every classification row while scored races retain them", () => {
+  const { cars } = tiedSeason();
+  const h = bootResults({ season: null, cars, seasonMode: false });
+  h.G.practice = true;
+  h.api.buildResults(cars.slice());
+  const points = () => rowsOf(h.els.resultsTable).map(r => r.children.find(c => c.classList.contains("res-pts")).textContent);
+  const story = h.els.resultsTable.children.find(c => c.getAttribute("data-results-part") === "story");
+  assert.equal(story.children[0].children[1].textContent, "Unscored session · P1");
+  assert.deepEqual(points(), ["Unscored", "Unscored"]);
+  assert.deepEqual(rowsOf(h.els.resultsTable).map(r => r.children[0].textContent), [1, 2]);
+  clear(h.els.resultsTable); h.G.practice = false;
+  h.api.buildResults(cars.slice());
+  assert.deepEqual(points(), ["25 pts", "18 pts"]);
+  const { season } = tiedSeason(); season.lastFl = cars[0].driverId;
+  const scored = bootResults({ season, cars });
+  scored.api.buildResults(cars.slice());
+  assert.equal(rowsOf(scored.els.resultsTable)[0].children.find(c => c.classList.contains("res-pts")).textContent, "26 pts +FL");
+});
 
 test("RESULTS top-10 and the CHAMPION panel rank by countback, like STANDINGS", () => {
   const { season, cars } = tiedSeason();

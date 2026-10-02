@@ -24,6 +24,26 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
+test('online Photo camera input integrates while shared physics continues; solo Photo holds physics', () => {
+  const source = src('js/game.js');
+  const tick = source.slice(source.indexOf('function tickBody(now) {'), source.indexOf('// ---------- car setup panel ----------'));
+  for (const [online, photo] of [[false, true], [true, true], [true, false]]) {
+    const calls = { photo: 0, render: 0, physics: 0 };
+    const sandbox = { Math, lastFrame: 0, paused: true, state: 'race', gfx: { warming: () => false },
+      Input: { poll() {}, clearEdges() {}, setTimeScale() {} }, BrakeCue: { tick() {} }, onboard: { tick() {} },
+      netPlay: { tick() {}, active: () => online }, PerfGov: { tick() {}, recordSimulation() {} },
+      _poseAt: null, photoMode: photo, setupPreviewOn: false,
+      els: { lighting: { hidden: true }, camtune: { hidden: true }, flyby: { hidden: true } },
+      announceT: 0, hitStop: 0, frozen: false, physAcc: 0, PHYS_DT: 1 / 60, cars: [], renderAlpha: 0,
+      clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), updateHud() {},
+      render: () => calls.render++, updatePhotoCam: () => calls.photo++, update: () => calls.physics++ };
+    vm.runInNewContext(tick + '\ntickBody(20);', sandbox);
+    assert.equal(calls.photo, photo ? 1 : 0, `${online ? 'online' : 'solo'} photo camera`);
+    assert.equal(calls.render, 1);
+    assert.equal(calls.physics, online ? 1 : 0, 'one player taking a photo cannot freeze a shared world');
+  }
+});
+
 function boot() {
   const dom = makeDom();
   const listeners = new Map();
@@ -53,15 +73,23 @@ function boot() {
   return { dom, G, api, key: (e) => { const list = listeners.get(e.type); if (list && list.length) list.at(-1)(e); } };
 }
 
-test("Photo Studio focused buttons keep Space and arrows while camera keyups still release", () => {
+test("Photo Studio buttons keep activation and arrows while WASD still flies and keyups release", () => {
   const { dom, G, api, key } = boot();
   Object.assign(G.photoKeys, { up: false, pu: false, yl: false, w: false }); api.enterPhotoMode();
   const panel = dom.byId("ps-panel"), button = dom.document.createElement("button"); panel.appendChild(button); button.focus();
   const event = (code, type = "keydown") => ({ code, type, prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} });
-  for (const code of ["Space", "ArrowUp", "ArrowLeft", "KeyW"]) {
+  for (const code of ["Space", "Enter", "NumpadEnter", "ArrowUp", "ArrowLeft"]) {
     const e = event(code); key(e); assert.equal(e.prevented, false, code + " belongs to the focused control");
   }
   assert.equal(G.photoKeys.up, false); assert.equal(G.photoKeys.pu, false); assert.equal(G.photoKeys.yl, false); assert.equal(G.photoKeys.w, false);
+  const move = event("KeyW"); key(move); api.updatePhotoCam(0.05);
+  assert.equal(move.prevented, true, "W is a camera control even when DONE has keyboard focus");
+  assert.ok(G.photoCam.pos[2] < -1, "the camera moves forward from the focused Studio button");
+  const field = dom.document.createElement("input"); panel.appendChild(field); field.focus();
+  G.photoKeys.w = false;
+  const editing = event("KeyW"); key(editing);
+  assert.equal(editing.prevented, false, "form fields retain their typing keys");
+  assert.equal(G.photoKeys.w, false, "typing in an input cannot fly the camera");
   G.photoKeys.w = true; G.photoKeys.up = true;
   key(event("KeyW", "keyup")); key(event("Space", "keyup"));
   assert.equal(G.photoKeys.w, false); assert.equal(G.photoKeys.up, false);

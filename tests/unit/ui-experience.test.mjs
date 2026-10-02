@@ -2,8 +2,33 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { makeDom } from '../helpers/mini-dom.mjs';
 const code = fs.readFileSync(new URL('../../js/ui/experience.js', import.meta.url), 'utf8');
 const ctx = vm.createContext({}); vm.runInContext(code + ';globalThis.api=UiExperience;', ctx);
+test('Home solo practice stays in sync with the coach and does not offer goals requiring rivals', () => {
+  const dom = makeDom({ tagFor: id => id === 'practice-goal' ? 'select' : 'div' });
+  let selected = 'lap', opens = 0;
+  const coach = { paint() {}, practiceGoal: () => selected, setPracticeGoal(id) { selected = id; return true; } };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} },
+    HomeWorld: { create: () => ({ end() {}, active: () => false, state: () => ({}) }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'auto', onSceneChange() {} },
+    addEventListener() {} };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const G = { $: dom.byId, state: 'menu', setupPreviewOn: false };
+  local.api.create(G, { coach, trackReady: () => true, openPractice: () => opens++ });
+  const goal = dom.byId('practice-goal'), button = dom.byId('mb-practice');
+  const offered = Array.from(goal.children, option => option.value);
+  assert.ok(offered.includes('lap') && offered.includes('launch'));
+  for (const id of ['start', 'slipstream', 'overtake', 'defend', 'backmarkers']) assert.ok(!offered.includes(id), id);
+  button.onclick(); assert.equal(goal.value, 'lap'); assert.equal(opens, 1);
+  goal.value = 'corner'; goal.onchange(); assert.equal(selected, 'corner');
+  coach.setPracticeGoal('sector'); button.onclick(); assert.equal(goal.value, 'sector');
+  coach.setPracticeGoal('overtake'); button.onclick(); assert.equal(goal.value, 'free'); assert.equal(selected, 'free');
+});
 test('pause context reads live classification and distinguishes online practice', () => {
   const p = {lap: 2}, G = { player:p, ranked:[{},p], track:{def:{name:'Monza'}}, session:'race', lapsTarget:12, practice:true, netPlay:{active:()=>true} };
   const b = ctx.api.raceBrief(G);

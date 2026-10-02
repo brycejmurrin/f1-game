@@ -1,5 +1,5 @@
 @layer overlays {
-#photo-studio { position: fixed; inset: 0; z-index: 44; background: transparent; pointer-events: none; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
+#photo-studio { position: fixed; inset: 0; z-index: 45; background: transparent; pointer-events: none; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
 #ps-panel { position: absolute; right: var(--safe-r); top: var(--safe-t); width: min(340px, 42vw); max-height: calc(100svh - var(--safe-t) - var(--safe-b)); overflow: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; pointer-events: auto; background: var(--surf-1); padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); border: thin solid var(--card-line); }
 #ps-panel h2 { margin: 0; font-size: var(--fs-6); }
 #ps-panel .balanced-row { flex-wrap: wrap; gap: calc(var(--gap) * .5); }
