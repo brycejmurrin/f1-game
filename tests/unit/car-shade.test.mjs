@@ -26,7 +26,8 @@ function load(withShade, storage) {
   if (storage) ctx.localStorage = storage;
   ctx.globalThis = ctx;
   vm.createContext(ctx);
-  const files = ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js"]
+  const files = ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js",
+                 "js/car/car-geometry.js", "js/car/car-wheels.js"]
     .concat(withShade ? ["js/car/car-shade.js"] : [], ["js/car/car3d.js"]);
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   const grab = (n) => vm.runInContext(n, ctx);

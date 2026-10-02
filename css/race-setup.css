@@ -122,6 +122,11 @@
 .trb-night { background: rgba(129,140,248,0.15); color: #818cf8; }
 .trb-street { background: rgba(245,158,11,0.12); color: #f59e0b; }
 .trb-classic { background: rgba(180,150,90,0.14); color: #c8a862; }
+/* CUSTOM (the player's own circuit, js/editor/custom-tracks.js) wears the
+   podium gold token: the badge is information, so it stays off --accent
+   (nontext-contrast keeps every accent consumer decorative) and off a new raw
+   colour (the rawColor ratchet). */
+.trb-custom { background: color-mix(in oklab, var(--gold) 14%, transparent); color: var(--gold); }
 /* Section header inside the picker list (CURRENT SEASON / CLASSIC CIRCUITS).
    Sticky so the group stays identifiable while the list scrolls under it. */
 .track-group-head {
