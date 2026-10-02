@@ -391,6 +391,7 @@ _268 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
+| `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
@@ -1303,8 +1304,11 @@ drone), HELI (broadcast heli), REVERSE (mounted ahead looking back), TV SIDE
 RIVAL LOCK (frames the nearest battle rival), PIT WALL (pit-lane wall cam with optional auto-cut),
 DRONE (smoothed tether with corner look-ahead). Chase modes
 anchor a fixed arc-length behind the car so they never lag at speed; onboard
-modes ride ON the car with very high damping. fov widens with speed; a debug
-free camera (`__apex.view`) can override all of it.
+modes ride ON the car with very high damping. FOV widens with speed through one
+shared curve (`CamFeel.modeFov` in `js/camera/feel.js`); onboard cams also take
+free-look (right stick / RMB-drag) and mode-aware look-back. A debug free
+camera (`__apex.view`) can override all of it. Feel reference:
+[notes/CAMERA-FEEL.md](notes/CAMERA-FEEL.md).
 
 Debug & test API: `window.__apex` (built by `js/agent/apex.js`) drives the game
 from the console or a headless harness — loading/positioning
