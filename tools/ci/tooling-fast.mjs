@@ -127,6 +127,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
+  "tests/unit/car-shade.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
@@ -248,6 +249,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
+  "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
