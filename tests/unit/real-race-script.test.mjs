@@ -278,6 +278,86 @@ test("the hub cancels pending WATCH immediately when year or Grand Prix changes"
 });
 function find(node, pred, out = []) { if (pred(node)) out.push(node); node.children.forEach((c) => find(c, pred, out)); return out; }
 
+// Execute the hub's public open/tab-click path, including its rendered-node
+// cache, with deferred WATCH loads rather than asserting source strings.
+function hubWatchHarness() {
+  const dom = makeDom(), requests = [];
+  let cancellations = 0, scheduleLoads = 0;
+  function el(...args) {
+    const node = dom.el(...args);
+    node.classList = { add() {}, toggle() {} };
+    node.style = {}; node.dataset = {};
+    node.focus = () => {}; node.scrollIntoView = () => {};
+    node.querySelector = () => null;
+    Object.defineProperty(node, "firstChild", { get: () => node.children[0] || null });
+    node.removeChild = (child) => {
+      const i = node.children.indexOf(child);
+      if (i >= 0) node.children.splice(i, 1);
+      child.parent = null;
+      return child;
+    };
+    return node;
+  }
+  const schedule = el("div", "schedule-result"), root = el("div");
+  const ctx = vm.createContext({
+    Dom: { el }, navigator: { onLine: true }, queueMicrotask,
+    document: { activeElement: null, getElementById: () => null, addEventListener() {} },
+    DataSchedule: { create: () => ({ loadSchedule: () => { scheduleLoads++; return Promise.resolve(schedule); } }) },
+    DataStandings: { create: () => ({}) }, DataResults: { create: () => ({}) },
+    DataLive: { create: () => ({ stopLiveAuto() {}, disarmLiveAuto() {} }) },
+    DataTelemetry: { create: () => ({ closeTelemPopup() {} }) },
+    DataExport: { create: () => ({}) },
+    DataRealRace: { create: () => ({
+      cancel: () => { cancellations++; },
+      loadRealRace: () => new Promise((resolve) => requests.push(resolve)),
+    }) },
+  });
+  seedLog(ctx);
+  vm.runInContext(fs.readFileSync(new URL("../../js/data/hub.js", import.meta.url), "utf8"), ctx);
+  const hub = vm.runInContext("DataHub", ctx);
+  hub.init(root);
+  const panel = find(root, (node) => node.id === "dh-panel")[0];
+  const click = (id) => find(root, (node) => node.id === "dh-tab-" + id)[0].fire("click");
+  return { hub, panel, requests, click, el, schedule,
+    flush: () => new Promise((resolve) => setImmediate(resolve)),
+    cancellations: () => cancellations, scheduleLoads: () => scheduleLoads };
+}
+
+test("leaving and returning to WATCH rebuilds its cancelled controller while other tabs stay cached", async () => {
+  const h = hubWatchHarness();
+  h.hub.open("race");
+  assert.equal(h.requests.length, 1);
+  const first = h.el("div", "first-watch");
+  h.requests[0](first); await h.flush();
+  assert.equal(h.panel.children[0], first);
+  h.click("schedule"); await h.flush();
+  assert.ok(h.cancellations() > 0, "leaving WATCH cancels its controller");
+  assert.equal(h.panel.children[0], h.schedule);
+  h.click("race");
+  assert.equal(h.requests.length, 2, "return builds a fresh WATCH controller, not its cancelled cached DOM");
+  const fresh = h.el("div", "fresh-watch");
+  h.requests[1](fresh); await h.flush();
+  assert.equal(h.panel.children[0], fresh);
+  h.click("schedule"); await h.flush();
+  assert.equal(h.panel.children[0], h.schedule);
+  assert.equal(h.scheduleLoads(), 1, "the schedule still uses its normal rendered-node cache");
+});
+
+test("a WATCH load completing after leaving cannot repopulate its invalidated tab cache", async () => {
+  const h = hubWatchHarness();
+  h.hub.open("race");
+  h.click("schedule"); await h.flush();
+  const stale = h.el("div", "cancelled-watch");
+  h.requests[0](stale); await h.flush();
+  assert.equal(h.panel.children[0], h.schedule, "the cancelled load cannot replace the active tab");
+  h.click("race");
+  assert.equal(h.requests.length, 2, "late completion must not become a reusable cached WATCH node");
+  assert.notEqual(h.panel.children[0], stale);
+  const fresh = h.el("div", "current-watch");
+  h.requests[1](fresh); await h.flush();
+  assert.equal(h.panel.children[0], fresh);
+});
+
 test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP IN at any lap in any seat", async () => {
   const launches = [];
   const store = new Map();

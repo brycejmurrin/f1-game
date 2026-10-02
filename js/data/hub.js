@@ -241,7 +241,12 @@ const DataHub = (function () {
   }
 
   function showTab(id) {
-    if (id !== "race") cancelRealRace();
+    if (id !== "race") {
+      cancelRealRace();
+      // Cancellation invalidates the WATCH controller behind this DOM. Rebuild
+      // on return, and prevent a pending tab load from recaching the old node.
+      state.race = null; gen.race = (gen.race || 0) + 1;
+    }
     closeTelemPopup();   // close popup and pause any running lap replay when changing tabs
     if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
