@@ -26,6 +26,7 @@ drives it.
 ## The area docs (load one on demand)
 
 | Doc | Covers |
+| [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
 |---|---|
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability — and the 12-category upgrade catalog with its measured ERS/aero tables. |
