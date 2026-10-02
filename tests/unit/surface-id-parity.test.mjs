@@ -141,6 +141,31 @@ test("the baked normal map's tangent frame is the tile's world axes on every bac
   }
 });
 
+test("puddles follow the road shape on every backend — crown drains, the low side of a camber pools", () => {
+  // The puddle mask was value noise on a flat threshold until 2026-10-01: water
+  // pooled equally on the crown and in the gutter and a banked turn held it on
+  // the high side (the second graphics-detail survey, item 13). On the road
+  // ribbon the noise is weighted 0.7 (centre) → 1.2 (edge) and by the lateral
+  // downhill read from the screen derivatives of trk.y against the geometric
+  // normal — the same constants in every language.
+  const wet = (file, start, end) => { const src = read(file); const i = src.indexOf(start); assert.ok(i >= 0, start); return src.slice(i, src.indexOf(end, i)); };
+  const glx = wet("js/render/glx/shaders/glsl-lit.js", "float pn = vnoise(vWorldPos.xz", "RAIN RIPPLES");
+  assert.match(glx, /mix\(0\.7, 1\.2, abs\(lat\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
+  assert.match(read("js/render/glx/shaders/glsl-lit.js"), /vec2 trkRightXZ = dFdx\(vWorldPos\.xz\) \* dFdx\(vTrk\.y\) \+ dFdy\(vWorldPos\.xz\) \* dFdy\(vTrk\.y\)/);
+  assert.match(glx, /dot\(trkRightXZ \/ rl, Ngeo\.xz\)/);
+  assert.match(glx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
+  const tlx = wet("js/render/three/tsl-lit.js", "const pn = vnoise(wp.xz", "RAIN RIPPLES");
+  assert.match(tlx, /mix\(float\(0\.7\), float\(1\.2\), abs\(lat\)\)\.mul\(clamp\(float\(1\.0\)\.add\(downhill\.mul\(lat\)\.mul\(4\.0\)\), 0\.5, 1\.5\)\)/);
+  assert.match(read("js/render/three/tsl-lit.js"), /const trkRightXZ = trkA \? dFdx\(wp\.xz\)\.mul\(dFdx\(trkA\.y\)\)\.add\(dFdy\(wp\.xz\)\.mul\(dFdy\(trkA\.y\)\)\)/);
+  assert.match(tlx, /dot\(trkRightXZ\.div\(rl\), Ngeo\.xz\)\.negate\(\)/);
+  assert.match(tlx, /smoothstep\(0\.48, 0\.88, pn\.mul\(pool\)\)\.mul\(wet\)/);
+  const wgx = wet("js/render/webgpu/wgsl-chunks.js", "let pn = svnoise(in.wpos.xz", "RAIN RIPPLES");
+  assert.match(wgx, /mix\(0\.7, 1\.2, abs\(lat\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
+  assert.match(read("js/render/webgpu/wgsl-chunks.js"), /let trkRightXZ = dpdx\(in\.wpos\.xz\) \* dpdx\(vTrk\.y\) \+ dpdy\(in\.wpos\.xz\) \* dpdy\(vTrk\.y\)/, "WGX takes the derivatives before the first branch (uniform control flow)");
+  assert.match(wgx, /-dot\(trkRightXZ \/ rl, Ngeo\.xz\)/);
+  assert.match(wgx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
+});
+
 test("particles are lit by the frame hemisphere and fogged by the lit pass's fog on every backend", () => {
   // Every particle was unlit and unfogged until 2026-10-01 (the second
   // graphics-detail survey, item 9): the alpha group must read the hemisphere
