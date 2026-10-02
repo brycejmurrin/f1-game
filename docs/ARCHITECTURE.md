@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_266 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_268 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -275,6 +275,7 @@ _266 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `stamps.js` | `TrackStamps` | LAZY_EDITOR | TrackStamps: the designer's STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND tools. |
 | `randomise.js` | `TrackRandom` | LAZY_EDITOR | TrackRandom: the RANDOMISE button. |
 | `validate.js` | `TrackValidate` | LAZY_EDITOR | TrackValidate: WYSIWYG validation for the track designer. |
+| `fixes.js` | `TrackFixes` | LAZY_EDITOR | TrackFixes: one-click remedies for the track designer's CHECKS (TrackValidate). |
 | `codec.js` | `TrackCodec` | LAZY_EDITOR | TrackCodec: the share code for a custom circuit. |
 | `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
@@ -389,6 +390,7 @@ _266 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
+| `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
@@ -1301,8 +1303,11 @@ drone), HELI (broadcast heli), REVERSE (mounted ahead looking back), TV SIDE
 RIVAL LOCK (frames the nearest battle rival), PIT WALL (pit-lane wall cam with optional auto-cut),
 DRONE (smoothed tether with corner look-ahead). Chase modes
 anchor a fixed arc-length behind the car so they never lag at speed; onboard
-modes ride ON the car with very high damping. fov widens with speed; a debug
-free camera (`__apex.view`) can override all of it.
+modes ride ON the car with very high damping. FOV widens with speed through one
+shared curve (`CamFeel.modeFov` in `js/camera/feel.js`); onboard cams also take
+free-look (right stick / RMB-drag) and mode-aware look-back. A debug free
+camera (`__apex.view`) can override all of it. Feel reference:
+[notes/CAMERA-FEEL.md](notes/CAMERA-FEEL.md).
 
 Debug & test API: `window.__apex` (built by `js/agent/apex.js`) drives the game
 from the console or a headless harness — loading/positioning
@@ -1508,6 +1513,13 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **MOON DIRECTION (2026-10-01):** on all three. The night sky's moon disc and
+  halo hang on the sun-direction uniform (GLX `uSunDir`, TLX `U.sunDir`, WGX the
+  sky function's `sunDir`), which at night IS the moon key light the lit pass,
+  the wet-road glint and the shadow map use. Before, each sky shader drew the
+  disc at a literal `(0.42, 0.72, 0.55)` so the moon and its shadows disagreed on
+  any night palette with its own `sunDir`. `tests/unit/surface-id-parity.test.mjs`
+  pins the uniform read on every backend.
 - **PUDDLE RIPPLES (2026-10-01):** on all three. Inside each lit shader's wet
   block, where `puddle > 0` and rain is FALLING (`frame.rain`, ramped like
   wetness: GLX `uRain`, TLX `U.rain`, WGX `params4.z`), two cell grids of
