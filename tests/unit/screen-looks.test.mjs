@@ -375,3 +375,14 @@ test("shell: GENERAL wraps the preview, COLOURS, READABILITY and MOTION, before 
     assert.ok(fold.includes(`id="${id}"`), `${id} inside GENERAL`);
   assert.ok(end < look.indexOf('<details id="pm-pausemenu"'), "before PAUSE MENU");
 });
+
+test("a peek swallows only the dismissing click, not the next one", () => {
+  const src = read("js/ui/screen-looks.js");
+  const fn = src.slice(src.indexOf("function onPointer"), src.indexOf("function onClick"));
+  assert.doesNotMatch(fn, /700/);
+  assert.match(fn, /pk\.swallowGen/);
+  assert.match(fn, /setTimeout\(\(\) => \{ if \(pk\.swallowGen === gen\) pk\.swallowClick = false; \}, 0\)/);
+  assert.match(fn, /pointerup/);
+  assert.match(fn, /pointercancel/);
+  assert.match(fn, /f\.contains\(t\)\) return/, "a click inside the fold still does not end the peek");
+});
