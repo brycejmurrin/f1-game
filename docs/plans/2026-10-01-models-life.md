@@ -95,15 +95,31 @@ foundation specs; `verify-track` for each; the index-strip pins in
 `tests/unit/track-build-vm-release.test.mjs` are re-measured (they will move:
 real grandstands are 128–1302 triangles against the boxes' 12).
 
-## Slice D — instance baked models (item 7) — M
+## Slice D — instance baked models (item 7) — M — DONE 2026-10-02
 
-A model placed N times is N copies in the graph. Add an `instances` record
-per model id in the graph bake — `[x, y, z, yaw, scale]` per placement —
-and expand it at replay through the existing instancing family
-(`InstCells` cull per cell, one draw per model per visible cell set) on GLX,
-TLX (`BatchedMesh` / `InstancedMesh`, r186) and WGX. The graph's authored
-`bakedModel` call becomes a record, not a copy. Verify: Monza's graph bake
-size drops; a parity test on instance expansion; the `gfx` group.
+A model placed N times was N copies in the props soup. `bakedModel()` now
+records every placement (`track.modelInstances[key] = {id, mat, verts, tris,
+n, inst, xf: [x, y, z, yaw, scale] × n, tint}`) and, when the backend draws
+instanced batches (`G.createInstancedBatch` — the graph's primitive models
+already go that way), `flushModels` keeps a key as ONE compacted geometry
+(`TrackGraph.meshModel`: referenced vertices only, `mat` forced when the
+placement asks) plus N transforms (`meshPlace`), which `batches()` returns
+as `mesh:<key>` records beside the primitive batches — so `tracks.js`
+uploads them, `instTop` folds them into the shadow span, and GLX, TLX and
+WGX draw and shadow them with NO backend change. A key is batched only when
+it saves ≥ 1024 vertices (two 28-triangle barriers are cheaper copied than
+as a draw + shadow caster + TLX's ~64 KB padded instance block). Off without
+the batch API (every VM sweep, `verify-track`, the build worker) and under
+`apex26.modelInst=0`, so the fleet audits still measure the copies and the
+`track-build-vm-release` pins did not move. Measured on this tree: Monza's
+30 construction barriers + 13 cones, Silverstone's 19 + 15, Spa's 23 + 10
+become two batches each (~2 k triangles a circuit); the point is Slice E,
+where grandstands (128–1302 triangles) and pits garages are placed tens of
+times per circuit. Verify: `tests/unit/baked-model-instancing.test.mjs`.
+Known: TLX on software WebGPU skips every instanced batch (`skipBatches`),
+so CI soft-present frames do not show instanced models; browser-side
+`props-over-road.spec` / `__apex.trackGeometry()` no longer see them (the
+VM sweeps, which do the geometry audits, still do).
 
 ## Slice E — spread to the other 46 circuits (item 8) — S × 46
 
