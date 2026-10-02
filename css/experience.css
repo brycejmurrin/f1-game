@@ -61,7 +61,13 @@
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1fr) min(46%, 400px); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: start; }
   :where(body[data-shape="wide"][data-density="compact"]) #home-motion { top: auto; bottom: var(--safe-b); }
-  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons .bigbtn { min-height: var(--tap); font-size: var(--fs-micro); padding-block: calc(var(--gap) / 2); }
+  /* No font-size here: a flat var(--fs-micro) overrode menus.css's compact
+     `calc(var(--fs-4) * var(--ui-compact-text))`, so UI SIZE 200% painted the
+     doors at 17.5px (ui-scale.spec "200% keeps title navigation reachable",
+     phone portrait, 2026-10-02) — the readability remainder never reached the
+     rendered scene's buttons. The shared compact size scales; this only trims
+     the height. */
+  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons .bigbtn { min-height: var(--tap); padding-block: calc(var(--gap) / 2); }
   :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#tagline, #blurb, #disclaimer, #audiostate) { display: none; }
   :root[data-motion="reduce"] :is(#pm-race-context, #pm-quick-doors, #practice-brief) { animation: none; transition: none; }
 }
