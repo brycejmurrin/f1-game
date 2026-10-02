@@ -157,6 +157,13 @@ const UiExperience = (function () {
     window.addEventListener("apex26:photo-background", stamp);
     stamp();
     function stopHome() {
+      // Clear FX/post `_last` ONLY when tearing down a live Home present.
+      // renderHome() calls stopHome() every race frame once the overlay is
+      // hidden; clearing then zeroes bloom/fxaa between presents and races any
+      // probe that waitForFunction's then re-evaluates postState (Pages
+      // 36966538881: M8 day wait saw fxaa, evaluate saw bloom false, diag later
+      // saw bloom true). Track/pitlane Home uses world.active(), not `home`.
+      const leaving = home || !!(world.active && world.active());
       if (home) deps.setupCam.endHome();
       world.end();
       home = false; signature = ""; elapsed = 0; painted = false;
@@ -165,11 +172,14 @@ const UiExperience = (function () {
       // TLX is still warming, render() can bail and leave that present's FX
       // counters in __tlx.fxState() — M6 on Metal then waited on glow alone and
       // passed on the stale garage frame (run 36951948980 / 36954047730). Clear
-      // so a race probe cannot see Home leftovers.
-      try {
-        const t = G.gfx && G.gfx.__tlx;
-        if (t && typeof t.clearFxState === "function") t.clearFxState();
-      } catch (_) { /* probe hygiene — never block leaving Home */ }
+      // so a race probe cannot see Home leftovers — once, on leave, not every
+      // idle stopHome during a race.
+      if (leaving) {
+        try {
+          const t = G.gfx && G.gfx.__tlx;
+          if (t && typeof t.clearFxState === "function") t.clearFxState();
+        } catch (_) { /* probe hygiene — never block leaving Home */ }
+      }
     }
     function renderHome(dt) {
       if (previewBusy) return false;
