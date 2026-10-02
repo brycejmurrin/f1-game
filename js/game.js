@@ -3073,6 +3073,13 @@ async function startRaceBody() {
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
+  // Warm the actual rear view at its HUD size while the grid is covered.
+  // startRace's promise includes this so multiplayer cannot arm green early.
+  const entryPlayer = player;
+  if (!headlessMode && !document.hidden)
+    await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
+  if (player !== entryPlayer || state !== "count") return false;
+
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
 }
@@ -4468,6 +4475,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 
 function quitToMenu() {
   Ghost.flush();
+  mirrorPass.cancelPreparation();
   cancelIntro();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
@@ -6855,7 +6863,7 @@ function armBackendProbe() {
 }
 function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
-  if (headlessMode) { if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
+  if (headlessMode) { mirrorPass.cancelPreparation(); if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   if (gfx.warming && gfx.warming()) return;
   if (uiExperience && uiExperience.renderHome(dt)) return;
   // The live Home garage returned above. Other menus hide undrawn canvases
@@ -8404,7 +8412,7 @@ function render(dt) {
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
-  RaceEntryProfile.afterPresent(loadingScreen, gfx);
+  RaceEntryProfile.afterPresent(loadingScreen, gfx, mirrorPass.preparing());
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
   // reverts on the next boot, which is the whole point of it.
@@ -8463,13 +8471,19 @@ function tickBody(now) {
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
-  if (!paused && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
+  if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
   onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
   netPlay.tick(now, _poseAt); if (gfx.warming && gfx.warming()) { Input.clearEdges(); return; }
+  // Preparation renders but charges neither the countdown nor physics/governor.
+  if (mirrorPass.preparing()) {
+    Input.clearEdges(); render(0);
+    lastFrame = Math.max(now, performance.now());
+    return;
+  }
   if (paused && !netPlay.active()) {
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire
@@ -9499,6 +9513,7 @@ function _disarmProbeOnLeave() {
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) _disarmProbeOnLeave();
+  if (document.hidden) mirrorPass.cancelPreparation();   // rAF stops; optional warm must not hold entry
   if (document.hidden && (state === "race" || state === "count")) setPaused(true, "hidden-tab");
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
@@ -9516,7 +9531,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && netPlay.active()) _netHiddenPump = setInterval(() => netPlay.tick(performance.now()), 500);
 });
 let _netHiddenPump = 0;
-window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); });
+window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); mirrorPass.cancelPreparation(); });
 // LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
 // the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
 // or an overlay taking focus, left the car coasting off-line while the field
