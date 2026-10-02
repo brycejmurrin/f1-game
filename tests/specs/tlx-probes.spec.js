@@ -192,11 +192,19 @@ test.describe("TLX — boot", () => {
     // docs/notes/TESTING-FIELD-NOTES.md), and runs 3477 and 3484 both burned
     // a retry here at 42 s with the chain simply not yet presented once.
     const left = Math.min(300_000, Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000));
-    await page.waitForFunction(
-      () => { const p = GLX.__tlx && GLX.__tlx.postState(); return !!(p && p.on && p.targets[0] > 0 && p.blocks.fxaa); },
-      null, { polling: 100, timeout: left },
-    ).catch(async () => { throw new Error("TLX post chain never completed a pass in " + Math.round(left / 1000) + " s: " + await tlxDiag(page)); });
-    const st = await page.evaluate(() => GLX.__tlx.postState());
+    // Atomic wait (same pattern as M6 / M8 godray): waiting on fxaa alone then
+    // re-reading postState() raced a later clearLast between presents (Pages
+    // 36966538881: st.bloom false while diag-later bloom true). jsonValue keeps
+    // the co-presented bloom+fxaa snapshot. AGENTS.md: polling 100.
+    const handle = await page.waitForFunction(() => {
+      const p = typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.postState();
+      if (!(p && p.on && p.hdr && p.targets[0] > 0 && p.targets[1] > 0
+          && p.blocks && p.blocks.fxaa === true && p.blocks.bloom === true)) return null;
+      return p;
+    }, null, { polling: 100, timeout: left }).catch(async (e) => {
+      throw new Error("TLX post chain never co-presented bloom+fxaa in " + Math.round(left / 1000) + " s: " + await tlxDiag(page) + " — " + e.message);
+    });
+    const st = await handle.jsonValue();
     const diag = await tlxDiag(page);
     expect(st.on, diag).toBe(true);
     expect(st.hdr, diag).toBe(true);
