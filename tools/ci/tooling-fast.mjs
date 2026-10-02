@@ -545,6 +545,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // rewritten by a tool, so drift shows up as a commit nobody meant to make.
   "tests/unit/spec-timings.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
+  // The start gantry's five lamps follow the countdown: one additive glow per
+  // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
+  "tests/unit/start-lights.test.mjs",
   "tests/unit/start-race-latch.test.mjs",
   "tests/unit/steel-role.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
