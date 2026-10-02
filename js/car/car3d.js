@@ -1591,6 +1591,21 @@ const Car3D = (function () {
     _mirrorAnchorCache.set(k, a);
     return a;
   }
+  // The COCKPIT build's mirror GLASS faces (the driver-facing side of the
+  // face(0.012, mz-0.038) block in build()'s ckpt branch), 1 mm toward the eye:
+  // car-draw.js lays a sky-tint fallback there while the HUD mirror pass is not
+  // drawing. Per side [a,b,c,d] (inboard-low, outboard-low, outboard-high, inboard-high).
+  const _ckMirrorCache = new Map();
+  function cockpitMirrorGlass(mirrorScale) {
+    const mScale = Math.max(0.85, Math.min(1.35, mirrorScale || 1)), k = mScale.toFixed(3);
+    if (_ckMirrorCache.has(k)) return _ckMirrorCache.get(k);
+    const mx = 0.60 * mScale, mW = 0.215, mH = 0.075, mY = 0.780, toe = 0.030, ins = 0.012, z = 0.92 - 0.038 - 0.001;
+    const y0 = mY - mH / 2 + ins, y1 = mY + mH / 2 - ins, zi = z + toe * ins / mW, zo = z + toe * (1 - ins / mW);
+    const q = [-1, 1].map((s) => { const xi = s * (mx - mW / 2 + ins), xo = s * (mx + mW / 2 - ins);
+      return [[xi, y0, zi], [xo, y0, zo], [xo, y1, zo], [xi, y1, zi]]; });
+    _ckMirrorCache.set(k, q);
+    return q;
+  }
   function mergeRecipe(defaults, recipe) {
     return Object.assign(defaults, recipe || {});
   }
@@ -4092,7 +4107,7 @@ const Car3D = (function () {
            wingBand: wingBandGeom,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge, sharkFinRoot, FIN_SHAPES, FIN_SHAPE_IDS,
-           TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, SPINE_HEIGHT_IDS, spineRise,
+           TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, cockpitMirrorGlass, SPINE_HEIGHT_IDS, spineRise,
            coverProfile, coverFlankX, coverSurfaceY, COVER_STACK,
            aeroLevelOf, aeroStyleOf };
 })();
