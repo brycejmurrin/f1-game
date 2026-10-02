@@ -723,6 +723,9 @@ body.hud-hidden #hud-restore::after {
 }
 @keyframes hud-hint-out { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { body.hud-hidden #hud-restore::after { animation: none; } }
+/* …and under MOTION: REDUCED (html[data-motion]), so the hint stays put
+   rather than fading on the player who switched motion off in SETTINGS. */
+:root[data-motion="reduce"] #hud-restore::after { animation: none; }
 /* Camera picker grid: opened by press-and-hold on the CAM button. Anchored
    under the button (top-right), thumb-reachable in landscape. */
 #campicker {
@@ -805,6 +808,34 @@ body[data-density="compact"] #campicker {
 #res-ghost-clear { opacity: 0.6; }
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot { justify-content: center; }
 #res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
+
+/* ---------- SCREEN LOOKS: POPUPS fold (js/ui/screen-looks.js) ----------
+   SETTINGS › APPEARANCE › POPUPS: the screen's own two knobs. The shared core
+   knobs (WIDTH, DENSITY, BUTTON HEIGHT, CORNERS, BACKGROUND, HEADINGS) live in
+   css/responsive.css over the same scope; each attribute is written only off
+   the default, so the shipped pop-ups match nothing here. The scope is every
+   dimmed dialog.screen except the settings page and the two sheets with folds
+   of their own (pause, race settings) — the same 14 dialogs responsive.css
+   names, written short enough for the prelude cap in
+   tests/unit/css-comments.test.mjs. */
+
+/* POSITION — the sheet's block placement in its .screen grid (place-items:
+   center by default). #track-detail is left out on purpose: it is full-bleed
+   and a column FLEX box, where align-items is the CROSS axis — `start` would
+   shrink-wrap the circuit body back to its content, the exact feedback loop
+   css/track-detail.css stretches to break. There is no slack to move it in. */
+:root[data-look-popups-vpos="top"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: start; }
+:root[data-look-popups-vpos="bottom"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: end; }
+
+/* TABLE ROWS — the shared .res-row (standings, results, qualifying, career
+   history). TIGHT goes below even the compact tier's block padding
+   (css/career.css), so it still reads on a sheet SheetShape has compacted;
+   ROOMY floors each row at the tap height. Scoped, so the CAREER hub's own
+   championship rows (#career, a fold of its own — not a dialog) are untouched.
+   The overlays layer outranks that components-layer compact rule regardless
+   of order. */
+:root[data-look-popups-rows="tight"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) .res-row { padding-block: calc(var(--gap) * 0.2); }
+:root[data-look-popups-rows="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) .res-row { min-height: var(--tap); }
 
 #save-warning {
   position: fixed; z-index: 8500;

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
 import { evaluateLiveProbe, probeFailures } from "../../tools/check/quick-validate.mjs";
 
 const passing = {
@@ -55,4 +56,12 @@ test("live probe waits for the race to arm, and says so when it never does", asy
   const armed = await evaluateLiveProbe(makeApex({ mode: "cockpit" }, "count"), allGlobalsPresent, noWait);
   assert.equal(armed.armed, true, "the countdown counts as armed — the race exists");
   assert.deepEqual(probeFailures(armed, []), []);
+});
+
+test("the always-on globals list does not require a DEFERRED backend island", () => {
+  // GLXShaders only exists after the GLX DEFERRED pack loads; TLX is the default.
+  const src = fs.readFileSync(new URL("../../tools/check/quick-validate.mjs", import.meta.url), "utf8");
+  const block = src.match(/for \(const name of \[([^\]]+)\]/)?.[1] || "";
+  assert.doesNotMatch(block, /GLXShaders|TLXShaders|WGX/);
+  assert.match(block, /PhysicsConsts/);
 });

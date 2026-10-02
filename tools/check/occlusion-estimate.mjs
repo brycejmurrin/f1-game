@@ -15,6 +15,7 @@
  * drawn for nothing and is what occlusion culling would remove.
  *
  *   node tools/check/occlusion-estimate.mjs [track] [cameras]
+ *   node tools/check/occlusion-estimate.mjs --help
  *   OCC_W=512 OCC_H=288 node tools/check/occlusion-estimate.mjs vegas 4
  *
  * WHAT IT IS NOT. Props only — not the road, the terrain or the cars. Cameras
@@ -35,11 +36,19 @@
 import { createRequire } from "node:module";
 import path from "node:path"; import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Repo root (tools/check -> ../..). A lone ".." resolved to tools/, and the
+// subsequent tools/lib join then doubled the tools segment (MODULE_NOT_FOUND).
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  console.log("usage: node tools/check/occlusion-estimate.mjs [track] [cameras]");
+  console.log("env:   OCC_W OCC_H  (default 256x144)");
+  process.exit(0);
+}
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 
-const TRACK = process.argv[2] || "vegas";
-const SAMPLES = +(process.argv[3] || 16);
+const TRACK = args[0] || "vegas";
+const SAMPLES = +(args[1] || 16);
 const CELL = 72, W = +(process.env.OCC_W||256), H = +(process.env.OCC_H||144), FOV = 55 * Math.PI / 180, NEAR = 0.3, FAR = 1500;
 const g = await createGame({ track: TRACK });
 const M4 = g.ctx.M4, track = g.G.track;

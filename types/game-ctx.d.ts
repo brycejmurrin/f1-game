@@ -372,6 +372,7 @@ interface GameCtx {
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
   readonly openDailyPicker: () => void;
+  readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
   readonly seasonRound: number;
@@ -399,6 +400,8 @@ interface GameCtx {
 
   // ── Tyres: the race setting and the live wear model ───────────────────────
   raceTyreWear: TyreLevel;
+  /** Dirty-air wake model: off / classic (default) / cfd. */
+  raceDirtyAir: "off" | "classic" | "cfd";
   readonly tyres: TyreSession;
   readonly pits: PitSession;
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
@@ -582,6 +585,8 @@ interface GameCtx {
   // ── Menus: selection state + the screens game.js still owns ───────────────
   driverIdx: number;
   difficulty: string;
+  /** AI pace mode: scripted (fixed car/driver pace) or catchup (legacy rubber band). */
+  aiPace: "scripted" | "catchup";
   readonly store: StoreApi;
   readonly tickUi: () => void;
   readonly scheduleFlybyTrack: (settle?: boolean) => void;
@@ -714,7 +719,7 @@ interface GameCtx {
   readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
   /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */
   readonly weather: (w?: Weather) => Weather;
-  readonly snapGameCam: () => void;
+  readonly snapGameCam: (paint?: number | true) => void;
   readonly setCarRole: (c: CarState, human: boolean, local: boolean) => void;
   readonly modsFor: (team: TeamDef, setup: PartsSetup) => CarMods;
   readonly swapGridSlots: (a: number, b: number) => boolean;
@@ -798,6 +803,8 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
    NetSession (js/net/session.js takes {transport}) — same `create()` spelling,
    different contract. */
 declare const AeroZones: GameModuleFactory;
+// js/editor/custom-tracks.js — create(G, { load, door? }): the TRACK DESIGNER door + its lazy bundle.
+declare const CustomTracks: GameModuleFactory;
 declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
 declare const ShadowPass: GameModuleFactory;
@@ -807,8 +814,10 @@ declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
 declare const RadioVoice: GameModuleFactory;
+declare const RecordedAnnouncer: GameModuleFactory;
 declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
+declare const PlayerForces: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
 declare const DrivingCues: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;
@@ -837,11 +846,17 @@ declare const RaceControl: GameModuleFactory;
 // `interface WeatherArc` above is the arc OBJECT it hands back on G.weatherArc;
 // TypeScript keeps the two in separate declaration spaces.
 declare const WeatherArc: GameModuleFactory;
+declare const StartLights: GameModuleFactory;
+declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
+declare const UiExperience: GameModuleFactory;
+declare const HomeWorld: GameModuleFactory;
+declare const PhotoStudio: GameModuleFactory;
+declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;

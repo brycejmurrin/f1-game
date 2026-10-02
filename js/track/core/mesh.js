@@ -313,12 +313,18 @@ const TrackMesh = (function () {
     // lerping its own two rings), so where the ribbon meets terrain is identical
     // — the coplanar/float audits do not move.
     const STRIPE_M = 1.6;
-    const SUB = Math.max(1, Math.round(ds / STRIPE_M));   // sub-rings per node span (≈2-3 at 4 m nodes)
+    // (SUB evenly spaced sub-rings, each coloured by its own arc, was the first
+    // cut: ~1.33 m apart against a 1.6 m stripe, so with per-vertex colour
+    // interpolating between rings most segments were red<->white RAMPS with an
+    // irregular period. Now a ring lands exactly on every stripe boundary and is
+    // emitted twice, see ribbon() below.)
+    const par = (m) => ((m % 2) + 2) % 2;   // stripe parity, safe for negative arcs
     // one ribbon strip over node range, on `side` (-1 left edge, +1 right).
     function ribbon(k0, k1, side) {
       const count = k1 - k0;
       const base = [];         // ring vertex indices, one per emitted ring
       const arcs = [];         // arc length of each emitted ring, for striping
+      const dup = [];          // ring i is coincident with ring i-1 (a stripe boundary's second copy)
       let prev = null;         // [ax,ay,az,bx,by,bz] of the previous NODE ring
       let prevArc = 0;
       for (let i = 0; i <= count; i++) {
@@ -334,24 +340,46 @@ const TrackMesh = (function () {
         const cur = [px[k] + r[0]*oA + u[0]*hA, py[k] + r[1]*oA + u[1]*hA + 0.03, pz[k] + r[2]*oA + u[2]*hA,
                      px[k] + r[0]*oB + u[0]*hB, py[k] + r[1]*oB + u[1]*hB + 0.03, pz[k] + r[2]*oB + u[2]*hB];
         const arc = k0 * ds + i * ds;   // monotone along the strip (ds-spaced nodes)
-        const first = i === 0 ? 0 : 1;                 // skip t=0 duplicate after the first node
-        for (let sIdx = first; sIdx <= SUB; sIdx++) {
-          const t = i === 0 ? 1 : sIdx / SUB;          // node 0 emits only its own ring
+        // A ring at t in [0,1] along this node span (lerped between the previous
+        // and this node's rails, so node endpoints never move), coloured by
+        // stripe PARITY, not by its own arc.
+        const emitRing = (t, parity, coincident) => {
           const rA = prev ? [prev[0] + (cur[0]-prev[0])*t, prev[1] + (cur[1]-prev[1])*t, prev[2] + (cur[2]-prev[2])*t] : [cur[0],cur[1],cur[2]];
           const rB = prev ? [prev[3] + (cur[3]-prev[3])*t, prev[4] + (cur[4]-prev[4])*t, prev[5] + (cur[5]-prev[5])*t] : [cur[3],cur[4],cur[5]];
           const ai = out.pos.length / 3;
           out.pos.push(rA[0], rA[1], rA[2]); out.nrm.push(u[0], u[1], u[2]);
           out.pos.push(rB[0], rB[1], rB[2]); out.nrm.push(u[0], u[1], u[2]);
           const a = prevArc + (arc - prevArc) * t;
-          const c = (Math.floor(a / STRIPE_M) % 2) === 0 ? ka : kb;
+          const c = parity === 0 ? ka : kb;
           out.col.push(c[0], c[1], c[2], c[0], c[1], c[2]);
           if (out.mat) out.mat.push(MAT.FLAT, MAT.FLAT);
           if (out.trk) out.trk.push(a, oA, 0, a, oB, 0);   // hw=0 → roadMarkings() skips the ribbon
-          base.push(ai); arcs.push(a);
+          base.push(ai); arcs.push(a); dup.push(coincident);
+        };
+        if (i === 0) {
+          emitRing(1, par(Math.floor(arc / STRIPE_M + 1e-6)), false);   // node 0: only its own ring
+        } else {
+          // CRISP STRIPES: a ring at every stripe boundary m*STRIPE_M inside
+          // (prevArc, arc], emitted TWICE at the same position — the colour
+          // ending there, then the colour starting there — so every stripe is
+          // a flat run of one colour with a hard edge (vertex colour
+          // interpolates; one ring per boundary was a ramp). Then the node's own
+          // ring, unless a boundary landed on it. The quad between the two
+          // copies is zero-area and is skipped below, never emitted.
+          const span = arc - prevArc;
+          let nodeDone = false;
+          for (let m = Math.floor(prevArc / STRIPE_M + 1e-6) + 1; m * STRIPE_M <= arc + 1e-6; m++) {
+            const t = Math.min(1, (m * STRIPE_M - prevArc) / span);
+            emitRing(t, par(m - 1), false);
+            emitRing(t, par(m), true);
+            if (t >= 1) nodeDone = true;
+          }
+          if (!nodeDone) emitRing(1, par(Math.floor(arc / STRIPE_M + 1e-6)), false);
         }
         prev = cur; prevArc = arc;
       }
       for (let i = 0; i < base.length - 1; i++) {
+        if (dup[i + 1]) continue;   // the boundary pair: coincident rings, zero-area quad
         const a = base[i], b = base[i + 1];
         // match buildRoad winding (top face up under BACK-face culling)
         out.idx.push(a, a + 1, b, a + 1, b + 1, b);
@@ -533,7 +561,28 @@ const TrackMesh = (function () {
     const _gWarm = (hash(_idn * 4.4) - 0.5) * 0.07;
     const _bG = pal.grass || [0.30, 0.42, 0.22];
     const grass = [_bG[0] * _gBri + _gWarm, _bG[1] * _gBri, Math.max(0, _bG[2] * _gBri - _gWarm)];
-    const wearF = (v) => (v >= 5 && v <= 8) ? 0.86 : (v === 4 || v === 9 ? 1.07 : 1.0);
+    // RACING-LINE WEAR FOLLOWS THE BAKED LINE. TrackLine.bake runs before
+    // buildRoad (js/track/tracks.js), so track.line — the line's lateral offset
+    // per node, +right metres, the same frame as the column offsets — is here:
+    // a rubbered band around it (full 0.86 within 1.2 m, gone by 4 m), a
+    // slightly cleaner (lighter) surface from 4.5 m off-line, and the step
+    // columns (4/9) keep their lighter dust edge. The band is WIDE because the
+    // asphalt columns are bunched at the centre (+-0.35) and the edges (w-0.25):
+    // a tight band would miss every vertex when the line runs mid-lane. What
+    // this buys is the SIDE: through a corner the apex-side edge columns go dark
+    // and the centre lightens, where before a fixed centre band (columns 5-8)
+    // ignored the line and the rubber sat mid-road through every corner. Vertex
+    // colour only: no car reads it (docs/PHYSICS.md §Curvature channels, the
+    // mesh.js surface row). A strip decal along the line is the finer follow-up.
+    const lineX = track.line && track.line.length === n ? track.line : null;
+    const wearF = (v, k, o) => {
+      const f = (v === 4 || v === 9) ? 1.07 : 1.0;
+      if (!lineX) return (v >= 5 && v <= 8) ? f * 0.86 : f;
+      const d = __M.abs(o - lineX[k]);
+      const band = d < 1.2 ? 1 : d > 4.0 ? 0 : (4.0 - d) / 2.8;
+      const off = d < 4.5 ? 0 : d > 7.0 ? 1 : (d - 4.5) / 2.5;
+      return f * (1 - 0.14 * band + 0.035 * off);
+    };
     // THE ROAD'S OWN VERGE IS GRASS — and on the pit side, inside the complex,
     // that is the green strip between the racing surface and the pit wall. It
     // is this mesh, not the lane's: the ribbon starts at the lane's inner edge
@@ -625,7 +674,7 @@ const TrackMesh = (function () {
           }
         } else {
           // asphalt running surface: racing-line wear + subtle aggregate grain
-          const f = wearF(v), grain = (hash(k * 13 + v) - 0.5) * 0.016;
+          const f = wearF(v, k, o), grain = (hash(k * 13 + v) - 0.5) * 0.016;
           c = [asphalt[0] * f + grain, asphalt[1] * f + grain, asphalt[2] * f + grain];
           m = MAT.ASPHALT;
         }
@@ -696,6 +745,12 @@ const TrackMesh = (function () {
   }
 
   function buildTerrain(track) {
+    const it = buildTerrainSteps(track);
+    for (;;) { const r = it.next(); if (r.done) return r.value; }
+  }
+
+  // Complete rows preserve the clip/face/normal order while yielding to paints.
+  function* buildTerrainSteps(track) {
     Log.info("track", "buildTerrain start " + (track.def && track.def.id));
     const { n, px, py, pz, hw, total } = track;
     const pos = [], nrm = [], col = [], mat = [];
@@ -724,11 +779,15 @@ const TrackMesh = (function () {
     const NTV = surface.rails.length;
     const isStreet = !!track.def.street;
     const flat = !!track.def.flatTerrain;
+    // The ground beyond the runoff verge: GRASS unless the def names SAND or
+    // SNOW (the designer's desert / alpine themes; no shipped def does, so the
+    // 52 keep their bytes — tests/unit/track-foundation* and verify-track).
+    const groundMat = track.def.terrainMat === "SAND" ? MAT.SAND : track.def.terrainMat === "SNOW" ? MAT.SNOW : MAT.GRASS;
     const outerW = surface.outerW;
     const latsL = surface.rails.map((d) => -d);
     const latsR = surface.rails.slice();
     // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
-    function ribbon(lats, flip) {
+    function* ribbon(lats, flip) {
       const base = pos.length / 3;
       for (let k = 0; k < n; k++) {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
@@ -848,8 +907,9 @@ const TrackMesh = (function () {
           const gt = NTV <= 1 ? 1 : v / (NTV - 1);          // 0 inner edge → 1 far (same 1-rail guard as the position path)
           const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
-          mat.push(gt < 0.22 ? MAT.ROCK : MAT.GRASS);
+          mat.push(gt < 0.22 ? MAT.ROCK : groundMat);
         }
+        if ((k + 1) % 32 === 0 || k + 1 === n) yield;
       }
       const faceSafe = (ia, ib, ic) => {
         const ax = pos[ia * 3], ay = pos[ia * 3 + 1], az = pos[ia * 3 + 2];
@@ -875,6 +935,7 @@ const TrackMesh = (function () {
             tri(a + v + 1, b + v, b + v + 1);
           }
         }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
       }
 
       // REAL NORMALS for the ribbon just emitted. Every terrain vertex used to
@@ -911,6 +972,7 @@ const TrackMesh = (function () {
           accumFaceN(nrm, pos, a + v, b + v, a + v + 1);
           accumFaceN(nrm, pos, a + v + 1, b + v, b + v + 1);
         }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
       }
       for (let k = 0; k < n; k++) {
         for (let v = 0; v < NTV; v++) {
@@ -921,9 +983,10 @@ const TrackMesh = (function () {
           if (l > 1e-6) { nrm[i3] = nx / l; nrm[i3 + 1] = ny / l; nrm[i3 + 2] = nz2 / l; }
           else { nrm[i3] = 0; nrm[i3 + 1] = 1; nrm[i3 + 2] = 0; }
         }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
       }
     }
-    ribbon(latsL, false); ribbon(latsR, true);
+    yield* ribbon(latsL, false); yield* ribbon(latsR, true);
     return { pos, nrm, col, mat, idx: idxArr };
   }
 
@@ -1311,7 +1374,7 @@ const TrackMesh = (function () {
 
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
-           nodeGrid, buildRoad, buildTerrain, buildFloor, gridSlot, buildGridBoxes,
+           nodeGrid, buildRoad, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
            buildPitLane, buildPitBoxes, buildPitGarages, pitHatch, buildPitHatch, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);

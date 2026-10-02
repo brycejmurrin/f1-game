@@ -26,6 +26,7 @@ drives it.
 ## The area docs (load one on demand)
 
 | Doc | Covers |
+| [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
 |---|---|
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability — and the 12-category upgrade catalog with its measured ERS/aero tables. |
@@ -33,6 +34,7 @@ drives it.
 | [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) | **Track/scenery build pipeline** — load order, `buildProps` layers, frames/shift traps, and accuracy levers (per-circuit vs shared generators). Start here before dressing a circuit. |
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire: transport channels, the packed invite SDP, Nostr/room-code rendezvous, snapshots and interpolation, and who owns which car. |
 | [LIGHTING.md](LIGHTING.md) | Light-record layout, shader uniforms, time-of-day branches, track lamps; every hand-tuned constant and how to A/B it; the per-track × time-of-day × weather presets. |
+| [TRACK-DESIGNER.md](TRACK-DESIGNER.md) | The player guide to the TRACK DESIGNER: the 60-second start, shaping and stamping corners, the start line, themes, CHECKS and FIX, save / race / share, and the touch / mouse / keyboard / gamepad cheat sheet. The long form of the designer's HOW TO tab. |
 | [UI-MAP.md](UI-MAP.md) | The title-to-race navigation web, mode-specific flows, Settings values, How to Play anchors, all 15 Garage tabs and pause actions, plus the source-backed inventory of `UiLayers`, major DOM IDs and CSS entrypoints. |
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
@@ -60,6 +62,7 @@ anything in here.
 
 | Note | What it records |
 |---|---|
+| [notes/REPO-SIZE-2026-10.md](notes/REPO-SIZE-2026-10.md) | What makes a clone big, on FULL history: 1,080 MB packed, 892 MB of it history-only (90% PNG, mostly a June 2026 screenshot burst); why a shallow agent clone measures it wrong; the 15.6 MB blobless clone; why the history rewrite is parked |
 | [notes/REAL-RACE-2026-09-27.md](notes/REAL-RACE-2026-09-27.md) | REAL RACE (Data Hub RACE IT): the OpenF1 bodies a race script needs and their measured sizes, the script shape, the director's arm / pace-loop / flag design over the live field, and the v1 limits |
 | [notes/PERF-FINDINGS.md](notes/PERF-FINDINGS.md) | **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement. |
 | [notes/TLX-PERF-PLAN.md](notes/TLX-PERF-PLAN.md) | The working plan for the three.js backend's remaining per-frame costs (night lamp shadow, godray chain, draw records, post materials): steps, status, switches and checks. Results land in PERF-FINDINGS. |
@@ -84,6 +87,7 @@ anything in here.
 | [notes/BUG-HUNT-2026-09-02.md](notes/BUG-HUNT-2026-09-02.md) | Two rounds of read-only bug hunts (UI, GLX, WGX+TLX, memory, race-flow; then track engine, physics/AI, input/audio, net): every CONFIRMED row and what each fix batch landed. |
 | [notes/PERF-HUNT-2026-08-18.md](notes/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT`, DebrisWorld asleep-skip. |
 | [notes/TRACK-ROSTER-RESEARCH-2026-09-14.md](notes/TRACK-ROSTER-RESEARCH-2026-09-14.md) | The 38 World Championship venues the game does not carry, why the upstream `bacinger/f1-circuits` trace file can add no more, what each remaining candidate costs to import (Overpass-measured), and the four shipped defs whose `classic` flag the 2027 calendar contradicts. |
+| [notes/TUMFTM-RACETRACK-DATABASE.md](notes/TUMFTM-RACETRACK-DATABASE.md) | TUMFTM racetrack-database (LGPL-3.0): designer CSV importer, roster overlap vs the three missing DTM layouts, and why upstream racelines are NOT wired into TrackLine/AI (bake already min-curvature). |
 
 ## `research/` — cited from source, not a description of behaviour
 
@@ -176,3 +180,6 @@ For day-to-day workflows, see the **skills** in `.claude/skills/`
 - [Process speed-up: the next fifteen](plans/2026-09-16-process-speedup-next.md): plans for what the 2026-09-16 research landing left — `selected` on llvmpipe, the elevation-tracks floor, a runner-side dispatch tool, more VM twins, the settings and docs items — each with evidence, files, verification and expected saving.
 - [Loading-screen flyby improvements](plans/2026-09-24-flyby-improvements.md): the fleet audit of the pre-race flyby (52 circuits, headless), what the follow-up branch fixed (pops, cranes, landmark overshoot, grid sightlines, whip pans, corner roles) and the phased plan beyond it.
 - [Refactor readability plan](plans/2026-09-24-refactor-readability.md): ranked hotspots (game.js, tracks buildProps, WGX, presets, …), Phase 0–2 sequence, explicit non-goals; supersedes [CLEANUP-ROADMAP](plans/CLEANUP-ROADMAP.md) as the backlog.
+- [Barrier run-off lateral teleports](plans/2026-09-30-barrier-runoff-teleports.md): open 2026-09-26 ledger defect — `wallAt`/`bar*` jumps ~7.9 m at tyre-stack termini; feather + end-face clamp plan with per-circuit probes.
+- [Carve headroom](plans/2026-09-30-carve-headroom.md): saturated size ratchets → extract player-forces / wall-clamp / grip / band / cam leftovers from `game.js` (helpers, not a megafunction split); lower ceilings only.
+- [Wetness and lighting](plans/2026-09-30-wetness-lighting.md): shared continuous track wetness (look=drive) then tod×weather preset grids for the twelve `"*"`-fallback circuits.

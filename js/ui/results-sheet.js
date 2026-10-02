@@ -143,7 +143,10 @@ function buildResults(order, race) {
   els.resultsTitle.textContent = sprint ? `SPRINT — ${track.def.name}`
     : G.seasonMode ? `ROUND ${season.round} — ${track.def.name}`
     : `${track.def.name} RESULT`;
-  const badges = sprint ? [] : awardBadges(order, !!(race && race.duel));   // a sprint is not a Grand Prix result
+  // A WATCHED real race (REAL REPLAY / HIGHLIGHTS, js/race/real-race.js) ends here too, with the
+  // followed car as G.player (G.followCar) — nobody drove it: no badge, no YOUR RACE card.
+  const watched = typeof RealRace !== "undefined" && !!RealRace.status().watch;
+  const badges = sprint || watched ? [] : awardBadges(order, !!(race && race.duel));   // a sprint is not a Grand Prix result
   // On a GUEST the order is the host's (game.js netOrder) but `retired`/`dnf`
   // were still this peer's own: each peer arms reliability off its OWN seed
   // and race counter (game.js armReliability), so the guest parked different
@@ -192,8 +195,14 @@ function buildResults(order, race) {
     box.textContent = `OFFICIAL WINNER ELAPSED — ${timing.winner.code || "WINNER"}  ${timing.winner.name || ""}: ${timing.text}`;
     els.resultsTable.appendChild(box);
   }
+  if (typeof ResultsStory !== "undefined") {
+    const story = ResultsStory.render(G, order, { dnfOf, watched, duel: race && race.duel,
+      points: sprint ? SeasonCal.SPRINT_POINTS : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS,
+      fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null });
+    if (story) els.resultsTable.appendChild(story);
+  }
   const playerPlace = order.findIndex((c) => c.isPlayer);
-  if (playerPlace >= 0) {
+  if (playerPlace >= 0 && !watched) {
     const self = order[playerPlace], verdict = sourceOf(self), elapsed = correctedFinish(verdict);
     const card = document.createElement("div"); card.className = "res-personal";
     const heading = document.createElement("strong"); heading.textContent = dnfOf(self) ? "YOUR RACE · " + outLabel(dnfOf(self)) : "YOUR RACE · P" + (playerPlace + 1);

@@ -453,7 +453,7 @@ test("game.js flushes the ghost at its off-race moments", () => {
   const game = readFileSync(join(ROOT, "js", "game.js"), "utf8");
   assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
   assert.match(game, /function quitToMenu\(\) \{\s*Ghost\.flush\(\);/);
-  assert.match(game, /if \(p\) Ghost\.flush\(\);/, "pause writes it too");
+  assert.match(game, /if \(p\) \{ Ghost\.flush\(\);/, "pause writes it too");
 });
 
 test("a same-circuit rebuild does not re-key the ghost (sameCircuit reads the id from BEFORE the reset)", () => {
@@ -467,7 +467,8 @@ test("a same-circuit rebuild does not re-key the ghost (sameCircuit reads the id
   assert.ok(a > 0 && a < b, "prevTrackId is captured before the reset");
   // ...and the stepped build (loadTrackStepped) captures it before ITS reset, for _loadTrackBody's builtPrevId.
   const st = src.slice(src.indexOf("async function loadTrackStepped("), src.indexOf("function loadTrack(idx)"));
-  assert.ok(st.indexOf("prevId = builtTrackId;") > 0 && st.indexOf("prevId = builtTrackId;") < st.indexOf("track = null; builtTrackId = null;"), "the stepped build captures it before its own reset");
+  assert.ok(st.indexOf("prevId = builtTrackId;") > 0 && st.indexOf("prevId = builtTrackId;") < st.indexOf("dropTrackWorld();"), "the stepped build captures it before its own reset");
+  assert.match(src, /function dropTrackWorld\(\) \{[\s\S]{0,200}track = null; builtTrackId = null;/, "…which is dropTrackWorld's");
   assert.match(st, /_loadTrackBody\(idx, def, built, prevId\);/);
   assert.match(src, /const sameCircuit = prevTrackId === def\.id;/);
 });

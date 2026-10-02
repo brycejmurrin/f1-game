@@ -57,7 +57,10 @@ export async function evaluateLiveProbe(
 ) {
   const nap = sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const out = { globals: {}, race: null, armed: null, state: null, obs: null, light: null, cams: null };
-  for (const name of ["GLX", "Tracks", "Parts", "Teams", "TrackDefs", "GLXShaders",
+  // Always-on FULL globals only. GLXShaders (and the rest of the GLX/TLX/WGX
+  // islands) live in DEFERRED and load only for the chosen backend — TLX is
+  // the default, so requiring GLXShaders fails a clean tree.
+  for (const name of ["GLX", "Tracks", "Parts", "Teams", "TrackDefs",
                       "TrackGeom", "TrackSceneryData", "PhysicsConsts"]) {
     out.globals[name] = hasGlobal(name);
   }

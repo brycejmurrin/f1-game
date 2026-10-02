@@ -150,6 +150,6 @@ test("__apex.garageCam reports the effective distance, not just the stored zoom"
   // fitD is the fit BEFORE the clamp, so a test can see the fit diverge rather
   // than only its clamped symptom. It must not be the same source as effDist.
   const game = readFileSync(new URL("../../js/garage/setup-camera.js", import.meta.url), "utf8");
-  assert.match(game, /_spEffDist = spDist; _spEffFit = spFitD;/,
+  assert.match(game, /_spEffDist = spDist; _spEffFit = homeFit \? homeFit\.dist : spFitD;/,
     "the effective distance and the raw fit must be published from the render path");
 });

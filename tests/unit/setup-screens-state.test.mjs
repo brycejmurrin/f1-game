@@ -168,6 +168,7 @@ function loadCareerUi(careerOpts = {}) {
     PhysicsConsts: { DIFF: { EASY: 1 } },
   });
   vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
+  vm.runInNewContext(src("js/career/experience.js"), sb, { filename: "js/career/experience.js" });
   vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
   const ui = sb.CareerUI.create(G);
   return { dom, ui, Career, G, $: G.$ };
@@ -237,7 +238,7 @@ test("career hub: next race and funds sit on the left; the market ladder is on t
   ui.openHub();
   const left = $("cr-left"), right = $("cr-right");
   assert.equal($("cr-nextrace").parentNode, left, "NEXT RACE card is the left-column action");
-  assert.equal($("cr-nextrace").querySelector(".cr-nr-round").textContent, "ROUND 3");
+  assert.equal($("cr-nextrace").querySelector(".cr-nr-round").textContent, "ROUND 3 OF 24");
   assert.ok($("cr-nextrace").querySelector(".cr-nr-name").textContent);
   assert.equal($("cr-funds").tagName, "DETAILS");
   assert.equal($("cr-funds").parentNode, left);
@@ -248,6 +249,10 @@ test("career hub: next race and funds sit on the left; the market ladder is on t
   assert.ok(!left.contains($("cr-ladder")));
   assert.ok(right.querySelectorAll(".season-upcoming-row").length, "UPCOMING list stays on the right");
   assert.equal(left.contains(right.querySelector(".season-upcoming-row") || { parentNode: null }), false);
+  assert.deepEqual(texts($("cr-header"), "button"),
+    ["Race brief", "Calendar", "Development", "Team & contract", "Career record"]);
+  assert.equal(right.querySelector("[data-career-part=calendar]").children.length, 4,
+    "season story uses the real calendar in this fixture, not a fixed 24-round mock");
 });
 
 test("career hub: THE CAR's Fitted row groups thousands like the garage readout", () => {
@@ -481,4 +486,32 @@ test("season setup: an APPLY that hits another tab's save reloads it, so the nex
   assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON", "repainted against ITS progress");
   $("ss-apply").onclick();                       // armConfirm stub applies at once
   assert.deepEqual({ ...G.season }, { round: 0 }, "the retry applies");
+});
+
+test("title SEASON door: refreshTitle writes the round into the label span and the accessible name, and reverts", () => {
+  // Since the title redesign the door is <svg/><span>SEASON<span class="mb-sub">…</span></span>;
+  // refreshTitle looked for a text node DIRECTLY in the button, found none and
+  // returned — the label read "SEASON" through a whole championship.
+  const shell = read("index.html");
+  assert.match(shell, /<button id="mb-season"[^>]*>(?:(?!<\/button>).)*<\/svg><span>SEASON<span class="mb-sub">A CHAMPIONSHIP, YOUR RULES<\/span><\/span><\/button>/s,
+    "the shell's door shape this test models");
+  let progress = true;
+  const { ui, $, G, dom } = loadSeasonUi(["a", "b"], { hasProgress: () => progress, rounds: () => 23 });
+  const btn = $("mb-season");
+  btn.setAttribute("aria-label", "Season — A championship, your rules");
+  const svg = dom.document.createElement("svg"), lab = dom.document.createElement("span"), sub = dom.document.createElement("span");
+  sub.className = "mb-sub"; sub.textContent = "A CHAMPIONSHIP, YOUR RULES";
+  const text = { nodeType: 3, nodeValue: "SEASON" };
+  btn.appendChild(svg); btn.appendChild(lab); lab.appendChild(sub);
+  btn.childNodes = [svg, lab]; lab.childNodes = [text, sub];   // mini-dom has no text nodes: model the shell's
+  G.season = { round: 4 };
+  ui.refreshTitle();
+  assert.equal(text.nodeValue, "SEASON · R5 OF 23");
+  assert.deepEqual(lab.childNodes, [text, sub], "the .mb-sub line is kept");
+  assert.equal(sub.textContent, "A CHAMPIONSHIP, YOUR RULES");
+  assert.equal(btn.getAttribute("aria-label"), "Season · R5 of 23 — A championship, your rules");
+  progress = false;
+  ui.refreshTitle();
+  assert.equal(text.nodeValue, "SEASON");
+  assert.equal(btn.getAttribute("aria-label"), "Season — A championship, your rules", "no progress: the shell's own name");
 });

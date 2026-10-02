@@ -53,11 +53,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // off a straight onto a real corner, which moves the ground the scenery beside
 // it is anchored to). Attributed with `clip-audit <id> --why`, diffed against
 // the pre-fix tree:
-//   estoril      one NEW pairing, scenery-nature.js:857 x itself — two terrace
+//   estoril      one NEW pairing, scenery-nature.js's crowdMound x itself — two terrace
 //                treads of ONE crowdMound run, same call site, same CONCRETE
 //                material, shared volume interior. The limitation above, exactly.
 //   indianapolis NO new pairing at all; three existing city-row pairings
-//                (build-props.js:1591 x neonTower) each gained one hit — the
+//                (js/track/scenery/build-props.js x neonTower) each gained one hit — the
 //                arc-length row compression named above.
 // Neither is a new defect class and neither is visible. Raised rather than
 // chased: the alternative is re-authoring two circuits' scenery to suit a
@@ -77,7 +77,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // indianapolis 94 → 100 (2026-08-18): same oval-stand remesh as the
 // coplanar 8→9 raise. clip-audit --why: 100 severe / 107 total from
 // 305 pairs. Dominant pairings stay the documented neonTower × city-row
-// / tree class (build-props.js:1669); grandstandEx × neonTower appears at
+// / tree class (js/track/scenery/build-props.js); grandstandEx × neonTower appears at
 // 6 hits (max 1.80 m). More shorter bays, more existing-class contacts.
 // No new defect class. Locked to the measured count.
 //
@@ -135,6 +135,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // dropped one severe cone×cyl pair; measured, not assumed.
 // portimao 51 -> 44 (2026-09-24): SRTM Algarve bake + hillside escarpment
 // ground-seat; mid-sector terrace split cleared floaters and six severe spots.
+// brands_hatch 31→34, hungaroring 1→2, jerez 16→17, mont_tremblant 38→52,
+// zolder 39→46; singapore 6→5, spa 11→8, imola 9→8 (2026-10-01):
+// transformSceneryApi wraps every() to authored-frame k (same as along), so
+// pine/marshalPost/backdrop no longer double-shift. Caps follow the measured
+// counts — raises where correctly placed stands now overlap, lowers where the
+// double-shift had been inventing contacts.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );

@@ -1,4 +1,8 @@
-/* Apex 26 — shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. A fixed CPU pool of camera-facing soft … */
+/* Apex 26 — shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. A fixed CPU pool of camera-facing soft
+ * billboards drawn in two batches a frame through gfx.drawParticles(), plus the
+ * RAIN STREAK FIELD (rain*): falling drops in a box around the camera, each one a
+ * pre-expanded world-space quad appended to the alpha batch — the same shader on
+ * every backend draws it as a soft streak (see rainFill). */
 const Particles = (function () {
   "use strict";
 
@@ -34,7 +38,8 @@ const Particles = (function () {
     _a0 = new Float32Array(MAX);
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
     _add = new Uint8Array(MAX);
-    _vertA = new Float32Array(MAX * FLOATS_PER);
+    // The alpha batch also carries the rain shower (rainFill): size for both.
+    _vertA = new Float32Array((MAX + _rainN) * FLOATS_PER);
     _vertB = new Float32Array(MAX * FLOATS_PER);
     _n = 0;
   }
@@ -128,6 +133,13 @@ const Particles = (function () {
     }
   }
 
+  // A steady emissive disc: a lamp re-spawned every frame by its owner (the
+  // start gantry, js/race/start-lights.js). Additive, no motion, no gravity;
+  // `life` just outlives one frame so the next spawn replaces it.
+  function glow(x, y, z, size, r, g, b, alpha, life) {
+    spawn(x, y, z, 0, 0, 0, life > 0 ? life : 0.1, size, 0, r, g, b, alpha, 0, 0, true);
+  }
+
   function spray(x, y, z, bvx, bvz, strength, count) {
     const m = mul(); if (m <= 0) return;
     for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
@@ -169,7 +181,8 @@ const Particles = (function () {
   }
 
   function draw() {
-    if (!_gfx || !_gfx.drawParticles || !_n) return;
+    if (!_gfx || !_gfx.drawParticles) return;
+    if (!_n && !(_rainN && _rainOn)) return;
     let pa = 0, pb = 0;
     for (let i = 0; i < _n; i++) {
       const t = _age[i] / _life[i];
@@ -189,129 +202,196 @@ const Particles = (function () {
       }
       if (_add[i]) pb = p; else pa = p;
     }
+    // The shower rides in the SAME alpha call: TLX keeps one vertex stream per
+    // blend group and a second drawParticles() in a frame overwrites the first.
+    pa = rainFill(_vertA, pa);
     if (pa) _gfx.drawParticles(_vertA, pa, false);
     if (pb) _gfx.drawParticles(_vertB, pb, true);
   }
 
-  let _rainCanvas = null, _rainCtx = null, _rainDrops = [], _rainLastShown = 0;
+  // ── RAIN: a falling-streak field around the camera ──────────────────────────
+  // Until 2026-10-01 rain was a second full-screen Canvas2D stroked over #game:
+  // no depth (streaks over the car and the walls alike), no fog, no bloom, not
+  // in the rear-view mirror, invisible to every canvas screenshot, and a CPU
+  // path + compositor layer that the governor had to shed. Now each drop is a
+  // thin world-space quad in a box that travels with the eye, appended to the
+  // alpha particle batch with fxSize 0 — the particle shaders then add nothing
+  // to the pre-expanded corners and their soft-disc falloff over the quad's
+  // (±1, ±1) corner UV draws a soft ELLIPSE inscribed in the rectangle: a rain
+  // streak, depth-tested, on all three backends with no new program.
+  //
+  // The look is physical where the overlay faked it: the streak direction is
+  // the APPARENT velocity (drop velocity − camera velocity), so a fast car sees
+  // the rain rake toward it and stretch — the RAIN SPEED SLANT / STRETCH knobs
+  // now scale that camera term (their shipped values are the physical 1:1) —
+  // and RAIN WIND slants the fall along the shared WIND DIRECTION knob the
+  // trees sway to. Drops are stored as OFFSETS from the eye and wrap in the
+  // box, so the field is stationary in the world yet always fills the view.
+  // Box: ±R around the eye, RAIN_DOWN below .. RAIN_UP above (m). Only about a
+  // quarter of it is in view, so the on-screen count is rainCount / 4: at
+  // 18 x 18 x 8 m the shipped 360 drops read like the overlay's density did
+  // (measured on the montreal rain probe: 28 x 28 x 11 m looked sparse).
+  const RAIN_R = 9, RAIN_DOWN = 3, RAIN_UP = 5;
+  const RAIN_H = RAIN_DOWN + RAIN_UP;
+  const RAIN_EXPO = 0.022;                             // s — the "shutter" that turns apparent velocity into streak length
+  const RAIN_COL = [0.69, 0.78, 0.91];                 // the overlay's #afc8e8
+  let _rainOn = false, _rainN = 0, _rainLastShown = 0, _rainRaining = false;
+  let _rox = null, _roy = null, _roz = null;          // offset from the eye (m)
+  let _rspd = null, _rlen = null, _ralpha = null;     // fall speed (m/s), streak-length scale, opacity
+  const _rainEye = [0, 0, 0];
+  let _rainEyeOk = false;                              // false until the first update after a seed/show (no finite difference)
+  const _camVel = [0, 0, 0];
+  let _windX = 0, _windZ = 0;
 
   const _clamp01 = (v) => Math.max(0, Math.min(1, v));
   function _lt() {
     return (typeof LightTune !== "undefined" && LightTune.LT) || {};
   }
 
-  function _rainEnsure() {
-    if (_rainCanvas) return;
-    _rainCanvas = document.createElement("canvas");
-    _rainCanvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;display:none;";
-    document.body.appendChild(_rainCanvas);
-    _rainCtx = _rainCanvas.getContext("2d");
-  }
+  // Show/hide without dropping the seed (menus, results sheet, quit).
+  function rainShow(on) { _rainOn = !!on; if (!on) _rainEyeOk = false; }
+  function rainActive() { return _rainN > 0; }
 
-  function rainShow(on) {
-    _rainEnsure();
-    if (!on && _rainCtx) {
-      _rainCtx.clearRect(0, 0, _rainCanvas.width, _rainCanvas.height);
-    }
-    _rainCanvas.style.display = on ? "block" : "none";
+  function _rainScatter(i) {
+    _rox[i] = rnd(RAIN_R);
+    _roy[i] = -RAIN_DOWN + Math.random() * RAIN_H;
+    _roz[i] = rnd(RAIN_R);
   }
-
-  function rainActive() { return _rainDrops.length > 0; }
 
   function rainSeed(drizzle) {
-    _rainEnsure();
     const LT = _lt();
-    _rainCanvas.width = window.innerWidth;
-    _rainCanvas.height = window.innerHeight;
     const dzCount = LT.drizzleCount != null ? LT.drizzleCount : 0.3;
     const dzLen   = LT.drizzleLen   != null ? LT.drizzleLen   : 0.5;
     const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6;
-    // TIERED, like the 3D pool at the top of this file (MAX 96 vs 256) — and for
-    // a stronger reason, because these drops are drawn by the CPU. Every frame
-    // this clears a full-viewport 2D canvas, walks ~500 drops emitting a moveTo +
-    // lineTo each, strokes them, and hands the compositor a second full-screen
-    // surface to blend over #game. LT.rainCount is 450-650 across the wet presets.
-    //
-    // The mobileTier cap is the seed-time half of the gate; the governor half is
-    // per-frame in rainDraw (see _rainShown), because the shed level moves long
+    // TIERED, like the pool (MAX 96 vs 256): every shown drop is six CPU-written
+    // vertices a frame. LT.rainCount is 450-650 across the wet presets. The
+    // mobileTier cap is the seed-time half of the gate; the governor half is
+    // per frame in rainUpdate (_rainShown), because the shed level moves long
     // after a shower is seeded.
-    const wetCap = (_gfx && _gfx.mobileTier) ? 140 : Infinity;
-    const count = Math.min(wetCap, Math.round(LT.rainCount * (drizzle ? dzCount : 1)));
-    _rainDrops = Array.from({ length: count }, () => ({
-      x: Math.random() * _rainCanvas.width,
-      y: Math.random() * _rainCanvas.height,
-      len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? dzLen : 1),
-      speed: (380 + Math.random() * 360) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
-      opacity: 0.16 + Math.random() * 0.34,
-    }));
+    const wetCap = (_gfx && _gfx.mobileTier) ? 140 : 1000;
+    const base = LT.rainCount != null ? LT.rainCount : 360;
+    const count = Math.max(0, Math.min(wetCap, Math.round(base * (drizzle ? dzCount : 1))));
+    if (!_rox || _rox.length < count) {
+      _rox = new Float32Array(count); _roy = new Float32Array(count); _roz = new Float32Array(count);
+      _rspd = new Float32Array(count); _rlen = new Float32Array(count); _ralpha = new Float32Array(count);
+    }
+    _rainN = count;
+    for (let i = 0; i < count; i++) {
+      _rainScatter(i);
+      // 6.5-9.5 m/s is terminal velocity for 1.5-4 mm drops; the knobs scale it.
+      _rspd[i] = (6.5 + Math.random() * 3.0) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1);
+      _rlen[i] = (0.75 + Math.random() * 0.5) * (LT.rainStreak != null ? LT.rainStreak : 1) * (drizzle ? dzLen : 1);
+      _ralpha[i] = 0.16 + Math.random() * 0.34;
+    }
     _rainLastShown = count;
+    _rainEyeOk = false;
+    // The alpha batch must hold the pool AND the shower in ONE call (see draw()).
+    const need = (MAX + count) * FLOATS_PER;
+    if (!_vertA || _vertA.length < need) _vertA = new Float32Array(need);
   }
 
-  // How many of the seeded drops this frame may draw. Rain is CPU-drawn over a
-  // second full-screen surface, so it sheds WITH the rest of the ladder rather
-  // than outliving it: one in (1 + autoShed) drops once the governor has shed on
-  // its own measurements. Read per frame, so density returns when it recovers.
+  // How many of the seeded drops this frame may draw: the shower sheds WITH the
+  // rest of the ladder rather than outliving it — one in (1 + autoShed) drops
+  // once the governor has shed on its own measurements. Read per frame, so
+  // density returns when it recovers.
   function _rainShown() {
     const shed = (typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0;
-    return shed > 0 ? Math.ceil(_rainDrops.length / (1 + shed)) : _rainDrops.length;
+    return shed > 0 ? Math.ceil(_rainN / (1 + shed)) : _rainN;
   }
 
-  function rainDraw(dt, speed, raining) {
+  // Advance the field. `eye` = the camera position (world, m); the camera
+  // velocity is its finite difference, and a cut (> 40 m in one frame) resets
+  // it rather than painting one frame of 4 km/h streaks. Render-only: reads the
+  // handed-in eye, never writes physics state.
+  function rainUpdate(dt, eye, raining) {
+    if (!_rainN || !_rainOn || !eye) return;
+    if (!(dt > 0)) dt = 0;
+    if (dt > 0.1) dt = 0.1;      // tab-back / hitch: don't teleport the field
+    _rainRaining = !!raining;
+    if (_rainEyeOk && dt > 0) {
+      const dx = eye[0] - _rainEye[0], dy = eye[1] - _rainEye[1], dz = eye[2] - _rainEye[2];
+      if (dx * dx + dy * dy + dz * dz < 40 * 40) { _camVel[0] = dx / dt; _camVel[1] = dy / dt; _camVel[2] = dz / dt; }
+      else { _camVel[0] = _camVel[1] = _camVel[2] = 0; }
+    } else { _camVel[0] = _camVel[1] = _camVel[2] = 0; }
+    _rainEye[0] = eye[0]; _rainEye[1] = eye[1]; _rainEye[2] = eye[2];
+    _rainEyeOk = true;
     const LT = _lt();
-    // The backing store was sized once at rainSeed and never again, while the
-    // element is CSS 100%x100% — rotating a 393x852 phone mid-shower stretched
-    // the stale bitmap 2.17x/0.46x and every streak smeared. A per-frame
-    // integer compare is free; on mismatch resize (which clears) and remap the
-    // live drops proportionally so the shower doesn't visibly restart.
-    if (_rainCanvas.width !== window.innerWidth || _rainCanvas.height !== window.innerHeight) {
-      const ow = _rainCanvas.width || 1, oh = _rainCanvas.height || 1;
-      _rainCanvas.width = window.innerWidth;
-      _rainCanvas.height = window.innerHeight;
-      const sx = _rainCanvas.width / ow, sy = _rainCanvas.height / oh;
-      for (const d of _rainDrops) { d.x *= sx; d.y *= sy; }
-    }
-    const w = _rainCanvas.width, h = _rainCanvas.height;
-    _rainCtx.clearRect(0, 0, w, h);
-    _rainCtx.lineWidth = 1;
-    _rainCtx.strokeStyle = "#afc8e8";
-    _rainCtx.globalAlpha = _clamp01((raining ? 0.25 : 0.16) * (LT.rainOpacity != null ? LT.rainOpacity : 1));   // ~mean of the 0.16..0.50 per-drop range
-    // SPEED-REACTIVE streaks: at speed the rain shears toward the camera's motion
-    // and stretches into driving streaks (apparent velocity = fall + car speed).
-    // Render-only — reads the handed-in speed, never writes physics state.
-    const vk = _clamp01((speed || 0) / 90);
-    const wind = LT.rainWind + vk * (LT.rainShearWind != null ? LT.rainShearWind : 0.9);
-    const lenMul = 1 + vk * (LT.rainShearLen != null ? LT.rainShearLen : 2);
-    _rainCtx.beginPath();
+    // Horizontal drift along WIND DIRECTION, as a fraction of the fall speed
+    // (RAIN WIND 0.18 = a ~10° slant); the trees lean the same way.
+    const wd = (LT.windDir != null ? LT.windDir : 35) * (Math.PI / 180);
+    const wk = LT.rainWind != null ? LT.rainWind : 0.18;
+    _windX = Math.cos(wd) * wk; _windZ = Math.sin(wd) * wk;
     const shown = _rainShown();
-    // Hidden drops do not advance while shedding; re-seed only the returning
-    // tail on a shed transition so old coordinates never pop into view.
-    for (let i = _rainLastShown; i < shown; i++) {
-      _rainDrops[i].x = Math.random() * w;
-      _rainDrops[i].y = Math.random() * h;
-    }
+    // Hidden drops do not advance while shedding; re-scatter only the returning
+    // tail on a shed transition so stale offsets never pop into view.
+    for (let i = _rainLastShown; i < shown; i++) _rainScatter(i);
     _rainLastShown = shown;
+    // Offsets are eye-relative, so the camera's own motion moves every drop the
+    // other way: the field stays put in the world and wraps back into the box.
+    const mx = _camVel[0] * dt, my = _camVel[1] * dt, mz = _camVel[2] * dt;
     for (let i = 0; i < shown; i++) {
-      const d = _rainDrops[i];
-      d.y += d.speed * dt;
-      d.x += d.speed * dt * wind;
-      if (d.y - d.len > h || d.x > w || d.x < 0) { d.y = -d.len; d.x = Math.random() * w; }
-      _rainCtx.moveTo(d.x, d.y);
-      _rainCtx.lineTo(d.x + d.len * lenMul * wind, d.y + d.len * lenMul);
+      const s = _rspd[i] * dt;
+      let x = _rox[i] + s * _windX - mx, y = _roy[i] - s - my, z = _roz[i] + s * _windZ - mz;
+      if (y < -RAIN_DOWN) { y += RAIN_H; x = rnd(RAIN_R); z = rnd(RAIN_R); }
+      else if (y > RAIN_UP) y -= RAIN_H;
+      if (x > RAIN_R) x -= 2 * RAIN_R; else if (x < -RAIN_R) x += 2 * RAIN_R;
+      if (z > RAIN_R) z -= 2 * RAIN_R; else if (z < -RAIN_R) z += 2 * RAIN_R;
+      _rox[i] = x; _roy[i] = y; _roz[i] = z;
     }
-    _rainCtx.stroke();
-    _rainCtx.globalAlpha = 1;
   }
 
-  // Lightning veil: drawn on top of rain drops so it bleaches the rain too.
-  function rainFlash(alpha) {
-    _rainCtx.save();
-    _rainCtx.globalAlpha = alpha;
-    _rainCtx.fillStyle = "#dcecff";
-    _rainCtx.fillRect(0, 0, _rainCanvas.width, _rainCanvas.height);
-    _rainCtx.restore();
+  // Append the shower's quads to the alpha batch at float cursor `p`; returns
+  // the new cursor. One drop = 6 vertices of [cornerX, cornerY, x, y, z, r, g,
+  // b, size 0, alpha]: the corners are expanded HERE, along the apparent
+  // velocity (half-length) and across it (half-width, facing the eye).
+  function rainFill(out, p) {
+    if (!_rainN || !_rainOn || !_rainEyeOk) return p;
+    const LT = _lt();
+    // The overlay's per-drop range was 0.16..0.50 (mean 0.33) under a batch
+    // alpha of 0.25 (storm) / 0.16 (drizzle); the same mean brightness here.
+    const alphaMul = (_rainRaining ? 0.25 : 0.16) / 0.33 * (LT.rainOpacity != null ? LT.rainOpacity : 1);
+    // RAIN SPEED SLANT / STRETCH: how much of the camera's velocity reaches the
+    // streak's direction and its length. Shipped 0.9 / 2.0 = the physical 1:1.
+    const shearW = (LT.rainShearWind != null ? LT.rainShearWind : 0.9) / 0.9;
+    const shearL = (LT.rainShearLen != null ? LT.rainShearLen : 2.0) / 2.0;
+    const cvx = _camVel[0] * shearW, cvy = _camVel[1] * shearW, cvz = _camVel[2] * shearW;
+    const camSpeed = Math.hypot(_camVel[0], _camVel[1], _camVel[2]) * shearL;
+    const ex = _rainEye[0], ey = _rainEye[1], ez = _rainEye[2];
+    const cr = RAIN_COL[0], cg = RAIN_COL[1], cb = RAIN_COL[2];
+    const shown = _rainLastShown;
+    for (let i = 0; i < shown; i++) {
+      const s = _rspd[i];
+      const tx = _rox[i], ty = _roy[i], tz = _roz[i];           // eye → drop
+      const dist = Math.hypot(tx, ty, tz);
+      if (dist < 0.4) continue;                                 // inside the lens
+      // apparent velocity = drop velocity − camera velocity
+      const vx = s * _windX - cvx, vy = -s - cvy, vz = s * _windZ - cvz;
+      const vm = Math.hypot(vx, vy, vz) || 1;
+      const dx = vx / vm, dy = vy / vm, dz = vz / vm;
+      // width axis: across the streak AND across the eye ray, so the quad faces the camera
+      let rx = dy * tz - dz * ty, ry = dz * tx - dx * tz, rz = dx * ty - dy * tx;
+      const rl = Math.hypot(rx, ry, rz);
+      if (rl < 1e-6) continue;                                  // streak points at the eye
+      rx /= rl; ry /= rl; rz /= rl;
+      const halfLen = Math.min(3.0, 0.5 * RAIN_EXPO * _rlen[i] * (s + camSpeed));
+      const halfW = 0.014 + dist * 0.0022;                      // ~1 px floor at distance (62° fov, 1080p: 1 px ≈ 0.0011 m per m)
+      const a = _ralpha[i] * alphaMul * _clamp01((dist - 0.4) / 1.6);   // fade the drops right at the lens
+      if (a <= 0.004) continue;
+      const cx = ex + tx, cy = ey + ty, cz = ez + tz;
+      for (let v = 0; v < 12; v += 2) {
+        const kx = _CORNERS[v], ky = _CORNERS[v + 1];
+        out[p++] = kx; out[p++] = ky;
+        out[p++] = cx + dx * halfLen * ky + rx * halfW * kx;
+        out[p++] = cy + dy * halfLen * ky + ry * halfW * kx;
+        out[p++] = cz + dz * halfLen * ky + rz * halfW * kx;
+        out[p++] = cr; out[p++] = cg; out[p++] = cb;
+        out[p++] = 0; out[p++] = a;                            // size 0: the shader adds nothing to the expanded corner
+      }
+    }
+    return p;
   }
 
-  return { init, clear, count, update, draw, tyreSmoke, sparks, kickup, spray,
-           rainShow, rainSeed, rainDraw, rainFlash, rainActive };
+  return { init, clear, count, update, draw, tyreSmoke, sparks, kickup, spray, glow,
+           rainShow, rainSeed, rainUpdate, rainActive };
 })();
 Object.freeze(Particles);

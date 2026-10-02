@@ -98,6 +98,7 @@ not.
 | family | rules | owner | also in |
 |---|---|---|---|
 | `dh-` | 368 | `data.css` | `components.css` |
+| `td-` | 27 | `editor.css` | — |
 | *(unprefixed)* | 226 | `overlays.css` | components, carsetup, career, menus, tuner, hud, responsive, tokens |
 | `cs-` | 132 | `carsetup.css` | components, menus, responsive |
 | `cr-` | 75 | `career.css` | — |
@@ -246,6 +247,12 @@ most-shared class in the project and had no entry at all:
 - `.track-row` — `components` + `menus`
 - `.tune-label` — `components` + `tuner`
 - `.tune-row` — `components` + `tuner`
+
+- `watch-` — `watch-transport.css`: replay transport and its race layout context.
+- `.bc-head` — `hud.css` + `watch-transport.css`, timing header button semantics.
+- `.cr-nextrace` / `.cr-nr-name` — `career.css` + `career-experience.css`, real next-race brief.
+- `.photo-mode` — `overlays.css` + `watch-transport.css`, hide playback chrome during composition.
+- `.photo-studio-open` — `experience.css` + `photo-studio.css` + `watch-transport.css`, scene-only composition.
 
 ## Dead classes
 
@@ -402,6 +409,7 @@ found a real WCAG failure in the lighting tuner within a minute.
 | `garage` | `#carsetup` | `#mb-garage` → ENGINE tab |
 | `career` | `#career` | `#mb-career` (new-career SETUP state) |
 | `datahub` | `#datahub` | `#mb-data` |
+| `trackdesigner` | `#trackdesigner` | `#mb-designer` |
 | `howtoplay` | `#howtoplay` | `#mb-help` |
 | `settings` | `#pmsettings` | `#mb-settings` |
 | `vsfriend` | `#vsfriend` | `#mb-vs` |

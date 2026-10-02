@@ -9,13 +9,19 @@ const AiDrive = (function () {
   // ratings on the car (0..1), with a mid-grid default
   // Reused scratch — same contract as game.js pairContact/_ct. Callers must
   // read fields before the next traits() call (updateCar does; tests do).
-  const _traits = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75 };
+  // aggression / optimism are signed style traits (−1..+1), default neutral.
+  const _traits = {
+    craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75,
+    aggression: 0, optimism: 0,
+  };
   function traits(c) {
     _traits.craft = c.craft != null ? c.craft : 0.75;
     _traits.awareness = c.awareness != null ? c.awareness : 0.75;
     _traits.experience = c.experience != null ? c.experience : 0.75;
     _traits.skill = c.skill != null ? c.skill : 0.97;
     _traits.consistency = c.consistency != null ? c.consistency : 0.75;
+    _traits.aggression = c.aggression != null ? c.aggression : 0;
+    _traits.optimism = c.optimism != null ? c.optimism : 0;
     return _traits;
   }
 
@@ -82,14 +88,47 @@ const AiDrive = (function () {
     return lerp(1.15, 0.45, t.awareness);
   }
 
-  function followPad(t, street, team, seat, other, stats) {
-    const pad = lerp(-0.8, 2.2, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats);
-    const out = street ? pad * 0.5 : pad;
-    return out * ordersMul(team, seat, other, "follow");
-  }
-
   function followBase(street) {
     return street ? 8 : 6;
+  }
+
+  // THE FOLLOW GAP IS A TIME — IDM's s0 + v·T. It was metres: followBase plus
+  // an awareness pad of -0.8..+2.2 m, which at 80 m/s is a tenth of a second,
+  // so every follower sat in the gearbox of the car ahead and the field ran as
+  // trains no move could start from (ai-tactics, 2026-10-01: lap 1 with 85 %
+  // of intervals under 1 s and trains of 12). s0 is the old base; T is
+  // lerp(0.15, 0.30, awareness) s, scaled by house hold and team orders as the
+  // pad was, and streets take 0.8 of it (low speeds; the old street pad was
+  // halved). `tight` (0..1) shrinks T toward FOLLOW_TIGHT — a pass latched or
+  // armed, or a tow on a straight: closing up is the point there — and
+  // `extra` adds seconds (getting a run, the first lap). Capped at FOLLOW_MAX
+  // so a car at the gap still feels the wake (TOW_RANGE 34 m faded over 28:
+  // a fifth of the tow at 28 m).
+  // MEASURED, NOT GUESSED (ai-tactics, silverstone, 2026-10-01): the first cut,
+  // T 0.25-0.45 s tightening to 0.12 s, cost a third of the settled passes
+  // (128 -> 83) and the conversion (19.9 -> 17.2 %) — a car 0.4 s back at the
+  // corner exit is out of the tow for the straight that follows. 0.15-0.30 s
+  // tightening to 0.05 s kept the passes (120) and raised the conversion (23.7 %)
+  // with the contact, side-by-side and swap-back gains intact.
+  const FOLLOW_TIGHT = 0.05, FOLLOW_MAX = 28;
+  function followTime(t, street, team, seat, other, stats) {
+    return lerp(0.15, 0.30, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
+      * ordersMul(team, seat, other, "follow");
+  }
+  // STREET CIRCUITS KEEP THE METRE GAP (2026-10-01): followBase 8 m plus the old
+  // awareness pad (-0.4..+1.1 m), and only `extra` (the first lap) as time. At
+  // monaco speeds the old gap IS ~0.25 s, and every headway tried there cost
+  // passes the narrow zones cannot spare: ai-tactics, 5 seeds x 8 laps, settled
+  // passes 48 base -> 33 with the time headway, 50 with this (conversion 4.8 %
+  // both); docs/notes/AI-FIELD-RESEARCH.md has the street ablation.
+  function followGap(t, street, speed, tight, team, seat, other, stats, extra) {
+    const v = Math.max(speed || 0, 0);
+    if (street) {
+      return followBase(true) + lerp(-0.8, 2.2, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
+        * 0.5 * ordersMul(team, seat, other, "follow") + v * (extra || 0);
+    }
+    const T = lerp(followTime(t, street, team, seat, other, stats), FOLLOW_TIGHT, clamp(tight || 0, 0, 1)) + (extra || 0);
+    return Math.min(followBase(street) + v * T, FOLLOW_MAX);
   }
 
   // Slipstream vmax gain. Streets get a half-size tow: with none, the 8 m train
@@ -287,9 +326,12 @@ const AiDrive = (function () {
     const craftMul = lerp(0.45, 1.55, t.craft);
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
     const expMul = lerp(0.75, 1.15, t.experience);      // rookies hesitate
+    // Aggression (Slice 3 fire half): ±35 % around the craft/awareness window.
+    // Spacing half (followTime / contactGive) stays out — stuck/bunching workstream.
+    const aggrMul = 1 + clamp(t.aggression != null ? t.aggression : 0, -1, 1) * 0.22;
     const house = houseMulCtx(ctx, 0.88, 1.12, "attack");
     const orders = ordersMul(ctx.team, ctx.seat, ctx.other, "ot");
-    return clamp(0.55 * situ * craftMul * awareMul * expMul * house * orders, 0.08, 2.4);
+    return clamp(0.55 * situ * craftMul * awareMul * expMul * aggrMul * house * orders, 0.08, 2.4);
   }
 
   // roll is the caller's simRnd() — only invoke when otArmed (short-circuit).
@@ -360,7 +402,10 @@ const AiDrive = (function () {
   // No iterative solver in the per-car, per-node brake lookahead.
   function cornerSpeed(k, lat, pace = 1, vmax = 72) {
     const V = Math.max(0.05, pace) * Math.max(1, vmax), kk = Math.max(k, 1e-5), L = Math.max(0, lat);
-    const den = kk - L * AI_DF / (V * V);
+    return cornerSpeedEnvelope(kk, L, V, V * V);
+  }
+  function cornerSpeedEnvelope(kk, L, V, vSq) {
+    const den = kk - L * AI_DF / vSq;
     if (den > 0) {
       const v = Math.sqrt(L / den);
       if (v <= V) return v;
@@ -376,12 +421,16 @@ const AiDrive = (function () {
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
+    // The aero speed envelope is shared by every lookahead node this tick.
+    // Keep the same solve as cornerSpeed without reclamping pace/vmax per node.
+    const V = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace)
+      * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
     let vLimSq = Infinity;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
       const bankMu = 1 + Math.sin(s.bank || 0) * 0.8;
-      const vC = cornerSpeed(k, latMax * bankMu * grip, ctx.pace, ctx.vmax) * skill * (ctx.diffCorner || 1);
+      const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq) * skill * (ctx.diffCorner || 1);
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
       const entrySq = vC * vC + 2 * brake * 0.85 * d;
@@ -399,6 +448,12 @@ const AiDrive = (function () {
     if (attacking && room > 1.6) {
       vLim *= lerp(1.0, 1.07, t.craft) * houseMulCtx(ctx, 0.99, 1.03, "attack");
     }
+    // Optimism (Slice 3): over-confidence carries a little more speed into the
+    // marker. Signed, zero-mean across the grid — not a top-speed product term.
+    // Kept small (±1.2 %): a 3 % always-on term moved field median >1 % despite
+    // zero-mean (nonlinear with who sits at the median).
+    const opt = clamp(t.optimism != null ? t.optimism : 0, -1, 1);
+    if (opt) vLim *= 1 + opt * 0.012;
     if (ctx.errMul) vLim *= ctx.errMul;   // a missed braking point (mistakeBrakeMul)
     return vLim;
   }
@@ -484,7 +539,10 @@ const AiDrive = (function () {
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     // QUEUE PRESSURE lowers the bar: a car held behind the same car for its
     // patience window will take a 2 % edge (the tow alone is 4.5 %), not 7 %.
-    const margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx));
+    // Aggression shrinks the pace edge needed to want the move (fire half).
+    const aggr = clamp(ctx.traits && ctx.traits.aggression != null ? ctx.traits.aggression : 0, -1, 1);
+    const margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx))
+      * lerp(1.10, 0.88, (aggr + 1) * 0.5);
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
     // A car under ~12 % of the top speed is an OBSTACLE whatever its pace: the
     // follower behind it sits on the queue crawl floor, which is below the
@@ -525,6 +583,23 @@ const AiDrive = (function () {
     return lerp(plan.grip, 1, clamp((tSince - plan.react) / LAUNCH_FADE, 0, 1));
   }
   function launchDone(tSince, plan) { return !plan || tSince > plan.react + LAUNCH_FADE; }
+
+  // THE FIRST LAP IS NOT THE RACE. Off a standing start the whole field
+  // arrived at turn 1 as one train (ai-tactics, 2026-10-01: lap 1 with 85 % of
+  // intervals under a second, trains of 12, and the most contact of the race)
+  // and attacked into it as if it were lap 20. A launching car — and for
+  // START_CALM s from the green — leaves START_GAP_T s more headway and
+  // attacks at START_ATTACK of the quality (attackOK); calm fades over the
+  // last 8 s and nothing changes after. `until` is game.js's c.calmUntil,
+  // set when the launch ends, so a car placed at speed (a test rig, a rolling
+  // start) never had a launch and is never calm.
+  const START_CALM = 20, START_GAP_T = 0.2, START_ATTACK = 0.5;
+  function startCalm(launching, until, t) {
+    if (launching) return 1;
+    return until > t ? clamp((until - t) / 8, 0, 1) : 0;
+  }
+  function startCalmS() { return START_CALM; }
+  function startGapT(calm) { return START_GAP_T * (calm || 0); }
 
   // PACE PHASE. Two AI cars of equal pace ran in lockstep for a whole race:
   // identical vmax, identical acceleration, so the gap between them never
@@ -577,11 +652,82 @@ const AiDrive = (function () {
   // Craft commits longer; experience retries sooner. Both are per-car, which is
   // also what stops twenty cars deciding the same thing on the same frame.
   function passHold(t) {
-    return lerp(2.4, 4.2, t.craft);
+    // Aggression commits a touch longer once the move is on (attacker patience).
+    const aggr = clamp(t && t.aggression != null ? t.aggression : 0, -1, 1);
+    return lerp(2.4, 4.2, t.craft) * (1 + aggr * 0.12);
   }
   function passCooldown(t) {
     return lerp(3.5, 1.8, t.experience);
   }
+  // THE RE-PASS LOCKOUT, scaled by the pace edge. A car just passed may not
+  // attack the car that passed it for twice its cooldown — the same
+  // "threshold endured" game.js gives an abandoned pass — unless it has the
+  // pace to: `edge` is (its pace - the passer's) / the top speed, and a 6 %
+  // edge (a car only passed on a tow or a mistake) cuts the lockout to 30 %.
+  // 42-61 % of the field's order flips were the SAME pair swapping straight
+  // back (ai-tactics swapBackPct, 2026-10-01): hysteresis on the overtake
+  // state, Game AI Pro ch.38.
+  function repassLock(t, edge) {
+    return 2 * passCooldown(t) * clamp(1 - (edge || 0) / 0.06, 0.3, 1);
+  }
+
+  // A PER-ATTEMPT ROLL. attackOK's roll was c.phaseRoll — drawn once per car
+  // per race, so a car that drew low was timid in every attack it ever
+  // considered. Each braking zone (key = the turn-in's metre) on each lap is
+  // a fresh attempt now: an integer hash of the car's race hash, the lap and
+  // the zone — deterministic and seeded, never a simRnd() draw.
+  function attemptRoll(hash, lap, key) {
+    let h = ((hash | 0) ^ Math.imul(lap | 0, 0x9e3779b1) ^ Math.imul(key | 0, 0x85ebca6b)) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+    h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
+  // GET A RUN. Through the corner that leads onto a passing straight (the
+  // next zone's quality `qNext` >= 0.4), a follower that wants the move hangs
+  // back RUN_T s more: out of the dirty air it carries its own corner speed
+  // and exits with a run instead of exiting in the gearbox of the car ahead.
+  // On the straight it closes in the tow (followGap's tight term) and pulls
+  // out LATE (latchLate): far from the braking zone it waits for a real
+  // closing rate or a short gap, so the slingshot is used, not spent early.
+  const RUN_T = 0.15;
+  // Permanent circuits only, like latchLate, the side bonus and the lane
+  // look-ahead: on a street every one of them cost monaco passes (the street
+  // ablation, docs/notes/AI-FIELD-RESEARCH.md 2026-10-01).
+  function runExtra(kHere, qNext, want, street) {
+    return !street && want && Math.abs(kHere || 0) > 0.004 && qNext >= 0.4 ? RUN_T : 0;
+  }
+  // "On the gearbox" is the tight follow gap (FOLLOW_TIGHT) plus a little. A
+  // car held for its whole patience goes anyway: at racing speed two cars
+  // accelerate alike, so a 4 % car may never close the last metres in the tow
+  // (measured: requiring it, a 4 % faster car never passed in 50 s at monza).
+  function latchLate(ctx) {
+    if (ctx.street) return true;
+    if (!(ctx.toTurnIn > 150) || Math.abs(ctx.kAhead || 0) > 0.004) return true;   // the zone is near, or not a straight
+    const ref = ctx.vTop > 0 ? ctx.vTop : 72;
+    if ((ctx.blockerSpeed || 0) < 0.12 * ref || queuePress(ctx) >= 1) return true;
+    return (ctx.speed || 0) - (ctx.blockerSpeed || 0) >= 0.015 * ref
+      || (ctx.blockerGap || 0) <= 6 + (FOLLOW_TIGHT + 0.03) * (ctx.speed || 0);
+  }
+  // THE NEXT CORNER'S DIRECTION: the curvature with the largest magnitude of
+  // three samples into it (10 / 30 / 55 m past the turn-in). One sample just
+  // past the turn-in read a near-zero entry spiral on long corners (monza's
+  // Lesmo approach read 0.0003 where the corner runs at 0.014).
+  function cornerK(k1, k2, k3) {
+    let k = k1 || 0;
+    if (Math.abs(k2 || 0) > Math.abs(k)) k = k2;
+    if (Math.abs(k3 || 0) > Math.abs(k)) k = k3;
+    return k;
+  }
+
+  // COMMIT OR YIELD. A side-by-side the rule has decided (sideYieldsA) was
+  // still left to geometry: the yielder only kept a lane's gap, so a pair ran
+  // alongside for seconds (ai-tactics: p90 5 s, max 20-25 s) and half of the
+  // fights never changed the order. Past SBS_COMMIT s alongside as the
+  // yielder, a car that is not clearly the faster lifts to SBS_EASE of the
+  // other's speed and tucks in behind.
+  function sbsCommitT() { return 2; }
+  function sbsEase() { return 0.97; }
 
   // SIDE RUB: WHO YIELDS. Identical treatment of two cars alongside (sepShares
   // 50/50, contactGive cutting BOTH to 0.25-0.55, rubScrub bleeding BOTH by
@@ -630,6 +776,7 @@ const AiDrive = (function () {
     const closing = clamp(((ctx.speed || 0) - (ctx.blockerSpeed || 0)) / (6 * ref / 72), 0.25, 1);
     const craft = lerp(0.7, 1.25, ctx.traits ? ctx.traits.craft : 0.75);
     const roll = 0.85 + 0.3 * (ctx.roll != null ? ctx.roll : 0.5);
+    q *= 1 - (1 - START_ATTACK) * (ctx.calm || 0);   // the first lap: not lap 20 into turn 1 (startCalm)
     // A queued car can never show a closing rate — the queue cap pins it to the
     // blocker's speed — so time held behind stands in for it (queuePress).
     return q * Math.max(closing, deficit, 0.7 * queuePress(ctx)) * craft * roll >= 0.32 && passReach(ctx);
@@ -668,7 +815,11 @@ const AiDrive = (function () {
   function queueTime(prevT, held, dt) {
     return held ? (prevT || 0) + dt : Math.max(0, (prevT || 0) - 2 * dt);
   }
-  function queuePatience(t) { return lerp(7, 3.5, t ? t.craft : 0.75); }
+  function queuePatience(t) {
+    // High aggression burns patience faster → higher queuePress sooner → otWant.
+    const aggr = clamp(t && t.aggression != null ? t.aggression : 0, -1, 1);
+    return lerp(7, 3.5, t ? t.craft : 0.75) * lerp(1.12, 0.88, (aggr + 1) * 0.5);
+  }
   function queuePress(ctx) {
     return clamp((ctx.queueT || 0) / queuePatience(ctx.traits), 0, 1);
   }
@@ -1051,9 +1202,21 @@ const AiDrive = (function () {
   // fired; this one scales whether it fires at all). >0 multiplies the base
   // rate; undefined/0/negative leaves it at 1 so every existing caller and
   // test is unchanged.
+  //
+  // Slice 4: short races need visible late-brake/gather on easy/normal without
+  // editing DIFF.err. Hard (errMul≈1) keeps the 0.004 base; easy/normal get a
+  // visibility lift from (em−1). Optimism adds under pressure only (zero-mean
+  // when unpressured).
   function mistakeChance(t, pressure, errMul) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
-    return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons) * (errMul > 0 ? errMul : 1);
+    const em = errMul > 0 ? errMul : 1;
+    const press = clamp(pressure || 0, 0, 1);
+    // Cap 8× once em≥2.5 (easy); normal (~1.8) gets ~5.7×. Hard (em=1)
+    // stays on the 0.004 base so DIFF.err alone sets the hard rate.
+    const base = 0.004 * (1 + 7.0 * clamp((em - 1) / 1.2, 0, 1));
+    const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
+    const optMul = 1 + 0.25 * opt * press;
+    return base * (1 + 2 * press) * (1.3 - cons) * em * optMul;
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
@@ -1106,13 +1269,46 @@ const AiDrive = (function () {
   //
   // Without it the fix for "the AI drives into my side" silently becomes "the
   // AI yields to any contact", which is the pushover outcome, not this one.
-  function humanYieldT(prevT, close, aiElected, otherHuman, intruding, dt) {
+  //
+  // HOLDING IS NOT YIELDING EITHER (2026-10-01). With the rule electing the
+  // human and the AI only HOLDING its line inside the band (`inside`), the
+  // pair still had no yielder at all: tools/check/ai-tactics.mjs --mode human
+  // measured contact in 11-22 % of the frames an AI ran alongside the player.
+  // A held line now arms the timer at HOLD_RATE, so a player leaning on an AI
+  // gets grace / HOLD_RATE (1.2 s) of rub — a contest, not a free lane at
+  // 0.3 s — and then the AI concedes, so ONE car always yields in the end.
+  // `close` is STILL BESIDE THEM (game.js: the clear gap plus a metre), so a
+  // concession is held while the pair stays alongside: released at the gap it
+  // drifted straight back to its lane and re-armed, a 1.5 s in-out cycle.
+  const HOLD_RATE = 0.25;
+  function humanYieldT(prevT, close, aiElected, otherHuman, intruding, dt, inside) {
     if (!close || !otherHuman) return 0;
     if (aiElected) return 0;          // the normal path already has it; start clean
-    if (!intruding) return prevT;     // their move, not ours — hold, do not arm
-    return prevT + dt;
+    if (intruding) return prevT + dt;
+    return inside ? prevT + dt * HOLD_RATE : prevT;   // their lean: slower; at the gap: settled
   }
   function humanYieldTakes(t) { return (t || 0) > humanYieldGrace(); }
+
+  // A HUMAN'S PACE. otWant / attackOK / the lunge rule compare our free pace
+  // with the blocker's PACE (its vmax). An AI's vmax is its pace; a human's is
+  // only the CAR's, so the old read for a human was its LIVE speed — and that
+  // is low in every corner and braking zone, exactly where a pass cannot
+  // complete: the AI attacked a player where it would never attack an AI
+  // (2026-10-01 investigation). The like-for-like read is the human's speed
+  // against what an AI does at the same metre of road: AI cars in free air
+  // teach a per-node profile of speed / own vmax (paceRef, `ref` is a
+  // Float32Array of track.n), and a human's paceF is its own speed / vmax
+  // against that profile, smoothed over ~7 s. The human's pace vmax is then
+  // vmax x paceF — 1 for a driver who drives like the field.
+  // AI-only: it decides what the AI does about the player, never the car.
+  function paceSample(ref, i, c, vmax, free, dt) {
+    if (!(vmax > 1)) return;
+    const f = c.speed / vmax;   // a ratio: the same at every OVERALL SPEED
+    if (!(f > 0.02)) return;
+    if (!c.human) { if (free) ref[i] = ref[i] > 0 ? ref[i] + (f - ref[i]) * 0.2 : f; return; }
+    const r = ref[i];
+    if (r > 0.05) c.paceF = damp(c.paceF > 0 ? c.paceF : 1, clamp(f / r, 0.6, 1.25), 0.15, dt);
+  }
 
   // THE AIM, NOT THE CONTACT. Every side-by-side rule above keys on where the
   // two cars ARE (|dx| inside the clear gap), while the AI steers toward a
@@ -1134,10 +1330,15 @@ const AiDrive = (function () {
     return otherX <= x ? desiredX < x : desiredX > x;
   }
 
+  // LEVEL, THE INSIDE OF THE NEXT CORNER OWNS IT. With `kTurn` (the
+  // curvature just past the next turn-in, AI-only) the outer car is the one on
+  // the outside of THAT corner — |x| from the centreline is the outside of the
+  // corner only when the pair is already in it. Without it, as before.
   const SIDE_LEVEL = 2.4;
-  function sideYieldsA(dProg, xA, xB) {
+  function sideYieldsA(dProg, xA, xB, kTurn) {
     if (dProg < -SIDE_LEVEL) return true;        // A is behind B
     if (dProg > SIDE_LEVEL) return false;        // A is ahead
+    if (Math.abs(kTurn || 0) > 0.004 && xA !== xB) return (xA - xB) * Math.sign(kTurn) > 0;   // A outside (+k = left: outside is +x)
     return Math.abs(xA) >= Math.abs(xB);         // level: the outer car concedes
   }
 
@@ -1156,8 +1357,11 @@ const AiDrive = (function () {
   // gearbox — too late to be a cover. Awareness widens it: 0.35 s .. 0.7 s.
   function defendWindowT(t) { return lerp(0.35, 0.7, t ? t.awareness : 0.75); }
 
+  // MID-TRAIN TOO (2026-10-01): a car with a car ahead never defended at all,
+  // so every car in a train was a free pass. It defends when the attack
+  // behind is nearer than the car ahead (blockerGap) — the threat that matters.
   function defendPull(ctx) {
-    if (ctx.blocker || !ctx.chaser) return 0;
+    if (!ctx.chaser || (ctx.blocker && (ctx.street || !(ctx.chaserGap < ctx.blockerGap)))) return 0;
     const gT = (ctx.chaserGap == null ? 99 : ctx.chaserGap) / Math.max(ctx.speed || 0, 10);
     const winT = defendWindowT(ctx.traits);
     if (gT >= winT) return 0;
@@ -1173,18 +1377,29 @@ const AiDrive = (function () {
     // on. dx is the chaser's lateral offset from us, +x = right, so the side to
     // take IS its sign. Dead behind is not yet a move to cover — hold the line
     // and let defendOnce spend the move when they commit.
+    // PREDICT THE ATTACKER (Liniger's defender plans against the attacker's
+    // best reply): dead behind on a straight, the move it will make is the
+    // one otSide / passSideBonus make for it — the inside of the next corner
+    // (kTurn) once that corner is within two seconds of road. Cover that.
     let coverSide, straight = false;
     if (Math.abs(kA) > 0.004) {
       coverSide = -Math.sign(kA);
     } else {
       const ox = ctx.other && Number.isFinite(ctx.other.x) ? ctx.other.x : 0;
       const dx = ox - (ctx.x || 0);
-      if (Math.abs(dx) < 0.35) return 0;
-      coverSide = dx > 0 ? 1 : -1;
+      const kT = ctx.kTurn || 0;
+      if (Math.abs(dx) >= 0.35) coverSide = dx > 0 ? 1 : -1;
+      else if (!ctx.street && Math.abs(kT) > 0.004 && ctx.toTurnIn < 2 * Math.max(ctx.speed || 0, 10)) coverSide = -Math.sign(kT);
+      else return 0;
       straight = true;
     }
     const coverRoom = coverSide > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
     if (ctx.street && coverRoom < 2.2) return 0;
+    // LEAVE A CAR'S WIDTH at the edge (FIA): never pull closer to the road
+    // edge than a car width plus half a metre. roadL/R are the room to the
+    // ROAD edge (roomL/R reach into the run-off on a permanent circuit).
+    const road = coverSide > 0 ? ctx.roadR : ctx.roadL;
+    const edgeCap = road != null ? Math.max(0, road - 2.5) : Infinity;
     const mag = lerp(0.2, 1.1, ctx.traits.craft)
       * clamp(1 - gT / winT, 0, 1) * clamp(coverRoom / 2, 0, 1)
       * houseMulCtx(ctx, 0.90, 1.12, "hold")
@@ -1192,7 +1407,7 @@ const AiDrive = (function () {
     // A straight cover is a lane move, not a chop: three fifths of the corner
     // pull, and defendOnce still spends it once per straight.
     const scale = (ctx.street ? 0.45 : 1) * (straight ? 0.6 : 1);
-    return coverSide * mag * scale;
+    return coverSide * Math.min(mag * scale, edgeCap);
   }
 
   function wallHitLoss(street) {
@@ -1242,11 +1457,23 @@ const AiDrive = (function () {
     const roomL = ctx.roomL || 0, roomR = ctx.roomR || 0;
     const diff = roomR - roomL;
     if (Math.abs(diff) >= 0.6) return diff > 0 ? 1 : -1;
-    const kA = ctx.kAhead || 0;
+    const kA = Math.abs(ctx.kTurn || 0) > 0.002 ? ctx.kTurn : (ctx.kAhead || 0);   // the corner the pass is FOR, else the bend ahead
     if (Math.abs(kA) > 0.002) return kA > 0 ? -1 : 1;   // inside = -sign(k)
     const lane = ctx.lane || 0;
     if (Math.abs(lane) > 0.05) return lane > 0 ? 1 : -1;
     return diff >= 0 ? 1 : -1;
+  }
+
+  // THE INSIDE AT THE CATCH POINT. The pass completes at the next turn-in
+  // (passReach), so the side worth having is the inside of THAT corner —
+  // kTurn, not the curvature 18-70 m ahead (which on a straight is ~0 and
+  // left the choice to a coin of lane and room). AiCorridor adds this to a
+  // lane's score: 0.8 for the inside of a real corner within 250 m (worth
+  // over 3 m of extra room), otherwise the old 0.3 for otSide's pick.
+  function passSideBonus(ctx, side) {
+    const k = ctx.kTurn || 0;
+    if (!ctx.street && Math.abs(k) > 0.004 && ctx.toTurnIn < 250) return side === -Math.sign(k) ? 0.8 : 0;
+    return otSide(ctx) === side ? 0.3 : 0;
   }
 
   // LET PASS. A car that is faster, right behind, and not held up by anything
@@ -1293,14 +1520,14 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
+    lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
-    otWant, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
-    launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
+    otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,

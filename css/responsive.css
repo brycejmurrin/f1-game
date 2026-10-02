@@ -112,6 +112,7 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #menu-hero,
   :where(body:not([data-density="compact"])) #menu-primary,
   :where(body:not([data-density="compact"])) #menu-secondary { width: 100%; gap: clamp(8px, calc(1 * var(--vwz)), 12px); }
+  :where(body:not([data-density="compact"])) #menu-explore { width: 100%; gap: clamp(8px, calc(1 * var(--vwz)), 12px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { padding: 9px 6px 9px 10px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text
      dropped near the title rather than a caption belonging to it. */
@@ -140,6 +141,7 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #menu-hero,
   :where(body:not([data-density="compact"])) #menu-primary,
   :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), 660px, 100%); }
+  :where(body:not([data-density="compact"])) #menu-explore { width: min(calc(66 * var(--vwz)), 660px, 100%); }
   :where(body:not([data-density="compact"])) #menu-buttons { gap: 14px; }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { font-size: clamp(20px, calc(2.4 * var(--vwz)), 28px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: clamp(14px, calc(1.5 * var(--vwz)), 18px); }
@@ -360,12 +362,12 @@ body.rotate-help-open #rotate-device { display: none !important; }
   width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
   max-width: none; min-width: 0; justify-self: center;
 }
-:root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-secondary) { width: 100%; max-width: none; }
+:root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min
    (css/components.css): 100% is one per line, 0px is one equal row. */
-:root[data-title-btns="stack"] #menu-buttons > :is(#menu-primary, #menu-secondary) { --balance-basis: 100%; --balance-min: 100%; }
+:root[data-title-btns="stack"] #menu-buttons > :is(#menu-primary, #menu-explore, #menu-secondary) { --balance-basis: 100%; --balance-min: 100%; }
 :root[data-title-btns="stack"] #menu-retention { grid-template-columns: minmax(0, 1fr); }
-:root[data-title-btns="row"] #menu-buttons > :is(#menu-primary, #menu-secondary) { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
+:root[data-title-btns="row"] #menu-buttons > :is(#menu-primary, #menu-explore, #menu-secondary) { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
 /* SIDE. Two-column shapes trade columns; a single column trades order. */
 :root[data-title-side="swap"] #menu-brand { order: 1; }
 :root[data-title-side="swap"] :where(body[data-shape="tall"]) #menu-brand { grid-row: 2; }
@@ -380,12 +382,17 @@ body.rotate-help-open #rotate-device { display: none !important; }
   :where(body:not([data-density="compact"])):where(:root[data-title-side="swap"] *) #menu-brand { grid-column: 2; }
   :where(body:not([data-density="compact"])):where(:root[data-title-side="swap"] *) #menu-buttons { grid-column: 1; }
 }
-/* PEEK: while a TITLE LAYOUT slider is held, the title screen shows through
-   the settings page (css/components.css fades #overlay under any open dialog). */
-body[data-tl-peek] #overlay { opacity: 1; }
-body[data-tl-peek] #pmsettings { background: transparent; }
-body[data-tl-peek] #pmsettings::backdrop { background: transparent; }
-body[data-tl-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
+/* PEEK (js/ui/screen-looks.js → html[data-appearance-peek="<screen>"]): while
+   an APPEARANCE knob changes, the settings page fades to a ghost and the
+   screen that knob describes shows behind it. TITLE: css/components.css fades
+   #overlay under any open dialog, so the peek lifts that. The other screens
+   are revealed by the block at the end of this file. */
+:root[data-appearance-peek="title"] #overlay { opacity: 1; }
+:root[data-appearance-peek] #pmsettings { background: transparent; }
+:root[data-appearance-peek] #pmsettings::backdrop { background: transparent; }
+:root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
+:root[data-appearance-peek][data-motion="reduce"] #pmsettings > * { transition: none; }
+:root[data-appearance-peek] #pmsettings :focus-visible { outline-color: transparent; }   /* a ring would read through the ghost; it returns with the page */
 /* EDIT ON TITLE SCREEN (html[data-tl-edit], js/ui/title-layout.js): the pieces
    are outlined and dragged whole — their own controls take no pointer, so a
    press on a door is the door's piece, never its click. #tl-art is the
@@ -419,5 +426,131 @@ body[data-tl-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
   border-radius: 50%; background: var(--red); border: 2px solid var(--text);
   cursor: nwse-resize; touch-action: none;
 }
+
+/* ---------- SCREEN LOOKS: per-screen APPEARANCE folds (js/ui/screen-looks.js) ----------
+   Every rule keys on an <html data-look-<screen>-<knob>> attribute that the
+   engine writes ONLY for a non-default answer, and reads ranges from the
+   matching --look-<screen>-<knob> token (v / 100). Untouched, nothing here
+   matches. In this layer on purpose: css/data.css and css/track-detail.css are
+   @layer overlays too, and a components-layer rule would silently lose.
+   The SHARED CORE knobs live here; each screen's own knobs live beside its
+   other rules (css/components.css pause block, css/data.css, css/menus.css,
+   css/career.css, css/carsetup.css, css/overlays.css).
+   POPUPS scope (one fold): `dialog.screen.dim:not(#pmsettings, #pausemenu,
+   #race-settings)` — every dimmed pop-up (standings, quali, results, the
+   team / duel pickers, season setup, VS FRIEND, customise, HOW TO PLAY,
+   music, career offers / guide / history, circuit details) except the
+   settings page itself and the two sheets with folds of their own. */
+
+/* A CLOSED dialog this file styles restates its closed state first (the
+   guard tests/unit/css-layers.test.mjs holds every winning-layer rule to:
+   layout in the hidden -> showModal seam drops child boxes for good). The
+   peek reveal below out-ranks these on purpose, for exactly as long as the
+   peek lasts — js/ui/screen-looks.js flushes the box away when it ends. */
+#pausemenu:not([open]) { display: none; }
+#race-settings:not([open]) { display: none; }
+#standings:not([open]) { display: none; }
+#datahub:not([open]) { display: none; }
+
+/* PEEK REVEAL. The target's hidden / open attributes are never touched (every
+   layer, focus and input module keys on them); display alone puts it behind
+   the ghosted settings page, which stays modal in the top layer, so nothing
+   revealed can take a pointer or focus. A closed dialog is not in the top
+   layer, so it takes a z-index over the title screen. !important because the
+   targets carry `hidden`, and `[hidden] { display: none !important }` above
+   (this layer) is beaten only by an important rule of higher specificity. */
+:root[data-appearance-peek="pause"] #pausemenu:not([open]),
+:root[data-appearance-peek="race"] #race-settings:not([open]),
+:root[data-appearance-peek="popups"] #standings:not([open]) { display: grid !important; z-index: 30; }
+:root[data-appearance-peek="datahub"] #datahub:not([open]) { display: flex !important; z-index: 30; }
+:root[data-appearance-peek="select"] #select[hidden],
+:root[data-appearance-peek="career"] #career[hidden],
+:root[data-appearance-peek="garage"] #carsetup[hidden] { display: grid !important; }
+/* The music card is hidden until a track plays; a pause peek shows its shell
+   so MUSIC CARD has something to hide. */
+:root[data-appearance-peek="pause"]:not([data-look-pause-music="hide"]) #pm-now-card[hidden] { display: flex !important; }
+
+/* WIDTH — a share of each sheet's OWN --sheet-w cap. */
+:root[data-look-select-w] #sel-inner { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-select-w, 1))); }
+:root[data-look-race-w] #race-settings > .sheet { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-race-w, 1))); }
+:root[data-look-career-w] #cr-inner { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-career-w, 1))); }
+:root[data-look-popups-w] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-popups-w, 1))); }
+
+/* DENSITY — SheetShape's own compact tier (js/ui/sheet-shape.js reads
+   --compact-at off the sheet): ROOMY never goes compact, TIGHT always does.
+   1px, not 0: a zero reads as unset and falls back to the default. */
+:root[data-look-select-density="roomy"] #sel-inner,
+:root[data-look-race-density="roomy"] #race-settings > .sheet,
+:root[data-look-career-density="roomy"] #cr-inner,
+:root[data-look-garage-density="roomy"] #cs-inner { --compact-at: 1px; }
+:root[data-look-popups-density="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 1px; }
+:root[data-look-select-density="tight"] #sel-inner,
+:root[data-look-race-density="tight"] #race-settings > .sheet,
+:root[data-look-career-density="tight"] #cr-inner,
+:root[data-look-garage-density="tight"] #cs-inner { --compact-at: 99999px; }
+:root[data-look-popups-density="tight"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 99999px; }
+
+/* BUTTON HEIGHT — the tap tokens, scaled from their shipped values
+   (--tap-0 / --chip-h-0, css/tokens.css), so the touch floor scales too. */
+:root[data-look-datahub-btn] #datahub { --tap: calc(var(--tap-0) * var(--look-datahub-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-datahub-btn, 1)); }
+:root[data-look-select-btn] #select { --tap: calc(var(--tap-0) * var(--look-select-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-select-btn, 1)); }
+:root[data-look-race-btn] #race-settings { --tap: calc(var(--tap-0) * var(--look-race-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-race-btn, 1)); }
+:root[data-look-career-btn] #career { --tap: calc(var(--tap-0) * var(--look-career-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-career-btn, 1)); }
+:root[data-look-garage-btn] #carsetup { --tap: calc(var(--tap-0) * var(--look-garage-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-garage-btn, 1)); }
+:root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
+
+/* CORNERS — the radius tokens every card and button reads. */
+:root[data-look-pause-corners="sharp"] #pausemenu,
+:root[data-look-datahub-corners="sharp"] #datahub,
+:root[data-look-select-corners="sharp"] #select,
+:root[data-look-race-corners="sharp"] #race-settings { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
+:root[data-look-career-corners="sharp"] #career,
+:root[data-look-garage-corners="sharp"] #carsetup { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
+:root[data-look-popups-corners="sharp"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
+:root[data-look-pause-corners="pill"] #pausemenu,
+:root[data-look-datahub-corners="pill"] #datahub,
+:root[data-look-select-corners="pill"] #select,
+:root[data-look-race-corners="pill"] #race-settings { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
+:root[data-look-career-corners="pill"] #career,
+:root[data-look-garage-corners="pill"] #carsetup { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
+:root[data-look-popups-corners="pill"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
+
+/* BACKGROUND — the scrim behind the card. Dialogs paint it twice (their own
+   box and ::backdrop, which reads --pause-wash / --pause-scrim, see
+   css/components.css), so both layers move together. */
+:root[data-look-race-dim="solid"] #race-settings.screen.dim { background: var(--scrim-heavy); }
+:root[data-look-popups-dim="solid"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: var(--scrim-heavy); }
+:root[data-look-datahub-dim="solid"] #datahub,
+:root[data-look-select-dim="solid"] #select,
+:root[data-look-career-dim="solid"] #career { background: var(--scrim-heavy); }
+:root[data-look-race-dim="soft"] #race-settings.screen.dim { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
+:root[data-look-popups-dim="soft"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
+:root[data-look-datahub-dim="soft"] #datahub,
+:root[data-look-select-dim="soft"] #select,
+:root[data-look-career-dim="soft"] #career { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
+:root[data-look-race-dim="off"] #race-settings.screen.dim { background: transparent; }
+:root[data-look-popups-dim="off"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: transparent; }
+:root[data-look-datahub-dim="off"] #datahub,
+:root[data-look-select-dim="off"] #select,
+:root[data-look-career-dim="off"] #career { background: transparent; }
+:root[data-look-race-dim="solid"] #race-settings::backdrop { --pause-scrim: 0.62; }
+:root[data-look-popups-dim="solid"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-scrim: 0.62; }
+:root[data-look-race-dim="soft"] #race-settings::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
+:root[data-look-popups-dim="soft"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
+:root[data-look-race-dim="off"] #race-settings::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
+:root[data-look-popups-dim="off"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
+
+/* #track-detail (a full-bleed popup) keeps its opaque page and its
+   name | close head: BACKGROUND OFF would show #select through it, and a
+   centred head pulls the close button into the middle. */
+/* HEADINGS — the sheet's title band, centred. Rows and forms keep their
+   LABEL ‹ VALUE › alignment. */
+:root[data-look-datahub-head="centre"] #datahub .sheet-head,
+:root[data-look-select-head="centre"] #select .sheet-head,
+:root[data-look-race-head="centre"] #race-settings .sheet-head { justify-content: center; text-align: center; }
+:root[data-look-career-head="centre"] #career .sheet-head,
+:root[data-look-garage-head="centre"] #carsetup .sheet-head { justify-content: center; text-align: center; }
+:root[data-look-popups-head="centre"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) .sheet-head { justify-content: center; text-align: center; }
+
 
 } /* @layer overlays */

@@ -21,6 +21,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.7,
+    tyreSeverity: 2.00,  // Barcelona softs 0.247 s/lap (F1 Chronicle half-season) — heaviest 2026; clamped to model max
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     // The main stand is the scenery's own grandstandEx(0.005, -1, 180 m); the

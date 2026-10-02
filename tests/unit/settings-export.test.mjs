@@ -52,6 +52,14 @@ function boot(opts = {}) {
   // In the page js/data/teams.js loads long before this file; opt in where a
   // test is about what Teams.sanitizeCustom does to an imported team.
   if (opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
+  // Career collect/apply run migrateCareer. Teams is a HARD_EDGES dep of
+  // SaveMigrate.remapPoints — load both only when a test exercises the career
+  // file, so garage round-trips keep their pre-Teams verbatim customTeam shape.
+  if (opts.career) {
+    if (!opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
+    vm.runInContext(read("js/career/save-migrate.js"), ctx, { filename: "js/career/save-migrate.js" });
+    vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
+  }
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: "js/ui/settings-export.js" });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
@@ -59,8 +67,10 @@ function boot(opts = {}) {
   return { SettingsExport, G, disk,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
+    career: () => plain(SettingsExport.collectCareer()),
     loadSettings: (o) => plain(SettingsExport.applySettings(o, G)),
-    loadGarage: (o) => plain(SettingsExport.applyGarage(o)) };
+    loadGarage: (o) => plain(SettingsExport.applyGarage(o)),
+    loadCareer: (o) => plain(SettingsExport.applyCareer(o)) };
 }
 
 function bootImportUI(opts = {}) {
@@ -203,9 +213,11 @@ test("a changed key carries its value, the default it replaced and the source th
     "apex26.cockpitHalo": "0", "apex26.metricsSize": "l",
     "apex26.lightTune": JSON.stringify({ "monza|day|dry": { sunI: 1.2 } }),
     "apex26.camTune": JSON.stringify({ chase: { dist: 2 } }),
+    "apex26.camTuneGlobal": JSON.stringify({ fov: 4 }),
+    "apex26.camComfort": JSON.stringify({ bob: 0.3 }),
   } });
   const f = collect("changes");
-  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camTune", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
+  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneGlobal", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
   assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
@@ -215,6 +227,8 @@ test("a changed key carries its value, the default it replaced and the source th
   assert.equal(f.defaults.camera.cockpitHalo, "1");
   assert.deepEqual(f.settings.lighting.lightTune, { "monza|day|dry": { sunI: 1.2 } });
   assert.deepEqual(f.settings.camera.camTune, { chase: { dist: 2 } });
+  assert.deepEqual(f.settings.camera.camTuneGlobal, { fov: 4 });
+  assert.deepEqual(f.settings.camera.camComfort, { bob: 0.3 });
   for (const name of f.changed) assert.match(f.where[name], /^js\//, name + " names its source");
   assert.equal(f.settings.driving.reliability, undefined, "an untouched key is absent from CHANGES");
 });
@@ -231,6 +245,19 @@ test("a tuner that saves its whole table reports only the fields the player move
   assert.deepEqual(f.defaults.audio.sndTune, { gain: 1, bass: 0.5, air: 0.2 });
   assert.deepEqual(f.settings.audio.voiceTune, { radio: { name: "Samantha", pitch: 1.1 } });
   assert.deepEqual(f.defaults.audio.voiceTune, {}, "an absent channel uses the shipped voice/prosody defaults");
+});
+
+test("recorded voice choices and radio sound survive settings backup and restore", () => {
+  const voiceTune = { radio: { pack: "michael" }, announcer: { pack: "bella" } };
+  const file = boot({ disk: { "apex26.radioPreset": JSON.stringify("vintage"),
+    "apex26.voiceTune": JSON.stringify(voiceTune) } }).collect("changes");
+  const dst = boot();
+  assert.equal(dst.loadSettings(file).skipped, 0);
+  assert.equal(JSON.parse(dst.disk.get("apex26.radioPreset")), "vintage");
+  assert.deepEqual(JSON.parse(dst.disk.get("apex26.voiceTune")), voiceTune);
+  const bad = dst.loadSettings({ format: "apex26-settings-v1", settings: { audio: { radioPreset: "unknown" } } });
+  assert.equal(bad.skipped, 1);
+  assert.equal(JSON.parse(dst.disk.get("apex26.radioPreset")), "vintage");
 });
 
 test("the binding tables count as changed by Input's word, not by value", () => {
@@ -728,4 +755,114 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const res = b.loadSettings(f);
   assert.equal(res.ok, true);
   assert.equal(res.skipped, 0, "every row passes its oneOf / type check");
+});
+
+// ── THE CAREER FILE ──────────────────────────────────────────────────────────
+
+const CAREER_SAVE = {
+  v: 1, flavour: "driver", year: 2027, money: 4200, rep: 61, seat: 0, seed: 42,
+  driver: { name: "Ada", code: "ADA", num: 7 },
+  team: "mercedes",
+  season: { round: 3, pts: { "mercedes:0": 25 }, teamPts: { mercedes: 25 }, driverCodes: {} },
+  owned: ["wing_std"], fitted: { wing: "wing_std" },
+  results: [{ round: 0, p: 1 }], history: [],
+  dev: {}, tdev: {}, seats: {}, offers: [],
+  budgetLvl: 1, facility: 0,
+};
+
+test("the career file carries the six slots and the live pointer, and nothing else", () => {
+  const disk = Object.assign({}, POISON, GARAGE, {
+    "apex26.career.driver.0": JSON.stringify(CAREER_SAVE),
+    "apex26.career.myteam.1": JSON.stringify(Object.assign({}, CAREER_SAVE, { flavour: "myteam", team: "custom" })),
+    "apex26.careerSlot": JSON.stringify("driver:0"),
+  });
+  const { career, collect, garage } = boot({ career: true, disk });
+  const f = career();
+  assert.equal(f.format, "apex26-career-v1");
+  assert.equal(f.careers.careerSlot, "driver:0");
+  assert.equal(f.careers["career.driver.0"].driver.code, "ADA");
+  assert.equal(f.careers["career.myteam.1"].flavour, "myteam");
+  assert.equal(f.careers["career.driver.0"].money, 4200);
+  assert.ok(!("career.driver.1" in f.careers), "empty slots are omitted");
+  assert.equal(f.count, 3);
+  const text = JSON.stringify(f).replace(/"excluded":"[^"]*"/, "");
+  assert.ok(!/SECRET|parts\.mercedes|spotify|ghost|ttlb|wss:/.test(text), "career export leaks nothing else");
+  // SETTINGS and GARAGE still refuse career keys.
+  assert.ok(!/"career\.driver/.test(JSON.stringify(collect("all")).replace(/"excluded":"[^"]*"/, "")));
+  assert.ok(!/"career\.driver/.test(JSON.stringify(garage()).replace(/"excluded":"[^"]*"/, "")));
+});
+
+test("an empty store still produces a valid career file", () => {
+  const f = boot({ career: true }).career();
+  assert.equal(f.format, "apex26-career-v1");
+  assert.deepEqual(f.careers, {});
+  assert.equal(f.count, 0);
+});
+
+test("loading a career file migrates slots and refuses non-career keys", () => {
+  const b = boot({ career: true });
+  const r = b.loadCareer({
+    format: "apex26-career-v1",
+    careers: {
+      "career.driver.0": { flavour: "driver", money: "not-a-number", driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
+      "career.driver.9": CAREER_SAVE,           // out of range — not a career key
+      "parts.mercedes": { wing: 9 },            // garage — must not write
+      careerSlot: "myteam:2",
+      "apex26.volMusic": 0.9,
+    },
+  });
+  assert.equal(r.ok, true);
+  assert.ok(r.applied >= 2, "slot + pointer applied");
+  assert.ok(r.skipped >= 2, "out-of-range and garage keys skipped");
+  const saved = JSON.parse(b.disk.get("apex26.career.driver.0"));
+  assert.equal(typeof saved.money, "number", "migrateCareer coerced money");
+  assert.equal(saved.v >= 1, true, "migrateCareer stamped CAREER_V");
+  assert.equal(b.disk.get("apex26.careerSlot"), JSON.stringify("myteam:2"));
+  assert.equal(b.disk.has("apex26.parts.mercedes"), false, "career loader never writes the garage");
+  assert.equal(b.disk.has("apex26.volMusic"), false, "career loader never writes settings");
+  assert.equal(b.disk.has("apex26.career.driver.9"), false);
+});
+
+test("a career file of the wrong shape is refused whole", () => {
+  assert.equal(boot({ career: true }).loadCareer({ format: "apex26-garage-v1", careers: {} }).ok, false);
+  assert.equal(boot({ career: true }).loadCareer(null).ok, false);
+  assert.equal(boot({ career: true }).loadCareer({ format: "apex26-settings-v1", careers: {} }).ok, false);
+});
+
+test("career round-trip: export then import restores the slot through migrateCareer", () => {
+  const src = boot({ career: true, disk: {
+    "apex26.career.driver.0": JSON.stringify(CAREER_SAVE),
+    "apex26.careerSlot": JSON.stringify("driver:0"),
+  } });
+  const file = src.career();
+  const dst = boot({ career: true });
+  const r = dst.loadCareer(file);
+  assert.equal(r.ok, true);
+  assert.equal(r.failed, 0);
+  const got = JSON.parse(dst.disk.get("apex26.career.driver.0"));
+  assert.equal(got.driver.code, "ADA");
+  assert.equal(got.money, 4200);
+  assert.equal(got.team, "mercedes");
+  assert.equal(JSON.parse(dst.disk.get("apex26.careerSlot")), "driver:0");
+});
+
+test("careerRow injects two buttons without a static shell id in index.html", () => {
+  const src = read("js/ui/settings-export.js");
+  assert.match(src, /function careerRow\(/);
+  assert.match(src, /cr-career-save/);
+  assert.match(src, /cr-career-load/);
+  assert.equal(/id="cr-career-file"/.test(read("index.html")), false,
+    "career file controls are injected — they must not add shellNodes");
+  assert.match(read("js/career/career-ui.js"), /SettingsExport\.careerRow/);
+});
+
+test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, OFF by default", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(html, /<div id="pm-buildworker" class="set-row"[\s\S]*?<select id="pm-buildworker-sel"/, "a static SettingRow in the renderer levers");
+  const client = fs.readFileSync(path.join(root, "js/track/build-client.js"), "utf8");
+  assert.match(client, /SettingRow\.wire\("pm-buildworker", \{ values: SettingRow\.labels\(\["off", "on"\]\)/);
+  assert.match(client, /else document\.addEventListener\("DOMContentLoaded", initUI/, "wired after js/ui/setting-row.js has loaded");
+  const reg = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
+  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "0",/, "exported and imported with the other settings, default OFF");
 });

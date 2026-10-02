@@ -1,6 +1,7 @@
 // Every catalog option must be VISIBLY different from the one it replaces.
 //
-// tests/specs/parts-physics.spec.js:874 already hashes each option's mesh and
+// tests/specs/parts-physics.spec.js ("every option in a category produces a
+// distinct consumed mesh signature") already hashes each option's mesh and
 // fails on a collision. That proves options are not byte-identical; it does not
 // prove anyone can see the difference, and a one-vertex 0.001 m change passes
 // it. 128 of the 297 options are SIGNATURE clones whose entire reason to exist
@@ -16,10 +17,14 @@
 // edit-loop `test:tooling-fast`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   sweepParallel, classify, attribute, loadParts, catalogRows, assertFlapSig, THRESHOLDS,
 } from "../../tools/car/parts-sweep.mjs";
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const M = loadParts();
 
 // One sweep for the whole file, farmed across worker threads by category.
@@ -72,7 +77,7 @@ test("a SIGNATURE is a pure reskin: same cost, same four stat multipliers", () =
 
 test("every option resolves to itself under an eligible team", async () => {
   // An unknown or gated-out id resolves to the category DEFAULT with no warning
-  // (js/car/parts.js:594), which would photograph the default car and report a
+  // (`_resolve` in js/car/parts.js), which would photograph the default car and report a
   // false "identical". sweep() asserts this per row; BROKEN is how it surfaces.
   assert.deepEqual(await of("BROKEN"), [], "an option does not resolve to itself");
 });
@@ -164,4 +169,12 @@ test("catalogRows picks a team that can actually see each option", () => {
     assert.ok(M.Teams.LIST.some((t) => t.id === r.teamId));
     if (r.signature) assert.ok(r.equivalent, `${r.optionId} is SIGNATURE with no equivalent`);
   }
+});
+
+test("parts-sweep.mjs --help exits 0 without sweeping", () => {
+  const r = spawnSync(process.execPath, ["tools/car/parts-sweep.mjs", "--help"], {
+    encoding: "utf8", cwd: ROOT, timeout: 5000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Usage:.*parts-sweep/);
 });

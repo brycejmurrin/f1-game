@@ -61,9 +61,12 @@ and cut Monza's order flips 18 %, but LENGTHENED close-following episodes
   antithesis of what we want") and when lapping, and — the important one —
   modifying **driver skill** (braking points, corner speed) rather than power,
   "as the drivers are still in the same cars and so no 'cheating' is happening".
-  Ours multiplies `vmax`, is reverse-only, and has none of the disables.
+  Ours multiplies `vmax` under CATCH-UP (`aiPace`), is reverse-only, and has
+  start/lapping disables. Default AI pace is SCRIPTED (2026-10-01): no
+  gap-to-player boost — Pure / Black Rock race-scripted intent. See
+  `js/physics/ai-band.js` and docs/PHYSICS.md §AI field.
   [Game AI Pro ch.42](https://www.gameaipro.com/GameAIPro/GameAIPro_Chapter42_A_Rubber-Banding_System_for_Gameplay_and_Race_Management.pdf).
-  Measured caveat: our band contributes **0.9 % for five seconds and then
+  Measured caveat (catch-up on): our band contributes **0.9 % for five seconds and then
   0.00 %** unless the player is leading by hundreds of metres, so it is not the
   cause of anything a mid-pack player sees.
 - **Narrow the spread, add a biorhythm** — skill should map onto ~98–99 %, and
@@ -827,3 +830,162 @@ notch because the pressure timer now works at the 0.6 s it was written for.
 `ROOT = "/home/user/f1-game"`, so an A/B run from a second worktree loaded the FIRST
 checkout's code in both arms — the first comparison came back identical to the digit.
 It resolves its root from its own file now.
+
+## 2026-10-01 — "they bunch up and aren't tactical": time headway, the next corner, and the player
+
+The complaint, verbatim: "AI cars bunch up and aren't very tactical about how to
+manoeuvre around each other or me." A read-only investigation found the follow gap in
+METRES (6-8 m + a -0.8..+2.2 m pad: ~0.1 s at speed), a pass side chosen from the bend
+18-70 m ahead, a race-long attack roll per car, side-by-side left to geometry, no lockout
+outside a latched pass, no defence mid-train, a human blocker judged by its LIVE speed,
+no yielder when the rule elected the player, and no first-lap logic. Design references:
+IDM time headway (s0 + v·T); TORCS bt catch distance / inside of the next turn; MOBIL
+lane check with a threshold; "get a run"; Liniger-style defence against the attacker's
+best reply; FIA driving standards (one move, a car's width, no move under braking);
+Game AI Pro ch.38 utility + hysteresis and post-abort lockout.
+
+**The instrument first.** Every AI-only VM instrument raced around the player car PARKED
+on its grid box (no input): attacked 7-10 times a race, 11-21 % of passes within 60 m of
+it, and the leading human the rubber band banded toward. `game-vm.cjs` `aiOnly()` hands
+it to the AI and retires it (out of `ranked`, so out of every scan); ai-field, ai-pace and
+the new `tools/check/ai-tactics.mjs` call it.
+
+**What landed** (one commit each; `docs/PHYSICS.md` §Racecraft tactics has the rules):
+the follow gap as a TIME (`followGap`, s0 + v·T); the pass side from the inside of the
+NEXT corner (`kTurn`/`cornerK`, `passSideBonus`); get a run (`runExtra`, `latchLate`);
+AiCorridor looking down the target lane; a per-zone attack roll (`attemptRoll`, a hash,
+never `simRnd`); level pairs owned by the inside of the next corner and commit-or-yield
+after 2 s; a re-pass lockout on ANY flip with the passer as a wide blocker
+(`repassLock`); defending mid-train / adjacent lane / predicted side with a car's width
+left and no move under braking; a calm first 20 s (`startCalm`); a human judged by
+`paceVmax` (`paceSample`), a held line arming `humanYieldT` at a quarter rate and the
+concession held.
+
+**The headway was the cost, and it was retuned on measurement.** The first cut (T
+0.25-0.45 s, tight 0.12 s) took a third of silverstone's settled passes. Ablations,
+`ai-tactics --track silverstone --laps 4 --runs 2` (n=2: read the direction, not the
+digit):
+
+| variant | settled | conversion % | swap-back % | stuck >30 s | AI-AI contact | sbs p90 s | lap-1 <0.5 s % |
+|---|---|---|---|---|---|---|---|
+| base | 128.5 | 19.9 | 18.1 | 10.5 | 82.5 | 4.6 | 51.3 |
+| first cut (all items, T 0.25-0.45 / 0.12) | 83 | 17.2 | 8.8 | 22.5 | 31.5 | 3.9 | 38.7 |
+| a0 - wide lockout blocker | 71 | 11.8 | 18.6 | 22 | 40 | 4.3 | 38.8 |
+| a0, wanting = fully tight | 91 | 19.9 | 12.4 | 23 | 26.5 | 3.3 | 40.7 |
+| a0 - lane look-ahead | 81 | 16.2 | 9.6 | 24.5 | 25 | 4.3 | 41.7 |
+| a0 - mid-train defence | 79 | 18.1 | 9.3 | 21 | 13.5 | 3.6 | 36.7 |
+| a0 - commit-or-yield | 76.5 | 13.2 | 6.7 | 24 | 34.5 | 3.8 | 38.5 |
+| a0, OLD metre follow gap | 131 | 24.4 | 9.6 | 17.5 | 47 | 4.3 | 53.8 |
+| a0 - latchLate | 88 | 18.4 | 7.5 | 18.5 | 23 | 3.8 | 37.7 |
+| a0, fixed phaseRoll | 66 | 16.5 | 10.9 | 21 | 22.5 | 3.8 | 33.6 |
+| a0 - next-corner side bonus | 82 | 17.7 | 10 | 25 | 26 | 4 | 38.6 |
+| a0 - first-lap calm | 98.5 | 15.3 | 10.4 | 22 | 28.5 | 3.5 | 40.5 |
+| a0, 16 m queue window | 93.5 | 17.1 | 7 | 23.5 | 24 | 4 | 45.9 |
+| a0, tight 0.06 | 92.5 | 15.9 | 9.7 | 28 | 23.5 | 3.6 | 39.8 |
+| a0, T 0.2-0.35, tight 0.06 | 98 | 18.3 | 8.5 | 23 | 31.5 | 3.4 | 44.1 |
+| a0, tight 0.04 | 94 | 18.8 | 11.9 | 17.5 | 27.5 | 3.6 | 40.1 |
+| a0, T 0.1-0.2, tight 0.05 | 131 | 22 | 13 | 20.5 | 46 | 3.9 | 55 |
+| a0, T 0.06-0.15, tight 0.03 | 118.5 | 20.7 | 9.2 | 19 | 37.5 | 3.9 | 54.5 |
+| a0, T 0.15-0.3, tight 0.05 (SHIPPED) | 120 | 23.6 | 11.6 | 20.5 | 31.5 | 3.8 | 47.7 |
+
+The wide lockout blocker is what removes the swap-backs (without it 18.6 %, base 18.1);
+the per-attempt roll and the queue window are worth passes; the old metre gap alone kept
+every pass and lost the lap-1 and contact gains with it.
+
+### Measured — the shipped tree against base, `ai-tactics --laps 8 --runs 5` (medians)
+
+Base = deploy tip 2a76baf1c plus the instrument fix (`artifacts/ai-before/`), after = the
+final commit (`artifacts/ai-after/`); per-seed ranges are in those JSONs.
+
+| metric | monza before → after | silverstone before → after | monaco before → after |
+|---|---|---|---|
+| stuck >30 s (faster behind slower) | 29 → 29 | 28 → 35 | 33 → 40 |
+| swap-back % of flips | 23.4 → 11.7 | 18.3 → 11.7 | 14.5 → 13.6 |
+| settled passes | 158 → 168 | 147 → 139 | 48 → 33 |
+| attack conversion % | 22.7 → 29.7 | 18.5 → 21.6 | 4.8 → 4 |
+| side-by-side p90 s | 5.5 → 4.3 | 4.8 → 3.5 | 4.5 → 4.5 |
+| AI-AI contact episodes | 70 → 29 | 96 → 44 | 83 → 44 |
+| lap-1 intervals <0.5 s % | 57.4 → 55.2 | 57.5 → 49 | 38.6 → 21.2 |
+| lap-8 leader-to-last s | 64.7 → 65.3 | 72 → 71 | 39.3 → 40.6 |
+
+| human mode, monza | pace 0.97 before → after | pace 1.03 before → after |
+|---|---|---|
+| zero-yielder % (inside the gap >1.5 s, AI not yielding) | 7.3 → 2.5 | 0 → 0 |
+| AI-player contact /100 s | 1.4 → 0.7 | 0.1 → 0.3 |
+| AI attacks on the player | 42 → 29 | 2 → 3 |
+| ...begun in a corner | 14 → 12 | 0 → 1 |
+| AI-AI contact | 70 → 43 | 71 → 36 |
+| swap-back % | 21 → 13 | 21.7 → 13.6 |
+
+**What this licenses saying.** On the two permanent circuits the field races more cleanly
+and more decisively: swap-backs halve (pairs no longer trade places back), attacks convert
+better (monza 22.7 -> 29.7 %, silverstone 18.5 -> 21.6 %), side-by-side resolves sooner
+(p90 5.5 -> 4.3 s, 4.8 -> 3.5 s; max 28.8 -> 11.3 s at monza) and AI-AI contact halves on
+every circuit. Lap 1 is less of a train (monaco 38.6 -> 21.2 % of intervals under 0.5 s;
+silverstone 57.5 -> 49; monza only 57.4 -> 55.2). The field does not string out
+(leader-to-last after 8 laps within a second or two everywhere). Against a slower player
+(0.97) the AI concedes when it should (zero-yielder 7.3 -> 2.5 %), touches the player half
+as often (1.4 -> 0.7 per 100 s) and attacks less in corners (14 -> 12, total 42 -> 29).
+
+**What it does NOT show.** (1) "Faster car stuck behind a slower one for over 30 s" did not
+fall: flat at monza, up at silverstone (28 -> 35) and monaco (33 -> 40, range 22-42). A
+probe of those episodes on monza: 65 % of the samples have the "faster" car NOT in the
+slower car's lane and over 16 m back — running parallel at the same speed, not blocked —
+and the rated edges are 0.3-1.2 %, inside the ±0.5-1.6 % pace-phase drift. The metric
+counts a time-headway field as stuck by construction; it is not a blocked-pass count.
+(2) Monaco passes fewer (48 -> 33 settled, conversion 4.8 -> 4.0, inside the range) —
+fewer, not worse, but not more. (3) Zero-yielder is 2.5 %, not 0: the grace (0.3 s; 1.2 s
+for a held line) is the AI legitimately holding. (4) Against a FASTER scripted player
+(1.03) AI-player contact rose 0.1 -> 0.3 per 100 s; the scripted player's straight-line
+cap (55 m/s) reads as a slow `paceF`, so the AI attacks it a little more.
+
+**Coverage.** The instrument is a VM bench of AI-vs-AI and a SCRIPTED player; nothing here
+ran in a browser, and `tests/specs/` collision / physics-characterization were not run.
+
+### Street circuits: the old passing game back (same day, before shipping)
+
+The table above shipped Monaco with fewer passes (48 -> 33 settled). A street ablation
+(temporary flags, 2 seeds x 4 laps to rank, then 5 x 8 to confirm) found the time headway
+the main cost on a narrow track, then the gates that only pay on long wide straights. On a
+street circuit (`track.street`) the shipped tree keeps the METRE follow gap (8 m + the old
+awareness pad, halved; only the first-lap +0.2 s is time), the old `passReach` allowance,
+otSide's 0.3 side tiebreak, and drops the lane look-ahead, `latchLate`, `runExtra` and the
+wide re-pass blocker. The trade is plain in the 5 x 8 confirms — every variant that won
+back contact or lap 1 gave passes away, because at monaco the passes ARE the lap-1 shuffle:
+
+| monaco, 5 seeds x 8 laps | settled | conversion % | swap-back % | AI-AI contact | lap-1 <0.5 s % | stuck >30 s |
+|---|---|---|---|---|---|---|
+| base | 48 | 4.8 | 14.5 | 83 | 38.6 | 33 |
+| shipped first (all gates, street headway) | 33 | 4 | 13.6 | 44 | 21.2 | 40 |
+| old metre gap + old reach, no look-ahead / latchLate / runExtra / wide lockout | 46 | 4.3 | 12.7 | 77 | 30.5 | 36 |
+| ...and the old side bonus (SHIPPED) | 50 | 4.8 | 13 | 73 | 31.3 | 34 |
+| N1: SHIPPED + wide lockout blocker | 42 | 5.6 | 5.6 | 52 | 30.5 | 30 |
+| N1 + lap-1 extra x1.5 | 46 | 4.1 | 7.3 | 64 | 23.7 | 28 |
+| SHIPPED + lap-1 extra x1.5 | 37 | 5.5 | 17.3 | 70 | 27.6 | 25 |
+| M1: SHIPPED + lap-1 extra x2.5 | 37 | 5.5 | 13.1 | 63 | 24.8 | 24 |
+| N1 + lap-1 extra x2.5 | 38 | 4.8 | 8.7 | 51 | 21.1 | 30 |
+| M1 + 0.06 s headway | 37 | 3.6 | 16.7 | 41 | 17.6 | 28 |
+| M1 + 0.12 s headway | 35 | 5.2 | 21.3 | 49 | 15.2 | 27 |
+
+**The shipped tree against base, all four circuits** (5 seeds x 8 laps, medians; monaco
+and baku re-run on the final commit; monza and silverstone are the table above —
+their code path is unchanged, checked byte-for-byte: a 2-lap `--json` run of the final
+and the previous tree is identical on monza, silverstone and human-mode monza):
+
+| metric | monaco before → after | baku before → after | monza before → after | silverstone before → after |
+|---|---|---|---|---|
+| settled passes | 48 → 50 | 110 → 103 | 158 → 168 | 147 → 139 |
+| attack conversion % | 4.8 → 4.8 | 14.6 → 14.5 | 22.7 → 29.7 | 18.5 → 21.6 |
+| swap-back % of flips | 14.5 → 13 | 19.9 → 20.7 | 23.4 → 11.7 | 18.3 → 11.7 |
+| AI-AI contact episodes | 83 → 73 | 75 → 70 | 70 → 29 | 96 → 44 |
+| lap-1 intervals <0.5 s % | 38.6 → 31.3 | 46.8 → 42.6 | 57.4 → 55.2 | 57.5 → 49 |
+| side-by-side p90 s | 4.5 → 4.3 | 4.5 → 4.8 | 5.5 → 4.3 | 4.8 → 3.5 |
+| stuck >30 s (faster behind slower) | 33 → 34 | 32 → 42 | 29 → 29 | 28 → 35 |
+| lap-8 leader-to-last s | 39.3 → 40.2 | 60.4 → 55.6 | 64.7 → 65.3 | 72 → 71 |
+
+Monaco meets the passing bar (settled 50 >= 48, conversion 4.8 % = base, swap-back 13 %
+<= 14.5) and keeps part of its other gains (AI-AI contact 83 -> 73, lap-1 under 0.5 s
+38.6 -> 31.3 %) — not the 44 / 21 % the headway bought. Baku (a street circuit with long
+straights) sits at base: passes 110 -> 103 and conversion 14.6 -> 14.5 % inside the
+seed range, contact 75 -> 70, swap-back 19.9 -> 20.7 %, stuck >30 s 32 -> 42 (the
+measure discussed above).

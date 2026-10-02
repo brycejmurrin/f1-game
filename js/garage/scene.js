@@ -520,8 +520,8 @@ function lights(liv) {
 // written in place, the moving props are static meshes under a matrix.
 const GANTRY_AT = FIXTURES.length + 2, LAMP_AT = GANTRY_AT + 4;   // record indices in _rig
 const GANTRY_TINT = [1.0, 0.93, 0.78];
-let pulseAt = -1e9, spotName = null, nightNow = false;
-function pulse() { pulseAt = typeof performance !== "undefined" ? performance.now() : Date.now(); }
+let liveNow = 0, pulseAt = -1e9, spotName = null, nightNow = false;
+function pulse() { pulseAt = liveNow; }
 function spot(name) { spotName = name || null; }
 // Where the work lamp stands for each preset, and what it looks at. Each
 // stand is OUTSIDE that preset's frame (the fit is +/-3.1 m across the view
@@ -541,6 +541,7 @@ let lampAim = [PARK[0], 0, PARK[1], 0, 0, 0, 0];   // x, z, yaw, on, ax, ay, az
 // seconds after a part is fitted. Returns the rig, plus the chase while it runs.
 function live(liv, now, ctx) {
   const rig = lights(liv);
+  liveNow = now;
   nightNow = !!(ctx && ctx.night);
   const ge = nightNow ? 6.5 * E : 0;
   for (let i = 0; i < 4; i++) {
@@ -567,11 +568,11 @@ function live(liv, now, ctx) {
   // a drop only when they line up, so it flickers rarely rather than strobes.
   {
     const t = now / 1000, f = (Math.sin(t * 23.1) + Math.sin(t * 7.3) + Math.sin(t * 41.7)) / 3;
-    const on = f > 0.62 ? 0.30 : f > 0.50 ? 0.72 : 1, F = FIXTURES[8], e = F[4] * E * on, o = 8 * 15;
+    const on = ctx && ctx.ambient === false ? 1 : f > 0.62 ? 0.30 : f > 0.50 ? 0.72 : 1, F = FIXTURES[8], e = F[4] * E * on, o = 8 * 15;
     rig[o + 3] = F[3][0] * e; rig[o + 4] = F[3][1] * e; rig[o + 5] = F[3][2] * e;
   }
   const u = (now - pulseAt) / 2200;
-  if (u < 0 || u >= 1) return rig;
+  if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return rig;
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
   const m = Math.max(c2[0], c2[1], c2[2]) || 1, ce = (2.6 / m) * E * Math.sin(u * Math.PI);
   const z = Z_BACK + (Z_DOOR - Z_BACK) * u, chase = rig.slice();
@@ -825,6 +826,19 @@ function buildBayFloor(out, liv) {
 // 2D panel makes. getParts is passed in rather than read from the store because
 // career mode substitutes its own fitted set (js/game.js getTeamParts), and a
 // direct store read would quietly show the wrong car.
+// The race paints Career.driverOverride (MY TEAM seat 0 is you, seat 1 is
+// the hire). The turntable, the wall board and the pit board have to name
+// the same person, not the shipped team.drivers row.
+function seatDriverAt(team, idx) {
+  if (!team) return null;
+  const i = idx | 0;
+  const over = (typeof Career !== "undefined" && Career.driverOverride)
+    ? Career.driverOverride(team.id, i) : null;
+  if (over) return over;
+  const seats = (typeof Career !== "undefined" && Career.gridDrivers)
+    ? (Career.gridDrivers(team) || team.drivers) : team.drivers;
+  return (seats && seats[i]) || (seats && seats[0]) || null;
+}
 function boardInfo(team, getParts, driverIdx) {
   if (typeof Parts === "undefined" || typeof getParts !== "function") return null;
   try {
@@ -843,7 +857,7 @@ function boardInfo(team, getParts, driverIdx) {
       const opt = r.options[cat.id];
       return { cat: String(cat.label || cat.id).toUpperCase(), label: (opt && opt.label) || "Stock" };
     });
-    const drv = (team.drivers || [])[driverIdx | 0] || (team.drivers || [])[0] || {};
+    const drv = seatDriverAt(team, driverIdx) || {};
     // THE CAREER CAP, not the free-play constant. js/garage/setup-sheet.js resolves this the
     // same way and enforces against it, but the BUDGET board on the garage wall
     // read Parts.BUDGET (780) unconditionally — so a career at any team whose
@@ -968,7 +982,7 @@ function paintDress(team, liv, info) {
   ctx.fillStyle = css(c1); ctx.fillRect(D_BOARD.x, D_BOARD.y, D_BOARD.w, 56);
   ctx.fillStyle = "#f4f5f7"; ctx.font = "700 34px system-ui, sans-serif";
   ctx.fillText(String(team.short || ""), D_BOARD.x + D_BOARD.w / 2, D_BOARD.y + 29);
-  const drv = (team && team.drivers) || [];
+  const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   for (let i = 0; i < 2; i++) {
     const d = drv[i] || {}, top = D_BOARD.y + 78 + i * 140;
     ctx.fillStyle = "#f4f5f7"; ctx.font = "700 88px system-ui, sans-serif";
@@ -1343,7 +1357,7 @@ function buildStatic(liv, opts) {
 }
 
 function rebuild(team, liv, info, ctx) {
-  const drv = (team && team.drivers) || [];
+  const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
@@ -1351,7 +1365,10 @@ function rebuild(team, liv, info, ctx) {
                  + `/${kc(liv && liv.c2)}/${kc(liv && liv.logo)}`
                  + `/${kc(liv && liv.logo2)}/${kc(liv && liv.logo3)}`
                  + `/${(liv && liv.sponsors) || "-"}`;   // the bay banners paint the sponsor pack (scene-live.js)
-  const gKey = `${team && team.id}|${livKey}`
+  // `legend`: the LEGENDS row keeps its id across legends, and two tribute
+  // liveries can share every colour (Schumacher's and Senna's reds), so the
+  // wall kept the previous legend's crest — a Ferrari horse over Senna.
+  const gKey = `${team && team.id}|${(team && team.legend) || ""}|${livKey}`
                + `|${logoGen}|${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`
                + `|${ctxKey(ctx)}`;
   const key = `${gKey}|${boardKey(info)}`;
@@ -1387,6 +1404,7 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
     buildProps(g, liv);
     GarageEquipment.build(g, liv, ctx);
+    GarageExperience.buildFacility(g, liv, ctx);
     for (let i = 0; i < SIDES.length; i++)
       if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     for (let i = 0; i < SIDES.length; i++)
@@ -1402,6 +1420,7 @@ function rebuild(team, liv, info, ctx) {
       try {
         if (!liveCanvas) { liveCanvas = document.createElement("canvas"); liveCanvas.width = liveCanvas.height = LIVE; }
         paintLive(liveCanvas, team, liv, ctx);
+        GarageExperience.paintCareer(liveCanvas, ctx);
         if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
         liveTex = _gfx.createTexture(liveCanvas);
         if (!liveTex || liveTex._phase === 4) throw new Error("live texture upload returned no handle");
@@ -1457,7 +1476,7 @@ function ctxKey(ctx) {
   return `${ctx.track ? ctx.track.id : "-"}|${ctx.weather || "-"}|${ctx.tod || "-"}`
          + `|${ctx.wins | 0}|${ctx.night ? 1 : 0}|${ctx.career ? 1 : 0}|${ctx.round | 0}`
          + `|${last ? (last.dnf || "") + ":" + (last.p | 0) + ":" + (last.pts | 0) : "-"}`
-         + `|${ctx.sponsor && ctx.sponsor.label || "-"}`;
+         + `|${ctx.sponsor && ctx.sponsor.label || "-"}|${ctx.studio ? 1 : 0}|${GarageExperience.careerKey(ctx)}`;
 }
 let lastTrace = -1e9, traceFail = 0;
 const shutterMat = new Float32Array(MAT_I), arrivalMirror = new Float32Array(MAT_MIRROR);
@@ -1465,7 +1484,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   if (!_gfx) return;
   rebuild(team, liv, boardInfo(team, getParts, driverIdx), ctx);
   ensureDynamic();
-  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
   // THE FLOOR REFLECTION: the car again, mirrored in y = 0, drawn faint and
   // without a depth test straight after the floor. It writes no depth, so the
@@ -1474,9 +1493,12 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
   // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
   if (carMesh) {
-    arrivalMirror[14] = carMat ? carMat[14] : 0;
+    // The car's own matrix mirrored in y = 0 (its y row negated): it turns and moves with the car.
+    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
+    else arrivalMirror.set(MAT_MIRROR);
     _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
   }
+  if (ctx && ctx.studio) return;   // an actual car studio: floor/reflection, no room dressing
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
   // Each wall's furniture AND its lighting, only while the eye is inside that
   // wall — the same decision back-face culling makes for the wall itself. A
@@ -1508,7 +1530,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   }
   {
     const cyc = (now / 1000) % 34;
-    if (cyc < 6.5 && passMesh)
+    if ((!ctx || ctx.ambient !== false) && cyc < 6.5 && passMesh)
       _gfx.draw(passMesh, mk(_mPass, -24 + 48 * (cyc / 6.5), -0.04, PIT_FAST_Z, Math.PI / 2, 0), SHELL_OPTS);
   }
   // The engineers' traces tick over every 1.5 s: repaint one region of the
@@ -1516,7 +1538,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // Three strikes, as the dress: the atlas stays up with its last traces. A
   // Keep the last working handle until the replacement uploads successfully:
   // a transient upload failure can then retry without losing the live atlas.
-  if (liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
+  if ((!ctx || ctx.ambient !== false) && liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
     lastTrace = now;
     try {
       paintTrace(liveCanvas, liv, now);
@@ -1686,6 +1708,6 @@ function debug() {
 }
 
   return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, draw, framingHull, recentre,
-           previewMesh, dropPreviewMeshes, pulse, spot, debug };
+           previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

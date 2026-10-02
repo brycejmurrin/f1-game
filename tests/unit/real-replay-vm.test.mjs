@@ -156,9 +156,15 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
     assert.ok(Math.abs(by("STR").prog - (-30 + 45 * 60)) < 1, "parked where the data ended: " + by("STR").prog);
     assert.equal(by("RUS").retired, false);
     // The flag: the winner's data ends at 200 s; a few seconds later the results take the order.
+    // Nobody DROVE it: the followed car (G.player) gets no YOUR RACE card — the
+    // sheet reads RealRace.status().watch, still live while endRace builds it.
+    // (The badge half of that gate is pinned in ui-sheets-audit.test.mjs: here
+    // the followed car reads retired at the flag, so forRace is empty anyway.)
     RR.replay().seek(205);
     g.step(5 * 60 / 8 + 60);
     assert.equal(G.state, "results");
+    const personal = (el) => (el.children || []).some((e) => e.className === "res-personal" && /YOUR RACE/.test((e.children || []).map((x) => x.textContent).join(" ")));
+    assert.equal(personal(G.els.resultsTable), false, "a watched replay draws no YOUR RACE card");
     g.step(1);
     assert.equal(RR.replay().isRunning(), false, "the replay stopped with the director at the results");
     assert.equal(RR.status().armed, false);
@@ -434,4 +440,103 @@ test("BROADCAST PiP in WATCH: two cars 8 m apart put the partner in the inset (l
     g.step(1);
     assert.equal(MP.instance().state().pip.code, null, "the results clear the subject");
   } finally { g.close(); }
+});
+
+function transportReplay() {
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+    Log: { info() {}, warn() {}, debug() {} },
+    CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "side" }, { id: "heli" }] },
+    Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
+  for (const file of ["js/race/broadcast.js", "js/race/real-replay.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
+  const cars = [{ code: "AAA" }, { code: "BBB" }], snaps = [];
+  const drivers = [{ code: "AAA", num: 1, pos: 1, name: "Driver A", lapStart: [0, 10] }, { code: "BBB", num: 2, pos: 2, name: "Driver B", lapStart: [0] }];
+  const G = { cars, track: { total: 1000 }, state: "race", camMode: 0,
+    followCar: (c) => { G.player = c; }, snapGameCam: () => snaps.push(G.player.prog),
+    setCamMode: (m) => { G.camMode = m; } };
+  const replay = vm.runInContext("RealReplay", ctx).create(G);
+  replay.start({ script: { laps: 2, drivers, passes: [{ t: 12, lap: 1, by: 2, over: 1, pos: 1 }] },
+    traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, 10) } },
+    seats: new Map([[cars[0], drivers[0]], [cars[1], drivers[1]]]), follow: "AAA", camera: "auto" });
+  return { replay, G, cars, snaps };
+}
+
+test("WATCH transport pause holds the replay clock, and seek reposes ended and rewound drivers before snapping", () => {
+  const { replay, cars, snaps } = transportReplay();
+  replay.setPaused(true); replay.tick(5);
+  assert.equal(replay.status().T, 0, "paused playback does not advance");
+  replay.seek(20);
+  assert.equal(cars[0].prog, 1000);
+  assert.equal(cars[1].prog, 450, "a forward seek parks the stopped car at its final recorded position");
+  assert.equal(cars[1].retired, true);
+  assert.equal(cars[1].rPrevPx, cars[1].px, "ended car also clears the prior interpolation pose");
+  assert.equal(snaps.at(-1), 1000, "camera resets after the new subject pose");
+  replay.seek(5);
+  assert.equal(cars[1].retired, false, "backward seek revives the car at that moment");
+  replay.setPaused(false); replay.tick(10);
+  assert.equal(cars[1].retired, true, "the rewound car can retire again");
+  replay.seek(NaN); assert.equal(replay.status().T, 15, "invalid timeline values cannot corrupt the clock");
+  replay.seek(999); assert.equal(replay.status().T, 30, "scrubbing is bounded by loaded positions");
+  replay.stop();
+});
+
+test("WATCH follow lock survives director holds and event navigation, AUTO releases it, and restart clears playback state", () => {
+  const { replay, G } = transportReplay();
+  replay.setLocked(true);
+  replay.tick(25);
+  assert.equal(replay.status().follow, "AAA", "the selected driver stays locked beyond the old twenty-second hold");
+  assert.equal(replay.status().broadcast.locked, true);
+  replay.seek(0); replay.setPaused(true);
+  assert.equal(replay.eventStep(1), "BBB PASSES AAA FOR P1");
+  assert.equal(replay.status().T, 4, "event navigation gives eight seconds of context");
+  assert.equal(replay.status().follow, "AAA", "event navigation preserves a locked subject");
+  assert.equal(replay.status().paused, true, "scrubbing does not start paused playback");
+  replay.setAuto(true);
+  assert.equal(replay.status().broadcast.locked, false);
+  assert.equal(replay.autoOn(), true);
+  replay.stop();
+  assert.equal(G.camMode, 0, "exit restores the player's driving camera");
+  assert.equal(replay.status(), null);
+});
+
+test("WATCH toolbar exposes working pointer controls, honest event labels and photo ownership, then tears down", () => {
+  function element(tag) {
+    const listeners = {}, attrs = {};
+    return { tagName: tag.toUpperCase(), dataset: {}, children: [], style: {}, hidden: false,
+      classList: { add() {}, remove() {} },
+      appendChild(n) { this.children.push(n); n.parentNode = this; return n; },
+      remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((n) => n !== this); },
+      setAttribute(k, v) { attrs[k] = v; }, getAttribute(k) { return attrs[k]; },
+      addEventListener(k, fn) { listeners[k] = fn; }, dispatch(k) { if (listeners[k]) listeners[k](); } };
+  }
+  const body = element("body"), doc = { body, createElement: element };
+  const ctx = vm.createContext({ document: doc, CamModes: { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "heli", label: "AERIAL" }] }, RealReplay: { LEAD_S: 8 } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  const W = vm.runInContext("WatchTransport", ctx), calls = [];
+  const state = { T: 0, duration: 100, paused: false, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
+  const api = { describe: () => ({ name: "Test GP", drivers: [{ code: "AAA", name: "Alpha" }, { code: "BBB", name: "Beta" }], events: [{ t: 20, lap: 2, kind: "pass", text: "AAA PASSES BBB" }], speeds: [0.5, 1, 2] }),
+    status: () => state, setPaused: (v) => { state.paused = v; }, setSpeed: (v) => { state.speed = v; },
+    follow: (v) => { state.follow = v; }, setLocked: (v) => { state.broadcast.locked = v; },
+    setAuto: () => { state.broadcast.auto = true; state.broadcast.locked = false; },
+    seek: (v) => { state.T = v; }, eventStep: (v) => calls.push(["event", v]) };
+  const G = { camMode: 0, setCamMode: (i, opts) => { G.camMode = i; calls.push(["camera", opts.persist]); }, snapGameCam: () => calls.push(["snap"]), openWatchPhoto: () => calls.push(["photo", state.paused]) };
+  const ui = W.create(G, api); ui.start();
+  const find = (key, parent = body) => parent.dataset.wt === key ? parent : parent.children.map((n) => find(key, n)).find(Boolean);
+  assert.equal(find("play").getAttribute("aria-label"), "Pause replay");
+  assert.equal(find("prev").disabled, true); assert.equal(find("next").disabled, false);
+  assert.match(find("event").textContent, /^NEXT · L2/, "an upcoming moment is explicitly marked NEXT");
+  find("play").dispatch("click"); assert.equal(state.paused, true);
+  assert.equal(find("play").getAttribute("aria-label"), "Play replay");
+  find("play").dispatch("click");
+  find("speed").value = "2"; find("speed").dispatch("change"); assert.equal(state.speed, 2);
+  find("driver").value = "BBB"; find("driver").dispatch("change");
+  assert.equal(state.follow, "BBB"); assert.equal(state.broadcast.locked, true);
+  find("camera").value = "heli"; find("camera").dispatch("change");
+  assert.deepEqual(calls.slice(-2), [["camera", false], ["snap"]], "changing view is temporary and resets framing");
+  find("seek").value = "30"; find("seek").dispatch("input"); find("seek").dispatch("change");
+  assert.equal(state.T, 30); assert.equal(find("seek").getAttribute("aria-valuetext"), "0:30 of 1:40");
+  assert.equal(find("next").disabled, true);
+  find("prev").dispatch("click"); assert.deepEqual(calls.at(-1), ["event", -1]);
+  find("auto").dispatch("click"); assert.equal(state.broadcast.locked, false);
+  find("photo").dispatch("click"); assert.deepEqual(calls.at(-1), ["photo", false], "photo owner receives the original playing state");
+  ui.stop(); assert.equal(body.children.length, 0, "session exit removes the controls");
 });

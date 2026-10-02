@@ -65,7 +65,7 @@ test("every foundation circuit has a spec and a resolvable track id", () => {
   assert.ok(CIRCUITS.length >= 16,
     `found ${CIRCUITS.length} foundation specs — expected at least 16; did the glob break?`);
   // Tracks.LIST off the VM sandbox, the way the browser reads the page global
-  // (new-hooks-vm.test.mjs:480 does the same for its Jeddah def).
+  // (new-hooks-vm.test.mjs's Jeddah foundation test does the same for its def).
   const known = new Set(Array.from(g.sandbox.Tracks.LIST, (t) => t.id));
   for (const stem of CIRCUITS) {
     assert.ok(known.has(trackId(stem)),

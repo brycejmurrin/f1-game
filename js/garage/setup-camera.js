@@ -7,6 +7,22 @@ const SetupCamera = (function () {
 // one source for them. See the HARD_EDGES pair in tools/manifest.cjs.
 const { X_OPEN_RATE, X_CLOSE_RATE } = PhysicsConsts;
 
+// WHERE THE DOCKED PANEL LEAVES THE CAR ITS ROOM — pure, so it is testable
+// without a canvas (tests/unit/garage-panel-side.test.mjs). `pr` is the
+// panel's visual rect, `cr` the canvas rect, cw/ch the canvas size, `camTop` a
+// thunk for the open camera panel's top (read only on the portrait axis).
+// Returns { x, y } as fractions of the canvas: x is SIGNED by which half the
+// panel's centre sits in (+ right, the shipped dock, - left), so a right dock
+// returns exactly the unsigned number it always did; y is the portrait band.
+function panelCover(pr, cr, cw, ch, camTop) {
+  const lim = (v) => (v < 0 ? 0 : v > 0.85 ? 0.85 : v);   // M4.clamp(v, 0, 0.85), the clamp this replaced
+  if (cw - pr.width >= ch - pr.height) {
+    const f = lim(pr.width / cw);
+    return { x: f > 0 && pr.left + pr.right < cr.left + cr.right ? -f : f, y: 0 };
+  }
+  return { x: 0, y: lim((pr.bottom + Math.min(camTop(), ch) - ch) / ch) };
+}
+
 /** @param {*} G the js/game.js ctx façade.
  *  @param {*} deps car-drawing helpers that stay in game.js (the garage and the
  *  race share them) — the same seam js/car/car-draw.js and
@@ -28,6 +44,7 @@ const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSetting
 let driveOut = null;
 function startDriveOut() {
   const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  endHome();
   driveOut = null;
   if (!cfg.enabled || reducedMotion()) return 0;
   driveOut = { t: 0, cfg };
@@ -41,10 +58,10 @@ function driveOutLeft() {
 // Stepped on the WALL clock, not the render dt the menu loop caps at 1/20 s: under
 // 20 fps that cap played the car in slow motion. A gap over 0.1 s (a synchronous
 // build) still only advances it 0.1 s, so a stall delays the car, never skips it.
-function stepDriveOut() {
+function stepDriveOut(held = false) {
   const now = performance.now(), gap = driveOut.last ? (now - driveOut.last) / 1000 : 0;
   driveOut.last = now;
-  driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
+  if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
   return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg), { active: true });
 }
 // THE ARRIVAL PREVIEW (#garrival's PREVIEW IN / OUT): the tuner's saved settings
@@ -57,6 +74,7 @@ function stepDriveOut() {
 let preview = null;
 function startArrivalPreview(dir, btn) {
   if (!dir) return stopPreview();
+  endHome();
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
   const cfg = Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
@@ -183,7 +201,10 @@ let _spEffDist = 0, _spEffFit = 0, _spEffPanel = 0;
 // clock live() gets, so under performance.now() two captures at different WALL
 // instants light the room differently — a held render clock did not hold the
 // garage. Measurements: tools/shot/garage-angles.mjs header.
-function garageNow() { return G.skyHold ? G.skyT * 1000 : performance.now(); }
+const ambientClock = GarageExperience.clock(performance.now());
+function garageNow() {
+  return G.skyHold ? G.skyT * 1000 : ambientClock.step(performance.now(), !document.hidden && !reducedMotion() && (!home.active || home.moving));
+}
 // PAN — a translation of the whole rig (orbit centre AND look-at) in car-local
 // metres. Orbit and zoom alone can only ever circle the same point, so there is
 // no way to walk along the car and study one end of it up close; you can only
@@ -201,9 +222,11 @@ function flapAimPoint(which) {
   const aSt = teamDecalState(Teams.LIST[G.teamIdx], true);
   return Car3D.aeroFlapAim(aSt.val, which, aSt.aero);
 }
+let setupPreviewView = "hero";
 function setSetupView(name) {
   const v = SP_VIEWS[name];
   if (!v) return;
+  setupPreviewView = name;
   GarageScene.spot(name);   // the work lamp wheels over to what the preset frames
   setupPreviewFree = false;   // a preset is the player's range again
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
@@ -319,6 +342,7 @@ function applyHeldSetupCam(dt) {
     setupPan((spHeld.strafe || 0) * dt, (spHeld.dolly || 0) * dt);
 }
 function resetSetupCam() {
+  endHome();
   arrival.cancel();
   setupPreviewAz = 0.6;
   setupPreviewEl = SP_EL_DEF;
@@ -351,6 +375,8 @@ const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", 
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function garageSeat() {
   const team = Teams.LIST[G.teamIdx];
+  if (typeof GarageScene !== "undefined" && GarageScene.seatDriverAt)
+    return GarageScene.seatDriverAt(team, G.driverIdx);
   const seats = (typeof Career !== "undefined" && Career.gridDrivers)
     ? (Career.gridDrivers(team) || team.drivers) : team.drivers;
   return (seats && seats[G.driverIdx]) || (seats && seats[0]) || null;
@@ -390,8 +416,33 @@ function garageCtx() {
            night: G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night)),
            wins: c ? c.results.filter((r) => r.p === 1).length : 0,
            last: c && c.results.length ? c.results[c.results.length - 1] : null,
-           sponsor: c ? Career.sponsor() : null, career: !!c, round: c ? c.season.round : 0, spin: setupPreviewSpin };
+           sponsor: c ? Career.sponsor() : null, career: !!c, round: c ? c.season.round : 0, spin: setupPreviewSpin,
+           achievements: typeof CareerExperience !== "undefined" ? CareerExperience.garageMetadata() : null,
+           sceneNow: garageNow(), ambient: !reducedMotion() && (!home.active || home.moving),
+           studio: home.mode === "studio", ...(home.active ? { night: home.mode === "night" } : {}) };
 }
+function captureCamera() {
+  return { az: setupPreviewAz, el: setupPreviewEl, dist: setupPreviewDist, spin: setupPreviewSpin,
+    orbit: setupPreviewOrbit.slice(), target: setupPreviewTgt.slice(), pan: setupPreviewPan.slice(),
+    minDist: setupPreviewMinDist, free: setupPreviewFree, xOn: setupPreviewXOn, aeroX: setupPreviewAeroX, view: setupPreviewView };
+}
+function restoreCamera(s) {
+  if (!s) return;
+  setupPreviewAz = s.az; setupPreviewEl = s.el; setupPreviewDist = s.dist;
+  setupPreviewOrbit = s.orbit.slice(); setupPreviewTgt = s.target.slice(); setupPreviewPan = s.pan.slice();
+  setupPreviewMinDist = s.minDist; setupPreviewFree = s.free; setupPreviewXOn = s.xOn; setupPreviewAeroX = s.aeroX;
+  setupPreviewView = s.view; GarageScene.spot(s.view); setSetupSpin(s.spin);
+}
+function setHomeView(name, pose) {
+  setSetupView(name);
+  setupPreviewAz = pose.az; setupPreviewEl = pose.el; setupPreviewDist = pose.dist;
+}
+const home = GarageExperience.homeSession({ capture: captureCamera, restore: restoreCamera, view: setHomeView }, reducedMotion);
+function beginHome(mode, opts) {
+  if (preview || driveOut || ($("carsetup") && !$("carsetup").hidden)) return false;
+  return home.begin(mode, opts);
+}
+function endHome() { return home.end(); }
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
 const _spInvProj = new Float32Array(16);
 const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on store.rev
@@ -399,39 +450,48 @@ const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on stor
 // subject. ssao needs the proj/invProj pair passed to begin(); contact shadows
 // would additionally need sunViewDir, and the sun is now only a fill.
 const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
-function renderSetupPreview(dt) {
+function renderSetupPreview(dt, holdDriveOut = false) {
+  // The race's HUD mirror: render() never reaches its slot on a garage frame,
+  // so its rect stayed set and present() composited it over the car.
+  if (typeof MirrorPass !== "undefined" && MirrorPass.instance()) MirrorPass.instance().standDown();
   gfx.resize();
-  const arriving = driveOut ? stepDriveOut() : preview ? stepPreview(dt) : arrival.step(dt);
-  if (!arriving || !arriving.active) applyHeldSetupCam(dt);                               // held on-screen controls
-  if (setupPreviewSpin && !(arriving && arriving.active)) setupPreviewAz += dt * 0.35;   // slow turntable
-  stepSetupAero(dt);
+  const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
+  if ((home.active ? home.moving : setupPreviewSpin && !reducedMotion()) && !(arriving && arriving.active)) setupPreviewAz += dt * (home.active ? 0.035 : 0.35);   // slow turntable
+  if (!home.active) stepSetupAero(dt);
   // The orbit radius is horizontal, so raising the camera does not walk it away
   // from the car: at el 0 this is the turntable ring, at el 1.2 it is overhead.
   const spCe = Math.cos(setupPreviewEl), spSe = Math.sin(setupPreviewEl);
-  // The docked #cs-inner panel covers the right portion of the canvas, so the
-  // car only ever gets (1 - panelFrac) of the frustum. Read the panel's live
-  // pixel width so this tracks every breakpoint/viewport automatically.
+  // The docked #cs-inner panel covers one side of the canvas, so the car only
+  // ever gets (1 - |panelFrac|) of the frustum. Read the panel's live pixel
+  // width so this tracks every breakpoint/viewport automatically. SIGNED: the
+  // panel docks RIGHT (+) by default and LEFT (-) under APPEARANCE › GARAGE ›
+  // PANEL SIDE; the lens shift and GarageScene.recentre take the sign as is
+  // (the car lands at -panelFrac either way), the fit takes the magnitude.
   // WHICH WAY DOES THE PANEL LEAVE ROOM? It docks to the RIGHT on a wide screen
   // and to the TOP on a tall one, because a portrait phone has no width to give
   // and plenty of height — so the gap the car gets is either beside the panel or
   // below it. Measure both and shift along the axis that actually has the room;
   // shifting the wrong one is what left the car invisible behind a full-width
   // sheet in portrait.
-  const canvasEl = $("game"), panelEl = $("cs-inner");
+  const canvasEl = $("game"), panelEl = home.active ? home.panel : $("cs-inner");
+  let homePane = null;
+  if (home.active) getSetupPreviewMesh();   // the first held home frame needs its silhouette now, before framing
   let panelFrac = 0, panelFracY = 0;
   if (!(arriving && arriving.active) && canvasEl && panelEl && canvasEl.clientWidth > 0 && canvasEl.clientHeight > 0) {
     // Visual coverage vs the unzoomed canvas (A13). viewportRect scales up on
     // engines where gBCR is still local under CSS zoom.
     const pr = (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect();
-    const cw = canvasEl.clientWidth, ch = canvasEl.clientHeight;
-    if (cw - pr.width >= ch - pr.height) panelFrac = clamp(pr.width / cw, 0, 0.85);
-    else {
-      // Portrait: centre the car in what is left between the sheet and the OPEN
-      // camera panel (bottom of the same gap), not behind the buttons that aim it.
-      const cam = $("cs-cam-panel"), camTop = cam && !cam.hidden && cam.offsetParent !== null
-        ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top : ch;
-      panelFracY = clamp((pr.bottom + Math.min(camTop, ch) - ch) / ch, 0, 0.85);
-    }
+    if (home.active) homePane = GarageExperience.freePane(pr, canvasEl.getBoundingClientRect());
+    // Portrait: centre the car in what is left between the sheet and the OPEN
+    // camera panel (bottom of the same gap), not behind the buttons that aim it.
+    const camTop = () => {
+      const cam = home.active ? null : $("cs-cam-panel");
+      return cam && !cam.hidden && cam.offsetParent !== null
+        ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top : canvasEl.clientHeight;
+    };
+    const cover = panelCover(pr, canvasEl.getBoundingClientRect(), canvasEl.clientWidth, canvasEl.clientHeight, camTop);
+    panelFrac = cover.x; panelFracY = cover.y;
   }
   // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF clears the full
   // frustum — but a third of that frustum is behind the panel, so there the
@@ -442,7 +502,7 @@ function renderSetupPreview(dt) {
   // keeps that inside it. Only the AUTOMATIC view self-frames — picking a preset
   // or zooming clears setupPreviewSpin, and from there the distance is theirs.
   // THIS BACKS OFF WITHOUT BOUND. The visible half-angle is
-  // atan(tan18 * aspect * (1 - panelFrac)), so as the region narrows the
+  // atan(tan18 * aspect * (1 - |panelFrac|)), so as the region narrows the
   // distance diverges, and otherwise only the MANUAL zoom's SP_DIST_MAX stops
   // it. Measured at 900x820 with the panel over half the width: the
   // fit asks for 17.6 m and pins on 15 — outside the bay's 5.4 m side wall, the
@@ -458,20 +518,23 @@ function renderSetupPreview(dt) {
   // against the vertical half-angle was tried and measured wrong — a constant
   // 10.31 m floor that pushed 1440x900 from 9.10 to 10.31.
   const spFitD = Math.min(SP_FIT_DIST_MAX,
-    SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - panelFrac), 0.05));
-  const spDist = setupPreviewSpin
+    SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - Math.abs(panelFrac)), 0.05));
+  const homeFov = homePane && gfx.aspect < 1 ? 72 : (home.lens && home.lens.fov) || 36;
+  const homeFit = homePane && GarageExperience.fitHome(_spHull, { az: setupPreviewAz, el: setupPreviewEl,
+    center: setupPreviewTgt, aspect: gfx.aspect, fov: homeFov, minDist: SP_DIST_MIN, maxDist: home.lens.maxDist || SP_FIT_DIST_MAX }, homePane);
+  const spDist = homeFit ? homeFit.dist : (setupPreviewSpin || home.active)
     ? clamp(Math.max(setupPreviewDist, spFitD), SP_DIST_MIN, SP_DIST_MAX) : setupPreviewDist;
   // Publish what the camera USES: garageCam() reported setupPreviewDist, which
   // is the effective distance only when the turntable is off — so on the auto
   // path, the one that can misframe, it read 8.5 while the camera sat at 15.
-  _spEffDist = spDist; _spEffFit = spFitD; _spEffPanel = panelFrac;
+  _spEffDist = spDist; _spEffFit = homeFit ? homeFit.dist : spFitD; _spEffPanel = panelFrac;
   // PAN shifts the orbit centre and the look-at together, so strafing tracks
   // along the car instead of swinging the aim off it — the difference between
   // "walk down the flank" and "turn your head at the far end of the pit box".
   const eye = [setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * spDist * spCe,
                setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe,
                setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe];
-  M4.perspectiveTo(_spProj, 36 * Math.PI / 180, gfx.aspect, 0.1, 60);
+  M4.perspectiveTo(_spProj, homeFov * Math.PI / 180, gfx.aspect, 0.1, 60);
   // An on-axis camera centers the car behind the panel, half-cropped. Shift the
   // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
   // region instead — sideways when the panel is docked to an edge, downwards
@@ -480,6 +543,7 @@ function renderSetupPreview(dt) {
   // the car ends up at -frac, the centre of the gap the panel is not covering.
   _spProj[8] = panelFrac;
   _spProj[9] = panelFracY;
+  if (homeFit) { _spProj[8] = homeFit.shiftX; _spProj[9] = homeFit.shiftY; }
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
@@ -490,8 +554,9 @@ function renderSetupPreview(dt) {
   }
   M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
-  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, setupPreviewSpin && !(arriving && arriving.active), _spHull);
+  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && (setupPreviewSpin || home.active) && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
+  const context = garageCtx(), sceneTime = context.sceneNow;
   if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
     // flanks carry opposite normals (+X and -X), so any X in the sun direction
@@ -507,10 +572,10 @@ function renderSetupPreview(dt) {
     // present(), and an interior lives or dies on its corner darkening.
     viewProj: _spVP, view: _spView, eye, sunDir: [0, 0.86, 0.51], sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
-    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), garageNow(), garageCtx()),
+    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), sceneTime, context),
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
-  }) === false) return;
+  }) === false) return false;
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Matte preview: the glossy clear-coat + sharp speculars from the studio ring
@@ -522,8 +587,12 @@ function renderSetupPreview(dt) {
   spMat.specular = 0.22;
   spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
   spMat.metalness = Math.min(spMat.metalness, 0.05);
-  arrivalCar[14] = arriving ? arriving.z : 0;
-  GarageScene.draw(Teams.LIST[G.teamIdx], _spLiv(), eye, getTeamParts, G.driverIdx, garageCtx(), getSetupPreviewMesh(), arriving, arrivalCar);
+  // The car's matrix from the pose: translate (x, 0, z), turn by yaw about +Y, then the
+  // preview's X mirror (MAT_REFLECT_X). The arrival in, and the parked car, have no x/yaw.
+  const ay = (arriving && arriving.yaw) || 0, ac = Math.cos(ay), as = Math.sin(ay);
+  arrivalCar[0] = -ac; arrivalCar[2] = as; arrivalCar[8] = as; arrivalCar[10] = ac;
+  arrivalCar[12] = (arriving && arriving.x) || 0; arrivalCar[14] = arriving ? arriving.z : 0;
+  GarageScene.draw(Teams.LIST[G.teamIdx], _spLiv(), eye, getTeamParts, G.driverIdx, context, getSetupPreviewMesh(), arriving, arrivalCar);
   gfx.draw(getSetupPreviewMesh(), arrivalCar, spMat);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.
@@ -541,8 +610,9 @@ function renderSetupPreview(dt) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(GarageScene.live(_spLiv(), garageNow(), garageCtx()), GarageScene.glareStr());
+  gfx.drawGlow(GarageScene.live(_spLiv(), sceneTime, context), GarageScene.glareStr());
   gfx.present(SP_PRESENT);
+  return !(gfx.warming && gfx.warming());
 }
 
 // ---- the #cs-view / #cs-cam-panel controls ----
@@ -656,9 +726,18 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     const p = [...spPtr.values()];
     return p.length >= 2 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0;
   };
+  function canPointerOrbit(e) {
+    const photo = $("photo-studio"), photoOpen = !!photo && !photo.hidden;
+    const panel = photoOpen && $("ps-panel");
+    const r = panel && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
+    const inPanel = r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    return GarageExperience.canOrbit(G.setupPreviewOn, home.active, photoOpen,
+      !!preview || !!(arrival.state && arrival.state.active) || !!inPanel
+        || !!(e.target && e.target.closest && e.target.closest("#ps-panel")));
+  }
   if (canvas) {
     canvas.addEventListener("pointerdown", (e) => {
-      if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
+      if (!canPointerOrbit(e)) return;
       spPtr.set(e.pointerId, { x: e.clientX, y: e.clientY });
       spPinch = pinchGap();
       // Taking hold of the car is itself the instruction to stop the turntable —
@@ -666,8 +745,11 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
       if (spPtr.size === 1) setSetupSpin(false);
     });
     window.addEventListener("pointermove", (e) => {
-      if (!G.setupPreviewOn || !spPtr.has(e.pointerId)) return;
+      if (!spPtr.has(e.pointerId)) return;
       const p = spPtr.get(e.pointerId);
+      if (!canPointerOrbit(e)) {
+        p.x = e.clientX; p.y = e.clientY; spPinch = pinchGap(); return;
+      }
       const dx = e.clientX - p.x, dy = e.clientY - p.y;
       p.x = e.clientX; p.y = e.clientY;
       if (spPtr.size >= 2) {
@@ -690,7 +772,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     window.addEventListener("pointerup", release);
     window.addEventListener("pointercancel", release);
     canvas.addEventListener("wheel", (e) => {
-      if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
+      if (!canPointerOrbit(e)) return;
       e.preventDefault();
       setupZoom(e.deltaY > 0 ? 1.1 : 1 / 1.1);
     }, { passive: false });
@@ -700,7 +782,9 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
 // The camera's own state, published for the G façade (js/game.js keeps the
 // spellings __apex.garageCam() and types/game-ctx.d.ts already name).
 return {
-  startArrival: arrival.start, cancelArrival: arrival.cancel,
+  beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
+  captureCamera, restoreCamera,
+  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival: arrival.cancel,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
@@ -721,6 +805,6 @@ return {
 };
 }
 
-return { create };
+return { create, panelCover };
 })();
 Object.freeze(SetupCamera);

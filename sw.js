@@ -26,9 +26,22 @@ const OPTIONAL_ASSET_MS = 4000;
 // exercises this branch; the deployed site never does.
 const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && self.location.hostname) || "");
 const INSTALL_COMPLETE_URL = "__apex_install_complete__";
-// Written after the OPTIONAL pool too, right before skipWaiting: the cache holds
-// everything its build will ever precache. The opportunistic sweep waits for it.
+// Written after the BACKGROUND optional pool: the cache holds everything its
+// build will eventually precache. The opportunistic sweep waits for it. The
+// install-critical set (essentials + GLX + chosen backend) finishes earlier and
+// may skipWaiting before this marker — activate must NOT delete prior
+// generations until SETTLED, or a mid-background offline window loses assets.
 const INSTALL_SETTLED_URL = "__apex_install_settled__";
+
+// Default chosen backend at install: TLX (three) is the shipped picker default.
+// GLX stays in the required pool separately. WGX + scenery + data/net wait for
+// the background pool after skipWaiting.
+function isInstallCriticalOptional(u) {
+  return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
+}
+function isBackgroundOptional(u) {
+  return !isInstallCriticalOptional(u);
+}
 
 let _cacheNamePromise = null;
 // The RESOLVED name, readable without awaiting: cache matching must never wait
@@ -352,6 +365,15 @@ async function precacheAssetLists() {
     "js/input/phone-pad.js",
     // LAZY_WORKER — worker entry scripts (new Worker, never a page tag)
     "js/track/build-worker.js",
+    // LAZY_EDITOR — the track designer behind the TRACK DESIGNER door
+    "js/editor/shape.js",
+    "js/editor/stamps.js",
+    "js/editor/randomise.js",
+    "js/editor/validate.js",
+    "js/editor/fixes.js",
+    "js/editor/codec.js",
+    "js/editor/canvas.js",
+    "js/editor/designer.js",
     // /@gen-shell:sw-optional
   ]);
   const shell = await fetch("index.html", { cache: "no-store" });
@@ -466,23 +488,25 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
         ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
-    // SKIPWAITING STAYS LAST, deliberately. Hoisting it above this pool lets a
-    // returning player's new worker activate — and `activate` both claims
-    // clients and DELETES every other generation's cache — while the deferred
-    // backends, the forty scenery closures and the data/net bundles are still
-    // in flight. Going offline inside that window would lose assets the
-    // previous cache still held a moment earlier. The first-visit boot win
-    // comes from deferring REGISTRATION (index.html), which costs nothing here.
+    // INSTALL-CRITICAL first (chosen backend = TLX + three.js). Then skipWaiting
+    // so the new worker can activate without waiting on ~5 MB of scenery/WGX/
+    // data/net. The BACKGROUND pool runs after skipWaiting still inside this
+    // waitUntil; activate refuses to delete prior generations until SETTLED.
+    const critical = stamped.filter((u) => isInstallCriticalOptional(u.replace(/\?v=.*$/, "")));
+    const background = stamped.filter((u) => isBackgroundOptional(u.replace(/\?v=.*$/, "")));
     let optionalMissed = 0, firstMissed = "";
-    await pooled(stamped, 4, async (u) => {
+    await pooled(critical, 4, async (u) => {
+      if (!(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
+    });
+    await self.skipWaiting();
+    await pooled(background, 4, async (u) => {
       if (!(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
     });
     if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
     await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
     invalidateCacheOrder();
-    await self.skipWaiting();
   })().catch((e) => {
     // An essential miss or an unreadable build aborts the install (the old
     // worker and its cache stay in charge). Say so, then keep the rejection.
@@ -495,10 +519,11 @@ self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const name = await currentCacheName();
     const cache = await openCache(name);
-    // No claim and no sweep for an incomplete generation — deliberate, and
-    // test-asserted (service-worker.test.mjs "activation preserves prior
-    // caches…"): don't seize clients onto a cache that never finished.
-    if (!(await cache.match(INSTALL_COMPLETE_URL))) return;
+    // No claim and no sweep until the BACKGROUND optional pool has settled —
+    // install may skipWaiting after the critical set alone, and deleting prior
+    // generations in that window would strand an offline client mid-seed.
+    // Test-asserted (service-worker.test.mjs "activation preserves prior…").
+    if (!(await cache.match(INSTALL_SETTLED_URL))) return;
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== name).map((k) => caches.delete(k)));
     invalidateCacheOrder();

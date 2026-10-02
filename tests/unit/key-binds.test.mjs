@@ -20,6 +20,9 @@ function boot() {
   // fallback target); one that reaches a focused control is recorded by that
   // control's own fake dispatchEvent instead — which is the point of the test.
   const dispatched = [];
+  // anyOpen = real menus (pause/settings). navOpen also covers title #overlay.
+  // Keep them independent so the touch-pause gate can pin anyOpen ≠ navOpen.
+  const anyOpen = { on: false };
   const navOpen = { on: false };
   const el = () => ({
     addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
@@ -42,7 +45,12 @@ function boot() {
       dispatchEvent: (e) => { dispatched.push(e); return true; },
       body: { classList: { add() {}, remove() {}, toggle() {} } },
     },
-    UiLayers: { navOpen: () => navOpen.on, anyOpen: () => navOpen.on, top: () => (navOpen.on ? { id: "pmsettings", contains: () => true } : null) },
+    UiLayers: {
+      anyOpen: () => anyOpen.on,
+      navOpen: () => anyOpen.on || navOpen.on,
+      top: () => (anyOpen.on ? { id: "pmsettings", contains: () => true }
+        : (navOpen.on ? { id: "overlay", contains: () => true } : null)),
+    },
   };
   sb.Event = class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } };
   sb.KeyboardEvent = class extends sb.Event {};
@@ -55,7 +63,7 @@ function boot() {
   const key = (code, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: code, code, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
   const fire = (t, e) => (listeners[t] || []).forEach((f) => f(e || {}));
-  return { Input, key, sb, fire, dispatched, navOpen };
+  return { Input, key, sb, fire, dispatched, navOpen, anyOpen };
 }
 // A standard-mapping pad the sandbox's navigator reports as the only one.
 // press(i, v) sets button i (a trigger takes a value); gamepadconnected must be
@@ -329,13 +337,14 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 
 // A DOM just deep enough for KeyBinds.create: elements by id with hidden,
 // textContent and children; createElement for the rows.
-function bootUi(desktop, helpSlots = {}) {
+// `disk`, when given, backs the store (reads and writes land in it).
+function bootUi(desktop, helpSlots = {}, disk = null) {
   const { Input, key, sb, fire } = boot();
   const nodes = {};
   const mk = (tag = "div") => {
     let text = "";
-    const n = { tagName: tag.toUpperCase(), hidden: false, dataset: {}, disabled: false, style: {}, kids: [], clears: 0,
-      setAttribute() {}, append(...a) { this.kids.push(...a); }, appendChild(a) { this.kids.push(a); },
+    const n = { tagName: tag.toUpperCase(), hidden: false, dataset: {}, disabled: false, style: {}, kids: [], clears: 0, attrs: {},
+      setAttribute(k, v) { this.attrs[k] = String(v); }, append(...a) { this.kids.push(...a); }, appendChild(a) { this.kids.push(a); },
       addEventListener() {}, removeEventListener() {},
       focus() { sb.document.activeElement = this; } };
     Object.defineProperty(n, "textContent", { get: () => text, set(v) {
@@ -356,7 +365,9 @@ function bootUi(desktop, helpSlots = {}) {
   sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
-  const store = { get: () => null, set() {} };
+  const store = disk
+    ? { get: (k, d) => (Object.prototype.hasOwnProperty.call(disk, k) ? disk[k] : d), set: (k, v) => { disk[k] = v; } }
+    : { get: () => null, set() {} };
   const G = { $: sb.document.getElementById, store, soundOn: false };
   const kb = KeyBinds.create(G);
   // A physical key: Input's window listener sets the latch, then the module's.
@@ -423,6 +434,88 @@ test("disarmAll aborts the wheel wizard so the pad drives again", () => {
   assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "button label restored");
   Input.poll();
   assert.equal(Input.debugState().pad.throttle, true, "disarmAll cleared axis capture");
+});
+
+// The slot chip for (action, slot) anywhere under a rendered table.
+function slotOf(node, action, slot) {
+  if (node.dataset && node.dataset.action === action && node.dataset.slot === String(slot)) return node;
+  for (const child of node.kids || []) { const hit = slotOf(child, action, slot); if (hit) return hit; }
+  return null;
+}
+
+test("Backspace on an armed KEY slot unbinds it, and the chip says so", () => {
+  // Bug hunt 2026-09-30: Input.clearKeyBinding had no caller — a slot could be
+  // moved but never emptied.
+  const disk = {};
+  const { Input, press, $ } = bootUi(true, {}, disk);
+  slotOf($("pm-keys"), "boost", 0).onclick();
+  press("Backspace");
+  assert.deepEqual(plain(Input.getKeyMap().boost), [null, null], "BOOST has no key now");
+  const chip = slotOf($("pm-keys"), "boost", 0);
+  assert.equal(chip.textContent, "—");
+  assert.match(chip.attrs["aria-label"], /unset/);
+  assert.deepEqual(plain(disk.keys.boost), [null, null], "the cleared map was saved");
+  assert.match($("pm-keys-note").textContent, /BOOST key cleared/);
+  press("Space");
+  assert.equal(Input.consumeBoostToggle(), false, "Space no longer boosts");
+  // Delete clears the SECOND slot alone.
+  slotOf($("pm-keys"), "left", 1).onclick();
+  press("Delete");
+  assert.deepEqual(plain(Input.getKeyMap().left), ["ArrowLeft", null]);
+  // Nothing is left armed: the next key is not captured.
+  press("KeyG");
+  assert.deepEqual(plain(Input.getKeyMap().left), ["ArrowLeft", null]);
+});
+
+test("Backspace from the keyboard unbinds an armed CONTROLLER slot and disarms the capture", () => {
+  const disk = {};
+  const { Input, $, press, fire, sb } = bootUi(true, {}, disk);
+  const pad = fakePad(sb, fire);
+  slotOf($("pm-pad"), "throttle", 1).onclick();
+  press("Backspace");
+  assert.deepEqual(plain(Input.getPadMap().throttle), [7, null], "A no longer means gas");
+  assert.deepEqual(plain(disk.pad.throttle), [7, null]);
+  assert.equal(slotOf($("pm-pad"), "throttle", 1).textContent, "—");
+  pad.press(0); Input.poll();
+  assert.deepEqual(plain(Input.getPadMap().throttle), [7, null], "the capture was disarmed, A was not bound");
+  assert.equal(Input.debugState().pad.throttle, false, "and A does not drive");
+});
+
+test("CALIBRATE STICK is stored and applied on the next boot; a garbage value is ignored", () => {
+  // Bug hunt 2026-09-30: the hint promised the offset applies "from then on",
+  // and it was lost on reload.
+  const disk = {};
+  const a = bootUi(true, {}, disk);
+  const pa = fakePad(a.sb, a.fire);
+  pa.pad.axes[0] = 0.08;
+  a.$("pm-pad-calib").onclick();
+  assert.ok(Math.abs(disk.padRest - 0.08) < 1e-9, "the offset was stored: " + disk.padRest);
+  const b = bootUi(true, {}, { padRest: disk.padRest });
+  assert.ok(Math.abs(b.Input.padRest() - 0.08) < 1e-9, "a fresh boot loads it");
+  const pb = fakePad(b.sb, b.fire);
+  pb.pad.axes[0] = 0.08; b.Input.poll();
+  assert.equal(b.Input.debugState().pad.steer, 0, "a stick resting at 0.08 steers nothing");
+  const c = bootUi(true, {}, {});
+  const pc = fakePad(c.sb, c.fire);
+  pc.pad.axes[0] = 0.08; c.Input.poll();
+  assert.ok(c.Input.debugState().pad.steer > 0, "control: uncalibrated, the same rest steers");
+  for (const junk of ["x", 0.9, -3, [0.1], { v: 0.1 }, Infinity, true]) {
+    assert.equal(bootUi(true, {}, { padRest: junk }).Input.padRest(), 0, "ignored: " + JSON.stringify(junk));
+  }
+});
+
+test("the wheel wizard drops a stored rest offset when the steering axis moves", () => {
+  const disk = { padRest: 0.08 };
+  const { Input, $, fire, sb } = bootUi(true, {}, disk);
+  const { pad } = fakePad(sb, fire);
+  pad.axes = [0.08, 0, 0, 0];
+  $("pm-pad-wheel").onclick();
+  pad.axes[1] = -0.9; Input.poll();     // steer -> axis 1
+  pad.axes[2] = 0.9; Input.poll();      // throttle -> axis 2
+  pad.axes[3] = 0.9; Input.poll();      // brake -> axis 3, finish
+  assert.equal(disk.padAxes.steer, 1, "the wizard finished");
+  assert.equal(Input.padRest(), 0, "the old axis's offset is not carried over");
+  assert.equal(disk.padRest, 0, "…and not stored");
 });
 
 test("a desktop shows both tables and never the hint", () => {
@@ -544,4 +637,35 @@ test("D-pad Left/Right on a focused slider steps by its step within min/max; a b
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].key, "ArrowRight");
   assert.equal(dispatched[0].type, "keydown", "a button's arrow is an ordinary move");
+});
+
+test("an open menu still takes a key that was already down, and the on-screen pedals are gated", () => {
+  const { Input, key, anyOpen, navOpen, sb } = boot();
+  // Title #overlay alone: navOpen true, anyOpen false — pad walks doors, but
+  // on-screen GAS must still read (boot-page latch / travel specs). The gate
+  // is anyOpen(), not navOpen().
+  navOpen.on = true;
+  assert.equal(sb.UiLayers.navOpen(), true);
+  assert.equal(sb.UiLayers.anyOpen(), false);
+  key("KeyW", true);
+  assert.equal(Input.throttle(), true, "title navOpen must not mute a driving key");
+  key("KeyW", false);
+
+  // Real pause/settings: hold the key FIRST, then open — a pre-held key still
+  // drives; a fresh keydown is refused (menuOverlayOpen). Touch pedals gate on
+  // anyOpen(), matching the keyboard's menu gate, not title-only navOpen().
+  key("KeyW", true);
+  anyOpen.on = true;
+  assert.equal(Input.throttle(), true, "a key held before the menu is not the touch path");
+  assert.equal(Input.throttleLevel(), 1);
+  // A keydown WHILE the menu is open was already refused (menuOverlayOpen).
+  key("KeyS", true);
+  assert.equal(Input.braking(), false, "keyboard keydowns stay gated; this change is the touch path");
+  const src = read("js/input/input.js");
+  assert.match(src, /function navBlocksTouch\(\) \{ return !!\(window\.UiLayers && window\.UiLayers\.anyOpen\(\)\); \}/);
+  assert.match(src, /navBlocksTouch\(\) \? 0 : buttonSteering\(\)/);
+  assert.match(src, /navBlocksTouch\(\) \? 0 : analogShape\(touchSteering\(\), "touch"\)/);
+  assert.match(src, /keyThrottle \|\| \(!navBlocksTouch\(\) && btnThrottle\)/);
+  assert.match(src, /if \(btnThrottle && !navBlocksTouch\(\)\)/);
+  assert.match(src, /if \(btnBrake && !navBlocksTouch\(\)\)/);
 });
