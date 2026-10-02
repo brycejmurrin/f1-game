@@ -96,8 +96,10 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
     // (2026-09-04) because it and the readouts compete for the same edges, and
     // the floor has to divide by the axis the dock actually zooms by or it
     // stops being a floor the moment the two part.
-    assert.match(r.decls.get("--tap"), /calc\(24px \/ var\(--hud-btn-scale\)\)/);
-    assert.match(r.decls.get("--hold"), /calc\(24px \/ var\(--hud-btn-scale\)\)/);
+    // Divided by the FLOORED axis since the dock zoom floors at 1 too: below
+    // 100 % the zoom stays 1, so the literals must not grow to compensate.
+    assert.match(r.decls.get("--tap"), /calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)/);
+    assert.match(r.decls.get("--hold"), /calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)/);
   }
   const ov = css("css/overlays.css");
   assert.equal(decl(ov, "body:not(.desktop) .dock .touchbtn", "width"), "var(--tap)");
@@ -160,7 +162,8 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const hud = read("js/ui/hud.js");
   const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
   assert.ok(air > 0, "hud.js declares FIT_AIR");
-  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, var(--hud-btn-scale))", "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback");
+  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, max(1, var(--hud-btn-scale)))",
+    "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback — floored at 1 so a setting never shrinks a tap target");
   // And fitHud compares that cap against the SAME slider — against --hud-scale
   // it would either pin a cap that fits or drop one that does not, the moment a
   // player set the two apart.
