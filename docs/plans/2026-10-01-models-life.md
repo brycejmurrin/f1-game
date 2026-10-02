@@ -59,7 +59,13 @@ light posts, banner towers, tyre stacks, cones, flags, barriers).
    stacks, barriers; drop: road pieces, cars, flags) by deleting the unwanted
    `assets/pack/models/*.bin` and re-running `assets.mjs verify` (md5 +
    budget). Record the kit in `assets/pack/CREDITS.md` (the workflow does).
-3. Verify: `tests/unit/import-models.test.mjs` (determinism),
+3. **Found 2026-10-02 (the Slice D survey):** a kit GLB shares one POSITION
+   accessor across its per-material primitives and the importer copied it
+   whole per primitive, so the 41 kept models carried 53,995 vertices for
+   15,822 referenced (3.4×). The importer now emits only what each primitive
+   indexes; re-dispatch the import once that lands and re-prune, so the pack
+   and any instanced upload (Slice D) carry the referenced vertices only.
+4. Verify: `tests/unit/import-models.test.mjs` (determinism),
    `tests/unit/model-pack-format.test.mjs` (every shipped model v2),
    `assets-pack.test.mjs` (licence allow-list CC0). Open as a draft PR; the
    models are inert until Slice B references them.
