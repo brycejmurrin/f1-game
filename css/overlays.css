@@ -259,6 +259,15 @@ body.mirror-controls #hud-dock { flex-direction: row-reverse; }
 body.mirror-controls #dock-left { justify-content: flex-end; }
 body.mirror-controls #dock-right { justify-content: flex-start; }
 
+/* Touch-dock REPOSITION edit mode (js/ui/dock-layout.js). Attribute selector —
+   no new cssClasses token. Token colour keeps rawColor flat. */
+body[data-dock-edit] .dock {
+  outline: 2px dashed color-mix(in oklab, var(--text) 55%, transparent);
+  outline-offset: 4px;
+  cursor: grab;
+}
+body[data-dock-edit] .dock:active { cursor: grabbing; }
+
 /* gear shift buttons: right column, stacked (DN bottom, UP above) with 8 px gaps */
 .shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }
 .shiftbtn small { font-size: var(--fs-micro); letter-spacing: var(--ls-4); color: var(--dim); }
