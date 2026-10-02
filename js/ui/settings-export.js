@@ -188,6 +188,8 @@ const SPEC = [
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
   { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js", oneOf: ["easy", "normal", "hard"] },
+  // AI PACE: scripted = fixed car/driver pace (ships); catchup = legacy rubber band.
+  { k: "aiPace", lane: "json", group: "driving", def: "scripted", src: "js/game.js / js/physics/ai-band.js", oneOf: ["scripted", "catchup"] },
   // Keys real UI writes (checked against every store.set call site): player
   // preferences by the file's own definition, beside difficulty/raceGrid/caution.
   { k: "drivingCoach", lane: "json", group: "driving", def: true, src: "js/race/driving-coach.js" },
