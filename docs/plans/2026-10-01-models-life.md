@@ -70,10 +70,16 @@ light posts, banner towers, tyre stacks, cones, flags, barriers).
    `assets-pack.test.mjs` (licence allow-list CC0). Open as a draft PR; the
    models are inert until Slice B references them.
 
-## Slice B — per-model material and UVs (item 6, part 2) — M
+## Slice B — per-model material and UVs (item 6, part 2) — M — NOT NEEDED (2026-10-02)
 
-The imported colour is a flat `baseColorFactor` per vertex; the material
-arrays' relief needs UVs.
+The premise was wrong: the lit shaders' `matTexUV` (GLX `glsl-lit.js`,
+mirrored on TLX and WGX) is TRIPLANAR in world space — a baked material layer
+tiles `vWorldPos.xz` for floors and `vWorldPos.{x|z},y` for wall-like MATs by
+the normal — so a baked model gets the material arrays' relief today from its
+per-vertex `mat` alone, without UVs. The 41 kit models carry `CONCRETE`; an
+authored UV stream would only matter for a per-model albedo texture, which
+the pack format does not carry and the flat-coloured kit does not have. Left
+here as the record; the rest of the slice is moot.
 
 1. **AX26 v3**: append an optional `uv` stream (u16 ×2, normalised) after the
    index block, flagged in the header's version word. The reader
@@ -121,14 +127,59 @@ so CI soft-present frames do not show instanced models; browser-side
 `props-over-road.spec` / `__apex.trackGeometry()` no longer see them (the
 VM sweeps, which do the geometry audits, still do).
 
-## Slice E — spread to the other 46 circuits (item 8) — S × 46
+## Slice E — spread to the other 46 circuits (item 8) — S × 46 — needs a rendered look first
+
+**Measured 2026-10-02** (every kit model's AX26 geometry, `scratchpad/model-front.cjs`
+on the compacted pack): the kit's FRONT is +Z in model space — the grandstands'
+tiers rise toward −Z and their riser normals sum to +Z (k_grandstand nrmΣz +75,
+awning +91, covered +81; the round stands rise along −X−Z), the pits garages'
+and offices' door faces sum to +Z (+36 / +83 / +24), the light posts' heads
+lean +Z. `bakedModel`'s default yaw already turns model +Z toward the road
+(`atan2(t.x, t.z) ± π/2` by side), so the kit faces the track with NO engine
+change and no `rotY`. Sizes at ×5: grandstands 5.0 wide × 4.5–6.9 tall
+(round 8.2), pits garage 5.0 × 3.5 × 5.4, tents 5–10 × 3.5, light posts
+3.2–4.0, banner towers 6.2, billboards 5.0 × 5.0.
+
+What still blocks a blind pass: the placing circuits are already dense
+(Monza's paddock has motorhomes 55–65 m off the line for s < 0.10 / > 0.90,
+a broadcast compound and four synthetic yards), props carry no prop-vs-prop
+overlap guard (only the road guard and the pit complex), and the kit's
+grandstands are 4.5–7 m toy stands beside 40 m procedural ones, so swapping
+the authored stands would shrink them. The pass that is safe without eyes is
+paddock FURNITURE (tents, banner towers, billboards, light posts, TV camera,
+radar) in gaps a rendered look confirms, one circuit per `track-surveyor`
+run; the `k_` barrier/pylon swap (#744) is the template.
 
 With A–D in, a per-circuit pass by the `track-surveyor` agent, one circuit per
 run, editing only `js/circuits/scenery/<id>.js`: grandstands at the authored
 stands, the pits garage along the pit lane, one landmark. Verify per circuit:
 `node tools/track/verify-track.cjs <id>` and the circuit's foundation spec.
 
-## Slice F — bake-time trees (item 14) — M
+## Slice F — bake-time trees (item 14) — M — design notes 2026-10-02
+
+`@dgreenheck/ez-tree` 1.1.0 is reachable from the container (`npm view`), so
+the bake can run here (`npm i --no-save @dgreenheck/ez-tree three`, never a
+`package.json` dependency: the bake is a manual tool whose output is
+committed). Two things the plan under-sized:
+
+1. **Sway weights need the format.** The procedural crowns carry wind as the
+   FRACTION of the per-vertex `mat` (`MAT.FOLIAGE + w × SWAY_FRAC`, nature.js
+   `swayOn`); AX26 v2 stores `mat` as u8, so a baked tree loses it. AX26 v3 =
+   v2 + a trailing u8 `sway` stream (w × 255), read back as `mat + sway/255 ×
+   SWAY_FRAC` in `_parseModel`, its node mirror `tools/lib/pack-assets.cjs`
+   and `tests/helpers/ax26.mjs`; `model-pack-format.test.mjs` must admit v3
+   for the tree ids. That is Slice G's encoding delivered with F.
+2. **The VM measures copies.** Slice D instances baked models only where the
+   batch API exists; every sweep (`props-tri-ratchet`, `track-build-vm-release`,
+   `coplanar-faces`, …) builds on the copy path, so a 200-triangle tree in
+   place of a ~70-triangle cone pine, placed thousands of times by
+   `forestEdge`, raises the measured props triangles ~3× on forested
+   circuits (Spa, Suzuka) and trips the tri ratchets even though the browser
+   draws one geometry per species. Either the sweeps' VM grows a
+   `createInstancedBatch` stub (then `baked-model-instancing.test.mjs`'s
+   copy-path pins move to a flag) or the tree LOD stays within the cone's
+   budget (~70 tris: 8 leaf cards + a 4-segment trunk) and the win is shape,
+   not detail. Decide before baking.
 
 ez-tree (MIT, https://github.com/dgreenheck/ez-tree) generates branching
 trees with leaf cards and per-vertex wind weights. A bake script under
@@ -166,6 +217,12 @@ vertex and already smaller than a quantised glTF with its JSON.
 
 A → C (the look changes on five circuits with real geometry) → D (so E can
 scale) → B (relief on the kit) → E → F → G → H.
+
+**Status 2026-10-02 08:50 UTC:** A (#743, re-imported compact in #752 + #756),
+C's first step (#744: Monza and Silverstone barriers and pylons) and D (#753)
+are merged and live. B is not needed (triplanar material UVs). E, F, G and H
+wait on the two decisions above (a rendered look for E; the sway stream and
+the VM tri budget for F/G).
 
 ## Sources
 
