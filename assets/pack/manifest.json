@@ -781,7 +781,7 @@
     },
     "k_bannertowergreen": {
       "file": "models/k_bannertowergreen.bin",
-      "verts": 2493,
+      "verts": 831,
       "tris": 426,
       "mat": "CONCRETE",
       "sizeM": [
@@ -792,11 +792,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "8e4de137fc94a4fcc8b3eaaf8fa62856"
+      "md5": "c2002f10aad3948e3640de99342c8c35"
     },
     "k_bannertowerred": {
       "file": "models/k_bannertowerred.bin",
-      "verts": 2493,
+      "verts": 831,
       "tris": 426,
       "mat": "CONCRETE",
       "sizeM": [
@@ -807,7 +807,7 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "4e4f80975f70d42a51231b790aafb43d"
+      "md5": "487468f49dd24d60f73bec661cfb7204"
     },
     "k_barrierred": {
       "file": "models/k_barrierred.bin",
@@ -822,11 +822,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "0f2e28793b94ff2448e86d3d7a77b07f"
+      "md5": "e61cfaac47edd6a1f037a1b1079e19d6"
     },
     "k_barrierwall": {
       "file": "models/k_barrierwall.bin",
-      "verts": 192,
+      "verts": 144,
       "tris": 76,
       "mat": "CONCRETE",
       "sizeM": [
@@ -837,7 +837,7 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "64ddd39ef35d42a96f94e5c96490bf2e"
+      "md5": "7900ce5c835042e9d5a258a2ad823479"
     },
     "k_barrierwhite": {
       "file": "models/k_barrierwhite.bin",
@@ -852,11 +852,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "8780b3eaf09bf841cc0426c9c61c88b1"
+      "md5": "27587ed6c4b8ccaa1a49e1bd97743a68"
     },
     "k_billboard": {
       "file": "models/k_billboard.bin",
-      "verts": 736,
+      "verts": 184,
       "tris": 136,
       "mat": "CONCRETE",
       "sizeM": [
@@ -867,11 +867,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "99ae6845512945147541ee453202a2ef"
+      "md5": "0dc7074fc5bb665646ca3dff84d58082"
     },
     "k_billboarddouble_exclusive": {
       "file": "models/k_billboarddouble_exclusive.bin",
-      "verts": 768,
+      "verts": 192,
       "tris": 126,
       "mat": "CONCRETE",
       "sizeM": [
@@ -882,11 +882,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "b0ebf057662d5d9978f41fd87ef57a91"
+      "md5": "81b6cc90de7d39709c1625c6d368a868"
     },
     "k_billboardlow": {
       "file": "models/k_billboardlow.bin",
-      "verts": 736,
+      "verts": 184,
       "tris": 136,
       "mat": "CONCRETE",
       "sizeM": [
@@ -897,11 +897,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "c8995be14cea89831a3050e10e0243c7"
+      "md5": "7876a4792cb7523a0508e1bc11188041"
     },
     "k_billboardlower": {
       "file": "models/k_billboardlower.bin",
-      "verts": 660,
+      "verts": 132,
       "tris": 72,
       "mat": "CONCRETE",
       "sizeM": [
@@ -912,11 +912,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "af5639e1ccd8ee0a5e5ab7497f1779f0"
+      "md5": "b8369d4eda0fd4b8a8168950ff771325"
     },
     "k_camera_exclusive": {
       "file": "models/k_camera_exclusive.bin",
-      "verts": 714,
+      "verts": 238,
       "tris": 136,
       "mat": "CONCRETE",
       "sizeM": [
@@ -927,11 +927,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "c8e2daa601617367abcfc4413b29b253"
+      "md5": "b8a8f6ff95f6cfea982625ec670ee137"
     },
     "k_fencecurved": {
       "file": "models/k_fencecurved.bin",
-      "verts": 932,
+      "verts": 466,
       "tris": 352,
       "mat": "CONCRETE",
       "sizeM": [
@@ -942,11 +942,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "92093eb6c4f0f9a214560c8424ac373b"
+      "md5": "782ba75a30accce3525c998f0672e42d"
     },
     "k_fencestraight": {
       "file": "models/k_fencestraight.bin",
-      "verts": 128,
+      "verts": 64,
       "tris": 36,
       "mat": "CONCRETE",
       "sizeM": [
@@ -957,11 +957,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "74e4fec91e913b858f49e72143f2d132"
+      "md5": "ffe1dec801733b258cd98dc81205b0de"
     },
     "k_grandstand": {
       "file": "models/k_grandstand.bin",
-      "verts": 1028,
+      "verts": 261,
       "tris": 128,
       "mat": "CONCRETE",
       "sizeM": [
@@ -972,11 +972,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "2bc890f453e01acb80964ab374d12617"
+      "md5": "8f913fb3d71a41fb129206aaadbd2f07"
     },
     "k_grandstandawning": {
       "file": "models/k_grandstandawning.bin",
-      "verts": 1398,
+      "verts": 474,
       "tris": 280,
       "mat": "CONCRETE",
       "sizeM": [
@@ -987,11 +987,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "13c1b6276f596ca5e56c53f49af32530"
+      "md5": "ee643ba86f42c416d8a19a8d1f6eee90"
     },
     "k_grandstandcovered": {
       "file": "models/k_grandstandcovered.bin",
-      "verts": 1560,
+      "verts": 320,
       "tris": 168,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1002,11 +1002,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "ce97fb83ebdf6a160bbff05fdec2a84d"
+      "md5": "9b4d18e6c363cdc521cab02ed7d3fdd7"
     },
     "k_grandstandcoveredround": {
       "file": "models/k_grandstandcoveredround.bin",
-      "verts": 11425,
+      "verts": 2387,
       "tris": 1302,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1017,11 +1017,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "27949392f4ce7981365048c9fac07422"
+      "md5": "d17c9792ad89776110f0f1fa5f11f1e2"
     },
     "k_grandstandround": {
       "file": "models/k_grandstandround.bin",
-      "verts": 7008,
+      "verts": 1820,
       "tris": 1022,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1032,11 +1032,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "08525973de3b5e13ffd9511a022d4891"
+      "md5": "0b7bca08bec62aa44b73fc8f98a2cb4c"
     },
     "k_lightcolored": {
       "file": "models/k_lightcolored.bin",
-      "verts": 2208,
+      "verts": 392,
       "tris": 268,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1047,11 +1047,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "64f661a614258fb53db0bd236dfa82f2"
+      "md5": "c91bdf1e5c9c963c6494af97ecc31510"
     },
     "k_lightpostlarge": {
       "file": "models/k_lightpostlarge.bin",
-      "verts": 1608,
+      "verts": 552,
       "tris": 340,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1062,11 +1062,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "e9606fbf17f6e7ae3326a7c63d45dffd"
+      "md5": "d60dc3310dbbcec9fe696b42bf70b5be"
     },
     "k_lightpostmodern": {
       "file": "models/k_lightpostmodern.bin",
-      "verts": 772,
+      "verts": 386,
       "tris": 198,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1077,11 +1077,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "2d7a0549e906f1b9b053b0d7e63c8752"
+      "md5": "d6301f9ea7e4c27657cd8be57533703c"
     },
     "k_lightpost_exclusive": {
       "file": "models/k_lightpost_exclusive.bin",
-      "verts": 1104,
+      "verts": 376,
       "tris": 228,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1092,11 +1092,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "9da08ff6c8a45a9ef1f9a1b04206e19f"
+      "md5": "b8a54bddf3387396cf799a02ff06413a"
     },
     "k_lightred": {
       "file": "models/k_lightred.bin",
-      "verts": 2000,
+      "verts": 432,
       "tris": 308,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1107,11 +1107,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "e469239c996830ae770d53b6274182d9"
+      "md5": "580bad4cbccf29dedc32f5600413e401"
     },
     "k_lightreddouble": {
       "file": "models/k_lightreddouble.bin",
-      "verts": 3360,
+      "verts": 736,
       "tris": 560,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1122,7 +1122,7 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "3c7f471268a5daf95cb61ca1e8091a0c"
+      "md5": "6b49982f4e6df056dc484d52ad45a606"
     },
     "k_overhead": {
       "file": "models/k_overhead.bin",
@@ -1137,11 +1137,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "982e1bdd0429094bd0cab7f07c81a78e"
+      "md5": "1d2702a47f6fc082a2e410d683a57d6f"
     },
     "k_overheadlights": {
       "file": "models/k_overheadlights.bin",
-      "verts": 1740,
+      "verts": 644,
       "tris": 432,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1152,11 +1152,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "f06cc02f83496f8f022bcd78b3b3792b"
+      "md5": "ed386699803aa20b156109da2920e695"
     },
     "k_overheadround": {
       "file": "models/k_overheadround.bin",
-      "verts": 354,
+      "verts": 191,
       "tris": 132,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1167,11 +1167,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "77ffc54bafa8b25fa2e0f3d15de5a214"
+      "md5": "316ef8a40d12a2c907bc5c01330c9bf7"
     },
     "k_overheadroundcolored": {
       "file": "models/k_overheadroundcolored.bin",
-      "verts": 312,
+      "verts": 180,
       "tris": 100,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1182,11 +1182,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "47baa2f1ba9b7232c0a5df81e81cc3cf"
+      "md5": "0c3f3d0898c93f6a5165d096b3c8dda9"
     },
     "k_pitsgarage": {
       "file": "models/k_pitsgarage.bin",
-      "verts": 616,
+      "verts": 164,
       "tris": 96,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1197,11 +1197,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "6d142dbe9003acf8765c7071746e45a5"
+      "md5": "7beea83e1fc03e6690579ac0be398ebc"
     },
     "k_pitsgarageclosed": {
       "file": "models/k_pitsgarageclosed.bin",
-      "verts": 1065,
+      "verts": 241,
       "tris": 162,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1212,11 +1212,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "2da4ccf41a5a397b89e1bd8ed3790300"
+      "md5": "169556d0deaa9ca97b88455c0510c301"
     },
     "k_pitsgaragecorner": {
       "file": "models/k_pitsgaragecorner.bin",
-      "verts": 830,
+      "verts": 181,
       "tris": 109,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1227,11 +1227,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "9f6f0bb861bca5101fca207087784980"
+      "md5": "27ca6a2c757590ef02aab38d116e241f"
     },
     "k_pitsoffice": {
       "file": "models/k_pitsoffice.bin",
-      "verts": 552,
+      "verts": 144,
       "tris": 88,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1242,11 +1242,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "de5f76c7d7b7b86c83cc275d0f4d186b"
+      "md5": "e28b7284151e0d03bd73aa13fc6ca0f4"
     },
     "k_pitsofficecorner": {
       "file": "models/k_pitsofficecorner.bin",
-      "verts": 582,
+      "verts": 194,
       "tris": 126,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1257,11 +1257,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "d64ecc039937c473305e9fe6fb7127e0"
+      "md5": "d581c91880db5a2baa107b9d3dffc52c"
     },
     "k_pitsofficeroof": {
       "file": "models/k_pitsofficeroof.bin",
-      "verts": 896,
+      "verts": 230,
       "tris": 142,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1272,7 +1272,7 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "171a5d6b6d0b2c6bf527302303eb8a60"
+      "md5": "98a172c35cb00393d8f0d5503837819f"
     },
     "k_pylon": {
       "file": "models/k_pylon.bin",
@@ -1287,11 +1287,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "1df8b140254daebb44368e62e3448ebd"
+      "md5": "1fe17ac4fef76c76f23ce2fe859e5005"
     },
     "k_radarequipment": {
       "file": "models/k_radarequipment.bin",
-      "verts": 932,
+      "verts": 466,
       "tris": 292,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1302,11 +1302,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "4763024ba86d70a0d75ca1468139c494"
+      "md5": "3aff1f4cd81f441e2969c526cdb2c01d"
     },
     "k_tent": {
       "file": "models/k_tent.bin",
-      "verts": 256,
+      "verts": 156,
       "tris": 86,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1317,11 +1317,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "f269356e91b6f6c2cd16dafcdd56b2ec"
+      "md5": "cf84406d61913ffcccfea4797a8de263"
     },
     "k_tentclosed": {
       "file": "models/k_tentclosed.bin",
-      "verts": 340,
+      "verts": 198,
       "tris": 110,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1332,11 +1332,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "acf6ec85b752b28775f14cb99c3d131d"
+      "md5": "466d12137522a6fdb60a0b0f779ffaa0"
     },
     "k_tentclosedlong": {
       "file": "models/k_tentclosedlong.bin",
-      "verts": 340,
+      "verts": 198,
       "tris": 110,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1347,11 +1347,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "2f9877b502635914a4991b9ca697b9d9"
+      "md5": "d8ac0b168e68a69983e8a32cbf260a40"
     },
     "k_tentlong": {
       "file": "models/k_tentlong.bin",
-      "verts": 256,
+      "verts": 156,
       "tris": 86,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1362,11 +1362,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "47891221b7eb7fa5a3624e7850bf5d2c"
+      "md5": "c594c903f69241743bc337b680575679"
     },
     "k_tentroof": {
       "file": "models/k_tentroof.bin",
-      "verts": 424,
+      "verts": 232,
       "tris": 132,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1377,11 +1377,11 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "81e73c520eb82672fa4fd8df511c2079"
+      "md5": "6df0e422f90bf7485b1fb83ef52262ff"
     },
     "k_tentroofdouble": {
       "file": "models/k_tentroofdouble.bin",
-      "verts": 716,
+      "verts": 384,
       "tris": 236,
       "mat": "CONCRETE",
       "sizeM": [
@@ -1392,7 +1392,1072 @@
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
       "licence": "CC0",
       "author": "Kenney",
-      "md5": "a96a5d1bab695d06e3a4defa0c1f2b34"
+      "md5": "7b59c77c405e24d16712fef0b9c417c7"
+    },
+    "k_flagcheckers": {
+      "file": "models/k_flagcheckers.bin",
+      "verts": 276,
+      "tris": 184,
+      "mat": "CONCRETE",
+      "sizeM": [
+        0.99,
+        6.25,
+        0.18
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "c4e4e7201ac72bcd444c03a872ff6bd2"
+    },
+    "k_flagcheckerssmall": {
+      "file": "models/k_flagcheckerssmall.bin",
+      "verts": 174,
+      "tris": 132,
+      "mat": "CONCRETE",
+      "sizeM": [
+        0.95,
+        1.5,
+        0.18
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "262cb65d3ca286eb7924c2671fc7e519"
+    },
+    "k_flaggreen": {
+      "file": "models/k_flaggreen.bin",
+      "verts": 360,
+      "tris": 184,
+      "mat": "CONCRETE",
+      "sizeM": [
+        0.99,
+        6.25,
+        0.18
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "ed86afda125ac28ab6862626a6d053c4"
+    },
+    "k_flagred": {
+      "file": "models/k_flagred.bin",
+      "verts": 360,
+      "tris": 184,
+      "mat": "CONCRETE",
+      "sizeM": [
+        0.99,
+        6.25,
+        0.18
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "33af3e838df02f896fa85b38c4a64931"
+    },
+    "k_flagtankco": {
+      "file": "models/k_flagtankco.bin",
+      "verts": 276,
+      "tris": 184,
+      "mat": "CONCRETE",
+      "sizeM": [
+        0.99,
+        6.25,
+        0.18
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "4191d998067fbbdf8c5d34b66905e9af"
+    },
+    "k_grass": {
+      "file": "models/k_grass.bin",
+      "verts": 4,
+      "tris": 2,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "966a2f3b82e509463b0aae24ebdc362f"
+    },
+    "k_racecargreen": {
+      "file": "models/k_racecargreen.bin",
+      "verts": 2543,
+      "tris": 1430,
+      "mat": "CONCRETE",
+      "sizeM": [
+        3.64,
+        1.99,
+        6.73
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "da71dc4448c8b69eb310ed20b3531b56"
+    },
+    "k_racecarorange": {
+      "file": "models/k_racecarorange.bin",
+      "verts": 2543,
+      "tris": 1430,
+      "mat": "CONCRETE",
+      "sizeM": [
+        3.64,
+        1.99,
+        6.73
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "f4e5da47b4eb1980f0e3fe64082d301e"
+    },
+    "k_racecarred": {
+      "file": "models/k_racecarred.bin",
+      "verts": 2543,
+      "tris": 1430,
+      "mat": "CONCRETE",
+      "sizeM": [
+        3.64,
+        1.99,
+        6.73
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "b9e52fc58f199ffcd858a52e45f3c2b0"
+    },
+    "k_racecarwhite": {
+      "file": "models/k_racecarwhite.bin",
+      "verts": 2543,
+      "tris": 1430,
+      "mat": "CONCRETE",
+      "sizeM": [
+        3.64,
+        1.99,
+        6.73
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "ff339296dc6c2a6906bf3b6f246a570a"
+    },
+    "k_rail": {
+      "file": "models/k_rail.bin",
+      "verts": 116,
+      "tris": 68,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.8,
+        0.25
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "a6daf58a5e26d9229b85396a72b9f1cd"
+    },
+    "k_raildouble": {
+      "file": "models/k_raildouble.bin",
+      "verts": 184,
+      "tris": 112,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        1.4,
+        0.25
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "eb42be9c8ffe40eeb1235c6436449c26"
+    },
+    "k_ramp": {
+      "file": "models/k_ramp.bin",
+      "verts": 130,
+      "tris": 94,
+      "mat": "CONCRETE",
+      "sizeM": [
+        2.75,
+        1.65,
+        3.65
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "eed8c300c5902e9936f4586b4bc811ea"
+    },
+    "k_roadbump": {
+      "file": "models/k_roadbump.bin",
+      "verts": 156,
+      "tris": 94,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.5,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "6d3df0028b4a6a076dd33044e4e52d7e"
+    },
+    "k_roadcornerbridgelarge": {
+      "file": "models/k_roadcornerbridgelarge.bin",
+      "verts": 466,
+      "tris": 308,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.63,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "9081d1bc96efa755f124963923f7447c"
+    },
+    "k_roadcornerbridgelarger": {
+      "file": "models/k_roadcornerbridgelarger.bin",
+      "verts": 468,
+      "tris": 308,
+      "mat": "CONCRETE",
+      "sizeM": [
+        15,
+        0.63,
+        15
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "a30832961e4f452bf39cba4ead024888"
+    },
+    "k_roadcornerbridgesmall": {
+      "file": "models/k_roadcornerbridgesmall.bin",
+      "verts": 396,
+      "tris": 260,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.63,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "585411a6812564360f96a468c8cf055b"
+    },
+    "k_roadcornerlarge": {
+      "file": "models/k_roadcornerlarge.bin",
+      "verts": 322,
+      "tris": 216,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "650796150e73d348614115894f49627b"
+    },
+    "k_roadcornerlargeborder": {
+      "file": "models/k_roadcornerlargeborder.bin",
+      "verts": 152,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        11.05,
+        0.1,
+        11.05
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "b2fbcadaa60136692c32160c7f38b236"
+    },
+    "k_roadcornerlargeborderinner": {
+      "file": "models/k_roadcornerlargeborderinner.bin",
+      "verts": 140,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "a2a0e70bdc59226ef90f1e9aeea383ff"
+    },
+    "k_roadcornerlargesand": {
+      "file": "models/k_roadcornerlargesand.bin",
+      "verts": 26,
+      "tris": 24,
+      "mat": "CONCRETE",
+      "sizeM": [
+        12.65,
+        0,
+        12.65
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "125663c14d3587f16a1e1e038098699e"
+    },
+    "k_roadcornerlargesandinner": {
+      "file": "models/k_roadcornerlargesandinner.bin",
+      "verts": 26,
+      "tris": 24,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "36ffc4909d3ff2514c93cd5dae05b7f7"
+    },
+    "k_roadcornerlargewall": {
+      "file": "models/k_roadcornerlargewall.bin",
+      "verts": 152,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        12.9,
+        0.2,
+        12.9
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "6eeb50bb062d82489451cfd99aa420aa"
+    },
+    "k_roadcornerlargewallinner": {
+      "file": "models/k_roadcornerlargewallinner.bin",
+      "verts": 142,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        2.35,
+        0.2,
+        2.35
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "7e05b49297e44b7b819fede2d84f499b"
+    },
+    "k_roadcornerlarger": {
+      "file": "models/k_roadcornerlarger.bin",
+      "verts": 234,
+      "tris": 216,
+      "mat": "CONCRETE",
+      "sizeM": [
+        15,
+        0.1,
+        15
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "f41332695676867ead9c9889f77fb5f2"
+    },
+    "k_roadcornerlargerborder": {
+      "file": "models/k_roadcornerlargerborder.bin",
+      "verts": 155,
+      "tris": 79,
+      "mat": "CONCRETE",
+      "sizeM": [
+        16.05,
+        0.1,
+        16.05
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "a10909b8e054fb4133fed7e6dafddc5c"
+    },
+    "k_roadcornerlargerborderinner": {
+      "file": "models/k_roadcornerlargerborderinner.bin",
+      "verts": 152,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "ba1430ee1a732719f0d1704a306a3291"
+    },
+    "k_roadcornerlargersand": {
+      "file": "models/k_roadcornerlargersand.bin",
+      "verts": 26,
+      "tris": 24,
+      "mat": "CONCRETE",
+      "sizeM": [
+        17.65,
+        0,
+        17.65
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "e99cdd9110d3a12d059359699dbd89ec"
+    },
+    "k_roadcornerlargersandinner": {
+      "file": "models/k_roadcornerlargersandinner.bin",
+      "verts": 26,
+      "tris": 24,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "0621591f7617948358087635689c1172"
+    },
+    "k_roadcornerlargerwall": {
+      "file": "models/k_roadcornerlargerwall.bin",
+      "verts": 152,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        17.9,
+        0.2,
+        17.9
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "776acff40b824fed2eb820621cd62f84"
+    },
+    "k_roadcornerlargerwallinner": {
+      "file": "models/k_roadcornerlargerwallinner.bin",
+      "verts": 140,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        7.35,
+        0.2,
+        7.35
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "b7e6b36fcad20a7ac696ec84f7bcfd78"
+    },
+    "k_roadcornersmall": {
+      "file": "models/k_roadcornersmall.bin",
+      "verts": 310,
+      "tris": 204,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "4ca943d7f40a5b4f1102f1bff8b16a4c"
+    },
+    "k_roadcornersmallborder": {
+      "file": "models/k_roadcornersmallborder.bin",
+      "verts": 140,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        6.05,
+        0.1,
+        6.05
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "2e9302981601501537e95de6e792aa6a"
+    },
+    "k_roadcornersmallsand": {
+      "file": "models/k_roadcornersmallsand.bin",
+      "verts": 27,
+      "tris": 25,
+      "mat": "CONCRETE",
+      "sizeM": [
+        7.65,
+        0,
+        7.65
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "e2c3853e2a85f227962ffec6a012a1aa"
+    },
+    "k_roadcornersmallsquare": {
+      "file": "models/k_roadcornersmallsquare.bin",
+      "verts": 438,
+      "tris": 182,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "a595e5916f64762eabf965701d63e698"
+    },
+    "k_roadcornersmallwall": {
+      "file": "models/k_roadcornersmallwall.bin",
+      "verts": 152,
+      "tris": 76,
+      "mat": "CONCRETE",
+      "sizeM": [
+        7.9,
+        0.2,
+        7.9
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "8da00480b9ce6a6f4ec57e7281e29498"
+    },
+    "k_roadcrossing": {
+      "file": "models/k_roadcrossing.bin",
+      "verts": 412,
+      "tris": 266,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "1901c7163cc3d751d1e4cb5c4f220454"
+    },
+    "k_roadcurved": {
+      "file": "models/k_roadcurved.bin",
+      "verts": 626,
+      "tris": 432,
+      "mat": "CONCRETE",
+      "sizeM": [
+        7.5,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "9fbf36694a4efe09db08e238ed2d7125"
+    },
+    "k_roadcurvedsplit": {
+      "file": "models/k_roadcurvedsplit.bin",
+      "verts": 858,
+      "tris": 592,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "07c34a04d83e0887536de63abb0b26a2"
+    },
+    "k_roadend": {
+      "file": "models/k_roadend.bin",
+      "verts": 187,
+      "tris": 125,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        7.5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "71a3a07a5683676f5959fcdf1dbad07e"
+    },
+    "k_roadpitentry": {
+      "file": "models/k_roadpitentry.bin",
+      "verts": 64,
+      "tris": 34,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "3267627b5cf30051dd74fc74e09c9f8b"
+    },
+    "k_roadpitgarage": {
+      "file": "models/k_roadpitgarage.bin",
+      "verts": 96,
+      "tris": 58,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "2885c534567499932480a321683f40d2"
+    },
+    "k_roadpitstraight": {
+      "file": "models/k_roadpitstraight.bin",
+      "verts": 32,
+      "tris": 16,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "5ee56388a7e0c584d9a69f91b0adcb6e"
+    },
+    "k_roadpitstraightlong": {
+      "file": "models/k_roadpitstraightlong.bin",
+      "verts": 32,
+      "tris": 16,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "5225d2bd8d833bdf461457d4a6c6b293"
+    },
+    "k_roadramp": {
+      "file": "models/k_roadramp.bin",
+      "verts": 36,
+      "tris": 18,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        1.35,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "2a1a70d3489a58a065d80f07f43e9506"
+    },
+    "k_roadramplong": {
+      "file": "models/k_roadramplong.bin",
+      "verts": 36,
+      "tris": 18,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        2.6,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "eaa8a34b75e7bdad75676de94040751a"
+    },
+    "k_roadramplongcurved": {
+      "file": "models/k_roadramplongcurved.bin",
+      "verts": 655,
+      "tris": 417,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        2.6,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "7072d67c6493cb617b3bcdf77046f907"
+    },
+    "k_roadramplongcurvedwall": {
+      "file": "models/k_roadramplongcurvedwall.bin",
+      "verts": 718,
+      "tris": 474,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        2.6,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "731a100c072aaa97cd0bd869735f465c"
+    },
+    "k_roadramplongwall": {
+      "file": "models/k_roadramplongwall.bin",
+      "verts": 54,
+      "tris": 30,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        2.6,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "3772cc9dd523e45ae35acc6ba6385a4d"
+    },
+    "k_roadrampwall": {
+      "file": "models/k_roadrampwall.bin",
+      "verts": 54,
+      "tris": 30,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        1.35,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "4aae551f486231277efbb14edf697fa4"
+    },
+    "k_roadside": {
+      "file": "models/k_roadside.bin",
+      "verts": 102,
+      "tris": 60,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "5bacf2458b01cf7c3555d0249b5156e4"
+    },
+    "k_roadsplit": {
+      "file": "models/k_roadsplit.bin",
+      "verts": 67,
+      "tris": 37,
+      "mat": "CONCRETE",
+      "sizeM": [
+        15,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "7dcd355fc066ee8e8af9ccd159ed8cbe"
+    },
+    "k_roadsplitlarge": {
+      "file": "models/k_roadsplitlarge.bin",
+      "verts": 279,
+      "tris": 187,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "cc4d19de50a9969b31dd8dd9eb907522"
+    },
+    "k_roadsplitlarger": {
+      "file": "models/k_roadsplitlarger.bin",
+      "verts": 459,
+      "tris": 201,
+      "mat": "CONCRETE",
+      "sizeM": [
+        15,
+        0.1,
+        15
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "202002d3ed16fe83e6382fc5c9c0484e"
+    },
+    "k_roadsplitround": {
+      "file": "models/k_roadsplitround.bin",
+      "verts": 545,
+      "tris": 375,
+      "mat": "CONCRETE",
+      "sizeM": [
+        15,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "59db887ad93566531b03beec52bff368"
+    },
+    "k_roadsplitroundlarge": {
+      "file": "models/k_roadsplitroundlarge.bin",
+      "verts": 834,
+      "tris": 393,
+      "mat": "CONCRETE",
+      "sizeM": [
+        25,
+        0.1,
+        15
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "f2396d9d569f333e165480632a1998ee"
+    },
+    "k_roadsplitsmall": {
+      "file": "models/k_roadsplitsmall.bin",
+      "verts": 210,
+      "tris": 134,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "d79112267ab411756d1bb73b3d9463a0"
+    },
+    "k_roadstart": {
+      "file": "models/k_roadstart.bin",
+      "verts": 292,
+      "tris": 182,
+      "mat": "CONCRETE",
+      "sizeM": [
+        6.3,
+        3.34,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "49796d90c7c84d04a88c00f405c6a47f"
+    },
+    "k_roadstartpositions": {
+      "file": "models/k_roadstartpositions.bin",
+      "verts": 100,
+      "tris": 82,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "430db4eac4f6abbd3d5437bdec8fe320"
+    },
+    "k_roadstraight": {
+      "file": "models/k_roadstraight.bin",
+      "verts": 36,
+      "tris": 18,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "8ed35e83f5f40f6f61140ab59c56def1"
+    },
+    "k_roadstraightarrow": {
+      "file": "models/k_roadstraightarrow.bin",
+      "verts": 54,
+      "tris": 36,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "0f352bcbfe44dda7bed758cfa54fcaa6"
+    },
+    "k_roadstraightbridge": {
+      "file": "models/k_roadstraightbridge.bin",
+      "verts": 74,
+      "tris": 44,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        2.6,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "cd2086bcb054c2271fa21c4158de87b7"
+    },
+    "k_roadstraightbridgemid": {
+      "file": "models/k_roadstraightbridgemid.bin",
+      "verts": 76,
+      "tris": 48,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.63,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "43288c7d277a6c510be5e2b7d62639a4"
+    },
+    "k_roadstraightbridgestart": {
+      "file": "models/k_roadstraightbridgestart.bin",
+      "verts": 96,
+      "tris": 60,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        2.6,
+        5
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "fdcbda4b84be4300b0cc3b595957a626"
+    },
+    "k_roadstraightlong": {
+      "file": "models/k_roadstraightlong.bin",
+      "verts": 36,
+      "tris": 18,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "b3630c805078ccc1d5e78ccc601fc93c"
+    },
+    "k_roadstraightlongbump": {
+      "file": "models/k_roadstraightlongbump.bin",
+      "verts": 1302,
+      "tris": 834,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        1.3,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "780442c89cf994d6454b4758468673e3"
+    },
+    "k_roadstraightlongbumpround": {
+      "file": "models/k_roadstraightlongbumpround.bin",
+      "verts": 180,
+      "tris": 114,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.2,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "b61c82b7b2feee8e70de161a87b2c5d3"
+    },
+    "k_roadstraightlongmid": {
+      "file": "models/k_roadstraightlongmid.bin",
+      "verts": 192,
+      "tris": 122,
+      "mat": "CONCRETE",
+      "sizeM": [
+        5,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "da5c15ce3e3ef24f4eb6b04a9c275bac"
+    },
+    "k_roadstraightskew": {
+      "file": "models/k_roadstraightskew.bin",
+      "verts": 36,
+      "tris": 18,
+      "mat": "CONCRETE",
+      "sizeM": [
+        10,
+        0.1,
+        10
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "3949caa2cf1de6b18d86a588061389ac"
+    },
+    "k_treelarge": {
+      "file": "models/k_treelarge.bin",
+      "verts": 132,
+      "tris": 72,
+      "mat": "CONCRETE",
+      "sizeM": [
+        1.78,
+        7.53,
+        2.06
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "2f56491f12909b0c7542c141843379f0"
+    },
+    "k_treesmall": {
+      "file": "models/k_treesmall.bin",
+      "verts": 132,
+      "tris": 72,
+      "mat": "CONCRETE",
+      "sizeM": [
+        1.27,
+        5.35,
+        1.46
+      ],
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip",
+      "licence": "CC0",
+      "author": "Kenney",
+      "md5": "286332f45e7650e955d09585341f0579"
     }
   },
   "env": {
@@ -2091,6 +3156,503 @@
     {
       "kind": "model",
       "id": "k_tentroofdouble",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_flagcheckers",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_flagcheckerssmall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_flaggreen",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_flagred",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_flagtankco",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_grass",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_racecargreen",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_racecarorange",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_racecarred",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_racecarwhite",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_rail",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_raildouble",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_ramp",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadbump",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerbridgelarge",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerbridgelarger",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerbridgesmall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlarge",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargeborder",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargeborderinner",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargesand",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargesandinner",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargewall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargewallinner",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlarger",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargerborder",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargerborderinner",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargersand",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargersandinner",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargerwall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornerlargerwallinner",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornersmall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornersmallborder",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornersmallsand",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornersmallsquare",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcornersmallwall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcrossing",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcurved",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadcurvedsplit",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadend",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadpitentry",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadpitgarage",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadpitstraight",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadpitstraightlong",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadramp",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadramplong",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadramplongcurved",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadramplongcurvedwall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadramplongwall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadrampwall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadside",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadsplit",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadsplitlarge",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadsplitlarger",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadsplitround",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadsplitroundlarge",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadsplitsmall",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstart",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstartpositions",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraight",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightarrow",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightbridge",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightbridgemid",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightbridgestart",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightlong",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightlongbump",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightlongbumpround",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightlongmid",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_roadstraightskew",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_treelarge",
+      "author": "Kenney",
+      "licence": "CC0",
+      "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "k_treesmall",
       "author": "Kenney",
       "licence": "CC0",
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
