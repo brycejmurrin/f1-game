@@ -306,6 +306,7 @@ const FULL = [
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
+  "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])

@@ -114,6 +114,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
+  "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
