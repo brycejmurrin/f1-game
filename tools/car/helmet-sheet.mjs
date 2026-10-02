@@ -23,6 +23,16 @@ import { resolve } from "node:path";
 import sharp from "sharp";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
+
+const HELP = `Usage: node tools/car/helmet-sheet.mjs [--view=front,side,…] [--only=44,1] [--cell=200]
+
+Rasterises each helmets.js design onto the real shell and writes a labelled
+contact-sheet PNG. Offline — no browser.
+`;
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(HELP.trim());
+  process.exit(0);
+}
 const flag = (name, dflt) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith("--" + name + "="));
   return hit ? hit.slice(name.length + 3) : dflt;

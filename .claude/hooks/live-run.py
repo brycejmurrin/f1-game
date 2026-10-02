@@ -9,6 +9,11 @@ never a bare `ps | grep` that fires on another worktree's run or on a shell
 whose -c text merely mentions the runner (the self-match trap).
 """
 import json, os, re, sys
+
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    print("usage: live-run.py <root>", file=sys.stderr)
+    sys.exit(0 if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help") else 2)
+
 root = os.path.realpath(sys.argv[1])
 pat = re.compile(r"playwright(\.js)?\s+test\b|run-playwright\.mjs")
 pid = ""

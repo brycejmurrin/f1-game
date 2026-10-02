@@ -123,6 +123,7 @@ uniform vec3 uEye;
 out vec2 vUV;
 out vec3 vColor;
 out float vAlpha;
+out float vDist;    // eye distance, for the scene's fog
 void main() {
   vec3 fwd = normalize(uEye - aCenter);
   vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd) + vec3(1e-4, 0.0, 0.0));
@@ -131,6 +132,7 @@ void main() {
   vUV = aCorner;
   vColor = aColor;
   vAlpha = aAlpha;
+  vDist = length(uEye - aCenter);
   gl_Position = uViewProj * vec4(wp, 1.0);
 }`;
 
@@ -139,14 +141,38 @@ precision mediump float;
 in vec2 vUV;        // -1..1 across the quad
 in vec3 vColor;
 in float vAlpha;
+in float vDist;
 uniform float uAdditive;
+uniform vec3 uSunColor;     // frame key (keyMul-scaled, as the decals)
+uniform vec3 uAmbSky;       // frame hemisphere (ambientMul-scaled)
+uniform vec3 uAmbGround;
+uniform vec3 uFogColor;     // the lit pass's fog, same density semantics
+uniform float uFogDensity;
 out vec4 outColor;
+// LIT + FOGGED (2026-10-01). The alpha group (smoke, dust, spray, rain) is
+// shaded as a small sphere: the hemisphere ambient read on the quad's up
+// (top of the puff sky-lit, bottom ground-lit) plus a wrap of the key, with a
+// floodlit floor so a night puff still reads under the lamps the shader cannot
+// see. The additive group (sparks, lamps) stays emissive. Both take the lit
+// pass's exp² fog on the eye distance: an alpha puff fades toward the fog
+// colour, an emissive one fades out. Before, every particle was unlit and
+// unfogged — smoke in the Monaco tunnel as bright as smoke in the sun, and a
+// night puff glowing white beside near-black ambient (the second
+// graphics-detail survey, item 9).
 void main() {
   float r2 = dot(vUV, vUV);
   float fall = max(1.0 - r2, 0.0);
   fall *= fall;                       // smooth soft-disc falloff, zero at the rim
   float a = vAlpha * fall;
-  outColor = mix(vec4(vColor, a), vec4(vColor * a, 1.0), uAdditive);
+  vec3 col = vColor;
+  if (uAdditive < 0.5) {
+    vec3 lit = mix(uAmbGround, uAmbSky, vUV.y * 0.5 + 0.5) + uSunColor * 0.45;
+    col *= max(lit, vec3(0.18));
+  }
+  float fd = vDist * uFogDensity;
+  float fog = 1.0 - exp(-fd * fd);
+  col = mix(mix(col, uFogColor, fog), col * (1.0 - fog), uAdditive);
+  outColor = mix(vec4(col, a), vec4(col * a, 1.0), uAdditive);
 }`;
   // DRIVING LINE ribbon (js/render/shared/driving-line.js builds the strip).
   // The colour is F1's dynamic grammar against the PLAYER's speed: green where

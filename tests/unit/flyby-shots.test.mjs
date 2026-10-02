@@ -850,7 +850,8 @@ test("intro builds cancel at async boundaries and never fly over pending compila
         if (mode === "settings") c.settings = "two";
       },
       FlybySeq: { reset() {}, setDuration: () => events.push("duration"), DEFAULT: [], vary: () => [],
-        planSteps: () => () => mode !== "plan-cancel" || slices > 0 },
+        // A real planner step consumes CPU before the async cancellation boundary.
+        planSteps: () => () => { now += 4; return mode !== "plan-cancel" || slices > 0; } },
       raceIntro: () => { assert.equal(warming, false, mode + ": never start unseen shots"); events.push("intro"); },
       quitToMenu: () => { c.cancelIntro(); c.loadingScreen.stop(); events.push("recover"); },
       announce: () => events.push("message"), Log: { warn() {} },
@@ -957,7 +958,7 @@ test("the world key includes the grid size, and a failed build does not keep the
   assert.match(game, /const menuKey = \(idx\) => \[idx, raceTimeOfDay, raceWeather, fieldSize\(\)\]\.join\("\|"\);/);
   assert.equal((game.match(/\[(trackIdx|want|idx), (raceTimeOfDay|tod), (raceWeather|weather)\]\.join\("\|"\)/g) || []).length, 0, "every menu key goes through menuKey()");
   assert.match(game, /track = null; builtTrackId = null;/, "a build that throws must force the next loadTrack to rebuild");
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, "the no-world card shows no stale circuit, nor a build card over the results");
+  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, "the no-world card shows no stale circuit, nor a build card over the results");
 });
 
 test("plans are reused when they still hold, and re-planned when they do not", async () => {
@@ -1243,7 +1244,7 @@ test("prepared night lamps make the actual synchronous flyby bake a cache hit", 
   assert.equal(h.events.filter(e => e === "warm:request").length, 1);
 });
 
-function introPlanBudgetHarness({ stepMs = 20, yieldMs = 10000, shotCount = 11, interrupt = null } = {}) {
+function introPlanBudgetHarness({ stepMs = 20, yieldMs = 10000, shotCount = 11, interrupt = null, interruptAtStep = 0 } = {}) {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const start = game.indexOf("async function introPlan(");
   const source = game.slice(start, game.indexOf("\n}\n", start) + 2);
@@ -1254,7 +1255,14 @@ function introPlanBudgetHarness({ stepMs = 20, yieldMs = 10000, shotCount = 11, 
     loadingScreen: { nextFlyMs: () => 24000 },
     FlybySeq: {
       DEFAULT: [], vary: () => Array.from({ length: shotCount }, (_, i) => ({ id: 'shot-' + i })), setDuration() {},
-      planSteps: () => () => { steps++; now += stepMs; return steps >= shotCount; },
+      planSteps: () => () => {
+        steps++; now += stepMs;
+        if (steps === interruptAtStep) {
+          if (interrupt === "cancel") wanted = false;
+          if (interrupt === "skip") c._introSkip = 1;
+        }
+        return steps >= shotCount;
+      },
     },
     menuSlice: async () => {
       yields++; now += yieldMs;
@@ -1332,4 +1340,122 @@ test("a noncold preparation branch cannot retire another owner's hidden frames",
   assert.equal(h.c._menuGate.warm, 2);
   h.plan.resolve(h.fly); await h.done;
   assert.equal(h.c._menuGate.warm, 2);
+});
+
+
+test("intro planning batches cheap shots without per-shot timer latency", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 0.25, yieldMs: 32 });
+  assert.ok(await h.run());
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 0, "eleven cheap steps fit in one 3ms slice");
+  assert.equal(h.elapsed(), 2.75);
+});
+
+test("intro planning yields after 3ms active batches, excluding delayed timers", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 1, yieldMs: 10000 });
+  assert.ok(await h.run());
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 3, "three batches of three and one final batch of two");
+  assert.equal(h.elapsed(), 30011, "yield time spends neither active budget");
+});
+
+test("intro planning checks ownership and skip between cheap steps in one batch", async () => {
+  for (const interrupt of ["cancel", "skip"]) {
+    const h = introPlanBudgetHarness({ stepMs: 0.25, interrupt, interruptAtStep: 2 });
+    assert.equal(await h.run(), null, interrupt);
+    assert.equal(h.steps(), 2);
+    assert.equal(h.yields(), 0, "cancellation needs no additional work or timer");
+  }
+});
+
+test("intro planning still yields after every indivisible 50ms cold shot", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 50, yieldMs: 32 });
+  assert.ok(await h.run());
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 10);
+  assert.equal(h.elapsed(), 870);
+});
+
+function menuPlanBatchHarness({ stepMs = 1, yieldMs = 32, shotCount = 11, cancelAtStep = 0, cancelAtYield = 0 } = {}) {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const start = game.indexOf("async function menuFinish(");
+  const source = game.slice(start, game.indexOf("\n}\n", start) + 2);
+  let now = 0, steps = 0, yields = 0, wanted = true, warms = 0;
+  const c = {
+    track: {}, trackIdx: 0, _menuFly: null, _menuGate: { warm: 0 },
+    performance: { now: () => now }, prepareMenuCarAssets: async () => {},
+    menuIdle: async current => current(), menuLampBake: async () => false,
+    warmPrograms: () => { warms++; return false; },
+    loadingScreen: { nextFlyMs: () => 24000 },
+    FlybySeq: {
+      DEFAULT: [], vary: () => Array.from({ length: shotCount }, (_, i) => ({ id: 'shot-' + i })),
+      reset() {}, setDuration() {},
+      planSteps: () => () => {
+        steps++; now += stepMs;
+        if (steps === cancelAtStep) wanted = false;
+        return steps >= shotCount;
+      },
+    },
+    menuSlice: async () => {
+      yields++; now += yieldMs;
+      if (yields === cancelAtYield) wanted = false;
+    },
+  };
+  vm.createContext(c); vm.runInContext(source, c);
+  return { run: () => c.menuFinish(() => wanted, "world"), c,
+    steps: () => steps, yields: () => yields, elapsed: () => now, warms: () => warms };
+}
+
+test("menu planning batches cheap shots but gives queued world warming one render opportunity", async () => {
+  const h = menuPlanBatchHarness({ stepMs: 0.25 });
+  await h.run();
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 1, "one render opportunity, not a timer per shot");
+  assert.equal(h.elapsed(), 34.75);
+  assert.equal(h.c._menuFly.shots.length, 11);
+  assert.equal(h.warms(), 1);
+  assert.equal(h.c._menuGate.warm, 2, "existing hidden-frame allowance is preserved even when no compile is requested");
+});
+
+test("menu planning yields at 3ms active batches despite long timer delays", async () => {
+  const h = menuPlanBatchHarness({ yieldMs: 10000 });
+  await h.run();
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 3);
+  assert.equal(h.elapsed(), 30011);
+  assert.equal(h.c._menuFly.shots.length, 11);
+});
+
+test("menu planning checks ownership between cheap steps and never publishes abandoned plans", async () => {
+  const h = menuPlanBatchHarness({ stepMs: 0.25, cancelAtStep: 2 });
+  await h.run();
+  assert.equal(h.steps(), 2);
+  assert.equal(h.yields(), 0);
+  assert.equal(h.c._menuFly, null);
+});
+
+test("menu planning rechecks ownership after yielding before any more shot work", async () => {
+  const h = menuPlanBatchHarness({ cancelAtYield: 1 });
+  await h.run();
+  assert.equal(h.steps(), 3);
+  assert.equal(h.yields(), 1);
+  assert.equal(h.c._menuFly, null);
+});
+
+test("menu planning retains full completion beyond the intro's 800ms active budget", async () => {
+  const h = menuPlanBatchHarness({ stepMs: 200 });
+  await h.run();
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 10, "each indivisible expensive shot yields on its own");
+  assert.equal(h.elapsed(), 2520);
+  assert.equal(h.c._menuFly.shots.length, 11);
+});
+
+
+test("menu planning rechecks ownership after its final warm rendering opportunity", async () => {
+  const h = menuPlanBatchHarness({ stepMs: 0.25, cancelAtYield: 1 });
+  await h.run();
+  assert.equal(h.steps(), 11);
+  assert.equal(h.yields(), 1);
+  assert.equal(h.c._menuFly, null, "the old plan is not published after a new request takes ownership");
 });

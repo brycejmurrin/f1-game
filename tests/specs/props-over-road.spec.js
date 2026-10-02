@@ -12,8 +12,7 @@
 // across the whole lap. A triangle whose footprint covers tarmac AND whose
 // surface sits between TOL and CEIL metres above the racing line is an offender.
 // Purely geometric — no rendering, so it runs under SwiftShader in CI.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { auditTracks } from "../helpers/track-helpers.js";
 
 // Every circuit (derived from tools/manifest.cjs), or TRACK=<id> for one.
@@ -171,4 +170,13 @@ test("no prop geometry on/above the racing line (all circuits)", async ({ page }
     );
   }
   expect(offenders, `circuits with props on/above the racing line:\n${offenders.join("\n")}`).toEqual([]);
+  // Drop mesh capture and quiet the render loop before the context tears down.
+  // fixtures.js afterEach also headless(true); this is belt-and-braces for the
+  // all-circuits walk that loaded every track's geometry into one page (the
+  // poison that hung the NEXT worker's Navigate when this ran packed — see
+  // SOLO_OWN_TIMEOUT_SEC / run-playwright mega peel).
+  await page.evaluate(() => {
+    try { window.__apex.trackGeometry(false); } catch (_) {}
+    try { window.__apex.headless(true); } catch (_) {}
+  });
 });
