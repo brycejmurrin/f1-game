@@ -6,28 +6,28 @@
     },
     "js/agent/apex.js": {
       "codeLines": 2277,
-      "lines": 3219
+      "lines": 3221
     },
     "js/car/car3d.js": {
-      "lines": 4118
+      "lines": 4094
     },
     "js/game.js": {
-      "codeLines": 5144,
-      "gMembers": 280,
-      "lines": 9580,
-      "topLets": 159
+      "codeLines": 5259,
+      "gMembers": 281,
+      "lines": 9666,
+      "topLets": 160
     },
     "js/lighting/presets.js": {
-      "lines": 17318
+      "lines": 17260
     },
     "js/net/lobby.js": {
-      "lines": 1868
+      "lines": 1872
     },
     "js/render/glx/glx.js": {
-      "lines": 2766
+      "lines": 2778
     },
     "js/track/tracks.js": {
-      "lines": 932
+      "lines": 690
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
@@ -39,7 +39,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 612,
+      "ceiling": 635,
       "slack": 5
     },
     "dynamicIdReads": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2069,
+      "ceiling": 2098,
       "slack": 25
     },
     "subFloorFontSize": {

@@ -177,7 +177,7 @@ function create(G) {
     // a retired circuit is perfectly racable, it is simply never a round of the
     // built-in championship (js/track/tracks.js).
     const used = new Set(draft.trackIds);
-    const rest = Tracks.LIST.filter((t) => !used.has(t.id));
+    const rest = Tracks.LIST.filter((t) => !t.custom && !used.has(t.id));   // the player's own circuits race solo (v1)
     pane.appendChild(head(rest.length ? "ADD A CIRCUIT" : "EVERY CIRCUIT IS ON THE CALENDAR"));
     for (const t of rest) {
       const row = el("button", "track-row");
