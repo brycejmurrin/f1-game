@@ -590,6 +590,8 @@ const ScreenLooks = (function () {
     wirePeekEnds();
   }
 
+  function refresh() { for (const id in built) if (id !== "_done") { built[id].paintRows(); built[id].paintSum(); } }
+
   apply();
 
   // Deferred scripts run while readyState is "interactive"; only a document
@@ -602,7 +604,7 @@ const ScreenLooks = (function () {
   return {
     SCREENS, PEEK_ONLY, CORE, PEEK_MS,
     read, set, reset, apply, normalize, isShipped, onChange,
-    peek, endPeek, holdPeek, build, mountPeekButton,
+    peek, endPeek, holdPeek, build, refresh, mountPeekButton,
     dataKey: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? dataKey(s, n) : null; },
     token: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? tokenOf(s, n) : null; },
     get peeking() { return pk.id; },

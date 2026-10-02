@@ -106,11 +106,11 @@ const TrackValidate = (function () {
     const add = (code, level, msg, extra) => issues.push(Object.assign({ code, level, msg }, extra || {}));
     const pts = design && Array.isArray(design.pts) ? design.pts : [];
     if (pts.length < LIMITS.ptsMin) add("points", "red", "Needs at least " + LIMITS.ptsMin + " points — keep drawing");
-    if (pts.length > LIMITS.ptsMax) add("points", "red", "Too many points (" + pts.length + "/" + LIMITS.ptsMax + ") — delete some");
-    else if (pts.length > LIMITS.ptsAmber) add("points", "amber", pts.length + " points — near the " + LIMITS.ptsMax + " cap");
+    if (pts.length > LIMITS.ptsMax) add("points", "red", "Too many points (" + pts.length + "/" + LIMITS.ptsMax + ") — delete some", { fix: "points" });
+    else if (pts.length > LIMITS.ptsAmber) add("points", "amber", pts.length + " points — near the " + LIMITS.ptsMax + " cap", { fix: "points" });
     for (let i = 0; i < pts.length && pts.length >= 2; i++) {
       const p = pts[i], q = pts[(i + 1) % pts.length];
-      if (Math.hypot(q[0] - p[0], q[1] - p[1]) < LIMITS.spacing) { add("spacing", "red", "Two points closer than " + LIMITS.spacing + " m at point " + (i + 1), { ctrl: i }); break; }
+      if (Math.hypot(q[0] - p[0], q[1] - p[1]) < LIMITS.spacing) { add("spacing", "red", "Two points closer than " + LIMITS.spacing + " m at point " + (i + 1), { ctrl: i, fix: "spacing" }); break; }
     }
     const hw = +design.baseHW;
     if (!(hw >= LIMITS.hwMin && hw <= LIMITS.hwMax)) add("width", "red", "Track half-width must be " + LIMITS.hwMin + "–" + LIMITS.hwMax + " m");
@@ -118,7 +118,7 @@ const TrackValidate = (function () {
     // The registry refused it even as a work in progress (a point off the
     // ±10 km map, a malformed point): nothing can be built, saved or raced —
     // never "All checks pass".
-    if (pts.length >= LIMITS.ptsMin && !built) add("bounds", "red", "This loop cannot be built — keep every point inside the ±10 km map");
+    if (pts.length >= LIMITS.ptsMin && !built) add("bounds", "red", "This loop cannot be built — keep every point inside the ±10 km map", { fix: "bounds" });
     if (built && built.error) add("build", "red", "The engine could not build this loop: " + built.error);
     const tr = built && built.tr;
     const j = tr ? judge(tr, design, built.def) : { issues: [], stats: emptyStats(), turns: [] };
@@ -142,9 +142,9 @@ const TrackValidate = (function () {
     {
       const n = tr.n, ds = tr.total / n, px = tr.px, pz = tr.pz, py = tr.py, curv = tr.curv, hwA = tr.hw;
       stats.lengthM = Math.round(tr.total);
-      if (tr.total < LIMITS.lenMin) add("length", "red", "Lap is " + (tr.total / 1000).toFixed(2) + " km — at least 2.5 km");
-      else if (tr.total > LIMITS.lenMax) add("length", "red", "Lap is " + (tr.total / 1000).toFixed(2) + " km — at most 7 km");
-      else if (tr.total < LIMITS.lenAmber) add("length", "amber", "Lap is " + (tr.total / 1000).toFixed(2) + " km — F1 circuits run 3.5 km or more");
+      if (tr.total < LIMITS.lenMin) add("length", "red", "Lap is " + (tr.total / 1000).toFixed(2) + " km — at least 2.5 km", { fix: "length" });
+      else if (tr.total > LIMITS.lenMax) add("length", "red", "Lap is " + (tr.total / 1000).toFixed(2) + " km — at most 7 km", { fix: "length" });
+      else if (tr.total < LIMITS.lenAmber) add("length", "amber", "Lap is " + (tr.total / 1000).toFixed(2) + " km — F1 circuits run 3.5 km or more", { fix: "length" });
       // Radius from the engine's own LUT, plus a 12 m-chord Menger pass for kinks between nodes.
       // A tarmac fold (verify-track's roadGeoChecks) is a racing-surface rail
       // running backwards at a NODE-scale kink the ±12 m curvature window
@@ -161,14 +161,14 @@ const TrackValidate = (function () {
         else if (R1 < hwA[k] * LIMITS.foldAmberFrac && !foldAmber) foldAmber = { k, R: R1 };
       }
       stats.minR = kMax > 1e-6 ? Math.round(1 / kMax) : Infinity;
-      if (stats.minR < LIMITS.rMin) add("radius", "red", "Corner too tight: " + stats.minR + " m radius (minimum " + LIMITS.rMin + " m)", { s: kAt * ds, k: kAt });
-      else if (stats.minR < LIMITS.rAmber) add("radius", "amber", "Very tight corner: " + stats.minR + " m radius (hairpins are " + LIMITS.rAmber + " m+)", { s: kAt * ds, k: kAt });
+      if (stats.minR < LIMITS.rMin) add("radius", "red", "Corner too tight: " + stats.minR + " m radius (minimum " + LIMITS.rMin + " m)", { s: kAt * ds, k: kAt, fix: "radius" });
+      else if (stats.minR < LIMITS.rAmber) add("radius", "amber", "Very tight corner: " + stats.minR + " m radius (hairpins are " + LIMITS.rAmber + " m+)", { s: kAt * ds, k: kAt, fix: "radius" });
       // A kink between nodes the ±12 m curvature window averages away: Menger over a 24 m chord.
       let kinkR = Infinity, kinkAt = 0;
       for (let k = 0; k < n; k++) { const R = S.menger([px[(k - 3 + n) % n], pz[(k - 3 + n) % n]], [px[k], pz[k]], [px[(k + 3) % n], pz[(k + 3) % n]]); if (R < kinkR) { kinkR = R; kinkAt = k; } }
-      if (kinkR < LIMITS.kinkMin && stats.minR >= LIMITS.rMin) add("kink", "red", "Kink in the road (" + Math.round(kinkR) + " m) — smooth the points here", { s: kinkAt * ds, k: kinkAt });
-      if (fold) add("fold", "red", "Corner tighter than the road is wide — the tarmac folds here", { s: fold.k * ds, k: fold.k });
-      else if (foldAmber) add("fold", "amber", "Corner nearly as tight as the road is wide", { s: foldAmber.k * ds, k: foldAmber.k });
+      if (kinkR < LIMITS.kinkMin && stats.minR >= LIMITS.rMin) add("kink", "red", "Kink in the road (" + Math.round(kinkR) + " m) — smooth the points here", { s: kinkAt * ds, k: kinkAt, fix: "kink" });
+      if (fold) add("fold", "red", "Corner tighter than the road is wide — the tarmac folds here", { s: fold.k * ds, k: fold.k, fix: "fold" });
+      else if (foldAmber) add("fold", "amber", "Corner nearly as tight as the road is wide", { s: foldAmber.k * ds, k: foldAmber.k, fix: "fold" });
       // Crossings: covered by a bridge (built height difference) or at grade.
       const bridges = Array.isArray(design.bridges) ? design.bridges : [];
       const xs = S.crossings(px, pz, n, 3);
@@ -200,9 +200,9 @@ const TrackValidate = (function () {
       }
       for (const w of S.clearance(px, pz, py, n, Dnodes, LIMITS.bridgeSep, CLEAR_CELL, 6)) {
         const need = hwA[w.i] + hwA[w.j];
-        if (w.dist < need + 2) { add("clearance", "red", "Two parts of the track overlap (" + Math.round(w.dist) + " m apart)", { s: w.i * ds, s2: w.j * ds }); break; }
-        if (pitReach > 2 && w.dist < need + pitReach) { add("clearance", "red", "The pit opening crosses the other part of the track", { s: w.i * ds, s2: w.j * ds }); break; }
-        if (w.dist < need + 10) { add("clearance", "amber", "Two parts of the track run very close (" + Math.round(w.dist) + " m)", { s: w.i * ds, s2: w.j * ds }); break; }
+        if (w.dist < need + 2) { add("clearance", "red", "Two parts of the track overlap (" + Math.round(w.dist) + " m apart)", { s: w.i * ds, s2: w.j * ds, fix: "clearance" }); break; }
+        if (pitReach > 2 && w.dist < need + pitReach) { add("clearance", "red", "The pit opening crosses the other part of the track", { s: w.i * ds, s2: w.j * ds, fix: "clearance" }); break; }
+        if (w.dist < need + 10) { add("clearance", "amber", "Two parts of the track run very close (" + Math.round(w.dist) + " m)", { s: w.i * ds, s2: w.j * ds, fix: "clearance" }); break; }
       }
       // Grade over a gradeWindowM (40 m) window; elevation range for the stats.
       let lo = Infinity, hi = -Infinity, gMax = 0, gAt = 0;

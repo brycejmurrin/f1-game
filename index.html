@@ -111,6 +111,12 @@
 <link rel="stylesheet" href="css/track-detail.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/appearance-studio.css?v=dev">
+<link rel="stylesheet" href="css/watch-transport.css?v=dev">
+<link rel="stylesheet" href="css/career-experience.css?v=dev">
+<link rel="stylesheet" href="css/garage-experience.css?v=dev">
+<link rel="stylesheet" href="css/photo-studio.css?v=dev">
+<link rel="stylesheet" href="css/experience.css?v=dev">
 <link rel="stylesheet" href="css/editor.css?v=dev" media="print" onload="this.media='all'">
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
@@ -646,9 +652,18 @@
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-pause">PAUSED</h2></div>
     <div class="sheet-body pane stack">
+      <div id="pm-race-context" role="status"></div>
       <button id="pm-resume" autofocus>RESUME</button>
       <button id="pm-restart">RESTART RACE</button>
       <button id="pm-settings">SETTINGS&hellip;</button>
+      <nav id="pm-quick-doors" aria-label="Race tools">
+        <button id="pm-strategy" type="button">PIT STRATEGY</button>
+        <button id="pm-practice" type="button">PRACTICE</button>
+        <button id="pm-review" type="button">INCIDENTS &amp; REVIEW</button>
+        <button id="pm-photo" type="button">PHOTO STUDIO</button>
+        <button id="pm-appearance" type="button">APPEARANCE</button>
+      </nav>
+      <details id="pm-checkpoint"><summary>CHECKPOINT &amp; REWIND</summary><div class="balanced-row"><button id="pm-checkpoint-save" type="button">SAVE START</button><button id="pm-checkpoint-retry" type="button" disabled>TRY AGAIN</button><button id="pm-checkpoint-rewind" type="button" disabled>REWIND 10s</button></div><p id="pm-checkpoint-state" class="adv-help"></p></details>
       <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
       <button id="pm-quit">QUIT TO MENU</button>
@@ -1877,6 +1892,9 @@
   </div>
 </dialog>
 
+<!-- Non-modal photo dock: camera pointer controls remain available; its own CLOSE door restores the caller. -->
+<div id="photo-studio" class="screen" role="region" aria-label="Photo Studio" data-esc-close="ps-close" hidden></div>
+
 <!-- main menu. data-intro ships in the shell so the first paint is already
      the title intro's start state; js/ui/title-fx.js takes it off after one
      pass (css/menus.css THE TITLE INTRO). -->
@@ -1990,6 +2008,7 @@
       <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
     </div>
   </div>
+  <button id="home-motion" class="minibtn" type="button" hidden>PAUSE BACKGROUND</button>
   <div id="menu-buttons">
     <!-- Inline Lucide icons (ISC — assets/icons/lucide-LICENSE.txt). stroke=currentColor
          so they inherit the button's text colour; sized via .btn-ico in css/menus.css. -->
@@ -2013,6 +2032,15 @@
     <button id="mb-tt" class="bigbtn" aria-label="Time Trial — You against the clock"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg><span>TIME TRIAL<span class="mb-sub">YOU AGAINST THE CLOCK</span></span></button>
     <button id="mb-vs" class="bigbtn" aria-label="Race a Friend — Private 2 to 4 player race"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>RACE A FRIEND<span class="mb-sub">PRIVATE 2&ndash;4 PLAYER RACE</span></span></button>
     <button id="mb-season" class="bigbtn" aria-label="Season — A championship, your rules"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"/><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"/><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg><span>SEASON<span class="mb-sub">A CHAMPIONSHIP, YOUR RULES</span></span></button>
+    </div>
+    <!-- EXPLORE: Watch / Practice / Photo Studio — the H3 Home doors. Their
+         own row keeps PLAY NOW a true 2x2 and keeps SECONDARY at its seven
+         rooms (standings + controller when shown), so balanced-row never
+         inherits an eighth secondary sibling. -->
+    <div id="menu-explore" class="balanced-row">
+    <button id="mb-watch" class="bigbtn" type="button"><span>WATCH REAL RACES<span class="mb-sub">BROADCAST &amp; REPLAY</span></span></button>
+    <button id="mb-practice" class="bigbtn" type="button"><span>PRACTICE<span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
+    <button id="mb-photo" class="bigbtn" type="button"><span>PHOTO STUDIO<span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
@@ -2122,6 +2150,7 @@
            numbers beside it. The section is the vertical scroller when the
            caption does not fit (a short landscape phone at a raised UI SIZE). -->
       <section class="pane" id="sel-track-section">
+        <div id="practice-brief" hidden><strong>PRACTICE SESSION</strong><p>Choose a goal, then pick your circuit. Save a starting point from Pause to repeat it. Time Trial records are disabled after a checkpoint or rewind.</p><label for="practice-goal">Goal</label> <select id="practice-goal"></select></div>
         <h3 class="sel-label" id="sel-circuit-label">CIRCUIT</h3>
         <div id="sel-track-preview">
           <div id="sel-hero">
@@ -2522,7 +2551,7 @@
             <select id="rs-diff-sel" aria-labelledby="rs-diff-label" aria-describedby="rs-diff-help"></select>
             <button id="rs-diff-next" type="button" data-step="1" aria-label="Next difficulty">&rsaquo;</button>
           </div>
-          <p id="rs-diff-help" class="adv-help">How quick and consistent the AI drivers are.</p>
+          <p id="rs-diff-help" class="adv-help">How quick and consistent the AI drivers are. Pace stays fixed from car and driver data unless AI PACE is set to CATCH-UP.</p>
         </div>
         <div id="rs-quali" class="set-row" role="group" aria-labelledby="rs-quali-label">
           <span class="tune-label" id="rs-quali-label">GRID</span>
@@ -3004,6 +3033,8 @@
         <dd>Championship weekends start with a flying lap. DRIVE MY LAP sets your own time; SIMULATE calculates one. The result sets your starting grid.</dd>
         <dt>DATA HUB</dt>
         <dd>Real Formula 1 schedules, standings and results. RACE IT replays a real Grand Prix: JUMP IN at any lap in a real driver&rsquo;s seat, or WATCH it or its HIGHLIGHTS recreated.</dd>
+        <dt>TRACK DESIGNER</dt>
+        <dd>Design your own circuit: RANDOMISE or DRAW a loop, drag points, stamp corners, pick a theme, then SAVE and RACE it. Red checks block saving — FIX repairs them. Share a circuit as a link.</dd>
         <dt>GARAGE</dt>
         <dd>Fit parts within your budget and design your livery.</dd>
         <dt>PAUSE MENU</dt>
@@ -3453,6 +3484,7 @@
 <script defer crossorigin="anonymous" src="js/editor/track-themes.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/editor/custom-tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-shade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car3d.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
@@ -3474,6 +3506,7 @@
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost-share.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/input-ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-records.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-insights.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/driving-coach.js?v=dev"></script>
@@ -3486,6 +3519,7 @@
 <script defer crossorigin="anonymous" src="js/lighting/lighting.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/profiles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-mesh.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-prims.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
@@ -3505,6 +3539,7 @@
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/ai-band.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/radio-lines.js?v=dev"></script>
@@ -3512,10 +3547,14 @@
 <script defer crossorigin="anonymous" src="js/race/spotter.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-radio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/extra-rigs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/cam-avoid.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/trackside.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
@@ -3538,9 +3577,13 @@
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/sporting-regs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/broadcast.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/start-lights.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/marshal-panels.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/photo-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/tuner-panel.js?v=dev"></script>
@@ -3555,6 +3598,7 @@
 <script defer crossorigin="anonymous" src="js/perf/gfx-debug-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
@@ -3564,6 +3608,7 @@
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/mode-switch.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-rig.js?v=dev"></script>
@@ -3575,9 +3620,14 @@
 <script defer crossorigin="anonymous" src="js/xr/xr-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/results-story.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/appearance-studio.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/home-world.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/photo-studio.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-menu.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-net.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-settings.js?v=dev"></script>
