@@ -1231,7 +1231,8 @@ body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top
 }
 /* Its PEEK (js/ui/screen-looks.js PEEK_ONLY.hud): the whole race HUD shows
    through the ghosted settings page, the selected element outlined. */
-:root[data-appearance-peek="hud"] body :is(
+/* :root twice: (1,3,0) outranks the (1,2,1) hide rule above without naming body. */
+:root:root[data-appearance-peek="hud"] :is(
   .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #announce, #hud-mirror
 ) {
   visibility: visible;
