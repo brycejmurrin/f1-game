@@ -470,3 +470,65 @@ test("the lit vertex shaders decode the weight with the same SWAY_FRAC", () => {
     assert.ok(src.includes(`/ ${F}`) || src.includes(`div(${F})`), `${rel} divides the fraction by ${F}`);
   }
 });
+
+// ── crown rounding (2026-10-01) ──────────────────────────────────────────────
+// Flat per-face normals light a cone-stack crown as a faceted lantern.
+// TrackGeom.roundNormals blends the normals emitted since v0 toward the radial
+// direction from the crown axis; swayOff() runs it on inline crowns and the
+// graph runs it for a swaying op on replay AND on the canonical bake, so an
+// instanced pine and a baked one shade the same.
+test("roundNormals: unit normals, pulled toward the axis-radial, nothing else touched", () => {
+  const out = buf();
+  out._mat = 6;
+  RAW.addCone(out, [3, 3, -2], 1.5, 8, [0, 1, 0], 7);
+  const before = { pos: out.pos.slice(), nrm: out.nrm.slice(), col: out.col.slice(), idx: out.idx.slice(), mat: out.mat.slice() };
+  TrackGeom.roundNormals(out, 0, [3, 1, -2], [0, 1, 0]);
+  assert.deepEqual(out.pos, before.pos); assert.deepEqual(out.col, before.col);
+  assert.deepEqual(out.idx, before.idx); assert.deepEqual(out.mat, before.mat);
+  let moved = 0;
+  for (let i = 0; i < out.nrm.length / 3; i++) {
+    const nx = out.nrm[i * 3], ny = out.nrm[i * 3 + 1], nz = out.nrm[i * 3 + 2];
+    assert.ok(Math.abs(Math.hypot(nx, ny, nz) - 1) < 1e-6, `vertex ${i}: normal not unit`);
+    const rx = out.pos[i * 3] - 3, rz = out.pos[i * 3 + 2] + 2, rl = Math.hypot(rx, rz);
+    if (rl < 1e-4) continue;   // the apex sits on the axis and keeps its face normal
+    const b = before.nrm, dotB = (b[i * 3] * rx + b[i * 3 + 2] * rz) / rl, dotA = (nx * rx + nz * rz) / rl;
+    assert.ok(dotA >= dotB - 1e-9, `vertex ${i}: the normal moved AWAY from the radial`);
+    if (dotA > dotB + 1e-6) moved++;
+  }
+  assert.ok(moved > 0, "no normal moved — the blend is a no-op");
+  assert.ok(TrackGeom.ROUND_K > 0 && TrackGeom.ROUND_K < 1, "ROUND_K is a blend, not a replacement");
+});
+
+test("a swaying op's crown is rounded identically on replay and on the canonical bake", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const build = (rec) => {
+    rec.mat(5);
+    rec.cyl([0, 0, 0], 0.3, 4, [1, 1, 1], 6);
+    rec.mat(6, [4, 12]);
+    rec.cone([0, 4, 0], 2, 8, [0, 1, 0], 7);
+  };
+  const out = buf();
+  const place = AT([10, 5, -3]);
+  g.instance("pine-round", place, build, null, RAW, out);
+  // replay: the trunk (WOOD) keeps flat normals, the crown is radial-blended
+  const plain = buf();
+  plain._mat = 6; RAW.addCone(plain, [10, 9, -3], 2, 8, [0, 1, 0], 7);
+  const crownStart = out.mat.findIndex((m) => Math.round(m) === 6), cn = plain.nrm.length / 3;
+  assert.ok(crownStart > 0, "the crown follows the trunk");
+  let differ = 0;
+  for (let i = 0; i < cn; i++) {
+    const o = (crownStart + i) * 3;
+    assert.ok(Math.abs(Math.hypot(out.nrm[o], out.nrm[o + 1], out.nrm[o + 2]) - 1) < 1e-6);
+    if (Math.abs(out.nrm[o] - plain.nrm[i * 3]) > 1e-6 || Math.abs(out.nrm[o + 2] - plain.nrm[i * 3 + 2]) > 1e-6) differ++;
+  }
+  assert.ok(differ > cn / 2, `only ${differ}/${cn} crown normals differ from a flat cone — replay did not round`);
+  for (let i = 0; i < crownStart; i++) {
+    const o = i * 3;
+    assert.ok(Math.abs(Math.hypot(out.nrm[o], out.nrm[o + 1], out.nrm[o + 2]) - 1) < 1e-6, "trunk normals stay unit");
+  }
+  // bake: the canonical model's crown normals equal the replayed ones (place is a pure translation)
+  const model = g.models.get("pine-round");
+  assert.ok(model && model.geo, "the canonical bake exists");
+  for (let i = 0; i < model.geo.nrm.length; i++)
+    assert.ok(Math.abs(model.geo.nrm[i] - out.nrm[i]) < 1e-6, `bake/replay normal ${i} differ: ${model.geo.nrm[i]} vs ${out.nrm[i]}`);
+});

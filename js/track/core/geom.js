@@ -38,6 +38,33 @@ const TrackGeom = (function () {
     };
   }
 
+  // CROWN ROUNDING (2026-10-01). Every primitive carries flat per-face normals,
+  // so a tree crown — a stack of 7-9-facet cones — lights as a faceted lantern.
+  // This blends the normals of the vertices emitted since v0 toward the radial
+  // direction from the crown's AXIS (base, up) at each vertex's own height, by
+  // k (0 = untouched, 1 = fully radial); a cone's upward tilt survives the
+  // blend, so tiers still read as tiers but the facets no longer do. Positions,
+  // indices, colours and material ids are untouched (vertex and triangle counts
+  // are pinned; hidden-faces reads mat and position only). Called by the
+  // emitters' swayOff() and by the graph's replay/bake for a swaying op.
+  const ROUND_K = 0.6;
+  function roundNormals(out, v0, base, up, k) {
+    const pos = out.pos, nrm = out.nrm, n = pos.length / 3;
+    const kk = k == null ? ROUND_K : k;
+    if (kk <= 0) return;
+    for (let i = v0; i < n; i++) {
+      const px = pos[i * 3] - base[0], py = pos[i * 3 + 1] - base[1], pz = pos[i * 3 + 2] - base[2];
+      const h = px * up[0] + py * up[1] + pz * up[2];
+      let rx = px - up[0] * h, ry = py - up[1] * h, rz = pz - up[2] * h;
+      const rl = Math.hypot(rx, ry, rz);
+      if (rl < 1e-4) continue;                   // on the axis (an apex): keep the face normal
+      rx /= rl; ry /= rl; rz /= rl;
+      let nx = nrm[i * 3] * (1 - kk) + rx * kk, ny = nrm[i * 3 + 1] * (1 - kk) + ry * kk, nz = nrm[i * 3 + 2] * (1 - kk) + rz * kk;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      nrm[i * 3] = nx / nl; nrm[i * 3 + 1] = ny / nl; nrm[i * 3 + 2] = nz / nl;
+    }
+  }
+
   function cross(a, b) {
     return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   }
@@ -316,6 +343,6 @@ const TrackGeom = (function () {
   // madrid's retail boxes vs the guardrail). Index by a per-emitter sequence.
   const SEP_SLOTS = Object.freeze([0.035, 0.065, 0.135, 0.165]);
 
-  return { MAT, SWAY_FRAC, swayMatAt, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
+  return { MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
            addBox, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain };
 })();

@@ -938,32 +938,78 @@ ${fullscreenTri}
 ${POST_VS}
 
 fn fxLuma(c : vec3<f32>) -> f32 { return dot(c, vec3<f32>(0.299, 0.587, 0.114)); }
+fn fxL(p : vec2<f32>) -> f32 { return fxLuma(textureSampleLevel(srcTex, srcSamp, p, 0.0).rgb); }
+const FXAA_SUBPIX : f32 = 0.75;
+const FXAA_STEPS : i32 = 8;
+const FXAA_STEP = array<f32, 8>(1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0);
 
+// FXAA 3.11 QUALITY (edge walk) — port of GLX FXAA_FS (js/render/glx/shaders/glsl-post.js):
+// orientation from the 3x3 luma neighbourhood, a walk along the edge in both
+// directions to the end of the span, a blend by position along it plus a
+// sub-pixel term. The flat-area early-out keeps its constants (0.04 / 0.125).
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let t  = U.texel;
   let uv = in.uv;
-  let cM  = textureSampleLevel(srcTex, srcSamp, uv, 0.0).rgb;
-  let lM  = fxLuma(cM);
-  let lNW = fxLuma(textureSampleLevel(srcTex, srcSamp, uv + vec2<f32>(-t.x, -t.y), 0.0).rgb);
-  let lNE = fxLuma(textureSampleLevel(srcTex, srcSamp, uv + vec2<f32>( t.x, -t.y), 0.0).rgb);
-  let lSW = fxLuma(textureSampleLevel(srcTex, srcSamp, uv + vec2<f32>(-t.x,  t.y), 0.0).rgb);
-  let lSE = fxLuma(textureSampleLevel(srcTex, srcSamp, uv + vec2<f32>( t.x,  t.y), 0.0).rgb);
-  let lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
-  let lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+  let cM = textureSampleLevel(srcTex, srcSamp, uv, 0.0).rgb;
+  let lM = fxLuma(cM);
+  let lN = fxL(uv + vec2<f32>(0.0, -t.y));
+  let lS = fxL(uv + vec2<f32>(0.0,  t.y));
+  let lW = fxL(uv + vec2<f32>(-t.x, 0.0));
+  let lE = fxL(uv + vec2<f32>( t.x, 0.0));
+  let lMin = min(lM, min(min(lN, lS), min(lW, lE)));
+  let lMax = max(lM, max(max(lN, lS), max(lW, lE)));
+  let range = lMax - lMin;
   // Flat areas (incl. HUD/text) stay pixel-exact.
-  if (lMax - lMin < max(0.04, lMax * 0.125)) { return vec4<f32>(cM, 1.0); }
-  var dir = vec2<f32>(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
-  let dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
-  let rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
-  dir = clamp(dir * rcp, vec2<f32>(-8.0), vec2<f32>(8.0)) * t;
-  let rA = 0.5 * (textureSampleLevel(srcTex, srcSamp, uv + dir * (-1.0 / 6.0), 0.0).rgb
-                + textureSampleLevel(srcTex, srcSamp, uv + dir * ( 1.0 / 6.0), 0.0).rgb);
-  let rB = rA * 0.5 + 0.25 * (textureSampleLevel(srcTex, srcSamp, uv + dir * -0.5, 0.0).rgb
-                            + textureSampleLevel(srcTex, srcSamp, uv + dir *  0.5, 0.0).rgb);
-  let lB = fxLuma(rB);
-  if (lB < lMin || lB > lMax) { return vec4<f32>(rA, 1.0); }
-  return vec4<f32>(rB, 1.0);
+  if (range < max(0.04, lMax * 0.125)) { return vec4<f32>(cM, 1.0); }
+  let lNW = fxL(uv + vec2<f32>(-t.x, -t.y));
+  let lNE = fxL(uv + vec2<f32>( t.x, -t.y));
+  let lSW = fxL(uv + vec2<f32>(-t.x,  t.y));
+  let lSE = fxL(uv + vec2<f32>( t.x,  t.y));
+  let lNS = lN + lS;
+  let lWE = lW + lE;
+  let edgeH = abs(-2.0 * lW + lNW + lSW) + 2.0 * abs(-2.0 * lM + lNS) + abs(-2.0 * lE + lNE + lSE);
+  let edgeV = abs(-2.0 * lN + lNW + lNE) + 2.0 * abs(-2.0 * lM + lWE) + abs(-2.0 * lS + lSW + lSE);
+  let horz = edgeH >= edgeV;
+  var subpix = clamp(abs((2.0 * (lNS + lWE) + lNW + lSW + lNE + lSE) / 12.0 - lM) / range, 0.0, 1.0);
+  subpix = (-2.0 * subpix + 3.0) * subpix * subpix;
+  subpix = subpix * subpix * FXAA_SUBPIX;
+  let l1 = select(lW, lN, horz);
+  let l2 = select(lE, lS, horz);
+  let g1 = l1 - lM;
+  let g2 = l2 - lM;
+  let pair1 = abs(g1) >= abs(g2);
+  let gradScaled = max(abs(g1), abs(g2)) * 0.25;
+  var lenSign = select(t.x, t.y, horz);
+  if (pair1) { lenSign = -lenSign; }
+  let lAvg = 0.5 * (select(l2, l1, pair1) + lM);
+  var posB = uv;
+  if (horz) { posB.y += lenSign * 0.5; } else { posB.x += lenSign * 0.5; }
+  let off = select(vec2<f32>(0.0, t.y), vec2<f32>(t.x, 0.0), horz);
+  var posN = posB - off * FXAA_STEP[0];
+  var posP = posB + off * FXAA_STEP[0];
+  var endN = fxL(posN) - lAvg;
+  var endP = fxL(posP) - lAvg;
+  var doneN = abs(endN) >= gradScaled;
+  var doneP = abs(endP) >= gradScaled;
+  for (var i : i32 = 1; i < FXAA_STEPS; i++) {
+    if (doneN && doneP) { break; }
+    if (!doneN) { posN -= off * FXAA_STEP[i]; endN = fxL(posN) - lAvg; doneN = abs(endN) >= gradScaled; }
+    if (!doneP) { posP += off * FXAA_STEP[i]; endP = fxL(posP) - lAvg; doneP = abs(endP) >= gradScaled; }
+  }
+  let dstN = select(uv.y - posN.y, uv.x - posN.x, horz);
+  let dstP = select(posP.y - uv.y, posP.x - uv.x, horz);
+  let mLow = (lM - lAvg) < 0.0;
+  let goodN = (endN < 0.0) != mLow;
+  let goodP = (endP < 0.0) != mLow;
+  let nearN = dstN < dstP;
+  let dst = min(dstN, dstP);
+  let good = select(goodP, goodN, nearN);
+  let pixOff = select(0.0, -dst / (dstN + dstP) + 0.5, good);
+  let o = max(pixOff, subpix) * lenSign;
+  var pos = uv;
+  if (horz) { pos.y += o; } else { pos.x += o; }
+  return vec4<f32>(textureSampleLevel(srcTex, srcSamp, pos, 0.0).rgb, 1.0);
 }`;
 
   // 6b. SGSR1 spatial upscale — Qualcomm Snapdragon Game Super Resolution mobile

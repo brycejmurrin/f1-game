@@ -200,6 +200,7 @@ const RealReplay = (function () {
   // ── The engine ────────────────────────────────────────────────────────────
   function create(G) {
     let run = null;   // {script, cars: Map car->{num, tr, d}, T, speed, follow, reel, reelIdx, list, fired, fit, finished, onKey, audio}
+    let transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
     // THE BROADCAST (js/race/broadcast.js): the timing tower, and with camera "auto" the director.
@@ -235,7 +236,9 @@ const RealReplay = (function () {
       const lead = (script.drivers || []).find((d) => d.pos === 1) || (script.drivers || [])[0];
       if (o.startLap > 1 && lead && Array.isArray(lead.lapStart) && lead.lapStart[o.startLap - 1] != null) T = lead.lapStart[o.startLap - 1];
       if (reel && reel.length) T = reel[0].t - LEAD_S;
-      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
+      run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
+      run.duration = Math.max(0, ...[...cars.values()].map((f) => f.tr ? f.tr.end : 0));
+      run.events = reelFor(list);
       run.savedCamera = G.camMode;
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       const auto = o.camera === "auto";   // the TV director cuts the shots (Broadcast)
@@ -259,12 +262,14 @@ const RealReplay = (function () {
       run.onKey = (e) => onKey(e);
       try { window.addEventListener("keydown", run.onKey, true); } catch (e) { /* no window: a VM */ }
       pose();
+      if (transport) transport.start();
       Log.info("game", "RealReplay.start T=" + T.toFixed(1) + " cars=" + [...cars.values()].filter((f) => f.tr).length + " reel=" + (reel ? reel.length : 0) + " follow=" + (follow ? follow.code : "-"));
       return true;
     }
 
     function stop() {
       if (!run) return;
+      if (transport) transport.stop();
       try { if (run.onKey) window.removeEventListener("keydown", run.onKey, true); } catch (e) { /* no window */ }
       if (run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; }
       if (bc) bc.stop();
@@ -294,34 +299,63 @@ const RealReplay = (function () {
       if (c) setFollow(c);
       return c ? c.code : null;
     }
-    function setSpeed(v) { if (run && v > 0) run.speed = clamp(v, SPEEDS[0], SPEEDS[SPEEDS.length - 1]); return run ? run.speed : 0; }
+    function setSpeed(v) { if (run && v > 0) { run.speed = clamp(v, SPEEDS[0], SPEEDS[SPEEDS.length - 1]); if (run.speed !== 1 && run.audio) { run.audio.pause(); run.audio = null; } } return run ? run.speed : 0; }
     function stepSpeed(dir) {
       if (!run) return 0;
       let i = SPEEDS.findIndex((s) => s >= run.speed - 1e-6); if (i < 0) i = SPEEDS.length - 1;
       return setSpeed(SPEEDS[clamp(i + dir, 0, SPEEDS.length - 1)]);
     }
-    function seek(t) { if (!run) return; run.T = Math.max(-30, t); run.fired = new Set(); pose(true); if (G.snapGameCam) G.snapGameCam(); }
+    function seek(t) {
+      if (!run || !Number.isFinite(t)) return;
+      run.T = clamp(t, -30, run.duration); run.fired.clear();
+      // A discontinuity must release the prior audio and all broadcast history.
+      if (run.audio) { run.audio.pause(); run.audio = null; }
+      if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= run.T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
+      pose(true); if (bc) bc.resetTiming(); if (G.snapGameCam) G.snapGameCam(true);
+      if (transport) transport.paint();
+    }
+    function setPaused(v) {
+      if (!run) return false;
+      run.paused = !!v;
+      if (run.audio) {
+        if (run.paused) run.audio.pause();
+        else if (run.speed === 1 && !run.audio.ended) { const p = run.audio.play(); if (p && p.catch) p.catch(() => { /* a blocked audio clip does not block playback */ }); }
+      }
+      if (transport) transport.paint();
+      return run.paused;
+    }
+    function eventStep(dir) {
+      if (!run) return null;
+      const list = run.events;
+      const h = dir < 0 ? list.slice().reverse().find((e) => e.t - LEAD_S < run.T - 1) : list.find((e) => e.t - LEAD_S > run.T + 1);
+      if (!h) return null;
+      seek(h.t - LEAD_S);
+      if (bc && !bc.status().locked) { const c = carOfNum(h.num); if (c && !c.retired) setFollow(c); bc.onCut(h.kind); }
+      if (transport) transport.paint();
+      return h.text;
+    }
 
     function cutTo(h) {
       run.T = h.t - LEAD_S;
       run.fired = new Set();
       const c = h.num != null ? [...run.cars.keys()].find((x) => run.cars.get(x).num === h.num) : null;
       pose(true);
-      if (c && !c.retired) setFollow(c); else if (!run.follow) follow(+1); else if (G.snapGameCam) G.snapGameCam();
+      if (c && !c.retired && !(bc && bc.status() && bc.status().locked)) setFollow(c); else if (!run.follow) follow(+1); else if (G.snapGameCam) G.snapGameCam();
       if (bc) bc.onCut(h.kind);
     }
     function skip() { if (!run || !run.reel) return; run.reelIdx++; if (run.reelIdx < run.reel.length) cutTo(run.reel[run.reelIdx]); else finish(); }
 
     function onKey(e) {
-      if (!run || G.state !== "race" || !e || e.repeat) return;
+      if (!run || G.state !== "race" || G.paused || G.photoMode || !e || e.repeat) return;
       const tag = e.target && e.target.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
       let used = true;
       if (e.code === KEY_NEXT) { follow(-1); if (bc) bc.manual(); }   // up the order: the viewer has the picture
       else if (e.code === KEY_PREV) { follow(+1); if (bc) bc.manual(); }   // down the order
       else if (e.code === KEY_SPEED_UP) stepSpeed(+1);
       else if (e.code === KEY_SPEED_DOWN) stepSpeed(-1);
       else if (e.code === KEY_SKIP && run.reel) skip();
+      else if (e.code === "Space") setPaused(!run.paused);
       else used = false;
       if (used) { e.preventDefault(); e.stopPropagation(); if (G.announce && e.code !== KEY_SKIP) G.announce((run.follow ? run.follow.code : "") + " · " + run.speed + "×", 1.2, "info"); }
     }
@@ -332,9 +366,9 @@ const RealReplay = (function () {
       for (const [c, f] of run.cars) {
         if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = c.dnf || "dns"; c.speed = 0; } continue; }
         sampleAt(f.tr, run.T, at);
-        if (at.before) { if (f.posed) { c.speed = 0; } continue; }   // still on the grid where gridUp put it
-        if (at.ended) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = c.dnf || "accident"; c.speed = 0; c.dnfAt = null; } continue; }
-        f.posed = true;
+        if (at.before && !discontinuous) { if (f.posed) { c.speed = 0; } continue; }   // a seek before the trace reposes its first sample
+        if (at.ended && !discontinuous) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = c.dnf || "accident"; c.speed = 0; c.dnfAt = null; } continue; }
+        f.posed = true; f.parked = false; c.dnf = null;
         const lap = Math.floor(at.prog / total) + 1;
         const s = at.prog - (lap - 1) * total;
         Tracks.sample(track, s, smp);
@@ -344,7 +378,8 @@ const RealReplay = (function () {
         c.px = smp.p[0] + smp.r[0] / rl * x; c.pz = smp.p[2] + smp.r[2] / rl * x;
         c.head = Math.atan2(smp.t[0], smp.t[2]);
         if (discontinuous || c.rPrevPx === undefined) { c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head; }
-        c.retired = false; c.finished = false;
+        c.retired = at.ended; c.finished = false;
+        if (at.ended) { f.parked = true; c.dnf = "accident"; c.speed = 0; c.dnfAt = null; }
         const v = at.speed / (G.vTop ? G.vTop() : 90);   // a fraction of the top speed: the tacho reads the real car's pace, whatever PACE the sim runs at
         c.gear = v > 0.7 ? 8 : v > 0.45 ? 6 : v > 0.2 ? 4 : 2;
         c.braking = false;
@@ -395,6 +430,8 @@ const RealReplay = (function () {
     function tick(dt) {
       if (!run || run.finished) return;
       if (G.state !== "race" && G.state !== "count") return;
+      if (transport) transport.tick(dt);
+      if (run.paused) return;
       if (G.state === "race") run.T += dt * run.speed;
       pose();
       if (G.state !== "race") return;
@@ -414,16 +451,21 @@ const RealReplay = (function () {
 
     function status() {
       if (!run) return null;
-      return { T: +run.T.toFixed(2), speed: run.speed, follow: run.follow ? run.follow.code : null, reel: run.reel ? run.reel.length : 0, reelIdx: run.reelIdx,
+      const followed = run.follow && run.cars.get(run.follow);
+      return { T: +run.T.toFixed(2), duration: run.duration, paused: run.paused, speed: run.speed, follow: followed && followed.d ? followed.d.code : null, reel: run.reel ? run.reel.length : 0, reelIdx: run.reelIdx,
                highlights: run.list.length, fit: run.fit ? { rms: +run.fit.rms.toFixed(2), refl: run.fit.refl } : null, finished: run.finished,
                cars: [...run.cars.values()].filter((f) => f.tr).length, broadcast: bc ? bc.status() : null };
     }
 
-    return { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, isRunning: () => !!run,
+    const api = { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, setPaused, eventStep, isRunning: () => !!run,
+             describe: () => run ? { name: run.script.name || run.script.circuit || "REAL RACE", drivers: [...run.cars.values()].filter((f) => f.tr && f.d).map((f) => ({ code: f.d.code, name: f.d.name })), events: run.events, speeds: SPEEDS } : null,
+             setLocked: (v) => (bc && run ? bc.setLocked(v) : false),
              // The in-game AUTO camera (js/camera/mode-switch.js): hand the picture to the
              // TV director, ask who has it, or take it (a shot picked by the viewer).
              setAuto: (v) => (bc && run ? bc.setAuto(v) : false), autoOn: () => !!(bc && run && bc.autoOn()),
              takePicture: () => { if (bc && run) bc.manual(); } };
+    if (typeof WatchTransport !== "undefined") transport = WatchTransport.create(G, api);
+    return api;
   }
 
   return { create, fitFrame, mapPoint, trackTrace, fromTrack, buildTraces, sampleAt, highlightsFor, reelFor, fmtLap, SPEEDS, LEAD_S, HOLD_S, ENDED_S };

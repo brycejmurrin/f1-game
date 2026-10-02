@@ -222,11 +222,29 @@ test.describe("TLX — boot", () => {
     // Singapore night: lampVol > 0 opens the volumetric pass, and the lamp
     // spot map arms per frame — present() snapshots the armed flag for the
     // godray lamp-index mapping before clearArmed() retires it.
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.postState().blocks.shafts === true, null, { polling: 100, timeout: 60_000 });
-    const st = await page.evaluate(() => ({
-      post: GLX.__tlx.postState(),
-      lamp: GLX.lampShadowState(),
-    }));
+    // Atomic wait (same pattern as M6): waiting on shafts alone then
+    // re-reading postState()/lampShadowState() raced a later Metal present
+    // where shafts was false (run 36957337434: wait passed in ~6 s, expect
+    // shafts true got false → flaky-on-retry red under APEX_FAIL_ON_FLAKY).
+    // jsonValue keeps the co-presented snapshot. AGENTS.md: polling 100.
+    const handle = await page.waitForFunction(() => {
+      if (typeof GLX === "undefined" || !GLX.__tlx || !GLX.lampShadowState) return null;
+      const post = GLX.__tlx.postState(), lamp = GLX.lampShadowState();
+      if (!(post && post.on && post.blocks && post.blocks.shafts === true && lamp && lamp.arms > 0)) return null;
+      return { post, lamp };
+    }, null, { polling: 100, timeout: 60_000 }).catch(async (e) => {
+      const d = await page.evaluate(() => {
+        const a = window.__apex;
+        return {
+          post: (typeof GLX !== "undefined" && GLX.__tlx) ? GLX.__tlx.postState() : null,
+          lamp: (typeof GLX !== "undefined" && GLX.lampShadowState) ? GLX.lampShadowState() : null,
+          state: a.info && a.info().state,
+          gov: a.renderScale && a.renderScale(),
+        };
+      });
+      throw new Error("M8 godray never co-presented shafts+lamp.arms in 60 s: " + JSON.stringify(d) + " — " + e.message);
+    });
+    const st = await handle.jsonValue();
     expect(st.post.on).toBe(true);
     expect(st.post.blocks.shafts).toBe(true);   // lamp volumetrics marched
     expect(st.lamp.arms).toBeGreaterThan(0);    // spot map armed -> snapshot taken
@@ -264,11 +282,41 @@ test.describe("TLX — boot", () => {
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("singapore"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
-    await page.evaluate(() => window.__apex.park(0.1));
+    // Chase (not the shipped cockpit default): park() shoves the AI field 600 m
+    // back, so only the player is inside the 550 m car-loop cull — and the
+    // cockpit path continues past queueCarDecals for the body. Chase still
+    // pushCasters the player blob and queues the nose/side decals the probe
+    // counts. Camera is broadcast-only; this does not touch physics.
+    await page.evaluate(() => {
+      window.__apex.camera("chase");
+      window.__apex.park(0.1);
+    });
     // Singapore is a night race: floodlights populate frame.lights and the
-    // glare-halo pass runs. Wait for a presented frame that carried FX.
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().glow > 0, null, { polling: 100, timeout: 60_000 });
-    const st = await page.evaluate(() => ({ fx: GLX.__tlx.fxState(), sky: GLX.__tlx.skyState() }));
+    // glare-halo pass runs. Wait for ONE presented frame that carried ALL
+    // three FX counters — waiting on glow alone then re-reading fxState()
+    // raced a later present on Metal (run 36951948980 / 36954047730: glow>0
+    // wait passed in ~4 s, then shadows was 0 on the follow-up evaluate).
+    // jsonValue() keeps that same-frame snapshot (a second evaluate would
+    // race again). AGENTS.md: polling 100.
+    const handle = await page.waitForFunction(() => {
+      if (typeof GLX === "undefined" || !GLX.__tlx) return null;
+      const fx = GLX.__tlx.fxState(), sky = GLX.__tlx.skyState();
+      if (!(fx && fx.on && fx.glow > 0 && fx.shadows > 0 && fx.decals > 0)) return null;
+      return { fx, sky };
+    }, null, { polling: 100, timeout: 60_000 }).catch(async (e) => {
+      const d = await page.evaluate(() => {
+        const a = window.__apex, fx = (typeof GLX !== "undefined" && GLX.__tlx) ? GLX.__tlx.fxState() : null;
+        const cam = a.camera && a.camera();
+        const info = a.info && a.info();
+        return {
+          fx, cam: cam && cam.mode, state: info && info.state,
+          cars: (a.field && a.field().length) || null,
+          gov: a.renderScale && a.renderScale(),
+        };
+      });
+      throw new Error("M6 FX never co-presented glow+shadows+decals in 60 s: " + JSON.stringify(d) + " — " + e.message);
+    });
+    const st = await handle.jsonValue();
     expect(st.fx.on).toBe(true);
     expect(st.fx.glow).toBeGreaterThan(0);        // near-field lamp halos in view
     expect(st.fx.shadows).toBeGreaterThan(0);     // blob shadows under the field
