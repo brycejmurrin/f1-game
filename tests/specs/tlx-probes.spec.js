@@ -222,11 +222,29 @@ test.describe("TLX — boot", () => {
     // Singapore night: lampVol > 0 opens the volumetric pass, and the lamp
     // spot map arms per frame — present() snapshots the armed flag for the
     // godray lamp-index mapping before clearArmed() retires it.
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.postState().blocks.shafts === true, null, { polling: 100, timeout: 60_000 });
-    const st = await page.evaluate(() => ({
-      post: GLX.__tlx.postState(),
-      lamp: GLX.lampShadowState(),
-    }));
+    // Atomic wait (same pattern as M6): waiting on shafts alone then
+    // re-reading postState()/lampShadowState() raced a later Metal present
+    // where shafts was false (run 36957337434: wait passed in ~6 s, expect
+    // shafts true got false → flaky-on-retry red under APEX_FAIL_ON_FLAKY).
+    // jsonValue keeps the co-presented snapshot. AGENTS.md: polling 100.
+    const handle = await page.waitForFunction(() => {
+      if (typeof GLX === "undefined" || !GLX.__tlx || !GLX.lampShadowState) return null;
+      const post = GLX.__tlx.postState(), lamp = GLX.lampShadowState();
+      if (!(post && post.on && post.blocks && post.blocks.shafts === true && lamp && lamp.arms > 0)) return null;
+      return { post, lamp };
+    }, null, { polling: 100, timeout: 60_000 }).catch(async (e) => {
+      const d = await page.evaluate(() => {
+        const a = window.__apex;
+        return {
+          post: (typeof GLX !== "undefined" && GLX.__tlx) ? GLX.__tlx.postState() : null,
+          lamp: (typeof GLX !== "undefined" && GLX.lampShadowState) ? GLX.lampShadowState() : null,
+          state: a.info && a.info().state,
+          gov: a.renderScale && a.renderScale(),
+        };
+      });
+      throw new Error("M8 godray never co-presented shafts+lamp.arms in 60 s: " + JSON.stringify(d) + " — " + e.message);
+    });
+    const st = await handle.jsonValue();
     expect(st.post.on).toBe(true);
     expect(st.post.blocks.shafts).toBe(true);   // lamp volumetrics marched
     expect(st.lamp.arms).toBeGreaterThan(0);    // spot map armed -> snapshot taken
