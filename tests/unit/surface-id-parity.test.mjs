@@ -167,6 +167,8 @@ test("the sun disc sits behind the cloud deck on every backend", () => {
   assert.match(discLine(b.TLX, /U\.sunCorona[^\n]*/), /cityCov\.oneMinus\(\)/, "TLX: the tight ring too");
   assert.match(discLine(b.WGX, /let disc = [^\n]*/), /\(1\.0 - covRay\)/, "WGX: the disc must be scaled by covRay");
   assert.match(discLine(b.WGX, /sunCorona \* coronaDamp[^\n]*/), /\(1\.0 - covRay\)/, "WGX: the tight ring too");
+});
+
 test("the moon disc hangs on the night key light, not a constant, on every backend", () => {
   // Three sky shaders drew the moon at a literal (0.42, 0.72, 0.55) until
   // 2026-10-01 while the lit pass, the wet-road glint and the shadow map used
