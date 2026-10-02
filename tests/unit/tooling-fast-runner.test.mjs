@@ -11,7 +11,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES }
+import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
+  parseToolingFastArgv, TOOLING_FAST_USAGE }
   from "../../tools/ci/tooling-fast.mjs";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "apex-tf-"));
@@ -139,4 +140,17 @@ test("the arithmetic contract fails", () => assert.equal(1, 2));
     assert.match(log, /operator: 'strictEqual'/);
     assert.doesNotMatch(log, /reason=timeout/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CLI: --help and unknown flags never start the suite", () => {
+  assert.match(TOOLING_FAST_USAGE, /--jobs=N/);
+  assert.equal(parseToolingFastArgv(["--help"]).help, true);
+  assert.equal(parseToolingFastArgv(["-h"]).help, true);
+  assert.throws(() => parseToolingFastArgv(["--help-me"]), /unknown flag --help-me/);
+  assert.throws(() => parseToolingFastArgv(["--paralel"]), /unknown flag --paralel/);
+  const ok = parseToolingFastArgv(["--jobs=3", "--record", "tests/unit/behind-ship.test.mjs"]);
+  assert.equal(ok.help, false);
+  assert.equal(ok.jobs, 3);
+  assert.equal(ok.record, true);
+  assert.deepEqual(ok.files, ["tests/unit/behind-ship.test.mjs"]);
 });
