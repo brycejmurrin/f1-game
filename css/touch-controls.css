@@ -260,8 +260,6 @@ body.mirror-controls #dock-right { justify-content: flex-start; }
 
 /* Touch-dock REPOSITION edit mode (js/ui/dock-layout.js). Attribute selector —
    no new cssClasses token. Token colour keeps rawColor flat. */
-/* Touch-dock REPOSITION edit mode (js/ui/dock-layout.js). Attribute selector —
-   no new cssClasses token. Token colour keeps rawColor flat. */
 body[data-dock-edit] .dock {
   outline: 2px dashed color-mix(in oklab, var(--text) 55%, transparent);
   outline-offset: 4px;
