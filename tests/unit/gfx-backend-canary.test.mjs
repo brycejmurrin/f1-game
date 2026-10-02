@@ -3329,6 +3329,27 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
+  // A released geometry (freeMesh / chunked free) is parked out of every slot
+  // AT ONCE: a slot is otherwise parked only by its target's next pass, which
+  // cannot run while the next track builds — so every chunk geometry of the
+  // old track stayed reachable through a hidden caster across the build peak.
+  assert.match(sh, /function releaseGeometry\(geo\) \{[\s\S]*?for \(const pl of pools\.values\(\)\)[\s\S]*?if \(m\.geometry !== geo\) continue;\s*m\.visible = false; m\.geometry = parkedGeo;\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}/,
+    "shadowSys.releaseGeometry parks every slot still pointing at the geometry AND drops its render object");
+  assert.match(sh, /releaseGeometry,\n/, "and exports it");
+  assert.match(tlxSrc, /function releaseGeometry\(geo\) \{[\s\S]*?meshByGeo\.delete\(geo\);\s*if \(shadowSys && shadowSys\.releaseGeometry\) shadowSys\.releaseGeometry\(geo\);/,
+    "TLX's own releaseGeometry hands the geometry to the shadow pools too");
+  // THE LEAK ITSELF (2026-10-02): three keeps a RenderObject — geometry, vertex
+  // buffers, GPU buffers — until the OBJECT or MATERIAL dispatches "dispose";
+  // geometry.dispose() alone only nulls an attribute mirror. A pooled wrapper
+  // dropped without the event pinned every chunk of every freed track (~17 MB
+  // of JS heap per picker pick, measured). Both drop paths go through one helper.
+  assert.match(tlxSrc, /function dropWrapper\(m\) \{[\s\S]*?if \(_warmPending\) \{ _dropQueue\.push\(m\); return; \}\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}[\s\S]*?m\.geometry = null; m\.material = null;\s*\}/,
+    "dropWrapper dispatches three's dispose event before nulling the wrapper — and defers while a warm's compileAsync may still hold the mesh");
+  assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
+  assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
+  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
+    "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
   const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");

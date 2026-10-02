@@ -656,6 +656,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
   _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
   _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov;
+  _vTrack = null;   // a per-call input: left set, it pinned the last raced world through the menu
   return _vantOut;
 }
 
