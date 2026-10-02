@@ -4474,7 +4474,7 @@ function quitToMenu() {
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
-  if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
+  if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
   closeLightTuner(false);
