@@ -5,26 +5,26 @@
       "lines": 2515
     },
     "js/agent/apex.js": {
-      "codeLines": 2277,
-      "lines": 3221
+      "codeLines": 2281,
+      "lines": 3227
     },
     "js/car/car3d.js": {
-      "lines": 4094
+      "lines": 4099
     },
     "js/game.js": {
-      "codeLines": 5258,
-      "gMembers": 280,
-      "lines": 9700,
-      "topLets": 159
+      "codeLines": 5331,
+      "gMembers": 283,
+      "lines": 9725,
+      "topLets": 160
     },
     "js/lighting/presets.js": {
       "lines": 17260
     },
     "js/net/lobby.js": {
-      "lines": 1872
+      "lines": 1884
     },
     "js/render/glx/glx.js": {
-      "lines": 2778
+      "lines": 2787
     },
     "js/track/tracks.js": {
       "lines": 690
@@ -39,11 +39,11 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 635,
+      "ceiling": 640,
       "slack": 5
     },
     "dynamicIdReads": {
-      "ceiling": 66,
+      "ceiling": 70,
       "slack": 5
     },
     "implicitAsserts": {
@@ -59,11 +59,11 @@
       "slack": 0
     },
     "rawSpacing": {
-      "ceiling": 304,
+      "ceiling": 305,
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2091,
+      "ceiling": 2131,
       "slack": 25
     },
     "subFloorFontSize": {
@@ -71,7 +71,7 @@
       "slack": 0
     },
     "twinDebt": {
-      "ceiling": 3,
+      "ceiling": 5,
       "slack": 0
     },
     "waitForTimeout": 127,

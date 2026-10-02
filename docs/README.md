@@ -26,6 +26,7 @@ drives it.
 ## The area docs (load one on demand)
 
 | Doc | Covers |
+| [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
 |---|---|
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability — and the 12-category upgrade catalog with its measured ERS/aero tables. |
@@ -33,6 +34,7 @@ drives it.
 | [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) | **Track/scenery build pipeline** — load order, `buildProps` layers, frames/shift traps, and accuracy levers (per-circuit vs shared generators). Start here before dressing a circuit. |
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire: transport channels, the packed invite SDP, Nostr/room-code rendezvous, snapshots and interpolation, and who owns which car. |
 | [LIGHTING.md](LIGHTING.md) | Light-record layout, shader uniforms, time-of-day branches, track lamps; every hand-tuned constant and how to A/B it; the per-track × time-of-day × weather presets. |
+| [TRACK-DESIGNER.md](TRACK-DESIGNER.md) | The player guide to the TRACK DESIGNER: the 60-second start, shaping and stamping corners, the start line, themes, CHECKS and FIX, save / race / share, and the touch / mouse / keyboard / gamepad cheat sheet. The long form of the designer's HOW TO tab. |
 | [UI-MAP.md](UI-MAP.md) | The title-to-race navigation web, mode-specific flows, Settings values, How to Play anchors, all 15 Garage tabs and pause actions, plus the source-backed inventory of `UiLayers`, major DOM IDs and CSS entrypoints. |
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
@@ -84,6 +86,7 @@ anything in here.
 | [notes/BUG-HUNT-2026-09-02.md](notes/BUG-HUNT-2026-09-02.md) | Two rounds of read-only bug hunts (UI, GLX, WGX+TLX, memory, race-flow; then track engine, physics/AI, input/audio, net): every CONFIRMED row and what each fix batch landed. |
 | [notes/PERF-HUNT-2026-08-18.md](notes/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT`, DebrisWorld asleep-skip. |
 | [notes/TRACK-ROSTER-RESEARCH-2026-09-14.md](notes/TRACK-ROSTER-RESEARCH-2026-09-14.md) | The 38 World Championship venues the game does not carry, why the upstream `bacinger/f1-circuits` trace file can add no more, what each remaining candidate costs to import (Overpass-measured), and the four shipped defs whose `classic` flag the 2027 calendar contradicts. |
+| [notes/TUMFTM-RACETRACK-DATABASE.md](notes/TUMFTM-RACETRACK-DATABASE.md) | TUMFTM racetrack-database (LGPL-3.0): designer CSV importer, roster overlap vs the three missing DTM layouts, and why upstream racelines are NOT wired into TrackLine/AI (bake already min-curvature). |
 
 ## `research/` — cited from source, not a description of behaviour
 

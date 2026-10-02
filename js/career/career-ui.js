@@ -859,9 +859,10 @@ function create(G) {
     if (midSeason) {
       left.appendChild(head("NEXT RACE"));
       const t = Tracks.SEASON[c.season.round];
-      const nr = el("div", "cr-card cr-nextrace");
+      const nr = typeof CareerExperience !== "undefined" ? CareerExperience.raceBrief(G, c, st, team)
+        : el("div", "cr-card cr-nextrace");
       nr.id = "cr-nextrace";
-      nr.append(
+      if (typeof CareerExperience === "undefined") nr.append(
         el("div", "cr-nr-round", `ROUND ${c.season.round + 1}`),
         el("div", "cr-nr-name", t ? t.name : "—"),
         el("div", "cr-nr-country", t && t.country ? t.country : ""));
@@ -1207,6 +1208,7 @@ function create(G) {
     // first and let the rule have the last word.
     $("cr-go").disabled = !!st.hire || Career.conflicted();
     $("cr-garage").hidden = false;
+    if (typeof CareerExperience !== "undefined") CareerExperience.mount(G, c, st, team);
   }
 
   function buildOffers() {
@@ -1433,6 +1435,7 @@ function create(G) {
   // it back on the same slot.
   const keep = (fn) => (window.TopModal && TopModal.keepFocus ? TopModal.keepFocus($("career"), fn) : fn());
   function build() {
+    if (typeof CareerExperience !== "undefined") CareerExperience.clear(G);
     keep(() => {
       if (picking) { draft = null; buildSlotPanes(); }
       else if (Career.active()) { draft = null; buildHubPanes(); }

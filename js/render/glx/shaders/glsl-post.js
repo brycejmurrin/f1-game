@@ -1293,10 +1293,17 @@ void main() {
   outColor = vec4(c, 1.0);
 }`;
 
-  // FXAA (Timothy Lottes, compact). Edge-detect via luma in a 3×3 neighbourhood,
-  // then blend along the detected edge — kills the jaggies/shimmer on thin
-  // geometry, kerbs, wires and specular highlights that MSAA misses. Runs on the
-  // already-tonemapped LDR image, last, straight to the screen.
+  // FXAA 3.11 QUALITY (Timothy Lottes, NVIDIA; the edge-walk form, 2026-10-01).
+  // Was the compact 5-tap variant: one blend along the local gradient, which
+  // fails on long near-horizontal edges — barrier tops, kerbs, the horizon —
+  // exactly where TLX (no scene MSAA) and the phone tiers rely on FXAA alone.
+  // This version finds the edge's orientation from a 3x3 luma neighbourhood,
+  // walks it in both directions (FXAA_STEPS, preset-13 spacing) to the end of
+  // the span, and blends by how far along the span the pixel sits, plus a
+  // sub-pixel term for isolated thin features. The flat-area early-out keeps
+  // its constants (0.04 / 0.125 — HUD/text stay pixel-exact) so flat regions
+  // are bit-identical to the old pass. Same thresholds on TLX and WGX.
+  // Runs on the already-tonemapped LDR image, last, straight to the screen.
   const FXAA_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
@@ -1304,28 +1311,65 @@ uniform sampler2D uTex;
 uniform vec2 uTexel;
 out vec4 outColor;
 float fxLuma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+float fxL(vec2 p) { return fxLuma(texture(uTex, p).rgb); }
+const float FXAA_SUBPIX = 0.75;
+const int FXAA_STEPS = 8;
+const float FXAA_STEP[8] = float[8](1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0);
 void main() {
   vec2 t = uTexel;
   vec3 cM = texture(uTex, vUV).rgb;
-  float lM  = fxLuma(cM);
-  float lNW = fxLuma(texture(uTex, vUV + vec2(-t.x,-t.y)).rgb);
-  float lNE = fxLuma(texture(uTex, vUV + vec2( t.x,-t.y)).rgb);
-  float lSW = fxLuma(texture(uTex, vUV + vec2(-t.x, t.y)).rgb);
-  float lSE = fxLuma(texture(uTex, vUV + vec2( t.x, t.y)).rgb);
-  float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
-  float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+  float lM = fxLuma(cM);
+  float lN = fxL(vUV + vec2(0.0, -t.y));
+  float lS = fxL(vUV + vec2(0.0,  t.y));
+  float lW = fxL(vUV + vec2(-t.x, 0.0));
+  float lE = fxL(vUV + vec2( t.x, 0.0));
+  float lMin = min(lM, min(min(lN, lS), min(lW, lE)));
+  float lMax = max(lM, max(max(lN, lS), max(lW, lE)));
+  float range = lMax - lMin;
   // Flat areas (incl. HUD/text) stay pixel-exact.
-  if (lMax - lMin < max(0.04, lMax * 0.125)) { outColor = vec4(cM, 1.0); return; }
-  vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
-  float dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
-  float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
-  dir = clamp(dir * rcp, -8.0, 8.0) * t;
-  vec3 rA = 0.5 * (texture(uTex, vUV + dir * (-1.0/6.0)).rgb
-                 + texture(uTex, vUV + dir * ( 1.0/6.0)).rgb);
-  vec3 rB = rA * 0.5 + 0.25 * (texture(uTex, vUV + dir * -0.5).rgb
-                             + texture(uTex, vUV + dir *  0.5).rgb);
-  float lB = fxLuma(rB);
-  outColor = vec4((lB < lMin || lB > lMax) ? rA : rB, 1.0);
+  if (range < max(0.04, lMax * 0.125)) { outColor = vec4(cM, 1.0); return; }
+  float lNW = fxL(vUV + vec2(-t.x, -t.y));
+  float lNE = fxL(vUV + vec2( t.x, -t.y));
+  float lSW = fxL(vUV + vec2(-t.x,  t.y));
+  float lSE = fxL(vUV + vec2( t.x,  t.y));
+  float lNS = lN + lS, lWE = lW + lE;
+  float edgeH = abs(-2.0 * lW + lNW + lSW) + 2.0 * abs(-2.0 * lM + lNS) + abs(-2.0 * lE + lNE + lSE);
+  float edgeV = abs(-2.0 * lN + lNW + lNE) + 2.0 * abs(-2.0 * lM + lWE) + abs(-2.0 * lS + lSW + lSE);
+  bool horz = edgeH >= edgeV;
+  // Sub-pixel aliasing: how far the centre sits from its 3x3 low-pass.
+  float subpix = clamp(abs((2.0 * (lNS + lWE) + lNW + lSW + lNE + lSE) / 12.0 - lM) / range, 0.0, 1.0);
+  subpix = (-2.0 * subpix + 3.0) * subpix * subpix;
+  subpix = subpix * subpix * FXAA_SUBPIX;
+  float l1 = horz ? lN : lW, l2 = horz ? lS : lE;
+  float g1 = l1 - lM, g2 = l2 - lM;
+  bool pair1 = abs(g1) >= abs(g2);
+  float gradScaled = max(abs(g1), abs(g2)) * 0.25;
+  float lenSign = horz ? t.y : t.x;
+  if (pair1) lenSign = -lenSign;
+  float lAvg = 0.5 * ((pair1 ? l1 : l2) + lM);
+  vec2 posB = vUV;
+  if (horz) posB.y += lenSign * 0.5; else posB.x += lenSign * 0.5;
+  vec2 off = horz ? vec2(t.x, 0.0) : vec2(0.0, t.y);
+  vec2 posN = posB - off * FXAA_STEP[0], posP = posB + off * FXAA_STEP[0];
+  float endN = fxL(posN) - lAvg, endP = fxL(posP) - lAvg;
+  bool doneN = abs(endN) >= gradScaled, doneP = abs(endP) >= gradScaled;
+  for (int i = 1; i < FXAA_STEPS; i++) {
+    if (doneN && doneP) break;
+    if (!doneN) { posN -= off * FXAA_STEP[i]; endN = fxL(posN) - lAvg; doneN = abs(endN) >= gradScaled; }
+    if (!doneP) { posP += off * FXAA_STEP[i]; endP = fxL(posP) - lAvg; doneP = abs(endP) >= gradScaled; }
+  }
+  float dstN = horz ? vUV.x - posN.x : vUV.y - posN.y;
+  float dstP = horz ? posP.x - vUV.x : posP.y - vUV.y;
+  bool mLow = (lM - lAvg) < 0.0;
+  bool goodN = (endN < 0.0) != mLow, goodP = (endP < 0.0) != mLow;
+  bool nearN = dstN < dstP;
+  float dst = min(dstN, dstP);
+  bool good = nearN ? goodN : goodP;
+  float pixOff = good ? (-dst / (dstN + dstP) + 0.5) : 0.0;
+  float o = max(pixOff, subpix) * lenSign;
+  vec2 pos = vUV;
+  if (horz) pos.y += o; else pos.x += o;
+  outColor = vec4(texture(uTex, pos).rgb, 1.0);
 }`;
 
   // Snapdragon GSR 1 (spatial upscale + sharpen, one pass) — adapted for WebGL2.

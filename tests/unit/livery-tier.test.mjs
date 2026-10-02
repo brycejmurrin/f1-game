@@ -92,8 +92,12 @@ test("photo mode asks for the full tier for every car, not just the player's", (
     "drawCarDecals must request the full tier while photo mode is on");
   // And it must NOT have been folded into usePlayerSetup, which selects the
   // player's SETUP for teamDecalState and means something else entirely.
-  assert.match(src, /teamDecalState\(team, usePlayerSetup\)/,
+  // Optional setup/stamp args key a career hire / AI shelf; the second arg is
+  // still plain usePlayerSetup (photoMode must not join it).
+  assert.match(src, /teamDecalState\(team, usePlayerSetup(?:, setup, stamp)?\)/,
     "the setup state must keep reading plain usePlayerSetup");
+  assert.doesNotMatch(src, /teamDecalState\(team,\s*usePlayerSetup\s*\|\|/,
+    "photoMode must not fold into the setup-state argument");
 });
 
 test("the decal cache keys on the tier, which is what makes the upgrade cheap", () => {
