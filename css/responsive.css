@@ -109,10 +109,7 @@ body.desktop #pm-calib { display: none !important; }
   /* ONE --vwz width for brand and all THREE tiers. The old 320–420px clamp
      stopped growing on a wide display and ignored UI SIZE; 32vwz scales with
      the viewport and divides by --ui-scale so zoom does not overflow. */
-  :where(body:not([data-density="compact"])) #menu-hero,
-  :where(body:not([data-density="compact"])) #menu-primary,
-  :where(body:not([data-density="compact"])) #menu-explore,
-  :where(body:not([data-density="compact"])) #menu-secondary { width: 100%; gap: clamp(8px, calc(1 * var(--vwz)), 12px); }
+  :where(body:not([data-density="compact"])) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; gap: clamp(8px, calc(1 * var(--vwz)), 12px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { padding: 9px 6px 9px 10px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text
      dropped near the title rather than a caption belonging to it. */
@@ -138,10 +135,7 @@ body.desktop #pm-calib { display: none !important; }
      (2064px wide) it made a 1362px button column while #title stays clamped at
      120px and .bigbtn at 28px. 660px matches what the landscape branch's
      32vw yields on the same physical width. */
-  :where(body:not([data-density="compact"])) #menu-hero,
-  :where(body:not([data-density="compact"])) #menu-primary,
-  :where(body:not([data-density="compact"])) #menu-explore,
-  :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), 660px, 100%); }
+  :where(body:not([data-density="compact"])) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: min(calc(66 * var(--vwz)), 660px, 100%); }
   :where(body:not([data-density="compact"])) #menu-buttons { gap: 14px; }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { font-size: clamp(20px, calc(2.4 * var(--vwz)), 28px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: clamp(14px, calc(1.5 * var(--vwz)), 18px); }
