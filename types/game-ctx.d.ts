@@ -846,6 +846,7 @@ declare const RaceControl: GameModuleFactory;
 // TypeScript keeps the two in separate declaration spaces.
 declare const WeatherArc: GameModuleFactory;
 declare const StartLights: GameModuleFactory;
+declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;

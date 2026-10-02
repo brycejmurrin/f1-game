@@ -85,7 +85,7 @@ test("lamp positions are memoised per track and recomputed on a new one", () => 
 test("game.js wires StartLights and the particle pool exposes glow", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /const startLights = StartLights\.create\(G\)/);
-  assert.match(game, /startLights\.update\(\);[^\n]*\n\s*Particles\.update\(dt\);/, "lamps spawn before the pool ages this frame");
+  assert.match(game, /startLights\.update\(\);[^\n]*\n(?:\s*marshalPanels\.update\(dt\);[^\n]*\n)?\s*Particles\.update\(dt\);/, "lamps spawn before the pool ages this frame (the posts' panels may sit between)");
   const particles = fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8");
   assert.match(particles, /function glow\(x, y, z, size, r, g, b, alpha, life\)/);
   assert.match(particles, /return \{[^}]*\bglow\b/);

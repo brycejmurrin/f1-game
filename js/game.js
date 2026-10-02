@@ -3800,6 +3800,7 @@ const playerForces = PlayerForces.create(G);
 // about a worn set. Reads the tyre model, so it is created after it.
 pits = PitLane.create(G);
 const startLights = StartLights.create(G);   // the start gantry's lamps (js/race/start-lights.js); a const — game.js's top-level lets are ratcheted
+const marshalPanels = MarshalPanels.create(G);   // the posts' light panels follow race control (js/race/marshal-panels.js)
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
@@ -8217,6 +8218,7 @@ function render(dt) {
   // beading and no wiper (there is nothing to wipe).
   if (isWetRoad() && Particles.rainActive()) Particles.rainUpdate(dt, camEye, isRaining());
   startLights.update();   // the gantry's lit lamps, re-spawned each count frame
+  marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
   Particles.update(dt);
   Particles.draw();
 

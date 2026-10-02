@@ -1,8 +1,11 @@
 // @ts-check
 // Tests for button/touch steer mode: auto-throttle, disabled calibrate button,
 // stable settings-menu layout, and race-settings layout (portrait + landscape).
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+// fixtures' test (not @playwright/test) so apex26.gfxBackend=webgl2 is pinned —
+// shared CI coverage is native GLX; TLX product coverage lives in tlx-probes.
+// Without that pin this file cold-booted TLX after a long selected shard and
+// waitReady died at BOOT_MS with the title screen still up (CI run 36967469812).
+import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
 const PORTRAIT  = { width: 390, height: 844 };
@@ -31,10 +34,23 @@ async function waitReady(page) {
 async function openPauseMenu(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.park(0.1));
-  await page.waitForTimeout(1000);
-  await page.locator("#pausebtn").click();
-  await page.locator("#pausemenu").waitFor({ state: "visible" });
+  // `go()` IS LOAD-BEARING for the lighting-tuner walk (and every other
+  // ADVANCED VISUALS door): syncSettingsAvailability disables #pm-lighting
+  // unless state === "race", and race() starts in COUNTDOWN. park() freezes
+  // the sim, so a park mid-count freezes the gantry too — lighting stays
+  // disabled, .click() fires no handler, and openLightingPhotoMode never
+  // reaches photo-mode. lighting-tuner-grade / ui-redesign already call go()
+  // first; this file was relying on the countdown finishing before park.
+  await page.evaluate(() => { window.__apex.go(); window.__apex.park(0.1); });
+  await page.waitForFunction(() => {
+    const b = document.getElementById("pausebtn");
+    return !!b && !b.hidden;
+  }, null, { polling: 100, timeout: BOOT_MS });
+  // Race is rendering (park keeps the loop for the parked view) — Playwright's
+  // actionability poll shares that main thread (see clickLive / lighting-tuner-grade).
+  await clickLive(page, "pausebtn");
+  await page.waitForFunction(() => !document.getElementById("pausemenu").hidden,
+    null, { polling: 100, timeout: BOOT_MS });
 }
 
 // Steering / lighting / gears controls now live on the SETTINGS sub-menu.
@@ -69,12 +85,23 @@ async function cycleToPauseSteerMode(page, targetText) {
 
 async function openLightingPhotoMode(page) {
   await openPauseSettings(page);
+  // Menu clicks stay as locator.click: the pause menu parks the render loop, so
+  // Playwright's stability checks are cheap here (lighting-tuner-grade's table).
   await page.locator("#pm-open-display").click();
   await page.locator("#pm-visual-tuners > summary").click();
+  // openSettings() re-runs syncSettingsAvailability; after go() the door is live.
+  await page.waitForFunction(() => {
+    const b = document.getElementById("pm-lighting");
+    return !!b && !b.disabled;
+  }, null, { polling: 100, timeout: BOOT_MS });
   await page.locator("#pm-lighting").click();
-  await page.locator("#pc-toggle").click();
-  await expect(page.locator("body")).toHaveClass(/lt-open/);
-  await expect(page.locator("body")).toHaveClass(/photo-mode/);
+  await page.waitForFunction(() => document.body.classList.contains("lt-open"),
+    null, { polling: 100, timeout: BOOT_MS });
+  // Opening the tuner starts the live-preview render path — #pc-toggle must
+  // use clickLive or the actionability poll pays for SwiftShader frames.
+  await clickLive(page, "pc-toggle");
+  await page.waitForFunction(() => document.body.classList.contains("photo-mode"),
+    null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function expectNormalRaceControls(page) {
