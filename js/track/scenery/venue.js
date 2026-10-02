@@ -103,7 +103,9 @@ const SceneryVenue = (function () {
           }
         }
         return true;
-      }, { kind: "venue", maxVertices: 288 });
+      // trial: search attempts must not pin suppressed ids — foundation specs
+      // list every suppressed model exactly (Imola acque-mist, etc.).
+      }, { kind: "venue", maxVertices: 288, trial: true });
       if (!ok) return false;
       massAdd(base, WIDTH, DEPTH, basis);
       indexSolidAt(k, side, dist, WIDTH / 2, DEPTH / 2);

@@ -597,6 +597,8 @@ test("venue guards reject excluded, occupied, fenced, unknown, steep and on-road
     assert.equal(r.out.pos.length, 0);
     assert.equal(r.reservations.length, 0);
     assert.equal(r.notes.length, 0);
+    assert.equal(r.diagnostics.suppressed.length, 0,
+      "venue site search must not pin suppressed ids for rejected probes");
   }
 });
 
