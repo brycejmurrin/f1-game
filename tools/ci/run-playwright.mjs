@@ -10,6 +10,11 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { extname, join, resolve as resolvePath, sep } from "node:path";
 import { partitionArgs } from "./twinned-specs.mjs";
+import {
+  partitionMegaSweepArgs,
+  shouldRunMegaOnThisShard,
+  megaSoloFlags,
+} from "./select-specs.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MIME = {
@@ -177,35 +182,77 @@ if (args.includes("--last-failed") && process.env.APEX_LAST_RUN_FILE) {
 // dated, reasoned) and turns the run red for any other retry-recovered pass.
 // Nothing to add to the argv here; ci.yml sets the variable on every browser job.
 const cli = join(ROOT, "node_modules", ".bin", "playwright");
-const child = spawn(cli, ["test", ...args], {
-  cwd: ROOT,
-  env: {
-    ...process.env,
-    APEX_PORT: port,
-    ...(managed ? { APEX_MANAGED_SERVER: "1" } : {}),
-  },
-  stdio: "inherit",
-});
 
-console.error(`[playwright] port=${port} pid=${child.pid}`);
+// MEGA-SWEEP ISOLATION (browser-group / packed group shards). select-specs already
+// solos props-over-road / terrain-over-road for the change-aware gate; Playwright
+// `--shard=i/n` on `test:circuits` still packs them next to foundation Navigate
+// victims (run 36911235525: 410 s walk → qatar Navigate 190 s hang → retry 23.6 s
+// on a fresh worker). Peel them out of the shared argv; run the rest as usual;
+// re-launch each mega in its own Playwright process on shard 1 only (or when
+// unsharded) so nothing inherits that Chromium. --list keeps them inline.
+const listing = args.includes("--list");
+const { mega, rest, peeled } = listing ? { mega: [], rest: args, peeled: false }
+  : partitionMegaSweepArgs(args);
+const hasSpecTarget = (list) => list.some((a) => !a.startsWith("-")
+  && (a.includes("*") || /\.spec\.js$/.test(a) || /tests\//.test(a)));
+const mainArgs = peeled ? rest : args;
+const runMegaHere = peeled && shouldRunMegaOnThisShard(args);
+if (peeled) {
+  console.error(`[playwright] peeled ${mega.length} mega-sweep spec(s) from the shared shard: ${mega.join(" ")}`);
+  if (!runMegaHere) console.error(`[playwright] mega-sweep solos run on shard 1 only — skipped on this shard`);
+}
+
+const env = {
+  ...process.env,
+  APEX_PORT: port,
+  ...(managed ? { APEX_MANAGED_SERVER: "1" } : {}),
+};
 
 let stopping = false;
+let activeChild = null;
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
-    try { child.kill(signal); } catch {}
+    try { activeChild?.kill(signal); } catch {}
   });
 }
 
-child.on("error", (error) => {
-  console.error(`[playwright] failed to start: ${error.message}`);
-  managed?.server.close();
-  process.exitCode = 1;
-});
+function runOnce(cliArgs, label) {
+  return new Promise((resolve) => {
+    if (stopping) return resolve(1);
+    const child = spawn(cli, ["test", ...cliArgs], { cwd: ROOT, env, stdio: "inherit" });
+    activeChild = child;
+    console.error(`[playwright] ${label} port=${port} pid=${child.pid}`);
+    child.on("error", (error) => {
+      console.error(`[playwright] failed to start: ${error.message}`);
+      activeChild = null;
+      resolve(1);
+    });
+    child.on("exit", (code, signal) => {
+      if (signal) console.error(`[playwright] child exited on ${signal}`);
+      activeChild = null;
+      resolve(code ?? 1);
+    });
+  });
+}
 
-child.on("exit", (code, signal) => {
-  if (signal) console.error(`[playwright] child exited on ${signal}`);
-  managed?.server.close();
-  process.exitCode = code ?? 1;
-});
+let exitCode = 0;
+if (hasSpecTarget(mainArgs) || !peeled) {
+  exitCode = await runOnce(mainArgs, peeled ? "shared-shard" : "main");
+} else {
+  console.error(`[playwright] shared shard has no remaining specs after peel — mega solos only`);
+}
+
+if (runMegaHere && !stopping) {
+  const flags = megaSoloFlags(args);
+  for (const spec of mega) {
+    if (stopping) break;
+    console.error(`[playwright] mega-sweep solo (fresh Chromium): ${spec}`);
+    const code = await runOnce([...flags, spec], `mega:${spec}`);
+    if (code) exitCode = code;
+  }
+}
+
+managed?.server.close();
+process.exitCode = exitCode;

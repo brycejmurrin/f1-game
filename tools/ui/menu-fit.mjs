@@ -30,6 +30,7 @@ import { join } from "node:path";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 // The data hub is the only screen whose content comes off the network. Reuse the
 // Playwright suite's fixtures so it audits a populated table rather than an error
 // card; if the import ever fails the hub still renders its empty/error state and
@@ -42,6 +43,12 @@ const OUT = join(ROOT, "scratch/captures/menu-fit");
 mkdirSync(OUT, { recursive: true });
 
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `menu-fit — cramped/clipped audit at a viewport (+ --safe= notch insets)
+
+  node tools/ui/menu-fit.mjs [WxH …] [--safe=L,T,R,B] [--scale=100,130] [--only=…]
+
+--safe is why this CLI still exists (layout-audit has no notch axis yet).
+Browser-only otherwise; use layout-audit.mjs --list for a no-browser catalog.`);
 const safeArg = argv.find((a) => a.startsWith("--safe="));
 const dims = argv.filter((a) => !a.startsWith("--"));
 const sizes = (dims.length ? dims : ["852x393"]).map((s) => {

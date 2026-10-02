@@ -1,7 +1,8 @@
 /* Apex 26 — TrackStamps: the designer's STRAIGHT / CORNER / HAIRPIN / CHICANE /
    S-BEND tools. A stamp is sampled exactly (arcs and straights from the anchor
-   point's pose), pre-compensated for the engine's two Laplacian passes so a
-   requested radius is roughly the BUILT radius, then spliced into the loop: the
+   point's pose), pre-compensated for the engine's two Laplacian passes at the
+   step it is actually sampled at, so the requested radius is the BUILT one (to
+   ~2 % mid-arc for R ≥ 30 m), then spliced into the loop: the
    stamp replaces the selected span and a Dubins path (TrackShape.dubins, r ≥ the
    hairpin floor) rejoins its end to the first reachable downstream point. The
    loop therefore stays closed by construction and nothing solves closure
@@ -14,6 +15,10 @@ const TrackStamps = (function () {
   const DEG = Math.PI / 180;
   const R_MIN = 15;           // the hairpin floor the validator reds below (built radius)
   const SPACING = 8;          // control points never closer than this
+  const CHORD_MAX = 25;       // …nor further apart on an arc than the 25 m straights beside it
+  // The Dubins rejoin: straights every ≤ 60 m, arcs on 8-25 m chords at the
+  // stamp's 10° grain where it leaves the stamp and ≤ 20° beyond (point budget).
+  const FILL_STEP = 60, FILL_CHORD = [SPACING, CHORD_MAX, 20 * DEG];
 
   // The engine smooths control points twice with L = 0.25 (TrackDef.realPoints):
   // on a sampled arc each pass scales the radius by 1 − L(1 − cos(h/R)), so
@@ -22,9 +27,19 @@ const TrackStamps = (function () {
     const f = 1 - 0.25 * (1 - Math.cos(h / R));
     return R / (f * f);
   }
-  // ≤ 10° per control point on wide arcs, never closer than the 8 m spacing
-  // rule on tight ones (the engine's spline carries a 25° step on an 18 m hairpin).
-  const stepFor = (R) => Math.max(SPACING, R * 0.17);
+  // An arc of R and sweep A: n steps of ≈ 10° with chords SPACING..CHORD_MAX m
+  // (the spacing rule wins on tight arcs — the engine's spline carries a 25°
+  // step on an 18 m hairpin; the cap keeps uniform Catmull-Rom from
+  // overshooting wide ones), sampled at Rc = R / f(φ)² for the step φ = A/n it
+  // is ACTUALLY sampled at. n depends on Rc, so iterate to the fixed point, then
+  // make sure Rc's chords still clear the spacing rule (fewer steps only grow Rc).
+  function arcFor(R, A) {
+    const comp = (n) => compensate(R, R * A / n);   // compensate() reads φ as h / R
+    let Rc = R, n = 1;
+    for (let it = 0; it < 6; it++) { n = S.arcSteps(Rc, A, SPACING, CHORD_MAX); Rc = comp(n); }
+    while (n > 1 && 2 * Rc * Math.sin(A / (2 * n)) < SPACING) Rc = comp(--n);
+    return { Rc, n };
+  }
 
   const KINDS = {
     straight: { label: "STRAIGHT", params: { L: 300 }, min: { L: 30 }, max: { L: 1500 } },
@@ -44,12 +59,13 @@ const TrackStamps = (function () {
     return out;
   }
 
-  /** Sample a stamp from `pose` ({x, z, th}); returns { pts, end } (start excluded). */
+  /** Sample a stamp from `pose` ({x, z, th}); returns { pts, end, ends } (start
+   *  excluded; `ends` holds the tangent points between its pieces, by reference). */
   function sample(kind, params, pose) {
     const p = clampParams(kind, params); if (!p) return null;
-    const pts = []; let cur = pose;
-    const push = (r) => { pts.push(...r.pts); cur = r.end; };
-    const arc = (R, deg, dir) => { const Rc = compensate(R, stepFor(R)); push(S.arcPts(cur, Rc, dir * deg * DEG, stepFor(Rc))); };
+    const pts = [], ends = new Set(); let cur = pose;
+    const push = (r) => { pts.push(...r.pts); ends.add(r.pts[r.pts.length - 1]); cur = r.end; };
+    const arc = (R, deg, dir) => { const a = arcFor(R, deg * DEG); push(S.arcPts(cur, a.Rc, dir * deg * DEG, 0, a.n)); };
     const run = (L) => push(S.straightPts(cur, L, 25));
     switch (kind) {
       case "straight": run(p.L); break;
@@ -59,7 +75,7 @@ const TrackStamps = (function () {
       case "sbend": arc(p.R, p.deg, p.dir); arc(p.R, p.deg, -p.dir); break;
       default: return null;
     }
-    return { pts, end: cur, params: p };
+    return { pts, end: cur, ends, params: p };
   }
 
   /** Replace the control span (i0, i1) exclusive with a stamp anchored at i0,
@@ -86,7 +102,7 @@ const TrackStamps = (function () {
       // Gentlest rejoin first: a 15 m fill behind a 60 m corner would be the
       // tightest bend on the lap, which is not what the stamp asked for.
       for (const r of [70, 45, 30, 20, R_MIN]) {
-        const d = S.dubins(E, goal, r, 20);
+        const d = S.dubins(E, goal, r, FILL_STEP, FILL_CHORD);
         // A fill that doubles back on itself (a full loop to turn around) is
         // the sign the goal is behind the stamp: skip to the next candidate.
         if (d && d.len <= 3 * straight + 2 * Math.PI * r + 60) { fill = d; break; }
@@ -94,13 +110,6 @@ const TrackStamps = (function () {
       if (!fill) continue;
       // Assemble: everything up to and including i0, the stamp, the fill (minus
       // its last point, which IS pts[j]), then pts[j..] round to i0.
-      const before = [], after = [];
-      for (let m = 0; m <= covered(i0 === 0 ? 0 : i0); m++) before.push(pts[m]);   // 0..i0 inclusive (i0 in loop order from 0)
-      // When i0 < j in index order the kept tail is j..N-1; when the span wraps, keep j..i0-1 via loop order.
-      let m = j;
-      while (m !== i0 && S.wrapI(m, N) !== 0) { after.push(pts[m]); m = S.wrapI(m + 1, N); }
-      const wrapped = S.wrapI(i1 - i0, N) < S.wrapI(j - i0, N) ? false : false; // (documented: ordering by loop walk below)
-      void wrapped;
       const fillPts = fill.pts.slice(0, -1);
       let out;
       if (j > i0 || j === 0) {
@@ -110,18 +119,24 @@ const TrackStamps = (function () {
         // the span wraps past the start line: [j..i0] survives, index 0 moves to j
         out = pts.slice(j, i0 + 1).concat(st.pts, fillPts);
       }
-      // Spacing: a sampled arc's last step can fall short of 8 m; dropping a
-      // point on a circle leaves the rest on the circle, so nothing is protected.
-      out = S.enforceSpacing(out, SPACING);
+      // Spacing: arc chords are ≥ 8 m by construction, but a fill point may crowd
+      // the stamp's end. The tangent points between its pieces are protected —
+      // dropping one turns the arc's last step into a kink off the circle.
+      const protect = new Set();
+      for (let m = 0; m < out.length; m++) if (st.ends.has(out[m])) protect.add(m);
+      out = S.enforceSpacing(out, SPACING, protect);
       // The stamp's surviving points, by reference (spacing may have merged a few).
       const mine = new Set(st.pts);
       let selA = -1, selB = -1;
       for (let m = 0; m < out.length; m++) if (mine.has(out[m])) { if (selA < 0) selA = m; selB = m; }
       if (out.length > 200) {
-        // thin the untouched remainder first (RDP at 1 m), never the stamp or its fill
-        const headEnd = selB + fillPts.length;
-        const head = out.slice(0, headEnd + 1), tail = out.slice(headEnd + 1);
-        out = head.concat(S.rdp(tail, 1));
+        // thin the untouched remainder first (RDP at 1 m) on both sides, never the
+        // stamp, its fill or the GUARD points next to them (a thinned 100 m chord
+        // beside an 8 m one makes the uniform spline overshoot the junction)
+        const GUARD = 2, a = Math.max(0, selA - GUARD), b = Math.min(out.length, selB + fillPts.length + 1 + GUARD);
+        const pre = S.rdp(out.slice(0, a), 1), tail = S.rdp(out.slice(b), 1);
+        out = pre.concat(out.slice(a, b), tail);
+        selB -= a - pre.length; selA -= a - pre.length;
         if (out.length > 200) return { ok: false, reason: "too many points — delete some first" };
       }
       return { ok: true, pts: out, sel: [selA, selB], word: fill.word };
@@ -140,6 +155,6 @@ const TrackStamps = (function () {
     return S.resample(pts, 25, true);
   }
 
-  return { KINDS, R_MIN, SPACING, compensate, clampParams, sample, splice, seedFromSegments };
+  return { KINDS, R_MIN, SPACING, compensate, arcFor, clampParams, sample, splice, seedFromSegments };
 })();
 Object.freeze(TrackStamps);

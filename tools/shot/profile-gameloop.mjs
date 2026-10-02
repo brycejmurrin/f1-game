@@ -7,9 +7,16 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
-const [track = "vegas", mode = "physics"] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+exitIfHelp(argv, `profile-gameloop — headless V8 CPU profile of the game loop
+
+  node tools/shot/profile-gameloop.mjs [track] [physics|render]
+
+Writes scratch/profiles/*.cpuprofile. Default track=vegas, mode=physics.`);
+const [track = "vegas", mode = "physics"] = argv;
 
 const srv = await startStaticServer(ROOT);
 let browser;

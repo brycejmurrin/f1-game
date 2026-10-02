@@ -16,6 +16,10 @@ node_modules
 # Regenerable output
 scratch/
 artifacts/
+# Run screenshots. A June 2026 lap audit committed ~1,700 versions of these in
+# two days — ~750 MB that every clone still carries. Baselines belong in a
+# Playwright *-snapshots/ dir (tests/unit/committed-images.test.mjs).
+tests/ui-screenshots/
 # Playwright MCP user-data-dir (repo playwright-mcp.sh + host occupancy)
 .playwright-mcp/
 # Transient agent/debug scripts must be underscore-prefixed.

@@ -3264,3 +3264,7 @@ No raw px: the vertical padding is `calc(var(--gap) / 2)`.
 ## 2026-09-25 — closing-chord coplanar seam fixes
 
 Closing-chord centerline interpolation shifted start-seam props on indy/madrid/watkins (+1 coplanar spot each). Fixed at source: Indy outer-bay gap +MIN_SEP near s≈0 (city carve unmasked an intentional upper-tier shell floater), madrid `ownPitStraight` (bespoke grandstandEx owns the pit straight), watkins hoarding gap 6.5→6.0. Lowered stale caps that measured better (coplanar istanbul/jerez/silverstone; props-tris indy/madrid; monza hidden-face STRIP after count).
+
+## 2026-10-01 — Merge #710 modelsReady await
+
+`js/game.js` lines 9691 → 9697 and codeLines 5312 → 5313. Ship tip after Merge #710 (`modelsReady` join in `ensureScenery` so a track build waits for the baked model pack) grew past both ceilings (measure: lines 9697, codeLines 5313; prior tip ~9690/9691). First snap to 9696 alone still failed PR CI — the lines metric counts a trailing empty split, and codeLines also moved +1. Deliberate raise for the intentional boot fix — not an extraction.
