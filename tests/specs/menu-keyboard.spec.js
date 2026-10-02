@@ -187,7 +187,10 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await openSelect(page);
     for (const pct of [100, 150, 200]) {
       await page.evaluate((p) => window.__apex.uiScale(p), pct);
-      await page.waitForTimeout(150);
+      await page.waitForFunction((p) => {
+        try { return Math.round((window.__apex.uiScale?.() ?? p)) === p || document.documentElement.style.getPropertyValue("--ui-scale") !== ""; }
+        catch (_) { return true; }
+      }, pct, { polling: 100, timeout: 2_000 }).catch(() => {});
       const r = await page.evaluate(() => {
         const list = document.getElementById("sel-tracks");
         list.scrollLeft = 0;
@@ -289,7 +292,10 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       return row.textContent.trim().replace(/\s+/g, " ").slice(0, 20);
     });
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(400);
+    await page.waitForFunction((want) => {
+      const t = (document.querySelector("#sel-tracks .track-row.active") || {}).textContent?.trim().replace(/\s+/g, " ").slice(0, 20);
+      return t === want;
+    }, picked, { polling: 100, timeout: 5_000 });
     const active = await page.evaluate(() =>
       (document.querySelector("#sel-tracks .track-row.active") || {}).textContent?.trim().replace(/\s+/g, " ").slice(0, 20));
     expect(active).toBe(picked);
@@ -324,7 +330,10 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => {
+      try { return window.__apex.physState?.().s > 0 || window.__apex.info().track === "monza"; }
+      catch (_) { return false; }
+    }, null, { polling: 100, timeout: 8_000 });
 
     // No menu layer is open, so MenuNav must be entirely out of the way.
     expect(await page.evaluate(() => { const l = window.MenuNav.activeLayer(); return l && l.id; })).toBeFalsy();
@@ -333,7 +342,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     // itself, so this asserts the key reached the driving handler rather than
     // asserting on a steering angle that grip and speed also move.
     await page.keyboard.down("ArrowLeft");
-    await page.waitForTimeout(400);
+    await page.waitForFunction(() => window.__apex.inputState().key.left === true, null, { polling: 100, timeout: 5_000 });
     const held = await page.evaluate(() => window.__apex.inputState().key.left);
     const steer = await page.evaluate(() => window.__apex.inputState());
     await page.keyboard.up("ArrowLeft");
@@ -365,7 +374,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
     });
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
+      null, { polling: 100, timeout: 5_000 });
 
     const seen = await page.evaluate(() => ({
       layer: (window.MenuNav.activeLayer() || {}).id || null,
@@ -378,7 +388,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
 
     // …and the arrow key lands inside it, which is the behaviour that was lost.
     await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(200);
+    await page.waitForFunction(() => document.getElementById("standings").contains(document.activeElement),
+      null, { polling: 100, timeout: 5_000 });
     expect(await page.evaluate(() =>
       document.getElementById("standings").contains(document.activeElement))).toBe(true);
   });
@@ -464,11 +475,15 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
       document.getElementById("pausemenu").hidden = false;
     });
-    await page.waitForTimeout(200);
+    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "pausemenu",
+      null, { polling: 100, timeout: 5_000 });
     expect(await page.evaluate(() => { const l = window.MenuNav.activeLayer(); return l && l.id; })).toBe("pausemenu");
 
     await page.keyboard.down("ArrowLeft");
-    await page.waitForTimeout(400);
+    // Menu owns the arrows: left must NOT latch driving input. Wait until focus
+    // is inside the pause menu (the useful side-effect), then sample the latch.
+    await page.waitForFunction(() => document.getElementById("pausemenu").contains(document.activeElement),
+      null, { polling: 100, timeout: 5_000 });
     const held = await page.evaluate(() => window.__apex.inputState().key.left);
     await page.keyboard.up("ArrowLeft");
     expect(held, "a paused car is not being steered by the menu keys").toBe(false);
@@ -519,7 +534,7 @@ test.describe("Escape is BACK", () => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => document.getElementById("select").hidden === true, null, { polling: 100, timeout: 5_000 });
     expect(await page.evaluate(() => document.getElementById("select").hidden)).toBe(true);
     expect(await page.evaluate(() => document.getElementById("overlay").hidden)).toBe(false);
   });
@@ -538,7 +553,7 @@ test.describe("Escape is BACK", () => {
     await page.locator("#sel-car").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => document.getElementById("carsetup").hidden === true, null, { polling: 100, timeout: 5_000 });
     expect(await page.evaluate(() => document.getElementById("carsetup").hidden)).toBe(true);
     // BACK, not DONE: race settings is what DONE would have opened.
     expect(await page.evaluate(() => document.getElementById("race-settings").hidden)).toBe(true);
@@ -550,7 +565,11 @@ test.describe("Escape is BACK", () => {
   test("Escape on the title screen does nothing at all", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
+    // Inert: overlay stays up and pause stays closed — poll the post-condition.
+    await page.waitForFunction(() =>
+      document.getElementById("overlay").hidden === false &&
+      document.getElementById("pausemenu").hidden === true,
+    null, { polling: 100, timeout: 2_000 });
     expect(await page.evaluate(() => ({
       overlay: document.getElementById("overlay").hidden,
       pause: document.getElementById("pausemenu").hidden,
@@ -581,9 +600,13 @@ test.describe("Escape is BACK", () => {
     // it. The sheet's own open path is `hidden = false` either way (TopModal
     // mirrors that onto showModal), which is exactly what is under test here.
     await page.evaluate(() => { document.getElementById("standings").hidden = false; });
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
+      null, { polling: 100, timeout: 5_000 });
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() =>
+      document.getElementById("standings").hidden === true &&
+      document.getElementById("pausemenu").hidden === false,
+    null, { polling: 100, timeout: 5_000 });
     expect(await page.evaluate(() => ({
       standings: document.getElementById("standings").hidden,
       pause: document.getElementById("pausemenu").hidden,

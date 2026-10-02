@@ -1659,6 +1659,18 @@ const vecArg = (a, k) => {
 
 function fail(msg) { console.error(`error: ${msg}`); process.exit(1); }
 
+/** Reject unknown --flags so a typo or inventing --dry-run cannot silently
+ *  rewrite assets/pack/. Known flags are per-command; bare positionals are fine. */
+function refuseUnknownFlags(args, known) {
+  const allow = new Set(known);
+  for (const a of args) {
+    if (!a.startsWith("--") || a === "--") continue;
+    const name = a.includes("=") ? a.slice(0, a.indexOf("=")) : a;
+    if (allow.has(name)) continue;
+    fail(`unknown flag ${name} (accepted: ${known.join(" ") || "(none)"})`);
+  }
+}
+
 async function bakeSyntheticModels(_args) {
   const { buildAll: buildSynthModels, CATALOG_IDS: SYNTH_MODEL_IDS } = await getSynthModels();
   if (!buildSynthModels) { console.error("synth-models.mjs not found"); process.exit(1); }
@@ -1734,6 +1746,27 @@ const USAGE = `Apex 26 asset bake CLI
 
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
+  if (cmd === "--help" || cmd === "-h" || args.includes("--help") || args.includes("-h")) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  // Per-command known flags. Anything else used to be shrugged off — and a
+  // mistaken `bake-synthetic --dry-run` rewrote the committed pack in place.
+  const KNOWN = {
+    "bake-synthetic": ["--size", "--models"],
+    "bake-synthetic-models": [],
+    "bake-atlas": ["--preset", "--size", "--grid", "--inset", "--low", "--albedo", "--normal", "--map"],
+    "search": [],
+    "fetch": ["--res"],
+    "bake-material": ["--size"],
+    "import-pack": ["--size", "--low"],
+    "bake-model": ["--scale", "--mat", "--source", "--licence", "--author"],
+    "bake-env": ["--sky", "--ground", "--source", "--licence", "--author", "--zenith", "--horizon"],
+    "bake-env-hdri": ["--tod", "--track", "--res"],
+    "verify": [],
+    "credits": [],
+  };
+  if (cmd && KNOWN[cmd]) refuseUnknownFlags(args, KNOWN[cmd]);
   switch (cmd) {
     case "bake-synthetic": bakeSynthetic(args); break;
     case "bake-synthetic-models": await bakeSyntheticModels(args); break;
