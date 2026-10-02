@@ -329,7 +329,7 @@ test.describe("minimal profile", () => {
       return {
         sectors: w("#hud-sectors"), energy: w("#hud-energy"),
         ot: w("#hud-ot"), aero: w("#hud-aero"),
-        best: w(".hud-top .hud-box:nth-child(4)"),
+        best: w("#hud-box-best"),
         pos: w("#hud-pos"), speed: w("#hud-speed"), gear: w("#hud-gear"),
       };
     });
@@ -358,7 +358,7 @@ test.describe("metrics layout", () => {
       return {
         cls: document.body.className.match(/hud-met-[a-z]+/g) || [],
         sectors: w("#hud-sectors"), energy: w("#hud-energy"),
-        best: w(".hud-top .hud-box:nth-child(4)"),
+        best: w("#hud-box-best"),
         pos: w("#hud-pos"), map: w("#minimap"), gaps: w(".hud-gaps"),
       };
     });
