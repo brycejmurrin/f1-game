@@ -125,11 +125,13 @@ function setPhotoUiHidden(hide) {
 }
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
 function photoKeyHandler(e) {
-  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  const focused = document.activeElement, tag = (focused && focused.tagName) || "";
   const down = e.type === "keydown";
   // Typing in a slider — but a key-UP always releases: W held while a click
   // moved focus into a slider (or COPY VIEW's textarea) stayed down forever.
-  if (down && e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
+  // The Studio's buttons own Space/Enter and menu arrows. Key-up must still
+  // release camera input held before focus moved into the dock.
+  if (down && e.code !== "Escape" && ((focused && focused.closest && focused.closest("#ps-panel")) || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
   const fc = freeCam ? freeCam.key(e.code, down, document.activeElement) : 0;
   if (fc < 0 && down) return;                // an arrow key over the free-cam panel belongs to its focused control
   if (fc > 0) { e.preventDefault(); if (down) e.stopPropagation(); return; }

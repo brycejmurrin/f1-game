@@ -1173,6 +1173,11 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `appearance-studio.test.mjs` | Visual-only preset/profile scopes, undo, normalization, durability and reduced motion. |
+| `career-experience.test.mjs` | Career facility/achievement context, calendar and canonical result story. |
+| `photo-studio.test.mjs` | Real frame crop/export metadata, library limits, input validation and stored background. |
+| `home-world.test.mjs` | Circuit and actual pit-ribbon camera framing, camera ownership, readiness and bounded/reduced-motion render cadence. |
+| `ui-experience.test.mjs` | Pause race context from actual session state and direct task door/layer contracts. |
 | `smoke.spec.js` | page loads, `__apex` available, race starts, no WebGL error |
 | `dev-tools.spec.js` | the `__apex` API contract (60+ tests) |
 | `headless-api.spec.js` | the headless control loop: `headless()`, `obs()`, `act()`, `reset()` |
