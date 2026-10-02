@@ -94,12 +94,18 @@ export function controlClickGuard(element) {
 export async function verifiedControlClick(page, selector) {
   await page.waitForSelector(selector, { state: 'visible', timeout: 15000 });
   const locator = page.locator(selector);
-  const guard = await locator.evaluate(controlClickGuard);
+  let guard = await locator.evaluate(controlClickGuard);
+  let scrollAttempted = false;
+  if (!guard.ready && guard.reason === 'outside viewport') {
+    await locator.evaluate((element) => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+    scrollAttempted = true;
+    guard = await locator.evaluate(controlClickGuard);
+  }
   if (!guard.ready) throw new Error(`replay control ${selector} is not clickable: ${guard.reason}`);
   // A real pointer click, with visibility/enabled/center hit-target checked above.
   // Skip Playwright's two-RAF stability gate on slow software-rendered frames.
   await locator.click({ force: true, timeout: 15000 });
-  return { selector, ...guard, method: 'pointer-click', stability: 'two-RAF gate omitted; visible enabled center hit-target verified' };
+  return { selector, ...guard, scrollAttempted, method: 'pointer-click', stability: 'two-RAF gate omitted; visible enabled center hit-target verified' };
 }
 export async function exitReplayThroughUi(page) {
   const hudBefore = await page.evaluate(() => window.__apex.hud());

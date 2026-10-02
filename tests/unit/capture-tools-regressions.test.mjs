@@ -278,9 +278,10 @@ test('replay exit reveals actual HUD pause control before clicks and restores pr
 
 test('verified replay pointer clicks require actual visible enabled center hit-target, without RAF stability', async () => {
   const originals = Object.fromEntries(['getComputedStyle', 'document', 'innerWidth', 'innerHeight'].map((key) => [key, globalThis[key]]));
-  let disabled = false, hit, clicked = 0;
+  let disabled = false, hit, clicked = 0, top = 20, scrolls = 0, canScroll = true;
   const element = { isConnected: true, hidden: false, matches: () => disabled, getAttribute: () => null, contains: (child) => child === hit && hit?.parent === element,
-    getBoundingClientRect: () => ({ left: 10, top: 20, width: 100, height: 40 }) };
+    getBoundingClientRect: () => ({ left: 10, top, width: 100, height: 40 }),
+    scrollIntoView: (options) => { assert.equal(options.behavior, 'instant'); scrolls++; if (canScroll) top = 20; } };
   globalThis.getComputedStyle = () => ({ display: 'block', visibility: 'visible', opacity: '1', pointerEvents: 'auto' });
   globalThis.innerWidth = 844; globalThis.innerHeight = 390;
   globalThis.document = { elementFromPoint: (x, y) => { assert.equal(x, 60); assert.equal(y, 40); return hit; } };
@@ -297,6 +298,14 @@ test('verified replay pointer clicks require actual visible enabled center hit-t
     const receipt = await verifiedControlClick(page, '#pausebtn');
     assert.equal(clicked, 1); assert.deepEqual(receipt.center, { x: 60, y: 40 });
     assert.match(receipt.stability, /hit-target verified/);
+    assert.equal(scrolls, 0, 'visible, blocked and disabled controls do not trigger scrolling');
+    top = 500;
+    const scrolled = await verifiedControlClick(page, '#pm-quit');
+    assert.equal(scrolled.scrollAttempted, true); assert.equal(scrolls, 1); assert.equal(clicked, 2);
+    assert.deepEqual(scrolled.center, { x: 60, y: 40 }, 'the guard uses the actual post-scroll rectangle');
+    top = 500; canScroll = false;
+    await assert.rejects(verifiedControlClick(page, '#pm-quit'), /outside viewport/);
+    assert.equal(scrolls, 2); assert.equal(clicked, 2, 'an unscrollable offscreen control is still rejected');
   } finally { for (const [key, value] of Object.entries(originals)) globalThis[key] = value; }
 });
 
