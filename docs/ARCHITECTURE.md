@@ -1537,6 +1537,14 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   age, keyed to the game clock) before the sun/lamp GGX lobes and the sky
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
+  (`light-grid.test.mjs` pins the constants and the plumbing).
+- **SCENE MSAA (2026-10-01):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
+  4× on its desktop WebGL2 backend (`tlx.js` passes `sceneSamples` into
+  `tlx-post.js`'s scene target; r186's WebGL backend resolves the depth texture
+  by blit, so SSAO/SSR/godray read a resolved depth), **TLX-WebGPU and WGX gap**:
+  core WebGPU cannot resolve a depth attachment, so the native path stays
+  single-sample with FXAA alone (`docs/research/WEBGPU-PARITY.md`). Phones: no
+  scene MSAA on any backend (the mobile recipe).
   (`light-grid.test.mjs` pins the constants and the plumbing). Wet-road SSR
   itself is also live on all three (GLX/TLX composite, WGX half-res pass →
   composite); analytic `envBlend` is the plain-gloss fallback when SSR sheds

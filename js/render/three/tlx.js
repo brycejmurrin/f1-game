@@ -1043,7 +1043,15 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
               softDest: function () { return softOutRT(); },
-              wantSpatialUpscale, getPresentSize });
+              wantSpatialUpscale, getPresentSize,
+              // SCENE MSAA (2026-10-01): 4 samples on the scene target on the
+              // desktop WebGL2 backend only — GLX's HIGH/ULTRA recipe. The
+              // WebGL backend resolves colour AND the depth texture by
+              // blitFramebuffer (resolveDepthBuffer), so SSAO/SSR/godray read a
+              // resolved depth. Phones keep the GLX mobile recipe (FXAA alone);
+              // the native-WebGPU TLX path stays single-sample: core WebGPU
+              // cannot resolve a depth attachment (docs/research/WEBGPU-PARITY.md).
+              sceneSamples: (forceWebGL && !isMobile) ? 4 : 0 });
           if (post && !post.enabled()) {
             try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
             post = null;

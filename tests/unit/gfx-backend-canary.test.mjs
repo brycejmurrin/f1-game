@@ -5351,3 +5351,17 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   assert.equal(begin(frame, 320, 100), true, "hardware mirrors retain their normal cadence");
   assert.equal(opened, 2);
 });
+
+test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolved", () => {
+  // 2026-10-01: the shipped renderer had NO geometric AA — the scene target was
+  // single-sample and the canvas MSAA only ever smoothed the FXAA quad. The
+  // samples now go to the scene target, on the desktop WebGL2 backend only:
+  // phones keep the GLX mobile recipe and the native-WebGPU path cannot
+  // resolve a depth attachment (docs/ARCHITECTURE.md §Parity, SCENE MSAA).
+  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlx, /sceneSamples:\s*\(forceWebGL && !isMobile\) \? 4 : 0/,
+    "tlx.js decides the scene sample count: 4 on desktop WebGL2, 0 on phones and native WebGPU");
+  assert.match(post, /samples:\s*ctx\.sceneSamples \|\| 0,\s*resolveDepthBuffer:\s*true/,
+    "the scene target takes the caller's samples and resolves its depth texture (SSAO/SSR/godray read it)");
+});
