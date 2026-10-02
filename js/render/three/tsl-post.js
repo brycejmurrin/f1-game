@@ -860,42 +860,85 @@
       })(), "tlx-post-comp"),
     };
 
-    /* FXAA (FXAA_FS in js/render/glx/shaders/glsl-post.js): Lottes compact, LDR resolve.
-     *    The flat-area early-out (lMax-lMin < max(0.04, lMax*0.125)) keeps
-     *    flat regions pixel-exact — constants verbatim. */
+    /* FXAA 3.11 QUALITY (FXAA_FS in js/render/glx/shaders/glsl-post.js): the
+     *    edge-walk form. Orientation from the 3x3 luma neighbourhood, a walk
+     *    along the edge both ways (8 steps, preset-13 spacing, unrolled: the
+     *    step table is a JS array), a blend by position along the span plus a
+     *    sub-pixel term. The flat-area early-out keeps its constants
+     *    (lMax-lMin < max(0.04, lMax*0.125)) so flat regions stay pixel-exact. */
     const fxaaTex = texture(ctx.blackTex);
     const fxaaU = { texel: uniform(new THREE.Vector2()) };
     const fxLuma = (cc) => dot(cc, vec3(0.299, 0.587, 0.114));
+    const FXAA_STEP = [1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0];
+    const FXAA_SUBPIX = 0.75;
     const fxaa = {
       tex: fxaaTex, U: fxaaU,
       mat: passMaterial(Fn(() => {
         const suv = vec2(screenUV).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const t = vec2(fxaaU.texel).toVar();
+        const fxL = (p) => fxLuma(fxaaTex.sample(TL(p)).rgb);
         const cM = vec3(fxaaTex.sample(TL(vUV)).rgb).toVar();
         const res = vec3(cM).toVar();
         const lM = fxLuma(cM).toVar();
-        const lNW = fxLuma(fxaaTex.sample(TL(vUV.add(vec2(t.x.negate(), t.y.negate())))).rgb).toVar();
-        const lNE = fxLuma(fxaaTex.sample(TL(vUV.add(vec2(t.x, t.y.negate())))).rgb).toVar();
-        const lSW = fxLuma(fxaaTex.sample(TL(vUV.add(vec2(t.x.negate(), t.y)))).rgb).toVar();
-        const lSE = fxLuma(fxaaTex.sample(TL(vUV.add(t))).rgb).toVar();
-        const lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))).toVar();
-        const lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE))).toVar();
+        const lN = fxL(vUV.add(vec2(0.0, t.y.negate()))).toVar();
+        const lS = fxL(vUV.add(vec2(0.0, t.y))).toVar();
+        const lW = fxL(vUV.add(vec2(t.x.negate(), 0.0))).toVar();
+        const lE = fxL(vUV.add(vec2(t.x, 0.0))).toVar();
+        const lMin = min(lM, min(min(lN, lS), min(lW, lE))).toVar();
+        const lMax = max(lM, max(max(lN, lS), max(lW, lE))).toVar();
+        const range = lMax.sub(lMin).toVar();
         // Flat areas stay pixel-exact (the early-out).
-        If(lMax.sub(lMin).greaterThanEqual(max(float(0.04), lMax.mul(0.125))), () => {
-          const dir = vec2(
-            lNW.add(lNE).sub(lSW.add(lSE)).negate(),
-            lNW.add(lSW).sub(lNE.add(lSE))).toVar();
-          const dirReduce = max(lNW.add(lNE).add(lSW).add(lSE).mul(0.03125), 0.0078125);
-          const rcp = float(1.0).div(min(abs(dir.x), abs(dir.y)).add(dirReduce));
-          dir.assign(clamp(dir.mul(rcp), vec2(-8.0), vec2(8.0)).mul(t));
-          const rA = fxaaTex.sample(TL(vUV.add(dir.mul(-1.0 / 6.0)))).rgb
-            .add(fxaaTex.sample(TL(vUV.add(dir.mul(1.0 / 6.0)))).rgb).mul(0.5).toVar();
-          const rB = rA.mul(0.5)
-            .add(fxaaTex.sample(TL(vUV.add(dir.mul(-0.5)))).rgb
-              .add(fxaaTex.sample(TL(vUV.add(dir.mul(0.5)))).rgb).mul(0.25)).toVar();
-          const lB = fxLuma(rB);
-          res.assign(select(lB.lessThan(lMin).or(lB.greaterThan(lMax)), rA, rB));
+        If(range.greaterThanEqual(max(float(0.04), lMax.mul(0.125))), () => {
+          const lNW = fxL(vUV.add(vec2(t.x.negate(), t.y.negate()))).toVar();
+          const lNE = fxL(vUV.add(vec2(t.x, t.y.negate()))).toVar();
+          const lSW = fxL(vUV.add(vec2(t.x.negate(), t.y))).toVar();
+          const lSE = fxL(vUV.add(t)).toVar();
+          const lNS = lN.add(lS).toVar(), lWE = lW.add(lE).toVar();
+          const edgeH = abs(lW.mul(-2.0).add(lNW).add(lSW)).add(abs(lM.mul(-2.0).add(lNS)).mul(2.0)).add(abs(lE.mul(-2.0).add(lNE).add(lSE)));
+          const edgeV = abs(lN.mul(-2.0).add(lNW).add(lNE)).add(abs(lM.mul(-2.0).add(lWE)).mul(2.0)).add(abs(lS.mul(-2.0).add(lSW).add(lSE)));
+          const horz = edgeH.greaterThanEqual(edgeV).toVar();
+          const subpix = clamp(abs(lNS.add(lWE).mul(2.0).add(lNW).add(lSW).add(lNE).add(lSE).div(12.0).sub(lM)).div(range), 0.0, 1.0).toVar();
+          subpix.assign(subpix.mul(-2.0).add(3.0).mul(subpix).mul(subpix));
+          subpix.assign(subpix.mul(subpix).mul(FXAA_SUBPIX));
+          const l1 = select(horz, lN, lW).toVar(), l2 = select(horz, lS, lE).toVar();
+          const g1 = l1.sub(lM).toVar(), g2 = l2.sub(lM).toVar();
+          const pair1 = abs(g1).greaterThanEqual(abs(g2)).toVar();
+          const gradScaled = max(abs(g1), abs(g2)).mul(0.25).toVar();
+          const lenSign = select(pair1, select(horz, t.y, t.x).negate(), select(horz, t.y, t.x)).toVar();
+          const lAvg = select(pair1, l1, l2).add(lM).mul(0.5).toVar();
+          const posB = select(horz, vec2(vUV.x, vUV.y.add(lenSign.mul(0.5))), vec2(vUV.x.add(lenSign.mul(0.5)), vUV.y)).toVar();
+          const off = select(horz, vec2(t.x, 0.0), vec2(0.0, t.y)).toVar();
+          const posN = posB.sub(off.mul(FXAA_STEP[0])).toVar();
+          const posP = posB.add(off.mul(FXAA_STEP[0])).toVar();
+          const endN = fxL(posN).sub(lAvg).toVar();
+          const endP = fxL(posP).sub(lAvg).toVar();
+          const doneN = abs(endN).greaterThanEqual(gradScaled).toVar();
+          const doneP = abs(endP).greaterThanEqual(gradScaled).toVar();
+          for (let i = 1; i < FXAA_STEP.length; i++) {
+            If(doneN.not(), () => {
+              posN.subAssign(off.mul(FXAA_STEP[i]));
+              endN.assign(fxL(posN).sub(lAvg));
+              doneN.assign(abs(endN).greaterThanEqual(gradScaled));
+            });
+            If(doneP.not(), () => {
+              posP.addAssign(off.mul(FXAA_STEP[i]));
+              endP.assign(fxL(posP).sub(lAvg));
+              doneP.assign(abs(endP).greaterThanEqual(gradScaled));
+            });
+          }
+          const dstN = select(horz, vUV.x.sub(posN.x), vUV.y.sub(posN.y)).toVar();
+          const dstP = select(horz, posP.x.sub(vUV.x), posP.y.sub(vUV.y)).toVar();
+          const mLow = lM.sub(lAvg).lessThan(0.0).toVar();
+          const goodN = endN.lessThan(0.0).notEqual(mLow);
+          const goodP = endP.lessThan(0.0).notEqual(mLow);
+          const nearN = dstN.lessThan(dstP);
+          const dst = min(dstN, dstP);
+          const good = select(nearN, goodN, goodP);
+          const pixOff = select(good, dst.negate().div(dstN.add(dstP)).add(0.5), float(0.0));
+          const o = max(pixOff, subpix).mul(lenSign).toVar();
+          const pos = select(horz, vec2(vUV.x, vUV.y.add(o)), vec2(vUV.x.add(o), vUV.y));
+          res.assign(fxaaTex.sample(TL(pos)).rgb);
         });
         return vec4(res, 1.0);
       })(), "tlx-post-fxaa"),

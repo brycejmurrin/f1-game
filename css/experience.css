@@ -1,0 +1,73 @@
+/* Apex 26 — readable live paddock and contextual race doors; existing primitives (Home explore tier). */
+@layer overlays {
+  /* Filled accent surfaces use contrast ink rather than the page's theme ink. */
+  .bigbtn:not(.alt) { color: var(--menu-accent-ink, var(--text)); }
+  #overlay #mb-career .mb-sub { color: inherit; }
+  #menu-primary .bigbtn,
+  #menu-explore .bigbtn { color: var(--text); }
+  #pm-race-context { grid-column: 1 / -1; display: grid; gap: calc(var(--gap) / 3); padding: var(--gap); background: var(--carbon); border-bottom: 1px solid var(--plate-line); }
+  #pm-race-context strong { font-size: var(--fs-5); }
+  #pm-race-context :is(span, small) { color: var(--dim); font-size: var(--fs-micro); }
+  #pm-quick-doors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--gap) / 2); grid-column: 1 / -1; }
+  #pm-quick-doors button { margin: 0; min-height: var(--tap); min-width: 0; font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: calc(var(--gap) / 2); transform: none; }
+  #pm-checkpoint { grid-column: 1 / -1; font-size: var(--fs-micro); border: 1px solid var(--plate-line); padding: calc(var(--gap) / 2); border-radius: var(--r-md); }
+  #pm-checkpoint summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; }
+  #pm-checkpoint button { font-size: var(--fs-micro); }
+  #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); }
+  #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }
+  #practice-goal { min-height: var(--tap); max-width: 100%; color: var(--text); background: var(--carbon); border: 1px solid var(--plate-line); }
+  #home-motion { position: absolute; z-index: 2; top: var(--safe-t); left: var(--safe-l); padding: calc(var(--gap) / 2) var(--gap); min-height: var(--tap); font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--carbon) 20%, transparent) 40%, var(--carbon) 66%); }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #title-car { opacity: 0; }
+  #overlay[data-home-scene="photo"] { background-image: linear-gradient(90deg, transparent, var(--carbon) 68%), var(--home-scene-image); background-size: cover; background-position: center; }
+  #overlay[data-home-scene="photo"]:not([style*="data:image"]) #title-car,
+  #overlay[data-home-scene]:not([data-home-scene="static"]):not([data-home-ready="1"]):not([data-home-scene="photo"]) #title-car { opacity: 1; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { background: transparent; border: 0; padding: var(--gap); }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start; justify-content: flex-start; padding: var(--gap); font-style: normal; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-secondary .bigbtn { transform: none; font-style: normal; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #mb-daily { justify-content: flex-start; text-align: start; font-style: normal; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand { align-self: end; }
+  body.photo-studio-open #overlay > :not(#title-car) { visibility: hidden; }
+  body.photo-studio-open #overlay[data-home-scene] { background: transparent; pointer-events: none; }
+  /* A wide scene owns the left half; menu surfaces retain their own solid ink.
+     ONE grid row. The brand used to sit in a row of its own ABOVE the buttons
+     (column 2, centred), so on a short wide window the 210 px wordmark row
+     pushed the 600 px button column into a 350 px slot: the column started a
+     third of the way down and WATCH / PRACTICE / PHOTO and the rooms were below
+     the fold behind a scrollbar (1280x600 and a half-height laptop window,
+     2026-10-02). The brand now lives top-left over the scene, as the compact
+     layout and the static title already place it, and the buttons own the whole
+     right column: centred when they fit, scrolling only when the window is
+     shorter than the column. */
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-content: stretch; align-items: start; gap: var(--gap); }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand { grid-column: 1; grid-row: 1; align-self: start; padding: 0; text-align: start; align-items: flex-start; }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #title { font-size: clamp(var(--fs-6), calc(5 * var(--vwz)), calc(var(--fs-6) * 4)); }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { grid-column: 2; grid-row: 1; width: 100%; max-height: 100%; align-self: center; align-content: start; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; min-height: 0; }
+  /* Just above the compact threshold (body --compact-at 600px) the full column
+     is ~605px in a ~576px slot: close the tier gaps and the plate padding a
+     little so the rooms row clears the fold instead of sitting 30px under it. */
+  @media (max-height: 660px) {
+    :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { gap: calc(var(--gap) * 0.5); }
+    :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
+    :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
+  }
+  /* The brand is top-left now, where this button used to dock: bottom-left for every wide scene, not only compact. */
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
+  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, transparent); grid-template-rows: auto minmax(0, 1fr); }
+  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: stretch; align-content: start; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; }
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1fr) min(46%, 400px); }
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: start; }
+  :where(body[data-shape="wide"][data-density="compact"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  /* No font-size here: a flat var(--fs-micro) overrode menus.css's compact
+     `calc(var(--fs-4) * var(--ui-compact-text))`, so UI SIZE 200% painted the
+     doors at 17.5px (ui-scale.spec "200% keeps title navigation reachable",
+     phone portrait, 2026-10-02) — the readability remainder never reached the
+     rendered scene's buttons. The shared compact size scales; this only trims
+     the height. */
+  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons .bigbtn { min-height: var(--tap); padding-block: calc(var(--gap) / 2); }
+  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#tagline, #blurb, #disclaimer, #audiostate) { display: none; }
+  :root[data-motion="reduce"] :is(#pm-race-context, #pm-quick-doors, #practice-brief) { animation: none; transition: none; }
+}

@@ -63,6 +63,11 @@ const TrackThemes = (function () {
       standSet: ["pastel", "scaffold", "alu"],
       pit: { mode: "street" },
       cityStyle: { neon: ["gold", "teal", "white", "rose"], dayPal: ["cream", "sand", "ochre", "terra", "peach"], bias: 0.12 },
+      // The day city is the fleet's densest generic dressing (~0.2 M prop
+      // vertices per km, un-instanced): full density for this many metres of
+      // lap, gaps beyond it (cityGaps) — 7 km built 1.36-1.58 M, over the
+      // 1.1 M fleet cap; thinned, ≤ 0.91 M.
+      cityM: 3600,
     },
     marina: {
       label: "MARINA NIGHT", blurb: "Floodlit walls, neon skyline on dark water.",
@@ -102,9 +107,33 @@ const TrackThemes = (function () {
    *  newer share code): the circuit still builds, in the default look. */
   function get(id) { return PRESETS[has(id) ? id : ORDER[0]]; }
 
+  /** A design's lap length (m): its stored lengthM, else the control polygon. */
+  function lapM(design) {
+    if (!design) return 0;
+    if (Number.isFinite(design.lengthM) && design.lengthM > 0) return design.lengthM;
+    const pts = Array.isArray(design.pts) ? design.pts : [];
+    let L = 0;
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if (a && b) L += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    return Number.isFinite(L) ? L : 0;
+  }
+  /** The generic city pass (build-props.js) plants a block every 18 m whatever
+   *  the lap length, so a long street lap outgrows the prop budget. Past `cityM`
+   *  metres, five evenly spread `dressingExclusions` windows (kind "city", both
+   *  sides, centred at 0.1, 0.3 … 0.9 — clear of the pit straight at 0) drop
+   *  the surplus: the city keeps cityM / L of the lap, at full density where it
+   *  stands. Lap fractions in the racing frame (startFrac 0, no scenery shift). */
+  function cityGaps(L, cityM) {
+    if (!(cityM > 0) || !(L > cityM)) return null;
+    const m = 5, w = (1 - cityM / L) / m;
+    const out = [];
+    for (let i = 0; i < m; i++) { const c = (i + 0.5) / m; out.push({ kind: "city", s0: +(c - w / 2).toFixed(4), s1: +(c + w / 2).toFixed(4) }); }
+    return out;
+  }
+
   /** The def fields a design inherits from its theme — what js/editor/custom-tracks.js
-   *  spreads into the raw def before TrackDef.fromRaw copies them onto the LIST entry. */
-  function defFields(id) {
+   *  spreads into the raw def before TrackDef.fromRaw copies them onto the LIST entry.
+   *  `design` (optional) scales the length-dependent ones (cityGaps). */
+  function defFields(id, design) {
     const p = get(id);
     const out = {
       theme: p.theme, sceneryTheme: p.sceneryTheme, night: !!p.night, street: !!p.street,
@@ -114,6 +143,8 @@ const TrackThemes = (function () {
     if (p.cityStyle) out.cityStyle = clone(p.cityStyle);
     if (p.pit) out.pit = clone(p.pit);
     if (p.terrainMat) out.terrainMat = p.terrainMat;   // "SAND" / "SNOW": the ground beyond the verge (js/track/core/mesh.js)
+    const gaps = design ? cityGaps(lapM(design), p.cityM) : null;
+    if (gaps) out.dressingExclusions = gaps;
     return out;
   }
 
@@ -126,25 +157,35 @@ const TrackThemes = (function () {
   // from the design (Hash32.unit — api.hash is only node-seeded, so two loops
   // with the same node count would share a scatter). Every placement stays
   // inside the api's own guards (onTrack footprint rejection, the mast caps) and
-  // inside the fleet prop budget: belts cover at most ~35 % of the lap, the
-  // horizon is at most 28 pieces beyond lapBounds().radius + 120.
+  // inside the fleet prop budget at the validator's 7 km lap cap
+  // (tests/unit/track-themes-build.test.mjs builds every preset there): belts
+  // cover at most `coverage` of BELT_REF_M (not of the lap, so a long lap does
+  // not plant more forest), the horizon is a FIXED ring of at most 28 pieces
+  // beyond lapBounds().radius + 120 (its cost does not grow with the lap), the
+  // street city thins past cityM (cityGaps) and the flood ring spaces itself
+  // to the lamp budget (floods).
+  const BELT_REF_M = 5000, LAMP_BUDGET = 460;
 
   /** Build-time reads of the centreline the dressers share. */
   function survey(api) {
     const { track, n, px, pz, curv } = Object.assign({ curv: api.track.curv }, api);
     const total = track.total, ds = total / n;
     const K = 0.0035;   // TrackPit.PIT_K: "not actively cornering"
-    // Straights: runs of |k| ≤ K, longest first, as lap fractions.
+    // Straights: runs of |k| ≤ K, longest first, as lap fractions. ONE lap,
+    // starting at the first curved node: a scan from node 0 counted the start
+    // straight twice (the partial run from 0 and the whole run wrapping into
+    // it), and belts() then planted the pit straight twice.
     const straights = [];
+    let c0 = 0;
+    while (c0 < n && Math.abs(curv[c0]) <= K) c0++;
     let run = 0, start = 0;
-    for (let i = 0; i < 2 * n; i++) {
+    if (c0 < n) for (let i = c0; i <= c0 + n; i++) {
       const k = i % n;
-      if (Math.abs(curv[k]) <= K) { if (!run) start = k; run++; }
+      if (i < c0 + n && Math.abs(curv[k]) <= K) { if (!run) start = k; run++; }
       else { if (run >= 50) straights.push({ s0: start / n, s1: ((start + run) % n) / n, lenM: run * ds, k0: start, k1: (start + run) % n }); run = 0; }
-      if (i >= n && run > n) break;
     }
     straights.sort((a, b) => b.lenM - a.lenM);
-    const uniq = straights.filter((s, i) => straights.findIndex((t) => t.k0 === s.k0) === i).slice(0, 6);
+    const uniq = straights.slice(0, 6);
     // Slow corners: top |k| peaks ≥ 250 m from the start line and 300 m apart.
     const peaks = [];
     for (let k = 0; k < n; k++) {
@@ -189,7 +230,7 @@ const TrackThemes = (function () {
   function belts(api, sv, h, opts) {
     const { forestEdge } = api;
     let covered = 0;
-    const budget = (opts.coverage || 0.35) * sv.total;
+    const budget = (opts.coverage || 0.35) * Math.min(sv.total, BELT_REF_M);
     const spans = sv.straights.map((s) => ({ s0: s.s0, s1: s.s1, lenM: s.lenM }));
     // Both sides of the longest straight, then alternate sides.
     spans.forEach((sp, i) => {
@@ -231,8 +272,14 @@ const TrackThemes = (function () {
     place(sv.far, "a");
     if (opts.second !== false) place(K(((sv.far / n) + 0.25 + h("shore", 1) * 0.5) % 1), "b");
   }
+  /** Flood masts both sides every `step` m. The lamp register also holds the
+   *  generic lamp posts (build-props.js: one per ~22 m, ~L / 20 measured with
+   *  the pit's) — so the ring takes what LAMP_BUDGET leaves: every 60 m up to
+   *  ~5.5 km (unchanged), sparser beyond, ≤ 460 lamps in all at 7 km
+   *  (MAST_LAMP_CAP 512). */
   function floods(api, sv, h, opts) {
-    const step = Math.max(60, sv.total / 200);   // ≤ 400 masts: under the 512 lamp cap with room for the pit flood banks
+    const room = Math.max(40, LAMP_BUDGET - sv.total / 20);
+    const step = Math.max(60, (2 * sv.total) / room);
     api.floodMastRing(step, { dist: opts.dist || 28, h: opts.h || 26, cool: opts.cool !== false, pool: true });
   }
   function oasis(api, sv, h, opts) {
@@ -241,71 +288,80 @@ const TrackThemes = (function () {
     api.waterSurface(sv.far, inside, 60, [140, 0.3, 90], opts.col || [0.16, 0.42, 0.48], { id: "custom-oasis" });
   }
 
+  // Each preset is a list of independent DRESSERS: one that throws is logged
+  // and skipped, and the rest still stand (sceneryFor).
   const DRESS = {
-    parkland(api, sv, h) {
-      belts(api, sv, h, { coverage: 0.35, gap: 40, col: [0.20, 0.40, 0.18], col2: [0.26, 0.42, 0.20], pineFrac: 0.2, hMin: 9, hMax: 16 });
-      stands(api, sv, h, { tiers: 2, h: 13 });
-      horizon(api, sv, h, { count: 24, h0: 10, h1: 6, cols: [[0.22, 0.42, 0.20], [0.20, 0.38, 0.18]] });
-    },
-    alpine(api, sv, h) {
-      belts(api, sv, h, { coverage: 0.5, gap: 30, col: [0.12, 0.28, 0.14], col2: [0.16, 0.32, 0.18], pineFrac: 0.85, hMin: 14, hMax: 24, density: 0.3, second: true });
-      stands(api, sv, h, { tiers: 1, h: 11, hills: 2, second: false });
-      horizon(api, sv, h, { mountain: true, count: 12, rMin: 900, rMax: 1500, w0: 700, w1: 400, h0: 260, h1: 160, rough: 0.3, snowline: 0.55, snow: [0.95, 0.96, 1.0], rock: [0.33, 0.32, 0.36], forest: [0.14, 0.24, 0.20] });
-    },
-    oasis(api, sv, h) {
-      horizon(api, sv, h, { count: 28, rMin: 180, rMax: 320, len: 200, wid: 46, h0: 14, h1: 14, cols: [[0.74, 0.60, 0.40], [0.70, 0.56, 0.38]] });
-      oasis(api, sv, h, {});
-      stands(api, sv, h, { tiers: 1, h: 12, hills: 1, grass: [0.62, 0.52, 0.34] });
-    },
-    desertnight(api, sv, h) {
-      horizon(api, sv, h, { count: 28, rMin: 180, rMax: 320, len: 200, wid: 46, h0: 14, h1: 14, cols: [[0.36, 0.30, 0.22], [0.32, 0.27, 0.20]] });
-      oasis(api, sv, h, { col: [0.06, 0.12, 0.18] });
-      stands(api, sv, h, { tiers: 1, h: 12, hills: 1, grass: [0.30, 0.26, 0.20] });
-      floods(api, sv, h, { cool: false });
-    },
-    harbour(api, sv, h) {
-      shore(api, sv, h, { col: [0.18, 0.38, 0.56] });
-      stands(api, sv, h, { tiers: 1, h: 9, hills: 0, livery: "alu", livery2: "scaffold" });
-    },
-    marina(api, sv, h) {
-      shore(api, sv, h, { col: [0.04, 0.08, 0.14] });
-      stands(api, sv, h, { tiers: 1, h: 9, hills: 0, livery: "navy", livery2: "alu" });
-      floods(api, sv, h, { cool: true, dist: 26, h: 22 });
-    },
-    tilke(api, sv, h) {
-      stands(api, sv, h, { tiers: 3, h: 16, hills: 2, stand: true, livery: "navy", livery2: "teal" });
+    parkland: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.35, gap: 40, col: [0.20, 0.40, 0.18], col2: [0.26, 0.42, 0.20], pineFrac: 0.2, hMin: 9, hMax: 16 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 13 })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 24, h0: 10, h1: 6, cols: [[0.22, 0.42, 0.20], [0.20, 0.38, 0.18]] })],
+    ],
+    alpine: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.5, gap: 30, col: [0.12, 0.28, 0.14], col2: [0.16, 0.32, 0.18], pineFrac: 0.85, hMin: 14, hMax: 24, density: 0.3, second: true })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, second: false })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 12, rMin: 900, rMax: 1500, w0: 700, w1: 400, h0: 260, h1: 160, rough: 0.3, snowline: 0.55, snow: [0.95, 0.96, 1.0], rock: [0.33, 0.32, 0.36], forest: [0.14, 0.24, 0.20] })],
+    ],
+    oasis: [
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 28, rMin: 180, rMax: 320, len: 200, wid: 46, h0: 14, h1: 14, cols: [[0.74, 0.60, 0.40], [0.70, 0.56, 0.38]] })],
+      ["oasis", (api, sv, h) => oasis(api, sv, h, {})],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 12, hills: 1, grass: [0.62, 0.52, 0.34] })],
+    ],
+    desertnight: [
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 28, rMin: 180, rMax: 320, len: 200, wid: 46, h0: 14, h1: 14, cols: [[0.36, 0.30, 0.22], [0.32, 0.27, 0.20]] })],
+      ["oasis", (api, sv, h) => oasis(api, sv, h, { col: [0.06, 0.12, 0.18] })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 12, hills: 1, grass: [0.30, 0.26, 0.20] })],
+      ["floods", (api, sv, h) => floods(api, sv, h, { cool: false })],
+    ],
+    harbour: [
+      ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.18, 0.38, 0.56] })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 9, hills: 0, livery: "alu", livery2: "scaffold" })],
+    ],
+    marina: [
+      ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.04, 0.08, 0.14] })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 9, hills: 0, livery: "navy", livery2: "alu" })],
+      ["floods", (api, sv, h) => floods(api, sv, h, { cool: true, dist: 26, h: 22 })],
+    ],
+    tilke: [
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 3, h: 16, hills: 2, stand: true, livery: "navy", livery2: "teal" })],
       // The hotel over the pit straight, set back behind the stands.
-      if (api.building) api.building(api.K(0.03), -sv.pitSide, 120, 30, 60, 30, { kind: "slab" });
-      horizon(api, sv, h, { count: 20, h0: 6, h1: 5, cols: [[0.24, 0.44, 0.22]] });
-    },
-    autumn(api, sv, h) {
-      belts(api, sv, h, { coverage: 0.4, gap: 34, col: [0.66, 0.36, 0.12], col2: [0.52, 0.28, 0.10], pineFrac: 0.1, hMin: 9, hMax: 16 });
-      stands(api, sv, h, { tiers: 1, h: 11, hills: 3, livery: "terracotta" });
-      horizon(api, sv, h, { count: 24, rMin: 160, rMax: 300, h0: 12, h1: 10, cols: [[0.36, 0.40, 0.18], [0.44, 0.38, 0.16]] });
-    },
+      ["hotel", (api, sv) => { if (api.building) api.building(api.K(0.03), -sv.pitSide, 120, 30, 60, 30, { kind: "slab" }); }],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 20, h0: 6, h1: 5, cols: [[0.24, 0.44, 0.22]] })],
+    ],
+    autumn: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.4, gap: 34, col: [0.66, 0.36, 0.12], col2: [0.52, 0.28, 0.10], pineFrac: 0.1, hMin: 9, hMax: 16 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 3, livery: "terracotta" })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 24, rMin: 160, rMax: 300, h0: 12, h1: 10, cols: [[0.36, 0.40, 0.18], [0.44, 0.38, 0.16]] })],
+    ],
   };
 
   /** The generated `scenery(api)` closure for a design. An inline closure beats
    *  the js/circuits/scenery registry (build-props.js resolves def.scenery
    *  first) and tells game.js's ensureScenery there is nothing to fetch. Every
    *  draw is seeded from the design, so the same share code dresses the same
-   *  circuit on every machine. A dresser that throws leaves the generic
-   *  dressing standing: the build must never strand on a theme. */
+   *  circuit on every machine. The build must never strand on a theme: a
+   *  failed survey leaves the generic dressing alone, and each dresser runs in
+   *  its own try, so one that throws is logged and the others still stand. */
   function sceneryFor(design) {
     const themeId = has(design && design.theme) ? design.theme : ORDER[0];
     const seed = (design && design.seed) >>> 0 || 1;
     return function customScenery(api) {
       const h = (tag, i) => Hash32.unit(seed, themeId, tag, i == null ? 0 : i);
-      try {
-        const sv = survey(api);
-        DRESS[themeId](api, sv, h);
-        Log.info("track", "custom scenery " + api.def.id + " theme=" + themeId + " straights=" + sv.straights.length + " slow=" + sv.slow.length);
-      } catch (e) {
-        Log.warn("track", "custom scenery " + themeId + " failed — generic dressing only: " + (e && e.message || e));
+      let sv;
+      try { sv = survey(api); } catch (e) {
+        Log.warn("track", "custom scenery " + themeId + " failed (survey) — generic dressing only: " + (e && e.message || e));
+        return;
       }
+      let failed = 0;
+      for (const [name, dress] of DRESS[themeId]) {
+        try { dress(api, sv, h); } catch (e) {
+          failed++;
+          Log.warn("track", "custom scenery " + themeId + " failed (" + name + ") — the other dressers stand: " + (e && e.message || e));
+        }
+      }
+      Log.info("track", "custom scenery " + api.def.id + " theme=" + themeId + " straights=" + sv.straights.length + " slow=" + sv.slow.length + (failed ? " failed=" + failed : ""));
     };
   }
 
-  return { ORDER, PRESETS, has, get, defFields, sceneryFor, survey, DRESS };
+  return { ORDER, PRESETS, has, get, defFields, sceneryFor, survey, DRESS, lapM, cityGaps };
 })();
 Object.freeze(TrackThemes);

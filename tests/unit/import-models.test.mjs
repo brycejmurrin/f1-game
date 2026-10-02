@@ -89,13 +89,17 @@ test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", async 
     // Read the .bin with the GAME'S reader, not a copy of it — tests/helpers/ax26.mjs.
     const binPath = path.join(out, man.models.q_building.file);
     const hdr = ax26Version(binPath);
-    // Two primitives, each copying the 6-vertex POSITION accessor -> 12 verts,
-    // 6 indices, 2 triangles. (Primitives do not share a vertex block.)
-    assert.equal(hdr.verts, 12); assert.equal(hdr.indices, 6);
+    // Two primitives sharing one 6-vertex POSITION accessor, each indexing three
+    // of its vertices -> 6 verts, 6 indices, 2 triangles. (Each primitive emits
+    // only the vertices it references; copying the accessor whole per primitive
+    // gave 12, and 3.4x on the Racing Kit's per-material primitives.)
+    assert.equal(hdr.verts, 6); assert.equal(hdr.indices, 6);
     assert.equal(hdr.version, 2, "an imported low-poly mesh must take the packed layout");
     const geo = await readAX26(binPath);
     assert.ok(geo, "the shipped reader must accept what the importer produced");
     const pos = geo.pos, col = geo.col, mat = geo.mat;
+    // Local indices in first-use order: primitive A's three, then B's three.
+    assert.deepEqual([...geo.idx], [0, 1, 2, 3, 4, 5]);
 
     // Height normalised to 12 m, base sitting on y=0.
     let mny = 1e9, mxy = -1e9;
@@ -188,4 +192,29 @@ test("import-models samples indexed (colour-type 3) Kenney-style colormaps", asy
   } finally {
     process.on("exit", () => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {} });
   }
+});
+
+test("--scale keeps a kit's relative sizes: a uniform metres-per-unit factor when --height is 0", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-"));
+  const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
+  fs.mkdirSync(src, { recursive: true }); fs.mkdirSync(out, { recursive: true });
+  try {
+    buildFixture(src);
+    const run = (args) => cp.spawnSync(process.execPath,
+      [path.join(ROOT, "tools", "gen", "import-models.mjs"), src, "--mat", "CONCRETE", ...args, "--prefix", "s_"],
+      { env: { ...process.env, APEX_PACK_DIR: out }, encoding: "utf8" });
+    const height = async (r) => {
+      assert.equal(r.status, 0, r.stderr);
+      const man = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));
+      const geo = await readAX26(path.join(out, man.models.s_building.file));
+      let mny = 1e9, mxy = -1e9;
+      for (let i = 1; i < geo.pos.length; i += 3) { mny = Math.min(mny, geo.pos[i]); mxy = Math.max(mxy, geo.pos[i]); }
+      return mxy - mny;
+    };
+    const h1 = await height(run(["--height", "0", "--scale", "1"]));
+    const h5 = await height(run(["--height", "0", "--scale", "5"]));
+    assert.ok(h1 > 0 && Math.abs(h5 - h1 * 5) < 1e-3, `scale 5 should be five times scale 1: ${h5} vs ${h1}`);
+    const hb = await height(run(["--height", "12", "--scale", "5"]));
+    assert.ok(Math.abs(hb - 12) < 1e-3, `--height wins over --scale: ${hb}`);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

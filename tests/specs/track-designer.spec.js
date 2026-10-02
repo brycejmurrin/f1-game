@@ -15,7 +15,7 @@ async function bootClean(page) {
   await page.addInitScript(() => {
     if (sessionStorage.getItem("apex26.spec.td-clean")) return;
     sessionStorage.setItem("apex26.spec.td-clean", "1");
-    for (const k of Object.keys(localStorage)) if (k === "apex26.customTracks" || k === "apex26.customTrackDraft" || k === "apex26.trackId" || k === "apex26.track") localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) if (k === "apex26.customTracks" || k === "apex26.customTrackDraft" || k === "apex26.customTrackDraftPrev" || k === "apex26.trackId" || k === "apex26.track") localStorage.removeItem(k);
   });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
@@ -236,5 +236,36 @@ test.describe("Track designer", () => {
     });
     expect(floor.n).toBe(8);
     expect(floor.refused).toBe(true);
+  });
+
+  test("FIX ALL turns a deliberately short loop green and SAVE enables", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 7);
+    // A 1.6 km ellipse on the 0.25 m lattice: red on the lap length and on the
+    // straights around the start line — every red one TrackFixes can repair.
+    await page.evaluate(() => {
+      const pts = [];
+      for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); }
+      TrackDesigner.load(Object.assign({}, TrackDesigner.state().design, { pts }));
+    });
+    await page.waitForFunction(() => !TrackDesigner.state().pending, null, { polling: 100, timeout: 15_000 });
+    const red = await page.evaluate(() => TrackDesigner.state());
+    expect(red.ok).toBe(false);
+    expect(red.issues).toContain("length:red");
+    const save = page.locator("#trackdesigner .td-foot button", { hasText: /^SAVE$/ });
+    await expect(save).toBeDisabled();
+    const fixAll = page.locator("#trackdesigner button", { hasText: /^FIX ALL$/ });
+    await expect(fixAll).toBeVisible();
+    await fixAll.click();
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
+    const green = await page.evaluate(() => TrackDesigner.state());
+    expect(green.red).toBe(0);
+    expect(green.lengthM).toBeGreaterThanOrEqual(2500);
+    expect(green.undo, "FIX ALL is one UNDO entry").toBe(red.undo + 1);
+    await expect(save).toBeEnabled();
+    await expect(fixAll).toBeHidden();
+    await expect(page.locator("#trackdesigner .td-msg")).toContainText("UNDO to revert");
+    expect((await page.evaluate(() => TrackDesigner.save())).ok).toBe(true);
   });
 });

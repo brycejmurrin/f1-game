@@ -143,16 +143,17 @@ test("the refined wheel styles fit their mounts and keep the shared LCD and hand
 });
 
 test("the interiors build inside the tub, keyed by livery, and only CLASSIC has glass", () => {
-  const { CarMesh, freed } = loadMesh();
+  const { CarMesh, freed } = loadMesh(), { opts } = loadOpts({});
+  const rearLimit = Math.min(...opts.CHOICES.seat.values.map(s => opts.layout("f1", s).eyeF)) - 0.35;
   for (const kind of ["carbon", "team", "suede", "ribbed", "classic"]) {
     const d = CarMesh.getCockpitCabin(kind, LIV).d, { mn, mx } = bounds(d);
     assert.ok(d.pos.length > 0 && d.idx.length % 3 === 0, `${kind} builds`);
     assert.ok(mn[0] >= -0.33 && mx[0] <= 0.33, `${kind} stays between the tub walls (±0.315): ${mn[0].toFixed(3)}..${mx[0].toFixed(3)}`);
-    // Nothing may crowd the eye: CLASSIC's scuttle starts ahead of it (run back
-    // past it, the rails filled the lower corners); TEAM's pads run alongside the
-    // driver but stay under the LOW seat's eye (0.76).
-    if (kind === "classic") assert.ok(mn[2] >= -0.20, `classic starts at or ahead of the STANDARD eye (z -0.20): ${mn[2].toFixed(3)}`);
-    else assert.ok(mx[1] < 0.76, `team stays under the LOW seat's eye: top ${mx[1].toFixed(3)}`);
+    // Tall rear headrests must stay well behind every eye and its near plane.
+    // Alongside the eye, modern trim still stays below even the LOW seat.
+    for (let i=0;i<d.pos.length;i+=3) if (d.pos[i+1] >= 0.76)
+      assert.ok(d.pos[i+2] <= rearLimit || (kind === "classic" && d.pos[i+2] >= -0.20),
+        `${kind}: tall trim crowds the eye at z ${d.pos[i+2]}`);
   }
   const a = CarMesh.getCockpitCabin("team", LIV);
   assert.equal(CarMesh.getCockpitCabin("team", LIV), a, "cached");
@@ -220,14 +221,14 @@ test("fifteen shift lenses keep the existing ramp/flash states, with the origina
 
 // Trace the driver's sightline, not a screenshot colour: the glass can look
 // grey while a dark stay pierces its lower half. This checks actual occlusion.
-function firstMaterial(mesh, eye, target) {
+function firstMaterial(mesh, eye, target, maxT = Infinity, frontOnly = false) {
   const sub=(a,b)=>a.map((v,i)=>v-b[i]), dot=(a,b)=>a.reduce((n,v,i)=>n+v*b[i],0);
   const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
   const point=(i)=>mesh.pos.slice(i*3,i*3+3), d=sub(target,eye);
-  let nearest=Infinity, material=null;
+  let nearest=maxT, material=null;
   for(let i=0;i<mesh.idx.length;i+=3){
     const a=mesh.idx[i], p=point(a), e1=sub(point(mesh.idx[i+1]),p), e2=sub(point(mesh.idx[i+2]),p);
-    const h=cross(d,e2), det=dot(e1,h); if(Math.abs(det)<1e-10)continue;
+    const h=cross(d,e2), det=dot(e1,h); if(Math.abs(det)<1e-10 || (frontOnly && det <= 0))continue;
     // Inclusive edges avoid missing both triangles on a shared diagonal.
     const v=sub(eye,p), u=dot(v,h)/det; if(u < -1e-12 || u > 1+1e-12)continue;
     const q=cross(v,e1), w=dot(d,q)/det; if(w < -1e-12 || u+w > 1+1e-12)continue;
@@ -321,4 +322,94 @@ test("body alternatives change shoulders but retain cockpit clearance and geomet
     assert.ok(mx[1] < opts.layout("f1", "low").eyeU, "walls stay below the LOW-seat eye");
   }
   for (let i=0;i<shapes.length;i++) for (let j=0;j<i;j++) assert.notDeepEqual(shapes[i].pos, shapes[j].pos);
+});
+
+
+test("every interior blocks road rays through the lower footwell from every seat", () => {
+  const { CarMesh } = loadMesh(), { opts } = loadOpts({});
+  for (const interior of opts.CHOICES.interior.values) {
+    const d = CarMesh.getCockpitCabin(interior, LIV).d;
+    const mesh = { ...d, mat: Array(d.pos.length / 3).fill(1) };
+    for (const seat of opts.CHOICES.seat.values) {
+      const l = opts.layout("f1", seat), eye = [0, l.eyeU, l.eyeF];
+      for (const x of [-0.55,-0.28,0,0.28,0.55]) for (const z of [-0.10,0.25,0.65,1.25,2.0])
+        assert.equal(firstMaterial(mesh, eye, [x,0,z], 1, true), 1, `${interior}/${seat}: road leak toward ${x},${z}`);
+    }
+  }
+});
+
+
+test("cockpit shoulders continue behind every seat when looking sideways or into a spin", () => {
+  const { Car3D } = loadCar3D(), { opts } = loadOpts({}), { CarMesh } = loadMesh();
+  const cabin = CarMesh.getCockpitCabin("carbon", LIV).d;
+  for (const cockpitBody of opts.CHOICES.body.values) {
+    const mesh = Car3D.build(LIV.c1, LIV.c2, { cockpit: true, cockpitBody, noWheels: true, noDriver: true, measure: true });
+    let start = 0;
+    for (const p of mesh.parts) { if (p.name === "bolsters") break; start += p.vertices; }
+    const end = start + mesh.parts.find(p => p.name === "bolsters").vertices;
+    const idx = mesh.idx.filter((_, i) => mesh.idx[Math.floor(i / 3) * 3] >= start && mesh.idx[Math.floor(i / 3) * 3] < end);
+    const shoulders = { pos: mesh.pos.concat(cabin.pos), idx: idx.concat(cabin.idx.map(i => i + mesh.pos.length / 3)),
+      mat: mesh.mat.concat(Array(cabin.pos.length / 3).fill(1)) };
+    const rear = Math.min(...mesh.pos.slice(start * 3, end * 3).filter((_, i) => i % 3 === 2));
+    for (const seat of opts.CHOICES.seat.values) {
+      const l = opts.layout("f1", seat), eye = [0, l.eyeU, l.eyeF];
+      assert.ok(rear < l.eyeF - 2.0, `${cockpitBody}/${seat}: shoulders terminate too close behind the eye`);
+      for (const sign of [-1, 1]) for (const deg of [70, 90, 110, 130, 150]) {
+        const a = deg * Math.PI / 180;
+        const target = [sign * 1.5 * Math.sin(a), 0.10, l.eyeF + 1.5 * Math.cos(a)];
+        assert.notEqual(firstMaterial(shoulders, eye, target, 1, true), null, `${cockpitBody}/${seat}: exposed shoulder end at ${sign * deg} degrees`);
+      }
+    }
+  }
+});
+
+test("every cockpit trim encloses the rear floor and bulkhead from all seats", () => {
+  const { CarMesh } = loadMesh(), { opts } = loadOpts({});
+  for (const interior of opts.CHOICES.interior.values) {
+    const d = CarMesh.getCockpitCabin(interior, LIV).d, mesh = { ...d, mat: Array(d.pos.length / 3).fill(1) };
+    for (const seat of opts.CHOICES.seat.values) {
+      const l = opts.layout("f1", seat), eye = [0, l.eyeU, l.eyeF];
+      for (const x of [-0.7, -0.3, 0, 0.3, 0.7]) for (const z of [-0.45, -0.9, -1.5, -2.5])
+        assert.equal(firstMaterial(mesh, eye, [x, 0, z], 1, true), 1, `${interior}/${seat}: rear road leak toward ${x},${z}`);
+      for (const x of [-0.35, 0, 0.35]) for (const y of [0.45, 0.65, 0.80])
+        assert.equal(firstMaterial(mesh, eye, [x, y, -2], 1, true), 1, `${interior}/${seat}: open rear bulkhead toward ${x},${y}`);
+    }
+  }
+});
+
+
+test("every enabled cockpit halo mounts behind the eye rather than ending beside it", () => {
+  const { Car3D } = loadCar3D(), { opts } = loadOpts({});
+  for (const halo of [1, 2, 3, 4]) {
+    const mesh = Car3D.build(LIV.c1, LIV.c2, { cockpit: true, halo, noWheels: true, noDriver: true, measure: true });
+    let start = 0;
+    for (const part of mesh.parts) { if (part.name === "cockpit") break; start += part.vertices; }
+    const count = mesh.parts.find(p => p.name === "cockpit").vertices;
+    const { mn } = bounds({ pos: mesh.pos.slice(start * 3, (start + count) * 3) });
+    for (const seat of opts.CHOICES.seat.values)
+      assert.ok(mn[2] < opts.layout("f1", seat).eyeF - 0.50, `${halo}/${seat}: halo stops at the eye`);
+  }
+});
+
+
+test("the rear enclosure covers the halo mounting ends during an oblique glance", () => {
+  const { Car3D } = loadCar3D(), { CarMesh } = loadMesh(), { opts } = loadOpts({});
+  for (const halo of [1, 2, 3, 4]) {
+    const mesh = Car3D.build(LIV.c1, LIV.c2, { cockpit: true, halo, noWheels: true, noDriver: true, measure: true });
+    let start = 0;
+    for (const part of mesh.parts) { if (part.name === "cockpit") break; start += part.vertices; }
+    const end = start + mesh.parts.find(p => p.name === "cockpit").vertices;
+    const rear = Math.min(...mesh.pos.slice(start * 3, end * 3).filter((_, i) => i % 3 === 2));
+    const mounts = [];
+    for (let i=start;i<end;i++) if (mesh.pos[i*3+2] < rear + 0.05) mounts.push(mesh.pos.slice(i*3,i*3+3));
+    assert.ok(mounts.length > 0);
+    for (const interior of opts.CHOICES.interior.values) {
+      const d = CarMesh.getCockpitCabin(interior, LIV).d, cabin = { ...d, mat: Array(d.pos.length / 3).fill(1) };
+      for (const seat of opts.CHOICES.seat.values) {
+        const l = opts.layout("f1", seat), eye = [0,l.eyeU,l.eyeF];
+        for (const target of mounts)
+          assert.equal(firstMaterial(cabin, eye, target, 1, true), 1, `${halo}/${interior}/${seat}: floating rear halo end`);
+      }
+    }
+  }
 });
