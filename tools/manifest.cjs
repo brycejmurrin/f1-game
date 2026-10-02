@@ -194,6 +194,7 @@ const FULL = [
   "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
   "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
+  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=, default OFF)
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/input.js",
@@ -258,6 +259,7 @@ const FULL = [
   "js/race/spotter.js",
   "js/race/race-radio.js",
   "js/camera/offsets.js",
+  "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
   "js/camera/flyby-seq.js",
   "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
@@ -304,6 +306,7 @@ const FULL = [
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
+  "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
@@ -412,6 +415,7 @@ const CARVIEW = [
   "js/data/teams.js",
   "js/car/parts.js",
   "js/car/helmets.js",
+  "js/car/car-shade.js",
   "js/car/car3d.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
@@ -792,11 +796,12 @@ const LAZY_EDITOR = [
   "js/editor/stamps.js",      // TrackStamps: STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND + the Dubins rejoin
   "js/editor/randomise.js",   // TrackRandom: hull + displacement + fixAngles (Maciel), seeded
   "js/editor/validate.js",    // TrackValidate: WYSIWYG rules over Tracks.buildCenterline
+  "js/editor/fixes.js",       // TrackFixes: one-click remedies for the validator's issues (start, length, spacing, smoothing, bridge, clearance)
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
   "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
-// stamps / randomise / validate / canvas destructure TrackShape at eval — the
+// stamps / randomise / validate / fixes / canvas destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/designer.js")

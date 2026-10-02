@@ -449,6 +449,12 @@ const api = {
     CamTunerPanel.refresh();
     return CamTune.values(m);
   },
+  // pitCamAuto(on?) — optional auto-cut onto PIT WALL around pit entry/exit
+  // (js/camera/extra-rigs.js). Default ON. Pass a boolean to set; no args to read.
+  pitCamAuto(on) {
+    if (typeof ExtraRigs === "undefined") return false;
+    return ExtraRigs.pitCamAuto(G.store, on);
+  },
   // track reflects the ACTIVE race track — null at the menu/select even though a
   // track is loaded for the background flyby (matches the documented contract).
   // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.

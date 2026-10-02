@@ -1,4 +1,4 @@
-/* Apex 26 — the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/ reverse) as… */
+/* Apex 26 — the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus ExtraRigs rival/pitwall/drone) as… */
 const GameCams = (function () {
   "use strict";
 
@@ -327,7 +327,18 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // height — a crane-over-the-circuit shot. Open circuits keep the full framing.
   const corr = track.def && track.def.street ? Math.max(cvA.hw - 1.0, 4) : Infinity;
   let eye = _vantEyeW, tgt = _vantTgtW, fov;   // pooled; every branch below writes IN PLACE
-  if (mode === "cockpit" || mode === "hood" || mode === "visor") {
+  // RIVAL / PIT WALL / DRONE — solvers live in js/camera/extra-rigs.js so this
+  // file stays under the ratchet. They write eye/tgt and return fov; CamTune
+  // and the ground clamp below still apply exactly as for the built-ins.
+  if (mode === "rival" || mode === "pitwall" || mode === "drone") {
+    if (typeof ExtraRigs !== "undefined") {
+      fov = ExtraRigs.solve(mode, track, s, x, spd, now, extra, eye, tgt);
+    } else {
+      eye[0] = p[0] - t[0] * 8; eye[1] = p[1] + 3.5; eye[2] = p[2] - t[2] * 8;
+      tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+      fov = 50;
+    }
+  } else if (mode === "cockpit" || mode === "hood" || mode === "visor") {
     const driver = mode === "cockpit" || mode === "visor";   // a driver's eye (visor = cockpit, further forward)
     const eyeFwd = driver ? seatFwd(mode) : 0.55;   // the cockpit INTERIOR's seat (CockpitOpts.layout)
     const eyeUp  = driver ? seatUp(mode) : 0.95;
@@ -356,7 +367,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
         aimZ = aimZ * (1 - tcL) + lp[2] * tcL;
       }
       tgt[0] = aimX; tgt[1] = p[1] + aimUp + t[1] * 30; tgt[2] = aimZ;
-      fov = lerp(64, 78, spFov) + dep * 3;
+      fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(64, 78, spFov) + dep * 3;
     } else {
       eye[0] = p[0] + t[0] * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = p[2] + t[2] * eyeFwd;
       if (driver) {
@@ -371,12 +382,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
         const av = aheadPt(30, eyeUp + 1.2, x * 0.6);
         tgt[0] = av[0]; tgt[1] = av[1]; tgt[2] = av[2];
       }
-      fov = lerp(64, 78, spFov) + dep * 3;             // wider = faster feel
+      fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(64, 78, spFov) + dep * 3;             // wider = faster feel
     }
   } else if (mode === "overhead") {
     eye[0] = p[0] - t[0] * 9; eye[1] = p[1] + 34; eye[2] = p[2] - t[2] * 9;
     tgt[0] = p[0] + t[0] * 12; tgt[1] = p[1]; tgt[2] = p[2] + t[2] * 12;
-    fov = 46;
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 46;
   } else if (mode === "heli") {
     // Broadcast helicopter — corner-aware: hovers on the OUTSIDE of the
     // upcoming bend so it looks across the apex. +kA is a LEFT bend (measured —
@@ -389,18 +400,20 @@ function vantage(track, mode, s, x, spd, now, extra) {
     eye[2] = cvB.p[2] + cvB.r[2] * hl * sgn;
     const heliAim = aheadPt(14, 0.9, x * 0.2);
     tgt[0] = heliAim[0]; tgt[1] = heliAim[1]; tgt[2] = heliAim[2];
-    fov = 36 + dep * 2;
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
   } else if (mode === "reverse") {
     eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
     tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
-    fov = lerp(60, 72, spFov);
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(60, 72, spFov);
   } else if (mode === "side") {
     // TV trackside: sits on the OUTSIDE of the bend looking across the apex.
     const sgn = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
     const sl = Math.min(25, corr);              // stay inside the street canyon
     eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 6.0 + (25 - sl) * 0.30; eye[2] = p[2] + r[2] * sgn * sl;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
-    fov = 44 + (25 - sl) * 0.5;                 // closer eye → widen so framing holds
+    // Corridor widen stays local; speed widen shares CamFeel.speedFov (mild scale).
+    const sideBase = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 44;
+    fov = sideBase + (25 - sl) * 0.5;
   } else if (mode === "cinematic") {
     // Outside-of-corner cinematic that gently breathes its angle instead of doing
     // full disorienting loops. Auto-picks the outside of the bend; on a straight it
@@ -415,15 +428,16 @@ function vantage(track, mode, s, x, spd, now, extra) {
     eye[0] = p[0] + dir[0] * od; eye[1] = p[1] + 6.5 + (22 - od) * 0.45; eye[2] = p[2] + dir[2] * od;
     const cinAim = aheadPt(lerp(12, 22, spN), 0.85, x * 0.15);
     tgt[0] = cinAim[0]; tgt[1] = cinAim[1]; tgt[2] = cinAim[2];
-    fov = lerp(50, 60, spFov);
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(50, 60, spFov);
   } else if (mode === "low") {
     Tracks.sample(track, wrapS(s - 10), cvB);
     const cx = x * 0.3;
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 10) + 0.45 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.6; tgt[2] = p[2];
-    fov = lerp(55, 68, spFov);
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(55, 68, spFov);
   } else if (mode === "trackside") {
     // Fixed corner cameras that auto-switch as the subject passes (js/camera/trackside.js).
+    // FOV comes from the measured pose (or the side-like fallback); CamFeel does not override.
     const ts = typeof TracksideCams !== "undefined" ? TracksideCams.pose(track, s, x, extra) : null;
     if (ts) {
       eye[0] = ts.eye[0]; eye[1] = ts.eye[1]; eye[2] = ts.eye[2];
@@ -441,11 +455,11 @@ function vantage(track, mode, s, x, spd, now, extra) {
     eye[0] = p[0] - t[0] * 0.52; eye[1] = p[1] + 1.46; eye[2] = p[2] - t[2] * 0.52;
     const avT = aheadPt(20, 0.35, x * 0.5);
     tgt[0] = avT[0]; tgt[1] = avT[1]; tgt[2] = avT[2];
-    fov = 46 + dep * 2;
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 46 + dep * 2;
   } else if (mode === "rear") {
     eye[0] = p[0] - t[0] * 0.95; eye[1] = p[1] + 1.38; eye[2] = p[2] - t[2] * 0.95;
     tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.7; tgt[2] = p[2] - t[2] * 26;
-    fov = lerp(58, 70, spFov) + dep * 2;
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(58, 70, spFov) + dep * 2;
   } else if (mode === "drift") {
     // Action chase that swings to the OUTSIDE of the slide so the car's flank faces
     // camera under oversteer, then settles directly behind once the car hooks up.
@@ -454,7 +468,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const cx = x * 0.5 - slipN * 6.5;
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 6.2) + 2.4 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.75; tgt[2] = p[2];
-    fov = lerp(55, 70, spFov) + dep * 3;
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(55, 70, spFov) + dep * 3;
   } else {
     const far = mode === "far";
     // CHASE's shipped framing bakes a CAMERA TUNER profile (height -0.75,
@@ -517,7 +531,9 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const avC = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one
       tgt[0] = avC[0]; tgt[1] = rideTgtAhead + tgtUp; tgt[2] = avC[2];
     }
-    fov = lerp(57, 63, spFov) + (far ? 4 : 0) + dep * 3;
+    fov = typeof CamFeel !== "undefined"
+      ? CamFeel.modeFov(far ? "far" : "chase", spFov, dep)
+      : lerp(57, 63, spFov) + (far ? 4 : 0) + dep * 3;
   }
   // Per-mode HEIGHT/DISTANCE/SIDE/PITCH/YAW/FOV nudges from js/camera/offsets.js,
   // applied to the solved rig rather than baked into each branch — one place to
@@ -527,15 +543,17 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // Deliberately BEFORE the ground clamp: a lowered eye must still be caught by
   // the terrain floor, or a −3 m HEIGHT would render the world from inside a hill.
   if (typeof CamTune !== "undefined") fov = CamTune.apply(mode, eye, tgt, fov);
-  /* LOOK BACK — spin the AIM about the eye, never move the eye. Held, not
-     toggled, so it behaves like the mirror glance it stands in for.
-     Placed after CamTune so a player's own YAW/PITCH trim is part of what gets
-     mirrored (otherwise a tuned camera would look somewhere else entirely when
-     they glanced back), and before the ground clamp below because the eye is
-     unchanged and must still be caught by the terrain floor.
-     Rotating the target about the eye keeps the pitch and the eye-to-target
-     distance exactly as they were: only the horizontal bearing flips. */
-  if (typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack()) {
+  // FREE-LOOK (js/camera/feel.js): additive yaw/pitch on bolted-on cams, after
+  // CamTune so the tuner offsets stay the base and free-look stacks on top.
+  if (typeof CamFeel !== "undefined") CamFeel.applyFreeLook(eye, tgt);
+  /* LOOK BACK — spin the AIM about the eye, never move the eye.
+     Mode-aware via CamFeel: reverse/rear already face aft, so a flip is skipped.
+     Default is hold (mirror glance); SETTINGS › CAMERA FEEL can latch on press.
+     After CamTune + free-look so trim and glance are part of what gets mirrored;
+     before the ground clamp (eye unchanged). */
+  const _lbHeld = typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack();
+  const _lb = typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld;
+  if (_lb) {
     const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
     tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
   }

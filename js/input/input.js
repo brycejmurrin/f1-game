@@ -43,6 +43,12 @@ const Input = (function () {
   let mirrorPressed = false;    // edge-triggered REAR-VIEW MIRROR on/off (js/render/shared/mirror-pass.js)
   let keyLookBack = false;      // HELD: look-back mirror while the key/button is down
   let padLookBack = false;
+  // FREE-LOOK axes (js/camera/feel.js): right stick + RMB-drag mouse deltas.
+  // Stick is latched each poll; mouse deltas accumulate until consumeLookMouse().
+  let lookStickX = 0, lookStickY = 0;
+  let lookMouseDx = 0, lookMouseDy = 0;
+  let lookMouseDown = false;
+  const LOOK_STICK_DEAD = 0.18;
 
   // gamepad (W3C Gamepad API, "standard" mapping). Polled once per display
   // frame from poll(). Works on desktop browsers and iOS 14.5+ Safari with a
@@ -1440,6 +1446,7 @@ const Input = (function () {
       padSteer = 0; padThrottle = false; padBrake = false;
       padThrottleVal = 0; padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
+      lookStickX = 0; lookStickY = 0;
       padDpadVal = 0; padDpadT = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padNavDir = null;
@@ -1458,6 +1465,18 @@ const Input = (function () {
     }
     const axes = pad.axes || [];
     const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert);
+    // Right stick (standard mapping axes 2/3) → free-look. Menu nav still uses
+    // both sticks via padNavDir; free-look is only consumed in-race by CamFeel.
+    {
+      const rx = readPadAxis(axes, 2), ry = readPadAxis(axes, 3);
+      const mag = Math.hypot(rx, ry);
+      if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
+      else {
+        const t = (mag - LOOK_STICK_DEAD) / (1 - LOOK_STICK_DEAD);
+        lookStickX = (rx / mag) * t;
+        lookStickY = (ry / mag) * t;
+      }
+    }
     // THE D-PAD IS A DIGITAL SOURCE AND MUST RAMP LIKE ONE: `ax = ±1` outright
     // is a teleport to full lock (at 300 km/h, undriveable), and XAG 107
     // requires the digital path to WORK. It shares the arrows' digitalStep ramp
@@ -2026,6 +2045,15 @@ const Input = (function () {
      control that least deserves a permanent seat there. */
   function lookingBack() { return keyLookBack || padLookBack || (remoteActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
 
+  /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
+     (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas. */
+  function lookStick() { return { x: lookStickX, y: lookStickY }; }
+  function consumeLookMouse() {
+    const o = { dx: lookMouseDx, dy: lookMouseDy };
+    lookMouseDx = 0; lookMouseDy = 0;
+    return o;
+  }
+
   /* ESCAPE IS SPENT ON LEAVING FULLSCREEN unless we ask for it. In fullscreen
      the UA takes Escape to exit, so our pause handler never sees the key —
      which is why PAUSE became a binding (a player can move it), but the key
@@ -2234,6 +2262,36 @@ const Input = (function () {
     window.addEventListener("pointerdown", function (e) {
       if (e.isTrusted !== false && (e.pointerType === "touch" || e.pointerType === "pen")) noteInputSource("touch");
     }, true);
+    // FREE-LOOK mouse: hold right button over the game canvas and drag.
+    // Button 2 only — left click is UI / no look; avoids fighting menus.
+    if (canvas && canvas.addEventListener) {
+      canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      canvas.addEventListener("pointerdown", function (e) {
+        if (e.button === 2) {
+          lookMouseDown = true;
+          try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* already gone */ }
+          e.preventDefault();
+        }
+      });
+      canvas.addEventListener("pointermove", function (e) {
+        if (!lookMouseDown) return;
+        lookMouseDx += e.movementX || 0;
+        lookMouseDy += e.movementY || 0;
+      });
+      const lookUp = function (e) {
+        if (e.button === 2 || e.type !== "pointerup") {
+          lookMouseDown = false;
+          lookMouseDx = 0; lookMouseDy = 0;
+        }
+      };
+      canvas.addEventListener("pointerup", lookUp);
+      canvas.addEventListener("pointercancel", function () {
+        lookMouseDown = false; lookMouseDx = 0; lookMouseDy = 0;
+      });
+      canvas.addEventListener("lostpointercapture", function () {
+        lookMouseDown = false;
+      });
+    }
     window.addEventListener("blur", reset);
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) reset();
@@ -2408,6 +2466,8 @@ const Input = (function () {
     padDpadVal = 0;
     padDpadT = 0;
     keyLookBack = false;
+    lookStickX = 0; lookStickY = 0;
+    lookMouseDx = 0; lookMouseDy = 0; lookMouseDown = false;
     remThr = remBrk = 0; remHeld = 0;   // the phone re-sends within 100 ms if still held
     recoverPressed = false;
     radioPressed = false;
@@ -2513,6 +2573,8 @@ const Input = (function () {
     consumeRadio,
     consumeMirror,
     lookingBack,
+    lookStick,
+    consumeLookMouse,
     lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,
     remoteSample, remoteEvent, remoteLost, remoteActive, remoteSteers, setRemoteHaptics,
