@@ -40,11 +40,15 @@ export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
 const say = (...a) => console.log("[ci-watch]", ...a);
 
-function api(pathQs) {
-  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+export function api(pathQs, { run = spawnSync, env = process.env } = {}) {
+  const token = env.GH_TOKEN || env.GITHUB_TOKEN;
   if (!token) return { error: "no GH_TOKEN / GITHUB_TOKEN" };
-  const r = spawnSync("curl", ["-sS", "--max-time", "30", "-K", "-", "-w", "\n%{http_code}",
+  const r = run("curl", ["-sS", "--max-time", "30", "-K", "-", "-w", "\n%{http_code}",
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
+    // Revalidate stored HTTP responses when polling mutable CI/PR state.
+    // https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2.1.4
+    // https://docs.github.com/en/rest/guides/best-practices-for-using-the-rest-api#use-conditional-requests
+    "-H", "Cache-Control: no-cache",
     `https://api.github.com/repos/${REPO}/${pathQs}`],
     { encoding: "utf8", input: `header = "Authorization: Bearer ${token}"\n` });
   if (r.status !== 0) return { error: (r.stderr || "curl failed").trim() };
@@ -134,30 +138,59 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 
-// The open PR whose head is `sha`, with mergeable_state (only the single-PR
-// endpoint reports it), or null. Best effort: an API error reads as "no PR".
-function openPrFor(sha) {
-  const list = api(`pulls?state=open&per_page=100`);
-  const hit = (list.json || []).find((p) => p.head && typeof p.head.sha === "string" && p.head.sha.startsWith(sha));   // callers pass short SHAs
-  if (!hit) return null;
-  const one = api(`pulls/${hit.number}`);
-  return one.json && one.json.number ? one.json : hit;
+// The commit-associated endpoint avoids a stale/incomplete broad open-PR
+// listing. Association can include earlier commits, so confirm the current
+// open head using the individual PR response before diagnosing no-run state.
+// https://docs.github.com/en/rest/commits/commits#list-pull-requests-associated-with-a-commit
+export function openPrFor(sha, request = api) {
+  const unknown = (error) => ({ state: "unknown", pr: null, error });
+  if (typeof sha !== "string" || !/^[0-9a-f]{4,40}$/i.test(sha)) return unknown("invalid commit SHA");
+  const validHead = (head) => typeof head === "string" && /^[0-9a-f]{40}$/i.test(head);
+  const matches = (head) => validHead(head) && head.toLowerCase().startsWith(sha.toLowerCase());
+  let changed = false, detailCalls = 0;
+  try {
+    // A full page does not establish absence. Bound the lookup, and report
+    // unknown rather than bless an incomplete commit-association list.
+    for (let page = 1; page <= 10; page++) {
+      const list = request(`commits/${encodeURIComponent(sha)}/pulls?per_page=100&page=${page}`);
+      if (list?.error) return unknown(`associated PR lookup: ${list.error}`);
+      if (!Array.isArray(list?.json)) return unknown("associated PR lookup returned no PR array");
+      for (const hit of list.json) {
+        if (!hit || !Number.isInteger(hit.number) || hit.number < 1 || !["open", "closed"].includes(hit.state) || !validHead(hit.head?.sha)) return unknown("associated PR lookup returned malformed PR metadata");
+        if (hit.state !== "open") continue;
+        // Association metadata may lag the current head. Check every open
+        // candidate before filtering by head, but cap slow detail requests.
+        if (detailCalls >= 10) return unknown("associated PR lookup exceeded 10 PR detail requests; absence unconfirmed");
+        detailCalls++;
+        const one = request(`pulls/${hit.number}`);
+        if (one?.error) return unknown(`PR #${hit.number} lookup: ${one.error}`);
+        const pr = one?.json;
+        if (pr?.number !== hit.number || !["open", "closed"].includes(pr.state) || !validHead(pr.head?.sha)) return unknown(`PR #${hit.number} lookup returned malformed metadata`);
+        if (pr.state !== "open" || !matches(pr.head.sha)) { if (matches(hit.head.sha) || pr.state !== hit.state) changed = true; continue; }
+        return { state: "found", pr, error: null };
+      }
+      if (list.json.length < 100) return changed ? unknown("associated PR head/state changed during lookup; recheck") : { state: "none", pr: null, error: null };
+    }
+    return unknown("associated PR lookup exceeded 10 pages; absence unconfirmed");
+  } catch (error) { return unknown(`associated PR lookup: ${error.message || error}`); }
 }
 
-async function watchSha(sha, { interval, deadline, once }) {
+export async function watchSha(sha, { interval, deadline, once, request = api, now = Date.now, wait = sleep, report = say }) {
   const seen = new Set(), announced = new Set();
-  const start = Date.now();
+  const start = now();
+  const unknown = (message) => { report(`= ci unknown — API: ${message}`); return 3; };
   for (;;) {
-    const r = api(`actions/runs?head_sha=${sha}&per_page=50`);
-    if (r.error) { say(`= ci unknown — API: ${r.error}`); return 3; }
-    const runs = latestPerWorkflow(r.json.workflow_runs || []);
+    const r = request(`actions/runs?head_sha=${sha}&per_page=50`);
+    if (r?.error || !Array.isArray(r?.json?.workflow_runs)) return unknown(r?.error || "workflow runs lookup returned no run array");
+    const runs = latestPerWorkflow(r.json.workflow_runs);
     const jobsByRun = {};
     for (const run of runs) {
-      if (!announced.has(run.id)) { announced.add(run.id); say(`${run.name} #${run.id} (${run.event}) ${run.status} ${run.html_url}`); }
-      const j = api(`actions/runs/${run.id}/jobs?per_page=100`);
-      jobsByRun[run.id] = j.json?.jobs || [];
+      if (!announced.has(run.id)) { announced.add(run.id); report(`${run.name} #${run.id} (${run.event}) ${run.status} ${run.html_url}`); }
+      const j = request(`actions/runs/${run.id}/jobs?per_page=100`);
+      if (j?.error || !Array.isArray(j?.json?.jobs)) return unknown(j?.error || `run #${run.id} jobs lookup returned no job array`);
+      jobsByRun[run.id] = j.json.jobs;
       for (const e of newJobEvents(jobsByRun[run.id], seen, run.name)) {
-        say(e.line);
+        report(e.line);
         // Annotations only for a job that FAILED: a cancelled job's annotation is
         // the draft/ready dedupe's "higher priority waiting request" (rule 8) — as a
         // Monitor event it read as a red, eight times over, on PR #279.
@@ -167,23 +200,27 @@ async function watchSha(sha, { interval, deadline, once }) {
     const v = verdict(runs, jobsByRun);
     // A commit ci.yml's paths-ignore skips (docs / *.md / .claude/) starts no
     // run at all; after 3 min of nothing that is the answer, not "queued".
-    if (v.state === "none" && Date.now() - start > 180_000) {
-      const pr = openPrFor(sha);
-      const checks = api(`commits/${sha}/check-runs?per_page=1`).json?.total_count || 0;
-      const nv = noneVerdict(pr, Date.now() - start, checks);
+    if (v.state === "none" && now() - start > 180_000) {
+      const lookup = openPrFor(sha, request);
+      if (lookup.state === "unknown") return unknown(lookup.error);
+      const pr = lookup.pr;
+      const checked = request(`commits/${sha}/check-runs?per_page=1`);
+      if (checked?.error || !Number.isInteger(checked?.json?.total_count) || checked.json.total_count < 0) return unknown(checked?.error || "commit checks lookup returned no valid count");
+      const checks = checked.json.total_count;
+      const nv = noneVerdict(pr, now() - start, checks);
       if (nv === "indexing" && !announced.has("indexing")) {
         announced.add("indexing");
-        say(`runs list is empty for ${sha.slice(0, 7)} but the commit has ${checks} check run(s): GitHub's run search is lagging — still waiting`);
+        report(`runs list is empty for ${sha.slice(0, 7)} but the commit has ${checks} check run(s): GitHub's run search is lagging — still waiting`);
       }
-      if (nv === "none") { say(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
-      if (nv === "blocked") { say(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
-      if (nv === "late") { say(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min; re-arm, or check the Actions tab`); return 124; }
+      if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
+      if (nv === "blocked") { report(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
+      if (nv === "late") { report(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min; re-arm, or check the Actions tab`); return 124; }
     }
     // `running` and `none` are NOT green: under --once a scripted `&& next`
     // used to proceed on a run still in flight (2026-09-24).
-    if (v.done || once) { say(`= ci ${v.line} sha=${sha.slice(0, 7)}`); return { passed: 0, failed: 1, cancelled: 2, running: 124, none: 124 }[v.state] ?? 0; }
-    if (Date.now() > deadline) { say(`= ci timeout — still ${v.line} sha=${sha.slice(0, 7)}; re-arm to keep watching`); return 124; }
-    await sleep(interval);
+    if (v.done || once) { report(`= ci ${v.line} sha=${sha.slice(0, 7)}`); return { passed: 0, failed: 1, cancelled: 2, running: 124, none: 124 }[v.state] ?? 0; }
+    if (now() > deadline) { report(`= ci timeout — still ${v.line} sha=${sha.slice(0, 7)}; re-arm to keep watching`); return 124; }
+    await wait(interval);
   }
 }
 
