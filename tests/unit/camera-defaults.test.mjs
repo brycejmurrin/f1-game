@@ -272,7 +272,12 @@ test("CamTune global baseline layers under per-mode; copyFrom and presets work",
 test("vantage.js FOV blends use comfort speedFov; corner-lead comment matches 0.54", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
   assert.match(src, /const spFov = spN \* \(typeof CamTune/);
-  assert.match(src, /fov = lerp\(57, 63, spFov\)/);
+  // Chase/far FOV goes through CamFeel.modeFov(..., spFov, ...) when CamFeel is
+  // loaded; the bare lerp stays as the no-CamFeel fallback. Either form must
+  // still blend on comfort-scaled spFov (never raw spN).
+  assert.match(src, /CamFeel\.modeFov\(\s*far \? "far" : "chase",\s*spFov/);
+  assert.match(src, /lerp\(57, 63, spFov\)/);
+  assert.doesNotMatch(src, /lerp\(57, 63, spN\)/);
   assert.match(src, /shipped 0\.54/);
   assert.doesNotMatch(src, /shipped 0\.18\)/);
 });

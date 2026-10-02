@@ -140,3 +140,28 @@ test("the baked normal map's tangent frame is the tile's world axes on every bac
       `${name}: the tangent frame must be built from the world axes (+x, +y, +z), not derived from N`);
   }
 });
+
+test("the moon disc hangs on the night key light, not a constant, on every backend", () => {
+  // Three sky shaders drew the moon at a literal (0.42, 0.72, 0.55) until
+  // 2026-10-01 while the lit pass, the wet-road glint and the shadow map used
+  // the palette's sunDir (which at night IS the moon key — the NIGHT gate
+  // comment in glsl-sky.js). Singapore's moon sat up-left of the pit straight
+  // with the shadows falling toward it (the second graphics-detail survey).
+  const moonBlock = (file, start) => {
+    const src = read(file);
+    const i = src.indexOf(start);
+    assert.ok(i >= 0, `${file}: ${start} not found`);
+    return src.slice(i, i + 600);
+  };
+  const blocks = {
+    GLX: moonBlock("js/render/glx/shaders/glsl-sky.js", "if (uMoon > 0.0 && uStars > 0.5)"),
+    TLX: moonBlock("js/render/three/tsl-sky.js", "If(U.moon.greaterThan(0.0).and(U.stars.greaterThan(0.5))"),
+    WGX: moonBlock("js/render/webgpu/wgsl-chunks.js", "if (moon > 0.0 && stars > 0.5)"),
+  };
+  for (const [name, s] of Object.entries(blocks)) {
+    assert.ok(!/moonDir\s*=\s*normalize\(vec3(<f32>)?\(\s*[\d.]+,\s*[\d.]+,\s*[\d.]+\s*\)\)/.test(s),
+      `${name}: the moon disc direction is a literal vector again — it must follow the night key light`);
+    assert.ok(/moonDir\s*=\s*normalize\((uSunDir|U\.sunDir|sunDir)\)/.test(s),
+      `${name}: the moon disc must be placed on the sun/moon key direction uniform`);
+  }
+});
