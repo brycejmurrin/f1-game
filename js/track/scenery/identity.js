@@ -374,16 +374,20 @@ const SceneryIdentity = (function () {
         }
         return lo === Infinity ? c : [c[0], Math.min(c[1], lo - 0.3), c[2]];
       };
+      const start = out.pos.length;
+      let trucks = 0;
       // OB truck row — box body on a darker chassis band, parked nose-in.
       for (let i = 0; i < vans; i++) {
         const off = (i - (vans - 1) / 2) * spacing;
         const c = seatAt(vadd(p.c, p.t, off), 0, 0);   // centre only (see seatAt)
-        addBox(out, vadd(c, p.u, 1.95), [7.2, 3.1, 2.5], vanCol, b);
+        if (addBox(out, vadd(c, p.u, 1.95), [7.2, 3.1, 2.5], vanCol, b) === false) continue;
+        trucks++;
         addBox(out, vadd(c, p.u, 0.42), [7.0, 0.7, 2.6], dark, b);
         // roof AC/cable box, so the row is not four identical bricks
         if (hash(k * 3.1 + i * 5.7 + side) > 0.45)
           addBox(out, vadd(vadd(c, p.u, 3.7), p.r, side * 1.2), [1.6, 0.5, 1.0], dark, b);
       }
+      if (!trucks) return;
       // Uplink dishes, set behind the trucks.
       for (let i = 0; i < dishes; i++) {
         const off = (i - (dishes - 1) / 2) * 3.4 + (vans * spacing) / 2 + 2.2;
@@ -409,6 +413,7 @@ const SceneryIdentity = (function () {
       addBox(out, vadd(mast, p.u, mastH), [0.9, 0.35, 0.7], dark, b);
       addBox(out, vadd(mast, p.u, mastH + 0.4), [0.26, 0.26, 0.26],
              NIGHT ? [1.60, 0.28, 0.20] : [0.72, 0.16, 0.12], b);
+      ctx.reserveEmittedSolid(out, start, b);
     };
 
     const pastelStreetRow = (s0, s1, side, gap, opts) => {

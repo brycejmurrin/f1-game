@@ -63,6 +63,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
   "tests/unit/agent-surface.test.mjs",
+  "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
   // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
@@ -80,6 +81,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
+  "tests/unit/appearance-studio.test.mjs",
   // Every AUTHORED activation-zone turn table resolves against the BUILT
   // centreline. One unresolvable pair discards a circuit's whole table and
   // falls through to ZONE_COUNT — silently, which is how monza shipped a
@@ -113,6 +115,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
+  "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
@@ -125,9 +128,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
+  "tests/unit/car-shade.test.mjs",
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
+  "tests/unit/career-experience.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
@@ -214,6 +219,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/deploy-tool.test.mjs",
+  // The track designer's drawing surface (js/editor/canvas.js) alone: long-press
+  // → onContext, the stamp tool's ghost polyline, the drag / span measurement
+  // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
+  "tests/unit/designer-canvas.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-builder-config.test.mjs",
   "tests/unit/desktop-native.test.mjs",
@@ -246,6 +255,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
+  "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
@@ -320,6 +330,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/harness-display.test.mjs",
   "tests/unit/helmets.test.mjs",
+  "tests/unit/home-world.test.mjs",
   "tests/unit/hooks-documented.test.mjs",
   // ...and an HTML-sink audit over js/: every innerHTML/outerHTML/
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
@@ -421,6 +432,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/phone-pad.test.mjs",
   "tests/unit/phone-touch-surface.test.mjs",
   "tests/unit/photo-kit.test.mjs",
+  "tests/unit/photo-studio.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   // The physics baseline's provenance stamp (_blessed): reason, data hash,
   // blessing commit. One file read and one git call, well under a second, and
@@ -593,6 +605,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // validator reads the engine's centreline; the share code round-trips on the
   // lattice and refuses every bad code with a reason. ~15 s together.
   "tests/unit/track-editor-geometry.test.mjs",
+  // The designer's one-click remedies (js/editor/fixes.js) over the real engine:
+  // per code a design TrackValidate judges RED, the fix, the re-check; point 0
+  // and the zones stay put, apply never throws, fixAll clears a tiny loop and a
+  // figure-8 within three rounds and leaves a green RANDOMISE loop alone. ~2 s.
+  "tests/unit/track-fixes.test.mjs",
   "tests/unit/track-foundation.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
@@ -617,6 +634,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // is a usable strategy range, the thermal layer warms/grains/blisters, and
   // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
+  "tests/unit/ui-experience.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",

@@ -157,14 +157,14 @@ const STRIP = {
   // → merged follow-ups 286489/257979 (yachts moored in open water, not
   // dropped; engine-helpers plinth sink)
   // → track limits 285994/257518 (two moored hulls over the road hole dropped)
-  monaco: { before: 263812, after: 241460 },
+  monaco: { before: 263968, after: 241574 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
   // → bahrain hollow-stand guard: grandstandEx suppresses when crowdBank
   // places 0 risers, so monza's fold-site shells (no seating) no longer emit
   // → back to ship emission 342395; strip after 315572
-  monza: { before: 342527, after: 315651 },
+  monza: { before: 341747, after: 314855 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

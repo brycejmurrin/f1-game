@@ -754,7 +754,8 @@ const SceneryCity = (function () {
       const nightLit = NIGHT && opts.lit !== false;
       const winCol = opts.window || (nightLit ? [1.5, 1.3, 0.85] : [0.30, 0.36, 0.42]);
       const loH = h * 0.56;
-      addBox(out, vadd(p.c, p.u, loH / 2), [w, loH, d], body, b);
+      const start = out.pos.length;
+      if (addBox(out, vadd(p.c, p.u, loH / 2), [w, loH, d], body, b) === false) return;
       addBox(out, vadd(p.c, p.u, loH + (h - loH) / 2), [w * 0.86, h - loH, d * 0.90], body, b);
       // Window ribbon along the lower deck's road-facing wall.
       const faceOff = -side * (w / 2 + 0.02);
@@ -763,13 +764,14 @@ const SceneryCity = (function () {
       addBox(out, vadd(vadd(p.c, p.r, faceOff * 1.001), p.u, loH * 0.12), [0.06, loH * 0.14, d * 0.94], accent, b);
       const awnDist = w * 0.42;
       const awnC = vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.u, loH * 0.92);
-      addBox(out, awnC, [0.05, 0.10, d * 0.9], opts.awning || [0.20, 0.22, 0.26], b);
-      for (const e of [-1, 1]) {
+      const awning = addBox(out, awnC, [0.05, 0.10, d * 0.9], opts.awning || [0.20, 0.22, 0.26], b);
+      if (awning !== false) for (const e of [-1, 1]) {
         const postC = vadd(vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.t, e * d * 0.42), p.u, -0.2);
         addCyl(out, postC, 0.05, loH * 0.92 + 0.25, [0.35, 0.35, 0.38], 4, b);
       }
       // Roof AC / satellite unit.
       if (hh > 0.25) addBox(out, vadd(p.c, p.u, h + 0.3), [w * 0.28, 0.5, d * 0.20], [0.55, 0.56, 0.58], b);
+      ctx.reserveEmittedSolid(out, start, b);
     };
     // Tapered tower (control tower, spire) + optional antenna mast.
     const tower = (k, side, dist, baseW, h, opts) => {

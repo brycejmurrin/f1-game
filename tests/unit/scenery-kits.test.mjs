@@ -888,3 +888,205 @@ test("palm relocation yields to already placed crowns and rejects hillside or un
     assert.equal(rejected.suppressed.length, 1);
   }
 });
+
+function treeClearanceHarness(occupied = () => false, options = {}, fenced = false) {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Nature = load("js/track/scenery/nature.js", "SceneryNature", { TrackGeom: Geom, TrackSceneryData: {} });
+  const out = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+  const queries = [], notes = [], suppressed = [], pieces = [];
+  const track = { rx: Array(100).fill(0.8), ry: Array(100).fill(0), rz: Array(100).fill(-0.6),
+    tx: Array(100).fill(0.6), ty: Array(100).fill(0), tz: Array(100).fill(0.8),
+    barL: Array(100).fill(12), barR: Array(100).fill(12) };
+  const ctx = {
+    out, track, def: {}, n: 100, ds: 4, hw: Array(100).fill(6),
+    px: Array(100).fill(0), py: Array(100).fill(0), pz: Array(100).fill(0), MAT: Geom.MAT,
+    vadd: Geom.vadd, norm: Geom.norm, upOf: () => [0, 1, 0], bankOffsetAt: () => 0,
+    hash: () => 0.68, terrainYAt: () => 0, groundYAt: () => 0,
+    onTrack: () => false, rejBox: () => false, barrierClear: () => !fenced,
+    massBlocked: (center, width, depth, basis) => {
+      queries.push({ center: Array.from(center), width, depth, basis });
+      return occupied(center, width, depth, basis);
+    },
+    note: (...args) => notes.push(args), noteSuppressed: (...args) => suppressed.push(args),
+  };
+  for (const key of ["addCyl", "addCone", "addFrustum", "emit"]) ctx[key] = (buffer, ...args) => {
+    const start = buffer.pos.length;
+    const result = Geom[key](buffer, ...args);
+    pieces.push(Array.from(buffer.pos.slice(start)));
+    return result;
+  };
+  const tree = Nature.create(ctx).tree;
+  tree(10, 1, 20, 12, [0.2, 0.4, 0.2], options);
+  return { out, track, queries, notes, suppressed, pieces, tree };
+}
+
+test("broadleaf clearance covers actual round, vase, weeping, columnar and dead geometry", () => {
+  for (const options of [{ crown: "round" }, { crown: "vase", spread: 1.4 }, { crown: "weeping" },
+                         { crown: "columnar" }, { deadChance: 1 }]) {
+    const h = treeClearanceHarness(() => false, options);
+    assert.ok(h.out.pos.length > 0);
+    for (const piece of h.pieces) assert.ok(h.queries.some((q) => {
+      for (let i = 0; i < piece.length; i += 3) {
+        const dx = piece[i] - q.center[0], dz = piece[i + 2] - q.center[2];
+        if (Math.abs(dx * q.basis[0][0] + dz * q.basis[0][2]) > q.width / 2 + 1e-6 ||
+            Math.abs(dx * q.basis[2][0] + dz * q.basis[2][2]) > q.depth / 2 + 1e-6) return false;
+      }
+      return true;
+    }), "every emitted primitive fits an occupied-footprint query");
+    assert.deepEqual(h.track.barL, Array(100).fill(12));
+    assert.deepEqual(h.track.barR, Array(100).fill(12));
+  }
+});
+
+test("broadleaf relocation preserves shape identity and rejection leaves no geometry or phantom planting", () => {
+  for (const options of [{ crown: "round" }, { crown: "vase" }, { crown: "weeping" },
+                         { crown: "columnar" }, { deadChance: 1 }]) {
+    const clear = treeClearanceHarness(() => false, options);
+    const moved = treeClearanceHarness((center) => center[0] < 24, options);
+    assert.equal(moved.notes.length, 1);
+    const delta = moved.notes[0][3].dist - clear.notes[0][3].dist;
+    assert.ok(delta > 0 && delta <= 12);
+    assert.equal(moved.out.pos.length, clear.out.pos.length);
+    assert.deepEqual(moved.out.col, clear.out.col);
+    assert.deepEqual(moved.out.mat, clear.out.mat);
+    moved.out.pos.forEach((v, i) => assert.ok(Math.abs(v - clear.out.pos[i] - [0.8 * delta, 0, -0.6 * delta][i % 3]) < 1e-9));
+  }
+  let blocked = true;
+  const rejected = treeClearanceHarness(() => blocked);
+  assert.equal(rejected.out.pos.length, 0);
+  assert.equal(rejected.notes.length, 0);
+  assert.equal(rejected.suppressed.length, 1);
+  blocked = false;
+  rejected.tree(10, 1, 20, 12, [0.2, 0.4, 0.2], {});
+  assert.ok(rejected.out.pos.length > 0, "failed preflight did not reserve the trunk site");
+  const fenced = treeClearanceHarness(() => false, {}, true);
+  assert.equal(fenced.out.pos.length, 0);
+  assert.equal(fenced.notes.length, 0);
+});
+
+test("broadleaf relocation respects earlier crowns in either order while authored woodland can interlock", () => {
+  const natural = treeClearanceHarness();
+  natural.tree(11, 1, 21.5, 12, [0.2, 0.4, 0.2], {});
+  assert.equal(natural.notes.length, 2, "ordinary authored crowns keep their natural overlap");
+  const reference = treeClearanceHarness((center) => center[0] < 24);
+  let occupied = false;
+  const prior = treeClearanceHarness((center) => occupied && center[0] < 24);
+  occupied = true;
+  prior.tree(11, 1, 20, 12, [0.2, 0.4, 0.2], {});
+  assert.ok(prior.notes.length === 1 || prior.notes[1][3].dist > reference.notes[0][3].dist,
+    "relocation yields to the already placed broadleaf crown");
+  let reverseOccupied = true;
+  const reverse = treeClearanceHarness((center) => reverseOccupied && center[0] < 24);
+  reverseOccupied = false;
+  reverse.tree(11, 1, 20, 12, [0.2, 0.4, 0.2], {});
+  assert.ok(reverse.notes.length === 1 || reverse.notes[1][3].dist > 20,
+    "a later authored site yields to the earlier relocated crown");
+});
+
+// Exercise the private build-context reservation function with its real source
+// and real growable accumulators, without booting a complete circuit fixture.
+function emittedReservationFixture(masses, segments) {
+  const source = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
+  const start = source.indexOf("    const reserveEmittedSolid = ");
+  const end = source.indexOf("    // Every existing guard", start);
+  assert.ok(start >= 0 && end > start);
+  return vm.runInNewContext(source.slice(start, end) + "\nreserveEmittedSolid;", {
+    massAdd: (...args) => masses.push(args), pushSeg: (...args) => segments.push(args),
+  });
+}
+
+function reservedVehicleHarness(rejection = "", side = 1) {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Models = load("js/track/scenery/models.js", "TrackModels");
+  const out = Models.scratch(8), masses = [], segments = [], calls = [];
+  const bank = 0.24, pitch = 0.18;
+  const r = [0.8 * Math.cos(bank), Math.sin(bank), -0.6 * Math.cos(bank)];
+  const bankUp = [-0.8 * Math.sin(bank), Math.cos(bank), 0.6 * Math.sin(bank)];
+  const t = [0.6 * Math.cos(pitch) - bankUp[0] * Math.sin(pitch),
+    -bankUp[1] * Math.sin(pitch), 0.8 * Math.cos(pitch) - bankUp[2] * Math.sin(pitch)];
+  const u = [bankUp[0] * Math.cos(pitch) + 0.6 * Math.sin(pitch),
+    bankUp[1] * Math.cos(pitch), bankUp[2] * Math.cos(pitch) + 0.8 * Math.sin(pitch)];
+  const p = { c: [124, 6, -83], r, u, t };
+  // Existing geometry and unused accumulator capacity must stay out of claims.
+  Geom.addBox(out, [-999, 5, -800], [3, 2, 4], [0.2, 0.3, 0.4]);
+  const start = out.pos.length;
+  const track = { barL: [12, 13, 14], barR: [15, 16, 17] };
+  const reserve = emittedReservationFixture(masses, segments);
+  const ctx = {
+    out, track, def: {}, NIGHT: false, MAT: Geom.MAT,
+    anchor: () => p, vadd: Geom.vadd, hash: () => 0.7,
+    onTrack: () => false, rejBox: () => rejection === "preflight",
+    terrainYAt: () => null, note: () => {}, noteSuppressed: () => {},
+    blockAt: () => assert.fail("reservation mutated driving limits"),
+    recordBarrier: () => assert.fail("reservation mutated driving limits"),
+    reserveEmittedSolid: reserve,
+  };
+  for (const name of ["addBox", "addCyl", "addFrustum"]) ctx[name] = (buffer, center, ...args) => {
+    calls.push({ name, center, args });
+    if (name === "addBox") {
+      const size = args[0];
+      if (rejection === "body" && ((size[0] === 12 && size[2] === 14) ||
+          (size[0] === 7.2 && size[1] === 3.1))) return false;
+      if (rejection === "awning" && size[0] === 0.05 && size[1] === 0.10) return false;
+    }
+    return Geom[name](buffer, center, ...args);
+  };
+  const City = load("js/track/scenery/city.js", "SceneryCity", { TrackSceneryData: {} });
+  const Identity = load("js/track/scenery/identity.js", "SceneryIdentity");
+  return { out, start, masses, segments, calls, track, reserve,
+    motorhome: () => City.create(ctx).motorhome(5, side, 30, 12, 7, 14, { wall: [0.8, 0.8, 0.8] }),
+    compound: (opts = {}) => Identity.create(ctx).broadcastCompound(5, side, 30, opts) };
+}
+
+function assertVehicleReservation(h) {
+  assert.equal(h.masses.length, 1);
+  assert.equal(h.segments.length, 1);
+  const [center, width, depth, basis] = h.masses[0];
+  assert.ok(width > 0 && depth > 0 && [center, width, depth, basis].flat(Infinity).every(Number.isFinite));
+  assert.ok(Math.abs(Math.hypot(basis[0][0], basis[0][2]) - 1) < 1e-12);
+  assert.ok(Math.abs(basis[0][0] * basis[2][0] + basis[0][2] * basis[2][2]) < 1e-12);
+  const pos = h.out.pos._data;
+  assert.equal(h.out.pos[0], undefined, "fixture uses a real non-indexable accumulator");
+  for (let i = h.start; i < h.out.pos.length; i += 3) {
+    const x = pos[i] - center[0], z = pos[i + 2] - center[2];
+    assert.ok(Math.abs(x * basis[0][0] + z * basis[0][2]) <= width / 2 + 1e-9);
+    assert.ok(Math.abs(x * basis[2][0] + z * basis[2][2]) <= depth / 2 + 1e-9);
+    const [x0, z0, x1, z1, radius] = h.segments[0];
+    const dx = x1 - x0, dz = z1 - z0;
+    const a = Math.max(0, Math.min(1, ((pos[i] - x0) * dx + (pos[i + 2] - z0) * dz) / (dx * dx + dz * dz)));
+    assert.ok(Math.hypot(pos[i] - x0 - a * dx, pos[i + 2] - z0 - a * dz) <= radius + 1e-9);
+  }
+  assert.ok(width < 35 && depth < 65, "claim excludes prior geometry and spare storage");
+  assert.deepEqual(h.track.barL, [12, 13, 14]);
+  assert.deepEqual(h.track.barR, [15, 16, 17]);
+}
+
+test("motorhomes and broadcast compounds reserve their emitted tilted footprints without driving limits", () => {
+  for (const side of [-1, 1]) {
+    const home = reservedVehicleHarness("", side);
+    home.motorhome(); assertVehicleReservation(home);
+    for (const opts of [{ vans: 1, dishes: 0 }, { vans: 3, dishes: 2 }, { vans: 8, dishes: 6 }]) {
+      const compound = reservedVehicleHarness("", side);
+      compound.compound(opts); assertVehicleReservation(compound);
+    }
+  }
+});
+
+test("rejected vehicle bodies and awnings leave no phantom footprint or detached details", () => {
+  for (const method of ["motorhome", "compound"]) {
+    const h = reservedVehicleHarness("body");
+    h[method]();
+    assert.equal(h.out.pos.length, h.start);
+    assert.equal(h.masses.length, 0); assert.equal(h.segments.length, 0);
+    assert.ok(h.calls.every(call => call.name === "addBox"));
+  }
+  const blocked = reservedVehicleHarness("preflight");
+  blocked.compound(); assert.equal(blocked.calls.length, 0); assert.equal(blocked.masses.length, 0);
+  const full = reservedVehicleHarness(); full.motorhome();
+  const noAwning = reservedVehicleHarness("awning"); noAwning.motorhome();
+  assertVehicleReservation(noAwning);
+  assert.equal(noAwning.calls.filter(call => call.name === "addCyl").length, 0);
+  assert.ok(noAwning.masses[0][1] < full.masses[0][1] - 4, "rejected awning does not reserve its overhang");
+  assert.equal(noAwning.reserve(noAwning.out, noAwning.out.pos.length, [[1, 0, 0], [0, 1, 0], [0, 0, 1]]), false);
+  assert.equal(noAwning.masses.length, 1, "empty range has no reservation");
+});

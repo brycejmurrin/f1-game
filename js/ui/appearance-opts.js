@@ -166,6 +166,7 @@ const AppearanceOpts = (function () {
       // Named presets: CSS :root[data-menu-accent=…] owns --red.
       el.style.removeProperty("--red");
     }
+    el.style.setProperty("--menu-accent-ink", pickInk(resolveAccent(menuAccent, menuHex)));
   }
 
   function applyHudAccent() {
@@ -395,6 +396,24 @@ const AppearanceOpts = (function () {
     }
   }
 
+  // Studio/profile restoration also updates this module's in-memory values.
+  // Persistence is owned by the caller; repainting must not write a second batch.
+  function restore(values) {
+    const v = values || {};
+    theme = oneOf(v.uiTheme, THEMES, "dark");
+    menuAccent = oneOf(v.menuAccent, ACCENTS, "brand");
+    hudAccent = oneOf(v.hudAccent, ACCENTS, "team");
+    menuHex = normHex(v.menuAccentHex, PRESET_HEX.brand);
+    hudHex = normHex(v.hudAccentHex, PRESET_HEX.brand);
+    textSize = oneOf(v.textSize, TEXT_SIZES, "normal");
+    contrast = oneOf(v.uiContrast, CONTRASTS, "off");
+    units = oneOf(v.speedUnits, UNITS, "kmh");
+    help = oneOf(v.menuHelp, HELPS, "on");
+    applyAll();
+    for (const [id, value] of [["pm-uitheme", theme], ["pm-menuaccent", menuAccent], ["pm-hudaccent", hudAccent],
+      ["pm-textsize", textSize], ["pm-contrast", contrast], ["pm-units", units], ["pm-helptext", help]]) paintRow(id, value);
+  }
+
   function initUI() {
     if (typeof SettingRow === "undefined") return;
     // COLOUR VISION row is runtime-built (shellNodes at ceiling) — insert after
@@ -482,7 +501,7 @@ const AppearanceOpts = (function () {
     hudUsesTeam: () => hudAccent === "team",
     teamHex, resolveAccent, pickInk,
     setTheme, setMenuAccent, setHudAccent, setMenuHex, setHudHex,
-    applyAll, applyMenuAccent, applyHudAccent, initUI,
+    applyAll, applyMenuAccent, applyHudAccent, restore, initUI,
   };
 })();
 Object.freeze(AppearanceOpts);

@@ -759,20 +759,50 @@
         const s = field === 2 ? 0.805 : 0.735 + field * 0.045;   // field 3 at 0.825 reached the Luffield loop (11 m)
         const a = anchor(k(s), 1, 56 + field * 12);
         const b = [a.r, a.u, a.t];
+        const pitches = [];
+        let minUp = 0, maxUp = 5.6;
+        for (let i = 0; i < 8; i++) {
+          const row = i < 4 ? -1 : 1, slot = i % 4;
+          const tent = (i + field) % 3 === 0;
+          const c = vadd(vadd(a.c, a.r, row * (9 + hash(field * 31 + i) * 4)),
+                         a.t, (slot - 1.5) * 12);
+          // Each pitch follows its own patch of field, rather than extending
+          // the centre's tilted plane across all eight tents and campers.
+          const ground = terrainYAt(c[0], c[2]);
+          if (Number.isFinite(ground)) {
+            // Camper floors clear the wheat field tiles and stand on wheels;
+            // the tent's fabric skirt remains embedded in the grass.
+            const baseY = ground + (tent ? -0.3 : 0.3);
+            c[1] = baseY;
+          }
+          const localUp = (q) => (q[0] - a.c[0]) * a.u[0] + (q[1] - a.c[1]) * a.u[1] + (q[2] - a.c[2]) * a.u[2];
+          minUp = Math.min(minUp, localUp(c)); maxUp = Math.max(maxUp, localUp(c) + (tent ? 2.7 : 2.5));
+          const wheels = [];
+          if (!tent) for (const side of [-1, 1]) for (const along of [-1.8, 1.8]) {
+            const wheel = vadd(vadd(vadd(c, a.u, -0.05), a.r, side * 1.6 - 0.09), a.t, along);
+            const wheelGround = terrainYAt(wheel[0], wheel[2]);
+            if (Number.isFinite(wheelGround)) wheel[1] = wheelGround + 0.21;
+            minUp = Math.min(minUp, localUp(wheel) - 0.3); maxUp = Math.max(maxUp, localUp(wheel) + 0.3);
+            wheels.push(wheel);
+          }
+          pitches.push({ c, i, tent, wheels });
+        }
         modelGroup(`silverstone-camping-field-${field + 1}`, {
-          center: vadd(a.c, a.u, 2.8), size: [54, 5.6, 58], basis: b,
+          center: vadd(a.c, a.u, (minUp + maxUp) / 2),
+          size: [54, maxUp - minUp, 58], basis: b,
         }, (stage) => {
-          for (let i = 0; i < 8; i++) {
-            const row = i < 4 ? -1 : 1;
-            const slot = i % 4;
-            const c = vadd(vadd(a.c, a.r, row * (9 + hash(field * 31 + i) * 4)),
-                           a.t, (slot - 1.5) * 12);
-            const tent = (i + field) % 3 === 0;
+          for (const { c, i, tent, wheels } of pitches) {
             if (tent) {
               stage._mat = MAT.FABRIC;
               TrackGeom.addPrism(stage, c, [4.8, 2.7, 6.5],
                                  i % 2 ? [0.78, 0.20, 0.18] : [0.20, 0.38, 0.62], b);
             } else {
+              // Two axles, with each tyre entering the grass and its upper
+              // shoulder meeting the chassis instead of a floating body box.
+              stage._mat = MAT.FLAT;
+              for (const wheel of wheels) {
+                TrackGeom.addCyl(stage, wheel, 0.3, 0.18, [0.12, 0.13, 0.14], 6, [a.t, a.r, a.u]);
+              }
               stage._mat = MAT.METAL;
               TrackGeom.addBox(stage, vadd(c, a.u, 1.25), [3.2, 2.5, 6.8],
                                [0.88, 0.88, 0.84], b);
@@ -968,7 +998,9 @@
           out._mat = MAT.METAL;
           seat.cyl(out, vadd(c, a.u, -0.4), 0.11, 10.4, [0.86, 0.87, 0.90], 5, b);
           out._mat = 0;
-          addBox(out, vadd(vadd(c, a.u, 8.6), a.t, 1.3), [0.08, 1.2, 2.2],
+          // The cloth's leading edge is sleeved around the mast; the previous
+          // 0.20m setback left a visible gap beyond the 0.11m pole radius.
+          addBox(out, vadd(vadd(c, a.u, 8.6), a.t, 1.1), [0.08, 1.2, 2.2],
                  SPONSOR[((i + 4) % SPONSOR.length + SPONSOR.length) % SPONSOR.length], b);
         }
       }

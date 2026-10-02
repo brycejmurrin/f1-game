@@ -271,29 +271,123 @@ const SceneryNature = (function () {
     // tip). The lit vertex shaders bend the crown downwind by it. Cleared with
     // swayOff() before each emitter returns: the props record is posted whole
     // from the build worker and a function on it would not clone.
-    const swayOn = (base, up, y0, y1) => { out._matAt = TrackGeom.swayMatAt(MAT.FOLIAGE, base, up, y0, y1); };
-    const swayOff = () => { out._matAt = null; };
+    // The same span is the CROWN: swayOff() rounds the normals emitted since
+    // swayOn() toward the crown axis (TrackGeom.roundNormals), so the cone
+    // stacks light as soft volumes instead of faceted lanterns.
+    let _crownV0 = -1, _crownBase = null, _crownUp = null;
+    const swayOn = (base, up, y0, y1) => {
+      out._matAt = TrackGeom.swayMatAt(MAT.FOLIAGE, base, up, y0, y1);
+      _crownV0 = out.pos.length / 3; _crownBase = base; _crownUp = up;
+    };
+    const swayOff = () => {
+      out._matAt = null;
+      if (_crownV0 >= 0) TrackGeom.roundNormals(out, _crownV0, _crownBase, _crownUp);
+      _crownV0 = -1; _crownBase = null; _crownUp = null;
+    };
+    // Authored woodland may interlock. Relocations claim complete tree parts
+    // so a later row cannot move its matching facet planes into that tree.
+    const TREE_CELL = 24, placedTrees = new Map();
+    const treeOccupied = (f, relocated) => {
+      const seen = new Set();
+      for (let x = Math.floor((f.c[0] - f.ex) / TREE_CELL); x <= Math.floor((f.c[0] + f.ex) / TREE_CELL); x++)
+        for (let z = Math.floor((f.c[2] - f.ez) / TREE_CELL); z <= Math.floor((f.c[2] + f.ez) / TREE_CELL); z++)
+          for (const site of placedTrees.get(`${x}|${z}`) || []) {
+            if (seen.has(site) || (!relocated && !site.relocated)) continue;
+            seen.add(site);
+            if (palmBoundsOverlap(f, site) && site.parts.some((p) => palmOverlaps(f, p))) return true;
+          }
+      return false;
+    };
     const tree = (k, side, dist, h, col, opts) => {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
-      const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (spotTaken(a.c[0], a.c[2])) return;   // one tree per spot — see the note on `planted`
-      if (onTrack(a.c[0], a.c[2], 4, Math.max(0.5, h * 0.3 * sp))) {   // the crown's radius from the pit complex — see pine()
-        ctx.noteSuppressed("tree", `tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
-        return;
+      const initialDist = dist;
+      // Relocation changes the anchor, never this tree's authored shape seed.
+      const vr = hash(k * 8.3 + side * 5.1 + initialDist + 4.7);
+      const deadAt = 1 - ((opts && opts.deadChance != null) ? opts.deadChance : 0.09);
+      const j = 0.85 + hash(k * 2.9 + side * 1.7 + initialDist) * 0.3;
+      const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;
+      const partsAt = (p) => {
+        const basis = [p.r, p.u, p.t], parts = [];
+        const part = (type, y, radius, height, x = 0, bb = basis) =>
+          parts.push({ type, c: vadd(vadd(p.c, p.u, y), p.r, x), size: [radius * 2, height, radius * 2], b: bb });
+        if (vr > deadAt) {
+          part("cyl", -0.5, 0.32, h * 0.7 + 0.5);
+          for (let i = 0; i < 3; i++) {
+            const bh = hash(k * 11 + i * 3.1 + initialDist), angle = (i / 3 + bh * 0.4) * 6.2832;
+            const bu = p.u.map((v, axis) => v * 0.7 + (p.r[axis] * Math.cos(angle) + p.t[axis] * Math.sin(angle)) * 0.7);
+            part("cyl", h * 0.7 + i * 0.25, 0.09, 1.6 + bh * 1.4, 0, [p.r, bu, p.t]);
+          }
+        } else {
+          part("cyl", -0.5, 0.4, h * 0.55 + 0.5);
+          part("cone", h * 0.20, (3.5 + h * 0.135) * j, h * 0.14); // entire understorey skirt
+          if (crown === "vase") {
+            part("cone", h * 0.34, (2.1 + h * 0.07) * j * sp, h * 0.28);
+            part("cone", h * 0.56, (3.4 + h * 0.15) * j * sp, h * 0.28);
+            part("cone", h * 0.78, (4.0 + h * 0.17) * j * sp, h * 0.24, lean);
+          } else if (crown === "weeping") {
+            part("cone", h * 0.62, (3.6 + h * 0.15) * j * sp, h * 0.30);
+            part("frustum", h * 0.24, (3.9 + h * 0.16) * j * sp, h * 0.40);
+          } else if (crown === "columnar") {
+            part("cone", h * 0.30, (1.5 + h * 0.05) * j * sp, h * 0.36);
+            part("cone", h * 0.56, (1.2 + h * 0.04) * j * sp, h * 0.34);
+            part("cone", h * 0.80, (0.8 + h * 0.03) * j * sp, h * 0.26);
+          } else {
+            part("cone", h * 0.28, (3.3 + h * 0.13) * j * sp, h * 0.30);
+            part("cone", h * 0.46, (3.7 + h * 0.14) * j * sp, h * 0.26);
+            part("cone", h * 0.66, (2.9 + h * 0.10) * j * sp, h * 0.26, lean);
+            part("cone", h * 0.82, (1.7 + h * 0.06) * j * sp, h * 0.22, lean * 1.6);
+          }
+        }
+        return parts;
+      };
+      const clearAt = (p, relocated = false) => !onTrack(p.c[0], p.c[2], 4, Math.max(0.5, h * 0.3 * sp)) &&
+        partsAt(p).every((part) => {
+          const f = palmFootprint(part);
+          return !ctx.massBlocked(f.c, f.w, f.d, f.b, 1) &&
+            !treeOccupied(f, relocated) &&
+            ctx.barrierClear(f.c[0], f.c[2], Math.hypot(f.w, f.d) / 2) &&
+            !rejBox(f.c, [f.w, f.maxY - f.minY, f.d], f.b);
+        });
+      let a = anchor(k, side, dist);
+      if (!clearAt(a)) {
+        let found = false;
+        for (let extra = 1.5; extra <= 12; extra += 1.5) {
+          dist = initialDist + extra;
+          a = anchor(k, side, dist);
+          if (clearAt(a, true)) { found = true; break; }
+        }
+        if (!found) {
+          ctx.noteSuppressed("tree", `tree SUPPRESSED by occupied ground at k=${k} side=${side}: dist=${initialDist}`);
+          return;
+        }
       }
+      const b = [a.r, a.u, a.t];
+      if (spotTaken(a.c[0], a.c[2])) return;   // reserve only the successful site
+      const reserve = () => {
+        const parts = partsAt(a).map(palmFootprint);
+        const minX = Math.min(...parts.map((f) => f.c[0] - f.ex)), maxX = Math.max(...parts.map((f) => f.c[0] + f.ex));
+        const minZ = Math.min(...parts.map((f) => f.c[2] - f.ez)), maxZ = Math.max(...parts.map((f) => f.c[2] + f.ez));
+        const site = { parts, relocated: dist !== initialDist, c: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
+          ex: (maxX - minX) / 2, ez: (maxZ - minZ) / 2,
+          minY: Math.min(...parts.map((f) => f.minY)), maxY: Math.max(...parts.map((f) => f.maxY)) };
+        for (let x = Math.floor(minX / TREE_CELL); x <= Math.floor(maxX / TREE_CELL); x++)
+          for (let z = Math.floor(minZ / TREE_CELL); z <= Math.floor(maxZ / TREE_CELL); z++) {
+            const key = `${x}|${z}`;
+            if (!placedTrees.has(key)) placedTrees.set(key, []);
+            placedTrees.get(key).push(site);
+          }
+      };
       // Past the on-track guard — this tree ships. Canopy radius scales with
       // height, so w/d are an estimate rather than a measured bound.
-      ctx.note("tree", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.5, h, h * 0.5], { k, side });
-      const vr = hash(k * 8.3 + side * 5.1 + dist + 4.7);
-      const deadAt = 1 - ((opts && opts.deadChance != null) ? opts.deadChance : 0.09);
+      ctx.note("tree", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.5, h, h * 0.5], { k, side, dist, initialDist });
       if (vr > deadAt) {   // dead/storm tree: bare trunk + a few angled branch stubs.
         const th = h * 0.7;
         out._mat = MAT.WOOD;
         if (addCyl(out, vadd(a.c, a.u, -0.5), 0.32, th + 0.5, [0.28, 0.22, 0.16], 6, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
         const top = vadd(a.c, a.u, th);
         for (let i = 0; i < 3; i++) {
-          const bh = hash(k * 11 + i * 3.1 + dist);
+          const bh = hash(k * 11 + i * 3.1 + initialDist);
           const ang = (i / 3 + bh * 0.4) * 6.2832;
           const ca = Math.cos(ang), sa = Math.sin(ang);
           const bu = [
@@ -303,13 +397,12 @@ const SceneryNature = (function () {
           ];
           addCyl(out, vadd(top, a.u, i * 0.25), 0.09, 1.6 + bh * 1.4, [0.30, 0.24, 0.17], 4, [a.r, bu, a.t]);
         }
+        reserve();
         out._mat = 0;
         return;
       }
       // per-instance jitter so adjacent broadleaves vary in size/shape
-      const j = 0.85 + hash(k * 2.9 + side * 1.7 + dist) * 0.3;
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
-      const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;   // asymmetric crown, ~35% of instances
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
       out._mat = MAT.FOLIAGE;
@@ -368,6 +461,7 @@ const SceneryNature = (function () {
         addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j * sp, h * 0.26, c2, 8, b);    // shoulder
         addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j * sp, h * 0.22, c2, 7, b);    // rounded cap
       }
+      reserve();
       out._mat = 0; swayOff();
     };
     // Palm: tall thin trunk + a crown of drooping frond prisms.

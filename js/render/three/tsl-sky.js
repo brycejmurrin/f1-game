@@ -417,9 +417,10 @@
         });
       });
 
-      // --- Moon disc + halo (night tracks; stable world-space direction) ---
+      // --- Moon disc + halo (night tracks). The disc hangs on sunDir, which at
+      // night IS the moon key light (GLX parity: the shadows fall toward it) ---
       If(U.moon.greaterThan(0.0).and(U.stars.greaterThan(0.5)), () => {
-        const moonDir = normalize(vec3(0.42, 0.72, 0.55));
+        const moonDir = normalize(U.sunDir);
         const md = dot(dir, moonDir).toVar();
         const moonPerp = length(dir.sub(moonDir.mul(max(md, 0.0)))).toVar();
         const moonDisc = smoothstep(U.moonDiscSize.mul(0.025), U.moonDiscSize.mul(0.010), moonPerp)
