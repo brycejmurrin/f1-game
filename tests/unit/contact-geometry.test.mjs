@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import {readFileSync} from "node:fs";
 const root = new URL("../../", import.meta.url);
-function setup() {
-  const ctx = vm.createContext({Math,Number,Object,WeakMap,
+function setup(options = {}) {
+  const ctx = vm.createContext({Math:options.math || Math,Number,Object,WeakMap,
     Log:{info(){},enabled(){return false;}},
-    IncidentSim:{owns:c=>!!c.owned,notifyCar(){}},
+    IncidentSim:{owns:c=>!!c.owned,notifyCar:options.onIncident || (()=>{})},
     DebrisWorld:{active:()=>false}, Tracks:{wallAt:()=>100}});
   for(const path of ["js/core/mat4.js","js/physics/ai-drive.js","js/physics/contact-geometry.js","js/physics/collide.js"])
     vm.runInContext(readFileSync(new URL(path,root),"utf8"),ctx);
@@ -14,7 +14,7 @@ function setup() {
   const ai=vm.runInContext("AiDrive",ctx);
   const G={track:{total:1000},player:null,netPlay:{owns:c=>!!c.remote},PACE:1,raceT:0,
     wrapS:s=>(s%1000+1000)%1000,worldFromTrack:(s,x)=>({x,z:s})};
-  const collision=vm.runInContext("Collide",ctx).create(G,()=>{});
+  const collision=vm.runInContext("Collide",ctx).create(G,options.onEffect || (()=>{}));
   return {geometry,collision,G,ai};
 }
 const {geometry:C,ai:AI}=setup();
@@ -131,4 +131,60 @@ test("a rotated remote contact only changes the locally owned car",()=>{
   const after=JSON.parse(before);
   for(const k of ["prog","s","x","speed","yawVis"])assert.equal(b[k],after[k]);
   assert.ok(a.x<0 || a.prog!==0);
+});
+
+// The middle car is swept once as a target, then as the next outer-loop car.
+// Its second time-of-impact must use the pose written by the first response.
+// For the first pair: relative travel = 18 - (-1), first contact gap = 10 - 4.8.
+// The middle car therefore travels only -t1 before its next sweep.
+test("successive swept contacts use the middle car's updated motion",()=>{
+  const effects=[];
+  const {collision,G}=setup({onEffect:(a,b)=>effects.push([a.id,b.id])});
+  const a={...car(0,180),id:0},b={...car(10,10),id:1};
+  const c={...car(20,200),id:2,human:true,yawVis:Math.PI};
+  collision.resolveCollisions([a,b,c],.1);
+  a.prog=a.s=18;b.prog=b.s=9;c.prog=c.s=0;G.raceT=.1;
+  collision.resolveCollisions([a,b,c],.1);
+  const t1=(10-4.8)/19, t2=(10-4.8)/(20-t1);
+  close(a.prog,18*t1);
+  close(b.prog,10-t1*t2);
+  close(c.prog,20-20*t2);
+  close(c.prog-b.prog,4.8);
+  assert.deepEqual(effects,[[0,1],[1,2]],"both crossings must produce their own response");
+});
+
+test("ownership acquired during a swept response excludes later cars immediately",()=>{
+  const effects=[];
+  const a={...car(0,180),id:0},b={...car(10,10),id:1};
+  const c={...car(20,200),id:2,human:true,yawVis:Math.PI};
+  const {collision,G}=setup({
+    onEffect:(a,b)=>effects.push([a.id,b.id]),
+    onIncident:()=>{a.owned=b.owned=c.owned=true;},
+  });
+  collision.resolveCollisions([a,b,c],.1);
+  a.prog=a.s=18;b.prog=b.s=9;c.prog=c.s=0;G.raceT=.1;
+  collision.resolveCollisions([a,b,c],.1);
+  close(a.prog,18*(10-4.8)/19);
+  close(b.prog,10-(10-4.8)/19);
+  close(c.prog,0);
+  close(c.speed,200);
+  assert.deepEqual(effects,[[0,1]],"the newly owned target must not receive a second response");
+});
+
+test("a quiet 22-car sweep does not repeat each car's movement check for every pair",()=>{
+  let calls=0;
+  const math=Object.create(Math);
+  math.hypot=(...args)=>{calls++;return Math.hypot(...args);};
+  const {collision,G}=setup({math});
+  const cars=Array.from({length:22},(_,id)=>car(id*25,35+id*2));
+  collision.resolveCollisions(cars,1/60);
+  for(const c of cars){const d=c.speed/60;c.prog+=d;c.s+=d;}
+  const expected=cars.map(c=>[c.prog,c.s,c.x,c.speed]);
+  calls=0;G.raceT=1/60;
+  collision.resolveCollisions(cars,1/60);
+  assert.deepEqual(cars.map(c=>[c.prog,c.s,c.x,c.speed]),expected,"a separated moving field is untouched");
+  // Relative-motion hypot tests remain pairwise (231). Checking every car's
+  // own motion once needs only 22 more, whereas repeated target checks take
+  // this workload to 484. Leave room for equivalent faster implementations.
+  assert.ok(calls<=300,`quiet sweep repeated movement work: ${calls} hypot calls`);
 });

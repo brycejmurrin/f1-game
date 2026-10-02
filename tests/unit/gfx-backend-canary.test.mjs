@@ -2534,6 +2534,20 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
 });
 
+test("TLX late sky depth-tests less-equal and does not write depth", () => {
+  // WGX's late sky used depthCompare "always" and erased the world. The
+  // saving is the covered fraction only when the far-plane triangle tests
+  // less-equal and leaves the depth buffer alone.
+  const src = read("js/render/three/tlx.js");
+  const i = src.indexOf("function makeSkyMat");
+  assert.notEqual(i, -1, "makeSkyMat moved");
+  const body = src.slice(i, i + 900);
+  assert.match(body, /depthTest = true/);
+  assert.match(body, /depthWrite = false/);
+  assert.match(body, /depthFunc = THREE\.LessEqualDepth/);
+  assert.doesNotMatch(body, /AlwaysDepth|depthCompare:\s*"always"/);
+});
+
 test("TLX pins the sky material before the HDR scene render, not only the canvas fallback", () => {
   const src = read("js/render/three/tlx.js");
   const present = src.indexOf("present(opts)");
@@ -3502,7 +3516,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // so the settings rows are read against black rather than a moving world.
   // The gate runs before every early return, and a freshly built world still
   // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/);
+  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/);
   assert.match(raceSettings, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\); \} catch \(e\) \{[^}]*startRace\(\); \}/,
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
@@ -3514,7 +3528,10 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
     "endRace clears the 2D rain overlay the way quitToMenu already did");
-  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
+  const renderBody = fnSource(game, "function render(dt)");
+  for (const boundary of ["const menuBlank", "if (setupPreviewOn && !heldWarm)", "if (!track) return;"]) {
+    assert.ok(renderBody.includes(boundary), "render contains the boundary: " + boundary);
+  }
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) {"),
     "the visibility gate precedes the garage-preview return");
   assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
@@ -4888,6 +4905,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
+  const uiExperience = null;
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
   const fire = () => { const [id, fn] = [...timers].pop(); timers.delete(id); return fn(); };
   schedule(true); const old = fire();

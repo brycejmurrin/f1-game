@@ -1,0 +1,38 @@
+@layer components {
+/* Career and results share restrained team-colour storytelling. Text is always
+   present; motion reveals the card, never delays access to the result. */
+[data-career-part="nav"] { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--gap); }
+[data-career-part="nav"] .sel-chip { font-style: normal; text-transform: none; }
+[data-career-part="nav"] [aria-current="location"] { border-color: var(--red); background: var(--carbon); }
+.cr-nextrace { padding: 0; overflow: hidden; border-color: var(--career-team, var(--red)); }
+.cr-nextrace > img { display: block; width: 100%; aspect-ratio: 2.4; object-fit: cover; }
+.cr-nextrace > div { padding: var(--pad); }
+.cr-nextrace, [data-career-part="story"], [data-results-part="story"] { font-style: normal; }
+.cr-nextrace .cr-nr-name { margin: 0; font-style: italic; font-size: var(--fs-6); }
+[data-career-part="facts"] { display: flex; flex-wrap: wrap; gap: var(--gap); font-size: var(--label); color: var(--dim); }
+[data-career-part="objective"] { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: 0; }
+[data-career-part="objective"] strong { color: var(--text); }
+[data-career-part="story"] { padding-bottom: var(--pad); }
+[data-career-part="calendar"] { display: flex; overflow-x: auto; gap: var(--gap); padding: var(--gap) 0 var(--pad); margin: 0; list-style: none; overscroll-behavior-x: contain; touch-action: pan-x; }
+[data-career-part="calendar"] > li { flex: 0 0 10em; display: flex; flex-direction: column; gap: var(--gap); padding: var(--pad); border: 1px solid var(--plate-line); background: var(--carbon); font-size: var(--label); }
+[data-career-part="calendar"] > li[data-stage="complete"] { border-top-color: var(--career-team, var(--red)); }
+[data-career-part="calendar"] > li[aria-current] { border-color: var(--red); background: var(--carbon); }
+[data-career-part="calendar"] > li span { color: var(--dim); }
+[data-career-part="milestones"] { display: flex; flex-direction: column; gap: var(--pad); border-left: 2px solid var(--career-team, var(--red)); padding-left: var(--pad); }
+[data-career-part="milestones"] > div { display: flex; flex-direction: column; gap: var(--gap); }
+[data-career-part="milestones"] small { color: var(--dim); }
+[data-results-part="story"] { padding: var(--pad); margin-bottom: var(--pad); background: var(--carbon); border: 1px solid var(--plate-line); }
+[data-results-part="head"] { display: flex; flex-direction: column; gap: var(--gap); }
+[data-results-part="head"] > strong { font-size: var(--fs-6); font-style: italic; }
+[data-results-part="head"] > span { color: var(--dim); }
+[data-results-part="podium"] { display: flex; gap: var(--gap); padding: var(--pad) 0 0; margin: 0; list-style: none; }
+[data-results-part="podium"] > li { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--gap); padding: var(--pad); background: var(--carbon); border-top: 3px solid var(--career-team, var(--red)); overflow-wrap: anywhere; }
+[data-results-part="podium"] > li > strong { font-family: var(--font-hud); font-size: var(--fs-6); }
+[data-results-part="podium"] small { color: var(--dim); }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduce"]) [data-results-part="story"] { animation: career-reveal 240ms ease-out both; }
+  :root:not([data-motion="reduce"]) [data-results-part="podium"] > li { animation: career-reveal 240ms ease-out backwards; animation-delay: calc(var(--podium-place) * 55ms); }
+  :root:not([data-motion="reduce"]) [data-career-part="calendar"] > li[aria-current] { animation: career-reveal 240ms ease-out; }
+}
+@keyframes career-reveal { from { opacity: 0.7; transform: translateY(calc(var(--gap) * 0.5)); } to { opacity: 1; transform: translateY(0); } }
+}
