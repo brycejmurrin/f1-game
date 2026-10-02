@@ -1,4 +1,4 @@
-/* Apex 26 — readable live paddock and contextual race doors; existing primitives. */
+/* Apex 26 — readable live paddock and contextual race doors; existing primitives (Home explore tier). */
 @layer overlays {
   /* Filled accent surfaces use contrast ink rather than the page's theme ink. */
   .bigbtn:not(.alt) { color: var(--menu-accent-ink, var(--text)); }
