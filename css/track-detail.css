@@ -270,12 +270,14 @@ body[data-density="compact"] #track-detail-header {
 }
 
 /* Cockpit cam: gear + speed live on the steering-wheel LCD — hide the floating
-   HUD duplicates so the view reads like sitting in the car. */
+   HUD duplicates so the view reads like sitting in the car. ENERGY, OVERTAKE
+   and AERO stay: the wheel only carries unlabelled lamps for them, so hiding
+   the chips hid WHY overtake was unavailable ("OT · LAP 1", "CLOSE IN") and the
+   aero-zone distance from the default touch camera. They are not left on the
+   wheel either — the SHIPPED cockpit layout in js/ui/hud-layout.js moves them (and TYRES) to
+   either side of it, a default the player can move or RESET back to. */
 body.cockpit-cam #hud-gearbox,
-body.cockpit-cam #hud-speed,
-body.cockpit-cam #hud-energy,
-body.cockpit-cam #hud-ot,
-body.cockpit-cam #hud-aero { display: none; }
+body.cockpit-cam #hud-speed { display: none; }
 
 /* …but the LCD only carries the read when it is big enough to READ. The wheel
    is drawn in world space, so it shrinks with the viewport: measured at phone

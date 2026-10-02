@@ -52,7 +52,7 @@ test("set writes only moved elements and paints --hl-* on that element", () => {
   const { H, written, els } = load();
   const e = H.set("map", { x: 5, s: 150 }, "other");
   assert.deepEqual({ ...e }, { x: 5, y: 0, s: 150 });
-  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 1, cockpit: {}, other: { map: { x: 5, y: 0, s: 150 } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 2, cockpit: {}, other: { map: { x: 5, y: 0, s: 150 } } });
   const m = els["#minimap"];
   assert.equal(m.attrs["data-hl"], "");
   assert.equal(m.props["--hl-x"], "5");
@@ -96,6 +96,95 @@ test("css/hud.css reads the tokens through one data-hl rule, compensated for ban
   assert.match(m[1], /translate:[^;]*--hl-x[^;]*--hud-z[^;]*--hl-y/);
   assert.match(m[1], /scale:\s*var\(--hl-s/);
   assert.match(m[1], /transform-origin:\s*var\(--hl-o/);
+});
+
+const plain = (o) => JSON.parse(JSON.stringify(o));
+const TD = fs.readFileSync(path.join(ROOT, "css/track-detail.css"), "utf8");
+
+test("cockpit ships a default strip beside the wheel; other ships zero", () => {
+  const { H, written, els } = load();
+  assert.equal(H.isShipped(), true);
+  assert.deepEqual(Object.keys(H.SHIPPED.other), []);
+  for (const id of ["ot", "aero", "energy", "tyre"]) {
+    const e = H.get(id, "cockpit");
+    assert.ok(Math.abs(e.x) >= 25, id + " clears the wheel's middle 40%");
+    assert.deepEqual(plain(H.get(id, "other")), { x: 0, y: 0, s: 100 });
+  }
+  assert.ok(H.get("ot", "cockpit").x > 0 && H.get("energy", "cockpit").x < 0, "OT right, ENERGY left");
+  assert.deepEqual(plain(H.get("gearbox", "cockpit")), { x: 0, y: 0, s: 100 });
+  assert.equal("data-hl" in els["#hud-ot"].attrs, false, "chase: nothing painted");
+  H.setCam("cockpit");
+  assert.equal(els["#hud-ot"].props["--hl-x"], String(H.SHIPPED.cockpit.ot.x));
+  assert.equal("data-hl" in els["#hud-gearbox"].attrs, false);
+  assert.equal(written.hudLayout, undefined, "the default is not written to the store");
+});
+
+test("stored offsets override the cockpit default; reset returns to the default, not zero", () => {
+  const { H, written } = load();
+  H.set("ot", { y: 0 }, "cockpit");
+  assert.deepEqual(plain(H.get("ot", "cockpit")), { x: H.SHIPPED.cockpit.ot.x, y: 0, s: 100 });
+  assert.equal(H.isShipped("cockpit"), false);
+  H.set("aero", { x: 0, y: 0 }, "cockpit");   // back to zero is a real choice in the cockpit
+  assert.deepEqual(plain(written.hudLayout.cockpit.aero), { x: 0, y: 0, s: 100 });
+  H.resetEl("ot", "cockpit");
+  assert.deepEqual(plain(H.get("ot", "cockpit")), plain(H.SHIPPED.cockpit.ot));
+  H.resetSet("cockpit");
+  assert.equal(written.hudLayout, null);
+  assert.deepEqual(plain(H.get("aero", "cockpit")), plain(H.SHIPPED.cockpit.aero));
+  H.set("tyre", plain(H.SHIPPED.cockpit.tyre), "cockpit");
+  assert.equal(written.hudLayout, null, "writing the default stores nothing");
+});
+
+test("v1 store migrates: its values kept, missing cockpit elements take the default, saves as v2", () => {
+  const { H, written } = load({ hudLayout: { v: 1, cockpit: { tyre: { x: -10, y: 0, s: 120 } }, other: { map: { x: 2, y: 0, s: 100 } } } });
+  assert.deepEqual(plain(H.get("tyre", "cockpit")), { x: -10, y: 0, s: 120 });
+  assert.deepEqual(plain(H.get("ot", "cockpit")), plain(H.SHIPPED.cockpit.ot));
+  assert.deepEqual(plain(H.get("map", "other")), { x: 2, y: 0, s: 100 });
+  H.set("map", { s: 110 }, "other");
+  assert.equal(written.hudLayout.v, 2);
+  assert.deepEqual(plain(written.hudLayout.cockpit), { tyre: { x: -10, y: 0, s: 120 } });
+});
+
+test("presets are pure data laid over the set's shipped layout", () => {
+  const { H } = load();
+  assert.deepEqual(plain(H.PRESETS.map((p) => p[0])), ["shipped", "clean", "big", "corners"]);
+  const ids = H.ELEMENTS.map((e) => e[0]);
+  for (const [, , els] of H.PRESETS) for (const id in els) assert.ok(ids.includes(id), id);
+  const c = H.presetLayout("clean", "cockpit");
+  assert.equal(c.tower.s, 85);
+  assert.equal(c.ot.s, 90);
+  assert.equal(c.ot.x, H.SHIPPED.cockpit.ot.x, "CLEAN keeps the cockpit strip beside the wheel");
+  assert.equal(H.presetLayout("clean", "other").ot.x, 0);
+  assert.equal(H.presetLayout("big", "other").gearbox.s, 125);
+  assert.equal(H.presetLayout("nope", "other"), null);
+});
+
+test("apply a preset to the edited set, tweak it, CUSTOM detection", () => {
+  const { H, written } = load();
+  assert.equal(H.presetOf("other"), "shipped");
+  assert.equal(H.presetOf("cockpit"), "shipped");
+  assert.equal(H.applyPreset("big", "other"), true);
+  assert.equal(H.presetOf("other"), "big");
+  assert.equal(H.presetOf("cockpit"), "shipped", "only the edited set changes");
+  assert.deepEqual(plain(written.hudLayout.cockpit), {});
+  assert.equal(H.get("tower", "other").s, 125);
+  H.set("tower", { s: 130 }, "other");
+  assert.equal(H.presetOf("other"), "custom");
+  H.applyPreset("corners", "cockpit");
+  assert.equal(H.presetOf("cockpit"), "corners");
+  assert.equal(H.get("energy", "cockpit").x, -34);
+  assert.equal(H.get("ot", "cockpit").x, H.SHIPPED.cockpit.ot.x);
+  H.applyPreset("shipped", "cockpit");
+  H.applyPreset("shipped", "other");
+  assert.equal(written.hudLayout, null);
+});
+
+test("css/track-detail.css: cockpit hides only speed/gear, not the OT/AERO/ENERGY strip", () => {
+  const hide = TD.match(/((?:body\.cockpit-cam #[\w-]+,?\s*)+)\{\s*display:\s*none/);
+  assert.ok(hide, "the cockpit hide rule exists");
+  assert.match(hide[1], /#hud-gearbox/);
+  assert.match(hide[1], /#hud-speed/);
+  for (const id of ["hud-ot", "hud-aero", "hud-energy", "hud-tyre"]) assert.doesNotMatch(hide[1], new RegExp("#" + id + "\\b"));
 });
 
 test("module has no Tracks / curvature reads", () => {
