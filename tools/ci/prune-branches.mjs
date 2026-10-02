@@ -42,7 +42,7 @@
 // unknown PR set is not an empty one.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import { audit, indexPrs, indexRuns, parseRefs, readJson, renderMarkdown, VERDICTS } from "./branch-audit.mjs";
+import { audit, indexPrs, indexRuns, inSurvey, parseRefs, readJson, renderMarkdown, surveyScope, SURVEY_QUIET_HOURS, VERDICTS } from "./branch-audit.mjs";
 
 export { parseRefs };
 // The branch-audit verdicts --also may opt into. "absorbed" is always on: merging
@@ -129,7 +129,12 @@ export function main(argv = process.argv.slice(2)) {
   const branches = parseRefs(git("for-each-ref", "--format=%(refname)\t%(objectname)\t%(committerdate:unix)", "refs/remotes/origin"));
   // THE AUDIT (branch-audit.mjs): every branch that is not a claims marker gets
   // a verdict. It is the report, and its "absorbed" verdict is a prune rule.
-  const rows = argv.includes("--no-audit") ? [] : audit(branches, { base, prs, runs: indexRuns(readJson(arg(argv, "--runs", null))), minAgeDays, skip: (n) => CLAIMS.test(n) });
+  // The audit surveys only branches with NO PR ever and no commit for
+  // --quiet-hours (default 48; branch-audit.mjs inSurvey). --audit-all widens it.
+  const quietHours = Number(arg(argv, "--quiet-hours", String(SURVEY_QUIET_HOURS)));
+  const auditAll = argv.includes("--audit-all");
+  const rows = argv.includes("--no-audit") ? [] : audit(branches, { base, prs, runs: indexRuns(readJson(arg(argv, "--runs", null))), minAgeDays,
+    skip: (n) => CLAIMS.test(n), survey: auditAll ? null : (b) => inSurvey(b, { prs, quietHours }) });
   const verdicts = new Map(rows.map((r) => [r.name, r.verdict]));
   const ancestor = new Map(rows.map((r) => [r.sha, r.ancestor]));
   const isMerged = (sha) => {
@@ -140,7 +145,7 @@ export function main(argv = process.argv.slice(2)) {
     base, defaultBranch: arg(argv, "--default", null), openHeads, keep: keepSrc ? new RegExp(keepSrc) : null, minAgeDays, isMerged, mergedHeads,
     verdicts, allow: new Set(["absorbed", ...also]),
   });
-  if (arg(argv, "--report", null)) fs.writeFileSync(arg(argv, "--report"), renderMarkdown(rows, base));
+  if (arg(argv, "--report", null)) fs.writeFileSync(arg(argv, "--report"), renderMarkdown(rows, base, { scope: auditAll ? "" : surveyScope(quietHours) }));
   if (arg(argv, "--json", null)) fs.writeFileSync(arg(argv, "--json"), JSON.stringify(rows, null, 1));
   const count = (list, key) => { const t = {}; for (const x of list) { const k = key(x); t[k] = (t[k] || 0) + 1; } return Object.entries(t).map(([k, n]) => `${n} ${k}`).join(", ") || "none"; };
   console.log(`prune-branches: ${branches.length} remote branches; ${prune.length} prunable (${count(prune, (n) => reasons.get(n))}; no open PR, quiet ${minAgeDays}+ days)`);

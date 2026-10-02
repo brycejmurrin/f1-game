@@ -10,7 +10,8 @@ name: Prune branches
 #
 # DISPATCH ONLY, and a DRY RUN unless `apply` is ticked. Every run writes the
 # BRANCH AUDIT (tools/ci/branch-audit.mjs) to the step summary and as an
-# artifact: one verdict per branch — merged, absorbed (a dry merge into the
+# artifact: one verdict per SURVEYED branch (never had a PR, no commit for
+# `quiet_hours`, default 48) — merged, absorbed (a dry merge into the
 # deploy branch changes nothing), superseded (its added lines are already in
 # deploy), post-merge, pr-closed, unmerged — with the PR and the last CI run.
 # A branch is deleted only when it is merged or absorbed (nothing on it is
@@ -38,6 +39,10 @@ on:
         description: "Regex of extra branch names to keep (blank = none)"
         required: false
         default: ""
+      quiet_hours:
+        description: "The audit surveys only branches with no PR ever and no commit for this many hours"
+        required: false
+        default: "48"
       also:
         description: "Also delete these audit verdicts, comma-separated: superseded, post-merge, pr-closed, no-history (blank = none)"
         required: false
@@ -78,10 +83,11 @@ jobs:
           MIN_AGE: ${{ inputs.min_age_days }}
           KEEP: ${{ inputs.keep }}
           ALSO: ${{ inputs.also }}
+          QUIET: ${{ inputs.quiet_hours }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           args=(--base claude/f1-game-project-26h3ng --default "$DEFAULT_BRANCH" --min-age-days "${MIN_AGE:-1}"
-                --prs "$RUNNER_TEMP/prs.json" --runs "$RUNNER_TEMP/runs.json"
+                --prs "$RUNNER_TEMP/prs.json" --runs "$RUNNER_TEMP/runs.json" --quiet-hours "${QUIET:-48}"
                 --report "$RUNNER_TEMP/branch-audit.md" --json "$RUNNER_TEMP/branch-audit.json")
           if [ -n "$KEEP" ]; then args+=(--keep "$KEEP"); fi
           if [ -n "$ALSO" ]; then args+=(--also "$ALSO"); fi
