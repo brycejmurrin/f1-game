@@ -52,6 +52,7 @@ const DYNAMIC_RE = /(?:document\.getElementById|(?<![.\w$])\$)\(\s*(?!["'])([^)]
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "ps-panel":          "PhotoStudio mk() builds the photo controls panel; setup-camera uses a null-guarded read to exclude it from orbit gestures",
   "pm-three-path":     "renderer-picker addBtn(), and only when the backend files exist — the read at paintPresent() is null-guarded",
   "pm-car-reflect":    "renderer-picker addBtn() CAR REFLECTIONS, injected only when the three files exist — every read is null-guarded",
   "pm-screenshots":    "renderer-picker addBtn(), same condition and same null-guarded read",
