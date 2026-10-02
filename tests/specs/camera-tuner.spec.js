@@ -204,9 +204,9 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   // The #camtune wrapper is a zero-width fixed shell (the docked .sheet inside
   // it is what has a box), so assert on the inner panel.
   await expect(page.locator("#camtune-inner")).toBeVisible();
-  // One tab per CamModes mode: 15 since TRACKSIDE joined CAM_MODES (#702).
-  expect(await page.locator("#ct-modes .lt-tab").count()).toBe(15);
-  // 7 framing sliders exist (#ct-in-*); CORNER LEAD only applies to chase/far,
+  // One tab per CamModes mode: 18 = 14 base + TRACKSIDE + RIVAL / PIT WALL / DRONE.
+  expect(await page.locator("#ct-modes .lt-tab").count()).toBe(18);
+  // 7 framing sliders exist (#ct-in-*); CORNER LEAD applies to chase/far/drone,
   // so on HOOD its row is hidden and the six geometric knobs show. Comfort
   // rows (#ct-cin-*) are separate and always visible.
   expect(await page.locator("#ct-rows input[id^=ct-in-]").count()).toBe(7);
