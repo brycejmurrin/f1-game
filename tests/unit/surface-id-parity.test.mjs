@@ -140,3 +140,56 @@ test("the baked normal map's tangent frame is the tile's world axes on every bac
       `${name}: the tangent frame must be built from the world axes (+x, +y, +z), not derived from N`);
   }
 });
+
+test("the sun disc sits behind the cloud deck on every backend", () => {
+  // The cloud pass hoists the coverage along the ray (GLX cityCov, TLX cityCov,
+  // WGX covRay) and the stars and the moon already fade by it; until 2026-10-01
+  // the sun corona and disc were ADDED after the clouds with only the global
+  // overcast damp, so a cumulus passing over the sun never hid the disc (the
+  // second graphics-detail survey, item 12). The disc and the tight ring must
+  // carry the full (1 − coverage); the aureole most of it.
+  const block = (file, start) => {
+    const src = read(file);
+    const i = src.indexOf(start);
+    assert.ok(i >= 0, `${file}: ${start} not found`);
+    return src.slice(i, i + 3200);
+  };
+  const b = {
+    GLX: block("js/render/glx/shaders/glsl-sky.js", "float coronaDamp = "),
+    TLX: block("js/render/three/tsl-sky.js", "const coronaDamp = "),
+    WGX: block("js/render/webgpu/wgsl-chunks.js", "let coronaDamp = "),
+  };
+  const discLine = (s, re) => { const m = re.exec(s); assert.ok(m, "no disc line"); return m[0]; };
+  assert.match(discLine(b.GLX, /float disc = [^\n]*/), /\* sunClear;/, "GLX: the disc must be scaled by the ray's cloud coverage");
+  assert.match(b.GLX, /float sunClear = 1\.0 - cityCov;/);
+  assert.match(discLine(b.GLX, /uSunCorona[^\n]*/), /\* sunClear/, "GLX: the tight ring too");
+  assert.match(discLine(b.TLX, /const disc = [\s\S]*?toVar\(\);/), /cityCov\.oneMinus\(\)/, "TLX: the disc must be scaled by cityCov");
+  assert.match(discLine(b.TLX, /U\.sunCorona[^\n]*/), /cityCov\.oneMinus\(\)/, "TLX: the tight ring too");
+  assert.match(discLine(b.WGX, /let disc = [^\n]*/), /\(1\.0 - covRay\)/, "WGX: the disc must be scaled by covRay");
+  assert.match(discLine(b.WGX, /sunCorona \* coronaDamp[^\n]*/), /\(1\.0 - covRay\)/, "WGX: the tight ring too");
+});
+
+test("the moon disc hangs on the night key light, not a constant, on every backend", () => {
+  // Three sky shaders drew the moon at a literal (0.42, 0.72, 0.55) until
+  // 2026-10-01 while the lit pass, the wet-road glint and the shadow map used
+  // the palette's sunDir (which at night IS the moon key — the NIGHT gate
+  // comment in glsl-sky.js). Singapore's moon sat up-left of the pit straight
+  // with the shadows falling toward it (the second graphics-detail survey).
+  const moonBlock = (file, start) => {
+    const src = read(file);
+    const i = src.indexOf(start);
+    assert.ok(i >= 0, `${file}: ${start} not found`);
+    return src.slice(i, i + 600);
+  };
+  const blocks = {
+    GLX: moonBlock("js/render/glx/shaders/glsl-sky.js", "if (uMoon > 0.0 && uStars > 0.5)"),
+    TLX: moonBlock("js/render/three/tsl-sky.js", "If(U.moon.greaterThan(0.0).and(U.stars.greaterThan(0.5))"),
+    WGX: moonBlock("js/render/webgpu/wgsl-chunks.js", "if (moon > 0.0 && stars > 0.5)"),
+  };
+  for (const [name, s] of Object.entries(blocks)) {
+    assert.ok(!/moonDir\s*=\s*normalize\(vec3(<f32>)?\(\s*[\d.]+,\s*[\d.]+,\s*[\d.]+\s*\)\)/.test(s),
+      `${name}: the moon disc direction is a literal vector again — it must follow the night key light`);
+    assert.ok(/moonDir\s*=\s*normalize\((uSunDir|U\.sunDir|sunDir)\)/.test(s),
+      `${name}: the moon disc must be placed on the sun/moon key direction uniform`);
+  }
+});

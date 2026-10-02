@@ -287,14 +287,23 @@ function _applyRaceBody() {
   // Skipped for night: night ambient is intentionally near-black so lamps carve
   // the scene; an HDRI fill would re-wash it to "dim day".
   // Keys: "<track>|<tod>" then "*|<tod>". Absent → leave the TOD base untouched.
+  // A WILDCARD hit is the pack's one generic (procedural) environment, so it
+  // may only fill in what nobody authored: on the "default" time of day the
+  // palette's own ambientSky/ambientGround/zenith/horizon win. Until 2026-10-01
+  // the wildcard replaced them, and the shipped pack carries ONLY wildcard
+  // keys — so forty circuits' authored ambient was dead and Bahrain, Spa and
+  // Monaco shared one grey (the second graphics-detail survey). An exact
+  // "<track>|<tod>" key is a measurement of THAT circuit and still overrides.
   if (!isNightSession && typeof Assets !== "undefined" && G.track && G.track.def) {
     const _tod = G.raceTimeOfDay || "default";
     const _env = Assets.env(G.track.def.id, _tod);
     if (_env) {
-      if (_env.ambientSky)    G.frame.ambientSky = _env.ambientSky.slice();
-      if (_env.ambientGround) G.frame.ambientGround = _env.ambientGround.slice();
-      if (_env.skyZenith)  { G.frameSky.zenith  = _env.skyZenith.slice();  G.frame.skyZenith  = G.frameSky.zenith; }
-      if (_env.skyHorizon) { G.frameSky.horizon = _env.skyHorizon.slice(); G.frame.skyHorizon = G.frameSky.horizon; }
+      const _exact = _env !== Assets.env("*", _tod);
+      const _pal = (_tod === "default" && !_exact && G.track.def.palette) || {};
+      if (_env.ambientSky && !_pal.ambientSky)       G.frame.ambientSky = _env.ambientSky.slice();
+      if (_env.ambientGround && !_pal.ambientGround) G.frame.ambientGround = _env.ambientGround.slice();
+      if (_env.skyZenith && !_pal.zenith)   { G.frameSky.zenith  = _env.skyZenith.slice();  G.frame.skyZenith  = G.frameSky.zenith; }
+      if (_env.skyHorizon && !_pal.horizon) { G.frameSky.horizon = _env.skyHorizon.slice(); G.frame.skyHorizon = G.frameSky.horizon; }
     }
   }
   // Wet / rain: overcast the sky and flatten the light (soft, diffuse, fewer
