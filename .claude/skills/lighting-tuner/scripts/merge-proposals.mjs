@@ -153,6 +153,13 @@ for (const { file, key, vals, delta } of pairs) {
     const d = TUNE.get(id);
     const err = knobError(id, v, TUNE);
     if (err) { errors.push(`${file}: ${key}.${id}=${v} ${err}`); continue; }
+    // Road wetness is physics (trackWetness), not a baked look. Shipping it
+    // made dry dawn/night presets look wet while grip stayed dry
+    // (docs/plans/2026-09-30-wetness-lighting.md). Live tuner may still pin it.
+    if (id === "wetness") {
+      errors.push(`${file}: ${key}.wetness must not be baked — leave AUTO; use ssrDryNight/ssrDryDay for dry sheen`);
+      continue;
+    }
     // Redundant with the fallback, so leaving it out keeps the file small —
     // but only where the fallback really is the default (see starSets).
     if (d.def !== undefined && v === d.def && !starSets(key, id)) continue;

@@ -236,6 +236,16 @@ test("lighting check mode reports actual snapshot/delta changes without writing 
   const bad = cli(".claude/skills/lighting-tuner/scripts/merge-proposals.mjs", [edits, "--check"]);
   assert.equal(bad.status, 1);
   assert.ok(bad.stderr.includes(path.relative(ROOT, edits)), "diagnostic retains the input path");
+  for (const input of [
+    'window.LightEdits = {"monza|night|wet":{"wetness":0.5}};',
+    JSON.stringify({ track: "monza", combos: { "night|wet": { wetness: 0.5 } } }),
+  ]) {
+    fs.writeFileSync(edits, input);
+    const wet = cli(".claude/skills/lighting-tuner/scripts/merge-proposals.mjs", [edits, "--check"]);
+    assert.equal(wet.status, 1, "physics wetness cannot be baked through either proposal shape");
+    assert.match(wet.stderr, /wetness must not be baked/);
+  }
+  assert.deepEqual(fs.readFileSync(path.join(ROOT, "js/lighting/presets.js")), before);
 });
 
 test("material PNG decoder rejects damaged signature, CRC and truncated image data", () => {

@@ -625,7 +625,7 @@ const PitLane = (function () {
     function worthStopping(c) {
       if (!enabled() || !c || c.retired || c.finished) return false;
       const wear = G.tyres.spent(c);
-      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
+      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
       const caution = G.cautionInfo ? G.cautionInfo() : null;
       const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
       return wear >= CUE_WEAR || wrongTread || free;
@@ -1318,7 +1318,7 @@ const PitLane = (function () {
     function pickFor(c) {
       const tyres = G.tyres;
       if (!tyres || !c) return null;
-      const want = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
+      const want = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
       const list = ownedTyres().map(function (o) { return tyres.optionRecord(o); });
       // TREAD FIRST, and it is not a preference. The wrong tread costs whole
       // seconds a lap and no compound choice makes that up. A career save that
@@ -1467,7 +1467,9 @@ const PitLane = (function () {
       return !!G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.stage(G.season) === "sprint";
     }
     function twoCompoundRule(laps) {
-      return laps >= TWO_COMPOUND_MIN_LAPS && TyreModel.treadFor(G.raceWeather) === 0 && !sprintLeg();
+      return laps >= TWO_COMPOUND_MIN_LAPS
+        && TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness()) === 0
+        && !sprintLeg();
     }
     const COMPOUND_WARN_LAPS = 5;
     function twoCompoundApplies() { return enabled() && twoCompoundRule(G.lapsTarget); }
@@ -1579,7 +1581,7 @@ const PitLane = (function () {
       if (!plan || !zz || !G.tyres || !c.tyre || typeof AiDrive === "undefined") return false;
       const ai = !c.human;
       if (ai && (c.pitArmed || (c.pitState && c.pitState !== "none") || (c.tyre.tread || 0) > 0
-          || TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness()) > 0
+          || TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness()) > 0
           || (G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0) < 2
           || (c.lap || 0) - (c._recutLap || -99) < AiDrive.STRAT.REPLAN_GAP)) return false;
       const done = c.pitStops || 0, lap = Math.max(1, c.lap || 1);
@@ -1700,7 +1702,7 @@ const PitLane = (function () {
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
       // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
       // dry->rain arc did not have.
-      const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
+      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
       const lapsToStop = nextAt == null ? 99 : nextAt - (c.lap || 0);
       const wear = G.tyres.spent(c);

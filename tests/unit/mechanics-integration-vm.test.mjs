@@ -40,13 +40,13 @@ test("weather grip is continuous through the old discrete transition boundaries"
     g.G.weatherArc.t=t;
     g.G.raceWeather=t<20?"dry":t<40?"wet":"rain";
     assert.equal(g.G.records.current(),configuration,"scheduled weather progress keeps the same event identity");
-    samples.push({t,w:g.G.roadWetness(),grip:g.G.gripMult({tread:0})});
+    samples.push({t,w:g.G.trackWetness(),grip:g.G.gripMult({tread:0})});
   }
   assert.equal(samples[0].grip,1);assert.equal(samples.at(-1).grip,.72);
   for(let i=1;i<samples.length;i++)assert.ok(samples[i].grip<=samples[i-1].grip);
   assert.ok(Math.abs(samples[3].grip-samples[1].grip)<.001);
   assert.ok(Math.abs(samples[6].grip-samples[4].grip)<.001);
-  g.apex.weather("dry");assert.equal(g.G.weatherArc,null);assert.equal(g.G.roadWetness(),0);
+  g.apex.weather("dry");assert.equal(g.G.weatherArc,null);assert.equal(g.G.trackWetness(),0);
 });
 
 test("a race can be armed for practice, which unlocks checkpoints and spoils the session",async()=>{

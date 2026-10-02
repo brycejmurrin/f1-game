@@ -311,6 +311,7 @@ const FULL = [
   "js/perf/renderer-picker.js",
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
+  "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
@@ -661,6 +662,7 @@ const HARD_EDGES = [
   ["js/audio/announcer.js", "js/game.js"],     // game.js calls Announcer.inert() at eval time
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],  // the announcer borrows speakable() and the per-channel tune
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
+  ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
@@ -1150,6 +1152,7 @@ const MOVED = {
   "js/game/results.js": "js/ui/results-sheet.js",
   "js/game/settings-nav.js": "js/ui/settings-tabs.js",
   "js/game/ui-scale.js": "js/ui/scale.js",
+  "js/game/dock-layout.js": "js/ui/dock-layout.js",
   "js/track/maps.js": "js/ui/track-maps.js",
   "js/game/garage-scene.js": "js/garage/scene.js",
   "js/game/setup-ui.js": "js/garage/setup-sheet.js",
