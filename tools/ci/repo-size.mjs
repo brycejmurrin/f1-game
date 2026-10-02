@@ -14,15 +14,20 @@
 // open PR breaks), this is the measurement: which files carry the weight.
 // It refuses a shallow clone rather than print a confident wrong number.
 //
+// HISTORY ONLY is the number that decides a rewrite: blobs reachable from some
+// ref but absent from today's tree (old versions, deleted files).
+//
 // `objectsize:disk` is the packed, delta-compressed size, which is what a clone
 // downloads; `objectsize` is the raw size. Both are reported for blobs.
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 
-/** Pure. `type sha size disksize path` lines -> totals, top blobs, per-dir and per-extension. */
-export function summarize(text, { top = 40 } = {}) {
-  let disk = 0, raw = 0, objects = 0;
-  const blobs = [], byDir = new Map(), byExt = new Map(), seen = new Set();
+/** Pure. `type sha size disksize path` lines -> totals, top blobs, per-dir and per-extension.
+ *  current: the blob shas in today's tree; a blob outside it is HISTORY ONLY —
+ *  bytes that only a history rewrite can remove, grouped three path levels deep. */
+export function summarize(text, { top = 40, current = null } = {}) {
+  let disk = 0, raw = 0, objects = 0, histDisk = 0, histBlobs = 0;
+  const blobs = [], byDir = new Map(), byExt = new Map(), byHist = new Map(), seen = new Set();
   for (const line of String(text).split("\n")) {
     const m = /^(\w+) ([0-9a-f]+) (\d+) (\d+)(?: (.*))?$/.exec(line);
     if (!m) continue;
@@ -38,10 +43,16 @@ export function summarize(text, { top = 40 } = {}) {
     const ext = /\.([A-Za-z0-9]+)$/.exec(file);
     const e = ext ? ext[1].toLowerCase() : "(none)";
     byExt.set(e, (byExt.get(e) || 0) + +dsize);
+    if (current && !current.has(sha)) {
+      histDisk += +dsize; histBlobs++;
+      const h = file ? file.split("/").slice(0, 3).join("/") : "(unknown)";
+      byHist.set(h, (byHist.get(h) || 0) + +dsize);
+    }
   }
   blobs.sort((a, b) => b.disk - a.disk || b.size - a.size);
   const rank = (m) => [...m].sort((a, b) => b[1] - a[1]);
-  return { objects, disk, raw, top: blobs.slice(0, top), byDir: rank(byDir), byExt: rank(byExt) };
+  return { objects, disk, raw, top: blobs.slice(0, top), byDir: rank(byDir), byExt: rank(byExt),
+    history: current ? { disk: histDisk, blobs: histBlobs, byPath: rank(byHist) } : null };
 }
 
 export const mb = (n) => (n / 1048576).toFixed(1) + " MB";
@@ -51,6 +62,10 @@ export function render(s, { refs = 0 } = {}) {
   const pct = (n) => (s.disk ? ((100 * n) / s.disk).toFixed(1) + "%" : "—");
   const out = [`### Repository size (full history, ${refs} refs)`, "",
     `**${mb(s.disk)}** packed on disk (${mb(s.raw)} raw) across ${s.objects.toLocaleString("en")} objects.`, "",
+    ...(s.history ? [
+      `**History only: ${mb(s.history.disk)} (${pct(s.history.disk)})** in ${s.history.blobs.toLocaleString("en")} file versions that are not in today's tree — old versions and deleted files, which only a history rewrite removes.`, "",
+      "| history-only path (3 levels) | packed | share of repo |", "|---|---|---|",
+      ...s.history.byPath.slice(0, 20).map(([d, n]) => `| \`${d}\` | ${mb(n)} | ${pct(n)} |`), ""] : []),
     "| top-level dir | packed | share |", "|---|---|---|",
     ...s.byDir.slice(0, 20).map(([d, n]) => `| \`${d}\` | ${mb(n)} | ${pct(n)} |`), "",
     "| extension | packed | share |", "|---|---|---|",
@@ -72,7 +87,10 @@ export function main(argv = process.argv.slice(2)) {
   const refs = execFileSync("git", ["for-each-ref"], { encoding: "utf8" }).split("\n").filter(Boolean).length;
   const arg = (f) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : undefined; };
   const top = Number(arg("--top")) || 40;
-  const md = render(summarize(batch.stdout, { top }), { refs });
+  // Today's tree: the checked-out ref (the workflow checks out the default branch).
+  const current = new Set(execFileSync("git", ["ls-tree", "-r", "HEAD"], { encoding: "utf8", maxBuffer: 256 << 20 })
+    .split("\n").map((l) => l.split(/\s+/)[2]).filter(Boolean));
+  const md = render(summarize(batch.stdout, { top, current }), { refs });
   if (arg("--out")) fs.writeFileSync(arg("--out"), md);
   process.stdout.write(md);
   return 0;

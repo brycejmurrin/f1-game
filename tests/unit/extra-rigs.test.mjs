@@ -124,9 +124,28 @@ test("ExtraRigs.tickPitAuto cuts to pitwall on entry and restores on exit", () =
   assert.equal(mode, 0);
 });
 
+test("ExtraRigs.tickPitAuto leaves the camera alone by default (opt-in only)", () => {
+  const { ExtraRigs } = loadExtraRigs();
+  let mode = 0;
+  const G = {
+    player: { pitState: "none" },
+    get camMode() { return mode; },
+    set camMode(v) { mode = v; },
+    setCamMode(i) { mode = i; return "x"; },
+    // A store that has never seen the key: get() hands back its default.
+    store: { get: (k, d) => d, set() {} },
+  };
+  G.player.pitState = "lane";
+  assert.equal(ExtraRigs.tickPitAuto(G), null, "no cut on pit entry unless pitCamAuto is set");
+  assert.equal(mode, 0, "the player's camera stays put in the pit lane");
+  G.player.pitState = "none";
+  assert.equal(ExtraRigs.tickPitAuto(G), null);
+  assert.equal(mode, 0);
+});
+
 test("ExtraRigs.pitCamAuto persists through GameStore", () => {
   const { ExtraRigs, disk } = loadExtraRigs();
-  assert.equal(ExtraRigs.pitCamAuto(null), true);
+  assert.equal(ExtraRigs.pitCamAuto(null), false, "off until the player opts in");
   assert.equal(ExtraRigs.pitCamAuto(null, false), false);
   assert.equal(disk.get("pitCamAuto"), false);
   assert.equal(ExtraRigs.pitCamAuto(null), false);

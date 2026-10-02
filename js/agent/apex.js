@@ -449,7 +449,7 @@ const api = {
     return CamTune.values(m);
   },
   // pitCamAuto(on?) — optional auto-cut onto PIT WALL around pit entry/exit
-  // (js/camera/extra-rigs.js). Default ON. Pass a boolean to set; no args to read.
+  // (js/camera/extra-rigs.js). Default OFF (opt-in). Pass a boolean to set; no args to read.
   pitCamAuto(on) {
     if (typeof ExtraRigs === "undefined") return false;
     return ExtraRigs.pitCamAuto(G.store, on);

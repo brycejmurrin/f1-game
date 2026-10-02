@@ -218,6 +218,7 @@ const FULL = [
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/car/ghost-share.js",
+  "js/car/input-ghost.js",
   "js/race/session-records.js",
   "js/race/race-insights.js",
   "js/race/driving-coach.js",
@@ -295,6 +296,8 @@ const FULL = [
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   "js/race/weather-arc.js",
+  "js/race/start-lights.js",   // StartLights.create(G): the start gantry's five lamps follow the countdown (after fx/particles.js)
+  "js/race/marshal-panels.js", // MarshalPanels.create(G): the marshal posts' light panels follow race control (after race-control.js)
   "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
@@ -309,6 +312,7 @@ const FULL = [
   "js/perf/renderer-picker.js",
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
+  "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
@@ -511,6 +515,7 @@ const HARD_EDGES = [
   // the 2nd tag so the order is never in doubt, but these are real eval-time
   // edges and the list is what records them; the toposort check derives the rest.
   ["js/core/mat4.js", "js/game.js"],
+  ["js/core/mat4.js", "js/car/input-ghost.js"],                 // aliases M4.clamp at eval
   ["js/core/mat4.js", "js/camera/photo-kit.js"],  // PhotoKit aliases M4.clamp at eval
   ["js/core/mat4.js", "js/camera/free-cam.js"],   // FreeCam aliases M4.clamp at eval
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval
@@ -627,6 +632,8 @@ const HARD_EDGES = [
   ["js/race/session-entry.js", "js/game.js"], // game.js creates the shared start/quali entry coordinator
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
+  ["js/race/start-lights.js", "js/game.js"],   // game.js calls StartLights.create(G) at eval time
+  ["js/race/marshal-panels.js", "js/game.js"], // game.js calls MarshalPanels.create(G) at eval time
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/race/quali-net.js", "js/game.js"],         // game.js calls QualiNet.create(hooks) after quali wiring
@@ -657,6 +664,7 @@ const HARD_EDGES = [
   ["js/audio/announcer.js", "js/game.js"],     // game.js calls Announcer.inert() at eval time
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],  // the announcer borrows speakable() and the per-channel tune
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
+  ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
@@ -1146,6 +1154,7 @@ const MOVED = {
   "js/game/results.js": "js/ui/results-sheet.js",
   "js/game/settings-nav.js": "js/ui/settings-tabs.js",
   "js/game/ui-scale.js": "js/ui/scale.js",
+  "js/game/dock-layout.js": "js/ui/dock-layout.js",
   "js/track/maps.js": "js/ui/track-maps.js",
   "js/game/garage-scene.js": "js/garage/scene.js",
   "js/game/setup-ui.js": "js/garage/setup-sheet.js",

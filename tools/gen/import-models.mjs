@@ -216,8 +216,25 @@ function importFile(file, opts) {
         const N = prim.attributes.NORMAL != null ? accessor(gltf, prim.attributes.NORMAL) : null;
         const UV = prim.attributes.TEXCOORD_0 != null ? accessor(gltf, prim.attributes.TEXCOORD_0) : null;
         const { factor, tex } = materialColour(gltf, prim.material);
+        const I = accessor(gltf, prim.indices);
+        // Emit only the vertices THIS primitive references. A kit GLB shares one
+        // POSITION accessor across its primitives (one per material), so copying
+        // the accessor whole per primitive baked every vertex once per material:
+        // the 41 Racing Kit models carried 53,995 vertices for 15,822 referenced
+        // (k_grandstandcoveredround 11,425 for 2,387; measured 2026-10-02). The
+        // game's compaction hid the waste on the GPU, the pack and an instanced
+        // upload did not. `remap` is source index -> local index, in first-use
+        // order, so the output is deterministic for a given file.
         const base = pos.length / 3;
-        for (let i = 0; i < P.count; i++) {
+        const remap = new Map();
+        const local = [];
+        for (let i = 0; i < I.count; i++) {
+          const src = I.data[i];
+          let li = remap.get(src);
+          if (li === undefined) { li = local.length; remap.set(src, li); local.push(src); }
+          idx.push(base + li);
+        }
+        for (const i of local) {
           const wp = xform(world, [P.data[i * 3], P.data[i * 3 + 1], P.data[i * 3 + 2]]);
           pos.push(wp[0], wp[1], wp[2]);
           if (N) { const wn = xformDir(world, [N.data[i * 3], N.data[i * 3 + 1], N.data[i * 3 + 2]]);
@@ -234,8 +251,6 @@ function importFile(file, opts) {
             col.push(tex.rgba[o] / 255 * factor[0], tex.rgba[o + 1] / 255 * factor[1], tex.rgba[o + 2] / 255 * factor[2]);
           } else col.push(factor[0], factor[1], factor[2]);
         }
-        const I = accessor(gltf, prim.indices);
-        for (let i = 0; i < I.count; i++) idx.push(base + I.data[i]);
       }
     }
     for (const c of node.children || []) walk(c, world);

@@ -23,6 +23,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -1554,4 +1555,15 @@ test("cutting a transmission short cuts its courtesy figure and squelch tail too
   GameAudio.radioStingStop();
   const late = mine.filter((n) => !n.loop && n.startAt != null && n.startAt > 1.0 && !(n.stopAt <= 1.0 + 1e-9));
   assert.deepEqual(late.map((n) => [n.kind, n.startAt]), [], "scheduled after the cut, still due to play");
+});
+
+test("audio-test.cjs --help exits 0 and does not treat --help as a baseURL", () => {
+  // Pre-fix: argv[2] defaulted to localhost:8099 and `--help` was passed to
+  // page.goto as a URL ("Cannot navigate to invalid URL").
+  const r = spawnSync(process.execPath, ["tools/check/audio-test.cjs", "--help"], {
+    cwd: ROOT, encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /audio-test/);
+  assert.match(r.stdout, /static server|baseURL/i);
 });

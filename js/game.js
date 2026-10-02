@@ -149,13 +149,17 @@ function sceneryResident(id) {
 const _sceneryLoads = new Map();
 function ensureScenery(idx) {
   const def = Tracks.LIST[idx];
-  if (!def || def.scenery || sceneryResident(def.id)) return Promise.resolve();   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
+  // Also wait for the baked model pack (Assets.modelsReady: the boot prefetch,
+  // or a 4 s cap): prop placement is synchronous, so a build that ran before the
+  // models landed kept the box fallback for the whole session.
+  const models = (typeof Assets !== "undefined" && Assets.modelsReady) ? Assets.modelsReady() : Promise.resolve();
+  if (!def || def.scenery || sceneryResident(def.id)) return models.then(() => {});   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
   let p = _sceneryLoads.get(def.id);
   if (!p) {
     p = loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []).then(() => { _sceneryLoads.delete(def.id); });
     _sceneryLoads.set(def.id, p);
   }
-  return p;
+  return Promise.all([p, models]).then(() => {});
 }
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
 // menu button, which a session that never opens DATA runs no byte of. Unlike
@@ -438,9 +442,11 @@ if (typeof Assets !== "undefined") {
   Assets.load();
   // Models also prefetch, but for a different reason: prop placement is SYNCHRONOUS
   // (buildProps -> the circuit's scenery() callback), so it must not depend on
-  // network timing — a circuit that asks for a model that has not landed gets
-  // nothing placed rather than a differently-built track. The manifest is a
-  // single small fetch and resolves to nothing when no models are baked.
+  // network timing — so ensureScenery() awaits Assets.modelsReady() (this same
+  // run, or a 4 s cap) before any build; a circuit that asks for a model that
+  // has not landed would otherwise keep the box fallback for the whole session.
+  // The manifest is a single small fetch and resolves to nothing when no models
+  // are baked.
   Assets.loadModels();
 }
 
@@ -976,6 +982,21 @@ function isRaining() { return raceWeather === "rain"; }
 function roadWetness() { return TyreModel.wetness(raceWeather, wxArc.arc); }
 function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, roadWetness()); }
 
+// Pose Ghost + InputGhost start together on every TT lap arm so an incident /
+// reverse-crossing / spoiled class cannot leave the input stream attached to a
+// dead pose recorder (or the reverse).
+function restartTTRecorders() {
+  Ghost.startLap();
+  if (typeof InputGhost !== "undefined") {
+    InputGhost.startLap({
+      seed: simSeed(),
+      physRev: PhysicsConsts.REVISION,
+      build: (typeof window !== "undefined" && window.__APEX_BUILD) || 0,
+      dt: PhysicsConsts.FIXED_DT,
+    });
+  }
+}
+
 // IncidentSim owns motion during a takeover, but the ordinary line-crossing
 // presentation still belongs here. Core lap/clock/finish state is advanced by
 // RaceControl.lineTransition for both callers; this hook handles only the local
@@ -985,7 +1006,7 @@ function onIncidentLineCross(c, cross, newS) {
   if (cross.direction < 0) {
     if (cross.changed && c.isPlayer) {
       sectorIdx = sectorAt(newS); sectorStartT = c.lapTime; sectorValid = false;
-      if (isTimeTrial()) Ghost.startLap();
+      if (isTimeTrial()) restartTTRecorders();
     }
     return;
   }
@@ -2969,7 +2990,7 @@ async function startRaceBody() {
   wxArc.startChangeable();
   recomputePlayerMods();
   rlap("finish");
-  if (isTimeTrial()) { records.begin(); Ghost.startLap(); }
+  if (isTimeTrial()) { records.begin(); Ghost.startLap(); /* InputGhost armed in records.begin */ }
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
   // js/game.js held ZERO Log calls before this one, despite `game` being the
@@ -3209,6 +3230,7 @@ function netOrder(order) {
 
 function endRace(forcedOrder) {
   Ghost.flush();
+  if (typeof InputGhost !== "undefined") InputGhost.flush();
   try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
   PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
@@ -3672,7 +3694,7 @@ const G = {
   LAT_MAX, BRAKE,   // ACCEL is deliberately NOT here — reading it was the bug aTop() fixed
   vTop: () => vTop(),
   aTop: () => aTop(),
-  applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
+  applyRaceSettings: (blendS) => applyRaceSettings(blendS),   // const initialised below — defer; blendS: see Atmosphere
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,
   setCautionEnabled, otEnabled,
@@ -3777,6 +3799,8 @@ const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
 pits = PitLane.create(G);
+const startLights = StartLights.create(G);   // the start gantry's lamps (js/race/start-lights.js); a const — game.js's top-level lets are ratcheted
+const marshalPanels = MarshalPanels.create(G);   // the posts' light panels follow race control (js/race/marshal-panels.js)
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
@@ -3852,7 +3876,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale;
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -4445,6 +4469,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 function quitToMenu() {
   Ghost.flush();
   cancelIntro();
+  if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();
   qualiSheet.close();
@@ -4641,6 +4666,7 @@ function update(dt) {
     IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
   }
   wxArc.tick(dt);   // dynamic weather progression (no-op unless an arc is armed)
+  _atmo.tick(dt);   // the lighting cross-fade a weather-arc step started (no-op otherwise)
   checkRetirements();
   // ranks by progress (reuse module-scope buffer, no per-step allocation).
   // RETIREMENTS ARE NOT IN THE FIELD. Dropping them here is one exclusion that
@@ -6043,8 +6069,11 @@ function updateCar(c, dt, ranked) {
     // includes what they hear. Body slip angle: ~6 deg starts to talk, ~17 deg is
     // a full slide.
     const slipAng = Math.abs(Math.atan2(c.vLat || 0, Math.max(4, Math.abs(c.speed))));
+    // A locked front (c.wheelLock, player-forces / the AI mistake phase) is a
+    // skid too: it squeals, marks and smokes like a slide, scaled by how locked.
+    // Until 2026-10-01 a lock-up only froze the wheel's spin (car-draw).
     c.skidIntensity = c.offroad ? 0.5
-      : clamp((slipAng - 0.10) / 0.20, 0, 1);
+      : Math.max(clamp((slipAng - 0.10) / 0.20, 0, 1), (c.wheelLock || 0) * 0.9);
   }
   // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
   // human slide-along scrub + conditional road→world writeback when xPinned.
@@ -6228,9 +6257,9 @@ function updateCar(c, dt, ranked) {
           ? { lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: flagged ? c.finishT : undefined }   // finishT: the in-step crossing, as classified locally
           : { lap: c.lap, time: null, best: isFinite(c.best) ? c.best : null, code: c.code, fin: c.finishT, invalid: true });
       }
-      if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else Ghost.startLap(); }
+      if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else restartTTRecorders(); }
     } else if (c.isPlayer && isTimeTrial()) {
-      Ghost.startLap();
+      restartTTRecorders();
     }
     c.incidentInvalidLap = false;   // the new lap starts clean
     c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
@@ -6251,12 +6280,12 @@ function updateCar(c, dt, ranked) {
       // rejects DECREASING s, so the next forward-jump sample would be appended and
       // at() would interpolate the replay ghost crawling across the whole lap.
       // Restart the recording so the re-timed lap records cleanly from here.
-      if (c.isPlayer && isTimeTrial()) Ghost.startLap();
+      if (c.isPlayer && isTimeTrial()) restartTTRecorders();
     }
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
   // takeover jumps s/x — recording it would corrupt the ghost trace).
-  if (isTimeTrial() && c.isPlayer) records.sample(c);
+  if (isTimeTrial() && c.isPlayer) records.sample(c, inp);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.human && state === "race" && !c.finished) {
@@ -7922,6 +7951,11 @@ function render(dt) {
         // floor is unreachable — the effect simply did not exist at the bottom
         // of the OVERALL SPEED slider (A16).
         let smokeI = (c.isPlayer && !c.offroad) ? (c.skidIntensity || 0) : 0;
+        // A lock-up smokes from the LOCKED axle — the fronts — and for every
+        // car: an AI's braking mistake (AiDrive.mistakePhase) is read as a
+        // puff of white from its front wheel, which is how a lock-up is seen.
+        const locked = !c.offroad && vStd(c.speed) > 8 && (c.wheelLock || 0) > 0.3;   // vStd: PACE scales speeds (vstd-invariant)
+        if (locked) smokeI = Math.max(smokeI, c.wheelLock);
         if (c.isPlayer && !c.offroad) {
           const _pax = c.axEstSm || 0, _pvl = Math.abs(c.vLat || 0);
           if (c.speed > 10) smokeI = Math.max(smokeI, clamp((_pvl - 3) / 5, 0, 1));
@@ -7929,7 +7963,7 @@ function render(dt) {
             smokeI = Math.max(smokeI, clamp((aStd(_pax) - 4.5) / 2.5, 0, 1) * clamp((12 - c.speed) / 9, 0, 1));
         }
         if (smokeI > 0.25) {
-          const wd = carDraw.WHEELS[2 + ((Math.random() * 2) | 0)];   // one rear wheel per event
+          const wd = carDraw.WHEELS[(locked ? 0 : 2) + ((Math.random() * 2) | 0)];   // one wheel per event: a front when locked, else a rear
           Particles.tyreSmoke(
             tmpMat[12] + tmpMat[0] * wd.x + tmpMat[8] * wd.z,
             tmpMat[13] + tmpMat[1] * wd.x + tmpMat[9] * wd.z + 0.10,
@@ -8183,6 +8217,8 @@ function render(dt) {
   // so onboard views get the same field as the chase cam — no water-on-glass
   // beading and no wiper (there is nothing to wipe).
   if (isWetRoad() && Particles.rainActive()) Particles.rainUpdate(dt, camEye, isRaining());
+  startLights.update();   // the gantry's lit lamps, re-spawned each count frame
+  marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
   Particles.update(dt);
   Particles.draw();
 
@@ -9139,7 +9175,7 @@ els.resNext.onclick = () => {
 
 function setPaused(p, why) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
-  if (p) Ghost.flush();   // paused: the frame budget is free for the ghost write
+  if (p) { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); }   // paused: the frame budget is free for the ghost write
   // THE PIT GARAGE HOLDS THE PAUSE. openPitWork freezes the race behind
   // #carsetup; a Start/P press or RESUME on a pause card stacked over it
   // (hidden tab) must not run the race UNDER the garage, where the box timer

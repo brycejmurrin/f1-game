@@ -123,6 +123,31 @@ test("cdmcp-bg with no args exits 2 and prints usage", () => {
   assert.match(r.stderr + r.stdout, /usage:/);
 });
 
+test("cdmcp-bg --help exits 0 and does NOT detach a measure", () => {
+  // Regression 2026-10-01: --help fell into start(), which rewrites a leading
+  // `--…` as `boot --…` and spawned Chromium. Must stay side-effect-free.
+  const before = fs.existsSync(path.join(ROOT, "artifacts/logs/cdmcp-bg.json"))
+    ? fs.readFileSync(path.join(ROOT, "artifacts/logs/cdmcp-bg.json"), "utf8")
+    : null;
+  const r = spawnSync("node", [BG, "--help"], { encoding: "utf8", cwd: ROOT, timeout: 5000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /usage:/);
+  assert.match(r.stdout, /--status/);
+  assert.doesNotMatch(r.stdout, /> cdmcp-measure/);
+  const after = fs.existsSync(path.join(ROOT, "artifacts/logs/cdmcp-bg.json"))
+    ? fs.readFileSync(path.join(ROOT, "artifacts/logs/cdmcp-bg.json"), "utf8")
+    : null;
+  assert.equal(after, before, "cdmcp-bg --help must not rewrite the bg state file");
+});
+
+test("cdmcp-cli --help exits 0 (not 'unknown: --help')", () => {
+  const r = spawnSync("python3", [CLI, "--help"], { encoding: "utf8", timeout: 5000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /list-tools/);
+  assert.match(r.stdout, /apex-shot/);
+  assert.doesNotMatch(r.stderr, /unknown/);
+});
+
 test("cdmcp-bg --status is safe when idle", () => {
   const r = spawnSync("node", [BG, "--status"], { encoding: "utf8", cwd: ROOT });
   assert.equal(r.status, 0, r.stderr);

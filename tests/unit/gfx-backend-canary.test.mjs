@@ -4234,6 +4234,13 @@ test("the attribute packer proves its precondition instead of assuming it", () =
 
 test("the packing round-trip check is wired to the shader's own decisions", () => {
   const tool = read("tools/gfx/tlx-pack-check.cjs");
+  const chunked = read("js/render/three/tlx-chunked.js");
+  // packAttr gained an optional fmt24 arg (WebGPU pad4). The lift regex must
+  // still match the shipping signature or the CLI throws before any check runs.
+  assert.match(chunked, /function packAttr\(THREE, src, len, itemSize, kind, fmt24\)/,
+    "tlx-chunked packAttr signature drifted — update tools/gfx/tlx-pack-check.cjs");
+  assert.match(tool, /kind\(\?:, fmt24\)\?/,
+    "tlx-pack-check lift regex must allow the optional fmt24 arg");
   // The tool must LIFT the packer out of the shipping file. A reimplementation
   // drifts, and then it verifies its own copy rather than what ships.
   assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,
@@ -5350,4 +5357,18 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   _softBlit = false; _softReadPending = true;
   assert.equal(begin(frame, 320, 100), true, "hardware mirrors retain their normal cadence");
   assert.equal(opened, 2);
+});
+
+test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolved", () => {
+  // 2026-10-01: the shipped renderer had NO geometric AA — the scene target was
+  // single-sample and the canvas MSAA only ever smoothed the FXAA quad. The
+  // samples now go to the scene target, on the desktop WebGL2 backend only:
+  // phones keep the GLX mobile recipe and the native-WebGPU path cannot
+  // resolve a depth attachment (docs/ARCHITECTURE.md §Parity, SCENE MSAA).
+  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlx, /sceneSamples:\s*\(forceWebGL && !isMobile\) \? 4 : 0/,
+    "tlx.js decides the scene sample count: 4 on desktop WebGL2, 0 on phones and native WebGPU");
+  assert.match(post, /samples:\s*ctx\.sceneSamples \|\| 0,\s*resolveDepthBuffer:\s*true/,
+    "the scene target takes the caller's samples and resolves its depth texture (SSAO/SSR/godray read it)");
 });

@@ -594,7 +594,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
-| `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, glx.js×2 |
+| `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, glx.js×4 |
 | `fogHeight` | FOG HEIGHT FALLOFF | 0 … 0.25 | 0.018 | `uFogHeight` | ✓ | game.js×2, glx.js×4 |
 | `fogTint` | FOG WARM / COOL | -6 … 3.9 | 0 | `uFogTint` | ✓ | glx.js×2 |
 | `fogColorSat` | FOG COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
@@ -712,7 +712,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `gainG` | GAIN · GREEN | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `gainB` | GAIN · BLUE | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `vibrance` | VIBRANCE | 0 … 1.5 | 0.2 | `uVibrance` | ✓ | — |
-| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, geom.js, build-props.js |
+| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, geom.js, build-props.js×6, graph.js |
 | `gradeStr` | GRADE STRENGTH | 0 … 2.5 | 1 | — | ✓ | game.js |
 | `shadowHue` | SHADOW TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
 | `hiHue` | HIGHLIGHT TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |

@@ -131,7 +131,7 @@ const SPEC = [
   { k: "ldCard", lane: "json", group: "camera", def: null, src: "js/ui/loading-screen.js loading card {scale, x, y} (null = shipped)" },
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
   { k: "camMode", lane: "json", group: "camera", def: 3, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
-  { k: "pitCamAuto", lane: "json", group: "camera", def: true, src: "js/camera/extra-rigs.js (auto-cut to PIT WALL in pits)" },
+  { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
   { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },
   { k: "camTuneGlobal", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js global baseline layered under every mode (same knob ids as camTune)" },
   { k: "camComfort", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
@@ -150,6 +150,7 @@ const SPEC = [
   { k: "manual", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "autoThrottle", lane: "json", group: "driving", def: false, src: "js/game.js (XAG 107: a held accelerator is an input barrier)" },
   { k: "mirrorControls", lane: "json", group: "driving", def: false, src: "js/game.js (left-handed dock)" },
+  { k: "dockLayout", lane: "json", group: "driving", def: null, src: "js/ui/dock-layout.js (per-scheme touch-dock offsets; null = defaults)" },
   // PER-DEVICE STEERING (js/input/steer-tuning.js). Each defaults to the notch
   // that reproduces exactly what shipped, so an absent key is a no-op.
   { k: "tiltCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
