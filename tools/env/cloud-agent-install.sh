@@ -13,6 +13,17 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  cat <<'EOF'
+usage: bash tools/env/cloud-agent-install.sh [--help]
+
+Cursor Cloud dashboard install: best-effort mesa/vulkan/xvfb, then
+install-browsers.sh, then the chrome-devtools / tinyfish MCP clones.
+Idempotent. Exit 0 when the snapshot already has usable deps.
+EOF
+  exit 0
+fi
+
 need_pkg() {
   dpkg -s "$1" >/dev/null 2>&1
 }

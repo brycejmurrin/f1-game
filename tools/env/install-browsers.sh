@@ -12,6 +12,16 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  cat <<'EOF'
+usage: bash tools/env/install-browsers.sh [--help]
+
+Idempotent Playwright Chromium install into /opt/pw-browsers (or
+$PLAYWRIGHT_BROWSERS_PATH). Skips npm install when node_modules is usable.
+EOF
+  exit 0
+fi
+
 BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"
 export PLAYWRIGHT_BROWSERS_PATH="$BROWSERS_PATH"
 # Skip Playwright's postinstall download during npm install — we place

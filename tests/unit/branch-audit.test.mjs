@@ -11,7 +11,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { addedLines, presence, indexPrs, indexRuns, verdictFor, renderMarkdown, audit, parseRefs, SUPERSEDED_PCT } from "../../tools/ci/branch-audit.mjs";
+import { addedLines, presence, indexPrs, indexRuns, verdictFor, renderMarkdown, audit, parseRefs, SUPERSEDED_PCT, inSurvey, SURVEY_QUIET_HOURS, surveyScope, main } from "../../tools/ci/branch-audit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -63,6 +63,26 @@ test("verdict precedence: open PR, merged, too recent, absorbed, no history, sup
   assert.equal(v({ ageDays: NaN }), "active", "an unreadable age is never old");
 });
 
+test("the survey is branches that never had a PR and have had no commit for 48 hours", () => {
+  assert.equal(SURVEY_QUIET_HOURS, 48);
+  const now = 1_800_000_000, H = 3600;
+  const prs = indexPrs([{ number: 1, state: "CLOSED", headRefName: "had-pr", mergedAt: null }, { number: 2, state: "OPEN", headRefName: "open-pr" }]);
+  const b = (name, hoursAgo) => ({ name, sha: name, time: now - hoursAgo * H });
+  const pick = (list) => list.filter((x) => inSurvey(x, { prs, now })).map((x) => x.name);
+  assert.deepEqual(pick([b("quiet", 49), b("busy", 47), b("had-pr", 300), b("open-pr", 300), b("claude/claims/x", 300),
+    { name: "no-time", sha: "n", time: NaN }]), ["quiet"],
+    "a closed PR still counts as a PR; a commit inside 48 h, a claims marker or an unreadable time keeps a branch out");
+  assert.deepEqual([inSurvey(b("q", 10), { prs, now, quietHours: 6 }), inSurvey(b("q", 10), { prs, now, quietHours: 12 })], [true, false]);
+  assert.match(surveyScope(48), /never had a pull request and have had no commit for 48\+ hours/);
+});
+
+test("the CLI refuses to survey without the PR list (an unknown PR set would survey everything)", () => {
+  const err = console.error; let said = "";
+  console.error = (m) => { said += m; };
+  try { assert.equal(main([]), 2); } finally { console.error = err; }
+  assert.match(said, /needs --prs/);
+});
+
 test("renderMarkdown tallies the verdicts and lists every branch with its evidence", () => {
   const md = renderMarkdown([
     { name: "a", verdict: "absorbed", ageDays: 3, ahead: 2, absorbed: true, from: "dep", pr: null, ci: null },
@@ -110,6 +130,12 @@ test("against real git: ancestor, absorbed, unmerged and an unrelated branch are
     assert.equal(by["real-work"].verdict, "unmerged");
     assert.equal(by["real-work"].anyPct, 0);
     assert.equal(by["unrelated"].verdict, "no-history");
+    process.chdir(work);
+    try {
+      const branches = parseRefs(g(work, "for-each-ref", "--format=%(refname)\t%(objectname)\t%(committerdate:unix)", "refs/remotes/origin"));
+      const only = audit(branches, { base: "deploy", now: Math.floor(Date.now() / 1000) + 30 * 86400, survey: (x) => x.name === "real-work" });
+      assert.deepEqual(only.map((r) => r.name), ["real-work"], "a survey predicate limits the audit to its branches");
+    } finally { process.chdir(cwd); }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

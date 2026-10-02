@@ -259,7 +259,10 @@ const RaceSettings = (function () {
      *  alone where no complex is built yet (no zone: no plan to draw). */
     function paintPlan(tt, laps) {
       const pits = G.pits;
-      const on = !tt && G.raceTyreWear !== "off" && !!pits;
+      // Store AND live model must agree wear is on. The store alone used to
+      // show STRATEGY while TyreModel still sat at create()'s initial "off"
+      // (planLaps → whole-race life → "NO STOP").
+      const on = !tt && G.raceTyreWear !== "off" && !!(G.tyres && G.tyres.on()) && !!pits;
       $("rs-plan").hidden = !on;
       const bar = $("rs-plan-bar");
       if (!on) { bar.hidden = true; return; }

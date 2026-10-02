@@ -406,7 +406,8 @@ interface GameCtx {
   readonly pits: PitSession;
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
   readonly pitCrewDrawn: () => number;
-  readonly roadWetness: () => number;
+  /** Continuous track wetness 0..1 (look=drive). Local roadWetness() in game.js aliases this. */
+  readonly trackWetness: () => number;
   readonly recordControls: () => Record<string, unknown>;
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown> };
@@ -867,6 +868,7 @@ declare const Spotter: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
+declare const DockLayout: GameModuleFactory;
 declare const KeyBinds: GameModuleFactory;
 declare const SettingsExport: GameModuleFactory;
 
