@@ -50,7 +50,7 @@
   @media (max-height: 660px) {
     :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { gap: calc(var(--gap) * 0.5); }
     :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
-    :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-hero .bigbtn { padding-block: 9px; }
+    :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
   }
   /* The brand is top-left now, where this button used to dock: bottom-left for every wide scene, not only compact. */
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
