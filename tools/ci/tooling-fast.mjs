@@ -344,6 +344,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-elements.test.mjs",
+  "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-feel.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
   "tests/unit/hud-tyres.test.mjs",

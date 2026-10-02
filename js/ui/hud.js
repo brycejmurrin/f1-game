@@ -144,6 +144,8 @@ function syncHudCamClasses() {
     body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
     body.classList.toggle("hud-prof-minimal", prof === "minimal");
     body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+    // MOVE & SIZE keeps one layout for the cockpit cameras, one for the rest.
+    if (typeof HudLayout !== "undefined") HudLayout.setCam(modeId);
   }
   // MAP/GAPS (and broadcast park) must re-run when only the setting
   // changes — camera+profile stay put, so the key above does not.
@@ -1213,13 +1215,15 @@ function drawMinimap() {
   const root = document.documentElement, body = document.body;
   const measureKey = window.innerWidth + "x" + window.innerHeight + "|" + body.className
     + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
-    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1);
+    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
+    + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
   if (_mmKey !== measureKey || _fitKey === "" || !minimapBg) {
     _mmKey = measureKey;
     _mmCssW = els.minimap.clientWidth || 140;
     _mmCssH = els.minimap.clientHeight || 140;
     _mmRatio = Math.min(3, Math.max(1,
-      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)
+      * (parseFloat(els.minimap.style.getPropertyValue("--hl-s")) || 1)));
     _mmBgKey = _mmCssW + "|" + _mmCssH + "|" + _mmRatio;
   }
   const cssW = _mmCssW, cssH = _mmCssH, ratio = _mmRatio;
