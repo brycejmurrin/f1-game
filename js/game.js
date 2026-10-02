@@ -3694,7 +3694,7 @@ const G = {
   LAT_MAX, BRAKE,   // ACCEL is deliberately NOT here — reading it was the bug aTop() fixed
   vTop: () => vTop(),
   aTop: () => aTop(),
-  applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
+  applyRaceSettings: (blendS) => applyRaceSettings(blendS),   // const initialised below — defer; blendS: see Atmosphere
   announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,
   setCautionEnabled, otEnabled,
@@ -4665,6 +4665,7 @@ function update(dt) {
     IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
   }
   wxArc.tick(dt);   // dynamic weather progression (no-op unless an arc is armed)
+  _atmo.tick(dt);   // the lighting cross-fade a weather-arc step started (no-op otherwise)
   checkRetirements();
   // ranks by progress (reuse module-scope buffer, no per-step allocation).
   // RETIREMENTS ARE NOT IN THE FIELD. Dropping them here is one exclusion that
