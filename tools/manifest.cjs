@@ -194,7 +194,7 @@ const FULL = [
   "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
   "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
-  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=, default OFF)
+  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=0 opts out, default ON)
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/input.js",
@@ -311,6 +311,7 @@ const FULL = [
   "js/perf/renderer-picker.js",
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
+  "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
@@ -663,6 +664,7 @@ const HARD_EDGES = [
   ["js/audio/announcer.js", "js/game.js"],     // game.js calls Announcer.inert() at eval time
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],  // the announcer borrows speakable() and the per-channel tune
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
+  ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
@@ -1152,6 +1154,7 @@ const MOVED = {
   "js/game/results.js": "js/ui/results-sheet.js",
   "js/game/settings-nav.js": "js/ui/settings-tabs.js",
   "js/game/ui-scale.js": "js/ui/scale.js",
+  "js/game/dock-layout.js": "js/ui/dock-layout.js",
   "js/track/maps.js": "js/ui/track-maps.js",
   "js/game/garage-scene.js": "js/garage/scene.js",
   "js/game/setup-ui.js": "js/garage/setup-sheet.js",

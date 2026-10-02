@@ -180,6 +180,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › BACKUP & RESTORE, which carries a player's state OUT of the browser and back IN. |
 | `watch-transport.js` | `WatchTransport` | tag | Visible controls for the real-race replay. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
+| `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |

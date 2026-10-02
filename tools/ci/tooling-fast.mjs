@@ -176,6 +176,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",
+  // No screenshot outside a *-snapshots/ baseline under tests/, no image over
+  // 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.
+  "tests/unit/committed-images.test.mjs",
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
@@ -244,6 +247,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Dirty-air wake shapes (js/physics/consts.js DirtyAir): classic linear
   // fade stays bit-compatible; CFD is exp×Gaussian; OFF is identity mul.
   "tests/unit/dirty-air.test.mjs",
+  "tests/unit/dock-layout.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   // Decorrelated DriverRatings.BASE + skill()/overall personality pins.
   "tests/unit/driver-ratings-personality.test.mjs",
@@ -907,19 +911,64 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   return { ok, passed, failed, results, logPath };
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  const argv = process.argv.slice(2);
-  const args = argv.filter((a) => !a.startsWith("--"));
-  const files = args.length ? args : [...TOOLING_FAST_FILES];
-  const val = (name) => { const a = argv.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : undefined; };
-  const jobs = val("jobs") ? Number(val("jobs")) : 1;
-  const { ok } = await runToolingFast(files, {
-    jobs,
+/** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
+ *  never silently start the suite: `--help` used to launch all 300+ files. */
+export const TOOLING_FAST_FLAGS = Object.freeze([
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--help", "-h",
+]);
+
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+       node tools/ci/tooling-fast.mjs --help`;
+
+/** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
+export function parseToolingFastArgv(argv) {
+  const unknown = [];
+  for (const a of argv) {
+    if (!a.startsWith("--") && a !== "-h") continue;
+    if (a === "--help" || a === "-h") continue;
+    const name = a.includes("=") ? a.slice(0, a.indexOf("=")) : a;
+    if (!TOOLING_FAST_FLAGS.includes(name)) unknown.push(name);
+  }
+  if (unknown.length) {
+    throw new Error(`unknown flag ${unknown.join(", ")}\n${TOOLING_FAST_USAGE}`);
+  }
+  if (argv.includes("--help") || argv.includes("-h")) return { help: true };
+  const args = argv.filter((a) => !a.startsWith("--") && a !== "-h");
+  const val = (name) => {
+    const a = argv.find((x) => x.startsWith(`--${name}=`));
+    return a ? a.slice(name.length + 3) : undefined;
+  };
+  return {
+    help: false,
+    files: args.length ? args : null, // null = full TOOLING_FAST_FILES
+    jobs: val("jobs") ? Number(val("jobs")) : 1,
     order: val("order"),
     record: argv.includes("--record"),
     testTimeoutMs: val("test-timeout") ? Number(val("test-timeout")) * 1000 : undefined,
     fileTimeoutMs: val("file-timeout") ? Number(val("file-timeout")) * 1000 : undefined,
+  };
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  let parsed;
+  try {
+    parsed = parseToolingFastArgv(process.argv.slice(2));
+  } catch (e) {
+    console.error(e.message);
+    process.exit(2);
+  }
+  if (parsed.help) {
+    console.log(TOOLING_FAST_USAGE);
+    process.exit(0);
+  }
+  const files = parsed.files || [...TOOLING_FAST_FILES];
+  const { ok } = await runToolingFast(files, {
+    jobs: parsed.jobs,
+    order: parsed.order,
+    record: parsed.record,
+    testTimeoutMs: parsed.testTimeoutMs,
+    fileTimeoutMs: parsed.fileTimeoutMs,
   });
   process.exit(ok ? 0 : 1);
 }
