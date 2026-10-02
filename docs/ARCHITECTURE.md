@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_263 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_264 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -328,6 +328,7 @@ _263 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `tyre-model.js` | `TyreModel` | tag | TYRE MODEL: wear, the grip it costs, and the fuel burn that argues with it. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
+| `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
@@ -376,7 +377,7 @@ _263 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.c… |
+| `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.camTune),… |
 | `flyby-seq.js` | `FlybySeq` | tag | FLYBY SHOT SEQUENCER: the pre-race loading screen's camera. |
 | `cam-avoid.js` | `CamAvoid` | tag | broadcast-camera wall / building avoidance for open circuits. |
 | `trackside.js` | `TracksideCams` | tag | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
@@ -384,7 +385,7 @@ _263 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
-| `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the 14 cameras carries its own… |
+| `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/ reverse) as… |
@@ -1506,6 +1507,12 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
+- **CROWN ROUNDING (2026-10-01):** data-side, so on all three for free. Every
+  primitive carries flat per-face normals; a tree crown (cone stacks) lit as a
+  faceted lantern. `TrackGeom.roundNormals` blends a crown's normals toward the
+  radial from its axis (`ROUND_K` 0.6) — run by the emitters' `swayOff()` and by
+  the graph's replay and canonical bake for a swaying op (`track-graph.test.mjs`
+  pins bake == replay). Positions, counts, colours and ids are untouched.
 - **SUN GLINT RANGE (2026-10-01):** on all three. The sun specular's soft clip
   is a knee with an asymptote (`specCol / (1 + specCol / K)`, K the
   `specKnee` knob, def 4; GLX `uSpecKnee`, TLX `U.specKnee`, WGX `params4.w`)

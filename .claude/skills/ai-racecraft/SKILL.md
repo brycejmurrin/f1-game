@@ -10,6 +10,14 @@ rate, ERS want, multi-sample brake target, slow lane nudge. Callers pass
 curvature samples and the already-drawn roll so the seeded stream in
 `makeCars()` / `updateCar` stays in `game.js`.
 
+## AI pace (scripted vs catch-up)
+
+`js/physics/ai-band.js` owns the gap-to-player catch-up band. **Default is
+`scripted`**: vmax = `tierV × skill × DIFF.ai` (± `pacePhase`), no boost from
+the player's gap. Opt-in `catchup` restores the legacy reverse-only rubber
+band (`DIFF.band`, start + lapping gates). Setting: Race Settings › FIELD ›
+AI PACE (`apex26.aiPace`). Do not edit `DIFF.*.band` literals here.
+
 ## Owns vs stays in `game.js`
 
 | `AiDrive` | `game.js` |
@@ -76,6 +84,7 @@ Browser collision/appearance evidence remains separate.
 
 ```sh
 node --test tests/unit/ai-drive.test.mjs      # ~100 tests, ~1 s
+node --test tests/unit/ai-band.test.mjs       # scripted vs catch-up factor pins
 node --test tests/unit/ai-racecraft-vm.test.mjs   # VM shape gate (jitter/approach/line); read its header first
 node tools/ci/test-bg.mjs collisions   # BROWSER group (background, AGENTS rule 4/5); racecraft lives in the contact specs
 
@@ -86,7 +95,7 @@ node tools/check/ai-race.mjs tactics [--track monza] [--laps 8] [--runs 5] [--mo
 node tools/check/ai-race.mjs line    [--track monza]
 node tools/check/ai-race.mjs human   [--track monza] [--runs 3]   # vs a PLAYER, not itself
 node tools/check/ai-race.mjs ratings [--json]                     # Pearson / style zero-mean (no race)
-node tools/check/ai-race.mjs band    [--track monza] [--diff normal] [--seconds 90]  # rubber-band profile
+node tools/check/ai-race.mjs band    [--track monza] [--diff normal] [--seconds 90]  # catch-up rubber-band profile (forces aiPace=catchup)
 # Race subcommands take --wear off|light|real (default off: no pits/deg).
 # Direct: ai-pace/ai-field/ai-line/ai-human/ai-ratings/ai-band.mjs;
 # tyre strategy over a race: node tools/check/ai-strategy-census.mjs (wear real).
