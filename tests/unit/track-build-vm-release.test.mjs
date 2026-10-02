@@ -164,7 +164,10 @@ const STRIP = {
   // places 0 risers, so monza's fold-site shells (no seating) no longer emit
   // → back to ship emission 342395; strip after 315572
   // → start-gantry lights 342347/315520 (one housing bar per gantry: −48 indices)
-  monza: { before: 342347, after: 315520 },
+  // → Racing Kit barriers/pylons 341367/314511 (k_barrierwhite ×1.5 / k_pylon
+  //   ×1.3 replace the synthetic construction barrier/cone along the Rettifilo:
+  //   fewer indices per stamp; measured on the tip merge, 2026-10-02)
+  monza: { before: 341367, after: 314511 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
