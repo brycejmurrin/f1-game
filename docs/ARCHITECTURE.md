@@ -1509,6 +1509,13 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **MOON DIRECTION (2026-10-01):** on all three. The night sky's moon disc and
+  halo hang on the sun-direction uniform (GLX `uSunDir`, TLX `U.sunDir`, WGX the
+  sky function's `sunDir`), which at night IS the moon key light the lit pass,
+  the wet-road glint and the shadow map use. Before, each sky shader drew the
+  disc at a literal `(0.42, 0.72, 0.55)` so the moon and its shadows disagreed on
+  any night palette with its own `sunDir`. `tests/unit/surface-id-parity.test.mjs`
+  pins the uniform read on every backend.
 - **PUDDLE RIPPLES (2026-10-01):** on all three. Inside each lit shader's wet
   block, where `puddle > 0` and rain is FALLING (`frame.rain`, ramped like
   wetness: GLX `uRain`, TLX `U.rain`, WGX `params4.z`), two cell grids of
