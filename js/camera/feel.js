@@ -162,6 +162,37 @@ const CamFeel = (function () {
     else for (const k in _fol) delete _fol[k];
   }
 
+  // Live camera motion. One-shot solves (no dt) and Reduce Motion return the
+  // rig untouched, so parked framing and the ride-height tests stay exact.
+  // A racing frame dollies out with speed, pushes in on the brakes, and
+  // swings to the outside of the yaw. Onboard and fixed cameras are left
+  // alone — a dolly there puts the eye in the bodywork or swims a cut.
+  const DRIVE_SKIP = Object.freeze(["cockpit", "hood", "visor", "tcam", "rear", "trackside", "rival", "pitwall"]);
+  function drive(mode, eye, tgt, fov, extra, spN) {
+    if (!extra || !(extra.dt > 0) || extra.reduceMotion) return fov;
+    if (DRIVE_SKIP.indexOf(mode) >= 0) return fov;
+    const dt = extra.dt;
+    const att = extra.att || {};
+    const sp = follow("drvSp", clamp(spN || 0, 0, 1), 3.2, dt);
+    const yaw = follow("drvYaw", clamp((att.yawRateCur || 0) / 1.1, -1, 1), 5.5, dt);
+    const brake = follow("drvBrk", clamp((att.baPitch || 0) / 0.025, 0, 1), 7, dt);
+    const slip = follow("drvSlip", clamp((extra.slipLat || 0) / 6, -1, 1), 5, dt);
+    let fx = tgt[0] - eye[0], fz = tgt[2] - eye[2];
+    const fl = Math.hypot(fx, fz) || 1;
+    fx /= fl; fz /= fl;
+    const rx = fz, rz = -fx;
+    const broadcast = mode === "heli" || mode === "side" || mode === "cinematic" || mode === "overhead" || mode === "drone";
+    const back = (broadcast ? 4.2 : mode === "far" ? 2.8 : 2.2) * sp - (broadcast ? 0.6 : 1.6) * brake;
+    eye[0] -= fx * back; eye[2] -= fz * back;
+    eye[1] += (broadcast ? 1.1 : 0.55) * sp - 0.35 * brake;
+    const swing = (broadcast ? 5.5 : 3.4) * yaw + (mode === "drift" ? 2.4 : 0.8) * slip;
+    eye[0] -= rx * swing; eye[2] -= rz * swing;
+    tgt[1] -= brake * (broadcast ? 0.2 : 0.45);
+    tgt[0] += rx * yaw * (broadcast ? 1.6 : 0.5);
+    tgt[2] += rz * yaw * (broadcast ? 1.6 : 0.5);
+    return fov + (broadcast ? 7 : 4.5) * sp + (mode === "drift" ? 4 : 2) * Math.abs(yaw) + 2.5 * brake;
+  }
+
   /* opts: { mode, dt, comfort, racing, lookHeld, stickX, stickY, mouseDx, mouseDy, spN }
      Call once per rendered race frame from game.js BEFORE vantage so look-back
      and free-look offsets are current for that solve. */
@@ -310,7 +341,7 @@ const CamFeel = (function () {
     shouldLookBack, lookBackLatch, setLookBackLatch,
     speedVignette, setSpeedVignette,
     applyFreeLook, applyAim, tick, tickRace, freeLookState, resetFreeLook, resetLatch,
-    follow, resetFollow,
+    follow, resetFollow, drive,
     initUI, loadSettings,
   };
 })();

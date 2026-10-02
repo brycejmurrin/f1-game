@@ -36,6 +36,24 @@ test("follow is exact with no dt and eases when a frame has one", () => {
   assert.ok(mid > 0, "it does not arrive in one short frame");
 });
 
+test("drive dollies with speed only while a frame has dt", () => {
+  const { CamFeel } = loadCamFeel();
+  CamFeel.resetFollow();
+  const eye = [0, 2, 0], tgt = [0, 1, 10];
+  assert.equal(CamFeel.drive("chase", eye, tgt, 57, { dt: 0, att: {} }, 1), 57);
+  assert.equal(eye[2], 0, "no dt means the rig does not move");
+  const moved = CamFeel.drive("chase", eye, tgt, 57, { dt: 0.05, att: { yawRateCur: 0, baPitch: 0 }, slipLat: 0 }, 1);
+  assert.ok(eye[2] < 0, "speed pulls the eye back, got " + eye[2]);
+  assert.ok(eye[1] > 2, "and lifts it");
+  assert.ok(moved > 57, "fov opens with speed");
+  const locked = [0, 2, 0];
+  assert.equal(CamFeel.drive("cockpit", locked, [0, 1, 10], 64, { dt: 0.05, att: {} }, 1), 64);
+  assert.equal(locked[2], 0, "onboard cams are not dollied");
+  const still = [0, 2, 0];
+  CamFeel.drive("chase", still, [0, 1, 10], 57, { dt: 0.05, reduceMotion: true, att: {} }, 1);
+  assert.equal(still[2], 0, "reduce motion skips the dolly");
+});
+
 test("speedFov is one shared curve scaled per mode", () => {
   const { CamFeel } = loadCamFeel();
   assert.equal(CamFeel.speedFov(64, 14, 0, 1), 64);
