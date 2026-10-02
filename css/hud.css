@@ -125,7 +125,7 @@
   position: absolute;
   /* BESIDE the minimap, top-left cluster, the two readouts STACKED — ahead over
      behind, which is the order they sit in on the road.
-     The horizontal anchor is the map: 130px is minimap left (10) + width (112) +
+     The horizontal anchor is the map: 146px is minimap left (10) + width (128) +
      an 8px gap, and both responsive overrides below re-derive it wherever the
      minimap resizes. Because this element rides `zoom: var(--hud-scale)` (see
      the group rule above) that constant tracks the map at every HUD SIZE for
@@ -145,7 +145,7 @@
      one; docking below `.hud-top` does clear at every scale, and was tried, but
      it breaks up the top-left cluster. */
   top: calc(8px + var(--sat) / var(--hud-z));
-  left: calc(130px + var(--sal) / var(--hud-z));
+  left: calc(146px + var(--sal) / var(--hud-z));
   /* ADAPTIVE SIZE. 12px is the base — below --fs-micro (14px, the token scale's
      floor) and deliberately so: that scale is calibrated for menu chrome a
      stopped player reads, while this is a peripheral glance during a lap, in
@@ -638,7 +638,7 @@ body.hud-met-compact #hud-tyre { display: none !important; }
   position: absolute;
   left: calc(10px + var(--sal) / var(--hud-z));
   top: calc(8px + var(--sat) / var(--hud-z));
-  width: 112px; height: 112px;
+  width: 128px; height: 128px;
   opacity: 0.90;
   background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
@@ -868,8 +868,8 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    600). Insets still divide by --hud-z. Do not redeclare #hud-sectors top. */
 body[data-density="compact"] .hud-top { gap: calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-box { padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.875); }
-body[data-density="compact"] #minimap { width: 96px; height: 96px; }
-body[data-density="compact"] .hud-gaps { left: calc(114px + var(--sal) / var(--hud-z)); }
+body[data-density="compact"] #minimap { width: 110px; height: 110px; }
+body[data-density="compact"] .hud-gaps { left: calc(128px + var(--sal) / var(--hud-z)); }
 body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 body[data-density="compact"] #hud-flag {
@@ -1114,7 +1114,7 @@ body[data-density="compact"]:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-
   right: auto;
   /* CLEAR THE MAP, MEASURED. --gm-top guesses `80px * --hud-z-top` capped at
      120, which is 92px at HUD SIZE 100 — while #minimap's real bottom is
-     8px + 112px = 120px. So the panel painted 28px INTO the map, every time,
+     8px + 112px = 120px (128 + 8 = 136 since the map grew). So the panel painted 28px INTO the map, every time,
      on the one side the map is on. Reported from a phone with the map's lower
      third covered.
      --hud-left-px is that column's occupied bottom MEASURED by fitHud off
@@ -1123,7 +1123,7 @@ body[data-density="compact"]:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-
      #hud-limits already carries two rules down: never pin HUD chrome to a
      constant a sibling's rendered height decides. The fallback is the map's
      own painted bottom, so a pre-fit frame still clears it. */
-  top: calc(var(--hud-left-px, 120px) + 8px);
+  top: calc(var(--hud-left-px, 136px) + 8px);
 }
 #game-metrics-bar {
   display: flex;
