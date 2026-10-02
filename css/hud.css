@@ -558,7 +558,10 @@ body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
 #hud-work[hidden] { display: none; }
 #hud-work {
   display: block; margin-top: calc(var(--gap) / 3);
-  min-height: 44px; padding: 0 calc(var(--gap) * 0.9);
+  /* 44 PAINTED px: .hud-bottom zooms by --hud-z, so a bare 44px painted
+     30.8px at HUD SIZE 70%. Divide by the band's zoom under 1; at >=1 the
+     literal wins and nothing moves. */
+  min-height: max(44px, calc(44px / var(--hud-z, 1))); padding: 0 calc(var(--gap) * 0.9);
   font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 800;
   letter-spacing: 0.08em; color: var(--bg); background: var(--you);
   border: 0; border-radius: var(--r-xs);
@@ -801,9 +804,9 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    on their own because the dock groups live outside the HUD until
    layoutDocks() moves them in. */
 :root[data-motion="reduce"] :is(#hud, #announce, .touchbtn),
-:root[data-motion="reduce"] :is(#hud, #announce) *,
-:root[data-motion="reduce"] :is(#hud, #announce) *::before,
-:root[data-motion="reduce"] :is(#hud, #announce) *::after {
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *,
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::before,
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
