@@ -52,6 +52,16 @@ about to lay down, for example `CORNER R 60 m × 90° LEFT`:
 - **ANGLE °** — how far it turns.
 - **TURNS LEFT / TURNS RIGHT** — which way it turns (a chicane or S-bend: the
   way its first part turns).
+- **SPIRAL m** (CORNER, HAIRPIN, CHICANE, S-BEND; 0–80 m) — eases into and out
+  of the corner on an [Euler spiral](https://en.wikipedia.org/wiki/Euler_spiral):
+  the road tightens steadily to the radius over that length, holds it, and
+  opens out the same way, so the steering builds instead of snapping. The
+  corner still turns exactly its angle and keeps its radius at the apex; it
+  just takes a little more road, and the rejoin absorbs that. The length is
+  rounded to whole steps of the arc (8.5–25 m), a spiral under two steps
+  is left out (the engine's own smoothing already eases that much), and two
+  steps of true arc always stay at the apex — so a short, tight corner may
+  take less spiral than you asked for, or none. 0 is the plain arc.
 
 Then tap the point where the shape should begin: it replaces the road after
 that point and rejoins the loop. **STAMP AT SELECTED POINT** does the same for
@@ -74,7 +84,13 @@ and AUTUMN COUNTRYSIDE. The night themes race under floodlights.
 ## 4 DETAILS
 
 Name the circuit (24 characters) and set **HALF-WIDTH m**, half the road's
-width, from 5 to 8 m. Two rows of chips live here too:
+width, from 5 to 8 m. **SPAN WIDTH m**, under it, narrows just the stretch
+you have selected (tap a point, shift-tap a second, or tap a row under TURNS)
+down to 5 m, tapering gently in and out (never steeper than 1 m in 20 m);
+step it back up to the half-width and the stretch is full width again. It
+only narrows — the road never gets wider than its half-width — and a circuit
+keeps up to 24 such stretches. They stay on their points when you add, delete
+or stamp elsewhere. Two rows of chips live here too:
 
 - **RANDOMISE · TRACK OF THE DAY · START FROM…** — three ways to a new
   circuit. **TRACK OF THE DAY** draws the same circuit for everyone on the
@@ -96,6 +112,13 @@ centres the view on it and sets **CORNER** (or **HAIRPIN**) to the arc that
 fits it. **REPLACE THE SELECTED SPAN** then rebuilds that corner from the
 settings — tighten the radius or change the angle first to reshape it. UNDO
 puts it back.
+
+While a row is selected, **SELECTED TURN · T3** shows under the list with one
+stepper, **BANK °**: FLAT, then 2° to 30° in steps of 2. It banks that corner
+at its apex over the corner's own length, cambered toward the inside; FLAT
+takes the banking away. Over 5.7° the checks add an FIA amber (Grade 1 allows
+5.7°; it is advice, not a block). A banked or narrowed corner says so on its
+row: `T3 · RIGHT 92° · R 45 m · 118 km/h · 140 m · BANK 6° · 12 m WIDE`.
 
 ## 5 CHECKS and FIX
 
