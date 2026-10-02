@@ -14,9 +14,15 @@ import {
 import { assertGarageInterior, sampleGarageGapPixels } from "./garage-interior.mjs";
 import sharp from "sharp";
 import { resolveRepoDefault, resolveContainedChild } from "../lib/output-paths.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `garage-frame — garage turntable screenshot + garageCam() JSON
+
+  node tools/shot/garage-frame.mjs [--backend webgpu|webgl2] [--viewport 1440x900] [--out dir]
+
+Default out: artifacts/garage-frame/. Soft-present + interior gate.`);
 const flag = (n, d) => {
   const i = argv.indexOf(n);
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : d;

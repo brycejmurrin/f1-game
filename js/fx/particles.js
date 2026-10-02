@@ -133,6 +133,13 @@ const Particles = (function () {
     }
   }
 
+  // A steady emissive disc: a lamp re-spawned every frame by its owner (the
+  // start gantry, js/race/start-lights.js). Additive, no motion, no gravity;
+  // `life` just outlives one frame so the next spawn replaces it.
+  function glow(x, y, z, size, r, g, b, alpha, life) {
+    spawn(x, y, z, 0, 0, 0, life > 0 ? life : 0.1, size, 0, r, g, b, alpha, 0, 0, true);
+  }
+
   function spray(x, y, z, bvx, bvz, strength, count) {
     const m = mul(); if (m <= 0) return;
     for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
@@ -384,7 +391,7 @@ const Particles = (function () {
     return p;
   }
 
-  return { init, clear, count, update, draw, tyreSmoke, sparks, kickup, spray,
+  return { init, clear, count, update, draw, tyreSmoke, sparks, kickup, spray, glow,
            rainShow, rainSeed, rainUpdate, rainActive };
 })();
 Object.freeze(Particles);

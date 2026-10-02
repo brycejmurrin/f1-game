@@ -38,7 +38,7 @@ const grab = (re, what) => { const m = chunkSrc.match(re); if (!m) throw new Err
 const packerSrc = [
   grab(/  const _fb = new Float32Array\(1\)[\s\S]*?\n  \}/, "_toHalf"),
   grab(/  let _zeroBuf = new Float32Array\(0\);[\s\S]*?\n  \}/, "_zeros"),
-  grab(/  function packAttr\(THREE, src, len, itemSize, kind\) \{[\s\S]*?\n  \}/, "packAttr"),
+  grab(/  function packAttr\(THREE, src, len, itemSize, kind(?:, fmt24)?\) \{[\s\S]*?\n  \}/, "packAttr"),
   grab(/  function packIndex\(THREE, idx, vCount\) \{[\s\S]*?\n  \}/, "packIndex"),
 ].join("\n");
 const packStats = { on: true, small: 0, wide: 0, zero: 0, savedMB: 0, half: 0,
