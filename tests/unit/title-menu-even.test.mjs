@@ -12,14 +12,15 @@ test("title 2-up rows share equal flex cells and fill them", () => {
   const menus = read("css/menus.css");
   assert.match(menus, /#menu-primary\s*\{[^}]*--balance-min:\s*calc\(50%/);
   assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-basis:\s*5\.5rem/);
-  assert.match(menus, /#menu-primary, #menu-secondary\s*\{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.7\)/);
+  assert.match(menus, /#menu-explore\s*\{[^}]*--balance-basis:\s*7rem/);
+  assert.match(menus, /#menu-primary, #menu-explore, #menu-secondary\s*\{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.7\)/);
   assert.match(
     menus,
-    /#menu-buttons :is\(#menu-primary, #menu-secondary\)\.balanced-row > \.bigbtn \{ width: 100%/,
+    /#menu-buttons :is\(#menu-primary, #menu-explore, #menu-secondary\)\.balanced-row > \.bigbtn \{ width: 100%/,
   );
   assert.doesNotMatch(
     menus,
-    /#menu-buttons :is\(#menu-primary, #menu-secondary\)\.balanced-row > \.bigbtn \{ width: auto/,
+    /#menu-buttons :is\(#menu-primary, #menu-explore, #menu-secondary\)\.balanced-row > \.bigbtn \{ width: auto/,
   );
   assert.match(menus, /#menu-buttons \.bigbtn \{[^}]*border-width:\s*1px/);
 });
@@ -43,7 +44,7 @@ test("compact landscape title doors fit without a nested scroller", () => {
   );
   assert.match(
     menus,
-    /body\[data-shape="wide"\]\[data-density="compact"\]\) :is\(#menu-primary, #menu-secondary\) \{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.45\)/,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) :is\(#menu-primary, #menu-explore, #menu-secondary\) \{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.45\)/,
     "2-up rows also tighten on the short landscape column",
   );
 });
@@ -73,7 +74,7 @@ test("tall title leftover-row is not gated on compact density", () => {
 test("title overlay columns grow with --vwz instead of a pixel cap", () => {
   const menus = read("css/menus.css");
   const responsive = read("css/responsive.css");
-  assert.match(menus, /#menu-hero, #menu-primary, #menu-secondary \{ width: min\(calc\(78 \* var\(--vwz\)\), 100%\)/);
+  assert.match(menus, /#menu-hero, #menu-primary, #menu-explore, #menu-secondary \{ width: min\(calc\(78 \* var\(--vwz\)\), 100%\)/);
   assert.match(menus, /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
   assert.match(menus, /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-brand,[\s\S]*?width:\s*100%/,
     "landscape compact title fills its 1fr tracks (no 42vwz shrink)");
