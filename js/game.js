@@ -973,14 +973,15 @@ function rpmFor(gear, speed) {
 }
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
-// Weather predicates. "wet" = damp/wet track (wet road, no falling rain);
-// "rain" = active storm (wet road + falling rain + lightning). Both wet the road.
-function isWetRoad() { return raceWeather === "wet" || raceWeather === "rain"; }
-function isRaining() { return raceWeather === "rain"; }
+// Weather predicates from continuous trackWetness (same 0.25 / 0.72 ladder as
+// TyreModel.treadFor). Atmosphere profiles keep reading raceWeather enum.
+function isWetRoad() { return trackWetness() >= 0.25; }
+function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
-function roadWetness() { return TyreModel.wetness(raceWeather, wxArc.arc); }
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, roadWetness()); }
+function trackWetness() { return TyreModel.wetness(raceWeather, wxArc && wxArc.arc); }
+function roadWetness() { return trackWetness(); }   // alias — grip / pits / engineer
+function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, trackWetness()); }
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -3695,7 +3696,7 @@ const G = {
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: (blendS) => applyRaceSettings(blendS),   // const initialised below — defer; blendS: see Atmosphere
-  announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, isErsDeploying, cautionInfo, cautionLevel,
+  announce, applyCaution, camVantage, endRace, gridUp, gripMult, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
@@ -7323,17 +7324,9 @@ function render(dt) {
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
   frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
-  // Wet-road material (rain): ramp wetness in/out smoothly so the surface
-  // darkens and starts mirroring lamps/sky over ~1s rather than popping.
-  if (LT.wetness >= 0) {
-    // Tuner override: pin the road wetness directly (skips the auto ramp, which
-    // saturates a few seconds after a weather flip — rate 0.8/s below).
-    frame.wetness = LT.wetness;
-  } else {
-    const wetTarget = roadWetness();
-    const cur = frame.wetness || 0;
-    frame.wetness = cur + (wetTarget - cur) * Math.min(1, dt * 0.8);
-  }
+  // frame.wetness: WeatherArc.syncWetness (also from wxArc.tick for headless
+  // look=drive). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
+  if (wxArc) wxArc.syncWetness(dt);
   // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
   // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
   // the same 0.8/s as wetness so the rings fade in and out rather than pop.
@@ -7496,7 +7489,7 @@ function render(dt) {
     // and at a 16-24 slot cap 35-39 % of it comes from lamps outside the set
     // (docs/notes/LAMP-POPPING-PLAN-2026-09-24.md, b) — so they pop. Per-chunk
     // lamps, road included, cover them; the governor shed still wins.
-    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.75 ? 0.6 : 0;   // 0.75: dry night presets pin ~0.55 sheen (≤ 8 % pops)
+    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.75 ? 0.6 : 0;   // 0.75: rain/wet only — dry sheen is ssrDryNight, not wetness
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
       : (_pcShed >= 1 ? Math.min(0.3, Math.max(_pcWet, +LT.perChunkLights || 0)) : Math.max(_pcWet, +LT.perChunkLights || 0));
     frame.roadChunkLamps = (frame.perChunkLights > 0 && (LT.roadChunkLamps || _pcWet > 0)) ? 1 : 0;
