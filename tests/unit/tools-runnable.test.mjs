@@ -632,3 +632,16 @@ test("the game's shipped tyreWear default is not 'off' (so off must be opt-in, n
   assert.ok(["light", "real"].includes(m[1]),
     `shipped tyreWear is ${m[1]} — re-read tools/lib/cli-args.mjs wearArg`);
 });
+
+test("occlusion-estimate resolves game-vm and --help exits without booting it", () => {
+  // ROOT was briefly one level too shallow (tools/check → tools), then joined
+  // tools/lib again, so createGame could not load. Pin the "../.." form and a
+  // side-effect-free --help before the VM boot.
+  const src = fs.readFileSync(tool("occlusion-estimate.mjs"), "utf8");
+  assert.match(src, /dirname\(fileURLToPath\(import\.meta\.url\)\),\s*"\.\.\/\.\."\)/);
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/lib/game-vm.cjs")));
+  const r = spawnSync(process.execPath, [tool("occlusion-estimate.mjs"), "--help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /usage:.*occlusion-estimate/);
+});
