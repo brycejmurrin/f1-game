@@ -276,6 +276,9 @@ const Car3D = (function () {
       else          addQuad(out, ft, rt, rs, fs, col, surface);
     }
   }
+  // A BODY span: rounded when CarShade is on for this build (js/car/car-shade.js), else trapezoid + crease.
+  let _round = false;
+  function bodySpan(out, a, b, col, bevel) { if (_round) CarShade.loft(out, a, b, col, addTri); else { addSpan(out, a, b, col, col); addTopBevel(out, a, b, bevel, col); } }
   function addBeveledSpan(out, front, rear, b, col, colFront, surface, frontSurface) {
     addSpan(out, front, rear, col, colFront, surface, frontSurface);
     if (b > 0) addTopBevel(out, front, rear, b, col, surface);
@@ -423,7 +426,7 @@ const Car3D = (function () {
     // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
     // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
     // with the measurement (480 per wheel).
-    const SEG = 24;
+    const SEG = 24, rw = typeof CarShade !== "undefined" && CarShade.any();   // rw: tread normals from its real shape (js/car/car-shade.js)
     const x0 = cx - w/2, x1 = cx + w/2;
     const rimR = r * 0.68;
     const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
@@ -494,6 +497,7 @@ const Car3D = (function () {
         out.idx.push(A, B, C, A, C, D);
       }
     }
+    if (rw) CarShade.vertexNormals(out, i0, out.pos.length / 3);
     const outerR = r * edgeRm;
     for (let i = 0; i < SEG; i++) {
       const a0 = (i / SEG) * Math.PI * 2, a1 = ((i+1) / SEG) * Math.PI * 2;
@@ -1731,10 +1735,8 @@ const Car3D = (function () {
     addBox(out, floor.cx, Math.max(floor.cy + rideDY, 0.052), floor.cz,
            floor.sx, floor.sy, floor.sz, CARBON);
     const nose = noseStations || CHASSIS.nose;
-    addSpan(out, nose[0], nose[1], c1);
-    addTopBevel(out, nose[0], nose[1], 0.022, c1);
-    addSpan(out, nose[1], nose[2], c1);
-    addTopBevel(out, nose[1], nose[2], 0.028, c1);
+    bodySpan(out, nose[0], nose[1], c1, 0.022);
+    bodySpan(out, nose[1], nose[2], c1, 0.028);
     const monoR = ckpt ? CKPT_MONO_REAR : CHASSIS.monocoque[1];
     // COCKPIT: this span is the tub the driver sits IN — the deck under the
     // wheel and the rear wall above it, 0.65 m from the eye. In body paint it
@@ -1760,8 +1762,7 @@ const Car3D = (function () {
       const f = (A.z - z) / (A.z - B.z), L = (a, b) => a + (b - a) * f;
       return { z, y: L(A.y, B.y), w: L(A.w, B.w), h: L(A.h, B.h), t: L(A.t, B.t) }; };
     const monoApex = monoAt(MONO_APEX_Z);
-    addSpan(out, CHASSIS.monocoque[0], ckpt ? monoR : monoApex, monoC);
-    addTopBevel(out, CHASSIS.monocoque[0], ckpt ? monoR : monoApex, 0.032, monoC);
+    bodySpan(out, CHASSIS.monocoque[0], ckpt ? monoR : monoApex, monoC, 0.032);
     if (ckpt) return;
     // SPLITTER / TEA-TRAY. The floor's leading edge is z 1.30 and there was
     // nothing at all ahead of it, so from any low front-three-quarter camera the
@@ -2028,7 +2029,8 @@ const Car3D = (function () {
   function buildSidepodBodywork(out, c1, eng, anchors) {
     const data = anchors || bodyAnchors({ engine: 1, _visual: { engine: eng } });
     const stations = data.podStations;
-    for (const side of [-1, 1]) {
+    if (_round) CarShade.podLoft(out, stations, c1, INTAKE, addTri);
+    else for (const side of [-1, 1]) {
       addStationLoft(out, stations.map((p) => sidepodStation(side, p.z, p.inner, p.outer,
         p.innerBottom, p.outerBottom, p.innerTop, p.outerTop)), c1, INTAKE);
     }
@@ -2200,13 +2202,14 @@ const Car3D = (function () {
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
+    const shade = !ckpt && typeof CarShade !== "undefined" && (opts && opts.smooth != null ? !!opts.smooth : CarShade.on(teamId));
+    _round = shade;
     const bodySplitFrom = out.pos.length / 3;
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
 
     part("hood");
-    // Driver-eye references: a descending nose deck ahead of the wheel,
-    // with curved shoulders wrapping the arms (official F1 / Sky visor cams).
+    // Driver-eye deck and shoulders (official F1 / Sky visor cams).
     const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.50, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
     // The cowl stays ahead of the wheel and rises to its surround, beneath
@@ -2219,8 +2222,7 @@ const Car3D = (function () {
     hR.w += profile[0]; hR.y += profile[1];
     const deck = ckpt ? [hF, { z: 0.86, y: 0.56, w: 0.58, h: 0.12, t: 0.62 }, hR] : [hF, hR];
     for (let i = 0; i < deck.length - 1; i++) {
-      addSpan(out, deck[i], deck[i + 1], c1, c1);
-      addTopBevel(out, deck[i], deck[i + 1], 0.026, c1);
+      bodySpan(out, deck[i], deck[i + 1], c1, 0.026);
     }
     // Exterior crown stripe follows the deck. In cockpit it foreshortens into
     // a slab (a white accent hit the centre ray at 0.69 m), so it stays outside.
@@ -2240,7 +2242,7 @@ const Car3D = (function () {
         const shoulder = [
           [[s*0.30,0.34,1.50],[s*0.56,0.26,1.50],[s*0.54,0.585,1.46],[s*0.30,0.62,1.46]],
           [[s*0.285,0.37,0.94],[s*0.565,0.29,0.94],[s*0.535,0.655,0.91],[s*0.285,0.69,0.91]],
-          [[s*0.32,0.40,-0.04],[s*0.55,0.32,-0.04],[s*0.53,0.73,-0.10],[s*0.32,0.755,-0.10]],
+          [[s*0.32,0.40,-2.56],[s*0.55,0.32,-2.56],[s*0.53,0.73,-2.52],[s*0.32,0.755,-2.52]],
         ];
         for (let i=0;i<3;i++) for (const j of [1,2]) {
           shoulder[i][j][0] += s * profile[2][i];
@@ -2978,25 +2980,26 @@ const Car3D = (function () {
     } else if (opts && opts.halo) {
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
-      const path = haloHoopPath(0.30,0.92,-0.15,0.28,0.18,faired?1.10:0.96,0.62,faired?24:10);
+      const path = haloHoopPath(0.30,0.765,-0.80,0.28,0.18,faired?1.10:0.96,0.62,faired?24:10);
       const hc = haloTint || (faired ? CARBON : HALO);
       if (faired) {
         const start=out.pos.length/3;
         // Broad carbon roof; underside curves smoothly into the central Y.
         // Swept crown rises toward the nose so its upper edge reads level
         // from the seat, instead of projecting as a deep U over the road.
-        for (const p of path) p[1] = 0.82 + 0.39*(p[2]+0.20) - 0.028;
+        for (const p of path) p[1] = Math.max(0.765,0.82 + 0.39*(p[2]+0.20) - 0.028);
         const rings = path.map((p,i) => {
           const a=path[Math.max(0,i-1)], b=path[Math.min(path.length-1,i+1)];
           const dx=b[0]-a[0], dz=b[2]-a[2], len=Math.hypot(dx,dz);
           const nx=-dz/len*0.038, nz=dx/len*0.038;
-          const low=p[1]-0.035*(p[2]+0.20)/0.82-0.15*Math.exp(-p[0]*p[0]/0.0081);
+          const low=p[1]-0.035*Math.max(0,p[2]+0.20)/0.82-0.15*Math.exp(-p[0]*p[0]/0.0081);
           return [[p[0]+nx,p[1]+0.028,p[2]+nz],[p[0]-nx,p[1]+0.028,p[2]-nz],
             [p[0]-nx,low,p[2]-nz],[p[0]+nx,low,p[2]+nz]];
         });
         for(let i=0;i<rings.length-1;i++)for(let j=0;j<4;j++)
           addQuad(out,rings[i][j],rings[i+1][j],rings[i+1][(j+1)%4],rings[i][(j+1)%4],hc,SURFACES.carbon);
         smoothSkin(out,start);
+        for(const i of [0,rings.length-1]) { const q=i===0?rings[i].slice().reverse():rings[i]; addQuad(out,q[0],q[1],q[2],q[3],hc,SURFACES.carbon); }
       } else addTube(out,path,0.025*hk,10,HALO,SURFACES.metal);
       // Carbon fairing: a narrow stem blending into a broad Y at the crown.
       const stem = faired ? [[0.67,0.014,0.026],[0.90,0.018,0.025],[0.95,0.026,0.028],
@@ -4038,6 +4041,8 @@ const Car3D = (function () {
       }
     }
 
+    _round = false;
+    if (shade) CarShade.smooth(out, { skip: [SURFACES.emissive] });
     // Close the last section and measure each from the vertices it emitted.
     if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {

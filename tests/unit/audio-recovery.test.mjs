@@ -163,8 +163,10 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
     "SOUND turned on under the pause card (js/audio/panel.js defers) gets music and rain back on RESUME");
   assert.match(g, /go\.addEventListener\("animationend", qGoShakeEnd, \{ once: true \}\)/, "one named handler, not a closure per rejected press");
   assert.match(g, /function tiltSay\(msg\) \{ els\.audiostate\.textContent = msg; if \(msg\) announce\(/, "tilt fallbacks reach the banner, not only the title line");
-  assert.match(g, /if \(state === "race" && !camComfort\(\) && _buzzWet > 0\.01/, "REDUCE MOTION / XR comfort drops the onboard speed buzz");
+  assert.match(g, /CamTune\.buzzAmp\(spV, player\.deploying, camComfort\(\), _buzzWet\)/, "REDUCE MOTION / XR comfort drops the onboard speed buzz via CamTune.buzzAmp");
   assert.match(g, /_vantExtra\.reduceMotion = camComfort\(\);/, "…and the kerb shiver (js/camera/vantage.js)");
+  assert.match(g, /CamTune\.shakeOffset\(shake, camComfort\(\)\)/, "collision shake also goes through CamTune (comfort bob)");
+  assert.match(g, /CamTune\.rollTarget\(roadCamRoll, camSlipSm/, "horizon lean goes through CamTune (comfort rollLean)");
 });
 
 // MENU SOUNDS (apex26.menuSfx) and ONE CLICK, ONE SOUND: the track tile once

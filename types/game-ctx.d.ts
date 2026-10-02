@@ -372,6 +372,7 @@ interface GameCtx {
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
   readonly openDailyPicker: () => void;
+  readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
   readonly seasonRound: number;
@@ -399,6 +400,8 @@ interface GameCtx {
 
   // ── Tyres: the race setting and the live wear model ───────────────────────
   raceTyreWear: TyreLevel;
+  /** Dirty-air wake model: off / classic (default) / cfd. */
+  raceDirtyAir: "off" | "classic" | "cfd";
   readonly tyres: TyreSession;
   readonly pits: PitSession;
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
@@ -582,6 +585,8 @@ interface GameCtx {
   // ── Menus: selection state + the screens game.js still owns ───────────────
   driverIdx: number;
   difficulty: string;
+  /** AI pace mode: scripted (fixed car/driver pace) or catchup (legacy rubber band). */
+  aiPace: "scripted" | "catchup";
   readonly store: StoreApi;
   readonly tickUi: () => void;
   readonly scheduleFlybyTrack: (settle?: boolean) => void;
@@ -846,6 +851,10 @@ declare const RealRace: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
+declare const UiExperience: GameModuleFactory;
+declare const HomeWorld: GameModuleFactory;
+declare const PhotoStudio: GameModuleFactory;
+declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;

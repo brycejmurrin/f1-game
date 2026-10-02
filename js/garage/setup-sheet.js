@@ -225,6 +225,7 @@ function activateCsCat(id, focus) {
     // LIVERY is about the wall crest as much as the paint chips: frame FRONT
     // on the category change only, never again while the tab stays open.
     if (id === "livery") framePreset("front");
+    else if (CAT_VIEW[id]) framePreset(CAT_VIEW[id]);
   }
   if (focus) {
     const tab = document.getElementById(csTabId(id));
@@ -466,6 +467,9 @@ function buildSetup() {
   if (csActiveCat === "tune")   { buildTuneOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
+  const showComparison = GarageExperience.partSummary(optsEl, team, parts, activeCat, curOpt,
+    typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null, unlimited ? Infinity : cap,
+    () => framePreset(CAT_VIEW[activeCat.id] || "hero"));
   const factorySetup = Parts.getFactorySetup(team);
   // Cheapest first, so a category reads as the ladder it now is. The CATALOG
   // is in authoring order — McLaren's aero tab ran 0, 80, 40, 60, 0, 50 … 110,
@@ -487,6 +491,8 @@ function buildSetup() {
     row.setAttribute("aria-pressed", active ? "true" : "false");
     row.dataset.csOpt = opt.id;
     row.dataset.csCat = activeCat.id;
+    row.addEventListener("focus", () => showComparison(opt));
+    row.addEventListener("pointerenter", () => showComparison(opt));
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
 

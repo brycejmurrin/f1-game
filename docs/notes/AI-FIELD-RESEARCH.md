@@ -61,9 +61,12 @@ and cut Monza's order flips 18 %, but LENGTHENED close-following episodes
   antithesis of what we want") and when lapping, and — the important one —
   modifying **driver skill** (braking points, corner speed) rather than power,
   "as the drivers are still in the same cars and so no 'cheating' is happening".
-  Ours multiplies `vmax`, is reverse-only, and has none of the disables.
+  Ours multiplies `vmax` under CATCH-UP (`aiPace`), is reverse-only, and has
+  start/lapping disables. Default AI pace is SCRIPTED (2026-10-01): no
+  gap-to-player boost — Pure / Black Rock race-scripted intent. See
+  `js/physics/ai-band.js` and docs/PHYSICS.md §AI field.
   [Game AI Pro ch.42](https://www.gameaipro.com/GameAIPro/GameAIPro_Chapter42_A_Rubber-Banding_System_for_Gameplay_and_Race_Management.pdf).
-  Measured caveat: our band contributes **0.9 % for five seconds and then
+  Measured caveat (catch-up on): our band contributes **0.9 % for five seconds and then
   0.00 %** unless the player is leading by hundreds of metres, so it is not the
   cause of anything a mid-pack player sees.
 - **Narrow the spread, add a biorhythm** — skill should map onto ~98–99 %, and
