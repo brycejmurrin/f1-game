@@ -824,7 +824,10 @@ test("overflowing Help navigation keeps its first landmark reachable", () => {
 /* ── Input (gamepad menu nav) in a VM ───────────────────────────────────── */
 function bootInput() {
   const dispatched = [];
-  const state = { navOpen: false, top: null, now: 1000, pad: null, active: null };
+  // anyOpen = pause/settings/sheets (gates driving keys + on-screen pedals).
+  // navOpen also covers title #overlay / rotate-device (pad walks doors; anyOpen
+  // stays false). Keep them independent — Input.navBlocksTouch() calls anyOpen().
+  const state = { navOpen: false, anyOpen: false, top: null, now: 1000, pad: null, active: null };
   const sb = {
     Math, console, Object, Array, Number, String, Map, Set, Date, isFinite, parseFloat,
     performance: { now: () => state.now },
@@ -837,7 +840,11 @@ function bootInput() {
     addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
     KeyboardEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
     Event: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
-    UiLayers: { navOpen: () => state.navOpen, top: () => state.top },
+    UiLayers: {
+      anyOpen: () => state.anyOpen,
+      navOpen: () => state.anyOpen || state.navOpen,
+      top: () => state.top,
+    },
     MenuNav: { activeLayer: () => state.top, FOCUSABLE: "button,input" },
     setTimeout: () => 0, clearTimeout() {}, requestAnimationFrame: () => 0,
     screen: { orientation: { type: "landscape-primary", angle: 0, addEventListener() {} } },
@@ -943,7 +950,9 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.ok(Math.abs(h.Input.steer() - (0.5 - 0.05) / (1 - 0.05)) < 1e-9, "rescale is (|ax| - dz) / (1 - dz - sat)");
 
   // MENU OPEN: the FIRST poll seeds focus with one ArrowDown, once per layer.
-  h.state.navOpen = true; h.state.top = { id: "select" };
+  // select/garage are gate:true layers — anyOpen and navOpen both true (title
+  // #overlay alone would be navOpen-only; key-binds.test.mjs pins that split).
+  h.state.anyOpen = true; h.state.top = { id: "select" };
   h.state.pad = h.pad(0); h.Input.poll();
   assert.deepEqual(h.keys(), ["ArrowDown"], "opening a menu seeds MenuNav's first-arrow path");
   h.Input.poll();
@@ -981,11 +990,11 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.equal(clicked, 1, "A on a focused button activates it");
   // Closing the menu clears the seed so the next open seeds again — when
   // nothing in the layer holds focus; a focused control is left alone.
-  h.state.pad = h.pad(0); h.state.navOpen = false; h.Input.poll(); h.keys();
-  h.state.navOpen = true; h.Input.poll();
+  h.state.pad = h.pad(0); h.state.anyOpen = false; h.Input.poll(); h.keys();
+  h.state.anyOpen = true; h.Input.poll();
   assert.deepEqual(h.keys(), [], "a layer that still has a focused control is not re-seeded");
-  h.state.navOpen = false; h.Input.poll(); h.keys();
-  h.state.active = null; h.state.navOpen = true; h.Input.poll();
+  h.state.anyOpen = false; h.Input.poll(); h.keys();
+  h.state.active = null; h.state.anyOpen = true; h.Input.poll();
   assert.deepEqual(h.keys(), ["ArrowDown"], "reopening the same layer with nothing focused seeds again");
 
   // The seams the pad path relies on, as behaviour where a module loads alone.

@@ -23,7 +23,7 @@ function load() {
   vm.createContext(ctx);
   vm.runInContext(SRC + "\n;this.CarMesh = CarMesh;", ctx, { filename: "car-mesh.js" });
   const gfx = {
-    createMesh(d) { const m = { id: made.length, verts: d.pos.length / 3 }; made.push(m); return m; },
+    createMesh(d) { const m = { id: made.length, verts: d.pos.length / 3, d }; made.push(m); return m; },
     freeMesh(m) { freed.push(m); },
   };
   ctx.CarMesh.init(gfx);
@@ -70,4 +70,24 @@ test("no GaragePrims: nothing is built or cached", () => {
   ctx.CarMesh.init({ createMesh() { n++; return {}; }, freeMesh() {} });
   assert.equal(ctx.CarMesh.getCrewMesh([0.1, 0.1, 0.1]), null);
   assert.equal(n, 0);
+});
+
+// ── wheel spin blur (2026-10-01) ─────────────────────────────────────────────
+test("the spin-blur disc is one shared two-sided annulus, built once, hub dark and lip light", () => {
+  const { CarMesh, made } = load();
+  const a = CarMesh.getSpinDisc();
+  assert.equal(CarMesh.getSpinDisc(), a, "built once and reused");
+  assert.equal(made.filter((m) => m === a).length, 1);
+  // 24 segments x 4 vertices, in the wheel plane (x = 0), both windings so it
+  // reads from either side of the wheel; inner ring darker than the outer.
+  assert.equal(a.verts, 24 * 4);
+  assert.equal(a.d.idx.length, 24 * 12);
+  let inner = 0, outer = 0, nIn = 0, nOut = 0;
+  for (let i = 0; i < a.verts; i++) {
+    assert.equal(a.d.pos[i * 3], 0, "the disc lies in the wheel plane");
+    const r = Math.hypot(a.d.pos[i * 3 + 1], a.d.pos[i * 3 + 2]);
+    const lum = a.d.col[i * 3] + a.d.col[i * 3 + 1] + a.d.col[i * 3 + 2];
+    if (r < 0.1) { inner += lum; nIn++; } else { outer += lum; nOut++; assert.ok(r < 0.34 * 0.68 + 1e-6, "inside the rim lip"); }
+  }
+  assert.ok(nIn > 0 && nOut > 0 && inner / nIn < outer / nOut, "hub darker than lip");
 });

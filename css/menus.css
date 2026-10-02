@@ -1,19 +1,21 @@
 @layer components {
 /* Apex 26 — menus styles. Load order: tools/manifest.cjs CSS. */
-/* THREE TIERS, by how much of your evening the thing costs.
+/* FOUR TIERS, by how much of your evening the thing costs.
    HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
-   the four one-sitting modes, 2x2, as dark plates with a red leading edge. SECONDARY is the rooms: half-height, two
-   across, no glow.
+   the four one-sitting modes, 2x2, as dark plates with a red leading edge.
+   EXPLORE is Watch / Practice / Photo Studio (H3 Home doors). SECONDARY is the
+   rooms: half-height, two across, no glow.
 
    It was two tiers, but the play row had grown to FIVE full-size red buttons, so
    the flat list the two-tier split existed to break up had quietly come back —
    and a 24-round career carried exactly the weight of a time trial. Folding the
    four quick modes into 2x2 pays for the hero's extra height, so the column is
-   no taller than before and still clears a 390px landscape phone. */
+   no taller than before and still clears a 390px landscape phone. Explore keeps
+   the H3 trio discoverable without inflating the secondary room count. */
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
-#menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
+#menu-hero, #menu-primary, #menu-explore, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
 #menu-hero { display: grid; gap: calc(var(--gap) * 0.55); }
 #menu-retention {
   display: grid;
@@ -34,8 +36,8 @@
   white-space: nowrap;
 }
 /* Shared gap / stretch. Column count lives on each row: primary is a
-   forced 2x2, secondary wraps from local space (see the two rules below). */
-#menu-primary, #menu-secondary {
+   forced 2x2, explore and secondary wrap from local space. */
+#menu-primary, #menu-explore, #menu-secondary {
   /* Same track gap so the play doors and the rooms share one lattice.
      0.55 on secondary only made that tier ~2–5px narrower on desktop. */
   gap: calc(var(--gap) * 0.7);
@@ -45,6 +47,13 @@
 #menu-primary {
   --balance-basis: calc(50% - 0.5em);
   --balance-min: calc(50% - 0.5em);
+}
+/* Explore (Watch / Practice / Photo) wraps from local space — three doors
+   share one row when the column holds them, otherwise 2+1 with a full
+   last cell, matching the secondary leftover contract. */
+#menu-explore {
+  --balance-basis: 7rem;
+  --balance-min: 7rem;
 }
 /* Rooms wrap from local space. Three visible doors (DATA / GARAGE /
    SETTINGS) sit on one row when the column holds them, instead of
@@ -88,8 +97,9 @@
 #overlay #mb-career .mb-sub { color: var(--text); }
 /* The 2x2 modes stack label over sub. No span for the label itself: a bare
    text node is already an anonymous flex item, so only the stack needs a box. */
-#menu-primary .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); }
-#menu-secondary {
+#menu-primary .bigbtn > span,
+#menu-explore .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); }
+#menu-explore, #menu-secondary {
   display: flex;
   flex-wrap: wrap;
 }
@@ -100,12 +110,12 @@
 /* Primary has `border: none`; rooms have a 1px .alt hairline. Matching width
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
    on 1280 before this). Color stays transparent on the red doors. */
-#menu-buttons :is(#menu-hero, #menu-primary) .bigbtn { border-color: transparent; }
+#menu-buttons :is(#menu-hero, #menu-primary, #menu-explore) .bigbtn { border-color: transparent; }
 /* width: 100% is REDUNDANT in the cascade (#menu-buttons .bigbtn at (1,1,0)
    already wins it on every branch) and KEPT on purpose: tests/unit/title-menu-even
    pins this exact declaration as the contract that 2-up cells fill, and
    asserts `width: auto` never appears here. A pin is worth more than a line. */
-#menu-buttons :is(#menu-primary, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
+#menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -149,7 +159,7 @@
    keeps the shared :active press (skew + scale 0.97). The hover/press "glow"
    is ::before — a red-tinted wash faded by OPACITY, which the compositor can
    run without repainting the shadow every frame (::after is the sheen). */
-#menu-buttons #menu-primary .bigbtn {
+#menu-buttons :is(#menu-primary, #menu-explore) .bigbtn {
   background:
     linear-gradient(90deg, var(--red) 0 4px, transparent 4px) border-box,
     color-mix(in oklab, var(--carbon) 88%, var(--text) 9%);
@@ -158,7 +168,7 @@
   box-shadow: none;
   transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
-#menu-buttons #menu-primary .bigbtn::before {
+#menu-buttons :is(#menu-primary, #menu-explore) .bigbtn::before {
   content: "";
   position: absolute; inset: 0; z-index: -1;
   pointer-events: none;
@@ -169,10 +179,10 @@
   transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
 @media (hover: hover) {
-  #menu-buttons #menu-primary .bigbtn:hover::before { opacity: 1; }
+  #menu-buttons :is(#menu-primary, #menu-explore) .bigbtn:hover::before { opacity: 1; }
 }
-#menu-buttons #menu-primary .bigbtn:active::before { opacity: 1; }
-#menu-buttons #menu-primary .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
+#menu-buttons :is(#menu-primary, #menu-explore) .bigbtn:active::before { opacity: 1; }
+#menu-buttons :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
 /* The hero keeps its red and its resting glow, but its hover heat is now the
    same opacity fade: the hot gradient lives on ::before, the face stays on
    --grad-primary, and box-shadow no longer TRANSITIONS (a gradient never
@@ -394,28 +404,30 @@ body { --compact-at: 600px; --wide-at: 620px; }
   :where(body[data-shape="tall"]) #menu-hero,
   :where(body[data-shape="tall"]) #menu-primary,
   :where(body[data-shape="tall"]) #menu-secondary { width: 100%; }
+  :where(body[data-shape="tall"]) #menu-explore { width: 100%; }
   :where(body[data-shape="tall"]) #menu-buttons {
     height: auto;
     align-self: start;
     align-content: start;
     gap: calc(var(--gap) * 0.6);
   }
-  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-secondary) { gap: calc(var(--gap) * 0.5); }
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore, #menu-secondary) { gap: calc(var(--gap) * 0.5); }
   :where(body[data-shape="tall"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.55); font-size: var(--fs-4); }
   :where(body[data-shape="tall"]) #menu-retention .bigbtn { min-height: calc(var(--tap) * 0.85); padding-block: calc(var(--gap) * 0.3); }
   /* Each play door is ONE line, icon beside label, sub gone: the four modes
      cost two rows of one tap target each. */
-  :where(body[data-shape="tall"]) #menu-primary .bigbtn {
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .bigbtn {
     display: flex; align-items: center; justify-content: center;
     gap: 0.45em;
     padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.8);
     font-size: var(--fs-3);
     min-height: calc(var(--tap) * 0.9);
   }
-  :where(body[data-shape="tall"]) #menu-primary .bigbtn .btn-ico { margin: 0; }
-  :where(body[data-shape="tall"]) #menu-primary .mb-sub { display: none; }
-  /* The rooms: a forced 2x2, a step lower than the play doors. */
-  :where(body[data-shape="tall"]) #menu-secondary {
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { margin: 0; }
+  :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
+  /* Explore + rooms: a forced 2-up on tall phones so three explore doors
+     land as 2+1 with a full last cell instead of a cramped 3-across. */
+  :where(body[data-shape="tall"]) :is(#menu-explore, #menu-secondary) {
     --balance-basis: calc(50% - 0.5em);
     --balance-min: calc(50% - 0.5em);
   }
@@ -580,7 +592,8 @@ body { --compact-at: 600px; --wide-at: 620px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
-:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-secondary) {
+:where(body[data-shape="wide"][data-density="compact"]) #menu-explore { width: 100%; }
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore, #menu-secondary) {
   gap: calc(var(--gap) * 0.45);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
@@ -591,25 +604,25 @@ body { --compact-at: 600px; --wide-at: 620px; }
      screenshots were taken at. */
   min-height: max(32px, var(--tap-min));
 }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore) .bigbtn {
   display: flex; align-items: center; justify-content: center;
   gap: 0.4em;
 }
 /* Four rooms in the narrower column wrap 3 + 1 from the 5.5rem basis, which
    stretches the leftover into a banner; a forced 2x2 costs one ~30px row
    (274 -> ~305 on a 343px safe height) and matches portrait. */
-:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary {
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-explore, #menu-secondary) {
   --balance-basis: calc(50% - 0.5em);
   --balance-min: calc(50% - 0.5em);
 }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-primary .bigbtn .btn-ico { margin: 0; flex: none; }
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { margin: 0; flex: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
   padding: 3px 6px 3px 10px;   /* size comes from the compact :is() rule below */
   min-height: max(26px, var(--tap-min));
 }
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */
-:where(body[data-density="compact"]) #menu-primary .mb-sub { display: none; }
+:where(body[data-density="compact"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
 
 /* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
    --------------------------------------
@@ -658,4 +671,3 @@ body { --compact-at: 600px; --wide-at: 620px; }
     font-size: calc(var(--fs-micro) * var(--ui-compact-text));
   }
 }
-} /* @layer components */

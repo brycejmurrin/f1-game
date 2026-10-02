@@ -889,6 +889,13 @@ export function sweepParallel({ cats, M, vis, workers } = {}) {
 // ── CLI ────────────────────────────────────────────────────────────────────
 async function main() {
   const args = process.argv.slice(2);
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(`Usage: node tools/car/parts-sweep.mjs [--cats=…] [--only=…] [--calibrate] [--attribute] [--clamp-scan] [--novis] [--json] [--workers=N]
+
+How much does each catalog option change the car? Offline via node:vm.
+Exits non-zero when any row is INVISIBLE or BROKEN.`);
+    return;
+  }
   const flag = (n, d) => { const i = args.indexOf("--" + n); return i < 0 ? d : args[i + 1]; };
   const has = (n) => args.includes("--" + n);
   const workersArg = args.find((a) => a.startsWith("--workers="));

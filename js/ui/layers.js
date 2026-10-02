@@ -53,7 +53,11 @@ window.UiLayers = (function () {
        #overlay while the title screen is being dragged about. */
     { id: "tl-editor" },
     { id: "photo-controls" },
+    { id: "photo-studio" },
     { id: "datahub" },
+    /* The TRACK DESIGNER (js/editor/designer.js): a <dialog> like #datahub,
+       built on first open behind #mb-designer. */
+    { id: "trackdesigner" },
   ];
 
   const LAYER_IDS = DEFS.map((d) => d.id);

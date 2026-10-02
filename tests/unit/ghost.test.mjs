@@ -453,7 +453,7 @@ test("game.js flushes the ghost at its off-race moments", () => {
   const game = readFileSync(join(ROOT, "js", "game.js"), "utf8");
   assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
   assert.match(game, /function quitToMenu\(\) \{\s*Ghost\.flush\(\);/);
-  assert.match(game, /if \(p\) Ghost\.flush\(\);/, "pause writes it too");
+  assert.match(game, /if \(p\) \{ Ghost\.flush\(\);/, "pause writes it too");
 });
 
 test("a same-circuit rebuild does not re-key the ghost (sameCircuit reads the id from BEFORE the reset)", () => {

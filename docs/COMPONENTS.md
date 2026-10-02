@@ -288,6 +288,11 @@ that relationship visible across its physical files.
 - `.pm-accent-swatches` — `settings-controls.css`, `settings.css`.
 - `.pm-replay-intro` — `settings-controls.css`, `settings.css`.
 - `.pm-pad-tools` — `settings-controls.css`, `settings.css`.
+- `watch-` — `watch-transport.css`: replay transport and its race layout context.
+- `.bc-head` — `hud.css` + `watch-transport.css`, timing header button semantics.
+- `.cr-nextrace` / `.cr-nr-name` — `career.css` + `career-experience.css`, real next-race brief.
+- `.photo-mode` — `overlays.css` + `watch-transport.css`, hide playback chrome during composition.
+- `.photo-studio-open` — `experience.css` + `photo-studio.css` + `watch-transport.css`, scene-only composition.
 
 ## Dead classes
 
@@ -444,6 +449,7 @@ found a real WCAG failure in the lighting tuner within a minute.
 | `garage` | `#carsetup` | `#mb-garage` → ENGINE tab |
 | `career` | `#career` | `#mb-career` (new-career SETUP state) |
 | `datahub` | `#datahub` | `#mb-data` |
+| `trackdesigner` | `#trackdesigner` | `#mb-designer` |
 | `howtoplay` | `#howtoplay` | `#mb-help` |
 | `settings` | `#pmsettings` | `#mb-settings` |
 | `vsfriend` | `#vsfriend` | `#mb-vs` |

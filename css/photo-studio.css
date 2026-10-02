@@ -1,0 +1,31 @@
+@layer overlays {
+#photo-studio { position: fixed; inset: 0; z-index: 44; background: transparent; pointer-events: none; padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); }
+#ps-panel { position: absolute; right: var(--safe-r); top: var(--safe-t); width: min(340px, 42vw); max-height: calc(100svh - var(--safe-t) - var(--safe-b)); overflow: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; pointer-events: auto; background: var(--surf-1); padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); border: thin solid var(--card-line); }
+#ps-panel h2 { margin: 0; font-size: var(--fs-6); }
+#ps-panel .balanced-row { flex-wrap: wrap; gap: calc(var(--gap) * .5); }
+#ps-panel button { min-height: var(--tap); }
+#ps-panel label { display: grid; grid-template-columns: minmax(0, .6fr) minmax(0, 1fr); align-items: center; gap: var(--gap); min-height: var(--tap); }
+#ps-panel label:has(input[type="file"]) { grid-template-columns: minmax(0, 1fr); }
+#ps-panel select, #ps-panel input[type="file"] { min-width: 0; max-width: 100%; min-height: var(--tap); padding: calc(var(--gap) * .5); font-family: var(--font-ui); font-size: var(--fs-2); color: var(--text); background: var(--surf-3); border: 1px solid var(--plate-line); border-radius: var(--r-sm); }
+#ps-panel input[type="file"]::file-selector-button { min-height: var(--tap-min); margin-inline-end: calc(var(--gap) * .5); font-family: inherit; color: var(--text); background: var(--plate); border: 1px solid var(--plate-line); border-radius: var(--r-sm); }
+#ps-panel input[type="checkbox"] { justify-self: end; accent-color: var(--red); }
+#ps-panel :is(select, input, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#ps-panel summary { min-height: var(--tap); padding-block: calc(var(--gap) * .5); cursor: pointer; }
+#ps-preview { width: 100%; object-fit: contain; border-radius: var(--r-md); }
+#ps-library > div { display: flex; gap: var(--gap); flex-wrap: wrap; margin-top: var(--gap); }
+#ps-library img { width: 100%; max-height: 160px; object-fit: contain; }
+#ps-guide { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 100%; height: 100%; border: thin solid var(--text); box-shadow: 0 0 0 100vmax color-mix(in oklab, var(--bg) 45%, transparent); pointer-events: none; }
+#photo-studio[data-aspect="wide"] #ps-guide { width: min(100vw, 177.778svh); height: min(100svh, 56.25vw); }
+#photo-studio[data-aspect="square"] #ps-guide { width: min(100vw, 100svh); height: min(100svh, 100vw); }
+#photo-studio[data-aspect="portrait"] #ps-guide { width: min(100vw, 80svh); height: min(100svh, 125vw); }
+#ps-grid { position: absolute; inset: 0; opacity: .65; }
+#photo-studio[data-grid="thirds"] #ps-grid { background: linear-gradient(to right, transparent 33.2%, var(--text) 33.2%, var(--text) 33.4%, transparent 33.4%, transparent 66.5%, var(--text) 66.5%, var(--text) 66.7%, transparent 66.7%), linear-gradient(to bottom, transparent 33.2%, var(--text) 33.2%, var(--text) 33.4%, transparent 33.4%, transparent 66.5%, var(--text) 66.5%, var(--text) 66.7%, transparent 66.7%); }
+#photo-studio[data-grid="centre"] #ps-grid { background: linear-gradient(to right, transparent 49.9%, var(--text) 49.9%, var(--text) 50.1%, transparent 50.1%), linear-gradient(to bottom, transparent 49.9%, var(--text) 49.9%, var(--text) 50.1%, transparent 50.1%); }
+body.photo-studio-open #pc-bar { display: none; }
+@media (max-width: 640px) {
+  #ps-panel { top: auto; bottom: var(--safe-b); width: calc(100% - var(--safe-l) - var(--safe-r)); max-height: 42svh; }
+}
+@media (max-height: 500px) and (min-width: 641px) {
+  #ps-panel { width: 34vw; }
+}
+}

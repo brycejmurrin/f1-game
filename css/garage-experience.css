@@ -1,0 +1,17 @@
+/* Garage comparison: a stable, readable decision area beside the actual car. */
+@layer components {
+  .cs-inspection {
+    display: grid;
+    gap: calc(var(--gap) * 0.5);
+    padding: var(--gap);
+    margin-bottom: var(--gap);
+    box-shadow: var(--edge);
+    border-inline-start: calc(var(--gap) * 0.25) solid var(--red);
+    border-radius: var(--r-md);
+    background: var(--carbon);
+    color: var(--text);
+  }
+  .cs-inspection p { margin: 0; color: var(--dim); font-size: var(--fs-2); line-height: 1.4; }
+  .cs-inspection > button { justify-self: start; }
+  #cs-options .cs-opt:focus-visible { outline-color: var(--red); outline-offset: calc(var(--gap) * 0.25); }
+}

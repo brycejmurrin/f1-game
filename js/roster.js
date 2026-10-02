@@ -351,6 +351,66 @@
     LAZY_WORKER: [
     "js/track/build-worker.js"
   ],
+    LAZY_EDITOR: [
+    "js/editor/shape.js",
+    "js/editor/stamps.js",
+    "js/editor/randomise.js",
+    "js/editor/validate.js",
+    "js/editor/fixes.js",
+    "js/editor/codec.js",
+    "js/editor/canvas.js",
+    "js/editor/designer.js"
+  ],
+    LAZY_EDITOR_EDGES: [
+    [
+      "js/editor/shape.js",
+      "js/editor/stamps.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/randomise.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/validate.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/fixes.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/canvas.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/stamps.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/randomise.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/validate.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/fixes.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/codec.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/canvas.js",
+      "js/editor/designer.js"
+    ]
+  ],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/mat4.js",
@@ -368,6 +428,7 @@
     "js/track/core/line.js",
     "js/track/core/mesh.js",
     "js/track/core/hidden-faces.js",
+    "js/track/core/def.js",
     "js/track/scenery/nature.js",
     "js/track/scenery/structures.js",
     "js/track/scenery/city.js",
@@ -375,6 +436,7 @@
     "js/track/scenery/pits.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
+    "js/garage/experience.js",
     "js/garage/scene-prims.js",
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",

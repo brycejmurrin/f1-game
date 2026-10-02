@@ -236,7 +236,10 @@ test("a shadow silhouette keeps the helmet shape without paint-split cost", () =
   assert.ok(field > sil, `field ${field} still carries the in-tub torso :sh drops (${sil})`);
   assert.match(SRC, /sil \|\| field/);
   const GAME = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");   // teamMesh lives in the car-draw seam
-  assert.match(GAME, /teamMeshKeyFor\(team, "sh"\)/);   // = teamMeshKey(team) + ":sh", memoised
+  // Shadow casters share one ":sh" per team(+parts); a custom setup stamps its
+  // own ":sh" so two shelves do not share a caster (see car-presentation-canary).
+  assert.match(GAME, /teamMeshKeyFor\(team, sil \? shadow : painted\)/);
+  assert.match(GAME, /\|\| "sh"/);
   assert.match(GAME, /silhouette: true/);
 });
 

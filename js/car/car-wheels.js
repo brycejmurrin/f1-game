@@ -33,7 +33,7 @@ const CarWheels = (function () {
       // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
       // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
       // with the measurement (480 per wheel).
-      const SEG = 24;
+      const SEG = 24, rw = typeof CarShade !== "undefined" && CarShade.any();   // rw: tread normals from its real shape (js/car/car-shade.js)
       const x0 = cx - w/2, x1 = cx + w/2;
       const rimR = r * 0.68;
       const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
@@ -104,6 +104,7 @@ const CarWheels = (function () {
           out.idx.push(A, B, C, A, C, D);
         }
       }
+      if (rw) CarShade.vertexNormals(out, i0, out.pos.length / 3);
       const outerR = r * edgeRm;
       for (let i = 0; i < SEG; i++) {
         const a0 = (i / SEG) * Math.PI * 2, a1 = ((i+1) / SEG) * Math.PI * 2;

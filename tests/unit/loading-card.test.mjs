@@ -830,8 +830,9 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   const intro = game.slice(game.indexOf("function introWarm(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
-  assert.match(intro, /if \(cold\) \{[^\n]*\n\s*warmPrograms\(\); _menuGate\.warm = 2;/, "a built but unwarmed world warms under the card before outgoing motion");
-  assert.match(intro, /await awaitIntroWarm\(live\)/, "same 30 s compile bound as introBuild — never fly over a pending warm");
+  assert.match(intro, /await introPrepare\(live, key, info, n, cold\)/, "a built but unwarmed world joins planning and warm under the card before motion");
+  const prepare = game.slice(game.indexOf("async function introPrepare("), game.indexOf("// A ready, warm world"));
+  assert.match(prepare, /await awaitIntroWarm\(current\)/, "shared compile bound — never fly over pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
   assert.match(intro, /if \(!built && menuWorld\(\) && introWarm\(go\)\) return;/, "raceIntro routes a built world with a pending warm through it");
   assert.match(intro, /function startRaceCovered\(\) \{\s*if \(!loadingScreen\.phase\(\)\) loadingScreen\.building\(loadingInfo\(\)\);\s*return startRace\(\);/);
@@ -841,7 +842,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   // The build path plans the flyby for the length it will run (a real race's read).
   const build = game.slice(game.indexOf("function introBuild(go)"), game.indexOf("function introWarm(go)"));
   assert.match(build, /const info0 = loadingInfo\(\);/);
-  assert.match(build, /await introPlan\(live, key, info0, n\)/);
+  assert.match(build, /await introPrepare\(live, key, info0, n, true\)/);
   assert.match(game, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
   assert.match(build, /await awaitIntroWarm\(live\)/, "introBuild waits via awaitIntroWarm, not the race-start introWarm(go)");
 });

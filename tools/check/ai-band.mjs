@@ -2,11 +2,11 @@
 /**
  * @doc Rubber-band profile: dead zone, forward/reverse, _bandNow vs gap — Melder checklist.
  * @skill ai-racecraft
- * ai-band.mjs — does the rubber band do what Game AI Pro ch.42 says it should?
+ * ai-band.mjs — does the catch-up rubber band do what Game AI Pro ch.42 says?
  *
- * ai-field / ai-pace deliberately run AI-ONLY so the band never fires. That left
- * the band unfalsifiable: start/lapping guards are unit-pinned, but dead zone,
- * forward banding, and "skill not vmax" have no census. This one puts a human
+ * Default AI pace is SCRIPTED (no gap boost). This census forces CATCH-UP so the
+ * legacy band is falsifiable. ai-field / ai-pace run AI-ONLY so the band never
+ * fires either way. Start/lapping guards are unit-pinned; this one puts a human
  * on track and samples every AI car's gap and `c._bandNow`.
  *
  *   node tools/check/ai-band.mjs                      monza, normal, 90 s
@@ -17,10 +17,11 @@
  * --wear off|light|real, DEFAULT off (harness pin). Band math does not read
  * tyre wear; the flag exists so a wear-on A/B cannot silently drift the default.
  *
- * Reading it (shipped tip, 2026-09-30): expect reverse-only (band when human
+ * Reading it (with aiPace=catchup): expect reverse-only (band when human
  * ahead / AI behind), no forward frames with band>0, no dead zone (band can
  * engage at small positive gaps once past the 8 s start guard), and vmax still
- * the primary lever (`_bandNow` multiplies vmax in game.js). Slice 5 flips those.
+ * the primary lever (`_bandNow` multiplies vmax in game.js). Scripted mode
+ * reports band-on share ≈ 0 by construction.
  */
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -66,7 +67,13 @@ function median(a) {
 }
 
 async function measure(seed) {
-  const g = await createGame({ track: TRACK, storage: { difficulty: DIFF, tyreWear: WEAR } });
+  // Force catch-up: the ship default is scripted (band never fires), which
+  // would make this census vacuous.
+  const g = await createGame({
+    track: TRACK,
+    storage: { difficulty: DIFF, tyreWear: WEAR, aiPace: "catchup" },
+  });
+  if (g.G && g.G.aiPace !== undefined) g.G.aiPace = "catchup";
   if (g.apex && typeof g.apex.seed === "function") {
     g.apex.seed(seed);
     await g.race(TRACK);

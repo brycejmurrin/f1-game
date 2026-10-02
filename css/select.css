@@ -625,3 +625,17 @@ h3.sel-label {
 .sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
 .sur-country { font-size: var(--fs-micro); color: var(--dim); }
 } /* @layer components */
+
+/* Phone/touch: micro type on select chrome (ported from deploy menus.css). */
+body:not(.desktop) #sel-preview-gp { font-size: var(--fs-micro); }
+body:not(.desktop) #sel-preview-meta dt { font-size: var(--fs-micro); }
+body:not(.desktop) .track-row-meta,
+body:not(.desktop) .track-row-rec { font-size: var(--fs-micro); }
+body:not(.desktop) .trb { font-size: var(--fs-micro); }
+body:not(.desktop) .track-group-head { font-size: var(--fs-micro); }
+body:not(.desktop) .season-upcoming-head,
+body:not(.desktop) .sur-rnd,
+body:not(.desktop) .sur-country { font-size: var(--fs-micro); }
+body:not(.desktop) #disclaimer,
+body:not(.desktop) #audiostate { font-size: var(--fs-micro); }
+body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }

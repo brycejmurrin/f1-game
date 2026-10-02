@@ -456,6 +456,38 @@ test("GameStore.get never throws on corrupt disk and never returns NaN default p
   });
 });
 
+// ── TrackCodec.decode + CustomTracks.sanitize (the track designer's share code) ──
+// A share code is someone else's bytes; a stored design is this player's old
+// bytes. Both decoders must answer { ok, reason } or a repaired design — never
+// throw, never hand the engine a NaN point.
+const TRACK_CORPUS = [
+  "APXT1.p.AQABAEYHiA", "APXT1.z.AAAA", "APXT9.p.AAAA", "APXG1.p.AAAA", "", "APXT1.p.", "APXT1.p.####",
+  { theme: "parkland", baseHW: 7, seed: 1, pts: [[0, 0], [100, 0], [200, 50], [250, 150], [200, 250], [100, 300], [0, 250], [-50, 150]] },
+  { theme: "<img>", baseHW: NaN, seed: -1, pts: "pts", hwZones: [{ s0: 2, s1: -1, hw: 1 }], elevations: [{ s: 0.5, halfM: 1, rise: 1e9 }] },
+  { pts: [[0, 0], [1, NaN]] }, null, 42, [],
+];
+test("TrackCodec.decode and CustomTracks.sanitize never throw or leak NaN (N=2000)", async () => {
+  const { bootEditor } = await import("../helpers/editor-vm.mjs");
+  const { CD, C } = bootEditor();
+  const good = await CD.encode(TRACK_CORPUS[7]);
+  const corpus = TRACK_CORPUS.concat([good]);
+  await fuzz("TrackCodec.decode", "track-decode-v1", N, async (rng) => {
+    const input = mutate(rng.pick(corpus), rng);
+    let r;
+    try {
+      // The URL fragment is untrusted too: a stray % must read as "no code", not a URIError.
+      if (typeof input === "string") { const h = CD.fromHash("#track=" + input + (input.length % 2 ? "%" : "%E0%A4%A")); assert.ok(h === null || typeof h === "string"); }
+      r = typeof input === "string" ? await CD.decode(input) : { ok: !!C.sanitize(input), design: C.sanitize(input) };
+    }
+    catch (err) { assert.fail(`track decode threw: ${(err && err.message) || err} for ${JSON.stringify(input).slice(0, 80)}`); }
+    assert.ok(r && typeof r.ok === "boolean", "ok-reason shape");
+    if (!r.ok) { if (typeof input === "string") assert.equal(typeof r.reason, "string"); return; }
+    const bad = findBadLiveValues(JSON.parse(JSON.stringify(r.design)));
+    assert.deepEqual(bad, [], `decoded design carries NaN/undefined: ${JSON.stringify(bad)}`);
+    assert.ok(r.design.pts.length >= 8 && r.design.pts.length <= 200);
+  });
+});
+
 // ── Wall-clock budget across the whole file ────────────────────────────────
 test("fuzz suite stays under 10 s wall clock", async (t) => {
   // The preceding tests already ran; this is a meta check that the file's

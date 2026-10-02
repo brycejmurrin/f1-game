@@ -26,9 +26,12 @@ const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b
 
 function boot() {
   const dom = makeDom();
+  const listeners = new Map();
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, Promise, Date, Error, parseFloat, parseInt, isFinite,
-    document: dom.document, addEventListener() {}, removeEventListener() {},
+    document: dom.document,
+    addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); },
+    removeEventListener(type, fn) { const list = listeners.get(type); if (list) { const i = list.indexOf(fn); if (i >= 0) list.splice(i, 1); } },
     setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, requestAnimationFrame: () => 0,
     getComputedStyle: () => ({ display: "block", visibility: "visible" }),
     navigator: { getGamepads: () => [], maxTouchPoints: 5, userAgent: "node" },
@@ -46,9 +49,24 @@ function boot() {
     photoKeys: {}, photoMouse: {}, photoMove: {}, photoLook: {},
     applyResMode() {}, snapGameCam() {}, camEye: [0, 0, 0], camTgt: [0, 0, -1], camFov: 60,
   };
-  vm.runInContext("Photomode", ctx).create(G);
-  return { dom, G };
+  const api = vm.runInContext("Photomode", ctx).create(G);
+  return { dom, G, api, key: (e) => { const list = listeners.get(e.type); if (list && list.length) list.at(-1)(e); } };
 }
+
+test("Photo Studio focused buttons keep Space and arrows while camera keyups still release", () => {
+  const { dom, G, api, key } = boot();
+  Object.assign(G.photoKeys, { up: false, pu: false, yl: false, w: false }); api.enterPhotoMode();
+  const panel = dom.byId("ps-panel"), button = dom.document.createElement("button"); panel.appendChild(button); button.focus();
+  const event = (code, type = "keydown") => ({ code, type, prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} });
+  for (const code of ["Space", "ArrowUp", "ArrowLeft", "KeyW"]) {
+    const e = event(code); key(e); assert.equal(e.prevented, false, code + " belongs to the focused control");
+  }
+  assert.equal(G.photoKeys.up, false); assert.equal(G.photoKeys.pu, false); assert.equal(G.photoKeys.yl, false); assert.equal(G.photoKeys.w, false);
+  G.photoKeys.w = true; G.photoKeys.up = true;
+  key(event("KeyW", "keyup")); key(event("Space", "keyup"));
+  assert.equal(G.photoKeys.w, false); assert.equal(G.photoKeys.up, false);
+  const escape = event("Escape"); key(escape); assert.equal(escape.prevented, false, "Escape reaches the canonical layer close door");
+});
 
 test("fly-cam UP hold survives the boundary pointerleave and a capture steal; a hidden button releases", () => {
   const { dom, G } = boot();

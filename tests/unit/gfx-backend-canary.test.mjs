@@ -2539,6 +2539,20 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
 });
 
+test("TLX late sky depth-tests less-equal and does not write depth", () => {
+  // WGX's late sky used depthCompare "always" and erased the world. The
+  // saving is the covered fraction only when the far-plane triangle tests
+  // less-equal and leaves the depth buffer alone.
+  const src = read("js/render/three/tlx.js");
+  const i = src.indexOf("function makeSkyMat");
+  assert.notEqual(i, -1, "makeSkyMat moved");
+  const body = src.slice(i, i + 900);
+  assert.match(body, /depthTest = true/);
+  assert.match(body, /depthWrite = false/);
+  assert.match(body, /depthFunc = THREE\.LessEqualDepth/);
+  assert.doesNotMatch(body, /AlwaysDepth|depthCompare:\s*"always"/);
+});
+
 test("TLX pins the sky material before the HDR scene render, not only the canvas fallback", () => {
   const src = read("js/render/three/tlx.js");
   const present = src.indexOf("present(opts)");
@@ -3507,7 +3521,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // so the settings rows are read against black rather than a moving world.
   // The gate runs before every early return, and a freshly built world still
   // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/);
+  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/);
   assert.match(raceSettings, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\); \} catch \(e\) \{[^}]*startRace\(\); \}/,
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
@@ -3519,8 +3533,11 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
     "endRace clears the 2D rain overlay the way quitToMenu already did");
-  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) { renderSetupPreview(dt); return; }"),
+  const renderBody = fnSource(game, "function render(dt)");
+  for (const boundary of ["const menuBlank", "if (setupPreviewOn && !heldWarm)", "if (!track) return;"]) {
+    assert.ok(renderBody.includes(boundary), "render contains the boundary: " + boundary);
+  }
+  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) {"),
     "the visibility gate precedes the garage-preview return");
   assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
     "results freeze precedes the garage-preview return");
@@ -4222,6 +4239,13 @@ test("the attribute packer proves its precondition instead of assuming it", () =
 
 test("the packing round-trip check is wired to the shader's own decisions", () => {
   const tool = read("tools/gfx/tlx-pack-check.cjs");
+  const chunked = read("js/render/three/tlx-chunked.js");
+  // packAttr gained an optional fmt24 arg (WebGPU pad4). The lift regex must
+  // still match the shipping signature or the CLI throws before any check runs.
+  assert.match(chunked, /function packAttr\(THREE, src, len, itemSize, kind, fmt24\)/,
+    "tlx-chunked packAttr signature drifted — update tools/gfx/tlx-pack-check.cjs");
+  assert.match(tool, /kind\(\?:, fmt24\)\?/,
+    "tlx-pack-check lift regex must allow the optional fmt24 arg");
   // The tool must LIFT the packer out of the shipping file. A reimplementation
   // drifts, and then it verifies its own copy rather than what ships.
   assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,
@@ -4893,6 +4917,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
+  const uiExperience = null;
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
   const fire = () => { const [id, fn] = [...timers].pop(); timers.delete(id); return fn(); };
   schedule(true); const old = fire();
@@ -5337,4 +5362,18 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   _softBlit = false; _softReadPending = true;
   assert.equal(begin(frame, 320, 100), true, "hardware mirrors retain their normal cadence");
   assert.equal(opened, 2);
+});
+
+test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolved", () => {
+  // 2026-10-01: the shipped renderer had NO geometric AA — the scene target was
+  // single-sample and the canvas MSAA only ever smoothed the FXAA quad. The
+  // samples now go to the scene target, on the desktop WebGL2 backend only:
+  // phones keep the GLX mobile recipe and the native-WebGPU path cannot
+  // resolve a depth attachment (docs/ARCHITECTURE.md §Parity, SCENE MSAA).
+  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlx, /sceneSamples:\s*\(forceWebGL && !isMobile\) \? 4 : 0/,
+    "tlx.js decides the scene sample count: 4 on desktop WebGL2, 0 on phones and native WebGPU");
+  assert.match(post, /samples:\s*ctx\.sceneSamples \|\| 0,\s*resolveDepthBuffer:\s*true/,
+    "the scene target takes the caller's samples and resolves its depth texture (SSAO/SSR/godray read it)");
 });
