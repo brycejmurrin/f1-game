@@ -254,6 +254,17 @@ function invokedAsCli() {
 
 if (invokedAsCli()) {
   const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    // Without this, `--help` was eaten by flag() (no value → default) and the
+    // CLI bound 0.0.0.0 and hung — the exact foot-gun an agent hits first.
+    console.log(`report-server — serve the working tree to a phone and collect apex-report POSTs
+
+  node tools/mcp/report-server.mjs [--port 3456] [--host 0.0.0.0] [--root .]
+
+Prints tokenised LAN URLs; Ctrl-C to stop. Needs a phone on the same network —
+loopback-only harness servers cannot reach a device.`);
+    process.exit(0);
+  }
   const flag = (name, def) => {
     const i = argv.indexOf(name);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : def;

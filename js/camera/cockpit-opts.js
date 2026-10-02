@@ -22,22 +22,22 @@ const LEAD_MAX = 1;
 //   INTERIOR  the trim car-mesh.js builds inside the tub (getCockpitCabin).
 //   HALO      OFF / SLIM / STANDARD / THICK / FAIRED: the hoop's tube (car3d.js, halo size).
 const CHOICES = {
-  wheel:    { key: "apex26.cockpitWheel", url: "ckwheel", values: ["f1", "gt", "butterfly", "retro", "round", "none"],
-              labels: { f1: "F1 2026", gt: "GT RIM", butterfly: "BUTTERFLY", retro: "2000s", round: "CLASSIC", none: "NONE" } },
-  body:     { key: "apex26.cockpitBody", url: "ckbody", values: ["standard", "sculpted", "wide"],
-              labels: { standard: "STANDARD", sculpted: "SCULPTED", wide: "WIDE" } },
+  wheel:    { key: "apex26.cockpitWheel", url: "ckwheel", values: ["f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"],
+              labels: { f1: "F1 2026", gt: "GT RIM", butterfly: "BUTTERFLY", yoke: "OPEN YOKE", endurance: "ENDURANCE", retro: "2000s", round: "CLASSIC", none: "NONE" } },
+  body:     { key: "apex26.cockpitBody", url: "ckbody", values: ["standard", "sculpted", "wide", "tapered", "stepped"],
+              labels: { standard: "STANDARD", sculpted: "SCULPTED", wide: "WIDE", tapered: "TAPERED", stepped: "STEPPED" } },
   seat:     { key: "apex26.cockpitSeat", url: "ckseat", values: ["std", "low", "high", "fwd"],
               labels: { std: "STANDARD", low: "LOW", high: "HIGH", fwd: "FORWARD" } },
-  interior: { key: "apex26.cockpitInterior", url: "ckint", values: ["carbon", "team", "classic"],
-              labels: { carbon: "CARBON", team: "TEAM", classic: "CLASSIC" } },
+  interior: { key: "apex26.cockpitInterior", url: "ckint", values: ["carbon", "team", "suede", "ribbed", "classic"],
+              labels: { carbon: "CARBON", team: "TEAM", suede: "SUEDE", ribbed: "RIBBED", classic: "CLASSIC" } },
 };
 const KEY_WHEEL = CHOICES.wheel.key, WHEELS = CHOICES.wheel.values;
-const SCREEN_WHEELS = { f1: true, gt: true, butterfly: true };
+const SCREEN_WHEELS = { f1: true, gt: true, butterfly: true, yoke: true, endurance: true };
 // STANDARD's eye is vantage.js COCKPIT_EYE_FWD / COCKPIT_EYE_UP; a seat moves it.
 const EYE_F = -0.20, EYE_U = 0.82;
 const SEATS = { std: [0, 0], low: [0, -0.06], high: [0, 0.08], fwd: [0.12, -0.02] };
 // The wheel mount at STANDARD: hub (y, z) and scale, car-local, per wheel.
-const MOUNTS = { f1: [0.70, 0.26, 0.80], gt: [0.70, 0.26, 0.80], butterfly: [0.70, 0.26, 0.80], retro: [0.70, 0.26, 0.80], round: [0.73, 0.28, 0.92], none: [0.70, 0.26, 0.80] };
+const MOUNTS = { f1: [0.70, 0.26, 0.80], gt: [0.70, 0.26, 0.80], butterfly: [0.70, 0.26, 0.80], yoke: [0.70, 0.26, 0.80], endurance: [0.70, 0.26, 0.80], retro: [0.70, 0.26, 0.80], round: [0.73, 0.28, 0.92], none: [0.70, 0.26, 0.80] };
 // Halo, stored "0" / "slim" / "1" / "thick" ("1" and "0" are the old ON/OFF switch).
 const HALO_VALUES = ["0", "slim", "1", "thick", "fairing"];
 const HALO_LABELS = { "0": "OFF", slim: "SLIM", "1": "STANDARD", thick: "THICK", fairing: "FAIRED" };
@@ -238,13 +238,13 @@ function initUI() {
   row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,
     "The steering wheel. CLASSIC, 2000s and NONE have no screen, so the HUD shows gear and speed.", wheel, setWheel);
   row("pm-ckbody", "BODY", C.body.values, C.body.labels,
-    "Cockpit body shape: the standard surround, sculpted shoulders, or a wider painted deck.", body, setBody);
+    "Cockpit body shape: standard, sculpted, wide, tapered or stepped shoulders.", body, setBody);
   row("pm-ckseat", "SEAT", C.seat.values, C.seat.labels,
     "Where you sit in the car. The wheel moves with the seat.", seat, setSeat);
   row("pm-halo", "HALO", HALO_VALUES, HALO_LABELS,
     "The halo over the cockpit. FAIRED adds a broad carbon roof and curved centre junction.", haloSetting, setHalo);
   row("pm-ckint", "INTERIOR", C.interior.values, C.interior.labels,
-    "The cockpit trim: bare carbon, padding in your team's colours, or a 1960s cockpit with an aeroscreen and round gauges.", interior, setInterior);
+    "The cockpit trim: carbon, team padding, suede, ribbed pads, or a 1960s cockpit with an aeroscreen and round gauges.", interior, setInterior);
 
   const lab = document.createElement("label");
   lab.className = "tune-row";

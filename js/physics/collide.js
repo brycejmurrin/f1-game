@@ -82,8 +82,20 @@ const Collide = (() => {
     const incidentSim = IncidentSim;   // static owns()/notifyCar() — one instance per page
     let track = null, player = null, netPlay = null;   // bound at resolveCollisions entry
     let motion = new WeakMap(), motionTrack = null, motionTime = -1;
+    let sweepGeneration = 0;
     const geom = {}, swept = {}, impulse = {}, bodyA = {}, bodyB = {};
     function deltaS(d) { const L = track.total; return ((d + L / 2) % L + L) % L - L / 2; }
+    // Cache only within this sweep; contact responses invalidate both cars.
+    // Ownership stays live at the pair checks, outside this numeric cache.
+    function sweepMotion(c, p, dt) {
+      if (p.sweepGeneration === sweepGeneration) return;
+      p.sweepGeneration = sweepGeneration;
+      p.sweepD = deltaS(c.prog - p.prog); p.sweepX = c.x - p.x;
+      p.sweepEligible = false;
+      if (Math.hypot(p.sweepD, p.sweepX) > Math.max(6, Math.abs(c.speed) * dt * 2 + 1)) return;
+      p.sweepAngle = bodyAngle(c);
+      p.sweepEligible = !(Math.abs(wrapDelta(p.sweepAngle - p.angle, TWO_PI)) > 0.15);
+    }
     function body(c, speed, out) {
       const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
       out.angle = bodyAngle(c);
@@ -124,6 +136,7 @@ const Collide = (() => {
       }
     }
     function sweepContacts(ranked, dt) {
+      sweepGeneration++;
       // Previous resolved poses are local collision state, never render history.
       // A teleport or rapidly rotating body is not a linear driving sweep.
       // The rotation test is on the WRAPPED angle: yawVis lives in (-π, π], so
@@ -132,17 +145,19 @@ const Collide = (() => {
       for (let i = 0; i < ranked.length; i++) {
         const a = ranked[i], pa = motion.get(a);
         if (!pa || incidentSim.owns(a) || netPlay.owns(a)) continue;
-        const da = deltaS(a.prog - pa.prog), xa = a.x - pa.x;
-        if (Math.hypot(da, xa) > Math.max(6, Math.abs(a.speed) * dt * 2 + 1) || Math.abs(wrapDelta(bodyAngle(a) - pa.angle, TWO_PI)) > 0.15) continue;
+        sweepMotion(a, pa, dt);
+        if (!pa.sweepEligible) continue;
+        const da = pa.sweepD, xa = pa.sweepX;
         for (let k = i + 1; k < ranked.length; k++) {
           const b = ranked[k], pb = motion.get(b);
           if (!pb || incidentSim.owns(b) || netPlay.owns(b)) continue;
-          const db = deltaS(b.prog - pb.prog), xb = b.x - pb.x;
-          if (Math.hypot(db, xb) > Math.max(6, Math.abs(b.speed) * dt * 2 + 1) || Math.abs(wrapDelta(bodyAngle(b) - pb.angle, TWO_PI)) > 0.15) continue;
+          sweepMotion(b, pb, dt);
+          if (!pb.sweepEligible) continue;
+          const db = pb.sweepD, xb = pb.sweepX;
           if (Math.hypot(da - db, xa - xb) < 1) continue;
           const x0 = deltaS(pa.prog - pb.prog), y0 = pa.x - pb.x, x1 = x0 + da - db, y1 = y0 + xa - xb;
           if (Math.min(x0, x1) > LCAR_MAX || Math.max(x0, x1) < -LCAR_MAX) continue;
-          if (ContactGeometry.overlap(x1, y1, bodyAngle(a), bodyAngle(b), geom)) continue;
+          if (ContactGeometry.overlap(x1, y1, pa.sweepAngle, pb.sweepAngle, geom)) continue;
           const hit = ContactGeometry.sweep(x0, y0, x1, y1, pa.angle, pb.angle, swept);
           if (!hit) continue;
           const t = hit.time;
@@ -152,6 +167,7 @@ const Collide = (() => {
           hit.dProg = x0 + (da - db) * t; hit.dX = y0 + (xa - xb) * t;
           hit.aSp = a.speed; hit.bSp = b.speed; hit.sA = shares.sA; hit.sB = shares.sB;
           orientedResponse(a, b, hit, true);
+          pa.sweepGeneration = pb.sweepGeneration = 0;
           break; // let the ordinary solver settle a cluster before another sweep
         }
       }
@@ -348,7 +364,8 @@ const Collide = (() => {
         // second (collision bench S5). The flag is idempotent and stays.
         if (corr > CORR_EPS) {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
-          if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
+          // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
+          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
           else { if (last) b.speed = Math.max(0, b.speed - rubScrub); b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars

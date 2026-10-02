@@ -66,6 +66,9 @@ async function openFieldFold(p) {
 }
 
 export const SCREENS = [
+  { id: "photostudio", name: "Photo Studio", root: "#photo-studio", open: async (p) => {
+      await p.evaluate(() => document.getElementById("mb-photo").click());
+      await p.waitForSelector("#photo-studio:not([hidden])", { timeout: 15000 }); } },
   { id: "title", name: "Title / main menu", root: "#overlay", open: async () => {} },
   { id: "select", name: "Circuit select", root: "#select", mapAxis: true, open: async (p, circuit) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
@@ -86,6 +89,9 @@ export const SCREENS = [
   { id: "datahub", name: "F1 data hub", root: "#datahub", open: async (p) => {
       await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(1200); } },
+  { id: "trackdesigner", name: "Track designer", root: "#trackdesigner", open: async (p) => {
+      await p.click("#mb-designer"); await p.waitForSelector("#trackdesigner:not([hidden])", { timeout: 15000 });
+      await p.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen() && !TrackDesigner.state().pending, null, { polling: 100, timeout: 15000 }); } },
   { id: "howtoplay", name: "How to play", root: "#howtoplay", open: async (p) => {
       await p.click("#mb-help"); await p.waitForSelector("#howtoplay:not([hidden])", { timeout: 15000 }); } },
   { id: "settings", name: "Settings", root: "#pmsettings", open: async (p) => {
@@ -501,7 +507,7 @@ export const SCREENS = [
 export const OVERLAY_IDS = [
   "select", "carsetup", "career", "career-offers", "career-history",
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
-  "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "track-detail", "vsfriend",
+  "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "trackdesigner", "track-detail", "vsfriend",
   "audioset", "spotifypanel", "lighting", "camtune", "flyby", "photo-controls",
   // A modal <dialog> left open keeps the whole page inert: the next cell's
   // click on #mb-race times out on a button that measures perfectly visible

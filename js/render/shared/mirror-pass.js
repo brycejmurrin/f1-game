@@ -167,7 +167,9 @@ const MirrorPass = (function () {
       if (G.state !== "race") return false;
       if (!G.player || !G.track || G.dbgCam) return false;
       if (document.body.classList.contains("hud-hidden")) return false;
-      if (typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack()) return false;
+      if (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(camId(),
+            !!(typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack()))
+          : (typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack())) return false;
       if (_dead) return false;
       if (mode === "on") return true;
       return !!ONBOARD[camId()] && !softGpu();
@@ -445,11 +447,24 @@ const MirrorPass = (function () {
       if (camMode) _subMode = camMode;
       _lastW = 0;   // a new subject draws on its first frame, whatever the cadence
     }
+    // STAND DOWN for a frame that never reaches render(): the GARAGE preview
+    // (game.js returns before the mirror's slot) left the race's frame and the
+    // backend's rect up, and present() composited the stale mirror image over
+    // the car. Hides the frame, the chip and the PiP and clears the rect.
+    function standDown() {
+      if (_shown) { _shown = false; const e = el(); if (e) e.hidden = true; document.body.classList.toggle("hud-mirror-on", false); document.body.classList.toggle("hud-mirror-side", false); }
+      if (_chipShown) { _chipShown = false; const c = chip(); if (c) c.hidden = true; }
+      if (_pipShown) { _pipShown = false; const e = pipEl(); if (e) e.hidden = true; }
+      _measureIn = 0;
+      const g = G.gfx;
+      if (g && g.mirrorRect) g.mirrorRect(null);
+    }
     function setPipMode(v) { if (MODES.indexOf(v) < 0) v = "auto"; pipMode = v; G.store.set("bcPip", pipMode); }
 
     return (_instance = {
       MODES,
       render,
+      standDown,
       toggle,
       setMode,
       setSubject,

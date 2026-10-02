@@ -1,0 +1,77 @@
+/* WATCH playback chrome; built by WatchTransport, using the same theme tokens as the HUD. */
+@layer hud {
+.watch-transport {
+  position: fixed; z-index: 24;
+  left: max(var(--gap), var(--sal)); right: max(var(--gap), var(--sar));
+  bottom: max(var(--gap), var(--sab));
+  max-width: 1100px; margin-inline: auto;
+  padding: var(--gap) var(--pad);
+  color: var(--text); background: color-mix(in oklab, var(--bg) 94%, transparent);
+  border: 1px solid var(--card-line); border-radius: var(--r-lg);
+  box-shadow: var(--edge), var(--lift-2); font: 600 var(--fs-micro) var(--font-ui);
+  font-variant-numeric: tabular-nums; pointer-events: auto;
+}
+.watch-transport [data-wt="controls"] { display: flex; align-items: end; gap: calc(var(--gap) * 2 / 3); }
+.watch-transport button, .watch-transport select {
+  height: 42px; min-width: 42px; margin: 0;
+  padding: calc(var(--gap) * 2 / 3) var(--gap); border: 1px solid var(--card-line);
+  border-radius: var(--r-md); background: var(--panel); color: var(--text);
+  font: inherit; letter-spacing: normal;
+}
+.watch-transport button:active, .watch-transport button[aria-pressed="true"] { border-color: var(--red); background: var(--plate-on); }
+@media (hover: hover) {
+  .watch-transport button:hover { border-color: var(--red); background: var(--plate-on); }
+}
+.watch-transport :is(button, select, input):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.watch-transport button:disabled { opacity: 0.45; }
+.watch-transport label { display: flex; flex-direction: column; gap: calc(var(--gap) / 3); min-width: 0; }
+.watch-transport label > span { color: var(--dim); font-size: var(--fs-micro); white-space: nowrap; }
+.watch-transport [data-wt="driver-field"] { flex: 1; }
+.watch-transport select { width: 100%; min-width: 0; }
+.watch-transport [data-wt="camera-field"] { flex: 0 1 150px; }
+.watch-transport [data-wt="timeline"] { display: flex; align-items: center; gap: var(--gap); margin-top: var(--gap); }
+.watch-transport [data-wt="track"] { flex: 1; position: relative; min-width: 0; }
+.watch-transport [data-wt="seek"] { display: block; width: 100%; margin: 0; height: 32px; accent-color: var(--red); cursor: pointer; }
+.watch-transport [data-wt="markers"] { position: absolute; inset: 0 calc(var(--gap) * 2 / 3); pointer-events: none; }
+.watch-transport [data-wt="markers"] i { position: absolute; top: 0; height: 5px; width: 2px; background: var(--dim); }
+.watch-transport [data-kind="pit"], .watch-transport [data-kind="fastest"] { background: var(--sec-best) !important; }
+.watch-transport [data-kind="pass"] { background: var(--faster) !important; }
+.watch-transport [data-kind="sc"] { background: var(--gold) !important; }
+.watch-transport [data-wt="caption"] { display: flex; justify-content: space-between; gap: var(--gap); color: var(--dim); font-size: var(--fs-micro); }
+.watch-transport [data-wt="event"] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-transport [data-wt="director"] { flex-shrink: 0; }
+body.watch-controls-on #hud-dock { visibility: hidden; }
+body.watch-controls-on #bc-tower {
+  max-height: calc(100svh - 180px - var(--sat) - var(--sab));
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y;
+}
+#bc-tower button.bc-head { width: 100%; text-align: left; border-radius: 0; background: transparent; }
+body:has(.screen:not([hidden])) .watch-transport, body.photo-mode .watch-transport { display: none; }
+@media (max-width: 900px) {
+  .watch-transport [data-wt="controls"] { flex-wrap: wrap; }
+  .watch-transport [data-wt="driver-field"] { flex: 1 1 120px; }
+  .watch-transport [data-wt="camera-field"] { flex: 1 1 120px; }
+  .watch-transport [data-wt="name"] { display: none; }
+}
+@media (max-height: 520px) and (min-width: 600px) {
+  .watch-transport { padding: calc(var(--gap) * 2 / 3) var(--gap); }
+  .watch-transport [data-wt="caption"], .watch-transport label > span { display: none; }
+  .watch-transport [data-wt="timeline"] { margin-top: 0; }
+  .watch-transport [data-wt="controls"] { flex-wrap: nowrap; gap: calc(var(--gap) / 3); }
+  .watch-transport [data-wt="driver-field"], .watch-transport [data-wt="camera-field"] { flex: 1 1 90px; }
+  .watch-transport button, .watch-transport select { padding-inline: calc(var(--gap) * 2 / 3); font-size: var(--fs-micro); }
+  body.watch-controls-on #bc-tower { max-height: calc(100svh - 100px - var(--sat) - var(--sab)); }
+}
+@media (max-width: 480px) {
+  .watch-transport { left: max(calc(var(--gap) * 2 / 3), var(--sal)); right: max(calc(var(--gap) * 2 / 3), var(--sar)); padding: calc(var(--gap) * 2 / 3); }
+  .watch-transport [data-wt="driver-field"], .watch-transport [data-wt="camera-field"] { flex: 1 1 40%; }
+  .watch-transport [data-wt="caption"] { gap: calc(var(--gap) / 3); }
+  .watch-transport [data-wt="director"] { display: none; }
+  body.watch-controls-on #bc-tower { max-height: calc(100svh - 260px - var(--sat) - var(--sab)); }
+}
+@media (max-height: 520px) and (max-width: 740px) {
+  .watch-transport [data-wt="controls"] { flex-wrap: wrap; }
+  body.watch-controls-on #bc-tower { max-height: calc(100svh - 150px - var(--sat) - var(--sab)); }
+}
+}

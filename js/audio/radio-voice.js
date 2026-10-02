@@ -58,7 +58,7 @@ const RadioVoice = (function () {
   const SAMPLE = Object.freeze({
     control: "Car 44, track limits — +5s penalty",
     coach: "Brake a little earlier here and get the car straight",
-    radio: "BOX BOX, P3 on the exit",
+    radio: "P3. Nice move",
     announcer: "Welcome to Apex 26. This is Silverstone, home of the British Grand Prix",
   });
   /* WHICH CHANNELS MAY USE A NETWORK VOICE — a correctness rule, one way and a
@@ -189,6 +189,8 @@ const RadioVoice = (function () {
       say: () => false, sayPreRace: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
       setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
+      recordedVoice: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
+      announcerPackOn: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
       debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
     });
@@ -211,6 +213,21 @@ const RadioVoice = (function () {
     // keeps every line on speech synthesis, for a player who prefers the
     // voice they picked below.
     let packOn = G.store.get("radioPack", true) !== false;
+    let previewGen = 0;
+    const recordedVoices = (sp) => typeof VoicePack !== "undefined" && VoicePack.choices ? VoicePack.choices(sp) : [];
+    const recordedVoice = (sp) => {
+      const chosen = tune[sp] && tune[sp].pack;
+      return recordedVoices(sp).some((v) => v.id === chosen) ? chosen : PACK_VOICE[sp];
+    };
+    // The pre-race presenter remains independent of the race-radio source.
+    const announcerPackOn = () => {
+      const t = tune.announcer || {};
+      // Older saves have system tuning without a source field. Honour that
+      // explicit choice when introducing recorded pre-race voices.
+      const source = ["recorded", "system"].includes(t.source) ? t.source
+        : t.name != null || t.pitch != null || t.rate != null ? "system" : "";
+      return !!(pack && (source === "recorded" || !source && packOn));
+    };
     // `current` is the utterance THIS instance is speaking, and it exists because
     // every utterance shares one handler over module state (`deadline`, the music
     // duck). speechSynthesis fires a cancelled line's end/error ASYNCHRONOUSLY —
@@ -337,9 +354,9 @@ const RadioVoice = (function () {
      *  line of each is not lost to the download. Idempotent and cheap: ensure()
      *  is a state check once a voice is loading or ready. */
     function ensureVoices() {
-      if (!pack || !packOn) return;
+      if (!pack) return;
       const ann = !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
-      for (const sp of Object.keys(PACK_VOICE)) if (sp === "announcer" ? ann : enabled) pack.ensure(PACK_VOICE[sp]);
+      for (const sp of Object.keys(PACK_VOICE)) if (sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn) pack.ensure(recordedVoice(sp));
     }
     function stop() {
       stopVoice();
@@ -350,6 +367,7 @@ const RadioVoice = (function () {
     }
     /** The words only: the hiss bed is the CARD's, and may already be the next one's. */
     function stopVoice() {
+      previewGen++;
       clearPending();
       clearDeadline();
       // Before cancel(): the callback it triggers must already see itself as
@@ -380,7 +398,7 @@ const RadioVoice = (function () {
       // fetching) — never speech synthesis in a race (PACK_VOICE above).
       if (pack && packOn && PACK_VOICE[p.speaker]) {
         activeKind = "";
-        last.reason = pack.ready && !pack.ready(PACK_VOICE[p.speaker]) ? "pack-loading" : "not-recorded";
+        last.reason = pack.ready && !pack.ready(recordedVoice(p.speaker)) ? "pack-loading" : "not-recorded";
         return false;
       }
       if (!api) { last.reason = "no-api"; return false; }
@@ -395,10 +413,10 @@ const RadioVoice = (function () {
      * ducks the music, and the card's deadline is the hard stop. The pack
      * schedules its own start after the courtesy figure (`leadS`), so there is
      * no pending timer. False — the pack is off, still loading, or does not
-     * cover every word — hands the line to speech synthesis. */
-    function speakPack(p) {
-      const id = PACK_VOICE[p.speaker];
-      if (!pack || !packOn || !id) return false;
+     * cover every word — leaves recorded-mode calls on the card. */
+    function speakPack(p, audition) {
+      const id = recordedVoice(p.speaker);
+      if (!pack || (!packOn && !audition) || !id) return false;
       pack.ensure(id);
       const tok = { pack: true };
       const ok = pack.speak(id, p.text, {
@@ -562,7 +580,12 @@ const RadioVoice = (function () {
       // Preview the actual engineer source. Its tuning rows select SYSTEM;
       // with RECORDED selected, TEST must not promise a different voice.
       activeKind = sp === "coach" ? "coach" : sp === "control" ? "warning" : "info";
-      if (speakPack({ speaker: sp, text: words, leadMs: 0, budgetMs: 8000 })) return true;
+      if (pack && (sp === "announcer" ? announcerPackOn() : packOn)) {
+        const id = recordedVoice(sp), gen = previewGen;
+        const play = () => gen === previewGen && G.soundOn && speakPack({ speaker: sp, text: words, leadMs: 0, budgetMs: 15000 }, true);
+        if (pack.load && !pack.ready(id)) { pack.load(id).then((ready) => { if (ready) play(); }); return true; }
+        return !!play();
+      }
       if (!api) return false;
       // A TEST press is the player asking for THIS sample now, from a settings
       // click, not a frame: whatever is speaking — an earlier sample, the
@@ -591,20 +614,39 @@ const RadioVoice = (function () {
       sayPreRace: (msg, life, lead) => (say(msg, life, "race", lead, true) ? last.leadMs / 1000 + last.secs : false),
       /** The installed voices a channel may be given, as plain rows for a <select>. */
       voiceList: (speaker) => voicesFor(!!REMOTE_OK[speaker]).map((v) => ({ name: v.name, lang: v.lang })),
+      recordedVoice, recordedVoices, announcerPackOn,
+      setRecordedVoice(speaker, id) {
+        if (!recordedVoices(speaker).some((v) => v.id === id)) return false;
+        if (G.announcer && G.announcer.stop) G.announcer.stop();
+        stop();
+        if (pack) pack.stop("spotter");
+        tune[speaker] = Object.assign({}, tune[speaker], { pack: id });
+        if (speaker === "announcer") tune[speaker].source = "recorded";
+        G.store.set("voiceTune", tune);
+        if (speaker !== "announcer") { packOn = true; G.store.set("radioPack", true); }
+        if (pack) pack.ensure(id);
+        return true;
+      },
       /** The stored tune, or the shipped default for a channel with none. */
       tuneFor: (speaker) => Object.assign(toneFor(speaker, tune), { name: (tune[speaker] && tune[speaker].name) || "" }),
       /** Patch one channel. A null patch RESETS it — see the readTune note. */
       setTune(speaker, patch) {
         if (!TONE[speaker]) return false;
         if (patch == null) delete tune[speaker];
-        else tune[speaker] = Object.assign({}, tune[speaker], patch);
+        else tune[speaker] = Object.assign({}, tune[speaker], patch, speaker === "announcer" ? { source: "system" } : {});
         G.store.set("voiceTune", tune);
         return true;
       },
       setEnabled(b) { enabled = !!b; if (!enabled) stop(); else ensureVoices(); },
       pack,
       volume: () => volume,
-      setPackOn(b) { packOn = !!b; G.store.set("radioPack", packOn); ensureVoices(); },
+      setPackOn(b) {
+        if (packOn !== !!b) {
+          if (G.announcer && G.announcer.stop) G.announcer.stop();
+          stop();
+        }
+        packOn = !!b; G.store.set("radioPack", packOn); ensureVoices();
+      },
       /** Fetch the recorded voices now (a race is about to start). */
       prepare: ensureVoices,
       packOn: () => !!(pack && packOn),

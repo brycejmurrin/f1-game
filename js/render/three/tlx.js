@@ -1043,7 +1043,15 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
               softDest: function () { return softOutRT(); },
-              wantSpatialUpscale, getPresentSize });
+              wantSpatialUpscale, getPresentSize,
+              // SCENE MSAA (2026-10-01): 4 samples on the scene target on the
+              // desktop WebGL2 backend only — GLX's HIGH/ULTRA recipe. The
+              // WebGL backend resolves colour AND the depth texture by
+              // blitFramebuffer (resolveDepthBuffer), so SSAO/SSR/godray read a
+              // resolved depth. Phones keep the GLX mobile recipe (FXAA alone);
+              // the native-WebGPU TLX path stays single-sample: core WebGPU
+              // cannot resolve a depth attachment (docs/research/WEBGPU-PARITY.md).
+              sceneSamples: (forceWebGL && !isMobile) ? 4 : 0 });
           if (post && !post.enabled()) {
             try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
             post = null;
@@ -1079,6 +1087,27 @@ const TLX = (function () {
       // attribute mirrors (the releases below hold on it).
       let _mirUsed = false;
       const _mirVP = new Float32Array(16), _mirProjGpu = new Float32Array(16);
+      const _mirRectScratch = [0, 0, 0, 0];   // reused every mirror/PiP frame
+      // The mirror uses no MRT; warming only the main HDR/MRT scene leaves
+      // both its world and composite programs to link on the first race frame.
+      function wantMirrorWarm() {
+        if (!_warmFx || !post || !post.enabled() || _mirDead || !lit || vizMat) return false;
+        let mode = "auto", pip = "auto";
+        try { mode = GameStore.store.get("hudMirror", "auto"); pip = GameStore.store.get("bcPip", "auto"); } catch (_) { /* defaults */ }
+        return mode === "on" || pip === "on" || ((mode !== "off" || pip !== "off") && !softGpu() && !softwareGL);
+      }
+      function prepareMirrorTarget(w, h) {
+        if (!mirRT) {
+          mirRT = new THREE.RenderTarget(w, h, {
+            type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
+            format: THREE.RGBAFormat, depthBuffer: true,
+            generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
+          });
+          mirRT.texture.colorSpace = THREE.NoColorSpace;
+          mirCam = new THREE.PerspectiveCamera();
+          mirCam.matrixAutoUpdate = false; mirCam.matrixWorldAutoUpdate = false;
+        } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
+      }
       try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
@@ -1222,6 +1251,7 @@ const TLX = (function () {
       LightBudget.setSlots(_maxLights());
 
       let sky = null;
+      let skyMesh = null, skyMatFull = null, skyMatFallback = null;
       try {
         if (window.TLXShaders && TLXShaders.sky) {
           if (!chunks && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
@@ -1230,6 +1260,56 @@ const TLX = (function () {
       } catch (e) {
         try { Log.warn("gfx", "TLX: sky factory failed, flat clear only —", e); } catch (_) {}
         sky = null;
+      }
+      // Late sky: a fullscreen triangle at the far plane, drawn with the opaque
+      // list (renderOrder above every world record) instead of scene.backgroundNode.
+      // three paints the background slot BEFORE opaques, which shades the whole
+      // frame and then lets the world overdraw it — the parity bug gfx.js names.
+      // GLX SKY_VS writes gl_Position.z = w (NDC z = 1, the far plane) with depth
+      // write off under LEQUAL, so early-Z drops every fragment the world already
+      // covered. vertexNode replaces modelViewProjection, so this triangle stays
+      // there on both coordinate systems (reversed depth is off; far is z = 1).
+      function skyClipNode() {
+        return TSL.vec4(TSL.positionGeometry.x, TSL.positionGeometry.y, 1.0, 1.0);
+      }
+      function makeSkyMat(node, key) {
+        const m = new THREE.MeshBasicNodeMaterial();
+        m.colorNode = node;
+        m.vertexNode = skyClipNode();
+        m.depthTest = true;
+        m.depthWrite = false;
+        // WGX shipped a late sky with depthCompare "always" and it painted
+        // over the world (docs/notes/PERF-FINDINGS.md). Less-equal at the far
+        // plane is what lets early-Z drop the pixels the world already covered.
+        m.depthFunc = THREE.LessEqualDepth;
+        m.lights = false;
+        m.fog = false;
+        m.toneMapped = false;
+        m.transparent = false;
+        m.side = THREE.FrontSide;
+        m.customProgramCacheKey = () => key;
+        return m;
+      }
+      if (sky && sky.node && TSL.positionGeometry && TSL.vec4) {
+        const geo = new THREE.BufferGeometry();
+        // The GLX fullscreen triangle: (-1,-1), (3,-1), (-1,3).
+        geo.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+        skyMatFull = makeSkyMat(sky.node, "tlx-sky");
+        skyMatFallback = sky.fallbackNode ? makeSkyMat(sky.fallbackNode, "tlx-sky-fb") : skyMatFull;
+        skyMesh = new THREE.Mesh(geo, skyMatFull);
+        skyMesh.frustumCulled = false;
+        skyMesh.matrixAutoUpdate = false;
+        skyMesh.renderOrder = 1000000;
+        skyMesh.visible = false;
+        scene.add(skyMesh);
+      }
+      function armSkyMesh(useFallback) {
+        if (!skyMesh) return;
+        skyMesh.material = useFallback && skyMatFallback ? skyMatFallback : skyMatFull;
+        skyMesh.visible = true;
+      }
+      function hideSkyMesh() {
+        if (skyMesh) skyMesh.visible = false;
       }
 
       let fx = null;
@@ -2021,6 +2101,14 @@ const TLX = (function () {
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
             let _tStage = performance.now();
             _gpuLastOperation = "compile-scene";
+            // The late sky mesh is hidden until drawSky. compileAsync skips
+            // invisible objects, which would leave the first painted frame to
+            // build the sky program. Show it for this compile only; begin()
+            // hides it again before the next paint.
+            if (typeof skyMesh !== "undefined" && skyMesh) {
+              skyMesh.material = (softContent("sky") && skyMatFallback) ? skyMatFallback : skyMatFull;
+              skyMesh.visible = true;
+            }
             await renderer.compileAsync(scene, camera);
             _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
             _gpuLastOperation = "compile-fx";
@@ -2061,7 +2149,21 @@ const TLX = (function () {
             // now castScene holds the grid's casters and the warm compiles the
             // real ones.
             if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
-            _warmStages.shadow = Math.round(performance.now() - _tStage);
+            _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
+            _warmStages.mirror = null;
+            if (wantMirrorWarm()) {
+              prepareMirrorTarget(16, 8);
+              _mirUsed = true;   // future mirror compiles still need CPU attributes
+              if (lit.setSsrMrt) lit.setSsrMrt(false);
+              if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+              renderer.setRenderTarget(mirRT);
+              _gpuLastOperation = "compile-mirror";
+              await renderer.compileAsync(scene, camera);
+              // The composite, like all post quads, draws under the main MRT.
+              renderer.setMRT(usePost ? _ssrMrtNode() : null);
+              if (post.warmMirror) await post.warmMirror(mirRT.texture);
+              _warmStages.mirror = Math.round(performance.now() - _tStage);
+            }
           } catch (e) {
             _warmStages.failed++;
             _warmRequested = _warmAttempts < 2;
@@ -3110,6 +3212,7 @@ const TLX = (function () {
             return;
           }
           _poolBatch++;
+          _instAlive.clear();
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -3130,7 +3233,7 @@ const TLX = (function () {
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
-          const prevSky = scene.backgroundNode;
+          _hideUndrawnInstanced();
           // Baseline at the first face of each probe pass.
           if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
           // Per-FACE window. The old cycle-wide compare (face 0 .. face 5 is
@@ -3141,11 +3244,7 @@ const TLX = (function () {
           let faceOk = true;
           try {
             if (lit && lit.setEnvCube && envDummy) lit.setEnvCube(envDummy.texture);
-            // Software GL: the procedural sky is a second full TSL compile+
-            // fill per face. Reflections stay road/terrain; the 64px cube
-            // never resolved the sky disc anyway.
-            if (softContent("env")) scene.backgroundNode = null;
-            else pinSkyMaterial();
+            pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
             _gpuLastOperation = "render-env";
             renderer.render(scene, faceCam);
@@ -3167,7 +3266,6 @@ const TLX = (function () {
             // every face and there is no console to read it out of.
             if (!_envFailStack) _envFailStack = String((e && e.stack) || "").slice(0, 600);
           }
-          if (softContent("env")) scene.backgroundNode = prevSky;
           renderer.setRenderTarget(softOutRT());
           if (lit && lit.setEnvCube) {
             // envReady means a PREVIOUS full probe wrote envRT; that stale cube
@@ -3233,23 +3331,13 @@ const TLX = (function () {
           _restoreEnvFrame();
         },
         mirrorBegin(frame, w, h) {
+          // The second world pass shares the soft-present queue. Submitting it
+          // while a read waits defeats present()'s backpressure and starves it.
+          if (_softBlit && _softReadPending) return false;
           if (_mirDead || _warmPending || _envActive || !lit || !frame || !frame.proj || !frame.view || !frame.viewProj) return false;
           w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
           try {
-            if (!mirRT) {
-              // MIPMAPPED: the target is supersampled (mirror-pass.js SS) and the
-              // composite minifies it into the HUD rect; three rebuilds the chain
-              // after every render into it (both of its backends).
-              mirRT = new THREE.RenderTarget(w, h, {
-                type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
-                format: THREE.RGBAFormat, depthBuffer: true,
-                generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
-              });
-              mirRT.texture.colorSpace = THREE.NoColorSpace;   // no-sRGB invariant, as the probe
-              mirCam = new THREE.PerspectiveCamera();
-              mirCam.matrixAutoUpdate = false;
-              mirCam.matrixWorldAutoUpdate = false;
-            } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
+            prepareMirrorTarget(w, h);
           } catch (e) {
             _mirDead = true; _mirErr = (e && e.message) || String(e);
             try { Log.warn("gfx", "TLX mirror target failed — mirror off:", _mirErr); } catch (_) { /* harness */ }
@@ -3313,7 +3401,7 @@ const TLX = (function () {
           _instAlive.clear();
           _poolBatch++;
         },
-        mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
+        mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
@@ -3636,6 +3724,7 @@ const TLX = (function () {
           _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
           _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0; _fxFrame.lineVerts = 0;
           scene.backgroundNode = null;
+          hideSkyMesh();
           resetRecs();
           _dMatUsed = 0;
           return true;
@@ -3648,9 +3737,13 @@ const TLX = (function () {
           // is still zenith, not leftover fog from a previous menu frame.
           const z = frameSky.zenith || frameSky.skyZenith;
           if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
-          scene.backgroundNode = (softContent("sky") && sky.fallbackNode)
-            ? sky.fallbackNode : sky.node;
-          pinSkyMaterial();
+          // Not the background slot. three draws that BEFORE the opaque list,
+          // so the sky shaded every pixel the world then covered (gfx.js).
+          // The triangle sits in the scene at renderOrder 1e6, far-plane
+          // depth, depth write off — GLX's order. Software GL takes the
+          // zenith fallback: softContent("sky") && sky.fallbackNode.
+          scene.backgroundNode = null;
+          armSkyMesh(!!(softContent("sky") && sky.fallbackNode));
         },
         draw(mesh, model, opts) {
           if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
@@ -3994,6 +4087,7 @@ const TLX = (function () {
             _cancelSoftBlits();
             try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
             sky = null;
+            hideSkyMesh();
             try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
             lit = null;
             fx = null;
@@ -4205,9 +4299,21 @@ const TLX = (function () {
               particles: _fxLast.particles, decals: _fxLast.decals,
             };
           },
+          // Zero last-presented FX counters so a Home-garage present (glow
+          // without blob shadows / car decals) cannot satisfy a race probe
+          // while Metal is still warming and Singapore has not presented.
+          // stopHome / startRace call this; the next race present() rewrites
+          // _fxLast from a real frame.
+          clearFxState() {
+            _fxLast.shadows = 0; _fxLast.marks = 0; _fxLast.skidVerts = 0;
+            _fxLast.glow = 0; _fxLast.particles = 0; _fxLast.decals = 0;
+            _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
+            _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
+            if (post && typeof post.clearLast === "function") post.clearLast();
+          },
           skyState() {
             return {
-              on: !!(sky && scene.backgroundNode),
+              on: !!(sky && skyMesh && skyMesh.visible),
               stars: sky ? sky.uniforms.stars.value : -1,
               cloud: sky ? sky.uniforms.cloud.value : -1,
               sunDir: sky ? sky.uniforms.sunDir.value.toArray() : null,
@@ -4436,7 +4542,7 @@ const TLX = (function () {
             o.presentMs = +_presentMs.toFixed(3);
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
-            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow,
+            o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count

@@ -10,6 +10,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
+  SOLO_OWN_TIMEOUT_SEC,
+  partitionMegaSweepArgs, shouldRunMegaOnThisShard, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
@@ -657,6 +659,66 @@ test("an over-budget spec the diff EDITS still runs; one merely routed still doe
   assert.ok(jobs.every((j) => j.perTest === own && j.timeout === shardCapMin(j.sec, own)),
     "each job is capped at the spec's own per-test timeout");
   if (jobs.length > 1) assert.ok(jobs.every((j) => /^\d+\/\d+$/.test(j.shard)), "a split plan carries --shard tokens");
+});
+
+test("mega-sweep over-budget specs never overflow into a shared selected job", () => {
+  // PR #604 / CI 36817164457: props-over-road and terrain-over-road declare
+  // 1500 s. As oversize they lose MAX_OVERSIZE_SHARDS to smaller-rank peers,
+  // spill to skipped, then overflow billed them at the 7.5 s fallback and
+  // packed them next to title-menu-rotation / qatar-foundation. The sweep
+  // then ran 5–10 min under llvmpipe and the next page.goto hung at 180 s
+  // (ERR_ABORTED / Navigate timeout); siblings on a fresh worker passed in ~8 s.
+  const mega = "tests/specs/props-over-road.spec.js";
+  const other = "tests/specs/career.spec.js";
+  const victim = "tests/specs/output-paths.spec.js"; // undeclared, small, packable
+  assert.ok(maxDeclaredTimeout(mega) / 1000 >= SOLO_OWN_TIMEOUT_SEC,
+    `props-over-road must stay above the solo threshold (${SOLO_OWN_TIMEOUT_SEC}s)`);
+
+  // Many over-budget peers at rank 1 so mega loses the oversize lottery.
+  const peers = [other, "tests/specs/ui-audit.spec.js", "tests/specs/hud-layout.spec.js", mega, victim];
+  const cut = fit(peers, 10, {
+    rank: (f) => (f === victim ? 3 : 1),
+    db: EMPTY,
+    overflowShards: 12,
+  });
+  assert.ok(!cut.overflow.some((s) => s.file === mega),
+    "a gate-over-declared mega-sweep must not ride as overflow");
+  assert.ok(cut.skipped.some((s) => s.file === mega) || cut.oversize.some((s) => s.file === mega),
+    "it stays oversize or skipped by name — never silently packed");
+
+  // When it DOES run (edited → oversize slot), shards() gives it a solo job so
+  // nothing inherits its Chromium after the all-circuits walk.
+  const alone = fit([mega], 30, { rank: () => 0, db: EMPTY });
+  assert.equal(alone.oversize.length, 1);
+  const plan = shards(alone, EMPTY);
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].specs, mega);
+  assert.match(plan[0].name, /^oversize-props-over-road/);
+});
+
+test("partitionMegaSweepArgs peels props/terrain-over-road out of a packed circuits argv", () => {
+  // browser-group.yml shards the whole circuits group with Playwright --shard;
+  // without this peel the mega-sweep shares a Chromium with qatar-foundation
+  // (run 36911235525). Helpers live next to SOLO_OWN_TIMEOUT_SEC so both gates
+  // use the same threshold.
+  const mega = "tests/specs/props-over-road.spec.js";
+  const terrain = "tests/specs/terrain-over-road.spec.js";
+  const qatar = "tests/specs/qatar-foundation.spec.js";
+  assert.equal(isMegaSweepSpec(mega), true);
+  assert.equal(isMegaSweepSpec(terrain), true);
+  assert.equal(isMegaSweepSpec(qatar), false);
+  assert.equal(isMegaSweepSpec("tests/specs/*-foundation.spec.js"), false);
+
+  const packed = ["--timeout=900000", "--shard=2/4", "--workers=1", mega, qatar, terrain];
+  const { mega: peeled, rest, peeled: did } = partitionMegaSweepArgs(packed);
+  assert.equal(did, true);
+  assert.deepEqual(peeled.sort(), [mega, terrain].sort());
+  assert.deepEqual(rest, ["--timeout=900000", "--shard=2/4", "--workers=1", qatar]);
+  assert.deepEqual(playwrightShard(packed), { index: 2, total: 4 });
+  assert.equal(shouldRunMegaOnThisShard(packed), false, "shard 2 must not re-run megas");
+  assert.equal(shouldRunMegaOnThisShard(["--shard=1/4", mega, qatar]), true);
+  assert.equal(shouldRunMegaOnThisShard([mega, qatar]), true, "unsharded runs megas once");
+  assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
 });
 
 test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {

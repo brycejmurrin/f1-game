@@ -213,9 +213,11 @@ test("a changed key carries its value, the default it replaced and the source th
     "apex26.cockpitHalo": "0", "apex26.metricsSize": "l",
     "apex26.lightTune": JSON.stringify({ "monza|day|dry": { sunI: 1.2 } }),
     "apex26.camTune": JSON.stringify({ chase: { dist: 2 } }),
+    "apex26.camTuneGlobal": JSON.stringify({ fov: 4 }),
+    "apex26.camComfort": JSON.stringify({ bob: 0.3 }),
   } });
   const f = collect("changes");
-  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camTune", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
+  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneGlobal", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
   assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
@@ -225,6 +227,8 @@ test("a changed key carries its value, the default it replaced and the source th
   assert.equal(f.defaults.camera.cockpitHalo, "1");
   assert.deepEqual(f.settings.lighting.lightTune, { "monza|day|dry": { sunI: 1.2 } });
   assert.deepEqual(f.settings.camera.camTune, { chase: { dist: 2 } });
+  assert.deepEqual(f.settings.camera.camTuneGlobal, { fov: 4 });
+  assert.deepEqual(f.settings.camera.camComfort, { bob: 0.3 });
   for (const name of f.changed) assert.match(f.where[name], /^js\//, name + " names its source");
   assert.equal(f.settings.driving.reliability, undefined, "an untouched key is absent from CHANGES");
 });
@@ -241,6 +245,19 @@ test("a tuner that saves its whole table reports only the fields the player move
   assert.deepEqual(f.defaults.audio.sndTune, { gain: 1, bass: 0.5, air: 0.2 });
   assert.deepEqual(f.settings.audio.voiceTune, { radio: { name: "Samantha", pitch: 1.1 } });
   assert.deepEqual(f.defaults.audio.voiceTune, {}, "an absent channel uses the shipped voice/prosody defaults");
+});
+
+test("recorded voice choices and radio sound survive settings backup and restore", () => {
+  const voiceTune = { radio: { pack: "michael" }, announcer: { pack: "bella" } };
+  const file = boot({ disk: { "apex26.radioPreset": JSON.stringify("vintage"),
+    "apex26.voiceTune": JSON.stringify(voiceTune) } }).collect("changes");
+  const dst = boot();
+  assert.equal(dst.loadSettings(file).skipped, 0);
+  assert.equal(JSON.parse(dst.disk.get("apex26.radioPreset")), "vintage");
+  assert.deepEqual(JSON.parse(dst.disk.get("apex26.voiceTune")), voiceTune);
+  const bad = dst.loadSettings({ format: "apex26-settings-v1", settings: { audio: { radioPreset: "unknown" } } });
+  assert.equal(bad.skipped, 1);
+  assert.equal(JSON.parse(dst.disk.get("apex26.radioPreset")), "vintage");
 });
 
 test("the binding tables count as changed by Input's word, not by value", () => {

@@ -200,8 +200,9 @@ export class VmPage {
    * Playwright's `goto("/")` reloads. game-vm's boot is 4.8 MB of source per
    * `createGame`, so re-booting per goto would make a shared page pointless.
    * The re-entry mirrors what `sharedTest`'s reset already does in the browser
-   * (clearInput / headless(false) / freeze(false)), and `reload()` below is
-   * the honest full boot for a spec that needs a virgin page.
+   * (clearInput / headless(false) / freeze(false) / roadFollow 0), and
+   * `reload()` below is the honest full boot for a spec that needs a virgin
+   * page.
    */
   async goto(_url) {
     this._gotos++;
@@ -212,6 +213,7 @@ export class VmPage {
       try { a.clearInput(); } catch (_) {}
       try { a.headless(false); } catch (_) {}
       try { a.freeze(false); } catch (_) {}
+      try { a.setPhysics({ roadFollow: 0 }); } catch (_) {}
     });
     return null;
   }

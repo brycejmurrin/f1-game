@@ -168,6 +168,7 @@ function loadCareerUi(careerOpts = {}) {
     PhysicsConsts: { DIFF: { EASY: 1 } },
   });
   vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
+  vm.runInNewContext(src("js/career/experience.js"), sb, { filename: "js/career/experience.js" });
   vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
   const ui = sb.CareerUI.create(G);
   return { dom, ui, Career, G, $: G.$ };
@@ -237,7 +238,7 @@ test("career hub: next race and funds sit on the left; the market ladder is on t
   ui.openHub();
   const left = $("cr-left"), right = $("cr-right");
   assert.equal($("cr-nextrace").parentNode, left, "NEXT RACE card is the left-column action");
-  assert.equal($("cr-nextrace").querySelector(".cr-nr-round").textContent, "ROUND 3");
+  assert.equal($("cr-nextrace").querySelector(".cr-nr-round").textContent, "ROUND 3 OF 24");
   assert.ok($("cr-nextrace").querySelector(".cr-nr-name").textContent);
   assert.equal($("cr-funds").tagName, "DETAILS");
   assert.equal($("cr-funds").parentNode, left);
@@ -248,6 +249,10 @@ test("career hub: next race and funds sit on the left; the market ladder is on t
   assert.ok(!left.contains($("cr-ladder")));
   assert.ok(right.querySelectorAll(".season-upcoming-row").length, "UPCOMING list stays on the right");
   assert.equal(left.contains(right.querySelector(".season-upcoming-row") || { parentNode: null }), false);
+  assert.deepEqual(texts($("cr-header"), "button"),
+    ["Race brief", "Calendar", "Development", "Team & contract", "Career record"]);
+  assert.equal(right.querySelector("[data-career-part=calendar]").children.length, 4,
+    "season story uses the real calendar in this fixture, not a fixed 24-round mock");
 });
 
 test("career hub: THE CAR's Fitted row groups thousands like the garage readout", () => {
