@@ -16,9 +16,9 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'EOF'
 usage: bash tools/env/install-browsers.sh [--plan] [--help]
 
-Idempotent Chromium bootstrap: reuse an installed browser or install into a
-writable Playwright cache (via tools/lib/chromium-path.mjs). --plan prints the
-chosen cache/browser and exits without installing.
+Idempotent Playwright Chromium bootstrap: reuse an installed browser or install
+into a writable Playwright cache (via tools/lib/chromium-path.mjs). --plan prints
+the chosen cache/browser and exits without installing.
 EOF
   exit 0
 fi
