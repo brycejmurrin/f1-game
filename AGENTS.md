@@ -140,7 +140,8 @@ Read `c.aeroX` (or `aeroDfMult(c)`), never `c.xOn`. Immutable numbers live in
 `assets/pack/`: PBR material arrays, one `TEXTURE_2D_ARRAY` whose layer index
 IS the `MAT` id, blended (`albedo * tex.rgb * 2.0`). **Ships ON.** (`matTexMix` def 1.0;
 `__apex.matTex(0)` is the A/B off-switch.) Every failure degrades to the procedural
-look; boot never awaits assets. GLX, TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
+look; boot never awaits the material arrays (a track BUILD waits for the model pack
+through `Assets.modelsReady()`, capped at 4 s, so baked props are never boxes for the session). GLX, TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()` the machine-readable
