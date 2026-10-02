@@ -37,9 +37,20 @@ import { join, normalize, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchChromium } from "../lib/harness.mjs";
 import { screenshotPresentedCanvas } from "./probe-page.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
-const [cmd = "modes", ...rest] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+exitIfHelp(argv, `apex-capture — parallel headless screenshot sweep
+
+  node tools/shot/apex-capture.mjs cameras [track] [outdir]
+  node tools/shot/apex-capture.mjs modes   [outdir]
+  node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
+  node tools/shot/apex-capture.mjs identity [outdir] [id ...]
+  node tools/shot/apex-capture.mjs lap-tour [track] [speed] [outdir]
+
+Default cmd=modes. Env APEX_WORKERS=N (default 2).`);
+const [cmd = "modes", ...rest] = argv;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAND = { width: 844, height: 390 };
 const IDENTITY_VP = { width: 960, height: 540 };
