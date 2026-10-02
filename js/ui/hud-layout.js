@@ -196,6 +196,8 @@ const HudLayout = (function () {
 
     let editing = cam, sel = IDS[0];
     // The settings page's own stepper (‹ select ›, .set-row) for both pickers.
+    // Like every shell stepper the arrows are pointer-only (tabindex -1,
+    // aria-hidden): the <select> owns the keys, so MenuNav walks one per row.
     function stepper(id, label, options, onPick) {
       const lab = el("span", { className: "tune-label", textContent: label });
       lab.id = id + "-label";
@@ -206,8 +208,8 @@ const HudLayout = (function () {
         const i = (pickEl.selectedIndex + d + options.length) % options.length;
         pickEl.selectedIndex = i; onPick(pickEl.value);
       };
-      const prev = el("button", { type: "button", textContent: "\u2039", attrs: { "aria-label": "Previous " + label.toLowerCase() } });
-      const next = el("button", { type: "button", textContent: "\u203A", attrs: { "aria-label": "Next " + label.toLowerCase() } });
+      const prev = el("button", { type: "button", textContent: "\u2039", attrs: { "aria-label": "Previous " + label.toLowerCase(), "aria-hidden": "true", tabindex: "-1" } });
+      const next = el("button", { type: "button", textContent: "\u203A", attrs: { "aria-label": "Next " + label.toLowerCase(), "aria-hidden": "true", tabindex: "-1" } });
       prev.addEventListener("click", () => go(-1));
       next.addEventListener("click", () => go(1));
       pickEl.addEventListener("change", () => onPick(pickEl.value));
