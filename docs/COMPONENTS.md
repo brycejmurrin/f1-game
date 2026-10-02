@@ -113,6 +113,7 @@ not.
 | family | rules | owner | also in |
 |---|---|---|---|
 | `dh-` | 264 | `data.css` | `components.css`, `dialog-platform.css`, `tokens.css` |
+| `td-` | 27 | `editor.css` | — |
 | *(unprefixed)* | 344 | `career.css` | `touch-controls.css`, `carsetup.css`, `components.css`, `menus.css`, `dialogs.css`, `hud.css`, `race-setup.css`, `dialog-platform.css`, `responsive.css`, `select.css`, `tuner.css`, `overlays.css`, `tokens.css`, `data.css`, `settings-controls.css`, `title.css`, `settings.css` |
 | `cs-` | 165 | `carsetup.css` | `components.css`, `tokens.css` |
 | `cr-` | 85 | `career.css` | — |

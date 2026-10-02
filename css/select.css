@@ -624,7 +624,6 @@ h3.sel-label {
 .sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
 .sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
 .sur-country { font-size: var(--fs-micro); color: var(--dim); }
-} /* @layer components */
 
 /* Phone/touch: micro type on select chrome (ported from deploy menus.css). */
 body:not(.desktop) #sel-preview-gp { font-size: var(--fs-micro); }
@@ -639,3 +638,4 @@ body:not(.desktop) .sur-country { font-size: var(--fs-micro); }
 body:not(.desktop) #disclaimer,
 body:not(.desktop) #audiostate { font-size: var(--fs-micro); }
 body:not(.desktop) #mb-career-sub { font-size: var(--fs-micro); }
+} /* @layer components */

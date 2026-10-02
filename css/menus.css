@@ -671,3 +671,4 @@ body { --compact-at: 600px; --wide-at: 620px; }
     font-size: calc(var(--fs-micro) * var(--ui-compact-text));
   }
 }
+}
