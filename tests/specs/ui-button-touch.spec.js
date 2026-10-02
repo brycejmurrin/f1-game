@@ -609,7 +609,9 @@ test("HOW TO PLAY names every way to play", async ({ page }) => {
     expect(body).toContain(mode);
   // The title screen's own buttons are the list it has to keep up with.
   const buttons = await page.evaluate(() =>
-    [...document.querySelectorAll("#menu-hero button, #menu-primary button")]
+    [...document.querySelectorAll("#menu-hero button, #menu-primary button, #menu-explore button")]
       .map((b) => b.innerText.trim()).filter(Boolean));
   expect(buttons.length).toBeGreaterThan(3);
+  expect(buttons.some((t) => /WATCH/i.test(t))).toBe(true);
+  expect(buttons.some((t) => /PHOTO/i.test(t))).toBe(true);
 });

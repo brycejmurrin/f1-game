@@ -3,7 +3,8 @@
   /* Filled accent surfaces use contrast ink rather than the page's theme ink. */
   .bigbtn:not(.alt) { color: var(--menu-accent-ink, var(--text)); }
   #overlay #mb-career .mb-sub { color: inherit; }
-  #menu-primary .bigbtn { color: var(--text); }
+  #menu-primary .bigbtn,
+  #menu-explore .bigbtn { color: var(--text); }
   #pm-race-context { grid-column: 1 / -1; display: grid; gap: calc(var(--gap) / 3); padding: var(--gap); background: var(--carbon); border-bottom: 1px solid var(--plate-line); }
   #pm-race-context strong { font-size: var(--fs-5); }
   #pm-race-context :is(span, small) { color: var(--dim); font-size: var(--fs-micro); }
@@ -22,8 +23,8 @@
   #overlay[data-home-scene="photo"]:not([style*="data:image"]) #title-car,
   #overlay[data-home-scene]:not([data-home-scene="static"]):not([data-home-ready="1"]):not([data-home-scene="photo"]) #title-car { opacity: 1; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { background: transparent; border: 0; padding: var(--gap); }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary .bigbtn { background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start; justify-content: flex-start; padding: var(--gap); font-style: normal; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary .bigbtn > span { align-items: flex-start; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start; justify-content: flex-start; padding: var(--gap); font-style: normal; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-secondary .bigbtn { transform: none; font-style: normal; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #mb-daily { justify-content: flex-start; text-align: start; font-style: normal; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand { align-self: end; }
@@ -34,7 +35,7 @@
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand { grid-column: 2; grid-row: 1; align-self: center; padding: 0; text-align: center; }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #title { font-size: clamp(var(--fs-6), calc(5 * var(--vwz)), calc(var(--fs-6) * 4)); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { grid-column: 2; grid-row: 2; width: 100%; max-height: 100%; align-self: start; align-content: start; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; min-height: 0; }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-secondary) { width: 100%; }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, transparent); grid-template-rows: auto minmax(0, 1fr); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: stretch; align-content: start; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; }
