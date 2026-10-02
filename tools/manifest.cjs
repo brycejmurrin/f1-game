@@ -194,6 +194,7 @@ const FULL = [
   "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
   "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
+  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=, default OFF)
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/input.js",
@@ -248,6 +249,7 @@ const FULL = [
   "js/physics/tyre-model.js",
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A)
   "js/physics/ai-drive.js",
+  "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
   // The race radio: phrasebook, facts (timing loop + events), then the brain
@@ -257,6 +259,7 @@ const FULL = [
   "js/race/spotter.js",
   "js/race/race-radio.js",
   "js/camera/offsets.js",
+  "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
   "js/camera/flyby-seq.js",
   "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
@@ -411,6 +414,7 @@ const CARVIEW = [
   "js/data/teams.js",
   "js/car/parts.js",
   "js/car/helmets.js",
+  "js/car/car-shade.js",
   "js/car/car3d.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
@@ -664,6 +668,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
+  ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
   ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];
 
@@ -1165,6 +1170,7 @@ const MOVED = {
   "js/game/store.js": "js/core/store.js",
   "js/game/physics-consts.js": "js/physics/consts.js",
   "js/game/ai-drive.js": "js/physics/ai-drive.js",
+  "js/game/ai-band.js": "js/physics/ai-band.js",
   "js/game/aerozones.js": "js/physics/aero-zones.js",
   "js/game/bodyattitude.js": "js/physics/body-attitude.js",
   "js/game/brake-cue.js": "js/physics/brake-cue.js",

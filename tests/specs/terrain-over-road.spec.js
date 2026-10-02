@@ -5,8 +5,7 @@
 // over a flat part of the track that passes near it). Method: capture each
 // circuit's meshes, then point-in-triangle test every face against asphalt
 // sample points across the whole lap — purely geometric, no rendering.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { auditTracks } from "../helpers/track-helpers.js";
 
 // Every circuit (derived from tools/manifest.cjs), or TRACK=<id> for one.
@@ -312,4 +311,9 @@ test("no terrain/road faces over the racing line (all circuits)", async ({ page 
     );
   }
   expect(offenders, `circuits with geometry over the racing line:\n${offenders.join("\n")}`).toEqual([]);
+  // Same quiet-down as props-over-road: the all-circuits walk must not leave a
+  // hot renderer for the next packed test (SOLO_OWN_TIMEOUT_SEC / mega peel).
+  await page.evaluate(() => {
+    try { window.__apex.headless(true); } catch (_) {}
+  });
 });
