@@ -60,8 +60,25 @@ function load({
       },
       appendChild(child) {
         children.push(child);
+        child.parentNode = el;
         return child;
       },
+      insertBefore(child, ref) {
+        const i = ref ? children.indexOf(ref) : -1;
+        if (i < 0) children.push(child);
+        else children.splice(i, 0, child);
+        child.parentNode = el;
+        return child;
+      },
+      get nextElementSibling() {
+        if (!el.parentNode || !el.parentNode.children) return null;
+        const sibs = el.parentNode.children;
+        const i = sibs.indexOf(el);
+        return i >= 0 && i + 1 < sibs.length ? sibs[i + 1] : null;
+      },
+      get nextSibling() { return el.nextElementSibling; },
+      get tagName() { return el._tagName || "DIV"; },
+      set tagName(v) { el._tagName = v; },
       querySelectorAll(sel) {
         if (sel === ".pm-accent-chip") return children.filter((c) => String(c.className).includes("pm-accent-chip"));
         return [];
@@ -87,6 +104,27 @@ function load({
     els.set(id, el);
     return el;
   };
+
+  // Shared parent so AppearanceOpts can insertBefore the CVD row after contrast.
+  const panel = makeEl("pm-panel-appearance");
+  panel.appendChild = function (child) {
+    panel.children.push(child);
+    child.parentNode = panel;
+    return child;
+  };
+  panel.insertBefore = function (child, ref) {
+    const i = ref ? panel.children.indexOf(ref) : -1;
+    if (i < 0) panel.children.push(child);
+    else panel.children.splice(i, 0, child);
+    child.parentNode = panel;
+    return child;
+  };
+  const contrast = byId("pm-contrast");
+  const contrastHelp = byId("pm-contrast-help");
+  contrastHelp.tagName = "P";
+  contrastHelp.id = "pm-contrast-help";
+  panel.appendChild(contrast);
+  panel.appendChild(contrastHelp);
 
   const documentElement = makeEl("documentElement");
   Object.assign(documentElement, {
@@ -114,6 +152,28 @@ function load({
       wire: (id, spec) => rows.set(id, spec),
       labels: (vals) => vals.map((v) => [v, v.toUpperCase()]),
       paint: (id, value) => { rows.get(id) && (rows.get(id)._painted = value); },
+      build(id, labelText, values) {
+        const row = makeEl(id);
+        row.id = id;
+        row.className = "set-row";
+        const label = makeEl(id + "-label");
+        label.id = id + "-label";
+        label.className = "tune-label";
+        label.textContent = labelText;
+        const ctl = makeEl(id + "-ctl");
+        const prev = makeEl(id + "-prev");
+        prev.tagName = "BUTTON";
+        prev.setAttribute("data-step", "-1");
+        const sel = makeEl(id + "-sel");
+        sel.tagName = "SELECT";
+        const next = makeEl(id + "-next");
+        next.tagName = "BUTTON";
+        next.setAttribute("data-step", "1");
+        ctl.appendChild(prev); ctl.appendChild(sel); ctl.appendChild(next);
+        row.appendChild(label); row.appendChild(ctl);
+        els.set(id, row);
+        return { row, label, sel, prev, next };
+      },
     },
     Teams: {
       LIST: [
@@ -192,6 +252,21 @@ test("defaults apply at eval: dark / brand / team data attrs", () => {
   assert.equal(dataset.uiTheme, "dark");
   assert.equal(dataset.menuAccent, "brand");
   assert.equal(dataset.hudAccent, "team");
+});
+
+test("profile restore updates live appearance caches and rows without another persistence batch", () => {
+  const { M, written, dataset, rows } = load();
+  M.restore({ uiTheme: "light", menuAccent: "cyan", hudAccent: "violet", menuAccentHex: "#ffffff", hudAccentHex: "#123456",
+    textSize: "large", uiContrast: "high", speedUnits: "mph", menuHelp: "off" });
+  assert.equal(M.theme(), "light"); assert.equal(M.menuAccent(), "cyan"); assert.equal(M.hudAccent(), "violet");
+  assert.equal(dataset.uiContrast, "high"); assert.equal(dataset.menuHelp, "off"); assert.equal(M.speed(287), 178);
+  assert.equal(rows.get("pm-uitheme").read(), "light"); assert.deepEqual(written, {});
+});
+
+test("menu custom colours receive the same safe ink selection as swatches", () => {
+  const { M, style } = load(); M.setMenuHex("#ffffff");
+  assert.equal(style.get("--menu-accent-ink"), "var(--bg)"); M.setMenuHex("#101010");
+  assert.equal(style.get("--menu-accent-ink"), "var(--text)");
 });
 
 test("setTheme persists and stamps data-ui-theme", () => {
@@ -298,7 +373,7 @@ test("bad store values at load fall to shipped defaults", () => {
 
 test("DOM ready wires SettingRows and builds both swatch rows", () => {
   const { rows, byId } = load({ readyState: "complete" });
-  assert.deepEqual([...rows.keys()].sort(), ["pm-contrast", "pm-helptext", "pm-hudaccent", "pm-menuaccent", "pm-textsize", "pm-uitheme", "pm-units"]);
+  assert.deepEqual([...rows.keys()].sort(), ["pm-contrast", "pm-cvd", "pm-helptext", "pm-hudaccent", "pm-menuaccent", "pm-textsize", "pm-uitheme", "pm-units"]);
   const menuChips = byId("pm-menuaccent-swatches").children;
   const hudChips = byId("pm-hudaccent-swatches").children;
   assert.equal(menuChips.length, 8);
@@ -331,7 +406,7 @@ test("hex text field accepts a full #rrggbb and rejects junk", () => {
 });
 
 test("appearance keys are registered for settings export/import", () => {
-  for (const k of ["uiTheme", "menuAccent", "hudAccent", "menuAccentHex", "hudAccentHex"]) {
+  for (const k of ["uiTheme", "menuAccent", "hudAccent", "menuAccentHex", "hudAccentHex", "cvdMode", "textSize"]) {
     assert.match(EXPORT, new RegExp(`k:\\s*"${k}"[\\s\\S]*?group:\\s*"appearance"`),
       `settings-export must carry ${k} in the appearance group`);
   }

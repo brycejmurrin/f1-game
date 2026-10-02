@@ -712,6 +712,13 @@
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
       }),
+      // Drop last-presented block flags (Home garage / mid-warm frames must
+      // not satisfy a race probe that waits on shafts/bloom before Singapore
+      // has presented). Next present() rewrites _last from that frame.
+      clearLast() {
+        _last.ssao = false; _last.bloom = false; _last.shafts = false;
+        _last.ssr = false; _last.fxaa = false; _last.sgsr = false;
+      },
     };
     } catch (e) {
       dispose();

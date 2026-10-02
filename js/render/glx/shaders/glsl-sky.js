@@ -377,9 +377,12 @@ void main() {
 
   // --- Moon disc + halo (night tracks) ---
   if (uMoon > 0.0 && uStars > 0.5) {
-    // Fixed moon direction: high in the sky, to the right of the sun's compass direction.
-    // Using a stable world-space direction so it doesn't follow the camera.
-    vec3 moonDir = normalize(vec3(0.42, 0.72, 0.55));
+    // The moon hangs where the moonlight comes from: at night uSunDir IS the
+    // moon key (see the NIGHT gate above), and the lit pass, the wet-road
+    // glint and the shadow map all use it. Until 2026-10-01 the disc sat on a
+    // constant (0.42, 0.72, 0.55) while the shadows fell toward the palette's
+    // sunDir, so on a night circuit the moon and its light disagreed.
+    vec3 moonDir = normalize(uSunDir);
     float md = dot(dir, moonDir);
     float moonPerp = length(dir - moonDir * max(md, 0.0));
     // Moon disc: crisp soft edge. MOON DISC SIZE knob (def 1.0 = as-shipped)

@@ -1,0 +1,239 @@
+// DesignerCanvas (js/editor/canvas.js) alone, in a Node VM over the real engine
+// (tests/helpers/editor-vm.mjs) and tests/helpers/mini-dom.mjs, with a recording
+// 2D context and a hand-driven setTimeout on the VM global. Pins the canvas
+// affordances the designer screen codes against: a long-press on a handle fires
+// onContext once and never becomes a drag (cancelled by movement, a second
+// pointer, pointercancel, lostpointercapture); the stamp tool's ghost is a
+// dashed COL.ghost polyline drawn only while a previewFn is set and a handle is
+// hovered / selected; the measurement chip reads "R <n> m" / STRAIGHT while a
+// handle is dragged and "<n> m" over a selected span; a touch press widens the
+// hit radius to HIT_TOUCH. The screen-level twin is track-designer-dom.test.mjs.
+import test from "node:test";
+import assert from "node:assert/strict";
+import vm from "node:vm";
+import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+
+/** The canvas module on the engine VM, a recording context and manual timers. */
+function boot(hooksExtra = {}, pts = null) {
+  const { ctx, S } = bootEditor();
+  const dom = makeDom();
+  ctx.document = dom.document;
+  ctx.devicePixelRatio = 1;
+  // Timers the test owns: setTimeout queues, run() fires what is still armed.
+  const timers = new Map();
+  let nextId = 1;
+  ctx.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { fn, ms }); return id; };
+  ctx.clearTimeout = (id) => { timers.delete(id); };
+  const runTimers = () => { const due = [...timers.entries()]; timers.clear(); for (const [, t] of due) t.fn(); return due.length; };
+  vm.runInContext(read("js/editor/canvas.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/editor/canvas.js" });
+  const DC = ctx.DesignerCanvas;
+  const canvas = dom.document.createElement("canvas");
+  canvas._rect = { left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400 };
+  const rec = { strokes: [], dashes: [], texts: [], arcs: [] };
+  canvas.getContext = () => {
+    const st = { _dash: [] };
+    return new Proxy(st, {
+      get: (t, k) => {
+        if (k === "stroke") return () => rec.strokes.push({ style: t.strokeStyle, dash: t._dash.slice() });
+        if (k === "setLineDash") return (d) => { t._dash = d.slice(); rec.dashes.push(d.slice()); };
+        if (k === "fillText") return (s) => rec.texts.push(String(s));
+        if (k === "arc") return (x, y, r) => rec.arcs.push(r);
+        if (k === "measureText") return (s) => ({ width: String(s).length * 6 });
+        return k in t ? t[k] : () => {};
+      },
+      set: (t, k, v) => { t[k] = v; return true; },
+    });
+  };
+  const ev = { changes: [], picks: [], contexts: [], selects: [] };
+  let cv = null;
+  cv = DC.create(canvas, Object.assign({
+    onChange: (p, kind) => { ev.changes.push({ pts: p, kind }); cv.setPoints(p); },
+    onPick: (i, e) => ev.picks.push(i), onSelect: (i) => ev.selects.push(i),
+    onContext: (i, at) => ev.contexts.push({ i, at }),
+  }, hooksExtra));
+  if (!pts) {
+    pts = [];
+    for (let i = 0; i < 24; i++) { const t = i / 24 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); }
+  }
+  cv.setPoints(pts);
+  const scr = (p) => { const v = cv.view(); return { clientX: (p[0] - v.cx) * v.scale + v.w / 2, clientY: (p[1] - v.cz) * v.scale + v.h / 2 }; };
+  const fire = (type, at, id = 1, extra) => dom.dispatch(canvas, Object.assign({ type, pointerId: id }, at, extra));
+  const off = (at, dx, dy) => ({ clientX: at.clientX + dx, clientY: at.clientY + dy });
+  return { ctx, S, DC, dom, canvas, cv, ev, pts, scr, fire, off, rec, timers, runTimers };
+}
+
+test("long-press: a handle held 500 ms fires onContext once, keeps it selected and never becomes a drag", () => {
+  const h = boot();
+  const a = h.scr(h.pts[5]);
+  h.fire("pointerdown", a, 1, { pointerType: "touch" });
+  assert.equal(h.timers.size, 1, "one hold timer armed on a handle press");
+  assert.equal([...h.timers.values()][0].ms, h.DC.HOLD_MS);
+  assert.equal(h.DC.HOLD_MS, 500);
+  h.fire("pointermove", h.off(a, 4, 0), 1, { pointerType: "touch" });     // finger jitter, under 6 px
+  assert.equal(h.runTimers(), 1);
+  assert.equal(h.ev.contexts.length, 1);
+  assert.equal(h.ev.contexts[0].i, 5);
+  assert.ok(Math.abs(h.ev.contexts[0].at.x - (a.clientX + 4)) < 1e-9 && Math.abs(h.ev.contexts[0].at.y - a.clientY) < 1e-9, "canvas-relative pointer position: " + JSON.stringify(plain(h.ev.contexts[0].at)));
+  h.fire("pointermove", h.off(a, 60, 30), 1, { pointerType: "touch" });   // after the hold: no drag
+  h.fire("pointerup", h.off(a, 60, 30), 1, { pointerType: "touch" });
+  assert.equal(h.runTimers(), 0, "nothing re-armed");
+  assert.equal(h.ev.contexts.length, 1, "fired once");
+  assert.equal(h.ev.changes.length, 0, "the release after a long-press moves nothing");
+  assert.deepEqual(h.ev.picks, [], "…and picks nothing");
+  assert.equal(h.cv.selection().sel, 5, "the held handle stays selected");
+  // The next press is an ordinary drag again.
+  const b = h.scr(h.pts[8]);
+  h.fire("pointerdown", b, 2);
+  h.fire("pointermove", h.off(b, 30, 0), 2);
+  h.fire("pointerup", h.off(b, 30, 0), 2);
+  assert.equal(h.ev.changes.length, 1);
+  assert.equal(h.ev.changes[0].kind, "move");
+  assert.equal(h.ev.contexts.length, 1);
+});
+
+test("long-press is cancelled by 10 px of movement, a second pointer, pointercancel and lostpointercapture", () => {
+  const h = boot();
+  const a = h.scr(h.pts[3]);
+  // moved 10 px: the timer is cleared and the drag goes on
+  h.fire("pointerdown", a, 1);
+  h.fire("pointermove", h.off(a, 10, 0), 1);
+  assert.equal(h.timers.size, 0, "movement past 6 px clears the hold timer");
+  h.fire("pointerup", h.off(a, 10, 0), 1);
+  assert.equal(h.ev.contexts.length, 0);
+  assert.equal(h.ev.changes.length, 1, "it stayed a drag");
+  // a second pointer: a pinch, never a context
+  const b = h.scr(h.ev.changes[0].pts[6]);
+  h.fire("pointerdown", b, 2);
+  assert.equal(h.timers.size, 1);
+  h.fire("pointerdown", h.off(b, 120, 80), 3);
+  assert.equal(h.timers.size, 0, "a second pointer clears the hold timer");
+  h.runTimers();
+  h.fire("pointerup", b, 2); h.fire("pointerup", h.off(b, 120, 80), 3);
+  // pointercancel / lostpointercapture
+  for (const kind of ["pointercancel", "lostpointercapture"]) {
+    const c = h.scr(h.ev.changes[0].pts[9]);
+    h.fire("pointerdown", c, 4);
+    h.fire(kind, {}, 4);
+    assert.equal(h.timers.size, 0, kind + " clears the hold timer");
+    h.runTimers();
+  }
+  // reset() clears a pending hold too
+  h.fire("pointerdown", h.scr(h.ev.changes[0].pts[12]), 5);
+  h.cv.reset();
+  assert.equal(h.timers.size, 0, "reset() clears the hold timer");
+  assert.equal(h.ev.contexts.length, 0, "no context from any cancelled hold");
+  // A canvas without an onContext hook arms nothing (the drag is untouched).
+  const q = boot({ onContext: undefined });
+  q.fire("pointerdown", q.scr(q.pts[2]), 1);
+  assert.equal(q.timers.size, 0);
+  q.fire("pointerup", q.scr(q.pts[2]), 1);
+  assert.deepEqual(q.ev.picks, [2]);
+});
+
+test("ghost: a previewFn's points draw as a dashed COL.ghost polyline only while a handle is hovered or selected", () => {
+  const h = boot();
+  const ghostStrokes = () => h.rec.strokes.filter((s) => s.style === h.DC.COL.ghost);
+  const asked = [];
+  const previewFn = (i) => { asked.push(i); const p = h.pts[i]; return { pts: [p, [p[0] + 40, p[1]], [p[0] + 80, p[1] + 20]] }; };
+  h.rec.strokes.length = 0;
+  h.cv.render();
+  assert.equal(ghostStrokes().length, 0, "no previewFn: no ghost");
+  // A previewFn with nothing hovered or selected: nothing to anchor on.
+  h.cv.setTool("corner", previewFn);
+  h.cv.render();
+  assert.equal(ghostStrokes().length, 0, "no anchor: no ghost");
+  assert.deepEqual(asked, []);
+  // Mouse hover over handle 4 anchors it.
+  h.fire("pointermove", h.scr(h.pts[4]), 7, { pointerType: "mouse" });
+  assert.equal(h.cv.hover(), 4);
+  assert.deepEqual(asked, [4], "asked once for the hovered handle");
+  h.rec.strokes.length = 0;
+  h.cv.render();
+  const gs = ghostStrokes();
+  assert.equal(gs.length, 1, "one ghost polyline");
+  assert.ok(gs[0].dash.length >= 2, "dashed: " + JSON.stringify(gs[0].dash));
+  assert.deepEqual(asked, [4], "a re-render reuses the answer (asked again only on a change)");
+  // The pointer leaves: the ghost falls back to the selection.
+  h.fire("pointerleave", {}, 7);
+  assert.equal(h.cv.hover(), -1);
+  h.rec.strokes.length = 0; h.cv.render();
+  assert.equal(ghostStrokes().length, 0, "no hover, no selection: no ghost");
+  h.cv.setSelection(9, -1);
+  assert.equal(asked[asked.length - 1], 9, "setSelection re-asks for the selected handle");
+  h.rec.strokes.length = 0; h.cv.render();
+  assert.equal(ghostStrokes().length, 1);
+  h.cv.setPoints(h.pts.slice());
+  assert.equal(asked.filter((i) => i === 9).length, 2, "setPoints re-asks");
+  // Touch anchors on the selection, never a stale mouse hover.
+  h.fire("pointermove", h.scr(h.pts[2]), 7, { pointerType: "mouse" });
+  assert.equal(asked[asked.length - 1], 2);
+  h.fire("pointerdown", h.scr(h.pts[11]), 8, { pointerType: "touch" });
+  h.fire("pointerup", h.scr(h.pts[11]), 8, { pointerType: "touch" });
+  h.rec.strokes.length = 0; h.cv.render();
+  assert.equal(asked[asked.length - 1], 11, "touch: the selected handle");
+  // A previewFn that answers null draws nothing; setTool without one clears it.
+  h.cv.setTool("corner", () => null);
+  h.rec.strokes.length = 0; h.cv.render();
+  assert.equal(ghostStrokes().length, 0, "null answer: no ghost");
+  h.cv.setTool("corner", previewFn);
+  h.rec.strokes.length = 0; h.cv.render();
+  assert.equal(ghostStrokes().length, 1);
+  h.cv.setTool("select");
+  h.rec.strokes.length = 0; h.cv.render();
+  assert.equal(ghostStrokes().length, 0, "setTool without a previewFn clears the ghost");
+});
+
+test("measurement chip: R <n> m while dragging a handle on a curve, STRAIGHT on a collinear triple, <n> m over a span", () => {
+  const h = boot();
+  assert.equal(h.cv.measure(), null, "nothing dragged or spanned: no chip");
+  const a = h.scr(h.pts[6]);
+  h.fire("pointerdown", a, 1);
+  h.fire("pointermove", h.off(a, 12, 5), 1);
+  const text = h.cv.measure();
+  assert.match(text, /^R \d+ m$/);
+  h.rec.texts.length = 0; h.cv.render();
+  assert.ok(h.rec.texts.includes(text), "the chip is drawn: " + h.rec.texts.join(" | "));
+  h.fire("pointerup", h.off(a, 12, 5), 1);
+  const p = h.ev.changes[0].pts;
+  const R = h.S.menger(p[5], p[6], p[7]);
+  assert.equal(text, "R " + Math.round(R) + " m", "the Menger radius through the dragged point and its neighbours");
+  assert.equal(h.cv.measure(), null, "the drag chip goes with the drag");
+  // A span [2, 5]: the polygon length, drawn at its middle.
+  h.cv.setSelection(2, 5);
+  let L = 0;
+  for (let i = 2; i < 5; i++) L += Math.hypot(p[i + 1][0] - p[i][0], p[i + 1][1] - p[i][1]);
+  assert.equal(h.cv.measure(), Math.round(L) + " m");
+  h.rec.texts.length = 0; h.cv.render();
+  assert.ok(h.rec.texts.includes(Math.round(L) + " m"));
+  h.cv.setSelection(3, 3);
+  assert.equal(h.cv.measure(), null, "a one-point selection is not a span");
+  // A collinear triple reads STRAIGHT, also while the point slides along its line.
+  const s = boot({}, [[0, 0], [50, 0], [100, 0], [100, 60], [0, 60]]);
+  const b = s.scr([50, 0]);
+  s.fire("pointerdown", b, 1);
+  assert.equal(s.cv.measure(), "STRAIGHT");
+  s.fire("pointermove", s.off(b, 15, 0), 1);
+  assert.equal(s.cv.measure(), "STRAIGHT");
+  s.fire("pointerup", s.off(b, 15, 0), 1);
+});
+
+test("touch targets: a press 27 px from a handle picks it with pointerType touch, not with a mouse", () => {
+  assert.equal(boot().DC.HIT_PX, 24, "the mouse radius is unchanged");
+  const h = boot();
+  assert.equal(h.DC.HIT_TOUCH, 30);
+  // 27 px radially outward from handle 0 (on +x): clear of the loop's segments.
+  const at = h.off(h.scr(h.pts[0]), 27, 0);
+  h.fire("pointerdown", at, 1, { pointerType: "mouse" });
+  h.fire("pointerup", at, 1, { pointerType: "mouse" });
+  assert.deepEqual(h.ev.picks, [], "a mouse at 27 px misses");
+  assert.equal(h.ev.changes.length, 0, "…and is a pan, not an insert");
+  h.fire("pointerdown", at, 2, { pointerType: "touch" });
+  h.fire("pointerup", at, 2, { pointerType: "touch" });
+  assert.deepEqual(h.ev.picks, [0], "a finger at 27 px picks the handle");
+  // Handles draw 1.5x under touch (the last pointer type seen); a mouse puts them back.
+  const plainR = () => { h.rec.arcs.length = 0; h.cv.render(); return Math.min(...h.rec.arcs); };
+  assert.equal(plainR(), 4.5 * 1.5, "an unselected handle under touch");
+  h.fire("pointermove", { clientX: 5, clientY: 5 }, 9, { pointerType: "mouse" });
+  assert.equal(plainR(), 4.5, "…and under a mouse again");
+});
