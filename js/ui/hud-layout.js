@@ -195,23 +195,34 @@ const HudLayout = (function () {
       "because the steering wheel covers the bottom of the screen. In a race, hold a slider to see the HUD through this page." }));
 
     let editing = cam, sel = IDS[0];
-    const setBtns = {};
-    const setRow = el("div", { className: "opt-row", attrs: { role: "group", "aria-label": "Layout to edit" } });
-    for (const [s, label] of [["cockpit", "COCKPIT CAMS"], ["other", "OTHER CAMS"]]) {
-      const b = el("button", { type: "button", className: "opt-btn", textContent: label, attrs: { "aria-pressed": "false" } });
-      b.id = "pm-hl-set-" + s;
-      b.addEventListener("click", () => { editing = s; if (fold.open) preview = s; apply(); paintAll(); });
-      setBtns[s] = b;
-      setRow.appendChild(b);
+    // The settings page's own stepper (‹ select ›, .set-row) for both pickers.
+    function stepper(id, label, options, onPick) {
+      const lab = el("span", { className: "tune-label", textContent: label });
+      lab.id = id + "-label";
+      const pickEl = el("select", { attrs: { "aria-labelledby": lab.id } });
+      pickEl.id = id + "-sel";
+      for (const [v, t] of options) pickEl.appendChild(el("option", { value: v, textContent: t }));
+      const go = (d) => {
+        const i = (pickEl.selectedIndex + d + options.length) % options.length;
+        pickEl.selectedIndex = i; onPick(pickEl.value);
+      };
+      const prev = el("button", { type: "button", textContent: "\u2039", attrs: { "aria-label": "Previous " + label.toLowerCase() } });
+      const next = el("button", { type: "button", textContent: "\u203A", attrs: { "aria-label": "Next " + label.toLowerCase() } });
+      prev.addEventListener("click", () => go(-1));
+      next.addEventListener("click", () => go(1));
+      pickEl.addEventListener("change", () => onPick(pickEl.value));
+      const row = el("div", { className: "set-row", attrs: { role: "group", "aria-labelledby": lab.id } },
+        [lab, el("div", null, [prev, pickEl, next])]);
+      row.id = id;
+      body.appendChild(row);
+      return pickEl;
     }
-    body.appendChild(el("label", { className: "tune-row" }, [el("span", { className: "tune-label", textContent: "LAYOUT FOR" })]));
-    body.appendChild(setRow);
-
-    const pick = el("select", { attrs: { "aria-label": "HUD element" } });
-    pick.id = "pm-hl-el";
-    for (const [id, label] of ELEMENTS) pick.appendChild(el("option", { value: id, textContent: label }));
-    pick.addEventListener("change", () => { sel = pick.value; selected = sel; apply(); paintAll(); peek(true, 900); });
-    body.appendChild(el("label", { className: "tune-row" }, [el("span", { className: "tune-label", textContent: "ELEMENT" }), pick]));
+    const setPick = stepper("pm-hl-set", "LAYOUT FOR", [["cockpit", "COCKPIT CAMS"], ["other", "OTHER CAMS"]], (v) => {
+      editing = v; if (fold.open) preview = v; apply(); paintAll(); peek(true, 900);
+    });
+    const pick = stepper("pm-hl-el", "ELEMENT", ELEMENTS.map((e) => [e[0], e[1]]), (v) => {
+      sel = v; selected = sel; apply(); paintAll(); peek(true, 900);
+    });
 
     const painters = [];
     for (const k of ["x", "y", "s"]) {
@@ -245,7 +256,7 @@ const HudLayout = (function () {
     body.appendChild(el("div", { className: "opt-row" }, [resetOne, resetAll]));
 
     function paintAll() {
-      for (const s of SETS) setBtns[s].setAttribute("aria-pressed", s === editing ? "true" : "false");
+      if (setPick.value !== editing) setPick.value = editing;
       if (pick.value !== sel) pick.value = sel;
       for (const p of painters) p();
       paintSum();
