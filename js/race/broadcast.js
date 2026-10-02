@@ -145,7 +145,7 @@ const Broadcast = (function () {
 
   // ── The live module ───────────────────────────────────────────────────────
   function create(G, replay) {
-    let on = false, auto = false, tower = null, rowsEl = [], head = null, listEl = null;
+    let on = false, auto = false, locked = false, tower = null, rowsEl = [], head = null, listEl = null;
     let wall = 0, lastCut = -1e9, manualUntil = 0, cuts = 0, onAirShot = null, setCam = null;
     let shown = new Set(), towerT = 0, mode = "gap", prevPos = new Map(), deltaAt = new Map();
     let clickBound = null;
@@ -166,7 +166,7 @@ const Broadcast = (function () {
     /** start({auto, tower}) — replay has already posed the field and chosen whom to follow. */
     function start(o) {
       stop();
-      on = true; auto = !!(o && o.auto); wall = 0; lastCut = -1e9; manualUntil = 0; cuts = 0;
+      on = true; auto = !!(o && o.auto); locked = false; wall = 0; lastCut = -1e9; manualUntil = 0; cuts = 0;
       shown = new Set(); towerT = 0; mode = "gap"; prevPos = new Map(); deltaAt = new Map();
       onAirShot = null; setCam = G.camMode;
       if (auto) { camTo(SHOTS[0]); lastCut = 0; }
@@ -189,15 +189,18 @@ const Broadcast = (function () {
     function manual() { if (on) { manualUntil = wall + MANUAL_S; setCam = G.camMode; } }   // the shot on air is now the viewer's baseline
     // Back to the director: it cuts at once, and the shot on air now is its
     // baseline — not a "viewer change" that would hand the picture back for 20 s.
-    function setAuto(v) { auto = !!v; if (auto) { manualUntil = 0; lastCut = -1e9; setCam = G.camMode; } return auto; }
+    function setAuto(v) { auto = !!v; if (auto) { locked = false; manualUntil = 0; lastCut = -1e9; setCam = G.camMode; } return auto; }
+    function setLocked(v) { locked = !!v; if (locked) { manualUntil = 0; setCam = G.camMode; } return locked; }
+    function resetTiming() { shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; setPip(null); }
     /** The director has the picture: AUTO and not waiting out a viewer's choice. */
-    function autoOn() { return on && auto && wall >= manualUntil; }
+    function autoOn() { return on && auto && !locked && wall >= manualUntil; }
 
     function buildTower(want) {
       const el = typeof document !== "undefined" ? document.getElementById("bc-tower") : null;
       if (!el || !want) return;
       tower = el; tower.textContent = "";
-      head = document.createElement("div"); head.className = "bc-head";
+      head = document.createElement("button"); head.type = "button"; head.className = "bc-head";
+      head.setAttribute("aria-label", "Timing tower: show intervals between drivers");
       tower.appendChild(head);
       listEl = document.createElement("ol"); listEl.className = "bc-rows";
       tower.appendChild(listEl);
@@ -205,7 +208,10 @@ const Broadcast = (function () {
       clickBound = (e) => {
         const t = e.target && e.target.closest ? e.target.closest("[data-code]") : null;
         if (t && t.dataset.code) { manual(); if (replay.follow) replay.follow(t.dataset.code); return; }
-        if (e.target && e.target.closest && e.target.closest(".bc-head")) { mode = mode === "gap" ? "interval" : "gap"; towerT = 0; }
+        if (e.target && e.target.closest && e.target.closest(".bc-head")) {
+          mode = mode === "gap" ? "interval" : "gap"; towerT = 0;
+          head.setAttribute("aria-label", mode === "gap" ? "Timing tower: show intervals between drivers" : "Timing tower: show gaps to leader");
+        }
       };
       tower.addEventListener("click", clickBound);
       tower.hidden = false;
@@ -228,7 +234,7 @@ const Broadcast = (function () {
       const rows = towerAt(st.script, st.T, st.isOut);
       const L = rows.find((r) => !r.out);
       const total = st.script.laps | 0;
-      head.textContent = "LAP " + Math.min(total, Math.max(1, ((L && L.lap) | 0) + 1)) + "/" + total + (mode === "interval" ? " · INT" : "");
+      head.textContent = "LAP " + Math.min(total, Math.max(1, ((L && L.lap) | 0) + 1)) + "/" + total + (mode === "interval" ? " · INTERVAL" : " · GAP");
       const followNum = st.followNum;
       rows.forEach((r, i) => {
         const e = rowEl(i);
@@ -260,7 +266,7 @@ const Broadcast = (function () {
     }
 
     function direct(st) {
-      if (!auto || wall < manualUntil) return;
+      if (!auto || locked || wall < manualUntil) return;
       // The viewer cycled the camera (C / the CAM button): theirs for a while.
       if (setCam != null && G.camMode !== setCam) { setCam = G.camMode; onAirShot = null; manual(); return; }
       if (st.reel) return;   // HIGHLIGHTS: the reel picks the car and calls onCut
@@ -284,7 +290,7 @@ const Broadcast = (function () {
 
     /** The reel cut to a new highlight (RealReplay.cutTo): a new shot for it, unless the viewer has the picture. */
     function onCut(kind) {
-      if (!on || !auto || wall < manualUntil) return;
+      if (!on || !auto || locked || wall < manualUntil) return;
       if (setCam != null && G.camMode !== setCam) { setCam = G.camMode; onAirShot = null; manual(); return; }
       lastCut = wall; cuts++;
       camTo(shotFor(kind, onAirShot, cuts));
@@ -331,10 +337,10 @@ const Broadcast = (function () {
       towerT -= dt;
       if (towerT <= 0) { towerT = TOWER_TICK_S; paintTower(st); pipTick(st); }
     }
-    function status() { return on ? { auto, manual: wall < manualUntil, shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,
+    function status() { return on ? { auto, locked, manual: wall < manualUntil, manualRemaining: Math.max(0, manualUntil - wall), shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,
                                       pip: pip ? { code: pip.key.code || null, label: pip.label } : null } : null; }
 
-    return { start, stop, tick, onCut, manual, setAuto, autoOn, status, isOn: () => on };
+    return { start, stop, tick, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
   }
 
   return { create, towerAt, crossAt, doneBy, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };

@@ -396,6 +396,22 @@ tyre call worth ~35% more grip than every other car on track and turned a whole
 weather condition into a walkover. As it stands a correct call roughly matches
 the field and a wrong one costs about a quarter of your cornering.
 
+Each AI car's free pace is `VMAX × PACE × tierV × skill × DIFF.ai`, then a
+zero-mean `pacePhase` wobble so equal cars do not lockstep. Driver skill is
+bounded (~0.90–1.0 from `DriverRatings.skill`); difficulty scales the whole
+field, not the gap to the player.
+
+**AI PACE** (`apex26.aiPace`, Race Settings › FIELD):
+
+| mode | behaviour |
+|---|---|
+| `scripted` (default) | No live boost from how far the player is ahead. Fair racing driven by car/driver data — Pure / Black Rock race-scripted intent ([Pure Advantage](https://www.gamedeveloper.com/design/the-pure-advantage-advanced-racing-game-ai), [GI: rubber banding](https://www.gamesindustry.biz/rubber-banding-is-not-fair-and-not-fun-black-rock)). |
+| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead (and not a lap clear), AI vmax and corner authority rise by up to `DIFF.band`, gated off the start (8 s) and once lapped. Melder / Game AI Pro ch.42. |
+
+`DIFF.band` magnitudes stay frozen; catch-up reuses them. AI-only benches
+(`ai-pace` / `ai-field` / `ai-line`) have no human, so the band never fires
+there either way. Measure catch-up with `node tools/check/ai-race.mjs band`.
+
 ### The racing line the AI drives
 
 `js/track/core/line.js` (`TrackLine`) bakes a lateral offset per centreline
@@ -1058,7 +1074,8 @@ it lands.
 | `js/race/pit-lane.js` | `entryRunM` (now the fallback for a track built without the engine's window; `js/track/core/pit.js` `straightRun`, same `PIT_K`, owns it) | **surface** | where the pit lane OPENS, walked back from the start/finish line once per circuit to find where the last corner lets go. The aero-zones row below is the precedent and this is the same shape: a fixed zone computed from the static arc, gating a driver-INITIATED action (calling a stop) identically for every car, no force path, nothing read per frame. Replaced a flat 320 m that landed Monza's entry inside Parabolica — where the commit gesture (hold the pit side) asks a driver to hold a line mid-corner. Threshold 0.0035 (r ~= 285 m) is deliberately looser than a DRS zone's 0.0014: an entry needs "not actively cornering", not a proper straight |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
 | `js/physics/debris-world.js` | `registerFurniture` | **broadcast-only** | apex-kerb cones in the one-way cosmetic Rapier side-world |
-| `js/camera/vantage.js` | `vantage` | **broadcast-only** | only heli/side/cinematic broadcast cams; 0 in every driven mode |
+| `js/camera/vantage.js` | `vantage` | **broadcast-only** | heli/side/cinematic plus ExtraRigs drone (side sway); trackside uses corner poses (no curvature); cam-avoid uses prop boxes only; 0 in every driven mode |
+| `js/camera/extra-rigs.js` | `droneFollow` | **broadcast-only** | optional `Tracks.curvature` read for drone side sway only; never reaches the car |
 | `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
 | `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |

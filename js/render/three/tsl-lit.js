@@ -1282,6 +1282,9 @@
         // standing rule, because roadMarkings() takes derivatives of it.
         const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
+        // Puddle shape (wet block): derivatives taken here, in uniform control flow
+        // (the WebGPU path compiles this graph to WGSL, which requires it).
+        const trkRightXZ = trkA ? dFdx(wp.xz).mul(dFdx(trkA.y)).add(dFdy(wp.xz).mul(dFdy(trkA.y))).toVar() : null;
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
         // Two-sided lighting: flip N toward the viewer on back fragments
@@ -1335,6 +1338,15 @@
         const satinMetalSurface = surfaceId.equal(29.0).toVar();
         const iriSurface = surfaceId.equal(30.0).toVar();
         const carbonFinish = surfaceId.equal(31.0).toVar();   // bare weave OVER the livery colour
+        // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its
+        // mean over 8-16 m so the 3.3 cm cross-hatch cannot moire at range.
+        // Computed here, ahead of the roughness ripple and the albedo twill.
+        const weave = float(0.5).toVar();
+        If(carbonFinish.or(carbonSurface), () => {
+          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
+          const wvFade = clamp(vd.sub(8.0).div(8.0).oneMinus(), 0.0, 1.0);
+          weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
+        });
         // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
         // clearcoat, dielectric env response — mirrors the GLX/WGSL split.
         const visorSurface = surfaceId.equal(32.0).toVar();
@@ -1446,7 +1458,7 @@
 
         // roughness resolution + car-surface clamps (js/render/glx/shaders/glsl-lit.js)
         const rough = clamp(matU.roughness, 0.04, 1.0).toVar();
-        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56)); });
+        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56).add(weave.sub(0.5).mul(0.10))); });   // the twill's roughness ripple
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
         If(metalSurface, () => { rough.assign(min(rough, 0.16)); });
         If(glassSurface.or(visorSurface), () => { rough.assign(min(rough, 0.13)); });
@@ -1462,10 +1474,10 @@
         // colour face-on. No derivative, so it is safe in any control flow.
         // CARBON FINISH (mirrors js/render/glx/shaders/glsl-lit.js).
         If(carbonFinish, () => {
-          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
-          const weave = wv.x.sin().mul(wv.y.sin()).mul(0.5).add(0.5).toVar();
           albedo.assign(mix(albedo.mul(0.16).add(vec3(0.030, 0.031, 0.035)), albedo.mul(0.28), 0.25));
           albedo.assign(albedo.mul(weave.mul(0.28).add(0.86)));
+        }).ElseIf(carbonSurface, () => {
+          albedo.assign(albedo.mul(weave.mul(0.14).add(0.93)));
         });
         If(iriSurface, () => {
           const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
@@ -1527,7 +1539,21 @@
             float(1.0), float(0.0));
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
-          puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
+          // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
+          // crown drains to the gutters (0.7 centre → 1.2 edge) and the low side
+          // of a banked turn holds the water (lateral downhill from the screen
+          // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
+          // chunked (city prop) variant, which has no road.
+          const pool = float(1.0).toVar();
+          if (trkA) {
+            If(trkA.z.greaterThan(0.5), () => {
+              const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
+              const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
+              const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
+              pool.assign(mix(float(0.7), float(1.2), abs(lat)).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
+            });
+          }
+          puddle.assign(smoothstep(0.48, 0.88, pn.mul(pool)).mul(wet).mul(porous.oneMinus()));
           // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
           // two cell grids of impact rings, a normal tilt on the pooled water that
           // the GGX lobes and the sky reflection below read (N is a toVar).

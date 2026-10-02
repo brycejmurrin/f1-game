@@ -9,7 +9,32 @@ const RaceSettings = (function () {
   const RS_CONDITIONS = [["stable", "STABLE"], ["mixed", "MIXED"]];
   const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];
   const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
+  // AI PACE (js/physics/ai-band.js): SCRIPTED = fixed car/driver pace (default);
+  // CATCH-UP = legacy gap-to-player rubber band. Opt-in so fair racing ships.
+  const RS_AIPACE = [["scripted", "SCRIPTED"], ["catchup", "CATCH-UP"]];
   const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
+
+  /** Inject AI PACE after DIFFICULTY — keeps shellNodes flat (same idea as
+   *  SettingsExport.careerRow). Idempotent. */
+  function ensureAiPaceRow($) {
+    if ($("rs-aipace")) return;
+    const diff = $("rs-diff");
+    if (!diff || !diff.parentNode) return;
+    const row = document.createElement("div");
+    row.id = "rs-aipace";
+    row.className = "set-row";
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-labelledby", "rs-aipace-label");
+    row.innerHTML =
+      '<span class="tune-label" id="rs-aipace-label">AI PACE</span>' +
+      "<div>" +
+      '<button id="rs-aipace-prev" type="button" data-step="-1" aria-label="Previous AI pace mode">&lsaquo;</button>' +
+      '<select id="rs-aipace-sel" aria-labelledby="rs-aipace-label" aria-describedby="rs-aipace-help"></select>' +
+      '<button id="rs-aipace-next" type="button" data-step="1" aria-label="Next AI pace mode">&rsaquo;</button>' +
+      "</div>" +
+      '<p id="rs-aipace-help" class="adv-help">SCRIPTED keeps each rival on a fixed target pace from car and driver ratings. CATCH-UP is the old rubber band: cars behind you speed up toward your gap.</p>';
+    diff.parentNode.insertBefore(row, diff.nextSibling);
+  }
   const DUEL_BASE = [["off", "OFF"], ["on", "FASTEST RIVAL"]];
   /* DUEL is OFF / ON / a named legend — one control rather than a second row.
    * ON keeps the original meaning (the fastest car on the grid, bumped); a
@@ -103,6 +128,7 @@ const RaceSettings = (function () {
     function setDrivingLine(v) { store.set("drivingLine", DrivingLine.setMode(v)); }
 
     function buildRaceSettings() {
+      ensureAiPaceRow($);
       const qualifies = !isTimeTrial() && !qualiResults() &&
         (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
       const qName = isChampionship() && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
@@ -134,6 +160,10 @@ const RaceSettings = (function () {
       SettingRow.disable("rs-time", !!daily);
       $("rs-diff").hidden = tt;
       SettingRow.paint("rs-diff", G.difficulty, RS_DIFF);
+      if ($("rs-aipace")) {
+        $("rs-aipace").hidden = tt;
+        SettingRow.paint("rs-aipace", G.aiPace || "scripted", RS_AIPACE);
+      }
       const champ = isChampionship();
       // DUEL is a one-off practice format: a 2-car race against the field's
       // quickest driver with his stats lifted. Hidden in a Time Trial (which
@@ -204,7 +234,7 @@ const RaceSettings = (function () {
       // · OFF · OFF · OFF" — a summary that is mostly padding stops being read.
       // The locked examples are the same length: "FEEL · NORMAL · TILT 6",
       // "MUSIC · ON · ALL". Opening the fold is what shows the rest.
-      const priority = name === "FIELD" ? ["rs-quali", "rs-diff", "rs-duel"]
+      const priority = name === "FIELD" ? ["rs-quali", "rs-diff", "rs-aipace", "rs-duel"]
         : ["rs-tyres", "rs-line", "rs-plan"];
       const vals = priority.map((id) => rows.find((r) => r.id === id))
         .filter(Boolean).map((r) => {
@@ -229,7 +259,10 @@ const RaceSettings = (function () {
      *  alone where no complex is built yet (no zone: no plan to draw). */
     function paintPlan(tt, laps) {
       const pits = G.pits;
-      const on = !tt && G.raceTyreWear !== "off" && !!pits;
+      // Store AND live model must agree wear is on. The store alone used to
+      // show STRATEGY while TyreModel still sat at create()'s initial "off"
+      // (planLaps → whole-race life → "NO STOP").
+      const on = !tt && G.raceTyreWear !== "off" && !!(G.tyres && G.tyres.on()) && !!pits;
       $("rs-plan").hidden = !on;
       const bar = $("rs-plan-bar");
       if (!on) { bar.hidden = true; return; }
@@ -269,6 +302,9 @@ const RaceSettings = (function () {
       });
       wire("rs-time", () => G.raceTimeOfDay, (v) => { G.raceTimeOfDay = v; scheduleFlybyTrack(); });
       wire("rs-diff", () => G.difficulty, (v) => { G.difficulty = v; store.set("difficulty", v); });
+      if ($("rs-aipace")) {
+        wire("rs-aipace", () => G.aiPace || "scripted", (v) => { G.aiPace = v; });
+      }
       wire("rs-quali", () => (isChampionship() ? G.champGrid : G.raceGrid), (v) => {
         if (isChampionship()) { G.champGrid = v; store.set("champGrid", v); } else { G.raceGrid = v; store.set("raceGrid", v); }
       });

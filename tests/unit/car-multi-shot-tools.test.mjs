@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -68,6 +68,18 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src.slice(src.indexOf("async function serveSession")), /page\.reload\(/, "the session reloads to serve the edited tree");
   assert.doesNotMatch(src, /page\.screenshot\(\s*\{\s*path:\s*png/,
     "no raw page.screenshot — that hung under SwiftShader");
+});
+
+test("garage-angles --help exits 0 without launching Chromium", () => {
+  // Regression 2026-10-01: bare --help was silently ignored and ran the
+  // default McLaren spine shoot (~2.5 min). Must stay side-effect-free.
+  const r = spawnSync(process.execPath, ["tools/shot/garage-angles.mjs", "--help"], {
+    cwd: ROOT, encoding: "utf8", timeout: 8000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /--plan/);
+  assert.match(r.stdout, /spine/);
+  assert.doesNotMatch(r.stdout, /shot |wrote \d+ angle/i);
 });
 
 test("settleGarage batches steps in one evaluate", () => {

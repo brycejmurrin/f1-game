@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 // branch-audit.mjs — is a branch's code already in the deploy branch? One verdict per remote branch, with the evidence.
-// @doc Per-branch verdict (merged/absorbed/superseded/pr-closed/unmerged) from ancestry, merge-tree, line presence, PRs, CI.
+// @doc Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch).
 // Full description: Classifies every remote branch against the deploy branch: ancestry, a merge-tree dry merge (absorbed = merging changes nothing), the share of its added lines already present in deploy (same file and anywhere, for code that moved), the PR that carried it and the last CI run on its head. prune-branches.mjs consumes the verdicts; --report writes the markdown table.
 // @skill check-changes
 //
 // WHY. prune-branches.mjs deleted the 220 branches that were provably merged
 // (2026-10-01). The ~290 left needed a person to answer "is this work in the
-// game or not?", and ancestry cannot: the deploy branch's history was RESTARTED
-// on 2026-09-29, so every older branch shares no merge base with it (116 of
-// them), and squash merges and later refactors move the same code under new
-// commits and new files. Measured on that tree: ancestor 73, absorbed 19,
-// clean-but-adds 30, conflicting 139.
+// game or not?", and ancestry alone cannot: squash merges, re-applied commits
+// and later refactors put the same code into deploy under new commits and new
+// files, so a branch can be "not an ancestor" yet have nothing left to give.
+//
+// RUN IT ON FULL HISTORY. Agent containers clone shallow (~50 commits), and a
+// shallow clone's cut-off commits look like roots: on 2026-10-01 that read as
+// "the deploy branch was restarted on 2026-09-29, 116 branches share no history
+// with it". It was not — on the workflow's fetch-depth 0 checkout every branch
+// but one shares history with deploy. A "no-history" verdict or a size figure
+// from a shallow clone is an artefact (`git rev-parse --is-shallow-repository`).
 //
 // THE EVIDENCE, cheapest and most certain first:
 //   ancestor   the tip is in the deploy history — merged, nothing to lose.
@@ -18,9 +23,8 @@
 //   absorbed   `git merge-tree --write-tree <deploy> <branch>` succeeds and the
 //              result is deploy's own tree: merging it would change NOTHING.
 //              Zero-loss by construction, so prune-branches deletes these too.
-//   presence   for the branch's own diff (from its merge base with deploy, or
-//              with an --old-base such as main for pre-restart branches), the
-//              share of ADDED lines (trimmed, >= MIN_LINE chars) that exist in
+//   presence   for the branch's own diff (from its merge base with deploy),
+//              the share of ADDED lines (trimmed, >= MIN_LINE chars) that exist in
 //              deploy — in the same file, and anywhere (code moves in splits).
 //              Evidence for a person, never a deletion rule on its own.
 //   PR         the newest PR whose head is this branch: open / merged / closed
@@ -30,6 +34,19 @@
 // prune-branches --also opts into.
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+
+// THE SURVEY SET (2026-10-02, the user's rule): only branches that have NEVER
+// had a pull request (open, closed or merged) and whose newest commit is at
+// least SURVEY_QUIET_HOURS old — which also makes the whole branch at least
+// that old. A branch with a PR is the PR's business (its merge state decides,
+// and merged heads are auto-deleted since 2026-10-02); a branch with a commit
+// in the last two days may be someone's work in progress. claude/claims/*
+// markers are prune-branches.mjs's age rule, never surveyed. --all widens it.
+export const SURVEY_QUIET_HOURS = 48;
+export function inSurvey(b, { prs = new Map(), now = Math.floor(Date.now() / 1000), quietHours = SURVEY_QUIET_HOURS } = {}) {
+  if (/^claude\/claims\//.test(b.name) || prs.has(b.name)) return false;
+  return Number.isFinite(b.time) && now - b.time >= quietHours * 3600;
+}
 
 export const MIN_LINE = 6;              // shorter trimmed lines ("});", "}") match anything
 export const SUPERSEDED_PCT = 95;       // >= this share of added lines present anywhere in deploy
@@ -41,7 +58,7 @@ export const VERDICTS = {
   "post-merge": "its PR merged, then more commits were pushed — review what came after",
   "pr-closed": "its PR was closed without merging — review, likely abandoned",
   unmerged: "work that is not in deploy — keep",
-  "no-history": "shares no history with deploy or any old base — review by hand",
+  "no-history": "shares no history with deploy (on a full clone) — review by hand",
 };
 
 /** Share (0-100) of `added` lines found in `sameFile` / `anyFile` sets. Empty diff = 100. */
@@ -136,13 +153,15 @@ export function treeLines(ref) {
 }
 
 /** Audit `branches` [{name, sha, time}] against `base`. Git-heavy; the verdict itself is verdictFor. */
-export function audit(branches, { base, oldBases = ["main"], prs = new Map(), runs = new Map(), now = Math.floor(Date.now() / 1000), minAgeDays = 1, skip = () => false }) {
+export function audit(branches, { base, prs = new Map(), runs = new Map(), now = Math.floor(Date.now() / 1000), minAgeDays = 1, skip = () => false,
+  survey = null }) {
   const baseRef = "refs/remotes/origin/" + base;
   const baseTree = git(["rev-parse", baseRef + "^{tree}"]).trim();
   let lines = null;   // built on first need: reading the whole tree is the slow part
   const rows = [];
   for (const b of branches) {
     if (b.name === base || skip(b.name)) continue;
+    if (survey && !survey(b)) continue;
     const ref = "refs/remotes/origin/" + b.name;
     const row = { name: b.name, sha: b.sha, ageDays: Number.isFinite(b.time) ? +((now - b.time) / 86400).toFixed(1) : NaN,
       pr: prs.get(b.name) || null, ci: runs.get(b.sha) || null, ancestor: false, absorbed: false, noHistory: false,
@@ -151,15 +170,15 @@ export function audit(branches, { base, oldBases = ["main"], prs = new Map(), ru
     if (!row.ancestor) {
       const mt = spawnSync("git", ["merge-tree", "--write-tree", baseRef, ref], { encoding: "utf8" });
       row.absorbed = mt.status === 0 && mt.stdout.split("\n")[0].trim() === baseTree;
-      for (const ob of [base, ...oldBases]) {
-        const mb = tryGit(["merge-base", "refs/remotes/origin/" + ob, ref]);
-        if (mb) { row.from = ob; row.ahead = Number(tryGit(["rev-list", "--count", `${mb}..${ref}`])) || 0;
-          if (!row.absorbed) {
-            lines = lines || treeLines(baseRef);
-            const p = presence(addedLines(git(["diff", "--unified=0", "--no-renames", mb, ref])), (f) => lines.perFile.get(f), lines.all);
-            Object.assign(row, { lines: p.lines, samePct: p.samePct, anyPct: p.anyPct });
-          }
-          break; }
+      const mb = tryGit(["merge-base", baseRef, ref]);
+      if (mb) {
+        row.from = base;
+        row.ahead = Number(tryGit(["rev-list", "--count", `${mb}..${ref}`])) || 0;
+        if (!row.absorbed) {
+          lines = lines || treeLines(baseRef);
+          const p = presence(addedLines(git(["diff", "--unified=0", "--no-renames", mb, ref])), (f) => lines.perFile.get(f), lines.all);
+          Object.assign(row, { lines: p.lines, samePct: p.samePct, anyPct: p.anyPct });
+        }
       }
       row.noHistory = !row.from;
     }
@@ -171,10 +190,10 @@ export function audit(branches, { base, oldBases = ["main"], prs = new Map(), ru
 
 const ORDER = Object.keys(VERDICTS);
 /** Markdown report: a tally, then one table per verdict. */
-export function renderMarkdown(rows, base) {
+export function renderMarkdown(rows, base, { scope = "" } = {}) {
   const by = new Map(ORDER.map((v) => [v, []]));
   for (const r of rows) by.get(r.verdict).push(r);
-  const out = [`### Branch audit vs \`${base}\``, "", "| verdict | branches | meaning |", "|---|---|---|"];
+  const out = [`### Branch audit vs \`${base}\``, "", ...(scope ? [scope, ""] : []), "| verdict | branches | meaning |", "|---|---|---|"];
   for (const v of ORDER) if (by.get(v).length) out.push(`| **${v}** | ${by.get(v).length} | ${VERDICTS[v]} |`);
   for (const v of ORDER) {
     const list = by.get(v);
@@ -185,7 +204,7 @@ export function renderMarkdown(rows, base) {
       const pres = r.ancestor ? "ancestor" : r.absorbed ? "absorbed" : r.anyPct == null ? "—" : `${r.samePct}% / ${r.anyPct}% of ${r.lines}`;
       const pr = r.pr ? `#${r.pr.number} ${r.pr.state}` : "—";
       const ci = r.ci ? `${r.ci.workflow}: ${r.ci.conclusion}` : "—";
-      out.push(`| \`${r.name}\` | ${Number.isFinite(r.ageDays) ? r.ageDays : "?"} | ${r.from && r.from !== base ? `${r.ahead} (from ${r.from})` : r.ahead} | ${pres} | ${pr} | ${ci} |`);
+      out.push(`| \`${r.name}\` | ${Number.isFinite(r.ageDays) ? r.ageDays : "?"} | ${r.ahead} | ${pres} | ${pr} | ${ci} |`);
     }
   }
   return out.join("\n") + "\n";
@@ -204,15 +223,22 @@ export function parseRefs(text) {
   return out;
 }
 
+export const surveyScope = (h) => `Surveyed: branches that never had a pull request and have had no commit for ${h}+ hours.`;
+
 export function readJson(file) { return file ? JSON.parse(fs.readFileSync(file, "utf8")) : []; }
 
 export function main(argv = process.argv.slice(2)) {
   const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
   const base = arg("--base", "claude/f1-game-project-26h3ng");
   const branches = parseRefs(git(["for-each-ref", "--format=%(refname)\t%(objectname)\t%(committerdate:unix)", "refs/remotes/origin"]));
-  const rows = audit(branches, { base, prs: indexPrs(readJson(arg("--prs", null))), runs: indexRuns(readJson(arg("--runs", null))),
-    minAgeDays: Number(arg("--min-age-days", "1")), skip: (n) => /^claude\/claims\//.test(n) });
-  const md = renderMarkdown(rows, base);
+  const prs = indexPrs(readJson(arg("--prs", null)));
+  const all = argv.includes("--all");
+  if (!all && !arg("--prs", null)) { console.error("branch-audit: the survey needs --prs (an unknown PR set would survey every branch) — or pass --all"); return 2; }
+  const quietHours = Number(arg("--quiet-hours", String(SURVEY_QUIET_HOURS)));
+  const rows = audit(branches, { base, prs, runs: indexRuns(readJson(arg("--runs", null))),
+    minAgeDays: Number(arg("--min-age-days", "1")), skip: (n) => /^claude\/claims\//.test(n),
+    survey: all ? null : (b) => inSurvey(b, { prs, quietHours }) });
+  const md = renderMarkdown(rows, base, { scope: all ? "" : surveyScope(quietHours) });
   if (arg("--report", null)) fs.writeFileSync(arg("--report"), md);
   if (arg("--json", null)) fs.writeFileSync(arg("--json"), JSON.stringify(rows, null, 1));
   if (!arg("--report", null)) process.stdout.write(md);
