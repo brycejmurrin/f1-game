@@ -3267,4 +3267,4 @@ Closing-chord centerline interpolation shifted start-seam props on indy/madrid/w
 
 ## 2026-10-01 — Merge #710 modelsReady await
 
-`js/game.js` lines 9691 → 9696. Ship tip after Merge #710 (`modelsReady` join in `ensureScenery` so a track build waits for the baked model pack) grew five lines past the ceiling; prior tip was 9690/9691. Deliberate raise for the intentional boot fix — not an extraction. Structural guards on push CI #7371 failed `ratchets.test.mjs` until this snap.
+`js/game.js` lines 9691 → 9697 and codeLines 5312 → 5313. Ship tip after Merge #710 (`modelsReady` join in `ensureScenery` so a track build waits for the baked model pack) grew past both ceilings (measure: lines 9697, codeLines 5313; prior tip ~9690/9691). First snap to 9696 alone still failed PR CI — the lines metric counts a trailing empty split, and codeLines also moved +1. Deliberate raise for the intentional boot fix — not an extraction.
