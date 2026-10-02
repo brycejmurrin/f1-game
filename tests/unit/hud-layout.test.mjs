@@ -190,3 +190,27 @@ test("css/track-detail.css: cockpit hides only speed/gear, not the OT/AERO/ENERG
 test("module has no Tracks / curvature reads", () => {
   assert.doesNotMatch(SRC, /\bTracks\b|\bcurvature\b/);
 });
+
+test("fit pulls a moved piece back on screen without touching the stored offset", () => {
+  const src = SRC;
+  const props = {}, attrs = { "data-hl": "" };
+  const el = {
+    style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
+    setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+    // 100px wide map at x=5 vw on a 1000px screen, pushed 60 px past the right edge.
+    getBoundingClientRect() { const x = parseFloat(props["--hl-x"] || 0) * 10; return { left: 900 + x - 50, right: 1000 + x - 50 + 60, top: 10, bottom: 110, width: 160, height: 100 }; },
+  };
+  const written = { hudLayout: { v: 2, cockpit: {}, other: { map: { x: 5, y: 0, s: 100 } } } };
+  const ctx = {
+    console, window: { innerWidth: 1000, innerHeight: 600 },
+    document: { readyState: "complete", getElementById: () => null, addEventListener() {},
+      querySelector: (sel) => (sel === "#minimap" ? el : { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false }) },
+    GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(src + "; this.HudLayout = HudLayout;", ctx);
+  ctx.HudLayout.fit();
+  const r = el.getBoundingClientRect();
+  assert.ok(r.right <= 1000 - 4 + 1e-6, "right edge inside the screen: " + r.right);
+  assert.equal(ctx.HudLayout.get("map", "other").x, 5, "stored offset unchanged");
+});

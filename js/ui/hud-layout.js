@@ -173,6 +173,40 @@ const HudLayout = (function () {
       if (selected === id && preview) el.setAttribute("data-hl-sel", "");
       else if (el.hasAttribute("data-hl-sel")) el.removeAttribute("data-hl-sel");
     }
+    fit();
+  }
+
+  /* KEEP MOVED PIECES ON SCREEN. An offset chosen on one screen (or at one HUD
+     SIZE) can push a piece past the edge of another. After every apply, and
+     after js/ui/hud.js's fitHud re-lays the bands out, measure each moved
+     element and pull its PAINTED --hl-x/--hl-y back inside the viewport (less
+     EDGE px). The stored offsets are untouched, so the layout comes back in
+     full on a screen that has room. translate runs in vw/vh divided by the
+     band's zoom, so a screen-px correction is exactly px / innerWidth * 100. */
+  const EDGE = 4;
+  function clampAxis(lo, hi, size) {
+    if (hi - lo > size - 2 * EDGE) return EDGE - lo;     // bigger than the screen: pin its start
+    if (lo < EDGE) return EDGE - lo;
+    if (hi > size - EDGE) return size - EDGE - hi;
+    return 0;
+  }
+  function fit() {
+    if (!doc || typeof window === "undefined" || !window.innerWidth) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const a = all()[shown()];
+    for (const [id, , sel] of ELEMENTS) {
+      const e = a[id];
+      if (!e || isDefEl(e)) continue;
+      const el = doc.querySelector(sel);
+      if (!el || !el.getBoundingClientRect || !el.hasAttribute("data-hl")) continue;
+      el.style.setProperty("--hl-x", String(e.x));
+      el.style.setProperty("--hl-y", String(e.y));
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;                // hidden right now: nothing to keep on screen
+      const dx = clampAxis(r.left, r.right, W), dy = clampAxis(r.top, r.bottom, H);
+      if (dx) el.style.setProperty("--hl-x", String(+(e.x + dx / W * 100).toFixed(2)));
+      if (dy) el.style.setProperty("--hl-y", String(+(e.y + dy / H * 100).toFixed(2)));
+    }
   }
 
   /** Write one element's values into layout `set`; returns the stored {x, y, s}. */
@@ -275,7 +309,9 @@ const HudLayout = (function () {
       "beside the wheel. A PRESET is a starting point you can still tweak. In a race, hold a slider to see the HUD through this page." }));
 
     let editing = cam, sel = IDS[0];
-    // The settings page's own stepper (‹ select ›, .set-row) for both pickers.
+    // The settings page's own stepper (‹ select ›, .set-row). Like every shell
+    // stepper the arrows are pointer-only (tabindex -1, aria-hidden): the
+    // <select> owns the keys, so MenuNav walks one control per row.
     function stepper(id, label, options, onPick) {
       const lab = el("span", { className: "tune-label", textContent: label });
       lab.id = id + "-label";
@@ -290,8 +326,8 @@ const HudLayout = (function () {
         }
         pickEl.selectedIndex = i; onPick(pickEl.value);
       };
-      const prev = el("button", { type: "button", textContent: "\u2039", attrs: { "aria-label": "Previous " + label.toLowerCase() } });
-      const next = el("button", { type: "button", textContent: "\u203A", attrs: { "aria-label": "Next " + label.toLowerCase() } });
+      const prev = el("button", { type: "button", textContent: "\u2039", attrs: { "aria-label": "Previous " + label.toLowerCase(), "aria-hidden": "true", tabindex: "-1" } });
+      const next = el("button", { type: "button", textContent: "\u203A", attrs: { "aria-label": "Next " + label.toLowerCase(), "aria-hidden": "true", tabindex: "-1" } });
       prev.addEventListener("click", () => go(-1));
       next.addEventListener("click", () => go(1));
       pickEl.addEventListener("change", () => onPick(pickEl.value));
@@ -370,7 +406,7 @@ const HudLayout = (function () {
 
   return {
     KEY, ELEMENTS, SETS, LIM, COCKPIT_CAMS, SHIPPED, PRESETS,
-    get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, build,
+    get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, build,
     camSet, shown: () => shown(), all, presetLayout, applyPreset, presetOf,
   };
 })();

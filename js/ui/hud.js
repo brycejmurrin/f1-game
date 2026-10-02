@@ -775,7 +775,11 @@ function fitHud() {
   };
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
-  set("--hud-z-dock", capDock, btnScale);
+  // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
+  // cap between BUTTON SIZE and 1 still has to be written.
+  set("--hud-z-dock", capDock, Math.max(1, btnScale));
+  // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.
+  if (typeof HudLayout !== "undefined") HudLayout.fit();
 }
 
 /* THE TEAM ACCENT for a team css/tokens.css has no row for.

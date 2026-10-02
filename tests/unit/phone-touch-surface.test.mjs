@@ -167,7 +167,9 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   // And fitHud compares that cap against the SAME slider — against --hud-scale
   // it would either pin a cap that fits or drop one that does not, the moment a
   // player set the two apart.
-  assert.match(hud, /set\("--hud-z-dock", capDock, btnScale\)/, "the dock cap is judged against BUTTON SIZE");
+  // Against what the dock actually paints at: BUTTON SIZE floored at 1 (the tap
+  // floor in css/overlays.css), or a cap between BUTTON SIZE and 1 is dropped.
+  assert.match(hud, /set\("--hud-z-dock", capDock, Math\.max\(1, btnScale\)\)/, "the dock cap is judged against the floored BUTTON SIZE");
   // FALLS BACK TO HUD SIZE TIMES THE COARSE RATIO, not to HUD SIZE. Unset, the
   // dock is `calc(var(--hud-scale) * var(--hud-btn-mult))` — and calc() inside a
   // custom property is never reduced, so the token reads back as a literal
