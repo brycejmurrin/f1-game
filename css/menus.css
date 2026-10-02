@@ -769,7 +769,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
   /* Full width, not 78vwz: at 78% a 2x2 cell on a 393px phone is 145px and
      RACE A FRIEND broke into two lines. The column's own padding-inline keeps
      the skewed tips off the edge. */
-  :where(body[data-shape="tall"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
+  :where(body[data-shape="tall"]) #menu-hero,
+  :where(body[data-shape="tall"]) #menu-primary,
+  :where(body[data-shape="tall"]) #menu-secondary { width: 100%; }
+  :where(body[data-shape="tall"]) #menu-explore { width: 100%; }
   :where(body[data-shape="tall"]) #menu-buttons {
     height: auto;
     align-self: start;
@@ -954,7 +957,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
    the mean by one unit. */
 :where(body[data-shape="wide"][data-density="compact"]) #title-car { opacity: 0.9; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: calc(var(--gap) * 1.5); gap: calc(var(--gap) / 2); }
-:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
+:where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-explore { width: 100%; }
 :where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore, #menu-secondary) {
   gap: calc(var(--gap) * 0.45);
 }
