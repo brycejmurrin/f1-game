@@ -885,7 +885,7 @@ def cmd_look_survey(argv: list[str]) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 2 or sys.argv[1] in ("help", "--help", "-h"):
         print(__doc__)
         sys.exit(0)
     cmd = sys.argv[1]

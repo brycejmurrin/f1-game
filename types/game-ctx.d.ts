@@ -849,6 +849,8 @@ declare const RaceControl: GameModuleFactory;
 // `interface WeatherArc` above is the arc OBJECT it hands back on G.weatherArc;
 // TypeScript keeps the two in separate declaration spaces.
 declare const WeatherArc: GameModuleFactory;
+declare const StartLights: GameModuleFactory;
+declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;

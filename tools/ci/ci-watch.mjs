@@ -28,11 +28,13 @@
 // run started — a docs-only push), 1 red, 2 cancelled with no live sibling,
 // 3 no token / API unreachable, 124 --timeout.
 //
-// Auth: GH_TOKEN or GITHUB_TOKEN (the remote containers carry both), sent via
-// curl's stdin config so it never appears in argv. Read-only: GET requests only.
+// Auth: GH_TOKEN or GITHUB_TOKEN, else `gh auth token` (Cloud boxes often have
+// gh logged in with no env token). Sent via curl's stdin config so it never
+// appears in argv. Read-only: GET requests only.
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -40,9 +42,9 @@ export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
 const say = (...a) => console.log("[ci-watch]", ...a);
 
-export function api(pathQs, { run = spawnSync, env = process.env } = {}) {
-  const token = env.GH_TOKEN || env.GITHUB_TOKEN;
-  if (!token) return { error: "no GH_TOKEN / GITHUB_TOKEN" };
+export function api(pathQs, { run = spawnSync, env = process.env, gh } = {}) {
+  const token = githubToken(gh !== undefined ? { env, gh } : { env });
+  if (!token) return { error: NO_TOKEN_HINT };
   const r = run("curl", ["-sS", "--max-time", "30", "-K", "-", "-w", "\n%{http_code}",
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
     // Revalidate stored HTTP responses when polling mutable CI/PR state.

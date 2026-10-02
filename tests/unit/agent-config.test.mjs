@@ -339,6 +339,27 @@ test("the Codex skill mirror is tracked symlinks and the repair script exists", 
   assert.match(read("tools/env/mirror-skills.sh"), /ln -s/, "the repair makes symlinks, the tracked form");
 });
 
+test("env install scripts and live-run.py answer --help without side effects", () => {
+  // --help used to run the install body (npm / apt / MCP clones) or crash
+  // live-run.py with IndexError when argv was missing.
+  const cases = [
+    { cmd: "bash", args: ["tools/env/mirror-skills.sh", "--help"], want: /--check/, no: /mirrored \d+ skills/ },
+    { cmd: "bash", args: ["tools/env/install-browsers.sh", "--help"], want: /Playwright Chromium/, no: /OK: Playwright Chromium ready/ },
+    { cmd: "bash", args: ["tools/env/cloud-agent-install.sh", "--help"], want: /install-browsers/, no: /OK: cloud-agent install complete/ },
+    { cmd: "python3", args: [".claude/hooks/live-run.py", "--help"], want: /usage: live-run\.py/, no: null },
+  ];
+  for (const c of cases) {
+    const r = spawnSync(c.cmd, c.args, { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+    const text = `${r.stdout || ""}\n${r.stderr || ""}`;
+    assert.equal(r.status, 0, `${c.args[0]} --help: ${text}`);
+    assert.match(text, c.want, `${c.args[0]} --help missing ${c.want}`);
+    if (c.no) assert.doesNotMatch(text, c.no, `${c.args[0]} --help ran the real body`);
+  }
+  const bare = spawnSync("python3", [".claude/hooks/live-run.py"], { encoding: "utf8", cwd: ROOT, timeout: 5000 });
+  assert.equal(bare.status, 2, "live-run.py with no root must exit 2, not IndexError");
+  assert.match(`${bare.stdout}\n${bare.stderr}`, /usage: live-run\.py/);
+});
+
 // ── THE ALWAYS-ON SURFACE HAS A BUDGET ──────────────────────────────────────
 // Rationale and evidence: docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md.
 // Measured across 1,867 repos and 247,694 instruction lifetimes (arXiv

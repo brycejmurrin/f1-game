@@ -61,7 +61,8 @@ const require = createRequire(import.meta.url);
 
 const KNOWN = ["--track", "--u", "--frames", "--shots", "--pose", "--subject", "--json", "--out",
                "--thumb", "--aspect", "--range", "--res", "--quiet",
-               "--fleet", "--tracks", "--worst", "--diff", "--min-delta", "--trusted-shots-js"];
+               "--fleet", "--tracks", "--worst", "--diff", "--min-delta",
+               "--trusted-shots-js", "--help", "-h"];
 const SELF = fileURLToPath(import.meta.url);
 const FLEET_OUT = "artifacts/frame-report/fleet.json";
 
@@ -465,6 +466,16 @@ function diff(F, argv) {
 async function main() {
   const argv = process.argv.slice(2);
   const F = makeFlags(argv, KNOWN);
+  if (F.has("--help") || F.has("-h")) {
+    console.log(`frame-report — Node-only FRAMING REPORT of flyby shots (no browser)
+
+  node tools/shot/frame-report.mjs --track monza
+  node tools/shot/frame-report.mjs --fleet [--tracks monza,spa] [--worst 20]
+  node tools/shot/frame-report.mjs --diff a.json b.json [--min-delta N]
+
+Accepts: ${KNOWN.filter((k) => k.startsWith("--")).join(" ")}`);
+    return;
+  }
   if (F.has("--diff")) return diff(F, argv);
   if (F.has("--fleet")) return fleet(F);
   if (F.has("--track") && !CIRCUITS.includes(F.flag("--track"))) {

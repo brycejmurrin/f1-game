@@ -359,6 +359,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
+| **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |

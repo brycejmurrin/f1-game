@@ -12,8 +12,15 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-if [[ "${1:-}" == "--help" ]]; then
-  echo "Usage: $0 [--plan] — reuse a browser or install Chromium into a writable cache"; exit 0
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  cat <<'EOF'
+usage: bash tools/env/install-browsers.sh [--plan] [--help]
+
+Idempotent Chromium bootstrap: reuse an installed browser or install into a
+writable Playwright cache (via tools/lib/chromium-path.mjs). --plan prints the
+chosen cache/browser and exits without installing.
+EOF
+  exit 0
 fi
 if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--plan" ) ]]; then echo "Unknown arguments; use --help" >&2; exit 2; fi
 BROWSERS_PATH="$(node "$ROOT/tools/lib/chromium-path.mjs" --cache-path)" || {

@@ -26,10 +26,18 @@ import { assertSafePathToken } from "../../../tools/lib/output-paths.mjs";
 import { chromiumArgsForBackend, installProbeInit } from "../../../tools/shot/probe-page.mjs";
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url)).replace(/[\\/]$/, "");
 
-const [trackId = "montreal", fracsArg, latsArg] = process.argv.slice(2);
-if (trackId === "--help" || trackId === "-h") { console.log("usage: ground-profile.mjs <trackId> [fracs] [lats]"); process.exit(0); }
+const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`Usage: node .claude/skills/survey-track/ground-profile.mjs <trackId> [fracs] [lats]
+
+Lateral ground-profile probe via __apex.groundY (boots Chromium).
+  fracs = comma lap fractions (default 0,0.12,0.25,0.5,0.65,0.8)
+  lats  = comma lateral metres (default 8,12,20,30,45,70,110)`);
+  process.exit(0);
+}
+const [trackId = "montreal", fracsArg, latsArg] = argv;
 assertSafePathToken(trackId, "track id");
-if (process.argv.slice(2).length > 3) throw new Error("too many arguments");
+if (argv.length > 3) throw new Error("too many arguments");
 const fracs = (fracsArg || "0,0.12,0.25,0.5,0.65,0.8").split(",").map((s) => s.trim() === "" ? NaN : Number(s));
 const lats = (latsArg || "8,12,20,30,45,70,110").split(",").map((s) => s.trim() === "" ? NaN : Number(s));
 

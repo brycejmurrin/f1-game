@@ -127,6 +127,24 @@ import { sweep as spineSweep, writePng as writeFlatPng } from "../car/spine-stat
 
 const LIVE_BASE = "https://brycejmurrin.github.io/f1-game/";
 const argv = process.argv.slice(2);
+// Bare `--help` used to be silently ignored (OWN_FLAGS only catches `--k=v`
+// unknowns as livery axes) and launch a multi-minute Chromium shoot. Exit
+// before any import that needs a browser settles — this is the first argv a
+// new agent types.
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`garage-angles — garage shots, ONE Chromium (soft #game-soft CDP)
+
+  node tools/shot/garage-angles.mjs [--team=redbull|all] [--views=spine] [--plan]
+    [--livery=default] [--preset=wall|fin|flank|mark|quick|sweep|none]
+    [--out=artifacts/garage-angles] [--fast] [--viewport=1280x720]
+
+  --plan     print the cartesian product and exit (no browser)
+  --preset=list   list named framing presets
+  spine      expands to hero,top,rear,side
+
+Full flag surface: header of tools/shot/garage-angles.mjs.`);
+  process.exit(0);
+}
 /** Accept `--name=value` and `--name value` (render-car style). */
 const flag = (name, dflt) => {
   const eq = argv.find((a) => a.startsWith(name + "="));

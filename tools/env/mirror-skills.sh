@@ -13,7 +13,18 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC="$ROOT/.claude/skills"
 DST="$ROOT/.agents/skills"
 MODE="${1:-}"
-case "$MODE" in ''|--check|--copy) ;; *) echo "Usage: $0 [--check|--copy]" >&2; exit 2 ;; esac
+if [[ "$MODE" == "--help" || "$MODE" == "-h" ]]; then
+  cat <<'EOF'
+usage: bash tools/env/mirror-skills.sh [--check|--copy|--help]
+
+Repair the tracked .agents/skills/ Codex mirror (one symlink per skill dir).
+  (default)  create/refresh symlinks
+  --check    exit 1 if the mirror drifts; write nothing
+  --copy     materialise real copies (never commit those)
+EOF
+  exit 0
+fi
+case "$MODE" in ''|--check|--copy) ;; *) echo "Usage: $0 [--check|--copy|--help]" >&2; exit 2 ;; esac
 [[ -d "$SRC" ]] || { echo "Missing canonical .claude/skills directory" >&2; exit 1; }
 
 want() { for entry in "$SRC"/*; do [[ ! -d "$entry" ]] || basename "$entry"; done | sort; }
