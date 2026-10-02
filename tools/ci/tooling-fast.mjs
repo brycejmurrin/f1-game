@@ -400,6 +400,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
+  // memory-sync.sh's three-way sync: a stale session never reverts other
+  // sessions' memories (2026-10-02, twice). Real hook, throwaway repo. ~1 s.
+  "tests/unit/memory-sync.test.mjs",
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
