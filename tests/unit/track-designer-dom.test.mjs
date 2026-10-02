@@ -899,3 +899,61 @@ test("START FROM…: a card per shipped circuit; a pick traces it into a new des
   assert.deepEqual(plain(b.D.state().design.pts), d0.pts, "UNDO brings the design back");
   assert.equal(b.D.startFrom("custom-nope"), false);
 });
+
+test("DESIGNED RANDOMISE: FAST fills four cards (busy while it runs), USE loads one in one UNDO, MORE LIKE THIS replaces them", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  const design = panes(b)[0], fast = chipsIn(design, "FAST")[0], row = fast.parentNode;
+  assert.deepEqual(row.children.map((c) => c.textContent), ["FAST", "TECHNICAL", "MIXED"]);
+  assert.ok(row.children.every((c) => c.getAttribute("aria-pressed") === "false"));
+  const grid = walk(design).filter((e) => e.classList.contains("td-grid"))[1];
+  assert.equal(grid.hidden, true, "no cards before a style is pressed");
+  assert.equal(row.parentNode, grid.parentNode, "the style row and the cards share 4 DETAILS");
+  // The run: busy at once (the frame paints), the cards after the timer slices.
+  const run = b.D.designed("FAST", 21);
+  assert.equal(grid.getAttribute("aria-busy"), "true", "aria-busy while designing");
+  assert.ok(row.children.every((c) => c.disabled), "style chips disabled while designing");
+  assert.equal(msgText(b), "Designing 16 circuits…");
+  assert.equal(fast.getAttribute("aria-pressed"), "true");
+  assert.equal(chipsIn(design, "TECHNICAL")[0].getAttribute("aria-pressed"), "false");
+  assert.equal(await run, true);
+  assert.equal(grid.hasAttribute("aria-busy"), false, "aria-busy cleared");
+  assert.ok(row.children.every((c) => !c.disabled));
+  assert.equal(grid.hidden, false);
+  assert.equal(grid.children.length, 4, "four cards");
+  const st = b.D.state();
+  assert.equal(st.candidates.length, 4);
+  for (let i = 1; i < 4; i++) assert.ok(st.candidates[i - 1].score >= st.candidates[i].score, "best first");
+  for (const card of grid.children) {
+    assert.ok(card.classList.contains("td-card"));
+    assert.equal(card.children[0].tagName, "CANVAS"); assert.equal(card.children[0].getAttribute("aria-hidden"), "true");
+    assert.match(card.children[1].textContent, /^\d+\.\d km · \d+ corners · \d+ passing$/);
+    assert.deepEqual(chipsIn(card).map((c) => c.textContent), ["USE", "MORE LIKE THIS"]);
+  }
+  assert.match(msgText(b), /^FAST: the best 4 of 16/);
+  // Deterministic per seed.
+  await b.D.designed("FAST", 21);
+  assert.deepEqual(plain(b.D.state().candidates), plain(st.candidates));
+  // USE: the card's loop, one UNDO entry, a new circuit.
+  const u0 = b.D.state().undo, d0 = plain(b.D.state().design.pts);
+  chipsIn(grid.children[1], "USE")[0].click();
+  let now = b.D.state();
+  assert.equal(now.undo, u0 + 1, "one UNDO entry");
+  assert.equal(now.design.seed, st.candidates[1].seed);
+  assert.equal(now.design.originId, undefined, "SAVE adds a new circuit");
+  assert.equal(b.D.preview().ok, true, "the card is green");
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), d0, "UNDO brings the design back");
+  // MORE LIKE THIS: variants of card 1 replace the cards.
+  const more = b.D.moreLikeThis(0);
+  assert.equal(grid.getAttribute("aria-busy"), "true");
+  assert.equal(await more, true);
+  assert.equal(grid.hasAttribute("aria-busy"), false);
+  const after = b.D.state().candidates;
+  assert.ok(after.length >= 2 && after.length <= 4 && grid.children.length === after.length, after.length + " variants");
+  assert.ok(after.every((c) => !st.candidates.some((o) => o.seed === c.seed)), "new seeds: the cards were replaced");
+  assert.match(msgText(b), /circuits like design 1/);
+  assert.equal(b.D.useCandidate(0), true);
+  assert.equal(b.D.preview().ok, true, "a variant is green");
+  assert.equal(b.D.useCandidate(9), false, "no such card");
+});

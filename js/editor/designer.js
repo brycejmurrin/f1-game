@@ -662,6 +662,7 @@ const TrackDesigner = (function () {
     sharing.append(ui.code, loadRow);
     pane.append(tools, ui.shape, theme, circuit, issues, sharing);
     buildInsight(pane, circuit, actions, sharing);
+    buildDesigned(circuit);
   }
 
   // ── share out / in ────────────────────────────────────────────────────────
@@ -941,6 +942,7 @@ const TrackDesigner = (function () {
       lastCode,
       corners: ins.map((c) => ({ n: c.n, dir: c.dir, angDeg: Math.round(c.angDeg), R: Math.round(c.R), kmh: Math.round(c.vApex * 3.6), lenM: Math.round(c.lenM), i0: c.i0, i1: c.i1, fit: c.fit ? copy(c.fit) : null })),
       heat: heatOn,
+      candidates: cands.map((c) => ({ seed: c.seed >>> 0, score: +c.score.toFixed(3) })),
     };
   }
 
@@ -1071,7 +1073,134 @@ const TrackDesigner = (function () {
     requestAnimationFrame(next);
   }
 
+  // ── DESIGNED RANDOMISE: FAST / TECHNICAL / MIXED, USE, MORE LIKE THIS ──
+  // cands: the cards on show ({ seed, pts, score, feats, tr, stats }, best
+  // first); candJob: the run in flight (a newer press drops an older one).
+  const DESIGN_N = 16, DESIGN_SLICES = 4, DESIGN_STYLES = ["FAST", "TECHNICAL", "MIXED"];
+  let cands = [], candStyle = null, candJob = 0, candThumbJob = 0, candBusy = false;
+  /** Under the RANDOMISE row's group: [FAST][TECHNICAL][MIXED] and the candidate cards. */
+  function buildDesigned(circuit) {
+    ui.styleRow = el("div", "td-chips");
+    ui.styles = {};
+    for (const st of DESIGN_STYLES) {
+      const b = btn(st, "sel-chip", () => designed(st));
+      b.setAttribute("aria-pressed", "false");
+      b.setAttribute("aria-label", st + ": design " + DESIGN_N + " circuits and show the best four");
+      ui.styles[st] = b; ui.styleRow.appendChild(b);
+    }
+    ui.cands = el("div", "td-grid"); ui.cands.hidden = true; ui.cands.setAttribute("aria-label", "Designed circuits, best first");
+    circuit.append(ui.styleRow, ui.cands);
+  }
+  function setDesignBusy(on) {
+    candBusy = on;
+    if (ui.cands) { if (on) ui.cands.setAttribute("aria-busy", "true"); else ui.cands.removeAttribute("aria-busy"); }
+    if (ui.styles) for (const st of DESIGN_STYLES) ui.styles[st].disabled = on;
+  }
+  /** `slices` synchronous steps, each on its own timer (the first after 30 ms so
+   *  the busy state paints), then done() → the Promise's value. A newer run
+   *  supersedes this one (false). */
+  function runSliced(text, slices, work, done) {
+    const job = ++candJob;
+    setDesignBusy(true); message(text);
+    return new Promise((resolve) => {
+      let k = 0;
+      const step = () => {
+        if (job !== candJob) { resolve(false); return; }
+        try { work(k); } catch (e) {
+          Log.warn("track", "designed randomise failed: " + (e && e.message || e));
+          setDesignBusy(false); message("Could not design circuits — RANDOMISE instead", true); resolve(false); return;
+        }
+        if (++k < slices) { setTimeout(step, 0); return; }
+        setDesignBusy(false);
+        resolve(done());
+      };
+      setTimeout(step, 30);
+    });
+  }
+  /** FAST / TECHNICAL / MIXED: DESIGN_N seeds (from `seed`, default the design's
+   *  own) validated, scored for the style, the best four as cards. Promise<bool>. */
+  function designed(style, seed) {
+    const I = insight();
+    if (!I || !I.rate || !TrackRandom.designOne || !TrackRandom.STYLES[style] || !design) return Promise.resolve(false);
+    const s0 = design.seed >>> 0;
+    const baseSeed = Number.isFinite(seed) ? seed >>> 0 : (Math.imul(s0 ^ (s0 >>> 13), 0x2c1b3c6d) + 0x6a09e667) >>> 0;
+    candStyle = style;
+    for (const st of DESIGN_STYLES) { const on = st === style; ui.styles[st].setAttribute("aria-pressed", on ? "true" : "false"); ui.styles[st].classList.toggle("active", on); }
+    const opts = { tries: 3, base: Object.assign({}, design), check: TrackValidate.check, score: I.rate };
+    const per = Math.ceil(DESIGN_N / DESIGN_SLICES), found = [];
+    return runSliced("Designing " + DESIGN_N + " circuits…", DESIGN_SLICES, (k) => {
+      for (let i = k * per; i < Math.min(DESIGN_N, (k + 1) * per); i++) found.push(TrackRandom.designOne(baseSeed, i, style, opts));
+    }, () => {
+      cands = TrackRandom.rank(found, 4);
+      renderCandidates();
+      message(cands.length ? style + ": the best " + cands.length + " of " + DESIGN_N + " — USE one, or MORE LIKE THIS" : "No clean " + style + " circuit in " + DESIGN_N + " seeds — press it again", !cands.length);
+      return cands.length > 0;
+    });
+  }
+  /** USE: the card's circuit becomes the design (one UNDO entry; SAVE adds a new circuit). */
+  function useCandidate(i) {
+    const c = cands[i];
+    if (!c || candBusy || !design) return false;
+    sel = -1; span = -1;
+    commit(Object.assign({}, design, { pts: c.pts.map((p) => [p[0], p[1]]), seed: c.seed >>> 0, originId: undefined }), "randomise");
+    if (cv) cv.fit();
+    message("Design " + (i + 1) + " loaded — seed " + (c.seed >>> 0) + ", UNDO to go back");
+    return true;
+  }
+  /** MORE LIKE THIS: four nudges of the card's loop (TrackRandom.mutate, seeds
+   *  Hash32.mix(seed + j)), validated, re-scored for the style, as the new cards. */
+  function moreLikeThis(i) {
+    const c = cands[i], I = insight();
+    if (!c || candBusy || !I || !TrackRandom.mutate || !design) return Promise.resolve(false);
+    const style = candStyle || "MIXED", base = Object.assign({}, design), found = [];
+    return runSliced("Designing 4 circuits like design " + (i + 1) + "…", 4, (j) => {
+      const seed = Hash32.mix((c.seed + j) >>> 0);
+      const m = TrackRandom.mutate(c.pts, seed, { check: (pts) => TrackValidate.check(Object.assign({}, base, { pts })) });
+      if (!m.ok || !m.verdict) return;
+      const r = I.rate(m.verdict, style);
+      found.push({ seed, pts: m.pts, score: r.score, feats: r.feats, tr: m.verdict.tr, stats: m.verdict.stats });
+    }, () => {
+      if (!found.length) { message("No clean variant of design " + (i + 1) + " — try another card", true); return false; }
+      cands = TrackRandom.rank(found, 4);
+      renderCandidates();
+      message(cands.length + " circuits like design " + (i + 1) + " — USE one, or MORE LIKE THIS again");
+      return true;
+    });
+  }
+  const candMeta = (c) => {
+    const km = c.tr ? c.tr.total / 1000 : 0, corners = c.feats ? Math.round(c.feats.C * km) : (c.stats ? c.stats.turns : 0);
+    return km.toFixed(1) + " km · " + corners + " corners · " + ((c.stats && c.stats.passZones) || 0) + " passing";
+  };
+  /** The cards: outline (one per frame, DesignerCanvas.thumb over the verdict's own tr), meta, USE, MORE LIKE THIS. */
+  function renderCandidates() {
+    if (!ui.cands) return;
+    while (ui.cands.firstChild) ui.cands.removeChild(ui.cands.firstChild);
+    ui.cands.hidden = !cands.length;
+    const job = ++candThumbJob, queue = [];
+    cands.forEach((c, i) => {
+      const card = el("div", "td-card");
+      const cvs = el("canvas"); cvs.width = 160; cvs.height = 110; cvs.setAttribute("aria-hidden", "true");
+      const row = el("div", "td-chips");
+      const use = btn("USE", "sel-chip", () => useCandidate(i));
+      use.setAttribute("aria-label", "Use design " + (i + 1) + ": " + candMeta(c));
+      const more = btn("MORE LIKE THIS", "sel-chip", () => moreLikeThis(i));
+      more.setAttribute("aria-label", "More like this: four variants of design " + (i + 1));
+      row.append(use, more);
+      card.append(cvs, el("div", "td-card-meta", candMeta(c)), row);
+      ui.cands.appendChild(card);
+      queue.push([cvs, c.tr]);
+    });
+    const next = () => {
+      if (job !== candThumbJob || !queue.length) return;
+      const [cvs, tr] = queue.shift();
+      try { DesignerCanvas.thumb(cvs, tr, { color: "#f6f6f9", width: 2 }); } catch (e) { Log.warn("track", "designed thumbnail failed: " + (e && e.message)); }
+      requestAnimationFrame(next);
+    };
+    requestAnimationFrame(next);
+  }
+
   return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO,
-    selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom };
+    selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
+    designed, useCandidate, moreLikeThis };
 })();
 Object.freeze(TrackDesigner);
