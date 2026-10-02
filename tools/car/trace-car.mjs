@@ -34,6 +34,13 @@ import { fileURLToPath } from "node:url";
 import { launchChromium, startStaticServer } from "../lib/harness.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`Usage: node tools/car/trace-car.mjs [--az=180] [--el=16] [--dist=9] [--team=ferrari] [--out=file.json] [--png]
+
+Trace the isolated carview beauty+empty-stage difference into SVG contours.
+Boots Chromium against carview.html.`);
+  process.exit(0);
+}
 const arg = (k, d) => {
   const hit = process.argv.slice(2).find((a) => a.startsWith(`--${k}=`));
   return hit === undefined ? d : hit.slice(k.length + 3);

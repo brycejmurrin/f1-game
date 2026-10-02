@@ -199,6 +199,7 @@ export const RULES = [
   // the optional iwer Playwright smoke is test:xr (not selected by path alone).
   [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
+  [/^js\/ui\/dock-layout\.js/, ["steering-unit", "ui"], "dock-layout.test.mjs + ui-button-touch reposition"],
   [/^js\/ui\//, ["ui"], "DOM screens"],
   [/^js\/fx\//, ["ui"], "visual-only layers"],
 
@@ -213,6 +214,7 @@ export const RULES = [
   [/^js\/race\/race-settings\.js/, ["game-vm"], "race-settings-vm.test.mjs"],
   [/^js\/career\/custom-team\.js/, ["car"], "custom-team.spec.js"],
   [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
+  [/^js\/car\/car-shade\.js/, ["garage-unit"], "car-shade.test.mjs"],
   [/^js\/garage\/setup-tune\.js/, ["garage-unit"], "setup-tune.test.mjs"],
   [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],

@@ -140,3 +140,107 @@ test("the baked normal map's tangent frame is the tile's world axes on every bac
       `${name}: the tangent frame must be built from the world axes (+x, +y, +z), not derived from N`);
   }
 });
+
+test("puddles follow the road shape on every backend — crown drains, the low side of a camber pools", () => {
+  // The puddle mask was value noise on a flat threshold until 2026-10-01: water
+  // pooled equally on the crown and in the gutter and a banked turn held it on
+  // the high side (the second graphics-detail survey, item 13). On the road
+  // ribbon the noise is weighted 0.7 (centre) → 1.2 (edge) and by the lateral
+  // downhill read from the screen derivatives of trk.y against the geometric
+  // normal — the same constants in every language.
+  const wet = (file, start, end) => { const src = read(file); const i = src.indexOf(start); assert.ok(i >= 0, start); return src.slice(i, src.indexOf(end, i)); };
+  const glx = wet("js/render/glx/shaders/glsl-lit.js", "float pn = vnoise(vWorldPos.xz", "RAIN RIPPLES");
+  assert.match(glx, /mix\(0\.7, 1\.2, abs\(lat\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
+  assert.match(read("js/render/glx/shaders/glsl-lit.js"), /vec2 trkRightXZ = dFdx\(vWorldPos\.xz\) \* dFdx\(vTrk\.y\) \+ dFdy\(vWorldPos\.xz\) \* dFdy\(vTrk\.y\)/);
+  assert.match(glx, /dot\(trkRightXZ \/ rl, Ngeo\.xz\)/);
+  assert.match(glx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
+  const tlx = wet("js/render/three/tsl-lit.js", "const pn = vnoise(wp.xz", "RAIN RIPPLES");
+  assert.match(tlx, /mix\(float\(0\.7\), float\(1\.2\), abs\(lat\)\)\.mul\(clamp\(float\(1\.0\)\.add\(downhill\.mul\(lat\)\.mul\(4\.0\)\), 0\.5, 1\.5\)\)/);
+  assert.match(read("js/render/three/tsl-lit.js"), /const trkRightXZ = trkA \? dFdx\(wp\.xz\)\.mul\(dFdx\(trkA\.y\)\)\.add\(dFdy\(wp\.xz\)\.mul\(dFdy\(trkA\.y\)\)\)/);
+  assert.match(tlx, /dot\(trkRightXZ\.div\(rl\), Ngeo\.xz\)\.negate\(\)/);
+  assert.match(tlx, /smoothstep\(0\.48, 0\.88, pn\.mul\(pool\)\)\.mul\(wet\)/);
+  const wgx = wet("js/render/webgpu/wgsl-chunks.js", "let pn = svnoise(in.wpos.xz", "RAIN RIPPLES");
+  assert.match(wgx, /mix\(0\.7, 1\.2, abs\(lat\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
+  assert.match(read("js/render/webgpu/wgsl-chunks.js"), /let trkRightXZ = dpdx\(in\.wpos\.xz\) \* dpdx\(vTrk\.y\) \+ dpdy\(in\.wpos\.xz\) \* dpdy\(vTrk\.y\)/, "WGX takes the derivatives before the first branch (uniform control flow)");
+  assert.match(wgx, /-dot\(trkRightXZ \/ rl, Ngeo\.xz\)/);
+  assert.match(wgx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
+});
+
+test("particles are lit by the frame hemisphere and fogged by the lit pass's fog on every backend", () => {
+  // Every particle was unlit and unfogged until 2026-10-01 (the second
+  // graphics-detail survey, item 9): the alpha group must read the hemisphere
+  // ambient on the quad's up plus a wrap of the key with a floodlit floor, and
+  // both groups must apply the lit pass's exp² fog on the eye distance.
+  const g = read("js/render/glx/shaders/glsl-fx.js");
+  const glx = g.slice(g.indexOf("const PARTICLE_FS"), g.indexOf("const LINE_VS"));
+  assert.match(glx, /mix\(uAmbGround, uAmbSky, vUV\.y \* 0\.5 \+ 0\.5\) \+ uSunColor \* 0\.45/);
+  assert.match(glx, /max\(lit, vec3\(0\.18\)\)/);
+  assert.match(glx, /float fog = 1\.0 - exp\(-fd \* fd\);/);
+  const t = read("js/render/three/tsl-fx.js");
+  const tlx = t.slice(t.indexOf("function particleMaterial"), t.indexOf("const decalCache"));
+  assert.match(tlx, /mix\(vec3\(U\.ambGround\), vec3\(U\.ambSky\), up\)\.add\(vec3\(U\.sunColor\)\.mul\(0\.45\)\)/);
+  assert.match(tlx, /max\(lit, vec3\(0\.18\)\)/);
+  assert.match(tlx, /exp\(fd\.mul\(fd\)\.negate\(\)\)/);
+  assert.match(t, /U\.fogDensity\.value = \(frame\.fogDensity != null \? frame\.fogDensity : 0\) \* k\("fogDensityMul", 1\)/, "TLX refreshes the fog uniform per frame");
+  const w = read("js/render/webgpu/wgsl-fx.js");
+  const wgx = w.slice(w.indexOf("const PARTICLE ="), w.indexOf("// 2c. LINE"));
+  assert.match(wgx, /mix\(U\.ambGnd\.xyz, U\.ambSky\.xyz, in\.uv\.y \* 0\.5 \+ 0\.5\) \+ U\.sunFog\.xyz \* 0\.45/);
+  assert.match(wgx, /max\(lit, vec3<f32>\(0\.18\)\)/);
+  assert.match(wgx, /let fog = 1\.0 - exp\(-fd \* fd\);/);
+  assert.match(wgx, /size 144/);
+  assert.match(w, /PARTICLE_UNIFORM_BYTES:\s+144/);
+  assert.match(read("js/render/webgpu/wgx.js"), /writeBuffer\(particleUBO\[i\], 0, s, 0, 36\)/, "WGX uploads all 36 floats of ParticleU");
+});
+
+test("the sun disc sits behind the cloud deck on every backend", () => {
+  // The cloud pass hoists the coverage along the ray (GLX cityCov, TLX cityCov,
+  // WGX covRay) and the stars and the moon already fade by it; until 2026-10-01
+  // the sun corona and disc were ADDED after the clouds with only the global
+  // overcast damp, so a cumulus passing over the sun never hid the disc (the
+  // second graphics-detail survey, item 12). The disc and the tight ring must
+  // carry the full (1 − coverage); the aureole most of it.
+  const block = (file, start) => {
+    const src = read(file);
+    const i = src.indexOf(start);
+    assert.ok(i >= 0, `${file}: ${start} not found`);
+    return src.slice(i, i + 3200);
+  };
+  const b = {
+    GLX: block("js/render/glx/shaders/glsl-sky.js", "float coronaDamp = "),
+    TLX: block("js/render/three/tsl-sky.js", "const coronaDamp = "),
+    WGX: block("js/render/webgpu/wgsl-chunks.js", "let coronaDamp = "),
+  };
+  const discLine = (s, re) => { const m = re.exec(s); assert.ok(m, "no disc line"); return m[0]; };
+  assert.match(discLine(b.GLX, /float disc = [^\n]*/), /\* sunClear;/, "GLX: the disc must be scaled by the ray's cloud coverage");
+  assert.match(b.GLX, /float sunClear = 1\.0 - cityCov;/);
+  assert.match(discLine(b.GLX, /uSunCorona[^\n]*/), /\* sunClear/, "GLX: the tight ring too");
+  assert.match(discLine(b.TLX, /const disc = [\s\S]*?toVar\(\);/), /cityCov\.oneMinus\(\)/, "TLX: the disc must be scaled by cityCov");
+  assert.match(discLine(b.TLX, /U\.sunCorona[^\n]*/), /cityCov\.oneMinus\(\)/, "TLX: the tight ring too");
+  assert.match(discLine(b.WGX, /let disc = [^\n]*/), /\(1\.0 - covRay\)/, "WGX: the disc must be scaled by covRay");
+  assert.match(discLine(b.WGX, /sunCorona \* coronaDamp[^\n]*/), /\(1\.0 - covRay\)/, "WGX: the tight ring too");
+});
+
+test("the moon disc hangs on the night key light, not a constant, on every backend", () => {
+  // Three sky shaders drew the moon at a literal (0.42, 0.72, 0.55) until
+  // 2026-10-01 while the lit pass, the wet-road glint and the shadow map used
+  // the palette's sunDir (which at night IS the moon key — the NIGHT gate
+  // comment in glsl-sky.js). Singapore's moon sat up-left of the pit straight
+  // with the shadows falling toward it (the second graphics-detail survey).
+  const moonBlock = (file, start) => {
+    const src = read(file);
+    const i = src.indexOf(start);
+    assert.ok(i >= 0, `${file}: ${start} not found`);
+    return src.slice(i, i + 600);
+  };
+  const blocks = {
+    GLX: moonBlock("js/render/glx/shaders/glsl-sky.js", "if (uMoon > 0.0 && uStars > 0.5)"),
+    TLX: moonBlock("js/render/three/tsl-sky.js", "If(U.moon.greaterThan(0.0).and(U.stars.greaterThan(0.5))"),
+    WGX: moonBlock("js/render/webgpu/wgsl-chunks.js", "if (moon > 0.0 && stars > 0.5)"),
+  };
+  for (const [name, s] of Object.entries(blocks)) {
+    assert.ok(!/moonDir\s*=\s*normalize\(vec3(<f32>)?\(\s*[\d.]+,\s*[\d.]+,\s*[\d.]+\s*\)\)/.test(s),
+      `${name}: the moon disc direction is a literal vector again — it must follow the night key light`);
+    assert.ok(/moonDir\s*=\s*normalize\((uSunDir|U\.sunDir|sunDir)\)/.test(s),
+      `${name}: the moon disc must be placed on the sun/moon key direction uniform`);
+  }
+});

@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import cp from "node:child_process";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
@@ -1013,4 +1014,72 @@ test("the UI never claims a provenance the pack contradicts", { skip: !hasPack &
       "must not describe the pack as a CC0 photoscan. Re-bake first (assets/pack/webbake.js " +
       "+ `assets.mjs import-pack`), which rewrites the manifest licences, and this guard relaxes.");
   }
+});
+
+// ── modelsReady: the build waits for the pack, bounded ─────────────────────────
+// Prop placement is synchronous (bakedModel reads modelSync), so a build that
+// ran before loadModels() settled kept the box fallback for the whole session
+// (the second graphics-detail survey, 2026-10-01). ensureScenery now awaits
+// Assets.modelsReady(): the same prefetch run, capped so an offline boot still
+// builds, and never a rejection.
+const MODEL_V2 = () => {
+  // One-vertex, one-index v2 record: enough for _parseModel to accept it.
+  const nv = 3, ni = 3, buf = new ArrayBuffer(20 + nv * 12 + nv * 6 + nv * 3 + nv + ni * 2);
+  const dv = new DataView(buf);
+  [0x41, 0x58, 0x32, 0x36].forEach((b, i) => dv.setUint8(i, b));
+  dv.setUint32(4, 2, true); dv.setUint32(8, nv, true); dv.setUint32(12, ni, true);
+  return buf;
+};
+const packFetch = (gate) => async (url) => {
+  if (/manifest\.json$/.test(url)) return { ok: true, json: async () => ({ models: { box: { file: "models/box.ax26" } } }) };
+  if (gate) await gate;
+  return { ok: true, arrayBuffer: async () => MODEL_V2() };
+};
+
+test("modelsReady resolves once the prefetched models are resident, and loadModels is one run", async () => {
+  let release; const gate = new Promise((r) => { release = r; });
+  let fetches = 0;
+  const assets = assetLoader({ setTimeout, clearTimeout, fetch: (u) => { fetches++; return packFetch(gate)(u); } });
+  const boot = assets.loadModels();
+  assert.equal(assets.loadModels(), boot, "a second loadModels joins the boot run");
+  let settled = false;
+  const ready = assets.modelsReady(60000).then((n) => { settled = true; return n; });
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(settled, false, "modelsReady must not resolve while the model fetch is in flight");
+  assert.equal(assets.modelSync("box"), null);
+  release();
+  assert.equal(await ready, 1, "resolves to the resident count once the fetch lands");
+  assert.ok(assets.modelSync("box"), "the model is resident when the build runs");
+  assert.equal(fetches, 2, "manifest + one model, shared by loadModels and modelsReady");
+});
+
+test("modelsReady gives up at its cap when the pack hangs, and never rejects on a failing pack", async () => {
+  const hung = assetLoader({ setTimeout, clearTimeout, fetch: packFetch(new Promise(() => {})) });
+  assert.equal(await hung.modelsReady(20), -1, "a hanging model fetch resolves -1 at the cap");
+  const broken = assetLoader({ setTimeout, clearTimeout, async fetch() { throw Error("offline"); } });
+  assert.equal(await broken.modelsReady(1000), 0, "a failing manifest resolves 0 at once, not a rejection");
+});
+
+test("ensureScenery awaits Assets.modelsReady before any build", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const i = game.indexOf("function ensureScenery(");
+  assert.ok(i >= 0);
+  const fn = game.slice(i, game.indexOf("\n}\n", i));
+  assert.match(fn, /Assets\.modelsReady\(\)/, "ensureScenery no longer waits for the baked model pack");
+  assert.match(fn, /Promise\.all\(\[p, models\]\)/, "the scenery script and the model pack must be awaited together");
+  assert.match(fn, /return models\.then/, "a resident or inline scenery must still wait for the pack");
+});
+
+test("unknown bake flag is refused before rewriting the pack", () => {
+  const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
+    { encoding: "utf8" });
+  assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
+  assert.match(r.stderr, /unknown flag --dry-run/, `expected unknown-flag error, got:\n${r.stderr}`);
+});
+
+test("assets.mjs --help prints usage and exits 0", () => {
+  const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "--help"],
+    { encoding: "utf8" });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /bake-synthetic/);
 });

@@ -110,6 +110,23 @@
 .td-issue[data-level="amber"] { border-left-color: var(--sec-slow); }
 .td-issue[data-level="info"] { border-left-color: var(--edit-fill); }
 .td-issue[data-level="ok"] { border-left-color: var(--faster); }
+/* A row with a FIX chip: the message grows, the chip sits at the end. */
+.td-issue { display: flex; align-items: center; gap: calc(var(--gap) / 2); }
+.td-issue > .sel-chip { flex: none; margin-left: auto; }
+/* Rows that only explain (the coach card, HOW TO) are not pressable. */
+.td-group > .td-issue, .td-pane[data-pane="howto"] .td-issue { cursor: default; }
+/* The CHECKS label row: the label takes the line, FIX ALL sits at its end. */
+.td-chips > .td-label { flex: 1 1 auto; align-self: center; }
+/* The canvas's press-and-hold row (designer.js showCtx sets left/right and
+   top/bottom to the press, opening away from the nearer edges). */
+.td-ctx {
+  position: absolute;
+  z-index: 1;
+  padding: calc(var(--gap) / 2);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+}
 .td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); }
 .td-card {
   display: flex; flex-direction: column; gap: calc(var(--gap) / 2);
@@ -137,14 +154,18 @@
    instead of a wrapping row that cost 172px on a 412px-wide phone. */
 @media (max-width: 760px), (orientation: portrait) {
   .td-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(200px, 1fr) minmax(0, 42%); }
-  .td-hint { display: none; }
+  .td-stage .td-hint { display: none; }   /* the rail's copy under 1 SHAPE stays */
   .td-foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
   .td-foot .td-msg { grid-column: 1 / -1; }
+}
+/* Wide and tall enough for the stage hint: the rail's copy would repeat it. */
+@media (min-width: 761px) and (orientation: landscape) and (min-height: 501px) {
+  .td-rail .td-hint { display: none; }
 }
 /* Short (a phone in landscape, 412px tall measured 2026-10-01): the canvas is
    the point of the screen, so the hint goes and the head and foot shrink. */
 @media (max-height: 500px) {
-  .td-hint { display: none; }
+  .td-stage .td-hint { display: none; }
   .td-stage { gap: calc(var(--gap) / 4); }
   .td-foot { padding-top: calc(var(--pad) * 0.2); padding-bottom: calc(var(--pad) * 0.25); }
 }

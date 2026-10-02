@@ -145,6 +145,15 @@ async function walk(page, layerId, { restore = "" } = {}) {
   return kb;
 }
 
+/** Wait until `__aud` top(+settings text) differs from `before`. */
+async function waitWhereChanged(page, before, timeout = 5_000) {
+  await page.waitForFunction(
+    (b) => (window.__aud.top() + "/" + ((document.getElementById("dlg-settings") || {}).textContent || "")) !== b,
+    before,
+    { polling: 100, timeout },
+  );
+}
+
 // Escape leaves the layer (closes it, or pops its page); reopened, so does B.
 // `seed` first: the walk can end in a text field, where the Escape KEY is
 // deliberately ignored (js/input/input.js `typing`) — the pad's B is not, it
@@ -154,23 +163,25 @@ async function leaves(page, layerId, reopen, seed) {
   if (seed) await page.evaluate((k) => window.__aud.focus(k), seed);
   const before = await where();
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(300);
+  await waitWhereChanged(page, before);
   expect(await where(), `${layerId}: Escape leaves`).not.toBe(before);
   await reopen();
-  expect(await page.evaluate(() => window.__aud.top())).toBe(layerId);
+  await page.waitForFunction((id) => window.__aud.top() === id, layerId, { polling: 100, timeout: BOOT_MS });
   if (seed) await page.evaluate((k) => window.__aud.focus(k), seed);
   const b0 = await where();
   await page.evaluate(() => window.__aud.padPress(1));
-  await page.waitForTimeout(300);
+  await waitWhereChanged(page, b0);
   expect(await where(), `${layerId}: the pad's B leaves`).not.toBe(b0);
 }
 
 const toTitle = async (page) => {
   for (let i = 0; i < 8; i++) {
     if ((await page.evaluate(() => window.__aud.top())) === "overlay") return;
+    const before = await page.evaluate(() => window.__aud.top());
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(250);
+    await page.waitForFunction((b) => window.__aud.top() !== b, before, { polling: 100, timeout: 2_000 }).catch(() => {});
   }
+  await page.waitForFunction(() => window.__aud.top() === "overlay", null, { polling: 100, timeout: 5_000 });
 };
 
 test.describe("Menu traversal — keyboard and controller", () => {
@@ -189,7 +200,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
     const open = async () => {
       await click(page, "#mb-race");
       await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
-      await page.waitForTimeout(400);
+      await page.waitForFunction(() => window.__aud.top() === "select", null, { polling: 100, timeout: BOOT_MS });
     };
     await open();
     const restore = `const on = document.querySelector('#sel-track-filter .sel-chip.active'); if (on && on.dataset.filter !== 'all') { const a = document.querySelector('#sel-track-filter [data-filter="all"]'); if (a) a.click(); }`;
@@ -205,7 +216,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
       await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
       await click(page, "#sel-go");
       await page.waitForFunction(() => !document.getElementById("race-settings").hidden, null, { polling: 100, timeout: BOOT_MS });
-      await page.waitForTimeout(300);
+      await page.waitForFunction(() => window.__aud.top() === "race-settings", null, { polling: 100, timeout: BOOT_MS });
     };
     await open();
     const { seed } = await walk(page, "race-settings");
@@ -217,9 +228,10 @@ test.describe("Menu traversal — keyboard and controller", () => {
       await boot(page);
       const open = async () => {
         await click(page, "#mb-settings");
-        await page.waitForTimeout(250);
+        await page.waitForFunction(() => window.__aud.top() === "pmsettings" || !document.getElementById("pmsettings")?.hidden,
+          null, { polling: 100, timeout: BOOT_MS });
         await click(page, door);
-        await page.waitForTimeout(250);
+        await page.waitForFunction(() => window.__aud.top() === "pmsettings", null, { polling: 100, timeout: BOOT_MS });
         await openFolds(page);
       };
       await open();
@@ -232,9 +244,10 @@ test.describe("Menu traversal — keyboard and controller", () => {
   test("a fold opens with Enter and with the pad's A; a select keeps its own axis and leaves on Down", async ({ page }) => {
     await boot(page);
     await click(page, "#mb-settings");
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => window.__aud.top() === "pmsettings" || !document.getElementById("pmsettings")?.hidden,
+      null, { polling: 100, timeout: BOOT_MS });
     await click(page, "#pm-open-display");
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => window.__aud.top() === "pmsettings", null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__aud.layerId = "pmsettings"; });
     const sum = await page.evaluate(() => {
       const s = MenuNav.items(UiLayers.top()).find((el) => el.tagName === "SUMMARY" && !el.parentElement.open);
@@ -275,7 +288,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
     await click(page, "#sel-car");
     await page.waitForFunction(() => !document.getElementById("carsetup").hidden, null, { polling: 100, timeout: 30_000 });
-    await page.waitForTimeout(600);
+    await page.waitForFunction(() => document.querySelectorAll('#cs-tabs [role="tab"]').length > 0, null, { polling: 100, timeout: 10_000 });
     // The rail activates on an arrow (automatic activation), so walking it
     // swaps the panel under it — assert the RAIL itself end to end.
     const chain = await page.evaluate(() => {
@@ -295,19 +308,24 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await page.evaluate(() => window.__apex.race("bahrain"));
     await page.waitForFunction(() => { const i = window.__apex.info(); return i && i.track != null; }, null, { polling: 100, timeout: TRACK_MS });
     await page.evaluate(() => { window.__apex.park(0.1); window.__apex.headless(true); });
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => {
+      const hud = document.getElementById("hud");
+      return !!(hud && !hud.hidden);
+    }, null, { polling: 100, timeout: 8_000 }).catch(() => {});
     const closeAll = async () => {
       for (let i = 0; i < 6; i++) {
         if (!(await page.evaluate(() => window.__aud.top()))) return;
+        const before = await page.evaluate(() => window.__aud.top());
         await page.keyboard.press("Escape");
-        await page.waitForTimeout(300);
+        await page.waitForFunction((b) => !window.__aud.top() || window.__aud.top() !== b, before,
+          { polling: 100, timeout: 2_000 }).catch(() => {});
       }
     };
     const openPause = async () => {
       await closeAll();
       await page.keyboard.press("Escape");
       await page.waitForFunction(() => !document.getElementById("pausemenu").hidden, null, { polling: 100, timeout: BOOT_MS });
-      await page.waitForTimeout(200);
+      await page.waitForFunction(() => window.__aud.top() === "pausemenu", null, { polling: 100, timeout: BOOT_MS });
     };
     await openPause();
     const pause = await walk(page, "pausemenu");
@@ -315,9 +333,9 @@ test.describe("Menu traversal — keyboard and controller", () => {
     const openDisplay = async () => {
       await openPause();
       await click(page, "#pm-settings");
-      await page.waitForTimeout(250);
+      await page.waitForFunction(() => window.__aud.top() === "pmsettings", null, { polling: 100, timeout: BOOT_MS });
       await click(page, "#pm-open-display");
-      await page.waitForTimeout(250);
+      await page.waitForFunction(() => window.__aud.top() === "pmsettings", null, { polling: 100, timeout: BOOT_MS });
       await openFolds(page);
     };
     await openDisplay();
