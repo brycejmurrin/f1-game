@@ -101,3 +101,15 @@ test("ai-band.mjs --help exits 0 and names the Melder checklist", () => {
   assert.match(r.stdout, /ai-band/);
   assert.match(r.stdout, /--wear/);
 });
+
+test("defend-duel.mjs --help exits 0 before the VM boot and names the real path", () => {
+  // A missing --help used to run the full duel grid; the header also pointed
+  // at scratch/defend-duel.mjs (file lives under tools/check/).
+  const r = spawnSync(process.execPath, ["tools/check/defend-duel.mjs", "--help"], {
+    cwd: ROOT, encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /defend-duel/);
+  assert.match(r.stdout, /tools\/check\/defend-duel\.mjs/);
+  assert.doesNotMatch(r.stdout, /scratch\/defend-duel/);
+});

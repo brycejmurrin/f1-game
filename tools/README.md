@@ -56,7 +56,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **ci/branch-audit.mjs** | Per-branch verdict (merged/absorbed/superseded/pr-closed/unmerged) from ancestry, merge-tree, line presence, PRs, CI. | check-changes |
+| **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
@@ -91,7 +91,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
-| **check/defend-duel.mjs** | Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`). | — |
+| **check/defend-duel.mjs** | Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`). | ai-racecraft |
 | **check/dup-keys.mjs** | Scans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins. | check-changes |
 | **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |
 | **check/extract-module.mjs** | Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`). | slim-bloat |
@@ -349,6 +349,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
+| **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |

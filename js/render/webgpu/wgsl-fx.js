@@ -296,13 +296,18 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
 struct ParticleU {
   viewProj : mat4x4<f32>,   // off  0
   eyeAdd   : vec4<f32>,     // off 64  (xyz eye, w additive)
-};                          // size 80
+  sunFog   : vec4<f32>,     // off 80  (xyz sun colour, w fog density)
+  ambSky   : vec4<f32>,     // off 96  (xyz hemisphere sky)
+  ambGnd   : vec4<f32>,     // off 112 (xyz hemisphere ground)
+  fogCol   : vec4<f32>,     // off 128 (xyz fog colour)
+};                          // size 144
 @group(0) @binding(0) var<uniform> U : ParticleU;
 struct VSOut {
   @builtin(position) clip : vec4<f32>,
   @location(0) uv : vec2<f32>,
   @location(1) color : vec3<f32>,
   @location(2) alpha : f32,
+  @location(3) dist : f32,
 };
 @vertex
 fn vs_main(
@@ -320,16 +325,28 @@ fn vs_main(
   o.uv = aCorner;
   o.color = aColor;
   o.alpha = aAlpha;
+  o.dist = length(U.eyeAdd.xyz - aCenter);
   o.clip = U.viewProj * vec4<f32>(wp, 1.0);
   return o;
 }
+// Lit + fogged (GLX PARTICLE_FS parity, 2026-10-01): the alpha group is shaded
+// as a small sphere (hemisphere on the quad's up + a wrap of the key, floodlit
+// floor 0.18); both groups take the lit pass's exp² fog on the eye distance.
 @fragment
 fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let r2 = dot(in.uv, in.uv);
   var fall = max(1.0 - r2, 0.0);
   fall = fall * fall;
   let a = in.alpha * fall;
-  return mix(vec4<f32>(in.color, a), vec4<f32>(in.color * a, 1.0), U.eyeAdd.w);
+  var col = in.color;
+  if (U.eyeAdd.w < 0.5) {
+    let lit = mix(U.ambGnd.xyz, U.ambSky.xyz, in.uv.y * 0.5 + 0.5) + U.sunFog.xyz * 0.45;
+    col = col * max(lit, vec3<f32>(0.18));
+  }
+  let fd = in.dist * U.sunFog.w;
+  let fog = 1.0 - exp(-fd * fd);
+  col = mix(mix(col, U.fogCol.xyz, fog), col * (1.0 - fog), U.eyeAdd.w);
+  return mix(vec4<f32>(col, a), vec4<f32>(col * a, 1.0), U.eyeAdd.w);
 }`;
 
   // 2c. LINE — the DRIVING LINE ribbon (js/render/shared/driving-line.js
@@ -443,7 +460,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     LINE_VERTEX_BYTES:          28,   // pos3(12) + across(4) + speed(4) + zone(4) + along(4)
     GLOW_VERTEX_BYTES:          36,   // corner2(8) + center3(12) + color3(12) + radius(4)
     DECAL_VERTEX_BYTES:         32,   // pos3(12) + nrm3(12) + uv2(8)
-    PARTICLE_UNIFORM_BYTES:     80,
+    PARTICLE_UNIFORM_BYTES:     144,  // viewProj + eyeAdd + sunFog + ambSky + ambGnd + fogCol
     PARTICLE_VERTEX_BYTES:      40,   // corner2 + center3 + color3 + size + alpha
   };
 })();

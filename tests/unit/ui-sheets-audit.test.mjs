@@ -503,11 +503,8 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   // The NOW PLAYING card's transport (pm-prev / pm-play / pm-skip) sits after
   // QUIT and only while music is live; it is not a menu action.
   const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]).filter((id) => !/^pm-(prev|play|skip)$/.test(id));
-  // DRIVING is reached through SETTINGS only. It used to sit in the pause root
-  // as well, where its handler did nothing but click SETTINGS and navigate to
-  // the same sheet — two doors onto one room. Two sessions removed it at once;
-  // this file is where both of them landed.
-  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
+  // Pause exposes specific race tasks; full preferences retain the Settings index.
+  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-practice", "pm-review", "pm-photo", "pm-appearance", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-howto", "pm-standings", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"],

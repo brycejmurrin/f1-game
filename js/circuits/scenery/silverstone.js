@@ -400,11 +400,15 @@
         }
         bakedModel("kenney_ind_chimney-large", k(0.945), 1, 90, { scale: 0.7 });
       }
+      // Kenney Racing Kit (CC0) barriers and pylons; the synthetic construction
+      // props stay the fallback for a build the pack has not reached.
       along(0.038, 0.05, 4.5, (kk) => {
-        bakedModel("kenney_construction-barrier", kk, 1, 5.8, { scale: 1.15 });
+        if (!bakedModel("k_barrierred", kk, 1, 5.8, { scale: 1.5 }))
+          bakedModel("kenney_construction-barrier", kk, 1, 5.8, { scale: 1.15 });
       });
       along(0.039, 0.049, 6.0, (kk) => {
-        bakedModel("kenney_construction-cone", kk, 1, 4.6, { tint: [1.0, 0.42, 0.10] });
+        if (!bakedModel("k_pylon", kk, 1, 4.6, { scale: 1.3 }))
+          bakedModel("kenney_construction-cone", kk, 1, 4.6, { tint: [1.0, 0.42, 0.10] });
       });
       // marquee / hospitality tents (white prism roofs) in the paddock
       for (const [s, d, tCol] of [

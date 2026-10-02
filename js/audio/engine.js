@@ -143,6 +143,7 @@ const GameAudio = (function () {
     cockpit: "onboard", hood: "onboard", tcam: "onboard", rear: "onboard", visor: "onboard",
     chase: "chase", far: "chase", drift: "chase", reverse: "chase",
     overhead: "tv", heli: "tv", side: "tv", cinematic: "tv", low: "tv", trackside: "tv",
+    rival: "tv", pitwall: "tv", drone: "tv",
   });
   let camMix = CAM_MIX.chase, camKind = "chase";
   let rivalVoices = [];           // { filt, gain, pan, detune, start, stop, setPitch }

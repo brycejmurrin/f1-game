@@ -195,6 +195,12 @@ function buildResults(order, race) {
     box.textContent = `OFFICIAL WINNER ELAPSED — ${timing.winner.code || "WINNER"}  ${timing.winner.name || ""}: ${timing.text}`;
     els.resultsTable.appendChild(box);
   }
+  if (typeof ResultsStory !== "undefined") {
+    const story = ResultsStory.render(G, order, { dnfOf, watched, duel: race && race.duel,
+      points: sprint ? SeasonCal.SPRINT_POINTS : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS,
+      fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null });
+    if (story) els.resultsTable.appendChild(story);
+  }
   const playerPlace = order.findIndex((c) => c.isPlayer);
   if (playerPlace >= 0 && !watched) {
     const self = order[playerPlace], verdict = sourceOf(self), elapsed = correctedFinish(verdict);

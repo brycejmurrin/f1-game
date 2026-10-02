@@ -20,6 +20,9 @@ function boot() {
   // fallback target); one that reaches a focused control is recorded by that
   // control's own fake dispatchEvent instead — which is the point of the test.
   const dispatched = [];
+  // anyOpen = real menus (pause/settings). navOpen also covers title #overlay.
+  // Keep them independent so the touch-pause gate can pin anyOpen ≠ navOpen.
+  const anyOpen = { on: false };
   const navOpen = { on: false };
   const el = () => ({
     addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
@@ -42,7 +45,12 @@ function boot() {
       dispatchEvent: (e) => { dispatched.push(e); return true; },
       body: { classList: { add() {}, remove() {}, toggle() {} } },
     },
-    UiLayers: { navOpen: () => navOpen.on, anyOpen: () => navOpen.on, top: () => (navOpen.on ? { id: "pmsettings", contains: () => true } : null) },
+    UiLayers: {
+      anyOpen: () => anyOpen.on,
+      navOpen: () => anyOpen.on || navOpen.on,
+      top: () => (anyOpen.on ? { id: "pmsettings", contains: () => true }
+        : (navOpen.on ? { id: "overlay", contains: () => true } : null)),
+    },
   };
   sb.Event = class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } };
   sb.KeyboardEvent = class extends sb.Event {};
@@ -55,7 +63,7 @@ function boot() {
   const key = (code, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: code, code, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
   const fire = (t, e) => (listeners[t] || []).forEach((f) => f(e || {}));
-  return { Input, key, sb, fire, dispatched, navOpen };
+  return { Input, key, sb, fire, dispatched, navOpen, anyOpen };
 }
 // A standard-mapping pad the sandbox's navigator reports as the only one.
 // press(i, v) sets button i (a trigger takes a value); gamepadconnected must be
@@ -629,4 +637,35 @@ test("D-pad Left/Right on a focused slider steps by its step within min/max; a b
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].key, "ArrowRight");
   assert.equal(dispatched[0].type, "keydown", "a button's arrow is an ordinary move");
+});
+
+test("an open menu still takes a key that was already down, and the on-screen pedals are gated", () => {
+  const { Input, key, anyOpen, navOpen, sb } = boot();
+  // Title #overlay alone: navOpen true, anyOpen false — pad walks doors, but
+  // on-screen GAS must still read (boot-page latch / travel specs). The gate
+  // is anyOpen(), not navOpen().
+  navOpen.on = true;
+  assert.equal(sb.UiLayers.navOpen(), true);
+  assert.equal(sb.UiLayers.anyOpen(), false);
+  key("KeyW", true);
+  assert.equal(Input.throttle(), true, "title navOpen must not mute a driving key");
+  key("KeyW", false);
+
+  // Real pause/settings: hold the key FIRST, then open — a pre-held key still
+  // drives; a fresh keydown is refused (menuOverlayOpen). Touch pedals gate on
+  // anyOpen(), matching the keyboard's menu gate, not title-only navOpen().
+  key("KeyW", true);
+  anyOpen.on = true;
+  assert.equal(Input.throttle(), true, "a key held before the menu is not the touch path");
+  assert.equal(Input.throttleLevel(), 1);
+  // A keydown WHILE the menu is open was already refused (menuOverlayOpen).
+  key("KeyS", true);
+  assert.equal(Input.braking(), false, "keyboard keydowns stay gated; this change is the touch path");
+  const src = read("js/input/input.js");
+  assert.match(src, /function navBlocksTouch\(\) \{ return !!\(window\.UiLayers && window\.UiLayers\.anyOpen\(\)\); \}/);
+  assert.match(src, /navBlocksTouch\(\) \? 0 : buttonSteering\(\)/);
+  assert.match(src, /navBlocksTouch\(\) \? 0 : analogShape\(touchSteering\(\), "touch"\)/);
+  assert.match(src, /keyThrottle \|\| \(!navBlocksTouch\(\) && btnThrottle\)/);
+  assert.match(src, /if \(btnThrottle && !navBlocksTouch\(\)\)/);
+  assert.match(src, /if \(btnBrake && !navBlocksTouch\(\)\)/);
 });

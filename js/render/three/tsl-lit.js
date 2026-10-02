@@ -1282,6 +1282,9 @@
         // standing rule, because roadMarkings() takes derivatives of it.
         const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
+        // Puddle shape (wet block): derivatives taken here, in uniform control flow
+        // (the WebGPU path compiles this graph to WGSL, which requires it).
+        const trkRightXZ = trkA ? dFdx(wp.xz).mul(dFdx(trkA.y)).add(dFdy(wp.xz).mul(dFdy(trkA.y))).toVar() : null;
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
         // Two-sided lighting: flip N toward the viewer on back fragments
@@ -1536,7 +1539,21 @@
             float(1.0), float(0.0));
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
-          puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
+          // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
+          // crown drains to the gutters (0.7 centre → 1.2 edge) and the low side
+          // of a banked turn holds the water (lateral downhill from the screen
+          // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
+          // chunked (city prop) variant, which has no road.
+          const pool = float(1.0).toVar();
+          if (trkA) {
+            If(trkA.z.greaterThan(0.5), () => {
+              const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
+              const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
+              const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
+              pool.assign(mix(float(0.7), float(1.2), abs(lat)).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
+            });
+          }
+          puddle.assign(smoothstep(0.48, 0.88, pn.mul(pool)).mul(wet).mul(porous.oneMinus()));
           // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
           // two cell grids of impact rings, a normal tilt on the pooled water that
           // the GGX lobes and the sky reflection below read (N is a toVar).
