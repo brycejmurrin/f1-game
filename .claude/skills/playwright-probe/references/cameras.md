@@ -1,26 +1,29 @@
 # Camera debug hooks
 
-Verified live (`tools/shot/apex-eval.mjs`). Two layers: the **13 built-in camera
+Verified live (`tools/shot/apex-eval.mjs`). Two layers: the **17 built-in camera
 modes** (C / CAM button) and the **free debug camera** (`view()` and friends)
 that overrides them for framing.
 
-## The 13 camera modes
+## The 17 camera modes
 
 `__apex.camera()` → `{ mode, index, modes:[...] }`. Cycle order
 (`CamModes.CAM_MODES` in `js/camera/mode-switch.js`):
 
 ```
-chase  far  drift  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear
+chase  far  drift  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear  visor  rival  pitwall  drone
 ```
 
 Set by id, label, or index: `__apex.camera("cockpit")` / `__apex.camera(3)`.
-All 13 render non-blank. After switching, `__apex.snapCam()` jumps the rig
+All 17 render non-blank. After switching, `__apex.snapCam()` jumps the rig
 without damping (every mode). `camera()` clears any `view()` / debug override.
 Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock instantly.
 
 - **drift** — swings OUTSIDE a slide so the flank faces camera; settles behind when gripping.
 - **heli/side/cinematic** — corner-aware: auto-pick the OUTSIDE of the upcoming bend.
 - **chase/far/cockpit/hood/tcam** — aim at the *curved* centreline ahead (INTO the corner).
+- **rival** — frames the nearest battle rival (Broadcast.battles); solo fallback is a three-quarter chase.
+- **pitwall** — pit-lane / pit-exit wall cam; optional auto-cut via `__apex.pitCamAuto()`.
+- **drone** — smoothed tether with corner look-ahead (ExtraRigs); calmer heli alternative.
 
 ## `orbit()` vs `snapCam()`
 

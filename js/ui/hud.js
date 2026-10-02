@@ -73,7 +73,7 @@ let _secFlash = [0, 0, 0];
 let _limitsDots = null;
 let _hudCamKey = "";
 let _hudDeltaEl = null;
-const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1 };
+const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1, rival: 1, pitwall: 1, drone: 1 };
 const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
 // Body classes toggled: hud-met-full, hud-met-timing, hud-met-driver, hud-met-compact.

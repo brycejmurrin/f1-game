@@ -131,6 +131,7 @@ const SPEC = [
   { k: "ldCard", lane: "json", group: "camera", def: null, src: "js/ui/loading-screen.js loading card {scale, x, y} (null = shipped)" },
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
   { k: "camMode", lane: "json", group: "camera", def: 3, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
+  { k: "pitCamAuto", lane: "json", group: "camera", def: true, src: "js/camera/extra-rigs.js (auto-cut to PIT WALL in pits)" },
   { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },
   { k: "camTuneGlobal", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js global baseline layered under every mode (same knob ids as camTune)" },
   { k: "camComfort", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
@@ -186,6 +187,8 @@ const SPEC = [
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
   { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js", oneOf: ["easy", "normal", "hard"] },
+  // AI PACE: scripted = fixed car/driver pace (ships); catchup = legacy rubber band.
+  { k: "aiPace", lane: "json", group: "driving", def: "scripted", src: "js/game.js / js/physics/ai-band.js", oneOf: ["scripted", "catchup"] },
   // Keys real UI writes (checked against every store.set call site): player
   // preferences by the file's own definition, beside difficulty/raceGrid/caution.
   { k: "drivingCoach", lane: "json", group: "driving", def: true, src: "js/race/driving-coach.js" },

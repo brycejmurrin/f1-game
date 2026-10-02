@@ -231,8 +231,19 @@ const SceneryNature = (function () {
     // tip). The lit vertex shaders bend the crown downwind by it. Cleared with
     // swayOff() before each emitter returns: the props record is posted whole
     // from the build worker and a function on it would not clone.
-    const swayOn = (base, up, y0, y1) => { out._matAt = TrackGeom.swayMatAt(MAT.FOLIAGE, base, up, y0, y1); };
-    const swayOff = () => { out._matAt = null; };
+    // The same span is the CROWN: swayOff() rounds the normals emitted since
+    // swayOn() toward the crown axis (TrackGeom.roundNormals), so the cone
+    // stacks light as soft volumes instead of faceted lanterns.
+    let _crownV0 = -1, _crownBase = null, _crownUp = null;
+    const swayOn = (base, up, y0, y1) => {
+      out._matAt = TrackGeom.swayMatAt(MAT.FOLIAGE, base, up, y0, y1);
+      _crownV0 = out.pos.length / 3; _crownBase = base; _crownUp = up;
+    };
+    const swayOff = () => {
+      out._matAt = null;
+      if (_crownV0 >= 0) TrackGeom.roundNormals(out, _crownV0, _crownBase, _crownUp);
+      _crownV0 = -1; _crownBase = null; _crownUp = null;
+    };
     const tree = (k, side, dist, h, col, opts) => {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
