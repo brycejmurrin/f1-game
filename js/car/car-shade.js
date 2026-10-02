@@ -1,6 +1,6 @@
 "use strict";
 /* Apex 26 — CAR SHADE: rounded body sections and smooth shading for the
- * procedural car (js/car/car3d.js). OFF unless asked for; Car3D.build calls in.
+ * procedural car (js/car/car3d.js). ON by default (2026-10-02); Car3D.build calls in.
  *
  * WHY. Every body part was a trapezoid loft (car3d frame()/addBlock): four
  * flat faces, a 90 degree crease at each corner, and a flat normal on every
@@ -30,19 +30,22 @@
  *
  * THE SWITCH. `apex26.carSmooth` in storage, or `?carsmooth=` in the URL
  * (the URL wins for that page load): "1" / "all" for every car, a team id
- * ("mclaren") for that team's car only, anything else off. Read once per
- * page; set() changes it live (callers drop their mesh caches).
+ * ("mclaren") for that team's car only, "0" / "off" for none. Nothing chosen
+ * is the DEFAULT, every car (it shipped opt-in first, A/B'd live, and turned
+ * on 2026-10-02), so an opt-out is stored as "0" rather than removed. Read
+ * once per page; set() saves it (the meshes rebuild on the next page load).
  */
 const CarShade = (function () {
   const KEY = "apex26.carSmooth";
+  const DEFAULT = "*";
   let _pref;   // undefined = not read yet; null = off; "*" = every car; else a team id
 
   function norm(v) {
-    if (v == null) return null;
-    const s = String(v).trim().toLowerCase();
+    const s = v == null ? "" : String(v).trim().toLowerCase();
+    if (!s) return DEFAULT;   // nothing chosen
     if (s === "1" || s === "all" || s === "on" || s === "true") return "*";
-    if (!s || s === "0" || s === "off" || s === "false") return null;
-    return /^[a-z0-9_-]{1,40}$/.test(s) ? s : null;
+    if (s === "0" || s === "off" || s === "false") return null;
+    return /^[a-z0-9_-]{1,40}$/.test(s) ? s : DEFAULT;
   }
   function pref() {
     if (_pref !== undefined) return _pref;
@@ -55,11 +58,17 @@ const CarShade = (function () {
     _pref = norm(v);
     return _pref;
   }
-  /** Set the switch ("1", a team id, or off) and save it. Returns what took effect. */
+  /** Set the switch ("1", a team id, "0" for off, or null/"" back to the
+   *  default) and save it. Returns what took effect. */
   function set(v) {
     _pref = norm(v);
-    try { if (typeof localStorage !== "undefined") { if (_pref) localStorage.setItem(KEY, _pref === "*" ? "1" : _pref); else localStorage.removeItem(KEY); } }
-    catch (_) { /* storage refused: live for this page only */ }
+    const empty = v == null || !String(v).trim();
+    try {
+      if (typeof localStorage !== "undefined") {
+        if (empty) localStorage.removeItem(KEY);
+        else localStorage.setItem(KEY, _pref === "*" ? "1" : _pref || "0");
+      }
+    } catch (_) { /* storage refused: live for this page only */ }
     return _pref;
   }
   /** Is it on for this team's car? */

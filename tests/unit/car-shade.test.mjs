@@ -1,15 +1,16 @@
 /* car-shade.test.mjs — CAR SHADE (js/car/car-shade.js): rounded body sections
- * and smooth shading for the procedural car, behind apex26.carSmooth.
+ * and smooth shading for the procedural car, ON by default since 2026-10-02
+ * (apex26.carSmooth / ?carsmooth=0 opts out).
  *
- * What has to hold for it to be safe to switch on:
+ * What has to hold for it to be safe as the default:
  *   - the rounded section keeps the trapezoid's ENVELOPE (top and bottom
  *     centres, flank at mid-height), so a stripe, number or light placed on a
  *     panel centre still sits on the skin;
  *   - the loft is closed and faces OUT;
  *   - smoothing merges shallow facets and leaves a real edge (90 degrees) sharp,
  *     never moves a vertex, and leaves lights flat;
- *   - OFF is byte-identical to a build that has never heard of CarShade, and ON
- *     builds a finite, unit-normal mesh in the same bounds.
+ *   - OFF (an opt-out) is byte-identical to a build that has never heard of
+ *     CarShade, and ON builds a finite, unit-normal mesh in the same bounds.
  *
  * Run: node --test tests/unit/car-shade.test.mjs
  */
@@ -20,10 +21,11 @@ import path from "node:path";
 import vm from "node:vm";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
-function load(withShade, storage) {
+function load(withShade, storage, search) {
   const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String,
                 Boolean, isFinite, isNaN, Map, Set, WeakMap, URLSearchParams };
   if (storage) ctx.localStorage = storage;
+  if (search) ctx.location = { search };
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   const files = ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js"]
@@ -153,35 +155,56 @@ test("smoothing merges a shallow facet, keeps a 90 degree edge sharp, moves no v
   assert.deepEqual(lamp.nrm, lit, "an emissive surface is left flat");
 });
 
-test("the switch: storage or URL, every car or one team, anything else off", () => {
+test("the switch: ON by default; storage or URL picks every car, one team, or none, and an opt-out sticks", () => {
   const norm = CarShade._norm;
+  assert.equal(norm(null), "*", "nothing chosen: the default, every car"); assert.equal(norm(""), "*");
   assert.equal(norm("1"), "*"); assert.equal(norm("all"), "*"); assert.equal(norm("ON"), "*");
-  assert.equal(norm("0"), null); assert.equal(norm(""), null); assert.equal(norm(null), null);
+  assert.equal(norm("0"), null); assert.equal(norm("off"), null); assert.equal(norm("false"), null);
   assert.equal(norm("mclaren"), "mclaren");
-  assert.equal(norm("<script>"), null, "not a team id: off");
+  assert.equal(norm("<script>"), "*", "not a team id: the default");
   const store = new Map();
   const ls = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
   const { CarShade: S } = load(true, ls);
-  assert.equal(S.on("mclaren"), false, "off by default");
+  assert.equal(S.on("mclaren"), true, "on by default"); assert.equal(S.any(), true);
   S.set("mclaren");
   assert.equal(store.get(S.KEY), "mclaren");
   assert.equal(S.on("mclaren"), true); assert.equal(S.on("ferrari"), false, "one team only");
   S.set("1");
   assert.equal(S.on("ferrari"), true);
   S.set("off");
-  assert.equal(store.has(S.KEY), false); assert.equal(S.on("mclaren"), false);
+  assert.equal(store.get(S.KEY), "0", "an opt-out is STORED: removing the key would mean the default (on)");
+  assert.equal(S.on("mclaren"), false); assert.equal(S.any(), false);
+  const { CarShade: Reloaded } = load(true, ls);
+  assert.equal(Reloaded.on("mclaren"), false, "the opt-out survives a reload");
+  const { CarShade: Url } = load(true, ls, "?carsmooth=1");
+  assert.equal(Url.on("mclaren"), true, "the URL wins for that page load");
+  assert.equal(load(true, null, "?carsmooth=0").CarShade.any(), false, "?carsmooth=0 turns it off with nothing stored");
+  Reloaded.set(null);
+  assert.equal(store.has(Reloaded.KEY), false, "set(null) clears the choice"); assert.equal(Reloaded.on("ferrari"), true, "back to the default");
 });
 
-test("Car3D: OFF is the build that never heard of CarShade; ON is finite, unit-normal and in the same bounds", () => {
+test("Car3D: OFF is the build that never heard of CarShade; ON (the default) is finite, unit-normal and in the same bounds", () => {
   const { Car3D: Plain } = load(false);
   const opts = { teamId: "mclaren", num: 4, measure: true };
   const ref = Plain.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], opts);
   const off = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], Object.assign({ smooth: false }, opts));
   const A = (x) => Array.from(x);   // two vm realms: compare values, not prototypes
-  assert.deepEqual(A(off.pos), A(ref.pos)); assert.deepEqual(A(off.nrm), A(ref.nrm)); assert.deepEqual(A(off.mat), A(ref.mat));
+  // `smooth: false` is a per-BUILD override of the body; the tyres follow the
+  // page's switch (wheels are cached apart from teams), so only they may differ.
+  const wheels = off.parts.find((p) => p.name === "wheels"), wv = off.pos.length / 3 - wheels.vertices;
+  assert.equal(wv, off.parts.slice(0, -1).reduce((n, p) => n + p.vertices, 0), "wheels are the last part");
+  assert.deepEqual(A(off.pos), A(ref.pos)); assert.deepEqual(A(off.mat), A(ref.mat));
+  assert.deepEqual(A(off.nrm).slice(0, wv * 3), A(ref.nrm).slice(0, wv * 3));
+  // A player who opted out ("0" stored) gets exactly the car that never heard of CarShade, tyres included.
+  const optOut = new Map([["apex26.carSmooth", "0"]]);
+  const { Car3D: Opted } = load(true, { getItem: (k) => (optOut.has(k) ? optOut.get(k) : null), setItem() {}, removeItem() {} });
+  const opted = Opted.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], opts);
+  assert.deepEqual(A(opted.pos), A(ref.pos), "opt-out pos"); assert.deepEqual(A(opted.nrm), A(ref.nrm), "opt-out nrm");
   const t0 = Date.now();
   const on = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], Object.assign({ smooth: true }, opts));
   const ms = Date.now() - t0;
+  const dflt = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], opts);
+  assert.deepEqual(A(dflt.pos), A(on.pos), "nothing chosen builds the rounded car"); assert.deepEqual(A(dflt.nrm), A(on.nrm));
   assert.equal(on.pos.length, on.nrm.length);
   assert.equal(on.idx.length % 3, 0, "whole triangles");
   for (let i = 0; i < on.nrm.length; i += 3) {
@@ -202,10 +225,13 @@ test("Car3D: OFF is the build that never heard of CarShade; ON is finite, unit-n
     assert.equal(pOn[name].vertices, pRef[name].vertices, name + " untouched");
   }
   assert.ok(ms < 1500, `a smoothed build stays cheap enough for a garage pick (${ms} ms)`);
-  // The cockpit (first-person) build never rounds or smooths.
-  const ck = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], { teamId: "mclaren", smooth: true, cockpit: true });
-  const ck0 = Plain.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], { teamId: "mclaren", cockpit: true });
-  assert.deepEqual(A(ck.pos), A(ck0.pos)); assert.deepEqual(A(ck.nrm), A(ck0.nrm));
+  // The cockpit (first-person) build never rounds or smooths its body; only the
+  // tyres it shows follow the page's switch (shaded shoulders, no vertex moved).
+  const ck = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], { teamId: "mclaren", smooth: true, cockpit: true, measure: true });
+  const ck0 = Plain.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], { teamId: "mclaren", cockpit: true, measure: true });
+  const cw = ck.parts.find((p) => p.name === "wheels"), ckBody = ck.pos.length / 3 - (cw ? cw.vertices : 0);
+  assert.deepEqual(A(ck.pos), A(ck0.pos), "cockpit pos");
+  assert.deepEqual(A(ck.nrm).slice(0, ckBody * 3), A(ck0.nrm).slice(0, ckBody * 3), "cockpit body normals");
 });
 
 test("tyres, with the switch on for any car: the tread shoulder is shaded from its real shape, same geometry, unit normals", () => {
