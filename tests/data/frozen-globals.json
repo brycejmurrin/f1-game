@@ -125,6 +125,7 @@
   "TrackStamps",
   "TrackSurface",
   "TrackValidate",
+  "TrackInsight",
   "TrackFixes",
   "TrackDesigner",
   "DesignerCanvas",

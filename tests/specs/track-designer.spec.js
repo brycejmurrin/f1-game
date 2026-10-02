@@ -238,6 +238,32 @@ test.describe("Track designer", () => {
     expect(floor.refused).toBe(true);
   });
 
+  test("TURNS row selects a span and REPLACE re-stamps it green", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    const st = await randomiseGreen(page, 7);
+    expect(st.corners.length).toBeGreaterThanOrEqual(3);
+    // TURNS is the design pane's second .td-issues list (5 CHECKS is the first): one info row per corner.
+    const rows = page.locator('#trackdesigner .td-pane[data-pane="design"] .td-issues').nth(1).locator(".td-issue");
+    await expect(rows).toHaveCount(st.corners.length);
+    await expect(rows.nth(1)).toHaveAttribute("data-level", "info");
+    await expect(rows.nth(1)).toHaveText(/^T2 · (LEFT|RIGHT) \d+° · R \d+ m · \d+ km\/h · \d+ m$/);
+    const c = st.corners[1];
+    await rows.nth(1).click();
+    const picked = await page.evaluate(() => TrackDesigner.state());
+    expect([picked.sel, picked.span, picked.tool]).toEqual([c.i0, c.i1, c.fit.kind]);
+    expect(picked.design.pts).toEqual(st.design.pts);
+    const replace = page.locator("#trackdesigner button", { hasText: /^REPLACE THE SELECTED SPAN$/ });
+    await expect(replace).toBeVisible();
+    await replace.click();
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.red).toBe(0);
+    expect(after.undo, "REPLACE is one UNDO entry").toBe(picked.undo + 1);
+    expect(after.design.pts).not.toEqual(st.design.pts);
+    expect(after.design.pts.slice(0, c.i0 + 1)).toEqual(st.design.pts.slice(0, c.i0 + 1));
+  });
+
   test("FIX ALL turns a deliberately short loop green and SAVE enables", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);
