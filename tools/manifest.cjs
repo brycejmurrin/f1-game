@@ -248,6 +248,7 @@ const FULL = [
   "js/physics/tyre-model.js",
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A)
   "js/physics/ai-drive.js",
+  "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
   // The race radio: phrasebook, facts (timing loop + events), then the brain
@@ -258,6 +259,8 @@ const FULL = [
   "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/flyby-seq.js",
+  "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
+  "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
@@ -286,6 +289,7 @@ const FULL = [
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   "js/race/weather-arc.js",
+  "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
   "js/lighting/tuner-panel.js",
@@ -309,6 +313,7 @@ const FULL = [
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
+  "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
   // WebXR Phase 0 — seated immersive-vr (capability, rig math, input, UI, boot).
@@ -485,6 +490,8 @@ const HARD_EDGES = [
   // the 2nd tag so the order is never in doubt, but these are real eval-time
   // edges and the list is what records them; the toposort check derives the rest.
   ["js/core/mat4.js", "js/game.js"],
+  ["js/core/mat4.js", "js/camera/photo-kit.js"],  // PhotoKit aliases M4.clamp at eval
+  ["js/core/mat4.js", "js/camera/free-cam.js"],   // FreeCam aliases M4.clamp at eval
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval
   ["js/core/mat4.js", "js/track/core/spline.js"],
   ["js/core/mat4.js", "js/track/core/line.js"],                    // TrackLine aliases M4.clamp/lerp at eval
@@ -658,6 +665,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
+  ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
   ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];
 
@@ -1158,6 +1166,7 @@ const MOVED = {
   "js/game/store.js": "js/core/store.js",
   "js/game/physics-consts.js": "js/physics/consts.js",
   "js/game/ai-drive.js": "js/physics/ai-drive.js",
+  "js/game/ai-band.js": "js/physics/ai-band.js",
   "js/game/aerozones.js": "js/physics/aero-zones.js",
   "js/game/bodyattitude.js": "js/physics/body-attitude.js",
   "js/game/brake-cue.js": "js/physics/brake-cue.js",

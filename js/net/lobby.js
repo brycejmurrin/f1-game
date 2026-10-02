@@ -1371,6 +1371,12 @@ const NetLobby = (function () {
         // and the next friend with the code found nothing. A fresh room starts clean.
         if (!opts.quiet || !_answersSeen || _answersSeen.code !== code) _answersSeen = { code, set: new Set() };
         const answersSeen = _answersSeen.set;
+        // Two different answer strings can both pass the transport guard and
+        // both enter acceptAnswer: decode/localBuild are awaited BEFORE the
+        // have-local-offer check, and stopCodeWait runs only after a success.
+        // A second arrival during that await must not start a second
+        // negotiation, and must not be blacklisted — the guest will retry.
+        let answerInFlight = false;
         const sub = await NetRendezvous.hostRoom({
           code, token: codeWait,
           mine: invite.code,
@@ -1422,15 +1428,21 @@ const NetLobby = (function () {
             // it had already thrown away, which on a LAN, where ICE cannot be
             // at fault, presents as a permanent "Connecting…".
             if (!transport || !pendingId) return;   // nothing awaiting an answer
+            if (answerInFlight) return;
+            answerInFlight = true;
             answersSeen.add(answer);
             const pending = transport;
             const id = pendingId;
             const acc = await NetHandshake.acceptAnswer(pending, answer);
-            if (!operationCurrent(gen) || transport !== pending || pendingId !== id) return;
+            if (!operationCurrent(gen) || transport !== pending || pendingId !== id) {
+              answerInFlight = false;
+              return;
+            }
             if (!acc.ok) {
               // A rejected answer must not stay blacklisted either: the guest
               // may repost the same string against a transport that is by then
               // ready for it.
+              answerInFlight = false;
               answersSeen.delete(answer);
               if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
               return;
