@@ -818,6 +818,8 @@ declare const RadioVoice: GameModuleFactory;
 declare const RecordedAnnouncer: GameModuleFactory;
 declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
+// js/fx/car-fx.js — create(G, { skids }): plank sparks + AI lock-up marks (reads G.vTop only).
+declare const CarFx: GameModuleFactory;
 declare const PlayerForces: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;

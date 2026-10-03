@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_281 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -384,8 +384,9 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
+| `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
+| `car-fx.js` | `CarFx` | tag | CarFx: per-car motion effects js/game.js's render loop asks for once a car's grounded basis is built — the PLANK SPARKS a car throws when its floor bottoms… |
 
 **`js/camera/`**
 
@@ -1203,7 +1204,15 @@ that travels with the eye, each a pre-expanded world-space quad appended to the
 alpha batch with size 0, so the particle shaders' soft-disc falloff draws a
 depth-tested streak along the drop's APPARENT velocity (fall − camera motion)
 on all three backends with no new program; it replaced a Canvas2D overlay that
-had no depth, no fog, no mirror and a compositor layer of its own. Emitters only READ car state;
+had no depth, no fog, no mirror and a compositor layer of its own. Also the
+one-frame **flares** (`Particles.flare`, 2026-10-02): additive discs appended to
+this frame's additive batch outside the pool and dropped after it — a far
+rival's brake glow (car-draw), where a pooled `glow()` re-spawned on a moving
+car stacked a trail of copies. Plank embers (`scrape`) stop at 60 % of the pool
+and spray at 75 %, so collision sparks and smoke always find room. The per-car
+motion emitters that are not one-liners live in `js/fx/car-fx.js` (`CarFx`:
+plank sparks off body-attitude's `c.baScrape`, AI lock-up marks through
+`SkidMarks.stampFor`). Emitters only READ car state;
 update/draw run in the RENDER path only, never inside the physics step, so
 headless obs/act runs are identical with FX on or off.
 
@@ -1243,7 +1252,7 @@ directory). The generated module index at the top of this file and
 | `js/lighting/tuner-panel.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel: slider rows from `TUNE_DEFS`, preview chips, COPY TO ALL TRACKS, the help toggle, RESET and the COPY VALUES export (`window.LightEdits`) |
 | `js/input/steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
 | `js/physics/aero-zones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `inAeroZone(c)`/`aeroDfMult()` stay in game.js because they read car state |
-| `js/fx/skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
+| `js/fx/skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()`; `stampFor()` is another car's mark on its own cadence, capped at `AI_CAP` slots (js/fx/car-fx.js, an AI lock-up) |
 | `js/ui/sheet-shape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
 | `js/ui/modal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 18 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheet-shape.js` |
 | `js/ui/aria-state.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
