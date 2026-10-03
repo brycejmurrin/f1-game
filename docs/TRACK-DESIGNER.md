@@ -74,7 +74,7 @@ and AUTUMN COUNTRYSIDE. The night themes race under floodlights.
 ## 4 DETAILS
 
 Name the circuit (24 characters) and set **HALF-WIDTH m**, half the road's
-width, from 5 to 8 m. Two rows of chips live here too:
+width, from 5 to 8 m. Three rows of chips live here too:
 
 - **RANDOMISE · TRACK OF THE DAY · START FROM…** — three ways to a new
   circuit. **TRACK OF THE DAY** draws the same circuit for everyone on the
@@ -85,6 +85,15 @@ width, from 5 to 8 m. Two rows of chips live here too:
 - **REVERSE · START HERE · DELETE POINT · UNDO · REDO · FIT VIEW · SPEED · TEST HERE** —
   **TEST HERE** drives from the selected point (see Test drive). **SPEED** colours the road by how fast a car takes it, yellow (slow) through
   orange and red to purple (flat out); press it again to turn it off.
+- **FAST · TECHNICAL · MIXED** — designed randomise: the designer draws 16
+  circuits, keeps the ones that pass every check, scores them for the style and
+  shows the best four as cards (`4.8 km · 14 corners · 2 passing`). **FAST**
+  favours long flat-out running and places to overtake; **TECHNICAL** many
+  corners of many different radii; **MIXED** variety in both corners and speed.
+  Every amber check costs a card points. **USE** loads a card as your design
+  (one UNDO takes it back; SAVE adds it as a new circuit); **MORE LIKE THIS**
+  nudges two or three of that card's points (never within 300 m of the start
+  line) into four new cards. The same circuit always gives the same cards.
 
 ## TURNS — every corner, tappable
 
