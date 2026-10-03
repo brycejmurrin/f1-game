@@ -99,7 +99,18 @@ async function openGarage(page) {
   await page.evaluate(() => document.getElementById("mb-garage").click());
   await page.waitForFunction(() => !document.getElementById("carsetup").hidden,
     null, { polling: 100, timeout: 10_000 });
-  await page.waitForTimeout(400);
+  // WAIT OUT THE WARM-UP FRAMES, NOT A FIXED SLEEP. Under GLX on SwiftShader the
+  // first animation frame after the garage opens took 4.1-4.8 s and the next two
+  // ~1 s each; after that a frame is ~17 ms (measured 2026-10-03, headless(true)
+  // on). SheetShape.watchScale reclassifies in a rAF, so a uiScale() write inside
+  // that window waited behind it: "a UI SIZE change re-classifies" missed its 5 s
+  // wait on CI (PR #778 selected shard; same as #804/#806). Three frames covers
+  // the expensive ones; the 400 ms sleep it replaces covered none of them.
+  await page.evaluate(() => new Promise((resolve) => {
+    let n = 0;
+    const step = () => (++n >= 3 ? resolve() : requestAnimationFrame(step));
+    requestAnimationFrame(step);
+  }));
 }
 
 // The four numbers a resize has to get right, read together so they cannot be
