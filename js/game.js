@@ -3060,7 +3060,7 @@ async function startRaceBody() {
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
-  dbgCam = null; replayBuf.onRaceStart(cars); // fresh race — drop free-cam; arm solo replay ring
+  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); // fresh race — drop free-cam + TV director; arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
@@ -3825,7 +3825,7 @@ const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
-const onboard = Onboard.create(G), replayBuf = ReplayBuf.create(G); // coach + solo replay ring
+const onboard = Onboard.create(G), director = Director.create(G), replayBuf = ReplayBuf.create(G); // coach + TV director + solo replay ring
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -8477,7 +8477,7 @@ function tickBody(now) {
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick();
-  onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
+  onboard.tick(dt); director.tick(dt); // coach marks + TV director (dbgCam only)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.

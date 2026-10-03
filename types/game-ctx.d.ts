@@ -864,6 +864,7 @@ declare const HomeWorld: GameModuleFactory;
 declare const PhotoStudio: GameModuleFactory;
 declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
+declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
