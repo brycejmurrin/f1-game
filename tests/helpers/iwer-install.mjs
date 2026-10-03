@@ -41,6 +41,10 @@ export async function installIwer(page, opts = {}) {
     try {
       localStorage.setItem("apex26.tlxForceGL", "1");
       localStorage.setItem("apex26.gfxBackend", "three");
+      // This suite qualifies the XR lifecycle, not desktop HIGH performance.
+      // IWER shares the canvas framebuffer; SwiftShader renders both eyes on
+      // the CPU. Keep the existing LOW preset from competing with XR timers.
+      localStorage.setItem("apex26.gfxPreset", JSON.stringify("low"));
     } catch (_) { /* */ }
     const root = globalThis.IWER || {};
     if (!root.XRDevice || !root.metaQuest3) {

@@ -17,6 +17,8 @@ and Meta IWER 2.5.0 behaviour under SwiftShader.
 
 ## IWER / CI only
 
+- The lifecycle suite seeds the existing LOW graphics preset and pins render scale to 0.5 before session attach, with assertions on the actual canvas dimensions. IWER shares that drawing buffer; TLX cannot resize it after attach. The full-resolution fixture stalled the page timers on CI even with one CDP evaluation (jobs 111165229602 and 111165039325). Frame progress still requires more than the requested delta within 45 seconds. This fixture covers sessions, pose, controls and stereo at constrained software-rendered resolution; it does not qualify desktop HIGH quality or headset performance.
+
 - `installRuntime({ forceInstall: true })` + `stereoEnabled = true` (Chrome ≥147 has stub/native `navigator.xr`).
 - IWER `XRWebGLLayer.framebuffer` is **null** → three `WebGLState.drawBuffers` WeakMap throws every frame. TLX remaps `backend.state.currentDrawbuffers` to a `Map` when the FBO is null (emulation-only; Quest gives a real FBO).
 - IWER cannot test projection layers, multiview, MSAA>1, foveation effect, or `XRGPUBinding`.

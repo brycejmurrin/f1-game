@@ -14,7 +14,7 @@
  */
 import { test, expect } from "@playwright/test";
 import {
-  installIwer, waitXrReady, waitXrFrames, waitWhilePresenting,
+  installIwer, waitXrFrames, waitWhilePresenting,
   captureCanvasDataUrl, sampleXrEye, IWER_VENDOR, IWER_VERSION,
 } from "../helpers/iwer-install.mjs";
 import fs from "fs";
@@ -31,7 +31,33 @@ test.beforeEach(async ({ page }) => {
 
 async function bootAndProbe(page) {
   await page.goto("/");
-  await waitXrReady(page);
+  // XrBoot binds before the agent API mounts; this fixture needs both. Keep a
+  // single boot-readiness budget instead of stacking two independent waits.
+  await page.waitForFunction(() => typeof XrSession !== "undefined"
+    && typeof XrSession.probe === "function"
+    && typeof XrBoot !== "undefined" && XrBoot.isBound()
+    && window.__apex && typeof window.__apex.renderScale === "function",
+  null, { polling: 100, timeout: 60_000 });
+  // Pin the existing half-resolution control BEFORE attach: TLX cannot resize
+  // its canvas while XR owns it, and IWER uses that same drawing buffer. The
+  // strict frame delta and 45 s deadline remain unchanged. This is lifecycle
+  // coverage at constrained software-rendered resolution, not headset timing.
+  const fixture = await page.evaluate(() => {
+    const perf = window.__apex.renderScale(0.5);
+    const canvas = document.getElementById("game");
+    return { scale: perf.scale, auto: perf.auto, preset: GfxQuality.current(),
+      width: canvas.width, height: canvas.height,
+      maxWidth: Math.round(innerWidth * devicePixelRatio * 0.5),
+      maxHeight: Math.round(innerHeight * devicePixelRatio * 0.5) };
+  });
+  test.info().annotations.push({ type: "xr-software-fixture", description: JSON.stringify(fixture) });
+  expect(fixture.preset).toBe("low");
+  expect(fixture.scale).toBe(0.5);
+  expect(fixture.auto).toBe(false);
+  expect(fixture.width).toBeGreaterThan(0);
+  expect(fixture.height).toBeGreaterThan(0);
+  expect(fixture.width).toBeLessThanOrEqual(fixture.maxWidth);
+  expect(fixture.height).toBeLessThanOrEqual(fixture.maxHeight);
   const install = await page.evaluate(() => globalThis.__iwerInstall || { ok: false });
   expect(install.ok, `IWER install: ${JSON.stringify(install)}`).toBe(true);
   const supported = await page.evaluate(async () => {
@@ -84,7 +110,7 @@ test("pinned IWER vendor is present and ENTER VR appears; session starts/exits/r
   expect(started.backend).toBe("webgl2");
   await expect(btn).toHaveText(/EXIT VR/i);
 
-  // XR frames advance while presenting (Node CDP poll — see waitXrFrames).
+  // XR frames advance while presenting (single page evaluation — see waitXrFrames).
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
   await endVr(page);
