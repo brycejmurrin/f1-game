@@ -46,6 +46,11 @@ const UiScale = (() => {
     // the columns at whatever the screen has room for — the slider is a wish, the cap the fit.
     const BTN_MAX = 300;
     const maxFor = (k) => (k === "hudBtnScale" ? BTN_MAX : SCALE_MAX);
+    // HUD SIZE has a TEXT floor: at 40 % the readouts painted ~5-6 px glyphs.
+    // 70 keeps the smallest HUD ink legible; a stored value under it (an older
+    // build's range) clamps up on boot through scalePct like any other.
+    const HUD_MIN = 70;
+    const minFor = (k) => (k === "hudScale" ? HUD_MIN : SCALE_MIN);
     const SCALE_STEP = 0.25;
     // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
     // are mirrored here — CSS owns FIRST paint, this owns every write after it,
@@ -60,7 +65,7 @@ const UiScale = (() => {
     const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
     const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
     const scaleSnap = (v, k) => {
-      const n = Math.max(SCALE_MIN, Math.min(maxFor(k), +v));
+      const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
     };
     // BUTTON SIZE's default is not a number, it is ANOTHER SLIDER: unset, the
@@ -213,7 +218,7 @@ const UiScale = (() => {
         else if (key === "hudBtnScale") applyBtnScale();
         else applyHudScale();
       }
-      return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: maxFor(key), step: SCALE_STEP };
+      return { pct: scalePct(key), stored: store.get(key, null), min: minFor(key), max: maxFor(key), step: SCALE_STEP };
     }
 
     const RES_MODES = [

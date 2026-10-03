@@ -1569,21 +1569,33 @@ test.describe("Parts module — team signatures and factory presets", () => {
     expect(result.drift).toEqual([]);
   });
 
-  test("a signature selected by the wrong team falls back to the category default", async ({ page }) => {
+  // Locked SIGNATURE must resolve to its catalog `equivalent` (mesh/band/stats),
+  // not the category DEFAULT. Trap: DEFAULTS.tyres is `medium`; a McLaren save
+  // that asked for sig_rb_street used to photograph the yellow medium ring.
+  // Prefer a signature whose peer ≠ DEFAULTS so that bug cannot pass silently.
+  test("a signature selected by the wrong team falls back to its catalog equivalent", async ({ page }) => {
     await load(page);
     const result = await page.evaluate(() => {
-      const signature = Parts.CATALOG.flatMap((cat) =>
-        cat.options.filter((opt) => opt.tag === "SIGNATURE").map((opt) => ({ cat, opt }))
-      )[0];
-      const wrongTeam = Teams.LIST.find((team) => !signature.opt.teams.includes(team.id));
+      const all = Parts.CATALOG.flatMap((cat) =>
+        cat.options
+          .filter((opt) => opt.tag === "SIGNATURE" && opt.equivalent)
+          .map((opt) => ({ cat, opt }))
+      );
+      const signature = all.find(({ cat, opt }) => opt.equivalent !== Parts.DEFAULTS[cat.id])
+        || all[0];
+      const wrongTeam = Teams.LIST.find((team) => !(signature.opt.teams || []).includes(team.id));
       const resolved = Parts.resolveSetup({ [signature.cat.id]: signature.opt.id }, wrongTeam);
       return {
         category: signature.cat.id,
+        asked: signature.opt.id,
         selected: resolved.ids[signature.cat.id],
+        equivalent: signature.opt.equivalent,
         fallback: Parts.DEFAULTS[signature.cat.id],
       };
     });
-    expect(result.selected).toBe(result.fallback);
+    expect(result.selected).toBe(result.equivalent);
+    expect(result.selected).not.toBe(result.asked);
+    expect(result.equivalent).not.toBe(result.fallback);
   });
 });
 

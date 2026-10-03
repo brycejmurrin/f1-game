@@ -289,6 +289,7 @@ const FULL = [
   "js/ui/settings-export.js",
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
+  "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
@@ -324,6 +325,7 @@ const FULL = [
   "js/ui/appearance-opts.js",
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
+  "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-layout.js",     // per-element HUD move/size (cockpit + other layouts); builds DISPLAY › HUD › MOVE & SIZE
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
@@ -509,6 +511,7 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/hud-elements.js"],
   ["js/core/store.js", "js/ui/hud-layout.js"],    // binds GameStore.store and applies the layout at eval
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
+  ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
@@ -632,6 +635,7 @@ const HARD_EDGES = [
   ["js/career/career.js", "js/race/quali-model.js"],    // quali reads Career.rnd/devFor for its spread
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create() at eval time
+  ["js/fx/car-fx.js", "js/game.js"],         // game.js calls CarFx.create(G, { skids }) at eval time
   ["js/render/shared/mirror-pass.js", "js/game.js"],   // game.js calls MirrorPass.create(G, deps) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/sporting-regs.js", "js/game.js"],  // game.js calls SportingRegs.createPassWatch() at eval time
@@ -1057,7 +1061,6 @@ const MOVED = {
   "tools/parts-ladder.mjs": "tools/car/parts-ladder.mjs",
   "tools/crest-sweep.mjs": "tools/car/crest-sweep.mjs",
   "tools/logo-authored-sweep.mjs": "tools/car/logo-authored-sweep.mjs",
-  "tools/trace-logo.mjs": "tools/car/trace-logo.mjs",
   "tools/cockpit-pale-sweep.mjs": "tools/car/cockpit-pale-sweep.mjs",
   "tools/career-economy.mjs": "tools/car/career-economy.mjs",
   "tools/layout-audit.mjs": "tools/ui/layout-audit.mjs",

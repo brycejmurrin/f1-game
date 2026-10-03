@@ -185,6 +185,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
 | `hud-tyres.js` | `HudTyres` | tag | HUD tyre temperature state. |
+| `hud-readouts.js` | `HudReadouts` | tag | the race HUD's derived readouts, kept out of js/ui/hud.js. |
 | `hud-layout.js` | `HudLayout` | tag | HudLayout: move and size each race HUD element, as a player setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE. |
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
@@ -389,8 +390,9 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
+| `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
+| `car-fx.js` | `CarFx` | tag | CarFx: per-car motion effects js/game.js's render loop asks for once a car's grounded basis is built — the PLANK SPARKS a car throws when its floor bottoms… |
 
 **`js/camera/`**
 
