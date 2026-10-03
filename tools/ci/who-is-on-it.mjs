@@ -246,16 +246,22 @@ export function main(argv = process.argv.slice(2)) {
       `refs/remotes/origin/${CLAIMS_PREFIX}`))].sort((a, b) => b.at - a.at);
   const active = claims.filter((c) => !c.released);
 
-  const touched = [];
+  // One row per commit: a commit on the deploy branch is reachable from every
+  // topic branch cut from it, so a per-branch log listed it once per branch.
+  // `branch` prefers the deploy branch; `branches` names every one carrying it.
+  const touchedBy = new Map();
   if (paths.length) {
-    for (const r of live) {
+    for (const r of [...live].sort((a, b) => (b.ref === DEPLOY) - (a.ref === DEPLOY))) {
       const log = git("log", `--since=${hours} hours ago`, "--format=%h%x09%an%x09%ar%x09%s", `origin/${r.ref}`, "--", ...paths);
       for (const line of log.split("\n").filter(Boolean)) {
         const [sha, author, when, ...s] = line.split("\t");
-        touched.push({ branch: r.ref, sha, author, when, subject: s.join("\t") });
+        const seen = touchedBy.get(sha);
+        if (seen) { if (!seen.branches.includes(r.ref)) seen.branches.push(r.ref); continue; }
+        touchedBy.set(sha, { branch: r.ref, branches: [r.ref], sha, author, when, subject: s.join("\t") });
       }
     }
   }
+  const touched = [...touchedBy.values()];
 
   const ago = (min) => min < 90 ? `${min} min` : `${Math.round(min / 60)} h`;
   if (json) {

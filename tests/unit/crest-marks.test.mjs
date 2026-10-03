@@ -200,7 +200,7 @@ test("a mark's COLOUR is never substituted; its LEGIBILITY is always asserted", 
             bad.push(`${team.id}/${liv.id}/${where} auto-haloed authored logo`);
           // Team data (a brand mark on the team's own default) must still read —
           // on the surfaces the SHIPPED car has: a fin badge on a car with no
-          // fin (every 2026 car) is texels nothing samples, and a player who
+          // fin (seven of the eleven 2026 cars) is texels nothing samples; a player who
           // turns the fin on gets the sheet's advisory for their own picks.
           const shippedFin = (liv.finShape || "standard") !== "none";
           if (!liv.logo && !P.brandPair && (where !== "badge" || shippedFin)) for (const f of under) {

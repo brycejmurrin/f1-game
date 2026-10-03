@@ -31,7 +31,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.7.0";
+const SERVER_VERSION = "1.8.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -970,42 +970,91 @@ export function splitOut(stdout) {
 }
 export function parseOut(stdout) { return splitOut(stdout).out; }
 
-function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) {
+/** Run a CLI without blocking the server. spawnSync froze the whole process
+ *  for a browser tool's 30–100 s: apex_status could not answer, and when a
+ *  client gave up at its own 60 s limit the child ran on holding the lock, so
+ *  the next call got lock_held (2026-10-03 re-test). The child leads its own
+ *  process group so a timeout or a client's notifications/cancelled takes the
+ *  Chromium it launched down with it. */
+const running = new Set();   // a detached child must not outlive the server
+process.on("exit", () => { for (const c of running) { try { process.kill(-c.pid, "SIGKILL"); } catch { /* gone */ } } });
+export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, signal = null } = {}) {
   const started = Date.now();
   const [cmd, ...args] = argv;
-  const r = spawnSync(cmd, args, {
-    encoding: "utf8",
-    cwd: ROOT,
-    env: { ...process.env, ...env },
-    timeout: timeoutMs,
-    maxBuffer: 8 * 1024 * 1024,
+  return new Promise((resolve) => {
+    let stdout = "", stderr = "", spawnErr = null, stopped = null, settled = false;
+    let child;
+    try {
+      child = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, detached: true });
+    } catch (e) { spawnErr = e; }
+    const killTree = (why) => {
+      if (!child || child.exitCode != null || stopped) return;
+      stopped = why;
+      try { process.kill(-child.pid, "SIGTERM"); } catch { try { child.kill("SIGTERM"); } catch { /* gone */ } }
+      setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* gone */ } }, 3000).unref();
+    };
+    const timer = setTimeout(() => killTree("timeout"), timeoutMs);
+    const onAbort = () => killTree("cancelled");
+    if (signal) { if (signal.aborted) onAbort(); else signal.addEventListener("abort", onAbort, { once: true }); }
+    const finish = (code, sig) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
+      const exit = code == null ? (sig ? 1 : 0) : code;
+      // stdout carries only what `out` does not: returning the raw JSON beside
+      // its parse doubled every result (apex_who_is_on_it reached 60 KB).
+      const { out, rest } = splitOut(stdout);
+      const body = {
+        ok: exit === 0,
+        exit,
+        argv,
+        env: Object.keys(env).length ? env : undefined,
+        stdout: rest,
+        stderr,
+        out,
+        durationMs: Date.now() - started,
+      };
+      if (spawnErr) {
+        body.ok = false;
+        body.error = "spawn_failed";
+        body.message = String(spawnErr.message || spawnErr);
+        body.fix = "Check node and that the CLI path exists under tools/.";
+      } else if (stopped) {
+        body.ok = false;
+        body.error = stopped;
+        body.message = stopped === "timeout"
+          ? `stopped after ${Math.round(timeoutMs / 1000)} s (process group killed)`
+          : "the client cancelled the call; the process group was killed";
+        body.fix = stopped === "timeout" ? "Check apex_status for load, then retry." : "Retry when ready.";
+      } else if (allowExit && allowExit.has(exit)) {
+        body.ok = true;
+      }
+      resolve(toolResult(body, { isError: !body.ok }));
+    };
+    if (!child) return finish(null, null);
+    running.add(child);
+    child.on("close", () => running.delete(child));
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    const cap = 8 * 1024 * 1024;
+    child.stdout.on("data", (d) => { if (stdout.length < cap) stdout += d; });
+    child.stderr.on("data", (d) => { if (stderr.length < cap) stderr += d; });
+    child.on("error", (e) => { spawnErr = e; finish(null, null); });
+    child.on("close", finish);
   });
-  const durationMs = Date.now() - started;
-  const stderr = r.stderr || "";
-  const exit = r.status == null ? (r.signal ? 1 : 0) : r.status;
-  // stdout carries only what `out` does not: returning the raw JSON beside its
-  // parse doubled every result, and apex_who_is_on_it reached 60 KB — over
-  // the host's inline limit, so the caller got a file path, not an answer.
-  const { out, rest } = splitOut(r.stdout);
-  const body = {
-    ok: exit === 0,
-    exit,
-    argv,
-    env: Object.keys(env).length ? env : undefined,
-    stdout: rest,
-    stderr,
-    out,
-    durationMs,
-  };
-  if (r.error) {
-    body.ok = false;
-    body.error = "spawn_failed";
-    body.message = String(r.error.message || r.error);
-    body.fix = "Check node and that the CLI path exists under tools/.";
-  } else if (allowExit && allowExit.has(exit)) {
-    body.ok = true;
+}
+
+/** rotate-markings --check prints text: one row per circuit whose start-line
+ *  markings a rotation would move, then a count. Lift both into `out`. */
+export function rotateReport(stdout) {
+  const circuits = [];
+  for (const l of String(stdout || "").split("\n")) {
+    const m = /^(\S+)\s+shift\s+([\d.]+)% of lap\s+(\d+) turns(\s+\(sectors left alone\))?/.exec(l);
+    if (m) circuits.push({ id: m[1], shiftPct: Number(m[2]), turns: Number(m[3]), sectorsLeftAlone: !!m[4] });
   }
-  return toolResult(body, { isError: !body.ok });
+  const n = /^(\d+) circuit file\(s\) would change/m.exec(String(stdout || ""));
+  return { wouldChange: n ? Number(n[1]) : circuits.length, circuits };
 }
 
 /** ci-watch prints text: lift its terminal `= ci <verdict> (…)` line, and
@@ -1019,7 +1068,8 @@ export function ciVerdict(stdout) {
     jobs: lines.filter((l) => !/\]\s*= ci /.test(l)).map((l) => l.replace(/^\[ci-watch\]\s*/, "")),
   };
 }
-function withCiVerdict(result) {
+async function withCiVerdict(pending) {
+  const result = await pending;
   const body = JSON.parse(result.content[0].text);
   // The job lines and the verdict move into `out`; stdout keeps the raw text
   // only when nothing parsed (no token, API down) so the reason survives.
@@ -1343,7 +1393,7 @@ function garageCommand(op, args) {
 }
 process.on("exit", () => { if (garage) garageClose("server exit"); });
 
-function dispatch(name, args = {}) {
+function dispatch(name, args = {}, { signal = null } = {}) {
   if (typeof name !== "string") return refuse("bad_args", "tool name must be a string", "Use a name from tools/list.");
   if (!name.startsWith(PREFIX)) {
     return refuse(
@@ -1396,17 +1446,23 @@ function dispatch(name, args = {}) {
   if (kind === "browser") {
     const took = acquireLock(name);
     if (took) return took;
-    try {
-      return runSpawn(argv, { timeoutMs: 180000, env });
-    } finally {
-      releaseLock();
-    }
+    // Released when the child exits — after a cancel too, never while a
+    // Chromium still runs.
+    return runSpawn(argv, { timeoutMs: 180000, env, signal }).finally(releaseLock);
   }
 
+  if (name === "apex_rotate_markings_check") {
+    return runSpawn(argv, { timeoutMs: 180000, env, signal }).then((result) => {
+      const body = JSON.parse(result.content[0].text);
+      if (!body.error) { body.out = rotateReport(body.stdout); body.stdout = ""; }
+      result.content[0].text = JSON.stringify(body);
+      return result;
+    });
+  }
   if (name === "apex_ci_status") {
     // ci-watch exits: 0 green / no run, 1 red, 2 cancelled, 124 still running
     // — each a verdict, not a tool failure. 3 (no token / API down) is one.
-    return withCiVerdict(runSpawn(argv, { timeoutMs: 60000, allowExit: new Set([0, 1, 2, 124]), env }));
+    return withCiVerdict(runSpawn(argv, { timeoutMs: 60000, allowExit: new Set([0, 1, 2, 124]), env, signal }));
   }
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
@@ -1415,7 +1471,7 @@ function dispatch(name, args = {}) {
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
   const allowExit = name === "apex_verify_change_fast" ? new Set([0, 2]) : null;
-  return runSpawn(argv, { timeoutMs, allowExit, env });
+  return runSpawn(argv, { timeoutMs, allowExit, env, signal });
 }
 
 function listTools() {
@@ -1490,6 +1546,9 @@ function rpcError(id, code, message) {
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
+/** tools/call requests still running, by JSON-RPC id, for notifications/cancelled. */
+const inflight = new Map();
+
 async function handleRpc(msg) {
   // MCP 2025-06-18 removed JSON-RPC batching. Reject arrays and primitive
   // envelopes without dereferencing them or terminating the shared server.
@@ -1504,7 +1563,15 @@ async function handleRpc(msg) {
   }
   if (Object.hasOwn(msg, "params") && !isObject(msg.params)) return rpcError(mid, -32602, "params must be an object");
   const method = msg.method;
-  if (!hasId) return null;
+  if (!hasId) {
+    // notifications/cancelled: stop the call and send no response for it.
+    // Spec: https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/cancellation
+    if (method === "notifications/cancelled" && isObject(msg.params)) {
+      const ctl = inflight.get(String(msg.params.requestId));
+      if (ctl) { log(`cancelled request ${msg.params.requestId}: ${msg.params.reason || "no reason"}`); ctl.abort(); }
+    }
+    return null;
+  }
 
   if (method === "initialize") {
     return {
@@ -1530,14 +1597,19 @@ async function handleRpc(msg) {
     const params = msg.params || {};
     if (typeof params.name !== "string" || !params.name) return rpcError(mid, -32602, "tools/call needs a string name");
     if (Object.hasOwn(params, "arguments") && !isObject(params.arguments)) return rpcError(mid, -32602, "tools/call arguments must be an object");
+    const ctl = new AbortController();
+    inflight.set(String(mid), ctl);
     try {
-      return { jsonrpc: "2.0", id: mid, result: await dispatch(params.name, params.arguments ?? {}) };
+      const result = await dispatch(params.name, params.arguments ?? {}, { signal: ctl.signal });
+      return ctl.signal.aborted ? null : { jsonrpc: "2.0", id: mid, result };
     } catch (e) {
       return {
         jsonrpc: "2.0",
         id: mid,
         error: { code: -32000, message: String(e.message || e).slice(0, 2000) },
       };
+    } finally {
+      inflight.delete(String(mid));
     }
   }
   if (method === "ping") {

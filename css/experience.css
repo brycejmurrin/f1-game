@@ -5,13 +5,18 @@
   #overlay #mb-career .mb-sub { color: inherit; }
   #menu-primary .bigbtn,
   #menu-explore .bigbtn { color: var(--text); }
-  #pm-race-context { grid-column: 1 / -1; display: grid; gap: calc(var(--gap) / 3); padding: var(--gap); background: var(--carbon); border-bottom: 1px solid var(--plate-line); }
+  #pm-race-context { grid-column: 1 / -1; display: grid; gap: 0; line-height: 1.25; padding: calc(var(--gap) / 2) var(--gap); background: var(--carbon); border-bottom: 1px solid var(--plate-line); }
   #pm-race-context strong { font-size: var(--fs-5); }
   #pm-race-context :is(span, small) { color: var(--dim); font-size: var(--fs-micro); }
-  #pm-quick-doors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--gap) / 2); grid-column: 1 / -1; }
-  #pm-quick-doors button { margin: 0; min-height: var(--tap); min-width: 0; font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: calc(var(--gap) / 2); transform: none; }
-  #pm-checkpoint { grid-column: 1 / -1; font-size: var(--fs-micro); border: 1px solid var(--plate-line); padding: calc(var(--gap) / 2); border-radius: var(--r-md); }
-  #pm-checkpoint summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; }
+  /* RACE TOOLS tray: three short chip-height tiles to a row, quieter than the
+     doors above it, so the card has one primary, two doors and a tray. */
+  #pm-quick-doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--gap) / 2); grid-column: 1 / -1; }
+  #pm-quick-doors button { margin: 0; min-height: max(var(--chip-h), 44px); min-width: 0; font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: calc(var(--gap) / 3); transform: none; }
+  #pm-quick-doors button[hidden] { display: none; }
+  #pm-checkpoint { font-size: var(--fs-micro); border: 1px solid var(--plate-line); padding: 0 calc(var(--gap) / 3); border-radius: var(--r-md); background: var(--carbon); min-width: 0; }
+  #pm-checkpoint[open] { grid-column: 1 / -1; }
+  #pm-checkpoint summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  #pm-checkpoint[open] { padding-bottom: calc(var(--gap) / 2); }
   #pm-checkpoint button { font-size: var(--fs-micro); }
   #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); }
   #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }
