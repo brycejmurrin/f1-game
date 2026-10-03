@@ -847,7 +847,7 @@ test.describe("world() nextCorner", () => {
 test.describe("frame() cameras and edges", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("renders any of the 13 camera modes without a live frame", async ({ page }) => {
+  test("renders any of the 15 camera modes without a live frame", async ({ page }) => {
     await load(page, "monza", 0.05, 60);
     // A synthetic camera is computed fresh — it does NOT need a rendered frame,
     // which is the whole point vs the live view.
