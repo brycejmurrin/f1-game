@@ -525,6 +525,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // sized this repo wrong on 2026-10-01), real-git fixture. ~1 s.
   "tests/unit/repo-size.test.mjs",
   "tests/unit/report-server.test.mjs",
+  // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
+  "tests/unit/results-cam.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
