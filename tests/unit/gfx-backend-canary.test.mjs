@@ -4848,6 +4848,12 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     const cockpitBodyMesh = (t, c, key) => calls.push(["cockpit", c.num, key]);
     const teamBodyMesh = (t, c) => calls.push(["field", c.num]);
     const getCarDecalTexture = (t, num, p) => calls.push(["atlas", num, p]);
+    // The shadow casters (warmCarAssets' gate): OFF for the cancel matrix, ON below.
+    let casters = false;
+    const shadowCastersWanted = () => casters;
+    const teamMesh = (t, c, sil) => calls.push(["caster", c.num, sil, c.visSh || "sh"]);
+    const Parts = { CATALOG: [{ id: "aero" }, { id: "tyres" }] };
+    G.getTeamParts = () => ({ aero: "hi" });
     const setTimeout = fn => {
       yields++;
       if (yields === 2) {
@@ -4877,6 +4883,17 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     await prepare(current);
     assert.equal(calls.length, 7, "cheap cache lookups still consult current assets");
     assert.equal(yields, 0, "cache hits do not pay one timer per driver");
+    if (cancel !== "none") continue;
+    // THE CASTERS in the same sliced loop: each its own step after its car (one
+    // build per yielded task, as before), keyed (team, car, true) like the shadow
+    // passes; the player's on its OWN build, makeCars' stamp + ":sh".
+    casters = true; calls.length = 0; yields = 0; clock = 0;
+    performance.now = () => (clock += 8);
+    await prepare(current);
+    assert.deepEqual(calls.filter(c => c[0] === "caster"),
+      [["caster", 99, true, "hi,:sh"], ["caster", 1, true, "sh"], ["caster", 3, true, "sh"]]);
+    assert.deepEqual(calls.map(c => c[0]), ["player", "cockpit", "atlas", "caster", "field", "atlas", "caster", "field", "atlas", "caster"]);
+    assert.equal(yields, 6, "a caster takes a slice of its own");
   }
 });
 

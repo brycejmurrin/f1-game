@@ -23,8 +23,8 @@
    ON, OFF. The two are never up together, so one target serves both.
    One MirrorPass.create(G, deps) at boot; the render loop calls render().
    Reads G.gfx / G.state / G.player / G.cars / G.track / G.camMode / G.dbgCam /
-   G.hideMeshes / G.store; the world draw and the car pose helpers come
-   through deps. */
+   G.hideMeshes / G.store; the world draw, the car draw (CarDraw.drawMirrorCar:
+   the main pass's own body + wheel meshes) and the pose helpers come through deps. */
 "use strict";
 
 const MirrorPass = (function () {
@@ -72,7 +72,7 @@ const MirrorPass = (function () {
 
   function create(G, deps) {
     Log.info("game", "MirrorPass.create");
-    const { drawWorldMeshes, teamMesh, renderPosOf, playerAnchor, yawVisInterp, basisMat, carPaint, onModeChange } = deps;
+    const { drawWorldMeshes, drawCar, renderPosOf, playerAnchor, yawVisInterp, basisMat, carPaint, onModeChange } = deps;
     let mode = G.store.get("hudMirror", "auto");
     if (MODES.indexOf(mode) < 0) mode = "auto";
 
@@ -278,8 +278,11 @@ const MirrorPass = (function () {
     }
 
     // Rivals within `reach` (QUALITY) of track arc and not ahead of the mirror eye:
-    // the factory whole-car mesh, one draw each (no decals, rings or lamps —
-    // the mirror is ~120 px tall).
+    // drawCar (CarDraw.drawMirrorCar) draws each from the MAIN pass's caches — the
+    // body-only mesh and the 4 rotating field wheels, on the grounded pose below.
+    // Never a whole-car teamMesh: nothing else builds one, so each rival new to
+    // the mirror cost a 140-250 ms Car3D.build mid-race. No decals, rings or lamps —
+    // the mirror is ~120 px tall.
     // `centre`: whose arc `reach` is measured from; `skip`: the car not drawn (the
     // mirror's own; the PiP draws its subject and skips nobody).
     function drawCars(wet, night, reach, centre, skip) {
@@ -288,7 +291,7 @@ const MirrorPass = (function () {
       if (hide && hide.cars) return;
       const ex = _eye[0], ez = _eye[2];
       const paint = carPaint(wet, night);
-      if (typeof FieldLod !== "undefined" && FieldLod.on) return drawCarsLod(paint, reach, centre, skip);
+      if (typeof FieldLod !== "undefined" && FieldLod.on) return drawCarsLod(paint, night, reach, centre, skip);
       for (const c of G.cars) {
         if (skip && (c === skip || c.isPlayer)) continue;
         const ds = Math.abs(c.s - centre.s);
@@ -297,7 +300,7 @@ const MirrorPass = (function () {
         const dx = _P[0] - ex, dz = _P[2] - ez;
         if (dx * _bx + dz * _bz < -3) continue;   // ahead of the eye: out of a rear view
         basisMat(_R, _U, _F, _P, _mat);
-        G.gfx.draw(teamMesh(c.team, c), _mat, paint);
+        drawCar(c, _mat, paint, night);
         _cars++;
       }
     }
@@ -307,7 +310,7 @@ const MirrorPass = (function () {
     // view cone (+5 m for the car's half-length), and only the nearest
     // FieldLod.mirrorCap() (6) to the eye are drawn. The PiP keeps no cone (a
     // TV shot can look steeply down) and always draws its subject.
-    function drawCarsLod(paint, reach, centre, skip) {
+    function drawCarsLod(paint, night, reach, centre, skip) {
       const track = G.track, ex = _eye[0], ez = _eye[2];
       let n = 0, force = -1;
       for (const c of G.cars) {
@@ -326,7 +329,7 @@ const MirrorPass = (function () {
       }
       FieldLod.nearest(_cD2, n, FieldLod.mirrorCap(), _cKeep, force);
       for (let i = 0; i < n; i++) {
-        if (_cKeep[i]) { G.gfx.draw(teamMesh(_cCars[i].team, _cCars[i]), _cMats[i], paint); _cars++; }
+        if (_cKeep[i]) { drawCar(_cCars[i], _cMats[i], paint, night); _cars++; }
         _cCars[i] = null;
       }
     }

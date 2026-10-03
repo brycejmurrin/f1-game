@@ -188,8 +188,9 @@ test("source guards: the arc reaches AI wheels only; the emitters run before the
   assert.ok(human, "the human arm is the speed taper");
   assert.doesNotMatch(human[1], /kCur|curvature/, "no curvature may reach a human car's wheels");
   assert.equal(cd.split("c.kCur").length - 1, 1, "car-draw reads c.kCur at exactly one (AI-only) site");
-  // The far brake flare is for rivals past the 40 m ring gate only.
-  assert.match(cd, /const flareA = !c\.isPlayer && heatF > 0\.15 && camD2 >= 40 \* 40/);
+  // The far brake flare is for rivals past the 40 m ring gate only, and never
+  // from the mirror's BARE wheels (a second camera would emit it twice).
+  assert.match(cd, /const flareA = !bare && !c\.isPlayer && heatF > 0\.15 && camD2 >= 40 \* 40/);
   // game.js: carFx.emit beside the other emitters, before the cockpit branch.
   const game = read("js/game.js");
   const emit = game.indexOf("carFx.emit(c, _groundMat, dt, state);");
