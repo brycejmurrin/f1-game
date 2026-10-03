@@ -19,6 +19,14 @@ import { join, resolve } from "node:path";
 import vm from "node:vm";
 
 const ROOT = resolve(new URL("../../../../", import.meta.url).pathname);
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`Usage: node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs [dir|file]
+
+SAFE merge of LightEdits / proposal deltas into js/lighting/presets.js.
+Default target: artifacts/lighting/proposals
+`);
+  process.exit(0);
+}
 const LP = join(ROOT, "js/lighting/presets.js");
 const LIGHTING = join(ROOT, "js/lighting/knobs.js");
 // A directory of proposal JSON, or ONE file — which is what a pasted export is.
@@ -182,6 +190,13 @@ for (const { file, key, vals, delta } of pairs) {
   for (const [id, v] of Object.entries(vals)) {
     const d = TUNE.get(id);
     if (!d) { errors.push(`${file}: ${key}.${id} is not a TUNE_DEFS id`); continue; }
+    // Road wetness is physics (trackWetness), not a baked look. Shipping it
+    // made dry dawn/night presets look wet while grip stayed dry
+    // (docs/plans/2026-09-30-wetness-lighting.md). Live tuner may still pin it.
+    if (id === "wetness") {
+      errors.push(`${file}: ${key}.wetness must not be baked — leave AUTO; use ssrDryNight/ssrDryDay for dry sheen`);
+      continue;
+    }
     if (typeof v !== "number" || !isFinite(v)) {
       errors.push(`${file}: ${key}.${id} is not a finite number`); continue;
     }

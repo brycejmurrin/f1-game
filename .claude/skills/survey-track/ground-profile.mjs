@@ -23,7 +23,16 @@ import {
 
 const ROOT = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
 
-const [trackId = "montreal", fracsArg, latsArg] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`Usage: node .claude/skills/survey-track/ground-profile.mjs <trackId> [fracs] [lats]
+
+Lateral ground-profile probe via __apex.groundY (boots Chromium).
+  fracs = comma lap fractions (default 0,0.12,0.25,0.5,0.65,0.8)
+  lats  = comma lateral metres (default 8,12,20,30,45,70,110)`);
+  process.exit(0);
+}
+const [trackId = "montreal", fracsArg, latsArg] = argv;
 const fracs = (fracsArg || "0,0.12,0.25,0.5,0.65,0.8").split(",").map(Number);
 const lats = (latsArg || "8,12,20,30,45,70,110").split(",").map(Number);
 

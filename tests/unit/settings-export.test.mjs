@@ -734,6 +734,27 @@ test("steerMode / hudProfile / drivingLine rows carry oneOf allowlists", () => {
 // flyby shots / loading card) because nobody added their SPEC rows. Every
 // store key APPEARANCE owns must be allowlisted, and a changed one must
 // survive the round trip.
+test("dockLayout is in SPEC and round-trips a per-scheme bag", () => {
+  const bag = {
+    tilt: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
+    buttons: { L: { x: 0.2, y: 0.1 }, R: { x: -0.1, y: 0 } },
+    touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
+  };
+  const { SettingsExport, collect } = boot({ disk: {
+    "apex26.dockLayout": JSON.stringify(bag),
+  } });
+  const row = SettingsExport.SPEC.find((r) => r.k === "dockLayout");
+  assert.ok(row, "dockLayout needs a SPEC row");
+  assert.equal(row.group, "driving");
+  const f = collect("changes");
+  assert.deepEqual(f.settings.driving.dockLayout.buttons.L, bag.buttons.L);
+  const b = boot();
+  const res = b.loadSettings(f);
+  assert.equal(res.ok, true);
+  assert.equal(res.skipped, 0);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.dockLayout")).buttons.L, bag.buttons.L);
+});
+
 test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const src = read("js/ui/appearance-opts.js");
   const keys = [...src.matchAll(/const K_[A-Z_]+ = "([A-Za-z]+)"/g)].map((m) => m[1]);

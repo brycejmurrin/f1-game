@@ -19,7 +19,19 @@ const ROOT = new URL("../../../../", import.meta.url).pathname;   // repo root
 
 function readInput() {
   const arg = process.argv[2];
-  if (arg && arg !== "-") return readFileSync(arg, "utf8");
+  if (arg === "--help" || arg === "-h" || process.argv.includes("--help") || process.argv.includes("-h")) {
+    console.log(`Usage: node .claude/skills/lighting-tuner/scripts/bake.mjs <file>
+       node .claude/skills/lighting-tuner/scripts/bake.mjs - < blob
+
+FULL REPLACE of window.LightPresets in js/lighting/presets.js from a SNAPSHOT.
+A LightEdits DELTA is refused — use merge-proposals.mjs instead.`);
+    process.exit(0);
+  }
+  if (!arg) {
+    console.error("No input. Pass a file path, '-' for stdin, or --help.");
+    process.exit(1);
+  }
+  if (arg !== "-") return readFileSync(arg, "utf8");
   return readFileSync(0, "utf8");   // stdin
 }
 

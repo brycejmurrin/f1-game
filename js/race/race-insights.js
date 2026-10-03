@@ -440,7 +440,7 @@ const RaceInsights = (function () {
         // still belong to the attempt; discarding it could award dirty mastery.
         observeDrill(c, current); return;
       }
-      const wet = G.roadWetness ? G.roadWetness() : 0;
+      const wet = G.trackWetness ? G.trackWetness() : 0;
       if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; sector.valid = false; weather = wet; }
       if (weather == null) weather = wet;
       const dt = now - previous.time, ds = current.prog - previous.prog;
