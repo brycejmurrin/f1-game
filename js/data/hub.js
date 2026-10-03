@@ -25,7 +25,7 @@ const DataHub = (function () {
     { id: "results", label: "RESULTS", load: function () { return loadResults(); } },
     { id: "live", label: "LIVE", load: function () { return loadLive(); } },
     { id: "telemetry", label: "TELEMETRY", load: function () { return loadTelemetry(); } },
-    { id: "race", label: "RACE IT", load: function () { return loadRealRace(); } },
+    { id: "race", label: "WATCH & DRIVE", load: function () { return loadRealRace(); } },
     { id: "export", label: "EXPORT", load: function () { return loadExport(); } }
   ];
 
@@ -188,8 +188,9 @@ const DataHub = (function () {
     });
   }
 
-  function open() {
+  function open(want) {
     if (!root) return;
+    if (want && TABS.some(function (t) { return t.id === want; })) active = want;
     returnFocus = document.activeElement;
     Log.info("data", "hub open");
     root.hidden = false;
@@ -207,6 +208,7 @@ const DataHub = (function () {
 
   function close() {
     if (!root) return;
+    cancelRealRace();
     Log.info("data", "hub close");
     disarmLiveAuto();
     closeTelemPopup();
@@ -239,6 +241,12 @@ const DataHub = (function () {
   }
 
   function showTab(id) {
+    if (id !== "race") {
+      cancelRealRace();
+      // Cancellation invalidates the WATCH controller behind this DOM. Rebuild
+      // on return, and prevent a pending tab load from recaching the old node.
+      state.race = null; gen.race = (gen.race || 0) + 1;
+    }
     closeTelemPopup();   // close popup and pause any running lap replay when changing tabs
     if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
@@ -338,18 +346,39 @@ const DataHub = (function () {
   function errorBlock(id, err, hasStale) {
     const w = el("div", "dh-error");
     w.setAttribute("role", "status");
-    // Three different things were all one sentence telling the player to check
-    // a connection that may be fine. navigator.onLine is only trustworthy in
-    // the negative — false really does mean no network — so it is read that
-    // way and nothing is claimed when it is true.
-    let msg = navigator.onLine === false
-      ? "You're offline. This tab needs a connection."
-      : "Couldn't reach the F1 data service. It may be busy — try again.";
-    if (hasStale) msg += " Showing the last data you loaded.";
-    if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
-      msg = err.message;
+    // Three different situations used to share one dead-end sentence. Split them
+    // so the player can tell OFFLINE (no network) from UPSTREAM (service busy /
+    // HTTP failure while the device thinks it is online). Cached content from
+    // this session still paints under the banner when hasStale is true.
+    const offline = navigator.onLine === false;
+    let reason = offline ? "offline" : "upstream";
+    let title = offline ? "OFFLINE" : "SERVICE UNAVAILABLE";
+    let msg = offline
+      ? "No network on this device. Open Data Hub once while online to keep a copy of schedule and standings for later."
+      : "Couldn't reach the F1 data service. It may be busy or blocked — try again in a moment.";
+    if (hasStale) {
+      title = offline ? "OFFLINE · CACHED" : "REFRESH FAILED · CACHED";
+      msg = offline
+        ? "You're offline. Showing the last data loaded on this device."
+        : "Couldn't refresh from the F1 data service. Showing the last data you loaded.";
+      reason = offline ? "offline-cached" : "upstream-cached";
     }
+    if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
+      title = "LIVE SESSION";
+      msg = err.message;
+      reason = "live-auth";
+    }
+    w.dataset.reason = reason;
+    const titleEl = el("div", "dh-error-msg", title);
+    titleEl.dataset.role = "title";
+    w.appendChild(titleEl);
     w.appendChild(el("div", "dh-error-msg", msg));
+    if (!hasStale && offline) {
+      const hint = el("div", "dh-error-msg",
+        "Tip: schedule, standings and results keep an API cache after a successful fetch — retry after you reconnect.");
+      hint.dataset.role = "hint";
+      w.appendChild(hint);
+    }
     const retry = el("button", "dh-retry", "RETRY");
     retry.type = "button";
     retry.addEventListener("click", function () { loadTab(id); });
@@ -363,6 +392,7 @@ const DataHub = (function () {
     if (mins < 1) txt = "updated just now";
     else if (mins < 60) txt = "updated " + mins + "m ago";
     else txt = "updated " + Math.floor(mins / 60) + "h " + (mins % 60) + "m ago";
+    if (navigator.onLine === false) txt += " · offline copy";
     return el("div", "dh-footnote", txt);
   }
 
@@ -445,6 +475,7 @@ const DataHub = (function () {
       b.type = "button";
       b.addEventListener("click", function () {
         if (y === sel.year) return;
+        cancelRealRace();
         sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
         for (let i = 0; i < yearRow.children.length; i++) {
           yearRow.children[i].classList.toggle("active", yearRow.children[i] === b);
@@ -475,6 +506,7 @@ const DataHub = (function () {
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
 
     gpSel.addEventListener("change", function () {
+      cancelRealRace();
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
       sel.sessionKey = null;
       sel.pinned = false;
@@ -576,7 +608,7 @@ const DataHub = (function () {
   });
   // Implementation: js/data/real-race-tab.js — the RACE IT tab: one real Grand
   // Prix's timing as a script, and every real driver's seat as a JUMP IN.
-  const { loadRealRace } = DataRealRace.create({
+  const { loadRealRace, cancel: cancelRealRace } = DataRealRace.create({
     el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
     teamChip, fmtDateTime, findTeam, close, isOpen
   });

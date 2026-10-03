@@ -48,10 +48,26 @@ async function startLiveRace(page) {
     window.__apex.go();
     try { window.__apex.rivals([]); } catch (_) { /* older builds */ }
   });
-  const live = await page.evaluate(() => {
-    try { return !!(window.__apex && window.__apex.info().track != null); } catch (_) { return false; }
+  // The on-track window recipe is measured on bahrain. A shared worker that
+  // previously raced another circuit (car-effects uses monza) must re-race —
+  // reusing "any live track" left Monza loaded and held lock left the road
+  // (CI 37082214838 / 37080085921: held.x 7.567 vs hw−0.5 6.3).
+  const track = await page.evaluate(() => {
+    try {
+      const i = window.__apex && window.__apex.info();
+      return i && i.track != null ? i.track : null;
+    } catch (_) { return null; }
   });
-  if (live) { await clearField(); return; }
+  if (track === "bahrain") { await clearField(); return; }
+  if (track != null) {
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(
+      () => window.__apex && window.__apex.info().track === "bahrain",
+      null, { polling: 100, timeout: BOOT_MS }
+    );
+    await clearField();
+    return;
+  }
   await page.goto("/");
   // Wait for boot BEFORE #mb-race: the click is a bare evaluate with no
   // actionability poll, so firing it before the title handlers attach leaves
@@ -74,7 +90,7 @@ async function startLiveRace(page) {
   await page.evaluate(() => document.getElementById("rs-go").click());
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(
-    () => window.__apex && window.__apex.info().track != null,
+    () => window.__apex && window.__apex.info().track === "bahrain",
     null, { polling: 100, timeout: BOOT_MS }
   );
   await clearField();
@@ -100,20 +116,22 @@ const probe = (page) => page.evaluate(() => window.__apex.probe());
 // Place the player, hold the given input for `ticks` physics frames, return the
 // before/after probes. dt is fixed at 1/60 s. throttle defaults off so speed
 // stays close to the value we jumped in at (no acceleration ramp).
+// ONE EVALUATE: a multi-evaluate jump/settle/step/probe chain lets the page's
+// frame loop insert uncounted ticks between CDP round-trips (DEFECT-LEDGER
+// 2026-09-22 item 2; symmetry case CI 36817162914). Pair with freeze(true) for
+// recipes that assert an absolute on-track window.
 async function run(page, { frac, speed = 30, steer = 0, throttle = false, brake = false, settle = 3, ticks = 90 }) {
-  await page.evaluate((f) => { window.__apex.jump(f.frac, f.speed, 0); }, { frac, speed });
-  await page.evaluate((inp) => {
-    window.__apex.setInput(inp);
-    window.__apex.step(1 / 60, inp.settle);
-  }, { steer: 0, throttle, brake, settle });
-  const before = await probe(page);
-  await page.evaluate((inp) => {
-    window.__apex.setInput(inp);
-    window.__apex.step(1 / 60, inp.ticks);
+  return page.evaluate((f) => {
+    window.__apex.jump(f.frac, f.speed, 0);
+    window.__apex.setInput({ steer: 0, throttle: f.throttle, brake: f.brake });
+    window.__apex.step(1 / 60, f.settle);
+    const before = window.__apex.probe();
+    window.__apex.setInput({ steer: f.steer, throttle: f.throttle, brake: f.brake });
+    window.__apex.step(1 / 60, f.ticks);
     window.__apex.clearInput();
-  }, { steer, throttle, brake, ticks });
-  const after = await probe(page);
-  return { before, after };
+    const after = window.__apex.probe();
+    return { before, after };
+  }, { frac, speed, steer, throttle, brake, settle, ticks });
 }
 
 // Move the racing-line slider and fire its handler (exercises the full wiring:
@@ -252,51 +270,57 @@ test.describe("Apex 26 — steering", () => {
 
   test("steering has authority to fight the curvature drift", async ({ page }) => {
     await startLiveRace(page);
-    const corners = await page.evaluate(() => window.__apex.corners());
-    // Pick a real corner.
-    let frac = corners[0], k0 = 0;
-    for (const f of corners) {
-      const p = await page.evaluate((ff) => { window.__apex.jump(ff, 24, 0); return window.__apex.probe(); }, f);
-      if (Math.abs(p.k) > 0.02) { frac = f; k0 = p.k; break; }
-    }
-    expect(Math.abs(k0)).toBeGreaterThan(0.02);
-
     // Isolate the DRIVER's authority from the DRIVING-HELP assist: with the
-    // assist off, held lock must move the car clearly further in the steered
-    // direction than coasting does — proving manual steering controls the line.
-    // (lockDir = +sign(k) was named "inward" when "+k = right-hand corner" was
-    // believed; under the measured convention it is the outside. The assertion
-    // never cared which side — it measures authority relative to coasting.)
-    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
-    const lockDir = Math.sign(k0);
-    // ON-TRACK WINDOW. At the old 22 m/s × 75 ticks the held run saturates on
-    // the wall (x ≈ ±hw) while coasting is still free — so as zero.dx keeps
-    // growing, (dxHeld − dxZero) shrinks or flips and the >2 m gate flakes
-    // (CI 36649674195: −16 … +0.2). 18 m/s × 55 ticks keeps BOTH runs inside
-    // |x| < hw − 0.5 on bahrain's first real corner (measured) while still
-    // clearing the same 2 m authority bar. Assertion unchanged.
+    // assist off, held lock toward the INSIDE must move the car clearly further
+    // inward than coasting (which runs wide) — proving manual steering fights
+    // the curvature drift. Under the measured convention +k = LEFT turn, so
+    // inside is -sign(k) and outside is +sign(k) (file header; road-follow
+    // sibling). lockDir = +sign(k) was a sign bug that steered further out and
+    // saturated the wall (DEFECT-LEDGER 2026-09-22; CI 37082214838 on monza
+    // inheritance: held.after.x 7.567 vs hw−0.5 = 6.3).
     //
-    // FROZEN WHILE MEASURED (2026-09-30). `run()` steps the sim by hand, but
-    // the page's own frame loop was stepping it too, between the evaluates:
-    // every wall-clock frame from jump() to the last step() added ticks the
-    // recipe never counted, so a slow runner held lock for LONGER and the
-    // car left the window — train 36656970688 on 8a5fe2d5: held.after.x
-    // 7.446 against hw − 0.5 = 6.3, on a tree with no physics change since
-    // this recipe passed (#488). docs/notes/DEFECT-LEDGER.md (2026-09-22,
-    // item 2) had already named the cure: freeze + field clear. The field
-    // clear landed; this is the freeze. With G.frozen the loop skips
-    // update() and step() still calls it directly (js/agent/apex.js), so
-    // exactly 3 + 55 ticks run per recipe, on every machine. The shared page
-    // resets freeze between tests; the finally covers a failed expect.
-    await page.evaluate(() => window.__apex.freeze(true));
-    let zero, held;
+    // ON-TRACK WINDOW. At the old 22 m/s × 75 ticks even coasting can leave the
+    // road; 18 m/s × 55 ticks keeps BOTH runs inside |x| < hw − 0.5 on bahrain's
+    // first real corner while still clearing the 2 m authority bar.
+    //
+    // FROZEN + ONE EVALUATE: corner pick + both bursts share one frozen
+    // evaluate so exactly 3 + 55 ticks run per arm (no page-loop ticks between
+    // CDP round-trips). Assertions unchanged.
+    await page.evaluate(() => {
+      window.__apex.setPhysics({ roadFollow: 0 });
+      window.__apex.freeze(true);
+    });
+    let measured;
     try {
-      zero = await run(page, { frac, speed: 18, steer: 0, throttle: false, ticks: 55 });
-      held = await run(page, { frac, speed: 18, steer: lockDir, throttle: false, ticks: 55 });
+      measured = await page.evaluate(() => {
+        const corners = window.__apex.corners();
+        let frac = corners[0], k0 = 0;
+        for (const f of corners) {
+          window.__apex.jump(f, 24, 0);
+          const p = window.__apex.probe();
+          if (Math.abs(p.k) > 0.02) { frac = f; k0 = p.k; break; }
+        }
+        if (Math.abs(k0) <= 0.02) return { ok: false, k0 };
+        const lockDir = -Math.sign(k0); // inside — fight the curvature drift
+        const burst = (steer) => {
+          window.__apex.jump(frac, 18, 0);
+          window.__apex.setInput({ steer: 0, throttle: false, brake: false });
+          window.__apex.step(1 / 60, 3);
+          const before = window.__apex.probe();
+          window.__apex.setInput({ steer, throttle: false, brake: false });
+          window.__apex.step(1 / 60, 55);
+          window.__apex.clearInput();
+          return { before, after: window.__apex.probe() };
+        };
+        return { ok: true, k0, lockDir, zero: burst(0), held: burst(lockDir) };
+      });
     } finally {
       await page.evaluate(() => { window.__apex.freeze(false); window.__apex.setPhysics({ roadFollow: 0 }); });
     }
 
+    expect(measured.ok).toBe(true);
+    expect(Math.abs(measured.k0)).toBeGreaterThan(0.02);
+    const { zero, held, lockDir } = measured;
     const dxZero = zero.after.x - zero.before.x;
     const dxHeld = held.after.x - held.before.x;   // should be far more toward lockDir
     expect(Math.abs(held.after.x)).toBeLessThan(held.before.hw - 0.5); // still on track
@@ -451,17 +475,32 @@ test.describe("Apex 26 — steering", () => {
 
   test("racing-line assist: PULL eases toward the line, PUSH sends it wider", async ({ page }) => {
     await startLiveRace(page);
+    // Assists other than the racing-line slider must stay off: roadFollow
+    // compounds the line, and without freeze run()'s multi-evaluate gaps let
+    // the page loop drive the car into the verge where offAssistFade crushes
+    // PUSH (CI 36943859283: (dxPush-dxOff)*inside = -0.1275 vs -0.2; apex-state
+    // x≈-8.1). Same freeze + roadFollow:0 isolation as the sibling cases.
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     const { frac, k } = await firstCorner(page);
     expect(Math.abs(k)).toBeGreaterThan(0.02);
     const inside = -Math.sign(k);   // apex is on the -sign(k) side
 
-    await setRaceLine(page, 0);
-    const off = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
-    await setRaceLine(page, 5);
-    const pull = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
-    await setRaceLine(page, -5);
-    const push = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
-    await setRaceLine(page, 0); // restore
+    await page.evaluate(() => window.__apex.freeze(true));
+    let off, pull, push;
+    try {
+      await setRaceLine(page, 0);
+      off = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      await setRaceLine(page, 5);
+      pull = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      await setRaceLine(page, -5);
+      push = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      await setRaceLine(page, 0); // restore
+    } finally {
+      await page.evaluate(() => {
+        window.__apex.freeze(false);
+        window.__apex.setPhysics({ roadFollow: 0 });
+      });
+    }
 
     const dxOff = off.after.x - off.before.x;
     const dxPull = pull.after.x - pull.before.x;

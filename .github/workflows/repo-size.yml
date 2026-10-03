@@ -1,0 +1,40 @@
+name: Repo size
+
+# What makes a full clone big: the largest blobs ever committed and the packed
+# total per directory and extension, measured on FULL history
+# (tools/ci/repo-size.mjs). Agent containers clone shallow, and a shallow
+# clone's sizes are wrong (2026-10-01: a phantom "history restart" and a
+# 193 MB figure for a 1,072 MB repository), so the measurement runs here.
+# Read-only and dispatch-only: it changes nothing, it answers "is a history
+# rewrite worth it, and of what?" before anyone considers one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      top:
+        description: "How many of the largest blobs to list"
+        required: false
+        default: "40"
+
+permissions:
+  contents: read
+
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0    # every branch, full history: a shallow clone measures the wrong thing
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Measure
+        env:
+          TOP: ${{ inputs.top }}
+        run: |
+          git fetch -q origin '+refs/heads/*:refs/remotes/origin/*'
+          node tools/ci/repo-size.mjs --top "${TOP:-40}" --out "$RUNNER_TEMP/repo-size.md" > /dev/null
+          cat "$RUNNER_TEMP/repo-size.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/repo-size.md"

@@ -75,3 +75,10 @@ node tools/ci/verify-change.mjs --plan --json
 ```
 
 Do not start a browser group from this skill. `verify-agent` for `--fast`.
+
+## Selection validity
+
+Reject noninteger/negative/reversed/out-of-file start/end ranges before parsing;
+a zero-line selection cannot establish clean code. Tree reports retain requested,
+scanned and missing scope coverage. Missing explicit paths require partial/failed
+evidence, rather than presenting a smaller scan as the full requested audit.

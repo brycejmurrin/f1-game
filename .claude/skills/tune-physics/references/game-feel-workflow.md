@@ -26,8 +26,11 @@ Generic trauma-shake math: [game-feel-feedback-recipes.md](game-feel-feedback-re
 3. FX may **read** physics, never write forces/pose/timers/AI.
 4. Verify visual/audio with hooks; run the relevant deterministic tests.
 5. Determinism proof, no browser: `node --test tests/unit/physics-characterization-vm.test.mjs` (~3 s, same
-   `tests/data/physics-baseline.json` as the browser spec; never regenerate it) plus `player-dynamics-vm.test.mjs`. It stays green
-   only if `shake`/`hitStop`/cue state never reach `physState` — `grep -n '\bshake\b' js/game.js` must show reads only in the camera block.
+   `tests/data/physics-baseline.json` as the browser spec; never regenerate it) plus `player-dynamics-vm.test.mjs`. These fixtures pin their exercised simulation paths; headless green alone
+   does not establish live hit-stop wall/sim timing. Existing `hitStop` deliberately
+   scales live sim time, while cosmetic shake belongs only in camera/render.
+   Compare equal simulation time separately from equal wall time in a frame-driver
+   contract before changing impact behavior; do not extend the slowdown to kerbs.
    Then the browser spec `physics-characterization` once (test-bg `physics-core`).
 
 ## Common mistakes

@@ -189,7 +189,12 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
  * committed any more, so the same history merges clean AND consistent: nothing
  * to regenerate, `npm run gen:check` green on the bare merge. Built in a
  * throwaway copy of the tree (text files only) and merged with the REAL
- * mergeDeployTip() from the copy's own deploy.mjs. */
+ * mergeDeployTip() from the copy's own deploy.mjs.
+ *
+ * Freshen generated files on the copy BEFORE the base commit: a ship tip that
+ * already carried a stale ARCHITECTURE.md count (#697+#740, 2026-10-02) made
+ * regenerateDerived write a follow-up commit for a reason that has nothing to
+ * do with the unit-file merge under test, and this assertion went red. */
 test("two sides that each add a unit file merge clean and leave nothing stale", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-regen-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
@@ -210,6 +215,8 @@ test("two sides that each add a unit file merge clean and leave nothing stale", 
     fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"));
     g("init", "-q", "-b", "base");
     g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    const freshen = spawnSync("npm", ["run", "-s", "gen"], { cwd: dir, encoding: "utf8" });
+    assert.equal(freshen.status, 0, "freshen generated files on the throwaway copy:\n" + freshen.stdout + freshen.stderr);
     g("add", "-A"); g("commit", "-qm", "base");
 
     const addUnit = (name) => {

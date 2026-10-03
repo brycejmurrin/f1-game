@@ -270,6 +270,7 @@
     "js/editor/stamps.js",
     "js/editor/randomise.js",
     "js/editor/validate.js",
+    "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
     "js/editor/designer.js"
@@ -289,6 +290,10 @@
     ],
     [
       "js/editor/shape.js",
+      "js/editor/fixes.js"
+    ],
+    [
+      "js/editor/shape.js",
       "js/editor/canvas.js"
     ],
     [
@@ -305,6 +310,10 @@
     ],
     [
       "js/editor/validate.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/fixes.js",
       "js/editor/designer.js"
     ],
     [
@@ -339,8 +348,10 @@
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
+    "js/track/scenery/venue.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
+    "js/garage/experience.js",
     "js/garage/scene-prims.js",
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",

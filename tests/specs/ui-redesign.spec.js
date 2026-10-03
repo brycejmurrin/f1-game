@@ -472,10 +472,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // evenly. It used to: --hud-scale followed --ui-scale, which this spec leaves at
   // 2, and 96 x 2 = 192 is on the grid. The owner's baked coarse default pins it to
   // 1.24 instead — 96 x 1.24 = 119.04, snapped DOWN to 119.03125, back over 1.24 =
-  // 95.99294. The rule under test is which of 96 / 112 / 140 applies, and those are
-  // 16px apart, so a nearest-px read discriminates exactly as well as equality did.
+  // 95.99294. The rule under test is which of 110 / 128 / 160 applies, and those are
+  // 18px+ apart, so a nearest-px read discriminates exactly as well as equality did.
   expect(Math.round(parseFloat(compactHud.mmCss)),
-    "compact minimap width " + compactDump).toBe(96);
+    "compact minimap width " + compactDump).toBe(110);
   await page.evaluate(() => {
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();
@@ -775,12 +775,20 @@ test("balanced control rows derive their shape from local room", async ({ page }
   // Seven rooms: DATA HUB, TRACK DESIGNER, GARAGE, SETTINGS, HOW TO PLAY,
   // STANDINGS, USE AS CONTROLLER. Wrap count is flex + overlay zoom's business.
   // What this guards is no leftover sliver: every visible door is present, and
-  // a lone last row fills the track.
+  // a lone last row fills the track. Photo Studio lives in #menu-explore with
+  // Watch / Practice (H3), so it never inflates this secondary count.
   const shownTitleDoors = await page.evaluate(() => ["mb-standings", "mb-data", "mb-designer", "mb-garage", "mb-settings", "mb-phonepad", "mb-help"]
     .filter((id) => !document.getElementById(id).hidden).length);
   expect(shownTitleDoors, "the touch page shows the controller door").toBe(7);
   expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(shownTitleDoors);
   expect(title.lastFill).toBeGreaterThan(0.9);
+
+  // Explore row keeps Watch / Practice / Photo discoverable without joining
+  // the secondary room lattice.
+  const explore = await report("#menu-explore");
+  expect(explore.display).toBe("flex");
+  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(3);
+  expect(explore.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full
   // rows with no sliver, which lastFill still holds.

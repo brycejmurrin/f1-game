@@ -388,6 +388,8 @@ const LIV_FIELDS = ['finShape', 'finStyle', 'finBadge', 'spineLogo', 'spineSide'
                     'cover', 'rearWing', 'stripe', 'accent', 'nose', 'pod', 'wing',
                     'halo', 'fin', 'finArt', 'logo', 'logo2', 'logo3'];
 for (const f of LIV_FIELDS) { const v = arg(f, null); if (v != null) qs.set(f, v); }
+// --carsmooth=0 renders the car without CarShade's rounded sections + smooth shading (js/car/car-shade.js; ON by default).
+{ const v = arg('carsmooth', null); if (v != null) qs.set('carsmooth', v); }
 // `npx serve` 301s `carview.html?…` to `/tools/carview` and DROPS the query,
 // so every team/aero flag used to boot the default McLaren. The extensionless
 // path keeps the search string (200). CARVIEW.set after ready is the backup

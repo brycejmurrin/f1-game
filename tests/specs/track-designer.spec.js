@@ -4,7 +4,7 @@
 // randomised design passes the WYSIWYG validator, SAVE appends it to
 // Tracks.LIST as a custom entry, RACE hands it to the ordinary picker flow,
 // __apex.race() builds and drives it, and a reload resolves the stored id.
-import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, TRACK_MS, clickLive } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 1180, height: 720 };
 
@@ -15,7 +15,7 @@ async function bootClean(page) {
   await page.addInitScript(() => {
     if (sessionStorage.getItem("apex26.spec.td-clean")) return;
     sessionStorage.setItem("apex26.spec.td-clean", "1");
-    for (const k of Object.keys(localStorage)) if (k === "apex26.customTracks" || k === "apex26.customTrackDraft" || k === "apex26.trackId" || k === "apex26.track") localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) if (k === "apex26.customTracks" || k === "apex26.customTrackDraft" || k === "apex26.customTrackDraftPrev" || k === "apex26.trackId" || k === "apex26.track") localStorage.removeItem(k);
   });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
@@ -236,5 +236,82 @@ test.describe("Track designer", () => {
     });
     expect(floor.n).toBe(8);
     expect(floor.refused).toBe(true);
+  });
+
+  test("FIX ALL turns a deliberately short loop green and SAVE enables", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 7);
+    // A 1.6 km ellipse on the 0.25 m lattice: red on the lap length and on the
+    // straights around the start line — every red one TrackFixes can repair.
+    await page.evaluate(() => {
+      const pts = [];
+      for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); }
+      TrackDesigner.load(Object.assign({}, TrackDesigner.state().design, { pts }));
+    });
+    await page.waitForFunction(() => !TrackDesigner.state().pending, null, { polling: 100, timeout: 15_000 });
+    const red = await page.evaluate(() => TrackDesigner.state());
+    expect(red.ok).toBe(false);
+    expect(red.issues).toContain("length:red");
+    const save = page.locator("#trackdesigner .td-foot button", { hasText: /^SAVE$/ });
+    await expect(save).toBeDisabled();
+    const fixAll = page.locator("#trackdesigner button", { hasText: /^FIX ALL$/ });
+    await expect(fixAll).toBeVisible();
+    await fixAll.click();
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
+    const green = await page.evaluate(() => TrackDesigner.state());
+    expect(green.red).toBe(0);
+    expect(green.lengthM).toBeGreaterThanOrEqual(2500);
+    expect(green.undo, "FIX ALL is one UNDO entry").toBe(red.undo + 1);
+    await expect(save).toBeEnabled();
+    await expect(fixAll).toBeHidden();
+    await expect(page.locator("#trackdesigner .td-msg")).toContainText("UNDO to revert");
+    expect((await page.evaluate(() => TrackDesigner.save())).ok).toBe(true);
+  });
+
+  test("TEST HERE drives from the selected point and returns", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 7);
+    // Select point 13 (index 12) as the keyboard does: `]` steps from none to 0, 1, …
+    const sel = await page.evaluate(() => {
+      const c = document.querySelector("#trackdesigner .td-stage canvas");
+      c.focus();
+      for (let i = 0; i < 13; i++) c.dispatchEvent(new KeyboardEvent("keydown", { key: "]", bubbles: true, cancelable: true }));
+      return TrackDesigner.state().sel;
+    });
+    expect(sel).toBe(12);
+    // Where the car should land: the node of the engine's own build nearest control 12.
+    const want = await page.evaluate(() => {
+      const st = TrackDesigner.state(), tr = TrackValidate.check(st.design).tr, p = st.design.pts[12];
+      let k = 0, best = Infinity;
+      for (let j = 0; j < tr.n; j++) { const d = (tr.px[j] - p[0]) ** 2 + (tr.pz[j] - p[1]) ** 2; if (d < best) { best = d; k = j; } }
+      return { s: k * tr.total / tr.n, total: tr.total };
+    });
+    // A script click, as the EDIT IN DESIGNER chip above: headless(true) stops the frames actionability waits for.
+    const pressed = await page.evaluate(() => {
+      const b = [...document.querySelectorAll("#trackdesigner .td-rail button")].find((x) => x.textContent === "TEST HERE");
+      if (!b || b.getAttribute("aria-disabled") !== "false") return false;
+      b.click();
+      return true;
+    });
+    expect(pressed).toBe(true);
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: TRACK_MS });
+    const run = await page.evaluate(() => ({ info: window.__apex.info(), ph: window.__apex.physState(), open: TrackDesigner.isOpen(), id: TrackDesigner.state().design.originId }));
+    expect(run.open).toBe(false);
+    expect(run.info.timeTrial).toBe(true);
+    expect(run.info.track).toBe(run.id);
+    expect(run.ph).not.toBeNull();
+    const ds = Math.abs(run.ph.s - want.s);
+    expect(Math.min(ds, want.total - ds), `on the selected point: s ${run.ph.s} vs ${want.s}`).toBeLessThanOrEqual(20);
+    // PAUSE > QUIT (CONFIRM QUIT is on by default: arm, then quit) hands the screen back.
+    await clickLive(page, "pausebtn");
+    await clickLive(page, "pm-quit");
+    await clickLive(page, "pm-quit");
+    await page.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen(), null, { polling: 100, timeout: 15_000 });
+    const back = await page.evaluate(() => ({ state: window.__apex.info().state, sel: TrackDesigner.state().sel, msg: (document.querySelector("#trackdesigner .td-msg") || {}).textContent }));
+    expect(back.state).toBe("menu");
+    expect(back.sel).toBe(12);
+    expect(back.msg).toContain("Back from the test drive");
   });
 });

@@ -194,7 +194,169 @@ function makeDom() {
   }
   return { el, clear: (n) => { n.children.length = 0; } };
 }
+
+function pendingWatchHarness() {
+  const requests = [], launches = [];
+  let opened = true;
+  const { D } = load({
+    F1API: { locationData: () => new Promise((resolve) => requests.push(resolve)) },
+    RealRace: { launch: (script, opts) => { launches.push({ script, opts }); return true; } },
+  });
+  const dom = makeDom();
+  const tab = D.create({ el: dom.el, clear: dom.clear, sel: {},
+    ensureSession: () => new Promise(() => {}), isOpen: () => opened,
+    close: () => { opened = false; tab.cancel(); } });
+  const script = (sessionKey) => ({ sessionKey, laps: 2, t0: Date.parse("2026-01-01T00:00:00Z"),
+    drivers: [{ num: 1, lapStart: [null, 0, 60], laps: [null, 60, 60] }] });
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  return { tab, requests, launches, script, flush, reopen: () => { opened = true; } };
+}
+
+test("pending WATCH snapshots its seat, camera, session and lap before positions arrive", async () => {
+  const h = pendingWatchHarness(), script = h.script(10);
+  h.tab.setSeat("AAA"); h.tab.setWatchCamera("heli");
+  assert.equal(h.tab.watch(script, null, 2, true), true);
+  await h.flush();
+  assert.equal(h.requests.length, 1);
+  h.tab.setSeat("BBB"); h.tab.setWatchCamera("chase"); h.tab.setStartLap(1);
+  h.requests[0]([]);
+  await h.flush();
+  assert.equal(h.launches.length, 1);
+  const launch = h.launches[0];
+  assert.equal(launch.script.sessionKey, 10);
+  assert.equal(launch.opts.seat, "AAA");
+  assert.equal(launch.opts.camera, "heli");
+  assert.equal(launch.opts.startLap, 2);
+  assert.equal(launch.opts.reel, true);
+});
+
+test("cancel/reopen and session replacement discard stale WATCH completions", async () => {
+  const h = pendingWatchHarness();
+  h.tab.watch(h.script(10), null, 1, false);
+  await h.flush();
+  h.tab.cancel(); h.reopen();
+  h.tab.watch(h.script(11), null, 2, false);
+  await h.flush();
+  assert.equal(h.requests.length, 2);
+  h.requests[0]([]); await h.flush();
+  assert.equal(h.launches.length, 0);
+  assert.equal(h.tab.traces(), null, "stale positions must not replace current state");
+  h.requests[1]([]); await h.flush();
+  assert.equal(h.launches.length, 1);
+  assert.equal(h.launches[0].script.sessionKey, 11);
+  const second = pendingWatchHarness();
+  second.tab.watch(second.script(20), null, 1, false);
+  await second.flush();
+  second.tab.loadRealRace(); // a newly selected session invalidates in-flight work
+  second.requests[0]([]); await second.flush();
+  assert.equal(second.launches.length, 0);
+});
+
+test("the hub cancels pending WATCH immediately when year or Grand Prix changes", () => {
+  const dom = makeDom();
+  let deps, cancellations = 0, repaints = 0;
+  const ctx = vm.createContext({
+    Dom: { el: (...args) => { const node = dom.el(...args); node.classList = { toggle() {} }; return node; } },
+    F1API: { meetings: () => new Promise(() => {}), sessionsForMeeting: () => new Promise(() => {}) },
+    DataSchedule: { create: () => ({}) }, DataStandings: { create: () => ({}) },
+    DataResults: { create: () => ({}) }, DataLive: { create: () => ({}) },
+    DataTelemetry: { create: () => ({}) }, DataExport: { create: () => ({}) },
+    DataRealRace: { create: (d) => { deps = d; return { cancel: () => { cancellations++; } }; } },
+  });
+  vm.runInContext(fs.readFileSync(new URL("../../js/data/hub.js", import.meta.url), "utf8"), ctx);
+  const picker = deps.buildPicker(() => { repaints++; });
+  const years = picker.children[0].children;
+  const otherYear = years.find((button) => Number(button.text) !== deps.sel.year);
+  assert.ok(otherYear);
+  otherYear.fire("click");
+  assert.equal(cancellations, 1, "cancel occurs before the pending meetings request answers");
+  const grandPrix = picker.children[1].children[0].children[1];
+  grandPrix.value = "42";
+  grandPrix.fire("change");
+  assert.equal(cancellations, 2, "cancel occurs before the pending sessions request answers");
+  assert.equal(repaints, 0, "new session metadata has not arrived yet");
+});
 function find(node, pred, out = []) { if (pred(node)) out.push(node); node.children.forEach((c) => find(c, pred, out)); return out; }
+
+// Execute the hub's public open/tab-click path, including its rendered-node
+// cache, with deferred WATCH loads rather than asserting source strings.
+function hubWatchHarness() {
+  const dom = makeDom(), requests = [];
+  let cancellations = 0, scheduleLoads = 0;
+  function el(...args) {
+    const node = dom.el(...args);
+    node.classList = { add() {}, toggle() {} };
+    node.style = {}; node.dataset = {};
+    node.focus = () => {}; node.scrollIntoView = () => {};
+    node.querySelector = () => null;
+    Object.defineProperty(node, "firstChild", { get: () => node.children[0] || null });
+    node.removeChild = (child) => {
+      const i = node.children.indexOf(child);
+      if (i >= 0) node.children.splice(i, 1);
+      child.parent = null;
+      return child;
+    };
+    return node;
+  }
+  const schedule = el("div", "schedule-result"), root = el("div");
+  const ctx = vm.createContext({
+    Dom: { el }, navigator: { onLine: true }, queueMicrotask,
+    document: { activeElement: null, getElementById: () => null, addEventListener() {} },
+    DataSchedule: { create: () => ({ loadSchedule: () => { scheduleLoads++; return Promise.resolve(schedule); } }) },
+    DataStandings: { create: () => ({}) }, DataResults: { create: () => ({}) },
+    DataLive: { create: () => ({ stopLiveAuto() {}, disarmLiveAuto() {} }) },
+    DataTelemetry: { create: () => ({ closeTelemPopup() {} }) },
+    DataExport: { create: () => ({}) },
+    DataRealRace: { create: () => ({
+      cancel: () => { cancellations++; },
+      loadRealRace: () => new Promise((resolve) => requests.push(resolve)),
+    }) },
+  });
+  seedLog(ctx);
+  vm.runInContext(fs.readFileSync(new URL("../../js/data/hub.js", import.meta.url), "utf8"), ctx);
+  const hub = vm.runInContext("DataHub", ctx);
+  hub.init(root);
+  const panel = find(root, (node) => node.id === "dh-panel")[0];
+  const click = (id) => find(root, (node) => node.id === "dh-tab-" + id)[0].fire("click");
+  return { hub, panel, requests, click, el, schedule,
+    flush: () => new Promise((resolve) => setImmediate(resolve)),
+    cancellations: () => cancellations, scheduleLoads: () => scheduleLoads };
+}
+
+test("leaving and returning to WATCH rebuilds its cancelled controller while other tabs stay cached", async () => {
+  const h = hubWatchHarness();
+  h.hub.open("race");
+  assert.equal(h.requests.length, 1);
+  const first = h.el("div", "first-watch");
+  h.requests[0](first); await h.flush();
+  assert.equal(h.panel.children[0], first);
+  h.click("schedule"); await h.flush();
+  assert.ok(h.cancellations() > 0, "leaving WATCH cancels its controller");
+  assert.equal(h.panel.children[0], h.schedule);
+  h.click("race");
+  assert.equal(h.requests.length, 2, "return builds a fresh WATCH controller, not its cancelled cached DOM");
+  const fresh = h.el("div", "fresh-watch");
+  h.requests[1](fresh); await h.flush();
+  assert.equal(h.panel.children[0], fresh);
+  h.click("schedule"); await h.flush();
+  assert.equal(h.panel.children[0], h.schedule);
+  assert.equal(h.scheduleLoads(), 1, "the schedule still uses its normal rendered-node cache");
+});
+
+test("a WATCH load completing after leaving cannot repopulate its invalidated tab cache", async () => {
+  const h = hubWatchHarness();
+  h.hub.open("race");
+  h.click("schedule"); await h.flush();
+  const stale = h.el("div", "cancelled-watch");
+  h.requests[0](stale); await h.flush();
+  assert.equal(h.panel.children[0], h.schedule, "the cancelled load cannot replace the active tab");
+  h.click("race");
+  assert.equal(h.requests.length, 2, "late completion must not become a reusable cached WATCH node");
+  assert.notEqual(h.panel.children[0], stale);
+  const fresh = h.el("div", "current-watch");
+  h.requests[1](fresh); await h.flush();
+  assert.equal(h.panel.children[0], fresh);
+});
 
 test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP IN at any lap in any seat", async () => {
   const launches = [];
@@ -354,4 +516,30 @@ test("the passes, the lap board and the race book read straight off the real tim
   store.set("apex26.api.https://api.openf1.org/v1/weather?session_key=11373", "{}");
   D2.forgetRaw(11377);
   assert.deepEqual([...store.keys()], ["apex26.api.https://api.openf1.org/v1/weather?session_key=11373"]);
+});
+
+test("real position retries retain successful cars, report partial failures, and never mix race sessions", async () => {
+  const requested = [], progress = [];
+  let rejectSecond = true;
+  const t0 = Date.parse("2026-09-20T11:00:00Z");
+  const F1API = { locationData: async (session, num) => {
+    requested.push([session, num]);
+    if (num === 2 && rejectSecond) throw new Error("network interrupted");
+    return [{ date: t0, x: 100, y: 200 }, { date: t0 + 1000, x: 200, y: 300 }];
+  } };
+  const { D } = load({ F1API });
+  const script = { sessionKey: 7, t0, drivers: [{ num: 1, lapStart: [0], laps: [30] }, { num: 2, lapStart: [0], laps: [30] }] };
+  const partial = await D.fetchTraces(script, (done, total) => progress.push([done, total]));
+  assert.deepEqual(host(partial.failed), [2]);
+  assert.equal(partial.cars[1].length, 6); assert.equal(partial.cars[2].length, 0);
+  assert.deepEqual(progress, [[1, 2], [2, 2]], "progress reports stable totals despite a failed car request");
+  rejectSecond = false;
+  const ready = await D.fetchTraces(script, null, partial);
+  assert.deepEqual(requested, [[7, 1], [7, 2], [7, 2]], "retry downloads only the failed driver");
+  assert.equal(ready.cars[1], partial.cars[1], "the successful car's positions are retained");
+  assert.equal(ready.cars[2].length, 6); assert.deepEqual(host(ready.failed), []);
+  await D.fetchTraces({ ...script, sessionKey: 8 }, null, ready);
+  assert.deepEqual(requested.slice(-2), [[8, 1], [8, 2]], "another race gets its own positions");
+  rejectSecond = true;
+  await assert.rejects(D.fetchTraces({ ...script, drivers: [script.drivers[1]] }), /positions did not load/, "a completely failed load cannot masquerade as cached positions");
 });

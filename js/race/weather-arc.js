@@ -45,7 +45,7 @@ const WeatherArc = (function () {
     // by __apex.weather() and the arc progression below, so every consumer (rain
     // layer, audio, lighting, AI grip, wetness ramp target) follows no matter who
     // initiated the change.
-    function setWeatherLive(w) {
+    function setWeatherLive(w, blend) {   // blend: true = cross-fade the lighting (the arc); omitted = cut
       G.raceWeather = (w === "wet" || w === "rain" || w === "overcast" || w === "fog") ? w : "dry";
       if (G.isWetRoad()) {   // rain = storm, wet = drizzle tier (see applyRaceSettings)
         G.initRainDrops();
@@ -58,7 +58,7 @@ const WeatherArc = (function () {
       // moved the wetness ramp / rain overlay — the cloud cover, muted sun,
       // ambient lift, fog density and exposure branches in applyRaceSettings
       // silently kept the previous weather (fog looked like a clear day).
-      if (G.track) G.applyRaceSettings();
+      if (G.track) G.applyRaceSettings(blend);   // true: Atmosphere cross-fades over WX_BLEND_S; a chip or __apex cuts
       return G.raceWeather;
     }
 
@@ -136,21 +136,43 @@ const WeatherArc = (function () {
       return arc;
     }
     function tick(dt) {
+      // Road wetness tracks the physics value every tick (and under headless),
+      // so shaders cannot keep a stale or preset-pinned sheen that disagrees
+      // with grip (look=drive / continuous trackWetness).
+      syncWetness(dt);
       if (!arc) return;
       arc.t += dt;
       const f = Math.min(1, arc.t / arc.dur);
       const seq = arc.seq;
       const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
-      if (G.raceWeather !== want) { setWeatherLive(want); G.announce("WEATHER: " + want.toUpperCase(), 2, "info"); }
+      if (G.raceWeather !== want) { setWeatherLive(want, true); G.announce("WEATHER: " + want.toUpperCase(), 2, "info"); }
       if (f >= 1) {
-        if (G.raceWeather !== arc.to) setWeatherLive(arc.to);
+        if (G.raceWeather !== arc.to) setWeatherLive(arc.to, true);
         arc = null;   // arc complete — weather stays at `to`
       }
     }
 
+    // Continuous track wetness → frame.wetness for every renderer. LightKnobs.LT
+    // wetness ≥ 0 is the LIVE tuner / localStorage diagnostic pin only — shipped
+    // LightPresets must leave the knob at AUTO (−0.05) so dry cannot look wet.
+    function syncWetness(dt) {
+      const frame = G.frame;
+      if (!frame) return;
+      const knobs = (typeof LightKnobs !== "undefined" && LightKnobs) ? LightKnobs.LT : null;
+      const pin = knobs && typeof knobs.wetness === "number" ? knobs.wetness : -0.05;
+      if (pin >= 0) {
+        frame.wetness = pin;
+        return;
+      }
+      const wetTarget = G.trackWetness ? G.trackWetness() : 0;
+      const cur = frame.wetness || 0;
+      const step = (dt == null || !(dt > 0)) ? 1 : Math.min(1, dt * 0.8);
+      frame.wetness = cur + (wetTarget - cur) * step;
+    }
+
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, planFor, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, planFor, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },

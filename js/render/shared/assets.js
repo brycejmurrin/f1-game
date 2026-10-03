@@ -57,11 +57,15 @@ const Assets = (function () {
 
   // ── material arrays ────────────────────────────────────────────────────────
 
-  async function _decodeStrip(file, size, present) {
+  async function _fetchStrip(file) {
     const res = await fetch(PACK_DIR + file);
     if (!res.ok) throw new Error("fetch " + file);
     const blob = await res.blob();
     _bytes += blob.size;
+    return blob;
+  }
+
+  async function _decodeStrip(blob, size, present) {
     const out = new Array(MAT_LAYERS);
     try {
       for (let i = 0; i < MAT_LAYERS; i++) {
@@ -158,7 +162,15 @@ const Assets = (function () {
 
     let albedo = null, normal = null, albedoTex = null, normalTex = null;
     try {
-      albedo = await _decodeStrip(variant.albedo, size, present);
+      // Start both downloads together; decode and upload remain sequential.
+      // Promise.all observes either rejection immediately, including a normal
+      // fetch that fails while the albedo request is still pending.
+      const [albedoBlob, normalBlob] = await Promise.all([
+        _fetchStrip(variant.albedo),
+        variant.normal ? _fetchStrip(variant.normal) : null,
+      ]);
+      if (generation !== _loadGeneration) return false;
+      albedo = await _decodeStrip(albedoBlob, size, present);
       if (generation !== _loadGeneration) {
         _discardLoad(albedo, normal, albedoTex, normalTex);
         return false;
@@ -166,7 +178,7 @@ const Assets = (function () {
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) throw new Error("albedo-upload");
       if (variant.normal) {
-        normal = await _decodeStrip(variant.normal, size, present);
+        normal = await _decodeStrip(normalBlob, size, present);
         if (generation !== _loadGeneration) {
           _discardLoad(albedo, normal, albedoTex, normalTex);
           return false;
@@ -332,11 +344,33 @@ const Assets = (function () {
   // Prefetch every model in the pack. Resolves to the number now resident.
   // Cheap by construction: `tools/gen/assets.mjs verify` caps the whole pack at
   // 8 MB, so this is never a large download.
-  async function loadModels() {
-    const m = await manifest();
-    if (!m || !m.models) return 0;
-    await Promise.all(Object.keys(m.models).map((id) => model(id)));
-    return Object.keys(_models).reduce((n, k) => n + (_models[k] ? 1 : 0), 0);
+  // Memoised: boot calls it once, and modelsReady() below joins the same run.
+  let _modelsPromise = null;
+  function loadModels() {
+    if (_modelsPromise) return _modelsPromise;
+    _modelsPromise = (async () => {
+      const m = await manifest();
+      if (!m || !m.models) return 0;
+      await Promise.all(Object.keys(m.models).map((id) => model(id)));
+      return Object.keys(_models).reduce((n, k) => n + (_models[k] ? 1 : 0), 0);
+    })();
+    return _modelsPromise;
+  }
+
+  // "The pack has landed, or we stopped waiting for it": the promise a track
+  // build awaits before it places props. Prop placement is SYNCHRONOUS (the
+  // circuit's scenery() callback calls bakedModel, which reads modelSync), so
+  // until 2026-10-01 a build that ran before loadModels() settled got the box
+  // fallback for every baked model, for the whole session — a service-worker
+  // boot or a deep link reached the first build in well under the fetch time.
+  // Never rejects; a missing or failing pack resolves 0 at once, a hanging
+  // fetch resolves at the timeout so an offline boot still builds the track.
+  function modelsReady(timeoutMs) {
+    const run = loadModels().catch(() => 0);
+    const ms = timeoutMs > 0 ? timeoutMs : 4000;
+    let timer = null;
+    const late = new Promise((resolve) => { timer = setTimeout(() => resolve(-1), ms); });
+    return Promise.race([run, late]).then((n) => { clearTimeout(timer); return n; });
   }
 
   // ── baked environment (HDRI-derived ambient) ───────────────────────────────
@@ -374,7 +408,7 @@ const Assets = (function () {
   }
 
   return { init, supported, manifest, load, unload, adopt, state,
-           model, modelSync, models, loadModels, env, credits, MAT_LAYERS };
+           model, modelSync, models, loadModels, modelsReady, env, credits, MAT_LAYERS };
 })();
 
 // No-build global export.

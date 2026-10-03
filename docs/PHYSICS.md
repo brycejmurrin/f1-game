@@ -396,6 +396,22 @@ tyre call worth ~35% more grip than every other car on track and turned a whole
 weather condition into a walkover. As it stands a correct call roughly matches
 the field and a wrong one costs about a quarter of your cornering.
 
+Each AI car's free pace is `VMAX × PACE × tierV × skill × DIFF.ai`, then a
+zero-mean `pacePhase` wobble so equal cars do not lockstep. Driver skill is
+bounded (~0.90–1.0 from `DriverRatings.skill`); difficulty scales the whole
+field, not the gap to the player.
+
+**AI PACE** (`apex26.aiPace`, Race Settings › FIELD):
+
+| mode | behaviour |
+|---|---|
+| `scripted` (default) | No live boost from how far the player is ahead. Fair racing driven by car/driver data — Pure / Black Rock race-scripted intent ([Pure Advantage](https://www.gamedeveloper.com/design/the-pure-advantage-advanced-racing-game-ai), [GI: rubber banding](https://www.gamesindustry.biz/rubber-banding-is-not-fair-and-not-fun-black-rock)). |
+| `catchup` | Legacy reverse-only rubber band in `js/physics/ai-band.js`: when the lead human is ahead (and not a lap clear), AI vmax and corner authority rise by up to `DIFF.band`, gated off the start (8 s) and once lapped. Melder / Game AI Pro ch.42. |
+
+`DIFF.band` magnitudes stay frozen; catch-up reuses them. AI-only benches
+(`ai-pace` / `ai-field` / `ai-line`) have no human, so the band never fires
+there either way. Measure catch-up with `node tools/check/ai-race.mjs band`.
+
 ### The racing line the AI drives
 
 `js/track/core/line.js` (`TrackLine`) bakes a lateral offset per centreline
@@ -777,15 +793,27 @@ below.
 
 ### Slipstream vs wake — the two are not one number
 
-`c.wake` is the positions-only proximity to the car ahead (game.js `wakeOf`,
-window `TOW_RANGE`/`TOW_FADE`/`TOW_HALF_W` in `js/physics/consts.js`) and is
-recorded for EVERY car every step; `dirtyAirMul(c.wake)` charges it at
-`aeroGrip` (player) and `_aiBr.grip` (AI), so both pay dirty air in the
-corners. `c.towing` is the tow BENEFIT actually applied to vmax — gated on the
+`c.wake` is the positions-only proximity to the car ahead
+(`PhysicsConsts.DirtyAir.wakeOf` in `js/physics/consts.js`, window
+`TOW_RANGE`/`TOW_FADE`/`TOW_HALF_W`) and is recorded for EVERY car every step;
+`DirtyAir.mul` / game.js `dirtyAirMul(c.wake)` charges it at `aeroGrip`
+(player) and `_aiBr.grip` (AI), so both pay dirty air in the corners.
+`c.towing` is the tow BENEFIT actually applied to vmax — gated on the
 driver (not braking, wheel near straight) for the player and on the curvature
 lookahead for the AI — and is what the HUD chip and engine audio read. The
 player's wake used to be the gated value, so it paid no dirty air in corners
 while the AI always did.
+
+**Race setting `dirtyAir`** (`off` / `classic` / `cfd`, ships **`classic`**):
+
+| level | wake shape | max aero-share loss | why |
+|---|---|---|---|
+| `off` | still recorded | 0 | no grip penalty; tow HUD unchanged |
+| `classic` | linear fade `(range−gap)/fade × lateral` | 0.35 | FIA ~20 % DF at 20 m / ~35 % at 10 m; default safe for characterization and AI-field measurements (`docs/notes/AI-FIELD-RESEARCH.md`) |
+| `cfd` | `exp(−gap/λ) × Gaussian(dx)` | 0.67 | SAE 2017-01-1546 close-spacing ceiling; λ and σ are starters to tune |
+
+Raising the classic loss past ~0.35 to fix AI churn was measured and reverted
+(0.35 → 0.60); the next lever for field behaviour is AI-side, not this model.
 
 Under a caution (`raceCtl.level >= 2`) a car above the delta pace is braked
 at `CAUTION_BRAKE · BRAKE` (game.js) toward it, on descents too; the cut vmax
@@ -954,6 +982,12 @@ it on. `js/race/reliability.js` ships off for the same reason.
   heat, so it sat 19 °C above its window permanently. What still differs
   between compounds is the time constant: softs switch on in about a lap, hards
   in two or three.
+  Heating follows oxiphysics (`Q_gen = slip_force · slip_speed`): `HEAT_ROLL`
+  is the clean-lap load·speed term the equilibrium solve targets; `HEAT_SLIP`
+  adds slide·load·v on top. Cooling is toward a blend of **ambient** and
+  **track temperature** (`SINK_TRACK` · asphalt + air; `T_TRACK_DELTA` by
+  weather — dry asphalt runs ~18 °C above air; rain closes the gap). Peak grip
+  is still `tempGrip(ts, life)` (quadratic either side of the window).
 - **A fresh set comes out of blankets at 70 °C, below its window.** That is the
   out-lap, and it is the counterweight the undercut needs — without it a stop is
   free and therefore always correct, which is a worse game than the one with the
@@ -965,7 +999,9 @@ it on. `js/race/reliability.js` ships off for the same reason.
   stop the car turning in, worn rears let it step out: opposite complaints with
   opposite answers, which is what makes a gone tyre something you can drive
   around. `axleSplit` is a RATIO against `gripMul` because `muBase` already
-  carries the shared drop.
+  carries the shared drop. The wear integral is distance × load ×
+  `(1 + W_SLIP_SPD · slide)` — rolling load still spends the set; sliding
+  spends it faster (oxiphysics TireWearModel: wear ~ load × slip speed).
 - **Circuit severity is what the SURFACE does, on top of what the layout does.**
   The emergent load already says how hard a LAYOUT works a tyre — it falls out
   of the forces the car made, with no authoring. `tyreSeverity` says what the
@@ -974,9 +1010,10 @@ it on. `js/race/reliability.js` ships off for the same reason.
   lets the model say something one number could not: Monaco's layout works the
   tyre hard (1.221 emergent) while its surface and speeds work it gently, which
   is how one of the sport's most demanding layouts is one of its LOWEST deg
-  circuits (0.050 s/lap against Austria's 0.097). Authored on the seven
-  circuits with a measured 2026 rate; the rest stay at 1.0 rather
-  than guessed (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.5).
+  circuits (0.050 s/lap against Austria's 0.097). Authored on the measured
+  circuits (`docs/notes/TYRE-SEVERITY-AUTHORING-2026-09-30.md`); the rest use
+  `SEVERITY_DEFAULT = 1.0` — the calendar-neutral placeholder, not a guessed
+  surface class (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.5).
 - **The player is told, in words they can act on** (`js/race/engineer.js`).
   Every line names something to DO: graining says ease off and clean them up
   because it heals, blistering says the set is done because it does not, and
@@ -1037,14 +1074,16 @@ it lands.
 | `js/race/pit-lane.js` | `entryRunM` (now the fallback for a track built without the engine's window; `js/track/core/pit.js` `straightRun`, same `PIT_K`, owns it) | **surface** | where the pit lane OPENS, walked back from the start/finish line once per circuit to find where the last corner lets go. The aero-zones row below is the precedent and this is the same shape: a fixed zone computed from the static arc, gating a driver-INITIATED action (calling a stop) identically for every car, no force path, nothing read per frame. Replaced a flat 320 m that landed Monza's entry inside Parabolica — where the commit gesture (hold the pit side) asks a driver to hold a line mid-corner. Threshold 0.0035 (r ~= 285 m) is deliberately looser than a DRS zone's 0.0014: an entry needs "not actively cornering", not a proper straight |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
 | `js/physics/debris-world.js` | `registerFurniture` | **broadcast-only** | apex-kerb cones in the one-way cosmetic Rapier side-world |
-| `js/camera/vantage.js` | `vantage` | **broadcast-only** | only heli/side/cinematic broadcast cams; 0 in every driven mode |
+| `js/camera/vantage.js` | `vantage` | **broadcast-only** | heli/side/cinematic plus ExtraRigs drone (side sway); trackside uses corner poses (no curvature); cam-avoid uses prop boxes only; 0 in every driven mode |
+| `js/camera/extra-rigs.js` | `droneFollow` | **broadcast-only** | optional `Tracks.curvature` read for drone side sway only; never reaches the car |
 | `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
 | `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
+| `js/audio/driving-cues.js` | `tick` / `cornerSide` | **assist-gated** | behind the AUDIO DRIVING CUES slider (`audioCues`, notch 1 = OFF, STANDARD/PRO stay OFF; ROOKIE/RELAX bundle mid notches); braking tone + L/R corner calls via `GameAudio.driveBrakeTone` / `cornerCall` — audio-only, no force/steer path, never `G.announce` / race radio. Early-returns before any `Tracks.curvature` read when OFF |
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
 | `js/editor/validate.js` | `straightRun` (TrackPit's `PIT_K` walk from the start line) + the built `curv` LUT in `judge` | **broadcast-only** | the track designer's validator: judges a design's BUILT centreline for the editor's issue list (radius, kink, fold, start straights, lap estimate) and the picker's baked turns, read once per edit in a menu — the race that follows builds its own LUT and no car reads these numbers |
-| `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
+| `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick; `buildRoad` racing-line wear band (reads `track.line`, the line LUT TrackLine.bake derived from curv) | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself; the wear band is vertex COLOUR along the baked line, a picture on the asphalt no car reads |
 | `js/track/tracks.js` | build LUT bake | **surface** | the producer itself (centreline curv[] bake) |
 | `js/track/scenery/build-props.js` | signboard side pick, pit-pass curvature | **surface** | static scenery placement (`TrackBuildProps.build`) |
 

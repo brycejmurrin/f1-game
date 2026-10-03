@@ -190,6 +190,32 @@ All eight already boot via `harness.mjs` (`startStaticServer` + own Chromium).
 replaces the recipe (layout-audit first-wins); an MCP pass-through would
 become a full `layout-audit`.
 
+## Week-6 (2026-10-02: session checks, and a live re-test of every wrap)
+
+| Tool | CLI | Pin |
+|---|---|---|
+| `apex_session_status` | `session-status.mjs --json` | No args |
+| `apex_who_is_on_it` | `who-is-on-it.mjs --json [--hours N] [--no-fetch] [paths…]` | Never `--claim` / `--release`; a path starting `-` is refused |
+| `apex_ci_status` | `ci-watch.mjs --once --sha <hex\|HEAD>` | One poll; exits 0/1/2/124 are verdicts in `out.verdict` |
+
+Live re-test of all twelve wraps (idle container, loadavg < 0.1) found three
+browser wraps broken and fixed them at the CLI, not the wrap:
+
+- `apex_agent` failed 2 of 2 on `waitForFunction: Timeout 15000ms` —
+  `agent.mjs` had no `polling: 100` and a 15 s boot / 20 s build budget.
+  `__apex` lands 10.3–12.6 s after `goto` on an idle box (3 boots) and a TLX
+  monza build is 16.6 s. Now 45 s / 45 s with timer polling: `world` in 22 s.
+- `apex_eval` failed its first call and passed the retry: same 15 s boot.
+- `apex_shot` exited 0 having saved an all-transparent PNG, then on a second
+  run the menu's garage scene, as monza. The first TLX present after the
+  camera move took 17.6 s; `awaitPresentedFrame`'s 8 s default timed out
+  silently and the capture read the previous blit. It now returns
+  true/false/null, `shot.mjs` waits up to 90 s and refuses a stale or blank
+  (sharp stats, not byte count) frame.
+- `parseOut` returned `563.528` for `apex_shot`: the line-by-line fallback
+  parsed an indented number from inside the JSON. The fallback now takes the
+  last column-0 `{`/`[` block, objects and arrays only.
+
 ### Locking
 
 Exclusive `scratch/apex-browser.lock` (gitignored). Week-1 including

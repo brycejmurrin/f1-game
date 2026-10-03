@@ -213,9 +213,11 @@ test("a changed key carries its value, the default it replaced and the source th
     "apex26.cockpitHalo": "0", "apex26.metricsSize": "l",
     "apex26.lightTune": JSON.stringify({ "monza|day|dry": { sunI: 1.2 } }),
     "apex26.camTune": JSON.stringify({ chase: { dist: 2 } }),
+    "apex26.camTuneGlobal": JSON.stringify({ fov: 4 }),
+    "apex26.camComfort": JSON.stringify({ bob: 0.3 }),
   } });
   const f = collect("changes");
-  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camTune", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
+  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneGlobal", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
   assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
@@ -225,6 +227,8 @@ test("a changed key carries its value, the default it replaced and the source th
   assert.equal(f.defaults.camera.cockpitHalo, "1");
   assert.deepEqual(f.settings.lighting.lightTune, { "monza|day|dry": { sunI: 1.2 } });
   assert.deepEqual(f.settings.camera.camTune, { chase: { dist: 2 } });
+  assert.deepEqual(f.settings.camera.camTuneGlobal, { fov: 4 });
+  assert.deepEqual(f.settings.camera.camComfort, { bob: 0.3 });
   for (const name of f.changed) assert.match(f.where[name], /^js\//, name + " names its source");
   assert.equal(f.settings.driving.reliability, undefined, "an untouched key is absent from CHANGES");
 });
@@ -730,6 +734,27 @@ test("steerMode / hudProfile / drivingLine rows carry oneOf allowlists", () => {
 // flyby shots / loading card) because nobody added their SPEC rows. Every
 // store key APPEARANCE owns must be allowlisted, and a changed one must
 // survive the round trip.
+test("dockLayout is in SPEC and round-trips a per-scheme bag", () => {
+  const bag = {
+    tilt: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
+    buttons: { L: { x: 0.2, y: 0.1 }, R: { x: -0.1, y: 0 } },
+    touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
+  };
+  const { SettingsExport, collect } = boot({ disk: {
+    "apex26.dockLayout": JSON.stringify(bag),
+  } });
+  const row = SettingsExport.SPEC.find((r) => r.k === "dockLayout");
+  assert.ok(row, "dockLayout needs a SPEC row");
+  assert.equal(row.group, "driving");
+  const f = collect("changes");
+  assert.deepEqual(f.settings.driving.dockLayout.buttons.L, bag.buttons.L);
+  const b = boot();
+  const res = b.loadSettings(f);
+  assert.equal(res.ok, true);
+  assert.equal(res.skipped, 0);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.dockLayout")).buttons.L, bag.buttons.L);
+});
+
 test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const src = read("js/ui/appearance-opts.js");
   const keys = [...src.matchAll(/const K_[A-Z_]+ = "([A-Za-z]+)"/g)].map((m) => m[1]);

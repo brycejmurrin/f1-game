@@ -112,6 +112,7 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #menu-hero,
   :where(body:not([data-density="compact"])) #menu-primary,
   :where(body:not([data-density="compact"])) #menu-secondary { width: 100%; gap: clamp(8px, calc(1 * var(--vwz)), 12px); }
+  :where(body:not([data-density="compact"])) #menu-explore { width: 100%; gap: clamp(8px, calc(1 * var(--vwz)), 12px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { padding: 9px 6px 9px 10px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text
      dropped near the title rather than a caption belonging to it. */
@@ -140,6 +141,7 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #menu-hero,
   :where(body:not([data-density="compact"])) #menu-primary,
   :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), 660px, 100%); }
+  :where(body:not([data-density="compact"])) #menu-explore { width: min(calc(66 * var(--vwz)), 660px, 100%); }
   :where(body:not([data-density="compact"])) #menu-buttons { gap: 14px; }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { font-size: clamp(20px, calc(2.4 * var(--vwz)), 28px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: clamp(14px, calc(1.5 * var(--vwz)), 18px); }
@@ -151,9 +153,9 @@ body.desktop #pm-calib { display: none !important; }
   .hud-box { padding: 5px 16px; }
   .hud-value { font-size: 23px; }
   .hud-label { font-size: var(--fs-micro); }
-  /* minimap is 140px here — gaps dock beside it (10+140+8), top-aligned with it
+  /* minimap is 160px here — gaps dock beside it (10+160+8), top-aligned with it
      by the base rule. */
-  .hud-gaps { left: calc(158px + var(--sal) / var(--hud-z)); }
+  .hud-gaps { left: calc(178px + var(--sal) / var(--hud-z)); }
   /* `.hud-top` is taller here (.hud-box padding 5px 16px, .hud-value 23px): its
      bottom sits at 68 in the widget's own zoomed units against 58 on the base
      ladder, so the dropped state clears by the same 4px. */
@@ -170,7 +172,7 @@ body.desktop #pm-calib { display: none !important; }
      height to spare. A monitor does, and at this size the cluster hugging the
      edge reads as something that fell off the screen. */
   #hud-dock { bottom: calc(22px + var(--sab)); }
-  #minimap { width: 140px; height: 140px; }
+  #minimap { width: 160px; height: 160px; }
 }
 
 /* Short-landscape HUD shrink used to live here behind
@@ -360,12 +362,12 @@ body.rotate-help-open #rotate-device { display: none !important; }
   width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
   max-width: none; min-width: 0; justify-self: center;
 }
-:root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-secondary) { width: 100%; max-width: none; }
+:root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min
    (css/components.css): 100% is one per line, 0px is one equal row. */
-:root[data-title-btns="stack"] #menu-buttons > :is(#menu-primary, #menu-secondary) { --balance-basis: 100%; --balance-min: 100%; }
+:root[data-title-btns="stack"] #menu-buttons > :is(#menu-primary, #menu-explore, #menu-secondary) { --balance-basis: 100%; --balance-min: 100%; }
 :root[data-title-btns="stack"] #menu-retention { grid-template-columns: minmax(0, 1fr); }
-:root[data-title-btns="row"] #menu-buttons > :is(#menu-primary, #menu-secondary) { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
+:root[data-title-btns="row"] #menu-buttons > :is(#menu-primary, #menu-explore, #menu-secondary) { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
 /* SIDE. Two-column shapes trade columns; a single column trades order. */
 :root[data-title-side="swap"] #menu-brand { order: 1; }
 :root[data-title-side="swap"] :where(body[data-shape="tall"]) #menu-brand { grid-row: 2; }

@@ -212,15 +212,21 @@ test.describe("title rotation late-iOS size settle", () => {
       });
     });
 
-    // Portrait keyboard.
+    // Portrait keyboard. The band is applied by the viewport handler on its own
+    // schedule, so wait on it rather than on a 50 ms sleep (a loaded SwiftShader
+    // box read 0 at 50 ms and failed the precondition, 2026-10-02).
+    const kbNow = () => page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--kb").trim());
+    const waitKbOver = (px) => page.waitForFunction((min) =>
+      (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--kb")) || 0) > min,
+      px, { polling: 100, timeout: 5000 });
     await page.evaluate(() => {
       window.__fakeIW = 430; window.__fakeIH = 932;
       window.__fakeVvH = 560; window.__fakeVvOff = 0;
       window.visualViewport.dispatchEvent(new Event("resize"));
     });
-    await page.waitForTimeout(50);
-    let kb = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue("--kb").trim());
+    await waitKbOver(100);
+    let kb = await kbNow();
     expect(parseFloat(kb) || 0, "precondition: keyboard band").toBeGreaterThan(100);
 
     // Mid-rotation mismatch + window events (still on portrait layout sizes).
@@ -230,17 +236,24 @@ test.describe("title rotation late-iOS size settle", () => {
       window.dispatchEvent(new Event("orientationchange"));
       window.dispatchEvent(new Event("resize"));
     });
-    await page.waitForTimeout(50);
-    kb = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue("--kb").trim());
+    await waitKbOver(100);
+    kb = await kbNow();
     expect(parseFloat(kb) || 0, "precondition: mismatched band latched").toBeGreaterThan(100);
 
     // Silent size settle — no further event. Settle timers must clear --kb.
+    // The last settle timer fires at 1500 ms (sheet-shape.js SETTLE_MS); a fixed
+    // 1700 ms sleep left 200 ms for its layout read, which a loaded llvmpipe
+    // runner missed on retry-pass twice in one afternoon (ui shard 3,
+    // 2026-10-02). Wait on the CONDITION instead: no event is dispatched, so a
+    // clear within the window still proves the timers did it — the bound is
+    // just no longer the box's speed.
     await page.evaluate(() => {
       window.__fakeIW = 932; window.__fakeIH = 430;
       window.__fakeVvH = 430;
     });
-    await page.waitForTimeout(1700);
+    await page.waitForFunction(() =>
+      (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--kb")) || 0) <= 1,
+      null, { polling: 100, timeout: 8000 });
 
     const after = await page.evaluate(() => ({
       kb: getComputedStyle(document.documentElement).getPropertyValue("--kb").trim(),

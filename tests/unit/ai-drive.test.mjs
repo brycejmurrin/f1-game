@@ -275,8 +275,17 @@ test("adaptLane nudges toward the freer side under density", () => {
   }, 0.5);
   assert.ok(a > 0, `expected rightward nudge, got ${a}`);
   assert.ok(b < 0, `expected leftward nudge, got ${b}`);
-  // Sparse traffic: no move
+  // Sparse traffic: no move on permanents
   assert.equal(A.adaptLane(0.2, { traits: mid, nearby: 1, roomL: 0.5, roomR: 4, baseLane: 0.2 }, 0.5), 0.2);
+  // Streets: held in a train behind ONE car still fans once queue pressure builds.
+  const pressed = A.adaptLane(0, {
+    traits: mid, nearby: 1, queueT: 60, street: true, roomL: 0.5, roomR: 3.5, baseLane: 0,
+  }, 0.5);
+  assert.ok(pressed > 0,
+    `street queue pressure must fan a one-car train toward the freer side, got ${pressed}`);
+  assert.equal(A.adaptLane(0.2, {
+    traits: mid, nearby: 1, queueT: 60, street: false, roomL: 0.5, roomR: 4, baseLane: 0.2,
+  }, 0.5), 0.2, "permanents keep the dens≥2 gate");
   // Dense traffic must not accumulate forever — damp toward home±step, not lane+step.
   let lane = 0;
   for (let i = 0; i < 120; i++) {
@@ -324,6 +333,27 @@ test("aiRescueDelay: contact is patience, never a veto", () => {
   assert.ok(Number.isFinite(held), "a contacting car must still be rescuable");
   assert.ok(held > free, `contact should wait longer, got ${held} vs ${free}`);
   assert.equal(free, 4, "the no-contact delay is the one that shipped");
+  // Escalated dig-out: short arm — contact patience already ran while digging.
+  assert.ok(A.aiRescueDelay(false, true) < free);
+  assert.ok(A.aiRescueDelay(true, true) < held);
+});
+
+test("dig-out has a budget — past it, rescue must be allowed to arm", () => {
+  // THE DEFECT: unstuckActive permanently vetoed aiStuck (`!unstuckActive`), so
+  // a car boxed at 0 m/s on monaco climbed stuckT to 7.6 s with rescueT = 0
+  // forever. Dig-out is the first recovery; when it fails, rescue is the second.
+  const budget = A.digOutBudget(mid);
+  assert.ok(budget > 1.5 && budget < 5,
+    `dig-out budget must be a few seconds, got ${budget}`);
+  assert.ok(A.digOutBudget(ace) < A.digOutBudget(rook),
+    "aware drivers escalate to rescue sooner");
+  assert.ok(A.digOutBudget(mid, true) < A.digOutBudget(mid, false),
+    "streets escalate sooner — walls leave less room for dig-out");
+  const thresh = A.stuckThreshold(mid);
+  assert.equal(A.digOutEscalated(thresh, mid), false, "just armed: still digging");
+  assert.equal(A.digOutEscalated(thresh + budget - 0.05, mid), false);
+  assert.equal(A.digOutEscalated(thresh + budget + 0.05, mid), true,
+    "past dig-out budget: escalate to rescue");
 });
 
 test("otSide: a tie does not send the whole queue one way", () => {
@@ -1226,7 +1256,14 @@ test("queue pressure: time held behind one car lowers the pass bar, craft spends
   const tow = { street: false, speed: 60, blockerSpeed: 60, vTop: 72, freeSpeed: 66 * 1.045, blockerVmax: 66, traits: mid };
   assert.equal(A.otWant({ ...tow, queueT: 0 }), false, "not the moment a car arrives behind another");
   assert.equal(A.otWant({ ...tow, queueT: A.queuePatience(mid) }), true, "held long enough: the tow is enough");
-  assert.equal(A.otWant({ ...tow, freeSpeed: 66, queueT: 60 }), false, "no pace edge at all: still no pass");
+  // Equal pace alone still refuses (the 30 % margin floor) — but with a CLEAR
+  // side open, full pressure takes the move so packs can split without tow.
+  assert.equal(A.otWant({ ...tow, freeSpeed: 66, queueT: 60, roomL: 1, roomR: 1 }), false,
+    "equal pace, no room: still no pass");
+  assert.equal(A.otWant({ ...tow, freeSpeed: 66, queueT: 60, roomL: 1, roomR: 4 }), true,
+    "full pressure + clear side: equal pace splits the train");
+  assert.equal(A.otWant({ ...tow, freeSpeed: 65, speed: 55, queueT: 60, roomL: 1, roomR: 4 }), false,
+    "slower free pace with no closing still refuses");
   // attackOK: a queued car shows no closing rate; pressure stands in for it on a straight.
   const st = { traits: mid, speed: 40, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 1e9, attackQ: 0 };
   assert.equal(A.attackOK({ ...st, queueT: 0 }), false);
@@ -1370,4 +1407,80 @@ test("letPassCase: a lapping car closing on the gearbox is waved through; a same
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
   assert.match(game, /AiDrive\.letPassCase\([\s\S]{0,200}chaser\.prog - c\.prog > track\.total \* 0\.5\)/,
     "game.js asks the rule with LAPPING = a lap or more ahead in progress");
+});
+
+// The optimized controller shares grip only AFTER longitudinal speed and wake
+// settle. Exercise the actual game block against the original steering equations,
+// with exact comparisons and dependency counts: a source-shaped cache assertion
+// alone would miss a changed heading, or stale grip on the fallback paths.
+test("AI heading reuses current grip without changing normal or recovery steering", () => {
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const decl = game.match(/\/\/ --- lateral ---\s*(let steer[^;]*;)/);
+  const start = game.indexOf("    const err = desiredX - c.x;");
+  const end = game.indexOf("  // Riding a kerb loses a little grip", start);
+  assert.ok(decl && start > 0 && end > start, "the production controller is present");
+  const constants = { window: {} };
+  vm.runInNewContext(readFileSync(join(ROOT, "js/physics/consts.js"), "utf8"), constants);
+  const K = { ...constants.window.PhysicsConsts };
+  for (const name of ["AI_HEAD_VMIN", "AI_XTRACK_GAIN", "AI_HEAD_MAX", "AI_YAW_LAT", "AI_YAW_MAX"]) {
+    const m = game.match(new RegExp("const " + name + " = ([^;]+);"));
+    assert.ok(m, name); K[name] = Number(m[1]);
+  }
+  const clamp = (x, lo, hi) => x < lo ? lo : x > hi ? hi : x;
+  const damp = (a, b, rate, dt) => a + (b - a) * (1 - Math.exp(-rate * dt));
+  const control = new Function("v", "deps", `
+    const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer } = v;
+    const { AiDrive, gripMult, tyres, dirtyAirMul, clamp, damp, K, aiT } = deps;
+    const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
+    const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
+    ${decl[1]}
+    if (c.human) steer = inputSteer; else {
+    ${game.slice(start, end)}
+    return { steer, gripScale, latFac, aiHead: c.aiHead, steerSm: c.steerSm };
+  `);
+  let seed = 9271;
+  const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const modes = ["normal", "contact", "unstuck", "rub", "crawl", "stopped", "human"];
+  for (let i = 0; i < 280; i++) {
+    const mode = modes[i % modes.length], PACE = [0.05, 0.5, 1, 2][i % 4];
+    const speed = (mode === "stopped" ? 0 : mode === "crawl" ? 3 : 12 + 90 * rnd()) * PACE * (i % 9 ? 1 : -1);
+    const c = { human: mode === "human", x: rnd() * 8 - 4, speed, aeroLoad: rnd(),
+      wake: i % 3 ? rnd() : 0, aiHead: rnd() * 0.6 - 0.3, steerSm: i % 4 ? rnd() - 0.5 : undefined,
+      contactT: mode === "contact" ? 0.3 : 0 };
+    const original = { ...c };
+    const weatherGrip = [1, 0.72, 0.45][i % 3], tyreGrip = 0.4 + rnd() * 0.6;
+    const air = (wake, velocity) => 1 - 0.2 * wake * Math.min(1, Math.abs(velocity) / (K.VMAX * Math.max(PACE, 0.05))) ** 2;
+    const v = { c, PACE, dt: [1 / 120, 1 / 60, 1 / 30][i % 3], desiredX: rnd() * 10 - 5,
+      tanT: rnd() * 0.2 - 0.1, unstuckActive: mode === "unstuck", rubClamp: mode === "rub", inputSteer: 0.23 };
+    const calls = { weather: 0, tyre: 0, air: 0, lateral: 0, yaw: 0 };
+    const deps = { K, clamp, damp, aiT: mid,
+      AiDrive: { ...A,
+        yawScale(...args) { calls.yaw++; return A.yawScale(...args); },
+        lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },
+      gripMult() { calls.weather++; return weatherGrip; },
+      tyres: { gripMul() { calls.tyre++; return tyreGrip; } },
+      dirtyAirMul(wake, velocity) { calls.air++; return air(wake, velocity); } };
+    const got = control(v, deps);
+    const grip = weatherGrip * tyreGrip * air(original.wake, original.speed);
+    const lateral = A.lateralScale(speed, original.aeroLoad, grip, PACE, K.VMAX);
+    const vStd = speed * K.VMAX / (K.VMAX * Math.max(PACE, 0.05));
+    const latFac = clamp(Math.abs(vStd) / 18, 0, 1), err = v.desiredX - original.x, vAbs = Math.abs(speed);
+    let head = original.aiHead, sm = original.steerSm, steer = v.inputSteer;
+    const recovery = mode !== "normal" && mode !== "human";
+    if (!c.human && recovery) {
+      const e = Math.abs(err) < 0.3 ? err * (Math.abs(err) / 0.3) : err;
+      const want = clamp(e * 0.9, -1, 1);
+      steer = sm = damp(sm === undefined ? want : sm, want, A.steerDamp(mid), v.dt);
+      const vl = steer * K.STEER_VMAX * latFac;
+      head = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX) : 0;
+    } else if (!c.human) {
+      const want = clamp(Math.atan(v.tanT) + Math.atan(K.AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -K.AI_HEAD_MAX, K.AI_HEAD_MAX);
+      const max = Math.min(K.AI_YAW_MAX, K.AI_YAW_LAT * K.LAT_MAX * A.yawScale(speed, original.aeroLoad, grip, PACE, K.VMAX) / vAbs);
+      head = (head || 0) + clamp(want - (head || 0), -max * v.dt, max * v.dt);
+      steer = sm = clamp(vAbs * Math.sin(head) / Math.max(K.STEER_VMAX * latFac * lateral, 1), -1, 1);
+    }
+    assert.deepEqual(got, { steer, gripScale: lateral, latFac, aiHead: head, steerSm: sm }, mode + " case " + i);
+    assert.deepEqual(calls, { weather: 1, tyre: 1, air: 1, lateral: 1, yaw: mode === "normal" ? 1 : 0 },
+      mode + ": one current grip calculation; yaw only for the normal AI controller");
+  }
 });

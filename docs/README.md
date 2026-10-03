@@ -26,6 +26,7 @@ drives it.
 ## The area docs (load one on demand)
 
 | Doc | Covers |
+| [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
 |---|---|
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
 | [CAREER.md](CAREER.md) | Career mode: the flow/session axes, the six `apex26.career.<flavour>.N` save slots, driver ratings, the economy and R&D gate, qualifying, reliability — and the 12-category upgrade catalog with its measured ERS/aero tables. |
@@ -33,6 +34,7 @@ drives it.
 | [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) | **Track/scenery build pipeline** — load order, `buildProps` layers, frames/shift traps, and accuracy levers (per-circuit vs shared generators). Start here before dressing a circuit. |
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire: transport channels, the packed invite SDP, Nostr/room-code rendezvous, snapshots and interpolation, and who owns which car. |
 | [LIGHTING.md](LIGHTING.md) | Light-record layout, shader uniforms, time-of-day branches, track lamps; every hand-tuned constant and how to A/B it; the per-track × time-of-day × weather presets. |
+| [TRACK-DESIGNER.md](TRACK-DESIGNER.md) | The player guide to the TRACK DESIGNER: the 60-second start, shaping and stamping corners, the start line, themes, CHECKS and FIX, save / race / share, and the touch / mouse / keyboard / gamepad cheat sheet. The long form of the designer's HOW TO tab. |
 | [UI-MAP.md](UI-MAP.md) | The title-to-race navigation web, mode-specific flows, Settings values, How to Play anchors, all 15 Garage tabs and pause actions, plus the source-backed inventory of `UiLayers`, major DOM IDs and CSS entrypoints. |
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
@@ -60,6 +62,7 @@ anything in here.
 
 | Note | What it records |
 |---|---|
+| [notes/REPO-SIZE-2026-10.md](notes/REPO-SIZE-2026-10.md) | What makes a clone big, on FULL history: 1,080 MB packed, 892 MB of it history-only (90% PNG, mostly a June 2026 screenshot burst); why a shallow agent clone measures it wrong; the 15.6 MB blobless clone; why the history rewrite is parked |
 | [notes/REAL-RACE-2026-09-27.md](notes/REAL-RACE-2026-09-27.md) | REAL RACE (Data Hub RACE IT): the OpenF1 bodies a race script needs and their measured sizes, the script shape, the director's arm / pace-loop / flag design over the live field, and the v1 limits |
 | [notes/PERF-FINDINGS.md](notes/PERF-FINDINGS.md) | **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement. |
 | [notes/TLX-PERF-PLAN.md](notes/TLX-PERF-PLAN.md) | The working plan for the three.js backend's remaining per-frame costs (night lamp shadow, godray chain, draw records, post materials): steps, status, switches and checks. Results land in PERF-FINDINGS. |
@@ -69,6 +72,7 @@ anything in here.
 | [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) | The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8). |
 | [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) | The standing assessment: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and the lessons. |
 | [notes/CI-CAPACITY-2026-09-29.md](notes/CI-CAPACITY-2026-09-29.md) | The 20-concurrent-job jam of 2026-09-29 (200-290 jobs queued for 7 h): where PR runs spent their slots, why the selector over-sharded and excluded the circuit's own spec, what changed, what did not, and how to re-measure. |
+| [notes/CI-MERGE-BURST-2026-10-03.md](notes/CI-MERGE-BURST-2026-10-03.md) | A 30-merge burst held the site 30 PRs behind: one fast tier per merge clogged 40 slots and only-the-tip poking deployed nothing mid-burst. The fix: one shared no-cancel `ship-fast` group, a superseded green run pokes when no train is moving, and merge pacing; merge queue is not available on a personal-account repo. |
 | [notes/MERGE-HYGIENE-2026-09-29.md](notes/MERGE-HYGIENE-2026-09-29.md) | Concurrent-PR merge conflicts: measured hotspots (~60 ship merges), why `merge=union` is never for JSON, and the one-entry-per-line + sorted normalizer (`tools/check/merge-hygiene.mjs`). |
 | [notes/CI-RENDERING-PERFORMANCE.md](notes/CI-RENDERING-PERFORMANCE.md) | SwiftShader vs Lavapipe vs llvmpipe (measured canvas colours + wall-clock), WGX soft-present / `wgx-capture`, Cursor Cloud `mesa-vulkan-drivers` persist, why sharding is the wrong first speedup, and **§There IS a real GPU** — `macos-latest`. |
 | [notes/CEILING-HISTORY.md](notes/CEILING-HISTORY.md) | Why every size-ratchet number moved, 2026-08 → 2026-09-03; the live numbers are `tests/data/ratchets.json`. |
@@ -84,6 +88,7 @@ anything in here.
 | [notes/BUG-HUNT-2026-09-02.md](notes/BUG-HUNT-2026-09-02.md) | Two rounds of read-only bug hunts (UI, GLX, WGX+TLX, memory, race-flow; then track engine, physics/AI, input/audio, net): every CONFIRMED row and what each fix batch landed. |
 | [notes/PERF-HUNT-2026-08-18.md](notes/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT`, DebrisWorld asleep-skip. |
 | [notes/TRACK-ROSTER-RESEARCH-2026-09-14.md](notes/TRACK-ROSTER-RESEARCH-2026-09-14.md) | The 38 World Championship venues the game does not carry, why the upstream `bacinger/f1-circuits` trace file can add no more, what each remaining candidate costs to import (Overpass-measured), and the four shipped defs whose `classic` flag the 2027 calendar contradicts. |
+| [notes/TUMFTM-RACETRACK-DATABASE.md](notes/TUMFTM-RACETRACK-DATABASE.md) | TUMFTM racetrack-database (LGPL-3.0): designer CSV importer, roster overlap vs the three missing DTM layouts, and why upstream racelines are NOT wired into TrackLine/AI (bake already min-curvature). |
 
 ## `research/` — cited from source, not a description of behaviour
 
@@ -94,6 +99,7 @@ rather than rewriting the record.
 
 | Doc | Topic | Cited from |
 |---|---|---|
+| [research/AGENT-CONTRACTS.md](research/AGENT-CONTRACTS.md) | Current API references and reproducible agent tool contracts: diagnostics, smoke recipes, lifecycle/capture/replay evidence and hosted provider boundaries. | `tools/check/doctor.mjs`, `tools/lib/session-contracts.mjs` |
 | [research/PLATFORM-INPUT-NOTES.md](research/PLATFORM-INPUT-NOTES.md) | The platform behaviours that only bite on one device: pointer capture and the four-way release net, the top layer vs `z-index`, `zoom` and `--ui-scale`, `(pointer: coarse)`, Escape vs `<dialog>` close watchers, iOS WebGL context loss. | `js/input/input.js`, `js/ui/modal.js`, 4 specs |
 | [WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) | How to close WGX vs GLX: gap inventory, WebGPU API recipes (MSAA resolve, timestamp-query, texture arrays, mip-gen, god-ray), recommended slice order. §5 holds the WGSL rules a mock device cannot enforce. Left with the backends in the 2026-09-03 spike-out and back with the 2026-09-04 re-attach — see `spike/backends/README.md`. | `js/render/webgpu/wgx.js`, `js/render/webgpu/wgsl-chunks.js` |
 | [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings. | `js/game.js`, `js/input/steer-tuning.js` |

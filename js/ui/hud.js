@@ -72,7 +72,8 @@ let _secRows = null;
 let _secFlash = [0, 0, 0];
 let _limitsDots = null;
 let _hudCamKey = "";
-const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1 };
+let _hudDeltaEl = null;
+const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1, rival: 1, pitwall: 1, drone: 1 };
 const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
 // Body classes toggled: hud-met-full, hud-met-timing, hud-met-driver, hud-met-compact.
@@ -143,12 +144,56 @@ function syncHudCamClasses() {
     body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
     body.classList.toggle("hud-prof-minimal", prof === "minimal");
     body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+    // MOVE & SIZE keeps one layout for the cockpit cameras, one for the rest.
+    if (typeof HudLayout !== "undefined") HudLayout.setCam(modeId);
   }
   // MAP/GAPS (and broadcast park) must re-run when only the setting
   // changes — camera+profile stay put, so the key above does not.
   syncHudVisClasses(modeId);
 }
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
+function ensureHudDelta() {
+  if (_hudDeltaEl) return _hudDeltaEl;
+  if (typeof document === "undefined") return null;
+  const top = document.querySelector("#hud .hud-top");
+  if (!top) return null;
+  let el = document.getElementById("hud-delta");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "hud-delta";
+    el.className = "hud-box";
+    el.innerHTML = '<div class="hud-label">DELTA</div><div class="hud-value" id="hud-delta-n">—</div>';
+    top.appendChild(el);
+  }
+  _hudDeltaEl = el;
+  return el;
+}
+function paintHudDelta(player, timeTrial) {
+  const box = ensureHudDelta();
+  if (!box) return;
+  const n = box.querySelector("#hud-delta-n") || box;
+  // Prefer a ghost reference (PB or rival). In a race without a ghost, hide.
+  const ghost = typeof GhostShare !== "undefined" && GhostShare.hasGuest()
+    ? GhostShare
+    : (typeof Ghost !== "undefined" && Ghost.hasGhost() ? Ghost : null);
+  if (!ghost) {
+    hHidden(box, true);
+    return;
+  }
+  const ghostT = ghost.timeAt(player.s);
+  if (ghostT == null || !(player.lapTime >= 0)) {
+    hHidden(box, true);
+    return;
+  }
+  hHidden(box, false);
+  const delta = player.lapTime - ghostT;
+  const sign = delta >= 0 ? "+" : "";
+  hText(n, sign + delta.toFixed(3));
+  hData(box, "sign", delta <= 0 ? "fast" : "slow");
+  // Practice / TT: the gaps strip already says GHOST — keep DELTA as the
+  // glanceable centre-top number. Race: same chip, quieter label stays DELTA.
+  void timeTrial;
+}
 function buildSecRows() {
   // Sector labels carry no identity colour: .sec-lbl inherits the row's ink.
   // (S2 once wore the brand #e10600, ~4.2:1 on black at 14px — under the
@@ -861,6 +906,9 @@ function updateHud(force, dtMs) {
       const txt = left == null || spent >= 1 ? "" : "~" + Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
+    // TYRE TEMPERATURE (js/ui/hud-tyres.js): the compound letter turns blue
+    // when the set is below its window and red above it — one fact, no cells.
+    if (typeof HudTyres !== "undefined" && tyres.info) HudTyres.paint(els.tyre, tyres.info(player));
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
     // is called by holding the car on the pit side at the entry, so the dwell
     // has to be visible: without it a driver cannot tell the gesture is
@@ -899,7 +947,9 @@ function updateHud(force, dtMs) {
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
-    const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
+    // Practice / TT / quali: hide the race strategy line.
+    const practice = !!(timeTrial || G.session === "practice" || G.session === "quali");
+    const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     hData(els.tyre, "plan", pl && pl.state || null);
   } else {
@@ -1049,6 +1099,7 @@ function updateHud(force, dtMs) {
     };
     win(els.gapA, a); win(els.gapB, b);
   }
+  paintHudDelta(player, timeTrial);
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {
     if (!_secRows) buildSecRows();
@@ -1164,13 +1215,15 @@ function drawMinimap() {
   const root = document.documentElement, body = document.body;
   const measureKey = window.innerWidth + "x" + window.innerHeight + "|" + body.className
     + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
-    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1);
+    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
+    + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
   if (_mmKey !== measureKey || _fitKey === "" || !minimapBg) {
     _mmKey = measureKey;
     _mmCssW = els.minimap.clientWidth || 140;
     _mmCssH = els.minimap.clientHeight || 140;
     _mmRatio = Math.min(3, Math.max(1,
-      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)
+      * (parseFloat(els.minimap.style.getPropertyValue("--hl-s")) || 1)));
     _mmBgKey = _mmCssW + "|" + _mmCssH + "|" + _mmRatio;
   }
   const cssW = _mmCssW, cssH = _mmCssH, ratio = _mmRatio;

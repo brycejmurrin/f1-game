@@ -15,8 +15,8 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 
 const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/designer.js"];
 
-function bootScreen() {
-  const vmx = bootEditor({});
+function bootScreen(stored = {}) {
+  const vmx = bootEditor(stored);
   const { ctx } = vmx;
   const dom = makeDom({ tagFor: (id) => (id === "trackdesigner" ? "dialog" : id === "td-close" ? "button" : "div") });
   // What the browser gives the screen and the mini DOM does not: a 2D context
@@ -226,9 +226,765 @@ test("DesignerCanvas: fit() frames the loop; an arrow nudge comes back as a latt
   b.dom.dispatch(canvas, { type: "keydown", key: "ArrowLeft", shiftKey: true, preventDefault() {} });
   assert.equal(changes.length, 2);
   assert.deepEqual(plain(changes[0]), { begin: true });
-  assert.equal(changes[1].kind, "move");
+  assert.equal(changes[1].kind, "nudge", "a keyboard nudge (the designer folds a run of them into one UNDO)");
   assert.deepEqual(plain(changes[1].pts[2]), [90.25, 60.25], "10 m left, snapped to the 0.25 m lattice");
   assert.deepEqual(pts[2], [100.125, 60.3], "the array it was handed is untouched");
   cv.setBuilt(null); cv.setIssues([]); cv.render(); cv.zoom(2);
   assert.ok(cv.view().scale > v.scale);
+});
+
+// ── 2026-10-01 review fixes ────────────────────────────────────────────────
+const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
+/** The point at arc fraction f along a closed control polygon. */
+function pointAt(pts, f) {
+  const N = pts.length, c = [0];
+  for (let i = 0; i < N; i++) { const a = pts[i], b = pts[(i + 1) % N]; c.push(c[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+  const x = (((f % 1) + 1) % 1) * c[N];
+  let i = 0; while (i < N - 1 && c[i + 1] < x) i++;
+  const t = (x - c[i]) / ((c[i + 1] - c[i]) || 1), a = pts[i], b = pts[(i + 1) % N];
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+/** The point at control INDEX fraction u (what applyHwZones keys on). */
+function pointAtIndex(pts, u) {
+  const N = pts.length, x = u * N, i = Math.min(N - 1, Math.floor(x)), t = x - i, a = pts[i], b = pts[(i + 1) % N];
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+const samePlace = (p, q, tol, what) => assert.ok(Math.hypot(p[0] - q[0], p[1] - q[1]) <= tol, `${what}: ${p} vs ${q}`);
+const ZONES = {
+  hwZones: [{ s0: 0.2, s1: 0.3, hw: 6, ease: 0.025 }],
+  bankZones: [{ frac: 0.4, angleDeg: 12, widthM: 120 }, { frac: 0.05, angleDeg: -6, widthM: 80 }],
+  elevations: [{ s: 0.25, halfM: 100, rise: 3 }],
+  bridges: [{ s: 0.6, halfM: 120, rise: 6 }],
+};
+function openGreen(b, seed = 7) { b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open(); b.D.randomise(seed); b.D.preview(); return plain(b.D.state().design); }
+const msgText = (b) => b.root.querySelector(".td-msg").textContent;
+
+test("REVERSE and START HERE carry every zone type to the same place on the loop; a bank keeps its angle (sign included)", () => {
+  const b = bootScreen();
+  const d0 = Object.assign(openGreen(b), plain(ZONES));
+  b.D.load(d0);
+  assert.equal(b.D.reverse(), true);
+  const r = b.D.state().design;
+  near(r.bankZones[0].frac, 0.6, 1e-12, "bank frac → 1 − frac"); near(r.bankZones[1].frac, 0.95, 1e-12, "bank frac → 1 − frac");
+  assert.deepEqual([r.bankZones[0].angleDeg, r.bankZones[1].angleDeg, r.bankZones[0].widthM], [12, -6, 120], "angleDeg is never negated (its sign is not the camber side — mesh.js reads that off curvature)");
+  for (const z of r.bankZones) assert.deepEqual(Object.keys(z).sort(), ["angleDeg", "frac", "widthM"], "no stray s0/s1/angle on a bank");
+  near(r.hwZones[0].s0, 0.7, 1e-12, "hw s0 = 1 − s1"); near(r.hwZones[0].s1, 0.8, 1e-12, "hw s1 = 1 − s0");
+  near(r.elevations[0].s, 0.75, 1e-12, "elevation"); near(r.bridges[0].s, 0.4, 1e-12, "bridge");
+  for (const [f, g] of [[0.4, r.bankZones[0].frac], [0.25, r.elevations[0].s], [0.6, r.bridges[0].s], [0.2, r.hwZones[0].s1]]) samePlace(pointAt(d0.pts, f), pointAt(r.pts, g), 1e-6, "the reversed loop's zone sits where it was");
+  const before = plain(r);
+  assert.equal(b.D.setStart(5), true);
+  const s = b.D.state().design;
+  const L = (p) => { let t = 0; for (let i = 0; i < p.length; i++) { const a = p[i], c = p[(i + 1) % p.length]; t += Math.hypot(c[0] - a[0], c[1] - a[1]); } return t; };
+  let upto = 0; for (let k = 0; k < 5; k++) { const a = before.pts[k], c = before.pts[k + 1]; upto += Math.hypot(c[0] - a[0], c[1] - a[1]); }
+  const sh = upto / L(before.pts), w = (v) => ((v % 1) + 1) % 1;
+  near(s.bankZones[0].frac, w(before.bankZones[0].frac - sh), 1e-12, "bank frac shifts with the start");
+  assert.equal(s.bankZones[1].angleDeg, -6);
+  near(s.hwZones[0].s0, w(before.hwZones[0].s0 - sh), 1e-12, "hw s0"); near(s.elevations[0].s, w(before.elevations[0].s - sh), 1e-12, "elevation"); near(s.bridges[0].s, w(before.bridges[0].s - sh), 1e-12, "bridge");
+  for (const [f, g] of [[before.bankZones[0].frac, s.bankZones[0].frac], [before.elevations[0].s, s.elevations[0].s], [before.hwZones[0].s0, s.hwZones[0].s0], [before.hwZones[0].s1, s.hwZones[0].s1]]) samePlace(pointAt(before.pts, f), pointAt(s.pts, g), 1e-6, "START HERE moves the line, not the zones");
+  // …and the engine's hwZone window (control INDEX fractions, via toRaw) lands
+  // on that same place: the arc → index mapping is exact, not equal-spacing algebra.
+  const it = b.C.sanitize(s), raw = b.C.toRaw(it);
+  samePlace(pointAtIndex(it.pts, raw.hwZones[0].s0), pointAt(it.pts, it.hwZones[0].s0), 1e-6, "toRaw s0");
+  samePlace(pointAtIndex(it.pts, raw.hwZones[0].s1), pointAt(it.pts, it.hwZones[0].s1), 1e-6, "toRaw s1");
+  samePlace(pointAt(before.pts, before.hwZones[0].s0), pointAtIndex(it.pts, raw.hwZones[0].s0), 0.25, "end to end, within the u16 fraction grid");
+});
+
+test("an insert / delete / stamp keeps zones before the edit at their distance from the start, after it at their distance to the finish", () => {
+  const b = bootScreen();
+  const d0 = openGreen(b);
+  const N = d0.pts.length;
+  const cum = (p) => { const c = [0]; for (let i = 0; i < p.length; i++) { const a = p[i], q = p[(i + 1) % p.length]; c.push(c[i] + Math.hypot(q[0] - a[0], q[1] - a[1])); } return c; };
+  const c0 = cum(d0.pts), L0 = c0[N];
+  const i = Math.floor(N / 2);
+  // one zone well before point i, one well after, one on the segment the delete removes
+  const fBefore = c0[2] / L0, fAfter = c0[N - 2] / L0, fInside = (c0[i - 1] + c0[i]) / 2 / L0;
+  b.D.load(Object.assign({}, d0, { elevations: [{ s: fBefore, halfM: 60, rise: 2 }, { s: fAfter, halfM: 60, rise: 2 }, { s: fInside, halfM: 60, rise: 2 }], bankZones: [{ frac: fAfter, angleDeg: 10, widthM: 100 }] }));
+  assert.equal(b.D.deletePoint(i), true);
+  const d1 = b.D.state().design, c1 = cum(d1.pts), L1 = c1[d1.pts.length];
+  assert.equal(d1.elevations.length, 2, "the zone on the edited span is dropped");
+  near(d1.elevations[0].s * L1, fBefore * L0, 1e-6, "before the edit: same metres from the start");
+  near(L1 - d1.elevations[1].s * L1, L0 - fAfter * L0, 1e-6, "after the edit: same metres to the finish");
+  near(d1.bankZones[0].frac, d1.elevations[1].s, 1e-12, "banks ride the same map");
+  samePlace(pointAt(d1.pts, d1.elevations[1].s), pointAt(d0.pts, fAfter), 1e-6, "…so it is still on the same piece of road");
+  // A stamp after point 3 replaces road downstream of it (and, past 200
+  // points, RDP-thins the untouched tail at 1 m): the zones hold their place.
+  b.D.setTool("corner");
+  assert.equal(b.D.applyStamp(3, 3), true);
+  const d2 = b.D.state().design;
+  assert.equal(d2.bankZones.length, 1);
+  samePlace(pointAt(d2.pts, d2.bankZones[0].frac), pointAt(d0.pts, fAfter), 1.5, "a stamp upstream does not slide a zone off its corner");
+  samePlace(pointAt(d2.pts, d2.elevations[0].s), pointAt(d0.pts, fBefore), 1e-6, "…nor one before the anchor");
+  // An insert — a tap on the road at the middle of the loop's longest segment
+  // (after the stamp, before the finish zone) on the designer's own canvas
+  // (its view is fit()'s: the loop's box × 0.82 in 640 × 400).
+  b.D.load(d2);
+  let k = 20;
+  for (let m = 20; m < d2.pts.length - 20; m++) if (Math.hypot(d2.pts[m + 1][0] - d2.pts[m][0], d2.pts[m + 1][1] - d2.pts[m][1]) > Math.hypot(d2.pts[k + 1][0] - d2.pts[k][0], d2.pts[k + 1][1] - d2.pts[k][1])) k = m;
+  const xs = d2.pts.map((p) => p[0]), zs = d2.pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const sc = Math.min(640 / Math.max(60, x1 - x0), 400 / Math.max(60, z1 - z0)) * 0.82;
+  const mid = [(d2.pts[k][0] + d2.pts[k + 1][0]) / 2, (d2.pts[k][1] + d2.pts[k + 1][1]) / 2];
+  const at = { clientX: (mid[0] - (x0 + x1) / 2) * sc + 320, clientY: (mid[1] - (z0 + z1) / 2) * sc + 200, pointerId: 9 };
+  const canvas = b.root.querySelector("canvas");
+  b.D.setTool("select");
+  // Zoom in around the tap (the world point under the pointer stays put) so
+  // the 24 px handle radius no longer covers the road between the points.
+  b.dom.dispatch(canvas, Object.assign({ type: "wheel", deltaY: -2000 }, at));
+  b.dom.dispatch(canvas, Object.assign({ type: "pointerdown" }, at));
+  b.dom.dispatch(canvas, Object.assign({ type: "pointerup" }, at));
+  const d3 = b.D.state().design;
+  assert.equal(d3.pts.length, d2.pts.length + 1, "the tap inserted a point");
+  samePlace(pointAt(d3.pts, d3.bankZones[0].frac), pointAt(d2.pts, d2.bankZones[0].frac), 1e-6, "an insert upstream leaves a downstream zone in place");
+  samePlace(pointAt(d3.pts, d3.elevations[0].s), pointAt(d2.pts, d2.elevations[0].s), 1e-6, "…and an upstream one");
+});
+
+test("open({design}), EDIT and IMPORT never drop unsaved work: UNDO brings it back and the previous draft is kept on disk", async () => {
+  const b = bootScreen();
+  const green = openGreen(b);
+  b.D.setTheme("alpine");                                   // unsaved work (still green)
+  const mine = plain(b.D.state().design);
+  const other = b.C.sanitize(Object.assign({}, green, { pts: green.pts.map(([x, z]) => [x + 40, z]) }));
+  b.D.open({ design: other, shared: true });
+  assert.deepEqual(plain(b.D.state().design.pts), plain(other.pts), "the shared design is on screen");
+  assert.match(msgText(b), /UNDO brings back/, "…and the player is told how to get theirs back");
+  assert.deepEqual(plain(b.C.draftPrev().pts), mine.pts, "the unsaved design is kept under apex26.customTrackDraftPrev");
+  assert.equal(b.C.draftPrev().theme, "alpine");
+  b.D.close();
+  assert.deepEqual(plain(b.C.draft().pts), plain(other.pts), "the autosave writes the new draft…");
+  assert.deepEqual(plain(b.C.draftPrev().pts), mine.pts, "…and cannot clobber the kept one");
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), mine.pts, "UNDO restores it");
+  assert.equal(b.D.state().design.theme, "alpine");
+  // A saved, unchanged design is not 'unsaved work': nothing is stashed.
+  b.D.preview(); assert.equal(b.D.save().ok, true);
+  b.C.setDraftPrev(null);
+  b.D.open({ design: other });
+  assert.equal(b.C.draftPrev(), null); assert.equal(b.D.state().undo, 0);
+  // EDIT from MY CIRCUITS over an edit.
+  b.D.setWidth(6);
+  const saved = b.C.list()[0];
+  b.D.load(saved, "library", saved.id);
+  b.D.undo();
+  assert.equal(b.D.state().design.baseHW, 6, "UNDO after EDIT is the edited design");
+  // IMPORT (a pasted code) over an edit.
+  b.D.setStart(4);
+  const turned = plain(b.D.state().design.pts);
+  assert.equal(await b.D.loadFrom(await b.CD.encode(b.C.sanitize(Object.assign({}, other, { theme: "oasis" })))), true);
+  assert.equal(b.D.state().design.theme, "oasis");
+  b.D.undo();
+  assert.deepEqual(plain(b.D.state().design.pts), turned, "UNDO after IMPORT is the edited design");
+  const mineP = mine.pts;
+  // A FRESH PAGE: the unsaved work exists only as the autosaved draft. A share
+  // link opened there must not let the 600 ms autosave overwrite it.
+  const b2 = bootScreen({ customTrackDraft: Object.assign({}, mine, { theme: "harbour" }) });
+  b2.D.init(b2.G, { custom: b2.C, root: b2.root });
+  b2.D.open({ design: other, shared: true });
+  b2.D.close();
+  assert.deepEqual(plain(b2.C.draft().pts), plain(other.pts));
+  assert.deepEqual(plain(b2.C.draftPrev().pts), mineP, "the on-disk draft survived the share link");
+  assert.equal(b2.C.draftPrev().theme, "harbour");
+  assert.equal(b2.D.undo(), true);
+  assert.deepEqual(plain(b2.D.state().design.pts), mineP);
+  assert.equal(b2.D.state().design.theme, "harbour");
+});
+
+test("a share link while the screen is open keeps the return focus; EDIT → SAVE replaces the circuit; a full library names its limit", async () => {
+  const b = bootScreen();
+  const door = b.dom.byId("mb-designer"); door.tagName = "BUTTON";
+  door.focus();
+  openGreen(b);
+  b.root.querySelector("canvas").focus();          // the player is working in the screen
+  b.D.open({ design: b.C.sanitize(b.D.state().design), shared: true });   // hashchange while open
+  b.D.close();
+  assert.equal(b.dom.document.activeElement, door, "close returns focus to the title door, not into the hidden dialog");
+  // EDIT a saved circuit, change its geometry, SAVE: one entry, the new id.
+  b.D.open(); b.D.preview();
+  const first = b.D.save();
+  assert.equal(first.ok, true);
+  const item = b.C.get(first.id);
+  b.D.load(item, "library", item.id);
+  b.D.setStart(3); b.D.preview();
+  const second = b.D.save();
+  assert.equal(second.ok, true); assert.notEqual(second.id, first.id);
+  assert.deepEqual(plain(b.D.state().library), [second.id], "replaced, not duplicated");
+  b.D.setWidth(6); b.D.preview();
+  const third = b.D.save();
+  assert.deepEqual(plain(b.D.state().library), [third.id], "…on every later SAVE too");
+  // A full library: RACE on a NEW design is refused with the limit named.
+  for (let i = 0; b.C.list().length < b.C.LIMITS.items; i++) assert.equal(b.C.upsert(Object.assign({}, b.C.get(third.id), { seed: 1000 + i })).ok, true);
+  b.D.randomise(23); b.D.preview();
+  assert.equal(b.D.race("gp"), false);
+  assert.match(msgText(b), /full \(24 circuits\).*to race/, msgText(b));
+  assert.deepEqual(b.clicks, [], "no race door pressed");
+});
+
+test("CHECKS is not a live region; count changes are announced once; an unbuildable loop never reads 'All checks pass'", () => {
+  const b = bootScreen();
+  const d0 = openGreen(b);
+  const list = b.root.querySelector(".td-issues");
+  assert.equal(list.getAttribute("aria-live"), null, "the 80 ms rebuild is not read out");
+  const tiny = Object.assign({}, d0, { pts: Array.from({ length: 36 }, (_, i) => [Math.round(120 * Math.cos(i / 36 * 2 * Math.PI) * 4) / 4, Math.round(80 * Math.sin(i / 36 * 2 * Math.PI) * 4) / 4]) });
+  b.D.load(tiny);
+  const v = b.D.preview();
+  assert.equal(v.ok, false); assert.ok(v.red >= 1, "a ~630 m loop is RED, never a silent fail");
+  assert.notEqual(list.children[0].dataset.level, "ok");
+  assert.match(msgText(b), /CHECKS: \d+ red issue/, msgText(b));
+  const said = msgText(b);
+  b.D.preview();
+  assert.equal(msgText(b), said, "the same counts are not announced again");
+});
+
+test("IMPORT caps the file size; a malformed link or code is a message, never a throw", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  assert.equal(await b.D.importFile({ size: 1 << 20, text: async () => { throw new Error("must not read"); } }), false);
+  assert.match(msgText(b), /too big/);
+  assert.equal(await b.D.loadFrom("https://x.example/#track=%E0%A4%A"), false);
+  assert.ok(msgText(b).length > 0, "a message, not silence");
+  assert.equal(await b.D.loadFrom("APXT1.z.%%%"), false);
+  assert.ok(msgText(b).length > 0);
+});
+
+test("arrow nudges coalesce into one UNDO; arrows pass to MenuNav with nothing selected; Escape / B lets go of the canvas", async () => {
+  const b = bootScreen();
+  const win = [];
+  b.ctx.addEventListener = (type, fn, cap) => win.push({ type, fn, cap });   // window === the VM global here
+  openGreen(b);
+  const canvas = b.root.querySelector("canvas");
+  const key = (k) => { const e = { type: "keydown", key: k }; b.dom.dispatch(canvas, e); return e; };
+  canvas.focus();
+  assert.equal(canvas.dataset.arrows, "pass", "nothing selected: MenuNav may walk focus off the canvas");
+  assert.notEqual(key("ArrowLeft").defaultPrevented, true, "…so the canvas leaves the key alone");
+  key("]");
+  assert.equal(b.D.state().sel, 0);
+  assert.equal(canvas.dataset.arrows, "own");
+  const u0 = b.D.state().undo, p0 = plain(b.D.state().design.pts[0]);
+  for (let i = 0; i < 4; i++) assert.equal(key("ArrowRight").defaultPrevented, true);
+  assert.deepEqual(plain(b.D.state().design.pts[0]), [p0[0] + 4, p0[1]]);
+  assert.equal(b.D.state().undo, u0 + 1, "four presses, one UNDO entry");
+  key("]"); key("ArrowUp");
+  assert.equal(b.D.state().undo, u0 + 2, "a new point starts a new entry");
+  b.D.undo();
+  assert.deepEqual(plain(b.D.state().design.pts[0]), [p0[0] + 4, p0[1]]);
+  b.D.undo();
+  assert.deepEqual(plain(b.D.state().design.pts[0]), p0, "one UNDO takes back the whole run");
+  // MenuNav: a <canvas> owns the arrows unless it says data-arrows="pass".
+  const sb = { Math, Object, Array, Number, String, JSON, Map, Set, WeakMap, RegExp, Promise, Date, document: b.dom.document, UiLayers: { LAYER_IDS: [], shown: () => true, top: () => null }, Log: { info() {}, warn() {}, debug() {} }, addEventListener() {}, removeEventListener() {}, setTimeout: () => 0, clearTimeout() {}, getComputedStyle: () => ({ getPropertyValue: () => "" }), innerWidth: 800, innerHeight: 600, requestAnimationFrame: () => 0 };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/menu-nav.js").replace(/^const\b/gm, "var"), sb, { filename: "js/ui/menu-nav.js" });
+  key("]");
+  assert.equal(sb.MenuNav.ownsArrows(canvas, "ArrowDown", { isTrusted: false }), true, "a selected point: the pad's arrows nudge it");
+  // B on a pad arrives as `cancel` on the dialog; Escape as a keydown. Window capture runs first.
+  const back = win.filter((l) => l.cap && (l.type === "cancel" || l.type === "keydown"));
+  assert.equal(back.length, 2, "Escape and cancel are both claimed in the capture phase");
+  const cancel = { type: "cancel", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+  back.find((l) => l.type === "cancel").fn(cancel);
+  assert.equal(cancel.defaultPrevented, true); assert.equal(cancel.stopped, true, "the screen's close door never sees it");
+  assert.equal(b.D.state().sel, -1);
+  assert.notEqual(b.dom.document.activeElement, canvas, "focus left the canvas");
+  assert.equal(canvas.dataset.arrows, "pass");
+  assert.equal(sb.MenuNav.ownsArrows(canvas, "ArrowDown", { isTrusted: false }), false);
+  const again = { type: "cancel", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+  back.find((l) => l.type === "cancel").fn(again);
+  assert.equal(again.defaultPrevented, false, "a second B closes the screen as before");
+});
+
+/** A DesignerCanvas over a 1.6 km loop, with a recording 2D context. */
+function bootCanvas() {
+  const b = bootScreen();
+  const canvas = b.dom.document.createElement("canvas");
+  const fills = [];
+  canvas.getContext = () => new Proxy({}, { get: (t, k) => (k === "fill" ? () => fills.push(t.fillStyle) : k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
+  const ev = { changes: [], picks: [], deletes: [] };
+  let cv = null;
+  cv = b.DC.create(canvas, {
+    onChange: (pts, kind) => { ev.changes.push({ pts, kind }); cv.setPoints(pts); },
+    onPick: (i) => ev.picks.push(i), onDelete: (i) => ev.deletes.push(i), onSelect: () => {},
+  });
+  const pts = [];
+  for (let i = 0; i < 24; i++) { const t = i / 24 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); }
+  cv.setPoints(pts);
+  const scr = (p) => { const v = cv.view(); return { clientX: (p[0] - v.cx) * v.scale + v.w / 2, clientY: (p[1] - v.cz) * v.scale + v.h / 2 }; };
+  const fire = (type, at, id = 1, extra) => b.dom.dispatch(canvas, Object.assign({ type, pointerId: id }, at, extra));
+  const tap = (at, id = 1) => { fire("pointerdown", at, id); fire("pointerup", at, id); };
+  return { b, canvas, cv, ev, pts, scr, fire, tap, fills };
+}
+
+test("DesignerCanvas: lostpointercapture abandons a drag (no phantom pinch after a hidden dialog)", () => {
+  const h = bootCanvas();
+  h.fire("pointerdown", h.scr(h.pts[2]), 1);
+  h.fire("lostpointercapture", {}, 1);              // the dialog hid mid-drag: no pointerup ever comes
+  const a = h.scr(h.pts[5]);
+  h.fire("pointerdown", a, 2);
+  h.fire("pointermove", { clientX: a.clientX + 30, clientY: a.clientY }, 2);
+  h.fire("pointerup", { clientX: a.clientX + 30, clientY: a.clientY }, 2);
+  assert.equal(h.ev.changes.length, 1, "the next touch is a drag, not the second finger of a pinch");
+  assert.equal(h.ev.changes[0].kind, "move");
+  // reset() (the designer calls it on open / close) clears a stuck pointer too.
+  h.fire("pointerdown", h.scr(h.pts[7]), 3);
+  h.cv.reset();
+  h.tap(h.scr(h.pts[9]), 4);
+  assert.deepEqual(h.ev.picks, [9]);
+});
+
+test("DesignerCanvas: double-tap deletes only under SELECT and only the handle both taps picked", () => {
+  const h = bootCanvas();
+  const at = h.scr(h.pts[6]);
+  h.cv.setTool("corner");
+  h.tap(at); h.tap(at); h.fire("dblclick", at);
+  assert.deepEqual(h.ev.deletes, [], "a stamp tool's double-tap is two stamps, never a delete");
+  h.cv.setTool("select");
+  h.tap(at); h.tap(at); h.fire("dblclick", at);
+  assert.deepEqual(h.ev.deletes, [6], "two picks of one handle under SELECT");
+  // Two quick taps on the ROAD: the first inserts a point, the second lands on it.
+  const mid = h.scr([(h.pts[5][0] + h.pts[6][0]) / 2, (h.pts[5][1] + h.pts[6][1]) / 2]);
+  h.tap(mid); h.tap(mid); h.fire("dblclick", mid);
+  assert.equal(h.ev.changes.filter((c) => c.kind === "insert").length, 1);
+  assert.deepEqual(h.ev.deletes, [6], "the inserted point is not deleted by the same double-tap");
+});
+
+test("DesignerCanvas: a drag stops at the storage bounds; a preview landing mid-drag keeps the road stale", () => {
+  const h = bootCanvas();
+  const tr = { n: h.pts.length, px: h.pts.map((p) => p[0]), pz: h.pts.map((p) => p[1]), hw: h.pts.map(() => 7), total: 1600 };
+  h.cv.setBuilt(tr);
+  const a = h.scr(h.pts[3]);
+  h.fire("pointerdown", a);
+  h.fire("pointermove", { clientX: a.clientX + 40, clientY: a.clientY });
+  h.fills.length = 0;
+  h.cv.setBuilt(tr);                                 // the 80 ms preview of the PREVIOUS edit
+  assert.ok(h.fills.includes(h.b.DC.COL.roadStale) && !h.fills.includes(h.b.DC.COL.road), "still drawn stale: " + h.fills.join(","));
+  h.fire("pointerup", { clientX: a.clientX + 40, clientY: a.clientY });
+  h.cv.zoom(1e-6);                                   // MIN_SCALE: the canvas spans tens of km
+  const b0 = h.scr(h.ev.changes[0].pts[3]);
+  h.fire("pointerdown", b0);
+  h.fire("pointermove", { clientX: 1e6, clientY: -1e6 });
+  h.fire("pointerup", { clientX: 1e6, clientY: -1e6 });
+  const p = h.ev.changes[h.ev.changes.length - 1].pts[3];
+  assert.deepEqual(plain(p), [h.b.C.LIMITS.coord, -h.b.C.LIMITS.coord], "clamped to ±10 km, so the design stays saveable");
+});
+
+// ── 2026-10-01 usability: FIX chips, HOW TO, the first-open card, hints, labels, the context row ──
+/** Every descendant of `root` (the mini DOM has no descendant selectors). */
+const walk = (n, out = []) => { for (const c of n.children || []) { out.push(c); walk(c, out); } return out; };
+const chipsIn = (n, text) => walk(n).filter((e) => e.tagName === "BUTTON" && (text == null || e.textContent === text));
+/** The rail's three panes in build order: design, library, howto. */
+const panes = (b) => b.root.querySelector(".td-rail").children.filter((c) => c.tagName === "SECTION");
+/** A ~1.6 km ellipse: RED on length and on the start straights. */
+function shortLoop(b) {
+  const d0 = openGreen(b);
+  const pts = [];
+  for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); }
+  b.D.load(Object.assign({}, d0, { pts }));
+  const v = b.D.preview();
+  assert.equal(v.ok, false);
+  return d0;
+}
+
+test("FIX chips: only on rows TrackFixes can repair; FIX commits one UNDO entry and says so; the press never reaches the row", () => {
+  const b = bootScreen();
+  const seen = [];
+  let green = null;
+  b.ctx.TrackFixes = {
+    canFix: (it) => it.code === "length",
+    apply: (d, it, built) => { seen.push({ code: it.code, built: !!(built && built.issues) }); return seen.length === 1 ? { design: Object.assign({}, d, { pts: green.pts }), msg: "lap stretched to 3.2 km" } : null; },
+    fixAll: () => null,
+  };
+  green = shortLoop(b);
+  const rows = b.root.querySelector(".td-issues").children;
+  const fixable = rows.filter((li) => chipsIn(li, "FIX").length);
+  assert.equal(fixable.length, 1, "one FIX chip, on the length row");
+  assert.match(fixable[0].textContent, /Lap is/);
+  assert.ok(rows.filter((li) => li.dataset.level === "red").length > 1, "the start rows are red too, and carry no chip");
+  const fixAll = chipsIn(b.root, "FIX ALL")[0];
+  assert.equal(fixAll.hidden, false, "FIX ALL shows while a red issue is fixable");
+  const u0 = b.D.state().undo;
+  const ev = { type: "click", bubbles: true };
+  b.dom.dispatch(chipsIn(fixable[0], "FIX")[0], ev);
+  assert.equal(ev.propagationStopped, true, "the chip's click stops at the chip (the row would refocus the canvas)");
+  assert.deepEqual(plain(seen), [{ code: "length", built: true }], "apply(design, issue, the current verdict)");
+  assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry");
+  assert.deepEqual(plain(b.D.state().design.pts), plain(green.pts));
+  assert.equal(msgText(b), "Fixed: lap stretched to 3.2 km — UNDO to revert");
+  assert.equal(b.D.preview().ok, true);
+  assert.equal(chipsIn(b.root, "FIX ALL")[0].hidden, true, "nothing red, no FIX ALL");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.preview().ok, false, "UNDO takes the fix back");
+  b.dom.dispatch(chipsIn(b.root.querySelector(".td-issues"), "FIX")[0], { type: "click", bubbles: true });
+  assert.equal(msgText(b), "No automatic fix for this one");
+  // No TrackFixes (the module did not load): no chips at all, never a throw.
+  delete b.ctx.TrackFixes;
+  b.D.preview();
+  assert.equal(chipsIn(b.root.querySelector(".td-issues"), "FIX").length, 0);
+  assert.equal(chipsIn(b.root, "FIX ALL")[0].hidden, true);
+});
+
+test("FIX ALL runs fixAll(design, TrackValidate.check) and commits once, naming the codes it applied", () => {
+  const b = bootScreen();
+  let green = null;
+  const calls = [];
+  b.ctx.TrackFixes = {
+    canFix: (it) => it.code === "length" || it.code === "start",
+    apply: () => null,
+    fixAll: (d, check) => { calls.push(check === b.V.check); return { design: Object.assign({}, d, { pts: green.pts }), applied: ["length", "start"] }; },
+  };
+  let fits = 0;
+  const real = b.DC;
+  b.ctx.DesignerCanvas = { create: (c, h) => { const api = real.create(c, h), fit = api.fit; api.fit = () => { fits++; return fit(); }; return api; } };
+  green = shortLoop(b);
+  assert.ok(chipsIn(b.root.querySelector(".td-issues"), "FIX").length >= 2, "every fixable row has its chip");
+  const u0 = b.D.state().undo, f0 = fits;
+  chipsIn(b.root, "FIX ALL")[0].click();
+  assert.deepEqual(calls, [true], "handed the validator's own check");
+  assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry for the whole batch");
+  assert.equal(b.D.state().sel, 0, "a start remedy selects the new point 0, as START HERE does");
+  assert.equal(fits, f0 + 1, "a length remedy rescales the loop, so the view refits");
+  assert.equal(msgText(b), "Fixed length, start — UNDO to revert");
+  assert.equal(b.D.preview().ok, true);
+  b.D.undo(); b.D.preview();
+  b.ctx.TrackFixes.fixAll = (d) => ({ design: d, applied: [], msgs: [] });   // nothing applies → the SAME object
+  chipsIn(b.root, "FIX ALL")[0].click();
+  assert.equal(b.D.state().undo, u0, "nothing applied, nothing committed");
+  assert.match(msgText(b), /Nothing here can be fixed automatically/);
+});
+
+test("HOW TO: a third tab lists every HOWTO step, every input and the limits; the limits match the registry", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const tabs = walk(b.root).filter((e) => e.classList.contains("td-tab"));
+  assert.deepEqual(tabs.map((t) => t.textContent), ["DESIGN", "MY CIRCUITS", "HOW TO"]);
+  for (const t of tabs) assert.equal(t.getAttribute("role"), "tab");
+  const [design, lib, how] = panes(b);
+  assert.equal(how.dataset.pane, "howto"); assert.equal(how.getAttribute("role"), "tabpanel");
+  assert.equal(how.hidden, true);
+  tabs[2].click();
+  assert.deepEqual([design.hidden, lib.hidden, how.hidden], [true, true, false]);
+  assert.deepEqual(tabs.map((t) => t.getAttribute("aria-selected")), ["false", "false", "true"]);
+  const H = b.D.HOWTO;
+  const rows = walk(how).filter((e) => e.classList.contains("td-issue"));
+  for (const r of rows) assert.equal(r.dataset.level, "info", "info rows, the CHECKS recipe");
+  const text = rows.map((r) => r.textContent).join("\n");
+  assert.equal(H.STEPS.length, 7);
+  H.STEPS.forEach((st, i) => {
+    assert.equal(st.n, i + 1);
+    assert.ok(text.includes(st.n + " · " + st.title.toUpperCase() + " — " + st.text), "step " + st.n + " is listed");
+    assert.ok(st.text.split(/(?<=[.?!])\s+(?=[A-Z])/).length <= 2, "≤ 2 sentences: " + st.title);
+  });
+  assert.deepEqual(plain(H.GESTURES.map((g) => g.input)), ["Touch", "Mouse", "Keyboard", "Gamepad"]);
+  for (const g of H.GESTURES) assert.ok(text.includes(g.input.toUpperCase() + " — " + g.text));
+  assert.ok(text.includes(H.LIMITS));
+  const L = b.C.LIMITS, VL = b.V.LIMITS;
+  assert.ok(H.LIMITS.includes(VL.lenMin / 1000 + "–" + VL.lenMax / 1000 + " km"), "lap length limits");
+  assert.ok(H.LIMITS.includes(L.ptsMin + "–" + L.ptsMax + " points"), "point limits");
+  assert.ok(H.LIMITS.includes(L.items + " saved circuits"), "library limit");
+  tabs[0].click();
+  assert.deepEqual([design.hidden, lib.hidden, how.hidden], [false, true, true]);
+});
+
+test("the first-open card: shown once, HOW TO switches tab, GOT IT stores apex26.designerCoached; a later open has none", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  const design = panes(b)[0];
+  const card = design.children[0];
+  assert.ok(card.classList.contains("td-group"), "the card is the design pane's first group");
+  const note = card.children[0];
+  assert.ok(note.classList.contains("td-issue")); assert.equal(note.dataset.level, "info");
+  assert.equal(note.textContent, "RANDOMISE gave you a circuit to start from. Drag the white points, add corners with the tools, then SAVE and RACE. Open HOW TO for the full guide.");
+  assert.deepEqual(chipsIn(card).map((c) => c.textContent), ["HOW TO", "GOT IT"]);
+  const u0 = b.D.state().undo;
+  chipsIn(card, "HOW TO")[0].click();
+  assert.equal(panes(b)[2].hidden, false, "HOW TO opens the guide");
+  assert.equal(b.data.designerCoached, undefined, "…without dismissing the card");
+  chipsIn(card, "GOT IT")[0].click();
+  assert.equal(b.data.designerCoached, true, "GOT IT stores the flag");
+  assert.ok(!design.children.includes(card), "…and removes the card");
+  assert.equal(b.D.state().undo, u0, "UNDO / REDO untouched");
+  b.D.close(); b.D.open();
+  assert.ok(!design.children[0].children.some((c) => /RANDOMISE gave you/.test(c.textContent)), "no card on a later open");
+  // Seen once is enough: a close without GOT IT stores the flag too.
+  const b2 = bootScreen();
+  b2.D.init(b2.G, { custom: b2.C, root: b2.root });
+  b2.D.open();
+  assert.ok(/RANDOMISE gave you/.test(panes(b2)[0].children[0].children[0].textContent));
+  b2.D.close();
+  assert.equal(b2.data.designerCoached, true);
+  // A player who was coached on another visit never sees it.
+  const b3 = bootScreen({ designerCoached: true });
+  b3.D.init(b3.G, { custom: b3.C, root: b3.root });
+  b3.D.open();
+  assert.equal(chipsIn(panes(b3)[0], "GOT IT").length, 0);
+});
+
+test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone), the status line says it once, and the group labels", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const rail = b.root.querySelector(".td-rail"), stage = b.root.querySelector(".td-stage");
+  const hint = rail.querySelector(".td-hint"), stageHint = stage.querySelector(".td-hint");
+  assert.ok(hint && stageHint && hint !== stageHint);
+  const toolsGroup = panes(b)[0].children.find((g) => g.children.includes(hint));
+  assert.ok(toolsGroup && toolsGroup.children.some((c) => c.classList.contains("td-chips") && c.children.every((t) => t.dataset.tool)), "the hint sits in the TOOLS group");
+  assert.match(hint.textContent, /^SELECT: drag points/);
+  // css/editor.css: the phone rules hide only the stage's copy; the rail's stays.
+  const css = read("css/editor.css");
+  assert.equal((css.match(/\.td-stage \.td-hint \{ display: none; \}/g) || []).length, 2, "narrow/portrait and short both hide the stage hint");
+  assert.doesNotMatch(css, /^\s*\.td-hint \{ display: none/m, "no rule hides every .td-hint");
+  for (const [tool, re] of [["draw", /^DRAW: draw one closed loop/], ["corner", /^CORNER: tap a point to stamp/], ["hairpin", /^HAIRPIN: tap a point/], ["straight", /^STRAIGHT: tap a point/], ["select", /^SELECT: /]]) {
+    b.D.setTool(tool);
+    assert.match(hint.textContent, re, tool);
+    assert.equal(stageHint.textContent, hint.textContent, "one string, two places");
+    assert.equal(msgText(b), hint.textContent, "the status line says it once on a change");
+  }
+  b.D.setTool("select");
+  const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
+  b.D.setTool("corner");
+  const all = labels();
+  assert.deepEqual([all[0]].concat(all.slice(2)), ["1 SHAPE", "3 LOOK", "4 DETAILS", "5 CHECKS", "SHARE CODE"]);
+  const m = all[1].match(/^2 CORNERS · CORNER R (\d+) m × 90° LEFT$/);
+  assert.ok(m, all[1]);
+  chipsIn(b.root, "TURNS RIGHT")[0].click();
+  const up = walk(b.root).find((e) => e.getAttribute && e.getAttribute("aria-label") === "RADIUS m up");
+  up.click();
+  assert.equal(labels()[1], "2 CORNERS · CORNER R " + (+m[1] + 5) + " m × 90° RIGHT", "live from the steppers");
+  b.D.setTool("straight");
+  assert.equal(labels()[1], "2 CORNERS · STRAIGHT 200 m");
+});
+
+test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that point, anchored at the press; a canvas press hides it; a stamp tool hands the canvas a ghost", () => {
+  const b = bootScreen();
+  let hooks = null;
+  const toolCalls = [];
+  const real = b.DC;
+  b.ctx.DesignerCanvas = {
+    create: (c, h) => {
+      hooks = h;
+      const api = real.create(c, h), set = api.setTool;
+      api.setTool = (name, fn) => { toolCalls.push([name, fn]); return set(name); };
+      return api;
+    },
+  };
+  const d0 = openGreen(b);
+  assert.equal(typeof hooks.onContext, "function", "the designer offers the hook");
+  const row = b.root.querySelector(".td-ctx"), stage = b.root.querySelector(".td-stage");
+  assert.ok(stage.children.includes(row), "anchored in the stage"); assert.equal(row.hidden, true);
+  assert.ok(row.classList.contains("td-chips"));
+  hooks.onContext(5, { x: 600, y: 50 });
+  assert.equal(row.hidden, false);
+  assert.equal(b.D.state().sel, 5, "the point is selected");
+  assert.deepEqual([row.style.right, row.style.top, row.style.left, row.style.bottom], ["40px", "50px", "", ""], "opens away from the right edge (canvas 640 × 400)");
+  assert.equal(row.getAttribute("aria-label"), "Point 6");
+  chipsIn(row, "DELETE")[0].click();
+  assert.equal(row.hidden, true);
+  assert.equal(b.D.state().design.pts.length, d0.pts.length - 1);
+  assert.deepEqual(plain(b.D.state().design.pts[5]), plain(d0.pts[6]), "point 6 (index 5) went");
+  const before = plain(b.D.state().design.pts);
+  hooks.onContext(4, { x: 10, y: 390 });
+  assert.deepEqual([row.style.left, row.style.bottom], ["10px", "10px"], "opens away from the bottom edge");
+  chipsIn(row, "START HERE")[0].click();
+  assert.deepEqual(plain(b.D.state().design.pts[0]), before[4], "START HERE on that point");
+  hooks.onContext(0, { x: 100, y: 100 });
+  assert.equal(chipsIn(row, "START HERE")[0].disabled, true, "the start itself cannot be the new start");
+  chipsIn(row, "CLOSE")[0].click();
+  assert.equal(row.hidden, true);
+  hooks.onContext(3, { x: 100, y: 100 });
+  const canvas = b.root.querySelector("canvas");
+  b.dom.dispatch(canvas, { type: "pointerdown", pointerId: 7, clientX: 5, clientY: 5 });
+  b.dom.dispatch(canvas, { type: "pointercancel", pointerId: 7 });
+  assert.equal(row.hidden, true, "the next press on the canvas hides it");
+  hooks.onContext(3, { x: 100, y: 100 });
+  b.D.close();
+  assert.equal(row.hidden, true, "closing the screen hides it");
+  hooks.onContext(999, { x: 1, y: 1 });
+  assert.equal(row.hidden, true, "an index off the loop is ignored");
+  // The ghost: a stamp tool passes previewFn(i) → absolute world points from point i.
+  b.D.open();
+  b.D.setTool("corner");
+  const [name, fn] = toolCalls[toolCalls.length - 1];
+  assert.equal(name, "corner"); assert.equal(typeof fn, "function");
+  const pts = b.D.state().design.pts, g = fn(3);
+  assert.deepEqual(plain(g.pts[0]), plain(pts[3]), "the ghost starts on the point");
+  assert.ok(g.pts.length > 3, "…and runs the corner");
+  assert.equal(fn(-1), null);
+  b.D.setTool("select");
+  assert.equal(toolCalls[toolCalls.length - 1][1], undefined, "SELECT clears the ghost");
+});
+
+// ── Round 3 PR E: the share card and TEST HERE ─────────────────────────────
+/** A 2D context that records the text it draws (and measures 6.6 px a glyph). */
+function recordingCanvas(b, texts, canvases) {
+  const mk = b.dom.document.createElement;
+  b.dom.document.createElement = (tag) => {
+    const el = mk(tag);
+    if (String(tag).toLowerCase() === "canvas") {
+      canvases.push(el);
+      el.getContext = () => new Proxy({}, { get: (t, k) => (k === "fillText" ? (s) => texts.push(String(s)) : k === "measureText" ? (s) => ({ width: String(s).length * 6.6 }) : () => {}), set: () => true });
+      el.toBlob = (cb, type) => cb(new Blob(["\x89PNG"], { type }));
+    }
+    return el;
+  };
+}
+const SHORT_LOOP = () => { const pts = []; for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); } return pts; };
+
+test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, else NativeDownload, else <a download>; a dismissed sheet is silent; red refuses", async () => {
+  const b = bootScreen();
+  const texts = [], canvases = [], shared = [], native = [], anchors = [];
+  openGreen(b);
+  recordingCanvas(b, texts, canvases);
+  b.ctx.File = File;
+  let canShare = true, shareErr = null;
+  b.ctx.navigator = { canShare: (d) => canShare && Array.isArray(d.files) && d.files.every((f) => f instanceof File), share: async (d) => { if (shareErr) throw shareErr; shared.push(d); } };
+  const foot = b.root.querySelector(".td-foot");
+  assert.deepEqual(chipsIn(foot).map((c) => c.textContent).slice(3, 6), ["SHARE", "CARD", "EXPORT"], "CARD sits after SHARE in the foot");
+  assert.equal(await b.D.shareCard(), true);
+  const c = canvases[canvases.length - 1];
+  assert.deepEqual([c.width, c.height], [640, 360], "an offscreen 640×360 card");
+  const url = b.CD.shareUrl(b.D.state().lastCode), name = b.D.state().design.name;
+  assert.equal(shared.length, 1);
+  const f = shared[0].files[0];
+  assert.match(f.name, /^apex26-track-[a-z0-9-]+-card\.png$/);
+  assert.equal(f.type, "image/png");
+  assert.deepEqual([shared[0].title, shared[0].text], [name, url], "the full link always rides the share text");
+  assert.ok(texts.includes(name) && texts.includes("APEX 26 · TRACK DESIGNER"), "name and mark drawn: " + texts.join(" | "));
+  assert.ok(texts.some((t) => /km · \d+ corners · est lap \d+:\d\d\.\d$/.test(t)), "the facts line");
+  const urlLines = texts.filter((t) => /#track=|^https?:|^[A-Za-z0-9._~%-]+$/.test(t) && t !== name);
+  assert.ok(urlLines.length >= 1 && urlLines.length <= 3, "the link in at most three lines: " + urlLines.join(" | "));
+  assert.equal(msgText(b), "Card shared");
+  // No file sharing here: the native bridge where the shell has one…
+  canShare = false;
+  b.ctx.NativeDownload = { viable: () => true, saveBlob: async (blob, n) => { native.push([blob.type, n]); } };
+  assert.equal(await b.D.shareCard(), true);
+  assert.deepEqual(native, [["image/png", f.name]]);
+  assert.equal(msgText(b), "Card saved as " + f.name);
+  // …else an <a download>; a sheet that refuses for any other reason falls back the same way.
+  b.ctx.NativeDownload = { viable: () => false };
+  b.ctx.URL = { createObjectURL: () => "blob:card", revokeObjectURL: () => {} };
+  const mk = b.dom.document.createElement;
+  b.dom.document.createElement = (tag) => { const el = mk(tag); if (String(tag).toLowerCase() === "a") el.click = () => anchors.push([el.href, el.download]); return el; };
+  canShare = true; shareErr = Object.assign(new Error("no activation"), { name: "NotAllowedError" });
+  assert.equal(await b.D.shareCard(), true);
+  assert.deepEqual(anchors, [["blob:card", f.name]]);
+  // A dismissed sheet is the player's answer: nothing saved, nothing said.
+  shareErr = Object.assign(new Error("dismissed"), { name: "AbortError" });
+  b.D.load(Object.assign({}, b.D.state().design));   // a fresh status line
+  const before = msgText(b);
+  assert.equal(await b.D.shareCard(), false);
+  assert.equal(anchors.length, 1); assert.equal(native.length, 1);
+  assert.equal(msgText(b), before);
+  // Gated like SHARE: a red design draws nothing.
+  const n0 = canvases.length;
+  b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));
+  assert.equal(b.D.preview().ok, false);
+  assert.equal(await b.D.shareCard(), false);
+  assert.equal(canvases.length, n0);
+  assert.match(msgText(b), /Fix the red issues before sharing/);
+});
+
+test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, drops the car at rest on the selected point and goes green; a failed start comes back with the reason", async () => {
+  const b = bootScreen();
+  let hooks = null;
+  const real = b.DC;
+  b.ctx.DesignerCanvas = { create: (c, h) => { hooks = h; return real.create(c, h); }, COL: real.COL };
+  openGreen(b);
+  const d = b.D.state().design, tr = b.V.check(d).tr;   // the engine build the race drives
+  const calls = [];
+  const grid = { s: tr.total - 14, _prevS: tr.total - 14, prog: -14, x: -3, xVis: -3, px: 1, pz: 2, head: 0, speed: 4, vLat: 2, yawRateCur: 1, yawVis: 0.2, steerVis: 0.1, rescueT: 3, wallT: 1, wasOnWall: true, wrongT: 2, wrongWay: true, offT: 1 };
+  Object.assign(b.G, {
+    state: "menu", player: null, track: null, timeTrial: false, seasonMode: true,
+    startRace: async () => { calls.push(["startRace", b.G.trackIdx, b.G.timeTrial, b.G.seasonMode, b.D.isOpen()]); b.G.state = "count"; b.G.track = tr; b.G.player = Object.assign({}, grid); },
+    goRolling: () => { calls.push(["goRolling"]); if (b.G.state !== "count") return false; b.G.state = "race"; return true; },
+    snapGameCam: () => calls.push(["snap"]), refreshHud: () => calls.push(["hud"]),
+    quitToMenu: () => { calls.push(["quit"]); b.G.state = "menu"; b.C.consumeTrackHash(); },
+  });
+  b.ctx.ApexRoster = { LAZY_EDITOR: ["js/editor/designer.js"], LAZY_EDITOR_EDGES: [] };
+  b.C.create(b.G, { load: async () => true });
+  // The chip: last in the 4 DETAILS actions row and in the press-and-hold row; off until a point is selected.
+  const chip = chipsIn(b.root.querySelector(".td-rail"), "TEST HERE")[0];
+  assert.equal(chip.parentNode.children[chip.parentNode.children.length - 1], chip, "appended to the actions row");
+  assert.ok(chipsIn(chip.parentNode, "FIT VIEW").length === 1);
+  const ctxRow = b.root.querySelector(".td-ctx");
+  assert.equal(ctxRow.children[ctxRow.children.length - 1].textContent, "TEST HERE", "…and to the press-and-hold row");
+  assert.equal(chip.getAttribute("aria-disabled"), "true");
+  assert.equal(await b.D.testHere(), false, "no point, no drive");
+  assert.match(msgText(b), /Select a point/);
+  assert.equal(calls.length, 0);
+  hooks.onPick(12, { shiftKey: false });
+  assert.equal(chip.getAttribute("aria-disabled"), "false");
+  assert.equal(await b.D.testHere(), true);
+  const id = b.D.state().library[0];
+  assert.ok(id && b.D.state().design.originId === id, "saved first");
+  assert.deepEqual(plain(calls), [["startRace", b.Tracks.LIST.findIndex((t) => t.id === id), true, false, false], ["snap"], ["hud"], ["goRolling"]], "trackIdx + time trial + gp flow, closed, then the drop and the green");
+  assert.equal(b.G.state, "race");
+  // Within 20 m of the control's built s (the nearest node of the same engine build).
+  const p0 = d.pts[12];
+  let k = 0; for (let j = 0, best = Infinity; j < tr.n; j++) { const q = (tr.px[j] - p0[0]) ** 2 + (tr.pz[j] - p0[1]) ** 2; if (q < best) { best = q; k = j; } }
+  const sExp = k * tr.total / tr.n, p = b.G.player;
+  const ds = Math.abs(p.s - sExp), wrapD = Math.min(ds, tr.total - ds);
+  assert.ok(wrapD <= 20, "placed at s " + p.s + " vs " + sExp);
+  const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  b.Tracks.sample(tr, p.s, smp);
+  assert.deepEqual([p.px, p.pz, p.head], [smp.p[0], smp.p[2], Math.atan2(smp.t[0], smp.t[2])], "world pose from the track sample");
+  assert.equal(p.prog, p.s - tr.total, "an out-lap: the first crossing starts the timed lap");
+  assert.equal(p._prevS, p.s);
+  assert.deepEqual([p.x, p.xVis, p.speed, p.vLat, p.yawRateCur, p.yawVis, p.steerVis, p.rescueT, p.wallT, p.wasOnWall, p.wrongT, p.wrongWay, p.offT], [0, 0, 0, 0, 0, 0, 0, 0, 0, false, 0, false, 0], "at rest, every transient cleared");
+  assert.deepEqual([p.rPrevPx, p.rPrevPz, p.rPrevS, p.rPrevX, p.rPrevHead, p.rPrevYawVis], [p.px, p.pz, p.s, 0, p.head, 0], "render anchors seeded");
+  // The way back: armed, so quitting reopens the designer on the same point.
+  b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
+  b.D.close();
+  b.ctx.UiLayers = { inRace: () => true };
+  assert.equal(await b.C.consumeTrackHash(), null, "mid-race it waits");
+  assert.equal(b.D.isOpen(), false);
+  b.ctx.UiLayers = { inRace: () => false };
+  assert.equal(await b.C.consumeTrackHash(), true);
+  assert.equal(b.D.isOpen(), true);
+  assert.equal(b.D.state().sel, 12, "the selected point is back");
+  assert.equal(msgText(b), "Back from the test drive");
+  // A start that never reaches the lights: out through quitToMenu, back with the reason.
+  calls.length = 0;
+  b.G.startRace = async () => { calls.push(["startRace"]); };
+  b.G.state = "results";
+  hooks.onPick(12, { shiftKey: false });
+  assert.equal(await b.D.testHere(), false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(plain(calls), [["startRace"], ["quit"]], "never a frozen race");
+  assert.equal(b.D.isOpen(), true);
+  assert.match(msgText(b), /could not start/);
+  // A red design is refused before anything moves.
+  calls.length = 0;
+  b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));
+  hooks.onPick(3, { shiftKey: false });
+  assert.equal(await b.D.testHere(), false);
+  assert.equal(calls.length, 0);
+  assert.match(msgText(b), /Fix the red issues before racing/);
+});
+
+test("consumeTrackHash: an armed return reopens with sel/span (only for the same design), defers mid-race keeping it, and is taken once", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  const r = b.D.save();
+  assert.equal(r.ok, true);
+  b.ctx.ApexRoster = { LAZY_EDITOR: ["js/editor/designer.js"], LAZY_EDITOR_EDGES: [] };
+  b.C.create(b.G, { load: async () => true });
+  b.D.close();
+  assert.equal(await b.C.consumeTrackHash(), false, "nothing armed, no link: a no-op");
+  b.C.armReturn({ id: r.id, sel: 5, span: 9, s: 100 });
+  b.ctx.UiLayers = { inRace: () => true };
+  assert.equal(await b.C.consumeTrackHash(), null);
+  assert.equal(await b.C.consumeTrackHash(), null, "still armed while racing");
+  assert.equal(b.D.isOpen(), false);
+  b.ctx.UiLayers = { inRace: () => false };
+  assert.equal(await b.C.consumeTrackHash(), true);
+  assert.equal(b.D.isOpen(), true);
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9]);
+  assert.equal(msgText(b), "Back from the test drive");
+  b.D.close();
+  assert.equal(await b.C.consumeTrackHash(), false, "taken once: the second call is a no-op");
+  assert.equal(b.D.isOpen(), false);
+  // Another design on the screen since: it opens, but nothing is restored onto it.
+  b.D.open(); b.D.randomise(99); b.D.preview(); b.D.close();
+  b.C.armReturn({ id: r.id, sel: 7, span: -1, s: 0 });
+  assert.equal(await b.C.consumeTrackHash(), true);
+  assert.equal(b.D.isOpen(), true);
+  assert.equal(b.D.state().sel, -1);
+  assert.notEqual(msgText(b), "Back from the test drive");
+  assert.equal(b.data.customTrackReturn, undefined, "memory only — nothing stored");
+  assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });

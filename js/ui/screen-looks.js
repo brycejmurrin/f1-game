@@ -231,6 +231,9 @@ const ScreenLooks = (function () {
   const PEEK_ONLY = Object.freeze({
     title: Object.freeze({ id: "title", title: "TITLE SCREEN", fold: "pm-titlescreen",
       peekable: () => { const o = byId("overlay"); return !!o && !o.hidden; } }),
+    // DISPLAY › HUD › MOVE & SIZE (js/ui/hud-layout.js): only a race has a HUD.
+    hud: Object.freeze({ id: "hud", title: "RACE HUD", fold: "pm-hudlayout",
+      peekable: () => !!doc && !!doc.body && doc.body.classList.contains("in-race") }),
   });
   const BY_ID = {};
   for (const s of SCREENS) BY_ID[s.id] = s;
@@ -324,7 +327,7 @@ const ScreenLooks = (function () {
 
   // ── PEEK ────────────────────────────────────────────────────────────────
   const PEEK_MS = 1800;
-  const pk = { id: null, t: 0, button: false, cleanups: [], swallowClick: false };
+  const pk = { id: null, t: 0, button: false, cleanups: [], swallowClick: false, swallowGen: 0 };
   const peekUi = {};   // id -> { btn, status, fold }
   const settingsOpen = () => { const p = byId("pmsettings"); return !!p && !p.hidden; };
   function foldOf(id) {
@@ -420,7 +423,18 @@ const ScreenLooks = (function () {
       e.preventDefault();
       e.stopImmediatePropagation();
       pk.swallowClick = true;
-      setTimeout(() => { pk.swallowClick = false; }, 700);
+      // preventDefault often suppresses the click that onClick would clear,
+      // and a long hold then ate the NEXT click. The click event is
+      // dispatched before a 0-timer, so clear on the following turn if this
+      // generation is still the one that armed the swallow.
+      const gen = ++pk.swallowGen;
+      const up = () => {
+        window.removeEventListener("pointerup", up, true);
+        window.removeEventListener("pointercancel", up, true);
+        setTimeout(() => { if (pk.swallowGen === gen) pk.swallowClick = false; }, 0);
+      };
+      window.addEventListener("pointerup", up, true);
+      window.addEventListener("pointercancel", up, true);
     }
   }
   function onClick(e) {
@@ -579,6 +593,8 @@ const ScreenLooks = (function () {
     wirePeekEnds();
   }
 
+  function refresh() { for (const id in built) if (id !== "_done") { built[id].paintRows(); built[id].paintSum(); } }
+
   apply();
 
   // Deferred scripts run while readyState is "interactive"; only a document
@@ -591,7 +607,7 @@ const ScreenLooks = (function () {
   return {
     SCREENS, PEEK_ONLY, CORE, PEEK_MS,
     read, set, reset, apply, normalize, isShipped, onChange,
-    peek, endPeek, holdPeek, build, mountPeekButton,
+    peek, endPeek, holdPeek, build, refresh, mountPeekButton,
     dataKey: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? dataKey(s, n) : null; },
     token: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? tokenOf(s, n) : null; },
     get peeking() { return pk.id; },

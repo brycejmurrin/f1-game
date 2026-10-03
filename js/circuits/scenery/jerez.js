@@ -70,6 +70,12 @@
       const TERR_LO = { conc: CONC, concAlt: CONC_ALT, rows: 6, rise: 1.4, depth: 2.5 };
       const HILL  = { grass: OCHRE, riser: DUST, rows: 5, rise: 1.2, density: 0.45 };
       const HILL_BARE = { grass: OCHRE, riser: DUST, rows: 4, rise: 1.1, density: 0.06 };
+      // Dry Sack's four 2 m-deep treads occupy gap 36..44. Allow for
+      // the clump's full 2.74 m crown, hill phase and curved end segments.
+      const scrubCrown = 2.74, bankPhase = 0.3, bankDepth = 2;
+      const drySackInner = 36 - scrubCrown - bankPhase;
+      const drySackOuter = 36 + HILL_BARE.rows * bankDepth + scrubCrown + bankPhase;
+      const drySackEnd = (8 + scrubCrown + bankPhase) / 4430;
       // groundPatch wants a vec3; these are flat slabs of bare earth, not grass.
       const slab = (w, d) => [w, 0.16, d];
 
@@ -84,6 +90,9 @@
       const scrub = (k, side, dist, col) => {
         for (let j = 0; j < 4; j++) {
           const d = dist + j * 12;
+          const s = ((k / n) % 1 + 1) % 1;
+          if (side === -1 && s >= 0.286 - drySackEnd && s <= 0.326 + drySackEnd &&
+              d >= drySackInner && d <= drySackOuter) continue;
           const a = anchor(k, side, d);
           if (onTrack(a.c[0], a.c[2], 10)) continue;
           bush(k, side, d, col || SCRUB);

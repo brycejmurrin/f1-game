@@ -43,6 +43,12 @@ const Input = (function () {
   let mirrorPressed = false;    // edge-triggered REAR-VIEW MIRROR on/off (js/render/shared/mirror-pass.js)
   let keyLookBack = false;      // HELD: look-back mirror while the key/button is down
   let padLookBack = false;
+  // FREE-LOOK axes (js/camera/feel.js): right stick + RMB-drag mouse deltas.
+  // Stick is latched each poll; mouse deltas accumulate until consumeLookMouse().
+  let lookStickX = 0, lookStickY = 0;
+  let lookMouseDx = 0, lookMouseDy = 0;
+  let lookMouseDown = false;
+  const LOOK_STICK_DEAD = 0.18;
 
   // gamepad (W3C Gamepad API, "standard" mapping). Polled once per display
   // frame from poll(). Works on desktop browsers and iOS 14.5+ Safari with a
@@ -945,13 +951,19 @@ const Input = (function () {
       keyLeft = keyRight = keyThrottle = keyBrake = false;
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
-       driving gate — but still below the typing check, because P in a text
-       field is a letter. Inside the switch below they would be swallowed by
-       the gate's screen list (js/ui/layers.js) in the LIGHTING TUNER and free
-       camera — the one place their documented all-the-way-out behaviour
-       matters most. */
+       driving gate — but still below a TEXT-FIELD check, because P in a field
+       is a letter. BUTTON / SELECT / A focus must NOT block them: after
+       SETTINGS → BACK → RESUME (or Escape through that stack), focus often
+       stays on a door inside the now-hidden dialog, and the wider `typing`
+       flag then refused Escape so the race could not be paused again
+       (menu-traversal "DISPLAY page under" pause, 2026-10-01). Driving still
+       uses `typing` below so a focused button does not steer. Inside the
+       switch below these would be swallowed by the gate's screen list
+       (js/ui/layers.js) in the LIGHTING TUNER and free camera — the one place
+       their documented all-the-way-out behaviour matters most. */
     const act = codeToAction[normCode(e.code)] || null;
-    if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !typing) {
+    const inTextField = tag === "INPUT" || tag === "TEXTAREA" || !!(active && active.isContentEditable);
+    if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
         if (onPauseCb) onPauseCb();
         return;
@@ -1440,6 +1452,7 @@ const Input = (function () {
       padSteer = 0; padThrottle = false; padBrake = false;
       padThrottleVal = 0; padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
+      lookStickX = 0; lookStickY = 0;
       padDpadVal = 0; padDpadT = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padNavDir = null;
@@ -1458,6 +1471,18 @@ const Input = (function () {
     }
     const axes = pad.axes || [];
     const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert);
+    // Right stick (standard mapping axes 2/3) → free-look. Menu nav still uses
+    // both sticks via padNavDir; free-look is only consumed in-race by CamFeel.
+    {
+      const rx = readPadAxis(axes, 2), ry = readPadAxis(axes, 3);
+      const mag = Math.hypot(rx, ry);
+      if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
+      else {
+        const t = (mag - LOOK_STICK_DEAD) / (1 - LOOK_STICK_DEAD);
+        lookStickX = (rx / mag) * t;
+        lookStickY = (ry / mag) * t;
+      }
+    }
     // THE D-PAD IS A DIGITAL SOURCE AND MUST RAMP LIKE ONE: `ax = ±1` outright
     // is a teleport to full lock (at 300 km/h, undriveable), and XAG 107
     // requires the digital path to WORK. It shares the arrows' digitalStep ramp
@@ -1921,21 +1946,31 @@ const Input = (function () {
     // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
     // whatever the local mode. Pedals-only phones fall through to it.
     if (remoteSteers()) return analogShape(tiltSteering(), "tilt");
-    if (steerMode === "buttons") return buttonSteering();
+    // On-screen buttons and the drag wheel. A friend race keeps simulating
+    // under the pause menu; the pad already zeroes itself while a menu is open.
+    // Gate on anyOpen(), NOT navOpen(): navOpen() is also true on the title
+    // #overlay (gate:false) so the pad can walk the doors — that must not
+    // mute the on-screen GAS / drag wheel on a freshly loaded page (steering
+    // latch + touch-pedals specs). Do not clear the finger — the hold should
+    // still be there when the menu closes. Keyboard, tilt and the pad are
+    // unchanged.
+    if (steerMode === "buttons") return navBlocksTouch() ? 0 : buttonSteering();
     if (tiltActive()) return analogShape(tiltSteering(), "tilt");
-    return analogShape(touchSteering(), "touch");
+    return navBlocksTouch() ? 0 : analogShape(touchSteering(), "touch");
   }
 
   const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
   function remoteThrottle() { return remoteActive() && remThr > REMOTE_PEDAL_ON; }
   function remoteBrake() { return remoteActive() && remBrk > REMOTE_PEDAL_ON; }
+  // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
+  function navBlocksTouch() { return !!(window.UiLayers && window.UiLayers.anyOpen()); }
 
   function throttle() {
-    return keyThrottle || btnThrottle || padThrottle || remoteThrottle();
+    return keyThrottle || (!navBlocksTouch() && btnThrottle) || padThrottle || remoteThrottle();
   }
 
   function braking() {
-    return keyBrake || btnBrake || padBrake || remoteBrake();
+    return keyBrake || (!navBlocksTouch() && btnBrake) || padBrake || remoteBrake();
   }
 
   // 0..1 pedal travel. A KEY is digital and is therefore always full travel; an
@@ -1945,13 +1980,13 @@ const Input = (function () {
   // a stray pad axis.
   function throttleLevel() {
     if (keyThrottle) return 1;
-    if (btnThrottle) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
+    if (btnThrottle && !navBlocksTouch()) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
     if (remoteThrottle()) return remThr;
     return padThrottleVal > 0.12 ? padThrottleVal : 0;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
-    if (btnBrake) return btnBrakeVal;
+    if (btnBrake && !navBlocksTouch()) return btnBrakeVal;
     if (remoteBrake()) return remBrk;
     return padBrakeVal > 0.12 ? padBrakeVal : 0;
   }
@@ -2015,6 +2050,15 @@ const Input = (function () {
      column once PIT landed beside it, and a glance over the shoulder is the
      control that least deserves a permanent seat there. */
   function lookingBack() { return keyLookBack || padLookBack || (remoteActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
+
+  /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
+     (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas. */
+  function lookStick() { return { x: lookStickX, y: lookStickY }; }
+  function consumeLookMouse() {
+    const o = { dx: lookMouseDx, dy: lookMouseDy };
+    lookMouseDx = 0; lookMouseDy = 0;
+    return o;
+  }
 
   /* ESCAPE IS SPENT ON LEAVING FULLSCREEN unless we ask for it. In fullscreen
      the UA takes Escape to exit, so our pause handler never sees the key —
@@ -2224,6 +2268,36 @@ const Input = (function () {
     window.addEventListener("pointerdown", function (e) {
       if (e.isTrusted !== false && (e.pointerType === "touch" || e.pointerType === "pen")) noteInputSource("touch");
     }, true);
+    // FREE-LOOK mouse: hold right button over the game canvas and drag.
+    // Button 2 only — left click is UI / no look; avoids fighting menus.
+    if (canvas && canvas.addEventListener) {
+      canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      canvas.addEventListener("pointerdown", function (e) {
+        if (e.button === 2) {
+          lookMouseDown = true;
+          try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* already gone */ }
+          e.preventDefault();
+        }
+      });
+      canvas.addEventListener("pointermove", function (e) {
+        if (!lookMouseDown) return;
+        lookMouseDx += e.movementX || 0;
+        lookMouseDy += e.movementY || 0;
+      });
+      const lookUp = function (e) {
+        if (e.button === 2 || e.type !== "pointerup") {
+          lookMouseDown = false;
+          lookMouseDx = 0; lookMouseDy = 0;
+        }
+      };
+      canvas.addEventListener("pointerup", lookUp);
+      canvas.addEventListener("pointercancel", function () {
+        lookMouseDown = false; lookMouseDx = 0; lookMouseDy = 0;
+      });
+      canvas.addEventListener("lostpointercapture", function () {
+        lookMouseDown = false;
+      });
+    }
     window.addEventListener("blur", reset);
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) reset();
@@ -2398,6 +2472,8 @@ const Input = (function () {
     padDpadVal = 0;
     padDpadT = 0;
     keyLookBack = false;
+    lookStickX = 0; lookStickY = 0;
+    lookMouseDx = 0; lookMouseDy = 0; lookMouseDown = false;
     remThr = remBrk = 0; remHeld = 0;   // the phone re-sends within 100 ms if still held
     recoverPressed = false;
     radioPressed = false;
@@ -2434,8 +2510,14 @@ const Input = (function () {
   }
 
   function debugState() {
+    const active = document.activeElement;
+    const tag = active && active.tagName || "";
+    const interactive = ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(tag) || !!(active && active.isContentEditable);
+    const hudControl = !!(active && active.matches && active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore, .touchbtn"));
     return {
       steerMode,
+      gate: { anyOpen: !!menuOverlayOpen(), typing: interactive && !hudControl, hudControl,
+              focus: { id: active && active.id || null, tag, editable: !!(active && active.isContentEditable) } },
       key: { left: keyLeft, right: keyRight, throttle: keyThrottle, brake: keyBrake },
       btn: { throttle: btnThrottle, brake: btnBrake, left: btnSteerLeft, right: btnSteerRight,
              throttleVal: btnThrottleVal, brakeVal: btnBrakeVal, steerVal: btnSteerVal,
@@ -2497,6 +2579,8 @@ const Input = (function () {
     consumeRadio,
     consumeMirror,
     lookingBack,
+    lookStick,
+    consumeLookMouse,
     lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,
     remoteSample, remoteEvent, remoteLost, remoteActive, remoteSteers, setRemoteHaptics,

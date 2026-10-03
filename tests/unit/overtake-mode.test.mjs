@@ -167,7 +167,7 @@ function rcWith(weather, wetness) {
   const saved = new Map([["caution", true]]);
   const notes = [];
   const G = {
-    state: "race", ranked: [{ lap: 3 }], raceWeather: weather, roadWetness: () => wetness,
+    state: "race", ranked: [{ lap: 3 }], raceWeather: weather, trackWetness: () => wetness,
     netPlay: { ownsRaceControl: () => true, active: false },
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
     announce: (m) => { notes.push(m); return true; },
@@ -199,7 +199,7 @@ test("LOW GRIP (B7.2.2(d)): treaded-tyre conditions switch Overtake off and say 
   assert.equal(wet.notes.length, 3, "reset() re-arms the note for the next race");
 
   // A weather arc drying the track below the intermediate threshold hands it back.
-  wet.G.roadWetness = () => 0.2;
+  wet.G.trackWetness = () => 0.2;
   assert.equal(wet.rc.otEnabled(), true);
 });
 
@@ -244,4 +244,7 @@ test("SAFETY CAR QUEUE (B5.13): the leader runs SC pace, a car > 1 s adrift clos
   // Pace-free: the same field at half the OVERALL SPEED gives the same fractions.
   const half = cars.map((c) => ({ prog: leader.prog - (leader.prog - c.prog) / 2 }));
   assert.equal(RC.scQueueFrac(half[2], half, 5000, half[0], vTop / 2), RC.SC_CATCH);
+  const bumper = { prog: p3.prog + 0.4 };
+  const far = { prog: p3.prog + 3 * q };
+  assert.equal(RC.scQueueFrac(p3, [p3, bumper, far], 5000, leader, vTop), RC.SC_PACE, "0.4 m ahead: already queued");
 });

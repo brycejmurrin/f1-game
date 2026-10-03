@@ -42,7 +42,7 @@ faster when Mesa is installed (no `navigator.gpu`; `docs/notes/CI-RENDERING-PERF
 Session shape — twelve rules that control wall time, waiting and handoff:
 
 1. Fresh container: the SessionStart hook runs `npm install` and checks for
-   `chromium-headless-shell` (fallback `bash tools/env/cloud-agent-install.sh`); either missing reads as a total-red run — read the FIRST failure first.
+   a discovered executable Chromium (`node tools/lib/chromium-path.mjs --path`; fallback `bash tools/env/cloud-agent-install.sh`); a missing dependency or browser reads as a total-red run — read the FIRST failure first.
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
@@ -140,7 +140,8 @@ Read `c.aeroX` (or `aeroDfMult(c)`), never `c.xOn`. Immutable numbers live in
 `assets/pack/`: PBR material arrays, one `TEXTURE_2D_ARRAY` whose layer index
 IS the `MAT` id, blended (`albedo * tex.rgb * 2.0`). **Ships ON.** (`matTexMix` def 1.0;
 `__apex.matTex(0)` is the A/B off-switch.) Every failure degrades to the procedural
-look; boot never awaits assets. GLX, TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
+look; boot never awaits the material arrays (a track BUILD waits for the model pack
+through `Assets.modelsReady()`, capped at 4 s, so baked props are never boxes for the session). GLX, TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()` the machine-readable
@@ -189,6 +190,10 @@ stop and report. Detail: `docs/TESTING.md` §Merge train / §Flaky tests and
 `docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md`. Flakes: CI retries
 default to 1; quarantine in `tests/data/flaky-quarantine.json` only; fix real
 failures; re-run a failed job at most once for timeout/infra; never skip a
-test to get green.
+test to get green. MERGE PACING (2026-10-03): batch small tooling/doc fixes
+into ONE PR, and arm auto-merge on at most two PRs at a time per session — a
+30-merge burst held the site 30 PRs behind (`docs/notes/CI-MERGE-BURST-2026-10-03.md`;
+merge queue is not available on this personal-account repo). Never cancel
+another session's runs to free slots: it re-runs them.
 ### Watching CI and Pages
 `node tools/ci/ci-watch.mjs [--sha S] [--pages] [--once]` is the watcher (rule 12): it polls by `head_sha`, reads the newest run per workflow (so rule 8's dedupe is not a red), and says `= ci none` for a push that starts no run — docs-only, or a topic branch with no PR yet (ci.yml runs on push for the deploy branch only; a DRAFT PR gets the fast tier, a ready one the full tier). Do not conflate PR CI, ship-push CI, and Pages (`pages.yml` `295002043`). Poll by `head_sha`; a green PR does not prove Pages. On red, name the exact test, assertion and lane. After every push list all check runs on the head (incl. ready-state jobs), read every failed log, fix at the root; never report done with a red or pending check. Procedure and diagnosis notes: `docs/notes/` (SHARED-BRANCH-COORDINATION, deploy-research). Claim live only after Pages and `version.json` confirm. `deploy.mjs --train` prints the branch's last ci/pages conclusions AND the nightly rota BY JOB (a `cancelled` run hides a FAILED one — that is how a red sat unread for five days); the rota is the only scheduled coverage for the 61 specs `select-specs` never picks.
