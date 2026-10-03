@@ -385,14 +385,7 @@ body.hud-prof-broadcast #announce { top: max(calc(14svh / var(--hud-z)), calc(va
    MAP and GAPS are NOT touched here: they have their own controls, and a layout
    silently overruling an explicit toggle is the defect this block used to be.
    Broadcast parks map+gaps under the tower via hud-map-low / hud-gaps-low. */
-body.hud-met-timing #hud-energy,
-body.hud-met-timing #hud-ot,
-body.hud-met-timing #hud-aero,
-body.hud-met-compact #hud-energy,
-body.hud-met-compact #hud-ot,
-body.hud-met-compact #hud-aero,
-body.hud-met-timing #hud-bb,
-body.hud-met-compact #hud-bb { display: none !important; }
+body:is(.hud-met-timing, .hud-met-compact) :is(#hud-energy, #hud-ot, #hud-aero, #hud-bb) { display: none !important; }
 /* BRAKE BIAS is a desktop readout by default: on a touch device its extra row
    lifted OVERTAKE / AERO into the sector box (hud-layout.spec broadcast + heli).
    A player who places it in MOVE & SIZE (data-hl-user) still gets it. */
@@ -667,10 +660,10 @@ body.hud-met-compact #hud-tyre { display: none !important; }
 #hud-aero.ax-none { color: rgba(255,255,255,0.28); border: 1px dashed var(--plate-line); text-decoration: line-through; }
 /* The idle states carry no fill of their own, so their dim ink sat straight on
    the scene — unreadable over sky once MOVE & SIZE's cockpit layout lifts the
-   chips beside the wheel. The same plate as the other readouts (alpha floored
-   by --hud-panel-a-eff). */
+   chips beside the wheel. A FIXED plate: these are signals, not panels, so PANEL
+   OPACITY (--hud-panel-a-eff) does not reach them (scale-defaults.test.mjs). */
 #hud-ot:is(.ot-off, .ot-cool), #hud-aero:is(.ax-off, .ax-none) {
-  background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff, 1)));
+  background: rgba(8, 8, 14, 0.78);
 }
 #minimap {
   position: absolute;
@@ -815,9 +808,7 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    on their own because the dock groups live outside the HUD until
    layoutDocks() moves them in. */
 :root[data-motion="reduce"] :is(#hud, #announce, .touchbtn),
-:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *,
-:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::before,
-:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::after {
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) :is(*, *::before, *::after) {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;

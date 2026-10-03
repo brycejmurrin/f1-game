@@ -1183,12 +1183,12 @@ function getMirrorFallback(quads) {
   let m = _mirrorFbMeshes.get(quads);
   if (m) return m;
   const out = { pos: [], nrm: [], col: [], idx: [] }, TOP = [0.62, 0.72, 0.84], MID = [0.40, 0.48, 0.58], BOT = [0.20, 0.23, 0.27];
-  const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+  const mixV = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);   // per-axis mix of two corners
   for (const [a, b, c, d] of quads) {
     for (const [t0, t1, c0, c1] of [[0, 0.55, BOT, MID], [0.55, 1, MID, TOP]]) {
       // Two bands, colour per row; drawn doubleSided, so the winding is moot.
       const i0 = out.pos.length / 3;
-      for (const [v, col] of [[lerp(a, d, t0), c0], [lerp(b, c, t0), c0], [lerp(b, c, t1), c1], [lerp(a, d, t1), c1]]) {
+      for (const [v, col] of [[mixV(a, d, t0), c0], [mixV(b, c, t0), c0], [mixV(b, c, t1), c1], [mixV(a, d, t1), c1]]) {
         out.pos.push(v[0], v[1], v[2]); out.nrm.push(0, 0, -1); out.col.push(col[0], col[1], col[2]);
       }
       out.idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
