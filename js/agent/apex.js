@@ -349,6 +349,11 @@ const api = {
     if (i < 0 || i >= CAM_MODES.length) return false;
     G.dbgCam = null;   // switching to a game camera mode leaves any view() free-cam
     setCamMode(i);
+    // Same as jump(): SwiftShader can starve rAF / the 10 Hz HUD tick for many
+    // seconds after a camera cut (heli + field LOD). hud-bcam and --hud-top-h
+    // must publish before the caller returns, or a 5 s layout wait times out
+    // while the next frame is still drawing (hud-layout.spec broadcast+heli).
+    if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
     return { mode: CAM_MODES[G.camMode].id, index: G.camMode };
   },
   snapCam(paint) {

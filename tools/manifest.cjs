@@ -335,6 +335,7 @@ const FULL = [
   "js/ui/scale.js",
   "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
+  "js/camera/cockpit-preview.js",
   "js/camera/drive-chase.js",      // per-mode live motion (before feel.js dispatches)
   "js/camera/drive-broadcast.js",
   "js/camera/drive-onboard.js",
@@ -408,6 +409,7 @@ const CSS = [
   "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
   "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
   "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
+  "css/cockpit-preview.css",
 ];
 // Title-critical sheets are also <link rel="preload">ed above the stylesheet
 // block; the components family retains its original preload coverage.
@@ -474,7 +476,9 @@ const CARVIEW = [
   "js/car/crest-paths.js",
   "js/car/livery-graphics.js",
   "js/car/liverytex.js",
+  "js/physics/consts.js",
   "js/car/car-mesh.js",
+  "js/camera/cockpit-preview.js",
 ];
 
 // verify-track.cjs / track-foundation Node-VM subset, in order.

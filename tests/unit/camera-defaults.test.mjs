@@ -185,6 +185,17 @@ test("broadcast cameras carry per-mode cut ease durations", () => {
   assert.match(src, /\.cut\s*\|\|\s*0\.35/);
 });
 
+test("a camera cut publishes HUD classes without waiting for rAF", () => {
+  const cam = fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8");
+  const apex = fs.readFileSync(path.join(root, "js/agent/apex.js"), "utf8");
+  const refreshCam = cam.slice(cam.indexOf("function refreshCamBtn"), cam.indexOf("function setCamMode"));
+  assert.match(refreshCam, /G\.refreshHud\(true\)/,
+    "refreshCamBtn must paint hud-bcam / --hud-top-h on the cut, not the next HUD tick");
+  const cameraHook = apex.slice(apex.indexOf("camera(m) {"), apex.indexOf("snapCam(paint)"));
+  assert.match(cameraHook, /G\.refreshHud\(true\)/,
+    "__apex.camera must refreshHud like jump() so layout probes are not starved by the next GL frame");
+});
+
 test("HUD applies camera/profile body classes", () => {
   const src = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
   assert.match(src, /hud-bcam/);

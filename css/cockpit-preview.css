@@ -1,0 +1,12 @@
+/* Shares SETTINGS tokens, contrast and touch sizing in both themes. */
+@layer components {
+#ckpreview { margin: var(--gap) 0; }
+#ckpreview button { min-height: var(--tap); padding: calc(var(--gap) * .66) var(--gap); border: 1px solid var(--dim); border-radius: var(--r-sm); background: var(--surf-1); color: var(--text); font: inherit; cursor: pointer; }
+#ckpreview button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#ckpreview button[aria-pressed="true"] { border-color: var(--red); box-shadow: inset 0 -3px var(--red); }
+#ckpreview-frame { display: block; width: 100%; height: clamp(230px, 35vw, 340px); border: 1px solid var(--dim); border-radius: var(--r-md); margin-top: var(--gap); background: var(--carbon); }
+#ckpreview-angles { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * .5); padding-top: calc(var(--gap) * .66); }
+#ckpreview-angles button { flex: 1 0 64px; font-size: var(--fs-micro); }
+@media (max-width: 600px) { #ckpreview-frame { height: 245px; } }
+@media (max-height: 500px) { #ckpreview-frame { height: 150px; } }
+}

@@ -180,6 +180,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
   // stays in the edit loop where a cockpit geometry change is actually made.
   "tests/unit/cockpit-crest-stripe.test.mjs",
+  "tests/unit/cockpit-preview.test.mjs",
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",

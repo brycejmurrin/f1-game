@@ -437,6 +437,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a short highlights montage from the solo ReplayBuf tags. |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
+| `cockpit-preview.js` | `CockpitPreview` | tag | isolated cockpit option preview. |
 | `drive-chase.js` | `DriveChase` | tag | lens only for the chase family. vantage.js owns the pose: distance, corner lead, the brake tuck, the drift swing. |
 | `drive-broadcast.js` | `DriveBroadcast` | tag | lens only for the broadcast cameras. |
 | `drive-onboard.js` | `DriveOnboard` | tag | lens only for cameras bolted to the car. |

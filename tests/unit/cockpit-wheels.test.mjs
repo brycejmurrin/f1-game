@@ -586,6 +586,44 @@ test("pedal indicators and speed-unit legends follow live state, with a bounded 
   assert.equal(made.length,count,"holding a pedal never rebuilds the status mesh");
 });
 
+
+test("classic instrument needles follow RPM, KPH and energy with one bounded shared mesh",()=>{
+  const {CarMesh,draws,made}=loadMesh({AppearanceOpts:{units:()=>"mph"}});
+  const mat=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+  const opt={roughness:.88};
+  CarMesh.drawClassicTelemetry(mat,{rpm:0,energy:0},0,opt);
+  assert.equal(draws.length,3);assert.equal(made.length,1);
+  const angle=d=>Math.atan2(d.mat[1],d.mat[0]);
+  assert.ok(draws.every(d=>Math.abs(angle(d)+Math.PI*.75)<1e-6),"zero is the lower-left tick");
+  CarMesh.drawClassicTelemetry(mat,{rpm:8000,energy:.5},200,opt);
+  assert.ok(draws.slice(3).every(d=>Math.abs(angle(d)-Math.PI*.5)<1e-6),"half scale is the upper tick, independent of speed-unit preference");
+  CarMesh.drawClassicTelemetry(mat,{rpm:32000,energy:2},800,opt);
+  assert.ok(draws.slice(6).every(d=>Math.abs(angle(d)+Math.PI*.25)<1e-6),"all readings clamp at their last tick");
+  CarMesh.drawClassicTelemetry(mat,{rpm:NaN,energy:Infinity},-50,opt);
+  assert.ok(draws.slice(9).every(d=>d.mat.every(Number.isFinite)&&Math.abs(angle(d)+Math.PI*.75)<1e-6));
+  const start=draws.length;
+  CarMesh.drawClassicTelemetry(mat,{rpm:16000,energy:0},200,opt);
+  assert.ok(Math.abs(angle(draws[start])+Math.PI*.25)<1e-6,"RPM alone reaches redline");
+  assert.ok(Math.abs(angle(draws[start+1])-Math.PI*.5)<1e-6,"speed remains at half scale");
+  assert.ok(Math.abs(angle(draws[start+2])+Math.PI*.75)<1e-6,"empty energy stays at zero independently");
+  for(let i=0;i<120;i++)CarMesh.drawClassicTelemetry(mat,{rpm:i*131,energy:i/120},i*3,opt);
+  assert.equal(made.length,1,"changing telemetry never creates new meshes");
+  assert.ok(draws.every(d=>d.mesh===draws[0].mesh),"three physical instruments share the same needle geometry");
+  assert.deepEqual(draws.slice(0,3).map(d=>Number(d.mat[12].toFixed(3))),[0,-.15,.15]);
+});
+
+test("all cabin trims retain matte padding and carbon structure instead of texturing every surface as weave",()=>{
+  const {CarMesh}=loadMesh();
+  for(const kind of ["carbon","team","suede","ribbed","classic"]) {
+    const d=CarMesh.getCockpitCabin(kind,LIV).d;
+    assert.equal(d.mat.length,d.pos.length/3);
+    assert.ok(d.mat.includes(21)&&d.mat.includes(22)&&d.mat.includes(26),kind+" separates carbon, soft padding and detail materials");
+    const topPad=[];
+    for(let i=0;i<d.mat.length;i++)if(d.pos[i*3+2]<-.70&&d.pos[i*3+1]>.84)topPad.push(d.mat[i]);
+    assert.ok(topPad.includes(22),kind+" headrest stays matte rather than carbon weave");
+  }
+});
+
 // THE ARMS AND THE LOCK (js/car/car-mesh.js cockpitWheelRoll / forearm*). The
 // gloves ended at their cuffs and floated, worst at full lock; the wheel turned
 // a flat ±46° a beat late. Checked in CAR space with the rig matrices the draw
