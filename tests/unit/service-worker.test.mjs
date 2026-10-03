@@ -224,6 +224,29 @@ test("install tolerates optional asset failures and waits for essential writes b
   assert.equal(current.has(`${ORIGIN}/assets/icon.png`), false);
 });
 
+test("GLX fallback is required and deferred scripts use the runtime build pin", async () => {
+  const ordinary = installFetch(), paths = [];
+  const h = createHarness({ fetchImpl: async (request) => {
+    const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    paths.push(u.pathname + u.search);
+    return ordinary(request);
+  } });
+  await h.lifecycleEvent("install").done();
+  const current = h.stores.get("apex26-321");
+  for (const family of ["glx", "three", "webgpu"]) {
+    const files = paths.filter((p) => p.startsWith(`/js/render/${family}/`));
+    assert.ok(files.length > 0, `${family} deferred family was cached`);
+    assert.ok(files.every((p) => p.endsWith("?v=321")), `${family} URLs match loadBackendScripts pins`);
+    assert.ok(files.every((p) => current.has(ORIGIN + p)));
+  }
+  const broken = createHarness({ fetchImpl: (request) => {
+    const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    return u.pathname.startsWith("/js/render/glx/") ? Promise.resolve(new Response("missing", { status: 404 })) : ordinary(request);
+  } });
+  await assert.rejects(broken.lifecycleEvent("install").done(), /essential|cache|precache|fetch/i);
+  assert.equal(broken.skipped, 0, "missing offline fallback must not activate a new worker");
+});
+
 test("install bypasses the HTTP cache only for mutable shell/version essentials", async () => {
   const seen = [];
   const ordinary = installFetch();
@@ -559,12 +582,16 @@ test("activation preserves prior caches while only INSTALL_COMPLETE is set (back
 test("activation removes prior caches after a settled successful install", async () => {
   const harness = createHarness({ fetchImpl: installFetch({ failOptional: true }) });
   harness.stores.set("apex26-320", new Map([["healthy", new Response("old")]]));
+  harness.stores.set("apex26-322", new Map([["healthy", new Response("newer")]]));
+  harness.stores.set("unrelated", new Map());
 
   await harness.lifecycleEvent("install").done();
   await harness.lifecycleEvent("activate").done();
 
   assert.deepEqual(harness.deleted, ["apex26-320"]);
   assert.equal(harness.stores.has("apex26-321"), true);
+  assert.equal(harness.stores.has("apex26-322"), true, "a stale worker must preserve a newer generation");
+  assert.equal(harness.stores.has("unrelated"), true);
   assert.equal(harness.claimed, 1);
 });
 

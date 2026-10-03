@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag → playwright-probe; gamepad/touch/tilt → input-controls; AI → ai-racecraft.
+description: "Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag → playwright-probe; gamepad/touch/tilt → input-controls; AI → ai-racecraft."
 ---
 
 # Tune the physics
@@ -44,7 +44,7 @@ Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-node tools/ci/test-bg.mjs physics-core # browser-gated — driving model (~35 tests, mostly fast)
+node tools/ci/test-bg.mjs physics-core # browser-gated — driving model (selected driving-model coverage)
 node tools/ci/test-bg.mjs collisions  # browser-gated — car-to-car + wall contact
 node tools/ci/test-bg.mjs aero         # aero-zones, active-aero, drift, understeer (~37 tests)
 node tools/ci/test-bg.mjs input        # steering + camera

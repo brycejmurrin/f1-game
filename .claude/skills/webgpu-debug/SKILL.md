@@ -1,6 +1,6 @@
 ---
 name: webgpu-debug
-description: Use when WebGPU/WGX rendering is wrong — black screen, missing road/world, NaN-white surfaces, GPU validation errors, WGSL compile failures, device lost or a frozen frame on WebGPU, silent fallback to WebGL2, MSAA/HDR format issues, or when validating WGSL changes with real Dawn in-container via wgx-validate. A textured-vs-procedural or wrong-colour material look on WGX is asset-pack.
+description: "Use when WebGPU/WGX rendering is wrong — black screen, missing road/world, NaN-white surfaces, GPU validation errors, WGSL compile failures, device lost or a frozen frame on WebGPU, silent fallback to WebGL2, MSAA/HDR format issues, or when validating WGSL changes with real Dawn in-container via wgx-validate. A textured-vs-procedural or wrong-colour material look on WGX is asset-pack."
 ---
 
 # Debug WebGPU / WGX renderer issues
@@ -44,18 +44,18 @@ MSAA 1, and `deviceLostHint: true` after a clean init is a note, not a failure.
 ```js
 __apex.diag({download:false}).env   // { backend, msaa, hdr, ... }
 WGX.gpuErrors()                     // MUST be 0
-WGX.lastFailure
+WGX.lastFailure()
 __apex.logs()                       // "gfx" ns
 ```
 
 `backend: "webgl2"` when you expected webgpu means WGX refused — read
-`WGX.lastFailure` and `localStorage["apex26.gfxWgxFail"]`.
+`WGX.lastFailure()` and `localStorage["apex26.gfxWgxFail"]`.
 
-Fallback path (read-only trace, no browser): `Gfx.bind` (`js/render/gfx.js`
+Fallback path (read-only trace, no browser): `Gfx.create` (`js/render/gfx.js`
 ~L240) awaits `WGX.create()`, which returns null on ANY failure after
 `wgx.js` records `_lastFailure` + `apex26.gfxWgxFail` and logs
-`WGX unavailable (...) — falling back to WebGL2`; `Gfx.bind` logs
-`Gfx.bind fallback webgl2` and `js/game.js` binds GLX. NaN-white road with
+`WGX unavailable (...) — falling back to WebGL2`; `Gfx.create` logs
+`Gfx.create fallback webgl2` and `js/game.js` binds GLX. NaN-white road with
 NO fallback = warning-mode Dawn ran undefined derivatives (defects.md #2);
 with fallback = strict uniformity error. Static half of that check:
 `--static` plus `node --test tests/unit/webgpu-lifecycle.test.mjs`. Live

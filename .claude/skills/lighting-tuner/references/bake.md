@@ -76,7 +76,7 @@ comments the export writes between blocks are fine.
 ### One-key hand-merge (no bake.mjs)
 
 If you only need to update ONE `track|tod|weather` (or `"*"`) key and do not
-have a fresh COPY VALUES export, do **not** feed `bake.mjs` a one-key object:
+have a complete shipped snapshot, do **not** feed `bake.mjs` a one-key object:
 
 1. Read `js/lighting/presets.js` and parse the existing
    `window.LightPresets` object (plain JSON after the assignment).
@@ -84,13 +84,12 @@ have a fresh COPY VALUES export, do **not** feed `bake.mjs` a one-key object:
 3. Write the whole object back as `window.LightPresets = {…};` and
    `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
-A silent `--merge` default would make a future partial paste look safe.
-If a merge mode is ever added it must be an explicit opt-in flag.
+Prefer the explicit `merge-proposals.mjs` path for partial player deltas.
 
 ### Input shape
 
-Keys are `"trackId|timeOfDay|weather"` (or `"*"`);
-`timeOfDay` ∈ dawn|day|dusk|night, `weather` ∈ dry|wet|rain|fog|overcast.
+Keys are `"trackId|timeOfDay|weather"`, `"*"`, or `"*|timeOfDay"`;
+`timeOfDay` ∈ dawn|day|dusk|night, `weather` values must be registered in the current game settings.
 Values are partial `{knobId: number}` maps (only non-default knobs). A
 `window.LightPresets` blob is a FULL snapshot and REPLACES the whole literal;
 a `window.LightEdits` blob (what COPY VALUES emits) is a DELTA and must go
@@ -107,7 +106,7 @@ through the merge path above.
    ```
 
 2. **Bake** (writes presets only; shell tags stay `?v=dev` —
-   validates shape, never commits):
+   validates key syntax, registered knobs, finite values, range and slider grid; never commits):
    ```sh
    node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt
    ```
@@ -117,8 +116,8 @@ through the merge path above.
    git --no-pager diff js/lighting/presets.js
    node --check js/lighting/presets.js
    ```
-   Every key should look like `track|tod|weather`. A typo'd knob id is
-   silently ignored at runtime — stop and ask.
+   Every key and knob must pass the script validator. COPY VALUES is a
+   delta: use merge-proposals, never re-copy it as a full snapshot.
 
 4. **Smoke (optional):** `node tools/ci/test-bg.mjs smoke`
 
@@ -156,3 +155,13 @@ literal only: a leading `//` comment line fails to parse, so strip comments from
 - Regex failure (`Could not find the window.LightPresets assignment`): the
   file must contain a line-anchored `window.LightPresets = {` … `};` on its
   own line. Hand-fix, `node --check`, re-run `bake.mjs`.
+
+## Read-only preflight receipts
+
+Both scripts accept `[file] --check` (alias `--dry-run`) and `--json`.
+Before writes, validate registered track/time/weather keys, `*` and `*|tod`,
+registered knob ids, finite range and slider-grid values through the shared
+`tools/lighting/preset-validation.mjs`. Receipts list added/deleted/changed
+profiles deterministically. `--check` creates no output or shipped-file edits.
+A snapshot deletion receipt requires reviewing every removed key; a player
+COPY VALUES delta belongs in merge-proposals, never full replacement.
