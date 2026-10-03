@@ -271,27 +271,21 @@ test.describe("Apex 26 — steering", () => {
   test("steering has authority to fight the curvature drift", async ({ page }) => {
     await startLiveRace(page);
     // Isolate the DRIVER's authority from the DRIVING-HELP assist: with the
-    // assist off, held lock must move the car clearly further in the steered
-    // direction than coasting does — proving manual steering controls the line.
-    // (lockDir = +sign(k) was named "inward" when "+k = right-hand corner" was
-    // believed; under the measured convention it is the outside. The assertion
-    // never cared which side — it measures authority relative to coasting.)
+    // assist off, held lock toward the INSIDE must move the car clearly further
+    // inward than coasting (which runs wide) — proving manual steering fights
+    // the curvature drift. Under the measured convention +k = LEFT turn, so
+    // inside is -sign(k) and outside is +sign(k) (file header; road-follow
+    // sibling). lockDir = +sign(k) was a sign bug that steered further out and
+    // saturated the wall (DEFECT-LEDGER 2026-09-22; CI 37082214838 on monza
+    // inheritance: held.after.x 7.567 vs hw−0.5 = 6.3).
     //
-    // ON-TRACK WINDOW. At the old 22 m/s × 75 ticks the held run saturates on
-    // the wall (x ≈ ±hw) while coasting is still free — so as zero.dx keeps
-    // growing, (dxHeld − dxZero) shrinks or flips and the >2 m gate flakes
-    // (CI 36649674195: −16 … +0.2). 18 m/s × 55 ticks keeps BOTH runs inside
-    // |x| < hw − 0.5 on bahrain's first real corner (measured) while still
-    // clearing the same 2 m authority bar. Assertion unchanged.
+    // ON-TRACK WINDOW. At the old 22 m/s × 75 ticks even coasting can leave the
+    // road; 18 m/s × 55 ticks keeps BOTH runs inside |x| < hw − 0.5 on bahrain's
+    // first real corner while still clearing the 2 m authority bar.
     //
-    // FROZEN + ONE EVALUATE (2026-09-30 freeze; 2026-10-03 atomic recipe).
-    // `run()` used to step across several CDP round-trips while the page loop
-    // could still insert ticks — held.after.x 7.446 against hw − 0.5 = 6.3 on
-    // train 36656970688 with no physics change. Freeze alone was not enough on
-    // a loaded selected shard once cockpit mesh cost grew (PR #781 CI
-    // 37080085921: held.after.x 7.567 vs 6.3 — same failure class as the
-    // symmetry case CI 36817162914). Corner pick + both recipes now share one
-    // frozen evaluate so exactly 3 + 55 ticks run per arm. Assertions unchanged.
+    // FROZEN + ONE EVALUATE: corner pick + both bursts share one frozen
+    // evaluate so exactly 3 + 55 ticks run per arm (no page-loop ticks between
+    // CDP round-trips). Assertions unchanged.
     await page.evaluate(() => {
       window.__apex.setPhysics({ roadFollow: 0 });
       window.__apex.freeze(true);
@@ -307,7 +301,7 @@ test.describe("Apex 26 — steering", () => {
           if (Math.abs(p.k) > 0.02) { frac = f; k0 = p.k; break; }
         }
         if (Math.abs(k0) <= 0.02) return { ok: false, k0 };
-        const lockDir = Math.sign(k0);
+        const lockDir = -Math.sign(k0); // inside — fight the curvature drift
         const burst = (steer) => {
           window.__apex.jump(frac, 18, 0);
           window.__apex.setInput({ steer: 0, throttle: false, brake: false });
