@@ -269,15 +269,26 @@ const CarDraw = (function () {
     function warmCarAssets() {
       if (carModelBuf) return;   // a GLB body is one piece with no procedural build to warm
       const at = performance.now();
+      // The car and lamp shadow passes (js/render/shared/shadow-pass.js) fetch every
+      // caster with teamMesh(team, car, true) on the FIRST countdown frame: ~12 builds
+      // there, unless they are built here behind the loading cover. Same gates as the passes.
+      const casters = shadowCastersWanted();
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         try {
           if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
           if (c.isPlayer && CamModes.CAM_MODES[G.camMode].id === "cockpit") cockpitBodyMesh(c.team, c);
           getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
+          if (casters) teamMesh(c.team, c, true);
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
-      Log.info("gfx", "race car assets ready", { cars: G.cars.length, cpuMs: Math.round(performance.now() - at) });
+      Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, cpuMs: Math.round(performance.now() - at) });
+    }
+    function shadowCastersWanted() {
+      const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};
+      if (G.headlessMode || !LT) return false;
+      const tier = typeof PerfGov === "undefined" ? 0 : PerfGov.tier();
+      return !!((gfx.carShadowBegin && LT.carShadow && tier < 3) || (gfx.lampShadowBegin && LT.lampShadow && tier < 2));
     }
     // Prepare visual descriptors only: do not call makeCars(), advance the seeded
     // simulation, replace the live field, or arm a race from a menu. Existing bounded
@@ -673,6 +684,7 @@ const CarDraw = (function () {
       return true;
     }
     function pitCrewDrawn() { const n = _crewDrawn; _crewDrawn = 0; return n; }
+    const VIS_WHEELBASE = WHEELS[0].z - WHEELS[2].z;   // the DRAWN axle spacing (3.3 m)
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
       const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team, c);
       c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt) % (Math.PI * 2);
@@ -682,7 +694,19 @@ const CarDraw = (function () {
       const spR = Math.sin(c.wheelSpin), cpR = Math.cos(c.wheelSpin);
       const spF = Math.sin(c.wheelSpinF), cpF = Math.cos(c.wheelSpinF);
       const flat = (c.flatSpot || 0) * 0.004 * (0.5 + 0.5 * cpF);
-      const steerA = M4.clamp(c.steerVis || 0, -1, 1) * PhysicsConsts.WHEEL_STEER_VIS;
+      // FRONT-WHEEL ANGLE (visual). An AI's `steer` is a lane-change command,
+      // not a steering angle — its TURNING is the arc it follows — so steerVis
+      // sat near 0 through every bend and the field cornered on straight
+      // wheels. An AI car adds the Ackermann angle atan(L·k) of the bend under
+      // it (kCur; L = the drawn wheelbase; +k is a LEFT turn, +steer is right).
+      // AI-ONLY: the arc must not reach a human car (docs/PHYSICS.md). A
+      // human's wheels show the driver's input, tapered with speed by the
+      // driving model's OWN lock taper (updateCar's lockTaper, 1/(1 + vStd/
+      // STEER_SPEED_REF)) — a twitch at 300 km/h no longer draws hairpin lock.
+      const WSV = PhysicsConsts.WHEEL_STEER_VIS;
+      let steerA = M4.clamp(c.steerVis || 0, -1, 1) * WSV;
+      if (!c.human) steerA = M4.clamp(steerA - Math.atan(VIS_WHEELBASE * (c.kCur || 0)), -WSV, WSV);
+      else if (G.STEER_SPEED_REF > 0) steerA /= 1 + Math.abs(c.speed || 0) * PhysicsConsts.VMAX / (G.vTop() * G.STEER_SPEED_REF);
       const ws = wScale || 1;   // widen the tyre along its axle (cockpit view)
       // The stop, seen (PitLane.stopAnim): a car held in its box is up on its
       // jacks and its wheels come off outward along their axles.
@@ -703,6 +727,15 @@ const CarDraw = (function () {
       // Within 120 m of a rival; the player always.
       const spinRate = (c.speed / PhysicsConsts.WHEEL_R) * dt;
       const blur = camD2 < 120 * 120 ? Math.min(1, Math.max(0, (Math.abs(spinRate) - 0.6) / 1.2)) : 0;
+      // PAST THE RINGS (a rival beyond 40 m): one cheap additive flare per FRONT
+      // disc (Particles.flare — this frame only, outside the pool) on the same
+      // brakeHeat. Mostly a night cue: `opt.emissive` is the wheels' night term
+      // (game.js sets 0.12 after dark, 0 by day), so by day it is a faint fleck
+      // and after dark a braking zone lights up down the straight. Out to
+      // 240 m; past that a 0.4 m disc is under a pixel.
+      const heatF = c.brakeHeat || 0;
+      const flareA = !c.isPlayer && heatF > 0.15 && camD2 >= 40 * 40 && camD2 < 240 * 240 && typeof Particles !== "undefined"
+        ? (heatF - 0.15) / 0.85 * (opt && opt.emissive > 0 ? 0.9 : 0.3) : 0;
       for (let w = 0; w < WHEELS.length; w++) {
         const wd = WHEELS[w];
         if (frontsOnly && wd.rear) continue;   // cockpit: rears sit beside the camera and blob the corners
@@ -781,6 +814,10 @@ const CarDraw = (function () {
           _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
           _rqMesh[_rqN] = null;   // the brake ring
           _rqN++;
+        } else if (flareA > 0 && wd.front) {
+          const tx = (wd.x < 0 ? -1 : 1) * 0.19, W = _wheelWorld;
+          Particles.flare(W[12] + W[0] * tx, W[13] + W[1] * tx, W[14] + W[2] * tx,
+            0.16 + 0.10 * heatF, 2.4, 0.85, 0.22, flareA);
         }
       }
       // Run 1: the fixed wheel layers, one bind for up to four draws, then

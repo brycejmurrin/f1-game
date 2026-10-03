@@ -10,6 +10,9 @@ const TracksideCams = (function () {
   const LOOK_UP = 0.9;
   const HYST_M = 18;           // hold the previous cam until the car is this far past the next
   const FOV = 42;
+  const FOV_NEAR = 50;         // car filling the lens
+  const FOV_FAR = 18;          // long lens so a car down the straight stays readable
+  const FOV_SPAN = 16;         // metres of circuit the lens is framed to hold
   const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
   const _eye = [0, 0, 0], _tgt = [0, 0, 0];
 
@@ -115,7 +118,14 @@ const TracksideCams = (function () {
       Tracks.sample(track, wrapS(track, c.lookS), _smp);
       _tgt[0] = _smp.p[0]; _tgt[1] = _smp.p[1] + LOOK_UP; _tgt[2] = _smp.p[2];
     }
-    return { eye: _eye, tgt: _tgt, fov: c.fov, index: idx, count: cams.length, n: c.n };
+    // A fixed 42° lens makes the car a speck once it is a straight away, and
+    // a fisheye when it passes the camera. Hold ~FOV_SPAN metres of circuit
+    // in frame and clamp so neither end blows out.
+    const dist = Math.hypot(_tgt[0] - _eye[0], _tgt[1] - _eye[1], _tgt[2] - _eye[2]) || 1;
+    let fov = 2 * Math.atan((FOV_SPAN * 0.5) / dist) * (180 / Math.PI);
+    if (fov < FOV_FAR) fov = FOV_FAR;
+    if (fov > FOV_NEAR) fov = FOV_NEAR;
+    return { eye: _eye, tgt: _tgt, fov: fov, index: idx, count: cams.length, n: c.n };
   }
 
   function status(track) {
