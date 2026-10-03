@@ -152,10 +152,12 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  // 30 → 12 on 2026-09: everything else is a plain tools/ CLI.
+  // 30 → 12 on 2026-09: everything else is a plain tools/ CLI. 12 → 15 on
+  // 2026-10-02 for the three read-only session checks.
   assert.deepEqual([...names].sort(), [
     "apex_agent",
     "apex_bump_cache_check",
+    "apex_ci_status",
     "apex_eval",
     "apex_frame_report",
     "apex_garage",
@@ -163,9 +165,11 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_pick_tests",
     "apex_rotate_markings_check",
     "apex_select_specs",
+    "apex_session_status",
     "apex_shot",
     "apex_status",
     "apex_verify_change_fast",
+    "apex_who_is_on_it",
   ]);
   for (const n of names) {
     assert.match(n, /^apex_/);
@@ -714,4 +718,62 @@ test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () =>
     child.kill();
   }
 });
+});
+
+test("parseOut takes the trailing JSON block, never a number from inside it", async () => {
+  const { parseOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  // apex_shot: a text line, then pretty-printed JSON whose last value line is a bare number.
+  const shot = 'wrote x.png (20.3 KB)\n{\n  "frame": {\n    "tgt": [\n      -285.6,\n      563.528\n    ]\n  }\n}';
+  assert.deepEqual(parseOut(shot), { frame: { tgt: [-285.6, 563.528] } });
+  assert.equal(parseOut("42"), 42, "a whole-stdout scalar is still apex_eval's answer");
+  assert.equal(parseOut("plain text\n  7"), null, "an indented scalar line is not a result");
+  assert.deepEqual(parseOut('log\n{"a":1}'), { a: 1 });
+  assert.equal(parseOut(""), null);
+});
+
+test("ciVerdict lifts ci-watch's terminal line into out", async () => {
+  const { ciVerdict } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const v = ciVerdict([
+    "[ci-watch] CI #1 (push) queued https://x/1",
+    "[ci-watch] CI › Smoke (2) → failure — step \"Run smoke shard\": boom https://x/2",
+    "[ci-watch] = ci failed (19 jobs, 1 failed, 4 skipped) sha=e3bd067",
+  ].join("\n"));
+  assert.equal(v.verdict, "failed");
+  assert.equal(v.summary, "(19 jobs, 1 failed, 4 skipped) sha=e3bd067");
+  assert.equal(v.jobs.length, 2);
+  assert.match(v.jobs[1], /^CI › Smoke/);
+  assert.equal(ciVerdict("").verdict, null);
+});
+
+test("session-check wraps are read-only and pinned", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const ss = callCli("apex_session_status", { dryRun: true });
+  assert.equal(ss.status, 0, ss.stderr);
+  assert.match(body(ss).argv.join(" "), /ci\/session-status\.mjs --json$/);
+
+  const who = callCli("apex_who_is_on_it", { dryRun: true, hours: 12, noFetch: true, paths: ["js/game.js"] });
+  assert.equal(who.status, 0, who.stderr);
+  assert.match(body(who).argv.join(" "), /ci\/who-is-on-it\.mjs --json --hours 12 --no-fetch js\/game\.js$/);
+  for (const [args, re] of [
+    [{ paths: ["--claim"] }, /not flags/],
+    [{ paths: ["-x"] }, /not flags/],
+    [{ paths: "js/game.js" }, /array/],
+    [{ hours: 0 }, /hours must be/],
+    [{ hours: 999 }, /hours must be/],
+  ]) {
+    const r = callCli("apex_who_is_on_it", args);
+    assert.equal(body(r).error, "bad_args", JSON.stringify(args));
+    assert.match(body(r).message, re);
+  }
+
+  const ci = callCli("apex_ci_status", { dryRun: true, sha: "e21bcf4" });
+  assert.equal(ci.status, 0, ci.stderr);
+  assert.match(body(ci).argv.join(" "), /ci\/ci-watch\.mjs --once --sha e21bcf4$/);
+  for (const sha of ["--pages", "main", "e21b", "e21bcf4; rm -rf /"]) {
+    assert.equal(body(callCli("apex_ci_status", { sha })).error, "bad_args", sha);
+  }
+  const src = fs.readFileSync(MCP, "utf8");
+  for (const n of ["apex_session_status", "apex_who_is_on_it", "apex_ci_status"]) {
+    assert.match(src, new RegExp(`name: "${n}",\\s*week: 6,\\s*kind: "tree"`), `${n} takes no browser lock`);
+  }
 });

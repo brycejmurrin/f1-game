@@ -132,6 +132,9 @@ const opts = {
   toS: has("to") ? num("to", 0) : null,           // query: arc window end (m)
 };
 
+// Budgets sized off measurements, shared with apex-eval.mjs.
+const BOOT_MS = 45000, TRACK_MS = 45000;
+
 (async () => {
   const srv = await startStaticServer(ROOT);
   try {
@@ -141,7 +144,12 @@ const opts = {
     });
     const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
     await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+    // BOOT_MS, polling: 100 — both halves. An idle container defines __apex
+    // 10.3-12.6 s after goto (3 boots, 2026-10-02) and a fresh Chromium is
+    // slower, so 15 s failed this tool 2 of 2 through apex_agent; and rAF
+    // polling on a rendering page can starve the timeout itself
+    // (tools/check/wait-polling-lint.mjs).
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });
 
     if (opts.cmd === "help") {
       console.log(JSON.stringify(await page.evaluate(() => window.__apex.agentHelp()), null, 2));
@@ -150,7 +158,8 @@ const opts = {
 
     await page.evaluate(([t, w, tod]) => window.__apex.race(t, tod || undefined, w || undefined),
                         [track, opts.weather, opts.tod]);
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20000 });
+    // A TLX monza build measures 16.6 s on SwiftShader (apex-eval.mjs TRACK_MS).
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: TRACK_MS, polling: 100 });
     await sleep(1600);                       // mesh build
 
     // Stage the car, then let frames actually draw. visible() reads the LAST
