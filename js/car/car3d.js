@@ -826,19 +826,33 @@ const Car3D = (function () {
 
   const TYRE_BAND     = { 0: [0.92, 0.92, 0.90], 1: [0.85, 0.10, 0.08], 2: [0.95, 0.15, 0.05] };
   const BRAKE_CALIPER = { 0: null, 1: null, 2: [0.75, 0.08, 0.05] };
-  function endplateGeom(aLvl) {
-    const aN = (aLvl || 0) / 4;
-    const cy = 0.60 + 0.20 * Math.pow(aN, 0.7);
-    const sy = 0.28 + 0.30 * Math.pow(aN, 0.7);
+  // Rear tyre crown (wheelY + r). Tier 0 plank ≤ crown; tier 4 clears it on
+  // the side frame. Height from level + rearSweep + fin (side-on area).
+  const REAR_TYRE_CROWN = AXLES.wheelY + 0.34;
+  function endplateGeom(aLvl, style) {
+    const aN = Math.max(0, Math.min(1, (aLvl || 0) / 4));
+    const st = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
+    const sweep = Math.max(-0.06, Math.min(0.20, st.rearSweep != null ? st.rearSweep : 0.03));
+    const fin = Math.max(0.55, Math.min(1.45, st.fin != null ? st.fin : 1));
+    const lift = Math.pow(aN, 0.85);
+    const sweepN = Math.max(0, (sweep + 0.02) / 0.14);
+    const finN = Math.max(0, (fin - 0.55) / 0.90);
+    // Grow UP from a low plank. tier0 = crown-0.02; tier4+extreme ≈ 1.34.
+    const topY = (REAR_TYRE_CROWN - 0.02) + 0.42 * lift
+      + 0.14 * sweepN * lift + 0.12 * finN * lift;
+    const sy = 0.22 + 0.48 * lift + 0.10 * sweepN * lift + 0.08 * finN * lift;
+    const cy = topY - 0.015 - sy * 0.5;
+    const chord = 0.48 + 0.22 * lift;
+    const rearZ = -2.69, frontZ = rearZ + chord;
     const profile = (z, sectionCy, sectionSy) => ({
       z, cy: sectionCy, sy: sectionSy,
       bottom: sectionCy - sectionSy * 0.5,
       top: sectionCy + sectionSy * 0.5,
     });
     return {
-      cy, sy, chord: 0.54,
-      front: profile(-2.15, cy - 0.035, sy * 0.76),
-      rear: profile(-2.69, cy + 0.015, sy),
+      cy, sy, chord,
+      front: profile(frontZ, cy - 0.035, sy * 0.76),
+      rear: profile(rearZ, cy + 0.015, sy),
     };
   }
   const FW_MOVEABLE = 2;
@@ -1211,7 +1225,7 @@ const Car3D = (function () {
         upsweep: i === els.length - 1 ? { fwHalf, e } : null,
       }, prev));
     }
-    const ep = endplateGeom(a), crownY = ep.rear.top - 0.018;
+    const ep = endplateGeom(a, st), crownY = ep.rear.top - 0.018;
     const upperTrailY = crownY - ((a >= 4 || (st.drs || 0)) ? 0.075 : 0);
     const rearMain = Object.assign(
       elemRecord([-2.30, upperTrailY - 0.270], [-2.52, upperTrailY - 0.225], 0.024, 0),
@@ -1300,7 +1314,7 @@ const Car3D = (function () {
       // A DRS package BAKES an extra plane over the whole moveable stack (see
       // part("rearWing")). It never rotates, so it is both the surface the camera
       // sees and the one that keeps the band attached at every wing angle.
-      const crownY = endplateGeom(a).rear.top - 0.018;
+      const crownY = endplateGeom(a, st).rear.top - 0.018;
       const rearSweep = Math.max(-0.06, Math.min(0.20, st.rearSweep));
       const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
       spec = { zLead: -2.44, yLead: crownY - 0.050, zTrail: -2.60, yTrail: crownY,
@@ -1345,8 +1359,8 @@ const Car3D = (function () {
   // its bottom a small gap above the plate base. The plate base barely moves with
   // DF (~0.46 → 0.51) while the top shoots up, so a low anchor reads grounded on
   // the short low-DF plate and low-on-a-tall-plate for max DF — never floating.
-  function numberBoard(aLvl) {
-    const ep = endplateGeom(aLvl), h = 0.20;
+  function numberBoard(aLvl, style) {
+    const ep = endplateGeom(aLvl, style), h = 0.20;
     return { cy: ep.cy - ep.sy * 0.5 + 0.05 + h * 0.5, h };
   }
   // The blade OUTLINES a livery may pick (liv.finShape). "standard" is the one
@@ -3250,11 +3264,13 @@ const Car3D = (function () {
     }
 
     part("exhaust");
+    let exhTipRForLamp = 0.07;
     const exhTwin = exhStyle.pipes != null ? exhStyle.pipes >= 3
       : (engStyle ? !!engStyle.twin : tier("engine") === 2);
     const exhBore = Math.max(0.7, Math.min(1.5, exhStyle.bore));
-    const exhR = (engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
+    const exhR0 = (engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07)) * exhBore;
+    const exhR = exhTwin ? Math.max(exhR0, 0.095) : exhR0;
     const fuelFlame = fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];
     const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     const exhMetal = [0.16, 0.16, 0.17];
@@ -3263,97 +3279,122 @@ const Car3D = (function () {
     const exhDia = (cx, cy, z, r) => [
       [cx, cy - r, z], [cx + r, cy, z], [cx, cy + r, z], [cx - r, cy, z],
     ];
-    // The single tailpipe was an `addBox` — a SQUARE pipe, dead centre of every
-    // chase shot — while the TWIN pipes 60 lines down already got a round loft.
-    // Same car, two answers to "is an exhaust round". An 8-sided `addTube` is
-    // 16 triangles against the box's 12, and `addTube` is the primitive the
-    // halo already uses, so nothing new is introduced.
-    addTube(out, [[0, 0.40, -2.04], [0, 0.40, -2.20]], exhR, 8, exhMetal, SURFACES.metal);
-    const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
-    if (exhFlare > 0) {
-      const tip = exhR * (1 + 0.55 * exhFlare);
-      addLoft(out, -2.16, 0, 0.40, exhR * 2, exhR * 2,
-              -2.23, 0, 0.40, tip * 2, tip * 2,
-              exhFlareC, SURFACES.metal);
-      addStationLoft(out, [
-        exhDia(0, 0.40, -2.16, exhR),
-        exhDia(0, 0.40, -2.23, tip),
-      ], exhFlareC, null, SURFACES.metal);
-      addBox(out, 0, 0.40, -2.245, tip * 2.18, tip * 2.18, 0.018,
-             [0.22, 0.22, 0.24], SURFACES.metal);
-      addBox(out, 0, 0.40, -2.250, tip * 1.45, tip * 1.45, 0.016,
-             [0.05, 0.04, 0.04], SURFACES.carbon);
-    }
-    if (exhStyle.wrap) {
-      addBox(out, 0, 0.40, -2.04, exhR * 1.18, exhR * 1.18, 0.06,
-             [0.72, 0.70, 0.66], SURFACES.panel);
-      addBox(out, 0, 0.40, -2.00, exhR * 1.24, exhR * 1.12, 0.045,
-             [0.68, 0.66, 0.62], SURFACES.panel);
-      addBox(out, 0, 0.40, -1.96, exhR * 1.14, exhR * 1.22, 0.045,
-             [0.74, 0.72, 0.67], SURFACES.panel);
-      addBox(out, 0, 0.40, -2.02, exhR * 1.30, 0.012, 0.012,
-             [0.22, 0.22, 0.24], SURFACES.metal);
-    }
-    const exhGates = Math.max(0, Math.min(2, Math.round(exhStyle.wastegate || 0)));
-    for (let i = 0; i < exhGates; i++) {
-      const s = i === 0 ? -1 : 1;
-      addSpan(out, { z: -2.02, x: s * 0.075, y: 0.47, w: 0.036, h: 0.036 },
-                   { z: -2.16, x: s * 0.095, y: 0.53, w: 0.030, h: 0.030 },
-              [0.20, 0.20, 0.22], null, SURFACES.metal);
-      addBox(out, s * 0.098, 0.535, -2.175, 0.034, 0.034, 0.028,
-             [0.22, 0.22, 0.24], SURFACES.metal);
-      addBox(out, s * 0.098, 0.535, -2.192, 0.020, 0.020, 0.012,
-             glazeOf(fTwin), SURFACES.metal);
-    }
-    addBox(out, 0, 0.40, -2.185, exhR*0.72, exhR*0.72, 0.03, [0.05, 0.04, 0.04], SURFACES.carbon);
-    addBox(out, 0, 0.40, -2.198, exhR*0.55, exhR*0.55, 0.012,
-           glazeOf(fuelFlame), SURFACES.metal);
-    // HEAT STAIN. Before this the `flame` recipe key reached only three ~2 cm
-    // glaze pips deep in the pipe mouths — 0.0028 m2, which --clamp-scan reads
-    // as a dead key, so the one place a fuel grade is supposed to show was too
-    // small to see. A discoloured sleeve on the last stretch of every pipe
-    // carries the same colour at a size a camera can resolve. Blended
-    // half-and-half with the pipe metal so it reads as bluing, not as paint.
+    const EXH_OUT = 0.34, EXH_Y = 0.40;   // between crash (0.12) and tyre inner (0.57)
     const heatOf = (c) => {
       const g = glazeOf(c);
       return [exhMetal[0]*0.55 + g[0]*0.45, exhMetal[1]*0.55 + g[1]*0.45,
               exhMetal[2]*0.55 + g[2]*0.45];
     };
-    addTube(out, [[0, 0.40, -2.118], [0, 0.40, -2.193]], exhR * 1.06, 8,
-            heatOf(fuelFlame), SURFACES.metal);
+    const tipZ = exhTwin ? -2.28 : -2.20;
+    const exits = exhTwin ? [-EXH_OUT, EXH_OUT] : [0];
     if (exhTwin) {
-      for (const s of [-1, 1]) {
-        addBox(out, s*0.15, 0.40, -2.10, 0.045, 0.045, 0.14, exhMetal, SURFACES.metal);
-        addBox(out, s*0.15, 0.40, -2.172, 0.026, 0.026, 0.012,
-               glazeOf(fTwin), SURFACES.metal);
-        addBox(out, s*0.15, 0.40, -2.135, 0.049, 0.049, 0.070,
-               heatOf(fTwin), SURFACES.metal);
-        addStationLoft(out, [
-          exhDia(s * 0.15, 0.40, -2.03, 0.045),
-          exhDia(s * 0.15, 0.40, -2.17, 0.045),
-        ], exhMetal, null, SURFACES.metal);
+      addTube(out, [[0, EXH_Y, -2.00], [0, EXH_Y, -2.08]], exhR * 0.55, 8,
+              exhMetal, SURFACES.metal);
+    }
+    for (const cx of exits) {
+      if (exhTwin) {
+        const s = Math.sign(cx) || 1;
+        addTube(out, [[s * 0.08, EXH_Y, -2.05], [cx, EXH_Y, -2.14]], exhR * 0.85, 8,
+                exhMetal, SURFACES.metal);
+        addTube(out, [[cx, EXH_Y, -2.12], [cx, EXH_Y, tipZ]], exhR, 8,
+                exhMetal, SURFACES.metal);
+      } else {
+        addTube(out, [[0, EXH_Y, -2.04], [0, EXH_Y, tipZ]], exhR, 8, exhMetal, SURFACES.metal);
       }
-      addBox(out, 0, 0.40, -2.05, 0.32, 0.018, 0.040, exhMetal, SURFACES.metal);
+      const flame = exhTwin ? fTwin : fuelFlame;
+      addTube(out, [[cx, EXH_Y, tipZ + 0.082], [cx, EXH_Y, tipZ + 0.007]],
+              exhR * (exhTwin ? 1.08 : 1.06), 8, heatOf(flame), SURFACES.metal);
+      addStationLoft(out, [
+        exhDia(cx, EXH_Y, tipZ + 0.06, exhR),
+        exhDia(cx, EXH_Y, tipZ, exhR),
+      ], exhMetal, null, SURFACES.metal);
+      addBox(out, cx, EXH_Y, tipZ + 0.012, exhR * 1.45, exhR * 1.45, 0.02,
+             [0.05, 0.04, 0.04], SURFACES.carbon);
+      addBox(out, cx, EXH_Y, tipZ, exhR * (exhTwin ? 1.15 : 0.55),
+             exhR * (exhTwin ? 1.15 : 0.55), 0.014, glazeOf(flame), SURFACES.metal);
+    }
+    if (exhTwin && (exhStyle.wastegate || 0) >= 1) {
+      addBox(out, 0, EXH_Y + exhR + 0.045, tipZ + 0.04, EXH_OUT * 2.05, 0.022, 0.040,
+             exhMetal, SURFACES.metal);
+    }
+    const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
+    if (exhFlare > 0) {
+      const flareMul = exhTwin ? 0.55 : 0.85;
+      for (const cx of exits) {
+        const tip = exhR * (1 + flareMul * exhFlare);
+        const z0 = tipZ + 0.04, z1 = tipZ - (exhTwin ? 0.04 : 0.055);
+        if (!exhTwin) {
+          addLoft(out, z0, 0, EXH_Y, exhR * 2, exhR * 2, z1, 0, EXH_Y, tip * 2, tip * 2,
+                  exhFlareC, SURFACES.metal);
+        }
+        addStationLoft(out, [exhDia(cx, EXH_Y, z0, exhR), exhDia(cx, EXH_Y, z1, tip)],
+                       exhFlareC, null, SURFACES.metal);
+        if (!exhTwin) {
+          addBox(out, 0, EXH_Y, z1 - 0.012, tip * 2.18, tip * 2.18, 0.018,
+                 [0.22, 0.22, 0.24], SURFACES.metal);
+          addBox(out, 0, EXH_Y, z1 - 0.018, tip * 1.45, tip * 1.45, 0.016,
+                 [0.05, 0.04, 0.04], SURFACES.carbon);
+        }
+      }
+    }
+    if (exhStyle.wrap) {
+      for (const cx of exits) {
+        addBox(out, cx, EXH_Y, -2.10, exhR * 1.18, exhR * 1.18, 0.06,
+               [0.72, 0.70, 0.66], SURFACES.panel);
+        addBox(out, cx, EXH_Y, -2.06, exhR * 1.24, exhR * 1.12, 0.045,
+               [0.68, 0.66, 0.62], SURFACES.panel);
+        if (!exhTwin) {
+          addBox(out, 0, EXH_Y, -1.96, exhR * 1.14, exhR * 1.22, 0.045,
+                 [0.74, 0.72, 0.67], SURFACES.panel);
+          addBox(out, 0, EXH_Y, -2.02, exhR * 1.30, 0.012, 0.012,
+                 [0.22, 0.22, 0.24], SURFACES.metal);
+        }
+      }
+    }
+    const exhGates = Math.max(0, Math.min(2, Math.round(exhStyle.wastegate || 0)));
+    for (let i = 0; i < exhGates; i++) {
+      const s = i === 0 ? -1 : 1;
+      const gx = exhTwin ? s * (EXH_OUT * 0.55) : s * 0.075;
+      const tipX = exhTwin ? s * EXH_OUT * 0.72 : s * 0.098;
+      addSpan(out, { z: -2.02, x: gx, y: 0.47, w: 0.036, h: 0.036 },
+                   { z: tipZ + 0.06, x: tipX, y: 0.53, w: 0.030, h: 0.030 },
+              [0.20, 0.20, 0.22], null, SURFACES.metal);
+      addBox(out, tipX, 0.535, tipZ + 0.05, 0.034, 0.034, 0.028,
+             [0.22, 0.22, 0.24], SURFACES.metal);
+      addBox(out, tipX, 0.535, tipZ + 0.032, 0.020, 0.020, 0.012,
+             glazeOf(fTwin), SURFACES.metal);
     }
     const exhLip = Math.max(0, Math.min(2, Math.round(exhStyle.lip || 0)));
     if (exhLip >= 1) {
-      const colR = exhR * (1 + 0.22 * exhLip);
-      addBox(out, 0, 0.40, -2.08, colR * 2.15, colR * 2.15, 0.09, CARBON, SURFACES.carbon);
-      addBox(out, 0, 0.40, -2.125, colR * 1.95, colR * 1.95, 0.03,
-             [0.20, 0.20, 0.22], SURFACES.metal);
-    }
-    if (exhLip >= 2) {
-      const colR = exhR * 1.44;
-      addBox(out, 0, 0.40, -2.02, colR * 2.35, colR * 2.35, 0.06, CARBON, SURFACES.carbon);
-    }
-    if (exhStyle.shield) {
-      addBox(out, 0, 0.40 + exhR + 0.028, -2.05, Math.max(0.12, exhR * 2.6), 0.010, 0.16,
-             [0.32, 0.30, 0.28], SURFACES.metal);
-      for (const s of [-1, 1]) {
-        addBox(out, s * (exhR + 0.022), 0.40 + exhR * 0.45, -2.05, 0.010, exhR * 1.05, 0.13,
-               [0.28, 0.26, 0.24], SURFACES.metal);
+      for (const cx of exits) {
+        const colR = exhR * (1 + (exhTwin ? 0.18 : 0.22) * exhLip);
+        addBox(out, cx, EXH_Y, tipZ + (exhTwin ? 0.08 : 0.12),
+               colR * (exhTwin ? 2.0 : 2.15), colR * (exhTwin ? 2.0 : 2.15),
+               exhTwin ? 0.06 : 0.09, CARBON, SURFACES.carbon);
+        if (!exhTwin) {
+          addBox(out, 0, EXH_Y, tipZ + 0.07, colR * 1.95, colR * 1.95, 0.03,
+                 [0.20, 0.20, 0.22], SURFACES.metal);
+        }
       }
     }
+    if (exhLip >= 2 && !exhTwin) {
+      const colR = exhR * 1.44;
+      addBox(out, 0, EXH_Y, tipZ + 0.18, colR * 2.35, colR * 2.35, 0.06, CARBON, SURFACES.carbon);
+    }
+    if (exhStyle.shield) {
+      for (const cx of exits) {
+        addBox(out, cx, EXH_Y + exhR + 0.028, tipZ + (exhTwin ? 0.10 : 0.15),
+               Math.max(exhTwin ? 0.10 : 0.12, exhR * (exhTwin ? 2.4 : 2.6)), 0.010,
+               exhTwin ? 0.14 : 0.16, [0.32, 0.30, 0.28], SURFACES.metal);
+        if (!exhTwin) {
+          for (const s of [-1, 1]) {
+            addBox(out, s * (exhR + 0.022), EXH_Y + exhR * 0.45, tipZ + 0.15,
+                   0.010, exhR * 1.05, 0.13, [0.28, 0.26, 0.24], SURFACES.metal);
+          }
+        }
+      }
+    }
+    exhTipRForLamp = exhTwin ? exhR : (exhFlare > 0 ? exhR * (1 + 0.85 * exhFlare) : exhR);
 
     part("sharkFin");
     // liv.finShape picks the outline (FIN_SHAPES); "none" builds no blade at
@@ -3431,7 +3472,7 @@ const Car3D = (function () {
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
     out.flapInfo = { aLvl, style: aeroStyle, col: wingCol, finish: liv.finish };
 
-    const nb = numberBoard(aLvl);
+    const nb = numberBoard(aLvl, aeroStyle);
     for (const s of [-1, 1]) {
       addBox(out, s*0.527, nb.cy, -2.42, 0.012, nb.h, 0.30, c1);
     }
@@ -3608,9 +3649,9 @@ const Car3D = (function () {
     part("rearAssembly");
     if (!ckpt) {
       const rwLift = (aLvl - 2) * 0.045;        // gentler vertical shift (beam-wing ref)
-      const _ep    = endplateGeom(aLvl);
-      const epSY   = _ep.sy;   // lvl0 0.28 → lvl2 0.47 → lvl4 0.58 (capped)
-      const epCY   = _ep.cy;   // lvl0 0.60 → lvl2 0.72 → lvl4 0.80 (slow rise)
+      const _ep    = endplateGeom(aLvl, aeroStyle);
+      const epSY   = _ep.sy;   // grows with lvl + rearSweep + fin (side silhouette)
+      const epCY   = _ep.cy;
       for (const s of [-1, 1]) {
         addBeveledSpan(out,
           { z: _ep.front.z, x: s*0.50, y: _ep.front.cy, w: 0.040, h: _ep.front.sy, t: 0.58 },
@@ -3688,15 +3729,14 @@ const Car3D = (function () {
                  { z: -2.61, x: 0, y: epCY + 0.276, w: drsSX * 0.78, h: 0.040, t: 0.55 },
             DARK);
 
-      // The tail cap: three nested slabs on the rearmost centreline, the second
-      // most centred object in a chase shot after the exhaust. A crash
-      // structure tapers to its rain light; `addSpan` says that for the same 12
-      // triangles the box cost.
+      const tipR = exhTipRForLamp;
+      const lampW = Math.min(0.055, tipR * 0.85);
+      const lampH = Math.min(0.070, tipR * 1.05);
       addSpan(out, { z: -2.47, x: 0, y: 0.50, w: 0.14, h: 0.19, t: 0.78 },
                    { z: -2.57, x: 0, y: 0.50, w: 0.115, h: 0.155, t: 0.62 }, DARK);
-      addBox(out, 0, 0.50, -2.585, 0.10, 0.13, 0.03,
+      addBox(out, 0, 0.50, -2.585, lampW, lampH, 0.03,
              [2.6, 0.08, 0.06], SURFACES.emissive);
-      addBox(out, 0, 0.50, -2.60, 0.04, 0.05, 0.02,
+      addBox(out, 0, 0.50, -2.60, lampW * 0.45, lampH * 0.42, 0.02,
              [3.4, 0.12, 0.05], SURFACES.emissive);   // brake-light core
 
       const diffW  = (0.72 + aLvl * 0.145) * Math.max(0.78, Math.min(1.3, aeroStyle.floorEdge));

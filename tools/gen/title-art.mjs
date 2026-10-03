@@ -386,20 +386,21 @@ function build() {
   const FWEP_R = fwep(-1), FWEP_L = fwep(1);
 
   // REAR WING at aero level 4, from endplateGeom(4) + the rearWing() calls.
-  // aN = 1 -> cy 0.80, sy 0.58; the rear endplate profile therefore tops at
-  // 1.105 and crownY = 1.087, so upperTrailY = 1.012 with DRS shut.
+  // Default style (sweep 0.03, fin 1): topY 1.190, crownY 1.172, upperTrailY
+  // 1.097 with DRS shut. Tier-0 planks sit at/below the rear-tyre crown; tier 4
+  // clears it — endplateGeom grows from level + rearSweep + fin.
   // THE HALF-SPAN IS 0.51, NOT 0.84 — the wing drawn here before was 65 % too
   // wide, wider than the rear tyres, which no F1 wing has been since 2009, and
   // it FELL toward the trailing edge where the real one rises.
-  const RW_MAIN = taper([4.00, -0.51, 0.51, 0.742, 0.766], [4.22, -0.51, 0.51, 0.787, 0.811]);
-  const RW_MID  = taper([4.04, -0.51, 0.51, 0.842, 0.864], [4.26, -0.51, 0.51, 0.897, 0.919]);
-  const RW_FLAP = taper([4.08, -0.51, 0.51, 0.937, 0.963], [4.34, -0.51, 0.51, 1.012, 1.038]);
-  const RW_TOP  = taper([4.12, -0.50, 0.50, 1.032, 1.054], [4.36, -0.50, 0.50, 1.087, 1.109]);
+  const RW_MAIN = taper([4.00, -0.51, 0.51, 0.827, 0.851], [4.22, -0.51, 0.51, 0.872, 0.896]);
+  const RW_MID  = taper([4.04, -0.51, 0.51, 0.927, 0.949], [4.26, -0.51, 0.51, 0.982, 1.004]);
+  const RW_FLAP = taper([4.08, -0.51, 0.51, 1.022, 1.048], [4.34, -0.51, 0.51, 1.097, 1.123]);
+  const RW_TOP  = taper([4.12, -0.50, 0.50, 1.117, 1.139], [4.36, -0.50, 0.50, 1.172, 1.194]);
   const BEAM    = taper([4.06, -0.46, 0.46, 0.676, 0.698], [4.28, -0.46, 0.46, 0.716, 0.738], "r");
-  // endplateGeom(4): chord 0.54, z -2.15 (0.5446..0.9854) -> -2.69 (0.525..1.105).
+  // endplateGeom(4): chord 0.70, z -1.99 (0.457..1.047) -> -2.69 (0.414..1.190).
   // The endplate is the tallest thing at the back of a real car and the only
   // part of the wing this camera sees clear of the rear tyre.
-  const rwep = (s) => plate(s*0.52, 3.85, 0.5446, 0.9854, 4.39, 0.525, 1.105);
+  const rwep = (s) => plate(s*0.52, 3.85, 0.457, 1.047, 4.39, 0.414, 1.190);
   const RWEP_R = rwep(-1), RWEP_L = rwep(1);
   const PYLON  = plate(-0.05, 3.98, 0.44, 0.76, 4.26, 0.42, 0.74);
 

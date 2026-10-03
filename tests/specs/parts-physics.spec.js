@@ -780,7 +780,7 @@ test.describe("Parts module — visual recipes", () => {
       return aero.options.flatMap((option) => {
         const style = option.visual;
         const level = style.lvl;
-        const ep = Car3D.endplate(level);
+        const ep = Car3D.endplate(level, style);
         const sweep = Math.max(-0.06, Math.min(0.20, style.rearSweep));
         const crownY = ep.rear.top - 0.018;
         // The trailing edge of the aerofoil section closes to zero thickness ON
@@ -813,7 +813,7 @@ test.describe("Parts module — visual recipes", () => {
     const detached = await page.evaluate(() => {
       const aero = Parts.CATALOG.find((category) => category.id === "aero");
       return aero.options.flatMap((option) => {
-        const ep = Car3D.endplate(option.visual.lvl);
+        const ep = Car3D.endplate(option.visual.lvl, option.visual);
         const mesh = Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
           noWheels: true,
           parts: { aero: 1, _visual: { aero: option.visual } },
