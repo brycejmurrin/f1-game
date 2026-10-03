@@ -1173,6 +1173,12 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `session-contracts.test.mjs` | Hosted-result error propagation, conflicting plugin metadata, explicit Drive file transport, native document routing and truthful session capability diagnostics; pure local adapters, no service writes. |
+| `bootstrap-doctor.test.mjs` | Real YAML skill headers, helper references, mirror repair, protected shell interval checks, Chromium discovery and read-only environment diagnostics. |
+| `apex-career-delete.test.mjs` | Career slot deletion preserves storage durability and failure results through the agent API. |
+| `validation-cli.test.mjs` | Validation and planning CLIs reject invalid numeric inputs, account for unclaimed paths, preserve immutable plans, validate material integrity and bound lighting proposals. |
+| `skill-smoke.test.mjs` | Every canonical skill has a bounded recipe with expected results and prerequisites; skipped browser or credential work never reports as tested. |
+| `capture-tools-regressions.test.mjs` | Capture option and path bounds, plan immutability, black-scene rejection, renderer identity, and lifecycle evidence through actual cancellation and cleanup. |
 | `appearance-studio.test.mjs` | Visual-only preset/profile scopes, undo, normalization, durability and reduced motion. |
 | `career-experience.test.mjs` | Career facility/achievement context, calendar and canonical result story. |
 | `photo-studio.test.mjs` | Real frame crop/export metadata, library limits, input validation and stored background. |
@@ -1442,7 +1448,7 @@ what it covers.
 | `title-menu-even.test.mjs` | title 2-up doors share equal flex cells and overlay columns use `--vwz`, not a pixel cap |
 | `menu-survey.spec.js` | click every button, capture every state |
 | `merge-hygiene.test.mjs` | conflict-prone JSON stays one-entry-per-line and stably sorted (`tools/check/merge-hygiene.mjs`): `ratchets.json` file/metric keys, `groups.json` group keys + `files`/`flags` + toolingFast (notes glued to the next path, then sorted), and `manifest.cjs` `CIRCUITS` one id per line. `--fix` rewrites; `--check` (default) fails on unsorted or blob formatting. Evidence: `docs/notes/MERGE-HYGIENE-2026-09-29.md` |
-| `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race) |
+| `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race); native dialogs opened in reverse DOM order retain focus and correct top ownership after close/reopen |
 | `menu-traversal.spec.js` | EVERY control of a menu layer is reachable with the arrow keys alone and with a controller's D-pad alone — a breadth-first walk of focus states compared against `MenuNav.items(layer)`, plus Escape and the pad's B leaving each layer. Five defects shipped in exactly this gap and are pinned here: a closed `<details>` kept its contents' layout boxes so `step()` chose one and `focus()` silently refused; a `<select>` owned all four arrows so every ‹ value › row was an island needing Tab, which a pad has not; the across-penalty let a distant full-width slider beat the next row's chevrons; the ‹ › chevrons formed a focusable column nothing entered; and the pad's synthetic key went to `document`, where an element's own `onkeydown` (both tab rails) is not in its path |
 | `menu-baseline.spec.js` | SIX blessed pixel baselines (title/select/garage x landscape-phone/desktop) — the IDENTITY half `tools/ui/layout-audit.mjs` structurally cannot see: colour, type, weight, spacing. Deliberately six, not 380: a suite that asks a human to bless 380 images gets rubber-stamped |
 | `camera.spec.js` | all 13 player camera modes, via the hook and the CAM button |

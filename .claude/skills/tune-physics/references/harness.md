@@ -22,7 +22,7 @@ __apex.headless(true);
 
 function trial(phys) {
   __apex.setPhysics(phys);
-  let o = __apex.reset(0.30, 60, 0);
+  let o = __apex.reset(0.30, 60, 0, 42);
   for (let i = 0; i < 180; i++)
     o = __apex.act({ steer: -0.4, throttle: true, brake: false }, 1/60, 1);
   return o;  // o.x, o.speed, o.slipFactor, o.k, o.clearL/R, o.offT, o.wrongWay
@@ -48,34 +48,34 @@ const p = __apex.physState();
 `obs()`/`physState()` — they return null until `player.px` exists. `reset()`
 does this for you.
 
-## Parallel two-page sweep
+## Seeded serialized A/B
 
-Each config on its **own** headless page. Any `waitForFunction` on a rendering
-page needs `{ polling: 100 }` (default rAF polling starves under SwiftShader).
+Use a Node VM first; use one parent-owned browser/page only when native evidence
+is needed. Stage `seed(42)` BEFORE `race(id)`, then `go()` and a seeded reset.
+For each config, reset to the same episode seed/pose and assert a non-null obs
+and `world().state.playerReady` (or `world().ego` on success). Record physics
+setter results; unknown/nonfinite values are rejected rather than silently used.
 
 ```js
-const CONFIGS = [0.4, 0.6, 0.8, 1.0, 1.2].map(v => ({ label:`rf=${v}`, physics:{ roadFollow:v } }));
-const results = await Promise.all(CONFIGS.map(async cfg => {
-  const page = await browser.newPage({ viewport:{ width:844, height:390 } });
-  await page.goto(`http://127.0.0.1:${port}/`);
-  await page.waitForFunction(() => window.__apex?.info().track != null, { polling: 100 });
-  return page.evaluate(async ({ physics }) => {
-    __apex.headless(true); __apex.setPhysics(physics);
-    let o = __apex.reset(0.30, 60, 0);
-    const slips = [];
-    for (let i = 0; i < 300; i++) {
-      o = __apex.act({ steer:-0.4, throttle:true }, 1/60, 1);
-      slips.push(o.slipFactor ?? 1);
-    }
-    return { finalSpeed:o.speed, avgSlip: slips.reduce((a,b)=>a+b)/slips.length, offT:o.offT, done:o.done };
-  }, cfg).then(r => ({ label: cfg.label, ...r }));
-}));
+const {createGame} = require("./tools/lib/game-vm.cjs");
+const g = await createGame({track:"suzuka"});
+try {
+  const a=g.apex; a.seed(42); await g.race("suzuka"); a.go(); a.headless(true);
+  for (const frontGrip of [0.89,1.0]) {
+    a.setPhysics({frontGrip});
+    let o=a.reset(0.30,60,0,42);
+    if (!o) throw new Error("player not staged");
+    for(let i=0;i<180;i++) o=a.act({steer:-0.4,throttle:true,brake:false},1/60,1);
+    // Save frontGrip, seed, pose, final obs and terminal; compare directionally.
+  }
+} finally { g.close(); }
 ```
 
-See `tools/lib/harness.mjs` (`pickChromium`, `startStaticServer`) and
-**playwright-probe**. Metrics: `finalSpeed`, `avgSlip` (< 1 = traction
-consumed), `offT` (stability), `done` (crashed). Harder: run
-`tests/specs/autopilot.spec.js` under each config and compare lap times.
+For browser fallback, use `launchChromium`, finite `waitForFunction(fn,null,
+{polling:100,timeout:45000})`, and close each page/browser in `finally`.
+Never hand that browser run to a subagent or fan out unbounded pages. Green
+headless replay does not verify wall-clock live hitStop: that legacy cue scales
+the frame driver; do not extend it to new cosmetic feedback.
 
 ## House-style assertions
 

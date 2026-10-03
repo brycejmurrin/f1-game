@@ -85,10 +85,11 @@ test("buildProps sceneryApi surface matches the frozen contract", () => {
 
 test("reversed/source-coordinate defs get the same surface (wrapped)", () => {
   const Tracks = buildContext();
+  const lazy = new Set(MANIFEST.LAZY_SCENERY.map((f) => f.split("/").pop().replace(/\.js$/, "")));
   const def = Tracks.LIST.find(
-    (d) => (d.reverse || d.sceneryCoordinates === "source") && d.scenery,
+    (d) => (d.reverse || d.sceneryCoordinates === "source") && (d.scenery || lazy.has(d.id)),
   );
-  if (!def) return; // no such circuit currently — nothing to check
+  assert.ok(def, "the lazy circuit registry must contain a wrapped scenery fixture");
   let keys = null;
   def.scenery = (api) => { keys = Object.keys(api).sort(); };
   Tracks.build(def);

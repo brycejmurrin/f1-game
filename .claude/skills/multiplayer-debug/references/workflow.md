@@ -76,8 +76,8 @@ Load from the SKILL.md index when the task needs this detail.
    - Handshake refuses mismatched builds because physics/track constants can
      differ. The build it compares is the shell's own
      `<meta name="apex-build">` (`js/net/handshake.js`, error `build_mismatch`)
-     — it deliberately does NOT fetch `version.json`, so a peer that cannot
-     read the meta tag fails as `build_unknown`.
+     — meta wins without fetching. An unstamped shell falls back to
+     `version.json`; `build_unknown` means neither provides build identity.
    - If JS/CSS changed, run `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump); stale builds can make peers unable to
      connect by design.
 
@@ -98,7 +98,7 @@ Trace the path in order, stop at the first broken link:
 1. `__apex.net()` — `active`, `role`, `remotes[]` (one per rival, keyed `wire`/`driverId`), `buffered` = first remote's interpolation buffer (`remotes[i].buffered` per rival), `net` = session stats (clock sync). `remotes: []` = no grid slot bound (`slotFallback`), see `netplay.js` `status()`.
 2. `buffered` 0 while the session is alive = packets held before clock sync (session `synced()` false; see the `autoPong` comment in `apex.js` `netLoopback`) or dropped by wire id mismatch; >0 but car still = interpolation/pose (`snapshot.js`, `netplay.js`), not transport.
 3. Game side: `netPlay.owns(c)` must be true for the rival so `updateCar` early-outs (`js/game.js`, grep `netPlay.owns(c)`).
-Offline (no browser), single files: `node --test tests/unit/net-session.test.mjs` (sync/routing), `net-snapshot.test.mjs` (interp), `net-authority.test.mjs` (who owns which car). Green = fault is browser/ICE side, go to step 6 above. The whole `npm run test:net-unit` (17 files) is the pre-browser gate (step 8), not needed to localise this.
+Offline (no browser), single files: `node --test tests/unit/net-session.test.mjs` (sync/routing), `net-snapshot.test.mjs` (interp), `net-authority.test.mjs` (who owns which car). Green rules out the exercised contracts, not every game-loop/wire combination; inspect the first failed live link next, using step 6 for ICE evidence. The whole `npm run test:net-unit` (17 files) is the pre-browser gate (step 8), not needed to localise this.
 
 ## Three-player (star topology)
 

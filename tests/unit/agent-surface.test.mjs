@@ -89,16 +89,14 @@ test("server table names the three attached servers and the four that left", () 
   assert.deepEqual(cursor, cfg, ".cursor/mcp.json must lockstep .mcp.json");
 });
 
-test("wrap map is exactly the fifteen kept wraps", () => {
+test("wrap map is exactly the sixteen kept wraps", () => {
   const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
-  assert.equal(catalog.tools.length, 15,
+  assert.equal(catalog.tools.length, 16,
     "30 → 12 on 2026-09, then 12 → 10 on 2026-09-03 when apex_gfx_probe and " +
     "apex_wgx_validate_static left with the WGX/TLX spike-out (their CLIs are in " +
     "tools/gfx/ now), then 10 → 11 on 2026-09-10 for apex_garage, the one wrap that " +
     "is a SESSION (garage-angles --serve), then 11 → 12 on 2026-09-24 for " +
-    "apex_frame_report (node-VM framing report, no browser), then 12 → 15 on 2026-10-02 for " +
-    "apex_session_status / apex_who_is_on_it / apex_ci_status (rule 12's read-only session " +
-    "checks); grow it on purpose, in the doc too");
+    "apex_frame_report (node-VM framing report, no browser), then 12 → 13 for read-only apex_doctor and 13 → 16 for read-only session checks; grow it on purpose, in the doc too");
 });
 
 test("never-wrap table names the load-bearing refuses", () => {
@@ -286,7 +284,8 @@ test("every agent and skill frontmatter key is one a host documents", () => {
    a UI matrix walk, a circuit survey): the parent gets the report, not the
    dumps (2026-09-22). */
 const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
-const FORKED_SKILLS = ["playwright-probe", "survey-ui-matrix", "survey-track"];
+// Browser workflows run in the parent; only the offline track census may fork.
+const FORKED_SKILLS = ["survey-track"];
 test("every skill with agent: names an existing subagent or a builtin, and forks", () => {
   const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
     .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));

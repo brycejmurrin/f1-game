@@ -31,14 +31,14 @@ need_pkg() {
 ensure_apt_pkgs() {
   local missing=()
   local p
-  for p in mesa-vulkan-drivers vulkan-tools xvfb; do
+  for p in mesa-vulkan-drivers vulkan-tools xvfb tmux; do
     if need_pkg "$p"; then
       continue
     fi
     missing+=("$p")
   done
   if [[ ${#missing[@]} -eq 0 ]]; then
-    echo "apt packages already present: mesa-vulkan-drivers vulkan-tools xvfb"
+    echo "apt packages already present: mesa-vulkan-drivers vulkan-tools xvfb tmux"
     return 0
   fi
   echo "apt missing: ${missing[*]} — attempting install"
@@ -88,8 +88,9 @@ ensure_mcp_clones() {
 }
 
 if ! bash "$ROOT/tools/env/install-browsers.sh"; then
-  if [[ -x /opt/google/chrome/chrome ]]; then
-    echo "WARN: Playwright browsers missing; system Chrome is present at /opt/google/chrome/chrome"
+  system_browser="$(node "$ROOT/tools/lib/chromium-path.mjs" --path || true)"
+  if [[ -n "$system_browser" && -x "$system_browser" ]]; then
+    echo "WARN: Playwright browser install failed; installed Chrome is present at $system_browser"
     if [[ -f node_modules/playwright/package.json && -f node_modules/sharp/package.json ]]; then
       ensure_mcp_clones
       echo "OK: cloud-agent install complete (npm ready, browsers deferred)"
