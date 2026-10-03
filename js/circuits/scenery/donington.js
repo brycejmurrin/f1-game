@@ -221,6 +221,13 @@
       //    disused exhibition block — do not present it as an open museum.
       //    gap 58, not the brief's 34: closer than ~55 the hall overlaps tarmac.
       building(K(0.048), 1, 58, 24, 7.5, 64, { col: WALL, roof: ROOF, flat: true });
+      // The long hall's circular crown cannot clear the neighbouring road.
+      // Seat its retained rooftop plant on a rectangular curb within the roof.
+      {
+        const a = anchor(K(0.048), 1, 70);
+        addBox(out, vadd(a.c, a.u, 8.25), [7, 1.65, 20], CONCRETE,
+          [a.r, a.u, a.t]);
+      }
       building(K(0.072), 1, 28, 12, 4.8, 18, { col: WALL_2, roof: ROOF, flat: true });
       groundPatch(K(0.046), 1, 24, [26, 0.18, 54], TARMACISH);
       hedge(0.034, 0.078, 1, 17, 2.2, HEDGE_C);
@@ -365,7 +372,9 @@
       hut(K(0.300), -1, 24, WALL_2);
 
       // 9. s 0.3342 +1 15 — OLD HAIRPIN, the lowest point of the lap
-      spectatorHill(0.318, 0.372, 1, 17, { h: 8.0, col: GRASS });
+      // Leave a planting strip behind the full hedge, while preserving the
+      // marshal post and guardrail in the narrower foreground corridor.
+      spectatorHill(0.318, 0.372, 1, 18, { h: 8.0, col: GRASS });
       hedge(0.314, 0.378, 1, 15, 1.9, HEDGE_C);
       guardrail(0.310, 0.380, 1, 12, ARMCO);
       marshalPost(K(0.3342), 1, 13);

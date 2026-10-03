@@ -161,3 +161,80 @@ test("api.K wraps negative and over-lap fracs into [0, n)", () => {
   }
   assert.equal(K(-0.002), K(1 - 0.002), "a frac just behind the line is the node just behind the line");
 });
+
+test("Silverstone camping preserves every object on grounded running gear and flags meet their poles", () => {
+  const vm = require("node:vm");
+  const ROOT = path.resolve(path.dirname(require("node:url").fileURLToPath(import.meta.url)), "../..");
+  const sandbox = { Math, Number }; sandbox.window = sandbox;
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/track/core/geom.js"), "utf8").replace(/^const\b/gm, "var"), sandbox);
+  const Geom = sandbox.TrackGeom, groups = [], stageGroups = new Map(), flags = [], poles = [];
+  const buffer = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 });
+  const wrapped = { ...Geom };
+  for (const kind of ["addBox", "addPrism", "addCyl"]) wrapped[kind] = (stage, center, ...args) => {
+    const start = stage.pos.length;
+    Geom[kind](stage, center, ...args);
+    const part = { kind, center, args, mat: stage._mat, vertices: stage.pos.slice(start) };
+    if (stageGroups.has(stage)) stageGroups.get(stage).parts.push(part);
+    return part;
+  };
+  sandbox.TrackGeom = wrapped;
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/circuits/scenery/silverstone.js"), "utf8"), sandbox);
+  const ground = (x, z) => x * 0.025 + z * 0.03;
+  const grade = Math.atan(0.03), r = [1, 0, 0], u = [0, Math.cos(grade), -Math.sin(grade)], t = [0, Math.sin(grade), Math.cos(grade)];
+  const out = buffer(), n = 1000;
+  const api = new Proxy({
+    out, MAT: Geom.MAT, n, ds: 4, px: Array(n).fill(0), pz: Array(n).fill(0), pyMin: 0,
+    pal: {}, ATM: {}, circuitKit: null, hash: () => 0.25, onTrack: () => false,
+    vadd: Geom.vadd, terrainYAt: ground, lapBounds: () => ({ cx: 0, cz: 0, radius: 1000 }),
+    anchor: (k, side, gap) => { const x = side * (6 + gap), z = k * 4; return { c: [x, ground(x, z) - 0.3, z], r, u, t }; },
+    modelGroup: (id, bounds, build) => {
+      if (!id.startsWith("silverstone-camping-field-")) return true;
+      const stage = buffer(), group = { id, bounds, parts: [] };
+      groups.push(group); stageGroups.set(stage, group); build(stage); return true;
+    },
+    addBox: (stage, center, size, color, basis) => {
+      if (size[0] !== 0.08 || size[1] !== 1.2 || size[2] !== 2.2) return;
+      flags.push({ center, size, basis });
+    },
+    seat: new Proxy({ cyl: (stage, center, radius, height, color, seg, basis) => {
+      if (radius === 0.11 && height === 10.4) poles.push({ center, radius, height, basis });
+    } }, { get: (target, name) => name in target ? target[name] : () => {} }),
+  }, { get: (target, name) => name in target ? target[name] : () => {} });
+  sandbox.TrackScenery.silverstone(api);
+  const parts = groups.flatMap(g => g.parts), bodies = parts.filter(p => p.kind === "addBox" && p.mat === Geom.MAT.METAL);
+  const wheels = parts.filter(p => p.kind === "addCyl");
+  assert.equal(groups.length, 3); assert.equal(bodies.length, 16);
+  assert.equal(parts.filter(p => p.kind === "addPrism").length, 8);
+  assert.equal(parts.filter(p => p.kind === "addBox" && p.mat === Geom.MAT.GLASS).length, 16);
+  assert.equal(wheels.length, 64);
+  for (const [field, group] of groups.entries()) {
+    const objects = group.parts.filter(p => p.kind === "addPrism" || p.kind === "addBox" && p.mat === Geom.MAT.METAL);
+    for (const [i, object] of objects.entries()) {
+      const s = field === 2 ? 0.805 : 0.735 + field * 0.045, base = object.kind === "addPrism" ? object.center : Geom.vadd(object.center, u, -1.25);
+      assert.ok(Math.abs(base[0] - (62 + field * 12 + (i < 4 ? -10 : 10))) < 1e-9, "object X placement retained");
+      assert.ok(Math.abs(base[2] - (Math.round(s * n) * 4 + t[2] * (i % 4 - 1.5) * 12)) < 1e-9, "object Z placement retained");
+    }
+  }
+  for (const body of bodies) for (let i = 0; i < body.vertices.length; i += 3) {
+    const vertex = body.vertices.slice(i, i + 3), delta = vertex.map((v, j) => v - body.center[j]);
+    if (delta.reduce((sum, v, j) => sum + v * u[j], 0) > -1.24) continue;
+    assert.ok(vertex[1] > ground(vertex[0], vertex[2]) + 0.1, "camper floor clears wheat tile top");
+  }
+  for (const wheel of wheels) {
+    let gap = Infinity;
+    for (let i = 0; i < wheel.vertices.length; i += 3) gap = Math.min(gap, wheel.vertices[i + 1] - ground(wheel.vertices[i], wheel.vertices[i + 2]));
+    assert.ok(gap < 0, "tyre reaches the actual sloping ground");
+    assert.ok(bodies.some(body => Math.abs(wheel.center[2] - body.center[2]) < 2 && Math.abs(wheel.center[0] - body.center[0]) < 2
+      && wheel.center[1] + 0.3 >= body.center[1] - 1.25 * u[1]), "tyre shoulder reaches chassis");
+  }
+  for (const group of groups) for (const part of group.parts) for (let i = 0; i < part.vertices.length; i += 3) {
+    const d = part.vertices.slice(i, i + 3).map((v, j) => v - group.bounds.center[j]);
+    for (let axis = 0; axis < 3; axis++) assert.ok(Math.abs(d.reduce((sum, v, j) => sum + v * group.bounds.basis[axis][j], 0)) <= group.bounds.size[axis] / 2 + 1e-9, "all running gear fits declared field envelope");
+  }
+  assert.equal(flags.length, 9); assert.equal(poles.length, 9);
+  for (let i = 0; i < flags.length; i++) {
+    const flag = flags[i], pole = poles[i], delta = flag.center.map((v, j) => v - pole.center[j]);
+    const along = delta.reduce((sum, v, j) => sum + v * t[j], 0);
+    assert.ok(Math.abs(along - flag.size[2] / 2) < pole.radius, "cloth sleeve meets mast");
+  }
+});

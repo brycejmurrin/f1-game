@@ -177,6 +177,7 @@ const FULL = [
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
+  "js/track/scenery/venue.js",
   // buildProps orchestration (guards nested for a later peel). Tracks.build calls it.
   "js/track/scenery/build-props.js",
   ...circuitFiles,
@@ -468,6 +469,7 @@ const TRACK_VM = [
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
+  "js/track/scenery/venue.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -577,6 +579,7 @@ const HARD_EDGES = [
   ["js/track/scenery/city.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],    // SceneryPits.build last
+  ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/build-props.js", "js/track/tracks.js"],          // Tracks.build → TrackBuildProps.build
   ["js/track/core/space.js", "js/track/core/surface.js"],
   ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
