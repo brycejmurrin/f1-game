@@ -34,6 +34,7 @@
 //
 // --scale joins the viewport axis (`ios-iphone-landscape@130`). Raise --jobs=N
 // only when /proc/loadavg first field is under ~3.
+import { menuReady } from "./menu-readiness.mjs";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
 import fs from "node:fs";
@@ -115,7 +116,7 @@ function parseArgv(argv) {
     circuits: parseCircuits(argv),
     outDir: arg("--out=")
       ? path.resolve(ROOT, arg("--out="))
-      : (gallery || screen ? GALLERY_OUT : GEOM_OUT),
+      : (gallery || screen || has("--report") ? GALLERY_OUT : GEOM_OUT),
   };
 }
 // ------------------------------------------------------------------ the probe
@@ -593,9 +594,11 @@ if (opts.report) {
   process.exit(r.ok ? 0 : 1);
 }
 if (opts.screen) {
+  if (opts.scales.length !== 1) throw new Error("--screen accepts one --scale; use --gallery for a scale matrix");
   const result = await runMenuShot({
     screen: opts.screen,
     viewport: opts.viewport,
+    scale: opts.scales[0],
     outDir: opts.outDir,
     force: opts.force,
   });
@@ -790,13 +793,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       // Swallow the timeout deliberately: a screen that genuinely never becomes
       // visible must still be MEASURED and reported as absent. Turning that
       // into a thrown "skipped" would hide a real defect behind a harness error.
-      await page.waitForFunction((sel) => {
-        const el = document.querySelector(sel);
-        if (!el) return true;   // no root at all is a finding, not something to wait for
-        const anims = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
-        if (anims.some((a) => a.playState === "running")) return false;
-        return getComputedStyle(el).opacity !== "0";
-      }, screen.root, { polling: 50, timeout: 5000 }).catch(() => {});
+      await page.waitForFunction(menuReady, screen.root, { polling: 100, timeout: 5000 }).catch(() => {});
       await page.waitForTimeout(150);
       // Simulate the notch by writing the tokens the layout is built on, then
       // let it reflow. Applied per cell rather than once per context because a

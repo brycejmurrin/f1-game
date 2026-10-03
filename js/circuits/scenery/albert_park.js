@@ -316,11 +316,6 @@
                [6.0, 0.25, 11.8],
                [CCOL[0] * 0.75, CCOL[1] * 0.75, CCOL[2] * 0.75], b);
       }
-      const AVENUE = [0.30, 0.46, 0.22];
-      for (let j = 0; j < 3; j++) {
-        tree((k(0.0) + j * 3) % n, 1, 20 + j * 7, 13 + hash(j * 3) * 3, AVENUE);
-        tree((k(0.94) + j * 3) % n, 1, 20 + j * 7, 12 + hash(j * 5) * 3, AVENUE);
-      }
 
       const WBOARD = [0.75, 0.72, 0.62];
       const boathouse = (kk, side, gap, seed) => {
@@ -696,6 +691,12 @@
         const accent = [[0.70, 0.10, 0.10], [0.10, 0.20, 0.55], [0.85, 0.20, 0.15],
                         [0.75, 0.65, 0.10], [0.35, 0.35, 0.40], [0.10, 0.55, 0.45]][j % 6];
         motorhome(kk, 1, 34, 12, 7 + hash(j * 3) * 3, 14, { wall, window: [0.18, 0.22, 0.28], accent });
+      }
+      // The avenue yields to the already parked motorhome bodies and awnings.
+      const AVENUE = [0.30, 0.46, 0.22];
+      for (let j = 0; j < 3; j++) {
+        tree((k(0.0) + j * 3) % n, 1, 20 + j * 7, 13 + hash(j * 3) * 3, AVENUE);
+        tree((k(0.94) + j * 3) % n, 1, 20 + j * 7, 12 + hash(j * 5) * 3, AVENUE);
       }
       for (let j = 0; j < 5; j++) {
         const a = anchor((k(0.0) + j * 10) % n, 1, 56 + hash(j * 7) * 8);

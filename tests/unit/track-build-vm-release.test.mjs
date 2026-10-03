@@ -148,6 +148,8 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // tip engine grounding (tyre footings, marshal boards, hoarding legs, cable
 // posts, pit exit signal): ship merge had restored the pre-audit STRIP
 // numbers; tip then moved both circuits again.
+// Re-measured 2026-10-01: venue facilities, supported crowd heads and camera
+// guard panels; secondary facade panes reduced to pay for nearby detail.
 const STRIP = {
   // ship 293659/258313 → audit 287677/252433 → tip 287821/258089
   // → fix-top-counts 285112/256710 (yachts/pontoons under the quay land no
@@ -156,7 +158,9 @@ const STRIP = {
   // dropped; engine-helpers plinth sink)
   // → track limits 285994/257518 (two moored hulls over the road hole dropped)
   // → start-gantry lights 285946/257466 (the gantry housing is one bar, not three boxes: −48 indices)
-  monaco: { before: 285946, after: 257466 },
+  // → full-track-scenery onto tip aa4197c 263920/241522 (venue facilities +
+  //   secondary facade pane reduction; measured 2026-10-02)
+  monaco: { before: 263920, after: 241522 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -167,7 +171,9 @@ const STRIP = {
   // → Racing Kit barriers/pylons 341367/314511 (k_barrierwhite ×1.5 / k_pylon
   //   ×1.3 replace the synthetic construction barrier/cone along the Rettifilo:
   //   fewer indices per stamp; measured on the tip merge, 2026-10-02)
-  monza: { before: 341367, after: 314511 },
+  // → full-track-scenery onto tip aa4197c 340719/313794 (venue + clearance on
+  //   the Racing Kit tip; measured 2026-10-02)
+  monza: { before: 340719, after: 313794 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

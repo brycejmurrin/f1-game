@@ -15,7 +15,8 @@
 // which is the ONLY tool that may take a window.LightPresets snapshot. Does NOT
 // bump cache — none is needed (deploy stamps hashes; tags stay ?v=dev).
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { badProfileKey, knobDefs, knobError, presetChanges } from "../../../../tools/lighting/preset-validation.mjs";
+import { join, resolve, relative } from "node:path";
 import vm from "node:vm";
 
 const ROOT = resolve(new URL("../../../../", import.meta.url).pathname);
@@ -30,40 +31,14 @@ Default target: artifacts/lighting/proposals
 const LP = join(ROOT, "js/lighting/presets.js");
 const LIGHTING = join(ROOT, "js/lighting/knobs.js");
 // A directory of proposal JSON, or ONE file — which is what a pasted export is.
-const TARGET = resolve(process.argv[2] || join(ROOT, "artifacts/lighting/proposals"));
-
-const TODS = new Set(["dawn", "day", "dusk", "night"]);
-const WXS = new Set(["dry", "wet", "rain", "fog", "overcast"]);
-
-const decimals = (x) => {
-  const s = String(x), i = s.indexOf(".");
-  return i < 0 ? 0 : s.length - i - 1;
-};
-function onGrid(v, min, step) {
-  const p = Math.max(decimals(v), decimals(min), decimals(step)) + 2;
-  const k = Math.round(10 ** p);
-  const scaled = Math.round((v - min) * k);
-  const stepK = Math.round(step * k);
-  return stepK !== 0 && scaled % stepK === 0;
-}
-
-function defs() {
-  const src = readFileSync(LIGHTING, "utf8");
-  const starts = [...src.matchAll(/\{\s*id:\s*"(\w+)"/g)];
-  const out = new Map();
-  for (let i = 0; i < starts.length; i++) {
-    const chunk = src.slice(starts[i].index,
-      i + 1 < starts.length ? starts[i + 1].index : starts[i].index + 4000);
-    const num = (k) => {
-      const m = chunk.match(new RegExp(`\\b${k}:\\s*(-?[\\d.]+)`));
-      return m ? Number(m[1]) : undefined;
-    };
-    const d = { id: starts[i][1], min: num("min"), max: num("max"), step: num("step"), def: num("def") };
-    if (d.min === undefined || d.step === undefined) continue;
-    out.set(d.id, d);
-  }
-  return out;
-}
+const argv = process.argv.slice(2);
+const unknown = argv.find((a) => a.startsWith("--") && !["--check", "--dry-run", "--json", "--help"].includes(a));
+if (unknown) { console.error(`Unknown option: ${unknown}`); process.exit(1); }
+if (argv.includes("--help")) { console.log("Usage: merge-proposals.mjs [file | directory] [--check | --dry-run] [--json]"); process.exit(0); }
+const inputs = argv.filter((a) => !a.startsWith("--"));
+if (inputs.length > 1) { console.error("Expected at most one proposal path"); process.exit(1); }
+const check = argv.includes("--check") || argv.includes("--dry-run");
+const TARGET = resolve(inputs[0] || join(ROOT, "artifacts/lighting/proposals"));
 
 function loadPresets() {
   const ctx = vm.createContext({ window: {}, Math, JSON, Object, Array });
@@ -83,7 +58,7 @@ function loadPresets() {
 function readEdits(text, file) {
   const ctx = vm.createContext({ window: {} });
   try {
-    vm.runInContext(text, ctx, { filename: file });
+    vm.runInContext(text, ctx, { filename: file, timeout: 1000 });
   } catch (e) {
     console.error(`${file}: could not evaluate as a LightEdits export — ${e.message}`);
     process.exit(1);
@@ -116,7 +91,7 @@ function loadPairs(target) {
   }
   const pairs = [];
   for (const full of files) {
-    const file = full.slice(ROOT.length + 1);
+    const file = relative(ROOT, full);
     const text = readFileSync(full, "utf8");
     const edits = /window\.Light(Edits|Presets)\s*=/.test(text) ? readEdits(text, file) : null;
     if (edits) {
@@ -144,20 +119,7 @@ function loadPairs(target) {
 // "monza|night|wet", the bare "*" global layer, or "*|night". The last two come
 // only from the tuner export — a {track, combos} proposal cannot express them —
 // and both are real shapes in the shipped file.
-function badKey(key) {
-  if (key === "*") return null;
-  const parts = key.split("|");
-  if (parts.length === 2) {
-    return parts[0] === "*" && TODS.has(parts[1]) ? null : `bad key "${key}"`;
-  }
-  if (parts.length !== 3) return `bad key "${key}"`;
-  if (!parts[0]) return `bad key "${key}" (empty track)`;
-  if (!TODS.has(parts[1])) return `bad time-of-day in "${key}"`;
-  if (!WXS.has(parts[2])) return `bad weather in "${key}"`;
-  return null;
-}
-
-const TUNE = defs();
+const TUNE = knobDefs();
 const STAR = new Set(["carGloss", "blacks", "shadows", "midtones", "highlights",
   "whites", "toe", "shoulder", "liftR", "liftG", "liftB", "gammaR", "gammaG",
   "gammaB", "gainR", "gainG", "gainB"]);
@@ -181,7 +143,7 @@ function starSets(key, id) {
 }
 
 for (const { file, key, vals, delta } of pairs) {
-  const kerr = badKey(key);
+  const kerr = badProfileKey(key);
   if (kerr) { errors.push(`${file}: ${kerr}`); continue; }
   if (!vals || typeof vals !== "object" || Array.isArray(vals)) {
     errors.push(`${file}: ${key} is not a knob map`); continue;
@@ -189,15 +151,14 @@ for (const { file, key, vals, delta } of pairs) {
   const clean = {};
   for (const [id, v] of Object.entries(vals)) {
     const d = TUNE.get(id);
-    if (!d) { errors.push(`${file}: ${key}.${id} is not a TUNE_DEFS id`); continue; }
-    if (typeof v !== "number" || !isFinite(v)) {
-      errors.push(`${file}: ${key}.${id} is not a finite number`); continue;
-    }
-    if (v < d.min || v > d.max) {
-      errors.push(`${file}: ${key}.${id}=${v} outside [${d.min}, ${d.max}]`); continue;
-    }
-    if (!onGrid(v, d.min, d.step)) {
-      errors.push(`${file}: ${key}.${id}=${v} off slider grid (min ${d.min} step ${d.step})`); continue;
+    const err = knobError(id, v, TUNE);
+    if (err) { errors.push(`${file}: ${key}.${id}=${v} ${err}`); continue; }
+    // Road wetness is physics (trackWetness), not a baked look. Shipping it
+    // made dry dawn/night presets look wet while grip stayed dry
+    // (docs/plans/2026-09-30-wetness-lighting.md). Live tuner may still pin it.
+    if (id === "wetness") {
+      errors.push(`${file}: ${key}.wetness must not be baked — leave AUTO; use ssrDryNight/ssrDryDay for dry sheen`);
+      continue;
     }
     // Redundant with the fallback, so leaving it out keeps the file small —
     // but only where the fallback really is the default (see starSets).
@@ -244,7 +205,12 @@ if (!src.match(re)) {
   console.error("Could not find the window.LightPresets assignment");
   process.exit(1);
 }
-writeFileSync(LP, src.replace(re, "window.LightPresets = " + JSON.stringify(ordered, null, 2) + ";"));
+if (!check) writeFileSync(LP, src.replace(re, "window.LightPresets = " + JSON.stringify(ordered, null, 2) + ";"));
+const changes = presetChanges(shipped, ordered);
+if (argv.includes("--json") || check) {
+  console.log(JSON.stringify({ ok: true, mode: check ? "check" : "write", incoming: pairs.length, profiles: Object.keys(ordered).length, changes }, null, 2));
+  process.exit(0);
+}
 console.log(`Merged ${pairs.length} incoming profile(s): ${wrote} written, ${knobs} knob(s).`);
 console.log(`Shipped profiles now: ${Object.keys(ordered).length} (incl "*").`);
 console.log("No cache bump needed — hashes are stamped at deploy (tags read ?v=dev).");

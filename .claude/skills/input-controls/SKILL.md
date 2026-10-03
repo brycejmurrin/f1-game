@@ -1,6 +1,6 @@
 ---
 name: input-controls
-description: Use when steering, gamepad (stick dead zone, saturation, drift, calibrate centre, axis map), touch steer, tilt/gyro, keyboard leaks into menus, on-screen steer buttons, driving-help/racing-line assists, or input.js / steer-tuning.js are being changed or debugged. For handling forces (understeer/grip/pace) use tune-physics; for menu Escape/focus use ui-menu-a11y.
+description: "Use when steering, gamepad (stick dead zone, saturation, drift, calibrate centre, axis map), touch steer, tilt/gyro, keyboard leaks into menus, on-screen steer buttons, driving-help/racing-line assists, or input.js / steer-tuning.js are being changed or debugged. For handling forces (understeer/grip/pace) use tune-physics; for menu Escape/focus use ui-menu-a11y."
 ---
 
 # Driving input — devices, not forces
@@ -25,7 +25,7 @@ math itself is `js/input/tilt-roll.js`, shared with `controller.html`. Digital s
 
 | Store / slider | Effect |
 |---|---|
-| `drivingHelp` | ROAD_FOLLOW gain via `helpFromSlider` — v1 = OFF, ships at 0 |
+| `drivingHelp` | ROAD_FOLLOW gain via `helpFromSlider` — stored default 1 = OFF; resulting ROAD_FOLLOW gain 0 |
 | `raceLine` (slider id `pm-line`) | pull to line / push wide; 0 = off. `G.raceLineAssist = raceLine / 5` |
 | `adaptiveButtons` | digital-steer rate half of SPEED STEER (keys + on-screen arrows). v1 = OFF, **unset default 5**. Schema 4. Not the stick / tilt / drag |
 | `brakeCue` | pulse-rate brake warning. v1 = OFF, unset default 1. Never writes throttle/brake |
@@ -68,8 +68,10 @@ Pins — node: `tests/unit/key-binds.test.mjs` (Input in a VM, `anyOpen` mocked)
 `menu-a11y-audit.test.mjs` (layer coverage); browser only: `menu-keyboard.spec.js`
 "with the pause menu up the arrow keys stop reaching the car" / "with a race
 running the arrow keys drive the car", `steering.spec.js` "keyboard latch".
-Record: which of `typing` / `anyOpen` / focus owner (`document.activeElement`)
-was true, via `__apex.inputState().key`.
+Read held latches from `__apex.inputState().key`; read
+`__apex.inputState().gate` for `anyOpen`, `typing`, `hudControl` and
+`focus:{id,tag,editable}`. These are separate from held-key latches.
+Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging focus.
 
 ## Sharp edges
 

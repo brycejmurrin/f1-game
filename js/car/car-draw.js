@@ -496,6 +496,10 @@ const CarDraw = (function () {
       G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, opt);   // style + livery keyed: team grips/marker/gloves
       // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the
       // HUD shows gear and speed instead (js/camera/mode-switch.js).
+      if (wheelStyle === "retro") {
+        CarMesh.drawRetroTelemetry(_rigB,c,G.dashKph(c.speed || 0),G.raceT);
+        return;
+      }
       if (!CockpitOpts.wheelHasScreen(wheelStyle)) return;
       // Live telemetry ON the wheel (all ride the wheel matrix, like the real LCD):
       // gear (auto or manual — c.gear is maintained by both paths), RPM shift
