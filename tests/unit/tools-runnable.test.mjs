@@ -220,7 +220,8 @@ test("cloud-agent install is offline-tolerant (npm ECONNRESET must not fail a us
   assert.doesNotMatch(browsers, /^set -e/m);
   assert.match(cloud, /mesa-vulkan-drivers/);
   assert.match(cloud, /install-browsers\.sh/);
-  assert.match(cloud, /\/opt\/google\/chrome\/chrome/);
+  assert.match(cloud, /tools\/lib\/chromium-path\.mjs/);
+  assert.match(cloud, /--path/);
   assert.match(cloud, /node_modules\/playwright\/package\.json/);
   assert.doesNotMatch(cloud, /^set -e/m);
 });
@@ -292,6 +293,17 @@ test("the MCP-facing entry points answer without touching a browser or a network
     else if (!c.want.test(text)) failed.push(`${path.basename(c.args[0])}: output missing ${c.want}`);
   }
   assert.deepEqual(failed, [], "an MCP-facing entry point does not answer");
+});
+
+test("offline-precache-check --help prints usage and does not launch Chromium", () => {
+  // Measured 2026-10-01: `--help` was taken as the warm circuit id and the
+  // check booted Playwright against warm=--help. A new agent following the
+  // PWA skill's "run it" line must get usage, not a browser.
+  const r = spawnSync(process.execPath, [tool("offline-precache-check.cjs"), "--help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /usage:.*offline-precache-check\.cjs/);
+  assert.doesNotMatch(r.stdout, /\(raced online\)/, "must exit before the server/Chromium path");
 });
 
 test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => {
@@ -631,4 +643,17 @@ test("the game's shipped tyreWear default is not 'off' (so off must be opt-in, n
   assert.ok(m, "js/data/settings-defaults.js no longer lists tyreWear — re-read tools/lib/cli-args.mjs wearArg");
   assert.ok(["light", "real"].includes(m[1]),
     `shipped tyreWear is ${m[1]} — re-read tools/lib/cli-args.mjs wearArg`);
+});
+
+test("occlusion-estimate resolves game-vm and --help exits without booting it", () => {
+  // ROOT was briefly one level too shallow (tools/check → tools), then joined
+  // tools/lib again, so createGame could not load. Pin the "../.." form and a
+  // side-effect-free --help before the VM boot.
+  const src = fs.readFileSync(tool("occlusion-estimate.mjs"), "utf8");
+  assert.match(src, /dirname\(fileURLToPath\(import\.meta\.url\)\),\s*"\.\.\/\.\."\)/);
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/lib/game-vm.cjs")));
+  const r = spawnSync(process.execPath, [tool("occlusion-estimate.mjs"), "--help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /usage:.*occlusion-estimate/);
 });

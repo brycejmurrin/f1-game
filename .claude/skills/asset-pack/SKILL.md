@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, when editing js/render/shared/assets.js or tools/gen/assets.mjs, or when tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac A/B (sheen/exposure with no pack is lighting-tuner; liveries garage-parts-livery). A black screen or NaN-white surface with no material involved is webgl-debug / webgpu-debug.
+description: "Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, when editing js/render/shared/assets.js or tools/gen/assets.mjs, or when tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac A/B (sheen/exposure with no pack is lighting-tuner; liveries garage-parts-livery). A black screen or NaN-white surface with no material involved is webgl-debug / webgpu-debug."
 ---
 
 # Baked asset pack

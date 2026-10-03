@@ -69,19 +69,11 @@ const MIME = {
   ".txt": "text/plain",
 };
 
-// System browsers, tried only after Playwright's own build: a tool that needs
-// GL on a box with no ms-playwright install can still run on the vendor Chrome.
-const SYSTEM_CHROME = [
-  "/opt/google/chrome/chrome",
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-];
-
 /** CHROME / PW_CHROMIUM, else the Playwright build chromium-path.mjs derives
  *  from playwright-core's browsers.json revision (newest installed as the
  *  fallback), else a system Chrome; undefined → Playwright's bundled default. */
-export function pickChromium() {
-  return chromiumPath()
-    || SYSTEM_CHROME.find(existsSync);
+export function pickChromium(opts) {
+  return chromiumPath(opts);
 }
 
 /**
@@ -159,16 +151,28 @@ function track(entry) {
 
 const timeout = (ms) => new Promise((r) => { const t = setTimeout(r, ms); t.unref?.(); });
 
-/** Tear down every tracked server/browser. Idempotent, safe to call twice. */
+/** Register an owned teardown resource (also supports bounded non-browser probes). */
+export function registerTeardownResource(entry) {
+  if (!entry || typeof entry.close !== "function" || typeof entry.force !== "function") throw new TypeError("teardown resource requires close and force functions");
+  return track(entry);
+}
+
+/** Tear down every tracked server/browser, including resources acquired during shutdown. */
 export function shutdown() {
   if (!pending) {
-    const entries = [...resources];
-    resources.clear();
-    pending = Promise.all(entries.map(async (r) => {
-      // A wedged browser must not block the exit path — force-kill after 5 s.
-      try { await Promise.race([r.close(), timeout(5000)]); } catch {}
-      try { r.force(); } catch {}
-    })).finally(() => { pending = null; });
+    pending = (async () => {
+      do {
+        const entries = [...resources];
+        resources.clear();
+        await Promise.all(entries.map(async (r) => {
+          // A wedged browser must not block the exit path — force-kill after 5 s.
+          try { await Promise.race([r.close(), timeout(5000)]); } catch {}
+          try { r.force(); } catch {}
+        }));
+        // A launch may resolve while prior closes await their deadline. Drain
+        // that new owner too instead of forgetting it behind the pending promise.
+      } while (resources.size);
+    })().finally(() => { pending = null; });
   }
   return pending;
 }
@@ -277,4 +281,3 @@ export async function launchChromium(opts = {}) {
   browser.close = async (...a) => { resources.delete(entry); try { await close(...a); } finally { killGroup(browser); } };
   return browser;
 }
-

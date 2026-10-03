@@ -62,6 +62,7 @@ anything in here.
 
 | Note | What it records |
 |---|---|
+| [notes/REPO-SIZE-2026-10.md](notes/REPO-SIZE-2026-10.md) | What makes a clone big, on FULL history: 1,080 MB packed, 892 MB of it history-only (90% PNG, mostly a June 2026 screenshot burst); why a shallow agent clone measures it wrong; the 15.6 MB blobless clone; why the history rewrite is parked |
 | [notes/REAL-RACE-2026-09-27.md](notes/REAL-RACE-2026-09-27.md) | REAL RACE (Data Hub RACE IT): the OpenF1 bodies a race script needs and their measured sizes, the script shape, the director's arm / pace-loop / flag design over the live field, and the v1 limits |
 | [notes/PERF-FINDINGS.md](notes/PERF-FINDINGS.md) | **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement. |
 | [notes/TLX-PERF-PLAN.md](notes/TLX-PERF-PLAN.md) | The working plan for the three.js backend's remaining per-frame costs (night lamp shadow, godray chain, draw records, post materials): steps, status, switches and checks. Results land in PERF-FINDINGS. |
@@ -97,6 +98,7 @@ rather than rewriting the record.
 
 | Doc | Topic | Cited from |
 |---|---|---|
+| [research/AGENT-CONTRACTS.md](research/AGENT-CONTRACTS.md) | Current API references and reproducible agent tool contracts: diagnostics, smoke recipes, lifecycle/capture/replay evidence and hosted provider boundaries. | `tools/check/doctor.mjs`, `tools/lib/session-contracts.mjs` |
 | [research/PLATFORM-INPUT-NOTES.md](research/PLATFORM-INPUT-NOTES.md) | The platform behaviours that only bite on one device: pointer capture and the four-way release net, the top layer vs `z-index`, `zoom` and `--ui-scale`, `(pointer: coarse)`, Escape vs `<dialog>` close watchers, iOS WebGL context loss. | `js/input/input.js`, `js/ui/modal.js`, 4 specs |
 | [WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) | How to close WGX vs GLX: gap inventory, WebGPU API recipes (MSAA resolve, timestamp-query, texture arrays, mip-gen, god-ray), recommended slice order. §5 holds the WGSL rules a mock device cannot enforce. Left with the backends in the 2026-09-03 spike-out and back with the 2026-09-04 re-attach — see `spike/backends/README.md`. | `js/render/webgpu/wgx.js`, `js/render/webgpu/wgsl-chunks.js` |
 | [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings. | `js/game.js`, `js/input/steer-tuning.js` |

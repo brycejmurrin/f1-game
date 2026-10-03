@@ -42,7 +42,7 @@ faster when Mesa is installed (no `navigator.gpu`; `docs/notes/CI-RENDERING-PERF
 Session shape — twelve rules that control wall time, waiting and handoff:
 
 1. Fresh container: the SessionStart hook runs `npm install` and checks for
-   `chromium-headless-shell` (fallback `bash tools/env/cloud-agent-install.sh`); either missing reads as a total-red run — read the FIRST failure first.
+   a discovered executable Chromium (`node tools/lib/chromium-path.mjs --path`; fallback `bash tools/env/cloud-agent-install.sh`); a missing dependency or browser reads as a total-red run — read the FIRST failure first.
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.

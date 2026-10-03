@@ -11,7 +11,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES }
+import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
+  parseToolingFastArgv, TOOLING_FAST_USAGE }
   from "../../tools/ci/tooling-fast.mjs";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "apex-tf-"));
@@ -98,7 +99,12 @@ test("a hung TEST fails as `not ok` with its name via --test-timeout", async () 
   try {
     const f = path.join(dir, "stuck.test.mjs");
     fs.writeFileSync(f, `import test from "node:test";
-test("waits forever", () => new Promise(() => { setTimeout(() => {}, 60000); }));
+test("waits forever", (t) => new Promise(() => {
+  const keepAlive = setTimeout(() => {}, 60000);
+  // This fixture tests test cancellation, not an unrelated open-handle leak.
+  // The hung-FILE fixture above covers handles surviving a completed test.
+  t.after(() => clearTimeout(keepAlive));
+}));
 `);
     const logPath = path.join(dir, "suite.log");
     const r = await runToolingFast([f], { jobs: 1, logPath, localTimingsPath: null, testTimeoutMs: 500, fileTimeoutMs: 30000 });
@@ -110,4 +116,41 @@ test("waits forever", () => new Promise(() => { setTimeout(() => {}, 60000); }))
     assert.match(log, /test timed out after 500ms/);
     assert.doesNotMatch(log, /reason=timeout/, "the per-test bound fired, not the file wall");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// The runner parses TAP failure blocks, independently of the host Node's
+// default reporter and this suite's inherited NODE_TEST_CONTEXT.
+test("a failed child preserves named TAP subtests and assertion diagnostics", async () => {
+  const dir = tmp();
+  try {
+    const file = path.join(dir, "assertion.test.mjs");
+    fs.writeFileSync(file, `import test from "node:test"; import assert from "node:assert/strict";
+test("the arithmetic contract fails", () => assert.equal(1, 2));
+`);
+    const logPath = path.join(dir, "suite.log");
+    const result = await runToolingFast([file], { jobs: 1, logPath, localTimingsPath: null });
+    assert.equal(result.ok, false);
+    assert.equal(result.failed, 1);
+    assert.equal(result.results[0].exit, 1);
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.match(log, /failed 1 subtest\(s\):/);
+    assert.match(log, /not ok 1 - the arithmetic contract fails/);
+    assert.match(log, /expected: 2/);
+    assert.match(log, /actual: 1/);
+    assert.match(log, /operator: 'strictEqual'/);
+    assert.doesNotMatch(log, /reason=timeout/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CLI: --help and unknown flags never start the suite", () => {
+  assert.match(TOOLING_FAST_USAGE, /--jobs=N/);
+  assert.equal(parseToolingFastArgv(["--help"]).help, true);
+  assert.equal(parseToolingFastArgv(["-h"]).help, true);
+  assert.throws(() => parseToolingFastArgv(["--help-me"]), /unknown flag --help-me/);
+  assert.throws(() => parseToolingFastArgv(["--paralel"]), /unknown flag --paralel/);
+  const ok = parseToolingFastArgv(["--jobs=3", "--record", "tests/unit/behind-ship.test.mjs"]);
+  assert.equal(ok.help, false);
+  assert.equal(ok.jobs, 3);
+  assert.equal(ok.record, true);
+  assert.deepEqual(ok.files, ["tests/unit/behind-ship.test.mjs"]);
 });
