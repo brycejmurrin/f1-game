@@ -67,6 +67,34 @@ async function endVr(page) {
   await page.waitForFunction(() => !XrSession.isPresenting(), null, { polling: 100, timeout: 10_000 });
 }
 
+/** Wait until XR frameCount exceeds `target`.
+ *
+ * IWER + SwiftShader: the first immersive tick compiles shaders. Playwright
+ * `page.waitForFunction({ polling: 50 })` / frequent `page.evaluate` during that
+ * tick freezes frameCount at 0/1 for the whole budget (measured 2026-10-03 on
+ * tip and on #782's ci.yml-only PR — same fail). Poll with in-page setTimeout
+ * only (2 s settle, then 100 ms) so session rAF can finish. Assertion
+ * unchanged: must clear `target`.
+ */
+async function waitXrFrames(page, target, timeout = 20_000) {
+  const result = await page.evaluate(({ target, timeout }) => new Promise((resolve) => {
+    const t0 = performance.now();
+    const tick = () => {
+      let fc = 0;
+      try { fc = XrSession.frameCount(); } catch (_) { /* */ }
+      if (fc > target) return resolve({ ok: true, fc });
+      if (performance.now() - t0 > timeout) return resolve({ ok: false, fc });
+      setTimeout(tick, 100);
+    };
+    // First delay lets the current XR rAF finish before we read frameCount.
+    setTimeout(tick, 2000);
+  }), { target, timeout });
+  if (!result.ok) {
+    throw new Error(`XrSession.frameCount()=${result.fc} never exceeded ${target} within ${timeout}ms`);
+  }
+  return result.fc;
+}
+
 test("pinned IWER vendor is present and ENTER VR appears; session starts/exits/re-enters", async ({ page }) => {
   test.setTimeout(180_000);
   await bootAndProbe(page);
@@ -84,7 +112,7 @@ test("pinned IWER vendor is present and ENTER VR appears; session starts/exits/r
 
   // XR frames advance while presenting.
   const n0 = await page.evaluate(() => XrSession.frameCount());
-  await page.waitForFunction((n) => XrSession.frameCount() > n + 2, n0, { polling: 50, timeout: 10_000 });
+  await waitXrFrames(page, n0 + 2);
 
   await endVr(page);
   await expect(btn).toHaveText(/ENTER VR/i);
@@ -103,7 +131,7 @@ test("head pose moves the seated eye; recenter clears XZ drift", async ({ page }
   expect(started.ok).toBe(true);
 
   // Wait for at least one composed eye bag.
-  await page.waitForFunction(() => XrSession.frameCount() > 2, null, { polling: 50, timeout: 10_000 });
+  await waitXrFrames(page, 2);
 
   const beforeBag = await sampleXrEye(page);
   expect(beforeBag && beforeBag.eye).toBeTruthy();
@@ -116,7 +144,7 @@ test("head pose moves the seated eye; recenter clears XZ drift", async ({ page }
   });
   // Give a few XR frames for the new pose to propagate.
   const n = await page.evaluate(() => XrSession.frameCount());
-  await page.waitForFunction((base) => XrSession.frameCount() > base + 3, n, { polling: 50, timeout: 10_000 });
+  await waitXrFrames(page, n + 3);
 
   const afterBag = await sampleXrEye(page);
   expect(afterBag && afterBag.eye).toBeTruthy();
@@ -139,7 +167,7 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
   test.setTimeout(180_000);
   await bootAndProbe(page);
   expect((await startVr(page)).ok).toBe(true);
-  await page.waitForFunction(() => XrSession.frameCount() > 2, null, { polling: 50, timeout: 10_000 });
+  await waitXrFrames(page, 2);
 
   const mapped = await page.evaluate(async () => {
     const d = globalThis.__iwerDevice;
@@ -196,7 +224,7 @@ test("controller disconnect and visibility-blurred cause no pageerror", async ({
   test.setTimeout(180_000);
   await bootAndProbe(page);
   expect((await startVr(page)).ok).toBe(true);
-  await page.waitForFunction(() => XrSession.frameCount() > 2, null, { polling: 50, timeout: 10_000 });
+  await waitXrFrames(page, 2);
 
   await page.evaluate(() => {
     const d = globalThis.__iwerDevice;
@@ -204,7 +232,7 @@ test("controller disconnect and visibility-blurred cause no pageerror", async ({
     if (d.controllers.right) d.controllers.right.connected = false;
   });
   const n1 = await page.evaluate(() => XrSession.frameCount());
-  await page.waitForFunction((n) => XrSession.frameCount() > n + 2, n1, { polling: 50, timeout: 10_000 });
+  await waitXrFrames(page, n1 + 2);
 
   await page.evaluate(() => {
     globalThis.__iwerDevice.updateVisibilityState("visible-blurred");
@@ -272,7 +300,7 @@ test("EXIT VR restores window tick once (no double loop); camMode store unchange
   const beforeStore = await page.evaluate(() => localStorage.getItem("apex26.camMode"));
 
   expect((await startVr(page)).ok).toBe(true);
-  await page.waitForFunction(() => XrSession.frameCount() > 2, null, { polling: 50, timeout: 10_000 });
+  await waitXrFrames(page, 2);
 
   const during = await page.evaluate(() => ({
     cam: typeof camMode !== "undefined" ? camMode : null,
@@ -341,7 +369,7 @@ test("stereo viewports: left width > 0; canvas toDataURL capture; flat mode afte
   test.setTimeout(180_000);
   await bootAndProbe(page);
   expect((await startVr(page)).ok).toBe(true);
-  await page.waitForFunction(() => XrSession.frameCount() > 3, null, { polling: 50, timeout: 10_000 });
+  await waitXrFrames(page, 3);
 
   const sampled = await sampleXrEye(page);
   const views = (sampled && sampled.views) || [];
