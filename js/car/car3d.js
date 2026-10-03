@@ -3336,21 +3336,17 @@ const Car3D = (function () {
     }
     const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
     if (exhFlare > 0) {
-      // Megaphone: a WIDER mouth at the rear face, not a U-bracket over the lamp.
+      // Megaphone: a WIDER open mouth at the rear face. Station loft only — a
+      // solid tip box would paint over the rain light sitting in the opening.
       const flareMul = exhTwin ? 0.55 : 1.15;
       for (const cx of exits) {
         const tip = tipRShow * (1 + flareMul * exhFlare);
-        const z0 = tipZ + 0.06, z1 = tipZ - 0.025;
-        if (!exhTwin) {
-          addLoft(out, z0, 0, EXH_Y, tipRShow * 2, tipRShow * 2, z1, 0, EXH_Y, tip * 2, tip * 2,
-                  exhFlareC, SURFACES.metal);
-        }
+        const z0 = tipZ + 0.08, z1 = tipZ + 0.005;
         addStationLoft(out, [exhDia(cx, EXH_Y, z0, tipRShow), exhDia(cx, EXH_Y, z1, tip)],
                        exhFlareC, null, SURFACES.metal);
-        addBox(out, cx, EXH_Y, z1 - 0.010, tip * 2.10, tip * 2.10, 0.016,
-               [0.22, 0.22, 0.24], SURFACES.metal);
-        addBox(out, cx, EXH_Y, z1 - 0.016, tip * 1.55, tip * 1.55, 0.014,
-               [0.05, 0.04, 0.04], SURFACES.carbon);
+        // Thin outer rim only (not a filled face).
+        addStationLoft(out, [exhDia(cx, EXH_Y, z1, tip * 1.05), exhDia(cx, EXH_Y, z1 - 0.012, tip * 1.12)],
+                       [0.22, 0.22, 0.24], null, SURFACES.metal);
       }
     }
     if (exhStyle.wrap) {
