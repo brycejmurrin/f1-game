@@ -216,6 +216,20 @@ Input.init(canvas, { onPause: () => {
   // via the pause BUTTON / gamepad Start — a keyboard Esc never gets here while a
   // menu sheet is up (onKey returns early on menuOverlayOpen(), js/input/input.js).
   if (G.paused && els.howtoplay && !els.howtoplay.hidden) { els.howtoplay.hidden = true; return; }
+  // A TOOL OPENED FROM PAUSE (the garage arrival tuner, the photo studio, the
+  // Spotify panel) hides the pause and settings sheets and puts up its own
+  // layer. Unpausing under it left that layer over a running race — driving
+  // input gated behind it, the car coasting, #garrival's body.lt-open hiding
+  // the pause button — and its close door then reopened SETTINGS over a race
+  // that was not paused. Press the layer's own Escape door instead, exactly as
+  // Escape does (js/ui/modal.js), so the tool closes back to the pause menu.
+  if (G.paused && typeof UiLayers !== "undefined") {
+    const top = UiLayers.top();
+    if (top && top !== els.pausemenu && top !== els.pmsettings) {
+      const door = top.dataset && top.dataset.escClose ? document.getElementById(top.dataset.escClose) : null;
+      if (door) { door.click(); return; }
+    }
+  }
   if (G.paused && els.pmsettings && !els.pmsettings.hidden) {
     if (settingsBack()) closeSettings();
     return;
