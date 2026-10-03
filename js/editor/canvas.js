@@ -24,7 +24,12 @@ const DesignerCanvas = (function () {
     sel: "#e10600", span: "rgba(225,6,0,0.45)", start: "#ffd700", draw: "#aeea00",
     red: "#ff3b30", amber: "#f6d200", info: "#1e90ff", text: "#9a9aa8",
     ghost: "rgba(0,214,190,0.6)", chipBg: "rgba(10,10,14,0.78)", chipText: "#f6f6f9",
+    // SPEED: the plasma ramp, slow → fast (perceptually ordered, colour-blind safe).
+    spd0: "#f0f921", spd1: "#fca636", spd2: "#e16462", spd3: "#b12a90", spd4: "#6a00a8",
   });
+  const SPD = [COL.spd0, COL.spd1, COL.spd2, COL.spd3, COL.spd4];
+  const SPD_EDGES = [40, 55, 70, 85];   // m/s: < 40 · < 55 · < 70 · < 85 · ≥ 85
+  const spdBucket = (v) => { let b = 0; while (b < SPD_EDGES.length && v >= SPD_EDGES[b]) b++; return b; };
   const LABEL_FONT = "11px system-ui, sans-serif";
   const snap = (v) => Math.round(v * LATTICE) / LATTICE;
   // The storage bounds (CustomTracks.LIMITS.coord, FULL): a point dragged past
@@ -57,6 +62,7 @@ const DesignerCanvas = (function () {
     let preview = null;              // setTool's ghost: (i) → { pts: [[x, z]…] } | null
     let ghost = null, ghostKey = null; // its last answer, and the (fn, anchor, loop) it answered
     let last = null;                 // the pointer's latest canvas-relative position
+    let heat = null;                 // setHeat's per-node speed (m/s), or null
 
     // ── view ────────────────────────────────────────────────────────────────
     const toSX = (x) => (x - cx) * scale + W / 2;
@@ -368,6 +374,7 @@ const DesignerCanvas = (function () {
       g.closePath();
       g.fillStyle = stale ? COL.roadStale : COL.road;
       g.fill("evenodd");
+      if (heat && !stale && heat.length === n) heatFill(L, R, n);
       g.strokeStyle = COL.edge; g.lineWidth = 1; g.stroke();
       // centre line
       g.beginPath();
@@ -383,6 +390,40 @@ const DesignerCanvas = (function () {
       g.lineTo(toSX(ax - tx / tl * 8 / Math.max(0.3, scale) - tz / tl * 5 / Math.max(0.3, scale)), toSY(az - tz / tl * 8 / Math.max(0.3, scale) + tx / tl * 5 / Math.max(0.3, scale)));
       g.lineTo(toSX(ax - tx / tl * 8 / Math.max(0.3, scale) + tz / tl * 5 / Math.max(0.3, scale)), toSY(az - tz / tl * 8 / Math.max(0.3, scale) - tx / tl * 5 / Math.max(0.3, scale)));
       g.closePath(); g.fill();
+    }
+    // SPEED: one polygon per run of nodes in the same speed bucket (the wrap
+    // merged), each one node wider than its run so no hairline shows between.
+    function heatFill(L, R, n) {
+      const b = new Uint8Array(n);
+      for (let k = 0; k < n; k++) b[k] = spdBucket(heat[k]);
+      let k0 = 0;
+      while (k0 < n && b[k0] === b[(k0 - 1 + n) % n]) k0++;
+      if (k0 === n) {                                   // one bucket all the way round: the whole ring
+        g.beginPath();
+        for (let k = 0; k < n; k++) k ? g.lineTo(toSX(L[k][0]), toSY(L[k][1])) : g.moveTo(toSX(L[k][0]), toSY(L[k][1]));
+        g.closePath(); g.moveTo(toSX(R[0][0]), toSY(R[0][1]));
+        for (let k = n - 1; k >= 0; k--) g.lineTo(toSX(R[k][0]), toSY(R[k][1]));
+        g.closePath(); g.fillStyle = SPD[b[0]]; g.fill("evenodd");
+        return;
+      }
+      for (let done = 0; done < n;) {
+        const start = (k0 + done) % n, c = b[start];
+        let len = 1;
+        while (done + len < n && b[(start + len) % n] === c) len++;
+        g.beginPath();
+        for (let d = 0; d <= len; d++) { const p = L[(start + d) % n]; d ? g.lineTo(toSX(p[0]), toSY(p[1])) : g.moveTo(toSX(p[0]), toSY(p[1])); }
+        for (let d = len; d >= 0; d--) { const p = R[(start + d) % n]; g.lineTo(toSX(p[0]), toSY(p[1])); }
+        g.closePath(); g.fillStyle = SPD[c]; g.fill();
+        done += len;
+      }
+    }
+    function heatLegend() {
+      if (!heat || !built) return;
+      const sw = 14, y = H - 22;
+      g.font = LABEL_FONT; g.textBaseline = "middle";
+      g.fillStyle = COL.chipBg; g.fillRect(4, y - 4, 5 * sw + 92, sw + 8);
+      for (let i = 0; i < 5; i++) { g.fillStyle = SPD[i]; g.fillRect(8 + i * sw, y, sw - 2, sw); }
+      g.fillStyle = COL.chipText; g.fillText("SLOW → FAST", 14 + 5 * sw, y + sw / 2);
     }
     function markers() {
       if (!built || !built.n || stale) return;
@@ -488,7 +529,7 @@ const DesignerCanvas = (function () {
       if (canvas.dataset && canvas.dataset.arrows !== arrows) canvas.dataset.arrows = arrows;
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.clearRect(0, 0, W, H);
-      grid(); road(); markers(); ghostLine(); controls(); drawing(); chipLabel();
+      grid(); road(); markers(); ghostLine(); controls(); drawing(); chipLabel(); heatLegend();
     }
 
     // ── api ─────────────────────────────────────────────────────────────────
@@ -498,6 +539,8 @@ const DesignerCanvas = (function () {
       // brings is still the old loop, so a moved drag stays stale.
       setBuilt(tr) { built = tr && tr.n ? tr : null; if (!(mode === "drag" && moved)) stale = false; render(); },
       setIssues(list) { issues = Array.isArray(list) ? list : []; render(); },
+      /** SPEED: per-node speeds (m/s, the built road's n) paint the road; null clears. */
+      setHeat(v) { heat = v && v.length ? v : null; render(); },
       setSelection(i, j) { ghostKey = null; sel = Number.isInteger(i) ? i : -1; span = Number.isInteger(j) ? j : -1; render(); },
       /** previewFn (optional): (pointIndex) → { pts: [[x, z]…] } | null, world
        *  coords — drawn as the dashed ghost of what the tool would stamp there. */
@@ -522,6 +565,30 @@ const DesignerCanvas = (function () {
     return api;
   }
 
-  return { create, HIT_PX, HIT_TOUCH, HOLD_MS, COL };
+  /** A circuit's outline on a small canvas (START FROM's cards): fitted, one
+   *  stroke over a built centreline `tr` ({ px, pz, n }), and the start tick.
+   *  opts: { color, width, start (false: no tick), pad }. No TrackMaps bake. */
+  function thumb(canvas, tr, opts) {
+    opts = opts || {};
+    if (!canvas || !tr || !(tr.n > 2)) return false;
+    const g = canvas.getContext("2d"), W = canvas.width, H = canvas.height, pad = opts.pad != null ? opts.pad : 12, n = tr.n;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (let k = 0; k < n; k++) { x0 = Math.min(x0, tr.px[k]); x1 = Math.max(x1, tr.px[k]); z0 = Math.min(z0, tr.pz[k]); z1 = Math.max(z1, tr.pz[k]); }
+    const sc = Math.min((W - 2 * pad) / ((x1 - x0) || 1), (H - 2 * pad) / ((z1 - z0) || 1));
+    const X = (x) => (W - (x1 - x0) * sc) / 2 + (x - x0) * sc, Y = (z) => (H - (z1 - z0) * sc) / 2 + (z - z0) * sc;
+    g.clearRect(0, 0, W, H);
+    g.beginPath();
+    for (let k = 0; k < n; k++) k ? g.lineTo(X(tr.px[k]), Y(tr.pz[k])) : g.moveTo(X(tr.px[k]), Y(tr.pz[k]));
+    g.closePath(); g.strokeStyle = opts.color || COL.centre; g.lineWidth = opts.width || 3; g.lineJoin = "round"; g.stroke();
+    if (opts.start !== false) {
+      const tx = tr.px[1] - tr.px[0], tz = tr.pz[1] - tr.pz[0], tl = Math.hypot(tx, tz) || 1, w = 8;   // css px either side
+      const sx = X(tr.px[0]), sy = Y(tr.pz[0]), nx = -tz / tl * w, ny = tx / tl * w;
+      g.beginPath(); g.moveTo(sx - nx, sy - ny); g.lineTo(sx + nx, sy + ny);
+      g.strokeStyle = COL.start; g.lineWidth = 3; g.stroke();
+    }
+    return true;
+  }
+
+  return { create, thumb, HIT_PX, HIT_TOUCH, HOLD_MS, COL };
 })();
 Object.freeze(DesignerCanvas);
