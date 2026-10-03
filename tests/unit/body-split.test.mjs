@@ -79,10 +79,13 @@ const buildMcl = (lower, opts) => {
     livery, teamId: "mclaren", num: 4, parts: mclParts, noWheels: true, measure: true }, opts));
 };
 // THE LINE, derived here, not read from CarShade: pod fraction 0.31 of the
-// pod's own bottom..top, between z -2.00 and +0.70.
-const anchors = S.Car3D.bodyAnchors(mclParts, "mclaren", mcl.livery.spineHeight);
-const lineY = (z) => { const p = anchors.podAt(z); return p.bottom + 0.31 * (p.top - p.bottom); };
-const signed = (y, z) => (z > 0.70 || z < -2.00 ? 1 : y - lineY(z));   // < 0: below the line
+// pod's own bottom..top, between z -2.00 and +0.70. The pod is the BUILD's own:
+// the rounded car's anchors carry the downwash ramp (bodyAnchors(.., true),
+// CarShade.downwash — McLaren's coke 1.06 drops its pod tops aft of z -0.38), so
+// its line drops with them; smooth:false keeps the flat pod.
+const anchorsOf = (smooth) => S.Car3D.bodyAnchors(mclParts, "mclaren", mcl.livery.spineHeight, smooth);
+const lineY = (z, smooth = true) => { const p = anchorsOf(smooth).podAt(z); return p.bottom + 0.31 * (p.top - p.bottom); };
+const signed = (y, z, smooth = true) => (z > 0.70 || z < -2.00 ? 1 : y - lineY(z, smooth));   // < 0: below the line
 const colAt = (m, v) => [m.col[v * 3], m.col[v * 3 + 1], m.col[v * 3 + 2]];
 const is = (m, v, c) => m.col[v * 3] === c[0] && m.col[v * 3 + 1] === c[1] && m.col[v * 3 + 2] === c[2];
 // The zone covers chassis..livery: it runs just before part("cockpit").
@@ -110,9 +113,9 @@ for (const smooth of [true, false]) {
       if (is(two, v, LOW)) {
         low++;
         assert.equal(two.mat[v], PAINT, "only paint takes the lower colour");
-        assert.ok(signed(y, z) <= 1e-6 || Math.abs(z - 0.70) < 1e-6, `lower vertex above the line at y ${y.toFixed(4)} z ${z.toFixed(4)}`);
+        assert.ok(signed(y, z, smooth) <= 1e-6 || Math.abs(z - 0.70) < 1e-6, `lower vertex above the line at y ${y.toFixed(4)} z ${z.toFixed(4)}`);
       } else if (is(two, v, C1) && two.mat[v] === PAINT && z < 0.70 - 1e-6) {
-        assert.ok(signed(y, z) >= -1e-6, `primary vertex below the line at y ${y.toFixed(4)} z ${z.toFixed(4)}`);
+        assert.ok(signed(y, z, smooth) >= -1e-6, `primary vertex below the line at y ${y.toFixed(4)} z ${z.toFixed(4)}`);
       }
     }
     assert.ok(low > 300, `only ${low} lower vertices: the zone did not run`);
@@ -131,7 +134,7 @@ for (const smooth of [true, false]) {
       }
       for (let i = 1; i < 8; i++) for (let j = 1; i + j < 8; j++) {
         const a = i / 8, b = j / 8, c = 1 - a - b;
-        const y = p[0][1] * c + p[1][1] * a + p[2][1] * b, z = p[0][2] * c + p[1][2] * a + p[2][2] * b, d = signed(y, z);
+        const y = p[0][1] * c + p[1][1] * a + p[2][1] * b, z = p[0][2] * c + p[1][2] * a + p[2][2] * b, d = signed(y, z, smooth);
         assert.ok(isLow ? d < 0.001 : d > -0.001,
           `a ${isLow ? "lower" : "primary"} triangle reaches ${(Math.abs(d) * 1000).toFixed(1)} mm across the line at y ${y.toFixed(3)} z ${z.toFixed(3)}`);
       }
@@ -175,13 +178,17 @@ test("lower: the line sits at pod fraction 0.31 down the sidepod flank", () => {
     if (Math.abs(z - 0.70) < 1e-6) continue;   // the vertical edge where the zone stops: the nose stays primary
     seam++;
     assert.ok(Math.abs(y - lineY(z)) < 1e-6, `seam vertex ${((y - lineY(z)) * 1000).toFixed(3)} mm off the line at z ${z.toFixed(3)}`);
-    const p = anchors.podAt(z);
+    const p = anchorsOf(true).podAt(z);
     if (z < 0.62 && z > -1.48 && Math.abs(Math.abs(x) - p.x) < 0.001) {
       flank++;
       assert.ok(Math.abs((y - p.bottom) / (p.top - p.bottom) - 0.31) < 1e-6, "the flank seam is at pod fraction 0.31");
     }
   }
   assert.ok(seam > 50 && flank >= 12, `seam ${seam}, on the pod flanks ${flank}: the line was not cut`);
+  // …and that pod is the rounded car's: the downwash ramp drops it aft of z -0.38
+  // only (4.5 mm at -1.48 for the default engine's coke 1.0).
+  for (const z of [0.46, 0, -0.38]) assert.equal(lineY(z, true), lineY(z, false), `the line moved at z ${z}, ahead of the ramp`);
+  assert.ok(lineY(-1.48, true) < lineY(-1.48, false) - 0.003, "the rounded line does not follow the downwash ramp");
 });
 
 test("lower absent is today's car: no lower = lower:null, and the flat build matches one that never heard of CarShade", () => {

@@ -32,9 +32,9 @@ function load(withShade, storage, search) {
     .concat(withShade ? ["js/car/car-shade.js"] : [], ["js/car/car3d.js"]);
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   const grab = (n) => vm.runInContext(n, ctx);
-  return { Car3D: grab("Car3D"), CarShade: withShade ? grab("CarShade") : null };
+  return { Car3D: grab("Car3D"), CarShade: withShade ? grab("CarShade") : null, Parts: grab("Parts"), Teams: grab("Teams") };
 }
-const { Car3D, CarShade } = load(true);
+const { Car3D, CarShade, Parts, Teams } = load(true);
 
 test("the rounded section keeps the trapezoid's envelope: top, bottom and mid-flank are where the flat faces were", () => {
   const f = { z: 1, y: 0.4, w: 0.30, h: 0.12, t: 0.7, x: 0.05 };
@@ -429,4 +429,112 @@ test("the rounded car keeps what is placed against its small parts: endplate boa
     // Headrest (part "cockpit") wraps the helmet (centre (0, 0.715, -0.075), r 0.145) without cutting it.
     for (const p of part("cockpit")) assert.ok(Math.hypot(p[0], p[1] - 0.715, p[2] + 0.075) > 0.15, `${teamId}: the headrest cuts the helmet`);
   }
+});
+
+// ---- Coke bottle + downwash ramp (2026-10-03): bodyAnchors(.., round) ----
+// Every factory car, plus the two extreme engine recipes tests/specs/parts-physics
+// uses (every bodywork knob at one clamp, then the other).
+const EXTREMES = [
+  { in: 1, inlet: 1, outlet: 1, podWidth: 0.72, shoulderHeight: 0.76, undercut: 1.38, coke: 1.38, tailWidth: 0.70, coverHeight: 0.78 },
+  { in: 1, inlet: 1, outlet: 1, podWidth: 1.28, shoulderHeight: 1.28, undercut: 0.72, coke: 0.72, tailWidth: 1.30, coverHeight: 1.28 },
+];
+const factoryCars = (P, T) => T.LIST.filter((t) => P.FACTORY_PRESETS[t.id]).map((t) => ({ id: t.id, spine: t.livery.spineHeight, parts: P.getVisualTiers(P.FACTORY_PRESETS[t.id], t) }));
+const recipeCars = () => factoryCars(Parts, Teams).concat(EXTREMES.map((engine, i) => ({ id: null, spine: i ? "dorsal" : null, parts: { engine: 1, _visual: { engine } } })));
+const withCoke = (coke) => ({ engine: 1, _visual: { engine: Object.assign({}, EXTREMES[0], { podWidth: 1, shoulderHeight: 1, undercut: 1, tailWidth: 1, coverHeight: 1, coke }) } });
+const ZS = Array.from({ length: 501 }, (_, i) => +(2.6 - i * 0.01).toFixed(2));
+const sampled = (a) => JSON.stringify({ key: a.key, st: a.podStations, pod: ZS.map((z) => a.podAt(z)), cov: ZS.map((z) => a.coverAt(z)), nose: ZS.map((z) => a.noseAt(z)) });
+
+test("bodyAnchors(.., false) is today's anchors for every factory car at every spine height", () => {
+  const Plain = load(false);   // a build that never heard of CarShade
+  const plainCars = factoryCars(Plain.Parts, Plain.Teams);
+  for (const [i, car] of factoryCars(Parts, Teams).entries()) {
+    for (const spine of Car3D.SPINE_HEIGHT_IDS) {
+      const off = Car3D.bodyAnchors(car.parts, car.id, spine, false);
+      assert.equal(off, Car3D.bodyAnchors(car.parts, car.id, spine), `${car.id}/${spine}: round false is not the cached default`);
+      assert.equal(sampled(off), sampled(Plain.Car3D.bodyAnchors(plainCars[i].parts, car.id, spine)), `${car.id}/${spine}: the flat anchors changed`);
+      const on = Car3D.bodyAnchors(car.parts, car.id, spine, true);
+      assert.notEqual(on, off, "the rounded anchors are their own cache entry");
+      assert.equal(on.key, off.key + "|r", `${car.id}: the rounded key is the flat one + "|r" (the decal cache splits on it)`);
+    }
+  }
+});
+
+test("the downwash ramp: only pod TOPS aft of z -0.38 drop; floors at bottom + 0.03, inner top never under the cover's bottom + 0.01", () => {
+  for (const car of recipeCars()) {
+    const flat = Car3D.bodyAnchors(car.parts, car.id, car.spine), rnd = Car3D.bodyAnchors(car.parts, car.id, car.spine, true);
+    const what = car.id || "extreme coke " + car.parts._visual.engine.coke;
+    assert.equal(rnd.podStations.length, flat.podStations.length, `${what}: a station was added`);
+    rnd.podStations.forEach((r, i) => {
+      const f = flat.podStations[i];
+      for (const k of ["z", "inner", "outer", "innerBottom", "outerBottom"]) assert.equal(r[k], f[k], `${what}: ${k} moved at z ${f.z}`);
+      if (f.z > -0.38) { assert.equal(r.innerTop, f.innerTop); assert.equal(r.outerTop, f.outerTop, `${what}: the top moved at z ${f.z}, ahead of the ramp`); return; }
+      assert.ok(r.outerTop <= f.outerTop && r.innerTop <= f.innerTop, `${what}: a top ROSE at z ${f.z}`);
+      assert.ok(r.outerTop >= r.outerBottom + 0.03 - 1e-12, `${what}: outer cap under 3 cm at z ${f.z}`);
+      assert.ok(r.innerTop >= r.innerBottom + 0.03 - 1e-12, `${what}: inner cap under 3 cm at z ${f.z}`);
+      assert.ok(r.innerTop >= rnd.coverAt(f.z).bottom + 0.01 - 1e-12,
+        `${what}: the inner top ${r.innerTop.toFixed(3)} is under the cover's bottom ${rnd.coverAt(f.z).bottom.toFixed(3)} + 0.01 at z ${f.z} — a slot opens`);
+      assert.ok(f.outerTop - r.outerTop >= f.innerTop - r.innerTop - 1e-12, `${what}: the inner top dropped more than the outer at z ${f.z}`);
+    });
+    // Ahead of the ramp the pod is the flat one, sample for sample: the sponsor
+    // board, both pod decals (z 0.46..-0.34) and parts-physics.spec's flat-anchor
+    // checks (z -0.40..0.50) read it there.
+    for (let i = 70; i >= -38; i--) assert.deepEqual(rnd.podAt(i / 100), flat.podAt(i / 100), `${what}: podAt(${i / 100})`);
+    for (let i = -38; i >= -200; i--) assert.equal(rnd.podAt(i / 100).x, flat.podAt(i / 100).x, `${what}: the pod plan moved at z ${i / 100}`);
+  }
+  // It is the coke knob's: none at 0.95 and under (Alpine 0.90), deeper with coke, full from 1.30.
+  const tail = (coke) => { const p = Car3D.bodyAnchors(withCoke(coke), null, null, true).podAt(-1.48); return p.top - p.bottom; };
+  const flatTail = (() => { const p = Car3D.bodyAnchors(withCoke(1), null, null).podAt(-1.48); return p.top - p.bottom; })();
+  assert.equal(tail(0.90), flatTail, "no ramp at coke 0.90");
+  assert.equal(tail(0.95), flatTail, "no ramp at coke 0.95");
+  for (let c = 0.96; c <= 1.30; c += 0.02) assert.ok(tail(c) < tail(c - 0.02) - 1e-6, `the ramp does not deepen from coke ${(c - 0.02).toFixed(2)} to ${c.toFixed(2)}`);
+  assert.ok(Math.abs(tail(1.30) - 0.25 * flatTail) < 1e-9 && tail(1.38) === tail(1.30), "full ramp from coke 1.30: the outer cap at a quarter of its height");
+});
+
+test("the coke pinch narrows the cover's FOOT only: exact at both ends, never wider, deeper with coke, crown and shoulder untouched", () => {
+  for (const car of recipeCars()) {
+    const flat = Car3D.bodyAnchors(car.parts, car.id, car.spine), rnd = Car3D.bodyAnchors(car.parts, car.id, car.spine, true);
+    const coke = car.parts._visual.engine.coke, what = car.id || "extreme coke " + coke;
+    for (const z of [-0.55, -2.00, -0.40, -2.10]) {   // the ends, and clamped beyond them
+      const c = rnd.coverAt(z);
+      if (c.xb != null) assert.equal(c.xb, c.x, `${what}: the foot moved at the junction z ${z}`);
+    }
+    for (let z = -0.55; z >= -2.00 - 1e-9; z -= 0.01) {
+      const c = rnd.coverAt(z), f = flat.coverAt(z);
+      for (const k of ["z", "x", "bottom", "top"]) assert.equal(c[k], f[k], `${what}: coverAt(${z.toFixed(2)}).${k} changed`);
+      if (coke <= 0.9) { assert.equal(c.xb, undefined, `${what}: a pinch at coke ${coke}`); continue; }
+      assert.ok(c.xb <= c.x + 1e-12 && c.xb >= 0.76 * c.x - 1e-12, `${what}: foot ${c.xb} against x ${c.x} at z ${z.toFixed(2)}`);
+      const pr = Car3D.coverProfile(c), pf = Car3D.coverProfile(f);
+      assert.deepEqual(pr.pts.slice(1), pf.pts.slice(1), `${what}: shoulder/facet/crown moved at z ${z.toFixed(2)}`);
+      assert.equal(pr.pts[0][0], c.xb, "coverProfile's foot is xb");
+      // coverFlankX: on the foot at the bottom, on the shoulder at the crease.
+      assert.ok(Math.abs(Car3D.coverFlankX(c, c.bottom) - c.xb) < 1e-12 && Math.abs(Car3D.coverFlankX(c, pr.shoulder) - pr.pts[1][0]) < 1e-12, "coverFlankX follows the pinched flank");
+    }
+  }
+  const foot = (coke, z) => Car3D.bodyAnchors(withCoke(coke), null, null, true).coverAt(z);
+  assert.equal(foot(0.90, -1.13).xb, undefined, "no pinch at coke 0.90");
+  for (let c = 0.92; c <= 1.38 + 1e-9; c += 0.02) assert.ok(foot(c, -1.13).xb < foot(c - 0.02, -1.13).xb - 1e-6 || (c - 0.02 <= 0.9 && foot(c, -1.13).xb < foot(c, -1.13).x), `the pinch does not deepen at coke ${c.toFixed(2)}`);
+  const deepest = foot(1.38, -1.13);
+  assert.ok(deepest.xb / deepest.x < 0.85, `the deepest pinch is only ${(100 * (1 - deepest.xb / deepest.x)).toFixed(1)} % at the waist`);
+});
+
+test("the rounded engine cover is one closed, outward skin at CarShade.COVER_Z, and the build draws it there", () => {
+  assert.deepEqual(Array.from(CarShade.COVER_Z), [-0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.70, -1.90, -2.00]);
+  for (const car of recipeCars()) {
+    const a = Car3D.bodyAnchors(car.parts, car.id, car.spine, true), o = collect();
+    CarShade.coverLoft(o, a, Car3D.coverProfile, -0.55, -2.00, [1, 0, 0], o.tri);
+    assertClosedOut(o.tris, "cover loft " + (car.id || car.parts._visual.engine.coke));
+    const zs = new Set(o.tris.flat().map((p) => p[2]));
+    assert.deepEqual([...zs].sort((x, y) => y - x), Array.from(CarShade.COVER_Z), "one ring per COVER_Z");
+  }
+  // The build: the cover's skin (its own colour) has vertices on every ring, the
+  // flat build only at the two ends — and only the engineCover part changes count.
+  const SENT = [0.31, 0.62, 0.93], rb = factoryCars(Parts, Teams).find((c) => c.id === "redbull");
+  const rings = (smooth) => {
+    const m = Car3D.build([0.2, 0.2, 0.6], [0.9, 0.9, 0.1], { teamId: "redbull", parts: rb.parts, livery: { cover: SENT }, smooth, noWheels: true });
+    const z = new Set();
+    for (let v = 0; v < m.pos.length / 3; v++) if (m.col[v * 3] === SENT[0] && m.col[v * 3 + 1] === SENT[1] && m.col[v * 3 + 2] === SENT[2] && m.pos[v * 3 + 2] <= -0.55 && m.pos[v * 3 + 2] >= -2.00) z.add(m.pos[v * 3 + 2]);
+    return Array.from(CarShade.COVER_Z).filter((r) => z.has(r));
+  };
+  assert.deepEqual(rings(true), Array.from(CarShade.COVER_Z), "the rounded cover is drawn at every ring");
+  assert.deepEqual(rings(false), [-0.55, -2.00], "the flat cover keeps its two stations");
 });

@@ -28,6 +28,12 @@
  *   purely radial, so its rounded shoulder never caught the light; they now
  *   come from the tread's real shape. No vertex moves.
  *
+ *   COKE BOTTLE + DOWNWASH (downwash/cokeFoot/coverLoft): the engine recipe's
+ *   `coke` knob read as the downwash concept it stands for — pod tops ramp
+ *   down aft of z -0.38, the engine cover's foot pinches between its
+ *   stations, and the cover is one skin at the COVER_Z rings. car3d
+ *   bodyAnchors(.., round) carries the shape, so what is placed off it follows.
+ *
  *   SMALL PARTS (skin/pipe/strut/block/...): struts with a lens or ellipse
  *   section (wishbones, halo pillar, nose pylons, every beam), rounded blocks
  *   (bolsters, airbox, brake ducts, exhaust core), and shaped plates (floor,
@@ -475,6 +481,85 @@ const CarShade = (function () {
     for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side)), col, frontCol, tri);
   }
 
+  // ---- COKE BOTTLE + DOWNWASH (rounded builds, 2026-10-03) ----
+  // The engine recipe's `coke` knob (0.72-1.38; after #797 the grid runs 0.90
+  // Alpine .. 1.18 Mercedes .. 1.30 Audi, 1.32 Red Bull / Aston) only narrowed
+  // the pods' PLAN view at the waist (z -0.62) and tail (-1.48). The engine cover
+  // was a two-station linear loft nothing pinched, and the pod tops fell only to
+  // 0.27-0.30 m at -1.48, ending in a vertical cap 14-17 cm above the 0.13 m
+  // floor: no car had a downwash ramp. The knob already separates the concepts,
+  // so a rounded build reads it as one — no new catalog field. car3d
+  // bodyAnchors(.., round) carries the shape, so everything mounted off
+  // podAt / coverAt / coverFlankX (ERS cells and conduit, louvres, outlets,
+  // gills, pinstripe, fin root, the two-tone line, the livery decals) follows.
+  //
+  //   DOWNWASH RAMP (downwash): only station TOPS at z <= -0.38 move; no station
+  //   is added or moved, so every loft and flank span keeps its stop count.
+  //     r = clamp((coke - 0.95) / 0.35, 0, 1),   w(z) = 0 at -0.38 .. 1 at -1.48
+  //     outerTop = outerBottom + max(0.03, h  (1 - 0.75 r w))
+  //     innerTop = innerBottom + max(0.03, hi (1 - 0.50 r w)), never below the
+  //                cover's bottom + 0.01 (nor raised), so no slot opens between
+  //                pod and cover.
+  //   It starts at -0.38 because everything ahead of it must not move: the
+  //   sponsor board and both pod decals (z 0.46..-0.34), and
+  //   tests/specs/parts-physics.spec.js, which scores the rounded car against
+  //   FLAT bodyAnchors over z -0.40..0.50 (x everywhere; tops only where the
+  //   decals are). Keep it there.
+  //
+  //   COKE PINCH (cokeFoot): the cover's FOOT half-width, t = 0 at the airbox
+  //   (z -0.55) .. 1 at the gearbox (-2.00):
+  //     xb = xF (1 - s) + xR s,  s = 1 - (1 - t)^p,  p = 1 + 2 max(0, coke - 0.9)
+  //   clamped to xb >= 0.76 x. Exact at t 0 and 1 (the airbox, hoop and gearbox
+  //   junctions do not move), only ever narrower than the linear x, more with
+  //   coke; the shoulder and crown are untouched (car3d coverProfile reads xb).
+  //
+  //   COVER LOFT (coverLoft): the cover as ONE closed skin through coverProfile
+  //   at the COVER_Z rings — three stacked two-station blocks could not follow
+  //   the pinch. car-mesh drapes the flank decal at the same rings, so the
+  //   graphic stays its 14 mm off the skin (13.0-14.7 measured) where one
+  //   straight quad, a chord across the pinch, stood up to 40 mm off it.
+  const COVER_Z = Object.freeze([-0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.70, -1.90, -2.00]);
+  const RAMP = Object.freeze({ from: -0.38, to: -1.48, coke: 0.95, span: 0.35, outer: 0.75, inner: 0.50, min: 0.03, gap: 0.01 });
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const cokeOf = (c) => Math.max(0.72, Math.min(1.38, c == null ? 1 : c));   // car3d sidepodStations' clamp
+  /** car3d sidepodStations with the downwash ramp: a NEW array of new stations
+   *  (the input is not touched), or the input itself when coke gives no ramp.
+   *  coverBottomAt(z) is the engine cover's bottom y there. */
+  function downwash(stations, coverBottomAt, coke) {
+    const r = clamp01((cokeOf(coke) - RAMP.coke) / RAMP.span);
+    if (!(r > 0)) return stations;
+    return stations.map((st) => {
+      const k = r * clamp01((RAMP.from - st.z) / (RAMP.from - RAMP.to));
+      if (!(k > 0)) return st;   // ahead of the ramp, and AT its start (-0.38): untouched, to the bit
+      const ho = st.outerTop - st.outerBottom, hi = st.innerTop - st.innerBottom;
+      const dropped = st.innerBottom + Math.max(RAMP.min, hi * (1 - RAMP.inner * k));
+      return Object.assign({}, st, {
+        outerTop: st.outerBottom + Math.max(RAMP.min, ho * (1 - RAMP.outer * k)),
+        innerTop: Math.max(dropped, Math.min(st.innerTop, coverBottomAt(st.z) + RAMP.gap)),
+      });
+    });
+  }
+  /** A sampled cover anchor `c` ({z, x, bottom, top}) with its pinched foot
+   *  `xb` added; `stations` are the cover's two end stations. Returned as is
+   *  (no xb) when coke gives no pinch. */
+  function cokeFoot(c, stations, coke) {
+    const p = 1 + 2 * Math.max(0, cokeOf(coke) - 0.9);
+    if (!(p > 1)) return c;
+    const F = stations[0], R = stations[stations.length - 1], t = clamp01((F.z - c.z) / (F.z - R.z));
+    const s = 1 - Math.pow(1 - t, p);
+    return Object.assign({}, c, { xb: Math.max(0.76 * c.x, F.x * (1 - s) + R.x * s) });
+  }
+  /** The ENGINE COVER from zF to zR as one closed skin: per COVER_Z ring the
+   *  section is car3d's coverProfile(anchors.coverAt(z)).pts — foot, shoulder,
+   *  facet, crown on the right, mirrored — closed along the bottom. */
+  function coverLoft(out, anchors, profile, zF, zR, col, tri) {
+    const zs = [zF].concat(COVER_Z.filter((z) => z < zF && z > zR), [zR]);
+    skin(out, zs.map((z) => {
+      const p = profile(anchors.coverAt(z)).pts;
+      return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
+    }), col, tri);
+  }
+
   /** Smooth vertex normals from the faces of an INDEXED vertex range [from, to):
    *  the tyre tread, whose ring normals were purely radial, so its rounded
    *  shoulder never caught the light. Only triangles wholly inside the range. */
@@ -665,7 +750,8 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, EXP_TOP, LOWER, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft, vertexNormals, lowerZone, smooth,
+  return { KEY, RING_N, EXP, EXP_TOP, LOWER, COVER_Z, RAMP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft,
+           downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, smooth,
            skin, earcut, sect, pipe, strut, fine, rquad, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
            _norm: norm };
 })();
