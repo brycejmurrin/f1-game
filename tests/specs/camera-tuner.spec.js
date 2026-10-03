@@ -42,7 +42,7 @@ const frame = (page, mode) => page.evaluate((m) => __apex.previewCam(m, 0.2, 55)
 test("camTune() reports the knob registry; the six offsets default to zero", async ({ page }) => {
   await loadMonza(page);
   const all = await page.evaluate(() => __apex.camTune());
-  expect(all.defs.map((d) => d.id)).toEqual(["height", "dist", "side", "pitch", "yaw", "fov", "cornerLead"]);
+  expect(all.defs.map((d) => d.id)).toEqual(["height", "dist", "side", "pitch", "yaw", "fov", "cornerLead", "cornerHang"]);
   expect(all.tuned).toEqual({});
   const chase = await page.evaluate(() => __apex.camTune("chase"));
   // The six GEOMETRIC knobs are deltas on the solved rig, so their zero means
@@ -51,9 +51,13 @@ test("camTune() reports the knob registry; the six offsets default to zero", asy
   // rather than 0. Reporting 0 here is what made the flat end of the slider
   // unreachable (tests/unit/camera-defaults.test.mjs holds the two numbers
   // together); this asserts the registry's own default rather than a literal.
+  // CORNER HANG (js/camera/offsets.js) is the same kind of knob: a scale on the
+  // shipped hang whose def (1) IS the shipped amount.
   const leadDef = all.defs.find((d) => d.id === "cornerLead").def;
+  const hangDef = all.defs.find((d) => d.id === "cornerHang").def;
   expect(leadDef).toBeGreaterThan(0);
-  for (const [id, v] of Object.entries(chase)) expect(v).toBe(id === "cornerLead" ? leadDef : 0);
+  expect(hangDef).toBe(1);
+  for (const [id, v] of Object.entries(chase)) expect(v).toBe(id === "cornerLead" ? leadDef : id === "cornerHang" ? hangDef : 0);
   expect(await page.evaluate(() => __apex.camTune("nope"))).toBe(false);
 });
 
@@ -186,8 +190,9 @@ test("values clamp to the slider range, persist, and reset", async ({ page }) =>
   await page.evaluate(() => __apex.camTune("cockpit", null));
   // cornerLead reads its registry default even on a mode that never applies it
   // (values() fills every knob); chase/far are the only readers.
-  const leadDef = (await page.evaluate(() => __apex.camTune())).defs.find((d) => d.id === "cornerLead").def;
-  expect(await page.evaluate(() => __apex.camTune("cockpit"))).toEqual({ height: 0, dist: 0, side: 0, pitch: 0, yaw: 0, fov: 0, cornerLead: leadDef });
+  const defs = (await page.evaluate(() => __apex.camTune())).defs;
+  const leadDef = defs.find((d) => d.id === "cornerLead").def, hangDef = defs.find((d) => d.id === "cornerHang").def;
+  expect(await page.evaluate(() => __apex.camTune("cockpit"))).toEqual({ height: 0, dist: 0, side: 0, pitch: 0, yaw: 0, fov: 0, cornerLead: leadDef, cornerHang: hangDef });
   expect((await frame(page, "cockpit")).eye[1]).toBeLessThan(base.eye[1] - 4);
 });
 
@@ -206,12 +211,14 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   await expect(page.locator("#camtune-inner")).toBeVisible();
   // One tab per CamModes mode: 20 = 14 base + TRACKSIDE + RIVAL / PIT WALL / DRONE + TV + HELMET (appended 2026-10-03, deliberate).
   expect(await page.locator("#ct-modes .lt-tab").count()).toBe(20);
-  // 7 framing sliders exist (#ct-in-*); CORNER LEAD applies to chase/far/drone,
-  // so on HOOD its row is hidden and the six geometric knobs show. Comfort
-  // rows (#ct-cin-*) are separate and always visible.
-  expect(await page.locator("#ct-rows input[id^=ct-in-]").count()).toBe(7);
+  // 8 framing sliders exist (#ct-in-*); CORNER LEAD (chase/far/drone) and CORNER
+  // HANG (chase/drift/reverse/overhead/broadcast) do not apply to HOOD, so their
+  // rows are hidden and the six geometric knobs show. Comfort rows (#ct-cin-*)
+  // are separate and always visible.
+  expect(await page.locator("#ct-rows input[id^=ct-in-]").count()).toBe(8);
   expect(await page.locator("#ct-rows input[id^=ct-cin-]").count()).toBe(4);
   await expect(page.locator("#ct-row-cornerLead")).toBeHidden();
+  await expect(page.locator("#ct-row-cornerHang")).toBeHidden();
   await expect(page.locator("#ct-row-height")).toBeVisible();
   await expect(page.locator("#ct-comfort-row-fovBias")).toBeVisible();
   await expect(page.locator("#ct-profile")).toContainText("HOOD");
