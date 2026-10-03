@@ -24,6 +24,7 @@
  *
  * Run: node --test tests/unit/ui-sheets-audit.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -546,7 +547,7 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
 });
 
 test("pause, settings, results and standings all scroll inside the sheet on a short viewport", () => {
-  const comp = cssRules(read("css/components.css"));
+  const comp = cssRules(readCssSource("css/components.css"));
   assert.equal(decl(comp, ".sheet", "grid-template-rows"), "auto minmax(0, 1fr) auto", "the body row can shrink, so the sheet never grows past the screen");
   assert.equal(decl(comp, ".pane", "overflow-y"), "auto");
   assert.equal(decl(comp, ".pane", "overflow-x"), "hidden");
@@ -616,7 +617,7 @@ test("RESULTS: your row keeps its lime ink and OPAQUE sticky ground on the podiu
   // the rows scrolling under a sticky row showed through it. A small cascade
   // over the sheet's own rules: compound class selectors (with :not), outside
   // any @media, ranked by specificity then source order, as the browser does.
-  const rules = cssRules(read("css/components.css")).filter((r) => !r.context.some((c) => c.startsWith("@media")));
+  const rules = cssRules(readCssSource("css/components.css")).filter((r) => !r.context.some((c) => c.startsWith("@media")));
   const COMPOUND = /^((?:\.[\w-]+)+)((?::not\(\.[\w-]+\))*)$/;
   const winner = (classes, prop, descendant) => {
     let best = null;

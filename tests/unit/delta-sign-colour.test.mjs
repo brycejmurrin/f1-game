@@ -1,7 +1,7 @@
 /* delta-sign-colour.test.mjs — two widgets, one sign convention, opposite colours.
  *
  * The TELEMETRY tab's compare gauge painted the TRAILING driver green and the
- * leading one red. js/data/telemetry.js computes both the gauge delta and the
+ * leading one red. js/data/telemetry-player.js computes both the gauge delta and the
  * lane-board delta with the same expression and comments both the same way:
  *
  *     const delta = timeAtDist(view.compare.cum, dP) - t;   // >0: compare is behind
@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const css = fs.readFileSync(path.join(ROOT, "css/data.css"), "utf8");
-const js = fs.readFileSync(path.join(ROOT, "js/data/telemetry.js"), "utf8");
+const js = fs.readFileSync(path.join(ROOT, "js/data/telemetry-player.js"), "utf8");
 
 /** The colour token `.<base>.<state>` resolves to, e.g. ("dh-gdelta","dh-pos"). */
 function tokenFor(base, state) {
@@ -52,11 +52,11 @@ test("the source really does use one sign convention for both deltas", () => {
 test("a positive delta is the SLOWER colour on every widget that uses it", () => {
   for (const base of BEHIND_IS_POS)
     assert.equal(tokenFor(base, "dh-pos"), "--slower",
-      `.${base}.dh-pos must be --slower: dh-pos means "behind" in telemetry.js`);
+      `.${base}.dh-pos must be --slower: dh-pos means "behind" in telemetry-player.js`);
 });
 
 test("a negative delta is the FASTER colour on every widget that uses it", () => {
   for (const base of BEHIND_IS_POS)
     assert.equal(tokenFor(base, "dh-neg"), "--faster",
-      `.${base}.dh-neg must be --faster: dh-neg means "ahead" in telemetry.js`);
+      `.${base}.dh-neg must be --faster: dh-neg means "ahead" in telemetry-player.js`);
 });

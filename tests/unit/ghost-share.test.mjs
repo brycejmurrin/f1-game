@@ -245,7 +245,8 @@ test("starting a race during ghost decoding preserves the link until returning t
     daily: { stop() {} }, restoreFreePlaySelection() {}, Tracks: { LIST: [{ id: "monza" }] },
     trackIdx: 0, buildSelect() { opens++; }, vt() {}, scheduleFlybyTrack() {},
   });
-  const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  ctx.G = { announce: h.notify, session: "race", daily: { stop() {} }, trackIdx: 0, buildSelect() { opens++; }, scheduleFlybyTrack() {} };
+  const source = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
   const consume = vm.runInContext("(" + fnSource(source, "async function consumeGhostHash()") + ")", ctx);
   const pending = consume();
   racing = true;
@@ -340,7 +341,7 @@ test("Phase 1 wires sharing into load order, results, boot/hashchange, HUD, and 
   const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
   const manifest = read("tools/manifest.cjs");
   const results = read("js/ui/results-sheet.js");
-  const game = read("js/game.js");
+  const game = read("js/ui/title-flow.js") + read("js/game.js");
   const hud = read("js/ui/hud.js");
 
   assert.match(manifest, /"js\/car\/ghost\.js",\s*"js\/car\/ghost-share\.js"/);

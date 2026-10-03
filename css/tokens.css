@@ -801,8 +801,11 @@ body:not(.desktop) {
      --hud-panel-a inline on <html> only once the player moves the slider, so
      unset this is 1 and every plate keeps its shipped alpha. css/hud.css
      multiplies each plate's alpha by the EFFECTIVE value below, which HIGH
-     CONTRAST pins at 1 (its block further down) — solid plates always win. */
-  --hud-panel-a-eff: var(--hud-panel-a, 1);
+     CONTRAST pins at 1 (its block further down) — solid plates always win.
+     FLOORED at 0.45: every plate that takes this carries text, and the
+     slider's 20 % put the 0.55 gap plate at 0.11 alpha — white ink straight
+     on a sunlit sky. Below 45 % the slider changes nothing; unset is still 1. */
+  --hud-panel-a-eff: max(0.45, var(--hud-panel-a, 1));
   --ui-compact-brand-scale: min(var(--ui-scale), 1);
   --ui-compact-scale: min(var(--ui-scale), 1.25);
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
@@ -1024,23 +1027,27 @@ body:not(.desktop) {
   --hud-text-boost: 1.18;
 }
 /* COLOUR VISION (js/ui/appearance-opts.js): remap semantic ink used by the HUD
-   and menus. IBM-safe triples — matches the driving-line COLOUR-BLIND palette
-   intent without filtering the 3D canvas. */
+   and menus. Same hues as the Tol/IBM-safe triples (matches the driving-line
+   COLOUR-BLIND palette intent without filtering the 3D canvas), LIGHTENED for
+   the always-dark HUD plate: the published values (#0077bb, #cc3311) are a
+   white-paper palette and measured ~3:1 on rgb(8 8 14 / .72) over a mid-grey
+   scene. Every ink here clears 4.5:1 there (tests/unit/apca-timing.test.mjs).
+   --red stays the dark accent: it is never HUD ink (see that test). */
 :root[data-cvd="deutan"],
 :root[data-cvd="protan"] {
-  --faster: #0077bb;
+  --faster: #4aa3ff;
   --slower: #ee7733;
   --sec-slow: #ee7733;
-  --sec-best: #33bbee;
-  --you: #cc3311;
+  --sec-best: #80e0ff;
+  --you: #ff6a4d;
   --red: #cc3311;
 }
 :root[data-cvd="tritan"] {
-  --faster: #009988;
-  --slower: #cc3311;
+  --faster: #00b8a3;
+  --slower: #ff6a4d;
   --sec-slow: #ee7733;
-  --sec-best: #0077bb;
-  --you: #ee3377;
+  --sec-best: #4aa3ff;
+  --you: #ff6699;
 }
 /* HIGH CONTRAST: solid plates instead of see-through ones, secondary text near
    full strength, lines that read as lines. Theme-relative, so LIGHT + HIGH
@@ -1057,6 +1064,35 @@ body:not(.desktop) {
   --hud-halo: 0 0 2px #000, 0 1px 3px #000;
   --look-hud-bg: var(--hc-hud-plate);
   --look-hud-dim: var(--look-hud-ink);
+}
+/* THE RACE HUD IS DARK IN EVERY THEME. Its plates are literal rgb(8 8 14 / …)
+   (css/hud.css), so LIGHT's ink tokens — a white --hud-halo, a mid-grey
+   --dim, dark hairlines and a light --bg used as ink on --you — painted a
+   glowing smear and ~2:1 labels on them. Same move as .touchbtn in
+   css/overlays.css: restate the DARK values inside #hud. Custom properties
+   resolve where declared, so HIGH CONTRAST's :root --dim (a light-theme mix)
+   must be restated here too, from the dark --text/--bg. */
+:root[data-ui-theme="light"] #hud {
+  --text: #f6f6f9; --dim: #9a9aa8; --bg: #0c0c14;
+  --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
+  --plate-line: rgba(255, 255, 255, 0.16); --card-line: rgba(255, 255, 255, 0.12);
+  /* and the INHERITED ink: .hud-value, #hud-speed and friends set no colour of
+     their own, so they inherit body's already-resolved (dark) --text. */
+  color: var(--text);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-ui-theme="system"] #hud {
+    --text: #f6f6f9; --dim: #9a9aa8; --bg: #0c0c14;
+    --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
+    --plate-line: rgba(255, 255, 255, 0.16); --card-line: rgba(255, 255, 255, 0.12);
+    color: var(--text);
+  }
+}
+:root[data-ui-contrast="high"] #hud {
+  --dim: color-mix(in oklab, #f6f6f9 86%, #0c0c14);
+  --plate-line: color-mix(in oklab, #f6f6f9 55%, transparent);
+  --card-line: color-mix(in oklab, #f6f6f9 40%, transparent);
+  --hud-halo: 0 0 2px #000, 0 1px 3px #000;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box;

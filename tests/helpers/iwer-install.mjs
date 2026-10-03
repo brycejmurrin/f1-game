@@ -41,6 +41,10 @@ export async function installIwer(page, opts = {}) {
     try {
       localStorage.setItem("apex26.tlxForceGL", "1");
       localStorage.setItem("apex26.gfxBackend", "three");
+      // This suite qualifies the XR lifecycle, not desktop HIGH performance.
+      // IWER shares the canvas framebuffer; SwiftShader renders both eyes on
+      // the CPU. Keep the existing LOW preset from competing with XR timers.
+      localStorage.setItem("apex26.gfxPreset", JSON.stringify("low"));
     } catch (_) { /* */ }
     const root = globalThis.IWER || {};
     if (!root.XRDevice || !root.metaQuest3) {
@@ -72,17 +76,20 @@ export async function waitXrReady(page, timeout = 60_000) {
 }
 
 /**
- * Wait while immersive-vr is presenting without using page timers / window.rAF.
+ * Wait for immersive-vr progress without repeatedly submitting CDP evaluations.
  *
- * Playwright `page.waitForFunction({ polling })` re-arms via the *page*
- * timer/`rAF`. Immersive XR suspends window.rAF (and can starve page timers);
- * IWER still delivers `session.requestAnimationFrame`, so a frameCount waiter
- * never re-samples → TimeoutError with a live session (CI 37083868797).
+ * Real immersive XR owns its session clock. Pinned IWER instead drives that
+ * clock through window.rAF plus synchronous software-GL work. Repeated CDP
+ * evaluation can stall its cold frames: CI job 111141505102 repeated base=0/fc=2
+ * with one evaluation blocked for the entire 45 s budget. The single-promise
+ * approach was also verified locally by commit d08906b2a (10/10 twice).
  *
  * Do NOT schedule our own `session.requestAnimationFrame` to wait either —
  * IWER effectively serialises XR callbacks, so a lightweight waiter steals
- * slots from the game's onXRFrame and frameCount stalls at 0–1. Poll
- * `XrSession.frameCount()` from Node via CDP evaluate instead.
+ * slots from the game's onXRFrame and frameCount stalls at 0–1. Read the
+ * baseline and poll inside ONE evaluation, letting the initial XR work settle.
+ * The settle is inside the budget. A Node watchdog still rejects when page
+ * timers or the evaluation itself are starved; neither can extend the budget.
  *
  * Soft-GL first XR ticks are slow (~5 s/frame cold under Playwright +
  * SwiftShader); allow up to 45 s for a small delta so ENTER VR still proves
@@ -92,17 +99,31 @@ export async function waitXrFrames(page, delta = 2, opts = {}) {
   const timeout = opts.timeout ?? 45_000;
   const interval = opts.interval ?? 200;
   const need = (delta | 0) || 2;
-  const base = await page.evaluate(() => XrSession.frameCount());
-  const deadline = Date.now() + timeout;
-  let fc = base;
-  while (Date.now() < deadline) {
-    fc = await page.evaluate(() => XrSession.frameCount());
-    if (fc > base + need) return base;
-    await new Promise((r) => setTimeout(r, interval));
+  let watchdog;
+  const budget = new Promise((_, reject) => {
+    watchdog = setTimeout(() => reject(new Error(
+      `waitXrFrames(+${need}) timed out after ${timeout}ms (page evaluation or timers stalled)`,
+    )), timeout);
+  });
+  try {
+    const result = await Promise.race([budget, page.evaluate(({ need, timeout, interval }) => new Promise((resolve) => {
+      const deadline = performance.now() + timeout;
+      const base = XrSession.frameCount();
+      const tick = () => {
+        const fc = XrSession.frameCount();
+        if (performance.now() >= deadline) return resolve({ ok: false, base, fc });
+        if (fc > base + need) return resolve({ ok: true, base, fc });
+        setTimeout(tick, interval);
+      };
+      setTimeout(tick, Math.min(2000, timeout));
+    }), { need, timeout, interval })]);
+    if (result.ok) return result.base;
+    throw new Error(
+      `waitXrFrames(+${need}) timed out after ${timeout}ms (base=${result.base}, fc=${result.fc})`,
+    );
+  } finally {
+    clearTimeout(watchdog);
   }
-  throw new Error(
-    `waitXrFrames(+${need}) timed out after ${timeout}ms (base=${base}, fc=${fc})`,
-  );
 }
 
 /**

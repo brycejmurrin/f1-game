@@ -5,6 +5,7 @@
  * index.html's first-paint copy of the arithmetic equal to the module's.
  *
  * Run: node --test tests/unit/title-layout.test.mjs */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -411,7 +412,7 @@ test("shell: every title-screen knob sits in ONE TITLE SCREEN fold; MOTION stays
   const motion = look.indexOf('id="pm-motion"');
   assert.ok(motion > 0 && motion < a, "MOTION is global: outside the fold, above it");
   assert.ok(look.lastIndexOf('<h4 class="pm-look-h">MOTION</h4>', motion) > look.indexOf("READABILITY"), "under its own MOTION heading");
-  assert.match(read("css/components.css"), /#pm-titlescreen-body,\s*#pm-titlelayout-body \{[^}]*flex-direction: column/, "the body is a column like the sub-fold's");
+  assert.match(readCssSource("css/components.css"), /#pm-titlescreen-body,\s*#pm-titlelayout-body \{[^}]*flex-direction: column/, "the body is a column like the sub-fold's");
 });
 
 test("TITLE SCREEN summary: SHIPPED only while the layout AND TitleFx's three looks are shipped", () => {

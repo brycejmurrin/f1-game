@@ -340,6 +340,28 @@
       iCast.push(m);
     }
 
+    // A geometry the owner released (freeMesh / chunked free): park every slot
+    // still pointing at it NOW. Slots are otherwise parked only when their
+    // target's next pass runs, and after a track switch that pass cannot run
+    // until the next world is built — so every chunk geometry of the old track
+    // stayed reachable through a hidden caster exactly across the build peak.
+    // Parking alone is not enough for a RELEASED geometry: three's render
+    // object for the slot keeps the geometry it last rendered with until the
+    // slot renders again, and a parked slot does not. The "dispose" event is
+    // what drops that render object (tlx.js dropWrapper has the measurement);
+    // the slot stays in the pool and simply builds a fresh one when next cast.
+    function releaseGeometry(geo) {
+      if (!geo) return;
+      for (const pl of pools.values()) {
+        for (let i = 0; i < pl.pool.length; i++) {
+          const m = pl.pool[i];
+          if (m.geometry !== geo) continue;
+          m.visible = false; m.geometry = parkedGeo;
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        }
+      }
+    }
+
     // The batch is gone (track switch): its caster goes with it, so a hidden
     // mesh never pins a freed geometry alive (the parkedGeo rule, per batch).
     function freeInstanced(batch) {
@@ -630,6 +652,7 @@
       castShadow: cast,
       castInstanced,
       freeInstanced,
+      releaseGeometry,
       castShadowChunked: cast,
       shadowEnd: () => endPass(sunRT),
       carShadowEnd,

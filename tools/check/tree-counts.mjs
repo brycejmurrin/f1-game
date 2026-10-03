@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { CSS_SOURCES } from "../lib/css-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -237,8 +238,18 @@ export const rawColorDistinct = () => colorForks().size;
 /** Sheets that space themselves entirely in raw px and read neither --pad nor
  *  --gap, so they cannot respond to the density ladder. A LIST, not a count:
  *  which screen is density-blind is the whole content of the finding. */
-export function zeroSpacingSheets() {
-  return sheets()
+export function zeroSpacingSheets(all = sheets()) {
+  // A physical split must not change whether its SCREEN responds to density.
+  // Literal counters above still scan each file. Only this screen-level policy
+  // joins the declared source families; unknown sheets remain independent.
+  const owners = new Map(Object.entries(CSS_SOURCES)
+    .flatMap(([owner, files]) => files.map((file) => [path.basename(file), path.basename(owner)])));
+  const logical = new Map();
+  for (const { name, src } of all) {
+    const owner = owners.get(name) || name;
+    logical.set(owner, (logical.get(owner) || "") + "\n" + src);
+  }
+  return [...logical].map(([name, src]) => ({ name, src }))
     .filter(({ name }) => name !== "tokens.css")
     .filter(({ src }) => /(?:padding|margin|gap)[a-z-]*:[^;{}]*[0-9.]+px/.test(src))
     .filter(({ src }) => !/(?:padding|margin|gap)[a-z-]*:[^;{}]*var\(--(?:pad|gap)/.test(src))

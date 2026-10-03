@@ -6,6 +6,7 @@
  *
  * Run: node --test tests/unit/ui-journey-session.test.mjs
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -26,7 +27,7 @@ function fitAtBlocks(css, id) {
 }
 
 test("session dialogs declare --fit-at next to --sheet-w so classifyFit can shrink them", () => {
-  const css = read("css/components.css");
+  const css = readCssSource("css/components.css");
   for (const id of SESSION) {
     const blocks = fitAtBlocks(css, id);
     assert.ok(blocks.length >= 1, `#${id} must declare --fit-at (inherits onto .sheet)`);
@@ -42,7 +43,7 @@ test("session dialogs declare --fit-at next to --sheet-w so classifyFit can shri
 });
 
 test("landscape --fit-at uses zoom-correct data-shape selector (not @media orientation)", () => {
-  const css = read("css/components.css");
+  const css = readCssSource("css/components.css");
   // Converted from @media (orientation: landscape) to data-shape="wide" (sheetshape.js).
   for (const id of ["results", "standings", "race-settings", "customize"]) {
     assert.match(css, new RegExp(`#${id} \\.sheet:not\\(\\[data-shape="tall"\\]\\)[^{]*\\{[^}]*--fit-at:\\s*220px`),
@@ -76,7 +77,7 @@ test("the garage stands down under its own dialogs: customize/teampicker fade #c
   // translucent sheet to composite into its form fields ("DRIVER" ghosting
   // inside CUSTOMIZE's CODE input). opacity, not hidden, so the turntable
   // canvas keeps its frustum while the dialog is up.
-  const css = read("css/components.css");
+  const css = readCssSource("css/components.css");
   assert.match(css,
     /body:has\(#customize:not\(\[hidden\]\)\) #carsetup,\s*\nbody:has\(#teampicker:not\(\[hidden\]\)\) #carsetup \{\s*\n\s*opacity:\s*0;\s*\n\s*pointer-events:\s*none;/,
     "#carsetup must fade under #customize and #teampicker like every other dialog host");

@@ -971,10 +971,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
   let surfaceId = i32(vMatId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 32;
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 33;
   let paintSurface = surfaceId == 20;
   let carbonSurface = surfaceId == 21;
   let rubberSurface = surfaceId == 22;
+  // TYRE SIDEWALL (car3d.js SURFACES.sidewall = 33): satin rubber wall, band and
+  // lettering vs the matte tread — mirrors js/render/glx/shaders/glsl-lit.js.
+  let sidewallSurface = surfaceId == 33;
   let metalSurface = surfaceId == 23;
   let glassSurface = surfaceId == 24;
   let emissiveSurface = surfaceId == 25;
@@ -992,11 +995,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its mean
   // over 8-16 m so the 3.3 cm cross-hatch cannot moire at range. Computed
   // here, ahead of the roughness ripple below and the albedo twill further on.
+  // wvT = the twill's ANALYTIC slope (same fade): tilts N below, no derivative.
   var weave = 0.5;
+  var wvT = vec2<f32>(0.0);
   if (carbonFinish || carbonSurface) {
     let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
     let wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
     weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+    wvT = vec2<f32>(cos(wv.x) * sin(wv.y), sin(wv.x) * cos(wv.y)) * wvFade;
   }
   // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
   // clearcoat, but a DIELECTRIC env response, not chrome — see baseRefl below.
@@ -1013,6 +1019,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       carPaint = 0.0;
       clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface || visorSurface);
       if (matteSurface) { clearcoat = 0.0; }
+      // Carbon: a thin lacquer (min 0.30) — glsl-lit.js. No env mirror (carPaint 0).
+      if (carbonSurface || carbonFinish) { clearcoat = min(D.mat1.z, 0.30); }
     }
   }
   let envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;
@@ -1050,6 +1058,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (carPaint > 0.001) {
     N = paintPeelN(N, in.objPos, vDist, carPaint);
   }
+  // CARBON WEAVE NORMAL (glsl-lit.js): tilt N along the twill's analytic slope in
+  // the peel's N-built tangent frame. No derivative: legal after the branches.
+  if (carbonFinish || carbonSurface) {
+    let wT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+    let wB = cross(N, wT);
+    N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.18);
+  }
   // Wall/MAT bump AFTER detail + peel, matching GLX glsl-lit.js. Lighting
   // still uses the bumped N; SAA does not (Nsaa / geo+peel mix).
   applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn);
@@ -1080,6 +1095,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (iriSurface) { metalness = max(D.mat0.w, 0.25); }
     if (matteSurface) { metalness = 0.0; }
     if (rubberSurface) { specular = 0.18; }
+    if (sidewallSurface) { specular = 0.35; }
     if (metalSurface || mirrorSurface) { specular = 1.0; }
     if (carbonSurface || carbonFinish) { specular = 0.48; }
     if (panelSurface) { specular = 0.35; }
@@ -1089,6 +1105,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
     if (carbonSurface || carbonFinish) { rough = max(rough, 0.56) + (weave - 0.5) * 0.10; }   // the twill's roughness ripple
     if (rubberSurface) { rough = max(rough, 0.90); }
+    if (sidewallSurface) { rough = clamp(rough, 0.55, 0.65); }   // satin wall vs the matte tread
     if (metalSurface) { rough = min(rough, 0.16); }
     if (glassSurface || visorSurface) { rough = min(rough, 0.13); }
     if (emissiveSurface) { rough = max(rough, 0.32); }
@@ -1180,7 +1197,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // when SSR sheds (tier / LITE) or a march misses.
   var wet = 0.0;
   var wetSheen = 0.0;
-  if (wetness > 0.001) {
+  // NOT on a car: this block is world-keyed (noise puddles, ripple cells, the
+  // tarmac absorb) and slid across the moving body in rain — glsl-lit.js.
+  if (wetness > 0.001 && !classifiedCar) {
     let upFace = smoothstep(0.50, 0.90, N.y);   // flat ground only
     // Porous ground (grass/foliage/rock/sand/snow) drinks the water: it
     // darkens but never polishes. Reflection-side terms key off wetSheen.
@@ -1238,12 +1257,29 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     f0 = mix(f0, vec3<f32>(0.04), wetSheen * 0.6);    // thin water film dielectric
     a = rough * rough;
   }
+  // CAR WET LOOK (glsl-lit.js, constant for constant): uniform, nothing world-
+  // keyed; the dull surfaces darken a little and gain a little gloss and a
+  // water-film f0. No puddles, no ripples, wetSheen stays 0.
+  if (wetness > 0.001 && classifiedCar) {
+    if (carbonSurface || carbonFinish || rubberSurface || sidewallSurface || matteSurface || panelSurface) {
+      albedo = albedo * (1.0 - 0.20 * wetness);
+      rough = rough * (1.0 - 0.25 * wetness);
+      a = rough * rough;
+      f0 = mix(f0, max(f0, vec3<f32>(0.04)), vec3<f32>(0.6 * wetness));
+    }
+  }
 
   // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
   // Ground fill is NOT scaled by anything — matches GLX js/render/glx/shaders/glsl-lit.js
   // amb = mix(uAmbGround, uAmbSky, N.y*0.5+0.5). BOUNCE (params3.x) is the
   // per-lamp bounce-fill strength (== GLX uBounceK), consumed in the lamp loop below.
-  let amb = mix(F.ambGround.xyz, F.ambSky.xyz, N.y * 0.5 + 0.5);
+  // GROUND-PROXIMITY AO (glsl-lit.js): ambient only, car BODY draws (the draw's
+  // carPaint D.mat1.w > 0.5; wheels draw with 0) minus the tyre ids. Object-space
+  // height above the road (the car origin sits on it); weighted to the ground
+  // half of the hemisphere (x0.5 at the road) and a touch of the sky (x0.94).
+  let gpao = select(0.0, 1.0 - smoothstep(0.02, 0.40, in.objPos.y),
+                    D.mat1.w > 0.5 && !rubberSurface && !sidewallSurface);
+  let amb = mix(F.ambGround.xyz * (1.0 - 0.50 * gpao), F.ambSky.xyz * (1.0 - 0.06 * gpao), N.y * 0.5 + 0.5);
   // Sun shadow (Phase 3): project the world pos into the sun's light-space clip,
   // then 3×3-PCF compare against the depth map (WebGPU NDC z is already [0,1], so
   // no -1..1 remap). shadowSamp is a comparison sampler — Level variant is legal
@@ -1415,6 +1451,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // SSR). envProbeStr scales probeLive (baseRefl 0.14→0.72); probe 0 still gets
   // a gentle analytic sheen. Energy-conserving: darken base under envW, then add.
   let envProbeStr = max(F.params5.x, 0.0);
+  // ccTrans: the share the lacquer lets through to the base (glsl-lit.js); the
+  // metal env term further down reflects only that share.
+  var ccTrans = 1.0;
   if (envSurface) {
     let Rg = reflect(-V, Ngeo);
     let NoVc = max(dot(Ngeo, V), 1e-4);
@@ -1450,7 +1489,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
     envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
           * F.params7.y * shadow * keyMul;
-    color = color * (1.0 - envW * 0.94);
+    ccTrans = 1.0 - envW * 0.94;
+    color = color * ccTrans;
     let addCC = envCC * envW;
     color = color + addCC / (1.0 + addCC * 0.35);
   }
@@ -1583,6 +1623,22 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let envAdd = envWet * envFresnel * envBlend * (1.0 - rough * 0.7) * (1.0 - metalness);
     let envM = max(max(envAdd.r, envAdd.g), envAdd.b);
     color = color + envAdd / (1.0 + envM);
+  }
+
+  // METAL ENV REFLECTION (glsl-lit.js, constant for constant): the metal share
+  // the block above drops with (1 - metalness) — env x Schlick(NoV, F0 = albedo)
+  // x metalness; sky/ground split + live probe exactly as the lacquer's envCC
+  // (same -y probe read), x ccTrans under a lacquer. No sun disc: GGX owns it.
+  if (metalSurface || satinMetalSurface || mirrorSurface) {
+    let Rm = reflect(-V, N);
+    let skyM = mix(F.skyHorizon.xyz * 1.2, F.skyZenith.xyz, sqrt(max(Rm.y, 0.0)));
+    var envMet = mix(F.ambGround.xyz * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
+    if (envProbeStr > 0.001) {
+      envMet = mix(envMet, textureSampleLevel(envCube, envCubeSamp, vec3<f32>(Rm.x, -Rm.y, Rm.z), rough * 2.5).rgb,
+                   vec3<f32>(clamp(envProbeStr, 0.0, 1.0)));
+    }
+    let metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
+    color = color + metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
   }
 
   // Sky rim / fresnel (GLX js/render/glx/shaders/glsl-lit.js): grazing-angle atmospheric

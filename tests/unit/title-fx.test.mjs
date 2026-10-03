@@ -3,6 +3,7 @@
  * haptic. Runs the REAL module in node:vm over a mini DOM.
  *
  * Run: node --test tests/unit/title-fx.test.mjs */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -14,8 +15,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const FILE = "js/ui/title-fx.js";
 const SRC = fs.readFileSync(path.join(ROOT, FILE), "utf8").replace(/^const\b/gm, "var");
 const CSS = fs.readFileSync(path.join(ROOT, "css/responsive.css"), "utf8");
-const MENUS = fs.readFileSync(path.join(ROOT, "css/menus.css"), "utf8");
-const COMP = fs.readFileSync(path.join(ROOT, "css/components.css"), "utf8");
+const MENUS = readCssSource("css/menus.css");
+const COMP = readCssSource("css/components.css");
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const EXPORT = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
 const MANIFEST = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");

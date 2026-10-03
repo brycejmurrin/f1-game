@@ -632,14 +632,14 @@ test("the settings preview counts too — it speaks directly, bypassing plan()",
 
 test("every channel the radio partitions into is a considered decision in the engine", () => {
   // TWO TABLES, ONE FACT. RadioVoice.SPEAKERS maps a `kind` onto a channel and
-  // js/audio/engine.js RADIO_CH gives that channel its click, hiss and squelch.
+  // js/audio/radio-fx.js RADIO_CH gives that channel its click, hiss and squelch.
   // A channel added to one and forgotten in the other is silent — which is the
   // right default, and exactly why it would never be noticed. This is what makes
   // the silence deliberate.
   const RV = load().RV;
-  const engine = read("js/audio/engine.js");
+  const engine = read("js/audio/radio-fx.js");
   const table = engine.match(/const RADIO_CH = Object\.freeze\(\{([\s\S]*?)\}\);/);
-  assert.ok(table, "could not find RADIO_CH in js/audio/engine.js");
+  assert.ok(table, "could not find RADIO_CH in js/audio/radio-fx.js");
   const voiced = new Set([...table[1].matchAll(/^\s*(\w[\w-]*):/gm)].map((m) => m[1]));
   // `coach` is the deliberate omission: the driving coach is not on a radio.
   // `announcer` too: in-race commentary (kind "comm") is the TV booth, not a
@@ -670,12 +670,12 @@ test("waiting for the courtesy figure costs no shipped line its voice", () => {
    * budget — and a budget that shrinks can silence a line that used to fit.
    * This is the measurement that says it does not. The engineer's figure is
    * four notes (~0.425 s) and race control's is two (~0.25 s); the lead is read
-   * from js/audio/engine.js so the two cannot drift.
+   * from js/audio/radio-fx.js so the two cannot drift.
    *
    * A NEW entry here means the cue just took a line off the air, and the
    * trade has to be made deliberately rather than discovered by a player. */
-  const src = read("js/audio/engine.js");
-  const table = src.match(/const RADIO_CH = Object\.freeze\(\{([\s\S]*?)\n  \}\);/);
+  const src = read("js/audio/radio-fx.js");
+  const table = src.match(/const RADIO_CH = Object\.freeze\(\{([\s\S]*?)\n    \}\);/);
   assert.ok(table, "could not find RADIO_CH");
   const leadOf = (speaker) => {
     // up to the figure's closing "]]" — the notes are themselves arrays, so a

@@ -86,6 +86,7 @@ const ShadowPass = (function () {
     const _shadowMats = [];   // pool of Float32Array(16), reused across frames
     const _shadowTeams = [];  // parallel: each car's team, for the dynamic car-shadow caster pass
     const _shadowCars = [];   // parallel refs: the live player transform replaces its stale pooled entry
+    const _shadowCast = [];   // parallel: false = blob only, never a sun / lamp map caster (FieldLod: rivals past 50 m)
     const _livePlayerShadowMat = new Float32Array(16);
     let _shadowCount = 0;
 
@@ -156,12 +157,13 @@ const ShadowPass = (function () {
     // The render loop: count reset before the car loop, one push per drawn car
     // (blob shadow this frame; sun / lamp caster next frame), flush after.
     function beginFrame() { _shadowCount = 0; }
-    function pushCaster(groundMat, team, car) {
+    function pushCaster(groundMat, team, car, cast) {
       let _sm = _shadowMats[_shadowCount];
       if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
       _sm.set(groundMat);
       _shadowTeams[_shadowCount] = team;   // for next frame's AI car-shadow caster pass
       _shadowCars[_shadowCount] = car;
+      _shadowCast[_shadowCount] = cast !== false;   // omitted = casts (the apex26.fieldLod=0 path)
       _shadowCount++;
     }
     // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
@@ -390,7 +392,7 @@ const ShadowPass = (function () {
             for (let i = 0; i < _shadowCount; i++) {
               const _sm2 = _shadowMats[i];
               const _sdx = _sm2[12] - _shadowCtr[0], _sdz = _sm2[14] - _shadowCtr[2];
-              if (_sdx * _sdx + _sdz * _sdz > _csR2) continue;
+              if (_sdx * _sdx + _sdz * _sdz > _csR2 || !_shadowCast[i]) continue;
               if (_shadowCars[i] !== G.player) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
             }
             G.gfx.carShadowEnd();
@@ -499,7 +501,7 @@ const ShadowPass = (function () {
             let _carKey = _playerIn ? _lampCasterKey(1, _pm) : 0;
             for (let i = 0; i < _shadowCount; i++) {
               const _cm = _shadowMats[i];
-              if (_shadowCars[i] === G.player) continue;
+              if (_shadowCars[i] === G.player || !_shadowCast[i]) continue;
               const _cdx = _cm[12] - _lx, _cdy = _cm[13] - _ly, _cdz = _cm[14] - _lz;
               if (_cdx * _cdx + _cdy * _cdy + _cdz * _cdz > _lsR2) continue;
               _carKey = _lampCasterKey(_carKey, _cm);
@@ -567,7 +569,7 @@ const ShadowPass = (function () {
             for (let i = 0; i < _shadowCount; i++) {
               const _lm = _shadowMats[i];
               const _ldx = _lm[12] - L[o], _ldy = _lm[13] - L[o + 1], _ldz = _lm[14] - L[o + 2];
-              if (_ldx * _ldx + _ldy * _ldy + _ldz * _ldz > _lsR2) continue;
+              if (_ldx * _ldx + _ldy * _ldy + _ldz * _ldz > _lsR2 || !_shadowCast[i]) continue;
               if (_shadowCars[i] !== G.player) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
             }
             if (!_carsOnlyPass) {

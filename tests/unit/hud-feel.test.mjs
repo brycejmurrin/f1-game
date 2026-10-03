@@ -23,6 +23,7 @@
  *
  * Run: node --test tests/unit/hud-feel.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -335,14 +336,14 @@ test("the POS box flashes on a position change and the gap chips carry the neigh
 });
 
 test("timing columns use the bundled condensed numerals with tabular figures", () => {
-  const comp = cssRules(read("css/components.css"));
+  const comp = cssRules(readCssSource("css/components.css"));
   for (const sel of [".res-pos", ".res-pts"]) {
     assert.equal(decl(comp, sel, "font-family"), "var(--font-hud)", sel + " reads the HUD face");
     assert.equal(decl(comp, sel, "font-variant-numeric"), "tabular-nums", sel + " keeps digits from reflowing");
   }
   const hud = cssRules(read("css/hud.css"));
   assert.match(decl(hud, '#hud-pos[data-delta="up"]', "color") || "", /--faster/);
-  const results = read("css/components.css");
+  const results = readCssSource("css/components.css");
   assert.match(results, /prefers-reduced-motion: no-preference\)[^}]*#results-table \.res-row \{ animation: row-in/s,
     "the results stagger lives inside the no-preference query");
 });
@@ -542,11 +543,13 @@ test("MOTION: REDUCED stops every HUD pulse, not only the OS query", () => {
   // still got the redline, OVERTAKE, pit-arrow, limits and VSC-flag pulses —
   // every one of them stopped only for an OS that asked.
   const hud = cssRules(read("css/hud.css"));
-  const back = hud.find((r) => r.selector.includes(':root[data-motion="reduce"] :is(#hud, #announce) *')
+  const back = hud.find((r) => r.selector.includes(':root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *')
     && !r.context.some((c) => c.startsWith("@media")));
   assert.ok(back, "css/hud.css carries a data-motion backstop over #hud and #announce, outside any @media");
   assert.match(back.selector, /:root\[data-motion="reduce"\] :is\(#hud, #announce, \.touchbtn\)/,
     "…and over the elements themselves, the touch buttons included (the dock groups start outside #hud)");
+  assert.match(back.selector, /:is\(#hud, #announce, \.touchbtn\) \*::before/,
+    "…and over the touch buttons' DESCENDANTS and pseudo-elements, not only the button box");
   assert.match(back.selector, /\*::before/); assert.match(back.selector, /\*::after/);
   assert.equal(back.decls.get("animation-iteration-count"), "1 !important", "nothing repeats");
   assert.match(back.decls.get("animation-duration") || "", /^0\.0\d*ms !important$/, "one-shots land at once");
@@ -570,10 +573,10 @@ test("MOTION: REDUCED stops every HUD pulse, not only the OS query", () => {
   }
   // The touch OVERTAKE pulse lives in css/overlays.css on #btn-ot: covered
   // because the shell gives it .touchbtn.
-  assert.match(read("css/overlays.css"), /#btn-ot\.armed \{[^}]*animation: pulse/);
+  assert.match(readCssSource("css/overlays.css"), /#btn-ot\.armed \{[^}]*animation: pulse/);
   assert.match(html, /<button id="btn-ot" class="touchbtn"/);
   // The HUD-HIDDEN hint's fade has the same twin as its OS rule, so it stays put.
-  assert.match(read("css/overlays.css"), /:root\[data-motion="reduce"\] #hud-restore::after \{ animation: none; \}/);
+  assert.match(readCssSource("css/overlays.css"), /:root\[data-motion="reduce"\] #hud-restore::after \{ animation: none; \}/);
 });
 
 function pitBoot(opts) {

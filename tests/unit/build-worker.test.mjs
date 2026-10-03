@@ -135,3 +135,22 @@ test("BUILD IN BACKGROUND's write flips exactly what enabled() (and loadTrackSte
   mem.set("apex26.buildWorker", "0"); assert.equal(C.enabled(), false);
   delete main.localStorage;
 });
+
+test("a replay whose upload throws frees the handles it had already made", async () => {
+  const def = Tracks.LIST.find((d) => d.id === "monza");
+  worker.posted.length = 0;
+  worker.send({ type: "build", seq: 3, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false } });
+  const msg = worker.posted[0];
+  const made = [], freed = [];
+  let n = 0;
+  const make = (kind) => { const h = { kind, chunks: kind === "chunked" ? [1] : undefined }; made.push(h); return h; };
+  const gfx = {
+    createMesh: () => { if (++n === 3) throw new RangeError("Array buffer allocation failed"); return make("mesh"); },
+    createChunkedMesh: () => make("chunked"),
+    createInstancedBatch: () => make("inst"),
+    freeMesh: (h) => freed.push(h), freeChunkedMesh: (h) => freed.push(h), freeInstancedBatch: (h) => freed.push(h),
+  };
+  await assert.rejects(main.TrackBuildClient.replay(msg, def, gfx), /allocation/);
+  assert.ok(made.length >= 2, "uploads landed before the throw");
+  assert.deepEqual(made.filter((h) => !freed.includes(h)), [], "every handle the failed replay made was freed");
+});

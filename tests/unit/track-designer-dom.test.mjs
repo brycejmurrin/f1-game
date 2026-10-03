@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/profile.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -898,6 +898,329 @@ test("START FROM…: a card per shipped circuit; a pick traces it into a new des
   assert.equal(b.D.undo(), true);
   assert.deepEqual(plain(b.D.state().design.pts), d0.pts, "UNDO brings the design back");
   assert.equal(b.D.startFrom("custom-nope"), false);
+});
+
+// ── Authoring: SPIRAL m, SPAN WIDTH m, the SELECTED TURN's BANK ° ──
+const rowOf = (root, label) => walk(root).find((e) => e.classList.contains("td-row") && e.children[0] && e.children[0].textContent === label);
+const stepBy = (row, n) => { const b = row.children[n > 0 ? 3 : 1]; for (let i = 0; i < Math.abs(n); i++) b.click(); };
+/** Boot with the canvas hooks in hand (a span is a tap and a shift-tap; an insert is onChange). */
+function bootHooked() {
+  const b = bootScreen();
+  const real = b.DC;
+  b.ctx.DesignerCanvas = { create: (c, h) => { b.hooks = h; return real.create(c, h); }, thumb: real.thumb };
+  return b;
+}
+const cumOf = (p) => { const c = [0]; for (let i = 0; i < p.length; i++) { const a = p[i], q = p[(i + 1) % p.length]; c.push(c[i] + Math.hypot(q[0] - a[0], q[1] - a[1])); } return c; };
+
+test("SPIRAL m: a stepper for CORNER / HAIRPIN / CHICANE / S-BEND only, 0–80 in 5s, named in the label and carried by STAMP", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const row = rowOf(b.root, "SPIRAL m");
+  assert.ok(row, "the row exists");
+  assert.match(row.parentNode.children[0].textContent, /^2 CORNERS/, "inside 2 CORNERS");
+  for (const [tool] of b.D.TOOLS) {
+    b.D.setTool(tool);
+    const curved = ["corner", "hairpin", "chicane", "sbend"].includes(tool);
+    assert.equal(!row.hidden && !row.parentNode.hidden, curved, tool + (curved ? " shows" : " hides") + " SPIRAL m");
+  }
+  b.D.setTool("corner");
+  const val = row.children[2];
+  assert.equal(val.textContent, "0");
+  stepBy(row, 3); assert.equal(val.textContent, "15");
+  stepBy(row, 30); assert.equal(val.textContent, "80", "clamps at 80");
+  const label = () => walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^2 CORNERS/.test(e.textContent)).textContent;
+  assert.match(label(), /^2 CORNERS · CORNER R \d+ m × \d+° (LEFT|RIGHT) · SPIRAL 80 m$/);
+  b.D.setTool("hairpin"); assert.equal(val.textContent, "80", "the value rides across the curved tools");
+  stepBy(row, -30); assert.equal(val.textContent, "0", "clamps at 0");
+  assert.doesNotMatch(label(), /SPIRAL/, "no spiral, no mention");
+  // STAMP lays the spiral down: the same anchor with and without differs, one UNDO each.
+  // (The hairpin left R at 25: a 60° arc that short has no room for two spirals.)
+  b.D.setTool("corner");
+  stepBy(rowOf(b.root, "RADIUS m"), 7); stepBy(rowOf(b.root, "ANGLE °"), 6);
+  assert.match(label(), /^2 CORNERS · CORNER R 60 m × 90° /);
+  const d0 = plain(b.D.state().design);
+  assert.equal(b.D.applyStamp(3, 3), true);
+  const flat = plain(b.D.state().design.pts);
+  assert.equal(b.D.undo(), true);
+  stepBy(row, 8);
+  assert.equal(b.D.applyStamp(3, 3), true);
+  const spiral = plain(b.D.state().design.pts);
+  assert.notDeepEqual(spiral, flat, "SPIRAL 40 m changes the stamp");
+  assert.deepEqual(spiral.slice(0, 4), d0.pts.slice(0, 4), "upstream of the anchor nothing moves");
+});
+
+test("SPAN WIDTH m: one hwZone on the span's control points, merged on repeat, cleared at the base width, capped at 24, carried by an insert and a delete", () => {
+  const b = bootHooked();
+  const d0 = openGreen(b);
+  const row = rowOf(b.root, "SPAN WIDTH m"), val = row.children[2];
+  const details = row.parentNode;
+  assert.ok(/^4 DETAILS/.test(details.children[0].textContent), "in 4 DETAILS");
+  assert.equal(details.children[details.children.indexOf(rowOf(b.root, "HALF-WIDTH m")) + 1], row, "right under HALF-WIDTH");
+  assert.equal(row.getAttribute("aria-disabled"), "true", "no span: disabled");
+  assert.equal(row.children[1].getAttribute("aria-disabled"), "true");
+  assert.equal(val.textContent, "—");
+  stepBy(row, -1);
+  assert.match(msgText(b), /^Select a span first/);
+  assert.deepEqual(plain(b.D.state().design.hwZones), []);
+  // A span: tap point 5, shift-tap point 9.
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9]);
+  assert.equal(row.getAttribute("aria-disabled"), "false");
+  assert.equal(val.textContent, d0.baseHW.toFixed(1));
+  const u0 = b.D.state().undo;
+  stepBy(row, -10);
+  let d = b.D.state().design;
+  assert.equal(d.hwZones.length, 1, "ten presses, one zone");
+  const z = d.hwZones[0], hw = Math.round((d0.baseHW - 1) * 10) / 10;
+  assert.equal(z.hw, hw); assert.equal(val.textContent, hw.toFixed(1));
+  assert.equal(z.ease, 0.025, "a 1 m step tapers over the engine's default");
+  assert.equal(b.D.state().undo, u0 + 10, "one UNDO per press");
+  assert.deepEqual(plain(d.pts), d0.pts, "no point moves");
+  samePlace(pointAt(d.pts, z.s0), d.pts[5], 1e-6, "s0 on point 6"); samePlace(pointAt(d.pts, z.s1), d.pts[9], 1e-6, "s1 on point 10");
+  // The engine narrows exactly there (toRaw → index fractions → applyHwZones).
+  const it = b.C.sanitize(d), raw = b.C.toRaw(it);
+  samePlace(pointAtIndex(it.pts, raw.hwZones[0].s0), d.pts[5], 0.25, "toRaw s0");
+  const v = b.D.preview(), mid = d.pts[7];
+  let k = 0; for (let j = 0; j < v.tr.n; j++) if (Math.hypot(v.tr.px[j] - mid[0], v.tr.pz[j] - mid[1]) < Math.hypot(v.tr.px[k] - mid[0], v.tr.pz[k] - mid[1])) k = j;
+  assert.ok(Math.abs(v.tr.hw[k] - hw) < 0.05, "built half-width " + v.tr.hw[k] + " under the span");
+  // The engine only narrows (def.js applyHwZones keeps the smaller): the base width is the top.
+  assert.equal(b.D.setSpanWidth(d0.baseHW + 1), true, "over the base clamps to it…");
+  assert.deepEqual(plain(b.D.state().design.hwZones), [], "…which clears the zone");
+  assert.equal(b.D.setSpanWidth(d0.baseHW), false, "nothing left to clear");
+  assert.equal(b.D.setSpanWidth(5.5), true);
+  assert.equal(b.D.setSpanWidth(5.5), false, "the same width again is no edit");
+  assert.equal(b.D.setSpanWidth(2), true, "under the registry's 5 m floor clamps to it");
+  d = b.D.state().design;
+  assert.equal(d.hwZones.length, 1); assert.equal(d.hwZones[0].hw, 5);
+  // Insert a point before the span (the canvas's onChange "insert"), then delete one after it.
+  const P = d.pts, ins = P.slice(0, 2).concat([[(P[1][0] + P[2][0]) / 2, (P[1][1] + P[2][1]) / 2]], P.slice(2));
+  b.hooks.onChange(ins, "insert");
+  let e = b.D.state().design;
+  assert.equal(e.pts.length, P.length + 1);
+  samePlace(pointAt(e.pts, e.hwZones[0].s0), P[5], 1e-6, "insert before: s0 still on the same point"); samePlace(pointAt(e.pts, e.hwZones[0].s1), P[9], 1e-6, "…and s1");
+  assert.equal(b.D.deletePoint(14), true);
+  e = b.D.state().design;
+  samePlace(pointAt(e.pts, e.hwZones[0].s0), P[5], 1e-6, "delete after: s0 still on the same point"); samePlace(pointAt(e.pts, e.hwZones[0].s1), P[9], 1e-6, "…and s1");
+  // Repeat on an overlapping span merges: one zone, the new width.
+  b.hooks.onPick(5, {}); b.hooks.onPick(8, { shiftKey: true });   // P[4] … P[7] after the insert
+  assert.equal(b.D.setSpanWidth(6), true);
+  e = b.D.state().design;
+  assert.equal(e.hwZones.length, 1, "an overlapping span replaces the zone"); assert.equal(e.hwZones[0].hw, 6);
+  // 24 is the registry's cap: a 25th refuses with the limit, a replacement still works.
+  const N = e.pts.length, c = cumOf(e.pts), L = c[N];
+  const many = [];
+  for (let m = 0; m < 24; m++) { const a = c[20 + m] / L, q = (c[20 + m] + 4) / L; many.push({ s0: a, s1: q, hw: 6.5, ease: 0.025 }); }
+  b.D.load(Object.assign({}, e, { hwZones: many }));
+  b.hooks.onPick(2, {}); b.hooks.onPick(5, { shiftKey: true });
+  assert.equal(b.D.setSpanWidth(6), false);
+  assert.match(msgText(b), /24 width zones at most/);
+  assert.equal(b.D.state().design.hwZones.length, 24);
+  b.hooks.onPick(20, {}); b.hooks.onPick(22, { shiftKey: true });
+  assert.equal(b.D.setSpanWidth(6), true, "over zones it replaces, the cap is not reached");
+  assert.equal(b.D.state().design.hwZones.filter((q) => q.hw === 6).length, 1);
+  assert.ok(b.D.state().design.hwZones.length <= 24);
+});
+
+test("BANK °: the SELECTED TURN banks its apex — {frac, angleDeg, widthM: the corner's length}; over 5.7° is FIA amber; 0 flattens it; TURNS reads it back", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const list = turnsList(b), pick = list.parentNode.children.find((e) => e.getAttribute && e.getAttribute("role") === "group");
+  assert.ok(pick, "a SELECTED TURN block inside TURNS");
+  assert.equal(pick.hidden, true, "hidden until a turn is selected");
+  const row = rowOf(pick, "BANK °"), val = row.children[2];
+  list.children[1].click();
+  assert.equal(pick.hidden, false);
+  assert.equal(pick.children[0].textContent, "SELECTED TURN · T2");
+  assert.equal(val.textContent, "FLAT");
+  const v0 = b.D.preview(), st = b.D.state();
+  const c = b.ctx.TrackInsight.corners(v0.tr, st.design.pts, null, v0.turns)[1];
+  assert.equal(c.bankDeg, 0); assert.equal(c.hwSpan, null);
+  const u0 = st.undo;
+  stepBy(row, 3);
+  let d = b.D.state().design;
+  assert.equal(d.bankZones.length, 1, "three presses, one zone");
+  assert.deepEqual(plain(d.bankZones[0]), { frac: c.sApex / v0.tr.total, angleDeg: 6, widthM: Math.round(Math.min(600, Math.max(20, c.lenM))) });
+  assert.equal(b.D.state().undo, u0 + 3);
+  assert.deepEqual(plain(d.pts), st.design.pts, "no point moves");
+  assert.equal(val.textContent, "6°");
+  let v = b.D.preview();
+  assert.ok(v.issues.some((i) => i.code === "fia-bank" && i.level === "amber"), "6° is over the FIA's 5.7°: " + v.issues.map((i) => i.code).join(","));
+  assert.equal(v.red, 0);
+  assert.match(turnsList(b).children[1].textContent, / · BANK 6°$/, "TURNS says so");
+  assert.equal(b.ctx.TrackInsight.corners(v.tr, d.pts, null, v.turns)[1].bankDeg, 6);
+  assert.equal(pick.hidden, false, "still selected after the preview");
+  stepBy(row, -1);
+  v = b.D.preview();
+  assert.equal(b.D.state().design.bankZones[0].angleDeg, 4);
+  assert.ok(!v.issues.some((i) => i.code === "fia-bank"), "4° is within Grade 1");
+  stepBy(row, -5);
+  assert.deepEqual(plain(b.D.state().design.bankZones), [], "down past 2° is flat: the zone goes");
+  assert.equal(val.textContent, "FLAT");
+  assert.equal(b.D.setCornerBank(2, 99), true, "by number; clamps to 30");
+  assert.equal(b.D.state().design.bankZones[0].angleDeg, 30);
+  assert.equal(b.D.setCornerBank(2, 30), false, "the same again is no edit");
+  assert.equal(b.D.setCornerBank(2, 0), true);
+  assert.equal(b.D.setCornerBank(99, 6), false, "no such turn");
+  // SPAN WIDTH on the selected turn shows on its row too.
+  turnsList(b).children[1].click();
+  assert.equal(b.D.setSpanWidth(6), true);
+  b.D.preview();
+  assert.match(turnsList(b).children[1].textContent, / · 12 m WIDE$/);
+  // Another selection hides the block.
+  b.D.setTool("select");
+  b.D.undo();
+  assert.equal(pick.hidden, true, "UNDO clears the selection");
+});
+
+// ── the elevation strip (js/editor/profile.js) ─────────────────────────────
+test("the elevation strip: tap / keys / Delete commit elev:add | elev:move | elev:del (one UNDO each); hills survive an insert and save byte-equal; HILL steppers while one is selected; Escape lets go first", () => {
+  const b = bootScreen();
+  const win = [];
+  b.ctx.addEventListener = (type, fn, cap) => win.push({ type, fn, cap });   // window === the VM global here
+  const kinds = [];
+  const dbg = b.ctx.Log.debug;
+  b.ctx.Log.debug = (ns, msg) => { const m = /designer edit: (\S+)/.exec(String(msg)); if (m) kinds.push(m[1]); };
+  let hooks = null;
+  const real = b.DC;
+  b.ctx.DesignerCanvas = Object.assign({}, real, { create: (c, h) => { hooks = h; return real.create(c, h); } });
+  try {
+    const d0 = openGreen(b);
+    const strip = b.root.querySelector('canvas[data-role="profile"]'), stage = b.root.querySelector(".td-stage");
+    assert.ok(strip, "the strip is built");
+    assert.equal(stage.children.indexOf(strip), stage.children.indexOf(b.root.querySelector("canvas")) + 1, "straight under the main canvas");
+    assert.equal(strip.tabIndex, 0); assert.equal(strip.getAttribute("role"), null);
+    assert.equal(strip.dataset.arrows, "pass");
+    const rows = walk(b.root).filter((e) => e.classList.contains("td-row") && /^HILL/.test(e.children[0].textContent));
+    assert.deepEqual(rows.map((r) => r.children[0].textContent), ["HILL m", "HILL LENGTH m"]);
+    const circuit = b.root.querySelector(".td-input").parentNode;   // 4 DETAILS: the name field's group
+    const remove = chipsIn(circuit, "REMOVE HILL")[0];
+    assert.equal(circuit.children.at(-1), remove.parentNode, "appended at the END of 4 DETAILS");
+    assert.ok(rows.every((r) => r.hidden) && remove.parentNode.hidden, "hidden with no hill selected");
+    // A tap on the empty strip: a hill there, { halfM 160, rise +6 }, one UNDO entry.
+    const u0 = b.D.state().undo, L = b.D.preview().tr.total;
+    b.dom.dispatch(strip, { type: "pointerdown", pointerId: 1, clientX: 160, clientY: 390 });
+    b.dom.dispatch(strip, { type: "pointerup", pointerId: 1, clientX: 160, clientY: 390 });
+    assert.equal(kinds.at(-1), "elev:add");
+    let st = b.D.state();
+    assert.equal(st.undo, u0 + 1);
+    assert.equal(st.design.elevations.length, 1);
+    const h0 = st.design.elevations[0];
+    assert.equal(h0.halfM, 160); assert.equal(h0.rise, 6);
+    near(h0.s * L, L / 4, 1, "a quarter of the strip is a quarter of the lap");
+    assert.equal(strip.dataset.arrows, "own", "the new hill is selected");
+    assert.ok(rows.every((r) => !r.hidden), "…so its steppers show");
+    assert.equal(rows[0].querySelector(".td-num").textContent, "+6");
+    assert.equal(rows[1].querySelector(".td-num").textContent, "320", "the length shown is the whole hill, 2 × halfM");
+    // The stepper and the strip's own keys: elev:move, one entry each.
+    chipsIn(rows[0], "+")[0].click();
+    assert.equal(kinds.at(-1), "elev:move");
+    assert.equal(b.D.state().design.elevations[0].rise, 7);
+    strip.focus();
+    b.dom.dispatch(strip, { type: "keydown", key: "ArrowUp" });
+    assert.equal(b.D.state().design.elevations[0].rise, 8);
+    assert.equal(b.D.state().undo, u0 + 3);
+    chipsIn(rows[0], "+")[0].click();
+    assert.equal(b.D.state().design.elevations[0].rise, 8, "the 8 % cap (160 / 19.6 → 8 m on the lattice) holds");
+    assert.equal(b.D.state().undo, u0 + 3, "a refused step commits nothing");
+    // Escape / B with the strip focused: let go of the hill first, and keep focus.
+    const back = win.filter((l) => l.cap && l.type === "keydown");
+    const esc = { type: "keydown", key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+    for (const l of back) l.fn(esc);
+    assert.equal(esc.defaultPrevented, true); assert.equal(esc.stopped, true, "the screen's close door never sees it");
+    assert.equal(strip.dataset.arrows, "pass");
+    assert.ok(rows.every((r) => r.hidden), "steppers hidden again");
+    assert.equal(b.dom.document.activeElement, strip, "focus stays on the strip");
+    const again = { type: "keydown", key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+    for (const l of back) l.fn(again);
+    assert.equal(again.defaultPrevented, false, "a second Escape closes the screen as before");
+    // What the strip stores is what the registry keeps, byte for byte.
+    const before = plain(b.D.state().design);
+    assert.equal(JSON.stringify(b.C.sanitize(before).elevations), JSON.stringify(before.elevations));
+    // An insert on the main canvas upstream of the hill keeps it on the same road (REMAP).
+    b.dom.dispatch(strip, { type: "keydown", key: "]" });
+    const k = 2, mid = [(before.pts[k][0] + before.pts[k + 1][0]) / 2, (before.pts[k][1] + before.pts[k + 1][1]) / 2];
+    const ins = before.pts.slice(0, k + 1).concat([mid], before.pts.slice(k + 1));
+    hooks.onChange(ins, "insert");
+    const after = b.D.state().design;
+    assert.equal(after.pts.length, before.pts.length + 1);
+    assert.equal(after.elevations.length, 1);
+    samePlace(pointAt(after.pts, after.elevations[0].s), pointAt(before.pts, before.elevations[0].s), 1e-3, "the hill stays on its piece of road");
+    // (A remap leaves s off the 1/65535 lattice — every zone list does — and SAVE puts it back.)
+    const kept = b.C.sanitize(after).elevations[0];
+    near(kept.s, after.elevations[0].s, 1 / 65535, "sanitize snaps the remapped hill to the lattice");
+    assert.deepEqual([kept.halfM, kept.rise], [after.elevations[0].halfM, after.elevations[0].rise]);
+    // Delete on the strip: elev:del, and UNDO brings the hill back.
+    b.D.selectBump(0);
+    b.dom.dispatch(strip, { type: "keydown", key: "Delete" });
+    assert.equal(kinds.at(-1), "elev:del");
+    assert.equal(b.D.state().design.elevations.length, 0);
+    b.D.undo();
+    assert.deepEqual(plain(b.D.state().design.elevations), plain(after.elevations));
+    // The cap on hills: 24, then a message.
+    const many = Array.from({ length: 24 }, (_, i) => ({ s: i / 24, halfM: 40, rise: 1 }));
+    b.D.load(Object.assign({}, d0, { elevations: many }));
+    b.D.preview();
+    assert.equal(b.D.addBump(100), -1);
+    assert.match(msgText(b), /24 hills/);
+  } finally { b.ctx.Log.debug = dbg; }
+});
+
+test("DESIGNED RANDOMISE: FAST fills four cards (busy while it runs), USE loads one in one UNDO, MORE LIKE THIS replaces them", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  const design = panes(b)[0], fast = chipsIn(design, "FAST")[0], row = fast.parentNode;
+  assert.deepEqual(row.children.map((c) => c.textContent), ["FAST", "TECHNICAL", "MIXED"]);
+  assert.ok(row.children.every((c) => c.getAttribute("aria-pressed") === "false"));
+  const grid = walk(design).filter((e) => e.classList.contains("td-grid"))[1];
+  assert.equal(grid.hidden, true, "no cards before a style is pressed");
+  assert.equal(row.parentNode, grid.parentNode, "the style row and the cards share 4 DETAILS");
+  // The run: busy at once (the frame paints), the cards after the timer slices.
+  const run = b.D.designed("FAST", 21);
+  assert.equal(grid.getAttribute("aria-busy"), "true", "aria-busy while designing");
+  assert.ok(row.children.every((c) => c.disabled), "style chips disabled while designing");
+  assert.equal(msgText(b), "Designing 16 circuits…");
+  assert.equal(fast.getAttribute("aria-pressed"), "true");
+  assert.equal(chipsIn(design, "TECHNICAL")[0].getAttribute("aria-pressed"), "false");
+  assert.equal(await run, true);
+  assert.equal(grid.hasAttribute("aria-busy"), false, "aria-busy cleared");
+  assert.ok(row.children.every((c) => !c.disabled));
+  assert.equal(grid.hidden, false);
+  assert.equal(grid.children.length, 4, "four cards");
+  const st = b.D.state();
+  assert.equal(st.candidates.length, 4);
+  for (let i = 1; i < 4; i++) assert.ok(st.candidates[i - 1].score >= st.candidates[i].score, "best first");
+  for (const card of grid.children) {
+    assert.ok(card.classList.contains("td-card"));
+    assert.equal(card.children[0].tagName, "CANVAS"); assert.equal(card.children[0].getAttribute("aria-hidden"), "true");
+    assert.match(card.children[1].textContent, /^\d+\.\d km · \d+ corners · \d+ passing$/);
+    assert.deepEqual(chipsIn(card).map((c) => c.textContent), ["USE", "MORE LIKE THIS"]);
+  }
+  assert.match(msgText(b), /^FAST: the best 4 of 16/);
+  // Deterministic per seed.
+  await b.D.designed("FAST", 21);
+  assert.deepEqual(plain(b.D.state().candidates), plain(st.candidates));
+  // USE: the card's loop, one UNDO entry, a new circuit.
+  const u0 = b.D.state().undo, d0 = plain(b.D.state().design.pts);
+  chipsIn(grid.children[1], "USE")[0].click();
+  let now = b.D.state();
+  assert.equal(now.undo, u0 + 1, "one UNDO entry");
+  assert.equal(now.design.seed, st.candidates[1].seed);
+  assert.equal(now.design.originId, undefined, "SAVE adds a new circuit");
+  assert.equal(b.D.preview().ok, true, "the card is green");
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), d0, "UNDO brings the design back");
+  // MORE LIKE THIS: variants of card 1 replace the cards.
+  const more = b.D.moreLikeThis(0);
+  assert.equal(grid.getAttribute("aria-busy"), "true");
+  assert.equal(await more, true);
+  assert.equal(grid.hasAttribute("aria-busy"), false);
+  const after = b.D.state().candidates;
+  assert.ok(after.length >= 2 && after.length <= 4 && grid.children.length === after.length, after.length + " variants");
+  assert.ok(after.every((c) => !st.candidates.some((o) => o.seed === c.seed)), "new seeds: the cards were replaced");
+  assert.match(msgText(b), /circuits like design 1/);
+  assert.equal(b.D.useCandidate(0), true);
+  assert.equal(b.D.preview().ok, true, "a variant is green");
+  assert.equal(b.D.useCandidate(9), false, "no such card");
 });
 
 // ── Round 3 PR E: the share card and TEST HERE ─────────────────────────────

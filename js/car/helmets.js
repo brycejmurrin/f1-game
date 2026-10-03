@@ -621,6 +621,120 @@ const Helmets = (function () {
      exactly as curved as it did. */
   const MAX_SPLIT = 1;
 
+  /* THE AERO A REAL LID CARRIES, which the traced profile cannot: it measured
+     the shell's outline, and a spoiler, a scoop and a visor strip are thin
+     enough to vanish into a silhouette's edge. The chase camera sits behind
+     and above the car, so the back and the top are most of what it ever sees
+     of the head — a bare ovoid there reads as a ball. Three small lofts, each
+     rooted ON the shell through pointAt() so they move with SHAPE/SCALE:
+
+       REAR GURNEY  a kicked-up lip across the upper back (t 0.30, az 180 +-42),
+                    standing 17 mm off the shell — still inside the traced back
+                    reach (B peaks lower, at t 0.62), so the length is unmoved.
+       TOP INTAKE   a scoop on the crown's centreline, its dark mouth facing
+                    forward over the brow (t 0.22) and fairing out by t 0.05.
+       VISOR STRIP  a raised band along the eye port's upper edge, above the
+                    gasket, following the lens's curve to the temples.
+
+     Paint is the design's own at each root, so the parts belong to the lid;
+     the mouth, the lip's underside and the strip are dark. Field and shadow
+     builds (simplePaint) keep the two silhouette parts and drop the strip. */
+  function surfAt(t, az) {
+    const a = az * Math.PI / 180, e = 0.01, ea = 0.02;
+    const p = pointAt(t, a);
+    const pu = pointAt(Math.min(1, t + e), a), pd = pointAt(Math.max(0, t - e), a);
+    const pr = pointAt(t, a + ea), pl = pointAt(t, a - ea);
+    const tu = [pu[0] - pd[0], pu[1] - pd[1], pu[2] - pd[2]], ta = [pr[0] - pl[0], pr[1] - pl[1], pr[2] - pl[2]];
+    const n = [ta[1] * tu[2] - ta[2] * tu[1], ta[2] * tu[0] - ta[0] * tu[2], ta[0] * tu[1] - ta[1] * tu[0]];
+    const m = Math.hypot(n[0], n[1], n[2]) || 1;
+    return { p, n: [n[0] / m, n[1] / m, n[2] / m] };
+  }
+  const _add = (p, n, k) => [p[0] + n[0] * k, p[1] + n[1] * k, p[2] + n[2] * k];
+  // The azimuth (degrees) at which ring t is `w` metres off the centre plane.
+  function azAtHalfWidth(t, w) {
+    let lo = 0, hi = 90;
+    for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (pointAt(t, m * Math.PI / 180)[0] < w) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  }
+  const AERO_DARK = [0.05, 0.05, 0.06];
+  function buildAero(out, cx, cy, cz, design, S, simplePaint) {
+    const paint = simplePaint ? () => design.base : painter(design);
+    // One flat triangle, wound so its face normal leans the way `ref` says is
+    // outward — the shell's own convention (counter-clockwise from outside).
+    const tri = (a, b, c, col, ref) => {
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const m = Math.hypot(n[0], n[1], n[2]);
+      if (m < 1e-12) return;
+      n = [n[0] / m, n[1] / m, n[2] / m];
+      if (n[0] * ref[0] + n[1] * ref[1] + n[2] * ref[2] < 0) { const s = b; b = c; c = s; n = [-n[0], -n[1], -n[2]]; }
+      const i = out.pos.length / 3, cc = [Math.min(col[0], 1), Math.min(col[1], 1), Math.min(col[2], 1)];
+      for (const q of [a, b, c]) {
+        out.pos.push(cx + q[0], cy + q[1], cz + q[2]); out.nrm.push(n[0], n[1], n[2]);
+        out.col.push(cc[0], cc[1], cc[2]); out.mat.push(S.paint);
+      }
+      out.idx.push(i, i + 1, i + 2);
+    };
+    const quad = (a, b, c, d, col, ref) => { tri(a, b, c, col, ref); tri(a, c, d, col, ref); };
+    const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+    const UP = [0, 1, 0];
+
+    // REAR GURNEY: root on the shell at TG, underside root a little further
+    // down the back, tip off along the normal and kicked up.
+    const TG = 0.30, TU = 0.345, SPAN = 42, NG = 7, H0 = 0.017;
+    const gs = [];
+    for (let i = 0; i < NG; i++) {
+      const f = i / (NG - 1) * 2 - 1, az = 180 + f * SPAN, h = H0 * (0.55 + 0.45 * Math.cos(Math.PI * f * 0.92));
+      const top = surfAt(TG, az), low = surfAt(TU, az);
+      gs.push({ r: top.p, u: low.p, n: top.n, tip: _add(_add(top.p, top.n, h), UP, h * 0.35), c: paint(TG, az) });
+    }
+    for (let i = 0; i < NG - 1; i++) {
+      const a = gs[i], b = gs[i + 1];
+      quad(a.r, b.r, b.tip, a.tip, a.c, _add(a.n, UP, 0.6));                 // the upper face, in paint
+      quad(a.u, b.u, b.tip, a.tip, AERO_DARK, [-a.n[0], -1, -a.n[2]]);     // its dark underside
+    }
+    for (const g of [gs[0], gs[NG - 1]]) {
+      const side = [g.r[0], 0, 0];
+      tri(g.r, g.tip, g.u, g.c, side);
+    }
+
+    // TOP INTAKE on the centreline: front (mouth) to back (faired into the crown).
+    const IT = [0.22, 0.17, 0.12, 0.08, 0.05], IH = [0.015, 0.013, 0.009, 0.004, 0], IW = 0.026;
+    const st = IT.map((t, i) => {
+      const c = surfAt(t, 0), aB = azAtHalfWidth(t, IW), aT = azAtHalfWidth(t, IW * 0.75);
+      const sink = (az) => { const s = surfAt(t, az); return _add(s.p, s.n, -0.004); };
+      const lift = (az) => _add(surfAt(t, az).p, c.n, IH[i]);
+      return { n: c.n, bl: sink(-aB), tl: lift(-aT), tr: lift(aT), br: sink(aB), col: paint(t, 0) };
+    });
+    for (let i = 0; i < st.length - 1; i++) {
+      const a = st[i], b = st[i + 1];
+      quad(a.bl, b.bl, b.tl, a.tl, a.col, [-1, 0.3, 0]);
+      quad(a.tl, b.tl, b.tr, a.tr, a.col, a.n);
+      quad(a.tr, b.tr, b.br, a.br, a.col, [1, 0.3, 0]);
+    }
+    const m0 = st[0];
+    quad(m0.bl, m0.tl, m0.tr, m0.br, AERO_DARK, [0, 0, 1]);   // the mouth, facing forward
+
+    // VISOR STRIP: along the gasket's upper edge (visorAt grown 0.020), from
+    // temple to temple. Field and shadow builds drop it — sub-pixel there.
+    if (simplePaint) return out;
+    const grow = 0.020, t0g = VISOR_T0 - grow, t1g = VISOR_T1 + grow, AZW = (VISOR_AZ + grow * 110) * 1.55;
+    const vs = [];
+    for (let az = -70; az <= 70.001; az += 14) {
+      const tTop = t0g + (t1g - t0g) * Math.asin(Math.min(1, Math.abs(az) / AZW)) / Math.PI;
+      const lo = surfAt(tTop - 0.004, az), hi = surfAt(tTop - 0.064, az);
+      vs.push({ li: _add(lo.p, lo.n, -0.001), lo: _add(lo.p, lo.n, 0.0035), ho: _add(hi.p, hi.n, 0.0035), hi: _add(hi.p, hi.n, -0.001), n: mid(lo.n, hi.n) });
+    }
+    for (let i = 0; i < vs.length - 1; i++) {
+      const a = vs[i], b = vs[i + 1];
+      quad(a.lo, b.lo, b.ho, a.ho, AERO_DARK, a.n);
+      quad(a.ho, b.ho, b.hi, a.hi, AERO_DARK, [0, 1, 0]);
+      quad(a.li, b.li, b.lo, a.lo, AERO_DARK, [0, -1, 0]);
+    }
+    for (const v of [vs[0], vs[vs.length - 1]]) quad(v.li, v.lo, v.ho, v.hi, AERO_DARK, [v.lo[0], 0, 0]);
+    return out;
+  }
+
   function build(out, cx, cy, cz, design, S) {
     // Field cars and depth casters retain the traced shell, smooth normals and
     // visor, but do not evaluate 22 detailed artwork functions per triangle.
@@ -694,10 +808,12 @@ const Helmets = (function () {
     for (let r = 0; r < rings; r++)
       for (let sl = 0; sl < slices; sl++)
         patch(meshRingT(r), meshRingT(r + 1), (sl / slices) * 360, ((sl + 1) / slices) * 360, 0);
+    // S.aero === false builds the bare traced shell (the shape tests measure it).
+    if (!(S && S.aero === false)) buildAero(out, cx, cy, cz, design, S, simplePaint);
     return out;
   }
 
-  return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build,
+  return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build, buildAero, surfAt,
            RINGS, SLICES, FIELD_RINGS, FIELD_SLICES, ringT, MAX_SPLIT };   // the tessellation, so previews/tests can name both detail levels
 })();
 Object.freeze(Helmets);

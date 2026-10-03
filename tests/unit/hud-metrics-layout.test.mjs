@@ -1,3 +1,4 @@
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -72,7 +73,7 @@ test("a forced LAYOUT name hides; AUTO and MAP/GAPS are untouched", () => {
 test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  for (const sel of ["#hud-sectors", ".hud-box:nth-child(4)", "#hud-energy", "#hud-ot", "#hud-aero"])
+  for (const sel of ["#hud-sectors", "#hud-box-best", "#hud-energy", "#hud-ot", "#hud-aero", "#hud-bb"])
     assert.match(css, new RegExp("body\\.hud-prof-minimal " + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   // The inset reads are guarded on the rect having a WIDTH, and each falls back
   // to the other side rather than to a viewport-wide number.
@@ -122,7 +123,7 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
 
 test("HUD layout options live in a full-width pause submenu", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const css = fs.readFileSync(path.join(root, "css/components.css"), "utf8");
+  const css = readCssSource("css/components.css");
   assert.match(html, /id="pm-hud-details"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hidehud"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);

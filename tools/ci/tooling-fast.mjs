@@ -123,6 +123,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/branch-audit.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
+  "tests/unit/cam-motion.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
@@ -134,6 +135,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the whole point — the front-wing assertion this file ports sat red on the
   // deploy tip through five consecutive green Pages runs because the browser
   // group that held it is not gated at all.
+  // car-fx.js (plank sparks, AI lock-up marks) + the particle pool's scrape /
+  // flare / spray-plume discipline, in a VM with seeded Math.random; ~0.2 s.
+  "tests/unit/car-fx.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
@@ -176,6 +180,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
   // stays in the edit loop where a cockpit geometry change is actually made.
   "tests/unit/cockpit-crest-stripe.test.mjs",
+  "tests/unit/cockpit-preview.test.mjs",
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",
@@ -236,6 +241,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // → onContext, the stamp tool's ghost polyline, the drag / span measurement
   // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
   "tests/unit/designer-canvas.test.mjs",
+  // The designer's elevation strip (js/editor/profile.js) alone: tap adds a hill,
+  // a grip drag sets height (8 % cap) / place / Shift length and commits once,
+  // long-press and Delete remove, data-arrows own/pass, the hill's aria-label.
+  "tests/unit/designer-profile.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-builder-config.test.mjs",
   "tests/unit/desktop-native.test.mjs",
@@ -274,6 +283,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
+  // Rival-car distance LOD (js/car/field-lod.js): the table, the shadow-caster
+  // gate, the mirror cap and the launch warm. Real shadow/mirror passes in VMs, ~0.1 s.
+  "tests/unit/field-lod.test.mjs",
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
@@ -362,6 +374,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-feel.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
@@ -424,6 +437,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-nav-spatial.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
+  "tests/unit/mirror-lights.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",
@@ -451,6 +465,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // for the garage one defeats its whole purpose — a dropped material column
   // looks exactly like the bug it guards against.
   "tests/unit/parts-ladder.test.mjs",
+  // Locked SIGNATURE → equivalent (not DEFAULTS). ~0.1 s; without it a
+  // Faenza Street fit on McLaren silently photographed as medium.
+  "tests/unit/parts-locked-equivalent.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
