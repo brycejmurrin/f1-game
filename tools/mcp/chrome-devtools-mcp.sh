@@ -8,7 +8,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 REPO="$ROOT/scratch/chrome-devtools-mcp"
 BIN="$REPO/build/src/bin/chrome-devtools-mcp.js"
-PATH_FILE="$ROOT/scratch/chrome-devtools-path.env"
 REPO_URL="https://github.com/ChromeDevTools/chrome-devtools-mcp.git"
 # Audited live in this repository on 2026-08-17. Pin the network fallback so a
 # fresh machine cannot silently run a different MCP release than CI/tests saw.
@@ -21,33 +20,8 @@ find_chrome() {
   if [[ -n "${CHROMIUM_PATH:-}" && -x "$CHROMIUM_PATH" ]]; then
     echo "$CHROMIUM_PATH"; return 0
   fi
-  if [[ -f "$PATH_FILE" ]]; then
-    # shellcheck disable=SC1090
-    local saved
-    saved="$(source "$PATH_FILE" 2>/dev/null && echo "${CHROMIUM_PATH:-}")"
-    if [[ -n "$saved" && -x "$saved" ]]; then echo "$saved"; return 0; fi
-  fi
-  local mac="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  if [[ -x "$mac" ]]; then echo "$mac"; return 0; fi
-  local candidates=(
-    /opt/pw-browsers/chromium
-    /opt/pw-browsers/chromium-*/chrome-linux64/chrome
-    "$HOME/.cache/ms-playwright/chromium-*/chrome-linux64/chrome"
-    "$HOME/.cache/puppeteer/chrome/*/chrome-linux64/chrome"
-    /opt/google/chrome/chrome
-    /usr/local/bin/google-chrome
-  )
-  local c glob
-  for c in "${candidates[@]}"; do
-    for glob in $c; do
-      if [[ -x "$glob" ]]; then
-        mkdir -p "$(dirname "$PATH_FILE")"
-        printf 'CHROMIUM_PATH=%q\n' "$glob" >"$PATH_FILE"
-        echo "$glob"; return 0
-      fi
-    done
-  done
-  return 1
+  # Shared discovery is read-only: status/help must never write a saved path.
+  node "$ROOT/tools/lib/chromium-path.mjs" --path
 }
 
 detect_chrome() {

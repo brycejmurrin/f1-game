@@ -42,10 +42,13 @@ never render while test-bg.mjs is running.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
 import re
+import shutil
+import signal
 import subprocess
 import sys
 import urllib.error
@@ -54,9 +57,10 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-CHROME_DAEMON_PORT = int(os.environ.get("PROBE_CHROME_PORT", "3712"))
+CHROME_DAEMON_PORT = os.environ.get("PROBE_CHROME_PORT", "3712")
 CHROME_DAEMON_STATE = ROOT / "scratch" / "probe-chrome-daemon.port"
-CHROME_DAEMON_SESSION = "probe-chrome"
+CHROME_DAEMON_ID = hashlib.sha256(str(ROOT).encode()).hexdigest()[:16]
+CHROME_DAEMON_SESSION = f"probe-chrome-{CHROME_DAEMON_ID}"
 TINYFISH_SH = ROOT / "tools" / "mcp" / "tinyfish-mcp.sh"
 TINYFISH_BASE = os.environ.get("TINYFISH_MCP_BASE", "http://127.0.0.1:3711")
 TINYFISH_MCP = f"{TINYFISH_BASE.rstrip('/')}/mcp"
@@ -155,17 +159,24 @@ def daemon_port() -> int | None:
     env = os.environ.get("PROBE_CHROME_PORT", "").strip()
     if env.isdigit():
         candidates.append(int(env))
-    if CHROME_DAEMON_STATE.is_file():
+    try:
         text = CHROME_DAEMON_STATE.read_text().strip()
         if text.isdigit():
             candidates.append(int(text))
+    except OSError:
+        pass
     candidates.append(3712)
     for port in dict.fromkeys(candidates):
+        if not 1 <= port <= 65535:
+            continue
         try:
             with urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/healthz", timeout=0.5
             ) as resp:
-                if resp.status == 200:
+                health = json.loads(resp.read(8192))
+                if (resp.status == 200 and health.get("ok") is True
+                        and health.get("service") == "apex-probe-chrome"
+                        and health.get("rootId") == CHROME_DAEMON_ID):
                     return port
         except Exception:  # noqa: BLE001 — any failure means "not this port"
             continue
@@ -605,6 +616,8 @@ def cmd_call(args: argparse.Namespace) -> int:
 
 
 def _tmux(*args: str) -> subprocess.CompletedProcess:
+    if shutil.which("tmux") is None:
+        return subprocess.CompletedProcess(["tmux", *args], 127, "", "tmux is required; install tmux before chrome-start/chrome-stop")
     conf = Path("/exec-daemon/tmux.portal.conf")
     base = ["tmux", "-f", str(conf)] if conf.is_file() else ["tmux"]
     return subprocess.run([*base, *args], capture_output=True, text=True)
@@ -618,7 +631,13 @@ def cmd_chrome_daemon(args: argparse.Namespace) -> int:
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     backend = ChromeBackend(use_daemon=False)
-    backend.ensure()  # launch upstream now, so healthz means "browser is up"
+    # Bind first: an occupied port must never launch and leak an upstream browser.
+    srv = None
+    previous_signals = {}
+    def interrupt(_signum: int, _frame: Any) -> None:
+        raise KeyboardInterrupt
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        previous_signals[signum] = signal.signal(signum, interrupt)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_a: Any) -> None:  # keep the tmux pane readable
@@ -634,7 +653,8 @@ def cmd_chrome_daemon(args: argparse.Namespace) -> int:
 
         def do_GET(self) -> None:  # noqa: N802 — http.server API
             if self.path == "/healthz":
-                self._send(200, {"ok": True, "mock": _mock()})
+                self._send(200, {"ok": True, "mock": _mock(), "service": "apex-probe-chrome",
+                                 "rootId": CHROME_DAEMON_ID, "pid": os.getpid()})
             elif self.path == "/tools":
                 self._send(200, {"tools": backend.tools()})
             else:
@@ -658,19 +678,24 @@ def cmd_chrome_daemon(args: argparse.Namespace) -> int:
             except Exception as e:  # noqa: BLE001 — surface to the caller
                 self._send(500, {"error": str(e)[:2000]})
 
-    srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    port = srv.server_address[1]
-    CHROME_DAEMON_STATE.parent.mkdir(parents=True, exist_ok=True)
-    CHROME_DAEMON_STATE.write_text(str(port))
-    print(f"probe-chrome daemon listening on 127.0.0.1:{port}", flush=True)
     try:
+        srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+        backend.ensure()  # healthz now means the upstream is usable
+        port = srv.server_address[1]
+        CHROME_DAEMON_STATE.parent.mkdir(parents=True, exist_ok=True)
+        CHROME_DAEMON_STATE.write_text(str(port))
+        print(f"probe-chrome daemon listening on 127.0.0.1:{port}", flush=True)
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         backend.close()
-        if CHROME_DAEMON_STATE.is_file():
+        if srv:
+            srv.server_close()
+        if srv and CHROME_DAEMON_STATE.is_file() and CHROME_DAEMON_STATE.read_text().strip() == str(srv.server_address[1]):
             CHROME_DAEMON_STATE.unlink()
+        for signum, handler in previous_signals.items():
+            signal.signal(signum, handler)
     return 0
 
 
@@ -679,6 +704,9 @@ def cmd_chrome_start(args: argparse.Namespace) -> int:
     if port is not None:
         print(f"already running on 127.0.0.1:{port}")
         return 0
+    if shutil.which("tmux") is None:
+        print("tmux is required; install tmux before chrome-start", file=sys.stderr)
+        return 1
     _tmux("kill-session", "-t", CHROME_DAEMON_SESSION)
     r = _tmux(
         "new-session", "-d", "-s", CHROME_DAEMON_SESSION, "-c", str(ROOT),
@@ -701,11 +729,28 @@ def cmd_chrome_start(args: argparse.Namespace) -> int:
     print("daemon did not come up — tmux pane:", file=sys.stderr)
     print(_tmux("capture-pane", "-t", f"{CHROME_DAEMON_SESSION}:0.0", "-p").stdout,
           file=sys.stderr)
+    _tmux("kill-session", "-t", CHROME_DAEMON_SESSION)
     return 1
 
 
 def cmd_chrome_stop(_: argparse.Namespace) -> int:
-    _tmux("kill-session", "-t", CHROME_DAEMON_SESSION)
+    r = _tmux("kill-session", "-t", CHROME_DAEMON_SESSION)
+    if r.returncode == 127:
+        print(r.stderr, file=sys.stderr)
+        return 1
+    import time
+    for _ in range(10):
+        if daemon_port() is None:
+            break
+        time.sleep(0.1)
+    else:
+        print("chrome-stop failed: daemon is still healthy; state retained. " + r.stderr.strip(), file=sys.stderr)
+        return 1
+    if r.returncode != 0:
+        absent = re.search(r"can't find session|no server running|no sessions", r.stderr, re.I)
+        if not absent or _tmux("has-session", "-t", CHROME_DAEMON_SESSION).returncode == 0:
+            print("chrome-stop failed: termination was not confirmed. " + r.stderr.strip(), file=sys.stderr)
+            return 1
     if CHROME_DAEMON_STATE.is_file():
         CHROME_DAEMON_STATE.unlink()
     print("stopped (if it was running)")
@@ -815,11 +860,19 @@ def main() -> int:
     p_call.set_defaults(func=cmd_call)
 
     p_daemon = sub.add_parser("chrome-daemon", add_help=False)
-    p_daemon.add_argument("--port", type=int, default=CHROME_DAEMON_PORT)
+    def valid_port(value: str) -> int:
+        try:
+            port = int(value)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError("port must be an integer between 0 and 65535") from e
+        if not 0 <= port <= 65535:
+            raise argparse.ArgumentTypeError("port must be between 0 and 65535")
+        return port
+    p_daemon.add_argument("--port", type=valid_port, default=CHROME_DAEMON_PORT)
     p_daemon.set_defaults(func=cmd_chrome_daemon)
 
     p_cstart = sub.add_parser("chrome-start", add_help=False)
-    p_cstart.add_argument("--port", type=int, default=CHROME_DAEMON_PORT)
+    p_cstart.add_argument("--port", type=valid_port, default=CHROME_DAEMON_PORT)
     p_cstart.set_defaults(func=cmd_chrome_start)
 
     p_cstop = sub.add_parser("chrome-stop", add_help=False)

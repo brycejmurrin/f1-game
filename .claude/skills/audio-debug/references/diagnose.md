@@ -70,7 +70,7 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
    (network/CORS, or CC0 files absent); synth fallback should be active.
    `usingSamples` says which core is running.
 3. Suspended AudioContext (autoplay): a user gesture resumes it. Click
-   `#soundbtn` or `document.dispatchEvent(new MouseEvent("click"))`.
+Use a real UI click/tap or keyboard activation to unlock audio. Script-dispatched events do not establish trusted user activation; programmatic probes work only after unlock.
 4. Chrome DevTools → **Web Audio** — confirm oscillators / buffer sources
    reach the destination.
 5. `__apex.timing().raceT` should be increasing. A frozen sim means
@@ -82,8 +82,8 @@ The AudioContext itself is a private var — not exposed. Use
 ## Gear-shift cue silent
 
 Trigger path (all `GameAudio.shift(up)`; none in physics):
-`js/game.js` ~5084/5085 (manual gears: `c.gear` changes, `c.shiftT <= 0`) and
-~5198 (auto: `naturalGear(speed)` differs from `c.gear`). Each needs
+Search `GameAudio.shift` in `js/game.js`: manual-gear branches and the auto
+`naturalGear(speed)` comparison against `c.gear`. Each needs
 `soundOn && c.local` (+ `state === "race"` on the auto path), so a VS FRIEND
 rival's shift is deliberately mute. In `engine.js` `shift()` returns at once
 unless `sfxOk()` (ctx exists, master AND sfx bus on); there is no layer switch

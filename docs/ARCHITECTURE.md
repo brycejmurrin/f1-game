@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_303 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -194,7 +194,8 @@ _303 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
-| `hud-tyres.js` | `HudTyres` | tag | HUD tyre corner paint helpers. |
+| `hud-tyres.js` | `HudTyres` | tag | HUD tyre temperature state. |
+| `hud-layout.js` | `HudLayout` | tag | HudLayout: move and size each race HUD element, as a player setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE. |
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
@@ -241,6 +242,7 @@ _303 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `city.js` | `SceneryCity` | tag | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
 | `identity.js` | `SceneryIdentity` | tag | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | tag | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
+| `venue.js` | `SceneryVenue` | tag | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
 | `build-props.js` | `TrackBuildProps` | tag | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/circuits/`**
@@ -354,6 +356,7 @@ _303 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `announcer-recorded.js` | `RecordedAnnouncer` | tag | A recorded read owns its pending load as well as its playing clips. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
+| `driving-cues.js` | `DrivingCues` | tag | assist-gated audio driving cues (braking tone + L/R corner calls). |
 
 **`js/physics/`**
 
@@ -423,6 +426,7 @@ _303 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
+| `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.7 MB / 22 cars). |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |

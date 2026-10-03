@@ -23,7 +23,7 @@
 // diff — the exact diffs it exists for — and its only scheduled run was the
 // nightly rota's `test:circuits`, one night in eleven. A guard nobody runs is
 // not a guard, so the audit is ALSO here, in `test:sweeps`, which the Pages
-// gate runs on every geometry diff, blocking. The spec is untouched.
+// gate runs on every geometry diff, blocking. The browser companion remains.
 //
 // IT FOUND THE SPEC WAS RED. mosport and zandvoort read 1.07 m, which under the
 // spec's own rule ("a track NOT in this map must read <= TOL") is a failure,
@@ -105,18 +105,9 @@ const LADDER = [-0.9, -0.45, 0, 0.45, 0.9];
 // zandvoort) read the tarmac EDGE's boundary only because the ladder was
 // scaled by the road mesh; scaled by track.hw they read 0.00 and are held to
 // TOL now, which is stricter. miami and albert_park went the same way earlier.
-const BASELINE = {
-  // A forest crown leaning over the road, not an intrusion at the edge: dark
-  // green spanning y 9.96-12.46 with the road at 7.33, so 4.74 m of clearance
-  // a car drives under. Deliberate — the scenery engine keeps FOOTINGS out and
-  // lets crowns reach over (nature.js tree() guards with onTrack(x, z, 4,
-  // h * 0.3)). This circuit's identity is a forest tunnel and it builds an
-  // explicit ceiling over the cutting at 9.5-16 m, which clears CEIL; this one
-  // crown sits just under it. Never a regression: mont_tremblant arrived in
-  // 06833f3d and read 4.74 at the old 0.75-of-mesh rung; the 0.9 hw rung
-  // meets the same crown (lateral -8.6) at 4.97.
-  mont_tremblant: 5.0,
-};
+// Full-tree footprint clearance removed Mont Tremblant's overhanging crown.
+// The fleet now has no exceptions to the shared clean tolerance.
+const BASELINE = {};
 const ALLOW = new Set();          // fully-exempt circuits — none; everything is capped
 
 const ctxOnce = (() => { let c = null; return () => (c || (c = buildContext())); })();
@@ -294,9 +285,8 @@ const fleet = (() => {
     assert.equal(T.setKeepGeometry(true), true, "the build must keep its geometry for this audit");
     // process.env.APEX_CIRCUITS narrows the fleet to the circuits a
     // circuit-only pull request touched (tools/lib/circuit-scope.cjs); unset =
-    // every circuit. The two ANCHORS always build: the anti-vacuity test reads
-    // mont_tremblant's crown and the tolerance test reads shanghai off this
-    // map, and both must keep measuring at any scope.
+    // every circuit. The two ANCHORS always build: the tolerance regressions
+    // read mont_tremblant and shanghai off this map at any scope.
     const { scope } = require(path.join(ROOT, "tools", "lib", "circuit-scope.cjs"));
     const ANCHORS = new Set(["mont_tremblant", "shanghai"]);
     for (const def of T.LIST.filter((d) => ANCHORS.has(d.id) || scope([d.id]).length)) {
@@ -340,22 +330,21 @@ test("shanghai's track-owned props stay at the shared clean tolerance", () => {
     `${JSON.stringify(r.worst)}`);
 });
 
-test("the audit still measures: a planted slab and the forest crown are found", () => {
+test("mont_tremblant's forest crowns stay at the shared clean tolerance", () => {
+  const r = fleet().get("mont_tremblant");
+  assert.ok(r && !r.err, "mont_tremblant built and was audited");
+  assert.ok(r.max <= TOL, `mont_tremblant reads ${r.max} m over the road (limit ${TOL}): ` +
+    `${JSON.stringify(r.worst)}`);
+});
+
+test("the audit still measures: a planted slab and a planted forest crown are found", () => {
   // ANTI-VACUITY. Every assertion above is "nothing over the cap", which an
   // audit that silently stopped finding anything would pass forever. The fleet
   // is clean at TOL now, so the known reading is PLANTED: a 4 x 4 m slab 1.0 m
   // over the centreline at half-lap, handed to auditProps as the props buffer
-  // of a real built track. Plus mont_tremblant's crown, the one real object.
-  const fl = fleet(), mt = fl.get("mont_tremblant");
-  // 4.97 -> 4.79 on 2026-09-24: its road heights now come from the survey by
-  // arc fraction (they were read by point index, up to 8.9 m off here).
-  // 4.79 -> 4.54 (batch 2, same day): the run-off shelf and the placed-prop
-  // MIN_SEP slots moved the ground and the props under the same crown.
-  assert.ok(mt.max >= 4.45 && mt.max <= 4.65,
-    `mont_tremblant's crown should read ~4.54 m; got ${mt.max}. If it moved, ` +
-    "re-measure and update the baseline; if the audit stopped finding it, fix the audit.");
-
-  const t = ctxOnce().Tracks.build(ctxOnce().Tracks.LIST.find((d) => d.id === "shanghai"));
+  // of a real built track. A crown built with the real raw cone emitter must
+  // also be detected, without depending on a shipped scenery defect.
+  const ctx = ctxOnce(), t = ctx.Tracks.build(ctx.Tracks.LIST.find((d) => d.id === "shanghai"));
   const k = Math.round(0.5 * t.n), c = [t.px[k], t.py[k] + 1.0, t.pz[k]];
   const f = [t.tx[k], t.tz[k]], r = [t.rx[k], t.rz[k]];
   const pos = [], idx = [], col = [];
@@ -368,9 +357,25 @@ test("the audit still measures: a planted slab and the forest crown are found", 
     idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   const res = auditProps({ ...t, propsGeo: { pos, idx, col }, glassGeo: null });
-  ctxOnce().trim(0);
   assert.ok(res.max >= 0.95 && res.max <= 1.05, `the planted slab should read ~1.0 m; got ${JSON.stringify(res)}`);
   assert.deepEqual(res.worst.color, [1, 0, 1], `the worst offender should be the slab; got ${JSON.stringify(res.worst)}`);
+
+  // Raw cones are base-anchored. Two nine-facet tiers supply 54 vertices,
+  // exceeding the audit's 30-vertex mesh floor without duplicate faces.
+  // Match its rounded centreline sample so the upper apex is exactly 4 m up,
+  // comfortably inside the unchanged (TOL, CEIL) band.
+  const r3 = (v) => +v.toFixed(3), roadY = r3(t.py[k]);
+  const crownColor = [0.12, 0.32, 0.10];
+  const crown = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: ctx.TrackGeom.MAT.FOLIAGE };
+  for (const [baseY, radius] of [[1, 2.5], [2, 2]])
+    ctx.TrackGeom.addCone(crown, [r3(t.px[k]), roadY + baseY, r3(t.pz[k])], radius, 2, crownColor, 9);
+  assert.equal(crown.pos.length / 3, 54, "the positive control uses two real crown tiers");
+  const canopy = auditProps({ ...t, propsGeo: crown, glassGeo: null });
+  ctx.trim(0);
+  assert.ok(canopy.max >= 3.90 && canopy.max <= 4.10,
+    `the planted crown should read ~4.0 m; got ${JSON.stringify(canopy)}`);
+  assert.deepEqual(canopy.worst.color, crownColor,
+    `the worst offender should be the crown; got ${JSON.stringify(canopy.worst)}`);
 });
 
 test("no grounded solid stands on the tarmac, on any circuit", () => {

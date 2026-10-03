@@ -15,19 +15,20 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 ## The job
 
 1. Identify the run. The parent gives a run URL, a run id, or a SHA. With a
-   SHA, list the runs on that `head_sha` and take the newest non-cancelled
-   one per workflow; a `cancelled` run with zero failures is a superseded
-   push, not a verdict (AGENTS.md §Watching CI and Pages). Two shapes, both
+   SHA, list the runs on that `head_sha` and take the newest run
+   per workflow INCLUDING cancelled. Inspect failed/cancelled jobs and elapsed
+   time at timeout caps before deciding whether cancellation was superseded (AGENTS.md §Watching CI and Pages). Two shapes, both
    NOT reds: a newer commit superseded it, or — same `head_sha`, cancelled
    seconds in, a sibling still running — the designed draft/ready dedupe
    (one group per branch name; marking a draft ready cancels its fast run;
    before 2026-09-24 a branch push and its PR run did the same). Say which,
-   and never report a cancelled run as the failure: read the sibling.
+   and read the live sibling for dedupe. A newest cancelled run with failed jobs
+   or timeout-cap evidence is a real red; identify its job and assertion.
 2. Tell the three trains apart and say which this is: PR CI (`ci.yml` on a
    PR head), ship-push CI (`ci.yml` on the deploy branch), or Pages
    (`pages.yml`, which calls `ci.yml` with a `before_sha` and may select
    different specs). A green PR run proves nothing about Pages.
-3. Read the FAILED jobs only. Prefer the host's GitHub tools when the session
+3. Read FAILED jobs and CANCELLED jobs with timing/timeout evidence. Prefer the host's GitHub tools when the session
    has them (`get_job_logs` with `failed_only`, `actions_get`, `get_check_run`);
    otherwise `curl -sS https://api.github.com/repos/brycejmurrin/f1-game/actions/runs/<id>/jobs`
    and the job log URLs it returns. Grep the log for `Expected`, `Received`,

@@ -103,3 +103,12 @@ play is not a matrix proof.
 | Tap floor wrong | read `--tap` off `:root` (desktop 44) instead of `body` |
 | Boxes look huge | forgot `currentCSSZoom` on `.sheet` |
 | Dialog state poisoned | un-hid a `<dialog>` instead of clicking `#mb-*` |
+
+## Input and wait contract
+
+`--viewport` requires exactly two finite positive integers; `--scale` must be
+finite and inside the UI's supported range. Extra `--click` values append to the
+catalog's click route. With an explicit custom `--root`, the supplied clicks are
+the complete route; inspect `screenClicks` when authoring a custom screen.
+Open-state and stylesheet waits are bounded and identify the screen/root on
+failure. Infinite decorative animations must not block transition readiness.

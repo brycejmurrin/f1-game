@@ -1544,8 +1544,9 @@ const Car3D = (function () {
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
     // The cowl stays ahead of the wheel and rises to its surround, beneath
     // the raised hand position; the exterior aperture keeps its own datums.
-    const profiles = { standard:[0,0,[0,0,0],[0,0,0]], sculpted:[-0.06,-0.015,[-0.015,-0.045,0.015],[0,0.035,-0.012]],
-      wide:[0.10,0,[0.025,0.075,0.070],[0.020,0.020,0.020]], tapered:[-0.035,0,[-0.060,-0.020,0.055],[-0.020,0.015,0]], stepped:[0.035,-0.010,[0.020,0.055,-0.020],[-0.015,0.045,-0.025]] };
+    // Deck width, height, shoulder flare, waist and forward crown per design.
+    const profiles = { standard:[0,0,0,0,0], sculpted:[-0.045,-0.008,0.025,-0.040,0.026],
+      wide:[0.12,0,0.11,0.025,0.010], tapered:[-0.08,-0.015,-0.045,-0.020,-0.040], stepped:[0.04,0,0.055,-0.025,0.038] };
     const profile = profiles[ckpt && opts.cockpitBody] || profiles.standard;
     const hR = ckpt ? { z: 0.58, y: 0.59, w: 0.66, h: 0.13, t: 0.58 }
                     : { z: 0.30, y: 0.545, w: 0.42, h: 0.13, t: 0.58 };   // stops at the aperture (0.28), top 0.610 onto the tub line
@@ -1569,43 +1570,35 @@ const Car3D = (function () {
     part("bolsters");
     if (ckpt) {
       for (const s of [-1, 1]) {
-        const shoulder = [
-          [[s*0.30,0.34,1.50],[s*0.56,0.26,1.50],[s*0.54,0.585,1.46],[s*0.30,0.62,1.46]],
-          [[s*0.285,0.37,0.94],[s*0.565,0.29,0.94],[s*0.535,0.655,0.91],[s*0.285,0.69,0.91]],
-          [[s*0.32,0.40,-2.56],[s*0.55,0.32,-2.56],[s*0.53,0.73,-2.52],[s*0.32,0.755,-2.52]],
-        ];
-        for (let i=0;i<3;i++) for (const j of [1,2]) {
-          shoulder[i][j][0] += s * profile[2][i];
-          if (j === 2) shoulder[i][j][1] += profile[3][i];
-        }
-        const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
-        const rings=Array.from({length:3},(_,n)=>{
-          const t=n/2, w=[2*(t-0.5)*(t-1),-4*t*(t-1),2*t*(t-0.5)];
-          const q=shoulder[0].map((v,j)=>v.map((_,k)=>w.reduce((n,a,i)=>n+a*shoulder[i][j][k],0)));
-          const edge=mix(q[1],q[2],0.76), crown=mix(q[2],q[3],0.68), lip=mix(q[3],q[0],0.08);
-          const bend=(a,b,c,t)=>mix(mix(a,b,t),mix(b,c,t),t);
-          return [q[0],q[1],edge,bend(edge,q[2],crown,0.35),bend(edge,q[2],crown,0.70),crown,
-            bend(crown,q[3],lip,0.35),bend(crown,q[3],lip,0.70),lip];
+        // Six shoulder stations resolve the curvature beside the driver's arms.
+        const stations = [[1.50,0.30,0.52,0.62],[0.94,0.285,0.54,0.69],[0.44,0.265,0.52,0.723],
+          [-0.12,0.292,0.53,0.749],[-0.80,0.307,0.55,0.754],[-2.56,0.32,0.55,0.754]];
+        const rings = stations.map(([z,inner,outer,y])=>{
+          const waist = Math.exp(-Math.pow((z-0.15)/0.65,2));
+          outer += profile[2] + profile[3]*waist;
+          const top=Math.min(0.754,y+profile[4]*Math.exp(-Math.pow((z-0.55)/0.40,2)));
+          const x=inner+(outer-inner)*0.54;
+          return [[s*inner,0.34,z],[s*outer,0.30,z],[s*outer,top-0.080,z],
+            [s*(outer-0.025),top-0.018,z],[s*x,top,z],[s*(inner+0.014),y-0.008,z],[s*inner,y-0.040,z]];
         });
         const start=out.pos.length/3;
-        for(let i=0;i<rings.length-1;i++) for(let j=2;j<8;j++) {
+        for(let i=0;i<rings.length-1;i++) for(let j=2;j<6;j++) {
           const a=rings[i], b=rings[i+1];
           if(s>0) addQuad(out,a[j],b[j],b[j+1],a[j+1],c1); else addQuad(out,a[j+1],b[j+1],b[j],a[j],c1);
         }
         smoothSkin(out,start);
-        for(const i of [0,rings.length-1]) for(let j=1;j<8;j++) {
+        for(const i of [0,rings.length-1]) for(let j=1;j<6;j++) {
           const q=rings[i]; if((i===0)===(s>0)) addTri(out,q[0],q[j],q[j+1],c1); else addTri(out,q[0],q[j+1],q[j],c1);
         }
-        addTube(out,rings.map(q=>q[8]),0.009,6,CARBON,SURFACES.carbon);
+        addTube(out,rings.map(q=>q[6]),0.008,4,CARBON,SURFACES.carbon);
       }
       addBox(out, 0, 0.36, 0.60, 0.66, 0.13, 0.16, CARBON);
-      addBox(out, 0, 0.427, 0.56, 0.60, 0.03, 0.05, c2);       // accent lip
       addBox(out, 0, 0.345, 0.54, 0.52, 0.10, 0.05, INTAKE);   // dark instrument shroud
       // Dark six-point harness webbing avoids a pale slab across the lap.
       const WEB = [0.10, 0.11, 0.14];
       for (const s of [-1, 1]) {
-        addBeamBetween(out, [s * 0.185, 0.700, -0.30], [s * 0.055, 0.437, 0.155], 0.072, WEB, SURFACES.carbon);
-        addBeamBetween(out, [s * 0.245, 0.398, 0.095], [s * 0.052, 0.425, 0.168], 0.062, WEB, SURFACES.carbon);
+        addQuad(out, [s*0.15,0.700,-0.30],[s*0.22,0.700,-0.30],[s*0.09,0.437,0.155],[s*0.02,0.437,0.155],WEB,SURFACES.carbon);
+        addQuad(out, [s*0.245,0.398,0.064],[s*0.245,0.398,0.126],[s*0.052,0.425,0.199],[s*0.052,0.425,0.137],WEB,SURFACES.carbon);
       }
       addBox(out, 0, 0.432, 0.176, 0.088, 0.078, 0.034, [0.32, 0.32, 0.36], SURFACES.metal);
     } else {
@@ -2267,10 +2260,10 @@ const Car3D = (function () {
     if (noseC) {
       const capRearZ = styledTipZ - 0.38;
       const nt = anchors.noseAt(styledTipZ), nb = anchors.noseAt(capRearZ);
-      addSpan(out, { z: styledTipZ + 0.005, y: (nt.bottom + nt.top) * 0.5, w: nt.side*2 + 0.010,
-                     h: nt.top - nt.bottom + 0.010, t: 0.70 },
-                   { z: capRearZ, y: (nb.bottom + nb.top) * 0.5, w: nb.side*2 + 0.010,
-                     h: nb.top - nb.bottom + 0.010, t: 0.86 }, noseC);
+      const capF = { z: styledTipZ + 0.005, y: (nt.bottom + nt.top) * 0.5, w: nt.side*2 + 0.010, h: nt.top - nt.bottom + 0.010, t: 0.70 };
+      const capR = { z: capRearZ, y: (nb.bottom + nb.top) * 0.5, w: nb.side*2 + 0.010, h: nb.top - nb.bottom + 0.010, t: 0.86 };
+      // Rounded nose (CarShade): the cap wraps it at the nose's own taper instead of poking square corners past it.
+      if (_round) CarShade.capLoft(out, capF, capR, nt, nb, noseC, addTri); else addSpan(out, capF, capR, noseC);
     }
     // Proud 0.006 keeps the pod panel UNDER the sponsor board (0.008): a board is
     // applied over the paint, not buried by it. At 0.016 the panel sat proud of
@@ -2278,9 +2271,9 @@ const Car3D = (function () {
     // was actually sitting on the pod colour while being inked for the board.
     if (podC) addPodFlankSpan(0.45, 0.11, 0.60, 0.22, podC, SURFACES.paint, 0.006);
 
-    const deckF = anchors.noseAt(2.15), deckR = anchors.noseAt(1.69);
-    addLoft(out, deckR.z, 0, deckR.top + 0.010, Math.min(0.28, deckR.topSide*1.75), 0.018,
-           deckF.z, 0, deckF.top + 0.010, Math.min(0.28, deckF.topSide*1.75), 0.018, c1);
+    const deckF = anchors.noseAt(2.15), deckR = anchors.noseAt(1.69), deckW = (a) => Math.min(0.28, a.topSide*1.75);
+    const deckY = (a) => a.top + 0.010 - (_round ? CarShade.sink(a, deckW(a) / 2) : 0);   // rounded nose: edges seat on the skin
+    addLoft(out, deckR.z, 0, deckY(deckR), deckW(deckR), 0.018, deckF.z, 0, deckY(deckF), deckW(deckF), 0.018, c1);
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
@@ -2310,7 +2303,7 @@ const Car3D = (function () {
     } else if (opts && opts.halo) {
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
-      const path = haloHoopPath(0.30,0.765,-0.80,0.28,0.18,faired?1.10:0.96,0.62,faired?24:10);
+      const path = haloHoopPath(0.30,0.765,-0.80,0.28,0.18,faired?1.10:1.045,0.62,faired?24:10);
       const hc = haloTint || (faired ? CARBON : HALO);
       if (faired) {
         const start=out.pos.length/3;
@@ -2330,11 +2323,16 @@ const Car3D = (function () {
           addQuad(out,rings[i][j],rings[i+1][j],rings[i+1][(j+1)%4],rings[i][(j+1)%4],hc,SURFACES.carbon);
         smoothSkin(out,start);
         for(const i of [0,rings.length-1]) { const q=i===0?rings[i].slice().reverse():rings[i]; addQuad(out,q[0],q[1],q[2],q[3],hc,SURFACES.carbon); }
-      } else addTube(out,path,0.025*hk,10,HALO,SURFACES.metal);
+      } else {
+        const start=out.pos.length/3;
+        addTube(out,path,0.029*hk,10,hc,SURFACES.carbon);
+        for(let i=start;i<out.pos.length/3;i++) out.pos[i*3+1]=path[Math.floor((i-start)/10)][1]+(out.pos[i*3+1]-path[Math.floor((i-start)/10)][1])*0.64;
+        smoothSkin(out,start);
+      }
       // Carbon fairing: a narrow stem blending into a broad Y at the crown.
       const stem = faired ? [[0.67,0.014,0.026],[0.90,0.018,0.025],[0.95,0.026,0.028],
         [1.00,0.045,0.031],[1.05,0.077,0.034],[1.10,0.135,0.036]]
-        : [[0.67,0.014,0.026],[0.89,0.018,0.025],[0.971,0.054,0.031]];
+        : [[0.67,0.014,0.026],[0.93,0.018,0.025],[1.059,0.060,0.031]];
       const stemStart=out.pos.length/3;
       for (let i=0;i<stem.length-1;i++) {
         const ring = (v) => [[-v[1]*hk,v[0],0.62-v[2]*hk],[v[1]*hk,v[0],0.62-v[2]*hk],
@@ -2403,12 +2401,6 @@ const Car3D = (function () {
     // RV-MIRROR-BODY, Y 470..680 x Z 640..720. At x 0.44 / y 0.735 ours sat
     // inboard of that volume AND above its ceiling — reported as "floating".
     const mz = ckpt ? 0.92 : 0.24;
-    // `mirror` is the recipe's outboard-span scale. No part recipe reached this
-    // section at all before it — the only variation was the three team styles —
-    // yet the mirrors are the WIDEST element of the upper body and sit against
-    // open sky in every three-quarter shot, so a knob here buys more silhouette
-    // per line than anywhere else on the car. Clamped to the span the RV-MIRROR
-    // -BODY volume above constrains in Y and Z but not in X.
     const mScale = Math.max(0.85, Math.min(1.35, cockpitStyle.mirror || 1));
     const mx = ((ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0)) * mScale;
     const msx = (ckpt ? 0.54 : 0.30) * mScale;
@@ -2423,13 +2415,13 @@ const Car3D = (function () {
       // attached to nothing). Move the crown and this must move with it.
       const xi = s * (msx - 0.04), xo = s * mx;
       const sB = ckpt ? 0.655 : 0.68;    // root buried in the cockpit shoulder
-      const sR = ckpt ? 0.070 : 0.04;    // rise: must span crown -> housing underside
+      const sR = ckpt ? 0.025 : 0.04;    // rise: must span crown -> housing underside
       const aY = mY - (ckpt ? 0.780 : 0.735);   // style drop carries into the stalk too
       const stalkTop = ckpt ? mY - mH / 2 + 0.006 : sB + sR*1.5 + aY;
       const stalkZ = mz + (ckpt ? 0.025 : 0); // tuck the stay behind the glass
       addBlock(out, [
-        [xi, sB + aY, mz - 0.045], [xi, sB + aY, mz + 0.045], [xi, sB + sR + aY, mz + 0.045], [xi, sB + sR + aY, mz - 0.045],
-        [xo, sB + sR*0.75 + aY, stalkZ - 0.02],  [xo, sB + sR*0.75 + aY, stalkZ + 0.02],  [xo, stalkTop, stalkZ + 0.02],  [xo, stalkTop, stalkZ - 0.02],
+        [xi, sB + aY, mz - (ckpt ? 0.026 : 0.045)], [xi, sB + aY, mz + (ckpt ? 0.026 : 0.045)], [xi, sB + sR + aY, mz + (ckpt ? 0.026 : 0.045)], [xi, sB + sR + aY, mz - (ckpt ? 0.026 : 0.045)],
+        [xo, (ckpt ? stalkTop-0.016 : sB+sR*.75+aY), stalkZ - (ckpt ? 0.012 : 0.020)], [xo, (ckpt ? stalkTop-0.016 : sB+sR*.75+aY), stalkZ + (ckpt ? 0.012 : 0.020)],  [xo, stalkTop, stalkZ + (ckpt ? 0.012 : 0.020)], [xo, stalkTop, stalkZ - (ckpt ? 0.012 : 0.020)],
       ], DARK);
       // Glass goes on the face TOWARD the viewer (-z). At mz+0.066 it sits
       // 8 mm BEYOND the housing's own back face, and the driver AND the chase
@@ -2442,7 +2434,7 @@ const Car3D = (function () {
       const xIn = s * (mx - mW / 2), xOut = s * (mx + mW / 2);
       addBlock(out, [
         [xIn, hy0, mz - 0.03], [xOut, hy0, mz - 0.03 + toe], [xOut, hy1, mz - 0.03 + toe], [xIn, hy1, mz - 0.03],
-        [xIn, hy0, mz + 0.03], [xOut, hy0, mz + 0.03 + toe], [xOut, hy1, mz + 0.03 + toe], [xIn, hy1, mz + 0.03],
+        [xIn+s*(ckpt ? 0.018 : 0), hy0+(ckpt ? 0.008 : 0), mz + 0.03], [xOut-s*(ckpt ? 0.018 : 0), hy0+(ckpt ? 0.008 : 0), mz + 0.03 + toe], [xOut-s*(ckpt ? 0.018 : 0), hy1-(ckpt ? 0.008 : 0), mz + 0.03 + toe], [xIn+s*(ckpt ? 0.018 : 0), hy1-(ckpt ? 0.008 : 0), mz + 0.03],
       ], [0.09, 0.09, 0.11], null, SURFACES.carbon);
       // Recessed glass and carbon bezel share the housing's cant. A flat
       // glass box on a swept housing reads as a detached grey rectangle.
@@ -2454,7 +2446,7 @@ const Car3D = (function () {
       };
       if (ckpt) {
         addBlock(out,face(0.004,mz-0.035,0.006),[0.035,0.04,0.045],null,SURFACES.carbon);
-        addBlock(out,face(0.012,mz-0.038,0.003),[0.055,0.075,0.10],null,SURFACES.glass);
+        addBlock(out,face(0.012,mz-0.038,0.003),[0.38,0.40,0.42],null,SURFACES.mirror);
       } else {
         addBox(out,s*mx,mY,mz-0.032,mW*0.97,mH*0.80,0.012,[0.10,0.11,0.14],SURFACES.glass);
         addBox(out,s*mx,mY,mz-0.038,0.200,0.050,0.008,[0.46,0.56,0.78],SURFACES.glass);
@@ -3372,7 +3364,7 @@ const Car3D = (function () {
     }
 
     _round = false;
-    if (shade) CarShade.smooth(out, { skip: [SURFACES.emissive] });
+    if (shade && !sil) CarShade.smooth(out, { skip: [SURFACES.emissive] });   // a shadow caster keeps the shape; depth never reads normals
     // Close the last section and measure each from the vertices it emitted.
     if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {

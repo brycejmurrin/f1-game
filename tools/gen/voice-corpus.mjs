@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * @doc Author-time: races the game VM and writes every radio line it spoke, by channel → `tools/gen/voice-corpus.json` (voicepack.mjs records from it).
+ * @doc Races the game VM and writes radio lines by channel to `tools/gen/voice-corpus.json` for voicepack.mjs.
  * @skill audio-debug
  * EVERY LINE THE GAME ACTUALLY HANDS THE VOICE in a race, by speaker. Race
  * control, the coach and much of the engineer are built in code (penalties,

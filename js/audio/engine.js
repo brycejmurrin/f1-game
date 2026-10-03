@@ -1908,6 +1908,27 @@ const GameAudio = (function () {
     cueT = t + (0.4 + (0.07 - 0.4) * cueU);
   }
 
+  // Assist-gated AUDIO DRIVING CUES (js/audio/driving-cues.js). Distinct from
+  // brakeCue's 520 Hz square train — a softer triangle so two assists on at
+  // once do not read as one confused beep. Own clock (driveCueT).
+  let driveCueT = 0, driveCueFired = 0, cornerCallFired = 0;
+  function driveBrakeTone(urgency) {
+    const u = urgency > 0 ? Math.min(urgency, 1) : 0;
+    if (!u || !sfxOk()) { driveCueT = now(); return; }
+    const t = now();
+    if (t < driveCueT) return;
+    blip(380, "triangle", 0.09, 0.004, 0.06);
+    driveCueFired++;
+    driveCueT = t + (0.45 + (0.09 - 0.45) * u);
+  }
+  // +k = LEFT turn (AGENTS.md). Two pitches, never speech / announce.
+  function cornerCall(side) {
+    if (!sfxOk()) return;
+    const left = side === "L" || side === 1 || side === "left";
+    blip(left ? 620 : 480, "sine", 0.11, 0.005, 0.10);
+    cornerCallFired++;
+  }
+
   function uiSelect() {
     if (!uiOk()) return;
     blip(880, "square", 0.13, 0.005, 0.09);
@@ -2032,6 +2053,8 @@ const GameAudio = (function () {
     finish,
     uiTick,
     brakeCue,
+    driveBrakeTone,
+    cornerCall,
     uiSelect,
     uiReject,
     setUiEnabled,
@@ -2097,6 +2120,12 @@ const GameAudio = (function () {
     // the only way to assert the layer: blips emitted, the live urgency, and
     // when the next one is due against the clock it is scheduled on.
     brakeCueState() { return { fired: cueFired, urgency: +cueU.toFixed(3), nextAt: +cueT.toFixed(3), now: +now().toFixed(3) }; },
+    driveCueState() {
+      return {
+        brakeFired: driveCueFired, callFired: cornerCallFired,
+        nextAt: +driveCueT.toFixed(3), now: +now().toFixed(3),
+      };
+    },
     // Same shape for the other one-shots the tune reaches: wastegate dumps
     // (and how long the engine has been under load, which arms them) and the
     // gear-shift crack with the level the SHIFT trim gave the last one.
