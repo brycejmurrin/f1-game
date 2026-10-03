@@ -160,7 +160,7 @@ const SceneryStructures = (function () {
       // define-once contract already assumes.
       const postCol = (opts && opts.postCol) || [0.28, 0.28, 0.30];
       const meshCol = col || [0.72, 0.74, 0.78];
-      const postKey = `fence-post|${h}|${st}|${postCol.join(",")}`;
+      const postKey = `fence-post|unit|${st}|${postCol.join(",")}`;
       // SIDE JOINS THE KEY, BUT ONLY WHERE THE MESH ACTUALLY USES IT. The
       // "leaning" top rail is offset by `-side * h * 0.09`, so its geometry
       // differs per side while the key did not — the first caller's side was
@@ -177,9 +177,21 @@ const SceneryStructures = (function () {
           return;
         }
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-        ctx.instance(postKey, place,                                            // post, base sunk
+        // Keep the rail/panel on its authored line, but carry a raised verge
+        // down to the rendered ground. anchor's fast lookup intentionally
+        // omits the wide floor slab: extrapolating the road there left six
+        // Singapore posts (and their attached mesh) above the shoreline.
+        const terrain = Tracks.terrainY(track, p.c[0], p.c[2]);
+        const ground = Number.isFinite(terrain) ? terrain
+          : track.surface && track.surface.floorY;
+        const uy = p.u[1];
+        const extra = Number.isFinite(ground) && Number.isFinite(uy) && uy > 0.1
+          ? Math.max(0, (p.c[1] - ground) / uy - 0.4) : 0;
+        const postPlace = { o: vadd(p.c, p.u, -0.4 - extra),
+                            r: p.r, u: p.u, t: p.t, s: [1, h + 0.4 + extra, 1] };
+        ctx.instance(postKey, postPlace,                                       // grounded footing; top unchanged
           (rec) => {
-            rec.cyl([0, -0.4, 0], 0.13, h + 0.4, postCol, 5);
+            rec.cyl([0, 0, 0], 0.13, 1, postCol, 5);
           },
           { kind: "fence", k, side });
         const span = Object.assign({ s: [1, 1, spacing] }, place);
@@ -495,9 +507,9 @@ const SceneryStructures = (function () {
             addBox(out, vadd(vadd(p.c, p.t, st * legR), p.u, y), [legR * 2, 0.12, 0.1], col, b);
         }
       }
-      // Platform + rail
+      // Platform + seated track-facing guard panel supporting the camera head.
       addBox(out, vadd(p.c, p.u, h), [3.0, 0.2, 3.0], [0.52, 0.54, 0.58], b);
-      addBox(out, vadd(p.c, p.u, h + 0.55), [3.1, 0.09, 3.1], opts.railCol || [0.70, 0.72, 0.76], b);
+      addBox(out, vadd(vadd(p.c, p.r, -side * 1.4), p.u, h + 0.55), [0.09, 0.90, 3.0], opts.railCol || [0.70, 0.72, 0.76], b);
       // Camera head on a short boom, pointing back over the track.
       const head = vadd(vadd(p.c, p.u, h + 0.85), p.r, -side * (opts.boom != null ? opts.boom : 1.1));
       addBox(out, head, [0.75, 0.45, 0.5], [0.12, 0.12, 0.14], b);
@@ -600,10 +612,12 @@ const SceneryStructures = (function () {
       for (let i = 0; i < cnt; i++) {
         const hp = hash(seed + i * 13.7);
         if (hp > dens) continue;
+        const headH = NIGHT ? 0.16 : 0.30;
+        const skin = [[0.83, 0.62, 0.44], [0.57, 0.35, 0.22], [0.94, 0.77, 0.60]][i % 3];
         const off = cnt > 1 ? (i / (cnt - 1) - 0.5) * (len - 2) : 0;
-        addBox(out, vadd(vadd(vadd(c, b[2], off), b[1], h * 0.45),
+        addBox(out, vadd(vadd(vadd(c, b[2], off), b[1], h / 2 + headH / 2),
                          b[0], -side * thick * 0.25),
-               [thick * 0.9, h * 0.6, Math.min(1.6, len * 0.12)], pick(hp), b);
+               [Math.min(thick * 0.5, 0.28), headH, NIGHT ? 0.18 : 0.28], NIGHT ? pick(hash(seed * 3.1 + i)) : skin, b);
       }
       out._mat = prevMat;
     };

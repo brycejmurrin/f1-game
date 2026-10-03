@@ -23,7 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { collect, headerSentence, fileGlobal, rosterOf, OPEN, CLOSE } from "../../tools/gen/gen-arch-table.mjs";
+import { collect, headerSentence, fileGlobal, rosterOf, renderBlock, OPEN, CLOSE } from "../../tools/gen/gen-arch-table.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -36,6 +36,17 @@ test("docs/ARCHITECTURE.md matches a fresh `gen-arch-table.mjs --check`", () => 
   assert.equal(r.status, 0,
     `docs/ARCHITECTURE.md's module index is stale or the generator failed (exit ${r.status}).\n${r.stdout}${r.stderr}\n` +
     "Regenerate with: node tools/gen/gen-arch-table.mjs");
+});
+
+/* TWO MODULE-ADDING PRs (ship tip after #697 + #740, 2026-10-02). Each side
+ * regenerated `_265 rows over 30 directories_`; git kept that identical line while
+ * the rows from both sides landed — committed count 265, actual 266. The
+ * summary must not carry a total that both sides bump from the same base. */
+test("module-index summary has no total row count (merge-safe across concurrent module PRs)", () => {
+  const block = renderBlock();
+  assert.doesNotMatch(block, /^_\d+ rows over /m,
+    "a leading \"N rows\" digit merges identically when two PRs each add one module");
+  assert.match(block, /^_Module index over \d+ directories,/m);
 });
 
 test("every non-data manifest file gets exactly one row", () => {

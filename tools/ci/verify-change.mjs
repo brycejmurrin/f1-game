@@ -39,10 +39,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { pick, DEPLOY_BRANCH } from "./pick-tests.mjs";
+import { pick, DEPLOY_BRANCH, validateSelectionArgs, selectionReceipt } from "./pick-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
+try { validateSelectionArgs(argv, ["--staged", "--json", "--plan", "--fast", "--wait", "--keep-going", "--help", "-h"]); }
+catch (e) { console.error(e.message); process.exit(1); }
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log("Usage: verify-change.mjs [paths…] [--since ref | --staged] [--plan] [--fast] [--wait] [--keep-going] [--json]");
+  process.exit(0);
+}
 const flag = (name) => argv.includes(name);
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
 const JSON_OUT = flag("--json");
@@ -88,7 +94,8 @@ const groups = [...groupSel.keys()].filter((g) => pkg.scripts[`test:${g}`]).sort
 // fall back to a full run. Calling the raw pick() Map API drops it, and then
 // `!batches.length` cannot tell "nothing needs testing" from "I do not know
 // what to test". docs/PERF-FINDINGS.md 2j.
-const selReason = !files.length ? "none" : (groups.length ? "matched" : "unmatched");
+const receipt = selectionReceipt(files, pkg.scripts);
+const selReason = receipt.reason;
 const isBrowser = (g) => /run-playwright/.test(pkg.scripts[`test:${g}`]);
 const browserGroups = groups.filter(isBrowser);
 // tooling-fast is phase 1's inline gate — leaving it in the batch list would
@@ -117,6 +124,8 @@ const plan = {
   // used to give — "nothing to test" and "no rule claimed these files" look
   // identical without it. docs/PERF-FINDINGS.md 2j.
   selection: selReason,
+  receipts: receipt.receipts,
+  unclaimed: receipt.unclaimed,
   fast: {
     toolingFast: wantsToolingFast,
     verifyTrack: circuits,
@@ -229,12 +238,13 @@ if (!fastOk) finish("fail", { notRun: batches.flat() });
 // when it asks "did I break anything?", after running one advisory cache-check.
 // finish() already exits 2 for anything that is neither pass nor fail, and
 // apex-tools-mcp allows exit 2, so this needs no new vocabulary.
-if (selReason === "unmatched") {
-  finish("unmatched", {
+if (receipt.unclaimed.length) {
+  finish(selReason, {
     notRun: batches.flat(),
-    unclaimed: files,
+    unclaimed: receipt.unclaimed,
+    receipts: receipt.receipts,
     toolingFast: !!plan.fast.toolingFast,
-    why: "no rule in pick-tests.mjs claimed these files, so the group selection " +
+    why: "some paths have no rule in pick-tests.mjs, so the group selection " +
          "is not trustworthy — fall back to a full run before trusting a green.",
   });
 }

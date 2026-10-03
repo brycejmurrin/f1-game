@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -184,7 +184,8 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
-| `hud-tyres.js` | `HudTyres` | tag | HUD tyre corner paint helpers. |
+| `hud-tyres.js` | `HudTyres` | tag | HUD tyre temperature state. |
+| `hud-layout.js` | `HudLayout` | tag | HudLayout: move and size each race HUD element, as a player setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE. |
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
@@ -229,6 +230,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `city.js` | `SceneryCity` | tag | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
 | `identity.js` | `SceneryIdentity` | tag | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | tag | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
+| `venue.js` | `SceneryVenue` | tag | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
 | `build-props.js` | `TrackBuildProps` | tag | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/circuits/`**
@@ -331,6 +333,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `announcer-recorded.js` | `RecordedAnnouncer` | tag | A recorded read owns its pending load as well as its playing clips. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
+| `driving-cues.js` | `DrivingCues` | tag | assist-gated audio driving cues (braking tone + L/R corner calls). |
 
 **`js/physics/`**
 
@@ -400,6 +403,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
+| `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.7 MB / 22 cars). |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
@@ -1021,7 +1025,6 @@ shading (duplicated verts, face normals).
 | `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 | `ghost-share.js` | `GhostShare` | APXG1 fragment/file codec plus the in-memory guest rival; `#ghost=` is consumed at boot/hashchange and removed from history without writing the guest to `apex26.ghost.v1` |
-| `input-ghost.js` | `InputGhost` | deterministic local ghost: per-`FIXED_DT` steer/throttle/brake + `seed` + `PhysicsConsts.REVISION` + `__APEX_BUILD`; `apex26.inputGhost.v1`; refuses replay on version mismatch; pose Ghost remains the translucent draw |
 
 Results export the current local PB as a fragment-only link, bare code, or
 `.apexghost.json` file. A guest on the matching circuit takes the existing
@@ -1526,32 +1529,6 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
-- **PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01):** on all three. On the road
-  ribbon the puddle noise is weighted by where water stands: 0.7 at the crown →
-  1.2 at the gutters, and by the lateral downhill of the geometry (the world
-  direction of increasing lateral x from the screen derivatives of the track
-  coordinate, dotted with the geometric normal's tilt; ±4 per unit, clamped
-  0.5–1.5), so a camber pools its inside and dries its outside without
-  per-circuit data. GLX `LIT_FS` wet block (`vTrk`, `Ngeo`), TLX the same on
-  `trkA` (null only on the chunked city-prop variant, which has no road), WGX
-  on `vTrk`. Before, value noise on a flat threshold pooled the crown and the
-  high side alike. `tests/unit/surface-id-parity.test.mjs` pins the three.
-- **LIT, FOGGED PARTICLES (2026-10-01):** on all three. The alpha particle
-  group (tyre smoke, dust, spray, rain) is shaded as a small sphere — the frame
-  hemisphere ambient read on the quad's up plus 0.45 of the key, floored at
-  0.18 so a night puff still reads under lamps the shader cannot see; the
-  additive group (sparks, the start-gantry lamps) stays emissive. Both take the
-  lit pass's exp² fog on the eye distance (alpha → fog colour, additive → out).
-  GLX `PARTICLE_FS` (five new uniforms), TLX `particleMaterial` (the fx U block
-  gains fogColor/fogDensity), WGX `ParticleU` 80 → 144 B. Before, every
-  particle was unlit and unfogged. `tests/unit/surface-id-parity.test.mjs` pins the three.
-- **SUN BEHIND THE CLOUDS (2026-10-01):** on all three. The sky's sun disc and
-  tight corona ring are scaled by the cloud coverage along the ray (GLX
-  `sunClear = 1 − cityCov`, TLX `cityCov.oneMinus()`, WGX `1 − covRay`), the
-  aureole by 1 − 0.6·coverage — the same hoisted term the stars and the moon
-  already fade by. Before, the corona and disc were added after the cloud blend
-  with only the global overcast damp, so a cumulus over the sun never hid it.
-  `tests/unit/surface-id-parity.test.mjs` pins the three.
 - **MOON DIRECTION (2026-10-01):** on all three. The night sky's moon disc and
   halo hang on the sun-direction uniform (GLX `uSunDir`, TLX `U.sunDir`, WGX the
   sky function's `sunDir`), which at night IS the moon key light the lit pass,
@@ -1567,17 +1544,6 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
-- **SCENE MSAA (2026-10-01):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
-  4× on its desktop WebGL2 backend (`tlx.js` passes `sceneSamples` into
-  `tlx-post.js`'s scene target; r186's WebGL backend resolves the depth texture
-  by blit, so SSAO/SSR/godray read a resolved depth), **TLX-WebGPU and WGX gap**:
-  core WebGPU cannot resolve a depth attachment, so the native path stays
-  single-sample with FXAA alone (`docs/research/WEBGPU-PARITY.md`). Phones: no
-  scene MSAA on any backend (the mobile recipe).
-  (`light-grid.test.mjs` pins the constants and the plumbing). Wet-road SSR
-  itself is also live on all three (GLX/TLX composite, WGX half-res pass →
-  composite); analytic `envBlend` is the plain-gloss fallback when SSR sheds
-  or a march misses.
 - **CROWN ROUNDING (2026-10-01):** data-side, so on all three for free. Every
   primitive carries flat per-face normals; a tree crown (cone stacks) lit as a
   faceted lantern. `TrackGeom.roundNormals` blends a crown's normals toward the
