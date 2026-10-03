@@ -499,11 +499,16 @@
 
 <!-- race HUD -->
 <div id="hud" hidden>
+  <!-- Each box has its own id: the hide rules (css/hud.css) key on it, never on
+       a child position, so adding or re-ordering a box cannot hide the wrong one.
+       DELTA is static too (js/ui/hud.js paintHudDelta unhides it): vs the ghost
+       when there is one, else vs the player's best lap this race. -->
   <div class="hud-top">
-    <div class="hud-box"><div class="hud-label">POS</div><div id="hud-pos" class="hud-value">-</div></div>
-    <div class="hud-box"><div class="hud-label">LAP</div><div id="hud-lap" class="hud-value">-</div></div>
-    <div class="hud-box"><div class="hud-label">TIME</div><div id="hud-time" class="hud-value">-</div></div>
-    <div class="hud-box"><div class="hud-label">BEST</div><div id="hud-best" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-box-pos"><div class="hud-label">POS</div><div id="hud-pos" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-box-lap"><div class="hud-label">LAP</div><div id="hud-lap" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-box-time"><div class="hud-label">TIME</div><div id="hud-time" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-box-best"><div class="hud-label">BEST</div><div id="hud-best" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-delta" hidden><div class="hud-label">DELTA</div><div class="hud-value" id="hud-delta-n">&mdash;</div></div>
   </div>
   <div class="hud-gaps">
     <div id="hud-gap-ahead" class="hud-gap"></div>
@@ -529,12 +534,12 @@
         <div id="hud-tach"><div id="hud-rpm-fill"></div></div>
       </div>
       <div id="hud-speed"><span id="hud-speed-n">0</span><span class="hud-unit">KM/H</span></div>
-      <div id="hud-energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ENERGY</div></div>
+      <div id="hud-energy" role="img" aria-label="Energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ERS <span id="hud-energy-n"></span></div></div>
       <!-- TYRES. Sibling of ENERGY on purpose: the two resources a driver
            spends, one over seconds and one over laps. Hidden whenever TYRE WEAR
            is off, which is the shipped default, so the bar costs nothing to a
            player who never turns it on. -->
-      <div id="hud-tyre" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div><span id="hud-plan"></span></div>
+      <div id="hud-tyre" role="img" aria-label="Tyres" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div><span id="hud-plan"></span></div>
       <!-- PIT ENTRY. There is no pit button — a stop is called by steering into
            the entry (js/race/pit-lane.js) — so the window has to announce
            itself, or the gesture is undiscoverable. Shows the distance to the
@@ -550,6 +555,8 @@
       <button id="hud-work" type="button" hidden>WORK ON CAR</button>
       <div id="hud-ot" class="ot-off">OVERTAKE</div>
       <div id="hud-aero" class="ax-off">CORNER MODE</div>
+      <!-- BRAKE BIAS, the set-up sheet's front share (c.brakeBias). -->
+      <div id="hud-bb">BB 56%</div>
     </div>
     <div id="dock-right" class="dock"></div>
   </div>
@@ -1011,7 +1018,7 @@
               </div>
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
-                <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
+                <input id="pm-hudscale" type="range" min="70" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size.</p>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts
                    compete for the same edges: shrinking the pedals is how a
@@ -3579,6 +3586,7 @@
 <script defer crossorigin="anonymous" src="js/ui/settings-export.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/fx/car-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/sporting-regs.js?v=dev"></script>
@@ -3594,6 +3602,7 @@
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/replay-buf.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/results-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/brake-cue.js?v=dev"></script>
@@ -3608,11 +3617,15 @@
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dock-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-chase.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-broadcast.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-onboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/pause-opts.js?v=dev"></script>

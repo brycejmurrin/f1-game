@@ -317,3 +317,26 @@ test("every circuit with a pit wall builds one", () => {
   }
   assert.deepEqual(missing, [], `no pit wall built on: ${missing.join(", ")}`);
 });
+
+test("an upload that throws after the texture landed frees the texture and the mesh it made", () => {
+  const ctx2d = {
+    clearRect() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {},
+    fillRect() {}, fillText() {}, measureText: (s) => ({ width: 10 * s.length }),
+    set fillStyle(v) {}, set font(v) {}, set textBaseline(v) {}, set textAlign(v) {}, set globalAlpha(v) {},
+  };
+  const document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx2d }) };
+  const LiveryTex = { paintTeamMark() {}, inkOn: () => [0.97, 0.97, 0.98] };
+  const P = loadPainter({ document, LiveryTex });
+  const t = buildOnce(FULL);
+  t.meshes = {};
+  const freed = [];
+  let meshes = 0;
+  const G = {
+    createTexture: () => ({ id: "tex" }),
+    createTexMesh: () => { if (++meshes === 2) throw new Error("device lost"); return { id: "mesh" + meshes }; },
+    freeTexture: (h) => freed.push(h.id), freeMesh: (h) => freed.push(h.id),
+  };
+  assert.equal(P.upload(G, t), false, "the failure is reported");
+  assert.deepEqual(freed.sort(), ["mesh1", "tex"], "the texture and the first mesh were released");
+  assert.equal(t.meshes.pitSigns, null); assert.equal(t.meshes.pitSignTex, null); assert.equal(t.meshes.pitSignal, null);
+});

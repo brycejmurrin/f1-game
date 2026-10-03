@@ -144,6 +144,15 @@ async function setRaceLine(page, v) {
   }, v);
 }
 
+// Park every AI car half a lap ahead so a packed shared-page race cannot shove
+// the measured line while step() advances the whole field (CI 37088930611).
+async function parkField(page, frac) {
+  await page.evaluate((f) => {
+    const n = window.__apex.carState().length;
+    for (let i = 0; i < n; i++) window.__apex.aiPlace(i, f + 0.5 + i * 0.004, 0, 0);
+  }, frac);
+}
+
 // First corner with curvature above `min` (rad/m); returns { frac, k }.
 async function firstCorner(page, min = 0.02) {
   const corners = await page.evaluate(() => window.__apex.corners());
@@ -452,7 +461,12 @@ test.describe("Apex 26 — steering", () => {
     let deltaDx;
     try {
       deltaDx = await page.evaluate((f) => {
+        const park = () => {
+          const n = window.__apex.carState().length;
+          for (let i = 0; i < n; i++) window.__apex.aiPlace(i, f + 0.5 + i * 0.004, 0, 0);
+        };
         const burst = () => {
+          park();
           window.__apex.jump(f, 16, 0);
           window.__apex.setInput({ steer: 0, throttle: false, brake: false });
           window.__apex.step(1 / 60, 3);
@@ -489,10 +503,16 @@ test.describe("Apex 26 — steering", () => {
     let off, pull, push;
     try {
       await setRaceLine(page, 0);
+      expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBe(0);
+      await parkField(page, frac);
       off = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
       await setRaceLine(page, 5);
+      expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBe(1);
+      await parkField(page, frac);
       pull = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
       await setRaceLine(page, -5);
+      expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBe(-1);
+      await parkField(page, frac);
       push = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
       await setRaceLine(page, 0); // restore
     } finally {

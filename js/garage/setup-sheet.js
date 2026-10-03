@@ -113,7 +113,7 @@ const LIV_ROW_HINT = {
   noseStripe: "NOSE STRIPE — the nose crown only, tip to bulkhead. Layers on top of BODY STRIPE.",
   nose: "NOSE CAP — a painted nose cone. Unset = the bodywork colour.",
   pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
-  lower: "LOWER BODY — the bodywork below the sidepod accent-band line (pods, chassis sides and underside, from the sidepod inlet back; the nose stays PRIMARY). Only bare PRIMARY paint changes: bands, panels, stripes and caps keep theirs. Ignored under BODY SPLIT L/R. Unset = PRIMARY.",
+  lower: "LOWER BODY — the bodywork below a line along the sidepods at the sponsor board's top edge, carried forward along the chassis side to the nose (pod flanks and undersides, lower chassis; the nose stays PRIMARY). Only bare PRIMARY paint changes: the accent band, board, stripes and caps keep theirs. Ignored under BODY SPLIT L/R. Unset = PRIMARY.",
   cover: "ENGINE COVER — airbox, roll hoop, cover loft and snorkel. Unset = the bodywork colour. (AIRBOX had its own row and no longer does: it painted a strict subset of these surfaces.)",
   spineTint: "BAND — the SPINE TOP graphic fill on the cover crown, the tail top, the centreline RIDGE, and the saddle's flank half when SADDLE is unset. The colour you pick is used as-is. Unset = SECONDARY, else PRIMARY, checked against ENGINE COVER — never BODY STRIPE or DETAIL.",
   saddleTint: "SADDLE — the shoulder shelf and upper-flank saddle block, and the SPINE SIDE shoulder / rake fills. The colour you pick is used as-is. Unset = BAND under SADDLE or SADDLE WRAP.",
@@ -364,14 +364,20 @@ function buildSetup() {
   const team = Teams.LIST[G.teamIdx];
   const parts = getTeamParts(team.id);
 
-  // Drop any saved exclusive option the current team can't use
+  // Remap any saved exclusive option this team can't use onto its universal
+  // equivalent (Parts._resolve's peer). Deleting fell through to DEFAULTS and
+  // made a locked sig_rb_street photograph as medium instead of supersoft.
   let partsChanged = false;
   for (const cat of Parts.CATALOG) {
     const selId = parts[cat.id];
     if (selId) {
       const opt = cat.options.find((o) => o.id === selId);
       if (opt && !Parts.isOptionAvailable(opt, team)) {
-        delete parts[cat.id];
+        const eq = opt.equivalent
+          && cat.options.find((o) => o.id === opt.equivalent
+            && Parts.isOptionAvailable(o, team));
+        if (eq) parts[cat.id] = eq.id;
+        else delete parts[cat.id];
         partsChanged = true;
       }
     }
@@ -417,10 +423,19 @@ function buildSetup() {
   const activeCat = Parts.CATALOG.find((c) => c.id === csActiveCat);
 
   // Resolve the currently-fitted option for a category (respecting supplier lock).
+  // Mirror Parts._resolve: a locked SIGNATURE shows its equivalent's name
+  // (what is actually fitted), not the category default and not the foreign
+  // signature label.
   const resolveOpt = (cat) => {
     const id = parts[cat.id] || Parts.DEFAULTS[cat.id];
-    return cat.options.find((o) => o.id === id && Parts.isOptionAvailable(o, team))
-        || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
+    const sel = cat.options.find((o) => o.id === id);
+    if (sel && Parts.isOptionAvailable(sel, team)) return sel;
+    if (sel && sel.equivalent) {
+      const eq = cat.options.find((o) => o.id === sel.equivalent
+        && Parts.isOptionAvailable(o, team));
+      if (eq) return eq;
+    }
+    return cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
   };
 
   const tabs = $("cs-tabs");
@@ -963,7 +978,7 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
-  wrap.appendChild(colorRow("LOWER BODY", "lower", true));   // below the sidepod line: the two-tone body
+  wrap.appendChild(colorRow("LOWER BODY", "lower", true));   // below the sidepod board's top edge: the two-tone body
   wrap.appendChild(section("ENGINE COVER"));
   wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
   // Design fills — greyed until the current TOP/SIDE/BIND paints that surface.

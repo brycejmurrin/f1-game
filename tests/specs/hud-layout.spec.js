@@ -310,9 +310,10 @@ test.describe("minimal profile", () => {
   // THE CAMERA IS PART OF THE FIXTURE, and leaving it out made this test assert
   // something false for six days. `race()` without a `cam` boots the DEFAULT
   // camera, which is COCKPIT — and css/track-detail.css deliberately hides
-  // #hud-speed, #hud-gearbox, #hud-energy, #hud-ot and #hud-aero under
-  // `body.cockpit-cam`, because from inside the car those readouts are on the
-  // steering-wheel LCD and the floating duplicates spoil the view. So "MINIMAL
+  // #hud-speed and #hud-gearbox under `body.cockpit-cam`, because from inside
+  // the car those readouts are on the steering-wheel LCD and the floating
+  // duplicates spoil the view (#hud-energy, #hud-ot and #hud-aero stay, moved
+  // beside the wheel by js/ui/hud-layout.js's shipped cockpit layout). So "MINIMAL
   // must keep speed" failed on a rule that has nothing to do with the profile
   // and is working exactly as intended. Chase is the camera this test means:
   // the one where the DOM readouts are the only readouts, and dropping one is
@@ -329,7 +330,7 @@ test.describe("minimal profile", () => {
       return {
         sectors: w("#hud-sectors"), energy: w("#hud-energy"),
         ot: w("#hud-ot"), aero: w("#hud-aero"),
-        best: w(".hud-top .hud-box:nth-child(4)"),
+        best: w("#hud-box-best"),
         pos: w("#hud-pos"), speed: w("#hud-speed"), gear: w("#hud-gear"),
       };
     });
@@ -358,7 +359,7 @@ test.describe("metrics layout", () => {
       return {
         cls: document.body.className.match(/hud-met-[a-z]+/g) || [],
         sectors: w("#hud-sectors"), energy: w("#hud-energy"),
-        best: w(".hud-top .hud-box:nth-child(4)"),
+        best: w("#hud-box-best"),
         pos: w("#hud-pos"), map: w("#minimap"), gaps: w(".hud-gaps"),
       };
     });

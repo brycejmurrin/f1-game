@@ -579,15 +579,25 @@ const CarShade = (function () {
     }
   }
   // ---- UPPER/LOWER TWO-TONE (livery `lower`, 2026-10-03) ----
-  // A second body colour below a line that follows the sidepods:
-  //   y(z) = podAt(z).bottom + 0.31 (top - bottom), for z -2.00 .. +0.70
-  // (ahead of +0.70 the nose stays primary). No height knob: 0.31 is where the
-  // c2 accent band (pod fractions 0.08-0.30, car3d addPodFlankSpan) ends and the
-  // pale sponsor panel (0.32-0.80) starts, so no inked mark straddles the line.
-  // No vertex row lies on it — the pod flank is ONE segment of podRing and the
-  // cover flank one quad — so recolouring vertices alone would smear a ~20 cm
+  // A second body colour below a line along the sidepods and on forward
+  // along the monocoque side:
+  //   y(z) = podAt(z).bottom + 0.80 (top - bottom),  z -2.00 .. +1.05
+  // straight between pod stations, held at the end stations beyond them (the
+  // inlet height ahead of z +0.62, the tail's behind -1.48). It stops at z
+  // +1.05, the monocoque/nose joint, so the nose stays primary.
+  // No height knob. 0.80 is the TOP edge of the opaque sponsor board (PANEL,
+  // pod fractions 0.32-0.80, 16 mm proud of the flank, car3d addPodFlankSpan):
+  // along the board the seam hides behind its top edge, and fore and aft of
+  // it the flank is dark to the same height. The c2 accent band (0.08-0.30)
+  // and the strip decal on it sit inside the dark zone and keep their own
+  // colour; the accent flash (lower edge >= 0.8195) and the ERS strip
+  // (0.91-0.97) stay on primary. The first cut, 0.31, put the line under the
+  // board, which hid all but ~8 % of it from the side; this is ~20 % of the
+  // side-view body paint (body-split.test.mjs measures it).
+  // No vertex row lies on the line — the pod flank is ONE segment of podRing,
+  // the cover flank one quad — so recolouring vertices alone would smear a
   // gradient down the flank: a triangle across the line is CUT along it.
-  const LOWER = Object.freeze({ frac: 0.31, front: 0.70, rear: -2.00 });
+  const LOWER = Object.freeze({ frac: 0.80, front: 1.05, rear: -2.00 });
   /** Paint the body below the line in `lower`, in place, over triangles whose
    *  vertices all lie in [from, to): only those whose three vertices are
    *  `paint` in the body colour (c1, clamped as car3d addTri clamps paint) and
