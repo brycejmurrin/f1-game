@@ -194,18 +194,22 @@ test("race-entry ticks pump input and network while holding physics and governor
 });
 
 test("hiding or leaving the page cancels preparation when animation frames stop", () => {
-  const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  // Lifecycle listeners live in PlatformSession.wireLifecycle (extracted from game.js).
+  const source = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8");
   const start = source.indexOf('document.addEventListener("visibilitychange", () => {');
   const end = source.indexOf("// LOSING FOCUS", start);
+  assert.ok(start >= 0 && end > start, "PlatformSession wireLifecycle visibilitychange block");
   const handlers = {}, calls = [];
   const ctx = {
     document: { hidden: false, addEventListener: (name, fn) => { handlers[name] = fn; } },
     window: { addEventListener: (name, fn) => { handlers[name] = fn; } },
-    state: "count", raceWakeWanted: false,
-    mirrorPass: { cancelPreparation: () => calls.push("cancel") },
-    _disarmProbeOnLeave() {}, setPaused: () => calls.push("pause"),
+    G: { state: "count", netPlay: { active: () => false } },
+    disarmProbeOnLeave() {},
+    cancelMirrorPrep: () => calls.push("cancel"),
+    setPaused: () => calls.push("pause"),
     PerfGov: { sentinelArm() {}, sentinelResume() {} },
-    netPlay: { active: () => false }, clearInterval() {},
+    raceWakeLock: { wanted: () => false, hold() {} },
+    clearInterval() {}, setInterval() { return 1; },
   };
   vm.runInNewContext(source.slice(start, end), ctx);
   handlers.visibilitychange();

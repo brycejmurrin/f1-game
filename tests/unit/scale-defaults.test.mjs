@@ -33,6 +33,7 @@
  *
  * Run: node --test tests/unit/scale-defaults.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -97,7 +98,7 @@ test("the touch default puts every driving control over the physical floor", () 
   const css = coarseDefaults();
   const ratio = Number(css["--hud-btn-mult"]);
   const hud = Number(css["--hud-scale"]);
-  const overlays = read("css/overlays.css");
+  const overlays = readCssSource("css/overlays.css");
   const btn = Number(overlays.match(/--btn:\s*(\d+)px/)[1]);
   // The dock's own fit factor, measured: the painted pedal is ~0.947 of --btn
   // before the button scale, and the secondary column is ~0.71 of it.

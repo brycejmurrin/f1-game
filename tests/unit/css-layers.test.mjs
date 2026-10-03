@@ -28,9 +28,27 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { CSS_SOURCES } from "../helpers/css-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CSS_DIR = path.join(ROOT, "css");
+
+test("split stylesheet families retain contiguous cascade order and loading mode", () => {
+  const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const deferred = new Set(manifest.CSS_DEFERRED);
+  for (const [original, family] of Object.entries(CSS_SOURCES)) {
+    const start = manifest.CSS.indexOf(family[0]);
+    assert.ok(start >= 0, `${original}: the first stylesheet is absent from the manifest`);
+    assert.deepEqual(manifest.CSS.slice(start, start + family.length), family,
+      `${original}: split files must preserve their original source order without intervening stylesheets`);
+    const loadingMode = deferred.has(original);
+    for (const file of family) {
+      assert.equal(deferred.has(file), loadingMode,
+        `${file}: splitting a family must not change when its rules become available`);
+    }
+  }
+});
 
 // Braces inside comments are prose, not syntax — "{" shows up in more than one
 // explanatory note in these files. Blank the comments, keeping line numbers.
@@ -243,7 +261,7 @@ test("a dialog styled from a winning position restates its closed state", () => 
 
   const offenders = [];
   for (const file of files) {
-    if (file === "components.css" || file === "tokens.css") continue;
+    if (CSS_SOURCES["css/components.css"].includes("css/" + file) || file === "tokens.css") continue;
     const src = stripComments(fs.readFileSync(path.join(CSS_DIR, file), "utf8"));
     const layerName = (src.match(/^\s*@layer\s+([\w-]+)\s*\{/m) || [])[1];
     const outranks = layerName ? rank(layerName) > GUARD_RANK : true;

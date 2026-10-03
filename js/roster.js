@@ -160,7 +160,13 @@
   ],
     SCENERY_DIR: "js/circuits/scenery",
     LAZY_DATA: [
+    "js/data/tab-utils.js",
+    "js/data/api-transport.js",
     "js/data/api.js",
+    "js/data/telemetry-model.js",
+    "js/data/telemetry-render.js",
+    "js/data/telemetry-player.js",
+    "js/data/telemetry-view.js",
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
@@ -172,7 +178,31 @@
   ],
     LAZY_DATA_EDGES: [
     [
+      "js/data/tab-utils.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/api-transport.js",
+      "js/data/hub.js"
+    ],
+    [
       "js/data/api.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-render.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-player.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-view.js",
       "js/data/hub.js"
     ],
     [
@@ -202,6 +232,62 @@
     [
       "js/data/real-race-tab.js",
       "js/data/hub.js"
+    ],
+    [
+      "js/data/api-transport.js",
+      "js/data/api.js"
+    ],
+    [
+      "js/data/tab-utils.js",
+      "js/data/telemetry-model.js"
+    ],
+    [
+      "js/data/tab-utils.js",
+      "js/data/telemetry-view.js"
+    ],
+    [
+      "js/data/tab-utils.js",
+      "js/data/live.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/telemetry-render.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/telemetry-player.js"
+    ],
+    [
+      "js/data/telemetry-render.js",
+      "js/data/telemetry-player.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/telemetry-view.js"
+    ],
+    [
+      "js/data/telemetry-render.js",
+      "js/data/telemetry-view.js"
+    ],
+    [
+      "js/data/telemetry-player.js",
+      "js/data/telemetry-view.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/telemetry.js"
+    ],
+    [
+      "js/data/telemetry-render.js",
+      "js/data/telemetry.js"
+    ],
+    [
+      "js/data/telemetry-player.js",
+      "js/data/telemetry.js"
+    ],
+    [
+      "js/data/telemetry-view.js",
+      "js/data/telemetry.js"
     ]
   ],
     LAZY_NET: [

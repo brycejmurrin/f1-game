@@ -25,7 +25,7 @@ const TrackDesigner = (function () {
       { n: 2, title: "Shape", text: "Drag the white points to bend the road; tap the road to add a point, and double-tap a point (or DELETE POINT) to remove it. Pinch or wheel to zoom, drag empty space to pan, and FIT VIEW recentres the circuit." },
       { n: 3, title: "Corners", text: "Choose CORNER, HAIRPIN, CHICANE or S-BEND, set its radius, angle and LEFT or RIGHT, then tap the point where it should begin (STRAIGHT works the same way with a length). To reshape a corner already there, tap its row under TURNS and press REPLACE THE SELECTED SPAN — UNDO takes either back." },
       { n: 4, title: "Start line", text: "Select a point and press START HERE to put the start line there. It needs a long straight behind it for the grid and the pit lane." },
-      { n: 5, title: "Look", text: "Pick a theme — the scenery, time of day and terrain follow it. Then name the circuit and set the half-width of the road." },
+      { n: 5, title: "Look", text: "Pick a theme — the scenery, time of day and terrain follow it. Then name the circuit and set the half-width of the road (SPAN WIDTH narrows just the stretch you have selected)." },
       { n: 6, title: "Checks", text: "Red rows block saving; amber rows are only warnings (FIA lines are Grade 1 advice). Tap a row to see where it is, and tap FIX (or FIX ALL) to let the designer repair it." },
       { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or select a point and press TEST HERE to drive from it; QUIT brings you back): your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, CARD makes a picture of the circuit to send, and EXPORT / IMPORT move a circuit as a file." },
     ]),
@@ -90,6 +90,7 @@ const TrackDesigner = (function () {
     if (p.R != null) bits.push("R " + p.R + " m");
     if (p.deg != null) bits.push("× " + p.deg + "°");
     if (p.dir != null) bits.push(p.dir === -1 ? "RIGHT" : "LEFT");
+    if (p.Ls > 0) bits.push("· SPIRAL " + p.Ls + " m");
     return bits.join(" ");
   }
   function btn(label, cls, onClick) {
@@ -671,6 +672,7 @@ const TrackDesigner = (function () {
     sharing.append(ui.code, loadRow);
     pane.append(tools, ui.shape, theme, circuit, issues, sharing);
     buildInsight(pane, circuit, actions, sharing);
+    buildAuthoring();
     buildDesigned(circuit);
   }
 
@@ -772,6 +774,7 @@ const TrackDesigner = (function () {
     ui.undo.disabled = !undo.length; ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
     ui.hint.textContent = ui.toolHint.textContent = toolHint();
+    refreshAuthoring();
     syncProfile();
     if (ui.testHere) ui.testHere.setAttribute("aria-disabled", sel >= 0 ? "false" : "true");
   }
@@ -981,13 +984,14 @@ const TrackDesigner = (function () {
     turns.appendChild(ui.turns);
     pane.insertBefore(turns, before);
   }
-  const fmtTurn = (c) => "T" + c.n + " · " + (c.dir < 0 ? "RIGHT " : "LEFT ") + Math.round(Math.abs(c.angDeg)) + "° · R " + Math.round(c.R) + " m · " + Math.round(c.vApex * 3.6) + " km/h · " + Math.round(c.lenM) + " m";
+  const fmtTurn = (c) => "T" + c.n + " · " + (c.dir < 0 ? "RIGHT " : "LEFT ") + Math.round(Math.abs(c.angDeg)) + "° · R " + Math.round(c.R) + " m · " + Math.round(c.vApex * 3.6) + " km/h · " + Math.round(c.lenM) + " m" + turnTags(c);
   /** After each preview: the TURNS rows and, while SPEED is on, the road's colours. */
   function renderInsight() {
     const I = insight(), tr = verdict && verdict.tr;
     heatV = I && tr ? I.speedProfile(tr) : null;
     ins = I && tr ? I.corners(tr, design.pts, heatV, verdict.turns) : [];
     if (cv && cv.setHeat) cv.setHeat(heatOn ? heatV : null);
+    refreshAuthoring();
     if (!ui.turns) return;
     while (ui.turns.firstChild) ui.turns.removeChild(ui.turns.firstChild);
     if (!ins.length) { const li = el("li", "td-issue", tr ? "No corners yet" : "Build a loop to list its corners"); li.dataset.level = "info"; ui.turns.appendChild(li); return; }
@@ -1080,6 +1084,116 @@ const TrackDesigner = (function () {
       requestAnimationFrame(next);
     };
     requestAnimationFrame(next);
+  }
+
+  // ── authoring: SPIRAL m, SPAN WIDTH m, the SELECTED TURN's BANK ° ─────────
+  // No data-model field: SPIRAL is a stamp parameter (TrackStamps.spiralSweep),
+  // SPAN WIDTH writes an hwZone and BANK a bankZone — the shapes sanitize and
+  // the share code already carry. Neither zone kind is a REMAP edit: the
+  // control points do not move, and a later insert / delete / stamp carries
+  // the zone along through remapZones (zoneMap.range / pt).
+  const ZONE_EPS = 1e-9;
+  /** 2 CORNERS: SPIRAL m before the direction chips (the curved kinds only);
+   *  4 DETAILS: SPAN WIDTH m under HALF-WIDTH; TURNS: a SELECTED TURN block. */
+  function buildAuthoring() {
+    ui.spiral = stepper("SPIRAL m", () => params.Ls || 0, (v) => { params.Ls = clampParam("Ls", v); refreshControls(); }, 5);
+    ui.shape.insertBefore(ui.spiral, ui.dirL.parentNode);
+    // Right after HALF-WIDTH (children indexes in the browser and in the test DOM alike).
+    const box = ui.width.parentNode, at = Array.prototype.indexOf.call(box.children, ui.width);
+    ui.spanW = stepper("SPAN WIDTH m", spanHW, (v) => setSpanWidth(v), 0.1, (v) => (hasSpan() ? v.toFixed(1) : "—"));
+    box.insertBefore(ui.spanW, box.children[at + 1] || null);
+    ui.turnPick = el("div"); ui.turnPick.hidden = true; ui.turnPick.setAttribute("role", "group"); ui.turnPick.setAttribute("aria-label", "Selected turn");
+    ui.turnPickLabel = el("div", "td-label", "SELECTED TURN");
+    ui.bank = stepper("BANK °", pickedBank, (v) => { const c = pickedTurn(); if (c) setCornerBank(c, v); }, 2, (v) => (v > 0 ? v + "°" : "FLAT"));
+    ui.turnPick.append(ui.turnPickLabel, ui.bank);
+    ui.turns.parentNode.appendChild(ui.turnPick);
+  }
+  /** The stepper's − and + (stepper() builds label, −, value, +). */
+  const stepBtns = (row) => [row.children[1], row.children[3]];
+  function refreshAuthoring() {
+    if (!built || !design || !ui.spiral) return;
+    const kind = TrackStamps.KINDS[tool], curved = !!(kind && "Ls" in kind.params);
+    ui.spiral.hidden = !curved;
+    if (curved) { params.Ls = clampParam("Ls", params.Ls != null ? params.Ls : kind.params.Ls); ui.spiral._refresh(); }
+    const on = hasSpan();
+    ui.spanW.setAttribute("aria-disabled", on ? "false" : "true");
+    for (const b of stepBtns(ui.spanW)) b.setAttribute("aria-disabled", on ? "false" : "true");
+    ui.spanW._refresh();
+    const c = pickedTurn();
+    ui.turnPick.hidden = !c;
+    if (c) { ui.turnPickLabel.textContent = "SELECTED TURN · T" + c.n; ui.bank._refresh(); }
+  }
+  // SPAN WIDTH: the span sel → span in driving order (REPLACE's span), as
+  // control-polygon arc fractions — the frame remapZones keeps and toRaw maps
+  // to the engine's index fractions (CustomTracks.arcToIndexFrac).
+  const hasSpan = () => !!design && sel >= 0 && span >= 0 && sel !== span && sel < design.pts.length && span < design.pts.length;
+  function spanFracs() {
+    const c = cumArc(design.pts), L = c[design.pts.length];
+    return L > 0 ? [c[sel] / L, c[span] / L] : null;
+  }
+  /** Two lap ranges share road (s1 < s0 runs over the line; touching ends do not count). */
+  function rangesOverlap(a0, a1, b0, b1) {
+    const len = (x0, x1) => wrap01(x1 - x0);
+    const inside = (x, x0, x1) => { const d = wrap01(x - x0); return d > ZONE_EPS && d < len(x0, x1) - ZONE_EPS; };
+    return Math.abs(wrap01(a0 - b0 + 0.5) - 0.5) < ZONE_EPS || inside(b0, a0, a1) || inside(a0, b0, b1);
+  }
+  function spanHW() {
+    if (!design) return 7;
+    const f = hasSpan() ? spanFracs() : null;
+    const z = f && (design.hwZones || []).find((q) => rangesOverlap(f[0], f[1], q.s0, q.s1));
+    return z ? z.hw : design.baseHW;
+  }
+  /** Narrow the selected span to half-width hw (5 m … the base): one hwZone,
+   *  replacing any it overlaps; the base width clears it. The engine only ever
+   *  narrows (def.js applyHwZones keeps the smaller), so the base is the top. */
+  function setSpanWidth(hw) {
+    if (!hasSpan()) { message("Select a span first: tap a point, then shift-tap a second (or tap a row under TURNS)", true); return false; }
+    const LIM = CustomTracks.LIMITS, base = design.baseHW;
+    hw = Math.round(Math.min(base, Math.max(LIM.hwMin, Number.isFinite(+hw) ? +hw : base)) * 10) / 10;
+    const [s0, s1] = spanFracs(), had = design.hwZones || [];
+    const keep = had.filter((z) => !rangesOverlap(s0, s1, z.s0, z.s1));
+    if (hw !== base && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " width zones at most — set one back to the base width first", true); return false; }
+    // The taper: no steeper than 1 m of half-width per 20 m (×1.5), never under the engine's 0.025 default.
+    const Lb = verdict && verdict.tr ? verdict.tr.total : S.polyLen(design.pts);
+    const ease = Math.round(Math.min(0.2, Math.max(0.005, Math.max(0.025, 1.5 * 20 * Math.abs(hw - base) / Lb))) * 1000) / 1000;
+    const next = hw === base ? keep : keep.concat([{ s0, s1, hw, ease }]);
+    if (JSON.stringify(next) === JSON.stringify(had)) return false;
+    commit(Object.assign({}, design, { hwZones: next }), "zone:hw");
+    message(hw === base ? "Span back to the full " + (2 * base).toFixed(1) + " m" : "Span narrowed to " + (2 * hw).toFixed(1) + " m wide — UNDO to revert");
+    return true;
+  }
+  // BANK: the selected TURNS row (its span is the selection) banked at its
+  // apex — frac on the BUILT lap, the frame mesh.js bankingProfile paints in,
+  // widthM the corner's own length. The engine's re-seat snaps a loose zone to
+  // the nearest apex; this one already sits on it.
+  const lapDist = (a, b, L) => { const d = Math.abs(a - b) % L; return Math.min(d, L - d); };
+  function pickedTurn() { return hasSpan() ? ins.find((c) => c.i0 === sel && c.i1 === span) || null : null; }
+  function bankNear(c, L, reach) { return (design.bankZones || []).find((z) => lapDist(z.frac * L, c.sApex, L) < reach(z)) || null; }
+  function pickedBank() {
+    const c = pickedTurn(), tr = verdict && verdict.tr;
+    const z = c && tr ? bankNear(c, tr.total, (q) => Math.max(q.widthM / 2, c.lenM / 2)) : null;
+    return z ? z.angleDeg : 0;
+  }
+  /** Bank turn `row` (a TURNS row, or its number) at `deg` (0 = flat, else 2 … 30). */
+  function setCornerBank(row, deg) {
+    if (previewT || !verdict) runPreview();
+    const c = typeof row === "number" ? ins.find((x) => x.n === row) : row, tr = verdict && verdict.tr;
+    if (!c || !tr || !Number.isFinite(c.sApex)) { message("Select a turn under TURNS first", true); return false; }
+    const L = tr.total, LIM = CustomTracks.LIMITS, had = design.bankZones || [];
+    deg = Math.round(Math.min(LIM.angleDeg, Math.max(0, +deg || 0)));
+    if (deg < 2) deg = 0;
+    const keep = had.filter((z) => !(lapDist(z.frac * L, c.sApex, L) < c.lenM / 2));
+    if (deg && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " banked corners at most — flatten one first", true); return false; }
+    const next = deg ? keep.concat([{ frac: wrap01(c.sApex / L), angleDeg: deg, widthM: Math.round(Math.min(600, Math.max(20, c.lenM))) }]) : keep;
+    if (JSON.stringify(next) === JSON.stringify(had)) return false;
+    commit(Object.assign({}, design, { bankZones: next }), "zone:bank");
+    const I = insight(), fiaMax = I && I.THRESH ? I.THRESH.bankDeg : 5.7;
+    message("T" + c.n + (deg ? " banked " + deg + "°" + (deg > fiaMax ? " — over the FIA's " + fiaMax + "°" : "") : " is flat again"));
+    return true;
+  }
+  /** "· BANK 6° · 12.6 m WIDE" on a TURNS row whose apex carries a zone. */
+  function turnTags(c) {
+    return (c.bankDeg > 0 ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
   }
 
   // ── elevation: the strip under the canvas (DesignerProfile) ──
@@ -1486,6 +1600,7 @@ const TrackDesigner = (function () {
   return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
-    addBump, setBump, removeBump, selectBump };
+    addBump, setBump, removeBump, selectBump,
+    setSpanWidth, setCornerBank };
 })();
 Object.freeze(TrackDesigner);

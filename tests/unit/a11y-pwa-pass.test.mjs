@@ -47,7 +47,8 @@ function bootInput({ coarse = false, orientation } = {}) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(read("js/input/input.js"), ctx, { filename: "js/input/input.js" });
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+    vm.runInContext(read(f), ctx, { filename: f });
   return vm.runInContext("Input", ctx);
 }
 
@@ -105,8 +106,8 @@ test("lockLandscape swallows a rejection (not fullscreen, iPhone, unsupported) a
 });
 
 test("game.js locks landscape after race fullscreen succeeds and unlocks on exit and quit", () => {
-  const g = read("js/game.js");
-  assert.match(g, /req\.call\(el\)\)\.then\(\(\) => \{ Input\.lockEscape\(\); if \(state === "race" \|\| state === "count"\) Input\.lockLandscape\(\); \}\)/);
+  const g = read("js/ui/platform-session.js") + read("js/game.js");
+  assert.match(g, /req\.call\(el\)\)\.then\(\(\) => \{ Input\.lockEscape\(\); if \(G.state === "race" \|\| G.state === "count"\) Input\.lockLandscape\(\); \}\)/);
   assert.match(g, /"fullscreenchange", \(\) => \{ if \(!document\.fullscreenElement\) \{ Input\.unlockEscape\(\); Input\.unlockLandscape\(\); \}/);
   const quit = g.slice(g.indexOf("function quitToMenu() {"), g.indexOf("function quitToMenu() {") + 600);
   assert.match(quit, /Input\.unlockLandscape\(\)/, "quitting the race releases the lock");

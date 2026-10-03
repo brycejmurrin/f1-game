@@ -49,7 +49,7 @@ test("the table: a rival's parts by camera distance; the player is never reduced
   assert.deepEqual([p100.tier, p100.body, p100.flaps], [1, true, false], "100 m: body + decal + wheels, no flaps");
   const far = L.parts(at(130), false);
   assert.deepEqual([far.tier, far.body, far.decal, far.wheels, far.fixedWheels], [2, true, false, true, false],
-    "130 m: the whole-car teamMesh, ONE draw, no decal");
+    "130 m: the body and its 4 rotating wheels, no decal");
   const me = L.parts(at(400), true);
   assert.deepEqual([me.tier, me.fixedWheels, me.compound, me.flaps, me.flame, me.castsShadow], [0, true, true, true, true, true]);
   assert.equal(L.d2([3, 4, 0], [0, 0, 0], false), 25);
@@ -138,7 +138,8 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   assert.match(g, /< FieldLod\.flapsM\(\) \*\* 2/, "flaps gate from the table");
   assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
-  assert.match(cd, /const lite = !c\.isPlayer && FieldLod\.wheelsLite\(camD2\)/);
+  // BARE (the mirror / PiP, drawMirrorCar) is lite at any distance.
+  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && FieldLod\.wheelsLite\(camD2\)\)/);
   // lite: the rotating wheel draw, then only the far brake flare (a Particles
   // flare outside the pool, 40-240 m) before the wheel's other layers are skipped.
   assert.match(cd, /if \(lite\) \{[\s\S]{0,600}?Particles\.flare\([\s\S]{0,200}?continue;/, "lite: the rotating wheel, the far flare, then nothing else for that wheel");
@@ -180,7 +181,7 @@ function mirrorRig(lodOn) {
   const G = { gfx, state: "race", player, cars, track: { total: 5000 }, camMode: 0, dbgCam: null, hideMeshes: {}, frozen: false,
     store: { get: (k, d) => (k === "hudMirror" ? "on" : d), set() {} } };
   const mp = ctx.MirrorPass.create(G, {
-    drawWorldMeshes: () => {}, teamMesh: (team) => team,
+    drawWorldMeshes: () => {}, drawCar: (c) => gfx.draw(c.team),
     renderPosOf: (c) => ({ world: true, x: -c.x, z: c.s }), playerAnchor: (c) => ({ cS: c.s, cX: c.x }),
     yawVisInterp: () => 0,
     basisMat: (r, u, f, p, out) => { out.set([r[0], r[1], r[2], 0, u[0], u[1], u[2], 0, f[0], f[1], f[2], 0, p[0], p[1], p[2], 1]); return out; },
