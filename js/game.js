@@ -3364,7 +3364,7 @@ function endRace(forcedOrder) {
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
   // quali's qualiTrack + qualiMode stamps refuse it on another circuit or mode.
-  dbgCam = null;
+  dbgCam = null; resultsCam.onFlag();
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   els.results.hidden = false;
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
@@ -3830,7 +3830,7 @@ const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
-const onboard = Onboard.create(G), director = Director.create(G), replayBuf = ReplayBuf.create(G); // coach + TV director + solo replay ring
+const onboard = Onboard.create(G), director = Director.create(G), replayBuf = ReplayBuf.create(G), resultsCam = ResultsCam.create(G); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -4272,7 +4272,9 @@ function raceIntro(go) {
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
   const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
-  const flyMs = loadingScreen.nextFlyMs(info.readMs);
+  // Habitual short flyby only after the backend's warm is done — shortening into
+  // a still-compiling first frame was a freeze under a shorter card.
+  const flyMs = loadingScreen.nextFlyMs(info.readMs, info.warmReady = !(gfx && gfx.warming && gfx.warming()));
   FlybySeq.setDuration(flyMs);   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
@@ -4308,6 +4310,7 @@ function loadingInfo() {
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create();
+const carFx = CarFx.create(G, { skids });   // plank sparks + AI lock-up marks (js/fx/car-fx.js)
 DrivingLine.setMode(store.get("drivingLine", "full"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
@@ -4479,13 +4482,13 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
-  Ghost.flush(); replayBuf.clear(); cancelIntro();
+  Ghost.flush(); replayBuf.clear(); resultsCam.reset(); cancelIntro();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
-  if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
+  if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
   mirrorPass.cancelPreparation();
@@ -6907,7 +6910,7 @@ function render(dt) {
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
-  if (state === "results") return;
+  if (state === "results" && !resultsCam.live()) return; // ResultsCam owns chequered/orbit/highlights
   // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0);
@@ -7852,19 +7855,20 @@ function render(dt) {
     // clamped pitch/roll/heave offsets. Render-only — applied to the BODY basis
     // (tmpMat) below; _groundMat (wheels/contact/shadow) is already built and is
     // never touched. When disabled these all come back 0 (rigid chassis).
-    // ygV = speed × road slope (smp2.t normalized above): the ground's vertical
-    // velocity under the car, analytic — bodyattitude never differentiates height.
-    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1], aeroDfMult(c) * Math.min(1, Math.abs(c.speed || 0) / vTop()) ** 2);
+    // ygV = speed × road slope (smp2.t normalized above): the ground's vertical velocity
+    // under the car, analytic (never a height difference). _vF = |v|/vTop(): kerb strikes.
+    const _vF = Math.min(1, Math.abs(c.speed || 0) / vTop());
+    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1], aeroDfMult(c) * _vF * _vF, _vF);
     const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
-    // Pitch: rotate forward+up around the right axis (positive = nose up). This
-    // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
-    // the contact point — it's purely a mesh animation.
+    // Pitch: rotate forward+up around the right axis, POSITIVE = NOSE DOWN — the c.baPitch
+    // sign (braking > 0; vantage.js reads it so). It rotated nose-UP until 2026-10-02, so
+    // brake-dive lifted the nose; now the nose dips on the brakes and lifts on power.
     if (_baPitch) {
       const cp = Math.cos(_baPitch), sp = Math.sin(_baPitch);
       for (let i = 0; i < 3; i++) {
         const f = tmpF[i], u = tmpU[i];
-        tmpF[i] = f * cp + u * sp;
-        tmpU[i] = u * cp - f * sp;
+        tmpF[i] = f * cp - u * sp;
+        tmpU[i] = u * cp + f * sp;
       }
     }
     // Cornering lean (render-only) comes from the C2 visual-suspension roll
@@ -8002,27 +8006,26 @@ function render(dt) {
             dirt ? 0.46 : 0.30, dirt ? 0.40 : 0.36, dirt ? 0.26 : 0.15,
             dt * 30);
         }
-        // Rain spray: every car at speed on a wet road drags a rooster tail —
-        // lighter on "wet" (drying line) than under full "rain".
+        // Rain spray: every car at speed on a wet road drags a lingering plume
+        // (Particles.spray: ~1.5 s clouds, so 9-30/s here holds what 0.7 s puffs
+        // at 14-48/s did) — lighter on "wet" (drying line) than under "rain".
         // vStd on BOTH halves: 15 and the /45 span describe a fraction of the
         // car's envelope (spray starts at ~21 % of top speed and is full at
         // ~83 %), so fed a raw ground speed they moved with the OVERALL SPEED
         // slider — at pace 0.5 the strength could never exceed (36-15)/45 = 0.47
         // and full spray was unreachable, at pace 1.3 it was pinned at 1 down
-        // every straight. The particle VELOCITY below stays real m/s: it is
-        // world-space motion, not a threshold (A16).
+        // every straight. The particle VELOCITY stays real m/s (A16).
         if (wet && vStd(c.speed) > 15) {
           const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
-          if (str > 0) {
-            const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre
-            Particles.spray(
-              tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,
-              tmpMat[13] + 0.28,
-              tmpMat[14] + tmpMat[2] * sxo - tmpF[2] * 2.1,
-              -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
-              dt * (14 + 34 * str));
-          }
+          const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre (str > 0: vStd > 15)
+          Particles.spray(
+            tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,
+            tmpMat[13] + 0.28,
+            tmpMat[14] + tmpMat[2] * sxo - tmpF[2] * 2.1,
+            -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
+            dt * (9 + 21 * str));
         }
+        carFx.emit(c, _groundMat, dt, state);   // plank sparks + an AI lock-up's marks (js/fx/car-fx.js)
       }
     }
     if (c.isPlayer && (cockpitRigOnly || visorEye)) {
@@ -8113,10 +8116,9 @@ function render(dt) {
     if (preGrid ? gridFlash
                 : ersCode >= 0 ? ersCode === 1
                 : ((wet && _ledStrobe) || (!wet && night))) {
-      // Rivals: 40 m gate like brake rings. Player always draws. The grid spans
-      // 22 x 8 m, so pre-race it opens up or the field ahead of you sits dark.
-      const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];
-      const lGate = preGrid ? 200 : 40;
+      // Rivals: 40 m like the brake rings; 150 m WET (in spray the rain light IS the car
+      // ahead); 200 m on the 22 x 8 m grid or the field ahead sits dark. Player always.
+      const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2], lGate = preGrid ? 200 : wet ? 150 : 40;
       if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < lGate * lGate) {
         // Wet, grid and ERS-code lights stay full-bright — a status light must
         // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
@@ -8579,7 +8581,7 @@ function tickBody(now) {
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
-  render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
+  if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20)); render(Math.min(dt, 1 / 20)); // results orbit + frame dt
   if (state === "race" || state === "count") updateHud(false, _dtMs);
 }
 

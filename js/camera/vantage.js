@@ -502,10 +502,11 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt[0] = cinAim[0]; tgt[1] = cinAim[1]; tgt[2] = cinAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(50, 60, spFov);
   } else if (mode === "low") {
-    Tracks.sample(track, wrapS(s - 10), cvB);
+    Tracks.sample(track, wrapS(s - 8), cvB);
     const cx = x * 0.3;
-    eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 10) + 0.45 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
-    tgt[0] = p[0]; tgt[1] = p[1] + 0.6; tgt[2] = p[2];
+    eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 8) + 0.55 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
+    const lowAim = aheadPt(18, 0.45, x * 0.35);
+    tgt[0] = lowAim[0]; tgt[1] = lowAim[1]; tgt[2] = lowAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(55, 68, spFov);
   } else if (mode === "trackside") {
     // Fixed corner cameras that auto-switch as the subject passes (js/camera/trackside.js).
@@ -747,6 +748,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
   _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
   _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.cut = vantCut;
+  _vTrack = null;   // a per-call input: left set, it pinned the last raced world through the menu
   return _vantOut;
 }
 

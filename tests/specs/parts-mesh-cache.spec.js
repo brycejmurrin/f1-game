@@ -379,6 +379,46 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     expect(stats.fieldLive).toBeLessThanOrEqual(48);   // 12 pairs × rotating/fixed × F/R
   });
 
+  test("race warm-up builds the shadow casters, so lights-out builds none", async ({ page }) => {
+    // The car shadow pass fetches teamMesh(team, car, true) for every car in range
+    // on its first frame; warmCarAssets builds the same keys behind the loading
+    // cover (js/car/car-draw.js). Count silhouette builds in race() vs the frames
+    // after go(), and count caster passes so a run with shadows shed is visible.
+    await toMenu(page);
+    await page.evaluate(() => {
+      const probe = { phase: "warm", warm: 0, frames: 0, passes: 0 };
+      const build = Car3D.build;
+      Car3D.build = function (c1, c2, opts) {
+        if (opts && opts.silhouette) probe[probe.phase]++;
+        return build.apply(this, arguments);
+      };
+      const begin = GLX.carShadowBegin;
+      GLX.carShadowBegin = function () { if (probe.phase === "frames") probe.passes++; return begin.apply(this, arguments); };
+      window.__casterProbe = probe;
+      // A warm cache would make every count 0: drop it AFTER the hook (as below).
+      if (window.__apex.clearCarMeshCaches) window.__apex.clearCarMeshCaches();
+    });
+    await pinFreePlay(page);
+    await page.evaluate(async () => {
+      // headless(false) BEFORE race(): the warm-up skips casters for a headless
+      // race, because no shadow pass runs there.
+      window.__apex.headless(false);
+      await window.__apex.race("monza");
+    });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
+    const probe = await page.evaluate(() => {
+      const p = window.__casterProbe;
+      p.phase = "frames";
+      window.__apex.headless(false);
+      window.__apex.go();
+      for (let i = 0; i < 30; i++) window.__apex.snapCam(1 / 60);
+      return { warm: p.warm, frames: p.frames, passes: p.passes };
+    });
+    test.info().annotations.push({ type: "casters", description: JSON.stringify(probe) });
+    expect(probe.frames, "silhouette builds after go() " + JSON.stringify(probe)).toBe(0);
+    if (probe.passes > 0) expect(probe.warm, "casters built in race() " + JSON.stringify(probe)).toBeGreaterThan(0);
+  });
+
   test("player wheel centres stay on the road while the chassis pitches under braking", async ({ page }) => {
     // Shared page: back to the title with the default car pinned, then the
     // probe, then the race — the probe must be in place before the wheels build.

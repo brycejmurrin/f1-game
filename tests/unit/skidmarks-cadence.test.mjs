@@ -128,3 +128,36 @@ test("a caller that passes no dt is charged one nominal frame per call", () => {
   for (let i = 0; i < 10; i++) skids.stamp(IDENT, true);
   assert.equal(count(skids), 2, "ten nominal frames = the old five-frame cadence");
 });
+
+// OTHER CARS' MARKS (2026-10-02): an AI lock-up stamps through stampFor() on its
+// OWN cadence object (js/fx/car-fx.js keeps one per car), so two locking rivals
+// and the player each lay at 5/60 s instead of sharing — and draining — one
+// countdown; and other cars may hold at most AI_CAP slots of the 120-mark ring,
+// so a field of lock-ups never flushes the player's own trail.
+test("other cars stamp on their own cadence, inside a capped share of the ring", () => {
+  const ctx = vm.createContext({ Float32Array, Array, Math });
+  seedLog(ctx);
+  const SkidMarks = vm.runInContext(SRC + ";SkidMarks", ctx);
+  const skids = SkidMarks.create();
+  const a = { t: 0 }, b = { t: 0 };
+  for (let i = 0; i < 60; i++) {            // one second, three cars laying
+    skids.stamp(IDENT, true, 1 / 60);
+    skids.stampFor(a, IDENT, true, 1 / 60);
+    skids.stampFor(b, IDENT, true, 1 / 60);
+  }
+  assert.equal(count(skids), 36, "12 marks each in 1 s — one shared countdown would have laid 12 in all");
+  assert.equal(skids.otherCount, 24);
+  // Keep the rivals locking: they stop at the cap; the player still lays.
+  for (let i = 0; i < 240; i++) { skids.stampFor(a, IDENT, true, 1 / 60); skids.stampFor(b, IDENT, true, 1 / 60); }
+  assert.equal(skids.otherCount, SkidMarks.AI_CAP, `other cars hold at most AI_CAP (${SkidMarks.AI_CAP}) slots`);
+  assert.equal(skids.stampFor(a, IDENT, true, 1), false, "a stamp past the cap is refused");
+  // The player wraps the ring: overwritten rival slots are released from the share.
+  for (let i = 0; i < 60 * 12; i++) skids.stamp(IDENT, true, 1 / 60);
+  assert.equal(count(skids), SkidMarks.MAX_SKID);
+  assert.equal(skids.otherCount, 0, "rival marks the ring overwrote no longer count against the cap");
+  assert.equal(skids.stampFor(b, IDENT, true, 1), true, "room again once they are gone");
+  skids.reset();
+  assert.equal(count(skids), 0);
+  assert.equal(skids.otherCount, 0, "reset clears the share");
+  assert.equal(skids.stampFor(null, IDENT, true, 1 / 60), false, "no cadence object, no mark");
+});

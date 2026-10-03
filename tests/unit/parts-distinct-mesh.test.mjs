@@ -17,8 +17,8 @@
  * THE TRAP THIS TEST WAS BORN FROM. The first pass built every option against
  * one team and reported 100+ dead options. They were not dead: SIGNATURE parts
  * carry `teams: [id]` and manufacturer parts a supplier list, Parts._resolve
- * enforces both, and a Ferrari signature asked for on a McLaren correctly
- * resolves to the DEFAULT. That is the lock working. Every option is built
+ * enforces both, and a Ferrari signature asked for on a McLaren resolves to
+ * its `equivalent` (or DEFAULTS when it has none). Every option is built
  * against a team it is legal for, and hashes are compared WITHIN a team — two
  * teams' cars differ by chassis style, so a cross-team comparison is noise.
  *
