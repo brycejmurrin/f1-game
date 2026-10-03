@@ -77,6 +77,7 @@ const SHAPE = function () {
 // MEASURED TLX build (16.6 s) with room for a loaded box, not off a round
 // number: too short reads as "the game is broken" when the game is fine.
 const TRACK_MS = 45000;
+const BOOT_MS = 45000;
 
 (async () => {
   const srv = await startStaticServer(ROOT);
@@ -95,7 +96,10 @@ const TRACK_MS = 45000;
     }, backend);
     console.error(`apex-eval: backend=${backend} track=${track}`);
     await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000, polling: 100 });
+    // 15 s was under a cold boot: __apex lands 10.3-12.6 s after goto on an
+    // idle container (2026-10-02) and later on a fresh Chromium, so the first
+    // apex_eval of a session timed out and the retry passed.
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });
     await page.evaluate(SHAPE);
     await page.evaluate((t) => window.__apex.race(t), track);
     // TRACK_MS, not 15 s. A TLX build of monza on this container's SwiftShader

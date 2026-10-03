@@ -1291,6 +1291,7 @@ function status() {
     error: _loadErr,
     active: _active,
     live: liveCount(),          // impact-debris ONLY (cap spec asserts live===16)
+    queued: _queue.length,      // impacts owned by this episode, awaiting step
     cap: _cap || capFor(),
     stepped: _tick,
     spawned: _spawnedTotal,

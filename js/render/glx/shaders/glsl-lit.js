@@ -468,7 +468,7 @@ void applyMaterialNormal(int mid, inout vec3 N, float vd) {
 }
 // Albedo + roughness modulation (unchanged call site: after rough is resolved).
 void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
-  // mid > 16 is a Car3D surface id (20..31, see classifiedCar in the FS). The
+  // mid > 16 is a Car3D surface id (20..33, see classifiedCar in the FS). The
   // else-if chain below runs 1..16 with NO catch-all, and matTexUV refuses
   // anything above 16 outright, so for a car fragment this whole function was
   // a normalize(), two clamps and a 14-way integer chain that provably cannot
@@ -958,13 +958,17 @@ void main() {
   // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
   // they must not roughen the mirror shell (that's what read as "ghostly" before).
   vec3 Ngeo = N;
-  // Car3D surface ids occupy 20..26, above TrackGeom's 0..15 material range.
+  // Car3D surface ids occupy 20..33, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 32;
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 33;
   bool paintSurface = surfaceId == 20;
   bool carbonSurface = surfaceId == 21;
   bool rubberSurface = surfaceId == 22;
+  // TYRE SIDEWALL (car3d.js SURFACES.sidewall = 33): the moulded wall, its
+  // compound band and lettering are a SATIN rubber (rough ~0.6, a little more
+  // specular), not the tread's matte 0.9 — the wall and the tread separate.
+  bool sidewallSurface = surfaceId == 33;
   bool metalSurface = surfaceId == 23;
   bool glassSurface = surfaceId == 24;
   bool emissiveSurface = surfaceId == 25;
@@ -985,14 +989,33 @@ void main() {
   // mirror: see the baseRefl split in the env block below.
   bool visorSurface = surfaceId == 32;
   bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
+  // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
+  // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 8-16 m so it
+  // cannot moire at range (it had no fade: a sin*sin at 190/m crawled on every
+  // wing at 30 m). The parts get a subtler twill and a roughness ripple so
+  // they read as carbon in cockpit and close-up instead of flat dark paint.
+  // wvT is the twill's ANALYTIC slope (d/du, d/dv of the sin*sin, same fade):
+  // it tilts the shading normal below with no derivative, so the weave catches
+  // the light thread by thread instead of being a printed pattern.
+  float weave = 0.5;
+  vec2 wvT = vec2(0.0);
+  if (carbonFinish || carbonSurface) {
+    vec2 wv = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
+    float wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+    wvT = vec2(cos(wv.x) * sin(wv.y), sin(wv.x) * cos(wv.y)) * wvFade;
+  }
   float carPaint = classifiedCar ? (paintLike ? uCarPaint : 0.0) : uCarPaint;
+  // Carbon parts carry a THIN lacquer (min 0.30): F1 carbon is clear-coated, so
+  // the weave sits under a crisp sun/lamp glint. No env mirror (carPaint 0).
   float clearcoat = classifiedCar
     ? (paintSurface ? uClearcoat
       : (mirrorSurface ? max(uClearcoat, 0.85)
       : (iriSurface ? max(uClearcoat, 0.70)
       : (satinMetalSurface ? min(uClearcoat, 0.25)
       : (matteSurface ? 0.0
-      : ((glassSurface || visorSurface) ? uClearcoat * 0.45 : 0.0))))))
+      : ((carbonSurface || carbonFinish) ? min(uClearcoat, 0.30)
+      : ((glassSurface || visorSurface) ? uClearcoat * 0.45 : 0.0)))))))
     : uClearcoat;
   // PAINT gets uMetalness — the only surface through which CAR METALLIC can act:
   // every car pixel is classified (car3d.js surfaceOf() falls back to paint),
@@ -1013,7 +1036,7 @@ void main() {
       : ((carbonSurface || carbonFinish) ? 0.08 : (paintSurface ? uMetalness : 0.0)))))))
     : uMetalness;
   float specular = classifiedCar
-    ? (rubberSurface ? 0.18 : ((metalSurface || mirrorSurface) ? 1.0
+    ? (rubberSurface ? 0.18 : sidewallSurface ? 0.35 : ((metalSurface || mirrorSurface) ? 1.0
       : (satinMetalSurface ? 0.82 : (matteSurface ? 0.16
       : ((carbonSurface || carbonFinish) ? 0.48 : (panelSurface ? 0.35 : uSpecular))))))
     : uSpecular;
@@ -1048,6 +1071,15 @@ void main() {
   // widened roughness on every brick/concrete/corrugation seam and made
   // WebGL2 walls read duller than WebGPU. Lighting still uses the bumped N.
   vec3 Nsaa = N;
+  // CARBON WEAVE NORMAL: tilt N along the twill's analytic slope (wvT, faded
+  // with the weave itself), in the same N-built tangent frame the orange-peel
+  // uses. After the Nsaa snapshot, like the material bump: it is a micro-normal,
+  // and WGX cannot take dpdx of it after the surface-id branch.
+  if (carbonFinish || carbonSurface) {
+    vec3 wT = normalize(cross(N, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
+    vec3 wB = cross(N, wT);
+    N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.18);
+  }
   // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
   // mortar/plank seams/corrugation ridges etc. actually affect the lighting
   // response, not just an albedo tint applied after the fact.
@@ -1116,18 +1148,8 @@ void main() {
   // from the front.
   // CARBON FINISH: bodywork in bare weave. Crush the livery colour toward the
   // dark resin and lay a fine cross-hatch over it, keeping a trace of the team
-  // tint so a red car is still identifiably that team's car in carbon.
-  // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
-  // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 8-16 m so it
-  // cannot moire at range (it had no fade: a sin*sin at 190/m crawled on every
-  // wing at 30 m). The parts get a subtler twill and a roughness ripple so
-  // they read as carbon in cockpit and close-up instead of flat dark paint.
-  float weave = 0.5;
-  if (carbonFinish || carbonSurface) {
-    vec2 wv = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
-    float wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
-    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
-  }
+  // tint so a red car is still identifiably that team's car in carbon. The
+  // weave itself is computed with the surface classification above.
   if (carbonFinish) {
     albedo = mix(albedo * 0.16 + vec3(0.030, 0.031, 0.035), albedo * 0.28, 0.25);
     albedo *= 0.86 + 0.28 * weave;
@@ -1146,6 +1168,7 @@ void main() {
   float rough = clamp(uRoughness, 0.04, 1.0);
   if (carbonSurface || carbonFinish) rough = max(rough, 0.56) + (weave - 0.5) * 0.10;   // the twill's roughness ripple
   if (rubberSurface) rough = max(rough, 0.90);
+  if (sidewallSurface) rough = clamp(rough, 0.55, 0.65);   // satin wall vs the matte tread
   if (metalSurface) rough = min(rough, 0.16);
   if (glassSurface || visorSurface) rough = min(rough, 0.13);
   if (emissiveSurface) rough = max(rough, 0.32);
@@ -1181,7 +1204,11 @@ void main() {
   // reflection-side use below must key off this, not plain wet — otherwise soaked
   // grass still mirrors the lamps and the sky.
   float wetSheen = 0.0;
-  if (uWetness > 0.001) {
+  // NOT on a car (classifiedCar): everything below is keyed to WORLD position —
+  // value-noise puddles, ripple cells, the 0.42 tarmac absorb on every up face —
+  // so in rain the car tops wore world-space puddles that slid across the moving
+  // body. Cars take the CAR WET LOOK after this block instead.
+  if (uWetness > 0.001 && !classifiedCar) {
     float upFace = smoothstep(0.50, 0.90, N.y);      // flat ground only
     // Water only SHEETS on a sealed surface. The up-facing test alone put the
     // same mirror film on the grass verges and the gravel traps as on the
@@ -1278,8 +1305,33 @@ void main() {
     // Only where a film can actually form.
     f0 = mix(f0, vec3(0.04), wetSheen * 0.6);
   }
+  // CAR WET LOOK (2026-10-03): uniform over the body, nothing world-keyed, so it
+  // rides with the car. The lacquered/metal/glass surfaces are already wet-glossed
+  // by the PAINT_WET_* roughness (js/game.js); the DULL ones — carbon, tyre tread
+  // and sidewall, matte and satin panels — darken a little (soaked fibre and
+  // rubber) and gain a little gloss and a water-film f0. No puddles, no ripples,
+  // and wetSheen stays 0: the road's analytic wet mirror is not a car's.
+  if (uWetness > 0.001 && classifiedCar) {
+    if (carbonSurface || carbonFinish || rubberSurface || sidewallSurface || matteSurface || panelSurface) {
+      albedo *= 1.0 - 0.20 * uWetness;
+      rough *= 1.0 - 0.25 * uWetness;
+      a = rough * rough;
+      f0 = mix(f0, max(f0, vec3(0.04)), 0.6 * uWetness);
+    }
+  }
 
-  vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
+  // GROUND-PROXIMITY AO (2026-10-03), AMBIENT ONLY, car BODY draws only (uCarPaint
+  // is 1 on the body/cockpit/flap draws and 0 on the separately drawn wheels; the
+  // tyre ids are excluded so a whole-car mesh matches). The car's origin sits on
+  // the road, so object-space height IS height above it: within ~0.4 m the road
+  // the low faces see is the car's own shadow. Weighted to the GROUND half of the
+  // hemisphere (x0.5 at the road) and only a touch of the sky half (x0.94), so
+  // the floor edge and lower sidepods ground the car while up faces barely move.
+  // Never touches the sun, lamps or reflections. Flaps are drawn pivot-local
+  // (objP.y ~ 0) — the sky weighting keeps their visible top within ~6%.
+  float gpao = (uCarPaint > 0.5 && !rubberSurface && !sidewallSurface)
+    ? 1.0 - smoothstep(0.02, 0.40, vObjPos.y) : 0.0;
+  vec3 amb = mix(uAmbGround * (1.0 - 0.50 * gpao), uAmbSky * (1.0 - 0.06 * gpao), N.y * 0.5 + 0.5);
 
   // Combine the hard shadow map with soft drifting cloud shadows: the sun is
   // dimmed where clouds pass overhead, casting moving dappled light on the track.
@@ -1567,6 +1619,9 @@ void main() {
   // panels (the "silver plane" under the car). Energy-conserving: the base is DARKENED under the mirror weight first,
   // then the reflected sky is added over it (a mirror on gloss, not a milky wash),
   // so the livery still reads through it face-on while the car goes mirror-bright.
+  // ccTrans: what the lacquer lets THROUGH to the base (1 - the absorb below) —
+  // the metal env term further down reflects only that share.
+  float ccTrans = 1.0;
   if (envSurface) {
     vec3 Rg = reflect(-V, Ngeo);
     float NoVc = max(dot(Ngeo, V), 1e-4);
@@ -1624,7 +1679,8 @@ void main() {
     float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
     float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
     envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow * uKeyMul;  // CAR SUN GLINT × KEY LIGHT — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
-    color *= 1.0 - envW * 0.94;                             // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
+    ccTrans = 1.0 - envW * 0.94;
+    color *= ccTrans;                                       // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
   }
@@ -1721,6 +1777,22 @@ void main() {
     vec3 envAdd = envWet * envFresnel * envBlend * roughDamp * (1.0 - metalness);
     float envM = max(max(envAdd.r, envAdd.g), envAdd.b);
     color += envAdd / (1.0 + envM);
+  }
+
+  // METAL ENV REFLECTION (2026-10-03). The block above is the DIELECTRIC share
+  // (F0 0.04, x (1 - metalness)); nothing reflected the METAL share, so rims,
+  // hubs, the halo, brake hardware and the chrome/brushed finishes read as dark
+  // albedo plus a GGX sun dot. A metal mirrors its surroundings tinted by its
+  // own colour: env x Schlick(NoV, F0 = albedo), x metalness. Sky/ground split
+  // and live probe exactly as the clearcoat mirror builds envCC (no sun disc —
+  // the GGX lobe owns the sun); under a lacquer only ccTrans reaches the metal.
+  if (metalSurface || satinMetalSurface || mirrorSurface) {
+    vec3 Rm = reflect(-V, N);
+    vec3 skyM = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rm.y, 0.0)));
+    vec3 envMet = mix(uAmbGround * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
+    if (uEnvStr > 0.001) envMet = mix(envMet, textureLod(uEnvCube, Rm, rough * 2.5).rgb, clamp(uEnvStr, 0.0, 1.0));
+    vec3 metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
+    color += metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
   }
 
   // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,

@@ -314,6 +314,55 @@ const TrackInsight = (function () {
     return { pts: pts.map((p) => [q(p[0] - cx), q(p[1] - cz)]), lengthM: Math.round(tr.total), baseHW, centre: [cx, cz] };
   }
 
-  return { THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit, verticalG };
+  // ── DESIGNED RANDOMISE: what a circuit is like, and how well it fits a style ──
+  const R_BINS = [15, 25, 40, 70, 120, 250];         // corner radius bins (m): [<25 incl. under 15, …, ≥ 250)
+  const V_EDGES = [40, 55, 70, 85];                  // SPEED's heat buckets (m/s): < 40 · < 55 · < 70 · < 85 · ≥ 85
+  /** Shannon entropy of a histogram over `bins` buckets, normalised to 0–1. */
+  function entropy(h, bins) {
+    let tot = 0; for (const w of h) tot += w;
+    if (!(tot > 0)) return 0;
+    let H = 0; for (const w of h) if (w > 0) { const p = w / tot; H -= p * Math.log(p); }
+    return H / Math.log(bins);
+  }
+  /** A circuit's character over its built centreline `tr`, speeds `v` (default
+   *  speedProfile) and verdict (its turns and amber count): { Hc: corner-radius
+   *  variety (length-weighted nodes with |k| > straightK over R_BINS, 0–1), Hv:
+   *  speed variety (time-weighted over the five heat buckets, 0–1), F: lap
+   *  fraction at ≥ 85 m/s, C: corners per km, P: passing zones (≤ 4), A: ambers }. */
+  function features(tr, v, verdict) {
+    if (!tr || !(tr.n > 2) || !tr.curv) return { Hc: 0, Hv: 0, F: 0, C: 0, P: 0, A: 0 };
+    v = v || speedProfile(tr);
+    const n = tr.n, ds = tr.total / n, hc = new Array(R_BINS.length).fill(0), hv = new Array(V_EDGES.length + 1).fill(0);
+    let fast = 0;
+    for (let k = 0; k < n; k++) {
+      const c = Math.abs(tr.curv[k]);
+      if (c > THRESH.straightK) { const R = 1 / c; let b = 0; while (b < R_BINS.length - 1 && R >= R_BINS[b + 1]) b++; hc[b] += ds; }
+      let b = 0; while (b < V_EDGES.length && v[k] >= V_EDGES[b]) b++;
+      hv[b] += ds / Math.max(1, v[k]);
+      if (v[k] >= 85) fast++;
+    }
+    const turns = verdict && Array.isArray(verdict.turns) ? verdict.turns : undefined;
+    const amber = verdict ? (Number.isFinite(verdict.amber) ? verdict.amber : (verdict.issues || []).filter((i) => i.level === "amber").length) : 0;
+    return { Hc: entropy(hc, hc.length), Hv: entropy(hv, hv.length), F: fast / n, C: bands(tr, turns).length / (tr.total / 1000), P: Math.min(4, passingZones(tr, v).length), A: amber };
+  }
+  /** A style's score: Σ weight · feature, C past the style's free corners/km
+   *  (TrackRandom.STYLES: FAST 2F + 0.5P + 0.5Hv − 0.3A − 0.2·max(0, C − 3),
+   *  TECHNICAL 1.5Hc + 0.4C − F + 0.2P − 0.3A, MIXED Hc + Hv + 0.3P − 0.3A).
+   *  `style`: a STYLES name or a weights object. */
+  function score(feats, style) {
+    const w = typeof style === "string" ? (typeof TrackRandom !== "undefined" && TrackRandom.STYLES ? TrackRandom.STYLES[style] : null) : style;
+    if (!w || !feats) return 0;
+    let s = 0;
+    for (const key of ["Hc", "Hv", "F", "P", "A"]) if (w[key]) s += w[key] * feats[key];
+    if (w.C) s += w.C * Math.max(0, feats.C - (w.cFree || 0));
+    return s;
+  }
+  /** TrackRandom.design's scorer over a validator verdict: { score, feats }. */
+  function rate(verdict, style) {
+    const feats = features(verdict && verdict.tr, null, verdict);
+    return { score: score(feats, style), feats };
+  }
+
+  return { THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit, verticalG, features, score, rate };
 })();
 Object.freeze(TrackInsight);

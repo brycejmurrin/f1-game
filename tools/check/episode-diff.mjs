@@ -62,6 +62,10 @@ export function snapshot(cars) {
  * @returns {Promise<{digestsMatch:boolean, rows:Array, fields:Array}>}
  */
 export async function episodeLeaks({ track = "monza", seed = 42, episodes = 3, seconds = 4, game } = {}) {
+  if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error("seed must be a uint32 integer");
+  if (!Number.isSafeInteger(episodes) || episodes < 2 || episodes > 100) throw new Error("episodes must be an integer in [2, 100]");
+  if (!Number.isFinite(seconds) || seconds < 0.05 || seconds > 120) throw new Error("seconds must be in [0.05, 120]");
+  if (typeof track !== "string" || !/^[a-z0-9_]+$/.test(track)) throw new Error("track must be a circuit id");
   const owned = !game;
   const g = game || await createGame({ track });
   try {
@@ -71,18 +75,30 @@ export async function episodeLeaks({ track = "monza", seed = 42, episodes = 3, s
 
     for (let e = 0; e < episodes; e++) {
       A.headless(true);
-      A.reset(0.02, 55, 0, seed);
+      try {
+      const reset = A.reset(0.02, 55, 0, seed);
+      if (!reset || reset.ok === false || reset.error) throw new Error("Episode reset failed");
       // The snapshot is taken AFTER reset and BEFORE the first tick: that is the
       // state the episode starts from, and the only place the leak is visible
       // without being tangled up in the divergence it causes.
+      if (!Array.isArray(g.G.cars) || !g.G.cars.length) throw new Error("Episode reset produced an empty field");
+      if (snaps.length && g.G.cars.length !== snaps[0].length) throw new Error("Car count changed across episodes");
       snaps.push(snapshot(g.G.cars));
       const r = A.rollout({ seconds, input: { steer: 0.05, throttle: true } });
       const f = A.field({ detail: "full" });
-      A.headless(false);
+      if (!r || r.ok === false || r.error || !r.ran || !Number.isSafeInteger(r.ran.ticks) || r.ran.ticks <= 0)
+        throw new Error(`Rollout failed or ran zero ticks: ${JSON.stringify(r)}`);
+      if (!Number.isFinite(r.distanceM) || !r.to || !Number.isFinite(r.to.frac) || !Number.isFinite(r.to.lap)
+          || !r.speedKph || !["min", "max", "mean", "final"].every((k) => Number.isFinite(r.speedKph[k])))
+        throw new Error("Rollout returned an incomplete or non-finite digest");
+      if (!f || f.ok === false || f.error || !Array.isArray(f.positions) || f.positions.length !== g.G.cars.length
+          || !f.positions.every((p) => typeof p.code === "string" && Number.isFinite(p.pace)))
+        throw new Error("Field returned an incomplete or non-finite grid");
       digests.push(JSON.stringify({
         distanceM: r.distanceM, speed: r.speedKph, to: r.to,
         grid: f.positions.map((p) => p.code + ":" + p.pace).join(","),
       }));
+      } finally { A.headless(false); }
     }
 
     const digestsMatch = digests.every((d) => d === digests[0]);
@@ -106,7 +122,7 @@ export async function episodeLeaks({ track = "monza", seed = 42, episodes = 3, s
       e.cars++; byField.set(f.field, e);
     }
     const rows = [...byField.values()].sort((a, b) => b.cars - a.cars);
-    return { digestsMatch, rows, fields };
+    return { digestsMatch, rows, fields, episodesChecked: snaps.length, carsChecked: snaps[0].length };
   } finally {
     if (owned) g.close();
   }
@@ -120,16 +136,26 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   };
   const has = (name) => argv.includes("--" + name);
 
+  try {
+  const allowed = new Set(["--track", "--seed", "--episodes", "--seconds", "--json", "--help"]);
+  for (let i = 0; i < argv.length; i++) {
+    if (!allowed.has(argv[i])) throw new Error(`Unknown option: ${argv[i]}`);
+    if (!["--json", "--help"].includes(argv[i])) {
+      if (!argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error(`${argv[i]} requires a value`);
+      i++;
+    }
+  }
+  if (has("help")) { console.log("Usage: episode-diff.mjs [--track id] [--seed uint32] [--episodes 2..100] [--seconds 0.05..120] [--json]"); process.exit(0); }
   const track = flag("track", "monza");
   const seed = Number(flag("seed", 42));
-  const episodes = Math.max(2, Number(flag("episodes", 3)));
+  const episodes = Number(flag("episodes", 3));
   const seconds = Number(flag("seconds", 4));
   const asJson = has("json");
 
-  const { digestsMatch, rows } = await episodeLeaks({ track, seed, episodes, seconds });
+  const { digestsMatch, rows, episodesChecked, carsChecked } = await episodeLeaks({ track, seed, episodes, seconds });
 
   if (asJson) {
-    console.log(JSON.stringify({ ok: true, track, seed, episodes, digestsMatch,
+    console.log(JSON.stringify({ ok: digestsMatch, track, seed, episodes, episodesChecked, carsChecked, digestsMatch,
                                  fieldCount: rows.length, fields: rows }, null, 2));
   } else {
     console.log(`episode-diff: ${track}, seed ${seed}, ${episodes} episodes of ${seconds}s`);
@@ -150,4 +176,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     }
   }
   process.exit(digestsMatch ? 0 : 1);
+  } catch (e) {
+    if (has("json")) console.log(JSON.stringify({ ok: false, error: e.message }));
+    else console.error(`episode-diff: ${e.message}`);
+    process.exitCode = 1;
+  }
 }

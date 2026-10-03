@@ -1,0 +1,194 @@
+/* Apex 26 — LIVE TV DIRECTOR (Director.create(G)): a broadcast-style camera
+ * brain for the race the player is driving. Reuses Broadcast's pure cut policy
+ * (battles / shotFor / dwell). When CAM_MODES id "tv" is on — or after the
+ * player finishes/retires in solo — it picks a subject (battle / leader) and a
+ * shot (side/heli/tcam/chase/cinematic/low), solves the vantage into G.dbgCam,
+ * and never touches car forces or sim RNG. Curvature reaches it only through
+ * GameCams.vantage (broadcast-only). Netplay: auto-spectate and TV cuts stay
+ * off while netPlay.active() — pause does not own the shared sim. */
+"use strict";
+const Director = (function () {
+  // Prefer Broadcast's shipped shot list and dwell when the module is loaded;
+  // fall back to the same literals so a bare VM unit test still runs.
+  const SHOTS = (typeof Broadcast !== "undefined" && Broadcast.SHOTS)
+    ? Broadcast.SHOTS.slice()
+    : ["side", "heli", "tcam", "chase", "cinematic", "low"];
+  const SHOT_MIN_S = (typeof Broadcast !== "undefined" && Broadcast.SHOT_MIN_S) || 5;
+  const SHOT_MAX_S = (typeof Broadcast !== "undefined" && Broadcast.SHOT_MAX_S) || 14;
+  const BATTLE_S = 1.0;
+
+  /** Progress-ordered running cars → Broadcast.battles shape. */
+  function battles(cars) {
+    if (typeof Broadcast !== "undefined" && Broadcast.battles) return Broadcast.battles(cars);
+    const out = [];
+    for (let i = 1; i < cars.length; i++) {
+      const a = cars[i - 1], b = cars[i];
+      const v = Math.max(b.speed || 0, 20);
+      const g = (a.prog - b.prog) / v;
+      if (g >= 0 && g < BATTLE_S) out.push({ key: b.key, ahead: a.key, gapS: g, score: g + i * 0.08 });
+    }
+    return out.sort((x, y) => x.score - y.score);
+  }
+  function shotFor(kind, onAir, n) {
+    if (typeof Broadcast !== "undefined" && Broadcast.shotFor) return Broadcast.shotFor(kind, onAir, n);
+    const pool = SHOTS.filter((s) => s !== onAir);
+    return pool.length ? pool[(n | 0) % pool.length] : onAir;
+  }
+
+  /**
+   * Pure cut decision. Mirrors Broadcast.direct: no cut before SHOT_MIN_S;
+   * a battle (or leader rotate) only after SHOT_MAX_S unless an explicit
+   * event kind is supplied. Returns null to hold, or { subject, kind, shot }.
+   */
+  function decideCut(st) {
+    const age = st.wall - st.lastCut;
+    if (age < SHOT_MIN_S) return null;
+    const running = st.running || [];
+    if (!running.length) return null;
+    const fight = battles(running)[0];
+    // Under SHOT_MAX_S: only cut when a battle appears and we are not already
+    // on its chaser (Broadcast cuts events early; live director treats a new
+    // battle the same way once the min dwell has passed).
+    if (age < SHOT_MAX_S) {
+      if (!fight) return null;
+      if (st.subject && fight.key === st.subject) return null;
+      const shot = shotFor("pass", st.onAirShot, st.cuts || 0);
+      return { subject: fight.key, kind: "pass", shot };
+    }
+    let subject = fight ? fight.key : null;
+    let kind = fight ? "pass" : null;
+    if (!subject) {
+      const n = Math.min(3, running.length);
+      subject = running[(st.cuts || 0) % n].key;
+    }
+    const shot = shotFor(kind, st.onAirShot, st.cuts || 0);
+    return { subject, kind, shot };
+  }
+
+  /** Should the live director be driving the picture right now? */
+  function wantOn(st) {
+    if (st.net) return false;
+    if (st.modeId === "tv") return true;
+    if (st.autoSpectate && (st.finished || st.retired)) return true;
+    return false;
+  }
+
+  let _live = null;
+  function live() { return _live; }
+
+  function create(G) {
+    Log.info("game", "Director.create");
+    let wall = 0, lastCut = -1e9, cuts = 0, onAirShot = null, subject = null;
+    let owningDbg = false, autoSpectate = true, forcedTv = false;
+    const scratchEye = [0, 0, 0], scratchTgt = [0, 0, 0];
+
+    function camIdx(id) {
+      const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
+      return modes.findIndex((m) => m.id === id);
+    }
+    function modeId() {
+      const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
+      const m = modes[G.camMode];
+      return m ? m.id : "";
+    }
+    function runningList() {
+      const cars = G.cars || [];
+      const out = [];
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i];
+        if (!c || c.retired || c.finished) continue;
+        out.push({ key: c, prog: c.prog || 0, speed: c.speed || 0 });
+      }
+      out.sort((a, b) => b.prog - a.prog);
+      return out;
+    }
+    function clearDbg() {
+      if (owningDbg && G.dbgCam) G.dbgCam = null;
+      owningDbg = false;
+    }
+    function applyShot(car, shot) {
+      if (!car || !G.track || !G.camVantage) return false;
+      const extra = {};
+      if (car.px != null && car.pz != null) {
+        extra.carPos = [car.px, car.pz];
+        extra.carHead = car.head || 0;
+      }
+      const v = G.camVantage(shot, car.s || 0, car.x || 0, car.speed || 0, 0, extra);
+      if (!v || !v.eye || !v.tgt) return false;
+      scratchEye[0] = v.eye[0]; scratchEye[1] = v.eye[1]; scratchEye[2] = v.eye[2];
+      scratchTgt[0] = v.tgt[0]; scratchTgt[1] = v.tgt[1]; scratchTgt[2] = v.tgt[2];
+      G.dbgCam = { eye: scratchEye, target: scratchTgt, fov: v.fov || 55, far: 6000 };
+      owningDbg = true;
+      onAirShot = shot;
+      subject = car;
+      return true;
+    }
+    function ensureTvMode() {
+      if (modeId() === "tv") return;
+      const i = camIdx("tv");
+      if (i < 0 || !G.setCamMode) return;
+      G.setCamMode(i, { persist: false });
+      forcedTv = true;
+    }
+    function tick(dt) {
+      const st = G.state;
+      if (st !== "race" && st !== "count") { clearDbg(); return; }
+      const net = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
+      const player = G.player;
+      const finished = !!(player && player.finished);
+      const retired = !!(player && player.retired);
+      if (!wantOn({ net, modeId: modeId(), autoSpectate, finished, retired })) {
+        if (forcedTv && modeId() === "tv") { /* left on tv by us; still off if wantOn false only via net */ }
+        clearDbg();
+        return;
+      }
+      if (autoSpectate && (finished || retired) && !net) ensureTvMode();
+      if (modeId() !== "tv") { clearDbg(); return; }
+
+      wall += dt > 0 ? dt : 0;
+      const running = runningList();
+      // After the player is done, include them as a spectate subject via follow
+      // of the field only — still no force path.
+      const decision = decideCut({
+        wall, lastCut, cuts, onAirShot, subject,
+        running: running.length ? running : (player && !player.retired ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
+      });
+      if (decision) {
+        lastCut = wall; cuts++;
+        applyShot(decision.subject, decision.shot);
+        Log.debug("game", "Director.cut kind=" + (decision.kind || "-") + " shot=" + decision.shot
+          + " car=" + (decision.subject && decision.subject.code ? decision.subject.code : "-"));
+      } else if (subject && onAirShot) {
+        applyShot(subject, onAirShot);   // keep dbgCam fresh as the car moves
+      } else if (running[0]) {
+        lastCut = wall; cuts++;
+        applyShot(running[0].key, shotFor(null, null, 0));
+      }
+    }
+    function reset() {
+      wall = 0; lastCut = -1e9; cuts = 0; onAirShot = null; subject = null;
+      forcedTv = false; clearDbg();
+    }
+    function status() {
+      return {
+        on: modeId() === "tv" && owningDbg,
+        shot: onAirShot,
+        cuts,
+        subject: subject && subject.code ? subject.code : null,
+        autoSpectate,
+        wall: +wall.toFixed(2),
+      };
+    }
+    function setAutoSpectate(v) { autoSpectate = !!v; return autoSpectate; }
+
+    const api = { tick, reset, status, setAutoSpectate, decideCut, wantOn };
+    _live = api;
+    return api;
+  }
+
+  return {
+    create, live, decideCut, wantOn, battles, shotFor,
+    SHOTS, SHOT_MIN_S, SHOT_MAX_S,
+  };
+})();
+Object.freeze(Director);

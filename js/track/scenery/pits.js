@@ -16,8 +16,10 @@ const SceneryPits = (function () {
   const POST = [0.22, 0.24, 0.28];
 
   // One bay mesh per team, shared across circuits: the geometry is a function
-  // of the livery only, and a session builds a handful of circuits.
-  const BAY_CACHE = new Map();
+  // of the livery only, and a session builds a handful of circuits. BOUNDED:
+  // custom liveries, MY TEAM and legend fields mint new keys for the whole
+  // session, so the oldest entry goes once the cache passes two grids' worth.
+  const BAY_CACHE = new Map(), BAY_CACHE_MAX = 48;
   function bayMesh(rowEntry) {
     if (typeof GarageScene === "undefined" || typeof GarageScene.buildStatic !== "function") return null;
     const key = rowEntry.team + "|" + rowEntry.col.join(",") + "|" + rowEntry.col2.join(",");
@@ -26,6 +28,7 @@ const SceneryPits = (function () {
       // `props: "lite"`: the furniture that reads from the lane — tyre stacks
       // in the door corners and out on the apron, tool chests, the jack.
       m = GarageScene.buildStatic({ c1: rowEntry.col, c2: rowEntry.col2, accent: rowEntry.col2 }, { props: "lite" });
+      if (BAY_CACHE.size >= BAY_CACHE_MAX) BAY_CACHE.delete(BAY_CACHE.keys().next().value);
       BAY_CACHE.set(key, m);
     }
     return m;

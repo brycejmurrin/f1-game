@@ -40,10 +40,12 @@ const OvertakeMode = (function () {
     if (Number.isFinite(f) && typeof TrackSpace !== "undefined") return TrackSpace.sceneryFrac(def, f);
     return DETECT_FRAC;
   }
-  let _cacheTrack = null, _cacheS = 0;
+  const _detectBy = new WeakMap();   // per track object, weakly: never pins a dropped world
   function detectS(track) {
-    if (track !== _cacheTrack) { _cacheTrack = track; _cacheS = track ? detectFrac(track.def) * track.total : 0; }
-    return _cacheS;
+    if (!track) return 0;
+    let s = _detectBy.get(track);
+    if (s === undefined) { s = detectFrac(track.def) * track.total; _detectBy.set(track, s); }
+    return s;
   }
 
   // Did a FORWARD step prevS -> s pass `at` (all arc metres on a lap of L)?

@@ -8,7 +8,7 @@ function fixture() {
   const saves = new Map(), announcements = [];
   const c = { prog: 0, lap: 1, speed: 40, energy: 1, tyreWear: 0, tyreStints: 0, tyre: { id: 'soft' } };
   const G = { player: c, raceT: 0, sectorIdx: 0, state: 'race', track: { total: 300 }, lapsTarget: 5,
-    vTop: () => 100, tyres: { on: () => true }, pits: { estimate: () => ({ lossS: 20 }) }, roadWetness: () => 0,
+    vTop: () => 100, tyres: { on: () => true }, pits: { estimate: () => ({ lossS: 20 }) }, trackWetness: () => 0,
     fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
     records: { key: () => 'class' }, store: { get: (k,d) => saves.get(k) ?? d, set: (k,v) => saves.set(k,v) },
     announce: (...args) => announcements.push(args) };
@@ -36,7 +36,7 @@ test('energy forecast requires full clean sectors, excludes the initial partial,
   G.sectorIdx = 0; tick({ prog: 240, energy: .7 }, 3);
   G.sectorIdx = 1; tick({ prog: 330, energy: .6 }, 3);
   assert.ok(Math.abs(api.forecast().energyPerLap - .3) < 1e-10);
-  G.roadWetness = () => .2; tick({ prog: 350 }, 1);
+  G.trackWetness = () => .2; tick({ prog: 350 }, 1);
   assert.equal(api.forecast().energyPerLap, null);
 });
 test('stint estimate is measured, waits half a lap and stays unknown with wear disabled', () => {

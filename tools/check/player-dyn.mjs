@@ -158,6 +158,14 @@ export function measure(g, frac = 0) {
 }
 
 async function main() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    console.log(`player-dyn — player vehicle-dynamics bench (VM, no browser)
+
+  TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json]
+
+Owned by tune-physics.`);
+    process.exit(0);
+  }
   const track = process.env.TRACK || "monza", frac = +(process.env.FRAC || 0);
   const g = await createGame({ track, storage: { difficulty: "normal", autoThrottle: false } });
   await g.race(track);

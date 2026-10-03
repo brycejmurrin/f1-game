@@ -131,6 +131,7 @@
   border-radius: var(--r-md);
 }
 .td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); }
+.td-grid[aria-busy="true"] { opacity: 0.5; }
 .td-card {
   display: flex; flex-direction: column; gap: calc(var(--gap) / 2);
   padding: calc(var(--gap) / 2);

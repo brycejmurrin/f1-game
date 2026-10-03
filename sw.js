@@ -483,7 +483,7 @@ self.addEventListener("install", (event) => {
     // onerror resolved with the global absent, and an opted-in TLX/WGX player
     // silently fell back to GLX. Stamp the same build here. Safe against
     // staleness because the cache NAME already carries the build and `activate`
-    // deletes every other generation, so a key inside this cache can only ever
+    // deletes older generations, so a key inside this cache can only ever
     // be this build's. Everything else in the list stays bare — the vendored
     // three.js reaches the network through the importmap with no query at all.
     // Everything loadBackendScripts() injects is requested as `<path>?v=<build>`,
@@ -527,7 +527,8 @@ self.addEventListener("activate", (event) => {
     // Test-asserted (service-worker.test.mjs "activation preserves prior…").
     if (!(await cache.match(INSTALL_SETTLED_URL))) return;
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== name).map((k) => caches.delete(k)));
+    const build = cacheBuild(name);
+    await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && cacheBuild(k) < build).map((k) => caches.delete(k)));
     invalidateCacheOrder();
     await self.clients.claim();
     swLog("info", "activated " + name);

@@ -69,9 +69,25 @@ function usage() {
   ].join("\n"));
 }
 
+// Cached refs only: no fetch, checkout, branch deletion or object-writing merge-tree.
+export function cachedPlan(prBranch, readGit = git) {
+  const head = must(readGit(["rev-parse", "--verify", `origin/${prBranch}`]), "cached PR ref (fetch explicitly first if absent)");
+  const tip = must(readGit(["rev-parse", "--verify", `origin/${DEPLOY_BRANCH}`]), "cached deploy ref");
+  const fastForward = readGit(["merge-base", "--is-ancestor", tip, head]).code === 0;
+  return { branch: prBranch, head, tip, fastForward, source: "cached-remote-refs", conflicts: null,
+    conflictsChecked: false, note: "Refs may be stale. Exact merge conflicts are checked during sync; plan changes nothing.",
+    theirCommits: must(readGit(["log", "--oneline", `${head}..${tip}`]), "cached commits").split("\n").filter(Boolean) };
+}
+
 export function main() {
-  if (!branch || flag("--help") || flag("-h")) { usage(); return branch ? 0 : 1; }
+  if (flag("--help") || flag("-h")) { usage(); return 0; }
+  if (!branch) { usage(); return 1; }
+  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push"].includes(a));
+  if (unknown || argv.filter((a) => !a.startsWith("-")).length !== 1) throw new Error(`Invalid arguments${unknown ? ": " + unknown : ""}`);
+  if (flag("--plan") && flag("--push")) throw new Error("--plan cannot be combined with --push");
   if (branch === DEPLOY_BRANCH) { log(`REFUSED: ${branch} is the deploy branch itself — use deploy.mjs, not sync-pr.mjs`); return 3; }
+
+  if (flag("--plan")) { console.log(JSON.stringify(cachedPlan(branch), null, 2)); return 0; }
 
   must(git(["fetch", "--no-tags", REMOTE, branch, DEPLOY_BRANCH]), "fetch");
   const problems = preflight();
@@ -79,18 +95,11 @@ export function main() {
 
   const startedOn = git(["branch", "--show-current"]).out || git(["rev-parse", "HEAD"]).out;
   const localBranch = `sync-pr-${branch.replace(/[^\w.-]/g, "-")}`;
-  git(["branch", "-D", localBranch]); // best-effort: drop any stale local copy from a prior run
-  must(git(["checkout", "-B", localBranch, `${REMOTE}/${branch}`]), "checkout PR branch");
+  if (git(["show-ref", "--verify", "--quiet", `refs/heads/${localBranch}`]).code === 0)
+    throw new Error(`Local branch ${localBranch} already exists; inspect or rename it before syncing`);
+  must(git(["checkout", "-b", localBranch, `${REMOTE}/${branch}`]), "checkout PR branch");
 
   const p = plan();
-  if (flag("--plan")) {
-    console.log(`${branch} @ ${p.head.slice(0, 7)} — deploy tip ${p.tip.slice(0, 7)} ${p.fastForward ? "(ancestor: nothing to sync)" : "(diverged)"}`);
-    if (p.conflicts.length) console.log("conflicts a merge would hit:\n  " + p.conflicts.join("\n  "));
-    if (p.theirCommits.length) console.log(`deploy has moved ${p.theirCommits.length} commit(s) ahead of this branch's last sync`);
-    git(["checkout", startedOn]);
-    git(["branch", "-D", localBranch]);
-    return 0;
-  }
 
   try {
     if (p.fastForward) {
@@ -114,7 +123,7 @@ export function main() {
     git(["checkout", startedOn]);
     git(["branch", "-D", localBranch]);
   } else {
-    log(`verified on ${localBranch} — rerun with --push to publish, or: git push ${REMOTE} ${localBranch}:${branch}`);
+    log(`verified on ${localBranch} — review, then publish with: git push ${REMOTE} ${localBranch}:${branch}`);
   }
   return 0;
 }

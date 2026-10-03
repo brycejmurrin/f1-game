@@ -27,7 +27,7 @@ const TrackDesigner = (function () {
       { n: 4, title: "Start line", text: "Select a point and press START HERE to put the start line there. It needs a long straight behind it for the grid and the pit lane." },
       { n: 5, title: "Look", text: "Pick a theme — the scenery, time of day and terrain follow it. Then name the circuit and set the half-width of the road." },
       { n: 6, title: "Checks", text: "Red rows block saving; amber rows are only warnings (FIA lines are Grade 1 advice). Tap a row to see where it is, and tap FIX (or FIX ALL) to let the designer repair it." },
-      { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL: your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, and EXPORT / IMPORT move a circuit as a file." },
+      { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or select a point and press TEST HERE to drive from it; QUIT brings you back): your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, CARD makes a picture of the circuit to send, and EXPORT / IMPORT move a circuit as a file." },
     ]),
     GESTURES: Object.freeze([
       { input: "Touch", text: "Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan." },
@@ -452,6 +452,8 @@ const TrackDesigner = (function () {
     ui.ctxStart = btn("START HERE", "sel-chip", () => { const i = ctxAt; hideCtx(); setStart(i); });
     ui.ctxClose = btn("CLOSE", "sel-chip", () => hideCtx());
     ui.ctx.append(ui.ctxDel, ui.ctxStart, ui.ctxClose);
+    ui.ctxTest = btn("TEST HERE", "sel-chip", () => { const i = ctxAt; hideCtx(); testHere(i); });
+    ui.ctx.appendChild(ui.ctxTest);
     canvas.addEventListener("pointerdown", () => hideCtx());
     stage.append(canvas, ui.stats, ui.hint, ui.ctx);
     // rail
@@ -474,12 +476,14 @@ const TrackDesigner = (function () {
     ui.race = btn("RACE", "sel-edit", () => race("gp"));
     ui.tt = btn("TIME TRIAL", "sel-edit", () => race("tt"));
     ui.share = btn("SHARE", "sel-chip", () => share());
+    ui.card = btn("CARD", "sel-chip", () => shareCard());
+    ui.card.setAttribute("aria-label", "Share a picture card of this circuit");
     ui.export = btn("EXPORT", "sel-chip", () => exportFile());
     ui.import = btn("IMPORT", "sel-chip", () => ui.file.click());
     ui.file = el("input"); ui.file.type = "file"; ui.file.accept = ".json,application/json"; ui.file.hidden = true; ui.file.setAttribute("aria-label", "Import a circuit file");
     ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; if (f) importFile(f); });
     ui.msg = el("div", "td-msg"); ui.msg.setAttribute("role", "status"); ui.msg.setAttribute("aria-live", "polite");
-    foot.append(ui.save, ui.race, ui.tt, ui.share, ui.export, ui.import, ui.file, ui.msg);
+    foot.append(ui.save, ui.race, ui.tt, ui.share, ui.card, ui.export, ui.import, ui.file, ui.msg);
     root.append(body, foot);
 
     cv = DesignerCanvas.create(canvas, {
@@ -642,6 +646,9 @@ const TrackDesigner = (function () {
     ui.redo = btn("REDO", "sel-chip", () => doRedo());
     ui.fitBtn = btn("FIT VIEW", "sel-chip", () => cv && cv.fit());
     actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.undo, ui.redo, ui.fitBtn);
+    ui.testHere = btn("TEST HERE", "sel-chip", () => testHere());
+    ui.testHere.setAttribute("aria-label", "Test drive from the selected point");
+    actions.appendChild(ui.testHere);
     circuit.appendChild(actions);
     // issues
     const issues = el("div", "td-group");
@@ -664,6 +671,7 @@ const TrackDesigner = (function () {
     sharing.append(ui.code, loadRow);
     pane.append(tools, ui.shape, theme, circuit, issues, sharing);
     buildInsight(pane, circuit, actions, sharing);
+    buildDesigned(circuit);
   }
 
   // ── share out / in ────────────────────────────────────────────────────────
@@ -698,15 +706,10 @@ const TrackDesigner = (function () {
   async function exportFile() {
     const env = await exportEnvelope();
     if (!env) { message("Nothing to export yet", true); return false; }
-    const name = "apex26-track-" + (design.name || "circuit").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".apextrack.json";
+    const name = fileStem() + ".apextrack.json";
     const blob = new Blob([JSON.stringify(env, null, 2)], { type: "application/json" });
     try {
-      if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable() && NativeDownload.saveBlob) await NativeDownload.saveBlob(blob, name);
-      else {
-        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      }
+      await saveFile(blob, name);
       message("Exported " + name);
       return true;
     } catch (e) { message("Export failed: " + (e && e.message || e), true); return false; }
@@ -770,6 +773,7 @@ const TrackDesigner = (function () {
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
     ui.hint.textContent = ui.toolHint.textContent = toolHint();
     syncProfile();
+    if (ui.testHere) ui.testHere.setAttribute("aria-disabled", sel >= 0 ? "false" : "true");
   }
   // ── FIX: TrackFixes (the editor fixes module) repairs what it can; each is one UNDO entry ──
   const fixer = () => (typeof TrackFixes !== "undefined" && TrackFixes ? TrackFixes : null);
@@ -916,6 +920,7 @@ const TrackDesigner = (function () {
       if (first) first.focus();
     });
     schedulePreview();
+    if (opts && opts.resume) resume(opts.resume);
     return true;
   }
   function close() {
@@ -945,6 +950,7 @@ const TrackDesigner = (function () {
       lastCode,
       corners: ins.map((c) => ({ n: c.n, dir: c.dir, angDeg: Math.round(c.angDeg), R: Math.round(c.R), kmh: Math.round(c.vApex * 3.6), lenM: Math.round(c.lenM), i0: c.i0, i1: c.i1, fit: c.fit ? copy(c.fit) : null })),
       heat: heatOn,
+      candidates: cands.map((c) => ({ seed: c.seed >>> 0, score: +c.score.toFixed(3) })),
     };
   }
 
@@ -966,7 +972,8 @@ const TrackDesigner = (function () {
     ui.heat = btn("SPEED", "sel-chip", () => toggleHeat());
     ui.heat.setAttribute("aria-pressed", "false");
     ui.heat.setAttribute("aria-label", "Speed map: colour the road slow (yellow) to fast (purple)");
-    actions.appendChild(ui.heat);
+    // SPEED sits before TEST HERE (#766 appends that chip last; the doc reads "… FIT VIEW · SPEED · TEST HERE").
+    actions.insertBefore(ui.heat, ui.testHere && ui.testHere.parentNode === actions ? ui.testHere : null);
     ui.from = el("div", "td-grid"); ui.from.hidden = true; ui.from.setAttribute("aria-label", "Start from a real circuit");
     circuit.appendChild(ui.from);
     const turns = group("TURNS");
@@ -1178,8 +1185,307 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO,
+  // ── DESIGNED RANDOMISE: FAST / TECHNICAL / MIXED, USE, MORE LIKE THIS ──
+  // cands: the cards on show ({ seed, pts, score, feats, tr, stats }, best
+  // first); candJob: the run in flight (a newer press drops an older one).
+  const DESIGN_N = 16, DESIGN_SLICES = 4, DESIGN_STYLES = ["FAST", "TECHNICAL", "MIXED"];
+  let cands = [], candStyle = null, candJob = 0, candThumbJob = 0, candBusy = false;
+  /** Under the RANDOMISE row's group: [FAST][TECHNICAL][MIXED] and the candidate cards. */
+  function buildDesigned(circuit) {
+    ui.styleRow = el("div", "td-chips");
+    ui.styles = {};
+    for (const st of DESIGN_STYLES) {
+      const b = btn(st, "sel-chip", () => designed(st));
+      b.setAttribute("aria-pressed", "false");
+      b.setAttribute("aria-label", st + ": design " + DESIGN_N + " circuits and show the best four");
+      ui.styles[st] = b; ui.styleRow.appendChild(b);
+    }
+    ui.cands = el("div", "td-grid"); ui.cands.hidden = true; ui.cands.setAttribute("aria-label", "Designed circuits, best first");
+    circuit.append(ui.styleRow, ui.cands);
+  }
+  function setDesignBusy(on) {
+    candBusy = on;
+    if (ui.cands) { if (on) ui.cands.setAttribute("aria-busy", "true"); else ui.cands.removeAttribute("aria-busy"); }
+    if (ui.styles) for (const st of DESIGN_STYLES) ui.styles[st].disabled = on;
+  }
+  /** `slices` synchronous steps, each on its own timer (the first after 30 ms so
+   *  the busy state paints), then done() → the Promise's value. A newer run
+   *  supersedes this one (false). */
+  function runSliced(text, slices, work, done) {
+    const job = ++candJob;
+    setDesignBusy(true); message(text);
+    return new Promise((resolve) => {
+      let k = 0;
+      const step = () => {
+        if (job !== candJob) { resolve(false); return; }
+        try { work(k); } catch (e) {
+          Log.warn("track", "designed randomise failed: " + (e && e.message || e));
+          setDesignBusy(false); message("Could not design circuits — RANDOMISE instead", true); resolve(false); return;
+        }
+        if (++k < slices) { setTimeout(step, 0); return; }
+        setDesignBusy(false);
+        resolve(done());
+      };
+      setTimeout(step, 30);
+    });
+  }
+  /** FAST / TECHNICAL / MIXED: DESIGN_N seeds (from `seed`, default the design's
+   *  own) validated, scored for the style, the best four as cards. Promise<bool>. */
+  function designed(style, seed) {
+    const I = insight();
+    if (!I || !I.rate || !TrackRandom.designOne || !TrackRandom.STYLES[style] || !design) return Promise.resolve(false);
+    const s0 = design.seed >>> 0;
+    const baseSeed = Number.isFinite(seed) ? seed >>> 0 : (Math.imul(s0 ^ (s0 >>> 13), 0x2c1b3c6d) + 0x6a09e667) >>> 0;
+    candStyle = style;
+    for (const st of DESIGN_STYLES) { const on = st === style; ui.styles[st].setAttribute("aria-pressed", on ? "true" : "false"); ui.styles[st].classList.toggle("active", on); }
+    const opts = { tries: 3, base: Object.assign({}, design), check: TrackValidate.check, score: I.rate };
+    const per = Math.ceil(DESIGN_N / DESIGN_SLICES), found = [];
+    return runSliced("Designing " + DESIGN_N + " circuits…", DESIGN_SLICES, (k) => {
+      for (let i = k * per; i < Math.min(DESIGN_N, (k + 1) * per); i++) found.push(TrackRandom.designOne(baseSeed, i, style, opts));
+    }, () => {
+      cands = TrackRandom.rank(found, 4);
+      renderCandidates();
+      message(cands.length ? style + ": the best " + cands.length + " of " + DESIGN_N + " — USE one, or MORE LIKE THIS" : "No clean " + style + " circuit in " + DESIGN_N + " seeds — press it again", !cands.length);
+      return cands.length > 0;
+    });
+  }
+  /** USE: the card's circuit becomes the design (one UNDO entry; SAVE adds a new circuit). */
+  function useCandidate(i) {
+    const c = cands[i];
+    if (!c || candBusy || !design) return false;
+    sel = -1; span = -1;
+    commit(Object.assign({}, design, { pts: c.pts.map((p) => [p[0], p[1]]), seed: c.seed >>> 0, originId: undefined }), "randomise");
+    if (cv) cv.fit();
+    message("Design " + (i + 1) + " loaded — seed " + (c.seed >>> 0) + ", UNDO to go back");
+    return true;
+  }
+  /** MORE LIKE THIS: four nudges of the card's loop (TrackRandom.mutate, seeds
+   *  Hash32.mix(seed + j)), validated, re-scored for the style, as the new cards. */
+  function moreLikeThis(i) {
+    const c = cands[i], I = insight();
+    if (!c || candBusy || !I || !TrackRandom.mutate || !design) return Promise.resolve(false);
+    const style = candStyle || "MIXED", base = Object.assign({}, design), found = [];
+    return runSliced("Designing 4 circuits like design " + (i + 1) + "…", 4, (j) => {
+      const seed = Hash32.mix((c.seed + j) >>> 0);
+      const m = TrackRandom.mutate(c.pts, seed, { check: (pts) => TrackValidate.check(Object.assign({}, base, { pts })) });
+      if (!m.ok || !m.verdict) return;
+      const r = I.rate(m.verdict, style);
+      found.push({ seed, pts: m.pts, score: r.score, feats: r.feats, tr: m.verdict.tr, stats: m.verdict.stats });
+    }, () => {
+      if (!found.length) { message("No clean variant of design " + (i + 1) + " — try another card", true); return false; }
+      cands = TrackRandom.rank(found, 4);
+      renderCandidates();
+      message(cands.length + " circuits like design " + (i + 1) + " — USE one, or MORE LIKE THIS again");
+      return true;
+    });
+  }
+  const candMeta = (c) => {
+    const km = c.tr ? c.tr.total / 1000 : 0, corners = c.feats ? Math.round(c.feats.C * km) : (c.stats ? c.stats.turns : 0);
+    return km.toFixed(1) + " km · " + corners + " corners · " + ((c.stats && c.stats.passZones) || 0) + " passing";
+  };
+  /** The cards: outline (one per frame, DesignerCanvas.thumb over the verdict's own tr), meta, USE, MORE LIKE THIS. */
+  function renderCandidates() {
+    if (!ui.cands) return;
+    while (ui.cands.firstChild) ui.cands.removeChild(ui.cands.firstChild);
+    ui.cands.hidden = !cands.length;
+    const job = ++candThumbJob, queue = [];
+    cands.forEach((c, i) => {
+      const card = el("div", "td-card");
+      const cvs = el("canvas"); cvs.width = 160; cvs.height = 110; cvs.setAttribute("aria-hidden", "true");
+      const row = el("div", "td-chips");
+      const use = btn("USE", "sel-chip", () => useCandidate(i));
+      use.setAttribute("aria-label", "Use design " + (i + 1) + ": " + candMeta(c));
+      const more = btn("MORE LIKE THIS", "sel-chip", () => moreLikeThis(i));
+      more.setAttribute("aria-label", "More like this: four variants of design " + (i + 1));
+      row.append(use, more);
+      card.append(cvs, el("div", "td-card-meta", candMeta(c)), row);
+      ui.cands.appendChild(card);
+      queue.push([cvs, c.tr]);
+    });
+    const next = () => {
+      if (job !== candThumbJob || !queue.length) return;
+      const [cvs, tr] = queue.shift();
+      try { DesignerCanvas.thumb(cvs, tr, { color: "#f6f6f9", width: 2 }); } catch (e) { Log.warn("track", "designed thumbnail failed: " + (e && e.message)); }
+      requestAnimationFrame(next);
+    };
+    requestAnimationFrame(next);
+  }
+
+  // ── files, the share card, the test drive ─────────────────────────────────
+  /** "apex26-track-<name>": the stem EXPORT and CARD name their files with. */
+  const fileStem = () => "apex26-track-" + (design && design.name || "circuit").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  /** A blob onto the player's device: the native share sheet where the app
+   *  shell has one (NativeDownload), else an <a download>. Throws what they throw. */
+  async function saveFile(blob, name) {
+    if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable() && NativeDownload.saveBlob) { await NativeDownload.saveBlob(blob, name); return true; }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    return true;
+  }
+  /** canvas → PNG blob (js/ui/photo-studio.js keeps its own copy private). */
+  function blobOf(c) {
+    return new Promise((resolve, reject) => {
+      try { c.toBlob((b) => (b ? resolve(b) : reject(new Error("The image could not be encoded"))), "image/png"); } catch (e) { reject(e); }
+    });
+  }
+  const CARD_W = 640, CARD_H = 360;
+  /** The built centreline fitted into rect {x, y, w, h}, z down the card as on
+   *  the designer's canvas, with a casing and a start-line dot. */
+  function strokeOutline(g, tr, rect, color) {
+    const n = tr.n, px = tr.px, pz = tr.pz;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (let k = 0; k < n; k++) { x0 = Math.min(x0, px[k]); x1 = Math.max(x1, px[k]); z0 = Math.min(z0, pz[k]); z1 = Math.max(z1, pz[k]); }
+    const sc = Math.min(rect.w / Math.max(1, x1 - x0), rect.h / Math.max(1, z1 - z0));
+    const ox = rect.x + (rect.w - (x1 - x0) * sc) / 2 - x0 * sc, oz = rect.y + (rect.h - (z1 - z0) * sc) / 2 - z0 * sc;
+    const step = Math.max(1, Math.floor(n / 600));
+    g.beginPath();
+    for (let k = 0; k < n; k += step) { const X = ox + px[k] * sc, Y = oz + pz[k] * sc; if (k) g.lineTo(X, Y); else g.moveTo(X, Y); }
+    g.closePath();
+    g.lineJoin = "round"; g.lineCap = "round";
+    g.strokeStyle = "rgba(0,0,0,0.55)"; g.lineWidth = 9; g.stroke();
+    g.strokeStyle = color; g.lineWidth = 5; g.stroke();
+    g.fillStyle = DesignerCanvas.COL.start; g.beginPath(); g.arc(ox + px[0] * sc, oz + pz[0] * sc, 6, 0, Math.PI * 2); g.fill();
+  }
+  /** Greedy character wrap (a URL has no spaces to break on) to lines ≤ w px. */
+  function wrapChars(g, s, w) {
+    const width = (t) => { const m = g.measureText(t); return m && m.width > 0 ? m.width : t.length * 6.6; };
+    const lines = []; let cur = "";
+    for (const ch of s) { if (cur && width(cur + ch) > w) { lines.push(cur); cur = ""; } cur += ch; }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  /** The 640×360 track card: the outline in the left 360², name, facts, theme,
+   *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
+  async function cardCanvas() {
+    if (previewT || !verdict) runPreview();
+    if (!verdict || !verdict.ok || !verdict.tr) { message("Fix the red issues before sharing", true); return null; }
+    const code = await shareCode();
+    if (!code) { message("This design cannot be encoded", true); return null; }
+    const url = TrackCodec.shareUrl(code), tr = verdict.tr, st = verdict.stats || {}, COL = DesignerCanvas.COL;
+    const c = document.createElement("canvas"); c.width = CARD_W; c.height = CARD_H;
+    const g = c.getContext("2d");
+    if (!g) { message("This browser cannot draw the card", true); return null; }
+    g.fillStyle = "#000"; g.fillRect(0, 0, CARD_W, CARD_H);   // opaque under the translucent chip ink
+    g.fillStyle = COL.chipBg; g.fillRect(0, 0, CARD_W, CARD_H);
+    let ink = COL.handle;
+    try { ink = (TrackMaps.themeColor && TrackMaps.themeColor(verdict.def)) || ink; } catch (_) { ink = COL.handle; }
+    strokeOutline(g, tr, { x: 28, y: 28, w: 304, h: 304 }, ink);
+    const X = 376, W = CARD_W - X - 24, T = TrackThemes.get(design.theme);
+    g.textBaseline = "top";
+    g.fillStyle = COL.chipText; g.font = "bold 24px system-ui, sans-serif"; g.fillText(design.name, X, 40, W);
+    g.fillStyle = COL.text; g.font = "14px system-ui, sans-serif";
+    g.fillText(fmtKm(tr.total) + " · " + (st.turns != null ? st.turns : (verdict.turns || []).length) + " corners · est lap " + fmtLap(st.estLapS), X, 80, W);
+    g.fillText((T && T.label) || design.theme, X, 102, W);
+    g.fillStyle = COL.sel; g.font = "bold 12px system-ui, sans-serif"; g.fillText("APEX 26 · TRACK DESIGNER", X, 140, W);
+    g.fillStyle = COL.text; g.font = "11px ui-monospace, monospace";
+    let lines = wrapChars(g, url, W);
+    if (lines.length > 3) {
+      const at = url.indexOf("#track="), origin = (url.match(/^[a-z]+:\/\/[^/#?]+/i) || [""])[0];
+      lines = wrapChars(g, origin + "…#track=" + url.slice(at + 7, at + 27), W).slice(0, 3);
+    }
+    lines.forEach((l, k) => g.fillText(l, X, CARD_H - 24 - (lines.length - k) * 15));
+    return { canvas: c, url, name: fileStem() + "-card.png" };
+  }
+  /** CARD: the OS share sheet with the PNG and the full link where the browser
+   *  can share files (canShare({files})), else the file is saved. A dismissed
+   *  sheet (AbortError) is the player's choice — no fallback, no message. */
+  async function shareCard() {
+    const card = await cardCanvas();
+    if (!card) return false;
+    let blob = null;
+    try { blob = await blobOf(card.canvas); } catch (e) { message("Could not draw the card: " + (e && e.message || e), true); return false; }
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    const file = typeof File === "function" ? new File([blob], card.name, { type: "image/png" }) : null;
+    if (file && nav && typeof nav.share === "function" && nav.canShare && nav.canShare({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: design.name, text: card.url });
+        message("Card shared"); Log.info("track", "designer card shared");
+        return true;
+      } catch (e) {
+        if (e && e.name === "AbortError") return false;
+        Log.info("track", "designer card share refused (" + (e && e.name || e) + ") — saving it instead");
+      }
+    }
+    try { await saveFile(blob, card.name); message("Card saved as " + card.name); return true; } catch (e) { message("Could not save the card: " + (e && e.message || e), true); return false; }
+  }
+  /** Arc s (m) of the preview build's node nearest control point i, or -1. */
+  function builtS(i) {
+    const tr = verdict && verdict.tr, p = design && design.pts[i];
+    if (!tr || !tr.n || !p) return -1;
+    let k = 0, best = Infinity;
+    for (let j = 0; j < tr.n; j++) { const d = (tr.px[j] - p[0]) * (tr.px[j] - p[0]) + (tr.pz[j] - p[1]) * (tr.pz[j] - p[1]); if (d < best) { best = d; k = j; } }
+    return k * tr.total / tr.n;
+  }
+  /** The player at rest at arc s — the fields __apex.jump (js/agent/apex.js)
+   *  and launchFlyingLap (js/game.js) write for a teleport and a standing lap:
+   *  track and world pose, cleared transients and teleport accumulators, seeded
+   *  render anchors. prog = s − total makes it an OUT-LAP: the first line
+   *  crossing starts the timed lap, so no partial lap reaches the TT board. */
+  function placeAt(p, track, s) {
+    const L = track.total, smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 0 };
+    s = ((s % L) + L) % L;
+    Tracks.sample(track, s, smp);
+    p.prog = s - L; p.s = p._prevS = s;
+    p.x = p.xVis = 0;                                    // on the centreline
+    p.px = smp.p[0]; p.pz = smp.p[2];
+    p.head = Math.atan2(smp.t[0], smp.t[2]);
+    p.speed = 0;                                         // a standing start: no raw m/s against PACE
+    p.vLat = 0; p.yawRateCur = 0; p.yawVis = 0; p.steerVis = 0;
+    p.rescueT = 0; p.wallT = 0; p.wasOnWall = false; p.wrongT = 0; p.wrongWay = false; p.offT = 0;
+    p.rPrevPx = p.px; p.rPrevPz = p.pz; p.rPrevS = p.s; p.rPrevX = p.x; p.rPrevHead = p.head; p.rPrevYawVis = 0;
+    return s;
+  }
+  /** TEST HERE: save, then a TIME TRIAL (startRaceBody clears practiceMode, so
+   *  a time trial is the unscored session that survives it) with the car at
+   *  rest on point i — the selected one by default — and green at once.
+   *  CustomTracks holds the way back; quitToMenu's consumeTrackHash() takes it. */
+  async function testHere(i) {
+    const at = Number.isInteger(i) ? i : sel;
+    if (!design || !(at >= 0 && at < design.pts.length)) { message("Select a point to test drive from", true); return false; }
+    const r = save(true);
+    if (!r.ok) return false;
+    const idx = custom.select(r.id);
+    if (idx < 0) { message("That circuit is not in the list any more", true); return false; }
+    sel = at;
+    const s = builtS(at), back = { id: r.id, sel: at, span, s };
+    if (custom.armReturn) custom.armReturn(back);
+    G.trackIdx = idx; G.seasonMode = false; G.timeTrial = true;   // openTimeTrial's flow + session
+    close();
+    Log.info("track", "designer test drive on " + r.id + " from point " + (at + 1) + " (s " + Math.round(s) + " m)");
+    try { await G.startRace(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
+    if (G.state === "count" && G.player && G.track && s >= 0) {
+      placeAt(G.player, G.track, s);
+      if (G.snapGameCam) G.snapGameCam();
+      if (G.refreshHud) G.refreshHud(true);
+      if (G.goRolling()) return true;
+    }
+    // Never a frozen race: out through the pause menu's own quit (quitToMenu),
+    // whose consumeTrackHash() hands the screen back with the reason. A start
+    // that already failed back to the menu (startRace's onFail quits) is
+    // reopened directly; a second open() is harmless and says why.
+    if (custom.armReturn) custom.armReturn(Object.assign({}, back, { msg: "The test drive could not start — try TIME TRIAL" }));
+    if (G.state === "menu") { if (custom.consumeTrackHash) custom.consumeTrackHash(); } else if (G.quitToMenu) G.quitToMenu();
+    return false;
+  }
+  /** Back from TEST HERE (open({resume})): the same design reselects the point
+   *  the drive left from and brings it into view. */
+  function resume(r) {
+    if (!r || !design || design.originId !== r.id) return false;
+    const N = design.pts.length;
+    sel = Number.isInteger(r.sel) && r.sel < N ? r.sel : -1;
+    span = Number.isInteger(r.span) && r.span < N ? r.span : -1;
+    if (cv) cv.setSelection(sel, span);
+    refreshControls();
+    // After open()'s own resize + fit: animation frames run in request order.
+    if (Number.isFinite(r.s) && r.s >= 0) requestAnimationFrame(() => { if (openFlag && cv) cv.focusAt(r.s); });
+    message(r.msg || "Back from the test drive", !!r.msg);
+    return true;
+  }
+
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
+    designed, useCandidate, moreLikeThis,
     addBump, setBump, removeBump, selectBump };
 })();
 Object.freeze(TrackDesigner);

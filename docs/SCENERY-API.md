@@ -1189,3 +1189,11 @@ Use one isolated track-scoped change at a time.
 - Day/night driver-eye and orbit captures.
 - `__apex.geometryDiagnostics()` contains only `ok:true` entries.
 - No non-finite geometry, unintended road intrusion, floating/sunk hero model, incomplete required model, or unsafe overhead span.
+
+The shared venue pass places up to six small race-day facilities on clear, level terrain after bespoke scenery and before foliage: a marshal shelter, recovery pickup, concession booth, service awning, medical response van and spectator shade with seating. It uses atomic model groups and reserves their footprints without changing driving limits. Circuit dressing exclusions can target `venue` or `all`; the public scenery API remains unchanged.
+
+Shared spectator-hill treads fit the spacing of the offset verge on bends. Narrow upper treads without a lower row receive a small ground-reaching pier within their footprint. Fence posts extend to rendered terrain or the underlying floor while their panels and tops retain the authored line. Broadleaf recipes check their complete trunk, branch, skirt and crown footprints before emission and try up to eight nearby outward sites while preserving their authored shape seeds. Relocated broadleaves also clear existing tree geometry, and later authored trees yield to those relocations. Palm assemblies check their emitted footprints against reserved scenery masses and try nearby clear sites before suppression. Relocations also yield to existing palms and require foliage vertices above known rendered terrain. Bush forms emit foliage material and restore the caller’s material.
+
+Motorhomes and broadcast compounds reserve a horizontal rectangle around their newly emitted vertices, including overhangs and tilted dish/mast geometry. These reservations only inform scenery placement and do not change driving boundaries. Rejected bodies leave no reservation.
+
+Silverstone camping pitches sample their own terrain; camper bodies clear the field surface and rest on small tyres. National flag sleeves meet their masts. Donington’s Collection hall rooftop plant has a curb joining it to the retained roof, Nurburgring scaffold rails have rear uprights reaching terrain, and Jerez scrub retries outward beyond the Dry Sack bank’s full footprint.

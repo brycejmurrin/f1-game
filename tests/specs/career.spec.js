@@ -1695,10 +1695,12 @@ test.describe("Career — slots", () => {
 
   test("deleting one leaves the other five", async ({ page }) => {
     await fourCareers(page);
-    const after = await page.evaluate(() => ({
-      used: window.__apex.careerSlotDelete("myteam", 0).map((s) => s.used),
-      live: window.__apex.career(),
-    }));
+    const after = await page.evaluate(() => {
+      // careerSlotDelete → {ok, durable, reason, slots} (docs/DEBUG-HOOKS.md)
+      const r = window.__apex.careerSlotDelete("myteam", 0);
+      return { ok: r.ok, used: (r.slots || []).map((s) => s.used), live: window.__apex.career() };
+    });
+    expect(after.ok).toBe(true);
     expect(after.used).toEqual([true, true, false, false, true, false]);
     expect(after.live).not.toBeNull();   // something is still live to continue
   });
