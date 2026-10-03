@@ -151,11 +151,13 @@ on:
     # longer runs on push — it is a release train (three ticks an hour) that
     # calls this workflow for the FULL gate on the tip. A push to the deploy
     # branch gets the FAST tier here instead: guards, node suites, the parts
-    # census, driving-model and the change-aware selection. Each ship push
-    # keys its own concurrency group on github.sha so a later merge never
-    # cancels an earlier one (Bryce 2026-10: every merge finishes its own
-    # run). Trade-off: merge bursts cost more runner minutes and queue longer
-    # against ~20 slots. The train is a different group (pages.yml's unique
+    # census, driving-model and the change-aware selection. Ship pushes share
+    # ONE group, `ship-fast`, with no cancel (2026-10-03, Bryce): the run in
+    # progress always finishes and only the NEWEST waiting push stays queued
+    # behind it, so a merge burst costs one fast tier at a time instead of one
+    # per merge (30 merges in 90 min queued ~750 jobs on 40 slots and held the
+    # site 30 PRs behind). The skipped middle commits are tested by the next
+    # run, which contains them. The train is a different group (pages.yml's unique
     # concurrency_key) and is never cancelled by a later push. The browser
     # smoke shards, the geometry sweeps and the renderer jobs are the train's
     # (and ready PRs'). The tier is decided by ONE expression,
@@ -321,13 +323,17 @@ concurrency:
   # is queued behind exactly that. Run 2758 (2026-09-08) ended `cancelled` at
   # 20 min with no job over its cap and nothing failing, which is the shape
   # this produces.
-  # A push to the DEPLOY branch (the fast tier) keys on github.sha so each
-  # merge finishes its own run. Shared `ship-push` + cancel used to newest-
-  # win through merge bursts; that hid reds on superseded tips. Dispatch and
+  # A push to the DEPLOY branch (the fast tier) joins the shared `ship-fast`
+  # group with NO cancel (2026-10-03): a running fast tier always finishes
+  # (the old `ship-push` + cancel killed runs mid-way and hid their reds), and
+  # GitHub's one-pending-run-per-group rule keeps only the newest waiting push
+  # (https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+  # Keying each push on github.sha ran one fast tier PER MERGE and clogged the
+  # queue in bursts (docs/notes/CI-MERGE-BURST-2026-10-03.md). Dispatch and
   # schedule still get a unique run_id group. The run that is DEPLOYING is
   # not in this group: pages.yml always passes a unique concurrency_key, and
   # its own `pages-gate-*` group has cancel-in-progress false.
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.sha) || github.event.pull_request.head.ref || github.ref_name }}
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && 'ship-fast') || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -2341,22 +2347,33 @@ jobs:
       actions: write
       contents: read
     steps:
-      # ONLY THE TIP POKES (2026-09-29). A burst of merges gave 57 train
-      # dispatches in 41 h (14 in one hour), 22 of them cancelled while
-      # waiting (docs/notes/CI-CAPACITY-2026-09-29.md). A train gates the TIP,
-      # not this commit, so a poke from a commit that is no longer the tip buys
-      # a gate the newer push's own fast tier will ask for anyway. If that
-      # newer run goes red it pokes nothing, and pages.yml's cron backstop
-      # still gates the tip. Any doubt (API error, empty answer) pokes.
-      - name: Is this commit still the tip?
+      # THE TIP POKES — AND SO DOES A SUPERSEDED GREEN RUN WHEN NO TRAIN IS
+      # MOVING (2026-10-03). Only-the-tip (2026-09-29) stopped a burst from
+      # dispatching 57 trains in 41 h (docs/notes/CI-CAPACITY-2026-09-29.md),
+      # but in a burst every run finished after the next merge landed, so
+      # NOTHING poked until the burst ended and the site sat 30 merges behind
+      # (docs/notes/CI-MERGE-BURST-2026-10-03.md). A dispatched train gates the
+      # branch TIP, so a poke from a superseded commit still ships everything
+      # merged so far; it is limited to "no pages.yml run is queued or running
+      # on this branch", which keeps it to one train at a time. Any doubt (API
+      # error, empty answer) pokes, as before.
+      - name: Is this commit still the tip, or is no train moving?
         id: tip
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TIP=$(gh api "repos/$GITHUB_REPOSITORY/branches/$GITHUB_REF_NAME" --jq .commit.sha 2>/dev/null || true)
           if [ -n "$TIP" ] && [ "$TIP" != "$GITHUB_SHA" ]; then
-            echo "poke=false" >> "$GITHUB_OUTPUT"
-            echo "NOT POKING: the tip moved to $TIP; its own fast tier pokes the train" | tee -a "$GITHUB_STEP_SUMMARY"
+            # Runs not yet completed (queued, waiting, pending, requested, in_progress).
+            ACTIVE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs?branch=$GITHUB_REF_NAME&per_page=20" \
+              --jq '[.workflow_runs[] | select(.status != "completed")] | length' 2>/dev/null || true)
+            if [ "$ACTIVE" = "0" ] || [ -z "$ACTIVE" ]; then
+              echo "poke=true" >> "$GITHUB_OUTPUT"
+              echo "POKING from a superseded commit: the tip moved to $TIP and no train is queued or running, so the train gates $TIP now" | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "poke=false" >> "$GITHUB_OUTPUT"
+              echo "NOT POKING: the tip moved to $TIP and $ACTIVE train run(s) are already queued or running" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
           else
             echo "poke=true" >> "$GITHUB_OUTPUT"
           fi

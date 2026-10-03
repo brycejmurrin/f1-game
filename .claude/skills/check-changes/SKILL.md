@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang or a `--wait` that exited 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward.
+description: "Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang or a `--wait` that exited 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
 ---
 
 # Validate changes before committing/pushing
@@ -68,7 +68,11 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
 
 `sync-pr.mjs <branch>` verifies on a temp branch and **checks it out**. Without
 `--push` it pushes nothing and returns with `HEAD` on `sync-pr-<branch>`. Its
-last line says so; the trap is that everything looks finished.
+last line says so; the trap is that everything looks finished. An existing
+temp branch is preserved and a fresh sync refuses. Do not rerun `--push` on an
+existing result: use the printed manual push command after reviewing it, or
+inspect/rename the branch before a fresh sync. `--plan` reads cached refs only;
+`conflicts:null`/`conflictsChecked:false` means conflicts were not checked.
 
 ```sh
 node tools/ci/sync-pr.mjs <branch>              # verifies, leaves HEAD on sync-pr-<branch>

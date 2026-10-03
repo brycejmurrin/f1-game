@@ -16,7 +16,7 @@ export const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 export const plain = (o) => JSON.parse(JSON.stringify(o));
 
 export const BOOT_FILES = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/custom-tracks.js"];
-export const EDITOR_FILES = ["js/editor/shape.js", "js/editor/stamps.js", "js/editor/randomise.js", "js/editor/validate.js", "js/editor/codec.js"];
+export const EDITOR_FILES = ["js/editor/shape.js", "js/editor/stamps.js", "js/editor/randomise.js", "js/editor/validate.js", "js/editor/insight.js", "js/editor/codec.js"];
 
 /** The engine + registry + editor over a store seeded with `stored` (short keys). */
 export function bootEditor(stored = {}) {

@@ -282,12 +282,18 @@ export async function waitGameVisible(page, timeout = 30000) {
  * Wait for a NEW software present WHILE THE LOOP STILL RUNS.
  * GLX/TLX present() drives the overlay; headless(true) skips render/present,
  * so a freeze-then-wait can never observe gen > start and times out.
+ *
+ * Resolves true when a new frame presented, false when the wait timed out,
+ * null when the page has no soft present (a real GPU composites for itself).
+ * It never throws, so a caller that ignores the result reads whatever was
+ * blitted LAST: shot.mjs saved the menu's garage scene, or an empty canvas,
+ * as a monza frame because the first TLX present after a camera move took
+ * 17.6 s against this 8 s default (2026-10-02). Check it when that matters.
  */
 export async function awaitPresentedFrame(page, timeoutMs = 8000) {
-  await page.evaluate(async (ms) => {
-    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
-      try { await GLX.awaitSoftPresent(ms); } catch (_) {}
-    }
+  return page.evaluate(async (ms) => {
+    if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) return null;
+    try { await GLX.awaitSoftPresent(ms); return true; } catch (_) { return false; }
   }, timeoutMs);
 }
 
@@ -419,6 +425,7 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
   };
   const session = await page.context().newCDPSession(page);
   let buf;
+  let timeoutHandle;
   try {
     const params = { format, clip, captureBeyondViewport: false };
     if (format === "jpeg" && opts.quality != null) params.quality = opts.quality;
@@ -429,13 +436,14 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
       const budget = opts.timeout;
       buf = await Promise.race([
         capture,
-        new Promise((_, rej) => setTimeout(() => rej(new Error(
-          `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget)),
+        new Promise((_, rej) => { timeoutHandle = setTimeout(() => rej(new Error(
+          `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget); }),
       ]);
     } else {
       buf = await capture;
     }
   } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     try { await session.detach(); } catch (_) { /* already closed */ }
   }
   if (opts.path) writeFileSync(opts.path, buf);
@@ -464,7 +472,7 @@ export async function screenshotGameCanvas(page, outPath, opts = {}) {
   await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
   try {
     const shot = await screenshotPresentedCanvas(page, {
-      path: outPath, skipAwait: true, forceCdp: true, timeout: 60000,
+      path: outPath, skipAwait: true, forceCdp: true, timeout: opts.timeout ?? 60000,
     });
     return { bytes: shot.bytes, clip: shot.clip, via: shot.via || shot.id || "cdp" };
   } finally {

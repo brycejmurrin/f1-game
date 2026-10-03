@@ -229,6 +229,56 @@ test.describe("HUD rear-view mirror", () => {
         } catch (_) {}
       });
     });
+    test("TLX prepares an enabled mirror before the countdown advances and reuses its target in the race", async ({ page }) => {
+      await page.addInitScript(() => localStorage.setItem("apex26.hudMirror", '"on"'));
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      const prepared = await page.evaluate(async () => {
+        const a = window.__apex;
+        // Pin both levers before preparation so the first race frame asks for
+        // the same target size. renderScale alone does not hold mirror quality.
+        a.renderScale(0.5);
+        a.govHold(true);
+        await a.race("redbull", "day", "dry", { laps: 3 });
+        a.freeze(true);   // freeze count in this same microtask, before another RAF
+        return {
+          state: a.info().state, m: a.mirror(),
+          frameHidden: document.getElementById("hud-mirror").hidden,
+          cls: document.body.classList.contains("hud-mirror-on"),
+          backend: GLX.backend,
+        };
+      });
+      const pd = JSON.stringify(prepared);
+      expect(prepared.backend, pd).toBe("three");
+      expect(prepared.state, pd).toBe("count");
+      expect(prepared.m.mode, pd).toBe("on");
+      expect(prepared.m.cam, pd).toBe("cockpit");
+      expect(prepared.m.preparing, pd).toBe(false);
+      expect(prepared.m.prepared, pd).toBe(true);
+      expect(prepared.m.shown, pd).toBe(false);
+      expect(prepared.frameHidden, pd).toBe(true);
+      expect(prepared.cls, pd).toBe(false);
+      expect(prepared.m.backend.ready, pd).toBe(true);
+      expect(prepared.m.backend.dead, pd).toBe(false);
+      expect(prepared.m.backend.renders, pd).toBeGreaterThan(0);
+      expect(prepared.m.backend.w, pd).toBeGreaterThanOrEqual(16);
+      expect(prepared.m.backend.h, pd).toBeGreaterThanOrEqual(8);
+      expect(prepared.m.backend.rect, pd).toBeNull();
+      expect(prepared.m.backend.composites, pd).toBe(0);
+
+      await page.evaluate(() => { window.__apex.go(); window.__apex.freeze(true); });
+      await page.waitForFunction((renders) => {
+        const m = window.__apex.mirror();
+        return m.shown && m.backend && m.backend.renders > renders && m.backend.composites > 0;
+      }, prepared.m.backend.renders, { polling: 100, timeout: FRAME_MS });
+      const visible = await page.evaluate(() => ({ state: window.__apex.info().state, m: window.__apex.mirror() }));
+      const vd = JSON.stringify(visible);
+      expect(visible.state, vd).toBe("race");
+      expect(visible.m.quality, vd).toBe(prepared.m.quality);
+      expect([visible.m.backend.w, visible.m.backend.h], vd).toEqual([prepared.m.backend.w, prepared.m.backend.h]);
+      expect(visible.m.backend.rect, vd).toEqual(visible.m.rect);
+      expect(visible.m.backend.dead, vd).toBe(false);
+    });
     test("TLX renders the mirror pass, composites it into #hud-mirror, and the key turns it off", async ({ page }) => {
       await mirrorRace(page);
       await mirrorCase(page);

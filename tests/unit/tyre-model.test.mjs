@@ -909,3 +909,27 @@ test("info() reports trackTemp above ambient in the dry", () => {
   const info = s.info(c);
   assert.ok(info.trackTemp > info.ambient, `${info.trackTemp} vs ambient ${info.ambient}`);
 });
+
+test("belowWindow preserves info's rounding, missing-state and non-finite behavior", () => {
+  const s = ctxFor({ laps: 10 });
+  for (const level of ["off", "light", "real"]) {
+    s.setLevel(level);
+    const cars = [null, {}, { tyreTs: 60 }, { tyre: T.classRecord("medium") }];
+    for (const life of [null, undefined, 0, 0.48, 0.7414, 0.7415, 0.88, 1.05, NaN, Infinity]) {
+      const opt = +T.optTemp(life).toFixed(1);
+      for (const ts of [null, undefined, NaN, -Infinity, Infinity, -0, -40, 400,
+                        opt - T.T_WINDOW - 0.051, opt - T.T_WINDOW - 0.049,
+                        opt - T.T_WINDOW + 0.049, opt - T.T_WINDOW + 0.051]) {
+        cars.push({ tyre: { life }, tyreTs: ts });
+      }
+    }
+    for (const c of cars) {
+      const info = s.info(c);
+      const expected = info && info.tempOpt != null && info.tempS != null
+        ? Math.max(0, (info.tempOpt - info.tempWindow) - info.tempS) : 0;
+      const before = c && { ...c };
+      assert.equal(s.belowWindow(c), expected, `${level}: life=${c?.tyre?.life}, ts=${c?.tyreTs}`);
+      assert.deepEqual(c, before, "reading a cold-window deficit changed the car");
+    }
+  }
+});

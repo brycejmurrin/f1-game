@@ -33,16 +33,20 @@ function loadOpts(disk, search = "", withCams = false) {
   return { opts: ctx.CockpitOpts, cams: ctx.GameCams, store };
 }
 
-function loadMesh() {
-  const made = [], freed = [];
-  const ctx = { Log: { info() {}, warn() {}, error() {} }, GaragePrims: { block() {} } };
+function loadMesh(extra = {}) {
+  const made = [], freed = [], draws = [];
+  const ctx = { Log: { info() {}, warn() {}, error() {} }, GaragePrims: { block() {} }, ...extra };
+  ctx.window=ctx;
   vm.createContext(ctx);
+  vm.runInContext(read("js/core/mat4.js"),ctx);
+  vm.runInContext(read("js/physics/consts.js"),ctx);
   vm.runInContext(read("js/car/car-mesh.js") + "\n;this.CarMesh = CarMesh;", ctx, { filename: "car-mesh.js" });
   ctx.CarMesh.init({
     createMesh(d) { const m = { d }; made.push(m); return m; },
     freeMesh(m) { freed.push(m); },
+    draw(m,mat,opt) { draws.push({mesh:m.d,mat:[...mat],opt:{...opt}}); },
   });
-  return { CarMesh: ctx.CarMesh, made, freed };
+  return { CarMesh: ctx.CarMesh, made, freed, draws };
 }
 const LIV = { c1: [0.8, 0.1, 0.1], c2: [0.9, 0.9, 0.9], accent: [1, 0.8, 0] };
 
@@ -116,7 +120,7 @@ test("the camera eye is the chosen seat; VISOR keeps its own", () => {
 
 test("all modern wheels carry the readouts, and a change reaches listeners", () => {
   const { opts } = loadOpts({});
-  assert.deepEqual([...opts.CHOICES.wheel.values].map((w) => opts.wheelHasScreen(w)), [true, true, true, true, true, false, false, false]);
+  assert.deepEqual([...opts.CHOICES.wheel.values].map((w) => opts.wheelHasScreen(w)), [true, true, true, true, true, true, false, false]);
   const seen = [];
   opts.onWheel((name, v) => seen.push(name + ":" + v));
   opts.setWheel("round"); opts.setSeat("low");
@@ -248,7 +252,7 @@ test("both cockpit mirror lenses remain clear of their stays from every seat",()
   const end=start+mesh.parts.find(p=>p.name==='mirrors').vertices;
   const lenses=[];
   for(let v=start;v<end;v+=6){
-    if(mesh.mat[v]===Car3D.SURFACES.glass&&mesh.nrm[v*3+2]<-0.5)
+    if(mesh.mat[v]===Car3D.SURFACES.mirror&&mesh.nrm[v*3+2]<-0.5)
       lenses.push([0,1,2,5].map(i=>mesh.pos.slice((v+i)*3,(v+i)*3+3)));
   }
   assert.equal(lenses.length,2,"one driver-facing lens on each side");
@@ -256,7 +260,7 @@ test("both cockpit mirror lenses remain clear of their stays from every seat",()
     const l=opts.layout('f1',seat), eye=[0,l.eyeU,l.eyeF];
     for(const lens of lenses)for(const u of [0.05,0.25,0.5,0.75,0.95])for(const v of [0.05,0.25,0.5,0.75,0.95]){
       const target=lens[0].map((_,i)=>(1-u)*(1-v)*lens[0][i]+u*(1-v)*lens[1][i]+u*v*lens[2][i]+(1-u)*v*lens[3][i]);
-      assert.equal(firstMaterial(mesh,eye,target),Car3D.SURFACES.glass,`${team.id}/${seat}: mirror glass obscured at ${u}/${v}`);
+      assert.equal(firstMaterial(mesh,eye,target),Car3D.SURFACES.mirror,`${team.id}/${seat}: mirror glass obscured at ${u}/${v}`);
     }
   }
   }
@@ -412,4 +416,51 @@ test("the rear enclosure covers the halo mounting ends during an oblique glance"
       }
     }
   }
+});
+
+
+test("coordinated presets preserve independent choices and saved halo values",()=>{
+  const {opts,store}=loadOpts({});
+  assert.equal(opts.preset(),"custom");
+  assert.equal(opts.setPreset("modern"),"modern");
+  assert.deepEqual([opts.body(),opts.interior(),opts.wheel(),opts.seat(),opts.haloSize()],["sculpted","carbon","f1","std",4]);
+  opts.setSeat("low");assert.equal(opts.preset(),"custom");
+  assert.equal(opts.setPreset("historic"),"historic");
+  assert.deepEqual([opts.body(),opts.interior(),opts.wheel(),opts.haloSize()],["tapered","classic","round",0]);
+  assert.equal(loadOpts(Object.fromEntries(store)).opts.preset(),"historic");
+  const before=[opts.body(),opts.wheel(),opts.haloSize()];
+  opts.setPreset("custom");opts.setPreset("unknown");
+  assert.deepEqual([opts.body(),opts.wheel(),opts.haloSize()],before,"custom and invalid preset do not overwrite saved choices");
+});
+
+test("retro telemetry draws live speed, gear, battery and shift lamps without unbounded caching",()=>{
+  const {CarMesh,draws,made}=loadMesh({AppearanceOpts:{speed:n=>Math.round(n*.621371),units:()=>"mph"}});
+  const mat=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+  const c={gear:5,energy:.6,rpm:10000};
+  CarMesh.drawRetroTelemetry(mat,c,200,0);
+  assert.equal(draws.length,8,"speed, gear, battery, shift row, pedal/units and aero state");
+  assert.ok(draws.slice(0,3).every(d=>d.mat[12]<0)&&draws[3].mat[12]>0,"speed occupies the left LCD cell, gear the right");
+  const initial=draws[0].mesh, count=made.length;
+  CarMesh.drawRetroTelemetry(mat,c,200,0);assert.equal(made.length,count,"same state reuses all digit meshes");
+  const next=draws.length;
+  CarMesh.drawRetroTelemetry(mat,{...c,gear:8,energy:0},-200,0);
+  assert.notDeepEqual(draws[next].mesh,initial,"negative speed clamps to zero rather than creating an invalid digit");
+  assert.ok(draws.every(d=>d.mat.every(Number.isFinite)),"all telemetry transforms remain finite");
+  const dark=draws.length;
+  CarMesh.drawRetroTelemetry(mat,{...c,aeroX:.8,otT:1,deploying:true,throttleDemand:1},200,.2);
+  assert.equal(draws.length-dark,11,"active aero travel and overtake lamp remain available on retro");
+  assert.ok(draws.at(-1).mesh.col.some(c=>c>1),"overtake emits a functioning indicator");
+});
+
+test("pedal indicators and speed-unit legends follow live state, with a bounded cache",()=>{
+  const {CarMesh,draws,made}=loadMesh({AppearanceOpts:{units:()=>"mph"}});
+  const mat=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+  CarMesh.drawWheelExtras(mat,{throttleDemand:0,brakeDemand:0},0);const idle=draws[0].mesh;
+  CarMesh.drawWheelExtras(mat,{throttleDemand:1,brakeDemand:0},0);const throttle=draws[2].mesh;
+  CarMesh.drawWheelExtras(mat,{throttleDemand:0,brakeDemand:1},0);const brake=draws[4].mesh;
+  assert.ok(throttle.idx.length>idle.idx.length && brake.idx.length>idle.idx.length,"real pedal demand fills its bar");
+  assert.notDeepEqual(throttle.pos,brake.pos,"throttle and brake fill separate slots");
+  const count=made.length;
+  for(let i=0;i<30;i++)CarMesh.drawWheelExtras(mat,{throttleDemand:1,brakeDemand:0},i);
+  assert.equal(made.length,count,"holding a pedal never rebuilds the status mesh");
 });

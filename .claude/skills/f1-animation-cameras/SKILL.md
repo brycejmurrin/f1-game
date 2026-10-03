@@ -1,0 +1,21 @@
+---
+name: f1-animation-cameras
+description: "Builds and validates Apex 26 animation and camera changes, including garage pit-work arrivals, Flyby, Data Hub WATCH, replay seeks and camera tuners. Use when motion, framing, shot transitions or camera controls in f1-game need improvement; exclude unrelated video editing and generic websites."
+---
+
+# Animation and cameras in f1-game
+
+Start with [the local game guide](references/game.md), then trace the named
+motion or camera owner. Separate car/world state from camera interpolation;
+measure the transition that prompted the change with a deterministic fixture.
+
+`node tools/check/skill-smoke.mjs --skill f1-animation-cameras --check` exercises
+the local chase-rig contract. Replay transitions use **replay-camera**; camera
+modes and still framing use **playwright-probe** `references/cameras.md`.
+Garage mesh/ownership uses **garage-parts-livery**. The parent owns every
+browser; subagents can inspect fixture, source and recorded evidence.
+
+The local guide is usable without a hosted skill package. External host skill
+resources still require that host's callable adapter; local files do not repair
+an inaccessible connector. `doctor.mjs --json --catalog <catalog.json>` records
+which external capabilities were supplied and which remain unverified.

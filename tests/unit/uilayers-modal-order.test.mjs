@@ -1,17 +1,4 @@
-// R8 F6: WHICH DIALOG IS ON TOP IS NOT A DOM-ORDER QUESTION.
-//
-// UiLayers.top() decides which screen owns Escape, arrow keys and focus
-// containment. Every open showModal() dialog used to rank Infinity, and the
-// `>=` tie-break then handed the answer to whichever dialog came LAST IN DOM
-// ORDER — which is right only while dialogs happen to be opened in the order
-// they appear in index.html. The browser already knows the real answer: the
-// spec orders `querySelectorAll(":modal")` by TOP-LAYER position (bottom
-// first), and the top layer is a stack, so the most recently shown dialog is
-// last. top() now ranks modals by that index.
-//
-// The last test here is why the fix is safe to land without a browser run:
-// on today's index.html every opener sits before the dialog it opens, so
-// DOM order and open order agree and the change is a provable no-op.
+// Native selectors retain DOM order; actual showModal calls establish the stack.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -29,7 +16,9 @@ function fakeDom(els, modalOrder) {
   const node = (e) => ({
     id: e.id,
     hidden: !!e.hidden,
-    _modal: !!e.modal,
+    _modal: false,
+    showModal() { this._modal = true; },
+    close() { this._modal = false; },
     _z: e.z,
     children: [],
     getBoundingClientRect: () => ({ width: 800, height: 600 }),
@@ -41,7 +30,7 @@ function fakeDom(els, modalOrder) {
     window: {},
     document: {
       querySelectorAll(sel) {
-        if (sel === ":modal") return modalOrder.map((id) => byId.get(id));
+        if (sel === ":modal") return nodes.filter((n) => n._modal);
         // ALL_SEL is the layer list with :not([hidden]) — honour the hidden
         // half, since that is what keeps the query cheap mid-race.
         const ids = new Set(sel.split(",").map((s) => s.trim().replace(/^#/, "").replace(/:not\(\[hidden\]\)$/, "")));
@@ -55,7 +44,11 @@ function fakeDom(els, modalOrder) {
   context.globalThis = context;
   vm.createContext(context);
   vm.runInContext(read("js/ui/layers.js"), context);
-  return context.window.UiLayers;
+  const U = context.window.UiLayers;
+  nodes.forEach((n) => U.trackDialog(n));
+  modalOrder.forEach((id) => byId.get(id).showModal());
+  U._nodes = byId;
+  return U;
 }
 
 test("the LAST-SHOWN dialog is top, even when it comes first in the DOM", () => {
@@ -88,28 +81,6 @@ test("any modal outranks any z-index, and hidden layers never rank", () => {
 test("with no dialogs open the z-index ranking is unchanged", () => {
   const U = fakeDom([{ id: "overlay", z: 10 }, { id: "select", z: 40 }], []);
   assert.equal(U.top().id, "select");
-});
-
-test("every opener in index.html precedes the dialog it opens", () => {
-  // The edge guard behind the fix: while this holds, DOM order and top-layer
-  // order agree on the shipped markup, so F6 cannot change today's behaviour —
-  // it only removes the dependence on that coincidence. A new dialog placed
-  // above its opener fails here, which is the moment to check the change.
-  const html = read("index.html");
-  const dialogs = [...html.matchAll(/<dialog[^>]*\bid="([^"]+)"/g)];
-  assert.ok(dialogs.length > 5, `expected the dialog family — found ${dialogs.length}`);
-  for (const [, id] of dialogs) {
-    const at = html.indexOf(`id="${id}"`);
-    // An opener is any element whose markup names this dialog's id as its
-    // target (data-opens/aria-controls); openers wired only in JS are out of
-    // scope for a markup guard.
-    const re = new RegExp(`(?:data-opens|aria-controls)="${id}"`, "g");
-    for (const m of html.matchAll(re)) {
-      assert.ok(m.index < at,
-        `#${id}'s opener at ${m.index} must precede the dialog at ${at} — ` +
-        "if it cannot, top() no longer agrees with DOM order and F6's no-op argument lapses");
-    }
-  }
 });
 
 test("topmodal does not preventDefault a non-cancelable focusin (F9)", () => {
@@ -214,4 +185,14 @@ test("a close event arriving after the screen reopened does not press its door",
   dlg.open = false;
   listeners.close();
   assert.equal(clicks, 1, "a platform close of a visible screen still presses its door");
+});
+
+test("close and reopen moves a dialog above the previously latest opening", () => {
+  const U = fakeDom([{id:"pmsettings"}, {id:"teampicker"}], ["pmsettings", "teampicker"]);
+  assert.equal(U.top().id, "teampicker");
+  U._nodes.get("pmsettings").close();
+  U._nodes.get("pmsettings").showModal();
+  assert.equal(U.top().id, "pmsettings");
+  U._nodes.get("teampicker").showModal();
+  assert.equal(U.top().id, "pmsettings", "showModal on an already-modal dialog does not move it");
 });

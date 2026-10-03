@@ -11,7 +11,7 @@
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         bowlSeatWall, cameraTower, sponsorHoarding, seat, forestEdge,
-        addBox, addCyl, addCone, addPrism, addFrustum, indexSolid } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, indexSolid, groundUnder } = api;
 
       function scaffoldStand(s0, s1, side, gap, rows) {
         const TUBE = [0.62, 0.63, 0.66], DECK = [0.44, 0.45, 0.48];
@@ -36,6 +36,22 @@
           }
           // Handrail closing the top of the rake.
           const top = anchor(k, side, gap + rows * 1.9);
+          const railY = 1.2 + rows * 1.15 + 0.9;
+          // Rear scaffold uprights carry the handrail; its top row stands
+          // beyond the last bench, so foliage must not be its only support.
+          for (const off of [-seg * 0.42, seg * 0.42]) {
+            const head = vadd(vadd(top.c, top.t, off), top.u, railY);
+            let down = railY + 0.1;
+            for (let j = 0; j < 3; j++) {
+              const foot = vadd(head, top.u, -down);
+              const y = groundUnder(foot[0], foot[2]);
+              if (!Number.isFinite(y) || top.u[1] <= 0.1) break;
+              down += (foot[1] - y + 0.1) / top.u[1];
+            }
+            if (Number.isFinite(down) && down > 0)
+              addCyl(out, vadd(head, top.u, -down), 0.09, down, TUBE, 4,
+                [top.r, top.u, top.t]);
+          }
           addBox(out, vadd(top.c, top.u, 1.2 + rows * 1.15 + 0.9),
             [0.09, 0.09, seg], TUBE, [top.r, top.u, top.t]);
           i++;
