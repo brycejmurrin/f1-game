@@ -2914,6 +2914,7 @@ async function startRaceBody() {
     else { buildSelect(); els.select.hidden = false; }
     return false;
   }
+  resultsCam.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
@@ -3836,7 +3837,7 @@ titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
-  resultsCam = ResultsCam.create(G); resultsCam.attachReplay(replayBuf);
+  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -4488,7 +4489,7 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
-  Ghost.flush(); replayBuf.clear(); resultsCam.reset(); cancelIntro();
+  Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();
@@ -9161,6 +9162,7 @@ $("cs-unlimited").onclick = () => {
 };
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
+  resultsCam.reset();
   if (announcer.stop) announcer.stop();   // a read-out still waiting on the radio must not start over the hub / quali sheet
   // Career never jumps straight into the next round: the weekend is one step of a
   // longer loop, and the hub is where you spend what you just earned.
