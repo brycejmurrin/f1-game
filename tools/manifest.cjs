@@ -250,7 +250,8 @@ const FULL = [
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
-  "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A)
+  "js/physics/grip-steer.js",
+  "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
@@ -292,6 +293,7 @@ const FULL = [
   "js/race/overtake-mode.js",
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
+  "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
   "js/ui/watch-transport.js",
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
@@ -590,6 +592,7 @@ const HARD_EDGES = [
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
   ["js/physics/consts.js", "js/ui/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
   ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
+  ["js/camera/director.js", "js/game.js"],          // game.js calls Director.create(G) at eval time
   ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
@@ -681,10 +684,13 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
+  ["js/core/mat4.js", "js/physics/grip-steer.js"],       // GripSteer binds M4.clamp/lerp at eval
+  ["js/physics/grip-steer.js", "js/physics/player-forces.js"], // PlayerForces.step caps via GripSteer.forPlayer
   ["js/core/mat4.js", "js/physics/player-forces.js"],    // PlayerForces binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/player-forces.js"], // …and reads PhysicsConsts at eval
   ["js/physics/tyre-model.js", "js/physics/player-forces.js"], // lateralCurve / brakeBeta
   ["js/physics/player-forces.js", "js/game.js"],         // updateCar calls PlayerForces.create(G)
+
   ["js/core/mat4.js", "js/race/pit-lane.js"],            // PitLane binds M4.clamp at eval
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
   ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
@@ -830,12 +836,13 @@ const LAZY_EDITOR = [
   "js/editor/stamps.js",      // TrackStamps: STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND + the Dubins rejoin
   "js/editor/randomise.js",   // TrackRandom: hull + displacement + fixAngles (Maciel), seeded
   "js/editor/validate.js",    // TrackValidate: WYSIWYG rules over Tracks.buildCenterline
+  "js/editor/insight.js",     // TrackInsight: TURNS bands, speed profile, passing zones, FIA Grade 1 ambers, TRACK OF THE DAY, START FROM
   "js/editor/fixes.js",       // TrackFixes: one-click remedies for the validator's issues (start, length, spacing, smoothing, bridge, clearance)
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
   "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
-// stamps / randomise / validate / fixes / canvas destructure TrackShape at eval — the
+// stamps / randomise / validate / insight / fixes / canvas destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/designer.js")
@@ -1210,6 +1217,7 @@ const MOVED = {
   "js/game/aerozones.js": "js/physics/aero-zones.js",
   "js/game/bodyattitude.js": "js/physics/body-attitude.js",
   "js/game/brake-cue.js": "js/physics/brake-cue.js",
+  "js/game/grip-steer.js": "js/physics/grip-steer.js",
   "js/game/driving-cues.js": "js/audio/driving-cues.js",
   "js/game/debrisworld.js": "js/physics/debris-world.js",
   "js/game/incidentsim.js": "js/physics/incident-sim.js",

@@ -738,7 +738,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
   b.D.setTool("corner");
   const all = labels();
-  assert.deepEqual([all[0]].concat(all.slice(2)), ["1 SHAPE", "3 LOOK", "4 DETAILS", "5 CHECKS", "SHARE CODE"]);
+  assert.deepEqual([all[0]].concat(all.slice(2)), ["1 SHAPE", "3 LOOK", "4 DETAILS", "5 CHECKS", "TURNS", "SHARE CODE"]);
   const m = all[1].match(/^2 CORNERS · CORNER R (\d+) m × 90° LEFT$/);
   assert.ok(m, all[1]);
   chipsIn(b.root, "TURNS RIGHT")[0].click();
@@ -806,6 +806,98 @@ test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that
   assert.equal(fn(-1), null);
   b.D.setTool("select");
   assert.equal(toolCalls[toolCalls.length - 1][1], undefined, "SELECT clears the ghost");
+});
+
+// ── Insight (js/editor/insight.js): TURNS, SPEED, TRACK OF THE DAY, START FROM ──
+const turnsList = (b) => walk(panes(b)[0]).filter((e) => e.tagName === "UL" && e.classList.contains("td-issues"))[1];
+
+test("TURNS: one info row per corner; a row selects its span, prefills the tool and REPLACE re-stamps it green", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const st = b.D.state(), list = turnsList(b);
+  assert.equal(list.getAttribute("aria-label"), "Corners, in driving order");
+  assert.ok(st.corners.length >= 3, st.corners.length + " corners");
+  assert.equal(list.children.length, st.corners.length, "one row per corner");
+  for (const li of list.children) {
+    assert.equal(li.dataset.level, "info"); assert.equal(li.tabIndex, 0);
+    assert.match(li.textContent, /^T\d+ · (LEFT|RIGHT) \d+° · R \d+ m · \d+ km\/h · \d+ m$/);
+  }
+  const c = st.corners[1], u0 = st.undo, dir = c.fit.dir < 0 ? "RIGHT" : "LEFT";
+  list.children[1].click();
+  let now = b.D.state();
+  assert.deepEqual([now.sel, now.span, now.tool], [c.i0, c.i1, c.fit.kind], "the row's span, the fitted tool");
+  assert.ok(now.sel !== now.span && !(now.span > 0 && now.span < now.sel), "point 0 is never inside the span");
+  const label = walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^2 CORNERS/.test(e.textContent));
+  assert.equal(label.textContent, c.fit.kind === "corner" ? "2 CORNERS · CORNER R " + c.fit.R + " m × " + c.fit.deg + "° " + dir : "2 CORNERS · HAIRPIN R " + c.fit.R + " m " + dir);
+  assert.equal(now.design.pts.length, st.design.pts.length, "selecting changes nothing");
+  assert.equal(now.undo, u0);
+  const replace = chipsIn(b.root, "REPLACE THE SELECTED SPAN")[0];
+  assert.ok(replace, "2 CORNERS offers REPLACE THE SELECTED SPAN");
+  replace.click();
+  const v = b.D.preview();
+  assert.equal(v.red, 0, "the re-stamped turn is green: " + v.issues.map((i) => i.code + ":" + i.level).join(","));
+  assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry");
+  // Keyboard: Enter on a row is the same press.
+  const first = turnsList(b).children[0], c0 = b.D.state().corners[0];
+  b.dom.dispatch(first, { type: "keydown", key: "Enter" });
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [c0.i0, c0.i1]);
+});
+
+test("4 DETAILS: RANDOMISE · TRACK OF THE DAY · START FROM… over the edit row, which ends in SPEED then TEST HERE (#766)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const design = panes(b)[0];
+  assert.equal(chipsIn(design, "RANDOMISE").length, 1, "RANDOMISE moved, not copied");
+  const seedRow = chipsIn(design, "RANDOMISE")[0].parentNode;
+  assert.deepEqual(seedRow.children.map((c) => c.textContent), ["RANDOMISE", "TRACK OF THE DAY", "START FROM…"]);
+  const speed = chipsIn(design, "SPEED")[0], editRow = speed.parentNode;
+  assert.deepEqual(editRow.children.map((c) => c.textContent), ["REVERSE", "START HERE", "DELETE POINT", "UNDO", "REDO", "FIT VIEW", "SPEED", "TEST HERE"]);
+  // SPEED: a toggle the canvas paints from.
+  assert.equal(speed.getAttribute("aria-pressed"), "false"); assert.equal(b.D.state().heat, false);
+  speed.click();
+  assert.equal(speed.getAttribute("aria-pressed"), "true"); assert.equal(b.D.state().heat, true);
+  speed.click();
+  assert.equal(speed.getAttribute("aria-pressed"), "false"); assert.equal(b.D.state().heat, false);
+  // TRACK OF THE DAY: the day's seed, the same loop on a second press.
+  chipsIn(design, "TRACK OF THE DAY")[0].click();
+  const a = plain(b.D.state().design.pts);
+  assert.match(msgText(b), /^Track of the day \(\d{4}-\d{2}-\d{2}\) — seed \d+$/);
+  assert.equal(b.D.trackOfTheDay(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), a, "deterministic for the day");
+  assert.equal(b.D.state().design.seed >>> 0, b.D.state().design.seed);
+});
+
+test("START FROM…: a card per shipped circuit; a pick traces it into a new design, one UNDO away", () => {
+  const b = bootScreen();
+  const d0 = openGreen(b);
+  const design = panes(b)[0], from = chipsIn(design, "START FROM…")[0];
+  const grid = walk(design).find((e) => e.classList.contains("td-grid"));
+  assert.equal(grid.hidden, true, "closed until asked");
+  from.click();
+  assert.equal(grid.hidden, false); assert.equal(from.getAttribute("aria-expanded"), "true");
+  const shipped = b.Tracks.LIST.filter((t) => !t.custom);
+  assert.equal(grid.children.length, shipped.length, "one card per shipped circuit");
+  for (const card of grid.children) {
+    assert.ok(card.classList.contains("td-card"));
+    assert.equal(card.children[0].tagName, "CANVAS"); assert.equal(card.children[0].getAttribute("aria-hidden"), "true");
+    assert.match(card.children[1].textContent, /^\d+\.\d\d km · \d+ corners$/);
+  }
+  const u0 = b.D.state().undo;
+  chipsIn(grid, "MONZA")[0].click();
+  const st = b.D.state();
+  assert.equal(st.design.name, "MONZA REMIX");
+  assert.ok(st.design.pts.length >= 60 && st.design.pts.length <= 120, st.design.pts.length + " points");
+  assert.equal(st.design.originId, undefined, "SAVE adds a new circuit");
+  assert.deepEqual(plain([st.design.hwZones, st.design.bankZones, st.design.elevations, st.design.bridges]), [[], [], [], []]);
+  assert.equal(st.undo, u0 + 1);
+  assert.equal(grid.hidden, true, "the cards fold away");
+  const v = b.D.preview();
+  assert.equal(v.red, 0, "Monza traces green: " + v.issues.map((i) => i.code + ":" + i.level).join(","));
+  const real = b.Tracks.buildCenterline(shipped.find((t) => t.id === "monza"), { line: false }).total;
+  assert.ok(Math.abs(v.tr.total / real - 1) < 0.03, "Monza's length: " + Math.round(v.tr.total) + " vs " + Math.round(real));
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), d0.pts, "UNDO brings the design back");
+  assert.equal(b.D.startFrom("custom-nope"), false);
 });
 
 // ── Round 3 PR E: the share card and TEST HERE ─────────────────────────────

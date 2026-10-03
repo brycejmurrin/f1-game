@@ -164,6 +164,75 @@ test("a pass counts only once the new order has HELD", () => {
   assert.equal(passes[0].pos, 1);
 });
 
+function passFacts() {
+  const a = car("AAA", 1090, 0), b = car("BBB", 1088, 0);
+  const c = car("CCC", 1086, 0), d = car("DDD", 1084, 0), p = car("PLY", 500, 0, { isPlayer: true });
+  const G = { state: "race", raceT: 5, cars: [a, b, c, d, p], player: p, track: { total: LAP } };
+  const facts = RF.create();
+  const tick = () => { G.raceT += 0.25; return Array.from(facts.observe(G, 0.25).ev).filter((e) => e.type === "pass").map((e) => ({ ...e })); };
+  tick();
+  return { a, b, c, d, G, facts, tick };
+}
+
+test("a pending pass fires on the hold boundary tick and only once", () => {
+  const { a, b, tick } = passFacts();
+  b.prog = 1092;
+  for (let i = 0; i < 3; i++) assert.deepEqual(tick(), [], "less than one second is still pending");
+  const ev = tick();
+  assert.equal(ev.length, 1);
+  assert.deepEqual(ev[0], { type: "pass", a: b, b: a, pos: 1 });
+  for (let i = 0; i < 5; i++) assert.deepEqual(tick(), [], "a held order must not repeat the pass");
+});
+
+test("a pending pair that leaves the comparison span starts fresh when it returns", () => {
+  const { a, b, c, d, tick } = passFacts();
+  const pair = (ev) => ev.filter((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a));
+  b.prog = 1092;
+  tick(); tick();                         // half the hold before the pair disappears
+  b.prog = 1098; c.prog = 1096; d.prog = 1094;
+  assert.deepEqual(pair(tick()), []);     // B, C, D, A: A/B now outside PAIR_SPAN
+  a.prog = 1097;
+  for (let i = 0; i < 6; i++) assert.deepEqual(pair(tick()), [], "returning order is a new baseline");
+  a.prog = 1099;
+  for (let i = 0; i < 3; i++) assert.deepEqual(pair(tick()), []);
+  const ev = pair(tick());
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0].a, a);
+  assert.equal(ev[0].b, b);
+});
+
+test("a single car moving back a checkpoint preserves unrelated pending passes", () => {
+  const { a, b, d, tick } = passFacts();
+  b.prog = 1092;
+  tick(); tick();
+  d.prog = 900;                           // only D's pairs should lose their baseline
+  assert.deepEqual(tick(), []);
+  const ev = tick();
+  assert.equal(ev.length, 1);
+  assert.deepEqual(ev[0], { type: "pass", a: b, b: a, pos: 1 });
+});
+
+test("reset and a replacement field discard pending pairs and keep current car identities", () => {
+  for (const mode of ["reset", "replacement"]) {
+    const { a, b, G, facts, tick } = passFacts();
+    b.prog = 1092;
+    tick(); tick();
+    if (mode === "reset") facts.reset();
+    else { G.cars = G.cars.map((c) => ({ ...c })); G.player = G.cars[4]; }
+    G.raceT = 5;
+    for (let i = 0; i < 6; i++) assert.deepEqual(tick(), [], mode + " must establish a new baseline");
+    const currentA = G.cars[0], currentB = G.cars[1];
+    currentA.prog = 1094;
+    for (let i = 0; i < 3; i++) assert.deepEqual(tick(), []);
+    const ev = tick();
+    assert.equal(ev.length, 1);
+    assert.deepEqual(ev[0], { type: "pass", a: currentA, b: currentB, pos: 1 });
+    assert.equal(ev[0].a, currentA);
+    assert.equal(ev[0].b, currentB);
+    if (mode === "replacement") { assert.notEqual(ev[0].a, a); assert.notEqual(ev[0].b, b); }
+  }
+});
+
 test("the caution edge reads the allocation-free cautionLevel() when the facade has it", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), p = car("PLY", 900, 60, { isPlayer: true });

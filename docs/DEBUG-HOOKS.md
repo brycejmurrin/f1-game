@@ -455,14 +455,16 @@ display label such as `"TV SIDE"` — returns `false`.
 | `rival` | RIVAL LOCK | Frames the nearest battle rival (ahead or behind) — reuses `Broadcast.battles` when present; falls back to the nearest car within ~2.5 s |
 | `pitwall` | PIT WALL | Pit-lane / pit-exit wall cam on the garage side of the complex; optional auto-cut via `apex26.pitCamAuto` / `__apex.pitCamAuto()` (default OFF — opt-in) |
 | `drone` | DRONE | Smoothed tether camera with corner look-ahead — a calmer, more usable alternative to HELI |
+| `tv` | TV | Live TV director (`js/camera/director.js`): auto-cuts between broadcast shots on battles/leader; auto-spectates after finish/retire in solo. Writes `dbgCam` only — never car forces. Status: `Director.live().status()` |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone"] }
+__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone","tv"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
 __apex.camera("tcam");      // → { mode:"tcam", index:11 }
 __apex.camera("trackside"); // → { mode:"trackside", index:14 }
 __apex.camera("drone");     // → { mode:"drone", index:17 }
 __apex.camera(3);           // switch by index → cockpit
+__apex.camera("tv");        // live director meta-mode (index 18)
 __apex.pitCamAuto();        // → false (default): the camera stays put in the pits
 __apex.pitCamAuto(true);    // opt in: auto-cut to PIT WALL on pit entry, restore on exit
 ```

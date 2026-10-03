@@ -26,6 +26,7 @@ test("boots to __apex with no script errors", () => {
   assert.deepEqual(g.record.scripts.filter((s) => s.error), [], "an injected script threw");
   assert.deepEqual(g.record.rejections, [], "an unhandled rejection escaped boot");
   assert.ok(g.G && g.G.track && g.G.player, "the G façade was not captured");
+  assert.equal(g.G.gfx.mirrorBegin, undefined, "the inert renderer must not advertise a mirror target");
 });
 
 test("failed automatic race boot releases harness resources", async () => {
