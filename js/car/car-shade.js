@@ -1,6 +1,6 @@
 "use strict";
 /* Apex 26 — CAR SHADE: rounded body sections and smooth shading for the
- * procedural car (js/car/car3d.js). OFF unless asked for; Car3D.build calls in.
+ * procedural car (js/car/car3d.js). ON by default (2026-10-02); Car3D.build calls in.
  *
  * WHY. Every body part was a trapezoid loft (car3d frame()/addBlock): four
  * flat faces, a 90 degree crease at each corner, and a flat normal on every
@@ -28,21 +28,30 @@
  *   purely radial, so its rounded shoulder never caught the light; they now
  *   come from the tread's real shape. No vertex moves.
  *
+ *   SMALL PARTS (skin/pipe/strut/block/...): struts with a lens or ellipse
+ *   section (wishbones, halo pillar, nose pylons, every beam), rounded blocks
+ *   (bolsters, airbox, brake ducts, exhaust core), and shaped plates (floor,
+ *   rear-wing endplates, diffuser tunnels, cockpit tub, headrest). Each keeps
+ *   the envelope of the box it replaces where something is placed against it.
+ *
  * THE SWITCH. `apex26.carSmooth` in storage, or `?carsmooth=` in the URL
  * (the URL wins for that page load): "1" / "all" for every car, a team id
- * ("mclaren") for that team's car only, anything else off. Read once per
- * page; set() changes it live (callers drop their mesh caches).
+ * ("mclaren") for that team's car only, "0" / "off" for none. Nothing chosen
+ * is the DEFAULT, every car (it shipped opt-in first, A/B'd live, and turned
+ * on 2026-10-02), so an opt-out is stored as "0" rather than removed. Read
+ * once per page; set() saves it (the meshes rebuild on the next page load).
  */
 const CarShade = (function () {
   const KEY = "apex26.carSmooth";
+  const DEFAULT = "*";
   let _pref;   // undefined = not read yet; null = off; "*" = every car; else a team id
 
   function norm(v) {
-    if (v == null) return null;
-    const s = String(v).trim().toLowerCase();
+    const s = v == null ? "" : String(v).trim().toLowerCase();
+    if (!s) return DEFAULT;   // nothing chosen
     if (s === "1" || s === "all" || s === "on" || s === "true") return "*";
-    if (!s || s === "0" || s === "off" || s === "false") return null;
-    return /^[a-z0-9_-]{1,40}$/.test(s) ? s : null;
+    if (s === "0" || s === "off" || s === "false") return null;
+    return /^[a-z0-9_-]{1,40}$/.test(s) ? s : DEFAULT;
   }
   function pref() {
     if (_pref !== undefined) return _pref;
@@ -55,11 +64,17 @@ const CarShade = (function () {
     _pref = norm(v);
     return _pref;
   }
-  /** Set the switch ("1", a team id, or off) and save it. Returns what took effect. */
+  /** Set the switch ("1", a team id, "0" for off, or null/"" back to the
+   *  default) and save it. Returns what took effect. */
   function set(v) {
     _pref = norm(v);
-    try { if (typeof localStorage !== "undefined") { if (_pref) localStorage.setItem(KEY, _pref === "*" ? "1" : _pref); else localStorage.removeItem(KEY); } }
-    catch (_) { /* storage refused: live for this page only */ }
+    const empty = v == null || !String(v).trim();
+    try {
+      if (typeof localStorage !== "undefined") {
+        if (empty) localStorage.removeItem(KEY);
+        else localStorage.setItem(KEY, _pref === "*" ? "1" : _pref || "0");
+      }
+    } catch (_) { /* storage refused: live for this page only */ }
     return _pref;
   }
   /** Is it on for this team's car? */
@@ -71,32 +86,340 @@ const CarShade = (function () {
   // tapers from w/2 at the bottom to t*w/2 at the top exactly as frame() does.
   // Counter-clockwise seen from +Z, starting at the right flank (mid-height).
   const RING_N = 24, EXP = 3;
-  function ring(f, n, p) {
-    n = n || RING_N; p = p || EXP;
-    const pts = [], x0 = f.x || 0, hw = f.w / 2, hh = f.h / 2, t = f.t !== undefined ? f.t : 1, e = 2 / p;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
-      const u = Math.sign(c) * Math.pow(Math.abs(c), e), v = Math.sign(s) * Math.pow(Math.abs(s), e);
-      pts.push([x0 + u * hw * (1 + (t - 1) * (v + 1) / 2), f.y + v * hh, f.z]);
-    }
+  // The UPPER half is squarer (EXP_TOP): a real nose and tub are flat-topped with
+  // rounded shoulders, and one exponent everywhere read as a round "cigar" nose
+  // (2026-10-02 review). The underside keeps EXP. Both halves meet at the flank
+  // (u = ±1, v = 0), so the section stays closed and the envelope is unchanged;
+  // the sharpest step at 24 points is ~29°, inside smooth()'s 55° crease.
+  const EXP_TOP = 6;
+  // One point of the section at angle `a` (0 = right flank, pi/2 = top centre).
+  function ringAt(f, a, p, pt) {
+    const x0 = f.x || 0, hw = f.w / 2, hh = f.h / 2, t = f.t !== undefined ? f.t : 1;
+    const snap = (x) => (Math.abs(x) < 1e-9 ? 0 : x);   // cos(pi/2) is 6e-17, not 0
+    const c = snap(Math.cos(a)), s = snap(Math.sin(a)), e = 2 / (s > 0 ? pt : p);
+    const u = Math.sign(c) * Math.pow(Math.abs(c), e), v = Math.sign(s) * Math.pow(Math.abs(s), e);
+    return [x0 + u * hw * (1 + (t - 1) * (v + 1) / 2), f.y + v * hh, f.z];
+  }
+  function ring(f, n, p, pt) {
+    n = n || RING_N; p = p || EXP; pt = pt || EXP_TOP;
+    const pts = [];
+    for (let i = 0; i < n; i++) pts.push(ringAt(f, (i / n) * Math.PI * 2, p, pt));
     return pts;
   }
+  /** How far the rounded top has fallen at half-width `halfW` of a car3d nose
+   *  anchor ({top, bottom, topSide}): sink a flat plate this much and its edges
+   *  sit on the skin instead of floating over the shoulder. */
+  function sink(st, halfW) {
+    const k = Math.min(1, Math.abs(halfW) / st.topSide), hh = (st.top - st.bottom) / 2;
+    return hh * (1 - Math.pow(1 - Math.pow(k, EXP_TOP), 1 / EXP_TOP));
+  }
+  /** A livery cap over the rounded nose: the body section at each end, grown by
+   *  the cap's own margin, so it wraps the nose instead of poking square corners
+   *  past it. `front`/`rear` are the cap's span stations; `nf`/`nr` the nose
+   *  anchors there (their topSide/side ratio is the nose's taper). */
+  function capLoft(out, front, rear, nf, nr, col, tri) {
+    loft(out, Object.assign({}, front, { t: nf.topSide / nf.side }), Object.assign({}, rear, { t: nr.topSide / nr.side }), col, tri);
+  }
   /** Loft `front` to `rear` (car3d span stations) with rounded sections and
-   *  both ends capped. `tri(out, a, b, c, col)` is car3d's addTri. */
+   *  both ends capped. `tri(out, a, b, c, col, surface)` is car3d's addTri;
+   *  opts.frontCol paints the front (+Z) cap (an intake mouth), opts.surface
+   *  overrides the surface id. */
   function loft(out, front, rear, col, tri, opts) {
-    const n = (opts && opts.n) || RING_N, p = (opts && opts.p) || EXP;
-    const F = ring(front, n, p), R = ring(rear, n, p);
+    const n = (opts && opts.n) || RING_N, p = (opts && opts.p) || EXP, pt = (opts && opts.pt) || EXP_TOP;
+    const sf = opts && opts.surface, fc = (opts && opts.frontCol) || col;
+    const F = ring(front, n, p, pt), R = ring(rear, n, p, pt);
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
-      tri(out, F[i], R[i], R[j], col);
-      tri(out, F[i], R[j], F[j], col);
+      tri(out, F[i], R[i], R[j], col, sf);
+      tri(out, F[i], R[j], F[j], col, sf);
     }
     const cf = [front.x || 0, front.y, front.z], cr = [rear.x || 0, rear.y, rear.z];
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
-      tri(out, cf, F[i], F[j], col);   // +Z
-      tri(out, cr, R[j], R[i], col);   // -Z
+      tri(out, cf, F[i], F[j], fc, sf);   // +Z
+      tri(out, cr, R[j], R[i], col, sf);  // -Z
     }
+  }
+
+  // ---- SMALL PARTS (2026-10-02, batch 3): struts, rounded blocks, plates ----
+  // The body sections above were rounded first; what still read as boxes were
+  // the parts hung off them — wishbones, halo pillar, mirrors, airbox, floor,
+  // endplates. Each helper below takes car3d's own datums (its corners, its
+  // stations, its addTri) and keeps their ENVELOPE, so a decal, light or part
+  // placed against the old box still lands on the new skin.
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const len = (a) => Math.hypot(a[0], a[1], a[2]);
+  const unit = (a) => { const l = len(a); return l > 1e-9 ? [a[0] / l, a[1] / l, a[2] / l] : null; };
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const mid = (r) => r.reduce((m, p) => [m[0] + p[0] / r.length, m[1] + p[1] / r.length, m[2] + p[2] / r.length], [0, 0, 0]);
+  function newell(r) {   // polygon normal, length = twice its area
+    const N = [0, 0, 0];
+    for (let i = 0; i < r.length; i++) {
+      const a = r[i], b = r[(i + 1) % r.length];
+      N[0] += (a[1] - b[1]) * (a[2] + b[2]); N[1] += (a[2] - b[2]) * (a[0] + b[0]); N[2] += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+    return N;
+  }
+  // A triangle with no area would carry a zero normal (and fail every
+  // unit-normal check downstream), so it is never emitted.
+  function face(out, a, b, c, col, tri, sf) {
+    if (len(crs(sub(b, a), sub(c, a))) > 1e-12) tri(out, a, b, c, col, sf);
+  }
+  /** Ear-clip a simple planar polygon (convex or not: a C, an arch) into
+   *  index triples wound like the polygon. */
+  function earcut(r) {
+    const N = newell(r), A = N.map(Math.abs);
+    const ax = A[0] >= A[1] ? (A[0] >= A[2] ? 0 : 2) : (A[1] >= A[2] ? 1 : 2), sg = N[ax] >= 0 ? 1 : -1;
+    const P = r.map((p) => [p[(ax + 1) % 3], p[(ax + 2) % 3] * sg]), idx = r.map((_, i) => i), tris = [];
+    const cr = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const same = (a, b) => Math.abs(a[0] - b[0]) < 1e-12 && Math.abs(a[1] - b[1]) < 1e-12;
+    while (idx.length > 3) {
+      const n = idx.length;
+      let cut = 0;
+      for (let k = 0; k < n; k++) {
+        const a = P[idx[(k + n - 1) % n]], b = P[idx[k]], c = P[idx[(k + 1) % n]];
+        if (cr(a, b, c) <= 1e-14) continue;   // reflex (or flat): not an ear
+        const blocked = idx.some((m) => { const q = P[m];
+          return !same(q, a) && !same(q, b) && !same(q, c) && cr(a, b, q) > 1e-14 && cr(b, c, q) > 1e-14 && cr(c, a, q) > 1e-14; });
+        if (!blocked) { cut = k; break; }
+      }
+      tris.push([idx[(cut + n - 1) % n], idx[cut], idx[(cut + 1) % n]]);
+      idx.splice(cut, 1);
+    }
+    tris.push(idx);
+    return tris;
+  }
+  /** Loft closed rings (equal counts, any one winding) into a skin that faces
+   *  OUT, both ends capped by earcut. o: {frontCol (rings[0]'s cap),
+   *  caps: false, segCol(i) (colour of the strip from ring point i to i+1)}. */
+  function skin(out, rings, col, tri, sf, o) {
+    o = o || {};
+    const n = rings[0].length, last = rings.length - 1;
+    // Directions are LOCAL (ring 0 -> 1, last-1 -> last): a path that bends
+    // back on itself (the headrest's U) has its ends side by side.
+    const d0 = sub(mid(rings[1]), mid(rings[0])), d1 = sub(mid(rings[last]), mid(rings[last - 1]));
+    const flip = dot(newell(rings[0]), d0) > 0;   // the rings wind the other way round the loft
+    for (let r = 0; r < last; r++) {
+      const F = rings[r], R = rings[r + 1];
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n, c = o.segCol ? o.segCol(i) : col;
+        if (flip) { face(out, F[i], R[j], R[i], c, tri, sf); face(out, F[i], F[j], R[j], c, tri, sf); }
+        else { face(out, F[i], R[i], R[j], c, tri, sf); face(out, F[i], R[j], F[j], c, tri, sf); }
+      }
+    }
+    if (o.caps === false) return;
+    const cap = (ring, c, d) => {   // the cap faces along d
+      const keep = dot(newell(ring), d) > 0;
+      for (const [a, b, e] of earcut(ring)) face(out, ring[a], keep ? ring[b] : ring[e], keep ? ring[e] : ring[b], c, tri, sf);
+    };
+    cap(rings[0], o.frontCol || col, d0.map((v) => -v));
+    cap(rings[last], col, d1);
+  }
+  /** Unit superellipse, n points CCW from (1, 0): exponent pPos where v > 0, pNeg below. */
+  function sect(n, pPos, pNeg) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const p = ringAt({ y: 0, z: 0, w: 2, h: 2 }, (i / n) * Math.PI * 2, pNeg, pPos);
+      pts.push([p[0], p[1]]);
+    }
+    return pts;
+  }
+  /** Sweep a superellipse section along a polyline, OUT-facing and capped.
+   *  The CHORD lies along `up` (default +Z, the airstream) squared to the
+   *  path and carried along it, the THICKNESS across; both may taper end to
+   *  end. o: {chord, thick, chord1, thick1, n (8), p (2: an ellipse), pt
+   *  (the +thick half; default p), up, frontCol, caps}. */
+  function pipe(out, path, col, tri, sf, o) {
+    const n = o.n || 8, S = sect(n, o.pt || o.p || 2, o.p || 2), L = [0];
+    for (let i = 1; i < path.length; i++) L.push(L[i - 1] + len(sub(path[i], path[i - 1])));
+    const tot = L[L.length - 1] || 1, c1 = o.chord1 != null ? o.chord1 : o.chord, t1 = o.thick1 != null ? o.thick1 : o.thick;
+    const off = (U, T) => unit(sub(U, T.map((x) => x * dot(U, T))));
+    let U = o.up || [0, 0, 1];
+    const rings = path.map((p, i) => {
+      const T = unit(sub(path[Math.min(path.length - 1, i + 1)], path[Math.max(0, i - 1)])) || [0, 0, 1];
+      U = off(U, T) || off([0, 1, 0], T) || off([1, 0, 0], T);
+      const V = crs(T, U), f = L[i] / tot;
+      const ch = (o.chord + (c1 - o.chord) * f) / 2, th = (o.thick + (t1 - o.thick) * f) / 2;
+      return S.map(([u, v]) => [0, 1, 2].map((k) => p[k] + U[k] * u * ch + V[k] * v * th));
+    });
+    skin(out, rings, col, tri, sf, o);
+  }
+  /** A STRUT from p0 to p1: pipe() on one segment, o.taper scaling the far end. */
+  function strut(out, p0, p1, chord, thick, col, tri, sf, o) {
+    o = o || {};
+    const k = o.taper == null ? 1 : o.taper;
+    pipe(out, [p0, p1], col, tri, sf, Object.assign({}, o, { chord, thick, chord1: chord * k, thick1: thick * k }));
+  }
+  /** Catmull-Rom through a polyline, k points per segment: original point i
+   *  lands at index k * (i - from), so it still marks what it marked. `from`
+   *  and `to` take a run of the points while the curve keeps bending with the
+   *  neighbours outside it (a co-axial fairing over part of the halo). */
+  function fine(path, k, from, to) {
+    from = from || 0; to = to == null ? path.length : to;
+    const last = path.length - 1;
+    const P = (i) => (i < 0 ? mix(path[0], path[1], -1) : i > last ? mix(path[last], path[last - 1], -1) : path[i]);
+    const pts = [];
+    for (let i = from; i < to - 1; i++) {
+      const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+      for (let j = 0; j < k; j++) {
+        const t = j / k, t2 = t * t, t3 = t2 * t;
+        pts.push([0, 1, 2].map((a) => 0.5 * (2 * p1[a] + (p2[a] - p0[a]) * t +
+          (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2 + (3 * p1[a] - p0[a] - 3 * p2[a] + p3[a]) * t3)));
+      }
+    }
+    pts.push(path[to - 1].slice());
+    return pts;
+  }
+  // Corner radii as edge FRACTIONS [toward the previous corner, toward the
+  // next] (<= 0.5), measured on one quad and reused on its partner so both
+  // ends of a loft get the same point count. Infinity rounds all the way.
+  function fracs(q, r) {
+    const R = Array.isArray(r) ? r : [r, r, r, r];
+    return q.map((B, k) => [Math.min(0.5, (R[k] || 0) / (len(sub(q[(k + 3) % 4], B)) || 1)),
+                            Math.min(0.5, (R[k] || 0) / (len(sub(q[(k + 1) % 4], B)) || 1))]);
+  }
+  /** A quad with its corners rounded: a quadratic arc through each corner
+   *  (seg steps); where two arcs meet mid-edge the point is emitted once. */
+  function rquad(q, fr, seg) {
+    const pts = [];
+    for (let k = 0; k < 4; k++) {
+      const A = q[(k + 3) % 4], B = q[k], C = q[(k + 1) % 4], [fa, fc] = fr[k];
+      if (!(fa > 0) && !(fc > 0)) { pts.push(B.slice()); continue; }
+      const p0 = mix(B, A, fa), p2 = mix(B, C, fc), meets = fc >= 0.5 - 1e-9 && fr[(k + 1) % 4][0] >= 0.5 - 1e-9;
+      for (let j = 0; j <= seg - (meets ? 1 : 0); j++) { const t = j / seg; pts.push(mix(mix(p0, B, t), mix(B, p2, t), t)); }
+    }
+    return pts;
+  }
+  /** car3d's addBlock (8 corners, q[0..3] the +Z end) with the section's
+   *  corners rounded: o.r metres, one number or one per corner, default
+   *  Infinity — a smooth section through the four edge MIDPOINTS, so every
+   *  flat face's centre line stays where it was. o.frontCol paints q[0..3]'s cap. */
+  function block(out, q, col, tri, sf, o) {
+    o = o || {};
+    const a = q.slice(0, 4), b = q.slice(4, 8), fr = fracs(a, o.r == null ? Infinity : o.r), seg = o.seg || 3;
+    skin(out, [rquad(a, fr, seg), rquad(b, fr, seg)], col, tri, sf, o);
+  }
+  /** addBox's numbers as a rounded block lofted along z (corners rounded in x-y). */
+  function box(out, cx, cy, cz, sx, sy, sz, col, tri, sf, o) {
+    const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, zf = cz + sz / 2, zr = cz - sz / 2;
+    block(out, [[x0, y0, zf], [x1, y0, zf], [x1, y1, zf], [x0, y1, zf],
+                [x0, y0, zr], [x1, y0, zr], [x1, y1, zr], [x0, y1, zr]], col, tri, sf, o);
+  }
+  /** addBox's own signature, rounded — a one-line swap at the call site:
+   *  `(_round ? CarShade.boxFn(addTri, o) : addBox)(out, cx, ...)`. */
+  function boxFn(tri, o) { return (out, cx, cy, cz, sx, sy, sz, col, sf) => box(out, cx, cy, cz, sx, sy, sz, col, tri, sf, o); }
+  /** addBlock's signature, rounded (o as block()). */
+  function blockFn(tri, o) { return (out, q, col, colFront, sf) => block(out, q, col, tri, sf, Object.assign({ frontCol: colFront }, o)); }
+
+  /** A MIRROR HOUSING from car3d's addBlock corners (q[0], q[1]: the back
+   *  face's inboard and outboard bottom, q[3] inboard top, q[4], q[5] the front
+   *  face): lofted along x, a flat back for the glass and a rounded nose, the
+   *  toe (outboard end swept forward) kept, both ends drawn in. The outboard
+   *  end still sits at the old x across mid-height, where the mirror light
+   *  anchors (car3d mirrorLightAnchors). */
+  function housing(out, q, col, tri, sf) {
+    const S = sect(12, 6, 2.6), y0 = q[0][1], y1 = q[3][1];
+    skin(out, [[0, 0.80], [0.14, 1], [0.86, 1], [1, 0.90]].map(([f, k]) => {
+      const x = q[0][0] + (q[1][0] - q[0][0]) * f;
+      const zb = q[0][2] + (q[1][2] - q[0][2]) * f, zf = q[4][2] + (q[5][2] - q[4][2]) * f;
+      const cy = (y0 + y1) / 2, hy = (y1 - y0) / 2 * k, cz = (zb + zf) / 2, hz = (zf - zb) / 2 * k;
+      return S.map(([u, v]) => [x, cy + u * hy, cz - v * hz]);   // v > 0 is the flat back (-z)
+    }), col, tri, sf);
+  }
+  /** The COCKPIT TUB beside and under the opening (car3d buildSharedChassis):
+   *  per station the ring() of the rail trapezoid — bottom w/2, top at the RAIL
+   *  top — with the opening (|x| < open above the seat floor) cut out of it, a
+   *  C, lofted and capped. It replaces the tub-under-the-seat span and the two
+   *  square rails, which stood 4-5 cm proud of the rounded monocoque where the
+   *  opening starts. The top half is flatter (exponent 10) so the coaming sits
+   *  on the rail. st: {z, y, w, h, t (at the rail top), open, rail}. */
+  function cTub(out, stations, floorY, col, tri) {
+    const M = 22, PT = 10;
+    skin(out, stations.map((st) => {
+      const bot = st.y - st.h / 2, f = { z: st.z, y: (bot + st.rail) / 2, w: st.w, h: st.rail - bot, t: st.t };
+      let lo = 0, hi = Math.PI / 2;   // where the rail top meets the opening: x falls from flank to top centre
+      for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (ringAt(f, m, EXP, PT)[0] > st.open) lo = m; else hi = m; }
+      const pts = [];
+      for (let i = 0; i < M; i++) pts.push(ringAt(f, Math.PI - lo + (i / (M - 1)) * (Math.PI + 2 * lo), EXP, PT));
+      // The seat floor (car3d's dark floor loft) tops out AT floorY: 2 mm under it, or the two z-fight.
+      return pts.concat([[st.open, floorY - 0.002, st.z], [-st.open, floorY - 0.002, st.z]]);
+    }), col, tri);
+  }
+  /** The FLOOR as a plan shape instead of CHASSIS.floor's 1.5 x 3.2 m box,
+   *  which ran ~20 cm past the edge rail at the rear and straight through the
+   *  rear tyres: half-width edgeAt(z) (car3d floorEdgeAt, the rails' own line),
+   *  rounded front corners, and held inboard of the rear tyre's inner face
+   *  (x 0.57) over its length. Same datum: fl's front, rear, thickness. */
+  function floor(out, fl, cy, edgeAt, col, tri, sf) {
+    const zF = fl.cz + fl.sz / 2, zR = fl.cz - fl.sz / 2, y0 = cy - fl.sy / 2, y1 = cy + fl.sy / 2, R = 0.15, TYRE = 0.555;
+    const cap = (z) => (z < -1.30 ? TYRE : z < -1.15 ? TYRE + (z + 1.30) / 0.15 * 0.15 : Infinity);
+    const hw = (z) => Math.min(edgeAt(z), cap(z)) - (z > zF - R ? R - Math.sqrt(Math.max(0, R * R - (z - zF + R) ** 2)) : 0);
+    const zs = [0, 1, 2, 3, 4].map((k) => zF - R * (1 - Math.cos(k * Math.PI / 8)))
+      .concat([0.78, 0.40, 0, -0.40, -0.80, -1.15, -1.30, -1.60, zR]).filter((z) => z <= zF && z >= zR);
+    const S = zs.sort((a, b) => b - a).map((z) => [z, hw(z)]);
+    const q = (a, b, c, d, want) => {   // a quad facing `want`
+      const k = dot(crs(sub(b, a), sub(c, a)), want) < 0;
+      face(out, a, k ? c : b, k ? b : c, col, tri, sf); face(out, a, k ? d : c, k ? c : d, col, tri, sf);
+    };
+    for (let i = 0; i < S.length - 1; i++) {
+      const [za, ha] = S[i], [zb, hb] = S[i + 1];
+      q([-ha, y1, za], [ha, y1, za], [hb, y1, zb], [-hb, y1, zb], [0, 1, 0]);
+      q([-ha, y0, za], [ha, y0, za], [hb, y0, zb], [-hb, y0, zb], [0, -1, 0]);
+      for (const s of [-1, 1]) q([s * ha, y0, za], [s * ha, y1, za], [s * hb, y1, zb], [s * hb, y0, zb], [s * (za - zb), 0, hb - ha]);
+    }
+    const [zf0, hf] = S[0], [zr0, hr] = S[S.length - 1];
+    q([-hf, y0, zf0], [hf, y0, zf0], [hf, y1, zf0], [-hf, y1, zf0], [0, 0, 1]);
+    q([-hr, y0, zr0], [hr, y0, zr0], [hr, y1, zr0], [-hr, y1, zr0], [0, 0, -1]);
+  }
+  /** A REAR-WING ENDPLATE (car3d endplateGeom `ep`, side s): the plate as an
+   *  outline with rounded corners — the big radii low, where the wing is not,
+   *  so it stops reading as a slab down to the diffuser — 33 mm thick, and its
+   *  accent crown swept over the top edge and round both top corners. Kept: the
+   *  number board's footprint (z -2.27..-2.57, its bottom 5 cm up), the outer
+   *  face the board sits on (x 0.521), the rear face across y 0.62 at every
+   *  level (the endplate light), and the crown's height (the flap tips). */
+  function endplate(out, ep, s, col, crownCol, crownSurf, tri) {
+    const X0 = 0.488, X1 = 0.521, f = ep.front, r = ep.rear, seg = 4;
+    const q = (x, e) => [[s * x, f.bottom, f.z - e], [s * x, f.top, f.z - e], [s * x, r.top, r.z + e], [s * x, r.bottom, r.z + e]];
+    // Radii front-bottom, front-top, rear-top, rear-bottom: the last stays under 78 mm,
+    // or at level 4 (plate bottom 0.525) the light's lower edge (0.603) falls off the rear face.
+    const fr = fracs(q(X1, 0), [0.10, 0.07, 0.04, 0.07]), CT = 0.018;
+    skin(out, [rquad(q(X1, 0), fr, seg), rquad(q(X0, 0), fr, seg)], col, tri);
+    // The crown straddles the top edge as the flat strip did (y top +- 9 mm), its
+    // ends inset half its thickness so they finish flush with the plate's edges.
+    pipe(out, rquad(q((X0 + X1) / 2, CT / 2), fr, seg).slice(seg + 1, 3 * (seg + 1)), crownCol, tri, crownSurf,
+         { chord: 0.046, thick: CT, n: 6, p: 4, up: [1, 0, 0] });
+  }
+  /** One DIFFUSER TUNNEL (side s): the ramped ceiling and the outer wall car3d
+   *  drew as two flat slabs, as ONE curved shell — the roof turns down into
+   *  the wall through a radius of 0.4 x the tunnel's smaller dimension —
+   *  ramping from the throat (z -1.95) to the exit (z -2.52). Inner face in
+   *  `inCol`, the outside in `col`; the strakes inside still clear the roof. */
+  function tunnel(out, s, keel, thr, exitHalf, yFloor, yThroat, yExit, inCol, col, tri, sf) {
+    const T = 0.03, seg = 5, m = seg + 3;
+    const ring = (z, xo, yc) => {
+      const A = [s * keel, yc], B = [s * xo, yc], C = [s * xo, yFloor], r = 0.4 * Math.min(xo - keel, yc - yFloor);
+      const p0 = [B[0] - s * r, yc], p2 = [B[0], yc - r], P = [A];
+      for (let j = 0; j <= seg; j++) { const t = j / seg, u = 1 - t; P.push([u * u * p0[0] + 2 * u * t * B[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * B[1] + t * t * p2[1]]); }
+      P.push(C);
+      const Q = P.map((p, i) => {   // the outer skin: T out along the profile's normal (up on the roof, outboard on the wall)
+        const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+        return [p[0] - s * T * dy / l, p[1] + s * T * dx / l];
+      });
+      return P.concat(Q.reverse()).map(([x, y]) => [x, y, z]);
+    };
+    skin(out, [ring(-1.95, thr, yThroat), ring(-2.52, exitHalf, yExit)], col, tri, sf, { segCol: (i) => (i < m - 1 ? inCol : col) });
+  }
+  /** The HEADREST: a horseshoe pad round the back of the helmet (car3d draws
+   *  the head at (0, 0.715, -0.075), r 0.145), sitting on the cockpit coaming
+   *  — where a dark 0.60 m bar crossed the car at helmet height, 11 cm over the
+   *  bolsters and through the back of the head. */
+  function headrest(out, col, tri, sf) {
+    const half = [[0.205, 0.640, 0.02], [0.208, 0.650, -0.08], [0.196, 0.660, -0.17], [0.150, 0.666, -0.245], [0.078, 0.669, -0.285]];
+    const path = half.map(([x, y, z]) => [-x, y, z]).concat([[0, 0.670, -0.298]], half.slice().reverse());
+    pipe(out, fine(path, 2), col, tri, sf, { chord: 0.075, thick: 0.055, n: 8, p: 2.5, up: [0, 1, 0] });
   }
 
   // A SIDEPOD section (car3d sidepodStations: inner/outer x, bottom/top y at
@@ -246,6 +569,8 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, on, any, set, pref, ring, loft, podRing, loftRings, podLoft, vertexNormals, smooth, _norm: norm };
+  return { KEY, RING_N, EXP, EXP_TOP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft, vertexNormals, smooth,
+           skin, earcut, sect, pipe, strut, fine, rquad, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
+           _norm: norm };
 })();
 Object.freeze(CarShade);

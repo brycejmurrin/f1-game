@@ -58,7 +58,7 @@ Playwright hang after a mid-run `version.json` bump.
 - Adding a DEFERRED file to `index.html` — breaks the opt-in load model.
 - Forgetting the `sw.js` optional entry — first TLX/WGX boot misses cache.
 - Promoting vendor/fonts to essential — the install fails on one unreachable
-  optional path (GLX is the only DEFERRED group `sw.js` already requires).
+  optional path (GLX is required; TLX/vendor are critical optional dependencies).
 - Expecting the SW to cache Jolpica/OpenF1 — same-origin guard blocks it.
 - Caching `blob:` music URLs — throws or breaks playback.
 - Expecting `test:service-worker` to catch DEFERRED drift — it does not; the
@@ -74,9 +74,8 @@ key for `js/render/{glx,webgpu,three}/` etc.), pooled, misses swallowed and
 logged once as `precache: N of M optional assets not cached`. The seed is the
 `@gen-shell:sw-optional` block, from `swOptionalFiles()` in `gen-shell.mjs`
 (`DEFERRED` + `LAZY_*`). Unit pins: seed presence = `load-order.test.mjs`;
-optional-miss tolerance = `service-worker.test.mjs`. NOT unit-pinned: the GLX
-promotion and the `?v=` stamping — only `offline-precache-check.cjs` (browser)
-sees a wrong key. Node checks: `node --test tests/unit/load-order.test.mjs`,
+optional-miss tolerance = `service-worker.test.mjs`. Install VM tests also pin GLX promotion and stamped lazy-group keys;
+`offline-precache-check.cjs` provides separate native offline boot evidence. Node checks: `node --test tests/unit/load-order.test.mjs`,
 `node tools/gen/gen-shell.mjs --check`. Verdict to record: seed present + check
 clean = precache list is fine; a remaining miss is a stamping/timeout
 (`OPTIONAL_ASSET_MS` 4 s) issue, verified only by the browser check.

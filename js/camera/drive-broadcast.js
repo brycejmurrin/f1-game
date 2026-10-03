@@ -136,3 +136,4 @@ const DriveBroadcast = (function () {
     modes: ["heli", "side", "cinematic", "overhead", "drone", "rival", "pitwall", "trackside"],
   };
 })();
+Object.freeze(DriveBroadcast);

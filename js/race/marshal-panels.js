@@ -26,14 +26,15 @@ const MarshalPanels = (function () {
 
   function create(G, deps) {
     const P = (deps && deps.Particles) || (typeof Particles !== "undefined" ? Particles : null);
-    let _track = null, _posts = null;
+    const _postsBy = new WeakMap();   // per track object, weakly: never pins a dropped world
     let _t = 0, _prevLevel = 0, _greenT = 0, _sector = -1, _infoT = -1;
 
     // Every marshal post's panel position and sector, or null; memoised per track.
     function postsFor(track) {
-      if (track === _track) return _posts;
-      _track = track; _posts = null;
-      const list = track && track.props && track.props.list;
+      if (!track) return null;
+      if (_postsBy.has(track)) return _postsBy.get(track);
+      _postsBy.set(track, null);
+      const list = track.props && track.props.list;
       if (!list || !(track.n > 2)) return null;
       // Race control's sector convention (js/physics/debris-world.js hazards()):
       // the circuit's authored splits (def.sectors, two lap fractions) or thirds.
@@ -46,8 +47,9 @@ const MarshalPanels = (function () {
         // The registry's y is the hut's centre (h tall); the panel sits above the roof.
         posts.push({ x: r.x, y: r.y + r.h / 2 + 0.45, z: r.z, sector: frac < splits[0] ? 0 : frac < splits[1] ? 1 : 2 });
       }
-      _posts = posts.length ? posts : null;
-      return _posts;
+      const out = posts.length ? posts : null;
+      _postsBy.set(track, out);
+      return out;
     }
 
     // What the panels show this frame: { col, flash, sector } or null for dark.

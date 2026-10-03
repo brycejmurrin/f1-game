@@ -24,38 +24,46 @@ const Parts = (function () {
         { id: "race",         label: "Race",           cost: 145, desc: "Maximum power output across the rev range",                        speed: 1.06, accel: 1.11, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.16, shoulderHeight: 1.20, undercut: 0.82, coke: 0.88, tailWidth: 1.14, coverHeight: 1.18, chimney: 2, servicePanel: 4, heatShield: 2}, visualTier: 2 },
         { id: "split_turbo",  label: "Split Turbo",    cost: 165, desc: "Separated compressor layout — sharp response with strong terminal speed",   speed: 1.06, accel: 1.13, braking: 1.01, visual: { in: 1.42, snork: 1, twin: 0, inlet: 3, outlet: 2, podWidth: 1.09, shoulderHeight: 1.13, undercut: 1.04, coke: 0.86, tailWidth: 1.02, coverHeight: 1.14, chimney: 2, servicePanel: 1, heatShield: 2}, visualTier: 2 },
         // Manufacturer-exclusive power units — shown only when team.engine matches
+        // THE 2026 SILHOUETTES. The engine `visual` of each team's FACTORY_PRESETS
+        // unit is the strongest shape lever at race distance (pods ±37 cm a side,
+        // undercut, airbox), so those recipes follow the REAL 2026 concepts, not
+        // the PU's price tier (2026-10-03; sources in js/data/teams.js): RB22 and
+        // AMR26 very tight pods, Audi near zero-pod (vertical inlets), Williams
+        // and Alpine wide, Ferrari a compact triangular airbox, Racing Bulls the
+        // largest airbox on the grid, Haas a larger hoop inlet than Ferrari.
+        // Mesh only: getMods / ersProfile / aeroLoad never read `visual`.
         { id: "manu_mercedes", label: "AMG HPP",        cost: 200, supplier: "Mercedes",      tag: "FACTORY",
           desc: "Mercedes-AMG High Performance Powertrains — 2026 peak spec",                   speed: 1.08, accel: 1.14, visual: {"in": 1.55, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 0.78, shoulderHeight: 0.96, undercut: 1.28, coke: 1.28, tailWidth: 0.76, coverHeight: 0.94, scoopLip: 2}, visualTier: 2 },
         { id: "manu_ferrari",  label: "Ferrari 066/12", cost: 200, supplier: "Ferrari",       tag: "FACTORY",
-          desc: "Scuderia Ferrari power unit — strong top speed and precision braking",          speed: 1.09, accel: 1.11, braking: 1.04, visual: {"in": 1.58, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.18, shoulderHeight: 1.22, undercut: 0.80, coke: 0.86, tailWidth: 1.16, coverHeight: 1.20, scoopLip: 1}, visualTier: 2 },
+          desc: "Scuderia Ferrari power unit — strong top speed and precision braking",          speed: 1.09, accel: 1.11, braking: 1.04, visual: {"in": 1.40, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.06, shoulderHeight: 1.12, undercut: 1.24, coke: 1.12, tailWidth: 0.98, coverHeight: 0.98, scoopLip: 1}, visualTier: 2 },
         { id: "manu_ford",     label: "Ford Powertrains", cost: 200, supplier: "Red Bull Ford", tag: "FACTORY",
-          desc: "Ford/Red Bull 2026 unit — explosive torque delivery out of slow corners",       speed: 1.06, accel: 1.16, visual: {"in": 1.5, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.14, shoulderHeight: 1.19, undercut: 0.83, coke: 0.89, tailWidth: 1.12, coverHeight: 1.16, scoopLip: 1}, visualTier: 2 },
+          desc: "Ford/Red Bull 2026 unit — explosive torque delivery out of slow corners",       speed: 1.06, accel: 1.16, visual: {"in": 1.40, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 0.85, shoulderHeight: 0.98, undercut: 1.30, coke: 1.32, tailWidth: 0.78, coverHeight: 0.96, scoopLip: 1}, visualTier: 2 },
         { id: "manu_honda",    label: "Honda RA626H",   cost: 200, supplier: "Honda",         tag: "FACTORY",
-          desc: "Honda RA626H — balanced power with exceptional traction assist",                speed: 1.07, accel: 1.12, cornering: 1.04, visual: {"in": 1.5, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.11, shoulderHeight: 1.17, undercut: 0.87, coke: 0.93, tailWidth: 1.08, coverHeight: 1.15, scoopLip: 1}, visualTier: 2 },
+          desc: "Honda RA626H — balanced power with exceptional traction assist",                speed: 1.07, accel: 1.12, cornering: 1.04, visual: {"in": 1.32, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 0.74, shoulderHeight: 0.94, undercut: 1.38, coke: 1.32, tailWidth: 0.78, coverHeight: 1.02, scoopLip: 1}, visualTier: 2 },
         { id: "manu_audi",     label: "Audi P.U.",      cost: 200, supplier: "Audi",          tag: "FACTORY",
-          desc: "Audi 2026 power unit — strong braking recovery and mid-range punch",            speed: 1.07, accel: 1.12, braking: 1.06, visual: {"in": 1.48, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.07, shoulderHeight: 1.13, undercut: 0.94, coke: 1.00, tailWidth: 0.98, coverHeight: 1.12, scoopLip: 2}, visualTier: 2 },
+          desc: "Audi 2026 power unit — strong braking recovery and mid-range punch",            speed: 1.07, accel: 1.12, braking: 1.06, visual: {"in": 1.48, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 0.76, shoulderHeight: 0.92, undercut: 1.28, coke: 1.30, tailWidth: 0.76, coverHeight: 1.12, scoopLip: 2}, visualTier: 2 },
         // Non-exclusive upgrades above factory level
         { id: "torque_curve",  label: "Torque Curve",  cost:  40, desc: "Rebalanced mapping — strong traction out of slow corners",        accel: 1.06, cornering: 1.03, visual: {"in": 1.0, "inlet": 1, "outlet": 1, podWidth: 0.98, shoulderHeight: 1.04, undercut: 1.02, coke: 1.06, tailWidth: 0.95, coverHeight: 1.00, chimney: 0, servicePanel: 2, heatShield: 1}, visualTier: 1 },
         { id: "hybrid_max",    label: "Hybrid Max",    cost: 150, desc: "Full MGU-K/H synergy — broad power gains across all four metrics", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: {"in": 1.3, "snork": 1, "twin": 1, "inlet": 2, "outlet": 2, podWidth: 1.08, shoulderHeight: 1.15, undercut: 0.89, coke: 0.95, tailWidth: 1.06, coverHeight: 1.13, chimney: 1, servicePanel: 2, heatShield: 0}, visualTier: 2 },
-        { id: "sig_mercedes_zero", label: "Zero-Sidepod PU", cost: 150, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "hybrid_max",
-          desc: "Mercedes signature compact installation — Hybrid Max performance in a tighter cooling form", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: { in: 1.38, snork: 1, twin: 1, inlet: 2, outlet: 3, podWidth: 0.72, shoulderHeight: 0.90, undercut: 1.35, coke: 1.34, tailWidth: 0.70, coverHeight: 0.90 , scoopLip: 2}, visualTier: 2 },
+        { id: "sig_mercedes_zero", label: "Downwash PU", cost: 150, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "hybrid_max",
+          desc: "Mercedes signature compact installation — Hybrid Max performance in a tighter cooling form", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: { in: 1.40, snork: 1, twin: 1, inlet: 2, outlet: 3, podWidth: 0.90, shoulderHeight: 0.94, undercut: 1.22, coke: 1.18, tailWidth: 0.84, coverHeight: 0.92 , scoopLip: 2}, visualTier: 2 },
         { id: "quali_engine",  label: "Quali Mode",    cost: 195, desc: "Unrestricted qualifying spec — peak power, no thermal limits",    speed: 1.10, accel: 1.09, braking: 0.97, visual: {"in": 1.65, "snork": 1, "twin": 1, "inlet": 3, "outlet": 3, podWidth: 1.20, shoulderHeight: 1.24, undercut: 0.78, coke: 0.84, tailWidth: 1.18, coverHeight: 1.22, chimney: 3, servicePanel: 4, heatShield: 2}, visualTier: 2 },
         // Cooling-layout units — the `chimney` stacks are the visual tell.
         { id: "chimney_spec",  label: "Chimney Spec",  cost:  90, desc: "Open-cooling installation — runs hot mappings safely for strong acceleration", speed: 1.01, accel: 1.08, braking: 1.03, visual: { in: 1.22, snork: 0, twin: 0, inlet: 2, outlet: 2, podWidth: 1.03, shoulderHeight: 1.05, undercut: 0.97, coke: 1.05, tailWidth: 1.01, coverHeight: 1.06, chimney: 3 }, visualTier: 1 },
         { id: "sealed_pod",    label: "Sealed Bodywork", cost: 95, desc: "Fully closed cooling — minimum drag from a tightly packaged installation", speed: 1.06, accel: 1.02, visual: { in: 0.96, snork: 0, twin: 0, inlet: 1, outlet: 1, podWidth: 0.84, shoulderHeight: 0.94, undercut: 1.22, coke: 1.20, tailWidth: 0.82, coverHeight: 0.96, chimney: 0 }, visualTier: 1 },
         { id: "plenum_max",    label: "Plenum Max",    cost: 155, desc: "Oversized airbox plenum — deep breathing across the whole rev range",   speed: 1.08, accel: 1.08, braking: 0.98, visual: { in: 1.72, snork: 1, twin: 1, inlet: 3, outlet: 2, podWidth: 1.11, shoulderHeight: 1.21, undercut: 0.85, coke: 0.96, tailWidth: 1.09, coverHeight: 1.19, chimney: 1 }, visualTier: 2 },
         { id: "sig_mclaren_pu", label: "Woking Hybrid", cost: 150, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "hybrid_max",
-          desc: "McLaren signature hybrid — Hybrid Max performance with 1 cooling chimney", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: { in: 1.3, snork: 1, twin: 1, inlet: 2, outlet: 2, podWidth: 1.037, shoulderHeight: 1.122, undercut: 0.908, coke: 0.988, tailWidth: 1.026, coverHeight: 1.107, chimney: 1 , scoopLip: 1}, visualTier: 2 },
+          desc: "McLaren signature hybrid — Hybrid Max performance with 1 cooling chimney", speed: 1.05, accel: 1.08, cornering: 1.03, braking: 1.02, visual: { in: 1.3, snork: 1, twin: 1, inlet: 2, outlet: 2, podWidth: 1.00, shoulderHeight: 1.08, undercut: 1.08, coke: 1.06, tailWidth: 0.96, coverHeight: 1.00, chimney: 1 , scoopLip: 1}, visualTier: 2 },
         { id: "sig_alpine_pu", label: "Enstone Hybrid", cost: 60, teams: ["alpine"], tag: "SIGNATURE", equivalent: "performance",
-          desc: "Alpine signature hybrid — Performance spec with 3 cooling chimneys", speed: 1.00, accel: 1.09, visual: { in: 1.15, twin: 1, inlet: 2, outlet: 1, podWidth: 1.102, shoulderHeight: 1.133, undercut: 0.927, coke: 0.996, tailWidth: 1.097, coverHeight: 1.081, chimney: 3 , scoopLip: 1}, visualTier: 2 },
+          desc: "Alpine signature hybrid — Performance spec with 3 cooling chimneys", speed: 1.00, accel: 1.09, visual: { in: 1.30, twin: 1, inlet: 2, outlet: 1, podWidth: 1.24, shoulderHeight: 1.16, undercut: 0.84, coke: 0.90, tailWidth: 1.16, coverHeight: 1.081, chimney: 3 , scoopLip: 1}, visualTier: 2 },
         { id: "sig_racingbulls_pu", label: "Faenza Hybrid", cost: 40, teams: ["racingbulls"], tag: "SIGNATURE", equivalent: "torque_curve",
-          desc: "Racing Bulls signature hybrid — Torque Curve performance with 1 cooling chimney", accel: 1.06, cornering: 1.03, visual: { in: 1, inlet: 1, outlet: 1, podWidth: 0.921, shoulderHeight: 1.003, undercut: 1.061, coke: 1.145, tailWidth: 0.904, coverHeight: 0.97, chimney: 1 , scoopLip: 1}, visualTier: 1 },
+          desc: "Racing Bulls signature hybrid — Torque Curve performance with 1 cooling chimney", accel: 1.06, cornering: 1.03, visual: { in: 1.62, inlet: 1, outlet: 1, podWidth: 0.92, shoulderHeight: 1.003, undercut: 1.10, coke: 1.145, tailWidth: 0.904, coverHeight: 0.97, chimney: 1 , scoopLip: 1}, visualTier: 1 },
         { id: "sig_haas_pu", label: "Kannapolis Hybrid", cost: 60, teams: ["haas"], tag: "SIGNATURE", equivalent: "v_power",
-          desc: "Haas signature hybrid — V-Power Spec performance with 2 cooling chimneys", speed: 1.02, accel: 1.07, visual: { in: 1.1, twin: 1, inlet: 2, outlet: 1, podWidth: 1.144, shoulderHeight: 1.145, undercut: 0.931, coke: 0.959, tailWidth: 1.123, coverHeight: 1.082, chimney: 2 , scoopLip: 1}, visualTier: 2 },
+          desc: "Haas signature hybrid — V-Power Spec performance with 2 cooling chimneys", speed: 1.02, accel: 1.07, visual: { in: 1.45, twin: 1, inlet: 2, outlet: 1, podWidth: 1.10, shoulderHeight: 1.145, undercut: 0.96, coke: 0.959, tailWidth: 1.08, coverHeight: 1.082, chimney: 2 , scoopLip: 1}, visualTier: 2 },
         { id: "sig_williams_pu", label: "Grove Hybrid", cost: 115, teams: ["williams"], tag: "SIGNATURE", equivalent: "highrev",
-          desc: "Williams signature hybrid — High-Rev performance with fully sealed cooling bodywork", speed: 1.07, accel: 1.03, braking: 0.98, visual: { in: 1.25, snork: 1, inlet: 3, outlet: 2, podWidth: 0.912, shoulderHeight: 1.044, undercut: 0.994, coke: 1.253, tailWidth: 0.852, coverHeight: 1.079, chimney: 0 , scoopLip: 1}, visualTier: 1 },
+          desc: "Williams signature hybrid — High-Rev performance with fully sealed cooling bodywork", speed: 1.07, accel: 1.03, braking: 0.98, visual: { in: 1.25, snork: 1, inlet: 3, outlet: 2, podWidth: 1.20, shoulderHeight: 1.18, undercut: 0.86, coke: 0.98, tailWidth: 1.08, coverHeight: 1.079, chimney: 0 , scoopLip: 1}, visualTier: 1 },
         { id: "sig_cadillac_pu", label: "Detroit Hybrid", cost: 200, teams: ["cadillac"], tag: "SIGNATURE", equivalent: "manu_ferrari",
-          desc: "Cadillac signature hybrid — Ferrari 066/12 performance with 3 cooling chimneys", speed: 1.09, accel: 1.11, braking: 1.04, visual: { in: 1.58, snork: 1, twin: 1, inlet: 3, outlet: 3, podWidth: 1.28, shoulderHeight: 1.28, undercut: 0.76, coke: 0.774, tailWidth: 1.271, coverHeight: 1.272, chimney: 3 , scoopLip: 2}, visualTier: 2 },
+          desc: "Cadillac signature hybrid — Ferrari 066/12 performance with 3 cooling chimneys", speed: 1.09, accel: 1.11, braking: 1.04, visual: { in: 1.40, snork: 1, twin: 1, inlet: 3, outlet: 3, podWidth: 1.04, shoulderHeight: 1.10, undercut: 1.02, coke: 1.00, tailWidth: 1.04, coverHeight: 1.10, chimney: 3 , scoopLip: 2}, visualTier: 2 },
       ],
     },
     {
@@ -200,7 +208,7 @@ const Parts = (function () {
         { id: "sig_haas_carbonmag", label: "Kannapolis C-Mag", cost: 120, teams: ["haas"], tag: "SIGNATURE", equivalent: "carbon_mag",
           desc: "Haas signature lightweight brake — Carbon-Mag performance with pale alloy hardware", speed: 1.01, accel: 1.03, braking: 1.20, visual: {cal: [0.88, 0.88, 0.9], duct: 1.42, rim: [0.42, 0.18, 0.14], discFace: 0, caliper: 2, scoop: 2, rotorScale: 1.06, caliperPos: 0.9}, visualTier: 2 },
         { id: "sig_mercedes_discs", label: "Brackley Discs", cost: 135, teams: ["mercedes"], tag: "SIGNATURE", equivalent: "ceramic",
-          desc: "Mercedes signature brake package — Carbon Ceramic performance with Petronas-teal hardware", speed: 0.98, braking: 1.24, visual: {cal: [0, 0.75, 0.7], duct: 1.55, rim: [0.6, 0.62, 0.66], discFace: 1, caliper: 1, caliperPos: 1.6, rotorScale: 1.05}, visualTier: 2 },
+          desc: "Mercedes signature brake package — Carbon Ceramic performance with team-teal hardware", speed: 0.98, braking: 1.24, visual: {cal: [0, 0.75, 0.7], duct: 1.55, rim: [0.6, 0.62, 0.66], discFace: 1, caliper: 1, caliperPos: 1.6, rotorScale: 1.05}, visualTier: 2 },
         { id: "sig_aston_carbon", label: "Lagonda Carbon", cost: 95, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "ventilated",
           desc: "Aston Martin signature vented brake — Ventilated Carbon performance with racing-green monoblocs", speed: 0.97, braking: 1.18, visual: {cal: [0, 0.55, 0.38], duct: 1.4, rim: [0.5, 0.44, 0.2], discFace: 2, caliper: 2, scoop: 2, caliperPos: 4, rotorScale: 0.94}, visualTier: 2 },
         { id: "sig_mclaren_brakes", label: "Woking Brake Pack", cost: 180, teams: ["mclaren"], tag: "SIGNATURE", equivalent: "six_piston",
@@ -653,10 +661,23 @@ const Parts = (function () {
     return true;
   }
 
+  // When the save asks for an option this team cannot fit (SIGNATURE teams
+  // list, manufacturer suppliers, or a career regulation), prefer that
+  // option's `equivalent` over the category DEFAULT. DEFAULTS.tyres is
+  // `medium`; a locked `sig_rb_street` must still draw `supersoft` (its peer),
+  // not the yellow medium ring. Mesh, band, stats and label all come from the
+  // resolved option — one path, so the garage name matches what is on the car.
+  // (sig_mercedes_tyre's peer is medium, same as DEFAULTS; the visible proof
+  // of the path is any signature whose equivalent is not the default.)
   function _resolve(cat, setup, team) {
     const selId = setup[cat.id] !== undefined ? setup[cat.id] : DEFAULTS[cat.id];
     let opt = cat.options.find((o) => o.id === selId);
-    if (opt && !isOptionAvailable(opt, team)) opt = null;
+    if (opt && !isOptionAvailable(opt, team)) {
+      const eq = opt.equivalent
+        ? cat.options.find((o) => o.id === opt.equivalent)
+        : null;
+      opt = (eq && isOptionAvailable(eq, team)) ? eq : null;
+    }
     return opt || cat.options.find((o) => o.id === DEFAULTS[cat.id]) || cat.options[0];
   }
 
@@ -795,9 +816,9 @@ const Parts = (function () {
   }
 
   // { engine: 0|1|2, aero: 0|1|2, ... } — the resolved cosmetic tier per
-  // category for Car3D.build(opts.parts). Shares resolveSetup's supplier-lock
-  // fallback, so an option locked out of the setup UI can never resolve to a
-  // visual tier either; an untagged option falls back to tier 1.
+  // category for Car3D.build(opts.parts). Shares resolveSetup's lock
+  // fallback (equivalent, then DEFAULTS), so a locked-out option never
+  // keeps a foreign visual tier; an untagged option falls back to tier 1.
   function getVisualTiers(setup, team) {
     const resolved = resolveSetup(setup, team);
     const out = Object.assign({}, resolved.tiers);

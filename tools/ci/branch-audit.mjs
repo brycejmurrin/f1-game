@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // branch-audit.mjs — is a branch's code already in the deploy branch? One verdict per remote branch, with the evidence.
-// @doc Per-branch verdict (merged/absorbed/superseded/pr-closed/unmerged) from ancestry, merge-tree, line presence, PRs, CI.
+// @doc Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch).
 // Full description: Classifies every remote branch against the deploy branch: ancestry, a merge-tree dry merge (absorbed = merging changes nothing), the share of its added lines already present in deploy (same file and anywhere, for code that moved), the PR that carried it and the last CI run on its head. prune-branches.mjs consumes the verdicts; --report writes the markdown table.
 // @skill check-changes
 //
@@ -34,6 +34,29 @@
 // prune-branches --also opts into.
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+
+// THE SURVEY SET (2026-10-02, the user's rule): only branches that have NEVER
+// had a pull request (open, closed or merged) and whose newest commit is at
+// least SURVEY_QUIET_HOURS old — which also makes the whole branch at least
+// that old. A branch with a PR is the PR's business (its merge state decides,
+// and merged heads are auto-deleted since 2026-10-02); a branch with a commit
+// in the last two days may be someone's work in progress. claude/claims/*
+// markers are prune-branches.mjs's age rule, never surveyed. --all widens it.
+// WIDENED 2026-10-03: a branch whose newest PR was CLOSED UNMERGED at least
+// SURVEY_QUIET_HOURS ago is surveyed too — nobody reopened it, so nothing else
+// would ever decide it (its verdict is usually pr-closed). The claims board
+// (who-is-on-it.mjs) is coordination state, never surveyed.
+export const SURVEY_QUIET_HOURS = 48;
+export const NEVER_SURVEYED = /^claude\/claims(\/|-board$)/;
+export function inSurvey(b, { prs = new Map(), now = Math.floor(Date.now() / 1000), quietHours = SURVEY_QUIET_HOURS } = {}) {
+  if (NEVER_SURVEYED.test(b.name)) return false;
+  const pr = prs.get(b.name);
+  if (pr) {
+    const closedAt = Date.parse(pr.at) / 1000;
+    if (pr.state !== "closed" || !Number.isFinite(closedAt) || now - closedAt < quietHours * 3600) return false;
+  }
+  return Number.isFinite(b.time) && now - b.time >= quietHours * 3600;
+}
 
 export const MIN_LINE = 6;              // shorter trimmed lines ("});", "}") match anything
 export const SUPERSEDED_PCT = 95;       // >= this share of added lines present anywhere in deploy
@@ -140,13 +163,15 @@ export function treeLines(ref) {
 }
 
 /** Audit `branches` [{name, sha, time}] against `base`. Git-heavy; the verdict itself is verdictFor. */
-export function audit(branches, { base, prs = new Map(), runs = new Map(), now = Math.floor(Date.now() / 1000), minAgeDays = 1, skip = () => false }) {
+export function audit(branches, { base, prs = new Map(), runs = new Map(), now = Math.floor(Date.now() / 1000), minAgeDays = 1, skip = () => false,
+  survey = null }) {
   const baseRef = "refs/remotes/origin/" + base;
   const baseTree = git(["rev-parse", baseRef + "^{tree}"]).trim();
   let lines = null;   // built on first need: reading the whole tree is the slow part
   const rows = [];
   for (const b of branches) {
     if (b.name === base || skip(b.name)) continue;
+    if (survey && !survey(b)) continue;
     const ref = "refs/remotes/origin/" + b.name;
     const row = { name: b.name, sha: b.sha, ageDays: Number.isFinite(b.time) ? +((now - b.time) / 86400).toFixed(1) : NaN,
       pr: prs.get(b.name) || null, ci: runs.get(b.sha) || null, ancestor: false, absorbed: false, noHistory: false,
@@ -175,10 +200,10 @@ export function audit(branches, { base, prs = new Map(), runs = new Map(), now =
 
 const ORDER = Object.keys(VERDICTS);
 /** Markdown report: a tally, then one table per verdict. */
-export function renderMarkdown(rows, base) {
+export function renderMarkdown(rows, base, { scope = "" } = {}) {
   const by = new Map(ORDER.map((v) => [v, []]));
   for (const r of rows) by.get(r.verdict).push(r);
-  const out = [`### Branch audit vs \`${base}\``, "", "| verdict | branches | meaning |", "|---|---|---|"];
+  const out = [`### Branch audit vs \`${base}\``, "", ...(scope ? [scope, ""] : []), "| verdict | branches | meaning |", "|---|---|---|"];
   for (const v of ORDER) if (by.get(v).length) out.push(`| **${v}** | ${by.get(v).length} | ${VERDICTS[v]} |`);
   for (const v of ORDER) {
     const list = by.get(v);
@@ -208,15 +233,22 @@ export function parseRefs(text) {
   return out;
 }
 
+export const surveyScope = (h) => `Surveyed: branches that never had a pull request, or whose last one closed unmerged ${h}+ hours ago, and have had no commit for ${h}+ hours.`;
+
 export function readJson(file) { return file ? JSON.parse(fs.readFileSync(file, "utf8")) : []; }
 
 export function main(argv = process.argv.slice(2)) {
   const arg = (f, d) => { const i = argv.indexOf(f); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
   const base = arg("--base", "claude/f1-game-project-26h3ng");
   const branches = parseRefs(git(["for-each-ref", "--format=%(refname)\t%(objectname)\t%(committerdate:unix)", "refs/remotes/origin"]));
-  const rows = audit(branches, { base, prs: indexPrs(readJson(arg("--prs", null))), runs: indexRuns(readJson(arg("--runs", null))),
-    minAgeDays: Number(arg("--min-age-days", "1")), skip: (n) => /^claude\/claims\//.test(n) });
-  const md = renderMarkdown(rows, base);
+  const prs = indexPrs(readJson(arg("--prs", null)));
+  const all = argv.includes("--all");
+  if (!all && !arg("--prs", null)) { console.error("branch-audit: the survey needs --prs (an unknown PR set would survey every branch) — or pass --all"); return 2; }
+  const quietHours = Number(arg("--quiet-hours", String(SURVEY_QUIET_HOURS)));
+  const rows = audit(branches, { base, prs, runs: indexRuns(readJson(arg("--runs", null))),
+    minAgeDays: Number(arg("--min-age-days", "1")), skip: (n) => NEVER_SURVEYED.test(n),
+    survey: all ? null : (b) => inSurvey(b, { prs, quietHours }) });
+  const md = renderMarkdown(rows, base, { scope: all ? "" : surveyScope(quietHours) });
   if (arg("--report", null)) fs.writeFileSync(arg("--report"), md);
   if (arg("--json", null)) fs.writeFileSync(arg("--json"), JSON.stringify(rows, null, 1));
   if (!arg("--report", null)) process.stdout.write(md);

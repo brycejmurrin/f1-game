@@ -29,6 +29,14 @@ Supersedes the "auto memory structurally cannot persist here" finding in
    (PostToolUse on Write/Edit, and Stop) copies the live dir back, so memories
    ride the session's next commit. Cloud only (`CLAUDE_CODE_REMOTE=true`) unless
    `APEX_MEMORY_SYNC=1`: a laptop's memory dir already persists and is personal.
+4. **Both directions are a three-way sync (2026-10-02).** The first `save`
+   copied every differing live file over the repo and deleted repo files the
+   session lacked, so a resumed session whose live dir predated a branch
+   checkout reverted other sessions' memories (twice in one day). Now each sync
+   compares against a baseline in `artifacts/.memory-base/`: only the side that
+   changed a file moves it, `MEMORY.md` is line-merged when both added lines,
+   and a topic file changed on both sides keeps the repo copy and prints
+   `CONFLICT`. `tests/unit/memory-sync.test.mjs` drives the real hook.
 
 ## Rules
 

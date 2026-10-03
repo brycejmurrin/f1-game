@@ -3329,6 +3329,27 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
+  // A released geometry (freeMesh / chunked free) is parked out of every slot
+  // AT ONCE: a slot is otherwise parked only by its target's next pass, which
+  // cannot run while the next track builds — so every chunk geometry of the
+  // old track stayed reachable through a hidden caster across the build peak.
+  assert.match(sh, /function releaseGeometry\(geo\) \{[\s\S]*?for \(const pl of pools\.values\(\)\)[\s\S]*?if \(m\.geometry !== geo\) continue;\s*m\.visible = false; m\.geometry = parkedGeo;\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}/,
+    "shadowSys.releaseGeometry parks every slot still pointing at the geometry AND drops its render object");
+  assert.match(sh, /releaseGeometry,\n/, "and exports it");
+  assert.match(tlxSrc, /function releaseGeometry\(geo\) \{[\s\S]*?meshByGeo\.delete\(geo\);\s*if \(shadowSys && shadowSys\.releaseGeometry\) shadowSys\.releaseGeometry\(geo\);/,
+    "TLX's own releaseGeometry hands the geometry to the shadow pools too");
+  // THE LEAK ITSELF (2026-10-02): three keeps a RenderObject — geometry, vertex
+  // buffers, GPU buffers — until the OBJECT or MATERIAL dispatches "dispose";
+  // geometry.dispose() alone only nulls an attribute mirror. A pooled wrapper
+  // dropped without the event pinned every chunk of every freed track (~17 MB
+  // of JS heap per picker pick, measured). Both drop paths go through one helper.
+  assert.match(tlxSrc, /function dropWrapper\(m\) \{[\s\S]*?if \(_warmPending\) \{ _dropQueue\.push\(m\); return; \}\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}[\s\S]*?m\.geometry = null; m\.material = null;\s*\}/,
+    "dropWrapper dispatches three's dispose event before nulling the wrapper — and defers while a warm's compileAsync may still hold the mesh");
+  assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
+  assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
+  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
+    "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
   const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -3522,20 +3543,24 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
     "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
-  assert.match(game, /if \(state === "results"\) return;/,
-    "results keeps the last race present — physics already stopped, re-drawing is unpaid");
+  assert.match(game, /if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/,
+    "results keeps the last race present — physics already stopped, re-drawing is unpaid (ResultsCam.live is the orbit/highlights exception)");
   // endRace's OWN call: over all of game.js the match began at startRaceBody's
   // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
     "endRace clears the 2D rain overlay the way quitToMenu already did");
+  // ResultsCam.live() + heldWarm: order pins below use the full render body.
   const renderBody = fnSource(game, "function render(dt)");
   for (const boundary of ["const menuBlank", "if (setupPreviewOn && !heldWarm)", "if (!track) return;"]) {
     assert.ok(renderBody.includes(boundary), "render contains the boundary: " + boundary);
   }
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) {"),
     "the visibility gate precedes the garage-preview return");
-  assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
+  const resultsGate = renderBody.search(/if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/);
+  assert.ok(resultsGate >= 0 && resultsGate < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
     "results freeze precedes the garage-preview return");
+  assert.match(renderBody, /!resultsCam\.live\(\)/,
+    "ResultsCam.live() keeps redrawing chequered/orbit/highlights");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
@@ -3762,7 +3787,9 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
 test("WGX SAA widens roughness before wet like GLX", () => {
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const saa = chunks.indexOf("let saaVar = mix(saaVarGeo, saaVarPeel");
-  const wet = chunks.indexOf("if (wetness > 0.001)");
+  // Prefix, not the full condition: the road block is gated off car surfaces
+  // ("&& !classifiedCar") and the car wet look follows it — both after SAA.
+  const wet = chunks.indexOf("if (wetness > 0.001");
   assert.ok(saa > 0 && wet > saa,
     "SAA after wet extra-widens puddle edges — GLX widens, then polishes");
   assert.match(chunks, /a = rough \* rough;/,
@@ -4234,6 +4261,13 @@ test("the attribute packer proves its precondition instead of assuming it", () =
 
 test("the packing round-trip check is wired to the shader's own decisions", () => {
   const tool = read("tools/gfx/tlx-pack-check.cjs");
+  const chunked = read("js/render/three/tlx-chunked.js");
+  // packAttr gained an optional fmt24 arg (WebGPU pad4). The lift regex must
+  // still match the shipping signature or the CLI throws before any check runs.
+  assert.match(chunked, /function packAttr\(THREE, src, len, itemSize, kind, fmt24\)/,
+    "tlx-chunked packAttr signature drifted — update tools/gfx/tlx-pack-check.cjs");
+  assert.match(tool, /kind\(\?:, fmt24\)\?/,
+    "tlx-pack-check lift regex must allow the optional fmt24 arg");
   // The tool must LIFT the packer out of the shipping file. A reimplementation
   // drifts, and then it verifies its own copy rather than what ships.
   assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,

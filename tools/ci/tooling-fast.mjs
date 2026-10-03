@@ -82,6 +82,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ladder on the platforms that do not have Daniel.
   "tests/unit/announcer.test.mjs",
   "tests/unit/apca-timing.test.mjs",
+  "tests/unit/apex-career-delete.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
@@ -115,15 +116,18 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // that took a stored index or object on trust. Executes the shipped source
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
   "tests/unit/boot-input-shape.test.mjs",
+  "tests/unit/bootstrap-doctor.test.mjs",
   "tests/unit/brake-cue.test.mjs",
   // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
   // and line presence, pinned against real git in a throwaway repo. ~1 s.
   "tests/unit/branch-audit.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
+  "tests/unit/cam-motion.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
+  "tests/unit/capture-tools-regressions.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
   // geometry, and a parts-mesh regression is exactly the kind that would then
@@ -131,6 +135,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the whole point — the front-wing assertion this file ports sat red on the
   // deploy tip through five consecutive green Pages runs because the browser
   // group that held it is not gated at all.
+  // car-fx.js (plank sparks, AI lock-up marks) + the particle pool's scrape /
+  // flare / spray-plume discipline, in a VM with seeded Math.random; ~0.2 s.
+  "tests/unit/car-fx.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
@@ -176,6 +183,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",
+  // No screenshot outside a *-snapshots/ baseline under tests/, no image over
+  // 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.
+  "tests/unit/committed-images.test.mjs",
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
@@ -241,13 +251,17 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
   "tests/unit/digital-steer.test.mjs",
+  // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
+  "tests/unit/director.test.mjs",
   // Dirty-air wake shapes (js/physics/consts.js DirtyAir): classic linear
   // fade stays bit-compatible; CFD is exp×Gaussian; OFF is identity mul.
   "tests/unit/dirty-air.test.mjs",
+  "tests/unit/dock-layout.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   // Decorrelated DriverRatings.BASE + skill()/overall personality pins.
   "tests/unit/driver-ratings-personality.test.mjs",
   "tests/unit/driving-coach.test.mjs",
+  "tests/unit/driving-cues.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
   // named legend has to round-trip through two setters, and the inert VM DOM
   // builds no SettingRow children, so painting the row would assert nothing.
@@ -311,6 +325,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/fuzz-untrusted-inputs.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/game-ctx-surface.test.mjs",
+  // Expensive game-systems CLIs (ai-pace/field/line/human, player-dyn,
+  // physics-tune-sweep, career-economy) must answer --help without booting
+  // the VM / Chromium. Measured 2026-10-01: --help silently ran the full work.
+  "tests/unit/game-tools-help.test.mjs",
   // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in
   // ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the
   // driving-model gate runs here in seconds rather than in a browser job.
@@ -335,6 +353,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
   "tests/unit/glx-output-target.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
+  "tests/unit/grip-steer.test.mjs",
   "tests/unit/harness-display.test.mjs",
   "tests/unit/helmets.test.mjs",
   "tests/unit/home-world.test.mjs",
@@ -345,7 +364,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
@@ -400,6 +421,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
+  // memory-sync.sh's three-way sync: a stale session never reverts other
+  // sessions' memories (2026-10-02, twice). Real hook, throwaway repo. ~1 s.
+  "tests/unit/memory-sync.test.mjs",
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
@@ -432,6 +456,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // for the garage one defeats its whole purpose — a dropped material column
   // looks exactly like the bug it guards against.
   "tests/unit/parts-ladder.test.mjs",
+  // Locked SIGNATURE → equivalent (not DEFAULTS). ~0.1 s; without it a
+  // Faenza Street fit on McLaren silently photographed as medium.
+  "tests/unit/parts-locked-equivalent.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
@@ -500,10 +527,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
+  // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
+  "tests/unit/replay-buf.test.mjs",
   // repo-size.yml's full-history size report: refuses a shallow clone (one
   // sized this repo wrong on 2026-10-01), real-git fixture. ~1 s.
   "tests/unit/repo-size.test.mjs",
   "tests/unit/report-server.test.mjs",
+  // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
+  "tests/unit/results-cam.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
@@ -518,6 +549,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/season-cal.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
+  "tests/unit/session-contracts.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
   "tests/unit/session-status.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
@@ -543,6 +575,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
+  "tests/unit/skill-smoke.test.mjs",
   "tests/unit/source-integrity.test.mjs",
   "tests/unit/span-kinds.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
@@ -626,6 +659,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-fixes.test.mjs",
   "tests/unit/track-foundation.test.mjs",
   "tests/unit/track-graph.test.mjs",
+  // The designer's insight (js/editor/insight.js): the speed profile is the lap
+  // estimate's bit for bit, TURNS bands and their control spans, REPLACE with the
+  // fitted arc re-stamps seed 7 green, each FIA Grade 1 amber fires on a crafted
+  // design and never RED, TRACK OF THE DAY per UTC day, START FROM traces. ~2 s.
+  "tests/unit/track-insight.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
   "tests/unit/track-line.test.mjs",
   "tests/unit/track-maps-corners.test.mjs",
@@ -655,6 +693,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-journey-session.test.mjs",
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/uilayers-modal-order.test.mjs",
+  "tests/unit/validation-cli.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
@@ -815,8 +854,11 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 
     // detached: the child leads its own process group, so the file timer can
     // kill `node --test` AND the per-file subprocess it spawns in one signal.
+    // The failure parser below consumes TAP. Node 23+ defaults to spec even
+    // when stdout is piped, so the wire format must be explicit.
+    // https://nodejs.org/api/test.html#test-reporters
     const child = spawn(process.execPath,
-                        ["--test", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
+                        ["--test", "--test-reporter=tap", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
                         { cwd: ROOT, env: childEnv, detached: true });
     live.add(child);
     let out = "", err = "", timedOut = false;
@@ -906,19 +948,64 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   return { ok, passed, failed, results, logPath };
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  const argv = process.argv.slice(2);
-  const args = argv.filter((a) => !a.startsWith("--"));
-  const files = args.length ? args : [...TOOLING_FAST_FILES];
-  const val = (name) => { const a = argv.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : undefined; };
-  const jobs = val("jobs") ? Number(val("jobs")) : 1;
-  const { ok } = await runToolingFast(files, {
-    jobs,
+/** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
+ *  never silently start the suite: `--help` used to launch all 300+ files. */
+export const TOOLING_FAST_FLAGS = Object.freeze([
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--help", "-h",
+]);
+
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+       node tools/ci/tooling-fast.mjs --help`;
+
+/** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
+export function parseToolingFastArgv(argv) {
+  const unknown = [];
+  for (const a of argv) {
+    if (!a.startsWith("--") && a !== "-h") continue;
+    if (a === "--help" || a === "-h") continue;
+    const name = a.includes("=") ? a.slice(0, a.indexOf("=")) : a;
+    if (!TOOLING_FAST_FLAGS.includes(name)) unknown.push(name);
+  }
+  if (unknown.length) {
+    throw new Error(`unknown flag ${unknown.join(", ")}\n${TOOLING_FAST_USAGE}`);
+  }
+  if (argv.includes("--help") || argv.includes("-h")) return { help: true };
+  const args = argv.filter((a) => !a.startsWith("--") && a !== "-h");
+  const val = (name) => {
+    const a = argv.find((x) => x.startsWith(`--${name}=`));
+    return a ? a.slice(name.length + 3) : undefined;
+  };
+  return {
+    help: false,
+    files: args.length ? args : null, // null = full TOOLING_FAST_FILES
+    jobs: val("jobs") ? Number(val("jobs")) : 1,
     order: val("order"),
     record: argv.includes("--record"),
     testTimeoutMs: val("test-timeout") ? Number(val("test-timeout")) * 1000 : undefined,
     fileTimeoutMs: val("file-timeout") ? Number(val("file-timeout")) * 1000 : undefined,
+  };
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  let parsed;
+  try {
+    parsed = parseToolingFastArgv(process.argv.slice(2));
+  } catch (e) {
+    console.error(e.message);
+    process.exit(2);
+  }
+  if (parsed.help) {
+    console.log(TOOLING_FAST_USAGE);
+    process.exit(0);
+  }
+  const files = parsed.files || [...TOOLING_FAST_FILES];
+  const { ok } = await runToolingFast(files, {
+    jobs: parsed.jobs,
+    order: parsed.order,
+    record: parsed.record,
+    testTimeoutMs: parsed.testTimeoutMs,
+    fileTimeoutMs: parsed.fileTimeoutMs,
   });
   process.exit(ok ? 0 : 1);
 }

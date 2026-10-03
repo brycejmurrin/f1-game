@@ -71,6 +71,71 @@ export async function waitXrReady(page, timeout = 60_000) {
   );
 }
 
+/**
+ * Wait while immersive-vr is presenting until frameCount advances by `delta`.
+ *
+ * History (measured 2026-10-03):
+ * - `page.waitForFunction({ polling })` re-arms via page timers/rAF; immersive
+ *   XR can starve those, so the waiter never re-samples (CI 37083868797).
+ * - Node CDP `page.evaluate` every ~200 ms during the cold first immersive
+ *   tick (shader compile under IWER + SwiftShader/llvmpipe) freezes session
+ *   rAF — frameCount stuck at 0–2 for the whole budget (CI 37091997066:
+ *   `waitXrFrames(+2) timed out … base=0, fc=2`, then green on retry /
+ *   APEX_FAIL_ON_FLAKY).
+ * - A competing `session.requestAnimationFrame` waiter serialises with the
+ *   game's onXRFrame under IWER and stalls frameCount at 0–1.
+ *
+ * Fix: one evaluate that settles (no poll) for `settleMs`, then samples with
+ * in-page `setTimeout` only — no CDP chatter during the cold tick. Assertion
+ * unchanged: must clear `base + delta`. Soft-GL budget stays 45 s.
+ */
+export async function waitXrFrames(page, delta = 2, opts = {}) {
+  const timeout = opts.timeout ?? 45_000;
+  const interval = opts.interval ?? 100;
+  const settleMs = opts.settleMs ?? 2000;
+  const need = (delta | 0) || 2;
+  const result = await page.evaluate(({ need, timeout, settleMs, interval }) => new Promise((resolve) => {
+    let base = 0;
+    try { base = XrSession.frameCount(); } catch (_) { /* */ }
+    const t0 = performance.now();
+    const tick = () => {
+      let fc = base;
+      try { fc = XrSession.frameCount(); } catch (_) { /* */ }
+      if (fc > base + need) return resolve({ ok: true, base, fc });
+      if (performance.now() - t0 > timeout) return resolve({ ok: false, base, fc });
+      setTimeout(tick, interval);
+    };
+    // First delay lets the cold immersive tick finish before we poll.
+    setTimeout(tick, settleMs);
+  }), { need, timeout, settleMs, interval });
+  if (!result.ok) {
+    throw new Error(
+      `waitXrFrames(+${need}) timed out after ${timeout}ms (base=${result.base}, fc=${result.fc})`,
+    );
+  }
+  return result.base;
+}
+
+/**
+ * Wait until a page predicate is truthy, polling from Node (CDP evaluate).
+ * Use after EXIT VR (session clock gone) or for non-frame signals.
+ */
+export async function waitWhilePresenting(page, predicate, opts = {}) {
+  const timeout = opts.timeout ?? 10_000;
+  const interval = opts.interval ?? 100;
+  const arg = opts.arg;
+  const deadline = Date.now() + timeout;
+  let last = null;
+  while (Date.now() < deadline) {
+    last = await page.evaluate(predicate, arg);
+    if (last) return last;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  throw new Error(
+    `waitWhilePresenting timed out after ${timeout}ms (last=${JSON.stringify(last)})`,
+  );
+}
+
 /** Capture the game canvas via toDataURL inside rAF (page.screenshot can hang under software GL). */
 export async function captureCanvasDataUrl(page, selector = "#game") {
   return page.evaluate(async (sel) => {

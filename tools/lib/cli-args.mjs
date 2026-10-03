@@ -106,3 +106,13 @@ export function wearArg(argv, dflt = "off") {
   }
   return v;
 }
+
+/** Print usage and exit 0 when argv asks for help. Browser/shot tools that
+ *  parse positionals first used to treat `--help` as a track id or ignore it
+ *  and launch Chromium (skilltest probe-debug, 2026-10-01). Call this BEFORE
+ *  any launch / bind. Returns false when argv is not a help ask. */
+export function exitIfHelp(argv, text) {
+  if (!argv.includes("--help") && !argv.includes("-h") && argv[0] !== "help") return false;
+  console.log(String(text).replace(/\s+$/, ""));
+  process.exit(0);
+}

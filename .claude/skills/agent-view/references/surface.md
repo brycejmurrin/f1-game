@@ -7,7 +7,7 @@ Load this when driving a lap, writing a policy, or debugging a typed error. The 
 
 - `node tools/shot/agent.mjs <track> <tool> [flags]` — stages `race`/`go`/`jump` +
   frames. **Each call boots its own browser (~30–40 s)**; one read per boot.
-  Don't chain several in one shell command. Cap parallel jobs at **2–3**.
+  Don't chain several in one shell command. Serialize browser boots; prefer the Node VM for numeric batches.
   Renames: `trackInfo`→`track`, `carView`→`car`, `agentHelp`→`help`;
   `model` = `render({what:"circuit"})`. `terminal`/`seed` are in-page only.
 - `node tools/shot/apex-eval.mjs <track> "<expr>"` — one boot, `a` = `__apex`.
@@ -156,9 +156,10 @@ by wherever the last sample lands. Three gotchas the loop above hides:
 - **`rollout` runs the full `seconds` regardless of a terminal event.** A rescue
   or wrong-way lands in `digest.terminal` but does not stop the interval (the car
   keeps being simulated, often stalled). Shorten `seconds`, or gate in the policy,
-  to end on the event. Only the FIRST event is reported — a second rescue in the
-  same window is invisible, so scoring an interval off `digest.terminal` alone
-  undercounts incidents. Cross-check `offTrack.events`.
+  to end on the event. `digest.terminal.reason` / `atS` summarize the FIRST event;
+  `digest.terminal.events` lists transitions, including repeat rescues after
+  recovery, and `last` names the latest. Count those events directly;
+  `offTrack.events` counts excursions and is a different metric.
 - **`brake:true` at a standstill drives you BACKWARDS.** Below walking pace the
   brake becomes reverse (deliberate — it lets a human ease off a wall). A natural
   "brake whenever clearance is low" rule therefore reverse-loops against the
@@ -242,3 +243,12 @@ exact call to make (`"call __apex.jump(frac, speed) first"`,
 says whether you are staged. Read `fix` and do what it says; the surface is
 built to be driven by its own error messages.
 
+
+## Lifecycle/tool receipts
+
+`agent.mjs --seed <uint32>` applies its seed before race staging and includes
+it in structured output. Keep that seed and staged state identical in serialized
+A/B comparisons. The VM `resourceSnapshot()` reports closed/timers/rafFrames/
+rejectionListeners; close in `finally` and compare resource ownership after
+failure as well as success. `G.resetEpisodeOwners` is the internal fresh-episode
+boundary, distinct from changing one public race setting.

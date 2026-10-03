@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing (dusk/dawn/night gate, lamp cap), the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating lighting knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as a GPU/shader defect is webgl-debug; adding or moving floodlight masts is scenery-dress.
+description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing (dusk/dawn/night gate, lamp cap), the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating lighting knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as a GPU/shader defect is webgl-debug; adding or moving floodlight masts is scenery-dress."
 
 ---
 
@@ -16,9 +16,9 @@ __apex.lightTune({ lampLevel: 0.4 })
 
 Precedence, lowest→highest: `TUNE_DEFS.def` → shipped
 `js/lighting/presets.js` `"*"` → shipped `"track|tod|weather"` →
-localStorage `"*"` → localStorage **`track|tod|weather`**. Live slider edits
+shipped `"*|tod"` when `gfx.hasPerChunkLights` (all presets/device classes) → localStorage `"*"` → localStorage **`track|tod|weather`**. Live slider edits
 write the **current condition** key (`LightStore.set` → `profiles[key()]`),
-not global `"*"`. Ship a look by baking COPY VALUES into
+not global `"*"`. Ship a look by merging the COPY VALUES `LightEdits` delta into
 `js/lighting/presets.js` ([references/bake.md](references/bake.md)). Edit `applyRaceSettings` only
 for STRUCTURAL changes.
 
@@ -47,7 +47,7 @@ Related: **webgl-debug**, **playwright-probe** (`references/cameras.md`).
 
 ## Visual A/B with slider-effect
 
-`slider-effect` classifies all 185 knobs (no browser) and runs live Playwright
+`slider-effect` classifies the live knob registry (no browser) and runs live Playwright
 A/B captures with pixel-diff outputs. Use it to confirm a knob is wired and to
 see *what region* of the frame it changes.
 
@@ -89,3 +89,7 @@ Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
 - A pasted `window.LightPresets` / `window.LightEdits` blob (LIGHTING TUNER
   COPY VALUES) → [references/bake.md](references/bake.md) — `scripts/bake.mjs`
   is a FULL REPLACE, `scripts/merge-proposals.mjs` merges a delta.
+
+The conditional layer is capability-gated; inspect CPU per-chunk light telemetry
+before assuming a shipped condition applies to every backend/preset. COPY VALUES
+exports `LightEdits` deltas; merged `lightState()` is observation, not a full export.

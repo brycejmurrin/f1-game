@@ -396,16 +396,18 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // Broadcast helicopter — corner-aware: hovers on the OUTSIDE of the
     // upcoming bend so it looks across the apex. +kA is a LEFT bend (measured —
     // agentview.js corner-table note) whose outside is +r.
-    // Live frames ease the side across; a hard sign flip teleported the eye
-    // ~36 m and the damper then swam it through the circuit.
-    Tracks.sample(track, wrapS(s - 26), cvB);
+    // Close enough, and low enough, that this is not a second overhead: the
+    // car stays large and the horizon stays in frame. Live frames ease the
+    // side across; a hard sign flip teleported the eye ~36 m and the damper
+    // then swam it through the circuit.
+    Tracks.sample(track, wrapS(s - 16), cvB);
     const sgnRaw = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendHeli", sgnRaw, 2.4, extra.dt || 0) : sgnRaw;
-    const hl = Math.min(18, corr);              // stay inside the street canyon
+    const hl = Math.min(12, corr);              // stay inside the street canyon
     eye[0] = cvB.p[0] + cvB.r[0] * hl * sgn;
-    eye[1] = centreY(track, s - 26) + 17 + (18 - hl) * 0.6 + bankDy;
+    eye[1] = centreY(track, s - 16) + 8.5 + (12 - hl) * 0.45 + bankDy;
     eye[2] = cvB.p[2] + cvB.r[2] * hl * sgn;
-    const heliAim = aheadPt(14, 0.9, x * 0.2);
+    const heliAim = aheadPt(6, 0.7, x * 0.2);
     tgt[0] = heliAim[0]; tgt[1] = heliAim[1]; tgt[2] = heliAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
   } else if (mode === "reverse") {
@@ -413,15 +415,19 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(60, 72, spFov);
   } else if (mode === "side") {
-    // TV trackside: sits on the OUTSIDE of the bend looking across the apex.
+    // TV tracking: a few metres behind the car, outside the bend, looking
+    // up the road so the car leads the frame instead of sitting dead-centre.
+    // Ease the outside-side flip so a kink does not teleport the eye.
     const sgnRaw = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
     const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendSide", sgnRaw, 2.6, extra.dt || 0) : sgnRaw;
-    const sl = Math.min(25, corr);              // stay inside the street canyon
-    eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 6.0 + (25 - sl) * 0.30; eye[2] = p[2] + r[2] * sgn * sl;
-    tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+    const sl = Math.min(14, corr);
+    Tracks.sample(track, wrapS(s - 6), cvB);
+    eye[0] = cvB.p[0] + cvB.r[0] * sgn * sl; eye[1] = centreY(track, s - 6) + 3.2 + (14 - sl) * 0.25 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * sgn * sl;
+    const sideAim = aheadPt(14, 0.7, x * 0.3);
+    tgt[0] = sideAim[0]; tgt[1] = sideAim[1]; tgt[2] = sideAim[2];
     // Corridor widen stays local; speed widen shares CamFeel.speedFov (mild scale).
     const sideBase = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 44;
-    fov = sideBase + (25 - sl) * 0.5;
+    fov = sideBase + (14 - sl) * 0.35;
   } else if (mode === "cinematic") {
     // Outside-of-corner cinematic that gently breathes its angle instead of doing
     // full disorienting loops. Auto-picks the outside of the bend; on a straight it
@@ -439,10 +445,11 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt[0] = cinAim[0]; tgt[1] = cinAim[1]; tgt[2] = cinAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(50, 60, spFov);
   } else if (mode === "low") {
-    Tracks.sample(track, wrapS(s - 10), cvB);
+    Tracks.sample(track, wrapS(s - 8), cvB);
     const cx = x * 0.3;
-    eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 10) + 0.45 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
-    tgt[0] = p[0]; tgt[1] = p[1] + 0.6; tgt[2] = p[2];
+    eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 8) + 0.55 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
+    const lowAim = aheadPt(18, 0.45, x * 0.35);
+    tgt[0] = lowAim[0]; tgt[1] = lowAim[1]; tgt[2] = lowAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(55, 68, spFov);
   } else if (mode === "trackside") {
     // Fixed corner cameras that auto-switch as the subject passes (js/camera/trackside.js).
@@ -670,6 +677,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
   _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
   _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.cut = vantCut;
+  _vTrack = null;   // a per-call input: left set, it pinned the last raced world through the menu
   return _vantOut;
 }
 

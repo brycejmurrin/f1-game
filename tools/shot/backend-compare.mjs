@@ -43,6 +43,7 @@ import {
 import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 import { fileURLToPath } from "node:url";
 import { awaitPresentedFrame, screenshotPresentedCanvas } from "./probe-page.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -52,6 +53,12 @@ function flag(argv, name, fallback) {
 }
 
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `backend-compare — same scene on GLX/TLX/WGX + pixel diff
+
+  node tools/shot/backend-compare.mjs [track] [frac] [cam]
+    [--backends webgl2,three] [--tod day] [--out DIR] [--az N] [--el N] [--dist N]
+
+Default: monza 0.1 orbit → scratch/captures/backend-compare/.`);
 const positionals = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i].startsWith("--")) { if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++; continue; }

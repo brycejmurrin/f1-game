@@ -149,16 +149,17 @@ const RaceEntryProfile = (() => {
   }
 
   async function spanAsync(name, fn) {
+    const mine = generation;
     mark(name + ":start");
     try { return await fn(); }
-    finally { mark(name + ":end"); }
+    finally { if (mine === generation) mark(name + ":end"); }
   }
 
   /** Lower the handoff card on the first painted present; tick the window. */
-  function afterPresent(screen, gfx) {
+  function afterPresent(screen, gfx, preparing = false) {
     const handoff = screen.phase() === "handoff", watching = armed && presentationEnabled;
     if (handoff || watching) {
-      const warming = !!(gfx.warming && gfx.warming());
+      const warming = preparing || !!(gfx.warming && gfx.warming());
       if (watching) notePresent(warming);
       if (handoff && !warming) { mark("handoff:lower"); screen.stop(); }
     }

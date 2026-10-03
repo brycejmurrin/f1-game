@@ -136,6 +136,10 @@ const WeatherArc = (function () {
       return arc;
     }
     function tick(dt) {
+      // Road wetness tracks the physics value every tick (and under headless),
+      // so shaders cannot keep a stale or preset-pinned sheen that disagrees
+      // with grip (look=drive / continuous trackWetness).
+      syncWetness(dt);
       if (!arc) return;
       arc.t += dt;
       const f = Math.min(1, arc.t / arc.dur);
@@ -148,9 +152,27 @@ const WeatherArc = (function () {
       }
     }
 
+    // Continuous track wetness → frame.wetness for every renderer. LightKnobs.LT
+    // wetness ≥ 0 is the LIVE tuner / localStorage diagnostic pin only — shipped
+    // LightPresets must leave the knob at AUTO (−0.05) so dry cannot look wet.
+    function syncWetness(dt) {
+      const frame = G.frame;
+      if (!frame) return;
+      const knobs = (typeof LightKnobs !== "undefined" && LightKnobs) ? LightKnobs.LT : null;
+      const pin = knobs && typeof knobs.wetness === "number" ? knobs.wetness : -0.05;
+      if (pin >= 0) {
+        frame.wetness = pin;
+        return;
+      }
+      const wetTarget = G.trackWetness ? G.trackWetness() : 0;
+      const cur = frame.wetness || 0;
+      const step = (dt == null || !(dt > 0)) ? 1 : Math.min(1, dt * 0.8);
+      frame.wetness = cur + (wetTarget - cur) * step;
+    }
+
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, planFor, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, planFor, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },

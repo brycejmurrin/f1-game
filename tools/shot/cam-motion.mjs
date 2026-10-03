@@ -3,6 +3,7 @@
 // back into one dolly? A still frame cannot answer that. This drives every
 // mode through speed, a turn, a brake, and a slide, on the same live path
 // the race uses (CamFeel.drive), and checks the signature of each one.
+// @doc Chase/far/heli speed-open and per-mode corner pose, from the rig not a second dolly.
 //
 //   node tools/shot/cam-motion.mjs            # table, exit 1 on a miss
 //   node tools/shot/cam-motion.mjs --svg out.svg

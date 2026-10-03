@@ -97,3 +97,4 @@ const DriveChase = (function () {
 
   return { apply: apply, modes: MODES };
 })();
+Object.freeze(DriveChase);

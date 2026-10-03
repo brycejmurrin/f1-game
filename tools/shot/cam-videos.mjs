@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // cam-videos.mjs — one short mp4 per camera, for an HTML page to play.
+// @doc Record one silent mp4 per camera, plus a page a phone can autoplay.
 //
 // Headless recordVideo does not pick up this game's WebGL canvas (the file
 // stays on the first cockpit frame while the sim moves on). Each frame is
