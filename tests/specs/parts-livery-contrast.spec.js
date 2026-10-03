@@ -115,10 +115,12 @@ test.describe("Livery atlas — ink contrast", () => {
       ${CONTRAST_FN}
       const D = [0.06,0.06,0.08], L = [0.97,0.97,0.98];
       const best = (bg) => (ratio(D, bg) >= ratio(L, bg) ? D : L);
-      // Ferrari's default: red body, WHITE wing flaps. Inking the wing band for
-      // the body picks white — white on white.
+      // A Ferrari livery with no WINGS row: red body, wing flaps falling back to
+      // the WHITE c2. Inking the wing band for the body picks white — white on
+      // white. (The shipped SF-26 default authors black wings since 2026-10-03,
+      // so it no longer exhibits the trap; the fallback is what this pins.)
       const team = Teams.LIST.find((t) => t.id === "ferrari");
-      const liv = Liveries.forTeam(team)[0];
+      const liv = Object.assign({}, Liveries.forTeam(team)[0], { wing: null });
       const wing = liv.wing || liv.c2;
       return { body: ratio(best(liv.c1), wing), wing: ratio(best(wing), wing) };
     })()`);

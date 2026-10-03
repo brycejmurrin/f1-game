@@ -156,7 +156,12 @@ const STRIP = {
   // dropped; engine-helpers plinth sink)
   // → track limits 285994/257518 (two moored hulls over the road hole dropped)
   // → start-gantry lights 285946/257466 (the gantry housing is one bar, not three boxes: −48 indices)
-  monaco: { before: 285946, after: 257466 },
+  // → white Haas 285946/257474 (2026-10-03: the VF-26 team colour went dark
+  //   graphite → white, js/data/teams.js; its garage bay — GarageScene
+  //   .buildStatic off the team colour — now carries an HDR-bright box, which
+  //   hidden-faces never lets enclose, so 8 indices it used to strip stay.
+  //   Bisected: the Haas colour alone moves both circuits by +8.)
+  monaco: { before: 285946, after: 257474 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -167,7 +172,9 @@ const STRIP = {
   // → Racing Kit barriers/pylons 341367/314511 (k_barrierwhite ×1.5 / k_pylon
   //   ×1.3 replace the synthetic construction barrier/cone along the Rettifilo:
   //   fewer indices per stamp; measured on the tip merge, 2026-10-02)
-  monza: { before: 341367, after: 314511 },
+  // → white Haas 341367/314519 (the same +8 as monaco: the Haas bay's
+  //   HDR-bright box cannot enclose; emission unchanged)
+  monza: { before: 341367, after: 314519 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
