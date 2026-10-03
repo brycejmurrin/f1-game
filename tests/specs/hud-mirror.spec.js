@@ -171,9 +171,17 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   // each glass the right way up, its top band brighter than its bottom exactly
   // when the HUD mirror's matching rows are (the sky over the road behind, on a
   // day race). A v-flip inverts the glass and not the HUD.
+  // WAITED FOR, not read once: TLX on llvmpipe renders a race frame every few
+  // hundred ms, and remote gfx shard 1/4 (run 37103719285) read the same count
+  // twice with no frame between. Poll for the next glass draw, then measure.
+  const glass0 = on.m.backend.glass || 0;
+  await page.waitForFunction((g) => {
+    const m = window.__apex.mirror();
+    return !!(m && m.backend && m.backend.glass > g && m.glass && m.glass.live > 0);
+  }, glass0, { polling: 100, timeout: FRAME_MS });
   const lens = await page.evaluate(() => window.__apex.mirror());
   const ld = JSON.stringify({ backend: lens.backend, glass: lens.glass });
-  expect(lens.backend.glass, ld).toBeGreaterThan(on.m.backend.glass || 0);
+  expect(lens.backend.glass, ld).toBeGreaterThan(glass0);
   expect(lens.glass && lens.glass.live, ld).toBeGreaterThan(0);
   const bands = await glassBands(page, lens.glass.screen, on.m.rect);
   test.info().annotations.push({ type: "mirror-glass-bands", description: JSON.stringify(bands) });
@@ -229,7 +237,12 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   expect(off.frameHidden, JSON.stringify(off)).toBe(true);
   const c0 = off.m.backend.composites, g0 = off.m.backend.glass, fb0 = off.m.glass ? off.m.glass.fallback : 0;
   await awaitPresentedFrame(page, 12000);
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  // A cockpit frame has to DRAW before the fallback count can move (slow TLX
+  // on llvmpipe): wait for it, then check nothing live was drawn meanwhile.
+  await page.waitForFunction((f) => {
+    const m = window.__apex.mirror();
+    return !!(m && m.glass && m.glass.fallback > f);
+  }, fb0, { polling: 100, timeout: FRAME_MS });
   const off2 = await page.evaluate(() => window.__apex.mirror());
   expect(off2.backend.composites, JSON.stringify(off2)).toBe(c0);
   // ...and the glass stops with it: no live glass draw, the sky-tint fallback instead.
