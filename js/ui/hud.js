@@ -72,7 +72,17 @@ let _secRows = null;
 let _secFlash = [0, 0, 0];
 let _limitsDots = null;
 let _hudCamKey = "";
-let _hudDeltaEl = null;
+// The readouts js/ui/hud-readouts.js derives (gap laps, ERS, BB, blue flag, the
+// race DELTA's best-lap trace, the spoken HUD). Optional: the node HUD harness
+// boots hud.js without it, and every use below is guarded on _ro.
+const _ro = typeof HudReadouts !== "undefined" ? HudReadouts : null;
+const _trace = _ro ? _ro.lapTrace() : null;
+const _speak = _ro ? _ro.speaker(els.announceLive) : null;
+const _doc = typeof document !== "undefined" ? document : null;
+const _rx = _doc ? { delta: _doc.getElementById("hud-delta"), deltaN: _doc.getElementById("hud-delta-n"),
+  energyBox: _doc.getElementById("hud-energy"), energyN: _doc.getElementById("hud-energy-n"),
+  bb: _doc.getElementById("hud-bb") } : {};
+let _ePrev = NaN, _blue = false, _blueSaid = null;
 const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1, rival: 1, pitwall: 1, drone: 1 };
 const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
@@ -152,35 +162,23 @@ function syncHudCamClasses() {
   syncHudVisClasses(modeId);
 }
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
-function ensureHudDelta() {
-  if (_hudDeltaEl) return _hudDeltaEl;
-  if (typeof document === "undefined") return null;
-  const top = document.querySelector("#hud .hud-top");
-  if (!top) return null;
-  let el = document.getElementById("hud-delta");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "hud-delta";
-    el.className = "hud-box";
-    el.innerHTML = '<div class="hud-label">DELTA</div><div class="hud-value" id="hud-delta-n">—</div>';
-    top.appendChild(el);
-  }
-  _hudDeltaEl = el;
-  return el;
-}
 function paintHudDelta(player, timeTrial) {
-  const box = ensureHudDelta();
+  const box = _rx.delta;   // static in index.html (.hud-top) — no injected markup
   if (!box) return;
-  const n = box.querySelector("#hud-delta-n") || box;
-  // Prefer a ghost reference (PB or rival). In a race without a ghost, hide.
+  const n = _rx.deltaN || box;
+  // Prefer a ghost reference (PB or rival). Without one, the player's own best
+  // lap THIS RACE (HudReadouts.lapTrace, sampled per frame in updateHud); with
+  // neither — the opening lap of a race — nothing.
   const ghost = typeof GhostShare !== "undefined" && GhostShare.hasGuest()
     ? GhostShare
     : (typeof Ghost !== "undefined" && Ghost.hasGhost() ? Ghost : null);
-  if (!ghost) {
+  const ref = ghost || (_trace && _trace.has() && (player.lap | 0) >= 1 ? _trace : null);
+  hData(box, "ref", ghost ? "ghost" : ref ? "best" : null);
+  if (!ref) {
     hHidden(box, true);
     return;
   }
-  const ghostT = ghost.timeAt(player.s);
+  const ghostT = ref.timeAt(player.s);
   if (ghostT == null || !(player.lapTime >= 0)) {
     hHidden(box, true);
     return;
@@ -315,6 +313,16 @@ function gapForm() {
     else delete root.dataset.gapDrop;
   }
   return short ? _gapFormShort : _gapFormLong;
+}
+// A LAP OR MORE IS LAPS, NOT SECONDS. distance ÷ the player's speed is a fair
+// stand-in for a few hundred metres; for a car a lap up it read "+76.2s" — a
+// number no timing screen would show, and one that moved with the player's
+// throttle. A whole lap apart spells "+1L" (HudReadouts.lapsApart), and the
+// slot's EMA restarts so the seconds do not glide in from a lap's worth.
+function gapText(slot, gap, arrow, o, dist, vFloor) {
+  const n = _ro && G.track ? _ro.lapsApart(dist, G.track.total) : 0;
+  if (n) { _gapWho[slot] = null; return _ro.lapGapText(arrow, o.code, n, gap === _gapFormShort); }
+  return gap(arrow, o.code, gapSec(slot, o, dist / vFloor));
 }
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
 // per call for two constant formats.
@@ -767,7 +775,11 @@ function fitHud() {
   };
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
-  set("--hud-z-dock", capDock, btnScale);
+  // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
+  // cap between BUTTON SIZE and 1 still has to be written.
+  set("--hud-z-dock", capDock, Math.max(1, btnScale));
+  // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.
+  if (typeof HudLayout !== "undefined") HudLayout.fit();
 }
 
 /* THE TEAM ACCENT for a team css/tokens.css has no row for.
@@ -847,6 +859,20 @@ function skinAccent(t) {
   }
 }
 
+// Gear, tachometer and speed — every frame (updateHud, above its 10 Hz gate).
+function paintInstruments(player) {
+  hText(els.gear, "" + player.gear);
+  const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
+  hStyle(els.rpmFill, "width", (rpmFrac * 100).toFixed(0) + "%");
+  // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
+  // pulse animation) every tick the needle hovered on the line, which is
+  // exactly where a driver holding a gear sits. Enter at 92%, leave at 89%.
+  _redline = player.rpm > MAX_RPM * (_redline ? 0.89 : 0.92);
+  hToggle(els.tach, "redline", _redline);
+  const kph = G.dashKph(player.speed);   // SPEED UNITS is display-only (js/ui/appearance-opts.js)
+  hText(els.speed, "" + (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(kph) : Math.round(kph)));
+}
+
 function updateHud(force, dtMs) {
   if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
@@ -863,6 +889,12 @@ function updateHud(force, dtMs) {
   // (tuned "0.3 s at 10 Hz") chattered again and the flashes ran short, while
   // a throttled 30 fps device dropped to 5 Hz. The forced refreshes pass no dt
   // and are charged one nominal frame.
+  // THE INSTRUMENTS RUN AT FRAME RATE. Gear, revs and speed are what a driver
+  // reads to shift and to brake, and at 10 Hz the tach visibly stepped and a
+  // shift showed up to 100 ms late. All three go through the write cache, so a
+  // frame that changes nothing writes nothing; everything else stays at 10 Hz.
+  paintInstruments(player);
+  if (_trace && G.track) _trace.sample(player, G.track.total);   // the race DELTA's best-lap reference
   hudT -= dtMs;
   if (!force && hudT > 0) return;
   hudT = HUD_TICK_MS;
@@ -880,9 +912,28 @@ function updateHud(force, dtMs) {
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   hText(els.time, G.fmtTime(player.lapTime));
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
-  const kph = G.dashKph(player.speed);   // SPEED UNITS is display-only (js/ui/appearance-opts.js)
-  hText(els.speed, "" + (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(kph) : Math.round(kph)));
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
+  // ENERGY as a number and a state, not only a bar length: MJ (the 2026 rule's
+  // unit, the OVERTAKE chip's too) and deploy/harvest (js/ui/hud-readouts.js).
+  if (_ro) {
+    const st = _ro.ersState(!!player.deploying, player.energy, _ePrev);
+    _ePrev = player.energy;
+    const en = _ro.energy(player.energy, st);
+    hText(_rx.energyN, en.text);
+    hData(_rx.energyBox, "ers", st === "idle" ? null : st);
+    hAttr(_rx.energyBox, "aria-label", en.label);
+    // BRAKE BIAS — the set-up sheet's split, fixed for the race (game.js applySetup).
+    if (_rx.bb) {
+      const bb = _ro.bbText(player.brakeBias, typeof SetupTune !== "undefined" ? SetupTune.BB_REF : 0.56);
+      hText(_rx.bb, bb);
+      hAttr(_rx.bb, "aria-label", "Brake bias " + bb.slice(3) + " front");
+    }
+    // Positions mean nothing in practice or qualifying (rank is road order there).
+    if (_speak && !timeTrial && G.state === "race" && G.session !== "practice" && G.session !== "quali") {
+      _speak.tick(typeof performance !== "undefined" ? performance.now() : Date.now(),
+        { rank: player.retired ? 0 : player.rank, of: cars.length, best: player.best }, G.fmtTime);
+    }
+  }
   // TYRES (js/physics/tyre-model.js). The widget is hidden entirely while the
   // setting is off — the shipped default — so a player who never turns it on
   // pays nothing for it, not even a greyed-out bar. `spent` is wear as a
@@ -906,9 +957,6 @@ function updateHud(force, dtMs) {
       const txt = left == null || spent >= 1 ? "" : "~" + Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
-    // TYRE TEMPERATURE (js/ui/hud-tyres.js): the compound letter turns blue
-    // when the set is below its window and red above it — one fact, no cells.
-    if (typeof HudTyres !== "undefined" && tyres.info) HudTyres.paint(els.tyre, tyres.info(player));
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
     // is called by holding the car on the pit side at the entry, so the dwell
     // has to be visible: without it a driver cannot tell the gesture is
@@ -952,20 +1000,19 @@ function updateHud(force, dtMs) {
     const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     hData(els.tyre, "plan", pl && pl.state || null);
+    // TYRE TEMPERATURE (js/ui/hud-tyres.js): the compound letter turns blue
+    // when the set is below its window and red above it, with ❄/▲ after it for
+    // anyone the hue does not reach — and the chip's aria-label (role="img")
+    // says compound, heat, laps left and the plan in words.
+    if (typeof HudTyres !== "undefined") {
+      HudTyres.paint(els.tyre, tyres.info ? tyres.info(player) : null,
+        { code: player.tyre && player.tyre.code, lapsLeft: spent >= 1 ? null : left, spent, plan: pl && pl.text });
+    }
   } else {
     // Both are written only above: a pit cue or WORK ON CAR up when a wear race was quit stayed up through a no-wear session.
     hHidden(els.pitCue, true);
     hHidden(els.workBtn, true);
   }
-  // gear + tachometer
-  hText(els.gear, "" + player.gear);
-  const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-  hStyle(els.rpmFill, "width", (rpmFrac * 100).toFixed(0) + "%");
-  // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
-  // pulse animation) every tick the needle hovered on the line, which is
-  // exactly where a driver holding a gear sits. Enter at 92%, leave at 89%.
-  _redline = player.rpm > MAX_RPM * (_redline ? 0.89 : 0.92);
-  hToggle(els.tach, "redline", _redline);
   // toggle-button states
   hToggle(els.btnBoost, "on", player.boostOn);
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
@@ -1084,8 +1131,8 @@ function updateHud(force, dtMs) {
     // of the envelope at low OVERALL SPEED and understated slow-corner gaps.
     // 0.26 × vTop ≈ 25 m/s at default pace.
     const vFloor = Math.max(player.speed, G.vTop() * 0.26);
-    hText(els.gapA, a ? gap("▲", a.code, gapSec(0, a, (a.prog - player.prog) / vFloor)) : "");
-    hText(els.gapB, b ? gap("▼", b.code, gapSec(1, b, (player.prog - b.prog) / vFloor)) : "");
+    hText(els.gapA, a ? gapText(0, gap, "▲", a, a.prog - player.prog, vFloor) : "");
+    hText(els.gapB, b ? gapText(1, gap, "▼", b, player.prog - b.prog, vFloor) : "");
     // WHO: the neighbour's team colour as the chip's left bar (css/hud.css).
     hStyle(els.gapA, "--gap-team", a ? teamCss(a) : "");
     hData(els.gapA, "tow", a && (player.towing || 0) > 0.5 ? "1" : null);   // in the tow
@@ -1161,14 +1208,25 @@ function updateHud(force, dtMs) {
   // w.r.t. the cars; the debris side-world never moves one). Hidden when green.
   if (els.flag) {
     const cn = G.cautionInfo ? G.cautionInfo() : null;
-    const show = !!(cn && cn.level > 0);
-    if (show) {
+    const caution = !!(cn && cn.level > 0);
+    // BLUE FLAG: a caution outranks it (the chip holds one flag); no field, no flag.
+    const blueCar = !caution && !timeTrial && _ro && G.track && G.state === "race"
+      ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26) : null;
+    const show = caution || !!blueCar;
+    if (caution) {
       const txt = cn.level === 1 ? "YELLOW" + (cn.sector >= 0 ? " S" + (cn.sector + 1) : "")
                 : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR";
       hText(els.flag, txt);
       hClass(els.flag, cn.level === 4 ? "flag-red" : cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
       if (txt !== _flagSaid) { _flagSaid = txt; sayFlag(cn); }
     } else _flagSaid = "";
+    if (blueCar) {
+      hText(els.flag, "BLUE FLAG " + (blueCar.code || ""));
+      hClass(els.flag, "");
+      // Once per lapping car: a gap breathing across the 1.2 s window must not re-speak it.
+      if (blueCar !== _blueSaid) { _blueSaid = blueCar; sayFlag(null, "BLUE FLAG, LET " + (blueCar.code || "THE LEADER") + " THROUGH"); }
+    }
+    if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
   }
   drawMinimap();
@@ -1182,10 +1240,10 @@ function updateHud(force, dtMs) {
 // clear, then write a moment later, so a repeated flag is still a change. Once
 // per change of the chip's text, never per HUD tick; spelled out in full words
 // because "VSC" and "S2" are glyphs to the eye and noise to a voice.
-function sayFlag(cn) {
+function sayFlag(cn, words) {
   const live = els.announceLive;
   if (!live) return;
-  const said = "RACE CONTROL: " + (cn.level === 1 ? "YELLOW FLAG" + (cn.sector >= 0 ? ", SECTOR " + (cn.sector + 1) : "")
+  const said = "RACE CONTROL: " + (words ? words : cn.level === 1 ? "YELLOW FLAG" + (cn.sector >= 0 ? ", SECTOR " + (cn.sector + 1) : "")
     : cn.level === 2 ? "VIRTUAL SAFETY CAR" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR");
   live.textContent = "";
   clearTimeout(_flagLiveT);
@@ -1429,7 +1487,13 @@ function invalidateMap() { minimapBg = null; }
 
 // Per-race HUD memory: the POS box compared its first ranked tick of a new race
 // against the LAST race's finishing position and flashed "down" at lights-out.
-function resetRace() { _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta; }
+// The race DELTA's best lap and the spoken HUD's baselines are per race too.
+function resetRace() {
+  _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
+  _ePrev = NaN; _blueSaid = null;
+  if (_trace) _trace.reset();
+  if (_speak) _speak.reset();
+}
 return { updateHud, invalidateMap, flashSector, resetRace };
 }
 

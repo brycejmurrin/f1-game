@@ -225,6 +225,7 @@ export const RULES = [
   [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
   [/^js\/ui\/hud-elements\.js/, ["state-unit", "ui"], "hud-elements.test.mjs"],
   [/^js\/ui\/hud-tyres\.js/, ["state-unit", "ui"], "hud-tyres.test.mjs"],
+  [/^js\/ui\/hud-readouts\.js/, ["state-unit", "ui"], "hud-readouts.test.mjs"],
   [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
   [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
   [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],

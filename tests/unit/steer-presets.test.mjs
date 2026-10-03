@@ -193,3 +193,12 @@ test("a preset-owned row still clears the chip", () => {
     assert.equal(disk.preset, "custom", `${id} is PRESET_STORE's — PRO no longer holds`);
   }
 });
+
+test("lineBand treats PUSH / non-named notches as CUSTOM, never CORNERS", () => {
+  // CI 37088930611: every PUSH notch (-5..-1) used to fold into CORNERS, so a
+  // later LINE STEERING sync could write PULL 3 over a deliberate PUSH.
+  assert.match(SRC, /\["custom", "CUSTOM", true\]/);
+  assert.match(SRC, /return "custom"/);
+  assert.match(SRC, /n === "custom" \|\| LINE_LEVELS\[n\] == null/);
+  assert.doesNotMatch(SRC, /rl === 0 \? "off" : rl >= 5 \? "full" : "corner"/);
+});

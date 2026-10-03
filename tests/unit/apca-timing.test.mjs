@@ -130,3 +130,27 @@ test("the brand red stays out of the timing palette", () => {
     assert.notEqual(token(t), token("--red"), `${t} must not be the brand red`);
   }
 });
+
+test("colour-vision palettes clear 4.5:1 on the dark HUD plate", () => {
+  // The [data-cvd] blocks once shipped the white-paper Tol values (#0077bb,
+  // #cc3311): ~3:1 on the HUD plate, rgb(8 8 14 / .72), composited over a
+  // mid-grey scene (128). WCAG 2 ratio here because that is the claim the fix
+  // made; the plate is the HUD's, which stays dark in every UI theme.
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const relL = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const ratio = (a, b) => { const x = relL(a), y = relL(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const plate = [8, 8, 14].map((c) => c * 0.72 + 128 * 0.28);
+  assert.ok(ratio(hex("#0077bb"), plate) < 3.2, "anti-vacuity: the old deutan --faster must fail this bar");
+  const blocks = [...tokens.matchAll(/:root\[data-cvd="(\w+)"\][^{]*\{([^}]*)\}/g)];
+  assert.ok(blocks.length >= 2, "css/tokens.css must declare the [data-cvd] palettes");
+  let n = 0;
+  for (const [, mode, body] of blocks) {
+    for (const [, name, val] of body.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)) {
+      if (name === "--red") continue;           // the accent, never HUD ink (test above)
+      const r = ratio(hex(val), plate);
+      n++;
+      assert.ok(r >= 4.5, `[data-cvd="${mode}"] ${name} ${val} is ${r.toFixed(2)}:1 on the HUD plate; needs 4.5:1`);
+    }
+  }
+  assert.ok(n >= 9, `expected the cvd inks to be checked, saw ${n}`);
+});

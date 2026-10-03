@@ -265,6 +265,23 @@ test("the roster no longer reaches for a logo PNG", () => {
   }
 });
 
+test("every roster mark is the generated ORIGINAL emblem, not a traced logo", async () => {
+  // Apex 26 is an unofficial fan game, and the crests used to be silhouettes
+  // TRACED from the real team logos (a since-retired tracer rebuilt them from
+  // the old logo bitmaps). js/car/crest-paths.js is now
+  // built from geometric primitives by tools/car/emblems.mjs, so a hand edit
+  // — or a traced mark pasted back in — drifts from the generator and fails
+  // here, and so does the tracer coming back.
+  const { build, fileText } = await import("../../tools/car/emblems.mjs");
+  const onDisk = fs.readFileSync(path.join(ROOT, "js/car/crest-paths.js"), "utf8");
+  assert.ok(onDisk === fileText(build()),
+    "js/car/crest-paths.js has drifted from tools/car/emblems.mjs — edit the generator and run --write");
+  assert.ok(!fs.existsSync(path.join(ROOT, "tools", "car", "trace-logo.mjs")), "the logo tracer is back");
+  // Every roster team draws from that data — no painter of its own.
+  const own = Teams.LIST.filter((t) => t.id !== "custom" && LT.CRESTS[t.id] !== LT.CRESTS.ferrari);
+  assert.equal(own.length, 0, "teams drawn by a painter of their own: " + own.map((t) => t.id).join(", "));
+});
+
 test("an authored TEAM LOGO colour is painted exactly as selected", () => {
   // The editor's TEAM LOGO row writes liv.logo. markPalette used to overrule it
   // whenever it fell under MARK_FLOOR against the paint (or force a halo, or

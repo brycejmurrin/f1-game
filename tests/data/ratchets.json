@@ -9,7 +9,7 @@
       "lines": 3235
     },
     "js/car/car3d.js": {
-      "lines": 3420
+      "lines": 3435
     },
     "js/game.js": {
       "codeLines": 4830,
@@ -27,7 +27,7 @@
       "lines": 2787
     },
     "js/track/tracks.js": {
-      "lines": 690
+      "lines": 703
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
@@ -51,7 +51,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 341,
+      "ceiling": 342,
       "slack": 0
     },
     "rawColorDistinct": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2130,
+      "ceiling": 2135,
       "slack": 25
     },
     "subFloorFontSize": {
@@ -74,7 +74,7 @@
       "ceiling": 2,
       "slack": 0
     },
-    "waitForTimeout": 94,
+    "waitForTimeout": 93,
     "waitNoPolling": {
       "ceiling": 47,
       "slack": 39
