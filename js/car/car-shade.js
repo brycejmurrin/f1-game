@@ -493,6 +493,102 @@ const CarShade = (function () {
       if (l > 0) { N[v * 3] = acc[k] / l; N[v * 3 + 1] = acc[k + 1] / l; N[v * 3 + 2] = acc[k + 2] / l; }
     }
   }
+  // ---- UPPER/LOWER TWO-TONE (livery `lower`, 2026-10-03) ----
+  // A second body colour below a line that follows the sidepods:
+  //   y(z) = podAt(z).bottom + 0.31 (top - bottom), for z -2.00 .. +0.70
+  // (ahead of +0.70 the nose stays primary). No height knob: 0.31 is where the
+  // c2 accent band (pod fractions 0.08-0.30, car3d addPodFlankSpan) ends and the
+  // pale sponsor panel (0.32-0.80) starts, so no inked mark straddles the line.
+  // No vertex row lies on it — the pod flank is ONE segment of podRing and the
+  // cover flank one quad — so recolouring vertices alone would smear a ~20 cm
+  // gradient down the flank: a triangle across the line is CUT along it.
+  const LOWER = Object.freeze({ frac: 0.31, front: 0.70, rear: -2.00 });
+  /** Paint the body below the line in `lower`, in place, over triangles whose
+   *  vertices all lie in [from, to): only those whose three vertices are
+   *  `paint` in the body colour (c1, clamped as car3d addTri clamps paint) and
+   *  used by no other triangle, so the accent band, panel, stripes, nose cap,
+   *  pod/cover overrides and helmet keep theirs. Wholly below: recoloured.
+   *  Across: cut where the line crosses its edges — its own slot rewritten,
+   *  the other pieces appended, normals interpolated — so the colour edge is
+   *  crisp, and smooth() still welds the shading across it: call it before
+   *  smooth() and the finish remap. Returns the number of vertices appended. */
+  function lowerZone(out, from, to, c1, lower, anchors, paint) {
+    if (!Array.isArray(lower) || lower.length < 3) return 0;   // a garage file keeps a string in a colour slot (settings-export cleanLivery)
+    const P = out.pos, N = out.nrm, C = out.col, M = out.mat, I = out.idx, nt = Math.floor(I.length / 3), EPS = 1e-7;
+    const body = [0, 1, 2].map((k) => Math.min(c1[k], 1)), low = [0, 1, 2].map((k) => Math.min(lower[k], 1));
+    // The line at its KNOTS (the range ends and the pod stations between them):
+    // podAt is linear between stations, so interpolating these is exact.
+    const knots = [LOWER.front].concat(anchors.podStations.map((s) => s.z).filter((z) => z < LOWER.front && z > LOWER.rear), [LOWER.rear])
+      .map((z) => { const p = anchors.podAt(z); return [z, p.bottom + LOWER.frac * (p.top - p.bottom)]; });
+    const line = (z) => {
+      for (let i = 1; i < knots.length; i++) {
+        const [za, ya] = knots[i - 1], [zb, yb] = knots[i];
+        if (z >= zb) return z >= za ? ya : yb + (ya - yb) * (z - zb) / (za - zb);
+      }
+      return knots[knots.length - 1][1];
+    };
+    // < 0 below the line; linear between two knots. Outside the z range nothing is below.
+    const inZ = (z) => z <= LOWER.front && z >= LOWER.rear, gLine = (x, y, z) => y - line(z);
+    const f = (y, z) => (inZ(z) ? y - line(z) : 1);
+    const uses = new Uint32Array(Math.max(0, to - from));
+    for (let i = 0; i < nt * 3; i++) if (I[i] >= from && I[i] < to) uses[I[i] - from]++;
+    const isBody = (v) => v >= from && v < to && uses[v - from] === 1 && M[v] === paint &&
+      C[v * 3] === body[0] && C[v * 3 + 1] === body[1] && C[v * 3 + 2] === body[2];
+    const tint = (v, c) => { C[v * 3] = c[0]; C[v * 3 + 1] = c[1]; C[v * 3 + 2] = c[2]; };
+    const at = (u, w, t, k) => P[u * 3 + k] + (P[w * 3 + k] - P[u * 3 + k]) * t;
+    const vert = (u, w, t) => {   // a new vertex at t along edge u -> w (coloured by the caller)
+      const n = P.length / 3, nrm = [0, 1, 2].map((k) => N[u * 3 + k] + (N[w * 3 + k] - N[u * 3 + k]) * t), l = len(nrm) || 1;
+      for (let k = 0; k < 3; k++) { P.push(at(u, w, t, k)); N.push(nrm[k] / l); C.push(body[k]); }
+      M.push(M[u]);
+      return n;
+    };
+    // Triangle q (indices, winding kept) cut where g(x, y, z) changes sign, as
+    // [piece, side] pairs; a corner within EPS of zero is ON the cut. g is
+    // linear over q (a knot plane, or the line inside one slab), so a crossing
+    // is where it interpolates to zero. Pieces on one side share corners.
+    function split(q, g) {
+      const d = q.map((u) => g(P[u * 3], P[u * 3 + 1], P[u * 3 + 2])), s = d.map((x) => (x < -EPS ? -1 : x > EPS ? 1 : 0));
+      if (s.every((x) => x >= 0)) return [[q, 1]];
+      if (s.every((x) => x <= 0)) return [[q, -1]];
+      // Rotate so `a` is the corner the cut runs through, or the one it cuts off.
+      const on = s.indexOf(0), k = on >= 0 ? on : s[0] === s[1] ? 2 : s[0] === s[2] ? 1 : 0;
+      const a = q[k], b = q[(k + 1) % 3], c = q[(k + 2) % 3], da = d[k], db = d[(k + 1) % 3], dc = d[(k + 2) % 3];
+      if (on >= 0) { const t = db / (db - dc); return [[[a, b, vert(b, c, t)], s[(k + 1) % 3]], [[vert(a, a, 0), vert(b, c, t), c], s[(k + 2) % 3]]]; }
+      const tb = da / (da - db), tc = da / (da - dc), ab = vert(a, b, tb);
+      return [[[a, vert(a, b, tb), vert(a, c, tc)], s[k]], [[ab, b, c], -s[k]], [[ab, c, vert(a, c, tc)], -s[k]]];
+    }
+    const n0 = P.length / 3, yTop = Math.max(...knots.map(([, y]) => y));
+    for (let t = 0; t < nt; t++) {
+      const a = I[t * 3], b = I[t * 3 + 1], c = I[t * 3 + 2];
+      if (!isBody(a) || !isBody(b) || !isBody(c)) continue;
+      const z0 = Math.min(P[a * 3 + 2], P[b * 3 + 2], P[c * 3 + 2]), z1 = Math.max(P[a * 3 + 2], P[b * 3 + 2], P[c * 3 + 2]);
+      if (Math.min(P[a * 3 + 1], P[b * 3 + 1], P[c * 3 + 1]) > yTop + EPS || z1 < LOWER.rear || z0 > LOWER.front) continue;   // clear of the line: most of the body
+      const q = [a, b, c];
+      // The line BENDS at a knot (and stops at the range ends), so a long
+      // triangle (the monocoque runs z 1.05 -> 0.05) can dip under it with all
+      // three corners above. Between knots it is straight: the corners and the
+      // points where the knot planes cross the edges decide, and a crossing
+      // triangle is cut on those planes first, then each piece on the line.
+      const span = knots.map(([z]) => z).filter((z) => z > z0 + EPS && z < z1 - EPS);
+      const probe = q.map((u) => f(P[u * 3 + 1], P[u * 3 + 2]));
+      for (const z of span) for (let e = 0; e < 3; e++) {
+        const u = q[e], w = q[(e + 1) % 3], zu = P[u * 3 + 2], zw = P[w * 3 + 2];
+        if ((zu - z) * (zw - z) < 0) probe.push(f(at(u, w, (z - zu) / (zw - zu), 1), z));
+      }
+      if (probe.every((d) => d >= -EPS)) continue;                                // above (or on) the line
+      if (probe.every((d) => d <= EPS)) { for (const u of q) tint(u, low); continue; }   // below it
+      let pieces = [q];
+      for (const z of span) pieces = pieces.flatMap((p) => split(p, (x, y, zz) => zz - z).map(([p2]) => p2));
+      const seen = new Set();   // the line may colour two plane pieces apart: none shares a corner
+      pieces = pieces.map((p) => p.map((u) => (seen.has(u) ? vert(u, u, 0) : (seen.add(u), u))));
+      pieces.flatMap((p) => (inZ((P[p[0] * 3 + 2] + P[p[1] * 3 + 2] + P[p[2] * 3 + 2]) / 3) ? split(p, gLine) : [[p, 1]])).forEach(([p, sd], i) => {
+        for (const u of p) tint(u, sd < 0 ? low : body);
+        if (i) I.push(p[0], p[1], p[2]); else { I[t * 3] = p[0]; I[t * 3 + 1] = p[1]; I[t * 3 + 2] = p[2]; }
+      });
+    }
+    return P.length / 3 - n0;
+  }
+
   /** Crease-angle normal smoothing over a Car3D mesh, in place, read through
    *  `idx`: most of car3d emits three fresh vertices per triangle with a face
    *  normal, but tubes (halo, harness) share ring vertices that already carry
@@ -569,7 +665,7 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, EXP_TOP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft, vertexNormals, smooth,
+  return { KEY, RING_N, EXP, EXP_TOP, LOWER, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft, vertexNormals, lowerZone, smooth,
            skin, earcut, sect, pipe, strut, fine, rquad, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
            _norm: norm };
 })();

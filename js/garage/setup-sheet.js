@@ -84,7 +84,7 @@ const SECONDARY_CATS = new Set(["floor", "cockpit", "wheels", "tune", "livery"])
 // The save's own `if (d.x && d.x !== <default>)` chain and Liveries.forTeam's
 // copy list are the other two spellings of these keys; team-livery.test.mjs
 // holds all three together.
-const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
+const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "lower", "wing", "halo",
                           "rearWing", "cover", "spineTint", "saddleTint",
                           "sideTint", "sunTint",
                           "bandTint2", "plateTint",
@@ -113,6 +113,7 @@ const LIV_ROW_HINT = {
   noseStripe: "NOSE STRIPE — the nose crown only, tip to bulkhead. Layers on top of BODY STRIPE.",
   nose: "NOSE CAP — a painted nose cone. Unset = the bodywork colour.",
   pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
+  lower: "LOWER BODY — the bodywork below the sidepod accent-band line (pods, chassis sides and underside, from the sidepod inlet back; the nose stays PRIMARY). Only bare PRIMARY paint changes: bands, panels, stripes and caps keep theirs. Ignored under BODY SPLIT L/R. Unset = PRIMARY.",
   cover: "ENGINE COVER — airbox, roll hoop, cover loft and snorkel. Unset = the bodywork colour. (AIRBOX had its own row and no longer does: it painted a strict subset of these surfaces.)",
   spineTint: "BAND — the SPINE TOP graphic fill on the cover crown, the tail top, the centreline RIDGE, and the saddle's flank half when SADDLE is unset. The colour you pick is used as-is. Unset = SECONDARY, else PRIMARY, checked against ENGINE COVER — never BODY STRIPE or DETAIL.",
   saddleTint: "SADDLE — the shoulder shelf and upper-flank saddle block, and the SPINE SIDE shoulder / rake fills. The colour you pick is used as-is. Unset = BAND under SADDLE or SADDLE WRAP.",
@@ -962,6 +963,7 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
+  wrap.appendChild(colorRow("LOWER BODY", "lower", true));   // below the sidepod line: the two-tone body
   wrap.appendChild(section("ENGINE COVER"));
   wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
   // Design fills — greyed until the current TOP/SIDE/BIND paints that surface.

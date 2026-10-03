@@ -50,7 +50,8 @@ rear mainplane block (absent = `c2`, today's look); the garage greys WINGS and R
 `finStyle` also offers `stars` (the W17's star flake, a fixed nine-point table, no RNG).
 `cover` is the ENGINE COVER colour zone — the airbox, roll structure, cover loft and snorkel
 take it instead of `c1` (the SF-26's white top on a red car); the atlas inks the crest and the
-spine designs against it through `coverPaint`, or a light cover swallows a light crest. Body details:
+spine designs against it through `coverPaint`, or a light cover swallows a light crest.
+`lower` is the LOWER BODY zone: bare `c1` paint below a fixed line along the pods (pod fraction 0.31 of `podAt(z)`, z −2.00..+0.70, between the c2 band and the sponsor panel) takes it, its triangles CUT along the line by `CarShade.lowerZone` before smoothing — not a design fill (not in `FILL_SURFACES`), overridden by `bodySplit: "lr"`, and absent it the build is byte-identical. Body details:
 `tcam` (`Car3D.TCAM_IDS`, mesh colour only) and `coverVents` (`Car3D.COVER_VENT_IDS`,
 geometry, also in `SP_HULL_GEOM_FIELDS`); `spineHeight` (`Car3D.SPINE_HEIGHT_IDS`,
 lifts the cover crown top-only through `bodyAnchors(parts, teamId, spineHeight)` —
@@ -68,7 +69,7 @@ it — place side details with `coverFlankX(c, y)` and crown details with
 lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
 `drawMirrorLights` at `Car3D.mirrorLightAnchors` under 20 km/h.
 **THE PAINT SHEET HAS ONE FIELD LIST, and adding a field means touching it in
-exactly two places.** The editor's 35 keys (20 colours + 15 pills) live in `LIV_DRAFT_COLORS` +
+exactly two places.** The editor's 36 keys (21 colours + 15 pills) live in `LIV_DRAFT_COLORS` +
 `LIV_DRAFT_PILLS` (js/garage/setup-sheet.js); `livDraftFrom(liv, name)` builds a
 draft for all three doors (new / edit / "customize a copy") and
 `livDraftTo(d, keepNull)` converts back for BOTH the save and the live preview
