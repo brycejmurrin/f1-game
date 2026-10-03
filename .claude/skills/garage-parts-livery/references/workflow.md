@@ -69,8 +69,8 @@ resolution.
    ```
    `--plan` prints the matrix as JSON and exits before Chromium — do that
    first, the product multiplies fast. (It is `--plan`, not `--dry-run`: the
-   parser takes any unknown `--x=y` as a livery-field AXIS, so a misremembered
-   flag does not error, it silently adds a dimension and then launches.)
+   planner validates field names, enum values and part ids before browser launch;
+   a misremembered flag must fail preflight.)
    Parts are `--part.<category>=<id>[,<id>]`, one flag per category, with
    `--part.<category>=all` expanding to the catalog; ids are checked against
    `isOptionAvailable` for the team being shot, because a part locked to
@@ -93,7 +93,7 @@ resolution.
    `parts-physics.spec.js` (mesh-hash collision).
 8. **Test and ship.** `node tools/ci/test-bg.mjs car` for catalog/physics/visual
    recipes; `node tools/ci/test-bg.mjs modes` when you changed research locks or
-   garage ownership UI (there is no `test:career`). Bump via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
+   garage ownership UI (there is no `test:career`). Check the shell via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
    before commit.
 
 ## Common mistakes

@@ -1,6 +1,6 @@
 ---
 name: audio-debug
-description: Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or debugging WebAudio, engine pitch, sfx, sound, music layers, or audio in Apex 26. Not for game-feel polish that must not change physics (tune-physics), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y).
+description: "Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or debugging WebAudio, engine pitch, sfx, sound, music layers, or audio in Apex 26. Not for game-feel polish that must not change physics (tune-physics), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y)."
 ---
 
 # Debug and tune the audio engine
@@ -30,9 +30,10 @@ GameAudio.centroidHz()              // spectral centroid of live engine
 ```
 
 ```sh
-node tools/ci/test-bg.mjs ui        # audio-smoke + music-library
-node tools/check/audio-test.cjs     # objective pitch probe — starts its own server + Chromium
-python3 -m http.server 3456         # then DevTools → Web Audio
+node tools/ci/test-solo.mjs tests/specs/audio-smoke.spec.js  # focused browser check; parent only
+# Add music-library.spec.js for library behavior; ui is a broader group.
+python3 -m http.server 3456         # start this matching server first
+node tools/check/audio-test.cjs http://localhost:3456  # LAUNCHES CHROMIUM, objective pitch probe
 ```
 
 `tests/specs/audio-smoke.spec.js` covers init, re-enable during a race, and a

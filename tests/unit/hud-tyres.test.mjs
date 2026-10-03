@@ -1,4 +1,4 @@
-/* hud-tyres — cold/ok/hot bands + four-corner projection from axle model. */
+/* hud-tyres — cold/ok/hot temperature state painted on the compound letter. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -21,29 +21,27 @@ test("band: cold below window, hot above, ok inside", () => {
   assert.equal(H.band(70, 90, 15), "cold");
   assert.equal(H.band(90, 90, 15), "ok");
   assert.equal(H.band(105, 90, 15), "hot");
+});test("state: reads TyreModel.info; missing temp reads ok", () => {
+  const H = load();
+  assert.equal(H.state({ tempS: 60, tempOpt: 90, tempWindow: 15 }), "cold");
+  assert.equal(H.state({ tempS: 92, tempOpt: 90, tempWindow: 15 }), "ok");
+  assert.equal(H.state({ tempS: 110, tempOpt: 90 }), "hot");
+  assert.equal(H.state(null), "ok");
+  assert.equal(H.state({ tempOpt: 90 }), "ok");
 });
 
-test("corners: four ids; lateral load warms the outer side", () => {
+test("paint: writes data-temp on the tyre widget, no child nodes", () => {
   const H = load();
-  const info = { tempS: 90, tempOpt: 90, tempWindow: 15, wearF: 0.2, wearR: 0.4 };
-  const right = H.corners(info, 1);
-  assert.equal(right.length, 4);
-  assert.equal(right[0].id, "fl");
-  assert.equal(right[1].id, "fr");
-  assert.equal(right[2].id, "rl");
-  assert.equal(right[3].id, "rr");
-  assert.ok(right[1].temp >= right[0].temp, "FR warmer than FL under +lat");
-  assert.ok(right[3].temp >= right[2].temp, "RR warmer than RL under +lat");
-  const left = H.corners(info, -1);
-  assert.ok(left[0].temp >= left[1].temp, "FL warmer than FR under -lat");
+  const el = { dataset: {} };
+  assert.equal(H.paint(el, { tempS: 60, tempOpt: 90, tempWindow: 15 }), true);
+  assert.equal(el.dataset.temp, "cold");
+  H.paint(el, { tempS: 110, tempOpt: 90, tempWindow: 15 });
+  assert.equal(el.dataset.temp, "hot");
+  assert.equal(H.paint(null, {}), false);
+  assert.doesNotMatch(SRC, /createElement|appendChild/);
 });
 
-test("tempDelta rounds °C from the window centre", () => {
-  const H = load();
-  assert.equal(H.tempDelta({ tempS: 98.4, tempOpt: 90 }), 8);
-  assert.equal(H.tempDelta({ tempS: 82, tempOpt: 90 }), -8);
-  assert.equal(H.tempDelta(null), null);
-});
+
 
 test("module has no Tracks / curvature / kCur reads", () => {
   assert.doesNotMatch(SRC, /\bTracks\b/);

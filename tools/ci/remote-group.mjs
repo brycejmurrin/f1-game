@@ -163,7 +163,17 @@ async function watch(runId, { interval, deadline }) {
   }
 }
 
+/** Printed for `--help` / a missing group — never `not a group name: undefined`. */
+export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--timeout <min>]
+       node tools/ci/remote-group.mjs --plan          # GROUP=/SHARDS= env (workflow step)
+       node tools/ci/remote-group.mjs --watch <run-id>
+       node tools/ci/remote-group.mjs --help`;
+
 async function main() {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(USAGE);
+    return 0;
+  }
   if (argv.includes("--plan")) {   // the workflow's plan step: validate, print the matrix
     const p = planMatrix(process.env.GROUP, process.env.SHARDS, scripts());
     if (p.error) { console.error("remote-group --plan: " + p.error); return 3; }
@@ -178,6 +188,11 @@ async function main() {
   if (argv.includes("--watch")) return watch(opt("--watch"), { interval, deadline });
 
   const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout", "--workers"].includes(argv[i - 1]));
+  // Bare invoke used to fall through to planMatrix(undefined) → "not a group name: undefined".
+  if (!group) {
+    console.error(USAGE);
+    return 3;
+  }
   const p = planMatrix(group, opt("--shards", "4"), scripts());
   if (p.error) { say("refused: " + p.error); return 3; }
   const gl = opt("--gl", "llvmpipe");

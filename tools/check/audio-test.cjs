@@ -173,6 +173,7 @@ if (argv.includes("--help") || argv.includes("-h")) {
   exitCode = ok ? 0 : 1;
   } finally {
     if (ownServer) await harness.shutdown();
+    process.exitCode = exitCode;   // early page-error returns must fail after cleanup too
   }
   process.exit(exitCode);
 })();
