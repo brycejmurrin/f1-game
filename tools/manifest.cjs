@@ -371,6 +371,7 @@ const FULL = [
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
+  "js/car/field-lod.js",  // FieldLod: rival-car distance LOD table + selectors (wheels / flaps / flame / whole-car / shadow casters / mirror cap)
   "js/car/car-draw.js",   // car mesh/atlas caches, decal queue, cockpit rig, planted wheels (CarDraw.create(G, deps)), extracted from game.js
   "js/render/shared/shadow-pass.js",   // sun / car / lamp shadow maps, snap caches, caster pools (ShadowPass.create(G, deps)), extracted from game.js
   "js/render/shared/mirror-pass.js",   // HUD rear-view mirror: second camera + rival poses, gfx.mirrorBegin/End (MirrorPass.create(G, deps))

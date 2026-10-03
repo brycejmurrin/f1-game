@@ -282,6 +282,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
+  // Rival-car distance LOD (js/car/field-lod.js): the table, the shadow-caster
+  // gate, the mirror cap and the launch warm. Real shadow/mirror passes in VMs, ~0.1 s.
+  "tests/unit/field-lod.test.mjs",
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
