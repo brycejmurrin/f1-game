@@ -332,6 +332,7 @@ interface TyreSession {
   /** Wear as a fraction of the compound's life, 0..2. */
   spent(c: CarState): number;
   info(c: CarState): Record<string, unknown> | null;
+  belowWindow(c: CarState | null): number;
   severity(): number;
   level(): TyreLevel;
   setLevel(v: TyreLevel): TyreLevel;
@@ -406,7 +407,8 @@ interface GameCtx {
   readonly pits: PitSession;
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
   readonly pitCrewDrawn: () => number;
-  readonly roadWetness: () => number;
+  /** Continuous track wetness 0..1 (look=drive). Local roadWetness() in game.js aliases this. */
+  readonly trackWetness: () => number;
   readonly recordControls: () => Record<string, unknown>;
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown> };
@@ -759,6 +761,10 @@ interface GameCtx {
   readonly daily: any;
   /** Fly a flag by script — level 1-3 holds it at least that high; 0 releases it (js/race/race-control.js hold). */
   readonly holdCaution: (level: number, cause?: string) => number;
+  /** Clear race-control, incident and debris ownership before a deterministic episode restart. */
+  readonly resetEpisodeOwners: () => void;
+  /** Read-only rendered camera damping anchors and independent simulation/render clocks. */
+  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; };
   /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
   readonly ttDistance: number;
   /** True while an #announce message is still on screen — a coach mark waits for it. */
@@ -819,6 +825,7 @@ declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const PlayerForces: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
+declare const DrivingCues: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;
 declare const PitLane: GameModuleFactory;
 declare const RaceEngineer: GameModuleFactory;
@@ -838,6 +845,7 @@ declare const NetLobby: GameModuleFactory;
 declare const NetPlay: GameModuleFactory;
 declare const Photomode: GameModuleFactory;
 declare const FreeCam: GameModuleFactory;
+declare const ReplayBuf: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
@@ -857,6 +865,7 @@ declare const HomeWorld: GameModuleFactory;
 declare const PhotoStudio: GameModuleFactory;
 declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
+declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
@@ -867,6 +876,7 @@ declare const Spotter: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
+declare const DockLayout: GameModuleFactory;
 declare const KeyBinds: GameModuleFactory;
 declare const SettingsExport: GameModuleFactory;
 

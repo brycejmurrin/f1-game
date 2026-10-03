@@ -16,7 +16,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
 const json = args.includes("--json");
-const extra = args.filter((a) => a !== "--json" && a !== "--help");
+const unknown = args.find((a) => a.startsWith("-") && !["--json", "--help"].includes(a));
+if (unknown) { console.error(`Unknown option: ${unknown}`); process.exit(1); }
+const requested = args.filter((a) => a !== "--json" && a !== "--help");
+const extra = requested.map((rel) => path.relative(ROOT, path.resolve(ROOT, rel)).split(path.sep).join("/"));
 
 if (args.includes("--help")) {
   console.log("usage: node tools/check/bloat-scan.mjs [--json] [path...]");
@@ -83,9 +86,15 @@ if (fs.existsSync(agentsRoot)) {
 }
 add("AGENTS.md", "always-on");
 
+const missing = requested.filter((rel) => !fs.existsSync(path.resolve(ROOT, rel)));
+const emptyScopes = [];
+const scanned = [];
 const LARGE = 800;
 for (const rel of extra) {
-  for (const f of walkFiles(rel)) {
+  const scopedFiles = walkFiles(rel);
+  if (fs.existsSync(path.join(ROOT, rel)) && !scopedFiles.length) emptyScopes.push(rel);
+  for (const f of scopedFiles) {
+    scanned.push(f);
     if (seen.has(f)) continue;
     const n = linesOf(f);
     if (n == null) continue;
@@ -96,10 +105,14 @@ for (const rel of extra) {
 files.sort((a, b) => (a.slack ?? 1e9) - (b.slack ?? 1e9) || b.lines - a.lines);
 
 if (json) {
-  console.log(JSON.stringify({ ok: true, files }, null, 2));
+  console.log(JSON.stringify({ ok: !missing.length && !emptyScopes.length, coverage: { requested, scanned: [...new Set(scanned)], missing, emptyScopes }, files }, null, 2));
 } else {
   console.log("path\tlines\tceiling\tslack\tkind");
   for (const f of files) {
     console.log([f.path, f.lines, f.ceiling ?? "", f.slack ?? "", f.kind].join("\t"));
   }
 }
+
+if (missing.length) { console.error(`Missing requested scopes: ${missing.join(", ")}`); process.exitCode = 1; }
+
+if (emptyScopes.length) { console.error(`Requested scopes contain no scanned files: ${emptyScopes.join(", ")}`); process.exitCode = 1; }

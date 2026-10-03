@@ -88,15 +88,28 @@ test("the global baseline profile, if present, is a plain knob map", () => {
     'the "*" baseline holds a non-numeric value — a profile pasted one level too deep is skipped in silence');
 });
 
+test("shipped presets never pin wetness (look=drive)", () => {
+  // LT.wetness ≥ 0 overrides trackWetness for frame.wetness. Baking it into
+  // dry dawn/night profiles made dry races look wet while grip stayed dry.
+  // Diagnostic pins stay on the live tuner / localStorage only.
+  const P = presets();
+  const bad = [];
+  for (const key of Object.keys(P)) {
+    if (P[key] && Object.prototype.hasOwnProperty.call(P[key], "wetness")) bad.push(key);
+  }
+  assert.deepEqual(bad, [],
+    "a shipped LightPresets key sets wetness — strip it (AUTO) and use ssrDryNight/ssrDryDay for dry sheen");
+});
+
 /** Full tod×weather grid: 4 times of day × 5 weathers. Fallthrough-only tracks
  *  have zero `track|…` keys and resolve to `"*"` alone — B batches fill them. */
 const TOD = ["dawn", "day", "dusk", "night"];
 const WX = ["dry", "wet", "rain", "fog", "overcast"];
 
-test("B1a fallthrough circuits ship a full tod×weather grid with no wetness pins", () => {
-  // Would fail before the B1a bake: fuji/okayama had zero track| keys.
+test("B1 fallthrough circuits ship a full tod×weather grid with no wetness pins", () => {
+  // B1a fuji/okayama + B1b korea/jerez — each had zero track| keys before bake.
   const P = presets();
-  for (const track of ["fuji", "okayama"]) {
+  for (const track of ["fuji", "okayama", "korea", "jerez"]) {
     const keys = TOD.flatMap((tod) => WX.map((wx) => `${track}|${tod}|${wx}`));
     const missing = keys.filter((k) => !P[k] || typeof P[k] !== "object");
     assert.deepEqual(missing, [], `${track} must ship all 20 tod×weather keys (not "*" fallthrough)`);

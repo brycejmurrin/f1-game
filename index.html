@@ -1461,7 +1461,7 @@
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
         <input id="pm-help" type="range" min="1" max="10" step="1" value="6" aria-label="Driving help"></label>
-      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob.</p>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob. GRIP STEER (below, and in ROOKIE / RELAX) caps lock at the front peak without reading the road arc.</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
@@ -3421,6 +3421,7 @@
 <script defer crossorigin="anonymous" src="js/track/scenery/city.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/identity.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/pits.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/track/scenery/venue.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/build-props.js?v=dev"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
 <script defer crossorigin="anonymous" src="js/circuits/bahrain.js?v=dev"></script>
@@ -3537,6 +3538,7 @@
 <script defer crossorigin="anonymous" src="js/career/badges.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/grip-steer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-band.js?v=dev"></script>
@@ -3577,6 +3579,7 @@
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/sporting-regs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/broadcast.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/director.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
@@ -3586,9 +3589,11 @@
 <script defer crossorigin="anonymous" src="js/camera/photo-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/replay-buf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/brake-cue.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/driving-cues.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/steer-tuning.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/governor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/loop-health.js?v=dev"></script>
@@ -3597,6 +3602,7 @@
 <script defer crossorigin="anonymous" src="js/perf/renderer-picker.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/gfx-debug-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/dock-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/drive-chase.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/drive-broadcast.js?v=dev"></script>
@@ -3606,6 +3612,7 @@
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/pause-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>

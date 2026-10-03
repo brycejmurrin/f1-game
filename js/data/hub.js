@@ -208,6 +208,7 @@ const DataHub = (function () {
 
   function close() {
     if (!root) return;
+    cancelRealRace();
     Log.info("data", "hub close");
     disarmLiveAuto();
     closeTelemPopup();
@@ -240,6 +241,12 @@ const DataHub = (function () {
   }
 
   function showTab(id) {
+    if (id !== "race") {
+      cancelRealRace();
+      // Cancellation invalidates the WATCH controller behind this DOM. Rebuild
+      // on return, and prevent a pending tab load from recaching the old node.
+      state.race = null; gen.race = (gen.race || 0) + 1;
+    }
     closeTelemPopup();   // close popup and pause any running lap replay when changing tabs
     if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
@@ -468,6 +475,7 @@ const DataHub = (function () {
       b.type = "button";
       b.addEventListener("click", function () {
         if (y === sel.year) return;
+        cancelRealRace();
         sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
         for (let i = 0; i < yearRow.children.length; i++) {
           yearRow.children[i].classList.toggle("active", yearRow.children[i] === b);
@@ -498,6 +506,7 @@ const DataHub = (function () {
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
 
     gpSel.addEventListener("change", function () {
+      cancelRealRace();
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
       sel.sessionKey = null;
       sel.pinned = false;
@@ -599,7 +608,7 @@ const DataHub = (function () {
   });
   // Implementation: js/data/real-race-tab.js — the RACE IT tab: one real Grand
   // Prix's timing as a script, and every real driver's seat as a JUMP IN.
-  const { loadRealRace } = DataRealRace.create({
+  const { loadRealRace, cancel: cancelRealRace } = DataRealRace.create({
     el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
     teamChip, fmtDateTime, findTeam, close, isOpen
   });
