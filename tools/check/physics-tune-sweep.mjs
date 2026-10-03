@@ -52,6 +52,15 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, 
 
 // ---- CLI ----
 const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`physics-tune-sweep — driveability of each handling-slider notch (browser)
+
+  node tools/check/physics-tune-sweep.mjs [--sliders pm-rate,pm-pace] [--tracks monza,monaco]
+       [--notches 1,3,5,7,10] [--aggr 0.88] [--json out.json]
+
+  Env: APEX_WORKERS=N (default 3). Owned by tune-physics.`);
+  process.exit(0);
+}
 function flag(name, def) {
   const i = argv.indexOf("--" + name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
