@@ -32,6 +32,7 @@ import {
   resolveRepoDefault,
 } from "../lib/output-paths.mjs";
 
+import { menuReady } from "./menu-readiness.mjs";
 const ROOT = pathFromModule(import.meta.url);
 
 function pathFromModule(metaUrl) {
@@ -127,12 +128,15 @@ export function parseCssPlayArgs(argv) {
     else if (a === "--inject") out.inject = next();
     else if (a === "--viewport") {
       const [w, h] = next().split("x").map(Number);
-      if (!w || !h) throw new Error("viewport must be WxH");
+      if (!/^\d+x\d+$/.test(argv[i]) || ![w, h].every((n) => Number.isInteger(n) && n >= 64 && n <= 8192)) throw new Error("viewport must be integer WxH (64..8192 each)");
       out.viewport = { width: w, height: h };
     } else if (a === "--out") out.out = next();
     else if (a === "--click") out.clicks = next().split(",").map((s) => s.trim()).filter(Boolean);
     else if (a === "--root") out.root = next();
-    else if (a === "--scale") out.scale = Number(next());
+    else if (a === "--scale") {
+      out.scale = Number(next());
+      if (!Number.isFinite(out.scale) || out.scale < 40 || out.scale > 200) throw new Error("scale must be finite, 40..200");
+    }
     else if (a.startsWith("--")) throw new Error(`unknown flag: ${a}`);
     else out.screen = resolveScreen(a);
   }
@@ -155,7 +159,7 @@ Flags:
   --inject CSS      overlay <style id="apex-css-play"> after the screen opens
   --viewport WxH    default 852x393 (play-shape iPhone landscape)
   --desktop         1280x720
-  --scale N         __apex.uiScale(N) after boot
+  --scale N         __apex.uiScale(N) after boot (finite 40..200 %)
   --click SEL,SEL   extra clicks after the catalog path (or instead, with --root)
   --root SEL        screen root when not using a catalog id
   --out DIR         under artifacts/ or scratch/ (default artifacts/css-play/<id>-<stamp>/)
@@ -169,7 +173,7 @@ Same CLI via the Playwright wrapper:
   ./tools/mcp/playwright-mcp.sh dom  --screen settings --sel .sheet
 
 Output: artifacts/css-play/<screen>-<stamp>/{shot.png,dom.json,meta.json}
-Hide #game. Do not bump-cache mid-loop — ship with bump-cache after the look lands.
+Hide #game. Deployment supplies content hashes; no cache bump is needed.
 `;
 }
 
@@ -270,8 +274,12 @@ export async function swapStylesheet(page, relPath) {
       (l.getAttribute("href") || "").includes(rel) || l.href.includes(rel));
     if (!link) throw new Error("stylesheet not loaded: " + rel);
     await new Promise((res, rej) => {
-      link.onload = () => res();
-      link.onerror = () => rej(new Error("reload failed: " + rel));
+      const oldLoad = link.onload, oldError = link.onerror;
+      let timer;
+      const done = (err) => { clearTimeout(timer); link.onload = oldLoad; link.onerror = oldError; err ? rej(err) : res(); };
+      link.onload = () => done();
+      link.onerror = () => done(new Error("reload failed: " + rel));
+      timer = setTimeout(() => done(new Error("stylesheet reload timed out: " + rel)), 10000);
       link.href = rel + "?play=" + mtime;
     });
   }, { rel: relPath, mtime });
@@ -304,25 +312,17 @@ function resolveOut(requested, screen) {
 
 async function waitOpen(page, root) {
   await page.waitForSelector(root + ":not([hidden])", { timeout: 15000 });
-  await page.evaluate(async (sel) => {
-    await new Promise((r) => {
-      const t = setInterval(() => {
-        const el = document.querySelector(sel);
-        if (!el) { clearInterval(t); r(); return; }
-        const a = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
-        if (!a.some((x) => x.playState === "running") && getComputedStyle(el).opacity !== "0") {
-          clearInterval(t); r();
-        }
-      }, 50);
-    });
-  }, root);
+  await page.waitForFunction(menuReady, root, { polling: 100, timeout: 15000 });
+}
+export function screenClicks(opts, def) {
+  return opts.root ? (opts.clicks || []) : [...def.clicks, ...(opts.clicks || [])];
 }
 
 export async function runCssPlay(opts) {
   const screenId = opts.root ? (opts.screen || "custom") : opts.screen;
   const def = SCREENS[screenId] || { name: screenId, root: opts.root || "#overlay", clicks: [] };
   const root = opts.root || def.root;
-  const clicks = opts.clicks || def.clicks;
+  const clicks = screenClicks(opts, def);
   const outDir = resolveOut(opts.out, screenId);
   mkdirSync(outDir, { recursive: true });
 
@@ -374,7 +374,7 @@ export async function runCssPlay(opts) {
     let shotPath = null;
     if (opts.shot !== false) {
       shotPath = resolve(outDir, "shot.png");
-      await page.screenshot({ path: shotPath, fullPage: false });
+      await page.screenshot({ path: shotPath, fullPage: false, timeout: 15000 });
     }
 
     const meta = {
@@ -393,8 +393,7 @@ export async function runCssPlay(opts) {
     writeFileSync(resolve(outDir, "meta.json"), JSON.stringify(meta, null, 2));
     return { ok: true, ...meta, dump: dom };
   } finally {
-    if (browser) await browser.close();
-    await srv.close();
+    await Promise.allSettled([browser?.close(), srv.close()]);
     await shutdown();
   }
 }

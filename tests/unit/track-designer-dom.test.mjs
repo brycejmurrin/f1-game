@@ -807,3 +807,184 @@ test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that
   b.D.setTool("select");
   assert.equal(toolCalls[toolCalls.length - 1][1], undefined, "SELECT clears the ghost");
 });
+
+// ── Round 3 PR E: the share card and TEST HERE ─────────────────────────────
+/** A 2D context that records the text it draws (and measures 6.6 px a glyph). */
+function recordingCanvas(b, texts, canvases) {
+  const mk = b.dom.document.createElement;
+  b.dom.document.createElement = (tag) => {
+    const el = mk(tag);
+    if (String(tag).toLowerCase() === "canvas") {
+      canvases.push(el);
+      el.getContext = () => new Proxy({}, { get: (t, k) => (k === "fillText" ? (s) => texts.push(String(s)) : k === "measureText" ? (s) => ({ width: String(s).length * 6.6 }) : () => {}), set: () => true });
+      el.toBlob = (cb, type) => cb(new Blob(["\x89PNG"], { type }));
+    }
+    return el;
+  };
+}
+const SHORT_LOOP = () => { const pts = []; for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); } return pts; };
+
+test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, else NativeDownload, else <a download>; a dismissed sheet is silent; red refuses", async () => {
+  const b = bootScreen();
+  const texts = [], canvases = [], shared = [], native = [], anchors = [];
+  openGreen(b);
+  recordingCanvas(b, texts, canvases);
+  b.ctx.File = File;
+  let canShare = true, shareErr = null;
+  b.ctx.navigator = { canShare: (d) => canShare && Array.isArray(d.files) && d.files.every((f) => f instanceof File), share: async (d) => { if (shareErr) throw shareErr; shared.push(d); } };
+  const foot = b.root.querySelector(".td-foot");
+  assert.deepEqual(chipsIn(foot).map((c) => c.textContent).slice(3, 6), ["SHARE", "CARD", "EXPORT"], "CARD sits after SHARE in the foot");
+  assert.equal(await b.D.shareCard(), true);
+  const c = canvases[canvases.length - 1];
+  assert.deepEqual([c.width, c.height], [640, 360], "an offscreen 640×360 card");
+  const url = b.CD.shareUrl(b.D.state().lastCode), name = b.D.state().design.name;
+  assert.equal(shared.length, 1);
+  const f = shared[0].files[0];
+  assert.match(f.name, /^apex26-track-[a-z0-9-]+-card\.png$/);
+  assert.equal(f.type, "image/png");
+  assert.deepEqual([shared[0].title, shared[0].text], [name, url], "the full link always rides the share text");
+  assert.ok(texts.includes(name) && texts.includes("APEX 26 · TRACK DESIGNER"), "name and mark drawn: " + texts.join(" | "));
+  assert.ok(texts.some((t) => /km · \d+ corners · est lap \d+:\d\d\.\d$/.test(t)), "the facts line");
+  const urlLines = texts.filter((t) => /#track=|^https?:|^[A-Za-z0-9._~%-]+$/.test(t) && t !== name);
+  assert.ok(urlLines.length >= 1 && urlLines.length <= 3, "the link in at most three lines: " + urlLines.join(" | "));
+  assert.equal(msgText(b), "Card shared");
+  // No file sharing here: the native bridge where the shell has one…
+  canShare = false;
+  b.ctx.NativeDownload = { viable: () => true, saveBlob: async (blob, n) => { native.push([blob.type, n]); } };
+  assert.equal(await b.D.shareCard(), true);
+  assert.deepEqual(native, [["image/png", f.name]]);
+  assert.equal(msgText(b), "Card saved as " + f.name);
+  // …else an <a download>; a sheet that refuses for any other reason falls back the same way.
+  b.ctx.NativeDownload = { viable: () => false };
+  b.ctx.URL = { createObjectURL: () => "blob:card", revokeObjectURL: () => {} };
+  const mk = b.dom.document.createElement;
+  b.dom.document.createElement = (tag) => { const el = mk(tag); if (String(tag).toLowerCase() === "a") el.click = () => anchors.push([el.href, el.download]); return el; };
+  canShare = true; shareErr = Object.assign(new Error("no activation"), { name: "NotAllowedError" });
+  assert.equal(await b.D.shareCard(), true);
+  assert.deepEqual(anchors, [["blob:card", f.name]]);
+  // A dismissed sheet is the player's answer: nothing saved, nothing said.
+  shareErr = Object.assign(new Error("dismissed"), { name: "AbortError" });
+  b.D.load(Object.assign({}, b.D.state().design));   // a fresh status line
+  const before = msgText(b);
+  assert.equal(await b.D.shareCard(), false);
+  assert.equal(anchors.length, 1); assert.equal(native.length, 1);
+  assert.equal(msgText(b), before);
+  // Gated like SHARE: a red design draws nothing.
+  const n0 = canvases.length;
+  b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));
+  assert.equal(b.D.preview().ok, false);
+  assert.equal(await b.D.shareCard(), false);
+  assert.equal(canvases.length, n0);
+  assert.match(msgText(b), /Fix the red issues before sharing/);
+});
+
+test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, drops the car at rest on the selected point and goes green; a failed start comes back with the reason", async () => {
+  const b = bootScreen();
+  let hooks = null;
+  const real = b.DC;
+  b.ctx.DesignerCanvas = { create: (c, h) => { hooks = h; return real.create(c, h); }, COL: real.COL };
+  openGreen(b);
+  const d = b.D.state().design, tr = b.V.check(d).tr;   // the engine build the race drives
+  const calls = [];
+  const grid = { s: tr.total - 14, _prevS: tr.total - 14, prog: -14, x: -3, xVis: -3, px: 1, pz: 2, head: 0, speed: 4, vLat: 2, yawRateCur: 1, yawVis: 0.2, steerVis: 0.1, rescueT: 3, wallT: 1, wasOnWall: true, wrongT: 2, wrongWay: true, offT: 1 };
+  Object.assign(b.G, {
+    state: "menu", player: null, track: null, timeTrial: false, seasonMode: true,
+    startRace: async () => { calls.push(["startRace", b.G.trackIdx, b.G.timeTrial, b.G.seasonMode, b.D.isOpen()]); b.G.state = "count"; b.G.track = tr; b.G.player = Object.assign({}, grid); },
+    goRolling: () => { calls.push(["goRolling"]); if (b.G.state !== "count") return false; b.G.state = "race"; return true; },
+    snapGameCam: () => calls.push(["snap"]), refreshHud: () => calls.push(["hud"]),
+    quitToMenu: () => { calls.push(["quit"]); b.G.state = "menu"; b.C.consumeTrackHash(); },
+  });
+  b.ctx.ApexRoster = { LAZY_EDITOR: ["js/editor/designer.js"], LAZY_EDITOR_EDGES: [] };
+  b.C.create(b.G, { load: async () => true });
+  // The chip: last in the 4 DETAILS actions row and in the press-and-hold row; off until a point is selected.
+  const chip = chipsIn(b.root.querySelector(".td-rail"), "TEST HERE")[0];
+  assert.equal(chip.parentNode.children[chip.parentNode.children.length - 1], chip, "appended to the actions row");
+  assert.ok(chipsIn(chip.parentNode, "FIT VIEW").length === 1);
+  const ctxRow = b.root.querySelector(".td-ctx");
+  assert.equal(ctxRow.children[ctxRow.children.length - 1].textContent, "TEST HERE", "…and to the press-and-hold row");
+  assert.equal(chip.getAttribute("aria-disabled"), "true");
+  assert.equal(await b.D.testHere(), false, "no point, no drive");
+  assert.match(msgText(b), /Select a point/);
+  assert.equal(calls.length, 0);
+  hooks.onPick(12, { shiftKey: false });
+  assert.equal(chip.getAttribute("aria-disabled"), "false");
+  assert.equal(await b.D.testHere(), true);
+  const id = b.D.state().library[0];
+  assert.ok(id && b.D.state().design.originId === id, "saved first");
+  assert.deepEqual(plain(calls), [["startRace", b.Tracks.LIST.findIndex((t) => t.id === id), true, false, false], ["snap"], ["hud"], ["goRolling"]], "trackIdx + time trial + gp flow, closed, then the drop and the green");
+  assert.equal(b.G.state, "race");
+  // Within 20 m of the control's built s (the nearest node of the same engine build).
+  const p0 = d.pts[12];
+  let k = 0; for (let j = 0, best = Infinity; j < tr.n; j++) { const q = (tr.px[j] - p0[0]) ** 2 + (tr.pz[j] - p0[1]) ** 2; if (q < best) { best = q; k = j; } }
+  const sExp = k * tr.total / tr.n, p = b.G.player;
+  const ds = Math.abs(p.s - sExp), wrapD = Math.min(ds, tr.total - ds);
+  assert.ok(wrapD <= 20, "placed at s " + p.s + " vs " + sExp);
+  const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  b.Tracks.sample(tr, p.s, smp);
+  assert.deepEqual([p.px, p.pz, p.head], [smp.p[0], smp.p[2], Math.atan2(smp.t[0], smp.t[2])], "world pose from the track sample");
+  assert.equal(p.prog, p.s - tr.total, "an out-lap: the first crossing starts the timed lap");
+  assert.equal(p._prevS, p.s);
+  assert.deepEqual([p.x, p.xVis, p.speed, p.vLat, p.yawRateCur, p.yawVis, p.steerVis, p.rescueT, p.wallT, p.wasOnWall, p.wrongT, p.wrongWay, p.offT], [0, 0, 0, 0, 0, 0, 0, 0, 0, false, 0, false, 0], "at rest, every transient cleared");
+  assert.deepEqual([p.rPrevPx, p.rPrevPz, p.rPrevS, p.rPrevX, p.rPrevHead, p.rPrevYawVis], [p.px, p.pz, p.s, 0, p.head, 0], "render anchors seeded");
+  // The way back: armed, so quitting reopens the designer on the same point.
+  b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
+  b.D.close();
+  b.ctx.UiLayers = { inRace: () => true };
+  assert.equal(await b.C.consumeTrackHash(), null, "mid-race it waits");
+  assert.equal(b.D.isOpen(), false);
+  b.ctx.UiLayers = { inRace: () => false };
+  assert.equal(await b.C.consumeTrackHash(), true);
+  assert.equal(b.D.isOpen(), true);
+  assert.equal(b.D.state().sel, 12, "the selected point is back");
+  assert.equal(msgText(b), "Back from the test drive");
+  // A start that never reaches the lights: out through quitToMenu, back with the reason.
+  calls.length = 0;
+  b.G.startRace = async () => { calls.push(["startRace"]); };
+  b.G.state = "results";
+  hooks.onPick(12, { shiftKey: false });
+  assert.equal(await b.D.testHere(), false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(plain(calls), [["startRace"], ["quit"]], "never a frozen race");
+  assert.equal(b.D.isOpen(), true);
+  assert.match(msgText(b), /could not start/);
+  // A red design is refused before anything moves.
+  calls.length = 0;
+  b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));
+  hooks.onPick(3, { shiftKey: false });
+  assert.equal(await b.D.testHere(), false);
+  assert.equal(calls.length, 0);
+  assert.match(msgText(b), /Fix the red issues before racing/);
+});
+
+test("consumeTrackHash: an armed return reopens with sel/span (only for the same design), defers mid-race keeping it, and is taken once", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  const r = b.D.save();
+  assert.equal(r.ok, true);
+  b.ctx.ApexRoster = { LAZY_EDITOR: ["js/editor/designer.js"], LAZY_EDITOR_EDGES: [] };
+  b.C.create(b.G, { load: async () => true });
+  b.D.close();
+  assert.equal(await b.C.consumeTrackHash(), false, "nothing armed, no link: a no-op");
+  b.C.armReturn({ id: r.id, sel: 5, span: 9, s: 100 });
+  b.ctx.UiLayers = { inRace: () => true };
+  assert.equal(await b.C.consumeTrackHash(), null);
+  assert.equal(await b.C.consumeTrackHash(), null, "still armed while racing");
+  assert.equal(b.D.isOpen(), false);
+  b.ctx.UiLayers = { inRace: () => false };
+  assert.equal(await b.C.consumeTrackHash(), true);
+  assert.equal(b.D.isOpen(), true);
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9]);
+  assert.equal(msgText(b), "Back from the test drive");
+  b.D.close();
+  assert.equal(await b.C.consumeTrackHash(), false, "taken once: the second call is a no-op");
+  assert.equal(b.D.isOpen(), false);
+  // Another design on the screen since: it opens, but nothing is restored onto it.
+  b.D.open(); b.D.randomise(99); b.D.preview(); b.D.close();
+  b.C.armReturn({ id: r.id, sel: 7, span: -1, s: 0 });
+  assert.equal(await b.C.consumeTrackHash(), true);
+  assert.equal(b.D.isOpen(), true);
+  assert.equal(b.D.state().sel, -1);
+  assert.notEqual(msgText(b), "Back from the test drive");
+  assert.equal(b.data.customTrackReturn, undefined, "memory only — nothing stored");
+  assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
+});

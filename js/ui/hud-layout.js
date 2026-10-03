@@ -314,8 +314,8 @@ const HudLayout = (function () {
 
     body.appendChild(el("p", { className: "adv-help", textContent:
       "Move and resize each race HUD element. The cockpit cameras (COCKPIT, VISOR) keep their own layout, " +
-      "because the steering wheel covers the bottom of the screen; their shipped layout puts OVERTAKE, AERO, ENERGY and TYRES " +
-      "beside the wheel. A PRESET is a starting point you can still tweak. In a race, hold a slider to see the HUD through this page." }));
+      "because the steering wheel covers the bottom of the screen; on a desktop their shipped layout puts OVERTAKE, AERO, ENERGY " +
+      "and TYRES beside the wheel (on a touch screen the buttons carry OVERTAKE and AERO until you place them). A PRESET is a starting point you can still tweak. In a race, hold a slider to see the HUD through this page." }));
 
     let editing = cam, sel = IDS[0];
     // The settings page's own stepper (‹ select ›, .set-row). Like every shell

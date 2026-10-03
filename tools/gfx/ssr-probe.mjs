@@ -70,6 +70,12 @@ const WETNESS = Number(arg("wetness", WEATHER === "wet" ? "1" : "-1"));
 const HI = flag("hi");
 const OUT = join(ROOT, "scratch", "captures", "ssr");
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`Usage: node tools/gfx/ssr-probe.mjs [--track=redbull] [--tod=dusk] [--weather=wet] [--frac=0.30,0.62] [--cam=cockpit] [--debug=off|gates|hitmiss|hitcol|mix] [--hi]
+
+Captures the wet-road SSR and reports why it looks as it does. Boots Chromium.`);
+  process.exit(0);
+}
 // ── debug overlays ─────────────────────────────────────────────────────────
 // Each is a string replacement into the composite's road-SSR block. The anchors
 // are the two lines that bracket the interesting stages; if either stops

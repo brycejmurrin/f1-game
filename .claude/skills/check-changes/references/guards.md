@@ -64,3 +64,13 @@ Check `/proc/loadavg` (< 3) and for a live `playwright test` process first.
 Push your `claude/<topic>` branch; the deploy branch is
 `claude/f1-game-project-26h3ng` — never push there without review. Run
 `deploy.mjs --gate-only` first, then commit + `git push -u origin <branch>`.
+
+## Coverage and structured results
+
+A plan/selector must account for every requested material path: requested,
+claimed and unclaimed paths remain visible in JSON. Mixed claimed/unclaimed
+changes require the explicit fallback; selecting one known group does not
+establish coverage for the rest. Skill/instruction Markdown has its own route.
+Unknown flags and missing values fail before work; positional paths are explicit.
+For experiment tools inspect `performed`, `notRun`, failures and positive
+selected counts. MCP transport success is independent of domain verification.

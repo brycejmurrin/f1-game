@@ -618,7 +618,15 @@ function _rigArc(out, r, a0, a1, n, w, d, col) {
 }
 // Convex, bevel-cornered fascia / glove panels. Unlike boxes, their silhouette
 // stays rounded when the wheel rolls. Front is -z, toward the driver.
+// Physical cockpit materials avoid the generic world/ground texture on instruments.
+function _rigMark(out,start,surface) {
+  if(!out.mat)out.mat=[];
+  while(out.mat.length<out.pos.length/3)out.mat.push(26);
+  for(let i=start;i<out.mat.length;i++)out.mat[i]=surface;
+}
+function _rigMaterials(out) { _rigMark(out,out.pos.length/3,26); return out; }
 function _rigPlate(out, pts, z, depth, col) {
+  const start=out.pos.length/3;
   let area = 0;
   for (let i=0;i<pts.length;i++) { const a=pts[i], b=pts[(i+1)%pts.length]; area += a[0]*b[1]-b[0]*a[1]; }
   if (area < 0) pts = pts.slice().reverse();
@@ -635,6 +643,7 @@ function _rigPlate(out, pts, z, depth, col) {
       out.idx.push(base, base + 1, base + 2);
     }
   }
+  _rigMark(out,start,Math.max(...col)<.15 && col[2]>col[0]+.005?21:26);
 }
 function _rigRounded(out, x, y, z, w, h, d, r, col) {
   const a=w/2, b=h/2, c=Math.min(r,a,b), pts=[];
@@ -660,6 +669,7 @@ function _rigEllipsoid(out, x, y, z, rx, ry, rz, col, angle=0) {
     const k=(j+1)%N; out.idx.push(base,base+1+j,base+1+k,top,top-N+k,top-N+j);
     for(let i=0;i<M-2;i++) {const a=base+1+i*N+j,b=base+1+i*N+k;out.idx.push(a,a+N,b+N,a,b+N,b);}
   }
+  _rigMark(out,base,22);
 }
 // A circular button / rotary / quick-release boss, with real depth rather
 // than a square painted block. The face is slightly proud of its bezel.
@@ -674,6 +684,13 @@ function _rigButton(out, x, y, z, r, col, rotary = false) {
 // Swept elliptical tube in the wheel plane: continuous silicone grips and
 // leather rims. Shared radial normals avoid a chain of visible square joints.
 function _rigGrip(out, path, radius, depth, col) {
+  const raw=path;
+  path=[];
+  for(let i=0;i<raw.length-1;i++) for(let j=0;j<3;j++) {
+    const t=j/3,a=raw[Math.max(0,i-1)],b=raw[i],c=raw[i+1],d=raw[Math.min(raw.length-1,i+2)];
+    path.push(b.map((v,k)=>.5*(2*v+(-a[k]+c[k])*t+(2*a[k]-5*v+4*c[k]-d[k])*t*t+(-a[k]+3*v-3*c[k]+d[k])*t*t*t)));
+  }
+  path.push(raw[raw.length-1]);
   const N = 8, start = out.pos.length / 3;
   for (let i = 0; i < path.length; i++) {
     const a = path[Math.max(0, i-1)], b = path[Math.min(path.length-1, i+1)];
@@ -694,35 +711,76 @@ function _rigGrip(out, path, radius, depth, col) {
     const a = start+i*N, b = a+j, c = b+1;
     out.idx.push(...(i === 0 ? [a,c,b] : [a,b,c]));
   }
+  _rigMark(out,start,22);
 }
 // Modern wheels are open-bottom control yokes, not rectangular hoops.
 // References: Mercedes cockpit photograph / McLaren wheel history (see
 // docs/notes/COCKPIT-MODEL-REFERENCES.md). Telemetry still uses the same LCD plane.
-function _wheelScreen(out, c2) {
+// Tiny geometry-native legends; no texture upload or per-frame text allocation.
+const _RIG_FONT = {
+  A:'010101111101101',B:'110101110101110',C:'011100100100011',D:'110101101101110',E:'111100110100111',F:'111100110100100',
+  G:'011100101101011',H:'101101111101101',I:'111010010010111',J:'001001001101010',K:'101101110101101',L:'100100100100111',
+  M:'101111111101101',N:'101111111111101',O:'010101101101010',P:'110101110100100',Q:'010101101111011',R:'110101110101101',
+  S:'011100010001110',T:'111010010010010',U:'101101101101111',V:'101101101101010',W:'101101111111101',X:'101101010101101',Y:'101101010010010',Z:'111001010100111',
+  '0':'111101101101111','1':'010110010010111','2':'110001010100111','3':'110001010001110','4':'101101111001001',
+  '5':'111100110001110','6':'011100111101111','7':'111001010010010','8':'111101111101111','9':'111101111001110',
+};
+function _rigLabel(out,text,x,y,z,size,col) {
+  const start=out.pos.length/3;
+  const left=x-(text.length*4-1)*size/2;
+  for(let k=0;k<text.length;k++) {
+    const glyph=_RIG_FONT[text[k]]; if(!glyph)continue;
+    for(let i=0;i<15;i++) if(glyph[i]==='1') {
+      const cx=left+(k*4+i%3+0.5)*size, cy=y+(2-Math.floor(i/3))*size;
+      _rigQuad(out,[cx-size*.43,cy-size*.43,z],[cx-size*.43,cy+size*.43,z],[cx+size*.43,cy+size*.43,z],[cx+size*.43,cy-size*.43,z],[0,0,-1],col);
+    }
+  }
+  _rigMark(out,start,26);
+}
+function _wheelScreen(out, c2, style) {
   const CARB = [0.09, 0.095, 0.105], DARK = [0.022, 0.028, 0.036];
-  _rigPlate(out, [[-0.090,-0.090],[0.090,-0.090],[0.112,-0.065],[0.116,0.068],
-    [0.101,0.095],[-0.101,0.095],[-0.116,0.068],[-0.112,-0.065]], 0.014, 0.042, CARB);
+  const outlines={
+    f1:[[-.090,-.092],[.090,-.092],[.114,-.055],[.112,.065],[.092,.098],[-.092,.098],[-.112,.065],[-.114,-.055]],
+    gt:[[-.084,-.102],[.084,-.102],[.107,-.057],[.105,.065],[.076,.085],[-.076,.085],[-.105,.065],[-.107,-.057]],
+    butterfly:[[-.057,-.104],[.057,-.104],[.121,-.036],[.111,.068],[.085,.092],[-.085,.092],[-.111,.068],[-.121,-.036]],
+    yoke:[[-.082,-.108],[.082,-.108],[.112,-.060],[.101,.055],[.067,.071],[-.067,.071],[-.101,.055],[-.112,-.060]],
+    endurance:[[-.101,-.112],[.101,-.112],[.119,-.065],[.116,.063],[.090,.096],[-.090,.096],[-.116,.063],[-.119,-.065]],
+  };
+  _rigPlate(out,outlines[style]||outlines.f1,0.014,0.042,CARB);
   _rigRounded(out, 0, 0.024, -0.016, 0.125, 0.080, 0.020, 0.008, [0.06,0.067,0.075]);
   _rigBox(out, 0, 0.024, -0.028, 0.112, 0.068, 0.006, DARK);
-  // Original aligned LCD cells: cyan speed, orange gear, green battery charge.
+  // Preserve aligned cyan speed, orange gear and green battery cells.
   _rigBox(out, 0.048, 0.024, -0.0295, 0.012, 0.050, 0.003, [0.03,0.04,0.045]);
-  _rigRounded(out, -0.034, 0.022, -0.0292, 0.052, 0.040, 0.003, 0.002, [0.10,0.11,0.13]);
+  _rigRounded(out, -0.034, 0.022, -0.0292, 0.052, 0.040, 0.003, 0.002, [0.06,0.067,0.075]);
   _rigRounded(out, -0.034, 0.022, -0.0296, 0.047, 0.035, 0.003, 0.001, [0.010,0.016,0.026]);
   _rigRounded(out, 0.014, 0.022, -0.0292, 0.034, 0.044, 0.003, 0.002, [0.032,0.028,0.027]);
   _rigRounded(out, 0.014, 0.022, -0.0296, 0.029, 0.039, 0.003, 0.001, [0.014,0.018,0.024]);
+  const LEG=[0.64,0.70,0.74];
+  _rigLabel(out,'SPD',-.034,.052,-.033,.0015,LEG);
+  _rigLabel(out,'G',.014,.052,-.033,.0015,LEG);
+  _rigLabel(out,'ERS',.048,.052,-.033,.0011,LEG);
+  for(const x of [-.004,.035]) _rigBox(out,x,.023,-.032,.0008,.054,.001,[.08,.11,.14]);
+  _rigLabel(out,'OT',-.082,.003,-.033,.0012,LEG);
+  _rigLabel(out,'AERO',.082,-.014,-.033,.0011,LEG);
   const BTN = [[0.83,0.12,0.09],[0.16,0.43,0.85],[0.12,0.65,0.30],[0.88,0.70,0.12]];
   for (const side of [-1,1]) {
-    for (let i = 0; i < 3; i++) _rigButton(out, side*0.096, 0.055-i*0.037, -0.027, 0.008, BTN[(i+(side>0?1:0))%4]);
+    for (let i = 0; i < 3; i++) _rigButton(out, side*(style === "endurance" ? 0.102 : style === "gt" ? 0.094 : 0.096), 0.055-i*0.037, -0.027, 0.008, BTN[(i+(side>0?1:0))%4]);
     _rigButton(out, side*0.132, 0.079, -0.023, 0.010, BTN[side<0?2:0]);
     _rigButton(out, side*0.126, 0.045, -0.025, 0.008, BTN[side<0?1:3]);
   }
-  // Three lower multifunction rotaries, with index marks and raised selectors.
-  for (const [x,col] of [[-0.064,BTN[3]],[0,BTN[1]],[0.064,BTN[2]]])
-    _rigButton(out, x, -0.063, -0.026, 0.017, col, true);
-  for (const x of [-0.064,0,0.064]) for (let i=0;i<8;i++) {
-    const a=i/8*Math.PI*2, c=Math.cos(a), sn=Math.sin(a);
-    _rigBar(out,x+c*0.021,-0.063+sn*0.021,x+c*0.024,-0.063+sn*0.024,-0.030,0.0014,0.001,[0.54,0.55,0.51]);
+  const rotaries=style==='gt'?[[-.045,BTN[3]],[.045,BTN[1]]]:style==='butterfly'?[[0,BTN[1]]]:style==='yoke'?[[-.060,BTN[3]],[.060,BTN[2]]]:style==='endurance'?[[-.075,BTN[3]],[-.025,BTN[1]],[.025,BTN[2]],[.075,BTN[0]]]:[[-.064,BTN[3]],[0,BTN[1]],[.064,BTN[2]]];
+  for(const [x,col] of rotaries) {
+    const r=style==='butterfly'?.023:style==='endurance'?.013:.016;
+    const y=style==='endurance'?-.073:-.063;
+    _rigButton(out,x,y,-.026,r,col,true);
+    for(let i=0;i<8;i++) {
+      const a=i/8*Math.PI*2, c=Math.cos(a), sn=Math.sin(a);
+      _rigLabel(out,String(i+1),x+c*(r+.007),y+sn*(r+.007),-.031,.00075,LEG);
+    }
   }
+  for(const [word,x,y] of [['N',-.132,.107],['P',.132,.107],['BB',-.064,-.102],['MODE',0,-.102],['DIFF',.064,-.102]])
+    _rigLabel(out,word,x,y,-.027,.0013,LEG);
+  if(style==='butterfly') for(const side of [-1,1]) _rigButton(out,side*.064,-.058,-.027,.009,BTN[side<0?3:2]);
   // Fasteners, separate from controls; no fake HDR glow on physical buttons.
   for (const x of [-0.104,0.104]) for (const y of [-0.072,0.084])
     _rigDisc(out, x, y, -0.009, 0.003, 8, [0.40,0.42,0.44]);
@@ -738,23 +796,23 @@ function _wheelPaddles(out, wide) {
 // Curved backs, individual finger pads, an inboard thumb and tapered cuffs.
 // All styles use the same nine-and-three grip points and rotate with the wheel.
 function _wheelHands(out, acc, c1) {
-  const GLOVE=[0.15,0.16,0.175], SEAM=[0.18,0.20,0.22];
+  const GLOVE=[0.12,0.135,0.155], SEAM=[0.29,0.31,0.33];
   for (const side of [-1,1]) {
-    _rigEllipsoid(out,side*0.181,-0.006,-0.007,0.028,0.057,0.027,GLOVE);
-    for(let i=0;i<4;i++) _rigEllipsoid(out,side*0.164,0.039-i*0.025,0.017,0.018,0.012,0.019,GLOVE);
-    _rigEllipsoid(out,side*0.144,0.029,-0.021,0.013,0.026,0.018,GLOVE,-side*0.58);
-    _rigEllipsoid(out,side*0.189,-0.115,-0.003,0.025,0.068,0.025,GLOVE,-side*0.08);
-    _rigGrip(out,[[side*0.166,-0.064],[side*0.177,-0.068],[side*0.192,-0.068],[side*0.209,-0.063]],0.004,0.026,c1 ? c1.map(v=>v*0.35) : SEAM);
-    // Small embroidery and a shaped knuckle seam, rather than a rigid badge.
-    _rigBar(out,side*0.176,0.016,side*0.185,0.005,-0.034,0.002,0.001,SEAM);
-    _rigBar(out,side*0.185,0.005,side*0.193,0.016,-0.032,0.002,0.001,SEAM);
+    _rigEllipsoid(out,side*.184,-.011,-.013,.023,.046,.024,GLOVE,-side*.12);
+    for(let i=0;i<4;i++) _rigEllipsoid(out,side*.169,.030-i*.021,.010,.014,.011,.020,GLOVE,-side*.25);
+    _rigEllipsoid(out,side*.154,.015,-.024,.011,.022,.014,GLOVE,-side*.68);
+    _rigEllipsoid(out,side*.188,-.077,-.003,.021,.035,.021,GLOVE,-side*.06);
+    _rigEllipsoid(out,side*.192,-.126,.005,.024,.039,.024,GLOVE,-side*.08);
+    for(const y of [-.098,-.104]) _rigGrip(out,[[side*.171,y],[side*.182,y-.003],[side*.193,y-.003],[side*.211,y]],.0012,.026,c1||SEAM);
+    for(let i=0;i<3;i++) _rigBar(out,side*.181,.017-i*.013,side*.197,.011-i*.013,-.035,.0008,.001,SEAM);
+    _rigBar(out,side*.176,-.043,side*.184,-.080,-.025,.001,.001,SEAM);
   }
 }
 const COCKPIT_WHEELS = ["f1", "gt", "butterfly", "yoke", "endurance", "retro", "round"];
 function _wheelRimF1(out, CARB, RUB, GRIP, acc, style) {
   for (const s of [-1,1]) {
-    _rigGrip(out, [[s*0.151,0.103],[s*0.169,0.084],[s*0.179,0.038],[s*0.176,-0.022],[s*0.155,-0.099]], 0.022, 0.029, RUB);
-    _rigBar(out, s*0.093, 0.080, s*0.151, 0.090, 0.010, 0.042, 0.039, CARB);
+    _rigGrip(out, [[s*0.151,style === "yoke" ? 0.062 : 0.103],[s*0.169,0.054],[s*0.179,0.020],[s*0.176,-0.031],[s*0.155,-0.099]], 0.022, 0.029, RUB);
+    _rigBar(out, s*0.093, style === "yoke" ? 0.045 : 0.080, s*0.151, style === "yoke" ? 0.053 : 0.090, 0.010, 0.042, 0.039, CARB);
   }
   if (style === "gt") {
     // A continuous flat-bottom rim around the modern display and hand grips.
@@ -764,7 +822,7 @@ function _wheelRimF1(out, CARB, RUB, GRIP, acc, style) {
   } else if (style === "butterfly") {
     // Angular wings and a tapered lower housing leave the top of the rim open.
     for (const side of [-1,1]) {
-      _rigPlate(out,[[side*0.090,-0.091],[side*0.160,-0.080],[side*0.162,0.094],[side*0.120,0.133],[side*0.090,0.100]],0.020,0.022,CARB);
+      _rigPlate(out,[[side*0.090,-0.091],[side*0.160,-0.080],[side*0.162,0.094],[side*0.140,0.140],[side*0.090,0.100]],0.020,0.022,CARB);
       _rigBar(out,side*0.108,-0.080,side*0.148,-0.063,-0.006,0.009,0.008,acc||GRIP);
     }
   }
@@ -792,8 +850,12 @@ function _wheelRimRetro(out, CARB, RUB, GRIP, acc) {
   }
   _rigRounded(out, 0, 0.042, -0.010, 0.084, 0.034, 0.006, 0.004, [0.02,0.02,0.025]);
   _rigBox(out, 0, 0.042, -0.014, 0.070, 0.024, 0.003, [0.16,0.22,0.12]);
-  // An era-correct small monochrome display: no simulated telemetry on it.
-  for(const x of [-0.020,0,0.020]) _rigBar(out,x,0.036,x+0.008,0.048,-0.017,0.003,0.001,[0.055,0.075,0.045]);
+  _rigLabel(out,'SPD',-.019,.066,-.018,.0011,[.58,.64,.48]);
+  _rigLabel(out,'G',.025,.066,-.018,.0011,[.58,.64,.48]);
+  for(const [word,x] of [['OT',-.041],['AX',.041]]) {
+    _rigRounded(out,x,.035,-.0155,.011,.011,.002,.002,[.025,.03,.04]);
+    _rigLabel(out,word,x,.020,-.018,.001,[.58,.64,.48]);
+  }
   for(let i=0;i<7;i++) _rigDisc(out, -0.042+i*0.014, 0.071, -0.016, 0.0035, 8, [0.12,0.15,0.10]);
   _wheelPaddles(out, false);
 }
@@ -805,6 +867,8 @@ function _wheelRimRound(out, GRIP, acc) {
   _rigPlate(out,[[-0.020,-0.026],[0.020,-0.026],[0.015,-0.151],[-0.015,-0.151]],0.018,0.009,MET);
   _rigButton(out,0,0,0.004,0.032,[0.18,0.20,0.22]); // compact mechanical boss; no road-car horn
   for(let i=0;i<6;i++){const a=i/6*Math.PI*2;_rigDisc(out,Math.cos(a)*0.022,Math.sin(a)*0.022,-0.006,0.003,8,[0.63,0.65,0.67]);}
+  for(const side of [-1,1]) for(const x of [.065,.095,.125]) _rigDisc(out,side*x,-.005,.011,.006,12,[.045,.05,.055]);
+  for(let i=0;i<24;i++){const a=i/24*Math.PI*2;_rigDisc(out,(R-.007)*Math.cos(a),(R-.007)*Math.sin(a),-.015,.0008,6,[.35,.25,.17]);}
   _rigRounded(out,0,R,-0.002,0.013,0.026,0.042,0.004,acc||[0.55,0.52,0.42]);
 }
 // Keyed like _cockpitDecalMesh: the chosen wheel and the player's livery colours
@@ -836,7 +900,7 @@ function getCockpitWheel(liv, style) {
   else if (st === "retro") _wheelRimRetro(out, CARB, RUB, GRIP, acc);
   else {
     _wheelRimF1(out, CARB, RUB, GRIP, acc, st);
-    _wheelScreen(out, c2);
+    _wheelScreen(out, c2, st);
   }
   // Physical fascia fasteners, paddle pivots and stitched glove cuffs on all wheels.
   for (const side of [-1,1]) {
@@ -849,7 +913,7 @@ function getCockpitWheel(liv, style) {
     }
   }
   _wheelHands(out, acc, c1);
-  cockpitWheelMesh = _gfx.createMesh(out);
+  cockpitWheelMesh = _gfx.createMesh(_rigMaterials(out));
   return cockpitWheelMesh;
 }
 // The COLUMN AND BULKHEAD a wheel clips onto, for VISOR — the cockpit with the
@@ -867,7 +931,9 @@ function getCockpitDash() {
   const CARB = [0.04, 0.04, 0.05], DARK = [0.015, 0.015, 0.02], MET = [0.30, 0.30, 0.33];
   _rigTube(out, [[0,-0.012,0.025],[0,-0.012,0.32]], 0.028, CARB);        // steering column into the bulkhead
   _rigRing(out, 0, 0, 0.020, 0.037, 16, 0.012, 0.034, MET);             // quick-release boss where the hub clips on
-  _rigDisc(out, 0, 0, 0.001, 0.027, 12, DARK);            // its spline socket, facing the driver
+  _rigDisc(out, 0, 0, 0.001, 0.027, 12, DARK);
+  _rigRing(out,0,0,-.001,.022,12,.003,.002,[.16,.17,.19]);
+  _rigButton(out,0,0,-.002,.010,[.25,.26,.28]);            // its spline socket, facing the driver
   _rigPlate(out, [[-0.28,-0.25],[0.28,-0.25],[0.34,-0.15],[0.37,0.04],[0.34,0.07],[-0.34,0.07],[-0.37,0.04],[-0.34,-0.15]], 0.32, 0.035, CARB);          // front bulkhead, down to the coaming (world y 0.43..0.69)
   _rigTube(out, [[-0.34,0.064,0.305],[-0.17,0.072,0.305],[0,0.075,0.305],[0.17,0.072,0.305],[0.34,0.064,0.305]], 0.009, [0.10,0.10,0.12]); // its top lip
   for (let i=0;i<6;i++) {
@@ -876,7 +942,7 @@ function getCockpitDash() {
   }
   for (const side of [-1,1]) for (let i=0;i<4;i++)
     _rigRounded(out,side*(0.22+i*0.026),-0.080,0.298,0.012,0.078,0.008,0.003,DARK);
-  cockpitDashMesh = _gfx.createMesh(out);
+  cockpitDashMesh = _gfx.createMesh(_rigMaterials(out));
   return cockpitDashMesh;
 }
 // --- COCKPIT INTERIORS (js/camera/cockpit-opts.js INTERIOR) ------------------
@@ -960,6 +1026,7 @@ function _rigGauge(out, cx, cy, cz, r, turn, face, bezel) {
     const t = Math.PI*(1.25-1.5*i/10), c = Math.cos(t), s = Math.sin(t);
     _rigBar(out,cx+c*r*0.70,cy+s*r*0.70,cx+c*r*0.86,cy+s*r*0.86,cz-0.001,r*0.035,0.001,[0.11,0.12,0.13]);
   }
+  for(let i=0;i<=8;i+=2){const a=Math.PI*(1.25-1.5*i/8);_rigLabel(out,String(i),cx+Math.cos(a)*r*.51,cy+Math.sin(a)*r*.51,cz-.002,r*.045,[.13,.14,.15]);}
   const a = Math.PI * (1.25 - 1.5 * turn);
   _rigBar(out, cx, cy, cx + Math.cos(a) * r * 0.8, cy + Math.sin(a) * r * 0.8, cz - 0.002, r * 0.08, 0.002, [1.4, 0.22, 0.08]);
 }
@@ -988,15 +1055,15 @@ function _cockpitLowerTub(out, kind, accent) {
   _rigBox(out,0,0.245,-0.725,0.66,0.040,3.65,carbon); // continuous opaque floor
   _rigBox(out,0,0.450,1.08,0.66,0.450,0.040,carbon); // closed footwell end
   for (const side of [-1,1]) {
-    const rings=[[-2.55,0.326,0.690],[0.22,0.313,0.677],[1.10,0.300,0.655]].map(([z,x,y])=>{
-      const ring=[[side*0.230,0.265,z],[side*0.255,0.245,z],[side*x,y,z],[side*(x-0.016),y-0.008,z],
-        [side*(x-0.027),y-0.035,z],[side*(x-0.037),y-0.115,z],[side*0.244,0.410,z]];
+    const rings=[[-2.55,.326,.690],[-.82,.322,.690],[-.20,.313,.681],[.20,.297,.672],[.48,.280,.665],[1.10,.300,.655]].map(([z,x,y])=>{
+      const ring=[[side*.230,.265,z],[side*.255,.245,z],[side*x,y,z],[side*(x-.014),y-.012,z],
+        [side*(x-.025),y-.045,z],[side*(x-.045),y-.110,z],[side*(x-.061),.450,z],[side*.244,.410,z]];
       return side>0 ? ring : ring.reverse();
     });
     _rigLiner(out,rings,pad);
     _rigBeam(out,[side*0.246,0.365,-0.20],[side*0.238,0.365,0.81],0.006,edge);
-    for (const z of [0.10,0.34,0.58,0.80])
-      _rigBeam(out,[side*0.244,0.375,z],[side*0.289,0.631,z],0.005,edge);
+    for (const z of [0.16,0.52,0.84])
+      _rigBeam(out,[side*0.244,0.375,z],[side*0.289,0.631,z],0.0025,edge);
     _rigRounded(out,side*0.212,0.440,0.17,0.045,0.055,0.055,0.007,metal);
     _rigRounded(out,side*0.212,0.440,0.137,0.028,0.033,0.008,0.004,accent);
     _rigBeam(out,[side*0.16,0.275,-0.15],[side*0.16,0.275,0.90],0.012,edge);
@@ -1014,33 +1081,35 @@ function _cockpitLowerTub(out, kind, accent) {
 }
 // Modern tub trim: rounded removable pads, a carbon scuttle, moulded seam
 // lines and recessed fasteners. TEAM adds accents to the same shaped trim.
-function _teamCabin(out, pad, stitch) {
+function _teamCabin(out, pad, stitch, kind) {
   const CARB = [0.08,0.085,0.095];
   for (const side of [-1,1]) {
-    _rigTube(out,[[side*0.302,0.739,-0.80],[side*0.300,0.729,-0.55],[side*0.298,0.719,-0.16],[side*0.296,0.716,-0.04],[side*0.291,0.708,0.10],
-      [side*0.281,0.694,0.24],[side*0.262,0.682,0.36],[side*0.231,0.687,0.42]],0.024,pad);
-    _rigBeam(out,[side*0.288,0.730,-0.04],[side*0.274,0.698,0.31],0.003,stitch);
-    _rigRounded(out,side*0.281,0.704,0.21,0.035,0.044,0.07,0.008,CARB);
-    _rigDisc(out, side*0.281, 0.713, 0.172, 0.009, 12, [0.26,0.28,0.30]);
-    _rigDisc(out, side*0.281, 0.713, 0.171, 0.004, 8, [0.035,0.04,0.045]);
+    const stations=[[-.80,.300,.727],[-.55,.297,.725],[-.16,.289,.714],[.10,.278,.704],[.28,.258,.691],[.42,.231,.687]];
+    const rings=stations.map(([z,x,y])=>[[side*(x+.012),y+.022,z],[side*(x-.012),y+.015,z],
+      [side*(x-.021),y-.006,z],[side*(x-.012),y-.039,z],[side*(x+.016),y-.047,z],[side*(x+.025),y-.018,z]]);
+    if(side<0) for(const q of rings)q.reverse();
+    _rigLiner(out,rings,pad);
+    _rigTube(out,stations.map(([z,x,y])=>[side*(x-.016),y-.007,z]),.0015,stitch);
+    _rigRounded(out,side*.273,.696,.23,.026,.035,.04,.006,CARB);
+    _rigDisc(out,side*.273,.696,.207,.004,8,[.30,.32,.34]);
+    if(kind==='team') _rigTube(out,stations.slice(0,4).map(([z,x,y])=>[side*x,y+.023,z]),.003,stitch);
   }
-  _rigTube(out,[[-0.302,0.739,-0.80],[-0.20,0.754,-0.82],[0,0.765,-0.82],[0.20,0.754,-0.82],[0.302,0.739,-0.80]],0.024,pad);
-  _rigTube(out,[[-0.231,0.687,0.42],[-0.15,0.704,0.44],[0,0.709,0.45],[0.15,0.704,0.44],[0.231,0.687,0.42]],0.024,CARB);
-  _rigRounded(out,0,0.721,0.400,0.44,0.012,0.008,0.005,pad);
-  _rigBar(out,-0.18,0.728,0.18,0.728,0.394,0.002,0.002,stitch);
+  _rigTube(out,[[-.302,.739,-.80],[-.20,.754,-.82],[0,.765,-.82],[.20,.754,-.82],[.302,.739,-.80]],.024,pad);
+  _rigTube(out,[[-.231,.687,.42],[-.15,.704,.44],[0,.709,.45],[.15,.704,.44],[.231,.687,.42]],.018,CARB);
+  _rigRounded(out,0,.714,.400,.44,.010,.008,.004,CARB);
 }
 function _classicCabin(out, paint) {
-  const LEATHER = [0.13, 0.075, 0.045], CHROME = [0.62, 0.62, 0.65], FACE = [0.55, 0.53, 0.48];
+  const LEATHER = [0.10, 0.065, 0.043], CHROME = [0.37, 0.39, 0.41], FACE = [0.55, 0.53, 0.48];
   // Leather coaming follows the entire opening, including behind the driver.
   const rim = [[0,0.75,-0.82],[-0.30,0.72,-0.80],[-0.30,0.69,-0.05],[-0.30,0.69,0.25],[-0.18,0.71,0.40],
     [0.18,0.71,0.40],[0.30,0.69,0.25],[0.30,0.69,-0.05],[0.30,0.72,-0.80],[0,0.75,-0.82]];
   _rigTube(out,rim,0.020,LEATHER);
   _rigRounded(out, 0, 0.745, 0.47, 0.50, 0.13, 0.03, 0.038, paint);        // painted dash panel
-  _rigGauge(out, 0, 0.75, 0.453, 0.045, 0.62, FACE, CHROME);     // rev counter, centre
-  _rigGauge(out, -0.15, 0.745, 0.453, 0.028, 0.35, FACE, CHROME); // oil / water
-  _rigGauge(out, 0.15, 0.745, 0.453, 0.028, 0.45, FACE, CHROME);
+  _rigGauge(out, 0, 0.75, 0.443, 0.045, 0.62, FACE, CHROME);     // rev counter, centre
+  _rigGauge(out, -0.15, 0.745, 0.443, 0.028, 0.35, FACE, CHROME); // oil / water
+  _rigGauge(out, 0.15, 0.745, 0.443, 0.028, 0.45, FACE, CHROME);
   const scr = _classicScreen();
-  for (const [a, b] of scr.frame) _rigBeam(out, a, b, 0.012, CHROME);   // aeroscreen frame
+  for (const [a, b] of scr.frame) _rigBeam(out, a, b, 0.004, CHROME);   // aeroscreen frame
 }
 // The wraparound aeroscreen: a centre panel and two swept side panels, top edge
 // below the eye (0.90) so the chrome never cuts the horizon.
@@ -1062,18 +1131,20 @@ function getCockpitCabin(kind, liv) {
   const out = { pos: [], nrm: [], col: [], idx: [] };
   _cockpitLowerTub(out, kind, acc);
   if (kind === "classic") _classicCabin(out, col);
-  else _teamCabin(out, kind === "team" ? col : kind === "suede" ? [0.12,0.115,0.11] : [0.095,0.10,0.11], kind === "team" ? acc : [0.18,0.19,0.20]);
-  if (kind === "suede" || kind === "ribbed") {
-    const pad = kind === "suede" ? [0.18,0.17,0.16] : [0.055,0.060,0.065];
-    for (const side of [-1,1]) {
-      for (let i=0;i<7;i++) {
-        const z=0.02+i*0.045, y=0.724-i*0.0033;
-        _rigBeam(out,[side*0.278,y,z],[side*0.304,y-0.008,z],kind === "ribbed" ? 0.007 : 0.002,pad);
-      }
-      _rigBeam(out,[side*0.300,0.733,-0.02],[side*0.281,0.702,0.32],0.002,kind === "suede" ? acc : [0.22,0.23,0.24]);
+  else _teamCabin(out, kind === "team" ? col.map(v=>v*.32+.045) : kind === "suede" ? [0.18,0.165,0.15] : [0.095,0.10,0.11], kind === "team" ? col : [0.18,0.19,0.20], kind);
+  for(const side of [-1,1]) {
+    if(kind==='ribbed') for(let i=0;i<8;i++) {
+      const z=-.12+i*.055, x=.282-Math.max(0,z)*.10, y=.708-Math.max(0,z)*.04;
+      _rigRounded(out,side*x,y-.040,z,.028,.065,.037,.012,[.12,.13,.145]);
     }
+    if(kind==='suede') {
+      for(let i=0;i<6;i++) _rigTube(out,[[side*.281,.706,-.14+i*.07],[side*.276,.677,-.14+i*.07]],.0008,[.31,.29,.26]);
+      _rigRounded(out,side*.265,.575,.18,.019,.130,.24,.009,[.15,.135,.12]);
+    }
+    for(const z of [-.32,.06,.39]) _rigDisc(out,side*.282,.638,z,.0035,8,[.24,.26,.29]);
   }
-  _cabinMesh = _gfx.createMesh(out);
+  if(kind==='carbon') _rigMark(out,0,21);
+  _cabinMesh = _gfx.createMesh(_rigMaterials(out));
   return _cabinMesh;
 }
 // CLASSIC's aeroscreen glass, drawn with an alpha material (car-draw.js _glassOpts).
@@ -1144,7 +1215,7 @@ function getGearDigit(g) {
   if (_gearMeshes[g]) return _gearMeshes[g];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const GRN = [1.3, 0.65, 0.12];   // original orange gear, with gentler bloom
-  const h = 0.026, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.022, cz = -0.0335;
+  const h = 0.030, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.022, cz = -0.0335;
   const L = _seg7Layout(h, w, t, q);
   const seg = _SEG7[g % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
@@ -1169,7 +1240,7 @@ let _ersBarMesh = null;
 function getErsBar() {
   if (_ersBarMesh) return _ersBarMesh;
   const out = { pos: [], nrm: [], col: [], idx: [] };
-  _rigBox(out, 0, 0.023, 0, 0.008, 0.046, 0.004, [0.25, 1.9, 0.5]);  // anchored at y=0
+  _rigBox(out, 0, 0.023, 0, 0.008, 0.046, 0.004, [0.25, 1.25, 0.5]);  // anchored at y=0
   _ersBarMesh = _gfx.createMesh(out);
   return _ersBarMesh;
 }
@@ -1201,7 +1272,56 @@ function getAeroBar(fill) {
 const _axT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 const _axM = new Float32Array(16);
 const _AX_FX = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true };
+// Compact monochrome telemetry for the 2000s wheel, using cached digits.
+const _RETRO_FX={emissive:1,roughness:.9,specular:0,noAlphaWrite:true,alpha:1};
+const _retroDigits={}, _retroT=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]), _retroM=new Float32Array(16);
+function drawRetroTelemetry(mat,c,kph,t) {
+  const speed=Math.max(0,Math.min(999,typeof AppearanceOpts!=='undefined'?AppearanceOpts.speed(kph):Math.round(kph)));
+  const values=[...String(speed).padStart(3,'0'),String(Math.max(0,Math.min(9,c.gear||1)))];
+  for(let i=0;i<4;i++) {
+    const n=+values[i];
+    if(!_retroDigits[n]) {
+      const out={pos:[],nrm:[],col:[],idx:[]},L=_seg7Layout(.011,.006,.0013,.00275);
+      for(let j=0;j<7;j++)if(_SEG7[n][j])_rigBox(out,L[j][1],L[j][0],0,L[j][2],L[j][3],.001,[.58,.82,.40]);
+      _retroDigits[n]=_gfx.createMesh(out);
+    }
+    _retroT[0]=_retroT[5]=_retroT[10]=1;
+    _retroT[12]=i===3?.025:-.029+i*.010;_retroT[13]=.042;_retroT[14]=-.018;
+    M4.mulTo(_retroM,mat,_retroT);_gfx.draw(_retroDigits[n],_retroM,_AX_FX);
+  }
+  const en=Math.max(0,Math.min(1,c.energy||0));
+  _retroT[0]=.32;_retroT[5]=.28*en;_retroT[10]=1;
+  _retroT[12]=.034;_retroT[13]=.029;_retroT[14]=-.018;
+  if(en>.01){M4.mulTo(_retroM,mat,_retroT);_RETRO_FX.alpha=c.deploying?.75+.25*Math.sin(t*22):1;_gfx.draw(getErsBar(),_retroM,_RETRO_FX);}
+  _retroT[0]=_retroT[5]=_retroT[10]=.60;
+  _retroT[12]=0;_retroT[13]=.023;_retroT[14]=0;
+  M4.mulTo(_retroM,mat,_retroT);
+  const rpm=Math.max(0,Math.min(1,((c.rpm||PhysicsConsts.IDLE_RPM)-PhysicsConsts.IDLE_RPM)/(PhysicsConsts.MAX_RPM-PhysicsConsts.IDLE_RPM)));
+  _gfx.draw(getLedStrip(rpm>.965?(t*14%1<.5?9:0):Math.round(rpm*8)),_retroM,_AX_FX);
+  _retroT[0]=_retroT[5]=_retroT[10]=.50;
+  _retroT[12]=0;_retroT[13]=.023;_retroT[14]=0;
+  M4.mulTo(_retroM,mat,_retroT);drawWheelExtras(_retroM,c,t);
+  if(c.otT>0 || c.otArmed) {
+    _RETRO_FX.alpha=c.otT>0?.7+.3*Math.sin(t*18):1;
+    _gfx.draw(getOtLamp(c.otT>0),_retroM,_RETRO_FX);
+  }
+}
+const _wheelStatus = {};
+function getWheelStatus(mph,throttle,brake) {
+  const key=(mph?1:0)+'|'+throttle+'|'+brake;
+  if(_wheelStatus[key])return _wheelStatus[key];
+  const out={pos:[],nrm:[],col:[],idx:[]};
+  _rigLabel(out,mph?'MPH':'KPH',-.034,.001,-.037,.0013,[.35,.75,.78]);
+  for(const [x,n,col,label] of [[-.036,throttle,[.16,.85,.35],'T'],[.005,brake,[.95,.18,.12],'B']]) {
+    _rigLabel(out,label,x-.017,-.016,-.034,.0012,[.48,.55,.59]);
+    _rigBox(out,x,-.016,-.034,.026,.003,.002,[.04,.055,.06]);
+    if(n>0)_rigBox(out,x-.013+.013*n/4,-.016,-.036,.026*n/4,.003,.001,col);
+  }
+  return _wheelStatus[key]=_gfx.createMesh(out);
+}
 function drawWheelExtras(mat, c, t) {
+  const mph=typeof AppearanceOpts!=='undefined' && AppearanceOpts.units()==='mph';
+  _gfx.draw(getWheelStatus(mph,Math.round(Math.max(0,Math.min(1,c.throttleDemand||0))*4),Math.round(Math.max(0,Math.min(1,c.brakeDemand||0))*4)),mat,_AX_FX);
   const ax = Math.max(0, Math.min(1, c.aeroX || 0));
   const open = ax > 0.05;
   _gfx.draw(getAeroLamp(open ? 2 : c.xArmed ? 1 : 0), mat, _AX_FX);
@@ -1382,6 +1502,6 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
 })();
 Object.freeze(CarMesh);

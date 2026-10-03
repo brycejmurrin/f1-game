@@ -30,7 +30,7 @@ import {
   resolveContainedChild,
   resolveRepoDefault,
 } from "../lib/output-paths.mjs";
-import { awaitPresentedFrame, screenshotPresentedCanvas } from "../shot/probe-page.mjs";
+import { chromiumArgsForBackend, installProbeInit, awaitPresentedFrame, screenshotPresentedCanvas } from "../shot/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 export const SURVEY_USAGE = "usage: survey-track.mjs <id> [label] [fracs] [--oblique]";
@@ -41,10 +41,13 @@ export function parseSurveyTrackArgs(argv) {
   let oblique = false;
   for (const a of argv) {
     if (a === "--oblique") { oblique = true; continue; }
-    if (a.startsWith("--")) continue;
+    if (a === "--help" || a === "-h") return { help: true };
+    if (a === "--plan") { positionals.plan = true; continue; }
+    if (a.startsWith("--")) throw new Error(`unknown flag: ${a}`);
     positionals.push(a);
   }
   const [idArg, ...rest] = positionals;
+  if (rest.length > 2) throw new Error("too many positionals");
   if (!idArg) return { error: SURVEY_USAGE };
   let labelArg = "survey";
   let fracsArg = null;
@@ -55,10 +58,13 @@ export function parseSurveyTrackArgs(argv) {
     labelArg = rest[0];
     fracsArg = rest[1];
   }
+  const fracs = (fracsArg || "0,0.25,0.5,0.75").split(",").map((v) => v.trim() === "" ? NaN : Number(v));
+  if (fracs.length > 32 || !fracs.every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) throw new Error("fracs must contain 1..32 finite fractions in 0..1");
   return {
+    plan: !!positionals.plan,
     id: assertSafePathToken(idArg, "track id"),
     label: assertSafePathToken(labelArg, "label"),
-    fracs: (fracsArg || "0,0.25,0.5,0.75").split(",").map(Number),
+    fracs,
     oblique,
   };
 }
@@ -73,9 +79,14 @@ function invokedAsCli() {
   }
 }
 
-if (invokedAsCli()) await runSurvey(parseSurveyTrackArgs(process.argv.slice(2)));
+if (invokedAsCli()) {
+  try { await runSurvey(parseSurveyTrackArgs(process.argv.slice(2))); }
+  catch (err) { console.error(err.message); process.exitCode = 2; }
+}
 
 async function runSurvey(parsed) {
+if (parsed.help) { console.log(SURVEY_USAGE + " [--plan]"); return; }
+if (parsed.plan) { console.log(JSON.stringify(parsed, null, 2)); return; }
 if (parsed.error) { console.error(parsed.error); process.exit(2); }
 const { id, label, fracs: FRACS, oblique } = parsed;
 const LATS = [8, 12, 20, 30, 45, 70, 110];   // lateral metres for the ground probe
@@ -89,10 +100,11 @@ const srv = await startStaticServer(ROOT);
 const shots = [];
 let probeRows = [], errs = [];
 try {
-  const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"] });
+  const browser = await launchChromium({ args: chromiumArgsForBackend("three") });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on("pageerror", (e) => errs.push(String(e.message).split("\n")[0]));
   page.setDefaultTimeout(60000);
+  await installProbeInit(page, { backend: "three" });
   await page.goto(srv.url);
   await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000, polling: 100 });
 
@@ -168,13 +180,12 @@ try {
   // 3 · lateral ground-profile probe (both sides; report the side with terrain)
   probeRows = await page.evaluate(({ fracs, lats }) => {
     const out = [];
-    for (const f of fracs) {
+    for (const f of fracs) for (const side of [1, -1]) {
       const cells = lats.map((lat) => {
-        const R = window.__apex.groundY(f, lat), L = window.__apex.groundY(f, -lat);
-        const pick = R.terrainY != null ? R : L;
-        return { lat, terrainY: pick.terrainY, gap: pick.gap };
+        const pick = window.__apex.groundY(f, side * lat);
+        return { lat: side * lat, terrainY: pick.terrainY, gap: pick.gap };
       });
-      out.push({ frac: f, roadY: window.__apex.groundY(f, 0).roadY, cells });
+      out.push({ frac: f, side: side > 0 ? "R" : "L", roadY: window.__apex.groundY(f, 0).roadY, cells });
     }
     return out;
   }, { fracs: FRACS, lats: LATS });
@@ -206,13 +217,13 @@ for (const r of probeRows) {
   const firstSolid = solidIdx[0] ?? -1, lastSolid = solidIdx[solidIdx.length - 1] ?? -1;
   let sandwichHole = false, bigJump = false, prev = null;
   r.cells.forEach((c, i) => {
-    if (c.terrainY == null) { if (i > firstSolid && i < lastSolid) sandwichHole = true; }
+    if (c.terrainY == null) { if (i > firstSolid && i < lastSolid) sandwichHole = true; prev = null; }
     else { if (prev != null && Math.abs(c.terrainY - prev) > 1.0) bigJump = true; prev = c.terrainY; }
   });
   const cells = r.cells.map((c) => (c.terrainY == null ? "--" : c.terrainY.toFixed(2)).padStart(8)).join("");
   const note = [sandwichHole && "HOLE", bigJump && "STEP"].filter(Boolean).join(",");
-  if (note) flags.push(`  frac ${r.frac}: ${[sandwichHole && "terrain hole between rings → props float in the gap", bigJump && "abrupt terrain step (cliff/channel)"].filter(Boolean).join("; ")}`);
-  console.log(String(r.frac).padEnd(7) + r.roadY.toFixed(2).padStart(5) + "  " + cells + (note ? "   ⚠ " + note : ""));
+  if (note) flags.push(`  frac ${r.frac} ${r.side}: ${[sandwichHole && "terrain hole between rings → props float in the gap", bigJump && "abrupt terrain step (cliff/channel)"].filter(Boolean).join("; ")}`);
+  console.log((String(r.frac) + r.side).padEnd(7) + r.roadY.toFixed(2).padStart(5) + "  " + cells + (note ? "   ⚠ " + note : ""));
 }
 console.log("");
 if (flags.length) { console.log("⚠ geometry flags (confirm with the EYE shots):"); flags.forEach((f) => console.log(f)); console.log(""); }
