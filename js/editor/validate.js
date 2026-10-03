@@ -87,17 +87,21 @@ const TrackValidate = (function () {
     }
     return turns.map((f) => ((f % 1) + 1) % 1).sort((a, b) => a - b);
   }
-  /** Point-mass lap estimate (s): corner speed √(32/|k|) capped at 92 m/s, 11 m/s² accel, 38 m/s² brake. */
-  function estLap(tr) {
+  /** The point-mass speed (m/s) at every node: corner speed √(32/|k|) capped
+   *  at 92 m/s, then 11 m/s² accel forward and 38 m/s² brake backward, twice
+   *  round the loop. estLap integrates it; TrackInsight reads it (SPEED, passing). */
+  function speedProfile(tr) {
     const n = tr.n, ds = tr.total / n, v = new Float64Array(n);
     for (let k = 0; k < n; k++) { const c = Math.abs(tr.curv[k]); v[k] = c > 1e-6 ? Math.min(92, Math.sqrt(32 / c)) : 92; }
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 0; i < 2 * n; i++) { const k = i % n, j = (k + 1) % n; v[j] = Math.min(v[j], Math.sqrt(v[k] * v[k] + 2 * 11 * ds)); }
       for (let i = 2 * n; i > 0; i--) { const k = i % n, j = (k - 1 + n) % n; v[j] = Math.min(v[j], Math.sqrt(v[k] * v[k] + 2 * 38 * ds)); }
     }
-    let t = 0; for (let k = 0; k < n; k++) t += ds / Math.max(8, v[k]);
-    return t;
+    return v;
   }
+  const lapOf = (tr, v) => { const n = tr.n, ds = tr.total / n; let t = 0; for (let k = 0; k < n; k++) t += ds / Math.max(8, v[k]); return t; };
+  /** Point-mass lap estimate (s) over speedProfile. */
+  function estLap(tr) { return lapOf(tr, speedProfile(tr)); }
 
   /** The verdict: { ok, red, amber, issues, stats, def, tr, turns }. */
   function check(design) {
@@ -126,7 +130,7 @@ const TrackValidate = (function () {
     const red = issues.filter((i) => i.level === "red").length, amber = issues.filter((i) => i.level === "amber").length;
     return { ok: red === 0 && !!tr, red, amber, issues, stats: j.stats, def: built && built.def, tr, turns: j.turns };
   }
-  const emptyStats = () => ({ lengthM: 0, turns: 0, minR: Infinity, estLapS: 0, startBackM: 0, startFwdM: 0, pitEntryM: 0, pitExitM: 0, elevM: 0, gradeMax: 0, crossings: 0 });
+  const emptyStats = () => ({ lengthM: 0, turns: 0, minR: Infinity, estLapS: 0, startBackM: 0, startFwdM: 0, pitEntryM: 0, pitExitM: 0, elevM: 0, gradeMax: 0, crossings: 0, passZones: 0 });
 
   /** The road rules over a BUILT centreline (any track, a shipped circuit too —
    *  tests/unit/track-validate-fleet.test.mjs judges all 52 as the oracle).
@@ -222,11 +226,19 @@ const TrackValidate = (function () {
       try { if (typeof TrackPit !== "undefined" && TrackPit.window) { const w = TrackPit.window(tr, Tracks.curvature); stats.pitEntryM = Math.round(w.entryM); stats.pitExitM = Math.round(w.exitM); } } catch (_) { /* informational */ }
       turns = bakeTurns(tr);
       stats.turns = turns.length;
-      stats.estLapS = +estLap(tr).toFixed(1);
+      const v = speedProfile(tr);
+      stats.estLapS = +lapOf(tr, v).toFixed(1);
+      // The FIA Grade 1 layout advice (js/editor/insight.js): AMBER only, never a gate.
+      if (typeof TrackInsight !== "undefined") {
+        try {
+          stats.passZones = TrackInsight.passingZones(tr, v).length;
+          issues.push(...TrackInsight.fia(tr, design, stats, { v, turns }));
+        } catch (e) { if (typeof Log !== "undefined") Log.warn("track", "insight checks failed: " + (e && e.message || e)); }
+      }
     }
     return { issues, stats, turns };
   }
 
-  return { LIMITS, previewDef, build, check, judge, straightRun, noBays, bakeTurns, estLap };
+  return { LIMITS, previewDef, build, check, judge, straightRun, noBays, bakeTurns, estLap, speedProfile };
 })();
 Object.freeze(TrackValidate);
