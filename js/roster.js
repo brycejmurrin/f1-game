@@ -274,6 +274,7 @@
     "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
+    "js/editor/profile.js",
     "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
@@ -300,6 +301,10 @@
     [
       "js/editor/shape.js",
       "js/editor/canvas.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/profile.js"
     ],
     [
       "js/editor/shape.js",
@@ -331,6 +336,10 @@
     ],
     [
       "js/editor/canvas.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/profile.js",
       "js/editor/designer.js"
     ]
   ],
