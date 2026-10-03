@@ -72,6 +72,32 @@ const TrackShape = (function () {
     return n;
   }
 
+  /** A clothoid (Euler spiral) of length L from pose: curvature runs linearly
+   *  k0 → k1 (both ≥ 0, `dir` +1 LEFT / −1 RIGHT), so θ(s) = θ0 + dir·(k0·s +
+   *  ½·c·s²) with c = (k1 − k0) / L — c = 1/(Rc·Ls) for a spiral into an arc of
+   *  Rc (https://en.wikipedia.org/wiki/Euler_spiral). Integrated by midpoint
+   *  steps of 0.5 m and emitted at EQUAL arc steps of ≈ clamp(cMin, cMax,
+   *  stepMax / k) at the sharp end — the chord of the arc it meets, so the
+   *  engine's uniform spline sees even spacing (a chord grown per-point from
+   *  the straight end measured a ripple at every change). Chords stay ≥ cMin;
+   *  the last point is the end: { pts (start excluded), end } with end.th analytic. */
+  function clothoidPts(pose, k0, k1, L, dir, cMin, cMax, stepMax) {
+    const sg = dir < 0 ? -1 : 1, c = L > 0 ? (k1 - k0) / L : 0, H = 0.5;
+    const th = (s) => pose.th + sg * (k0 * s + 0.5 * c * s * s);
+    const kMax = Math.max(Math.abs(k0), Math.abs(k1));
+    const step = Math.min(cMax, Math.max(cMin, kMax > 1e-12 ? stepMax / kMax : cMax));
+    let n = Math.max(1, Math.round(L / step));
+    while (n > 1 && (L / n) * (1 - Math.pow(L / n * kMax, 2) / 24) < cMin) n--;   // chord ≥ cMin
+    const out = [];
+    let x = pose.x, z = pose.z, s = 0;
+    for (let i = 1; i <= n; i++) {
+      const to = L * i / n;
+      while (s < to - 1e-9) { const h = Math.min(H, to - s), t = th(s + h / 2); x += h * Math.sin(t); z += h * Math.cos(t); s += h; }
+      out.push([x, z]);
+    }
+    return { pts: out, end: { x, z, th: th(L) } };
+  }
+
   // ── Dubins (shortest CSC/CCC path between two poses, turning radius r) ──
   // Computed in the textbook frame (heading φ with direction (cos φ, sin φ),
   // L = +φ) over X = x, Y = z. Our θ maps to φ = π/2 − θ, so the geometry is
@@ -305,7 +331,7 @@ const TrackShape = (function () {
     return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
 
-  return { TAU, wrapI, mod2pi, wrapAngle, heading, polyLen, centroid, signedArea, straightPts, arcPts, arcSteps, dubins, dubinsWords, dubinsSample,
+  return { TAU, wrapI, mod2pi, wrapAngle, heading, polyLen, centroid, signedArea, straightPts, arcPts, arcSteps, clothoidPts, dubins, dubinsWords, dubinsSample,
     rdp, resample, catmull, menger, rotate, project, enforceSpacing, convexHull, segIntersect, crossings, clearance, rng };
 })();
 Object.freeze(TrackShape);

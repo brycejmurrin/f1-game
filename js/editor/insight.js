@@ -138,6 +138,7 @@ const TrackInsight = (function () {
       for (let d = 0; d < m; d++) lo = Math.min(lo, v[(k0 + d) % n]);
       c.vApex = lo;
       if (canSpan) Object.assign(c, spanFor(tr, pts, c));
+      Object.assign(c, zoneTags(tr, pts, c));
     }
     return list;
   }
@@ -312,6 +313,29 @@ const TrackInsight = (function () {
     let hw = 0; for (let k = 0; k < tr.n; k++) hw += tr.hw[k];
     const baseHW = Math.min(8, Math.max(5, Math.round(hw / tr.n * 2) / 2));
     return { pts: pts.map((p) => [q(p[0] - cx), q(p[1] - cz)]), lengthM: Math.round(tr.total), baseHW, centre: [cx, cz] };
+  }
+
+  /** What the designer authored at a corner (TURNS reads it back): bankDeg —
+   *  the angle of a bankZone whose window (frac on the built lap ± widthM/2)
+   *  holds the apex, 0 when flat; hwSpan — the half-width of an hwZone over the
+   *  apex, null when none. hwZones reach the def as control INDEX fractions
+   *  (CustomTracks.toRaw), so the apex is projected onto the control loop. */
+  function zoneTags(tr, pts, c) {
+    const def = tr.def || {}, L = tr.total, out = { bankDeg: 0, hwSpan: null };
+    for (const z of Array.isArray(def.bankZones) ? def.bankZones : []) {
+      if (!Number.isFinite(z.frac) || !(z.widthM > 0)) continue;
+      const d = Math.abs(wrapS(z.frac * L, L) - c.sApex), gap = Math.min(d, L - d);
+      if (gap < z.widthM / 2 && Math.abs(z.angleDeg) > Math.abs(out.bankDeg)) out.bankDeg = z.angleDeg;
+    }
+    const hz = Array.isArray(def.hwZones) ? def.hwZones : [];
+    if (hz.length && Array.isArray(pts) && pts.length >= 3) {
+      const k = Math.round(c.sApex / L * tr.n) % tr.n, p = S.project(pts, tr.px[k], tr.pz[k]), u = (p.i + p.f) / pts.length;
+      for (const z of hz) {
+        const inside = z.s1 < z.s0 ? (u >= z.s0 || u <= z.s1) : (u >= z.s0 && u <= z.s1);
+        if (inside && Number.isFinite(z.hw) && (out.hwSpan == null || z.hw < out.hwSpan)) out.hwSpan = z.hw;
+      }
+    }
+    return out;
   }
 
   // ── DESIGNED RANDOMISE: what a circuit is like, and how well it fits a style ──
