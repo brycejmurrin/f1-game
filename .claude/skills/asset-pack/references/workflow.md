@@ -37,8 +37,8 @@ WGX is a device/feature miss, not "WGX has no arrays."
    node tools/gen/assets.mjs bake-synthetic
    node tools/gen/assets.mjs verify
    ```
-   `verify` enforces CC0 / **Apex26-Procedural** licence allow-list, per-asset
-   md5, manifest consistency, and **8 MB** total budget.
+   `verify` enforces CC0 / **Apex26-Procedural** licence allow-list, recorded model/material-strip hashes, PNG decodability/dimensions,
+   high/low tier licence/MAT/scale consistency, and **8 MB** total budget.
 
 3. **A/B the blend** without reloading JS (BROWSER-ONLY: `__apex` needs a live
    page — `mcp-probe`, or `apex_eval`; no Node-VM route). Tarmac is MAT 16, so
@@ -105,8 +105,8 @@ Diff these seams, in order:
    `ATLAS_PRESETS.generated`, `SCALES`). If GLX/WGX look right it is not this.
 
 Parity gates (all static): `tests/unit/assets-pack.test.mjs` (MAT_LAYERS /
-`uMatTexScale[17]` / manifest ids; it does NOT pin TLX's `Array(17)` or upload
-loop — a layer-count change must grep `tsl-lit.js` by hand), the canary tests
+`uMatTexScale[17]` / manifest ids; backend layer allocation/upload invariants are pinned in the updated
+asset/renderer contracts; inspect GLX/TLX/WGX together when changing MAT count), the canary tests
 above and `webgpu-lifecycle.test.mjs` (WGX `textureSample` uniform-CF).
 Per-backend pixel truth is BROWSER-ONLY: `matTex(0)` vs `matTex(1)` per
 backend, `__apex.assets()` `uploaded:true`. Record which of 1-4 was ruled out.
