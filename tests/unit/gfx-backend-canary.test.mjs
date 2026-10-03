@@ -5423,3 +5423,141 @@ test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolv
   assert.match(post, /samples:\s*ctx\.sceneSamples \|\| 0,\s*resolveDepthBuffer:\s*true/,
     "the scene target takes the caller's samples and resolves its depth texture (SSAO/SSR/godray read it)");
 });
+
+// THE COCKPIT'S LIVE MIRROR GLASS on GLX (post.js mirror.glass, glx.js
+// drawMirrorGlass): the mirror target sampled INSIDE the main pass, on the
+// lens mesh. Driven on the recording mock: the chain is built in mirrorEnd —
+// before the main pass samples it, never at composite time — on a spare unit;
+// the glass binds the target on that unit and leaves unit 0 (the shadow map)
+// active; and it refuses whenever there is nothing safe to show.
+test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 restored, and every refusal", () => {
+  const h = bootGlx();
+  const G = h.GLX, gl = h.gl;
+  const id = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const glass = G.createTexMesh({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
+    uv: [0.4, 0.22, 1, 0.22, 1, 0.78, 0.4, 0.78], idx: [0, 1, 2, 0, 2, 3] });
+  const rect = [0.4, 0.1, 0.2, 0.06];
+  assert.equal(typeof G.drawMirrorGlass, "function");
+  // Nothing rendered yet: refused, nothing drawn.
+  G.begin(h.frame());
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, null), false, "no mirror image yet");
+  assert.equal(h.count("drawElements"), 0);
+
+  // The pass. While it is open the target is the bound draw buffer: refused.
+  assert.equal(G.mirrorBegin(h.frame(), 64, 16), true);
+  const mirFBO = h.calls.filter((c) => c[0] === "bindFramebuffer").at(-1)[1][1];
+  assert.ok(mirFBO && mirFBO.fbo, "mirrorBegin binds the mirror FBO");
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, null), false, "an open mirror pass would sample its own target");
+  assert.equal(h.count("drawElements"), 0);
+  G.mirrorEnd();
+  const mip = h.calls.findIndex((c) => c[0] === "generateMipmap");
+  assert.ok(mip >= 0, "mirrorEnd builds the target's mip chain");
+  const before = h.calls.slice(0, mip);
+  assert.notEqual(before.filter((c) => c[0] === "bindFramebuffer").at(-1)[1][1], mirFBO,
+    "the chain is built with the OUTPUT framebuffer bound, never the target's own");
+  assert.equal(before.filter((c) => c[0] === "activeTexture").at(-1)[1][0], gl.TEXTURE5, "on the spare unit");
+  const mirTex = before.filter((c) => c[0] === "bindTexture").at(-1)[1][1];
+  assert.ok(mirTex && mirTex.texture, "the mirror texture is bound for generateMipmap");
+  assert.equal(h.calls.slice(mip).find((c) => c[0] === "activeTexture")[1][0], gl.TEXTURE0, "unit 0 active again");
+
+  // The main pass: drawn, sampling the target on unit 5; unit 0 never rebound.
+  G.begin(h.frame());
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, null), true);
+  let unit = null, mirOn0 = false;
+  for (const [name, args] of h.calls) {
+    if (name === "activeTexture") unit = args[0];
+    if (name === "bindTexture" && args[1] === mirTex && unit === gl.TEXTURE0) mirOn0 = true;
+  }
+  assert.equal(mirOn0, false, "unit 0 keeps the shadow map");
+  const bind = h.calls.findIndex((c) => c[0] === "bindTexture" && c[1][1] === mirTex);
+  assert.ok(bind > 0, "the glass binds the mirror target");
+  assert.equal(h.calls.slice(0, bind).filter((c) => c[0] === "activeTexture").at(-1)[1][0], gl.TEXTURE5);
+  assert.ok(h.calls.some((c) => c[0] === "uniform1i" && c[1][0] && c[1][0].name === "uTex" && c[1][1] === 5), "uTex samples unit 5");
+  assert.equal(h.calls.filter((c) => c[0] === "activeTexture").at(-1)[1][0], gl.TEXTURE0, "unit 0 left active");
+  const prog = h.calls.filter((c) => c[0] === "useProgram").at(-1)[1][0];
+  const fs = prog.shaders.map((sh) => sh.source).join("\n");
+  assert.match(fs, /outColor = vec4\(texture\(uTex, vUV\)\.rgb, 1\.0\)/, "MIRROR_GLASS_FS: unlit, alpha 1");
+  assert.doesNotMatch(fs, /discard/, "opaque: no alpha test");
+  assert.equal(h.count("drawElements"), 1);
+  assert.ok(h.calls.some((c) => c[0] === "colorMask" && c[1].every((v) => v === true)), "alpha written (the not-car-paint tag)");
+  assert.equal(h.count("enable", (a) => a[0] === gl.BLEND), 0, "no blend");
+  const draw = h.calls.findIndex((c) => c[0] === "drawElements");
+  assert.ok(h.calls.slice(0, draw).some((c) => c[0] === "disable" && c[1][0] === gl.CULL_FACE), "both faces");
+  assert.ok(h.calls.slice(draw).some((c) => c[0] === "enable" && c[1][0] === gl.CULL_FACE), "culling restored");
+  assert.equal(G.mirrorState().glass, 1, "mirrorState counts the glass");
+
+  // The composite no longer builds the chain (the glass already sampled it this frame).
+  G.mirrorRect(rect);
+  h.reset();
+  G.present({});
+  assert.equal(G.mirrorState().composites, 1, "the composite ran");
+  assert.equal(h.count("generateMipmap"), 0, "present() builds no mip chain");
+
+  // flip false = the broadcast PiP owns the target: refused; the mirror back: drawn.
+  G.begin(h.frame());
+  G.mirrorRect(rect, false);
+  assert.equal(G.drawMirrorGlass(glass, id, null), false, "never on the PiP");
+  G.mirrorRect(rect);
+  assert.equal(G.drawMirrorGlass(glass, id, null), true);
+  assert.equal(G.mirrorState().glass, 2);
+
+  // A dead target (an incomplete framebuffer at a new size): refused for good.
+  h.answers.checkFramebufferStatus = () => 0;
+  assert.equal(G.mirrorBegin(h.frame(), 128, 32), false);
+  assert.equal(G.mirrorState().dead, true);
+  G.begin(h.frame());
+  assert.equal(G.drawMirrorGlass(glass, id, null), false, "a dead target");
+  assert.equal(G.mirrorState().glass, 2);
+});
+
+// The TLX half of the live glass (three cannot load in Node): drawMirrorGlass's
+// own body runs against stubs of what it closes over — one opaque record while
+// mirRT holds an image, every refusal GLX makes — and the warm compiles the
+// glass material in the SCENE pass's render context, both winding signs.
+test("TLX live mirror glass: one record on mirRT, the same refusals, warmed under the scene target", () => {
+  const body = fnBody(code("js/render/three/tlx.js"), "drawMirrorGlass");
+  const run = (st) => {
+    const recs = [];
+    const make = new Function("st", "recs", `
+      let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
+      const draw = function (mesh, model, opts) {${body}};
+      return { draw, glass: () => _mirGlass };`);
+    const t = make(st, recs);
+    const ok = t.draw({ geo: "glassGeo" }, "model", null);
+    return { ok, recs, glass: t.glass() };
+  };
+  const tex = { rt: true }, mat = { glassMat: true };
+  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirRenders: 3, _mirFlip: true,
+    fx: { mirrorGlassMaterial: (t) => (t === tex ? mat : null) } };
+  const r = run(live);
+  assert.equal(r.ok, true);
+  assert.equal(r.glass, 1);
+  assert.deepEqual(r.recs, [["glassGeo", "model", mat, undefined, undefined, 0, null, null]], "one opaque, un-lit record on mirRT's texture");
+  for (const [why, over] of [["no image yet", { _mirRenders: 0 }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
+    ["the PiP", { _mirFlip: false }], ["an open mirror pass", { _mirActive: true }], ["no fx", { fx: null }]]) {
+    const x = run(Object.assign({}, live, over));
+    assert.equal(x.ok, false, why);
+    assert.equal(x.recs.length + x.glass, 0, why + ": nothing recorded");
+  }
+  const tlx = code("js/render/three/tlx.js");
+  assert.match(tlx, /composites: [^,]+, glass: _mirGlass,/, "mirrorState counts the glass");
+  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
+  const mrt = spanBack(tlx, "renderer.setMRT(usePost ? _ssrMrtNode() : null);", "if (fx && fx.mirrorGlassMaterial) {", "TLX mirror warm MRT");
+  assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
+  assert.match(warm, /renderer\.setRenderTarget\(usePost \? post\.sceneTarget\(\) : softOutRT\(\)\)/,
+    "the glass compiles under the scene pass's target, where it draws");
+  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileAsync\(m, camera, scene\)/,
+    "both winding signs of the real material");
+  assert.match(warm, /"uv", new THREE\.BufferAttribute/, "on createTexMesh's layout (position / normal / uv)");
+  const glass = fnBody(code("js/render/three/tsl-fx.js"), "mirrorGlassMaterial");
+  assert.match(glass, /m\.transparent = false;/);
+  assert.match(glass, /m\.depthWrite = true;/);
+  assert.match(glass, /m\.side = THREE\.DoubleSide;/);
+  assert.match(glass, /m\.colorNode = texture\(tex\)\.rgb;/, "sampled at the mesh uv: three flips a render target itself on WebGPU");
+  assert.match(glass, /m\.opacityNode = float\(1\.0\);/);
+  assert.doesNotMatch(glass, /trackFx|fxMaterial\(/, "not an FX material: no blend, no keep-dst ssrTag — the scene MRT's tag 1");
+});

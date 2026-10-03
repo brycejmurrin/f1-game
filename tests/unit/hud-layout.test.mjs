@@ -11,25 +11,68 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
 const CSS = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
 
-test("broadcast layout probe waits for camera and published tower height, not collision results", () => {
+test("HUD browser helper atomically holds producers, selects camera and refreshes the controlled HUD", async () => {
   const spec=fs.readFileSync(path.join(ROOT,"tests/specs/hud-layout.spec.js"),"utf8");
-  const predicate=spec.match(/await page\.waitForFunction\((\(broadcastCamera\) => \{[\s\S]*?\n    \}), o\.cam/);
+  const helper=spec.match(/async function race\([\s\S]+?\n\}\n\nconst measure/);
+  assert.ok(helper); const timeline=[];
+  let camera="chase", broadcast=false, published="0px", frozen=false, headless=false;
+  const elements=new Map();
+  const ctx=vm.createContext({BOOT_MS:60_000,localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
+    document:{
+      body:{classList:{contains:()=>broadcast}},
+      getElementById:(id)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},
+      querySelector:()=>({currentCSSZoom:1,getBoundingClientRect:()=>({height:42})}),
+      documentElement:{style:{getPropertyValue:()=>published}},
+    },
+    window:{__apex:{
+      race(){}, info:()=>({track:"monza"}), go(){},
+      camera(id){assert.equal(frozen&&headless,true,"producers held before camera update");camera=id;timeline.push("camera:"+id);},
+      jump(frac,speed,x){assert.deepEqual([frac,speed,x],[.1,60,0]);assert.equal(frozen&&headless,true);broadcast=camera==="heli";published="42.0px";timeline.push("refresh:"+camera);},
+      freeze(on){assert.equal(on,true);frozen=true;timeline.push("hold physics");},
+      headless(on){assert.equal(on,true);headless=true;timeline.push("hold renderer");},
+    }},
+  });
+  const run=vm.runInContext("("+helper[0].replace(/\n\nconst measure$/,"")+")",ctx);
+  const invoke=(fn,arg)=>vm.runInContext("("+fn.toString()+")",ctx)(arg);
+  const page={goto:async()=>{},reload:async()=>{},addStyleTag:async()=>{},evaluate:async(fn,arg)=>invoke(fn,arg),
+    waitForFunction:async(fn,arg)=>assert.equal(await invoke(fn,arg),true,"no background HUD tick runs during the warm-up"),
+    waitForTimeout:async()=>{throw new Error("broadcast helper must use readiness, not a sleep");}};
+  await run(page,"buttons",false,{sal:59,sar:59,sat:0,sab:21},{profile:"broadcast",cam:"heli"});
+  assert.deepEqual(timeline,["hold physics","hold renderer","camera:heli","refresh:heli"]);
+});
+
+test("broadcast layout probe waits for paint, camera and published tower height, not collision results", async () => {
+  const spec=fs.readFileSync(path.join(ROOT,"tests/specs/hud-layout.spec.js"),"utf8");
+  const predicate=spec.match(/await page\.waitForFunction\((async \(broadcastCamera\) => \{[\s\S]*?\n    \}), o\.cam/);
   assert.ok(predicate,"the broadcast helper carries its bounded input-readiness predicate");
-  let broadcast=false, published="", height=132.04, zoom=2;
-  const ctx=vm.createContext({document:{
+  let broadcast=false, published="", height=132.04, zoom=2, queries=0;
+  const frames=[];
+  const ctx=vm.createContext({requestAnimationFrame:(fn)=>frames.push(fn),document:{
     body:{classList:{contains:()=>broadcast}},
     querySelector:(selector)=>{
-      if (selector!==".hud-top") return null;
+      queries++;
+      assert.equal(selector,".hud-top","readiness must not wait for map/gap overlap results");
       return {currentCSSZoom:zoom,getBoundingClientRect:()=>({height,top:8,bottom:8+height})};
     },
     documentElement:{style:{getPropertyValue:()=>published}},
-  }, getComputedStyle:()=>({display:"block",visibility:"visible"})});
+  }});
   const ready=vm.runInContext("("+predicate[1]+")",ctx);
-  assert.equal(ready(true),false,"camera class has not caught up");
-  broadcast=true; assert.equal(ready(true),false,"height is not published yet");
-  published="0px"; assert.equal(ready(true),false,"initial zero height is stale");
-  published="40px"; assert.equal(ready(true),false,"old tower height is stale");
-  published="66.0px"; assert.equal(ready(true),true,"own units honor zoom and toFixed(1) rounding");
+  const afterPaint=async()=>{
+    const before=queries; let settled=false;
+    const result=ready(true); result.then(()=>{settled=true;});
+    assert.equal(frames.length,1,"first frame scheduled");
+    assert.equal(queries,before,"no layout read before paint");
+    frames.shift()(); await Promise.resolve();
+    assert.equal(settled,false,"one frame cannot complete paint readiness");
+    assert.equal(queries,before,"no layout read between frames");
+    assert.equal(frames.length,1,"second frame scheduled");
+    frames.shift()(); return await result;
+  };
+  assert.equal(await afterPaint(),false,"camera class has not caught up");
+  broadcast=true; assert.equal(await afterPaint(),false,"height is not published yet");
+  published="0px"; assert.equal(await afterPaint(),false,"initial zero height is stale");
+  published="40px"; assert.equal(await afterPaint(),false,"old tower height is stale");
+  published="66.0px"; assert.equal(await afterPaint(),true,"own units honor zoom and toFixed(1) rounding");
   // fitHud re-publishes --hud-top-h AFTER writing --hud-z-top so a zoom cap
   // in the same pass cannot leave the wait 0.1px behind.
   const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
@@ -37,16 +80,8 @@ test("broadcast layout probe waits for camera and published tower height, not co
   const zTop = fit.indexOf('set("--hud-z-top"');
   const republish = fit.indexOf('hStyle(root, "--hud-top-h"', zTop);
   assert.ok(zTop >= 0 && republish > zTop, "--hud-top-h must be published after the top zoom cap");
-  height=0; published="0px"; assert.equal(ready(true),false,"hidden tower is not ready");
-  height=132; zoom=1; published="132px"; assert.equal(ready(true),true);
-  const towerEl = {currentCSSZoom:1,getBoundingClientRect:()=>({height:132,top:8,bottom:140})};
-  const mapEl = {hidden:false,getBoundingClientRect:()=>({width:40,height:40,top:8,bottom:48})};
-  ctx.document.querySelector = (selector) => selector === ".hud-top" ? towerEl
-    : selector === "#minimap" ? mapEl : null;
-  ctx.getComputedStyle = () => ({ display: "block", visibility: "visible" });
-  assert.equal(ready(true), false, "a visible map still on the tower is not stacked yet");
-  mapEl.getBoundingClientRect = () => ({ width: 40, height: 40, top: 140, bottom: 180 });
-  assert.equal(ready(true), true, "map below the tower has consumed --hud-top-h");
+  height=0; published="0px"; assert.equal(await afterPaint(),false,"hidden tower is not ready");
+  height=132; zoom=1; published="132px"; assert.equal(await afterPaint(),true);
 });
 
 function fakeEl() {

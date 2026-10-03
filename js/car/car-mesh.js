@@ -1402,6 +1402,36 @@ function getMirrorFallback(quads) {
   _mirrorFbMeshes.set(quads, m);
   return m;
 }
+// LIVE MIRROR GLASS (gfx.drawMirrorGlass): the same lens quads as a TEXTURED
+// mesh (createTexMesh's pos/nrm/uv) that the backend maps this frame's HUD
+// rear view onto. The target holds the RAW rear-camera image — the HUD
+// composite flips it — so the glass's flip is baked into U, per side s (-1 the
+// left glass, x < 0; +1 the right): outboard u = 0.5 - 0.5s, inboard u =
+// 0.5 + 0.1s — left 1.0 -> 0.4, right 0.0 -> 0.6, each glass its own side of
+// the image and a tenth past the centre line. V runs MIRROR_GLASS_V, v = 0 the
+// image bottom: the lens is 0.191 x 0.051 m (3.75:1) and the target 7:2
+// (css/hud.css #hud-mirror), so 0.6 of its width over 0.56 of its height keeps
+// texels square. Cached per quads like getMirrorFallback; null when the backend
+// has no createTexMesh (the caller then lays the fallback).
+const MIRROR_GLASS_V = [0.22, 0.78];
+const _mirrorGlassMeshes = new Map();
+function getMirrorGlass(quads) {
+  if (_mirrorGlassMeshes.has(quads)) return _mirrorGlassMeshes.get(quads);
+  let m = null;
+  if (_gfx.createTexMesh) {
+    const out = { pos: [], nrm: [], uv: [], idx: [] }, v0 = MIRROR_GLASS_V[0], v1 = MIRROR_GLASS_V[1];
+    for (const [a, b, c, d] of quads) {
+      const s = b[0] < 0 ? -1 : 1, uo = 0.5 - 0.5 * s, ui = 0.5 + 0.1 * s, i0 = out.pos.length / 3;
+      for (const [p, u, v] of [[a, ui, v0], [b, uo, v0], [c, uo, v1], [d, ui, v1]]) {
+        out.pos.push(p[0], p[1], p[2]); out.nrm.push(0, 0, -1); out.uv.push(u, v);
+      }
+      out.idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
+    }
+    m = _gfx.createTexMesh(out);
+  }
+  _mirrorGlassMeshes.set(quads, m);
+  return m;
+}
 // 7-seg digit table, shared by the gear and speed LCD readouts.
 const _SEG7 = [
   [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],[1,1,1,1,0,0,1],[0,1,1,0,0,1,1],
@@ -1706,7 +1736,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, getMirrorFallback, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);

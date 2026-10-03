@@ -1,11 +1,20 @@
 # Cockpit rear-view mirror rendering contract
 
-The cockpit mirror housings contain reflective glass, but their current material
-does not show following cars. A physical rear-view image needs a depth-tested
-surface in the main scene. This document defines that extension without adding
-another world render for each mirror.
+This assessment preceded [PR #816](https://github.com/brycejmurrin/f1-game/pull/816).
+That implementation now draws live cockpit glass through `gfx.drawMirrorGlass`,
+using the existing rear-pass target in GLX, TLX and WGX with main-scene depth
+testing and no additional world pass. `CarMesh.getMirrorGlass` supplies the lens
+geometry; `CarDraw` falls back to the sky finish when the rear pass is inactive,
+its target is unavailable, or the target belongs to broadcast picture-in-picture.
+AUTO on a software renderer therefore still uses the fallback. Physical headset
+and real-GPU validation remain separate from the software checks.
 
-## Current reflection and its limits
+The sections below record the original assessment and proposed contract. Before
+that implementation, the cockpit housings contained reflective glass without a
+view of following cars. The proposal reused the existing rear camera rather
+than adding a world render for each mirror.
+
+## Baseline reflection and its limits
 
 [`js/car/car3d.js`](../../js/car/car3d.js), in the `mirrors` part, builds recessed,
 canted cockpit glass with `SURFACES.mirror` (material 27). That material is also
@@ -34,8 +43,8 @@ It owns quality, resolution, cadence, camera pose and frame restoration. Its
 single backend target also serves broadcast picture-in-picture, which uses a
 different camera and does not flip the image.
 
-The present renderer contract in [`js/render/gfx.js`](../../js/render/gfx.js)
-exposes `mirrorBegin`, `mirrorEnd`, `mirrorRect` and `mirrorState`. It supports a
+The baseline renderer contract in [`js/render/gfx.js`](../../js/render/gfx.js)
+exposed `mirrorBegin`, `mirrorEnd`, `mirrorRect` and `mirrorState`. It supported a
 rectangle composited after the main scene, rather than a textured mesh:
 
 | Backend | Target and current consumer | Required extension |

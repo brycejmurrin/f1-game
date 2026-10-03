@@ -1080,6 +1080,7 @@ const TLX = (function () {
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
       let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFlip = true;   // flip false: the broadcast PiP
+      let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
       // attribute.array.constructor on that first compile — the env probe's
@@ -2185,6 +2186,27 @@ const TLX = (function () {
               await renderer.compileAsync(scene, camera);
               // The composite, like all post quads, draws under the main MRT.
               renderer.setMRT(usePost ? _ssrMrtNode() : null);
+              // So does the cockpit's live glass (drawMirrorGlass), in the scene
+              // pass: compiled here on createTexMesh's layout, both winding signs
+              // (the pipeline keys on the matrix's determinant), or its first
+              // mirror frame would build it mid-race.
+              if (fx && fx.mirrorGlassMaterial) {
+                renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+                if (!_glassProbeGeo) {
+                  _glassProbeGeo = new THREE.BufferGeometry();
+                  _glassProbeGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3));
+                  _glassProbeGeo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1]), 3));
+                  _glassProbeGeo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2));
+                  _glassProbeGeo.setIndex(new THREE.BufferAttribute(new Uint32Array([0, 1, 2, 0, 2, 3]), 1));
+                }
+                const gm = fx.mirrorGlassMaterial(mirRT.texture);
+                for (const sx of [1, -1]) {
+                  const m = new THREE.Mesh(_glassProbeGeo, gm);
+                  m.frustumCulled = false;
+                  m.scale.x = sx; m.updateMatrixWorld(true);
+                  await renderer.compileAsync(m, camera, scene);
+                }
+              }
               if (post.warmMirror) await post.warmMirror(mirRT.texture);
               _warmStages.mirror = Math.round(performance.now() - _tStage);
             }
@@ -3462,7 +3484,20 @@ const TLX = (function () {
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, flip: _mirFlip, error: _mirErr };
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr };
+        },
+        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
+        // rendered in mirrorEnd before this pass records, on the glass mesh as
+        // one opaque draw record (tsl-fx.js mirrorGlassMaterial). Refused — the
+        // caller lays its fallback — with no image yet, a dead target, the PiP
+        // (flip false), or a mirror pass still recording (it would sample the
+        // target it is about to render into).
+        drawMirrorGlass(mesh, model, opts) {
+          if (_mirActive || _mirDead || !mirRT || _mirRenders <= 0 || !_mirFlip || !fx || !fx.mirrorGlassMaterial
+              || !mesh || !mesh.geo || !model) return false;
+          pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
+          _mirGlass++;
+          return true;
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
