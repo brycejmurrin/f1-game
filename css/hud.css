@@ -661,6 +661,13 @@ body.hud-met-compact #hud-tyre { display: none !important; }
    "not here, yet" and "not on this track" is the difference between waiting and
    never pressing the button again. */
 #hud-aero.ax-none { color: rgba(255,255,255,0.28); border: 1px dashed var(--plate-line); text-decoration: line-through; }
+/* The idle states carry no fill of their own, so their dim ink sat straight on
+   the scene — unreadable over sky once MOVE & SIZE's cockpit layout lifts the
+   chips beside the wheel. The same plate as the other readouts (alpha floored
+   by --hud-panel-a-eff). */
+#hud-ot:is(.ot-off, .ot-cool), #hud-aero:is(.ax-off, .ax-none) {
+  background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff, 1)));
+}
 #minimap {
   position: absolute;
   left: calc(10px + var(--sal) / var(--hud-z));

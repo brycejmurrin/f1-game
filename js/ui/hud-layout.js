@@ -58,6 +58,7 @@ const HudLayout = (function () {
     ["tyre", "TYRES", "#hud-tyre", "bottom center"],
     ["ot", "OVERTAKE", "#hud-ot", "bottom center"],
     ["aero", "AERO", "#hud-aero", "bottom center"],
+    ["bb", "BRAKE BIAS", "#hud-bb", "bottom center"],
   ].map(Object.freeze));
   const IDS = ELEMENTS.map((e) => e[0]);
   const SETS = Object.freeze(["cockpit", "other"]);
@@ -79,8 +80,19 @@ const HudLayout = (function () {
       tyre: { x: -30, y: -4, s: 100 },
       ot: { x: 30, y: -14, s: 100 },
       aero: { x: 30, y: -14, s: 100 },
+      bb: { x: -18, y: 0, s: 100 },
     }),
     other: fz({}),
+  });
+  // TOUCH COCKPIT: the pedal/OT/AERO/BOOST buttons fill the right-hand third
+  // from about 50% height down (measured 844x390: x 715+, y 198+), so on a touch
+  // device the OVERTAKE/AERO readouts ride up into the sky beside them instead
+  // (measured: unmoved they sit at y 347; -50vh lands them at 152, below the
+  // sector box that ends near 130px and above BOOST at 198). Laid over SHIPPED.cockpit
+  // while <body> lacks .desktop (js/game.js sets it from the input seen).
+  const TOUCH_COCKPIT = fz({
+    ot: { x: 30, y: -50, s: 100 },
+    aero: { x: 30, y: -50, s: 100 },
   });
   // PRESETS: [id, label, partial offsets laid over the set's shipped layout].
   const PRESETS = Object.freeze([
@@ -110,7 +122,8 @@ const HudLayout = (function () {
   const isDefEl = (e) => e.x === 0 && e.y === 0 && e.s === 100;
   const sameEl = (a, b) => a.x === b.x && a.y === b.y && a.s === b.s;
   /** The shipped {x, y, s} of element `id` in layout `sn`. */
-  const shippedEl = (id, sn) => normEl(SHIPPED[sn] && SHIPPED[sn][id]);
+  const touchDevice = () => !!(doc && doc.body && doc.body.classList && !doc.body.classList.contains("desktop"));
+  const shippedEl = (id, sn) => normEl((sn === "cockpit" && touchDevice() && TOUCH_COCKPIT[id]) || (SHIPPED[sn] && SHIPPED[sn][id]));
   /** One stored layout: only the elements that differ from that set's shipped layout. */
   function normSet(v, sn) {
     const out = {};
