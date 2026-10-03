@@ -91,14 +91,14 @@ const LiveryTex = (function () {
     williams:    ["GROVEX", "ALBION", "STRATON", "OXFORD", "IRONOAK", "MERIDEN"],
     haas:        ["IRONGATE", "MILLWORX", "CARBIDE", "FORGECO", "TORQUEX", "RIVETON"],
     audi:        ["VORSPRUN", "ELEKTRA", "PRAZION", "INGOLTEK", "VOLTKERN", "NEURON"],
-    astonmartin: ["ARAMONT", "GAYDONA", "AVIONNE", "REGALIS", "WINGCRAFT", "SAVILE"],
+    astonmartin: ["VERDANCE", "GAYDONA", "AVIONNE", "REGALIS", "WINGCRAFT", "SAVILE"],
     cadillac:    ["DETROX", "CRESTLIN", "LIBERTA", "AMERIGO", "MOTORCTY", "GRANDEUR"],
   };
   // SPONSOR PACKS — a livery's `sponsors` key swaps the per-team table for one
   // of these universal sets (texture only; the physical board is mesh).
   // `clean` paints no wordmark at all: the test-livery look.
   const SPONSOR_PACKS = {
-    retro:  ["MARLBOROUGH", "CASTROLIA", "AGIPO", "GOODYEARS", "ELFIN", "SHELLEY"],
+    retro:  ["TURBOLIN", "CORSAVIA", "MOTORELLA", "PISTONIA", "CHEQUERS", "LAPKING"],
     tech:   ["QUBITWARE", "NEURALIX", "CLOUDFORGE", "SYNAPSE", "VECTORA", "LATTICE"],
     energy: ["VOLTSHOT", "FUSIONFUEL", "RAPTORADE", "KINETIQ", "SURGE", "IONBLAST"],
     clean:  [],
