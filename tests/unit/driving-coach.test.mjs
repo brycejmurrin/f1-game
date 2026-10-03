@@ -15,7 +15,7 @@ function fixture() {
   // sits just before the line so the wrap is exercised.
   const G = { player: c, track: { total: 1000, def: { turns: [0.10, 0.50, 0.98] } },
     state: 'race', raceT: 0, paused: false, announceBusy: false,
-    vTop: () => 100, roadWetness: () => 0, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
+    vTop: () => 100, trackWetness: () => 0, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
     fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
     store: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
     // practice, not timeTrial, is what gates checkpoints and rewind now — a

@@ -282,12 +282,18 @@ export async function waitGameVisible(page, timeout = 30000) {
  * Wait for a NEW software present WHILE THE LOOP STILL RUNS.
  * GLX/TLX present() drives the overlay; headless(true) skips render/present,
  * so a freeze-then-wait can never observe gen > start and times out.
+ *
+ * Resolves true when a new frame presented, false when the wait timed out,
+ * null when the page has no soft present (a real GPU composites for itself).
+ * It never throws, so a caller that ignores the result reads whatever was
+ * blitted LAST: shot.mjs saved the menu's garage scene, or an empty canvas,
+ * as a monza frame because the first TLX present after a camera move took
+ * 17.6 s against this 8 s default (2026-10-02). Check it when that matters.
  */
 export async function awaitPresentedFrame(page, timeoutMs = 8000) {
-  await page.evaluate(async (ms) => {
-    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
-      try { await GLX.awaitSoftPresent(ms); } catch (_) {}
-    }
+  return page.evaluate(async (ms) => {
+    if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) return null;
+    try { await GLX.awaitSoftPresent(ms); return true; } catch (_) { return false; }
   }, timeoutMs);
 }
 

@@ -247,10 +247,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Dirty-air wake shapes (js/physics/consts.js DirtyAir): classic linear
   // fade stays bit-compatible; CFD is exp×Gaussian; OFF is identity mul.
   "tests/unit/dirty-air.test.mjs",
+  "tests/unit/dock-layout.test.mjs",
   "tests/unit/docs-integrity.test.mjs",
   // Decorrelated DriverRatings.BASE + skill()/overall personality pins.
   "tests/unit/driver-ratings-personality.test.mjs",
   "tests/unit/driving-coach.test.mjs",
+  "tests/unit/driving-cues.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
   // named legend has to round-trip through two setters, and the inert VM DOM
   // builds no SettingRow children, so painting the row would assert nothing.
@@ -503,6 +505,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
+  // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
+  "tests/unit/replay-buf.test.mjs",
   // repo-size.yml's full-history size report: refuses a shallow clone (one
   // sized this repo wrong on 2026-10-01), real-git fixture. ~1 s.
   "tests/unit/repo-size.test.mjs",
@@ -909,19 +913,64 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   return { ok, passed, failed, results, logPath };
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  const argv = process.argv.slice(2);
-  const args = argv.filter((a) => !a.startsWith("--"));
-  const files = args.length ? args : [...TOOLING_FAST_FILES];
-  const val = (name) => { const a = argv.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : undefined; };
-  const jobs = val("jobs") ? Number(val("jobs")) : 1;
-  const { ok } = await runToolingFast(files, {
-    jobs,
+/** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
+ *  never silently start the suite: `--help` used to launch all 300+ files. */
+export const TOOLING_FAST_FLAGS = Object.freeze([
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--help", "-h",
+]);
+
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+       node tools/ci/tooling-fast.mjs --help`;
+
+/** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
+export function parseToolingFastArgv(argv) {
+  const unknown = [];
+  for (const a of argv) {
+    if (!a.startsWith("--") && a !== "-h") continue;
+    if (a === "--help" || a === "-h") continue;
+    const name = a.includes("=") ? a.slice(0, a.indexOf("=")) : a;
+    if (!TOOLING_FAST_FLAGS.includes(name)) unknown.push(name);
+  }
+  if (unknown.length) {
+    throw new Error(`unknown flag ${unknown.join(", ")}\n${TOOLING_FAST_USAGE}`);
+  }
+  if (argv.includes("--help") || argv.includes("-h")) return { help: true };
+  const args = argv.filter((a) => !a.startsWith("--") && a !== "-h");
+  const val = (name) => {
+    const a = argv.find((x) => x.startsWith(`--${name}=`));
+    return a ? a.slice(name.length + 3) : undefined;
+  };
+  return {
+    help: false,
+    files: args.length ? args : null, // null = full TOOLING_FAST_FILES
+    jobs: val("jobs") ? Number(val("jobs")) : 1,
     order: val("order"),
     record: argv.includes("--record"),
     testTimeoutMs: val("test-timeout") ? Number(val("test-timeout")) * 1000 : undefined,
     fileTimeoutMs: val("file-timeout") ? Number(val("file-timeout")) * 1000 : undefined,
+  };
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  let parsed;
+  try {
+    parsed = parseToolingFastArgv(process.argv.slice(2));
+  } catch (e) {
+    console.error(e.message);
+    process.exit(2);
+  }
+  if (parsed.help) {
+    console.log(TOOLING_FAST_USAGE);
+    process.exit(0);
+  }
+  const files = parsed.files || [...TOOLING_FAST_FILES];
+  const { ok } = await runToolingFast(files, {
+    jobs: parsed.jobs,
+    order: parsed.order,
+    record: parsed.record,
+    testTimeoutMs: parsed.testTimeoutMs,
+    fileTimeoutMs: parsed.fileTimeoutMs,
   });
   process.exit(ok ? 0 : 1);
 }
