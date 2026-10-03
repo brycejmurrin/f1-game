@@ -58,6 +58,17 @@ test("pick advances as the car passes each cam, with hysteresis", () => {
   assert.equal(TS.pick(cams, 400 + TS.HYST_M + 1, 1000, 0), 1);
 });
 
+test("pose tightens the lens when the car is far and opens it when the car is close", () => {
+  const TS = load();
+  const track = { total: 1000, id: "test" };
+  const near = TS.pose(track, 100, 0, { carPos: [0, 100] });
+  track._tsIdx = 0;
+  const far = TS.pose(track, 280, 0, { carPos: [0, 280] });
+  assert.ok(near.fov > far.fov, `close shot should be wider (${near.fov} vs ${far.fov})`);
+  assert.ok(far.fov <= 22, `a distant car should be on the long lens, got ${far.fov}`);
+  assert.ok(near.fov <= 50 && far.fov >= 18, "fov stays inside the clamp");
+});
+
 test("pose aims at the subject car when carPos is supplied", () => {
   const TS = load();
   const track = { total: 1000, id: "test" };
