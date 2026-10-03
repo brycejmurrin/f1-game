@@ -9,7 +9,9 @@
  *
  * Authority is unchanged: the player integrates world px/pz; AI stays on
  * (s, x) and mirrors world metres after the step. TEAM_STYLE / garage-vs-
- * factory parts stay. This file only locks the presentation contract.
+ * factory parts stay. This file only locks the presentation contract —
+ * including the second camera's (the HUD mirror / PiP share the field's
+ * body + wheel meshes) and what the bounded team caches must hold.
  *
  * Run: node --test tests/unit/car-presentation-canary.test.mjs
  */
@@ -18,6 +20,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -106,9 +110,7 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.doesNotMatch(teamMeshSrc, /num \+ \(sil \? ":sh"/,
     "silhouette key must not include the seat number");
   const cap = cd.match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/);
-  assert.ok(cap, "TEAM_MESH_CACHE_MAX is a named ceiling");
-  assert.ok(Number(cap[1]) >= 36,
-    "cache must hold 12 teams × (2 painted + 1 :sh) = 36 or LRU frees a live caster (was 24)");
+  assert.ok(cap, "TEAM_MESH_CACHE_MAX is a named ceiling (what it must hold: the cache-occupancy test below)");
   assert.match(teamBodySrc, /carDecalNum\(team, car\)/, "teamBodyMesh must resolve the driver number");
   assert.match(teamBodySrc, /_pbNum = num/, "teamBodyMesh must resolve the driver number");
   assert.match(teamBodySrc, /teamMeshKeyFor\(team, suffix\)/, "teamBodyMesh must key on the driver number");
@@ -183,4 +185,95 @@ test("race warm-up builds the shadow casters the first countdown frame would", (
   assert.match(warm, /gfx\.carShadowBegin && LT\.carShadow && tier < 3\) \|\| \(gfx\.lampShadowBegin && LT\.lampShadow && tier < 2\)/);
   // An agent's headless race never renders a shadow: no caster builds there.
   assert.match(warm, /if \(G\.headlessMode \|\| !LT\) return false;/);
+});
+
+// THE HUD MIRROR AND THE BROADCAST PiP draw a rival the way the main pass does:
+// the body-only mesh and the planted FIELD wheels, from the same caches. They
+// drew teamMesh(team, car) — the WHOLE car, a cache nothing else filled — so
+// each rival new to the mirror cost a 140-250 ms Car3D.build mid-race.
+test("the mirror and the PiP draw rivals via teamBodyMesh + the field wheels, never teamMesh", () => {
+  const cd = read("js/car/car-draw.js"), game = read("js/game.js");
+  const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const mp = code(read("js/render/shared/mirror-pass.js"));
+  assert.doesNotMatch(mp, /teamMesh/, "mirror-pass.js reaches no whole-car mesh");
+  assert.match(mp, /const \{ drawWorldMeshes, drawCar, /);
+  assert.match(mp, /drawCar\(c, _mat, paint, night\);/, "the uncapped loop (apex26.fieldLod=0)");
+  assert.match(mp, /if \(_cKeep\[i\]\) \{ drawCar\(_cCars\[i\], _cMats\[i\], paint, night\); _cars\+\+; \}/, "the FieldLod nearest-6 loop");
+  assert.match(game, /MirrorPass\.create\(G, \{ drawWorldMeshes, drawCar: carDraw\.drawMirrorCar,/);
+  const fn = cd.match(/function drawMirrorCar\(c, mat, paint, night\) \{[\s\S]*?\n {4}\}/);
+  assert.ok(fn, "CarDraw.drawMirrorCar");
+  // The main pass's own selection (game.js: body + drawPlayerWheels on _groundMat).
+  assert.match(fn[0], /const body = carModelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);/);
+  assert.match(fn[0], /if \(!body\) \{ G\.gfx\.draw\(teamMesh\(c\.team, c\), mat, paint\); return; \}/, "a GLB is one piece, as in the main pass");
+  assert.equal(fn[0].split("teamMesh(").length - 1, 1, "teamMesh only on the GLB branch");
+  assert.match(fn[0], /drawPlayerWheels\(c, mat, 0, _mirWheelOpts, false, 0, 1, true\);/, "BARE wheels, dt 0 (the main pass spins them)");
+  assert.match(cd, /return \{[\s\S]*?drawMirrorCar,[\s\S]*?\};/, "exported");
+  // BARE: rotating wheels only and no Particles flare, at any distance.
+  assert.match(cd, /function drawPlayerWheels\(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare\)/);
+  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && FieldLod\.wheelsLite\(camD2\)\);/);
+  assert.match(cd, /const flareA = !bare && /);
+  // The wheels' material is the main pass's: TLX keys materials by VALUE, so
+  // equal opts are the one material (and pipeline) the race already compiled.
+  const lit = (src, re) => Object.assign({}, vm.runInNewContext("(" + src.match(re)[1] + ")"));
+  assert.deepEqual(lit(cd, /const _mirWheelOpts = (\{[^}]*\});/), lit(game, /const _wheelOpts = (\{[^}]*\});/));
+  assert.match(fn[0], /_mirWheelOpts\.emissive = night \? 0\.12 : 0;/, "and its night term (game.js: _wheelOpts.emissive = night ? 0.12 : 0)");
+  assert.match(game, /_wheelOpts\.emissive = night \? 0\.12 : 0;/);
+});
+
+// THE MENU PREP BUILDS THE CASTERS (PR #803 built them in warmCarAssets, ~32 ms
+// each, ~11 a race, behind the loading card): same gate, same key, in the sliced
+// loop, so race entry's warm is all hits. warmCarAssets keeps its call.
+test("the menu prep builds the shadow casters under shadowCastersWanted(), keyed as the race keys them", () => {
+  const cd = read("js/car/car-draw.js"), game = read("js/game.js");
+  const prep = cd.slice(cd.indexOf("async function prepareMenuCarAssets("), cd.indexOf("function drawCarDecals("));
+  assert.match(prep, /const casters = shadowCastersWanted\(\);/, "warmCarAssets' own gate");
+  assert.match(prep, /const steps = casters \? field\.flatMap\(c => \[c, \{ caster: c \}\]\) : field;/, "a step of its own after its car");
+  assert.match(prep, /for \(const step of steps\) \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*if \(performance\.now\(\) - sliceAt >= 8\) \{/, "the same slice discipline");
+  assert.match(prep, /if \(step\.caster\) teamMesh\(c\.team, c\.isPlayer \? ownCaster\(c\) : c, true\);/, "the shadow passes' (team, car, true)");
+  const warm = cd.slice(cd.indexOf("function warmCarAssets()"), cd.indexOf("async function prepareMenuCarAssets("));
+  assert.match(warm, /if \(casters\) teamMesh\(c\.team, c, true\);/, "warmCarAssets keeps the call: the safety net, hits after the menu");
+  // The player's caster keys on its OWN build: makeCars' stamp, character for character.
+  const norm = (m, v) => m.replace(new RegExp("\\b" + v + "\\b", "g"), "S");
+  const mine = cd.match(/const stamp = own \? (Parts\.CATALOG\.map\(\(cat\) => own\[cat\.id\] \|\| ""\)\.join\(","\)) : "";/);
+  const theirs = game.match(/const visStamp = visualSetup \? (Parts\.CATALOG\.map\(\(cat\) => visualSetup\[cat\.id\] \|\| ""\)\.join\(","\)) : "";/);
+  assert.ok(mine && theirs, "both stamps present");
+  assert.equal(norm(mine[1], "own"), norm(theirs[1], "visualSetup"), "the menu's stamp is makeCars' stamp");
+  assert.match(cd, /visSh: stamp \? stamp \+ ":sh" : ""/);
+  assert.match(game, /visSh: visStamp \? visStamp \+ ":sh" : ""/);
+  assert.match(game, /const visualSetup = \(isP \|\| mate\) \? getTeamParts\(team\.id\)/, "the player's visualSetup is getTeamParts");
+});
+
+// TEAM_MESH_CACHE_MAX bounds teamMeshes AND teamBodies (two LRUs of 40). What
+// the menu prep now holds, measured on the REAL CarDraw: the real 11-team grid,
+// the casters on, the race warm and the mirror/PiP over every car afterwards —
+// nothing built after the menu (race entry is all hits) and nothing evicted.
+test("the bounded team caches hold the menu prep, the race warm and the mirror with nothing evicted", async () => {
+  const cap = Number(read("js/car/car-draw.js").match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/)[1]);
+  for (const pick of ["real", "legends"]) {
+    const v = carDrawVm({ casters: true, legends: pick === "legends" });
+    v.G.teamIdx = pick === "legends" ? v.teams.length - 1 : 3;
+    v.G.driverIdx = 1;
+    await v.carDraw.prepareMenuCarAssets(() => true);
+    {
+      const count = (k) => v.rec.builds.filter(b => b.kind === k).length;
+      // Bodies: playerBodyMesh (its own cache) + teamBodyMesh per rival seat the
+      // menu lists: 21 real; LEGENDS lists its other 11 legends as well, keyed by
+      // number, and most carry 1 (js/data/legends.js): 22 + 2 keys.
+      const teamBodies = count("body") - 1, casters = count("sh");
+      assert.deepEqual([pick, count("whole"), teamBodies, casters],
+        pick === "legends" ? [pick, 0, 24, 13] : [pick, 0, 21, 12],
+        "menu: no whole car; the rivals' bodies; a :sh per team (+ the picked team's) + the player's own build");
+      assert.ok(teamBodies <= cap && casters <= cap, `teamBodies ${teamBodies} / teamMeshes ${casters} within ${cap}`);
+      const menu = v.rec.builds.length;
+      v.field((c, i) => 3000 - 9 * i);
+      v.carDraw.warmCarAssets();
+      assert.deepEqual(v.rec.builds.slice(menu), [], "race entry's warm span: every body and caster a cache hit");
+      const mp = v.mirror();
+      v.draw(mp);
+      v.classes.add("bc-on");
+      for (const c of v.G.cars) { mp.setSubject(c, "tcam"); v.draw(mp); }
+      assert.deepEqual(v.rec.builds.slice(menu), [], "the mirror and the PiP over every car: no build");
+      assert.equal(v.rec.freed, 0, "no live mesh evicted, menu -> race -> mirror");
+    }
+  }
 });
