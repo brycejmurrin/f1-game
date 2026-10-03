@@ -25,6 +25,15 @@ test("the newest run per workflow wins, so a superseded push run is not a red", 
   assert.equal(verdict(runs, { 2: [job(9, "guards", "completed", "success")] }).state, "passed");
 });
 
+test("a same-second tie goes to the higher run id, whatever order the API lists them in", () => {
+  const cancelled = run(10, "CI", "completed", "cancelled", "2026-10-03T07:15:09Z");   // the draft run the ready run cancelled
+  const live = run(11, "CI", "in_progress", null, "2026-10-03T07:15:09Z");
+  for (const order of [[cancelled, live], [live, cancelled]]) {
+    assert.deepEqual(latestPerWorkflow(order).map((r) => r.id), [11], "the newer (higher-id) run counts");
+  }
+  assert.equal(verdict(latestPerWorkflow([live, cancelled]), { 11: [] }).state, "running", "not a false `cancelled`");
+});
+
 test("verdict: failed as soon as a job fails, done only when every run completed", () => {
   const live = [run(1, "CI", "in_progress", null, "t")];
   const v = verdict(live, { 1: [job(1, "a", "completed", "failure"), job(2, "b", "in_progress", null)] });
