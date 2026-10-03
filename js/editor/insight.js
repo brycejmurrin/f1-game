@@ -7,7 +7,8 @@
    heavy stop), and the FIA Grade 1 layout advice (Appendix O as Autosport and
    Motorsport.com summarise it: straights ≤ 2 km, the first corner ≥ 250 m from
    the line and ≥ 45° at R < 300 m, ≤ 2 % on the start straight, ≥ 12 m wide,
-   banking ≤ 5.7°). Every FIA issue is AMBER, coded fia-*, with no fix tag —
+   banking ≤ 5.7°), plus the crests that lift the car and the dips that
+   compress it (v²·κv). Every such issue is AMBER, coded fia-*, with no fix tag —
    advice, never a gate, and FIX ALL leaves it alone. Plus TRACK OF THE DAY's
    seed and START FROM's shipped-circuit trace. Pure; LAZY_EDITOR, after
    validate.js; needs TrackShape at eval, Tracks / TrackValidate at call time. */
@@ -24,6 +25,10 @@ const TrackInsight = (function () {
     bandK: 0.0035, bandFrac: 0.3, bandSteps: 100,     // TrackMaps.measureApex's corner band
     spanPadM: 20,                                     // a corner's control span reaches this far past its band
     fitRunM: 30,                                      // …and its fitted arc ends this far short of the rejoin point
+    // Crests and dips: the vertical acceleration v²·κv at the point-mass speed,
+    // κv a second difference over vertWindowM (a 20 m window reads the ±0.3 m
+    // ripple as a crest on 50 of the 52 circuits; 40 m sees real ones only).
+    crestG: 0.5, sagG: 2.5, vertWindowM: 40,          // g lost over a crest (the car goes light) / g added in a dip
   });
   const DEG = 180 / Math.PI;
   const wrapS = (s, L) => ((s % L) + L) % L;
@@ -133,6 +138,7 @@ const TrackInsight = (function () {
       for (let d = 0; d < m; d++) lo = Math.min(lo, v[(k0 + d) % n]);
       c.vApex = lo;
       if (canSpan) Object.assign(c, spanFor(tr, pts, c));
+      Object.assign(c, zoneTags(tr, pts, c));
     }
     return list;
   }
@@ -177,7 +183,7 @@ const TrackInsight = (function () {
 
   /** The FIA Grade 1 layout advice over a built centreline: AMBER issues
    *  coded fia-straight | fia-t1 | fia-grade | fia-width | fia-bank |
-   *  fia-passing, each with a finite `s`, a one-line msg and no fix. `stats`
+   *  fia-passing | fia-crest | fia-sag, each with a finite `s`, a one-line msg and no fix. `stats`
    *  is judge()'s (startBackM / startFwdM); extra { v, turns } saves a recompute. */
   function fia(tr, design, stats, extra) {
     const out = [];
@@ -224,6 +230,41 @@ const TrackInsight = (function () {
     if (!passingZones(tr, v).length) {
       let vMax = 0, at = 0; for (let k = 0; k < n; k++) if (v[k] > vMax) { vMax = v[k]; at = k; }
       add("fia-passing", "No overtaking spot: no 400 m flat-out run into a heavy stop", at * ds);
+    }
+    // 7. Crests and dips: one per stretch over the limit, at its worst point.
+    for (const c of verticalG(tr, v)) {
+      const at = km1(c.s), kmh = Math.round(v[c.k] * 3.6);
+      add(c.code, c.code === "fia-crest" ? "Crest at " + at + ": the car goes light (" + c.g.toFixed(1) + " g) at " + kmh + " km/h"
+        : "Dip at " + at + ": " + c.g.toFixed(1) + " g compression at " + kmh + " km/h", c.s);
+    }
+    return out;
+  }
+  const km1 = (m) => (m / 1000).toFixed(1) + " km";
+
+  /** Crests and dips over a built centreline: the vertical acceleration
+   *  v²·κv, κv = (py[k+W] − 2·py[k] + py[k−W]) / (W·ds)² over a vertWindowM
+   *  window, against crestG (lift, κv < 0) and sagG (compression, κv > 0).
+   *  ONE entry per contiguous run of nodes over the limit (a run over the line
+   *  is one), at its peak: [{ code: "fia-crest" | "fia-sag", k, s, g }]. */
+  function verticalG(tr, v) {
+    const out = [];
+    if (!tr || !(tr.n > 2) || !tr.py) return out;
+    v = v || speedProfile(tr);
+    const n = tr.n, ds = tr.total / n, py = tr.py, T = THRESH, G = 9.81;
+    const W = Math.max(1, Math.round(T.vertWindowM / ds)), den = (W * ds) * (W * ds);
+    const a = new Float64Array(n);                    // m/s²: + compresses (a dip), − lifts (a crest)
+    for (let k = 0; k < n; k++) a[k] = v[k] * v[k] * (py[(k + W) % n] - 2 * py[k] + py[(k - W + n) % n]) / den;
+    for (const [code, sign, lim] of [["fia-crest", -1, T.crestG], ["fia-sag", 1, T.sagG]]) {
+      const on = (k) => sign * a[k] > lim * G;
+      let k0 = 0;
+      while (k0 < n && on(k0)) k0++;                  // start the walk outside a run, so a run over the line is one
+      if (k0 === n) k0 = 0;
+      for (let d = 0; d < n; d++) {
+        if (!on((k0 + d) % n)) continue;
+        let best = (k0 + d) % n;
+        for (; d < n && on((k0 + d) % n); d++) { const j = (k0 + d) % n; if (sign * a[j] > sign * a[best]) best = j; }
+        out.push({ code, k: best, s: best * ds, g: sign * a[best] / G });
+      }
     }
     return out;
   }
@@ -274,6 +315,78 @@ const TrackInsight = (function () {
     return { pts: pts.map((p) => [q(p[0] - cx), q(p[1] - cz)]), lengthM: Math.round(tr.total), baseHW, centre: [cx, cz] };
   }
 
-  return { THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit };
+  /** What the designer authored at a corner (TURNS reads it back): bankDeg —
+   *  the angle of a bankZone whose window (frac on the built lap ± widthM/2)
+   *  holds the apex, 0 when flat; hwSpan — the half-width of an hwZone over the
+   *  apex, null when none. hwZones reach the def as control INDEX fractions
+   *  (CustomTracks.toRaw), so the apex is projected onto the control loop. */
+  function zoneTags(tr, pts, c) {
+    const def = tr.def || {}, L = tr.total, out = { bankDeg: 0, hwSpan: null };
+    for (const z of Array.isArray(def.bankZones) ? def.bankZones : []) {
+      if (!Number.isFinite(z.frac) || !(z.widthM > 0)) continue;
+      const d = Math.abs(wrapS(z.frac * L, L) - c.sApex), gap = Math.min(d, L - d);
+      if (gap < z.widthM / 2 && Math.abs(z.angleDeg) > Math.abs(out.bankDeg)) out.bankDeg = z.angleDeg;
+    }
+    const hz = Array.isArray(def.hwZones) ? def.hwZones : [];
+    if (hz.length && Array.isArray(pts) && pts.length >= 3) {
+      const k = Math.round(c.sApex / L * tr.n) % tr.n, p = S.project(pts, tr.px[k], tr.pz[k]), u = (p.i + p.f) / pts.length;
+      for (const z of hz) {
+        const inside = z.s1 < z.s0 ? (u >= z.s0 || u <= z.s1) : (u >= z.s0 && u <= z.s1);
+        if (inside && Number.isFinite(z.hw) && (out.hwSpan == null || z.hw < out.hwSpan)) out.hwSpan = z.hw;
+      }
+    }
+    return out;
+  }
+
+  // ── DESIGNED RANDOMISE: what a circuit is like, and how well it fits a style ──
+  const R_BINS = [15, 25, 40, 70, 120, 250];         // corner radius bins (m): [<25 incl. under 15, …, ≥ 250)
+  const V_EDGES = [40, 55, 70, 85];                  // SPEED's heat buckets (m/s): < 40 · < 55 · < 70 · < 85 · ≥ 85
+  /** Shannon entropy of a histogram over `bins` buckets, normalised to 0–1. */
+  function entropy(h, bins) {
+    let tot = 0; for (const w of h) tot += w;
+    if (!(tot > 0)) return 0;
+    let H = 0; for (const w of h) if (w > 0) { const p = w / tot; H -= p * Math.log(p); }
+    return H / Math.log(bins);
+  }
+  /** A circuit's character over its built centreline `tr`, speeds `v` (default
+   *  speedProfile) and verdict (its turns and amber count): { Hc: corner-radius
+   *  variety (length-weighted nodes with |k| > straightK over R_BINS, 0–1), Hv:
+   *  speed variety (time-weighted over the five heat buckets, 0–1), F: lap
+   *  fraction at ≥ 85 m/s, C: corners per km, P: passing zones (≤ 4), A: ambers }. */
+  function features(tr, v, verdict) {
+    if (!tr || !(tr.n > 2) || !tr.curv) return { Hc: 0, Hv: 0, F: 0, C: 0, P: 0, A: 0 };
+    v = v || speedProfile(tr);
+    const n = tr.n, ds = tr.total / n, hc = new Array(R_BINS.length).fill(0), hv = new Array(V_EDGES.length + 1).fill(0);
+    let fast = 0;
+    for (let k = 0; k < n; k++) {
+      const c = Math.abs(tr.curv[k]);
+      if (c > THRESH.straightK) { const R = 1 / c; let b = 0; while (b < R_BINS.length - 1 && R >= R_BINS[b + 1]) b++; hc[b] += ds; }
+      let b = 0; while (b < V_EDGES.length && v[k] >= V_EDGES[b]) b++;
+      hv[b] += ds / Math.max(1, v[k]);
+      if (v[k] >= 85) fast++;
+    }
+    const turns = verdict && Array.isArray(verdict.turns) ? verdict.turns : undefined;
+    const amber = verdict ? (Number.isFinite(verdict.amber) ? verdict.amber : (verdict.issues || []).filter((i) => i.level === "amber").length) : 0;
+    return { Hc: entropy(hc, hc.length), Hv: entropy(hv, hv.length), F: fast / n, C: bands(tr, turns).length / (tr.total / 1000), P: Math.min(4, passingZones(tr, v).length), A: amber };
+  }
+  /** A style's score: Σ weight · feature, C past the style's free corners/km
+   *  (TrackRandom.STYLES: FAST 2F + 0.5P + 0.5Hv − 0.3A − 0.2·max(0, C − 3),
+   *  TECHNICAL 1.5Hc + 0.4C − F + 0.2P − 0.3A, MIXED Hc + Hv + 0.3P − 0.3A).
+   *  `style`: a STYLES name or a weights object. */
+  function score(feats, style) {
+    const w = typeof style === "string" ? (typeof TrackRandom !== "undefined" && TrackRandom.STYLES ? TrackRandom.STYLES[style] : null) : style;
+    if (!w || !feats) return 0;
+    let s = 0;
+    for (const key of ["Hc", "Hv", "F", "P", "A"]) if (w[key]) s += w[key] * feats[key];
+    if (w.C) s += w.C * Math.max(0, feats.C - (w.cFree || 0));
+    return s;
+  }
+  /** TrackRandom.design's scorer over a validator verdict: { score, feats }. */
+  function rate(verdict, style) {
+    const feats = features(verdict && verdict.tr, null, verdict);
+    return { score: score(feats, style), feats };
+  }
+
+  return { THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit, verticalG, features, score, rate };
 })();
 Object.freeze(TrackInsight);

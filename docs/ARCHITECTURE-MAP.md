@@ -27,6 +27,9 @@ assets/pack/        baked PBR material arrays (ships ON; failures degrade)
 2. `js/game.js` runs, builds the **`G` façade** (live getters over its closure
    state), and calls `Module.create(G)` on extracted subsystems. Modules must
    not reach into `game.js` internals — only through `G`.
+   Boot injection and payload retries live in `ScriptLoader` and `LazyBundles`
+   (`js/core/`); `RendererBoot` owns renderer selection and fallback. `TitleFlow`
+   and `PlatformSession` own menu entry and platform/phone lifecycle wiring.
 3. Renderer pick (`js/render/gfx.js`): default **TLX** (three.js), explicit
    WebGL2 **GLX**, opt-in **WGX** (WebGPU). All three are **DEFERRED** — injected
    at boot for the resolved choice, never tagged.
@@ -55,6 +58,18 @@ hooks (`info`, `physState`, `world`) over screenshots. See [DEBUG-HOOKS.md](DEBU
 | **Net** | `js/net/` | VS Friend WebRTC + Nostr room codes |
 | **Data hub** | `js/data/` | External F1 API tabs (optional) |
 | **Persist** | `js/core/store.js` | `apex26.*` localStorage + durable IDB mirror |
+
+Large domain modules keep their public façade while delegating to focused
+helpers. `Car3D` uses `CarGeometry` and `CarWheels`; `LiveryTex` uses
+`LiveryGraphics`. `Input` composes bindings, pad menu navigation, haptics and
+held-button handling. `GameAudio` keeps context/engine lifecycle and delegates
+tone definitions, signal primitives, soundtrack playback and radio effects.
+The lazy Data Hub separates API transport from endpoint mapping, and telemetry
+model/render/player/view code from its tab controller.
+
+Styles remain in `css/`, split by screen responsibility. Components, menu and
+overlay families occupy contiguous positions in the manifest; moving a family
+must preserve both its cascade order and its synchronous/deferred loading mode.
 
 ## Data flow (one race frame)
 

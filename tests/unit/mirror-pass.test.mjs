@@ -12,13 +12,18 @@
  *   - the camera looks BACK along the car, and a rival ahead of the eye is not drawn;
  *   - in a REAL RACE WATCH (body.bc-on) the mirror stands down and the same target
  *     is the broadcast PICTURE-IN-PICTURE: the subject on its TV shot, UNFLIPPED,
- *     into #bc-pip, its neighbours drawn wherever it is (js/race/broadcast.js).
+ *     into #bc-pip, its neighbours drawn wherever it is (js/race/broadcast.js);
+ *   - a mirror or PiP draw on a warmed field BUILDS NOTHING: the real CarDraw
+ *     (tests/helpers/car-draw-vm.mjs) draws each rival from the main pass's
+ *     body-only mesh and field wheels, never a whole-car teamMesh (140-250 ms of
+ *     Car3D.build per rival, mid-race, in the default cockpit cam).
  * No browser (~0.1 s). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -53,7 +58,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     performance: { now: () => 0 },
     GameCams: { vantage: (_t, m, s, x, spd) => { vant.push({ m, s, x, spd }); pooled.eye[0] = 0; pooled.eye[1] = 4; pooled.eye[2] = s - 12;
       pooled.tgt[0] = 0; pooled.tgt[1] = 1; pooled.tgt[2] = s + 20; return pooled; } },
-    CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }] },
+    CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }, { id: "helmet" }] },
     // A straight road along +Z; the track's +x-right is world −X (AGENTS.md).
     Tracks: {
       sample: (_t, s, out) => { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1;
@@ -79,13 +84,13 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const player = { isPlayer: true, s: 100, team: "p" };
   const behind = { s: 80, team: "b" }, ahead = { s: 130, team: "a" }, far = { s: -100, team: "f" };   // far: 200 m back
   const G = {
-    gfx, state, player, cars: [player, behind, ahead, far], track: { total: 5000 }, camMode: ["chase", "far", "drift", "cockpit"].indexOf(cam),
+    gfx, state, player, cars: [player, behind, ahead, far], track: { total: 5000 }, camMode: ["chase", "far", "drift", "cockpit", "helmet"].indexOf(cam),
     dbgCam: null, hideMeshes: {}, frozen: false,
     store: { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; } },
   };
   const deps = {
     drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj, frame.mirrorLite, Object.assign({}, frame.tune)]); if (throwInWorld) throw new Error("boom"); },
-    teamMesh: (team) => "mesh:" + team,
+    drawCar: (c, m) => gfx.draw("mesh:" + c.team, m),   // CarDraw.drawMirrorCar in the game (the real one: the test below)
     renderPosOf: (c) => ({ world: true, x: 0, z: c.s }),
     playerAnchor: (c) => ({ cS: c.s, cX: 0 }),
     yawVisInterp: () => 0,
@@ -110,6 +115,9 @@ test("AUTO shows the mirror in an onboard view on a hardware renderer, and not i
   assert.equal(onboard.mp.state().shown, true);
   assert.equal(onboard.frameEl.hidden, false);
   assert.ok(onboard.classes.has("hud-mirror-on"), "the radio card / flag step-down class");
+  const helmet = boot({ cam: "helmet" });
+  helmet.render();
+  assert.equal(helmet.mp.state().shown, true, "HELMET is an onboard view with no road behind it, like COCKPIT");
   const chase = boot({ cam: "chase" });
   chase.render();
   assert.equal(chase.mp.state().shown, false);
@@ -532,4 +540,72 @@ test("caught backend failures and stale ready targets do not claim preparation s
   }
   const h=boot({state:"count"});h.gfx.mirrorState=()=>{throw new Error("dead backend");};
   assert.equal(await h.mp.prepareRace(),false,"optional preparation remains non-throwing");
+});
+
+// THE MIRROR SHARES THE MAIN PASS'S MESHES. It drew teamMesh(team, car), the
+// WHOLE car, a cache nothing else fills: up to 6 Car3D.build calls inside
+// mirrorPrepare and one frame spike per rival new to the 6 nearest, mid-race.
+// Here the REAL CarDraw warms a full field (warmCarAssets, as race entry does)
+// and the REAL MirrorPass draws through its drawMirrorCar: no build, ever.
+test("a mirror draw on a warmed field builds nothing: body-only mesh + the field wheels, never a whole car", () => {
+  const v = carDrawVm();
+  v.G.teamIdx = 0; v.G.driverIdx = 0;
+  // The player at the front; the 21 rivals strung out behind it, 9 m apart.
+  v.field((c, i) => (c.isPlayer ? 1000 : 1000 - 9 * i));
+  v.carDraw.warmCarAssets();
+  assert.ok(v.rec.builds.length > 0 && v.rec.builds.every(b => b.kind === "body"), "race entry warms bodies (no whole car)");
+  const warmBuilds = v.rec.builds.length, warmWheels = v.rec.wheels;
+  const mp = v.mirror();
+  v.rec.draws.length = 0;
+  v.draw(mp);
+  assert.equal(mp.state().shown, true);
+  assert.equal(mp.state().cars, 6, "FieldLod: the nearest 6 behind");
+  assert.equal(v.rec.builds.length, warmBuilds, "a mirror draw builds no Car3D mesh");
+  assert.equal(v.rec.wheels, warmWheels, "nor a wheel pair");
+  const kinds = v.rec.draws.map(m => m.kind);
+  assert.deepEqual(kinds.filter(k => k !== "wheel"), ["body", "body", "body", "body", "body", "body"], "one body-only mesh per rival");
+  assert.equal(kinds.filter(k => k === "wheel").length, 24, "BARE wheels: the 4 rotating ones, no fixed layers / stripes / discs / rings");
+  assert.ok(v.rec.draws.every(m => (m.kind === "wheel" ? m._field : true)), "the FIELD pair (getFieldWheelMeshes), the main pass's own");
+  // Mid-race: the field reshuffles, so 6 DIFFERENT rivals are now the nearest.
+  v.G.cars.forEach((c, i) => { if (!c.isPlayer) c.s = 1000 - 9 * (v.G.cars.length - i); });
+  v.draw(mp);
+  assert.equal(mp.state().cars, 6);
+  assert.equal(v.rec.builds.length, warmBuilds, "a rival new to the mirror is a cache hit");
+  // Night: the wheels take the main pass's night emissive, still nothing built.
+  v.draw(mp, true);
+  assert.equal(v.rec.builds.length, warmBuilds);
+  assert.equal(v.rec.freed, 0, "nothing evicted from a bounded cache");
+});
+
+test("the broadcast PiP draws through the same meshes: its subject, its neighbours, the player's own body", () => {
+  const v = carDrawVm();
+  v.G.teamIdx = 2; v.G.driverIdx = 1;
+  v.field((c, i) => 2000 - 9 * i);
+  v.carDraw.warmCarAssets();
+  const warm = v.rec.builds.length;
+  const mp = v.mirror();
+  v.classes.add("bc-on");
+  for (const sub of [v.G.cars[7], v.G.cars[15], v.G.player]) {
+    mp.setSubject(sub, "tcam");
+    v.rec.draws.length = 0;
+    v.draw(mp);
+    assert.equal(mp.state().pip.shown, true);
+    assert.ok(mp.state().cars >= 1);
+    assert.equal(v.rec.builds.length, warm, "a PiP cut builds nothing (subject " + sub.code + ")");
+    assert.ok(!v.rec.draws.some(m => m.kind === "whole"), "never a whole-car mesh");
+  }
+});
+
+test("the shipped-before path, for contrast: teamMesh per mirror rival builds a whole car each", () => {
+  // The counter above is only evidence if it can see the regression: the
+  // previous drawCars body (teamMesh(c.team, c)) on the same warmed field.
+  const v = carDrawVm();
+  v.field((c, i) => (c.isPlayer ? 1000 : 1000 - 9 * i));
+  v.carDraw.warmCarAssets();
+  const warm = v.rec.builds.length;
+  const mp = v.mirror({ drawCar: (c, m, paint) => v.G.gfx.draw(v.carDraw.teamMesh(c.team, c), m, paint) });
+  v.draw(mp);
+  const whole = v.rec.builds.slice(warm);
+  assert.equal(whole.length, 6, "6 Car3D builds on the first mirror frame");
+  assert.ok(whole.every(b => b.kind === "whole"));
 });

@@ -1,6 +1,7 @@
 /* wake-lock-vm.test.mjs — tests/specs/wake-lock.spec.js replayed in the Node VM
  * (tools/lib/game-vm.cjs): the screen wake lock held for a race
- * (js/game.js holdRaceWake / dropRaceWake) with the SAME mock, the same
+ * (js/core/wake-lock.js RaceWakeLock.hold / RaceWakeLock.drop, invoked by
+ * js/game.js and PlatformSession) with the SAME mock, the same
  * sequences and the same expected logs as the browser spec.
  *
  * Ported: all 8 tests. Not portable: none — every assertion reads the mock's

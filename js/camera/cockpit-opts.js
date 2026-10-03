@@ -289,6 +289,7 @@ function initUI() {
   place(lab);
   help(lab.title);
   paintLead(inp, out);
+  if (typeof CockpitPreview !== "undefined") CockpitPreview.mount(content);
 }
 
 if (typeof document !== "undefined") {

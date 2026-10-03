@@ -8,7 +8,8 @@ import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
-const apiSource = await readFile(new URL("../../js/data/api.js", import.meta.url), "utf8");
+const apiSource = (await Promise.all(["api-transport", "api"].map((name) =>
+  readFile(new URL(`../../js/data/${name}.js`, import.meta.url), "utf8")))).join("\n");
 
 function lockoutHarness(status, body) {
   const url = "https://api.openf1.org/v1/weather?session_key=7";
@@ -325,7 +326,7 @@ test("the quota purge evicts telemetry bodies largest-first before any small sch
 
 test("hunt fixes: OpenF1 is held under 30 req/min, cancelled rounds never reach the picker, the default is a round that has started", async () => {
   const { readFileSync } = await import("node:fs");
-  const api = readFileSync(new URL("../../js/data/api.js", import.meta.url), "utf8");
+  const api = apiSource;
   assert.match(api, /const OPENF1_PER_MIN = 28/);
   assert.match(api, /if \(_of1Recent\.length >= OPENF1_PER_MIN\) wait = Math\.max\(wait, _of1Recent\[0\] \+ 60000 - now \+ 50\);/);
   assert.match(api, /out\.cancelled = m\.is_cancelled === true;/);
@@ -357,7 +358,7 @@ async function quotaCtx() {
   const fetch = async () => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => [{ driver_number: 1, position: 1, pad: big }] });
   const Log = { warn() {}, info() {}, debug() {}, error() {} };
   const ctx = vmm.createContext({ localStorage, Log, fetch, setTimeout, clearTimeout, AbortController, SaveMigrate: {} });
-  for (const f of ["js/core/store.js", "js/data/api.js"]) vmm.runInContext(await readFile(f, "utf8"), ctx, { filename: f });
+  for (const f of ["js/core/store.js", "js/data/api-transport.js", "js/data/api.js"]) vmm.runInContext(await readFile(f, "utf8"), ctx, { filename: f });
   return { ctx, m, run: (src) => vmm.runInContext(src, ctx) };
 }
 

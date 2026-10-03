@@ -1,0 +1,405 @@
+@layer components {
+/* Apex 26 — settings styles. Load order: tools/manifest.cjs CSS. */
+/* ---------- settings sub-menu ----------
+   Door index, then one page. Tabs hid MORE and spent a sticky row the
+   phone-landscape sheet cannot spare (docs/research/PAUSE-SETTINGS-IA.md).
+   .pm-doors already balances the home list; pages reuse .pm-group. */
+#pmsettings-inner {
+  --fit-at: 300px;
+  --compact-at: 480px;
+}
+#pmsettings-inner:not([data-shape="tall"]) { --fit-at: 220px; }
+#pm-settings-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+#pm-settings-index[hidden],
+.pm-groups > [role="region"][hidden] { display: none !important; }
+.pm-groups { min-width: 0; }
+.pm-groups > [role="region"] { min-width: 0; }
+/* .pm-pad-tools rides here rather than carrying numbers of its own. It wraps
+   CONTROLLER's three tools (CALIBRATE STICK / SET UP A WHEEL / RESET), and a
+   panel gap separates the WRAPPER from its siblings, never the buttons inside
+   it — so with `.pm-group button { margin: 0; width: 100% }` below, the three
+   welded into one slab: measured 844x390, three 44px-tall, 717px-wide buttons
+   0.0px apart where every other row in the panel had 4. The class had been in
+   the markup since the day it shipped and defined nowhere, which is exactly
+   what tools/check/class-usage.mjs now looks for. */
+.pm-group, .pm-pad-tools { display: flex; flex-direction: column; gap: 6px; }
+.pm-group-h {
+  /* Steel section chrome — red is reserved for the rule under the label. */
+  color: var(--steel);
+  font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
+  font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-5);
+  line-height: 1.2;
+  text-transform: uppercase;
+  box-sizing: border-box;
+  margin: 0; padding-bottom: 4px;
+  background: var(--grad-rule) bottom left / 100% 1px no-repeat;
+}
+.pm-group button { margin: 0; width: 100%; }
+/* Every interactive settings row is exactly --tap tall. The label overlays
+   the top of the track (pointer-events: none) so the grab target stays the
+   full row. */
+#pmsettings-inner .pm-group button,
+#pmsettings-inner .pm-doors button {
+  height: var(--tap);
+  min-height: var(--tap);
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.35em;
+  text-align: left;
+  width: 100%;
+  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+  /* Grows with the viewport, never under the micro floor inside sheet zoom. */
+  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-weight: 600;
+  letter-spacing: var(--ls-2);
+  color: var(--text);
+}
+#pmsettings-inner .pm-group :is(.opt-btn, .preset-btn) {
+  width: auto;
+  justify-content: center;
+  text-align: center;
+}
+/* A preset card carries a name AND a one-line blurb; the --tap row height
+   above clipped the blurb below the card (css-play 393x852, both before and
+   after the setting-row pass). Grow with the content, floor at the tap. */
+#pmsettings-inner .pm-group .preset-btn {
+  height: auto;
+  min-height: var(--tap);
+}
+/* NOW PLAYING transport: the same --chip-h plate square as a setting row's
+   chevrons (css/tuner.css .as-tbtn), restated at (1,2,1) over the broad
+   `.pm-group button` rules like the chevrons are. */
+#pmsettings-inner .pm-groups .as-tbtn {
+  width: var(--chip-h);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  padding: 0;
+  margin: 0;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
+/* Driving actions carry complete instructions at narrow widths and high zoom.
+   The shared preference rows retain their own compact control geometry. */
+#pmsettings-inner #pm-panel-driving :is(#pm-practice-set, #pm-practice-retry, #pm-driving-trace) {
+  height: auto;
+  min-height: var(--tap);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-block: calc(var(--gap) * 0.35);
+}
+/* Driving has one coach readout and optional tasks. Full-width folds retain
+   native disclosure visibility; only their content gets vertical spacing. */
+#pm-panel-driving > :is(details, #pm-coach-status, #pm-coach-tip) {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+#pm-panel-driving details > :not(summary) { margin-block: calc(var(--gap) * 0.5); }
+#pm-panel-driving :is(#pm-coach-tip, #pm-incident-log, #pm-ai-decisions, #pm-badges-list) {
+  font-size: var(--fs-micro);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+#pm-coach-tip { color: var(--text); padding-bottom: calc(var(--gap) * 0.5); }
+#pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
+#pm-badges-list { list-style: none; padding-inline-start: 0; }
+
+/* APPEARANCE — same setting-row chrome as the rest of SETTINGS; colour wells
+   match MY TEAM / garage (floored chip height, plate-line border). Live
+   preview + preset swatches sit above/beside the selects so dual accents are
+   obvious without leaving the sheet. */
+#pm-panel-appearance .pm-accent-preview {
+  /* A MOCK of the two places the choices land: a menu card on the left, the
+     race HUD's plate/lap/speed on the right. Stacked on a narrow sheet. */
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: calc(var(--gap) * 0.75);
+  margin: 0 0 calc(var(--gap) * 0.75);
+  padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.75);
+  border-radius: var(--r-md);
+  background: var(--surf-1);
+  border: 1px solid var(--plate-line);
+  pointer-events: none;
+}
+body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-template-columns: minmax(0, 1fr); }
+#pm-panel-appearance .pm-look-menu {
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.35);
+  padding: calc(var(--gap) * 0.5);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  border: 1px solid var(--card-line);
+  border-top: 2px solid var(--red);
+}
+#pm-panel-appearance .pm-look-kicker { font-size: var(--fs-1); font-weight: 800; letter-spacing: var(--ls-4); color: var(--red); }
+#pm-panel-appearance .pm-look-title { font-size: var(--fs-5); font-weight: 800; font-style: italic; color: var(--text); }
+#pm-panel-appearance .pm-look-chips { display: flex; gap: calc(var(--gap) * 0.4); }
+#pm-panel-appearance .pm-look-chip {
+  font-size: var(--fs-1); font-weight: 700; letter-spacing: var(--ls-3);
+  padding: calc(var(--gap) * 0.2) calc(var(--gap) * 0.6);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  color: var(--dim);
+  background: var(--plate);
+}
+#pm-panel-appearance .pm-look-chip[data-on] { color: var(--text); border-color: var(--red); background: var(--plate-on); }
+#pm-panel-appearance .pm-accent-preview-btn {
+  /* The real .bigbtn fill and skew, sized to the card: its own width, margin
+     and red bloom belong to a full menu, not a thumbnail of one. */
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  height: var(--chip-h);
+  margin: calc(var(--gap) * 0.25) 0 0;
+  padding: 0 calc(var(--gap) * 0.8);
+  display: flex;
+  align-items: center;
+  font-size: var(--fs-3);
+  box-shadow: var(--edge);
+}
+#pm-panel-appearance .pm-look-hud {
+  display: flex; flex-wrap: wrap; align-items: center; align-content: center;
+  gap: calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.5);
+  border-radius: var(--r-sm);
+  background: var(--look-hud-bg);
+}
+#pm-panel-appearance .pm-look-lap,
+#pm-panel-appearance .pm-look-spd {
+  font-family: var(--font-hud);
+  font-style: italic;
+  color: var(--look-hud-ink);
+  text-shadow: var(--look-hud-halo);
+  font-variant-numeric: tabular-nums;
+}
+#pm-panel-appearance .pm-look-lap { font-size: var(--fs-2); border-left: 3px solid var(--accent); padding-inline-start: calc(var(--gap) * 0.4); }
+#pm-panel-appearance .pm-look-spd { font-size: var(--fs-6); font-weight: 800; margin-inline-start: auto; }
+#pm-panel-appearance .pm-look-unit { font-size: var(--fs-1); font-weight: 700; margin-inline-start: calc(var(--gap) * 0.25); color: var(--look-hud-dim); }
+#pm-panel-appearance .pm-accent-preview-hud {
+  flex: 0 0 auto;
+  min-width: calc(var(--chip-h) * 1.1);
+  height: var(--chip-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(var(--gap) * 0.6);
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: var(--ls-2);
+  border: 1px solid color-mix(in oklab, var(--accent-ink) 28%, transparent);
+}
+#pm-panel-appearance .pm-look-h {
+  margin: calc(var(--gap) * 1.1) 0 calc(var(--gap) * 0.4);
+  padding-bottom: calc(var(--gap) * 0.25);
+  border-bottom: 1px solid var(--card-line);
+  font-size: var(--fs-1); font-weight: 800; letter-spacing: var(--ls-4);
+  color: var(--dim);
+}
+#pm-panel-appearance .pm-accent-swatches {
+  /* Two even rows of four, every width: 5+3 with a ragged, right-pushed second
+     row read as two different pickers (portrait survey, 2026-09-26). */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.5);
+  margin: calc(var(--gap) * -0.25) 0 calc(var(--gap) * 0.35);
+}
+/* Beat `.pm-group button { width:100%; height:var(--tap) }` — chips are
+   colour samples, not full-row actions (same carve-out as `.as-tbtn`). A NAMED
+   pill: BRAND, TEAM and CUSTOM can all be red, so the name tells them apart. */
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip {
+  width: 100%;
+  height: var(--chip-h);
+  min-width: 0;
+  min-height: 0;
+  padding: 0 calc(var(--gap) * 0.25);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: var(--chip, var(--plate));
+  color: var(--chip-ink, var(--text));
+  cursor: pointer;
+  font-size: var(--fs-1);
+  font-weight: 800;
+  letter-spacing: var(--ls-2);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip[aria-selected="true"] {
+  border-color: var(--text);
+  box-shadow: var(--edge), 0 0 0 2px var(--text);
+}
+#pmsettings-inner #pm-panel-appearance .pm-accent-chip-custom:not([aria-selected="true"]) {
+  border-style: dashed;
+}
+#pm-panel-appearance .pm-accent-custom > div {
+  display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--gap) * 0.5);
+}
+#pmsettings-inner #pm-panel-appearance input[type="color"] {
+  flex: 0 0 auto;
+  width: max(var(--tap-min), calc(var(--chip-h) * 1.35));
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  padding: 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: none;
+  cursor: pointer;
+}
+#pmsettings-inner #pm-panel-appearance .pm-accent-hextext {
+  width: 9.5ch;
+  min-width: 9.5ch;
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  padding: 0 calc(var(--gap) * 0.5);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line);
+  background: var(--plate);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-5);
+  text-transform: uppercase;
+}
+/* One-shot REPLAY INTRO — not a full-width Settings door. */
+#pmsettings-inner #pm-panel-appearance .pm-replay-intro {
+  width: auto;
+  align-self: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
+  height: auto;
+  min-height: var(--tap);
+  margin-top: calc(var(--gap) * 0.35);
+  padding: calc(var(--gap) * 0.55) calc(var(--gap) * 0.85);
+}
+#pmsettings-inner #pm-panel-appearance .pm-replay-intro small {
+  display: block;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: var(--ls-2);
+  color: var(--dim);
+  text-transform: none;
+}
+
+/* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
+   used to be the two plain-grey labels on a sheet of steel italics. */
+#pmsettings-inner .pm-group .tune-label {
+  color: var(--steel);
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: var(--ls-5);
+  text-transform: uppercase;
+}
+#pmsettings-inner .pm-group .tune-label b {
+  color: inherit;
+  font-style: italic;
+}
+/* OVERRIDDEN vs INHERITED, borrowed wholesale rather than invented. Unity's
+   editor puts an "override bar" on the left of a modified property's label and
+   bolds that label; VS Code puts a coloured bar left of any setting you have
+   changed; Google Workspace labels each row Inherited or Overridden. All three
+   pair a persistent marker with an in-context way back. The marker is the bar,
+   the way back is the button beside the value.
+
+   Why this matters here more than in most settings screens: BUTTON SIZE has no
+   number of its own until you move it — unset, it FOLLOWS HUD SIZE — so without
+   a marker "100%" and "100%, because it is tracking the slider above" render
+   identically, and a player cannot tell a value they chose from one they
+   inherited. The bar is the only thing that distinguishes them. */
+.pm-group .tune-over > .tune-label,
+.pm-group-h.tune-over {
+  /* The bar's width is a local property so the negative margin that cancels it
+     stays in step, and so this declaration carries no raw px (tools/check
+     ratchets `rawSpacing`: a px literal in a padding/margin/gap is a token that
+     was not used). The row keeps its alignment — the bar hangs outside. */
+  --tune-bar: 2px;
+  /* --text, NOT --accent. This bar is the only thing distinguishing a value you
+     chose from one you inherited, which makes it INFORMATION, and WCAG 1.4.11
+     wants 3:1 of anything that identifies a control's state. --accent is the
+     team skin: racingbulls #1634cb measures 2.21:1 and williams #0f3cc9 2.33:1
+     over --bg, so on those two teams the marker would have been the least
+     visible thing on the row. tests/unit/nontext-contrast.test.mjs caught this
+     — it freezes the --accent consumer list precisely so a new use has to argue
+     it is ornament, and this one could not. */
+  border-left: var(--tune-bar) solid var(--text);
+  padding-left: calc(var(--gap) * 0.4);
+  margin-left: calc(var(--gap) * -0.4 - var(--tune-bar));
+}
+.pm-group .tune-over > .tune-label b, .pm-group-h.tune-over b { font-weight: 900; }
+/* The revert sits in the label row, after the value, and is deliberately quiet:
+   it is an escape hatch, not an action anyone is looking for. Full tap height
+   via the shared ladder — it is a real target on a phone, not a text link. */
+.tune-revert,
+#pmsettings-inner .pm-group .tune-revert {
+  font: inherit; font-size: var(--fs-micro); font-style: normal;
+  letter-spacing: var(--ls-4); text-transform: uppercase;
+  margin-left: auto; padding: 0 calc(var(--gap) * 0.5);
+  min-height: var(--tap-sm); min-width: var(--tap-sm);
+  width: auto; height: auto; flex-shrink: 0; justify-content: center; text-align: center;
+  color: var(--dim); background: var(--plate); border: 1px solid var(--plate-line);
+  border-radius: var(--r-xs); cursor: pointer;
+  touch-action: manipulation;
+}
+@media (hover: hover) {
+  .tune-revert:hover { color: var(--text); background: var(--plate-hover); }
+}
+#pmsettings-inner .pm-doors button {
+  width: auto;
+  height: auto;
+  flex-direction: column;
+  align-items: flex-start;
+  /* A door, not a key/value row. */
+  justify-content: center;
+  text-align: left;
+  /* Title-room recipe: carbon tile + steel line. MORE doors sit on the
+     settings grain the same way #overlay alts sit on the title grain. */
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+#pm-settings-index small {
+  font-size: var(--fs-micro); font-weight: 400; letter-spacing: normal;
+  color: var(--dim);
+}
+.sheet[data-density="compact"] .pm-group-h {
+  letter-spacing: var(--ls-4);
+  font-size: var(--fs-2);
+}
+.pm-group .tune-row {
+  margin: 0;
+  min-height: var(--tap);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: calc(var(--gap) * 0.25);
+  box-sizing: border-box;
+}
+.pm-group .tune-row .tune-label {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  /* --fs-2 (15px): under .sheet zoom 0.9 paints ≥13.5px (visual floor 12). */
+  font-size: var(--fs-2);
+  line-height: 1.2;
+}
+.pm-group .tune-row input[type="range"] {
+  width: 100%;
+  height: var(--slider);
+  min-height: var(--slider);
+  margin: 0;
+  box-sizing: border-box;
+}
+} /* @layer components */

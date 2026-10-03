@@ -245,6 +245,14 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   //    BLEND         : alpha  (srcAlpha, oneMinusSrcAlpha), ALPHA-TESTED
   //    DEPTH         : test ENABLED, write DISABLED (sits proud of the body).
   //    CULL          : none (single quad, both faces)
+  //
+  //    fs_glass — THE COCKPIT'S LIVE MIRROR GLASS (wgx.js drawMirrorGlass, pGlass;
+  //               GLX MIRROR_GLASS_FS): the same vs_main and bind group, the
+  //               mirror target bound as the "atlas". Unlit and OPAQUE, alpha 1
+  //               (the SSR "not car paint" tag), depth WRITTEN, no blend. The
+  //               caller's uvRect (0, 1, 1, -1) reads (u, 1 - v): the target's
+  //               row 0 is its TOP, the mesh's v = 0 the image bottom. tint.rgb
+  //               scales the sample. No branch ahead of textureSample (uniformity).
   const DECAL = `
 struct DecalU {
   model     : mat4x4<f32>,  // off   0
@@ -290,6 +298,12 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let base = t.rgb * U.tint.xyz;
   let lit = base * (amb + U.sunColor.xyz * ndl) + base * U.tint.w;
   return vec4<f32>(lit, t.a);
+}
+
+@fragment
+fn fs_glass(in : VSOut) -> @location(0) vec4<f32> {
+  let t = textureSample(atlasTex, atlasSamp, in.uv);
+  return vec4<f32>(t.rgb * U.tint.xyz, 1.0);
 }`;
 
   const PARTICLE = `

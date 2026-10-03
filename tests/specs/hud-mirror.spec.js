@@ -39,6 +39,54 @@ async function mirrorPatch(page, rect) {
   }, rect);
 }
 
+// THE COCKPIT'S LIVE GLASS, in pixels. Per glass (mirror().glass.screen: the
+// projected corners [a inboard-low, b outboard-low, c outboard-high, d
+// inboard-high], canvas fractions), the mean of its top band (glass-local v
+// 0.75-0.95) and bottom band (0.05-0.25), u 0.2-0.8 — and the SAME image region
+// read off the HUD mirror. The glass maps the raw target as car-mesh.js
+// getMirrorGlass does (pinned by cockpit-wheels.test.mjs): image u runs from
+// 0.5 + 0.1s inboard to 0.5 - 0.5s outboard (s -1 the left glass, +1 the
+// right), image v from 0.22 to 0.78; the HUD composite shows image (u, v) at
+// rect (1 - u, 1 - v), flipped left-right like glass. null without a 2-D copy;
+// { off: true } for a glass whose band leaves the canvas.
+async function glassBands(page, screen, rect) {
+  return page.evaluate(({ scr, r }) => {
+    const soft = document.getElementById("game-soft");
+    if (!soft || !(soft.width > 0) || !scr || !r) return null;
+    const ctx = soft.getContext("2d");
+    if (!ctx) return null;
+    const W = soft.width, H = soft.height, img = ctx.getImageData(0, 0, W, H).data;
+    const luma = (x, y) => {
+      const px = Math.floor(x * W), py = Math.floor(y * H);
+      if (!(px >= 0 && py >= 0 && px < W && py < H)) return null;
+      const o = (py * W + px) * 4;
+      return (img[o] + img[o + 1] + img[o + 2]) / 3;
+    };
+    const mean = (pts) => {
+      let s = 0;
+      for (const [x, y] of pts) { const l = luma(x, y); if (l == null) return null; s += l; }
+      return +(s / pts.length).toFixed(1);
+    };
+    return scr.map((q, side) => {
+      if (!q || q.some((p) => !p)) return { off: true };
+      const s = side === 0 ? -1 : 1, ui = 0.5 + 0.1 * s, uo = 0.5 - 0.5 * s;
+      const band = (v0, v1) => {
+        const glass = [], hud = [];
+        for (let i = 0; i <= 8; i++) for (let j = 0; j <= 4; j++) {
+          const u = 0.2 + 0.6 * i / 8, v = v0 + (v1 - v0) * j / 4;
+          glass.push([0, 1].map((k) => (1 - u) * (1 - v) * q[0][k] + u * (1 - v) * q[1][k] + u * v * q[2][k] + (1 - u) * v * q[3][k]));
+          const iu = ui + (uo - ui) * u, iv = 0.22 + 0.56 * v;
+          hud.push([r[0] + r[2] * (1 - iu), r[1] + r[3] * (1 - iv)]);
+        }
+        return { glass: mean(glass), hud: mean(hud) };
+      };
+      const top = band(0.75, 0.95), bottom = band(0.05, 0.25);
+      if (top.glass == null || bottom.glass == null) return { off: true };
+      return { top: top.glass, bottom: bottom.glass, hudTop: top.hud, hudBottom: bottom.hud };
+    });
+  }, { scr: screen, r: rect });
+}
+
 async function mirrorRace(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
@@ -117,6 +165,40 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   await awaitPresentedFrame(page, 12000);
   const withMirror = await mirrorPatch(page, on.m.rect);
 
+  // THE COCKPIT'S LIVE GLASS (gfx.drawMirrorGlass): while the mirror draws, the
+  // housings' glass shows ITS image, with no second render — the backend counts
+  // every glass draw, and car-draw.js drew no fallback over it. Then the pixels:
+  // each glass the right way up, its top band brighter than its bottom exactly
+  // when the HUD mirror's matching rows are (the sky over the road behind, on a
+  // day race). A v-flip inverts the glass and not the HUD.
+  // WAITED FOR, not read once: TLX on llvmpipe renders a race frame every few
+  // hundred ms, and remote gfx shard 1/4 (run 37103719285) read the same count
+  // twice with no frame between. Poll for the next glass draw, then measure.
+  const glass0 = on.m.backend.glass || 0;
+  await page.waitForFunction((g) => {
+    const m = window.__apex.mirror();
+    return !!(m && m.backend && m.backend.glass > g && m.glass && m.glass.live > 0);
+  }, glass0, { polling: 100, timeout: FRAME_MS });
+  const lens = await page.evaluate(() => window.__apex.mirror());
+  const ld = JSON.stringify({ backend: lens.backend, glass: lens.glass });
+  expect(lens.backend.glass, ld).toBeGreaterThan(glass0);
+  expect(lens.glass && lens.glass.live, ld).toBeGreaterThan(0);
+  const bands = await glassBands(page, lens.glass.screen, on.m.rect);
+  test.info().annotations.push({ type: "mirror-glass-bands", description: JSON.stringify(bands) });
+  if (requirePixels) expect(bands, "GLX presents through #game-soft").toBeTruthy();
+  if (bands) {
+    const bd = JSON.stringify(bands);
+    let decided = 0;
+    for (const [i, b] of bands.entries()) {
+      expect(b.off, `cockpit glass ${i} is on the canvas: ${bd}`).toBeFalsy();
+      const hud = b.hudTop - b.hudBottom;
+      if (Math.abs(hud) < 6) continue;   // no vertical contrast in the HUD's rows: nothing to orient by
+      decided++;
+      expect((b.top - b.bottom) * Math.sign(hud), `glass ${i} top/bottom ordered like the HUD mirror (a v-flip inverts it): ${bd}`).toBeGreaterThan(2);
+    }
+    expect(decided, `at least one glass has HUD contrast to orient by: ${bd}`).toBeGreaterThan(0);
+  }
+
   // A TAP collapses it to the chip (the phone toggle — no M key there), and a
   // tap on the chip brings it back; the stored setting is untouched.
   // Hit-tested, not page.click(): Playwright's "stable" check waits on
@@ -153,11 +235,19 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   }));
   expect(off.cls, JSON.stringify(off)).toBe(false);
   expect(off.frameHidden, JSON.stringify(off)).toBe(true);
-  const c0 = off.m.backend.composites;
+  const c0 = off.m.backend.composites, g0 = off.m.backend.glass, fb0 = off.m.glass ? off.m.glass.fallback : 0;
   await awaitPresentedFrame(page, 12000);
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  // A cockpit frame has to DRAW before the fallback count can move (slow TLX
+  // on llvmpipe): wait for it, then check nothing live was drawn meanwhile.
+  await page.waitForFunction((f) => {
+    const m = window.__apex.mirror();
+    return !!(m && m.glass && m.glass.fallback > f);
+  }, fb0, { polling: 100, timeout: FRAME_MS });
   const off2 = await page.evaluate(() => window.__apex.mirror());
   expect(off2.backend.composites, JSON.stringify(off2)).toBe(c0);
+  // ...and the glass stops with it: no live glass draw, the sky-tint fallback instead.
+  expect(off2.backend.glass, JSON.stringify(off2)).toBe(g0);
+  expect(off2.glass && off2.glass.fallback, JSON.stringify(off2)).toBeGreaterThan(fb0);
 
   // Pixel evidence where the presented frame is readable: the rect held the
   // rear view, and now holds the forward view's pixels behind it.

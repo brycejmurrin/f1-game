@@ -119,11 +119,12 @@ test("create().tick writes dbgCam from camVantage and never mutates car speed", 
   assert.equal(G.dbgCam, null);
 });
 
-test("CAM_MODES appends tv last — save-format index contract", () => {
+test("CAM_MODES keeps tv at its shipped index — save-format index contract", () => {
   const text = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...text.matchAll(/\{\s*id:\s*"([^"]+)"/g)].map((m) => m[1]);
   assert.ok(ids.includes("tv"), "tv mode must be in CAM_MODES");
-  assert.equal(ids[ids.length - 1], "tv", "tv is appended — never reorder earlier ids");
+  // apex26.camMode stores the index: tv shipped at 18, later modes (HELMET) append after it.
+  assert.equal(ids.indexOf("tv"), 18, "tv keeps index 18 — never reorder earlier ids");
   assert.ok(ids.indexOf("visor") < ids.indexOf("tv"), "visor stays before tv");
 });
 

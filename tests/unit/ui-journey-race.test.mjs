@@ -6,6 +6,7 @@
  *
  * Run: node --test tests/unit/ui-journey-race.test.mjs
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -69,7 +70,7 @@ test("HUD clusters zoom with --hud-z, never --ui-scale on #lights / .hud-bottom"
 
 test("free-cam pads match the steering-arrow diameter", () => {
   const hud = read("css/hud.css");
-  const overlays = read("css/overlays.css");
+  const overlays = readCssSource("css/overlays.css");
   assert.match(overlays, /--steer:\s*84px/);
   assert.match(hud, /\.pc-btn\s*\{[^}]*width:\s*var\(--steer\)/);
   assert.match(hud, /\.pc-stick\s*\{[^}]*width:\s*118px/);
@@ -86,7 +87,7 @@ test("photo-mode restore eye is #pc-restore when controls are hidden", () => {
 
 test("compact race HUD uses body density, not orientation + max-height queries", () => {
   const hud = read("css/hud.css");
-  const overlays = read("css/overlays.css");
+  const overlays = readCssSource("css/overlays.css");
   const responsive = read("css/responsive.css");
   const added = hud + "\n" + overlays;
   assert.doesNotMatch(added, /orientation:\s*landscape\)\s*and\s*\(max-height:/,
@@ -123,7 +124,7 @@ test("sector box still clears #pausebtn via --tap-hud / --hud-z", () => {
  * colour was unreachable. It shipped because BRAKE carried no such restatement,
  * so exactly one of the two pedals was broken and only in one steering mode. */
 test("no layout-mode rule restates a pedal fill over its pressed colour", () => {
-  const css = stripComments(read("css/overlays.css"));
+  const css = stripComments(readCssSource("css/overlays.css"));
   for (const id of ["btn-throttle", "btn-brake"]) {
     assert.match(css, new RegExp(`#${id}:active \\{[^}]*background:`),
       `#${id} must have a pressed fill at all`);
@@ -136,7 +137,7 @@ test("no layout-mode rule restates a pedal fill over its pressed colour", () => 
 });
 
 test("the five action buttons share one transparency and the arrows keep theirs", () => {
-  const css = stripComments(read("css/overlays.css"));
+  const css = stripComments(readCssSource("css/overlays.css"));
   assert.match(css, /--btn-a:\s*0?\.\d+/, "the shared idle transparency is one named number");
   const shared = css.match(/:where\(([^)]*)\)\s*\{\s*opacity:\s*var\(--btn-a\)/);
   assert.ok(shared, "one :where() rule carries the shared idle opacity — :where() so " +

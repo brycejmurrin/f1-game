@@ -91,6 +91,8 @@ export function makeDom(opts = {}) {
       getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
       hasAttribute: (k) => attrs.has(k),
       removeAttribute: (k) => { attrs.delete(k); },
+      // Element.toggleAttribute(name, force): https://developer.mozilla.org/docs/Web/API/Element/toggleAttribute
+      toggleAttribute: (k, force) => { const on = force === undefined ? !attrs.has(k) : !!force; if (on) { if (!attrs.has(k)) attrs.set(k, ""); } else attrs.delete(k); return on; },
       appendChild: (c) => { el.children.push(c); c.parentNode = c.parentElement = el; return c; },
       append: (...cs) => cs.forEach((c) => c && typeof c === "object" && el.appendChild(c)),
       insertBefore: (c, ref) => { const i = ref ? el.children.indexOf(ref) : -1; if (i >= 0) el.children.splice(i, 0, c); else el.children.push(c); c.parentNode = c.parentElement = el; return c; },

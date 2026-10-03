@@ -2451,3 +2451,96 @@ test("createMesh road-piece OOM destroys every piece already uploaded", async ()
   const leaked = made.filter((b) => !b.destroyed);
   assert.equal(leaked.length, 0, `${leaked.length} of ${made.length} buffers leaked on the failed createMesh`);
 });
+
+// THE COCKPIT'S LIVE MIRROR GLASS on WGX (drawMirrorGlass): DECAL's module
+// with fs_glass, built EAGERLY beside pDecal and at the lit pass's sample
+// count; the mirror target bound through a group that is dropped with the
+// target (a resize must not leave it naming a destroyed view); and refused —
+// the caller lays its fallback — whenever there is nothing safe to sample.
+test("WGX live mirror glass: pGlass carries _fxMS, the group dies with the target, and every refusal", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(typeof gfx.drawMirrorGlass, "function");
+  const glassDesc = h.pipelineDescs.find((d) => d && d.fragment && d.fragment.entryPoint === "fs_glass");
+  assert.ok(glassDesc, "pGlass is built at init, where wgx-validate's Dawn pass sees it");
+  const decalDesc = h.pipelineDescs.find((d) => d && d.fragment && d.fragment.module === glassDesc.fragment.module && d.fragment.entryPoint === "fs_main");
+  assert.ok(decalDesc, "the same module as pDecal (DECAL's vs_main)");
+  assert.equal(glassDesc.vertex.entryPoint, "vs_main");
+  assert.deepEqual(glassDesc.vertex.buffers, decalDesc.vertex.buffers, "createTexMesh's stride-32 pos/nrm/uv layout");
+  assert.deepEqual(glassDesc.multisample, decalDesc.multisample, "the _fxMS spread: the lit pass's sample count");
+  assert.equal(glassDesc.multisample && glassDesc.multisample.count, 4, "this harness is the 4x desktop stack");
+  const t = glassDesc.fragment.targets[0];
+  assert.equal(t.blend, undefined, "opaque");
+  assert.equal(t.writeMask, 15, "alpha written: the SSR not-car-paint tag");
+  assert.equal(glassDesc.depthStencil.depthWriteEnabled, true);
+  assert.equal(glassDesc.depthStencil.depthCompare, "less-equal");
+  assert.equal(glassDesc.primitive.cullMode, "none");
+
+  const groups = [];
+  const createBindGroup = h.device.createBindGroup;
+  h.device.createBindGroup = (desc) => { groups.push(desc); return createBindGroup(desc); };
+  const mesh = gfx.createTexMesh({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
+    uv: [0.4, 0.22, 1, 0.22, 1, 0.78, 0.4, 0.78], idx: [0, 1, 2, 0, 2, 3] });
+  const model = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const rect = [0.4, 0.1, 0.2, 0.06];
+  gfx.mirrorRect(rect);
+  // No image yet: refused.
+  assert.equal(gfx.begin({}), true);
+  assert.equal(gfx.drawMirrorGlass(mesh, model, null), false, "no mirror image yet");
+  gfx.present({});
+  // The mirror pass, then a draw INSIDE it: the target is that pass's attachment.
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+  assert.equal(gfx.drawMirrorGlass(mesh, model, null), false, "an open mirror pass");
+  gfx.mirrorEnd();
+  // No main pass open: refused.
+  assert.equal(gfx.drawMirrorGlass(mesh, model, null), false, "no lit pass");
+  assert.equal(gfx.begin({}), true);
+  const before = groups.length;
+  assert.equal(gfx.drawMirrorGlass(mesh, model, null), true);
+  const g1 = groups.slice(before).filter((d) => d.entries[1] && d.entries[1].resource && d.entries[1].resource.texture);
+  assert.equal(g1.length, 1, "one group for the glass");
+  const view1 = g1[0].entries[1].resource;
+  assert.equal(view1.texture.desc.mipLevelCount > 1, true, "the whole mip chain (mirSampleView), not the level-0 attachment");
+  assert.equal(view1.viewDesc, undefined, "mirSampleView: the default full view");
+  assert.equal(gfx.drawMirrorGlass(mesh, model, null), true);
+  assert.equal(groups.length, before + 1, "the group is cached while the target lives");
+  assert.equal(gfx.mirrorState().glass, 2);
+  // The uniform slot reads (u, 1 - v): BLIT's convention, row 0 the image top.
+  gfx.present({});
+  const decalUBO = h.buffers.find((b) => b.desc.size === 128 * 256);
+  const ring = h.writes.filter((w) => w.buffer === decalUBO).at(-1).values;
+  assert.deepEqual(ring.slice(48, 52), [0, 1, 1, -1], "uvRect (0, 1, 1, -1)");
+  assert.deepEqual(ring.slice(52, 55), [1, 1, 1], "tint 1");
+
+  // flip false = the broadcast PiP owns the target: refused.
+  assert.equal(gfx.begin({}), true);
+  gfx.mirrorRect(rect, false);
+  assert.equal(gfx.drawMirrorGlass(mesh, model, null), false, "never on the PiP");
+  gfx.mirrorRect(rect);
+  gfx.present({});
+
+  // A resize frees the target: the group goes with it, and the next glass binds the NEW view.
+  assert.equal(gfx.mirrorBegin({}, 128, 32), true);
+  gfx.mirrorEnd();
+  assert.equal(view1.texture.destroyed, true, "the old target is gone");
+  assert.equal(gfx.begin({}), true);
+  const b2 = groups.length;
+  assert.equal(gfx.drawMirrorGlass(mesh, model, null), true);
+  const g2 = groups.slice(b2);
+  assert.equal(g2.length, 1, "a fresh group after the resize");
+  assert.notEqual(g2[0].entries[1].resource, view1);
+  assert.equal(g2[0].entries[1].resource.texture.destroyed, false, "never a destroyed view");
+  gfx.present({});
+
+  // A dead target (its allocation failed at a new size): refused for good.
+  h.failNextTexture();
+  assert.equal(gfx.mirrorBegin({}, 256, 64), false);
+  assert.equal(gfx.mirrorState().dead, true);
+  assert.equal(gfx.begin({}), true);
+  assert.equal(gfx.drawMirrorGlass(mesh, model, null), false, "a dead target");
+  assert.equal(gfx.mirrorState().glass, 3);
+  gfx.present({});
+  assert.match(WGX_SOURCE, /mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; _mirGlassBG = null;/,
+    "_mirrorFree drops the glass group with the views");
+});

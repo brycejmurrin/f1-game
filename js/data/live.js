@@ -374,15 +374,7 @@ const DataLive = (function () {
           const mainInfo = el("div", "dh-cons-main");
           mainInfo.appendChild(el("span", "dh-pos", p.pos != null ? p.pos : "—"));
           const chip = el("span", "dh-codechip", d.code || (p.num != null ? "#" + p.num : "—"));
-          let col = null;
-          if (d.color && /^[0-9a-fA-F]{6}$/.test(d.color)) {
-            col = [parseInt(d.color.slice(0, 2), 16) / 255,
-                   parseInt(d.color.slice(2, 4), 16) / 255,
-                   parseInt(d.color.slice(4, 6), 16) / 255];
-          } else {
-            const t = findTeam(d.team);
-            col = t ? t.color : null;
-          }
+          const col = DataTabUtils.driverColor(d, findTeam, null);
           chip.style.background = cssColor(col);
           chip.style.color = textColorOn(col);
           mainInfo.appendChild(chip);

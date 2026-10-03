@@ -749,7 +749,7 @@ test("a legend's car wears its marque crest; a wordmark marque is lettered with 
   sb.globalThis = sb;
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/data/legends.js", "js/car/liveries.js",
-                   "js/car/crest-paths.js", "js/car/liverytex.js"])
+                   "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   const L = vm.runInContext("LiveryTex", sb), Lg = vm.runInContext("Legends", sb), T = vm.runInContext("Teams", sb);
   const R = L.REGIONS.crest;

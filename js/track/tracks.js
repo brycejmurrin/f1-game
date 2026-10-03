@@ -371,8 +371,10 @@ const Tracks = (function () {
         // span. A VM with no createInstancedBatch fused them all — unchanged.
         track.propTop = Math.max(track.propTop, instTop(track, batches));
         if (batches.length) {
-          track.meshes.propBatches = batches.map((b) =>
-            G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
+          // Pushed as each one lands, not assigned after the map: a throw or an
+          // abandon part-way can then free the batches already on the GPU.
+          const pb = track.meshes.propBatches = [];
+          for (const b of batches) pb.push(G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
         }
       }
       lap("batches", "up"); yield track; _t = _now();
@@ -401,10 +403,21 @@ const Tracks = (function () {
     return track;
   }
   let _buildGen = 0, _pacing = 0;   // bumped by every build (a newer one abandons a paced one); paced in flight
+  // A throw mid-build (an OOM RangeError, a scenery closure fault) frees what the
+  // steps had already uploaded: the caller has no handle to the partial track, so
+  // every retry of a failed preparation would otherwise stack another orphaned world.
   function build(def, opts) {
     _buildGen++;
     const it = buildSteps(def, opts);
-    for (;;) { const r = it.next(); if (r.done) return r.value; }
+    let partial = null;
+    try {
+      for (;;) { const r = it.next(); if (r.done) return r.value; if (r.value) partial = r.value; }
+    } catch (e) { freePartial(partial, opts); throw e; }
+  }
+  function freePartial(partial, opts) {
+    const G = partial && partial._gfx || (opts && opts.gfx);
+    if (!partial || !G) return;
+    try { free(partial, G); if (typeof PitSigns !== "undefined") PitSigns.free(G, partial); } catch (_) { /* best effort: the build's own error is the one to surface */ }
   }
   // ~budgetMs per frame, a paint between slices. Resolves the track, or null once alive() is
   // false or a newer build started — after handing onAbandon the partial track to free.

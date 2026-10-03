@@ -326,7 +326,7 @@ const FIELD_STATIONS = {
   fin: ["finBadge"], finArt: ["finBadge"], finStyle: ["finBadge"], finBadge: ["finBadge"],
   finShape: ["finBadge"], finHandoff: ["finBadge"],
   nose: ["noseFlash"], noseStripe: ["noseFlash"], pod: ["sidepod"], stripe: ["sidepod"],
-  accent: ["sidepod", "noseFlash"], finish: ["sidepod"], bodySplit: ["sidepod"],
+  accent: ["sidepod", "noseFlash"], finish: ["sidepod"], bodySplit: ["sidepod"], lower: ["sidepod"],
   wing: ["endplate"], wingCarbon: ["endplate"], rearWing: ["rearWing"],
   logo: ["wallCrest", "spineTop"], logo2: ["wallCrest", "spineTop"], logo3: ["wallCrest", "spineTop"],
 };
