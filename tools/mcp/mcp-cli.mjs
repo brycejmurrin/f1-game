@@ -84,7 +84,10 @@ function parseProbeArgs(argv) {
               dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    const next = () => argv[++i];
+    const next = () => {
+      if (i + 1 >= argv.length || argv[i + 1].startsWith("--")) throw new Error(`probe: missing value for ${a}`);
+      return argv[++i];
+    };
     if (a === "--url") o.url = next();
     else if (a === "--backend") o.backend = next();
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
@@ -100,6 +103,12 @@ function parseProbeArgs(argv) {
     else if (a === "--dry-run") o.dryRun = true;
     else throw new Error(`probe: unknown flag ${a}`);
   }
+  if (o.backend != null && !["webgl2", "three", "webgpu"].includes(o.backend)) throw new Error("probe: --backend must be webgl2, three or webgpu");
+  if (!Number.isInteger(o.wait) || o.wait < 0 || o.wait > 180000) throw new Error("probe: --wait must be an integer 0..180000 milliseconds");
+  const modes = [o.tlxWebgpu, o.tlxAuto, o.tlxAutoGl].filter(Boolean).length;
+  if (modes > 1) throw new Error("probe: choose one of --tlx-webgpu, --tlx-auto or --tlx-auto-gl");
+  if (modes && o.backend !== "three") throw new Error("probe: TLX mode flags need --backend three");
+  if (o.lite && o.backend !== "webgpu") throw new Error("probe: --lite needs --backend webgpu");
   return o;
 }
 
@@ -156,7 +165,7 @@ function probeCalls(o) {
     body = src;
   }
   calls.push({ name: "evaluate_script", arguments: { function:
-    `async () => { await new Promise(r => setTimeout(r, ${o.wait | 0}));\n${body}\n}` } });
+    `async () => { await new Promise(r => setTimeout(r, ${o.wait}));\n${body}\n}` } });
   if (o.console !== null) calls.push({ name: "list_console_messages", arguments: {} });
   return calls;
 }
@@ -165,7 +174,9 @@ const argv = process.argv.slice(2);
 let calls;
 let consoleGrep = null;
 if (argv[0] === "probe") {
-  const o = parseProbeArgs(argv.slice(1));
+  let o;
+  try { o = parseProbeArgs(argv.slice(1)); }
+  catch (e) { console.error(e.message); process.exit(2); }
   calls = probeCalls(o);
   consoleGrep = o.console;
   // --dry-run prints the call array a real run would send and exits, so the

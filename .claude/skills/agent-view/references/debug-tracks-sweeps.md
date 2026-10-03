@@ -35,8 +35,9 @@ Compute min/max/mean of `hw` from the profile array; compare against `w.minOverH
 
 ## Parallel multi-track sweep (compare all circuits fast)
 
-Validated pattern — 4 tracks profiled concurrently in ~10 s using parallel
-Chromium workers (see the **playwright-probe** skill for the harness). Illustrative output of a
+Use `createGame({track})` from `tools/lib/game-vm.cjs` for numeric profiles,
+close each game in `finally`, and process tracks sequentially. Browser fallbacks
+are parent-owned and serialized; geometry alone needs no Chromium. Illustrative output of a
 profile sweep (the elev figures are stale: `max y − min y` over `trackProfile(1000)` now measures spa 102 m, monza 6 m; recompute, do not quote):
 
 ```
