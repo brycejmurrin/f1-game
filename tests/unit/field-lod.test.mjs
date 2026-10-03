@@ -13,8 +13,8 @@
  *     LOD off;
  *   - the WARM: TLX compiles the flame / ERS lit variants during the lights
  *     (their material keys equal the ones game.js draws with), and
- *     warmCarAssets builds the :sh caster, the mirror mesh, the field wheels
- *     and the flame quad.
+ *     warmCarAssets builds the :sh caster, up to mirrorCap() whole-car meshes,
+ *     the field wheels and the flame quad (skipped when headless).
  * No browser (~0.1 s). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -231,6 +231,9 @@ test("warm: warmCarAssets builds the caster silhouette, the field wheels and the
   // NOT the whole-car teamMesh per rival: ~240 ms of CPU each, it doubled the
   // game-vm track build (4 s -> 9 s) and failed "boot and track build do not hang".
   assert.doesNotMatch(body, /teamMesh\(c\.team, c\);/, "no per-rival whole-car pre-build");
+  // Visual-only warm: skipped headless / on an inert gfx (game-vm), where there
+  // is no launch hitch to hide.
+  assert.match(body, /const lodWarm = FieldLod\.on && !G\.headlessMode/, "headless skips the FieldLod warm");
   assert.match(body, /CarMesh\.getExhaustFlame\(c\.fuelVisual && c\.fuelVisual\.fxFlame\)/, "flame quad (same key the draw uses)");
   assert.match(cd, /FieldLod\.init\(G\.store\)/, "the off-switch is read once at boot");
 });

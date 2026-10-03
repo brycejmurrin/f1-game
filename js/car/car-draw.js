@@ -274,6 +274,14 @@ const CarDraw = (function () {
       // caster with teamMesh(team, car, true) on the FIRST countdown frame: ~12 builds
       // there, unless they are built here behind the loading cover. Same gates as the passes.
       const casters = shadowCastersWanted();
+      // FieldLod launch warm is VISUAL only. Skip it when there is no hitch to
+      // hide: headlessMode, or an inert gfx stub (game-vm omits mirrorBegin /
+      // present — see tools/lib/game-vm.cjs). game-vm's inert gfx omits
+      // mirrorBegin on purpose (and has no casters); a real backend always
+      // exposes the mirror API even when the HUD mirror is off.
+      const gfx = G.gfx || {};
+      const lodWarm = FieldLod.on && !G.headlessMode &&
+        !!(casters || typeof gfx.mirrorBegin === "function");
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         try {
@@ -285,15 +293,16 @@ const CarDraw = (function () {
           // the exhaust flame quad — each was built on its first draw, after the
           // lights, in the frame the field pulled away. (The caster silhouette is
           // the line above.) NOT the mirror's whole-car teamMesh: one per rival
-          // cost ~5 s of CPU here (game-vm track build 4 s -> 9 s); it stays lazy.
-          if (FieldLod.on) {
+          // cost ~5 s of CPU here (game-vm track build 4 s -> 9 s); it stays lazy,
+          // and no far LOD tier needs it (past 120 m a rival only drops its decal).
+          if (lodWarm) {
             if (!c.isPlayer) getFieldWheelMeshes(c.team, c);
             CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame);
             if (c.isPlayer) CarMesh.getErsLight();
           }
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
-      Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, cpuMs: Math.round(performance.now() - at) });
+      Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, lodWarm, cpuMs: Math.round(performance.now() - at) });
     }
     function shadowCastersWanted() {
       const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};
