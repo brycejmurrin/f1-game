@@ -196,7 +196,8 @@ test("PANEL OPACITY: unset writes nothing; the slider clamps to 20-100 and rever
 
 test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST pins it at 1", () => {
   const hud = read("css/hud.css");
-  assert.match(tokens, /--hud-panel-a-eff:\s*var\(--hud-panel-a, 1\);/, "unset is exactly 1: shipped alphas unchanged");
+  assert.match(tokens, /--hud-panel-a-eff:\s*max\(0\.45, var\(--hud-panel-a, 1\)\);/,
+    "unset is exactly 1 (shipped alphas unchanged) and no text plate thins under 0.45 of its alpha");
   const hc = tokens.match(/:root\[data-ui-contrast="high"\] \{([^}]*)\}/);
   assert.ok(hc && /--hud-panel-a-eff:\s*1;/.test(hc[1]), "HIGH CONTRAST must pin --hud-panel-a-eff at 1");
   // Every listed plate multiplies its shipped alpha by the effective token.
