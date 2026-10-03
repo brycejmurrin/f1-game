@@ -385,7 +385,14 @@ body.hud-prof-broadcast #announce { top: max(calc(14svh / var(--hud-z)), calc(va
    MAP and GAPS are NOT touched here: they have their own controls, and a layout
    silently overruling an explicit toggle is the defect this block used to be.
    Broadcast parks map+gaps under the tower via hud-map-low / hud-gaps-low. */
-body:is(.hud-met-timing, .hud-met-compact) :is(#hud-energy, #hud-ot, #hud-aero, #hud-bb) { display: none !important; }
+body.hud-met-timing #hud-energy,
+body.hud-met-timing #hud-ot,
+body.hud-met-timing #hud-aero,
+body.hud-met-compact #hud-energy,
+body.hud-met-compact #hud-ot,
+body.hud-met-compact #hud-aero { display: none !important; }
+body.hud-met-timing #hud-bb,
+body.hud-met-compact #hud-bb { display: none !important; }
 /* BRAKE BIAS is a desktop readout by default: on a touch device its extra row
    lifted OVERTAKE / AERO into the sector box (hud-layout.spec broadcast + heli).
    A player who places it in MOVE & SIZE (data-hl-user) still gets it. */
@@ -807,8 +814,16 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    still land on their end state, nothing throbs. The touch buttons are named
    on their own because the dock groups live outside the HUD until
    layoutDocks() moves them in. */
-:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn),
-:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) :is(*, *::before, *::after) {
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+/* Their descendants and pseudo-elements: a list of its own, so neither
+   selector list runs past the prelude limit (css-comments.test.mjs). */
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *,
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::before,
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
