@@ -28,6 +28,12 @@
  *   purely radial, so its rounded shoulder never caught the light; they now
  *   come from the tread's real shape. No vertex moves.
  *
+ *   COKE BOTTLE + DOWNWASH (downwash/cokeFoot/coverLoft): the engine recipe's
+ *   `coke` knob read as the downwash concept it stands for — pod tops ramp
+ *   down aft of z -0.38, the engine cover's foot pinches between its
+ *   stations, and the cover is one skin at the COVER_Z rings. car3d
+ *   bodyAnchors(.., round) carries the shape, so what is placed off it follows.
+ *
  *   SMALL PARTS (skin/pipe/strut/block/...): struts with a lens or ellipse
  *   section (wishbones, halo pillar, nose pylons, every beam), rounded blocks
  *   (bolsters, airbox, brake ducts, exhaust core), and shaped plates (floor,
@@ -475,6 +481,85 @@ const CarShade = (function () {
     for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side)), col, frontCol, tri);
   }
 
+  // ---- COKE BOTTLE + DOWNWASH (rounded builds, 2026-10-03) ----
+  // The engine recipe's `coke` knob (0.72-1.38; after #797 the grid runs 0.90
+  // Alpine .. 1.18 Mercedes .. 1.30 Audi, 1.32 Red Bull / Aston) only narrowed
+  // the pods' PLAN view at the waist (z -0.62) and tail (-1.48). The engine cover
+  // was a two-station linear loft nothing pinched, and the pod tops fell only to
+  // 0.27-0.30 m at -1.48, ending in a vertical cap 14-17 cm above the 0.13 m
+  // floor: no car had a downwash ramp. The knob already separates the concepts,
+  // so a rounded build reads it as one — no new catalog field. car3d
+  // bodyAnchors(.., round) carries the shape, so everything mounted off
+  // podAt / coverAt / coverFlankX (ERS cells and conduit, louvres, outlets,
+  // gills, pinstripe, fin root, the two-tone line, the livery decals) follows.
+  //
+  //   DOWNWASH RAMP (downwash): only station TOPS at z <= -0.38 move; no station
+  //   is added or moved, so every loft and flank span keeps its stop count.
+  //     r = clamp((coke - 0.95) / 0.35, 0, 1),   w(z) = 0 at -0.38 .. 1 at -1.48
+  //     outerTop = outerBottom + max(0.03, h  (1 - 0.75 r w))
+  //     innerTop = innerBottom + max(0.03, hi (1 - 0.50 r w)), never below the
+  //                cover's bottom + 0.01 (nor raised), so no slot opens between
+  //                pod and cover.
+  //   It starts at -0.38 because everything ahead of it must not move: the
+  //   sponsor board and both pod decals (z 0.46..-0.34), and
+  //   tests/specs/parts-physics.spec.js, which scores the rounded car against
+  //   FLAT bodyAnchors over z -0.40..0.50 (x everywhere; tops only where the
+  //   decals are). Keep it there.
+  //
+  //   COKE PINCH (cokeFoot): the cover's FOOT half-width, t = 0 at the airbox
+  //   (z -0.55) .. 1 at the gearbox (-2.00):
+  //     xb = xF (1 - s) + xR s,  s = 1 - (1 - t)^p,  p = 1 + 2 max(0, coke - 0.9)
+  //   clamped to xb >= 0.76 x. Exact at t 0 and 1 (the airbox, hoop and gearbox
+  //   junctions do not move), only ever narrower than the linear x, more with
+  //   coke; the shoulder and crown are untouched (car3d coverProfile reads xb).
+  //
+  //   COVER LOFT (coverLoft): the cover as ONE closed skin through coverProfile
+  //   at the COVER_Z rings — three stacked two-station blocks could not follow
+  //   the pinch. car-mesh drapes the flank decal at the same rings, so the
+  //   graphic stays its 14 mm off the skin (13.0-14.7 measured) where one
+  //   straight quad, a chord across the pinch, stood up to 40 mm off it.
+  const COVER_Z = Object.freeze([-0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.70, -1.90, -2.00]);
+  const RAMP = Object.freeze({ from: -0.38, to: -1.48, coke: 0.95, span: 0.35, outer: 0.75, inner: 0.50, min: 0.03, gap: 0.01 });
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const cokeOf = (c) => Math.max(0.72, Math.min(1.38, c == null ? 1 : c));   // car3d sidepodStations' clamp
+  /** car3d sidepodStations with the downwash ramp: a NEW array of new stations
+   *  (the input is not touched), or the input itself when coke gives no ramp.
+   *  coverBottomAt(z) is the engine cover's bottom y there. */
+  function downwash(stations, coverBottomAt, coke) {
+    const r = clamp01((cokeOf(coke) - RAMP.coke) / RAMP.span);
+    if (!(r > 0)) return stations;
+    return stations.map((st) => {
+      const k = r * clamp01((RAMP.from - st.z) / (RAMP.from - RAMP.to));
+      if (!(k > 0)) return st;   // ahead of the ramp, and AT its start (-0.38): untouched, to the bit
+      const ho = st.outerTop - st.outerBottom, hi = st.innerTop - st.innerBottom;
+      const dropped = st.innerBottom + Math.max(RAMP.min, hi * (1 - RAMP.inner * k));
+      return Object.assign({}, st, {
+        outerTop: st.outerBottom + Math.max(RAMP.min, ho * (1 - RAMP.outer * k)),
+        innerTop: Math.max(dropped, Math.min(st.innerTop, coverBottomAt(st.z) + RAMP.gap)),
+      });
+    });
+  }
+  /** A sampled cover anchor `c` ({z, x, bottom, top}) with its pinched foot
+   *  `xb` added; `stations` are the cover's two end stations. Returned as is
+   *  (no xb) when coke gives no pinch. */
+  function cokeFoot(c, stations, coke) {
+    const p = 1 + 2 * Math.max(0, cokeOf(coke) - 0.9);
+    if (!(p > 1)) return c;
+    const F = stations[0], R = stations[stations.length - 1], t = clamp01((F.z - c.z) / (F.z - R.z));
+    const s = 1 - Math.pow(1 - t, p);
+    return Object.assign({}, c, { xb: Math.max(0.76 * c.x, F.x * (1 - s) + R.x * s) });
+  }
+  /** The ENGINE COVER from zF to zR as one closed skin: per COVER_Z ring the
+   *  section is car3d's coverProfile(anchors.coverAt(z)).pts — foot, shoulder,
+   *  facet, crown on the right, mirrored — closed along the bottom. */
+  function coverLoft(out, anchors, profile, zF, zR, col, tri) {
+    const zs = [zF].concat(COVER_Z.filter((z) => z < zF && z > zR), [zR]);
+    skin(out, zs.map((z) => {
+      const p = profile(anchors.coverAt(z)).pts;
+      return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
+    }), col, tri);
+  }
+
   /** Smooth vertex normals from the faces of an INDEXED vertex range [from, to):
    *  the tyre tread, whose ring normals were purely radial, so its rounded
    *  shoulder never caught the light. Only triangles wholly inside the range. */
@@ -493,6 +578,112 @@ const CarShade = (function () {
       if (l > 0) { N[v * 3] = acc[k] / l; N[v * 3 + 1] = acc[k + 1] / l; N[v * 3 + 2] = acc[k + 2] / l; }
     }
   }
+  // ---- UPPER/LOWER TWO-TONE (livery `lower`, 2026-10-03) ----
+  // A second body colour below a line along the sidepods and on forward
+  // along the monocoque side:
+  //   y(z) = podAt(z).bottom + 0.80 (top - bottom),  z -2.00 .. +1.05
+  // straight between pod stations, held at the end stations beyond them (the
+  // inlet height ahead of z +0.62, the tail's behind -1.48). It stops at z
+  // +1.05, the monocoque/nose joint, so the nose stays primary.
+  // No height knob. 0.80 is the TOP edge of the opaque sponsor board (PANEL,
+  // pod fractions 0.32-0.80, 16 mm proud of the flank, car3d addPodFlankSpan):
+  // along the board the seam hides behind its top edge, and fore and aft of
+  // it the flank is dark to the same height. The c2 accent band (0.08-0.30)
+  // and the strip decal on it sit inside the dark zone and keep their own
+  // colour; the accent flash (lower edge >= 0.8195) and the ERS strip
+  // (0.91-0.97) stay on primary. The first cut, 0.31, put the line under the
+  // board, which hid all but ~8 % of it from the side; this is ~20 % of the
+  // side-view body paint (body-split.test.mjs measures it).
+  // No vertex row lies on the line — the pod flank is ONE segment of podRing,
+  // the cover flank one quad — so recolouring vertices alone would smear a
+  // gradient down the flank: a triangle across the line is CUT along it.
+  const LOWER = Object.freeze({ frac: 0.80, front: 1.05, rear: -2.00 });
+  /** Paint the body below the line in `lower`, in place, over triangles whose
+   *  vertices all lie in [from, to): only those whose three vertices are
+   *  `paint` in the body colour (c1, clamped as car3d addTri clamps paint) and
+   *  used by no other triangle, so the accent band, panel, stripes, nose cap,
+   *  pod/cover overrides and helmet keep theirs. Wholly below: recoloured.
+   *  Across: cut where the line crosses its edges — its own slot rewritten,
+   *  the other pieces appended, normals interpolated — so the colour edge is
+   *  crisp, and smooth() still welds the shading across it: call it before
+   *  smooth() and the finish remap. Returns the number of vertices appended. */
+  function lowerZone(out, from, to, c1, lower, anchors, paint) {
+    if (!Array.isArray(lower) || lower.length < 3) return 0;   // a garage file keeps a string in a colour slot (settings-export cleanLivery)
+    const P = out.pos, N = out.nrm, C = out.col, M = out.mat, I = out.idx, nt = Math.floor(I.length / 3), EPS = 1e-7;
+    const body = [0, 1, 2].map((k) => Math.min(c1[k], 1)), low = [0, 1, 2].map((k) => Math.min(lower[k], 1));
+    // The line at its KNOTS (the range ends and the pod stations between them):
+    // podAt is linear between stations, so interpolating these is exact.
+    const knots = [LOWER.front].concat(anchors.podStations.map((s) => s.z).filter((z) => z < LOWER.front && z > LOWER.rear), [LOWER.rear])
+      .map((z) => { const p = anchors.podAt(z); return [z, p.bottom + LOWER.frac * (p.top - p.bottom)]; });
+    const line = (z) => {
+      for (let i = 1; i < knots.length; i++) {
+        const [za, ya] = knots[i - 1], [zb, yb] = knots[i];
+        if (z >= zb) return z >= za ? ya : yb + (ya - yb) * (z - zb) / (za - zb);
+      }
+      return knots[knots.length - 1][1];
+    };
+    // < 0 below the line; linear between two knots. Outside the z range nothing is below.
+    const inZ = (z) => z <= LOWER.front && z >= LOWER.rear, gLine = (x, y, z) => y - line(z);
+    const f = (y, z) => (inZ(z) ? y - line(z) : 1);
+    const uses = new Uint32Array(Math.max(0, to - from));
+    for (let i = 0; i < nt * 3; i++) if (I[i] >= from && I[i] < to) uses[I[i] - from]++;
+    const isBody = (v) => v >= from && v < to && uses[v - from] === 1 && M[v] === paint &&
+      C[v * 3] === body[0] && C[v * 3 + 1] === body[1] && C[v * 3 + 2] === body[2];
+    const tint = (v, c) => { C[v * 3] = c[0]; C[v * 3 + 1] = c[1]; C[v * 3 + 2] = c[2]; };
+    const at = (u, w, t, k) => P[u * 3 + k] + (P[w * 3 + k] - P[u * 3 + k]) * t;
+    const vert = (u, w, t) => {   // a new vertex at t along edge u -> w (coloured by the caller)
+      const n = P.length / 3, nrm = [0, 1, 2].map((k) => N[u * 3 + k] + (N[w * 3 + k] - N[u * 3 + k]) * t), l = len(nrm) || 1;
+      for (let k = 0; k < 3; k++) { P.push(at(u, w, t, k)); N.push(nrm[k] / l); C.push(body[k]); }
+      M.push(M[u]);
+      return n;
+    };
+    // Triangle q (indices, winding kept) cut where g(x, y, z) changes sign, as
+    // [piece, side] pairs; a corner within EPS of zero is ON the cut. g is
+    // linear over q (a knot plane, or the line inside one slab), so a crossing
+    // is where it interpolates to zero. Pieces on one side share corners.
+    function split(q, g) {
+      const d = q.map((u) => g(P[u * 3], P[u * 3 + 1], P[u * 3 + 2])), s = d.map((x) => (x < -EPS ? -1 : x > EPS ? 1 : 0));
+      if (s.every((x) => x >= 0)) return [[q, 1]];
+      if (s.every((x) => x <= 0)) return [[q, -1]];
+      // Rotate so `a` is the corner the cut runs through, or the one it cuts off.
+      const on = s.indexOf(0), k = on >= 0 ? on : s[0] === s[1] ? 2 : s[0] === s[2] ? 1 : 0;
+      const a = q[k], b = q[(k + 1) % 3], c = q[(k + 2) % 3], da = d[k], db = d[(k + 1) % 3], dc = d[(k + 2) % 3];
+      if (on >= 0) { const t = db / (db - dc); return [[[a, b, vert(b, c, t)], s[(k + 1) % 3]], [[vert(a, a, 0), vert(b, c, t), c], s[(k + 2) % 3]]]; }
+      const tb = da / (da - db), tc = da / (da - dc), ab = vert(a, b, tb);
+      return [[[a, vert(a, b, tb), vert(a, c, tc)], s[k]], [[ab, b, c], -s[k]], [[ab, c, vert(a, c, tc)], -s[k]]];
+    }
+    const n0 = P.length / 3, yTop = Math.max(...knots.map(([, y]) => y));
+    for (let t = 0; t < nt; t++) {
+      const a = I[t * 3], b = I[t * 3 + 1], c = I[t * 3 + 2];
+      if (!isBody(a) || !isBody(b) || !isBody(c)) continue;
+      const z0 = Math.min(P[a * 3 + 2], P[b * 3 + 2], P[c * 3 + 2]), z1 = Math.max(P[a * 3 + 2], P[b * 3 + 2], P[c * 3 + 2]);
+      if (Math.min(P[a * 3 + 1], P[b * 3 + 1], P[c * 3 + 1]) > yTop + EPS || z1 < LOWER.rear || z0 > LOWER.front) continue;   // clear of the line: most of the body
+      const q = [a, b, c];
+      // The line BENDS at a knot (and stops at the range ends), so a long
+      // triangle (the monocoque runs z 1.05 -> 0.05) can dip under it with all
+      // three corners above. Between knots it is straight: the corners and the
+      // points where the knot planes cross the edges decide, and a crossing
+      // triangle is cut on those planes first, then each piece on the line.
+      const span = knots.map(([z]) => z).filter((z) => z > z0 + EPS && z < z1 - EPS);
+      const probe = q.map((u) => f(P[u * 3 + 1], P[u * 3 + 2]));
+      for (const z of span) for (let e = 0; e < 3; e++) {
+        const u = q[e], w = q[(e + 1) % 3], zu = P[u * 3 + 2], zw = P[w * 3 + 2];
+        if ((zu - z) * (zw - z) < 0) probe.push(f(at(u, w, (z - zu) / (zw - zu), 1), z));
+      }
+      if (probe.every((d) => d >= -EPS)) continue;                                // above (or on) the line
+      if (probe.every((d) => d <= EPS)) { for (const u of q) tint(u, low); continue; }   // below it
+      let pieces = [q];
+      for (const z of span) pieces = pieces.flatMap((p) => split(p, (x, y, zz) => zz - z).map(([p2]) => p2));
+      const seen = new Set();   // the line may colour two plane pieces apart: none shares a corner
+      pieces = pieces.map((p) => p.map((u) => (seen.has(u) ? vert(u, u, 0) : (seen.add(u), u))));
+      pieces.flatMap((p) => (inZ((P[p[0] * 3 + 2] + P[p[1] * 3 + 2] + P[p[2] * 3 + 2]) / 3) ? split(p, gLine) : [[p, 1]])).forEach(([p, sd], i) => {
+        for (const u of p) tint(u, sd < 0 ? low : body);
+        if (i) I.push(p[0], p[1], p[2]); else { I[t * 3] = p[0]; I[t * 3 + 1] = p[1]; I[t * 3 + 2] = p[2]; }
+      });
+    }
+    return P.length / 3 - n0;
+  }
+
   /** Crease-angle normal smoothing over a Car3D mesh, in place, read through
    *  `idx`: most of car3d emits three fresh vertices per triangle with a face
    *  normal, but tubes (halo, harness) share ring vertices that already carry
@@ -569,7 +760,8 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, EXP_TOP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft, vertexNormals, smooth,
+  return { KEY, RING_N, EXP, EXP_TOP, LOWER, COVER_Z, RAMP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft,
+           downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, smooth,
            skin, earcut, sect, pipe, strut, fine, rquad, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
            _norm: norm };
 })();

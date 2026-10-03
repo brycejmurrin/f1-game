@@ -769,7 +769,7 @@ const Car3D = (function () {
   function coverProfile(c) {
     const h = c.top - c.bottom, d = h * COVER_DROP;
     return { x: c.x, bottom: c.bottom, top: c.top, shoulder: c.top - d, d,
-             pts: [[c.x, c.bottom], [c.x * COVER_SHOULDER, c.top - d],
+             pts: [[c.xb != null ? c.xb : c.x, c.bottom], [c.x * COVER_SHOULDER, c.top - d],   // xb: the rounded car's coke-bottle foot (CarShade.cokeFoot)
                    [c.x * 0.55, c.top - d * 0.32], [c.x * COVER_CROWN, c.top]] };
   }
   // x of the flank skin at height y (clamped to the flank) — where a side-
@@ -777,7 +777,7 @@ const Car3D = (function () {
   function coverFlankX(c, y) {
     const p = coverProfile(c);
     const v = Math.max(0, Math.min(1, (y - p.bottom) / (p.shoulder - p.bottom)));
-    return p.x * (1 - (1 - COVER_SHOULDER) * v);
+    return c.xb != null ? c.xb + (p.pts[1][0] - c.xb) * v : p.x * (1 - (1 - COVER_SHOULDER) * v);
   }
   // y of the cover skin over |x| — the crown, a facet, or the flank top.
   function coverSurfaceY(c, x) {
@@ -1290,7 +1290,7 @@ const Car3D = (function () {
 
   const _anchorCache = new WeakMap();
   const _anchorNullKey = {};   // stand-in for a null/undefined parts (legacy bodies)
-  function bodyAnchors(parts, teamId, spineHeight) {
+  function bodyAnchors(parts, teamId, spineHeight, round) {
     const outer = parts || _anchorNullKey;
     let byTeam = _anchorCache.get(outer);
     if (!byTeam) { byTeam = new Map(); _anchorCache.set(outer, byTeam); }
@@ -1298,21 +1298,20 @@ const Car3D = (function () {
     // absent) spine keys exactly as before, so no caller that never heard of
     // it sees a different object.
     const rise = spineRise(spineHeight);
-    const tk = (teamId || "") + (rise ? "|" + spineHeight : "");
+    const tk = (teamId || "") + (rise ? "|" + spineHeight : "") + (round ? "|r" : "");   // round: the rounded car's coke-bottle shape (CarShade)
     const hit = byTeam.get(tk);
     if (hit) return hit;
-    const built = buildBodyAnchors(parts, teamId, rise);
+    const built = buildBodyAnchors(parts, teamId, rise, round);
     byTeam.set(tk, built);
     return built;
   }
 
-  function buildBodyAnchors(parts, teamId, rise) {
+  function buildBodyAnchors(parts, teamId, rise, round) {
     rise = rise || 0;
     const T = parts || {};
     const tier = T.engine != null ? T.engine : 1;
     const eng = buildEngineParts(T._visual && T._visual.engine, tier);
     const style = teamStyleOf(teamId);
-    const podStations = sidepodStations(eng, style);
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth,
@@ -1321,6 +1320,7 @@ const Car3D = (function () {
       { z: -2.00, x: 0.13 * eng.tailWidth,
         bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL },
     ];
+    const podStations = round ? CarShade.downwash(sidepodStations(eng, style), (z) => sampleStations(coverStations, z).bottom, eng.coke) : sidepodStations(eng, style);   // rounded: the downwash ramp
     const noseStations = styledNoseStations(style).map((station) => ({
       z: station.z, side: station.w * 0.5, topSide: station.w * station.t * 0.5,
       bottom: station.y - station.h * 0.5, top: station.y + station.h * 0.5,
@@ -1328,13 +1328,13 @@ const Car3D = (function () {
     return {
       key: [eng.podWidth, eng.shoulderHeight, eng.undercut, eng.coke,
             eng.tailWidth, eng.coverHeight, rise,
-            style === DEFAULT_STYLE ? "" : (teamId || "")].join(","),
+            style === DEFAULT_STYLE ? "" : (teamId || "")].join(",") + (round ? "|r" : ""),
       podAt(z) {
         const p = sampleStations(podStations, z);
         return { z, x: p.outer, inner: p.inner, bottom: p.outerBottom, top: p.outerTop,
                  innerBottom: p.innerBottom, innerTop: p.innerTop };
       },
-      coverAt(z) { return sampleStations(coverStations, z); },
+      coverAt(z) { const c = sampleStations(coverStations, z); return round ? CarShade.cokeFoot(c, coverStations, eng.coke) : c; },   // rounded: the pinched foot, c.xb
       noseAt(z) { return sampleStations(noseStations, z); },
       podStations: podStations.map((p) => Object.freeze(Object.assign({}, p))),
     };
@@ -1422,7 +1422,7 @@ const Car3D = (function () {
     // upper facet + crown — at the two anchor stations (the same numbers as
     // `front`/`rear` above, which other parts still read for their datums).
     const pf = coverProfile(anchors.coverAt(front.z)), pr = coverProfile(anchors.coverAt(rear.z));
-    for (let k = 0; k < 3; k++) {
+    if (_round) CarShade.coverLoft(out, anchors, coverProfile, front.z, rear.z, c1, addTri); else for (let k = 0; k < 3; k++) {   // rounded: one skin at CarShade.COVER_Z
       const ring = (p, z) => [[-p.pts[k][0], p.pts[k][1], z], [p.pts[k][0], p.pts[k][1], z],
                               [p.pts[k + 1][0], p.pts[k + 1][1], z], [-p.pts[k + 1][0], p.pts[k + 1][1], z]];
       addBlock(out, ring(pf, front.z).concat(ring(pr, rear.z)), c1, c1);
@@ -1520,7 +1520,7 @@ const Car3D = (function () {
     // today's look. Airbox mesh lips use airboxMeshColour (wrap sun > cover).
     // BODY SPLIT (liv.bodySplit === "lr"): Cadillac-style L/R body. Left (x<0)
     // keeps c1, right (x>=0) takes c2. Applied as a paint-only recolour over the
-    // chassis→livery sections so carbon / wings / glass stay untouched.
+    // chassis→livery sections so carbon / wings / glass stay untouched. It wins over `lower` (CarShade.lowerZone).
     const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
@@ -1542,8 +1542,9 @@ const Car3D = (function () {
     const cockpitStyle = design.cockpit;
     const wheelStyle = design.wheels;
     const teamStyle = teamStyleOf(opts && opts.teamId);
-    const anchors = bodyAnchors(T, opts && opts.teamId, liv.spineHeight);
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
+    const shade = !ckpt && typeof CarShade !== "undefined" && (opts && opts.smooth != null ? !!opts.smooth : CarShade.on(teamId));
+    const anchors = bodyAnchors(T, opts && opts.teamId, liv.spineHeight, shade);   // rounded: coke foot + downwash ramp
     const floorEdge = Math.max(0.72, Math.min(1.35, aeroStyle.floorEdge));
     const floorCut = Math.max(0, Math.min(0.24, aeroStyle.floorCut));
     // Same envelope the front wing now respects: at the catalog's widest floor
@@ -1557,7 +1558,6 @@ const Car3D = (function () {
     };
 
     part("chassis");
-    const shade = !ckpt && typeof CarShade !== "undefined" && (opts && opts.smooth != null ? !!opts.smooth : CarShade.on(teamId));
     _round = shade;
     const bodySplitFrom = out.pos.length / 3;
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
@@ -2291,7 +2291,7 @@ const Car3D = (function () {
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
-    if (bodySplitLR) applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2);
+    if (bodySplitLR) applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2); else if (liv.lower && !ckpt && !(opts && opts.silhouette) && typeof CarShade !== "undefined") CarShade.lowerZone(out, bodySplitFrom, out.pos.length / 3, c1, liv.lower, anchors, SURFACES.paint);   // two-tone body (CarShade.lowerZone)
 
     part("cockpit");
     // Exterior head surround stays out of the dedicated driver-eye mesh.
