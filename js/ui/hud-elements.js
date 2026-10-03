@@ -24,6 +24,7 @@ const HudElements = (function () {
     ["tyre", "TYRES"],
     ["ot", "OVERTAKE"],
     ["aero", "AERO"],
+    ["bb", "BRAKE BIAS"],
     ["limits", "TRACK LIMITS"],
   ];
 

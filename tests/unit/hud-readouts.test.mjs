@@ -1,0 +1,224 @@
+/* hud-readouts — the race HUD's derived readouts (js/ui/hud-readouts.js) and
+ * how js/ui/hud.js paints them: "+1L" gaps, ERS MJ + deploy/harvest, brake
+ * bias, the blue flag, the race DELTA vs the best lap this race, the throttled
+ * spoken HUD, and gear/tach/speed at frame rate under the 10 Hz gate.
+ *
+ * Run: node --test tests/unit/hud-readouts.test.mjs
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
+const src = (p) => read(p).replace(/^const\b/gm, "var");
+const SRC = read("js/ui/hud-readouts.js");
+
+function load(extra = {}) {
+  const timers = [];
+  const ctx = { console, Math, Number, Float32Array, setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {}, ...extra };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudReadouts = HudReadouts;", ctx);
+  return { R: ctx.HudReadouts, timers };
+}
+
+test("lapsApart / lapGapText: a lap or more is laps", () => {
+  const { R } = load();
+  assert.equal(R.lapsApart(4999, 5000), 0);
+  assert.equal(R.lapsApart(5000, 5000), 1);
+  assert.equal(R.lapsApart(10400, 5000), 2);
+  assert.equal(R.lapsApart(-6000, 5000), 0);
+  assert.equal(R.lapsApart(6000, 0), 0);
+  assert.equal(R.lapGapText("▲", "BEA", 1, false), "▲ BEA +1L");
+  assert.equal(R.lapGapText("▼", "BEA", 2, true), "▼ +2L");
+});
+
+test("energy: MJ of the 4 MJ store, deploy/harvest as glyph and words", () => {
+  const { R } = load({ PhysicsConsts: { ES_MJ: 4 } });
+  assert.equal(R.ersState(true, 0.5, 0.6), "deploy");
+  assert.equal(R.ersState(false, 0.51, 0.5), "harvest");
+  assert.equal(R.ersState(false, 0.5, 0.5), "idle");
+  assert.equal(R.ersState(false, 0.5, NaN), "idle");
+  assert.deepEqual({ ...R.energy(0.8, "idle") }, { text: "3.2 MJ", label: "Energy 3.2 megajoules" });
+  assert.equal(R.energy(0.5, "deploy").text, "▼ 2.0 MJ");
+  assert.equal(R.energy(0.5, "harvest").label, "Energy 2.0 megajoules, harvesting");
+});
+
+test("bbText: the set-up sheet's half-percent steps", () => {
+  const { R } = load();
+  assert.equal(R.bbText(0.56), "BB 56%");
+  assert.equal(R.bbText(0.585), "BB 58.5%");
+  assert.equal(R.bbText(null, 0.56), "BB 56%");
+});
+
+test("blueFlag: only a car a lap up, physically just behind, within ~1.2 s", () => {
+  const { R } = load();
+  const L = 5000;
+  const p = { prog: 2000, speed: 60 };
+  const lapper = { code: "VER", prog: 2000 + L - 50, speed: 70 };   // 50 m behind on the road, a lap up
+  const sameLap = { code: "HAM", prog: 1950, speed: 70 };           // 50 m behind, same lap: a race, not a flag
+  const far = { code: "LEC", prog: 2000 + L - 400, speed: 70 };     // a lap up but 400 m back
+  assert.equal(R.blueFlag(p, [p, sameLap, far], L, 25), null);
+  assert.equal(R.blueFlag(p, [p, sameLap, far, lapper], L, 25), lapper);
+  assert.equal(R.blueFlag(p, [p, { ...lapper, retired: true }], L, 25), null);
+  assert.equal(R.blueFlag({ ...p, finished: true }, [lapper], L, 25), null);
+});
+
+test("lapTrace: adopts a lap only when it became the new best, then interpolates", () => {
+  const { R } = load();
+  const tr = R.lapTrace(), L = 1000;
+  const c = { lap: 0, s: 990, lapTime: 3, best: Infinity, lastLap: 0 };
+  tr.sample(c, L);
+  // Lap 1: 50 m/s, so t = s / 50.
+  c.lap = 1;
+  for (let s = 0; s <= 995; s += 5) { c.s = s; c.lapTime = s / 50; tr.sample(c, L); }
+  assert.equal(tr.has(), false, "no reference until a lap completes");
+  c.lap = 2; c.s = 1; c.lapTime = 0.02; c.best = 20; c.lastLap = 20; tr.sample(c, L);
+  assert.equal(tr.has(), true);
+  assert.ok(Math.abs(tr.timeAt(500) - 10) < 1e-3);
+  assert.ok(Math.abs(tr.timeAt(2.5) - 0.05) < 1e-3, "before the first sample interpolates from the line");
+  // Lap 2 is slower (40 m/s) and NOT a best: the reference stays lap 1.
+  for (let s = 5; s <= 995; s += 5) { c.s = s; c.lapTime = s / 40; tr.sample(c, L); }
+  c.lap = 3; c.s = 1; c.lapTime = 0.02; c.lastLap = 25; tr.sample(c, L);
+  assert.ok(Math.abs(tr.timeAt(500) - 10) < 1e-3, "a slower lap never replaces the best");
+  // A teleport mid-lap spoils the lap even if it would have been a best.
+  c.s = 5; c.lapTime = 0.1; tr.sample(c, L);
+  c.s = 600; c.lapTime = 0.2; tr.sample(c, L);
+  for (let s = 605; s <= 995; s += 5) { c.s = s; c.lapTime = 0.2 + (s - 600) / 60; tr.sample(c, L); }
+  c.lap = 4; c.s = 1; c.lapTime = 0.02; c.best = 7; c.lastLap = 7; tr.sample(c, L);
+  assert.ok(Math.abs(tr.timeAt(500) - 10) < 1e-3, "a teleported lap is not a reference");
+  tr.reset();
+  assert.equal(tr.has(), false);
+});
+
+test("speaker: position held 2 s, one line per 2 s, yields to the radio", () => {
+  const { R, timers } = load();
+  const live = { textContent: "" };
+  const sp = R.speaker(live);
+  const fmt = (t) => t.toFixed(1);
+  const flush = () => { while (timers.length) timers.shift()(); };
+  sp.tick(0, { rank: 5, of: 20, best: Infinity }, fmt);            // grid slot: baseline, silent
+  sp.tick(100, { rank: 4, of: 20, best: Infinity }, fmt);
+  sp.tick(1500, { rank: 3, of: 20, best: Infinity }, fmt);          // still scrapping
+  assert.equal(sp.tick(3000, { rank: 3, of: 20, best: Infinity }, fmt), null, "not held 2 s yet");
+  assert.equal(sp.tick(3600, { rank: 3, of: 20, best: Infinity }, fmt), "Position 3 of 20");
+  flush();
+  assert.equal(live.textContent, "Position 3 of 20");
+  // The radio writes the region: a new line waits FOREIGN_MS after it.
+  sp.tick(4000, { rank: 3, of: 20, best: 90 }, fmt);                // first best: no line
+  live.textContent = "ENGINEER: BOX THIS LAP";
+  sp.tick(6000, { rank: 3, of: 20, best: 88 }, fmt);
+  assert.equal(sp.tick(6100, { rank: 3, of: 20, best: 88 }, fmt), null, "yields to the radio line");
+  assert.equal(sp.tick(7600, { rank: 3, of: 20, best: 88 }, fmt), "New best lap, 88.0");
+});
+
+test("source: display-only — no Tracks / curvature / racing line, no car writes", () => {
+  const code = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  assert.doesNotMatch(code, /\bTracks\b|\bcurvature\b|\bkCur\b|racingLine|DrivingLine/);
+  assert.doesNotMatch(code, /\b(?:c|o|player)\.(?:speed|energy|prog|s|lap|best)\s*=[^=]/);
+});
+
+// ── hud.js wiring, on the mini-dom harness (the hud-feel shape) ──────────────
+function boot() {
+  const dom = makeDom();
+  const rawCreate = dom.document.createElement;
+  dom.document.createElement = (tag) => { const el = rawCreate(tag); if (String(tag).toLowerCase() === "canvas") el.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true }); return el; };
+  const timers = [];
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date, parseFloat, parseInt, isFinite, Infinity, Float32Array,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    document: dom.document, innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
+    M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
+    PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000, ES_MJ: 4 },
+    Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
+    GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
+    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout: () => {},
+    performance: { now: () => 1000 },
+  };
+  sb.window = sb;
+  vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: "js/ui/hud-readouts.js" });
+  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
+  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
+  const $ = (id) => dom.byId(id);
+  const els = {
+    pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
+    speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
+    btnOT: $("btn-ot"), btnAero: $("btn-aero"),
+    gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
+    flag: $("hud-flag"), minimap: $("minimap"), gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
+    announceLive: $("announce-live"),
+  };
+  els.minimap.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true });
+  const mk = (o) => ({ team: { id: "t1", color: [1, 0, 0] }, lap: 1, lapTime: 12, best: Infinity, speed: 50, energy: 0.5, gear: 3, rpm: 5000,
+    otT: 0, otE: 0, aeroX: 0, s: 10, prog: 10, retired: false, ...o });
+  const player = mk({ code: "YOU", rank: 2, brakeBias: 0.565 });
+  const rival = mk({ code: "BEA", rank: 1, prog: 10 + 1000 + 300 });
+  const G = {
+    els, player, cars: [rival, player], ranked: [rival, player], timeTrial: false, state: "race", session: "race",
+    lapsTarget: 5, track: { map: [[0, 0], [0.5, 0.5], [1, 1]], total: 1000, def: {} },
+    sectorLast: [null, null, null], sectorBests: [Infinity, Infinity, Infinity], fieldSectorBests: [Infinity, Infinity, Infinity],
+    aeroZones: [{}], ttRecord: Infinity,
+    fmtTime: (t) => (isFinite(t) && t > 0 ? t.toFixed(2) : "-"),
+    dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true, cssCol: () => "#f00",
+  };
+  const hud = sb.GameHud.create(G);
+  return { dom, $, els, player, rival, G, hud, tick: () => hud.updateHud(true), frame: (ms) => hud.updateHud(false, ms) };
+}
+
+test("hud.js: a car a lap up reads +1L, not distance ÷ speed", () => {
+  const { els, rival, player, tick } = boot();
+  tick();
+  assert.equal(els.gapA.textContent, "▲ BEA +1L");
+  rival.prog = player.prog + 100; tick();
+  assert.match(els.gapA.textContent, /^▲ BEA \+2\.0s$/, "back to seconds, with no EMA carried from the lap");
+});
+
+test("hud.js: gear, tach and speed update every frame; the clock stays at 10 Hz", () => {
+  const { els, player, frame, tick } = boot();
+  tick();
+  player.gear = 4; player.speed = 60; player.lapTime = 13;
+  frame(16);
+  assert.equal(els.gear.textContent, "4");
+  assert.equal(els.speed.textContent, "216");
+  assert.equal(els.time.textContent, "12.00", "the lap clock is still on the 10 Hz tick");
+});
+
+test("hud.js: ENERGY number + state, BB chip, the energy fill has its own colour", () => {
+  const { $, player, tick } = boot();
+  tick();
+  assert.equal($("hud-energy-n").textContent, "2.0 MJ");
+  player.deploying = true; tick();
+  assert.equal($("hud-energy-n").textContent, "▼ 2.0 MJ");
+  assert.equal($("hud-energy").dataset.ers, "deploy");
+  assert.equal($("hud-bb").textContent, "BB 56.5%");
+  const css = read("css/hud.css");
+  assert.match(css, /#hud-energy-fill \{ background: linear-gradient\(90deg in oklab, var\(--edit-fill\), var\(--edit-ink\)\); \}/);
+});
+
+test("hud.js: race DELTA appears once a best lap exists, without a ghost", () => {
+  const { $, player, G, frame, tick } = boot();
+  G.cars = [player]; G.ranked = [player];
+  player.lap = 1;
+  for (let s = 0; s <= 995; s += 5) { player.s = s; player.lapTime = s / 50; frame(16); }
+  tick();
+  assert.equal($("hud-delta").hidden, true, "nothing to compare against on the opening lap");
+  player.lap = 2; player.s = 1; player.lapTime = 0.02; player.best = 20; player.lastLap = 20; frame(16);
+  player.s = 500; player.lapTime = 10.5; tick();
+  assert.equal($("hud-delta").hidden, false);
+  assert.equal($("hud-delta-n").textContent, "+0.500");
+  assert.equal($("hud-delta").dataset.ref, "best");
+});
+
+test("shell: every .hud-top box has an id the hide rules key on; no nth-child left", () => {
+  const shell = read("index.html"), css = read("css/hud.css"), hud = read("js/ui/hud.js");
+  for (const id of ["hud-box-pos", "hud-box-lap", "hud-box-time", "hud-box-best", "hud-delta"])
+    assert.match(shell, new RegExp(`class="hud-box" id="${id}"`));
+  assert.doesNotMatch(css, /\.hud-box:nth-child/);
+  assert.match(css, /body\[data-hud-hide~="best"\] #hud-box-best/);
+  assert.doesNotMatch(hud, /innerHTML/, "#hud-delta is static markup now");
+});

@@ -268,10 +268,11 @@
    clock, speed, gear, revs, and any penalty warning — and drop the analysis.
    BEST is the fourth .hud-box, the same one BROADCAST folds into its tower. */
 body.hud-prof-minimal #hud-sectors,
-body.hud-prof-minimal .hud-box:nth-child(4),
+body.hud-prof-minimal #hud-box-best,
 body.hud-prof-minimal #hud-energy,
 body.hud-prof-minimal #hud-ot,
-body.hud-prof-minimal #hud-aero { display: none !important; }
+body.hud-prof-minimal #hud-aero,
+body.hud-prof-minimal #hud-bb { display: none !important; }
 /* …BUT THE PIT CUE IS PROMOTED, NOT DROPPED. MINIMAL hides the map, and with it
    the only other thing that says where the pit entry is — so the cue, the one
    element that knows both the direction (its arrow) and the distance (its
@@ -299,6 +300,7 @@ body.hud-bcam #hud-gearbox,
 body.hud-bcam #hud-ot,
 body.hud-bcam #hud-aero,
 body.hud-bcam #hud-energy,
+body.hud-bcam #hud-bb,
 body.hud-bcam #hud-limits { display: none !important; }
 body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none !important; }
 
@@ -319,7 +321,7 @@ body.hud-prof-broadcast .hud-box {
   padding: calc(var(--gap) / 3) var(--gap);
 }
 body.hud-prof-broadcast .hud-box:last-child { border-right: none; }
-body.hud-prof-broadcast .hud-box:nth-child(4) { display: none; }   /* BEST: tower shows POS/LAP/TIME */
+body.hud-prof-broadcast #hud-box-best { display: none; }   /* BEST: tower shows POS/LAP/TIME */
 body.hud-prof-broadcast .hud-label { letter-spacing: var(--ls-4); }
 body.hud-prof-broadcast .hud-value { font-style: normal; }
 body.hud-prof-broadcast .hud-gaps {
@@ -389,10 +391,16 @@ body.hud-met-timing #hud-aero,
 body.hud-met-compact #hud-energy,
 body.hud-met-compact #hud-ot,
 body.hud-met-compact #hud-aero { display: none !important; }
+body.hud-met-timing #hud-bb,
+body.hud-met-compact #hud-bb { display: none !important; }
+/* BRAKE BIAS is a desktop readout by default: on a touch device its extra row
+   lifted OVERTAKE / AERO into the sector box (hud-layout.spec broadcast + heli).
+   A player who places it in MOVE & SIZE (data-hl-user) still gets it. */
+body:not(.desktop) #hud-bb:not([data-hl-user]) { display: none; }
 body.hud-met-driver #hud-sectors,
-body.hud-met-driver .hud-box:nth-child(4),
+body.hud-met-driver #hud-box-best,
 body.hud-met-compact #hud-sectors,
-body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
+body.hud-met-compact #hud-box-best { display: none !important; }
 
 #hud-energy {
   width: 130px; height: 14px;
@@ -407,6 +415,15 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
   margin-bottom: calc(var(--gap) * 2 / 3);
 }
 #hud-energy-fill, #hud-tyre-fill { height: 100%; width: 100%; background: linear-gradient(90deg in oklab, #00c853, #aeea00); }
+/* ENERGY IS NOT TYRES. The two bars sat side by side in the same green, so a
+   glance could not tell "battery" from "rubber". The store takes the ERS blue
+   (the palette's cool info pair), the tyre bar keeps the wear greens. While the
+   battery DEPLOYS the fill pulses — the same fact the steering-wheel LCD
+   pulses on (the car's deploying flag) — and the label's ▼/▲ says deploy/harvest in a
+   non-colour channel (js/ui/hud-readouts.js energy()). */
+#hud-energy-fill { background: linear-gradient(90deg in oklab, var(--edit-fill), var(--edit-ink)); }
+#hud-energy[data-ers="deploy"] #hud-energy-fill { animation: pulse var(--hud-pulse) ease-in-out infinite; }
+#hud-energy-n { letter-spacing: 0; margin-left: 0.4em; font-variant-numeric: tabular-nums; }
 /* TYRES. The compound letter sits OUTSIDE the bar rather than centred in it:
    unlike ENERGY this readout carries two independent facts (which compound, how
    much is left) and stacking them made neither legible at phone width. The fill
@@ -427,16 +444,20 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
    which win at equal specificity while the car is in the lane or the box. */
 #hud-tyre[data-temp="cold"] #hud-tyre-code { color: var(--sec-best); }
 #hud-tyre[data-temp="hot"] #hud-tyre-code { color: var(--slower); }
-/* Live lap DELTA chip (runtime #hud-delta in .hud-top). */
+/* …and the SAME state in a channel that is not colour: blue vs red is the one
+   pair a colour-vision deficiency and a bright sky both erase. */
+#hud-tyre[data-temp="cold"] #hud-tyre-code::after { content: "\2744"; font-style: normal; font-size: 0.8em; margin-left: 0.1em; }
+#hud-tyre[data-temp="hot"] #hud-tyre-code::after { content: "\25B2"; font-style: normal; font-size: 0.8em; margin-left: 0.1em; }
+/* Live lap DELTA chip (static #hud-delta in .hud-top, index.html). */
 #hud-delta .hud-value { font-variant-numeric: tabular-nums; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
 #hud-delta[data-sign="slow"] .hud-value { color: var(--slower); }
 #hud-delta[hidden] { display: none !important; }
 /* Per-element HUD toggles (js/ui/hud-elements.js). body[data-hud-hide~=id]. */
-body[data-hud-hide~="pos"] .hud-top .hud-box:nth-child(1),
-body[data-hud-hide~="lap"] .hud-top .hud-box:nth-child(2) { display: none !important; }
-body[data-hud-hide~="time"] .hud-top .hud-box:nth-child(3),
-body[data-hud-hide~="best"] .hud-top .hud-box:nth-child(4) { display: none !important; }
+body[data-hud-hide~="pos"] #hud-box-pos,
+body[data-hud-hide~="lap"] #hud-box-lap { display: none !important; }
+body[data-hud-hide~="time"] #hud-box-time,
+body[data-hud-hide~="best"] #hud-box-best { display: none !important; }
 body[data-hud-hide~="delta"] #hud-delta,
 body[data-hud-hide~="sectors"] #hud-sectors { display: none !important; }
 body[data-hud-hide~="speed"] #hud-speed,
@@ -445,6 +466,7 @@ body[data-hud-hide~="energy"] #hud-energy,
 body[data-hud-hide~="tyre"] #hud-tyre { display: none !important; }
 body[data-hud-hide~="ot"] #hud-ot,
 body[data-hud-hide~="aero"] #hud-aero,
+body[data-hud-hide~="bb"] #hud-bb,
 body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
 /* SETTINGS checklist for the toggles above (runtime #pm-hud-elements). */
 #pm-hud-elements-list {
@@ -540,7 +562,10 @@ body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
 #hud-work[hidden] { display: none; }
 #hud-work {
   display: block; margin-top: calc(var(--gap) / 3);
-  min-height: 44px; padding: 0 calc(var(--gap) * 0.9);
+  /* 44 PAINTED px: .hud-bottom zooms by --hud-z, so a bare 44px painted
+     30.8px at HUD SIZE 70%. Divide by the band's zoom under 1; at >=1 the
+     literal wins and nothing moves. */
+  min-height: max(44px, calc(44px / var(--hud-z, 1))); padding: 0 calc(var(--gap) * 0.9);
   font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 800;
   letter-spacing: 0.08em; color: var(--bg); background: var(--you);
   border: 0; border-radius: var(--r-xs);
@@ -627,6 +652,12 @@ body.hud-met-compact #hud-tyre { display: none !important; }
   padding: 5px 10px; border-radius: var(--r-sm);
 }
 #hud-aero.ax-off { color: var(--dim); border: 1px solid var(--plate-line); }
+/* BRAKE BIAS: a set-up fact, not a state — quiet ink, no fill, half a chip. */
+#hud-bb {
+  font-size: var(--fs-micro); font-weight: 700; font-variant-numeric: tabular-nums;
+  padding: calc(var(--gap) / 6) calc(var(--gap) * 2 / 3); margin-top: calc(var(--gap) * 0.5); border-radius: var(--r-sm);
+  color: var(--dim); border: 1px solid var(--plate-line); text-shadow: var(--hud-halo);
+}
 #hud-aero.ax-armed { color: #04202e; background: #26a5f5; }
 #hud-aero.ax-open { color: #d6efff; background: #083e78; box-shadow: 0 0 14px rgba(50,175,255,0.55); }
 /* A circuit with no qualifying straight has no activation zone and therefore no
@@ -634,6 +665,13 @@ body.hud-met-compact #hud-tyre { display: none !important; }
    "not here, yet" and "not on this track" is the difference between waiting and
    never pressing the button again. */
 #hud-aero.ax-none { color: rgba(255,255,255,0.28); border: 1px dashed var(--plate-line); text-decoration: line-through; }
+/* The idle states carry no fill of their own, so their dim ink sat straight on
+   the scene — unreadable over sky once MOVE & SIZE's cockpit layout lifts the
+   chips beside the wheel. A FIXED plate: these are signals, not panels, so PANEL
+   OPACITY (--hud-panel-a-eff) does not reach them (scale-defaults.test.mjs). */
+#hud-ot:is(.ot-off, .ot-cool), #hud-aero:is(.ax-off, .ax-none) {
+  background: rgba(8, 8, 14, 0.78);
+}
 #minimap {
   position: absolute;
   left: calc(10px + var(--sal) / var(--hud-z));
@@ -756,8 +794,13 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
   animation: pulse var(--hud-pulse) ease-in-out infinite; }
 #hud-flag.flag-sc { background: #f4f6ff; color: #101018; }
 #hud-flag.flag-red { background: var(--slower); color: var(--text); }   /* the red flag: the session is stopped */
+/* BLUE FLAG (js/ui/hud-readouts.js blueFlag): a car a lap up is on your gearbox.
+   A plate with a blue edge rather than a blue field: light ink on the palette's
+   blue misses AA, and the word does the work. */
+#hud-flag[data-flag="blue"] { background: var(--plate-opaque); color: var(--edit-ink); border-left: 6px solid var(--edit-fill); }
 @media (prefers-reduced-motion: reduce) {
   #hud-flag.flag-vsc { animation: none; }
+  #hud-energy[data-ers="deploy"] #hud-energy-fill,
   #hud-tach.redline #hud-rpm-fill,
   #hud-ot.ot-armed { animation: none; }
   .sec-row.sec-flash { animation: none; }
@@ -771,10 +814,16 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    still land on their end state, nothing throbs. The touch buttons are named
    on their own because the dock groups live outside the HUD until
    layoutDocks() moves them in. */
-:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn),
-:root[data-motion="reduce"] :is(#hud, #announce) *,
-:root[data-motion="reduce"] :is(#hud, #announce) *::before,
-:root[data-motion="reduce"] :is(#hud, #announce) *::after {
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+/* Their descendants and pseudo-elements: a list of its own, so neither
+   selector list runs past the prelude limit (css-comments.test.mjs). */
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *,
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::before,
+:root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;

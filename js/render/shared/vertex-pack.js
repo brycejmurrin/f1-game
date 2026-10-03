@@ -54,11 +54,11 @@
 //     emissive neon reaches 3.2) against a ceiling of 15.0. Colour is NOT the
 //     usual unsigned byte precisely because these run past 1.0, and even at
 //     this scale a step is 2.3e-4 — seventeen times finer than 8-bit.
-//   material ids reach 32 against a ceiling of 85.0. The id space is not
+//   material ids reach 33 against a ceiling of 85.0. The id space is not
 //     contiguous: 0-16 are the procedural track materials (Assets.MAT_LAYERS
-//     is 17) and 20-32 the car surfaces LIT_FS classifies (paint, carbon,
+//     is 17) and 20-33 the car surfaces LIT_FS classifies (paint, carbon,
 //     rubber, metal, glass, emissive, panel, mirror, matte, satin, iridescent,
-//     carbon-finish, visor).
+//     carbon-finish, visor, tyre sidewall).
 //
 // Both quantisers clamp rather than wrap, so a value past the ceiling saturates
 // — visible and debuggable — instead of aliasing a bright neon onto near-black

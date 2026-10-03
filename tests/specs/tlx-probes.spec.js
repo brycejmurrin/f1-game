@@ -649,7 +649,17 @@ test.describe("TLX — boot", () => {
     await page.addInitScript(() => { try { localStorage.setItem("apex26.tlxSharedUniforms", "0"); } catch (_) {} });
     const off = await sample();
     expect(off.sharedUniforms).toBe(false);
-    expect(off.rUbo).toBeGreaterThan(on.rUbo * 3);
+    // PER LIVE RENDER OBJECT, not raw: since 2026-10-02 a pooled wrapper idle
+    // for 20 s drops its render object (tlx.js dropWrapper — the track-switch
+    // leak fix), so the raw count follows how many chunks the park camera has
+    // seen in the last 20 s, which differs between the two page loads (CI
+    // llvmpipe: off 1054 vs on 744 raw, a 1.4x that read as a failure; per
+    // render object the arms are ~5.3 vs ~1.3 buffers, the same 4x the
+    // SwiftShader leg measures). The claim is "not one per draw", so the
+    // ratio is per object.
+    expect(on.rObj).toBeGreaterThan(0);
+    expect(off.rObj).toBeGreaterThan(0);
+    expect(off.rUbo / off.rObj).toBeGreaterThan((on.rUbo / on.rObj) * 3);
     expect(errors).toEqual([]);
   });
 

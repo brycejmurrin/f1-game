@@ -102,7 +102,8 @@ const MirrorPass = (function () {
     if (MODES.indexOf(pipMode) < 0) pipMode = "auto";
     const _pipExtra = { bankDy: 0 };
     // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
-    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null, tune: undefined };
+    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null, tune: undefined, lights: null, tailStart: 0, tailCount: 0 };
+    const _aim = [0, 0, 0];   // the pass camera's ground-plane aim, for FrameLights.viewLights
     // THE SUN'S VIEW-DEPENDENT TERMS STAY OUT OF THE MIRROR (a phone report:
     // "still a little flashy … sun and shadows"). The mirror is a small target
     // with no anti-aliasing of its own (FXAA runs before its composite), so
@@ -485,6 +486,13 @@ const MirrorPass = (function () {
       frame.mirrorLite = _q.lite;
       frame.tune = Object.assign(_mirTune, sv.tune || null, MIRROR_TUNE);
       frameSky.invViewProj = _invVP;
+      // THE MIRROR'S OWN LAMPS (FrameLights.viewLights): frame.lights is culled
+      // for the forward camera, which ranks lamps behind it last — the very
+      // lamps this camera sees — so they flashed in and out as the car moved.
+      sv.lights = frame.lights; sv.tailStart = frame.tailStart; sv.tailCount = frame.tailCount;
+      _aim[0] = _tgt[0] - _eye[0]; _aim[1] = 0; _aim[2] = _tgt[2] - _eye[2];
+      const vl = typeof FrameLights !== "undefined" && FrameLights.viewLights ? FrameLights.viewLights(frame, _eye, _aim) : null;
+      if (vl) { frame.lights = vl.lights; frame.tailStart = vl.tailStart; frame.tailCount = vl.tailCount; }
       let began = false;
       try {
         began = g.mirrorBegin(frame, w, h);
@@ -501,9 +509,10 @@ const MirrorPass = (function () {
           frame.invViewProj = sv.invViewProj; frame.eye = sv.eye; frame.cullDist = sv.cullDist;
           frame.mirrorLite = sv.lite;
           frame.tune = sv.tune;
+          frame.lights = sv.lights; frame.tailStart = sv.tailStart; frame.tailCount = sv.tailCount;
           frameSky.invViewProj = sv.sky;
           sv.viewProj = sv.view = sv.proj = sv.invProj = sv.invViewProj = sv.eye = sv.sky = null;
-          sv.tune = undefined;
+          sv.tune = undefined; sv.lights = null;
         }
       }
       return began;
@@ -551,6 +560,9 @@ const MirrorPass = (function () {
       setSubject,
       setPipMode,
       mode: () => mode,
+      // Is the rear-view actually drawing this frame? (car-draw.js lays a sky-tint
+      // fallback on the cockpit housings' glass when it is not.)
+      drawing: () => _shown && !!_rect && !_dead,
       // __apex.mirror(): the setting, what this frame resolved, and the backend's own count.
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         preparing: !!_preparation, prepared: _prepared,

@@ -305,6 +305,31 @@ test("both cockpit mirror lenses remain clear of their stays from every seat",()
   }
 });
 
+// MIRROR GLASS FALLBACK (owner, 2026-10-02: MIRROR AUTO on a software GPU left
+// the housings "flat black slabs"): with the HUD mirror pass off, car-draw.js
+// lays a sky-tint gradient over each lens. It must sit ON the lens, just
+// driver-side of it, and the LED strip must never go dark at the limiter.
+test("the mirror fallback covers each cockpit lens just driver-side, and the limiter strip stays lit",()=>{
+  const {Car3D,Teams,Parts}=loadCar3D(), {CarMesh}=loadMesh();
+  for(const team of Teams.LIST.slice(0,3))for(const setup of [Parts.DEFAULTS,Parts.getFactorySetup(team)]){
+    const tiers=Parts.getVisualTiers(setup,team), sc=tiers._visual&&tiers._visual.cockpit&&tiers._visual.cockpit.mirror;
+    const mesh=Car3D.build(team.color,team.color2,{teamId:team.id,parts:tiers,cockpit:true,noWheels:true,noDriver:true,measure:true});
+    const quads=Car3D.cockpitMirrorGlass(sc);
+    assert.equal(quads,Car3D.cockpitMirrorGlass(sc),"cached per scale");
+    const fb=CarMesh.getMirrorFallback(quads).d;
+    assert.equal(fb.pos.length/3,16,"two gradient bands per side");
+    for(let i=0;i<fb.pos.length;i+=3){
+      const p=[fb.pos[i],fb.pos[i+1],fb.pos[i+2]], tgt=[p[0],p[1],p[2]+0.004];
+      // The lens is SURFACES.mirror since the cockpit redesign (#781); glass before it.
+      assert.equal(firstMaterial(mesh,[p[0],p[1],p[2]-0.0005],tgt),Car3D.SURFACES.mirror,`${team.id}: fallback vertex ${i/3} lies on the lens`);
+    }
+    assert.ok(fb.col.some(c=>c>0.6)&&fb.col.every(c=>c<0.9),"pale sky top, no white-out");
+  }
+  const draw=read("js/car/car-draw.js");
+  assert.match(draw,/getLedStrip\(rpmF > 0\.965 \? \(motionReduced\(\) \|\| [^)]*\? 9 : 8\)/,"limiter alternates SHIFT and full ramp, never 0");
+  assert.match(draw,/mp && mp\.drawing\(\)/,"fallback only while the mirror pass is not drawing");
+});
+
 test("the faired halo adds a broad carbon crown with bounded geometry cost",()=>{
   const {Car3D}=loadCar3D();
   const build=halo=>Car3D.build(LIV.c1,LIV.c2,{cockpit:true,noWheels:true,noDriver:true,halo});

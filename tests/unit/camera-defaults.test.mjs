@@ -95,6 +95,29 @@ test("the CAMERA TUNER tunes HELMET as its own camera, apart from COCKPIT", () =
   assert.match(panel, /CamTune\.set\(curMode\(\), d\.id/);
 });
 
+test("CORNER HANG ships at 1 and 0 stays stored", () => {
+  const CamTune = loadCamTune();
+  const def = CamTune.CAM_TUNE_DEFS.find((d) => d.id === "cornerHang");
+  assert.equal(def.def, 1);
+  assert.ok(def.modes.indexOf("chase") >= 0);
+  assert.ok(def.modes.indexOf("heli") >= 0);
+  assert.ok(def.modes.indexOf("drone") >= 0);
+  assert.equal(def.modes.indexOf("far"), -1, "far has no second hang");
+  assert.equal(def.modes.indexOf("pitwall"), -1, "the pit wall stays put");
+  assert.equal(CamTune.cornerHang("chase"), null, "unset means the rig uses its shipped hang");
+  assert.equal(CamTune.values("chase").cornerHang, 1);
+  CamTune.set("chase", "cornerHang", 0);
+  assert.equal(CamTune.stored("chase", "cornerHang"), true);
+  assert.equal(CamTune.cornerHang("chase"), 0);
+  CamTune.set("chase", "cornerHang", 1);
+  assert.equal(CamTune.stored("chase", "cornerHang"), false);
+  assert.equal(CamTune.cornerHang("cockpit"), null);
+  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
+  assert.match(src, /hangScale\("chase"\)/);
+  assert.match(src, /hangScale\("heli"\)/);
+  assert.match(src, /CamTune\.cornerHang\(mode\)/);
+});
+
 test("the six geometric knobs stay deltas defaulting to 0", () => {
   const CamTune = loadCamTune();
   for (const id of ["height", "dist", "side", "pitch", "yaw", "fov"]) {

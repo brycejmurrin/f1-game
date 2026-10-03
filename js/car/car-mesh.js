@@ -1286,11 +1286,10 @@ const _ledMeshes = {};
 // `half` is the centre-to-centre half-span; 15 lenses at 2r + 1 mm each.
 const LED_ROWS = { std: { y: 0.082, half: 0.077, r: 0.005 }, gt: { y: 0.076, half: 0.077, r: 0.005 },
   yoke: { y: 0.0625, half: 0.070, r: 0.0045 } };
-// `lit` 0-8 lights that many LEDs left-to-right. 9 is the SHIFT FLASH: a real
-// wheel does not just fill the strip and stop — at the shift point the whole
-// row strobes blue, which is the cue a driver actually upshifts on, and it is
-// the one state the fill-only ramp could never express (8 lit and 8 lit-plus-
-// past-it looked identical). The caller alternates 9 and 0 to strobe it.
+// `lit` 0-8 lights that many LEDs left-to-right. 9 is SHIFT NOW: the whole
+// row blue, the cue a driver actually upshifts on (8 lit and 8 lit-plus-past-
+// it looked identical). The strip never goes DARK at the limiter — the caller
+// (car-draw.js) alternates 8 and 9, steady 9 under reduced motion.
 // `style` picks the row (LED_ROWS); anything else — the 2000s wheel scales the
 // standard row onto its own LCD — gets the standard one.
 function getLedStrip(lit, style) {
@@ -1305,6 +1304,31 @@ function getLedStrip(lit, style) {
   }
   _ledMeshes[key] = _gfx.createMesh(out);
   return _ledMeshes[key];
+}
+// MIRROR GLASS FALLBACK: the cockpit housings' glass is near-black because the
+// HUD mirror pass is the reflection. While that pass is not drawing (MIRROR
+// AUTO on a software GPU, OFF, collapsed) car-draw.js lays this over each
+// glass: a smoked sky gradient, pale at the top to grey-blue at the bottom.
+// `quads` is Car3D.cockpitMirrorGlass(scale); cached on that (frozen) array.
+const _mirrorFbMeshes = new Map();
+function getMirrorFallback(quads) {
+  let m = _mirrorFbMeshes.get(quads);
+  if (m) return m;
+  const out = { pos: [], nrm: [], col: [], idx: [] }, TOP = [0.62, 0.72, 0.84], MID = [0.40, 0.48, 0.58], BOT = [0.20, 0.23, 0.27];
+  const mixV = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);   // per-axis mix of two corners
+  for (const [a, b, c, d] of quads) {
+    for (const [t0, t1, c0, c1] of [[0, 0.55, BOT, MID], [0.55, 1, MID, TOP]]) {
+      // Two bands, colour per row; drawn doubleSided, so the winding is moot.
+      const i0 = out.pos.length / 3;
+      for (const [v, col] of [[mixV(a, d, t0), c0], [mixV(b, c, t0), c0], [mixV(b, c, t1), c1], [mixV(a, d, t1), c1]]) {
+        out.pos.push(v[0], v[1], v[2]); out.nrm.push(0, 0, -1); out.col.push(col[0], col[1], col[2]);
+      }
+      out.idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
+    }
+  }
+  m = _gfx.createMesh(out);
+  _mirrorFbMeshes.set(quads, m);
+  return m;
 }
 // 7-seg digit table, shared by the gear and speed LCD readouts.
 const _SEG7 = [
@@ -1610,7 +1634,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, getMirrorFallback, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);

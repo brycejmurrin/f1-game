@@ -579,7 +579,11 @@ test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the s
   assert.match(game, /const onboard = racing && \([^;]*camId === "helmet"/, "locked like the other onboard eyes (λ400)");
   assert.match(game, /const _nearM = \([^;]*_projMode === "helmet"[^;]*\) \? 0\.3 : 0\.9;/, "the cockpit's 0.3 m near plane, or the wheel is clipped away");
   assert.match(game, /const cockpitRigOnly = [^;]*CAM_MODES\[camMode\]\.id === "helmet"/, "the cockpit rig is drawn round it");
-  assert.match(game, /function cameraFollowsBank\(mode\) \{[^}]*mode === "helmet"/, "and it rides the bank like the cockpit");
+  // cameraBankScale gives every mode it does not name the FULL bank (1): HELMET,
+  // like the cockpit, is in neither the 0.35 nor the 0 list.
+  const bank = game.match(/function cameraBankScale\(mode\) \{[^}]*\}/);
+  assert.ok(bank, "cameraBankScale is the banked-camera table");
+  assert.doesNotMatch(bank[0], /"helmet"|"cockpit"/, "and it rides the full bank like the cockpit");
   const ms = readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...ms.matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
   assert.equal(ids[ids.length - 1], "helmet", "appended: apex26.camMode is an index");

@@ -158,7 +158,7 @@ const PitSigns = (function () {
         ? G.createTexMesh({ pos: r.pos, nrm: r.nrm, uv: r.uv, idx: r.idx }) : null;
       return true;
     } catch (e) {
-      track.meshes.pitSigns = track.meshes.pitSignTex = track.meshes.pitSignal = null;
+      free(G, track);   // the texture or the first mesh may already be on the GPU
       Log.warn("track", `${track.def && track.def.id}: pit signs skipped: ${e && e.message}`);
       return false;
     }
