@@ -3,6 +3,7 @@
 /** Hosted connector implementation is upstream. These adapters keep local
  * consumers honest about response data, readiness and file transport.
  * MCP result contract: https://modelcontextprotocol.io/specification/2025-11-25/server/tools */
+import path from "node:path";
 
 const record = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 export const ORCHESTRATION_TOOLS = Object.freeze([
@@ -15,28 +16,40 @@ export const ORCHESTRATION_TOOLS = Object.freeze([
  * every nesting level. Bounded traversal also accepts legacy JSON text. */
 export function normalizeToolResult(value, { maxDepth = 8 } = {}) {
   if (!Number.isInteger(maxDepth) || maxDepth < 1 || maxDepth > 32) throw new TypeError("maxDepth must be 1..32");
-  let current = value, error = false, depth = 0;
-  const seen = new Set();
-  while (depth < maxDepth) {
+  let error = false, truncated = false, remaining = 256;
+  const ancestors = new Set();
+  function visit(current, depth) {
+    const terminal = { data: current, depth };
+    if (record(current)) error ||= current.isError === true || current.ok === false;
+    if (depth >= maxDepth || --remaining < 0 || ancestors.has(current)) {
+      truncated = true;
+      return terminal;
+    }
     if (typeof current === "string") {
-      try { current = JSON.parse(current); depth++; continue; } catch { break; }
+      try { return visit(JSON.parse(current), depth + 1); } catch { return terminal; }
     }
-    if (!record(current) || seen.has(current)) break;
-    seen.add(current);
-    error ||= current.isError === true || current.ok === false;
-    if (current.structuredContent != null) { current = current.structuredContent; depth++; continue; }
+    if (!record(current)) return terminal;
+    ancestors.add(current);
+    let structured, texts = [], payloads = [];
+    if (current.structuredContent != null) structured = visit(current.structuredContent, depth + 1);
     if (Array.isArray(current.content)) {
-      const texts = current.content.filter((b) => b?.type === "text" && typeof b.text === "string");
-      const payloads = texts.flatMap((b) => { try { return [JSON.parse(b.text)]; } catch { return []; } });
-      // Never arbitrarily select between different valid payloads.
-      if (payloads.length === 1) { current = payloads[0]; depth++; continue; }
-      if (texts.length === 1 && payloads.length === 0) current = texts[0].text;
+      // Bound breadth as well as depth; a partial inspection cannot prove success.
+      if (current.content.length > remaining) truncated = true;
+      for (const block of current.content.slice(0, Math.max(0, remaining))) {
+        if (block?.type !== "text" || typeof block.text !== "string") continue;
+        texts.push(block.text);
+        let payload;
+        try { payload = JSON.parse(block.text); } catch { continue; }
+        payloads.push(visit(payload, depth + 1));
+      }
     }
-    break;
+    ancestors.delete(current);
+    // Inspect all candidates for errors, but never select an ambiguous payload.
+    return structured ?? (payloads.length === 1 ? payloads[0]
+      : texts.length === 1 && payloads.length === 0 ? { data: texts[0], depth } : terminal);
   }
-  error ||= record(current) && (current.ok === false || current.isError === true);
-  const truncated = depth === maxDepth;
-  return { ok: !error && !truncated, data: current, depth, truncated };
+  const result = visit(value, 0);
+  return { ok: !error && !truncated, ...result, truncated };
 }
 
 /** Conflicting installation observations are not authorization or readiness. */
@@ -59,7 +72,7 @@ export function reconcilePluginState(dependenciesResult, permissionsResults = []
   return { id, state: conflict ? "conflict" : states.size ? [...states][0] ? "installed" : "not_installed" : "unknown",
     installed: states.size === 1 ? [...states][0] : null,
     enabled: dependency.ok && typeof d.source_plugin_user_enabled === "boolean" ? d.source_plugin_user_enabled : null,
-    ready: !conflict && states.size === 1 && states.has(true) && d.source_plugin_user_enabled === true,
+    ready: dependency.ok && !conflict && states.size === 1 && states.has(true) && d.source_plugin_user_enabled === true,
     observations, fix: conflict ? "Recheck both services using the canonical plugin ID; do not infer permission from installed metadata." : null };
 }
 
@@ -107,7 +120,10 @@ export function analyzeSessionCatalog(input) {
   const cancellation = names.some((n) => /browser_use_.*cancel/.test(n));
   const library = names.some((n) => /(?:^|__)library_/.test(n));
   const warnings = [];
-  const resources = Array.isArray(input?.resources) ? input.resources : [];
+  const resources = [
+    ...(Array.isArray(input?.resources) ? input.resources : []),
+    ...skills.flatMap((skill) => Array.isArray(skill?.resources) ? skill.resources : []),
+  ];
   for (const resource of resources) {
     if (record(resource) && resource.ok === false && typeof resource.uri === "string") warnings.push({
       code: "SKILL_RESOURCE_UNREADABLE", uri: resource.uri,
@@ -115,7 +131,8 @@ export function analyzeSessionCatalog(input) {
     });
   }
   for (const skill of skills) {
-    if (record(skill) && skill.requiresFilesystem === true && !skill.skill_root) warnings.push({
+    if (record(skill) && skill.requiresFilesystem === true && !(typeof skill.skill_root === "string"
+        && !skill.skill_root.includes("\0") && path.isAbsolute(skill.skill_root))) warnings.push({
       code: "SKILL_HELPER_MOUNT_UNKNOWN", skill: skill.name,
       fix: "Require an explicit mounted helper root or materialize the authorized helper sources; do not invent a filesystem path for a skill URI.",
     });

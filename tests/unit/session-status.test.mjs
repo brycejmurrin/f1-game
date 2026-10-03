@@ -9,6 +9,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { parseVerdict, toMarkdown, collect } from "../../tools/ci/session-status.mjs";
 
 test("parseVerdict takes the LAST terminal line, never a heartbeat", () => {
@@ -46,4 +49,20 @@ test("collect runs against the real checkout without throwing", () => {
   const s = collect();
   assert.equal(typeof s.branch, "string");
   assert.ok(Array.isArray(s.commits) && Array.isArray(s.logs));
+});
+
+test("collect preserves the first porcelain status column and complete path", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "session-status-git-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, "git"), '#!/bin/sh\nif [ "$1" = status ]; then printf " M docs/README.md\\n?? new-file.md\\n"; else exit 1; fi\n', { mode: 0o755 });
+  const previousPath = process.env.PATH;
+  try {
+    process.env.PATH = dir + path.delimiter + (previousPath || "");
+    const result = collect();
+    assert.deepEqual(result.dirty, [" M docs/README.md", "?? new-file.md"]);
+    assert.match(toMarkdown(result), /`docs\/README\.md`/);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+  }
 });

@@ -155,6 +155,9 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
+| **shot/cam-corners.mjs** | Straight-vs-corner camera swing on Monaco, Spa, Suzuka, Monza, and Zandvoort. | — |
+| **shot/cam-motion.mjs** | Chase/far/heli speed-open and per-mode corner pose, from the rig not a second dolly. | — |
+| **shot/cam-videos.mjs** | Record one silent mp4 per camera, plus a page a phone can autoplay. | — |
 | **shot/capture-bundle.mjs** | Capture one backend-aware evidence bundle: identity, camera, actual renderer, pixels, console and viewport. | playwright-probe |
 | **shot/capture-contract.mjs** | Shared bounded input/output and pixel evidence contracts for capture CLIs. | — |
 | **shot/capture-runtime.mjs** | Serial browser capture lifecycle with identity, diagnostics and teardown on every path. | — |
@@ -235,6 +238,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/carshot.mjs** | Cropped studio-orbit car JPEG, self-booting: `carshot.mjs [az] [tod] [teamIdx] [out]` → `artifacts/tmp/carshot.jpg`. | playwright-probe |
 | **car/cockpit-pale-sweep.mjs** | Does anything in the COCKPIT read as a blank pale slab? Ray-casts the real Car3D cockpit from the driver's eye. | playwright-probe |
 | **car/crest-sweep.mjs** | Measures every team crest offline by replaying `LiveryTex.drawCrest` into a recording 2D context + scanline raster. | playwright-probe |
+| **car/emblems.mjs** | Author-time: builds the ORIGINAL team emblems in `js/car/crest-paths.js` from geometric primitives (no traced logos). | garage-parts-livery |
 | **car/flank-occlusion.mjs** | Ray-tests cover-flank stations against the real car mesh + wheels from a garage camera; reports what is hidden. | garage-parts-livery |
 | **car/helmet-sheet.mjs** | Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact-sheet PNG. | playwright-probe |
 | **car/helmet-trace.mjs** | Projects the helmet shell into a side-on photo, samples the real colour per (t, az), writes a colour map. | playwright-probe |
@@ -245,7 +249,6 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/render-car.mjs** | Headless batch renderer for `carview.html` — orbit presets, `--team=all` walks the grid, contact sheet; needs :3456. | playwright-probe |
 | **car/spine-station.mjs** | Measures + rasterises where every spine design lands on the cover flank, and the crown's own mark — offline, no browser. | garage-parts-livery |
 | **car/trace-car.mjs** | Trace the ISOLATED car into SVG: carview beauty + empty-stage plate -> exact matte -> contours + interior edges. | garage-parts-livery |
-| **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
 
 ### `tools/ui/`
 

@@ -112,42 +112,99 @@ const AgentRaster = (function () {
       const player = G.player;
       const s0 = player && player.s != null ? player.s : 0;
       const BEHIND = 60;
-      const edgeAt = (d) => {
+      // Clip-space w. A road edge behind the eye does not project, and the next
+      // sample in front can sit several metres up the road — past the band the
+      // bottom rows can see (only asphalt within ~2 m of a chase lens reaches
+      // them). The ribbon then stops and those rows are reported as ground.
+      // Measured: chase speed-open moved the eye ~2 m back at Monza s≈320 and
+      // the lower frame went from all road to 0.25. Clip the one straddling
+      // segment onto the near plane, and only when the eye is actually over
+      // the road, so a high broadcast camera does not gain a chord across the
+      // infield.
+      const clipW = (x, y, z) => vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
+      const endsAt = (d) => {
         const ss = wrapS(s0 + d);
         Tracks.sample(G.track, ss, scr);
         const [ex, ez] = unitRight(scr);
         const y = scr.p[1] + 0.05;
-        const L = projPoint(vp, scr.p[0] - ex * scr.hw, y, scr.p[2] - ez * scr.hw);
-        const R = projPoint(vp, scr.p[0] + ex * scr.hw, y, scr.p[2] + ez * scr.hw);
+        return {
+          lx: scr.p[0] - ex * scr.hw, ly: y, lz: scr.p[2] - ez * scr.hw,
+          rx: scr.p[0] + ex * scr.hw, ry: y, rz: scr.p[2] + ez * scr.hw,
+          hw: scr.hw, px: scr.p[0], pz: scr.p[2], py: scr.p[1], ex: ex, ez: ez,
+        };
+      };
+      const projectEnds = (e) => {
+        const L = projPoint(vp, e.lx, e.ly, e.lz);
+        const R = projPoint(vp, e.rx, e.ry, e.rz);
         return L && R ? { L, R, w: (L.w + R.w) / 2 } : null;
       };
-      let prev = null;
-      for (let i = 0; i <= roadPts; i++) {
-        const f = i / roadPts;
-        const d = -BEHIND + Math.pow(f, 1.8) * (range + BEHIND);
-        const cur = edgeAt(d);
-        if (prev && cur) {
-          const yA = cellY(Math.max(prev.L.y, prev.R.y)), yB = cellY(Math.max(cur.L.y, cur.R.y));
-          const yLo = Math.max(0, Math.min(yA, yB)), yHi = Math.min(rows - 1, Math.max(yA, yB));
-          for (let y = yLo; y <= yHi; y++) {
-            const t = yA === yB ? 0 : (y - yA) / (yB - yA);
-            const lx = prev.L.x + (cur.L.x - prev.L.x) * t;
-            const rx = prev.R.x + (cur.R.x - prev.R.x) * t;
-            const w = prev.w + (cur.w - prev.w) * t;
-            let c0 = cellX(Math.min(lx, rx)), c1 = cellX(Math.max(lx, rx));
-            if (c1 < 0 || c0 >= cols) continue;
-            c0 = Math.max(0, c0); c1 = Math.min(cols - 1, c1);
-            for (let x = c0; x <= c1; x++) {
-              const idx = y * cols + x;
-              if (w < depth[idx]) {
-                depth[idx] = w;
-                kind[idx] = (x === c0 || x === c1) && c1 > c0 + 1 ? "kerb" : "road";
-                idOf[idx] = null;
-              }
+      const here = endsAt(0);
+      const eyeLat = (eye[0] - here.px) * here.ex + (eye[2] - here.pz) * here.ez;
+      const overRoad = Math.abs(eyeLat) < here.hw + 1 && (eye[1] - here.py) < 6;
+      const NEAR_W = 1e-3;
+      const clipEnds = (back, front) => {
+        const tOf = (x0, y0, z0, x1, y1, z1) => {
+          const w0 = clipW(x0, y0, z0), w1 = clipW(x1, y1, z1);
+          const den = w1 - w0;
+          if (!(den > 1e-8)) return 1;
+          return Math.min(1, Math.max(0, (NEAR_W - w0) / den));
+        };
+        const mix = (a, b, t) => a + (b - a) * t;
+        const tL = tOf(back.lx, back.ly, back.lz, front.lx, front.ly, front.lz);
+        const tR = tOf(back.rx, back.ry, back.rz, front.rx, front.ry, front.rz);
+        return projectEnds({
+          lx: mix(back.lx, front.lx, tL), ly: mix(back.ly, front.ly, tL), lz: mix(back.lz, front.lz, tL),
+          rx: mix(back.rx, front.rx, tR), ry: mix(back.ry, front.ry, tR), rz: mix(back.rz, front.rz, tR),
+        });
+      };
+      // An unclamped near-plane vertex lands thousands of rows below the frame,
+      // and the span lerp then collapses onto the FAR edge — the bottom rows
+      // stay empty, which is the hole this clip exists to close. Park that
+      // vertex's ndc just outside the frame so the visible rows keep the near
+      // edge's width. Ordinary spans are left alone: clamping them would move
+      // a road edge that already projected correctly.
+      const yNdc = (y) => y < -1.5 ? -1.5 : y > 1.5 ? 1.5 : y;
+      const paintSpan = (a, b, clampOff) => {
+        const yOf = (y) => cellY(clampOff ? yNdc(y) : y);
+        const yA = yOf(Math.max(a.L.y, a.R.y)), yB = yOf(Math.max(b.L.y, b.R.y));
+        const yLo = Math.max(0, Math.min(yA, yB)), yHi = Math.min(rows - 1, Math.max(yA, yB));
+        for (let y = yLo; y <= yHi; y++) {
+          const t = yA === yB ? 0 : (y - yA) / (yB - yA);
+          const lx = a.L.x + (b.L.x - a.L.x) * t;
+          const rx = a.R.x + (b.R.x - a.R.x) * t;
+          const w = a.w + (b.w - a.w) * t;
+          let c0 = cellX(Math.min(lx, rx)), c1 = cellX(Math.max(lx, rx));
+          if (c1 < 0 || c0 >= cols) continue;
+          c0 = Math.max(0, c0); c1 = Math.min(cols - 1, c1);
+          for (let x = c0; x <= c1; x++) {
+            const idx = y * cols + x;
+            if (w < depth[idx]) {
+              depth[idx] = w;
+              kind[idx] = (x === c0 || x === c1) && c1 > c0 + 1 ? "kerb" : "road";
+              idOf[idx] = null;
             }
           }
         }
-        prev = cur || prev;
+      };
+      let prevE = null, prevP = null;
+      for (let i = 0; i <= roadPts; i++) {
+        const f = i / roadPts;
+        const d = -BEHIND + Math.pow(f, 1.8) * (range + BEHIND);
+        const e = endsAt(d);
+        const p = projectEnds(e);
+        if (prevE) {
+          if (prevP && p) paintSpan(prevP, p, false);
+          else if (overRoad && !prevP && p
+                   && Math.hypot(eye[0] - prevE.lx, eye[2] - prevE.lz) < 25) {
+            const c = clipEnds(prevE, e);
+            if (c) paintSpan(c, p, true);
+          } else if (overRoad && prevP && !p
+                     && Math.hypot(eye[0] - e.lx, eye[2] - e.lz) < 25) {
+            const c = clipEnds(e, prevE);
+            if (c) paintSpan(prevP, c, true);
+          }
+        }
+        prevE = e; prevP = p;
       }
 
       const reg = G.track.props;

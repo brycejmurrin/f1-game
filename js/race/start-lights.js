@@ -24,13 +24,16 @@ const StartLights = (function () {
 
   function create(G, deps) {
     const P = (deps && deps.Particles) || (typeof Particles !== "undefined" ? Particles : null);
-    let _track = null, _lamps = null;
+    // Memoised per track object, WEAKLY: a plain `_track` field pinned the whole
+    // previous world (props list, node arrays) through the next circuit's build.
+    const _lampsBy = new WeakMap();
 
     // World positions of the five lamps on the start gantry, or null.
     function lampsFor(track) {
-      if (track === _track) return _lamps;
-      _track = track; _lamps = null;
-      const list = track && track.props && track.props.list;
+      if (!track) return null;
+      if (_lampsBy.has(track)) return _lampsBy.get(track);
+      _lampsBy.set(track, null);
+      const list = track.props && track.props.list;
       if (!list || !track.px || !(track.n > 2)) return null;
       const n = track.n;
       let best = null, bestD = Infinity;
@@ -52,7 +55,7 @@ const StartLights = (function () {
         // Proud of the face that looks back down the grid (−tangent).
         lamps.push([best.x + rx * lat - tx * FACE, y, best.z + rz * lat - tz * FACE]);
       }
-      _lamps = lamps;
+      _lampsBy.set(track, lamps);
       return lamps;
     }
 

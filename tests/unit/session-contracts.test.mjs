@@ -66,3 +66,53 @@ test('bounded result traversal preserves an error at the boundary and rejects in
   assert.equal(concealed.truncated, true);
   assert.equal(concealed.ok, false);
 });
+
+test("failed dependency enablement cannot grant readiness from a permissions observation", () => {
+  const result = reconcilePluginState({ isError: true, structuredContent: {
+    source_plugin_id: "canonical", source_plugin_user_enabled: true,
+  } }, [{ app_id: "canonical", status: "installed" }]);
+  assert.equal(result.state, "installed");
+  assert.equal(result.enabled, null);
+  assert.equal(result.ready, false);
+});
+
+test("ambiguous JSON content preserves the envelope and every explicit failure", () => {
+  const envelope = { content: [
+    { type: "text", text: '{"ok":true}' },
+    { type: "text", text: '{"structuredContent":{"ok":false,"error":"operation refused"}}' },
+  ] };
+  const result = normalizeToolResult(envelope);
+  assert.equal(result.data, envelope);
+  assert.equal(result.ok, false);
+  assert.equal(result.truncated, false);
+  assert.equal(normalizeToolResult({ ...envelope, structuredContent: { ok: true } }).ok, false);
+  const successful = { content: envelope.content.slice(0, 1).concat({ type: "text", text: '{"value":42}' }) };
+  assert.equal(normalizeToolResult(successful).data, successful);
+  assert.equal(normalizeToolResult(successful).ok, true);
+});
+
+test("cyclic and excessively wide envelopes cannot become successful evidence", () => {
+  const cycle = {}; cycle.structuredContent = cycle;
+  assert.equal(normalizeToolResult(cycle).ok, false);
+  const wide = { content: Array.from({ length: 300 }, () => ({ type: "text", text: '{"ok":true}' })) };
+  assert.equal(normalizeToolResult(wide).ok, false);
+  assert.equal(normalizeToolResult(wide).truncated, true);
+  const shared = { ok: true };
+  assert.equal(normalizeToolResult({ structuredContent: shared, content: [{ type: "text", text: JSON.stringify(shared) }] }).ok, true);
+});
+
+test("required helper roots must be absolute filesystem paths", () => {
+  for (const skill_root of ["skill://package/scripts", "https://example.test/helpers", "file:///helpers", "helpers", "", {}, "/helpers\0invalid"]) {
+    const result = analyzeSessionCatalog({ tools: [], skills: [{ name: "example", requiresFilesystem: true, skill_root }] });
+    assert.ok(result.warnings.some((w) => w.code === "SKILL_HELPER_MOUNT_UNKNOWN"), String(skill_root));
+  }
+  assert.equal(analyzeSessionCatalog({ tools: [], skills: [{ name: "example", requiresFilesystem: true, skill_root: "/mounted/helpers" }] }).warnings.length, 0);
+});
+
+test("resource-level receipts retain missing siblings when another reference recovers", () => {
+  const result = analyzeSessionCatalog({ tools: [], skills: [{ name: "example", resources: [
+    { uri: "skill://example/recovered.md", ok: true },
+    { uri: "skill://example/still-missing.md", ok: false },
+  ] }] });
+  assert.deepEqual(result.warnings.filter((w) => w.code === "SKILL_RESOURCE_UNREADABLE").map((w) => w.uri), ["skill://example/still-missing.md"]);
+});

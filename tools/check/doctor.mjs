@@ -51,23 +51,37 @@ function resourceState(resource, root) {
 }
 
 /** Pure inspections only: no child process, network, npm install or browser. */
-export function diagnose({ root = ROOT, catalog, env = process.env } = {}) {
+export function diagnose({ root = ROOT, catalog, env = process.env, nodeVersion = process.versions.node } = {}) {
   root = path.resolve(root);
   const checks = [];
   const add = (id, status, message, details) => checks.push({ id, status, message, ...(details ? { details } : {}) });
-  add("runtime.node", Number(process.versions.node.split(".")[0]) >= 20 ? "pass" : "fail", "Node 20+ is required");
   if (!fs.existsSync(path.join(root, "package.json"))) {
+    add("runtime.node", "warn", "Node requirement is unverified without package.json");
     add("tree.root", "fail", "Root has no package.json");
   } else {
     try {
       const pkg = JSON.parse(read(path.join(root, "package.json")));
+      const engine = pkg.engines?.node;
+      const minimum = typeof engine === "string" && engine.match(/^>=\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?\s*$/);
+      const version = typeof nodeVersion === "string" && nodeVersion.match(/^(\d+)\.(\d+)\.(\d+)$/);
+      if (engine == null || engine === "*") add("runtime.node", "pass", "Inspected package declares no Node version constraint");
+      else if (!minimum || !version) add("runtime.node", "warn", "Node engine range or runtime version is unsupported by this inspector; compatibility remains unverified");
+      else {
+        const wanted = minimum.slice(1).map((v) => Number(v || 0));
+        const actual = version.slice(1).map(Number);
+        const difference = actual.map((v, i) => v - wanted[i]).find((v) => v !== 0) ?? 0;
+        add("runtime.node", difference >= 0 ? "pass" : "fail", `Node ${nodeVersion}; package requires ${engine.trim()}`);
+      }
       const require = createRequire(path.join(root, "package.json"));
       const missing = [];
       for (const name of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).sort()) {
         try { require.resolve(name); } catch { missing.push(safeName(name)); }
       }
       add("runtime.dependencies", missing.length ? "fail" : "pass", missing.length ? "Declared dependencies are missing; run npm install" : "Declared dependencies resolve", { missing });
-    } catch { add("tree.package", "fail", "Cannot read a valid package.json"); }
+    } catch {
+      if (!checks.some((c) => c.id === "runtime.node")) add("runtime.node", "warn", "Node requirement is unverified without a valid package.json");
+      add("tree.package", "fail", "Cannot read a valid package.json");
+    }
   }
 
   const skillsDir = path.join(root, ".claude/skills");
@@ -191,7 +205,7 @@ export function doctorMain(argv = process.argv.slice(2)) {
     } }).values;
   } catch (e) { console.error(e.message); return 2; }
   if (args.help) {
-    console.log("Usage: node tools/check/doctor.mjs [--tree] [--json] [--root DIR] [--catalog FILE]\nRead-only: no browser, network, child processes, writes or installs.\nCatalog: tool array, or {tools:[{name,description}],skills:[{name,path,available,resources:[{path,exists}]}],connectors:[{id,installed,enabled,dependenciesResult,permissionsResults}]}.\nSecrets and credential values are never included in results.\nExit 0: no failures (warnings may remain); 1: failed checks; 2: invalid CLI.");
+    console.log("Usage: node tools/check/doctor.mjs [--tree] [--json] [--root DIR] [--catalog FILE]\nRead-only: no browser, network, child processes, writes or installs.\nCatalog: tool array, or {tools:[{name,description}],skills:[{name,path,available,body,requiresFilesystem,skill_root,resources:[{path,uri,exists,ok}]}],connectors:[{id,installed,enabled,dependenciesResult,permissionsResults}]}.\nNode inspection supports >=minimum engines; other ranges remain unverified.\nSecrets and credential values are never included in results.\nExit 0: no failures (warnings may remain); 1: failed checks; 2: invalid CLI.");
     return 0;
   }
   const result = diagnose({ root: args.root || ROOT, catalog: args.catalog });

@@ -364,14 +364,20 @@ function buildSetup() {
   const team = Teams.LIST[G.teamIdx];
   const parts = getTeamParts(team.id);
 
-  // Drop any saved exclusive option the current team can't use
+  // Remap any saved exclusive option this team can't use onto its universal
+  // equivalent (Parts._resolve's peer). Deleting fell through to DEFAULTS and
+  // made a locked sig_rb_street photograph as medium instead of supersoft.
   let partsChanged = false;
   for (const cat of Parts.CATALOG) {
     const selId = parts[cat.id];
     if (selId) {
       const opt = cat.options.find((o) => o.id === selId);
       if (opt && !Parts.isOptionAvailable(opt, team)) {
-        delete parts[cat.id];
+        const eq = opt.equivalent
+          && cat.options.find((o) => o.id === opt.equivalent
+            && Parts.isOptionAvailable(o, team));
+        if (eq) parts[cat.id] = eq.id;
+        else delete parts[cat.id];
         partsChanged = true;
       }
     }
@@ -417,10 +423,19 @@ function buildSetup() {
   const activeCat = Parts.CATALOG.find((c) => c.id === csActiveCat);
 
   // Resolve the currently-fitted option for a category (respecting supplier lock).
+  // Mirror Parts._resolve: a locked SIGNATURE shows its equivalent's name
+  // (what is actually fitted), not the category default and not the foreign
+  // signature label.
   const resolveOpt = (cat) => {
     const id = parts[cat.id] || Parts.DEFAULTS[cat.id];
-    return cat.options.find((o) => o.id === id && Parts.isOptionAvailable(o, team))
-        || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
+    const sel = cat.options.find((o) => o.id === id);
+    if (sel && Parts.isOptionAvailable(sel, team)) return sel;
+    if (sel && sel.equivalent) {
+      const eq = cat.options.find((o) => o.id === sel.equivalent
+        && Parts.isOptionAvailable(o, team));
+      if (eq) return eq;
+    }
+    return cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
   };
 
   const tabs = $("cs-tabs");
