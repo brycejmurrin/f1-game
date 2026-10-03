@@ -2527,7 +2527,7 @@ __apex.race("albert_park"); __apex.pitSigns();
 // → { cells: 12, mesh: true, tex: true, drawn: 41, calls: 41 }
 ```
 
-### `mirror(mode?) → {mode, shown, collapsed, rect, cars, drawn, cam, lite, quality, backend} | null`
+### `mirror(mode?) → {mode, shown, collapsed, rect, cars, drawn, cam, lite, quality, backend, glass} | null`
 The HUD rear-view mirror (`js/render/shared/mirror-pass.js`): a second camera
 on the player's car looking back, rendered by the backend into its own target
 BEFORE the main `begin()` and composited, flipped, into the `#hud-mirror`
@@ -2545,9 +2545,14 @@ healthy desktop), `lite` (a phone or governor tier 1: no instanced prop
 batches, glass or water, a 180 m radius, rivals within 140 m, a 60% target,
 every frame), `low` (tier 2-3: half rate, 50%), `min` (tier 4+, e.g.
 GRAPHICS: LOW: a third of the rate, 40%); `lite` is true for all but `full`; `backend` is `gfx.mirrorState()` — `{ready, dead, w, h, hdr,
-renders, composites, rect}`, the backend's OWN count of mirror passes rendered
-and composites drawn (the live evidence `hud-mirror.spec.js` asserts). `null`
-before the game has created the mirror.
+renders, composites, glass, rect}`, the backend's OWN count of mirror passes rendered,
+composites drawn and cockpit-glass draws (the live evidence `hud-mirror.spec.js` asserts).
+`glass` is the cockpit's mirror glass (`js/car/car-draw.js` glassState): while
+the pass draws, the housings' glass shows ITS image (`gfx.drawMirrorGlass`, no
+second render), else a sky-tint fallback — `{live, fallback, screen}`, the two
+draw counts and, per glass, its corners `[a inboard-low, b outboard-low, c
+outboard-high, d inboard-high]` as canvas fractions (top-left origin) projected
+through the main camera, as last drawn. `null` before the game has created the mirror.
 ```js
 __apex.race("redbull"); __apex.go(); __apex.mirror("on");
 // next frames → { mode: "on", shown: true, rect: [0.36, 0.1, 0.27, 0.08], cars: 3, drawn: 12,

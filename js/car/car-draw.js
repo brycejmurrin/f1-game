@@ -6,7 +6,7 @@
    the shadow batches and the ground/attitude matrices, and reads the caches
    only through this surface. Depends on nothing in game.js by name: state
    comes through the G façade (gfx / store / cars / raceT / camEye / camMode /
-   raceTimeOfDay / track / teamIdx / driverIdx / headlessMode), the four
+   raceTimeOfDay / track / teamIdx / driverIdx / headlessMode / frame), the four
    helpers that could not leave game.js through deps (resolveLivery,
    partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali). */
 "use strict";
@@ -15,7 +15,7 @@ const CarDraw = (function () {
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
     FieldLod.init(G.store);   // apex26.fieldLod, read once at boot (0 = no rival LOD)
-    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback,
+    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback, getMirrorGlass,
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
     // ── cache-helpers ───────────────────────────────────────────────
@@ -464,11 +464,45 @@ const CarDraw = (function () {
     const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
     const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
     const _digM = new Float32Array(16);
-    // Windscreen / aeroscreen glass: a faint tint that still shows the road.
     const _mirrorFbOpts = { doubleSided: true, roughness: 0.08, specular: 0.7, emissive: 0.55 };
+    // THE HOUSINGS' GLASS: the HUD mirror's own rear view, LIVE, while that pass
+    // is drawing — gfx.drawMirrorGlass maps the target the pass rendered before
+    // this frame's begin() onto the lens (car-mesh.js getMirrorGlass), no second
+    // render. Anything else — the pass not drawing (MIRROR AUTO on a software GPU,
+    // OFF, collapsed), or the backend refusing (no image yet, a dead target, the
+    // PiP) — gets the sky-tint fallback. Exactly one of the two, every frame.
+    const _glassBase = new Float32Array(16);
+    let _glassQuads = null, _glassLive = 0, _glassFb = 0;
+    function drawMirrorLens(c, base, nite) {
+      const cm = teamDecalState(c.team, true).parts, vis = cm && cm._visual && cm._visual.cockpit;
+      const quads = Car3D.cockpitMirrorGlass(vis && vis.mirror), gfx = G.gfx;
+      const mp = typeof MirrorPass !== "undefined" ? MirrorPass.instance() : null;
+      _glassQuads = quads; _glassBase.set(base);
+      const mesh = mp && mp.drawing() && typeof gfx.drawMirrorGlass === "function" ? getMirrorGlass(quads) : null;
+      if (mesh && gfx.drawMirrorGlass(mesh, base, null)) { _glassLive++; return true; }
+      _mirrorFbOpts.emissive = nite ? 0.08 : 0.55;
+      gfx.draw(getMirrorFallback(quads), base, _mirrorFbOpts);
+      _glassFb++;
+      return false;
+    }
+    // __apex.mirror().glass (mirror-pass.js state): the live / fallback draw
+    // counts and, projected on demand through the main camera, the two glasses
+    // as last drawn — per glass its [a, b, c, d] corners (inboard-low,
+    // outboard-low, outboard-high, inboard-high) as canvas fractions, top-left
+    // origin. hud-mirror.spec.js samples the presented frame there.
+    function glassState() {
+      const vp = G.frame && G.frame.viewProj, b = _glassBase;
+      const screen = _glassQuads && vp ? _glassQuads.map((q) => q.map((p) => {
+        const w = [0, 1, 2].map((i) => b[i] * p[0] + b[4 + i] * p[1] + b[8 + i] * p[2] + b[12 + i]);
+        const cl = [0, 1, 3].map((i) => vp[i] * w[0] + vp[4 + i] * w[1] + vp[8 + i] * w[2] + vp[12 + i]);
+        return cl[2] > 1e-6 ? [(cl[0] / cl[2] + 1) / 2, (1 - cl[1] / cl[2]) / 2] : null;
+      })) : null;
+      return { live: _glassLive, fallback: _glassFb, screen };
+    }
     const _rmq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
     const motionReduced = () => !!(_rmq && _rmq.matches)   // the OS flag OR MOTION: REDUCED (html[data-motion]), as game.js
       || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
+    // Windscreen / aeroscreen glass: a faint tint that still shows the road.
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
     function drawCockpitRig(c, base, dt, paint, noWheel) {
@@ -485,14 +519,8 @@ const CarDraw = (function () {
       // seat (its eye is vantage.js VISOR_EYE_*) and no wheel.
       const wheelStyle = noWheel ? "none" : CockpitOpts.wheel(), lay = CockpitOpts.layout(wheelStyle, noWheel ? "std" : null);
       G.gfx.draw(cockpitBodyMesh(c.team, c), base, paint);
-      // The housings' glass is near-black (the HUD mirror is the reflection);
-      // with no mirror pass drawing it gets a sky-tint fallback (car-mesh.js).
-      const mp = typeof MirrorPass !== "undefined" ? MirrorPass.instance() : null;
-      if (!carModelBuf && !(mp && mp.drawing())) {
-        const cm = teamDecalState(c.team, true).parts, vis = cm && cm._visual && cm._visual.cockpit;
-        _mirrorFbOpts.emissive = nite ? 0.08 : 0.55;
-        G.gfx.draw(getMirrorFallback(Car3D.cockpitMirrorGlass(vis && vis.mirror)), base, _mirrorFbOpts);
-      }
+      // The housings' glass: the live rear view, else the sky-tint fallback.
+      if (!carModelBuf) drawMirrorLens(c, base, nite);
       // INTERIOR: carbon or team trim; CLASSIC adds gauges and an aeroscreen.
       // Car-local like the body (base), never rolled with the wheel.
       const cab = CockpitOpts.interior();
@@ -975,18 +1003,20 @@ const CarDraw = (function () {
       _teamMeshKeyCache.clear();
     }
 
-    return {
+    return (_instance = {
       teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx,
+      drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState,
       warmCarAssets, prepareMenuCarAssets, loadCarModel, buildCarData,
       setPlayerParts, invalidateCustomMeshCaches, invalidateFactoryMeshCaches,
       WHEELS,
       get modelBuf() { return carModelBuf; },
       get playerVisualKey() { return playerVisualKey; },
-    };
+    });
   }
-  return { create };
+  // The live instance, for mirror-pass.js state().glass — game.js creates exactly one.
+  let _instance = null;
+  return { create, instance: () => _instance };
 })();
 Object.freeze(CarDraw);

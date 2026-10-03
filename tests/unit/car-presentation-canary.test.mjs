@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -183,4 +184,60 @@ test("race warm-up builds the shadow casters the first countdown frame would", (
   assert.match(warm, /gfx\.carShadowBegin && LT\.carShadow && tier < 3\) \|\| \(gfx\.lampShadowBegin && LT\.lampShadow && tier < 2\)/);
   // An agent's headless race never renders a shadow: no caster builds there.
   assert.match(warm, /if \(G\.headlessMode \|\| !LT\) return false;/);
+});
+
+// THE COCKPIT LENS (car-draw.js drawMirrorLens, 2026-10-03): the HUD mirror's
+// LIVE image while that pass draws (gfx.drawMirrorGlass), else the sky-tint
+// fallback — exactly one of the two on every frame. Neither left the housings
+// as flat black slabs (2026-10-02); both would lay the fallback over the live
+// view. The real function runs against stubs of the six names it reads.
+test("the cockpit lens draws the live mirror glass XOR the sky-tint fallback", () => {
+  const src = read("js/car/car-draw.js");
+  const fn = fnSource(src, "function drawMirrorLens(");
+  const QUADS = [[[-0.5, 0.75, 0.9], [-0.7, 0.75, 0.9], [-0.7, 0.8, 0.9], [-0.5, 0.8, 0.9]]];
+  const GLASS = { glass: true }, FB = { fallback: true };
+  const run = ({ mp = "drawing", member = true, accepts = true, texMesh = true, nite = false }) => {
+    const calls = [];
+    const gfx = { draw: (m, b, o) => calls.push(["fallback", m, o.emissive]) };
+    if (member) gfx.drawMirrorGlass = (m, b) => { calls.push(["glass", m, b]); return accepts; };
+    const MirrorPass = { instance: () => (mp === null ? null : { drawing: () => mp === "drawing" }) };
+    const make = new Function("G", "MirrorPass", "Car3D", "teamDecalState", "getMirrorGlass", "getMirrorFallback",
+      `const _mirrorFbOpts = { doubleSided: true, emissive: 0.55 }, _glassBase = new Float32Array(16);
+       let _glassQuads = null, _glassLive = 0, _glassFb = 0;
+       ${fn}
+       return { draw: drawMirrorLens, counts: () => [_glassLive, _glassFb], quads: () => _glassQuads };`);
+    const lens = make({ gfx }, MirrorPass, { cockpitMirrorGlass: () => QUADS },
+      () => ({ parts: { _visual: { cockpit: { mirror: 1 } } } }),
+      (q) => (q === QUADS && texMesh ? GLASS : null), (q) => (q === QUADS ? FB : null));
+    const base = new Float32Array(16).fill(2);
+    const live = lens.draw({ team: {} }, base, nite);
+    return { calls, live, base, counts: lens.counts(), quads: lens.quads() };
+  };
+  // Live: one glass draw, on the cached glass mesh and the body's own matrix.
+  let r = run({});
+  assert.equal(r.live, true);
+  assert.deepEqual(r.calls.map((c) => c[0]), ["glass"]);
+  assert.equal(r.calls[0][1], GLASS);
+  assert.equal(r.calls[0][2], r.base, "the lens rides the cockpit body's matrix");
+  assert.deepEqual(r.counts, [1, 0]);
+  assert.equal(r.quads, QUADS, "glassState() projects the lens it drew");
+  // The backend refuses (no image yet, dead, the PiP, an open pass): the fallback, once.
+  r = run({ accepts: false });
+  assert.equal(r.live, false);
+  assert.deepEqual(r.calls.map((c) => c[0]), ["glass", "fallback"], "a refused glass drew nothing — the fallback covers it");
+  assert.deepEqual(r.counts, [0, 1]);
+  // The pass not drawing, no pass at all, a backend without the member, no
+  // textured mesh: the fallback only, and the backend is never asked.
+  for (const o of [{ mp: "off" }, { mp: null }, { member: false }, { texMesh: false }]) {
+    r = run(o);
+    assert.deepEqual(r.calls.map((c) => c[0]), ["fallback"], JSON.stringify(o));
+    assert.equal(r.calls[0][1], FB);
+    assert.deepEqual(r.counts, [0, 1], JSON.stringify(o));
+  }
+  // The fallback's look is unchanged: the day / night emissive.
+  assert.equal(run({ mp: "off" }).calls[0][2], 0.55);
+  assert.equal(run({ mp: "off", nite: true }).calls[0][2], 0.08);
+  // drawCockpitRig reaches it for every procedural cockpit, and it is the ONLY fallback draw.
+  assert.match(fnSource(src, "function drawCockpitRig("), /if \(!carModelBuf\) drawMirrorLens\(c, base, nite\);/);
+  assert.equal(src.split("getMirrorFallback(").length - 1, 1, "getMirrorFallback is drawn from drawMirrorLens only");
 });
