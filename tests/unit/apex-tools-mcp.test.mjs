@@ -1066,3 +1066,39 @@ test("session-check wraps are read-only and pinned", () => {
     assert.match(src, new RegExp(`name: "${n}",\\s*week: 6,\\s*kind: "tree"`), `${n} takes no browser lock`);
   }
 });
+
+test("runSpawn never blocks, and a cancel or timeout kills the child's process group", async () => {
+  const { runSpawn } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const body = (r) => JSON.parse(r.content[0].text);
+  // A client's notifications/cancelled: the call ends at once, not after the child's 30 s.
+  const ctl = new AbortController();
+  const t0 = Date.now();
+  const pending = runSpawn([process.execPath, "-e", "setTimeout(() => {}, 30000)"], { timeoutMs: 60000, signal: ctl.signal });
+  setTimeout(() => ctl.abort(), 200);
+  const cancelled = body(await pending);
+  assert.equal(cancelled.error, "cancelled");
+  assert.equal(cancelled.ok, false);
+  assert.ok(Date.now() - t0 < 5000, `cancel took ${Date.now() - t0} ms`);
+  // Its own timeout.
+  const timedOut = body(await runSpawn([process.execPath, "-e", "setTimeout(() => {}, 30000)"], { timeoutMs: 300 }));
+  assert.equal(timedOut.error, "timeout");
+  // A normal run still splits stdout from out.
+  const fine = body(await runSpawn([process.execPath, "-e", 'console.log("note"); console.log(JSON.stringify({a:1}))']));
+  assert.equal(fine.ok, true);
+  assert.deepEqual(fine.out, { a: 1 });
+  assert.equal(fine.stdout, "note");
+});
+
+test("rotateReport lifts rotate-markings --check rows into out", async () => {
+  const { rotateReport } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const r = rotateReport([
+    "abudhabi      shift 10.15% of lap  16 turns  (sectors left alone)",
+    "brands_hatch  shift 83.64% of lap  11 turns",
+    "",
+    "2 circuit file(s) would change (--write to apply)",
+  ].join("\n"));
+  assert.equal(r.wouldChange, 2);
+  assert.deepEqual(r.circuits[0], { id: "abudhabi", shiftPct: 10.15, turns: 16, sectorsLeftAlone: true });
+  assert.equal(r.circuits[1].sectorsLeftAlone, false);
+  assert.deepEqual(rotateReport(""), { wouldChange: 0, circuits: [] });
+});
