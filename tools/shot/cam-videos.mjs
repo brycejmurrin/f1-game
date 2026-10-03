@@ -76,8 +76,12 @@ function encode(id, pattern, fps) {
   const dest = join(OUT, `${id}.mp4`);
   const ff = spawnSync("ffmpeg", [
     "-y", "-framerate", String(fps), "-start_number", "0", "-i", pattern,
-    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-    "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "18",
+    "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+    "-map", "0:v:0", "-map", "1:a:0", "-shortest",
+    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1",
+    "-c:v", "libx264", "-profile:v", "baseline", "-level", "3.1", "-pix_fmt", "yuv420p",
+    "-preset", "veryfast", "-crf", "18",
+    "-c:a", "aac", "-b:a", "64k",
     "-movflags", "+faststart", dest,
   ], { encoding: "utf8" });
   if (ff.status !== 0) throw new Error(`encode ${id}: ${(ff.stderr || "").slice(-300)}`);
