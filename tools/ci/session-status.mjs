@@ -29,7 +29,8 @@ export const DEPLOY = "claude/f1-game-project-26h3ng";
 
 const git = (...args) => {
   const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
-  return r.status === 0 ? r.stdout.trim() : "";
+  // Porcelain's first space is the index status column, not padding.
+  return r.status === 0 ? r.stdout.trimEnd() : "";
 };
 
 /** The LAST verdict line a runner wrote: the Playwright reporter's `= run <s>`,

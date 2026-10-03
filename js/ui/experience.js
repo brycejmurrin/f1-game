@@ -83,7 +83,6 @@ const UiExperience = (function () {
     wire("pm-strategy", () => deps.openSettingsPage("driving", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("driving", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("driving", "pm-session-review"));
-    wire("pm-appearance", () => deps.openSettingsPage("appearance"));
     const intro = $("practice-brief");
     function showPractice() {
       if (!intro) return;
