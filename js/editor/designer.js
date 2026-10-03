@@ -27,7 +27,7 @@ const TrackDesigner = (function () {
       { n: 4, title: "Start line", text: "Select a point and press START HERE to put the start line there. It needs a long straight behind it for the grid and the pit lane." },
       { n: 5, title: "Look", text: "Pick a theme — the scenery, time of day and terrain follow it. Then name the circuit and set the half-width of the road." },
       { n: 6, title: "Checks", text: "Red rows block saving; amber rows are only warnings. Tap a row to see where it is, and tap FIX (or FIX ALL) to let the designer repair it." },
-      { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL: your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, and EXPORT / IMPORT move a circuit as a file." },
+      { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or select a point and press TEST HERE to drive from it; QUIT brings you back): your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, CARD makes a picture of the circuit to send, and EXPORT / IMPORT move a circuit as a file." },
     ]),
     GESTURES: Object.freeze([
       { input: "Touch", text: "Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan." },
@@ -450,6 +450,8 @@ const TrackDesigner = (function () {
     ui.ctxStart = btn("START HERE", "sel-chip", () => { const i = ctxAt; hideCtx(); setStart(i); });
     ui.ctxClose = btn("CLOSE", "sel-chip", () => hideCtx());
     ui.ctx.append(ui.ctxDel, ui.ctxStart, ui.ctxClose);
+    ui.ctxTest = btn("TEST HERE", "sel-chip", () => { const i = ctxAt; hideCtx(); testHere(i); });
+    ui.ctx.appendChild(ui.ctxTest);
     canvas.addEventListener("pointerdown", () => hideCtx());
     stage.append(canvas, ui.stats, ui.hint, ui.ctx);
     // rail
@@ -472,12 +474,14 @@ const TrackDesigner = (function () {
     ui.race = btn("RACE", "sel-edit", () => race("gp"));
     ui.tt = btn("TIME TRIAL", "sel-edit", () => race("tt"));
     ui.share = btn("SHARE", "sel-chip", () => share());
+    ui.card = btn("CARD", "sel-chip", () => shareCard());
+    ui.card.setAttribute("aria-label", "Share a picture card of this circuit");
     ui.export = btn("EXPORT", "sel-chip", () => exportFile());
     ui.import = btn("IMPORT", "sel-chip", () => ui.file.click());
     ui.file = el("input"); ui.file.type = "file"; ui.file.accept = ".json,application/json"; ui.file.hidden = true; ui.file.setAttribute("aria-label", "Import a circuit file");
     ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; if (f) importFile(f); });
     ui.msg = el("div", "td-msg"); ui.msg.setAttribute("role", "status"); ui.msg.setAttribute("aria-live", "polite");
-    foot.append(ui.save, ui.race, ui.tt, ui.share, ui.export, ui.import, ui.file, ui.msg);
+    foot.append(ui.save, ui.race, ui.tt, ui.share, ui.card, ui.export, ui.import, ui.file, ui.msg);
     root.append(body, foot);
 
     cv = DesignerCanvas.create(canvas, {
@@ -639,6 +643,9 @@ const TrackDesigner = (function () {
     ui.redo = btn("REDO", "sel-chip", () => doRedo());
     ui.fitBtn = btn("FIT VIEW", "sel-chip", () => cv && cv.fit());
     actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.undo, ui.redo, ui.fitBtn);
+    ui.testHere = btn("TEST HERE", "sel-chip", () => testHere());
+    ui.testHere.setAttribute("aria-label", "Test drive from the selected point");
+    actions.appendChild(ui.testHere);
     circuit.appendChild(actions);
     // issues
     const issues = el("div", "td-group");
@@ -694,15 +701,10 @@ const TrackDesigner = (function () {
   async function exportFile() {
     const env = await exportEnvelope();
     if (!env) { message("Nothing to export yet", true); return false; }
-    const name = "apex26-track-" + (design.name || "circuit").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".apextrack.json";
+    const name = fileStem() + ".apextrack.json";
     const blob = new Blob([JSON.stringify(env, null, 2)], { type: "application/json" });
     try {
-      if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable() && NativeDownload.saveBlob) await NativeDownload.saveBlob(blob, name);
-      else {
-        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      }
+      await saveFile(blob, name);
       message("Exported " + name);
       return true;
     } catch (e) { message("Export failed: " + (e && e.message || e), true); return false; }
@@ -765,6 +767,7 @@ const TrackDesigner = (function () {
     ui.undo.disabled = !undo.length; ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
     ui.hint.textContent = ui.toolHint.textContent = toolHint();
+    if (ui.testHere) ui.testHere.setAttribute("aria-disabled", sel >= 0 ? "false" : "true");
   }
   // ── FIX: TrackFixes (the editor fixes module) repairs what it can; each is one UNDO entry ──
   const fixer = () => (typeof TrackFixes !== "undefined" && TrackFixes ? TrackFixes : null);
@@ -910,6 +913,7 @@ const TrackDesigner = (function () {
       if (first) first.focus();
     });
     schedulePreview();
+    if (opts && opts.resume) resume(opts.resume);
     return true;
   }
   function close() {
@@ -940,6 +944,178 @@ const TrackDesigner = (function () {
     };
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO };
+  // ── files, the share card, the test drive ─────────────────────────────────
+  /** "apex26-track-<name>": the stem EXPORT and CARD name their files with. */
+  const fileStem = () => "apex26-track-" + (design && design.name || "circuit").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  /** A blob onto the player's device: the native share sheet where the app
+   *  shell has one (NativeDownload), else an <a download>. Throws what they throw. */
+  async function saveFile(blob, name) {
+    if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable() && NativeDownload.saveBlob) { await NativeDownload.saveBlob(blob, name); return true; }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    return true;
+  }
+  /** canvas → PNG blob (js/ui/photo-studio.js keeps its own copy private). */
+  function blobOf(c) {
+    return new Promise((resolve, reject) => {
+      try { c.toBlob((b) => (b ? resolve(b) : reject(new Error("The image could not be encoded"))), "image/png"); } catch (e) { reject(e); }
+    });
+  }
+  const CARD_W = 640, CARD_H = 360;
+  /** The built centreline fitted into rect {x, y, w, h}, z down the card as on
+   *  the designer's canvas, with a casing and a start-line dot. */
+  function strokeOutline(g, tr, rect, color) {
+    const n = tr.n, px = tr.px, pz = tr.pz;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (let k = 0; k < n; k++) { x0 = Math.min(x0, px[k]); x1 = Math.max(x1, px[k]); z0 = Math.min(z0, pz[k]); z1 = Math.max(z1, pz[k]); }
+    const sc = Math.min(rect.w / Math.max(1, x1 - x0), rect.h / Math.max(1, z1 - z0));
+    const ox = rect.x + (rect.w - (x1 - x0) * sc) / 2 - x0 * sc, oz = rect.y + (rect.h - (z1 - z0) * sc) / 2 - z0 * sc;
+    const step = Math.max(1, Math.floor(n / 600));
+    g.beginPath();
+    for (let k = 0; k < n; k += step) { const X = ox + px[k] * sc, Y = oz + pz[k] * sc; if (k) g.lineTo(X, Y); else g.moveTo(X, Y); }
+    g.closePath();
+    g.lineJoin = "round"; g.lineCap = "round";
+    g.strokeStyle = "rgba(0,0,0,0.55)"; g.lineWidth = 9; g.stroke();
+    g.strokeStyle = color; g.lineWidth = 5; g.stroke();
+    g.fillStyle = DesignerCanvas.COL.start; g.beginPath(); g.arc(ox + px[0] * sc, oz + pz[0] * sc, 6, 0, Math.PI * 2); g.fill();
+  }
+  /** Greedy character wrap (a URL has no spaces to break on) to lines ≤ w px. */
+  function wrapChars(g, s, w) {
+    const width = (t) => { const m = g.measureText(t); return m && m.width > 0 ? m.width : t.length * 6.6; };
+    const lines = []; let cur = "";
+    for (const ch of s) { if (cur && width(cur + ch) > w) { lines.push(cur); cur = ""; } cur += ch; }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  /** The 640×360 track card: the outline in the left 360², name, facts, theme,
+   *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
+  async function cardCanvas() {
+    if (previewT || !verdict) runPreview();
+    if (!verdict || !verdict.ok || !verdict.tr) { message("Fix the red issues before sharing", true); return null; }
+    const code = await shareCode();
+    if (!code) { message("This design cannot be encoded", true); return null; }
+    const url = TrackCodec.shareUrl(code), tr = verdict.tr, st = verdict.stats || {}, COL = DesignerCanvas.COL;
+    const c = document.createElement("canvas"); c.width = CARD_W; c.height = CARD_H;
+    const g = c.getContext("2d");
+    if (!g) { message("This browser cannot draw the card", true); return null; }
+    g.fillStyle = "#000"; g.fillRect(0, 0, CARD_W, CARD_H);   // opaque under the translucent chip ink
+    g.fillStyle = COL.chipBg; g.fillRect(0, 0, CARD_W, CARD_H);
+    let ink = COL.handle;
+    try { ink = (TrackMaps.themeColor && TrackMaps.themeColor(verdict.def)) || ink; } catch (_) { ink = COL.handle; }
+    strokeOutline(g, tr, { x: 28, y: 28, w: 304, h: 304 }, ink);
+    const X = 376, W = CARD_W - X - 24, T = TrackThemes.get(design.theme);
+    g.textBaseline = "top";
+    g.fillStyle = COL.chipText; g.font = "bold 24px system-ui, sans-serif"; g.fillText(design.name, X, 40, W);
+    g.fillStyle = COL.text; g.font = "14px system-ui, sans-serif";
+    g.fillText(fmtKm(tr.total) + " · " + (st.turns != null ? st.turns : (verdict.turns || []).length) + " corners · est lap " + fmtLap(st.estLapS), X, 80, W);
+    g.fillText((T && T.label) || design.theme, X, 102, W);
+    g.fillStyle = COL.sel; g.font = "bold 12px system-ui, sans-serif"; g.fillText("APEX 26 · TRACK DESIGNER", X, 140, W);
+    g.fillStyle = COL.text; g.font = "11px ui-monospace, monospace";
+    let lines = wrapChars(g, url, W);
+    if (lines.length > 3) {
+      const at = url.indexOf("#track="), origin = (url.match(/^[a-z]+:\/\/[^/#?]+/i) || [""])[0];
+      lines = wrapChars(g, origin + "…#track=" + url.slice(at + 7, at + 27), W).slice(0, 3);
+    }
+    lines.forEach((l, k) => g.fillText(l, X, CARD_H - 24 - (lines.length - k) * 15));
+    return { canvas: c, url, name: fileStem() + "-card.png" };
+  }
+  /** CARD: the OS share sheet with the PNG and the full link where the browser
+   *  can share files (canShare({files})), else the file is saved. A dismissed
+   *  sheet (AbortError) is the player's choice — no fallback, no message. */
+  async function shareCard() {
+    const card = await cardCanvas();
+    if (!card) return false;
+    let blob = null;
+    try { blob = await blobOf(card.canvas); } catch (e) { message("Could not draw the card: " + (e && e.message || e), true); return false; }
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    const file = typeof File === "function" ? new File([blob], card.name, { type: "image/png" }) : null;
+    if (file && nav && typeof nav.share === "function" && nav.canShare && nav.canShare({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: design.name, text: card.url });
+        message("Card shared"); Log.info("track", "designer card shared");
+        return true;
+      } catch (e) {
+        if (e && e.name === "AbortError") return false;
+        Log.info("track", "designer card share refused (" + (e && e.name || e) + ") — saving it instead");
+      }
+    }
+    try { await saveFile(blob, card.name); message("Card saved as " + card.name); return true; } catch (e) { message("Could not save the card: " + (e && e.message || e), true); return false; }
+  }
+  /** Arc s (m) of the preview build's node nearest control point i, or -1. */
+  function builtS(i) {
+    const tr = verdict && verdict.tr, p = design && design.pts[i];
+    if (!tr || !tr.n || !p) return -1;
+    let k = 0, best = Infinity;
+    for (let j = 0; j < tr.n; j++) { const d = (tr.px[j] - p[0]) * (tr.px[j] - p[0]) + (tr.pz[j] - p[1]) * (tr.pz[j] - p[1]); if (d < best) { best = d; k = j; } }
+    return k * tr.total / tr.n;
+  }
+  /** The player at rest at arc s — the fields __apex.jump (js/agent/apex.js)
+   *  and launchFlyingLap (js/game.js) write for a teleport and a standing lap:
+   *  track and world pose, cleared transients and teleport accumulators, seeded
+   *  render anchors. prog = s − total makes it an OUT-LAP: the first line
+   *  crossing starts the timed lap, so no partial lap reaches the TT board. */
+  function placeAt(p, track, s) {
+    const L = track.total, smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 0 };
+    s = ((s % L) + L) % L;
+    Tracks.sample(track, s, smp);
+    p.prog = s - L; p.s = p._prevS = s;
+    p.x = p.xVis = 0;                                    // on the centreline
+    p.px = smp.p[0]; p.pz = smp.p[2];
+    p.head = Math.atan2(smp.t[0], smp.t[2]);
+    p.speed = 0;                                         // a standing start: no raw m/s against PACE
+    p.vLat = 0; p.yawRateCur = 0; p.yawVis = 0; p.steerVis = 0;
+    p.rescueT = 0; p.wallT = 0; p.wasOnWall = false; p.wrongT = 0; p.wrongWay = false; p.offT = 0;
+    p.rPrevPx = p.px; p.rPrevPz = p.pz; p.rPrevS = p.s; p.rPrevX = p.x; p.rPrevHead = p.head; p.rPrevYawVis = 0;
+    return s;
+  }
+  /** TEST HERE: save, then a TIME TRIAL (startRaceBody clears practiceMode, so
+   *  a time trial is the unscored session that survives it) with the car at
+   *  rest on point i — the selected one by default — and green at once.
+   *  CustomTracks holds the way back; quitToMenu's consumeTrackHash() takes it. */
+  async function testHere(i) {
+    const at = Number.isInteger(i) ? i : sel;
+    if (!design || !(at >= 0 && at < design.pts.length)) { message("Select a point to test drive from", true); return false; }
+    const r = save(true);
+    if (!r.ok) return false;
+    const idx = custom.select(r.id);
+    if (idx < 0) { message("That circuit is not in the list any more", true); return false; }
+    sel = at;
+    const s = builtS(at), back = { id: r.id, sel: at, span, s };
+    if (custom.armReturn) custom.armReturn(back);
+    G.trackIdx = idx; G.seasonMode = false; G.timeTrial = true;   // openTimeTrial's flow + session
+    close();
+    Log.info("track", "designer test drive on " + r.id + " from point " + (at + 1) + " (s " + Math.round(s) + " m)");
+    try { await G.startRace(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
+    if (G.state === "count" && G.player && G.track && s >= 0) {
+      placeAt(G.player, G.track, s);
+      if (G.snapGameCam) G.snapGameCam();
+      if (G.refreshHud) G.refreshHud(true);
+      if (G.goRolling()) return true;
+    }
+    // Never a frozen race: out through the pause menu's own quit (quitToMenu),
+    // whose consumeTrackHash() hands the screen back with the reason. A start
+    // that already failed back to the menu (startRace's onFail quits) is
+    // reopened directly; a second open() is harmless and says why.
+    if (custom.armReturn) custom.armReturn(Object.assign({}, back, { msg: "The test drive could not start — try TIME TRIAL" }));
+    if (G.state === "menu") { if (custom.consumeTrackHash) custom.consumeTrackHash(); } else if (G.quitToMenu) G.quitToMenu();
+    return false;
+  }
+  /** Back from TEST HERE (open({resume})): the same design reselects the point
+   *  the drive left from and brings it into view. */
+  function resume(r) {
+    if (!r || !design || design.originId !== r.id) return false;
+    const N = design.pts.length;
+    sel = Number.isInteger(r.sel) && r.sel < N ? r.sel : -1;
+    span = Number.isInteger(r.span) && r.span < N ? r.span : -1;
+    if (cv) cv.setSelection(sel, span);
+    refreshControls();
+    // After open()'s own resize + fit: animation frames run in request order.
+    if (Number.isFinite(r.s) && r.s >= 0) requestAnimationFrame(() => { if (openFlag && cv) cv.focusAt(r.s); });
+    message(r.msg || "Back from the test drive", !!r.msg);
+    return true;
+  }
+
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO, saveFile, cardCanvas, shareCard, testHere };
 })();
 Object.freeze(TrackDesigner);

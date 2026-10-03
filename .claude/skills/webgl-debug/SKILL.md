@@ -1,6 +1,6 @@
 ---
 name: webgl-debug
-description: Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/blown-out/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night → lighting-tuner; WebGPU → webgpu-debug; garbled PBR layer → asset-pack; shimmer while driving → playwright-probe.
+description: "Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/blown-out/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night → lighting-tuner; WebGPU → webgpu-debug; garbled PBR layer → asset-pack; shimmer while driving → playwright-probe."
 
 ---
 
@@ -11,7 +11,7 @@ default backend (TLX is): it runs only when `apex26.gfxBackend` is `"webgl2"` or
 TLX/WGX failed to init — confirm with `__apex.diag()` (`backendState`) before
 debugging it. It uses WebGL2 with
 interleaved point lights, a 2048² sun shadow map (1024² on mobile; its PCSS blocker pass is a
-half-res R16F downsample; 512² is the separate LAMP spot map),
+desktop-only 512² R16F blocker target; 512² is also the separate LAMP spot map),
 ACES tone-map, bloom, and lens flare. Most rendering bugs fall into a small set
 of root causes — start with the probes below before reading shader source.
 
@@ -26,7 +26,7 @@ GLX.hdrMode()   // boolean — true = WebGL2 HDR float-FBO path active
 `hdrOk`): either the post chain fell back to direct rendering (no bloom, no
 composite at all), or `EXT_color_buffer_float` is absent so the chain runs on an
 8-bit RGBA8 target (bloom and ACES still run, but nothing exceeds 1.0 to bloom
-from). A bug in production if a modern GPU returns `false`. `true` says nothing
+from). Record browser/device, extension availability, post-enabled state and FBO/init errors before calling this a regression; GPU age is not a capability test. `true` says nothing
 about bloom strength: for over-bright/blown-out frames go to failures.md
 "Bloom blows out the whole frame".
 
@@ -85,7 +85,7 @@ There is **no UBO**. `frame.lights` is a flat JS array of 15-float records:
 [x, y, z,  r, g, b,  radius,  aimX, aimY, aimZ,  coneIn, coneOut,  bleed, volW, glareW]
 ```
 
-`setFrameLights()` (game.js) culls to the nearest CAP lamps each frame
+`setFrameLights()` (`js/lighting/frame-lights.js`) culls to the nearest CAP lamps each frame
 (`LT.lampCull` def 40 with traffic, else `LightBudget.MAX` = 48) and GLX
 uploads ONE interleaved `uLight[]` — 16 floats per lamp in a single
 `uniform4fv`, not parallel arrays. (`uLightPos[i]`/`uLightCol[i]` survive only

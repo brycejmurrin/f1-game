@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { selectPrunable, parseRefs, parseHeads, DEPLOY } from "../../tools/ci/prune-branches.mjs";
+import { selectPrunable, parseRefs, parseHeads, archiveRefs, DEPLOY } from "../../tools/ci/prune-branches.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NOW = 1_800_000_000, DAY = 86400;
@@ -58,11 +58,17 @@ test("an ABSORBED verdict prunes; a judgement verdict only when opted in, and th
   assert.deepEqual(opted.prune, ["abs", "sup"]);
 });
 
-test("--also refuses a verdict that is not a judgement call (merged/unmerged/active)", async () => {
+test("a lossy prune is archived as a tag first; merged, absorbed and expired claims are not", () => {
+  const reasons = new Map([["m", "merged"], ["a", "absorbed"], ["claude/claims/c", "expired claim"], ["u", "unmerged"], ["n", "no-history"]]);
+  assert.deepEqual(archiveRefs([...reasons.keys()], reasons, (n) => "sha-" + n),
+    ["sha-u:refs/tags/archive/u", "sha-n:refs/tags/archive/n"]);
+});
+
+test("--also refuses a verdict that is not a judgement call (merged/active)", async () => {
   const { main } = await import("../../tools/ci/prune-branches.mjs");
   const err = console.error; let said = "";
   console.error = (m) => { said += m; };
-  try { assert.equal(main(["--also", "unmerged"]), 2); } finally { console.error = err; }
+  try { assert.equal(main(["--also", "active"]), 2); } finally { console.error = err; }
   assert.match(said, /--also takes/);
 });
 
@@ -94,6 +100,8 @@ test("the workflow is dispatch-only, dry-run by default, and passes --apply only
   assert.match(yml, /if \[ "\$APPLY" = "true" \]; then args\+=\(--apply\); fi/);
   assert.match(yml, /--prs "\$RUNNER_TEMP\/prs.json" --runs "\$RUNNER_TEMP\/runs.json"/);
   assert.match(yml, /--state all [^\n]*headRefName,headRefOid/);
+  assert.match(yml, /--quiet-hours "\$\{QUIET:-48\}"/, "the audit surveys no-PR branches quiet for 48 h");
+  assert.match(on, /quiet_hours:[\s\S]*?default: "48"/);
   assert.match(yml, /if \[ -n "\$ALSO" \]; then args\+=\(--also "\$ALSO"\); fi/);
   assert.match(on, /also:[\s\S]*?default: ""/, "no verdict beyond merged/absorbed is deleted unless a person names it");
   assert.match(yml, /contents: write/);

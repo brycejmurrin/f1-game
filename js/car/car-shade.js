@@ -1,6 +1,6 @@
 "use strict";
 /* Apex 26 — CAR SHADE: rounded body sections and smooth shading for the
- * procedural car (js/car/car3d.js). OFF unless asked for; Car3D.build calls in.
+ * procedural car (js/car/car3d.js). ON by default (2026-10-02); Car3D.build calls in.
  *
  * WHY. Every body part was a trapezoid loft (car3d frame()/addBlock): four
  * flat faces, a 90 degree crease at each corner, and a flat normal on every
@@ -30,19 +30,22 @@
  *
  * THE SWITCH. `apex26.carSmooth` in storage, or `?carsmooth=` in the URL
  * (the URL wins for that page load): "1" / "all" for every car, a team id
- * ("mclaren") for that team's car only, anything else off. Read once per
- * page; set() changes it live (callers drop their mesh caches).
+ * ("mclaren") for that team's car only, "0" / "off" for none. Nothing chosen
+ * is the DEFAULT, every car (it shipped opt-in first, A/B'd live, and turned
+ * on 2026-10-02), so an opt-out is stored as "0" rather than removed. Read
+ * once per page; set() saves it (the meshes rebuild on the next page load).
  */
 const CarShade = (function () {
   const KEY = "apex26.carSmooth";
+  const DEFAULT = "*";
   let _pref;   // undefined = not read yet; null = off; "*" = every car; else a team id
 
   function norm(v) {
-    if (v == null) return null;
-    const s = String(v).trim().toLowerCase();
+    const s = v == null ? "" : String(v).trim().toLowerCase();
+    if (!s) return DEFAULT;   // nothing chosen
     if (s === "1" || s === "all" || s === "on" || s === "true") return "*";
-    if (!s || s === "0" || s === "off" || s === "false") return null;
-    return /^[a-z0-9_-]{1,40}$/.test(s) ? s : null;
+    if (s === "0" || s === "off" || s === "false") return null;
+    return /^[a-z0-9_-]{1,40}$/.test(s) ? s : DEFAULT;
   }
   function pref() {
     if (_pref !== undefined) return _pref;
@@ -55,11 +58,17 @@ const CarShade = (function () {
     _pref = norm(v);
     return _pref;
   }
-  /** Set the switch ("1", a team id, or off) and save it. Returns what took effect. */
+  /** Set the switch ("1", a team id, "0" for off, or null/"" back to the
+   *  default) and save it. Returns what took effect. */
   function set(v) {
     _pref = norm(v);
-    try { if (typeof localStorage !== "undefined") { if (_pref) localStorage.setItem(KEY, _pref === "*" ? "1" : _pref); else localStorage.removeItem(KEY); } }
-    catch (_) { /* storage refused: live for this page only */ }
+    const empty = v == null || !String(v).trim();
+    try {
+      if (typeof localStorage !== "undefined") {
+        if (empty) localStorage.removeItem(KEY);
+        else localStorage.setItem(KEY, _pref === "*" ? "1" : _pref || "0");
+      }
+    } catch (_) { /* storage refused: live for this page only */ }
     return _pref;
   }
   /** Is it on for this team's car? */
@@ -71,21 +80,42 @@ const CarShade = (function () {
   // tapers from w/2 at the bottom to t*w/2 at the top exactly as frame() does.
   // Counter-clockwise seen from +Z, starting at the right flank (mid-height).
   const RING_N = 24, EXP = 3;
-  function ring(f, n, p) {
-    n = n || RING_N; p = p || EXP;
-    const pts = [], x0 = f.x || 0, hw = f.w / 2, hh = f.h / 2, t = f.t !== undefined ? f.t : 1, e = 2 / p;
+  // The UPPER half is squarer (EXP_TOP): a real nose and tub are flat-topped with
+  // rounded shoulders, and one exponent everywhere read as a round "cigar" nose
+  // (2026-10-02 review). The underside keeps EXP. Both halves meet at the flank
+  // (u = ±1, v = 0), so the section stays closed and the envelope is unchanged;
+  // the sharpest step at 24 points is ~29°, inside smooth()'s 55° crease.
+  const EXP_TOP = 6;
+  function ring(f, n, p, pt) {
+    n = n || RING_N; p = p || EXP; pt = pt || EXP_TOP;
+    const pts = [], x0 = f.x || 0, hw = f.w / 2, hh = f.h / 2, t = f.t !== undefined ? f.t : 1;
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+      const a = (i / n) * Math.PI * 2, snap = (x) => (Math.abs(x) < 1e-9 ? 0 : x);   // cos(pi/2) is 6e-17, not 0
+      const c = snap(Math.cos(a)), s = snap(Math.sin(a)), e = 2 / (s > 0 ? pt : p);
       const u = Math.sign(c) * Math.pow(Math.abs(c), e), v = Math.sign(s) * Math.pow(Math.abs(s), e);
       pts.push([x0 + u * hw * (1 + (t - 1) * (v + 1) / 2), f.y + v * hh, f.z]);
     }
     return pts;
   }
+  /** How far the rounded top has fallen at half-width `halfW` of a car3d nose
+   *  anchor ({top, bottom, topSide}): sink a flat plate this much and its edges
+   *  sit on the skin instead of floating over the shoulder. */
+  function sink(st, halfW) {
+    const k = Math.min(1, Math.abs(halfW) / st.topSide), hh = (st.top - st.bottom) / 2;
+    return hh * (1 - Math.pow(1 - Math.pow(k, EXP_TOP), 1 / EXP_TOP));
+  }
+  /** A livery cap over the rounded nose: the body section at each end, grown by
+   *  the cap's own margin, so it wraps the nose instead of poking square corners
+   *  past it. `front`/`rear` are the cap's span stations; `nf`/`nr` the nose
+   *  anchors there (their topSide/side ratio is the nose's taper). */
+  function capLoft(out, front, rear, nf, nr, col, tri) {
+    loft(out, Object.assign({}, front, { t: nf.topSide / nf.side }), Object.assign({}, rear, { t: nr.topSide / nr.side }), col, tri);
+  }
   /** Loft `front` to `rear` (car3d span stations) with rounded sections and
    *  both ends capped. `tri(out, a, b, c, col)` is car3d's addTri. */
   function loft(out, front, rear, col, tri, opts) {
-    const n = (opts && opts.n) || RING_N, p = (opts && opts.p) || EXP;
-    const F = ring(front, n, p), R = ring(rear, n, p);
+    const n = (opts && opts.n) || RING_N, p = (opts && opts.p) || EXP, pt = (opts && opts.pt) || EXP_TOP;
+    const F = ring(front, n, p, pt), R = ring(rear, n, p, pt);
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
       tri(out, F[i], R[i], R[j], col);
@@ -246,6 +276,6 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, on, any, set, pref, ring, loft, podRing, loftRings, podLoft, vertexNormals, smooth, _norm: norm };
+  return { KEY, RING_N, EXP, EXP_TOP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft, vertexNormals, smooth, _norm: norm };
 })();
 Object.freeze(CarShade);

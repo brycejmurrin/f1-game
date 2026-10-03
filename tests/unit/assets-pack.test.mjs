@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import cp from "node:child_process";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
@@ -474,6 +475,12 @@ test("the shader's layer count matches the MAT table size", () => {
   assert.match(glx, /MAT_TEX_LAYERS = 17/, "glx.js MAT_TEX_LAYERS must be 17");
   const assets = fs.readFileSync(path.join(ROOT, "js", "render", "shared", "assets.js"), "utf8");
   assert.match(assets, /MAT_LAYERS = 17/, "assets.js MAT_LAYERS must be 17");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  assert.match(tlx, /U\.matTexScale = uniformArray\(Array\(17\)\.fill\(0\)\)/, "TLX material uniforms must cover all MAT ids");
+  assert.match(tlx, /for \(let i = 0; i < 17; i\+\+\)/, "TLX must upload all material scales");
+  const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
+  assert.match(wgx, /MAT_TEX_LAYERS = 17/, "WGX material resources must cover all MAT ids");
+  assert.match(wgx, /size: \[1, 1, MAT_TEX_LAYERS\]/, "WGX fallback arrays must have the full material depth");
 });
 
 test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
@@ -1067,4 +1074,18 @@ test("ensureScenery awaits Assets.modelsReady before any build", () => {
   assert.match(fn, /Assets\.modelsReady\(\)/, "ensureScenery no longer waits for the baked model pack");
   assert.match(fn, /Promise\.all\(\[p, models\]\)/, "the scenery script and the model pack must be awaited together");
   assert.match(fn, /return models\.then/, "a resident or inline scenery must still wait for the pack");
+});
+
+test("unknown bake flag is refused before rewriting the pack", () => {
+  const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic", "--dry-run"],
+    { encoding: "utf8" });
+  assert.notEqual(r.status, 0, "bake-synthetic --dry-run must exit non-zero");
+  assert.match(r.stderr, /unknown flag --dry-run/, `expected unknown-flag error, got:\n${r.stderr}`);
+});
+
+test("assets.mjs --help prints usage and exits 0", () => {
+  const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "--help"],
+    { encoding: "utf8" });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /bake-synthetic/);
 });

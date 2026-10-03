@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# @doc Idempotent Playwright Chromium install into `/opt/pw-browsers`; skips `npm install` when node_modules is usable.
+# @doc Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs.
 # Install Playwright Chromium into /opt/pw-browsers (the path tools/lib/harness.mjs
 # and chrome-devtools-mcp.sh prefer). Idempotent: safe to re-run from
 # environment install / cloud-agent bootstrap.
@@ -12,7 +12,24 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  cat <<'EOF'
+usage: bash tools/env/install-browsers.sh [--plan] [--help]
+
+Idempotent Playwright Chromium bootstrap: reuse an installed browser or install
+into a writable Playwright cache (via tools/lib/chromium-path.mjs). --plan prints
+the chosen cache/browser and exits without installing.
+EOF
+  exit 0
+fi
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--plan" ) ]]; then echo "Unknown arguments; use --help" >&2; exit 2; fi
+BROWSERS_PATH="$(node "$ROOT/tools/lib/chromium-path.mjs" --cache-path)" || {
+  echo "ERROR: no writable browser cache (set PLAYWRIGHT_BROWSERS_PATH)" >&2; exit 1;
+}
+FOUND_BROWSER="$(node "$ROOT/tools/lib/chromium-path.mjs" --path || true)"
+if [[ "${1:-}" == "--plan" ]]; then
+  printf 'cache: %s\nbrowser: %s\n' "$BROWSERS_PATH" "${FOUND_BROWSER:-not installed}"; exit 0
+fi
 export PLAYWRIGHT_BROWSERS_PATH="$BROWSERS_PATH"
 # Skip Playwright's postinstall download during npm install — we place
 # Chromium explicitly below (or leave the snapshot's copy in place).
@@ -23,7 +40,8 @@ export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # build 2026-08-17 failed with Permission denied otherwise).
 ensure_browsers_dir() {
   if [[ -d "$BROWSERS_PATH" ]]; then
-    return 0
+    [[ -w "$BROWSERS_PATH" ]] && return 0
+    return 1
   fi
   if mkdir -p "$BROWSERS_PATH" 2>/dev/null; then
     return 0
@@ -93,8 +111,11 @@ link_chromium() {
   return 1
 }
 
-ensure_browsers_dir || true
 ensure_npm || exit 1
+if [[ -n "$FOUND_BROWSER" && -x "$FOUND_BROWSER" ]]; then
+  echo "OK: installed Chromium ready at $FOUND_BROWSER"; exit 0
+fi
+ensure_browsers_dir || exit 1
 
 if [[ -x "$BROWSERS_PATH/chromium" ]] || link_chromium; then
   echo "Playwright Chromium already at $BROWSERS_PATH/chromium"

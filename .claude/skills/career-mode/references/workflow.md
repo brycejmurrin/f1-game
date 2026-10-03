@@ -54,7 +54,7 @@ Load from the SKILL.md index when the task needs this detail.
    - Then assert UI flow through `tests/specs/career.spec.js` / `tests/specs/quali.spec.js`.
    - Run `test:modes` in the background via `tools/ci/test-bg.mjs` (covers career + quali).
 
-8. **Cache-bust JS/CSS edits.**
+8. **Check the generated shell.**
    - Career often touches `js/career/career*.js`, `js/race/quali-model.js`,
      `js/race/reliability.js`, or `css/career.css`; run `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 

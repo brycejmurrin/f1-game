@@ -4,6 +4,8 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -152,10 +154,12 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  // 30 → 12 on 2026-09: everything else is a plain tools/ CLI.
+  // Sixteen pinned wrappers, including readiness and read-only session checks.
   assert.deepEqual([...names].sort(), [
     "apex_agent",
     "apex_bump_cache_check",
+    "apex_ci_status",
+    "apex_doctor",
     "apex_eval",
     "apex_frame_report",
     "apex_garage",
@@ -163,9 +167,11 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_pick_tests",
     "apex_rotate_markings_check",
     "apex_select_specs",
+    "apex_session_status",
     "apex_shot",
     "apex_status",
     "apex_verify_change_fast",
+    "apex_who_is_on_it",
   ]);
   for (const n of names) {
     assert.match(n, /^apex_/);
@@ -435,16 +441,16 @@ test("apex_frame_report: tree tool, validated track / u / frames / shots, never 
 
   const refused = [
     [{}, "bad_args", /needs track/],
-    [{ track: "atlantis" }, "bad_args", /unknown track atlantis/],
-    [{ track: "../monza" }, "bad_args", /unknown track/],
+    [{ track: "atlantis" }, "bad_args", /track must be one of/],
+    [{ track: "../monza" }, "bad_args", /track must be one of/],
     [{ track: "monza", u: [0.2], frames: 3 }, "bad_args", /u or frames/],
-    [{ track: "monza", u: [] }, "bad_args", /non-empty array/],
-    [{ track: "monza", u: "0.5" }, "bad_args", /non-empty array/],
+    [{ track: "monza", u: [] }, "bad_args", /u must (?:be array|have 1\.\.64 items)/],
+    [{ track: "monza", u: "0.5" }, "bad_args", /u must (?:be array|have 1\.\.64 items)/],
     [{ track: "monza", u: [1.5] }, "bad_args", /0\.\.1/],
-    [{ track: "monza", u: [0.1, "x"] }, "bad_args", /0\.\.1/],
-    [{ track: "monza", u: Array(65).fill(0.5) }, "bad_args", /at most 64/],
+    [{ track: "monza", u: [0.1, "x"] }, "bad_args", /u\[1\] must be number/],
+    [{ track: "monza", u: Array(65).fill(0.5) }, "bad_args", /u must have 1\.\.64 items/],
     [{ track: "monza", frames: 0 }, "bad_args", /1\.\.120/],
-    [{ track: "monza", frames: 2.5 }, "bad_args", /1\.\.120/],
+    [{ track: "monza", frames: 2.5 }, "bad_args", /frames must be integer/],
     [{ track: "monza", frames: 500 }, "bad_args", /1\.\.120/],
     [{ track: "monza", shots: "/etc/passwd" }, "path_escaped", /artifacts\/ or scratch\//],
     [{ track: "monza", shots: "scratch/../package.json" }, "path_escaped", /artifacts\/ or scratch\//],
@@ -533,6 +539,13 @@ test("serve-http /healthz and /mcp stay on loopback", async () => {
     const names = (listed.result.tools || []).map((t) => t.name);
     assert.ok(names.includes("apex_graph_parity"), names);
     assert.ok(names.every((n) => n.startsWith("apex_")));
+    // Keep using the same HTTP process after each malformed request.
+    for (const [payload, code] of [["null", -32600], ["true", -32600], ['"text"', -32600], ["[]", -32600], ['[{"jsonrpc":"2.0","id":1,"method":"ping"}]', -32600], ["{", -32700], [JSON.stringify({jsonrpc:"2.0",id:7,method:"tools/call",params:{name:"apex_status",arguments:null}}), -32602]]) {
+      const failed = await fetch(`http://127.0.0.1:${port}/mcp`, {method:"POST",headers:{"Content-Type":"application/json"},body:payload});
+      assert.equal((await failed.json()).error.code, code, payload);
+      const ping = await fetch(`http://127.0.0.1:${port}/mcp`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:99,method:"ping"})});
+      assert.deepEqual((await ping.json()).result, {});
+    }
   } finally {
     child.kill();
   }
@@ -714,4 +727,333 @@ test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () =>
     child.kill();
   }
 });
+});
+
+// Regression evidence from the tool survey: malformed callers must fail at
+// the seam, before any tree command, browser occupancy check or VM boot.
+test("all advertised schemas reject unknown keys; argument shapes, enums and bounds are enforced", () => {
+  const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
+  for (const tool of listed) {
+    assert.equal(tool.inputSchema.additionalProperties, false, tool.name);
+    const r = callCli(tool.name, { dryRun: true, unsupported: true });
+    assert.equal(r.status, 1, tool.name);
+    assert.equal(JSON.parse(r.stdout).error, "bad_args", tool.name);
+  }
+  const invalid = [
+    ["apex_pick_tests", null], ["apex_pick_tests", []], ["apex_status", 2],
+    ["apex_pick_tests", { files: "js/car/parts.js" }], ["apex_pick_tests", { files: [12] }],
+    ["apex_pick_tests", { staged: "false" }], ["apex_status", { dryRun: "false" }],
+    ["apex_eval", { track: "unknown" }], ["apex_garage", { op: "bogus" }],
+    ["apex_garage", { seat: 2 }], ["apex_garage", { frame: [] }],
+    ["apex_garage", { diff: ["one"] }], ["apex_graph_parity", { base: "HEAD", all: false }], ["apex_shot", { frac: 1.1 }],
+    ["apex_agent", { command: "unknown" }], ["apex_agent", { limit: 1.5 }],
+    ["apex_agent", { seconds: 121 }], ["apex_agent", { weather: "snow" }],
+    ["apex_select_specs", { since: "HEAD", budgetMin: 0 }],
+    ["apex_eval", { expr: "x".repeat(65537) }],
+    ["apex_pick_tests", { files: Array(257).fill("js/car/parts.js") }],
+    ["apex_pick_tests", JSON.parse('{"__proto__":{}}')],
+  ];
+  for (const [name, args] of invalid) {
+    const r = callCli(name, args);
+    assert.equal(r.status, 1, `${name}: ${r.stdout} ${r.stderr}`);
+    assert.equal(JSON.parse(r.stdout).error, "bad_args", `${name}: ${r.stdout}`);
+    assert.doesNotMatch(r.stderr, /TypeError|uncaught/i);
+  }
+});
+
+test("positional values cannot replace pinned CLI flags", () => {
+  for (const [name, args] of [
+    ["apex_graph_parity", { base: "HEAD", id: "--all" }],
+    ["apex_graph_parity", { base: "--all", id: "monza" }],
+    ["apex_pick_tests", { files: ["--since", "HEAD"] }],
+    ["apex_select_specs", { since: "--all" }],
+    ["apex_eval", { expr: "--backend=webgpu" }],
+    ["apex_garage", { op: "open", team: "--out" }],
+    ["apex_agent", { detail: "--url" }],
+  ]) {
+    const r = callCli(name, { ...args, dryRun: true });
+    assert.equal(r.status, 1, r.stdout);
+    assert.equal(JSON.parse(r.stdout).error, "bad_args");
+  }
+  assert.equal(callCli("apex_eval", { dryRun: true, expr: "-1" }).status, 0);
+});
+
+test("output preflight resolves existing and nearest ancestors without creating paths", () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mcp-output-"));
+  const dir = path.join(ROOT, "scratch", `apex-mcp-output-${process.pid}`);
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.writeFileSync(path.join(outside, "file.png"), "untouched");
+    fs.symlinkSync(outside, path.join(dir, "escape"));
+    fs.symlinkSync(path.join(outside, "file.png"), path.join(dir, "file.png"));
+    fs.symlinkSync(path.join(outside, "missing"), path.join(dir, "dangling"));
+    for (const out of [path.join(dir, "escape", "nested", "new.png"), path.join(dir, "file.png"), path.join(dir, "dangling", "new.png")]) {
+      const r = callCli("apex_shot", { dryRun: true, out });
+      assert.equal(r.status, 1, r.stdout);
+      assert.ok(["path_escaped", "bad_args"].includes(JSON.parse(r.stdout).error));
+    }
+    const safe = path.join(dir, "not-created", "new.png");
+    assert.equal(callCli("apex_shot", { dryRun: true, out: safe }).status, 0);
+    assert.equal(fs.existsSync(path.dirname(safe)), false);
+    assert.equal(fs.readFileSync(path.join(outside, "file.png"), "utf8"), "untouched");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true }); }
+});
+
+test("read-only framing refuses executable shot sources; legacy literals require explicit CLI mode", async () => {
+  const { readShots } = await import("../../tools/shot/frame-report.mjs");
+  const dir = path.join(ROOT, "scratch", `apex-mcp-shots-${process.pid}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const shot = { id: "test", dur: 0.5, ease: "linear", eye: [{ at: "start" }, { at: "start" }], look: [{ at: "start" }, { at: "start" }], fov: [45, 45] };
+  try {
+    const json = path.join(dir, "shots.json"), legacy = path.join(dir, "shots.js"), malicious = path.join(dir, "executable.json");
+    fs.writeFileSync(json, JSON.stringify([shot]));
+    fs.writeFileSync(legacy, `window.FlybyShots = [${JSON.stringify(shot).replace('"id":', 'id:')}];`);
+    fs.writeFileSync(malicious, "(() => { globalThis.__apexFrameSurveyExecuted = true; return []; })()");
+    assert.deepEqual(readShots(json), [shot]);
+    assert.throws(() => readShots(legacy), /JSON data/);
+    assert.deepEqual(readShots(legacy, { trustedJs: true }), [shot]);
+    assert.throws(() => readShots(malicious), /JSON data/);
+    assert.equal(globalThis.__apexFrameSurveyExecuted, undefined);
+    for (const shots of [legacy, malicious]) {
+      const r = callCli("apex_frame_report", { dryRun: true, track: "monza", shots });
+      assert.equal(r.status, 1, r.stdout);
+      assert.equal(JSON.parse(r.stdout).error, "bad_args");
+      assert.match(JSON.parse(r.stdout).message, /JSON/);
+    }
+    assert.equal(callCli("apex_frame_report", { dryRun: true, track: "monza", shots: json, trustedShotsJs: true }).status, 1);
+    fs.writeFileSync(json, "[{}]");
+    assert.throws(() => readShots(json), /no string id/);
+    assert.equal(callCli("apex_frame_report", { dryRun: true, track: "monza", shots: json }).status, 1);
+    fs.writeFileSync(json, "[]");
+    assert.deepEqual(readShots(json), []); // empty override keeps the live default
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("stdio survives null/scalar/batch/malformed envelopes and invalid arguments", () => {
+  const errors = rpc([
+    "null", "true", '"text"', "[]", '[{"jsonrpc":"2.0","id":1,"method":"ping"}]',
+    "{", { jsonrpc: "1.0", id: 1, method: "ping" },
+    { jsonrpc: "2.0", id: {}, method: "ping" },
+    { jsonrpc: "2.0", id: 2, method: "ping", params: [] },
+    { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "apex_status", arguments: null } },
+    { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: 3 } },
+    { jsonrpc: "2.0", id: 99, method: "ping" },
+    { jsonrpc: "2.0", id: 100, method: "tools/list" },
+  ]);
+  assert.equal(errors.length, 13);
+  assert.deepEqual(errors.filter((r) => r.error).map((r) => r.error.code).sort(), [-32600, -32600, -32600, -32600, -32600, -32700, -32600, -32600, -32602, -32602, -32602].sort());
+  assert.deepEqual(errors.find((r) => r.id === 99).result, {});
+  assert.ok(errors.find((r) => r.id === 100).result.tools.some((t) => t.name === "apex_doctor"));
+});
+
+test("doctor wrapper pins inspection only and rejects caller-supplied command/root/catalog", () => {
+  const r = callCli("apex_doctor", { dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout).argv.slice(1), [path.join(ROOT, "tools/check/doctor.mjs"), "--tree", "--json"]);
+  for (const key of ["root", "catalog", "command", "install", "url"]) {
+    assert.equal(callCli("apex_doctor", { dryRun: true, [key]: "untrusted" }).status, 1, key);
+  }
+});
+
+test("probe backend and wait errors fail before dispatch; integer boundary plans remain exact", () => {
+  const cli = path.join(ROOT, "tools/mcp/mcp-cli.mjs");
+  for (const args of [["--backend", "bogus"], ["--backend"], ["--wait"], ["--wait", "NaN"], ["--wait", "Infinity"], ["--wait", "-1"], ["--wait", "0.5"], ["--wait", "180001"], ["--backend", "--dry-run"], ["--tlx-auto"], ["--backend", "three", "--tlx-auto", "--tlx-webgpu"], ["--lite", "--backend", "three"]]) {
+    const r = spawnSync(process.execPath, [cli, "probe", "--dry-run", ...args], { encoding: "utf8", cwd: ROOT });
+    assert.equal(r.status, 2, `${args}: ${r.stdout} ${r.stderr}`);
+    assert.match(r.stderr, /probe:/);
+    assert.doesNotMatch(r.stderr, /TypeError|uncaught|stack/i);
+    assert.equal(r.stdout.trim(), "");
+  }
+  for (const wait of [0, 180000]) {
+    const r = spawnSync(process.execPath, [cli, "probe", "--dry-run", "--wait", String(wait)], { encoding: "utf8", cwd: ROOT });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(JSON.parse(r.stdout).at(-1).arguments.function.includes(`setTimeout(r, ${wait})`));
+  }
+});
+
+test("atomic browser claim preserves the competing owner that wins after preflight", async () => {
+  const { acquireLock, releaseLock } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  fs.mkdirSync(path.dirname(LOCK), { recursive: true });
+  const write = fs.writeFileSync, psBefore = process.env.APEX_MCP_PS;
+  process.env.APEX_MCP_PS = "";
+  let inserted = false;
+  fs.writeFileSync = (file, ...args) => {
+    if (file === LOCK && !inserted) {
+      inserted = true;
+      write(LOCK, JSON.stringify({ pid: process.pid, tool: "winner", since: Date.now() }));
+    }
+    return write(file, ...args);
+  };
+  try {
+    const result = acquireLock("loser");
+    assert.equal(inserted, true);
+    assert.equal(JSON.parse(result.content[0].text).error, "lock_held");
+    assert.equal(JSON.parse(fs.readFileSync(LOCK, "utf8")).tool, "winner");
+  } finally {
+    fs.writeFileSync = write;
+    releaseLock();
+    if (psBefore === undefined) delete process.env.APEX_MCP_PS; else process.env.APEX_MCP_PS = psBefore;
+  }
+});
+
+test("partially written or malformed lock cannot be stolen during an atomic claim", async () => {
+  const { acquireLock } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  fs.mkdirSync(path.dirname(LOCK), { recursive: true });
+  fs.writeFileSync(LOCK, "");
+  try {
+    const result = acquireLock("loser");
+    assert.equal(JSON.parse(result.content[0].text).error, "lock_held");
+    assert.equal(fs.readFileSync(LOCK, "utf8"), "");
+  } finally { fs.rmSync(LOCK, { force: true }); }
+});
+
+test("fake garage early exits, spawn errors and timeout settle open and retain ownership until child exit", { timeout: 5000 }, async () => {
+  const { EventEmitter } = await import("node:events");
+  const { PassThrough } = await import("node:stream");
+  const { garageOpen, garageClose, acquireLock, releaseLock } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const psBefore = process.env.APEX_MCP_PS;
+  process.env.APEX_MCP_PS = "";
+  const fake = () => {
+    const child = new EventEmitter();
+    child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    child.pid = process.pid; child.kill = () => true;
+    return child;
+  };
+  const body = (r) => JSON.parse(r.content[0].text);
+  try {
+    const early = fake();
+    const earlyOpen = garageOpen({}, { spawnChild: () => { setImmediate(() => early.emit("exit", 2)); return early; } });
+    assert.equal(body(await earlyOpen).error, "garage_boot_failed");
+    assert.equal(fs.existsSync(LOCK), false);
+
+    const failedSpawn = fake(); delete failedSpawn.pid;
+    const failed = garageOpen({}, { spawnChild: () => { setImmediate(() => failedSpawn.emit("error", new Error("fixture ENOENT"))); return failedSpawn; } });
+    assert.equal(body(await failed).error, "garage_boot_failed");
+    assert.equal(fs.existsSync(LOCK), false);
+
+    const thrown = await garageOpen({}, { spawnChild: () => { throw new Error("synchronous spawn failure"); } });
+    assert.equal(body(thrown).error, "garage_boot_failed");
+    assert.equal(fs.existsSync(LOCK), false);
+
+    const timed = fake();
+    const timeout = await garageOpen({}, { spawnChild: () => timed, readyTimeoutMs: 20 });
+    assert.equal(body(timeout).error, "garage_boot_failed");
+    assert.equal(fs.existsSync(LOCK), true, "timed-out child still owns its browser until exit");
+    assert.equal(body(acquireLock("another")).error, "lock_held");
+    timed.emit("exit", 1);
+    assert.equal(fs.existsSync(LOCK), false);
+
+    const ready = fake();
+    const recovered = await garageOpen({}, { spawnChild: () => { setImmediate(() => ready.stdout.write('{"ready":true}\n')); return ready; } });
+    assert.equal(body(recovered).ok, true, "a fresh session recovers after earlier failures");
+    const closed = garageClose("fixture close");
+    assert.equal(closed.closed, true);
+    assert.equal(fs.existsSync(LOCK), true, "close alone cannot release the browser");
+    assert.equal(body(acquireLock("another")).error, "lock_held");
+    ready.emit("exit", 0);
+    assert.equal(fs.existsSync(LOCK), false);
+  } finally {
+    garageClose("fixture teardown"); releaseLock();
+    if (psBefore === undefined) delete process.env.APEX_MCP_PS; else process.env.APEX_MCP_PS = psBefore;
+  }
+});
+
+test("graph-parity cleans partial archives and every load/build failure using small scratch fixtures", () => {
+  const require = createRequire(import.meta.url);
+  const { materialiseBaseline, main } = require("../../tools/track/graph-parity.cjs");
+  const fixture = path.join(ROOT, "scratch", `graph-parity-cleanup-${process.pid}`);
+  fs.mkdirSync(fixture, { recursive: true });
+  const log = console.log, error = console.error;
+  console.log = () => {}; console.error = () => {};
+  try {
+    for (const failedStage of ["git", "tar"]) {
+      const commands = [];
+      assert.throws(() => materialiseBaseline("HEAD", { scratchRoot: fixture, run(command, args) {
+        commands.push(command);
+        if (command === "tar") fs.writeFileSync(path.join(args.at(-1), "partial.json"), "fixture");
+        if (command === failedStage) throw new Error(`fixture ${command} failed`);
+        return Buffer.from("fixture archive");
+      } }), new RegExp(`fixture ${failedStage} failed`));
+      assert.deepEqual(fs.readdirSync(fixture), [], `${failedStage} failure leaked its tree`);
+      assert.deepEqual(commands, failedStage === "git" ? ["git"] : ["git", "tar"]);
+    }
+    const tracks = { LIST: [{ id: "fixture" }], setKeepGeometry() {}, build() { return Object.fromEntries(["propsGeo", "glassGeo", "waterGeo", "roadGeo", "terrainGeo"].map((name) => [name, { pos: [] }])); } };
+    for (const stage of ["baseline-load", "head-load", "unknown-track", "build", "comparison", "success"]) {
+      let dir, loads = 0;
+      const code = main({ args: [stage === "unknown-track" ? "missing" : "fixture"], baseRef: "HEAD", explicitBase: true,
+        materialise() { dir = fs.mkdtempSync(path.join(fixture, "baseline-")); fs.writeFileSync(path.join(dir, "fixture.json"), "{}"); return dir; },
+        loadContext() {
+          loads++;
+          if (stage === "baseline-load" && loads === 1 || stage === "head-load" && loads === 2) throw new Error(`fixture ${stage} failed`);
+          if (stage === "build") return { ...tracks, build() { throw new Error("fixture build failed"); } };
+          if (stage === "comparison") return { ...tracks, build() { return { get propsGeo() { throw new Error("fixture comparison failed"); } }; } };
+          return tracks;
+        },
+      });
+      assert.equal(code, stage === "success" ? 0 : 1, stage);
+      assert.equal(fs.existsSync(dir), false, `${stage} leaked baseline`);
+      assert.deepEqual(fs.readdirSync(fixture), [], stage);
+    }
+  } finally {
+    console.log = log; console.error = error;
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("parseOut takes the trailing JSON block, never a number from inside it", async () => {
+  const { parseOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  // apex_shot: a text line, then pretty-printed JSON whose last value line is a bare number.
+  const shot = 'wrote x.png (20.3 KB)\n{\n  "frame": {\n    "tgt": [\n      -285.6,\n      563.528\n    ]\n  }\n}';
+  assert.deepEqual(parseOut(shot), { frame: { tgt: [-285.6, 563.528] } });
+  assert.equal(parseOut("42"), 42, "a whole-stdout scalar is still apex_eval's answer");
+  assert.equal(parseOut("plain text\n  7"), null, "an indented scalar line is not a result");
+  assert.deepEqual(parseOut('log\n{"a":1}'), { a: 1 });
+  assert.equal(parseOut(""), null);
+});
+
+test("ciVerdict lifts ci-watch's terminal line into out", async () => {
+  const { ciVerdict } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const v = ciVerdict([
+    "[ci-watch] CI #1 (push) queued https://x/1",
+    "[ci-watch] CI › Smoke (2) → failure — step \"Run smoke shard\": boom https://x/2",
+    "[ci-watch] = ci failed (19 jobs, 1 failed, 4 skipped) sha=e3bd067",
+  ].join("\n"));
+  assert.equal(v.verdict, "failed");
+  assert.equal(v.summary, "(19 jobs, 1 failed, 4 skipped) sha=e3bd067");
+  assert.equal(v.jobs.length, 2);
+  assert.match(v.jobs[1], /^CI › Smoke/);
+  assert.equal(ciVerdict("").verdict, null);
+});
+
+test("session-check wraps are read-only and pinned", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const ss = callCli("apex_session_status", { dryRun: true });
+  assert.equal(ss.status, 0, ss.stderr);
+  assert.match(body(ss).argv.join(" "), /ci\/session-status\.mjs --json$/);
+
+  const who = callCli("apex_who_is_on_it", { dryRun: true, hours: 12, noFetch: true, paths: ["js/game.js"] });
+  assert.equal(who.status, 0, who.stderr);
+  assert.match(body(who).argv.join(" "), /ci\/who-is-on-it\.mjs --json --hours 12 --no-fetch js\/game\.js$/);
+  for (const [args, re] of [
+    [{ paths: ["--claim"] }, /not flags/],
+    [{ paths: ["-x"] }, /not flags/],
+    [{ paths: "js/game.js" }, /array/],
+    [{ hours: 0 }, /hours must be/],
+    [{ hours: 999 }, /hours must be/],
+  ]) {
+    const r = callCli("apex_who_is_on_it", args);
+    assert.equal(body(r).error, "bad_args", JSON.stringify(args));
+    assert.match(body(r).message, re);
+  }
+
+  const ci = callCli("apex_ci_status", { dryRun: true, sha: "e21bcf4" });
+  assert.equal(ci.status, 0, ci.stderr);
+  assert.match(body(ci).argv.join(" "), /ci\/ci-watch\.mjs --once --sha e21bcf4$/);
+  for (const sha of ["--pages", "main", "e21b", "e21bcf4; rm -rf /"]) {
+    assert.equal(body(callCli("apex_ci_status", { sha })).error, "bad_args", sha);
+  }
+  const src = fs.readFileSync(MCP, "utf8");
+  for (const n of ["apex_session_status", "apex_who_is_on_it", "apex_ci_status"]) {
+    assert.match(src, new RegExp(`name: "${n}",\\s*week: 6,\\s*kind: "tree"`), `${n} takes no browser lock`);
+  }
 });
