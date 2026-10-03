@@ -197,7 +197,7 @@ const RaceEngineer = (function () {
       // The wrong tread in EITHER direction — slicks in the rain and wets on a
       // drying track — read exactly as PitLane.think reads it for an AI car, so
       // the advice the player gets and the call the field makes cannot diverge.
-      const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
+      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness ? G.trackWetness() : undefined);
       const cautionLvl = G.cautionLevel ? G.cautionLevel() : 0;   // per step: the allocation-free read
       const pit = G.pits && G.pits.estimate(c);
       const armed = !!c.pitArmed || (c.pitState && c.pitState !== "none");

@@ -1,6 +1,6 @@
 ---
 name: pwa-cache-service-worker
-description: Use when editing sw.js, version.json, PWA offline install, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright failures caused by bumping version.json mid-run in Apex 26.
+description: "Use when editing sw.js, version.json, PWA offline install, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright failures caused by bumping version.json mid-run in Apex 26."
 ---
 
 # PWA cache and service worker
@@ -15,7 +15,9 @@ cache-first for immutable `?v=<sha256>` assets.
 **optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
 **DEFERRED** backends, `vendor/three-0.186.0`, other vendors, self-hosted fonts.
 The GLX files in it are promoted to REQUIRED at install (the fallback renderer:
-offline without it is "graphics unavailable"); TLX/WGX stay best-effort.
+offline without it is "graphics unavailable"); TLX and its vendor dependency are the critical optional pool before skipWaiting;
+WGX/scenery/fonts form a background optional pool. Required failures abort
+install; optional failures are recorded without making install incomplete.
 
 **Shell version guard.** Inline script at the top of `index.html` ("SHELL VERSION GUARD"):
 reads `<meta name="apex-build">`, fetches `version.json` no-store, and if the
@@ -24,14 +26,17 @@ deployed build is newer reloads once with `?b=<build>` (hash and query kept;
 `sw.js?v=<build>` after load+idle, so a new build is a new registration URL.
 Stale installed shell = this guard did not fire or `version.json` did not move.
 
-**Cache name.** `apex26-{build}` from `version.json`. `activate` deletes older
-`apex26-*` keys. Essential 404 aborts install; optional failures are
-swallowed.
+**Cache name.** `apex26-{build}` from `version.json`. `INSTALL_COMPLETE` records required success; `INSTALL_SETTLED` records
+completion of optional work. Activate retains older generations until settled,
+then deletes only numerically older `apex26-*` generations; newer caches are
+preserved. Essential 404 aborts install; optional failures are recorded.
 
-**Fetch.** Navigation + `version.json` = network-first (3 s → cache).
+**Fetch.** Ordinary navigation is network-first with a bounded cache fallback. Online
+`version.json` failure must not mask a newer generation with stale precache.
+A `?b=` shell-bust navigation bypasses generic stale-shell fallback.
 Everything else = cache-first (network-first on a dev host, where every tag reads
-`?v=dev`). Always refresh **content hashes AND the
-shell generation** together (`node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md))). Never bump `version.json`
+`?v=dev`). Deploy stamps **content hashes and shell generation** together; source tags
+stay `?v=dev`. Check with `node tools/gen/gen-shell.mjs --check`. Never bump `version.json`
 during a Playwright run.
 
 ## When to Use

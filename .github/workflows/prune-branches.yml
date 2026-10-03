@@ -15,7 +15,8 @@ name: Prune branches
 # deploy branch changes nothing), superseded (its added lines are already in
 # deploy), post-merge, pr-closed, unmerged — with the PR and the last CI run.
 # A branch is deleted only when it is merged or absorbed (nothing on it is
-# lost), or its verdict is listed in `also` (a person read the report), AND no
+# lost), or its verdict is listed in `also` (a person read the report; such a
+# branch is first pushed as the tag archive/<branch>, kept if that fails), AND no
 # open PR has it as its head AND it has been quiet for `min_age_days`.
 # claude/claims/* markers (who-is-on-it.mjs) go once quiet for a day. The
 # deploy branch, the default branch and gh-pages are never touched.
@@ -44,7 +45,7 @@ on:
         required: false
         default: "48"
       also:
-        description: "Also delete these audit verdicts, comma-separated: superseded, post-merge, pr-closed, no-history (blank = none)"
+        description: "Also delete these audit verdicts, archived as archive/<branch> tags first, comma-separated: superseded, post-merge, pr-closed, no-history, unmerged (blank = none)"
         required: false
         default: ""
 

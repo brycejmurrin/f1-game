@@ -64,9 +64,12 @@ test("the slug carries the SESSION, so two sessions on one branch never share a 
   // ...and the old slash-folding collision is gone for the same reason.
   assert.notEqual(claimSlug("claude/a/b", "s1"), claimSlug("claude/a--b", "s2"));
   assert.equal(claimSlug("main", "s1"), "main-s1");
-  // A box with no session id still gets a stable, filename-safe slug.
-  assert.equal(sessionId({}), "nosession");
-  assert.equal(sessionId({ CLAUDE_CODE_SESSION_ID: "abc-123/def!" }), "abc123def");
+  // Missing identity must never create a shared mutable "nosession" ref.
+  assert.equal(sessionId({}), null);
+  const id = sessionId({ APEX_SESSION_ID: "abc-123/def!" });
+  assert.match(id, /^[a-f0-9]{24}$/);
+  assert.equal(id, sessionId({ CODEX_THREAD_ID: "abc-123/def!" }));
+  assert.notEqual(id, sessionId({ APEX_SESSION_ID: "abc123def" }));
 });
 
 test("a live claim whose TEXT begins with the word released is not a tombstone", () => {

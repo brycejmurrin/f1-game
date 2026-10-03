@@ -1,6 +1,6 @@
 ---
 name: steward
-description: Use when driving a PR to green here — after a CI or Pages red (naming the failed test/assertion is ci-red-triage), a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: draft/ready dedupe (`cancelled` is normal), sync-pr.mjs over a hand merge, who-is-on-it.mjs before a shared red, what live means. Pre-push is check-changes.
+description: "Use when driving a PR to green here — after a CI or Pages red (naming the failed test/assertion is ci-red-triage), a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: draft/ready dedupe (`cancelled` is normal), sync-pr.mjs over a hand merge, who-is-on-it.mjs before a shared red, what live means. Pre-push is check-changes."
 ---
 
 # Driving a PR to green in Apex 26
@@ -21,8 +21,8 @@ ready cancels the fast run on the same `head_sha` seconds after it starts
 (ci.yml runs on push for the deploy branch only since 2026-09-24; before that
 a branch push and its PR run did the same). **A live sibling on
 that SHA is dedupe, not a red.** Do not re-run it and do not report it as a
-failure. (Dispatched, scheduled and deploy-branch-push runs each get their own
-`run_id` group on purpose, so they are never the sibling.)
+failure. (Dispatch/schedule use `run_id`; deploy-branch pushes use `github.sha`,
+so distinct pushed commits have distinct groups.)
 
 The other two look identical from the conclusion alone:
 
@@ -49,7 +49,8 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
 
 ## 2. A base merge is `sync-pr.mjs`, never a hand merge — and only when you must
 
-    node tools/ci/sync-pr.mjs <branch>          # …then --push when it is clean
+    node tools/ci/sync-pr.mjs <branch> --plan   # cached refs only; no conflict proof
+    node tools/ci/sync-pr.mjs <branch> --push   # fresh verified sync, when publication is intended
 
 **Do not sync on every tip move.** Branch protection (2026-09-30) requires
 the eight fast-tier checks green on the PR's own head, NOT an up-to-date
@@ -60,15 +61,18 @@ is already there. A green PR merges as it stands.
 
 Every base merge conflicts on `tests/data/ratchets.json` and the generated
 files; `sync-pr` cures both and a hand merge does not. It leaves you ON
-`sync-pr-<branch>` and pushes nothing without `--push` — recovery is in
+`sync-pr-<branch>` and pushes nothing without `--push` — publish already verified output using its printed manual push command, or
+inspect/rename an existing temp branch before a fresh sync. Recovery is in
 `check-changes` SKILL.md §After `sync-pr.mjs` (not references/deploy.md).
 
 **Hand-written files conflict (prose, a help sheet, a ratchet's FORM):**
 `sync-pr` runs `merge --abort`, prints `real conflicts … resolve by hand`
 (a `(moved to <path>)` tag = re-apply their edit there), and returns you to
 the branch you started on; `sync-pr-<branch>` is left as an unmerged copy of the
-PR head — delete it. Order: `sync-pr <branch> --plan` (names the files, runs
-nothing) → `who-is-on-it.mjs` if the base file is not yours → `git checkout
+PR head — inspect it before removal or rename. An existing temp branch makes
+a fresh sync refuse rather than delete unpublished output. Order:
+`sync-pr <branch> --plan` (cached refs; `conflicts:null`, `conflictsChecked:false`;
+no fetch or merge-tree) → `who-is-on-it.mjs` if the base file is not yours → `git checkout
 <branch> && git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides'
 intent in each hand-written file → generated leftovers at the source + `npm
 run gen` → `git add`/commit → `deploy.mjs --gate-only` → plain `git push`
@@ -140,3 +144,14 @@ ONE Playwright process, ONE group per batch, via `node tools/ci/test-bg.mjs
 hook-blocked). Never hand a subagent a browser run — report it unverified
 instead. Anchor a verdict on `grep -E '= run (passed|failed|timedout|interrupted)'`,
 never a looser pattern or `| tail` on a live log.
+
+## Host-neutral watch and claims
+
+Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts
+without a Claude session variable; do not share a `nosession` identity.
+If Monitor/subscribe_pr_activity/send_later are absent, run the watcher as one
+owned background command with a log, read events while doing independent work,
+and poll `ci-watch --sha <sha> --once` at checkpoints. Record missing subscription
+and reminder capabilities as unverified; do not claim an automation was armed.
+Check the active tool catalog with `doctor.mjs --catalog <file>`; upstream
+connector availability cannot be fixed by inventing tool results.
