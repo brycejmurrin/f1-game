@@ -837,12 +837,15 @@ const Car3D = (function () {
     const lift = Math.pow(aN, 0.85);
     const sweepN = Math.max(0, (sweep + 0.02) / 0.14);
     const finN = Math.max(0, (fin - 0.55) / 0.90);
-    // Grow UP from a low plank. tier0 = crown-0.02; tier4+extreme ≈ 1.34.
-    const topY = (REAR_TYRE_CROWN - 0.02) + 0.42 * lift
-      + 0.14 * sweepN * lift + 0.12 * finN * lift;
-    const sy = 0.22 + 0.48 * lift + 0.10 * sweepN * lift + 0.08 * finN * lift;
+    // Grow UP from a low plank. tier0 = crown-0.02; tier4+extreme ≈ 1.42.
+    // lift^1.15 stretches the top of the ladder so high (aN≈0.81) and extreme
+    // (aN=1) still step apart on the uncropped side frame at 7.2 m.
+    const topLift = Math.pow(lift, 1.15);
+    const topY = (REAR_TYRE_CROWN - 0.02) + 0.48 * topLift
+      + 0.18 * sweepN * topLift + 0.16 * finN * topLift;
+    const sy = 0.22 + 0.52 * topLift + 0.12 * sweepN * topLift + 0.10 * finN * topLift;
     const cy = topY - 0.015 - sy * 0.5;
-    const chord = 0.48 + 0.22 * lift;
+    const chord = 0.48 + 0.24 * topLift;
     const rearZ = -2.69, frontZ = rearZ + chord;
     const profile = (z, sectionCy, sectionSy) => ({
       z, cy: sectionCy, sy: sectionSy,
@@ -3285,56 +3288,57 @@ const Car3D = (function () {
       return [exhMetal[0]*0.55 + g[0]*0.45, exhMetal[1]*0.55 + g[1]*0.45,
               exhMetal[2]*0.55 + g[2]*0.45];
     };
-    const tipZ = exhTwin ? -2.28 : -2.20;
+    const tipZ = exhTwin ? -2.55 : -2.58;   // at/behind the rain-light plane so tips read from rear
     const exits = exhTwin ? [-EXH_OUT, EXH_OUT] : [0];
     if (exhTwin) {
-      addTube(out, [[0, EXH_Y, -2.00], [0, EXH_Y, -2.08]], exhR * 0.55, 8,
+      addTube(out, [[0, EXH_Y, -2.00], [0, EXH_Y, -2.10]], exhR * 0.55, 8,
               exhMetal, SURFACES.metal);
     }
     for (const cx of exits) {
       if (exhTwin) {
         const s = Math.sign(cx) || 1;
-        addTube(out, [[s * 0.08, EXH_Y, -2.05], [cx, EXH_Y, -2.14]], exhR * 0.85, 8,
+        addTube(out, [[s * 0.08, EXH_Y, -2.05], [cx, EXH_Y, -2.30]], exhR * 0.85, 8,
                 exhMetal, SURFACES.metal);
-        addTube(out, [[cx, EXH_Y, -2.12], [cx, EXH_Y, tipZ]], exhR, 8,
+        addTube(out, [[cx, EXH_Y, -2.28], [cx, EXH_Y, tipZ]], exhR, 8,
                 exhMetal, SURFACES.metal);
       } else {
+        // Single tip reaches the rear face so stock / megaphone are not buried
+        // ahead of the lamp (the chase-shot failure mode).
         addTube(out, [[0, EXH_Y, -2.04], [0, EXH_Y, tipZ]], exhR, 8, exhMetal, SURFACES.metal);
       }
       const flame = exhTwin ? fTwin : fuelFlame;
-      addTube(out, [[cx, EXH_Y, tipZ + 0.082], [cx, EXH_Y, tipZ + 0.007]],
-              exhR * (exhTwin ? 1.08 : 1.06), 8, heatOf(flame), SURFACES.metal);
+      addTube(out, [[cx, EXH_Y, tipZ + 0.10], [cx, EXH_Y, tipZ + 0.01]],
+              exhR * (exhTwin ? 1.10 : 1.08), 8, heatOf(flame), SURFACES.metal);
       addStationLoft(out, [
-        exhDia(cx, EXH_Y, tipZ + 0.06, exhR),
-        exhDia(cx, EXH_Y, tipZ, exhR),
+        exhDia(cx, EXH_Y, tipZ + 0.08, exhR),
+        exhDia(cx, EXH_Y, tipZ, exhR * (exhTwin ? 1.05 : 1.12)),
       ], exhMetal, null, SURFACES.metal);
-      addBox(out, cx, EXH_Y, tipZ + 0.012, exhR * 1.45, exhR * 1.45, 0.02,
+      addBox(out, cx, EXH_Y, tipZ + 0.008, exhR * 1.55, exhR * 1.55, 0.018,
              [0.05, 0.04, 0.04], SURFACES.carbon);
-      addBox(out, cx, EXH_Y, tipZ, exhR * (exhTwin ? 1.15 : 0.55),
-             exhR * (exhTwin ? 1.15 : 0.55), 0.014, glazeOf(flame), SURFACES.metal);
+      addBox(out, cx, EXH_Y, tipZ - 0.004, exhR * (exhTwin ? 1.25 : 0.90),
+             exhR * (exhTwin ? 1.25 : 0.90), 0.014, glazeOf(flame), SURFACES.metal);
     }
     if (exhTwin && (exhStyle.wastegate || 0) >= 1) {
-      addBox(out, 0, EXH_Y + exhR + 0.045, tipZ + 0.04, EXH_OUT * 2.05, 0.022, 0.040,
+      addBox(out, 0, EXH_Y + exhR + 0.055, tipZ + 0.02, EXH_OUT * 2.05, 0.028, 0.045,
              exhMetal, SURFACES.metal);
     }
     const exhFlare = Math.max(0, Math.min(1, exhStyle.flare || 0));
     if (exhFlare > 0) {
-      const flareMul = exhTwin ? 0.55 : 0.85;
+      // Megaphone: a WIDER mouth at the rear face, not a U-bracket over the lamp.
+      const flareMul = exhTwin ? 0.55 : 1.15;
       for (const cx of exits) {
         const tip = exhR * (1 + flareMul * exhFlare);
-        const z0 = tipZ + 0.04, z1 = tipZ - (exhTwin ? 0.04 : 0.055);
+        const z0 = tipZ + 0.06, z1 = tipZ - 0.025;
         if (!exhTwin) {
           addLoft(out, z0, 0, EXH_Y, exhR * 2, exhR * 2, z1, 0, EXH_Y, tip * 2, tip * 2,
                   exhFlareC, SURFACES.metal);
         }
         addStationLoft(out, [exhDia(cx, EXH_Y, z0, exhR), exhDia(cx, EXH_Y, z1, tip)],
                        exhFlareC, null, SURFACES.metal);
-        if (!exhTwin) {
-          addBox(out, 0, EXH_Y, z1 - 0.012, tip * 2.18, tip * 2.18, 0.018,
-                 [0.22, 0.22, 0.24], SURFACES.metal);
-          addBox(out, 0, EXH_Y, z1 - 0.018, tip * 1.45, tip * 1.45, 0.016,
-                 [0.05, 0.04, 0.04], SURFACES.carbon);
-        }
+        addBox(out, cx, EXH_Y, z1 - 0.010, tip * 2.10, tip * 2.10, 0.016,
+               [0.22, 0.22, 0.24], SURFACES.metal);
+        addBox(out, cx, EXH_Y, z1 - 0.016, tip * 1.55, tip * 1.55, 0.014,
+               [0.05, 0.04, 0.04], SURFACES.carbon);
       }
     }
     if (exhStyle.wrap) {
@@ -3394,7 +3398,7 @@ const Car3D = (function () {
         }
       }
     }
-    exhTipRForLamp = exhTwin ? exhR : (exhFlare > 0 ? exhR * (1 + 0.85 * exhFlare) : exhR);
+    exhTipRForLamp = exhTwin ? exhR : (exhFlare > 0 ? exhR * (1 + 1.15 * exhFlare) : exhR * 1.12);
 
     part("sharkFin");
     // liv.finShape picks the outline (FIN_SHAPES); "none" builds no blade at
@@ -3730,8 +3734,8 @@ const Car3D = (function () {
             DARK);
 
       const tipR = exhTipRForLamp;
-      const lampW = Math.min(0.055, tipR * 0.85);
-      const lampH = Math.min(0.070, tipR * 1.05);
+      const lampW = Math.min(0.042, tipR * 0.70);
+      const lampH = Math.min(0.052, tipR * 0.85);
       addSpan(out, { z: -2.47, x: 0, y: 0.50, w: 0.14, h: 0.19, t: 0.78 },
                    { z: -2.57, x: 0, y: 0.50, w: 0.115, h: 0.155, t: 0.62 }, DARK);
       addBox(out, 0, 0.50, -2.585, lampW, lampH, 0.03,
