@@ -25,9 +25,21 @@ import { createServer } from "node:http";
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { extname } from "node:path";
 import { launchChromium, sleep } from "../lib/harness.mjs";
+import { screenshotPresentedCanvas } from "../shot/probe-page.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
+
+// Soft-present / WebGL2: HeadlessChrome blits onto #game-soft. A bare
+// page.screenshot() of #game (or the viewport while soft is empty) used to
+// save the title/garage leftover as an "on-track" A/B. Pin GLX and wait for
+// a fresh present before every capture — same contract as campaign/capture.mjs.
+const CHROMIUM_ARGS = [
+  "--use-angle=swiftshader",
+  "--enable-unsafe-swiftshader",
+  "--enable-unsafe-webgpu",
+  "--disable-background-timer-throttling",
+];
 
 // ── Measurement regions (fractions of the 720x405 frame) ────────────────────
 // road: the tarmac band ahead of the car. fogwall: the distant haze block under
@@ -53,6 +65,10 @@ const SCENES = {
   monzaDay:    { track: "monza",       tod: "day",   wx: "dry",  frac: 0.30 },
   silvDay:     { track: "silverstone", tod: "day",   wx: "dry",  frac: 0.40 },
   zandRain:    { track: "zandvoort",   tod: "day",   wx: "rain", frac: 0.30 },
+  // B1b lighting grids (baked 2026-09-30; look-survey deferred). Campaign
+  // fracs are [0.05, 0.40, 0.75] — mid-lap eye-level matches the knob harness.
+  jerezNight:  { track: "jerez",       tod: "night", wx: "dry",  frac: 0.40 },
+  koreaDay:    { track: "korea",       tod: "day",   wx: "dry",  frac: 0.40 },
 };
 
 // ── The knob catalog ─────────────────────────────────────────────────────────
@@ -203,11 +219,11 @@ const KNOBS = [
     note: "prop emissive ramp at night (lit windows / lens glow level)" },
   // applyRaceSettings moved to js/lighting/atmosphere.js; this is its EXPLICIT-night
   // branch (raceTimeOfDay === "night"), which is what every *Night scene uses.
-  { id: "night.exposure", file: "js/lighting/atmosphere.js", scene: "qatarNight",
+  { id: "night.exposure", file: "js/lighting/atmosphere.js", scene: "jerezNight",
     find: "G.frame.exposure = (G.track && G.track.def && G.track.def.theme === \"street_night\") ? 0.86 : 0.90;",
     b:    "G.frame.exposure = (G.track && G.track.def && G.track.def.theme === \"street_night\") ? 1.05 : 1.10;",
     expect: { region: "frame", metric: "mean", dir: "+", minRel: 0.05 },
-    note: "explicit-night exposure — the master dark-stays-dark knob" },
+    note: "explicit-night exposure — master dark-stays-dark knob; A/B on jerez night-dry grid (B1b)" },
   { id: "night.bloomThresh", file: "js/game.js", scene: "vegasNight",
     find: "_thresh = 0.97;", b: "_thresh = 0.78;",
     expect: { region: "frame", metric: "bloomPct", dir: "+", minRel: 0.0 },
@@ -256,17 +272,51 @@ async function renderScene(browser, port, scene, outPath) {
   const page = await browser.newPage({ viewport: { width: 720, height: 405 } });
   const errs = [];
   page.on("console", (m) => { if (m.type() === "error") errs.push(m.text().slice(0, 90)); });
+  // Pin WebGL2 before first navigation — default TLX leaves soft-present unarmed
+  // on some heads and the viewport shot then reads as menu/garage leftovers.
+  await page.addInitScript(() => {
+    try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) { /* ignore */ }
+  });
   await page.goto(`http://127.0.0.1:${port}/`);
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+  await page.waitForFunction(() =>
+    window.__apex && document.querySelector("#game")?.getContext("webgl2"),
+    null, { timeout: 60000 });
   await page.evaluate((t) => window.__apex.race(t), scene.track);
   await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, null, { timeout: 25000 });
   await page.evaluate((t) => window.__apex.setTimeOfDay(t), scene.tod);
   await page.evaluate((w) => window.__apex.weather(w), scene.wx);
-  await page.evaluate((f) => window.__apex.park(f), scene.frac);
+  await page.evaluate((f) => {
+    const A = window.__apex;
+    A.hud(false);
+    A.park(f);
+  }, scene.frac);
   await sleep(2600);
   await page.evaluate((f) => window.__apex.eyeAt(f, 0.2, 1.35), scene.frac);
-  await sleep(1300);
-  await page.screenshot({ path: outPath, type: "jpeg", quality: 62 });
+  await sleep(400);
+  // Fresh soft-present blit, then read #game-soft (not a raw viewport shot).
+  const shot = await screenshotPresentedCanvas(page, {
+    path: outPath, type: "jpeg", quality: 62, awaitMs: 12000, timeout: 60000,
+  });
+  const meta = await page.evaluate(() => {
+    const info = window.__apex?.info?.() || {};
+    const carsetup = document.getElementById("carsetup");
+    const soft = document.getElementById("game-soft");
+    return {
+      track: info.track || null,
+      state: info.state || null,
+      tod: window.__apex?.setTimeOfDay?.() ?? null,
+      weather: window.__apex?.weather?.() ?? null,
+      backend: (typeof GLX !== "undefined" && GLX.backend) || null,
+      garageOpen: !!(carsetup && !carsetup.hidden),
+      softPresent: !!(soft && soft.width > 0 && soft.height > 0),
+      softSize: soft ? [soft.width, soft.height] : null,
+    };
+  });
+  meta.via = shot?.via || null;
+  writeFileSync(outPath.replace(/\.(jpe?g|png)$/i, "") + ".meta.json", JSON.stringify(meta, null, 2));
+  if (meta.garageOpen || meta.state === "menu") {
+    errs.push(`not-on-track: state=${meta.state} garageOpen=${meta.garageOpen} track=${meta.track}`);
+  }
   await page.close();
   return errs;
 }
@@ -501,9 +551,7 @@ async function main() {
       if (!vals.length) { console.error("sweep needs candidate values, e.g. sweep lamp.radius 24 30 34 40"); process.exit(2); }
       variants = vals.map((v) => ({ label: String(v), replacement: slot.make(v) }));
     }
-    const browser = await launchChromium({
-      args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
-    });
+    const browser = await launchChromium({ args: CHROMIUM_ARGS });
     const meterPage = await browser.newPage();
     const scene = SCENES[knob.scene];
     const { srv: baseSrv, port: basePort } = await startServer(null);
@@ -536,9 +584,7 @@ async function main() {
   const ids = rest.length && rest[0] !== "all" ? rest : KNOBS.map((k) => k.id);
   const knobs = ids.map((id) => KNOBS.find((k) => k.id === id) || (() => { throw new Error("unknown knob " + id); })());
 
-  const browser = await launchChromium({
-    args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
-  });
+  const browser = await launchChromium({ args: CHROMIUM_ARGS });
   const meterPage = await browser.newPage();
   const t0 = Date.now();
 
