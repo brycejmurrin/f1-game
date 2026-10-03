@@ -153,6 +153,7 @@ export const RULES = [
   [/^js\/game\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the loop: physics, AI, race logic"],
   [/^js\/physics\/consts\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
   [/^js\/physics\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
+  [/^js\/physics\/grip-steer\.js/, ["input", "steering-unit"], "own-state grip-steer cap + the steering sheet that hosts it"],
   [/^js\/audio\/driving-cues\.js/, ["steering-unit", "audio-unit"], "assist-gated braking tone + L/R corner calls"],
   [/^js\/physics\/body-attitude\.js/, ["ui"], "a visual-only layer"],
   // `sweeps` because debris-world's hazard query projects bodies back onto the

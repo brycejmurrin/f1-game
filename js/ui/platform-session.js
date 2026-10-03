@@ -5,7 +5,7 @@ const PlatformSession = (function () {
 function create(G, deps) {
 const { $, els, store } = G;
 const { MAX_RPM, IDLE_RPM } = PhysicsConsts;
-const { canvas, raceWakeLock, disarmProbeOnLeave, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn } = deps;
+const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn } = deps;
 function paintBuild() {
 // BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
 // own, so a stale shell (or a service worker serving a cached generation) can run
@@ -164,6 +164,7 @@ $("pm-phonepad").onclick = () => {
 function wireLifecycle() {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) disarmProbeOnLeave();
+  if (document.hidden && cancelMirrorPrep) cancelMirrorPrep();   // rAF stops; optional warm must not hold entry
   if (document.hidden && (G.state === "race" || G.state === "count")) setPaused(true, "hidden-tab");
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
@@ -181,7 +182,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && G.netPlay.active()) _netHiddenPump = setInterval(() => G.netPlay.tick(performance.now()), 500);
 });
 let _netHiddenPump = 0;
-window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); disarmProbeOnLeave(); });
+window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); disarmProbeOnLeave(); if (cancelMirrorPrep) cancelMirrorPrep(); });
 // LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
 // the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
 // or an overlay taking focus, left the car coasting off-line while the field

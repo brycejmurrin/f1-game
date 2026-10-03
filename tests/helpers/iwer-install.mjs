@@ -71,6 +71,60 @@ export async function waitXrReady(page, timeout = 60_000) {
   );
 }
 
+/**
+ * Wait while immersive-vr is presenting without using page timers / window.rAF.
+ *
+ * Playwright `page.waitForFunction({ polling })` re-arms via the *page*
+ * timer/`rAF`. Immersive XR suspends window.rAF (and can starve page timers);
+ * IWER still delivers `session.requestAnimationFrame`, so a frameCount waiter
+ * never re-samples → TimeoutError with a live session (CI 37083868797).
+ *
+ * Do NOT schedule our own `session.requestAnimationFrame` to wait either —
+ * IWER effectively serialises XR callbacks, so a lightweight waiter steals
+ * slots from the game's onXRFrame and frameCount stalls at 0–1. Poll
+ * `XrSession.frameCount()` from Node via CDP evaluate instead.
+ *
+ * Soft-GL first XR ticks are slow (~5 s/frame cold under Playwright +
+ * SwiftShader); allow up to 45 s for a small delta so ENTER VR still proves
+ * frames advance without hiding a zero-frame hang.
+ */
+export async function waitXrFrames(page, delta = 2, opts = {}) {
+  const timeout = opts.timeout ?? 45_000;
+  const interval = opts.interval ?? 200;
+  const need = (delta | 0) || 2;
+  const base = await page.evaluate(() => XrSession.frameCount());
+  const deadline = Date.now() + timeout;
+  let fc = base;
+  while (Date.now() < deadline) {
+    fc = await page.evaluate(() => XrSession.frameCount());
+    if (fc > base + need) return base;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  throw new Error(
+    `waitXrFrames(+${need}) timed out after ${timeout}ms (base=${base}, fc=${fc})`,
+  );
+}
+
+/**
+ * Wait until a page predicate is truthy, polling from Node (CDP evaluate).
+ * Use after EXIT VR (session clock gone) or for non-frame signals.
+ */
+export async function waitWhilePresenting(page, predicate, opts = {}) {
+  const timeout = opts.timeout ?? 10_000;
+  const interval = opts.interval ?? 100;
+  const arg = opts.arg;
+  const deadline = Date.now() + timeout;
+  let last = null;
+  while (Date.now() < deadline) {
+    last = await page.evaluate(predicate, arg);
+    if (last) return last;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  throw new Error(
+    `waitWhilePresenting timed out after ${timeout}ms (last=${JSON.stringify(last)})`,
+  );
+}
+
 /** Capture the game canvas via toDataURL inside rAF (page.screenshot can hang under software GL). */
 export async function captureCanvasDataUrl(page, selector = "#game") {
   return page.evaluate(async (sel) => {

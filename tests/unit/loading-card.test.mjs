@@ -333,11 +333,11 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   assert.match(body, /clearMenuScreens\(\);\s*if \(handoff\) RaceEntryProfile\.raiseHandoff\(loadingScreen\);/,
     "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
-  assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx\);/,
+  assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx, mirrorPass\.preparing\(\)\);/,
     "render() lowers it via afterPresent after a present that painted");
   assert.match(read("js/perf/race-entry-profile.js"), /function raiseHandoff\(screen\) \{[\s\S]*?screen\.handoff\(\);/,
     "raiseHandoff still calls loadingScreen.handoff()");
-  assert.match(read("js/perf/race-entry-profile.js"), /function afterPresent\(screen, gfx\) \{[\s\S]*?screen\.phase\(\) === "handoff"[\s\S]*?screen\.stop\(\)/,
+  assert.match(read("js/perf/race-entry-profile.js"), /function afterPresent\(screen, gfx, preparing = false\) \{[\s\S]*?screen\.phase\(\) === "handoff"[\s\S]*?if \(handoff && !warming\)[\s\S]*?screen\.stop\(\)/,
     "afterPresent still stops the card only when not warming");
   assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="handoff"\] #ld-card/, "the handoff phase shows the card");
 });
