@@ -30,7 +30,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.6.0";
+const SERVER_VERSION = "1.7.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -514,6 +514,55 @@ const CATALOG = [
       required: ["track"],
     },
   },
+  // 12 → 15 on 2026-10-02: the three read-only checks AGENTS.md rule 12 runs
+  // every session (status block for the PR body, who else is on a red, one CI
+  // poll after a push). Each answers in 0.1–2 s and only reads.
+  {
+    name: "apex_session_status",
+    week: 6,
+    kind: "tree",
+    description: "Tree — this branch's handoff block as JSON (sessions, commits vs the deploy branch, dirty/unpushed, each test log's verdict, a live run): the PR body's status section. Read-only. Skill: steward.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_who_is_on_it",
+    week: 6,
+    kind: "tree",
+    description: "Tree — recent pushes per branch, who touched these paths, live claims (--json): the check before fixing a red you did not cause. Read-only: never --claim / --release (run the CLI for those). Skill: steward.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        hours: { type: "number", description: "Look-back window in hours (1..168, default 6)." },
+        paths: { type: "array", items: { type: "string" }, description: "Repo-relative paths whose recent authors to list." },
+        noFetch: { type: "boolean", description: "Skip the git fetch (faster, may be stale)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_ci_status",
+    week: 6,
+    kind: "tree",
+    description: "Tree — ONE poll of a SHA's CI runs (ci-watch --once): per-job lines, a red's failing step, and the `= ci <verdict>` line parsed into out. Never waits — arm a Monitor on ci-watch.mjs for that. Read-only GETs. Skill: steward.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sha: { type: "string", description: "Commit SHA (7–40 hex) or HEAD (default)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
 ];
 
 function badArgs(message, fix) {
@@ -714,6 +763,36 @@ function buildArgv(name, args) {
       }
       return argv;
     }
+    case "apex_session_status":
+      return [...nodeTool("ci/session-status.mjs"), "--json"];
+    case "apex_who_is_on_it": {
+      const argv = [...nodeTool("ci/who-is-on-it.mjs"), "--json"];
+      if (args.hours != null) {
+        const h = Number(args.hours);
+        if (!Number.isFinite(h) || h < 1 || h > 168) badArgs(`hours must be 1..168 (got ${JSON.stringify(args.hours)})`);
+        argv.push("--hours", String(h));
+      }
+      if (args.noFetch) argv.push("--no-fetch");
+      if (args.paths != null) {
+        if (!Array.isArray(args.paths)) badArgs("paths must be an array of repo-relative paths");
+        for (const p of args.paths) {
+          // A path is a positional: one that starts with "-" would reach the
+          // CLI as a flag, and --claim / --release write refs.
+          if (typeof p !== "string" || !p || p.startsWith("-")) {
+            badArgs(`paths must be repo-relative paths, not flags (got ${JSON.stringify(p)})`);
+          }
+          argv.push(p);
+        }
+      }
+      return argv;
+    }
+    case "apex_ci_status": {
+      const sha = args.sha == null || args.sha === "" ? "HEAD" : String(args.sha);
+      if (sha !== "HEAD" && !/^[0-9a-f]{7,40}$/i.test(sha)) {
+        badArgs(`sha must be 7–40 hex characters or HEAD (got ${sha})`, 'Pass {"sha":"e21bcf4"}.');
+      }
+      return [...nodeTool("ci/ci-watch.mjs"), "--once", "--sha", sha];
+    }
     default:
       throw new Error(`no argv builder for ${name}`);
   }
@@ -724,20 +803,25 @@ function extraEnv(name, args) {
   return {};
 }
 
-function parseOut(stdout) {
+/** The CLI's JSON result: the whole stdout (any JSON value — apex_eval may
+ *  print a bare number), else the LAST block that opens with `{` or `[` at
+ *  column 0 and runs to the end (a text line, then pretty-printed JSON). The
+ *  fallback takes only an object or array: a line-by-line scan returned
+ *  `563.528` for apex_shot, an indented number from inside its JSON. */
+export function parseOut(stdout) {
   const text = String(stdout || "").trim();
   if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    const lines = text.split("\n").filter(Boolean);
-    for (let i = lines.length - 1; i >= 0; i--) {
-      try {
-        return JSON.parse(lines[i]);
-      } catch { /* continue */ }
-    }
-    return null;
+  const isDoc = (v) => v !== null && typeof v === "object";
+  try { return JSON.parse(text); } catch { /* fall through */ }
+  const lines = text.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!/^[{[]/.test(lines[i])) continue;
+    try {
+      const v = JSON.parse(lines.slice(i).join("\n"));
+      if (isDoc(v)) return v;
+    } catch { /* an earlier opener may hold the whole block */ }
   }
+  return null;
 }
 
 function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) {
@@ -773,6 +857,24 @@ function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) 
     body.ok = true;
   }
   return toolResult(body, { isError: !body.ok });
+}
+
+/** ci-watch prints text: lift its terminal `= ci <verdict> (…)` line, and
+ *  the per-job lines, into `out` so a caller need not regex stdout. */
+export function ciVerdict(stdout) {
+  const lines = String(stdout || "").split("\n").filter((l) => l.startsWith("[ci-watch]"));
+  const term = lines.map((l) => /\]\s*= ci (\S+)\s*(.*)$/.exec(l)).filter(Boolean).pop();
+  return {
+    verdict: term ? term[1] : null,
+    summary: term ? term[2].trim() : null,
+    jobs: lines.filter((l) => !/\]\s*= ci /.test(l)).map((l) => l.replace(/^\[ci-watch\]\s*/, "")),
+  };
+}
+function withCiVerdict(result) {
+  const body = JSON.parse(result.content[0].text);
+  if (!body.error) body.out = ciVerdict(body.stdout);
+  result.content[0].text = JSON.stringify(body);
+  return result;
 }
 
 function mockSuccess(name, argv, env = {}) {
@@ -886,6 +988,20 @@ function pinOk(name, argv) {
         "Run `node tools/shot/frame-report.mjs --fleet` / `--diff` from a shell for the fleet sweep.",
       );
     }
+  }
+  if (name === "apex_who_is_on_it" && (argv.includes("--claim") || argv.includes("--release"))) {
+    return refuse(
+      "pin_violated",
+      "apex_who_is_on_it is read-only — never --claim / --release",
+      "Run `node tools/ci/who-is-on-it.mjs --claim \"<text>\"` from a shell when you mean to claim.",
+    );
+  }
+  if (name === "apex_ci_status" && (!argv.includes("--once") || argv.includes("--timeout") || argv.includes("--pages"))) {
+    return refuse(
+      "pin_violated",
+      "apex_ci_status is one poll — --once, never a wait",
+      "Arm a Monitor on `node tools/ci/ci-watch.mjs --sha <sha> --timeout 30` to watch a run.",
+    );
   }
   if (argv.includes("--url")) {
     return refuse(
@@ -1107,9 +1223,14 @@ function dispatch(name, args = {}) {
     }
   }
 
+  if (name === "apex_ci_status") {
+    // ci-watch exits: 0 green / no run, 1 red, 2 cancelled, 124 still running
+    // — each a verdict, not a tool failure. 3 (no token / API down) is one.
+    return withCiVerdict(runSpawn(argv, { timeoutMs: 60000, allowExit: new Set([0, 1, 2, 124]), env }));
+  }
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
-    || name === "apex_frame_report";
+    || name === "apex_frame_report" || name === "apex_who_is_on_it";
   const timeoutMs = longTree ? 180000 : 60000;
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
@@ -1329,6 +1450,9 @@ function main(argv) {
   return 2;
 }
 
-Promise.resolve(main(process.argv.slice(2))).then((code) => {
-  if (process.argv[2] !== "serve" && process.argv[2] !== "serve-http") process.exitCode = code;
-});
+// Run only as the entry point, so a unit test can import parseOut.
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  Promise.resolve(main(process.argv.slice(2))).then((code) => {
+    if (process.argv[2] !== "serve" && process.argv[2] !== "serve-http") process.exitCode = code;
+  });
+}

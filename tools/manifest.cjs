@@ -195,7 +195,7 @@ const FULL = [
   "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
   "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
-  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=, default OFF)
+  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=0 opts out, default ON)
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/input.js",
@@ -301,6 +301,7 @@ const FULL = [
   "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
+  "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
   "js/lighting/tuner-panel.js",
   "js/camera/tuner-panel.js",
   "js/physics/brake-cue.js",
@@ -586,6 +587,7 @@ const HARD_EDGES = [
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
   ["js/physics/consts.js", "js/ui/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
   ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
+  ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval

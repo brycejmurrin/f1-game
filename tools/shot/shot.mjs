@@ -33,6 +33,7 @@ import {
   assertSafePathToken,
   resolveRepoDefault,
 } from "../lib/output-paths.mjs";
+import sharp from "sharp";
 import { awaitPresentedFrame, screenshotPresentedCanvas } from "./probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -171,18 +172,33 @@ try {
 
   await sleep(400);
 
-  await awaitPresentedFrame(page);
+  // A NEW frame, or no file. The first TLX present after the camera move
+  // measured 17.6 s on SwiftShader at 1280x720 (2026-10-02); the helper's 8 s
+  // default timed out silently and this saved the last blit — the menu's
+  // garage, or an all-transparent canvas — as the requested frame, exit 0.
+  const presentMs = Math.min(WAIT_MS, 90000);
+  if (await awaitPresentedFrame(page, presentMs) === false) {
+    throw new Error(`no new frame presented within ${presentMs / 1000} s of the camera move — ` +
+      "refusing to save the previous blit as this frame (raise --wait on a loaded box)");
+  }
   const shot = await screenshotPresentedCanvas(page, { path: out, skipAwait: true, timeout: 60000 }).catch(async () => {
     const buf = await page.screenshot({ path: out, timeout: 60000 });
     return { buf, bytes: buf.length };
   });
   const buf = shot.buf;
   const kb = (buf.length / 1024).toFixed(1);
-  const warn = buf.length < 5000 ? "  ⚠ looks blank (<5KB)" : "";
+  // Judge the pixels, not the byte count: an all-transparent 1280x720 PNG is
+  // 20 KB and passed the old "<5KB looks blank" check.
+  const st = await sharp(buf).stats();
+  const spread = Math.max(...st.channels.slice(0, 3).map((c) => c.stdev));
+  const opaque = st.channels.length < 4 || st.channels[3].max > 0;
+  if (!opaque || spread < 2) {
+    throw new Error(`wrote ${out} but it is blank (${opaque ? `pixel spread ${spread.toFixed(2)}` : "every pixel transparent"})`);
+  }
   const camWarn = safeCam !== "park" && !frame.dbgCamActive
     ? "  ⚠ free-cam inactive (chase?)"
     : "";
-  console.log(`wrote ${out} (${kb} KB)${warn}${camWarn}`);
+  console.log(`wrote ${out} (${kb} KB, pixel spread ${spread.toFixed(1)})${camWarn}`);
   console.log(JSON.stringify({ modelsPrefetch: modelInfo, frame }, null, 2));
 } catch (err) {
   console.error("shot failed:", err.message);
