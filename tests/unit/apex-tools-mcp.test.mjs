@@ -1011,6 +1011,15 @@ test("parseOut takes the trailing JSON block, never a number from inside it", as
   assert.equal(parseOut(""), null);
 });
 
+test("splitOut returns the JSON once: in out, and only the text before it in rest", async () => {
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const shot = 'wrote x.png (20 KB)\n{\n  "frame": 1\n}';
+  assert.deepEqual(splitOut(shot), { out: { frame: 1 }, rest: "wrote x.png (20 KB)" });
+  assert.deepEqual(splitOut('{"a":1}'), { out: { a: 1 }, rest: "" }, "pure JSON leaves no stdout");
+  assert.deepEqual(splitOut("plain text"), { out: null, rest: "plain text" }, "unparsed text is kept whole");
+  assert.deepEqual(splitOut(""), { out: null, rest: "" });
+});
+
 test("ciVerdict lifts ci-watch's terminal line into out", async () => {
   const { ciVerdict } = await import("../../tools/mcp/apex-tools-mcp.mjs");
   const v = ciVerdict([
