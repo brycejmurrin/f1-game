@@ -8,6 +8,7 @@
 // states BOTH what the skill does AND when to use it. Cursor subagent docs
 // require name + description + model (inherit | a model id).
 import test from "node:test";
+import { parseDocument } from "yaml";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -22,14 +23,18 @@ const MCP = path.join(SKILLS, "mcp-probe");
 const frontmatter = (text) => {
   const m = text.match(/^---\n([\s\S]*?)\n---/);
   assert.ok(m, "missing YAML frontmatter");
-  const out = {};
-  for (const line of m[1].split("\n")) {
-    // Keys may carry a hyphen or a capital (disable-model-invocation, maxTurns).
-    const kv = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
-    if (kv) out[kv[1]] = kv[2].trim();
-  }
+  const doc = parseDocument(m[1]);
+  assert.deepEqual(doc.errors.map(e => e.message), [], "frontmatter must be valid YAML");
+  const out = doc.toJS();
+  assert.ok(out && typeof out === "object" && !Array.isArray(out), "frontmatter must be a mapping");
   return out;
 };
+
+test("real YAML validation rejects colon-space descriptions and duplicate metadata", () => {
+  assert.throws(() => frontmatter("---\nname: demo\ndescription: Use when overrides: this example\n---"), /valid YAML/);
+  assert.throws(() => frontmatter("---\nname: demo\nname: other\ndescription: Use when needed\n---"), /valid YAML/);
+  assert.equal(frontmatter('---\nname: demo\ndescription: "Use when overrides: this example"\n---').description, "Use when overrides: this example");
+});
 
 test("mcp-probe SKILL.md stays a thin index (not the war-story dump)", () => {
   const skill = fs.readFileSync(path.join(MCP, "SKILL.md"), "utf8");
@@ -157,14 +162,9 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
     assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
   }
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  // Count tracks disk: webgpu-debug returned with the backends; keep the
-  // assertion message honest so a drift failure does not cite a stale 25.
-  // 27 since 2026-09-22: `steward` carries the handful of places this repo
-  // OVERRIDES generic PR stewardship (the designed draft/ready dedupe, sync-pr over
-  // a hand merge, who-is-on-it before a red on the shared deploy branch). It is
-  // an overrides list, not a second copy of AGENTS.md — that is the condition
-  // on which it earns its 77 always-on words in agent-config's budget.
-  assert.equal(dirs.length, 27, `expected 27 skills, got ${dirs.length}`);
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/check/skill-smoke-recipes.json"), "utf8"));
+  assert.deepEqual(dirs.map(d => d.name).sort(), catalog.recipes.map(r => r.skill).sort(),
+    "every canonical skill needs one bounded smoke recipe");
   // cross-backend-parity was a 15-line pointer at the renderers doc; that doc
   // was absorbed into docs/ARCHITECTURE.md in Phase 5 and the section moved
   // with it (docs/RENDERERS.md is a redirect stub now).
@@ -318,7 +318,7 @@ test("every custom subagent declares name, description, and model", () => {
     assert.equal(fm.name, id, `${f}: name must match the filename`);
     assert.ok(fm.description, `${f}: description is required`);
     assert.equal(fm.model, TIER[f], `${f}: model must be the documented tier (${TIER[f]})`);
-    assert.match(fm.maxturns || fm.maxTurns || "", /^[0-9]+$/, `${f}: maxTurns bounds a runaway agent`);
+    assert.match(String(fm.maxturns || fm.maxTurns || ""), /^[0-9]+$/, `${f}: maxTurns bounds a runaway agent`);
     // Cursor reads is_background, Claude Code reads background — both or neither.
     assert.equal(fm.background, fm.is_background, `${f}: background and is_background must agree`);
     // One prohibition line replaces the five verbatim blocks (2026-09).
@@ -406,7 +406,7 @@ test("readonly review agents stay --fast and never start Playwright", () => {
     const text = fs.readFileSync(file, "utf8");
     const fm = frontmatter(text);
     assert.equal(fm.name, id);
-    assert.equal(fm.readonly, "true", `${id} must be readonly`);
+    assert.equal(fm.readonly, true, `${id} must be readonly`);
     assert.doesNotMatch(fm.tools || "", /\b(Write|Edit|MultiEdit|NotebookEdit)\b/,
       `${id}: readonly is Cursor's field; Claude Code enforces it through tools:`);
     assert.match(fm.model, /^(inherit|haiku|sonnet)$/);

@@ -286,6 +286,7 @@ function makeTimers() {
       return n;
     },
     pending: () => pending.size,
+    clear: () => pending.clear(),
   };
   return api;
 }
@@ -591,85 +592,95 @@ async function createGame(opts) {
   if (typeof opts.onSandbox === "function") opts.onSandbox(sandbox, ctx);
   const onRej = (reason) => { record.rejections.push(String(reason && reason.message || reason)); };
   process.on("unhandledRejection", onRej);
+  let closed = false;
+  const resourceSnapshot = () => ({ closed, timers: timers.pending(), rafFrames: world.rafQueue.length,
+    rejectionListeners: process.listeners("unhandledRejection").includes(onRej) ? 1 : 0 });
+  const close = () => { closed = true; process.off("unhandledRejection", onRej); timers.clear(); world.rafQueue.length = 0; };
+  try {
+    const t0 = performance.now();
+    let bootPromise = null;
+    for (const f of MANIFEST.FULL) {
+      if (SKIP.has(f)) continue;
+      const r = runFile(ctx, f, record);
+      if (f === MANIFEST.PATHS.GAME) bootPromise = r;
+    }
+    // The loop above is fully SYNCHRONOUS — game.js's async IIFE has not resumed
+    // past its first await yet — so this lands before any draw could build a car.
+    if (opts.carMeshes === false) stubCarMeshes(ctx, record);
+    // The game IIFE is async: it resolves after bootAgentSurface() (LAZY_AGENT
+    // + js/net through the script stub above) and raceAssets().
+    if (bootPromise && typeof bootPromise.then === "function") {
+      await Promise.race([bootPromise, settle(() => sandbox.__apex != null, 4000)]);
+    }
+    await settle(() => sandbox.__apex != null, 4000);
+    // raceAssets() (not awaited by boot) injects the boot circuit's scenery
+    // closure on the next turns. The FIRST __apex call builds that circuit
+    // (lazyTrackEnsure), so give the closure its turns to land or the build is
+    // bare — and a bare build is a different physics world: its collidable
+    // props are gone (measured: "steady corner load" diverged at step 75).
+    const bootId = seed.trackId || (sandbox.Tracks && sandbox.Tracks.LIST[0] && sandbox.Tracks.LIST[0].id);
+    if (bootId) await settle(() => !!(sandbox.TrackScenery && sandbox.TrackScenery[bootId]), 200);
+    const bootMs = performance.now() - t0;
+    if (!sandbox.__apex) {
+      const err = new Error("game-vm: __apex never appeared — boot did not reach bootAgentSurface()");
+      err.record = record;
+      throw err;
+    }
 
-  const t0 = performance.now();
-  let bootPromise = null;
-  for (const f of MANIFEST.FULL) {
-    if (SKIP.has(f)) continue;
-    const r = runFile(ctx, f, record);
-    if (f === MANIFEST.PATHS.GAME) bootPromise = r;
+    const apex = sandbox.__apex;
+    const handle = {
+      apex, ctx, sandbox, record, bootMs, trackMs: 0,
+      get G() { return G; },
+      // Same shape the specs use: race(id, tod, wx) → wait info().track → go().
+      async race(id, tod, wx, opts) {
+        const t1 = performance.now();
+        // startRace() is async (it awaits the circuit's scenery closure), and
+        // apex.race() does not hand its promise back. The browser fixture polls
+        // info().track != null, which is already true on a page that raced
+        // before — here the field is the tell: makeCars() replaces G.cars, so a
+        // new identity means startRace() ran to completion for THIS call.
+        const carsBefore = G ? G.cars : null;
+        const r = apex.race(id || "monza", tod || "day", wx || "dry", opts);
+        if (!r) throw new Error("game-vm: unknown circuit " + id);
+        const ok = await settle(() => {
+          const i = apex.info();
+          if (!i || i.track !== r.track) return false;
+          return !G || G.cars !== carsBefore;
+        }, 4000);
+        if (!ok) throw new Error("game-vm: track never built for " + id);
+        apex.go();
+        handle.trackMs = performance.now() - t1;
+        return r;
+      },
+      step: (n, dt) => apex.step(dt != null ? dt : 1 / 60, n != null ? n : 1),
+      // AI-ONLY FIELD. A VM race has a player with no input: it sat PARKED on its
+      // grid box all race, a blocker the AI attacked 7-10 times a race (11-21 % of
+      // passes within 60 m of it) and the leading human the rubber band banded
+      // the field toward. Hand the car to the AI (finishDelay then waits for the
+      // first finisher, not the human) and RETIRE it: a retired car is out of
+      // `ranked`, so out of every traffic scan, collision and tow. Call after
+      // race(); returns the removed car (null when there is no player).
+      aiOnly() {
+        const i = G ? G.cars.findIndex((c) => c.isPlayer || c.human) : -1;
+        if (i < 0) return null;
+        apex.carRole(i, { human: false });
+        apex.retire(i, "bench");
+        return G.cars[i];
+      },
+      settle,
+      flushTimers: (onlyDue) => timers.flush(onlyDue),
+      pumpFrame: (now) => { const q = world.rafQueue.splice(0); for (const fn of q) fn(now != null ? now : performance.now()); return q.length; },
+      resourceSnapshot,
+      close,
+    };
+    if (opts.track) await handle.race(opts.track, opts.tod, opts.wx);
+    return handle;
+  } catch (error) {
+    close();
+    if (!error.record) error.record = record;
+    error.resources = resourceSnapshot();
+    throw error;
   }
-  // The loop above is fully SYNCHRONOUS — game.js's async IIFE has not resumed
-  // past its first await yet — so this lands before any draw could build a car.
-  if (opts.carMeshes === false) stubCarMeshes(ctx, record);
-  // The game IIFE is async: it resolves after bootAgentSurface() (LAZY_AGENT
-  // + js/net through the script stub above) and raceAssets().
-  if (bootPromise && typeof bootPromise.then === "function") {
-    await Promise.race([bootPromise, settle(() => sandbox.__apex != null, 4000)]);
-  }
-  await settle(() => sandbox.__apex != null, 4000);
-  // raceAssets() (not awaited by boot) injects the boot circuit's scenery
-  // closure on the next turns. The FIRST __apex call builds that circuit
-  // (lazyTrackEnsure), so give the closure its turns to land or the build is
-  // bare — and a bare build is a different physics world: its collidable
-  // props are gone (measured: "steady corner load" diverged at step 75).
-  const bootId = seed.trackId || (sandbox.Tracks && sandbox.Tracks.LIST[0] && sandbox.Tracks.LIST[0].id);
-  if (bootId) await settle(() => !!(sandbox.TrackScenery && sandbox.TrackScenery[bootId]), 200);
-  const bootMs = performance.now() - t0;
-  if (!sandbox.__apex) {
-    process.off("unhandledRejection", onRej);
-    const err = new Error("game-vm: __apex never appeared — boot did not reach bootAgentSurface()");
-    err.record = record;
-    throw err;
-  }
-
-  const apex = sandbox.__apex;
-  const handle = {
-    apex, ctx, sandbox, record, bootMs, trackMs: 0,
-    get G() { return G; },
-    // Same shape the specs use: race(id, tod, wx) → wait info().track → go().
-    async race(id, tod, wx, opts) {
-      const t1 = performance.now();
-      // startRace() is async (it awaits the circuit's scenery closure), and
-      // apex.race() does not hand its promise back. The browser fixture polls
-      // info().track != null, which is already true on a page that raced
-      // before — here the field is the tell: makeCars() replaces G.cars, so a
-      // new identity means startRace() ran to completion for THIS call.
-      const carsBefore = G ? G.cars : null;
-      const r = apex.race(id || "monza", tod || "day", wx || "dry", opts);
-      if (!r) throw new Error("game-vm: unknown circuit " + id);
-      const ok = await settle(() => {
-        const i = apex.info();
-        if (!i || i.track !== r.track) return false;
-        return !G || G.cars !== carsBefore;
-      }, 4000);
-      if (!ok) throw new Error("game-vm: track never built for " + id);
-      apex.go();
-      handle.trackMs = performance.now() - t1;
-      return r;
-    },
-    step: (n, dt) => apex.step(dt != null ? dt : 1 / 60, n != null ? n : 1),
-    // AI-ONLY FIELD. A VM race has a player with no input: it sat PARKED on its
-    // grid box all race, a blocker the AI attacked 7-10 times a race (11-21 % of
-    // passes within 60 m of it) and the leading human the rubber band banded
-    // the field toward. Hand the car to the AI (finishDelay then waits for the
-    // first finisher, not the human) and RETIRE it: a retired car is out of
-    // `ranked`, so out of every traffic scan, collision and tow. Call after
-    // race(); returns the removed car (null when there is no player).
-    aiOnly() {
-      const i = G ? G.cars.findIndex((c) => c.isPlayer || c.human) : -1;
-      if (i < 0) return null;
-      apex.carRole(i, { human: false });
-      apex.retire(i, "bench");
-      return G.cars[i];
-    },
-    settle,
-    flushTimers: (onlyDue) => timers.flush(onlyDue),
-    pumpFrame: (now) => { const q = world.rafQueue.splice(0); for (const fn of q) fn(now != null ? now : performance.now()); return q.length; },
-    close: () => { process.off("unhandledRejection", onRej); },
-  };
-  if (opts.track) await handle.race(opts.track, opts.tod, opts.wx);
-  return handle;
 }
 
 module.exports = { createGame, settle, ROOT, SKIP };

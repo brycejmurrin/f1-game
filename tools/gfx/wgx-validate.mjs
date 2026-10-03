@@ -38,22 +38,52 @@
 
 import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import * as espree from "espree";
 import { parseArgs } from "node:util";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
+// Parse descriptors, so comments or unrelated depth state cannot satisfy the gate.
+export function skyDepthErrors(source) {
+  const found = new Map(), errors = [];
+  const ast = espree.parse(source, { ecmaVersion: "latest", sourceType: "script" });
+  const prop = (obj, key) => obj?.type === "ObjectExpression" ? obj.properties.find((p) => (p.key?.name || p.key?.value) === key)?.value : null;
+  function walk(node) {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "AssignmentExpression" && ["skyPipeline", "skyPipelineMS"].includes(node.left?.name)
+        && node.right?.type === "CallExpression" && node.right.callee?.object?.name === "device"
+        && node.right.callee?.property?.name === "createRenderPipeline") {
+      const name = node.left.name;
+      found.set(name, (found.get(name) || 0) + 1);
+      const depth = prop(node.right.arguments[0], "depthStencil");
+      if (prop(depth, "depthCompare")?.value !== "less-equal" || prop(depth, "depthWriteEnabled")?.value !== false)
+        errors.push(`${name} must use depthCompare: less-equal and depthWriteEnabled: false`);
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(walk);
+      else if (value && typeof value === "object") walk(value);
+    }
+  }
+  walk(ast);
+  for (const name of ["skyPipeline", "skyPipelineMS"]) if (found.get(name) !== 1) errors.push(`Expected exactly one ${name} descriptor, found ${found.get(name) || 0}`);
+  return errors;
+}
+
+async function main() {
 const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   lite: { type: "boolean" }, "no-rg11b10": { type: "boolean" },
-  static: { type: "boolean" }, "lax-uniformity": { type: "boolean" },
+  static: { type: "boolean" }, help: { type: "boolean", short: "h" }, "lax-uniformity": { type: "boolean" },
   frames: { type: "string", default: "60" },
 } });
+if (values.help) { console.log("Usage: wgx-validate.mjs [trackId] [--static] [--lite] [--frames 1..3600] [--no-rg11b10] [--lax-uniformity]"); return; }
 if (positionals.length > 1) throw new Error("Expected at most one trackId");
 const track = positionals[0] || "montreal";
+if (!/^[a-z0-9_]+$/.test(track) || !existsSync(join(ROOT, `js/circuits/${track}.js`))) throw new Error(`Unknown trackId: ${track}`);
 const lite = !!values.lite;
 const noRg11b10 = !!values["no-rg11b10"];
 const staticOnly = !!values.static;
@@ -61,7 +91,7 @@ const staticOnly = !!values.static;
 // --lax-uniformity restores Dawn's warning-only default to bisect a red run.
 const uniformityError = !values["lax-uniformity"];
 const frames = Number(values.frames);
-if (!Number.isSafeInteger(frames) || frames < 1) throw new Error("--frames must be a positive integer");
+if (!Number.isSafeInteger(frames) || frames < 1 || frames > 3600) throw new Error("--frames must be an integer in [1, 3600]");
 
 // Source invariants the Dawn pass cannot see on a software adapter (it forces
 // MSAA 1) and cannot see at all for legal-but-wrong pipeline state (sky
@@ -99,10 +129,16 @@ function staticCheck() {
   // the old \w+-only sky regex from spanning to it — match less-equal properly).
   const wgx = WGSL_FILES.map((rel) => readFileSync(join(ROOT, rel), "utf8")).join("\n");
   const chunks = readFileSync(join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
-  const sky = [...wgx.matchAll(/skyPipeline\w*\s*=\s*device\.createRenderPipeline\(\{[\s\S]*?depthCompare:\s*"([\w-]+)"/g)];
-  for (const m of sky) {
-    if (m[1] === "always") fail("sky pipeline depthCompare is \"always\" — late sky erases the world; must be less-equal");
+  let skyChecked = false;
+  for (const rel of WGSL_FILES) {
+    const source = readFileSync(join(ROOT, rel), "utf8");
+    if (rel === "js/render/webgpu/wgx.js") {
+      skyChecked = true;
+      try { for (const error of skyDepthErrors(source)) fail(error); }
+      catch (e) { fail(`Sky descriptors could not be parsed: ${e.message}`); }
+    }
   }
+  if (!skyChecked) fail("WGX roster has no sky pipeline owner");
   if (/MSAA_COUNT\s*=\s*[^;\n]*\b2\b/.test(wgx) || /sampleCount:\s*2\b/.test(wgx)) {
     fail("MSAA sampleCount 2 is not a legal WebGPU value (only 1 or 4)");
   }
@@ -211,7 +247,7 @@ try {
     const out = {};
     try { out.env = __apex.diag({ download: false }).env; } catch (e) { out.env = { error: String(e) }; }
     try { out.gpuErrors = window.WGX && WGX.gpuErrors ? WGX.gpuErrors() : null; } catch (e) { out.gpuErrors = String(e); }
-    try { out.lastFailure = (window.WGX && WGX.lastFailure) || null; } catch (_) { out.lastFailure = null; }
+    try { out.lastFailure = (window.WGX && typeof WGX.lastFailure === "function" ? WGX.lastFailure() : null); } catch (_) { out.lastFailure = null; }
     // A lost device shows up as createMesh alloc failures on tiny buffers in
     // the gfx ring — Chrome's "size (N) is too large" wording is misleading.
     try {
@@ -238,6 +274,7 @@ try {
     msaa: state.env && state.env.msaa,
     hdr: state.env && state.env.hdr,
     gpuErrors: state.gpuErrors,
+    lastFailure: state.lastFailure,
     wgslParseErrors: parseErrLines.length,
     deviceLostHint: state.deviceLostHint || false,
     sceneCoveragePct: state.coveragePct || null,
@@ -252,3 +289,6 @@ try {
   await shutdown();
 }
 process.exit(failures ? 1 : 0);
+
+}
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

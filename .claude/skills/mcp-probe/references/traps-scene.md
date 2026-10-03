@@ -139,4 +139,3 @@ and confirm the number moves (+1200) — because two equal readings look identic
 whether the geometry is absent or your edit simply isn't being read. Note also
 that MOVING a prop never changes the count, so relocation tests prove nothing
 about emission; only add/remove does.
-

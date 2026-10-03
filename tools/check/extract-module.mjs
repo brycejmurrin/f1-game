@@ -26,12 +26,21 @@ if (!file || !startS || !endS) {
   process.exit(1);
 }
 const args = {};
-for (let i = 0; i < rest.length; i += 2) args[rest[i]] = rest[i + 1];
+for (let i = 0; i < rest.length; i += 2) {
+  if (!["--mutable", "--out", "--g-out"].includes(rest[i]) || !rest[i + 1] || rest[i + 1].startsWith("--")) {
+    console.error(`Unknown option or missing value: ${rest[i]}`); process.exit(1);
+  }
+  args[rest[i]] = rest[i + 1];
+}
 const mutable = new Set((args["--mutable"] || "").split(",").filter(Boolean));
 
 const lines = readFileSync(file, "utf8").split("\n");
-const start = parseInt(startS, 10), end = parseInt(endS, 10);
+const start = Number(startS), end = Number(endS);
+if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start || end > lines.length) {
+  console.error(`Line range must be positive integers with start <= end <= ${lines.length}`); process.exit(1);
+}
 let block = lines.slice(start - 1, end).join("\n");
+if (!block.trim()) { console.error("Requested range contains no source"); process.exit(1); }
 
 // A bare statement list parses fine as a program; expressions/object bodies
 // would need wrapping — caller passes whole functions/statements, so parse raw.

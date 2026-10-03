@@ -42,9 +42,19 @@ import fs from "node:fs";
 // and merged heads are auto-deleted since 2026-10-02); a branch with a commit
 // in the last two days may be someone's work in progress. claude/claims/*
 // markers are prune-branches.mjs's age rule, never surveyed. --all widens it.
+// WIDENED 2026-10-03: a branch whose newest PR was CLOSED UNMERGED at least
+// SURVEY_QUIET_HOURS ago is surveyed too — nobody reopened it, so nothing else
+// would ever decide it (its verdict is usually pr-closed). The claims board
+// (who-is-on-it.mjs) is coordination state, never surveyed.
 export const SURVEY_QUIET_HOURS = 48;
+export const NEVER_SURVEYED = /^claude\/claims(\/|-board$)/;
 export function inSurvey(b, { prs = new Map(), now = Math.floor(Date.now() / 1000), quietHours = SURVEY_QUIET_HOURS } = {}) {
-  if (/^claude\/claims\//.test(b.name) || prs.has(b.name)) return false;
+  if (NEVER_SURVEYED.test(b.name)) return false;
+  const pr = prs.get(b.name);
+  if (pr) {
+    const closedAt = Date.parse(pr.at) / 1000;
+    if (pr.state !== "closed" || !Number.isFinite(closedAt) || now - closedAt < quietHours * 3600) return false;
+  }
   return Number.isFinite(b.time) && now - b.time >= quietHours * 3600;
 }
 
@@ -223,7 +233,7 @@ export function parseRefs(text) {
   return out;
 }
 
-export const surveyScope = (h) => `Surveyed: branches that never had a pull request and have had no commit for ${h}+ hours.`;
+export const surveyScope = (h) => `Surveyed: branches that never had a pull request, or whose last one closed unmerged ${h}+ hours ago, and have had no commit for ${h}+ hours.`;
 
 export function readJson(file) { return file ? JSON.parse(fs.readFileSync(file, "utf8")) : []; }
 
@@ -236,7 +246,7 @@ export function main(argv = process.argv.slice(2)) {
   if (!all && !arg("--prs", null)) { console.error("branch-audit: the survey needs --prs (an unknown PR set would survey every branch) — or pass --all"); return 2; }
   const quietHours = Number(arg("--quiet-hours", String(SURVEY_QUIET_HOURS)));
   const rows = audit(branches, { base, prs, runs: indexRuns(readJson(arg("--runs", null))),
-    minAgeDays: Number(arg("--min-age-days", "1")), skip: (n) => /^claude\/claims\//.test(n),
+    minAgeDays: Number(arg("--min-age-days", "1")), skip: (n) => NEVER_SURVEYED.test(n),
     survey: all ? null : (b) => inSurvey(b, { prs, quietHours }) });
   const md = renderMarkdown(rows, base, { scope: all ? "" : surveyScope(quietHours) });
   if (arg("--report", null)) fs.writeFileSync(arg("--report"), md);

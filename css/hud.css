@@ -125,7 +125,7 @@
   position: absolute;
   /* BESIDE the minimap, top-left cluster, the two readouts STACKED — ahead over
      behind, which is the order they sit in on the road.
-     The horizontal anchor is the map: 130px is minimap left (10) + width (112) +
+     The horizontal anchor is the map: 146px is minimap left (10) + width (128) +
      an 8px gap, and both responsive overrides below re-derive it wherever the
      minimap resizes. Because this element rides `zoom: var(--hud-scale)` (see
      the group rule above) that constant tracks the map at every HUD SIZE for
@@ -145,7 +145,7 @@
      one; docking below `.hud-top` does clear at every scale, and was tried, but
      it breaks up the top-left cluster. */
   top: calc(8px + var(--sat) / var(--hud-z));
-  left: calc(130px + var(--sal) / var(--hud-z));
+  left: calc(146px + var(--sal) / var(--hud-z));
   /* ADAPTIVE SIZE. 12px is the base — below --fs-micro (14px, the token scale's
      floor) and deliberately so: that scale is calibrated for menu chrome a
      stopped player reads, while this is a peripheral glance during a lap, in
@@ -421,53 +421,12 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
    caught at merge by the guard in tests/unit/css-layers.test.mjs. */
 #hud-tyre[hidden] { display: none; }
 #hud-tyre { width: 130px; display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3); }
-/* FOUR CORNER TEMP CELLS + ΔT (js/ui/hud-tyres.js). Runtime DOM under #hud-tyre.
-   Bands use existing semantic tokens — COLOUR VISION (data-cvd) remaps them. */
-#hud-tyre-corners {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: calc(var(--gap) / 6);
-  width: 100%;
-  order: 3;
-  flex: 1 1 100%;
-}
-#hud-tyre-corners > span {
-  font-family: var(--font-hud);
-  font-size: calc(var(--fs-micro) * 0.85 * var(--hud-text-boost, 1));
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-  line-height: 1.2;
-  padding: calc(var(--gap) / 12) calc(var(--gap) / 6);
-  border-radius: var(--r-sm);
-  background: color-mix(in oklab, var(--faster) 35%, var(--carbon));
-  color: var(--look-hud-ink);
-  text-shadow: var(--hud-halo);
-}
-#hud-tyre-corners > span[data-band="cold"] {
-  background: color-mix(in oklab, var(--sec-best) 55%, var(--carbon));
-}
-#hud-tyre-corners > span[data-band="ok"] {
-  background: color-mix(in oklab, var(--faster) 45%, var(--carbon));
-}
-#hud-tyre-corners > span[data-band="hot"] {
-  background: color-mix(in oklab, var(--slower) 55%, var(--carbon));
-}
-#hud-tyre-delta {
-  order: 4;
-  flex: 1 1 100%;
-  text-align: center;
-  font-family: var(--font-hud);
-  font-size: calc(var(--fs-micro) * var(--hud-text-boost, 1));
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--dim);
-  text-shadow: var(--hud-halo);
-}
-#hud-tyre-delta:empty { display: none; }
-#hud-tyre-delta[data-sign="cold"] { color: var(--sec-best); }
-#hud-tyre-delta[data-sign="ok"] { color: var(--faster); }
-#hud-tyre-delta[data-sign="hot"] { color: var(--slower); }
+/* TYRE TEMPERATURE (js/ui/hud-tyres.js): one state painted on the compound
+   letter — cold / working / hot vs the compound window. Semantic tokens, so
+   COLOUR VISION (data-cvd) remaps them. Declared before the pit rules below,
+   which win at equal specificity while the car is in the lane or the box. */
+#hud-tyre[data-temp="cold"] #hud-tyre-code { color: var(--sec-best); }
+#hud-tyre[data-temp="hot"] #hud-tyre-code { color: var(--slower); }
 /* Live lap DELTA chip (runtime #hud-delta in .hud-top). */
 #hud-delta .hud-value { font-variant-numeric: tabular-nums; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
@@ -679,7 +638,7 @@ body.hud-met-compact #hud-tyre { display: none !important; }
   position: absolute;
   left: calc(10px + var(--sal) / var(--hud-z));
   top: calc(8px + var(--sat) / var(--hud-z));
-  width: 112px; height: 112px;
+  width: 128px; height: 128px;
   opacity: 0.90;
   background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
@@ -909,8 +868,8 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    600). Insets still divide by --hud-z. Do not redeclare #hud-sectors top. */
 body[data-density="compact"] .hud-top { gap: calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-box { padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.875); }
-body[data-density="compact"] #minimap { width: 96px; height: 96px; }
-body[data-density="compact"] .hud-gaps { left: calc(114px + var(--sal) / var(--hud-z)); }
+body[data-density="compact"] #minimap { width: 110px; height: 110px; }
+body[data-density="compact"] .hud-gaps { left: calc(128px + var(--sal) / var(--hud-z)); }
 body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 body[data-density="compact"] #hud-flag {
@@ -1155,7 +1114,7 @@ body[data-density="compact"]:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-
   right: auto;
   /* CLEAR THE MAP, MEASURED. --gm-top guesses `80px * --hud-z-top` capped at
      120, which is 92px at HUD SIZE 100 — while #minimap's real bottom is
-     8px + 112px = 120px. So the panel painted 28px INTO the map, every time,
+     8px + 112px = 120px (128 + 8 = 136 since the map grew). So the panel painted 28px INTO the map, every time,
      on the one side the map is on. Reported from a phone with the map's lower
      third covered.
      --hud-left-px is that column's occupied bottom MEASURED by fitHud off
@@ -1164,7 +1123,7 @@ body[data-density="compact"]:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-
      #hud-limits already carries two rules down: never pin HUD chrome to a
      constant a sibling's rendered height decides. The fallback is the map's
      own painted bottom, so a pre-fit frame still clears it. */
-  top: calc(var(--hud-left-px, 120px) + 8px);
+  top: calc(var(--hud-left-px, 136px) + 8px);
 }
 #game-metrics-bar {
   display: flex;
@@ -1260,6 +1219,25 @@ body:has(.screen:not([hidden])) :is(
 body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
   visibility: visible;
 }
+/* MOVE & SIZE (js/ui/hud-layout.js). A moved element carries data-hl and its own
+   --hl-x / --hl-y (share of the screen) and --hl-s (factor); dividing by the
+   element's band zoom keeps a 10% move 10% of the screen at every HUD SIZE.
+   `translate`/`scale` compose with the translateX(-50%) the centred pieces
+   already carry; --hl-o keeps a corner piece growing away from its corner. */
+[data-hl] {
+  translate: calc(var(--hl-x, 0) * 1vw / var(--hud-z, 1)) calc(var(--hl-y, 0) * 1vh / var(--hud-z, 1));
+  scale: var(--hl-s, 1);
+  transform-origin: var(--hl-o, center);
+}
+/* Its PEEK (js/ui/screen-looks.js PEEK_ONLY.hud): the whole race HUD shows
+   through the ghosted settings page, the selected element outlined. */
+/* :root twice: (1,3,0) outranks the (1,2,1) hide rule above without naming body. */
+:root:root[data-appearance-peek="hud"] :is(
+  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #announce, #hud-mirror
+) {
+  visibility: visible;
+}
+:root[data-appearance-peek="hud"] [data-hl-sel] { outline: 2px dashed var(--you); outline-offset: 3px; }
 #photo-controls > * { pointer-events: auto; }
 /* UI SIZE APPLIES TO THE FLY-CAM CONTROLS TOO. They sit beside the LIGHTING
    TUNER, which is a `.sheet` and therefore carries `zoom: var(--ui-scale)`
