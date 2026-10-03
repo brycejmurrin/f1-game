@@ -372,9 +372,10 @@ test("EVERY world-facing camera mode is C1 on a gradient", () => {
   // never touched the CAMERA TUNER still got the judder, just in a different
   // mode. This sweeps the lot so a new mode cannot quietly join them.
   //
-  // cockpit and hood are excluded ON PURPOSE: they are bolted to the car and
-  // must match the raw profile the chassis is drawn from. Riding the car's own
-  // bumps is what an onboard camera is for.
+  // cockpit and hood (and visor and helmet, the cockpit eye by other names)
+  // are excluded ON PURPOSE: they are bolted to the car and must match the raw
+  // profile the chassis is drawn from. Riding the car's own bumps is what an
+  // onboard camera is for.
   const MODES = ["chase", "far", "drift", "overhead", "heli", "reverse", "side",
                  "cinematic", "low", "tcam", "rear"];
   const track = makeTrack((s) => HILL(s) + RIPPLE(s));
@@ -476,6 +477,119 @@ test("REDUCE MOTION drops the cockpit kerb shiver, and only that", () => {
     "prefers-reduced-motion: no rib oscillation (developer.mozilla.org/docs/Web/CSS/@media/prefers-reduced-motion)");
   assert.equal(+eyeY({ onKerb: false, baHeave: 0.01 }, true).toFixed(9), +(flat + 0.01).toFixed(9),
     "the car's own heave still rides through");
+});
+
+// THE ONBOARD AIM FOLLOWS THE CHASSIS PITCH, with the chassis' sign. baPitch > 0
+// is brake DIVE (js/physics/body-attitude.js: -axEstSm, so braking is positive;
+// the chase rig's dolly reads it the same way). onboardAttitude added it to the
+// aim, so every bolted-on view tilted UP as the car dived into a braking zone.
+test("the bolted-on views dip under braking and lift under power, and it is the car's motion, kept under REDUCE MOTION", () => {
+  const track = makeTrack(() => 0), s = 500;
+  const cams = loadGameCams(makeTracksStub(track));
+  for (const mode of ["cockpit", "hood", "visor", "helmet", "tcam"]) {
+    const aim = (baPitch, reduceMotion) => pitchOf(cams.vantage(track, mode, s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baPitch }, reduceMotion }));
+    for (const rm of [true, false]) {
+      assert.ok(aim(0.024, rm) < aim(0, rm), `${mode}${rm ? " (reduce motion)" : ""}: braking dips the view`);
+      assert.ok(aim(-0.024, rm) > aim(0, rm), `${mode}${rm ? " (reduce motion)" : ""}: power lifts it`);
+    }
+  }
+  const chase = (baPitch) => pitchOf(cams.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baPitch } }));
+  assert.ok(chase(0.024) < chase(0), "the chase rig's aim drops under braking too: one convention");
+});
+
+// THE HEAD MOVES INSIDE THE CAR (vantage.js HEAD_*): outward under lateral g,
+// forward and down under braking — off the SMOOTHED body attitude, so it cannot
+// jitter — and the rig anchor takes the same offset off, so the view moves and
+// the tub does not. REDUCE MOTION (and COMFORT › HEAD BOB at 0) hold it still.
+test("the driver's head shifts outward in a corner and nods under braking, inside a rig that stays on the car", () => {
+  const track = makeTrack(() => 0), s = 500;
+  const cams = loadGameCams(makeTracksStub(track));
+  const R = [-1, 0, 0], F = [0, 0, 1];   // facing +Z: right is -X (R x F = +Y)
+  const at = (att, extra = {}) => {
+    const v = cams.vantage(track, "cockpit", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att, ...extra });
+    const out = { eye: [...v.eye], tgt: [...v.tgt] }, oR = [0, 0, 0], oU = [0, 0, 0], oF = [0, 0, 0], p = [0, 0, 0];
+    cams.cockpitViewmodelAxes(R, F, 0, out.eye, oR, oU, oF, p);   // the car loop anchors the rig right after
+    out.rig = p;
+    return out;
+  };
+  const H = cams.HEAD_MAX, rest = at({});
+  // A RIGHT turn leans the body's top toward -R (game.js rollTot); the head goes the same way, to the outside.
+  const corner = at({ baRoll: 0.055 });
+  const d = corner.eye.map((v, i) => v - rest.eye[i]);
+  assert.ok(Math.abs(Math.hypot(...d) - H.lat) < 1e-9 && H.lat >= 0.02 && H.lat <= 0.03, `the head moves ${(Math.hypot(...d) * 100).toFixed(1)} cm`);
+  assert.ok(-(d[0] * R[0] + d[1] * R[1] + d[2] * R[2]) > 0, "toward -R: the outside of a right-hander");
+  assert.ok(at({ baRoll: -0.055 }).eye[0] < rest.eye[0], "and the other way in a left-hander");
+  assert.deepEqual(at({ baRoll: 5 }).eye.map((v) => +v.toFixed(9)), corner.eye.map((v) => +v.toFixed(9)), "clamped at the body's own roll cap");
+  // Braking: forward and down, and the aim nods down with it.
+  const brake = at({ baPitch: 0.024 });
+  assert.ok(Math.abs(brake.eye[2] - rest.eye[2] - H.fwd) < 1e-9 && Math.abs(rest.eye[1] - brake.eye[1] - H.down) < 1e-9, "forward and down");
+  // The aim already follows the chassis pitch (onboardAttitude, kept under
+  // REDUCE MOTION); the nod is the head's own, on top of it.
+  assert.ok(pitchOf(brake) < pitchOf(at({ baPitch: 0.024 }, { reduceMotion: true })), "the head nods");
+  assert.deepEqual(at({ baPitch: -0.024 }).eye.map((v) => +v.toFixed(9)), rest.eye.map((v) => +v.toFixed(9)), "acceleration does not throw the head back into the headrest");
+  // The rig does not move: the tub, wheel and halo stay on the car point.
+  for (const moved of [corner, brake, at({ baRoll: 0.055, baPitch: 0.024 })])
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(moved.rig[i] - rest.rig[i]) < 1e-9, `the rig anchor moved with the head (axis ${i})`);
+  // REDUCE MOTION: no head shift at all (developer.mozilla.org/docs/Web/CSS/@media/prefers-reduced-motion).
+  const still = at({ baRoll: 0.055, baPitch: 0.024 }, { reduceMotion: true });
+  assert.deepEqual(still.eye.map((v) => +v.toFixed(9)), rest.eye.map((v) => +v.toFixed(9)), "prefers-reduced-motion holds the head still");
+  assert.deepEqual({ ...cams.headState() }, { lat: 0, up: 0, fwd: 0, nod: 0 }, "no offset, no nod — the chassis pitch the aim already follows is the car's, and stays");
+  assert.deepEqual(still.rig.map((v) => +v.toFixed(9)), rest.rig.map((v) => +v.toFixed(9)));
+  // COMFORT › HEAD BOB scales it.
+  const half = loadGameCams(makeTracksStub(track), { get: () => 0, cornerLead: () => 0, apply: (_, __, ___, fov) => fov, bob: () => 0.5 });
+  const hv = half.vantage(track, "cockpit", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baRoll: 0.055 } });
+  assert.ok(Math.abs(Math.abs(hv.eye[0] - rest.eye[0]) - H.lat / 2) < 1e-9, "HEAD BOB 0.5 halves it");
+  // A solve WITHOUT the player's attitude (the broadcast PiP, a debug preview)
+  // between the race camera and the car loop must not move the rig anchor.
+  at({ baRoll: 0.055 });
+  const before = cams.headState();
+  cams.vantage(track, "cockpit", s, 0, 60, 0, { carPos: [0, s], carHead: 0 });
+  cams.vantage(track, "heli", s, 0, 60, 0, {});
+  assert.deepEqual(cams.headState(), before, "only the call carrying att publishes the head offset");
+  // Chase and the other external cams never shift (chase's own brake dolly reads baPitch; roll is the head's alone).
+  const chase0 = cams.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: {} }).eye.map((v) => +v.toFixed(9));
+  const chase1 = cams.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baRoll: 0.055 } }).eye.map((v) => +v.toFixed(9));
+  assert.deepEqual(chase1, chase0, "the chase rig is not a head");
+  assert.deepEqual({ ...cams.headState() }, { lat: 0, up: 0, fwd: 0, nod: 0 }, "and switching to it zeroes the rig's head offset");
+});
+
+test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the same aim and lens, the rig on the same car point", () => {
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  const R = [-1, 0, 0], F = [0, 0, 1];
+  for (const s of [200, 1100, 1210]) {
+    const anchor = (mode, att) => {
+      const v = cams.vantage(track, mode, s, 0, 60, 0, { carPos: [0, s], carHead: 0, att });
+      const out = { eye: [...v.eye], tgt: [...v.tgt], fov: v.fov }, p = [0, 0, 0];
+      cams.cockpitViewmodelAxes(R, F, 0, out.eye, [0, 0, 0], [0, 0, 0], [0, 0, 0], p);
+      out.rig = p;
+      return out;
+    };
+    const c = anchor("cockpit", {}), h = anchor("helmet", {});
+    assert.ok(Math.abs(h.eye[2] - c.eye[2] - cams.HELMET_EYE_FWD) < 1e-9 && Math.abs(h.eye[0] - c.eye[0]) < 1e-9 && Math.abs(h.eye[1] - c.eye[1]) < 1e-9,
+      `s=${s}: the helmet eye is the cockpit eye moved ${cams.HELMET_EYE_FWD} m forward`);
+    assert.ok(Math.abs(pitchOf(h) - pitchOf(c)) < 0.05 && Math.abs(h.fov - c.fov) < 1e-9, "same aim and lens");
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(h.rig[i] - c.rig[i]) < 1e-9, `s=${s}: the rig sits on the same car point (axis ${i})`);
+    // A PiP / debug solve still seats the helmet eye, and leaves the rig alone.
+    const pip = cams.vantage(track, "helmet", s, 0, 60, 0, { carPos: [0, s], carHead: 0 });
+    assert.ok(Math.abs(pip.eye[2] - c.eye[2] - cams.HELMET_EYE_FWD) < 1e-9);
+  }
+  // Onboard everywhere the game asks: kerb shiver, no ground clamp, near plane, the rig, the lock.
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /const onboard = racing && \([^;]*camId === "helmet"/, "locked like the other onboard eyes (λ400)");
+  assert.match(game, /const _nearM = \([^;]*_projMode === "helmet"[^;]*\) \? 0\.3 : 0\.9;/, "the cockpit's 0.3 m near plane, or the wheel is clipped away");
+  assert.match(game, /const cockpitRigOnly = [^;]*CAM_MODES\[camMode\]\.id === "helmet"/, "the cockpit rig is drawn round it");
+  // cameraBankScale gives every mode it does not name the FULL bank (1): HELMET,
+  // like the cockpit, is in neither the 0.35 nor the 0 list.
+  const bank = game.match(/function cameraBankScale\(mode\) \{[^}]*\}/);
+  assert.ok(bank, "cameraBankScale is the banked-camera table");
+  assert.doesNotMatch(bank[0], /"helmet"|"cockpit"/, "and it rides the full bank like the cockpit");
+  const ms = readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8");
+  const ids = [...ms.matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
+  assert.equal(ids[ids.length - 1], "helmet", "appended: apex26.camMode is an index");
+  assert.match(ms, /document\.body\.toggleAttribute\("data-helmet-cam", camId === "helmet"\);/, "the visor frame follows the mode");
+  const css = readFileSync(join(ROOT, "css/hud.css"), "utf8");
+  assert.match(css, /body\[data-helmet-cam\] #hud::before \{/, "and css/hud.css draws it");
 });
 
 // NEAR-EYE CULL. A rival is hidden only when the eye is INSIDE its body box (grown by

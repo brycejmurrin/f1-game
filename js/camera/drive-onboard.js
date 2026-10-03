@@ -4,13 +4,13 @@
 const DriveOnboard = (function () {
   "use strict";
 
-  const MODES = ["cockpit", "hood", "visor", "tcam", "rear"];
+  const MODES = ["cockpit", "helmet", "hood", "visor", "tcam", "rear"];
 
   function spOf(ctx) { return (ctx && ctx.sp) || 0; }
   function brakeOf(ctx) { return (ctx && ctx.brake) || 0; }
 
   function apply(mode, eye, tgt, ctx) {
-    if (mode === "cockpit") return 1.5 * spOf(ctx) + 1 * brakeOf(ctx);
+    if (mode === "cockpit" || mode === "helmet") return 1.5 * spOf(ctx) + 1 * brakeOf(ctx);   // HELMET is the cockpit from inside the lid
     if (mode === "visor") return 1 * spOf(ctx);
     if (mode === "hood") return 2 * spOf(ctx) + 1.5 * brakeOf(ctx);
     if (mode === "tcam") return 2.5 * spOf(ctx);

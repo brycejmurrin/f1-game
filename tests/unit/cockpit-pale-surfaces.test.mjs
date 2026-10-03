@@ -18,6 +18,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
 import { loadCar3D, buildCockpit, sweep, isPale } from "../../tools/car/cockpit-pale-sweep.mjs";
 
 // Pale things that are SUPPOSED to be pale, each with the reason it stays.
@@ -204,4 +206,28 @@ test("the cockpit hood and nose keep the livery", () => {
   }
   assert.ok(painted >= 8,
     `only ${painted} hood vertices carry the body colour — the driver has lost the livery ahead of them`);
+});
+
+// THE DRIVER'S OWN SLEEVES (js/car/car-mesh.js getForearm) run up from the
+// bottom of the cockpit view in the SUIT colour, which is the livery's c2 —
+// the same field that put Ferrari's [1,1,1] slab in front of the wheel. They
+// are a rig mesh, not part of the Car3D build the sweep above casts at, so
+// they get the same rule by colour: no shipped livery's sleeve may be pale.
+test("no shipped livery dresses the cockpit forearms in a pale slab", () => {
+  const ctx = { Log: { info() {}, warn() {}, error() {} }, GaragePrims: { block() {} } };
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync("js/car/car-mesh.js", "utf8") + "\n;this.CarMesh = CarMesh;", ctx, { filename: "car-mesh.js" });
+  ctx.CarMesh.init({ createMesh: (d) => ({ d }), freeMesh() {} });
+  const offenders = [];
+  const check = (label, liv) => {
+    const col = ctx.CarMesh.getForearm(liv).d.col.slice(0, 3);
+    if (isPale(col)) offenders.push(`${label}: [${col.map((v) => v.toFixed(2))}]`);
+  };
+  check("white accent", { c1: [0.05, 0.05, 0.06], c2: [1, 1, 1] });
+  check("silver accent", { c1: [0.05, 0.05, 0.06], c2: [0.75, 0.76, 0.80] });
+  let n = 0;
+  for (const [team, arr] of Object.entries(Liveries.BY_TEAM))
+    (Array.isArray(arr) ? arr : [arr]).forEach((liv, i) => { if (liv && liv.c2) { n++; check(`${team}[${i}]`, liv); } });
+  assert.ok(n > 50, "the shipped liveries loaded");
+  assert.deepEqual(offenders, [], "a sleeve reads as a pale slab — suitColour must dim it like car3d _ckAcc");
 });

@@ -20,8 +20,8 @@ const CamFeel = (function () {
   // Off under camComfort() and on a wet road (SSR flicker).
   //
   // KERB RIB SHIVER: spatial, driven off arc `s` in vantage.js onboardAttitude
-  // for the same bolted set (cockpit/hood/visor/tcam).
-  const BUZZ_MODES = Object.freeze(["cockpit", "hood", "visor", "tcam"]);
+  // for the same bolted set (cockpit/hood/visor/tcam/helmet).
+  const BUZZ_MODES = Object.freeze(["cockpit", "hood", "visor", "tcam", "helmet"]);
   const FREELOOK_MODES = BUZZ_MODES;
   // LOOK BACK already faces aft in these — flipping again is a double reverse.
   const LOOKBACK_SKIP = Object.freeze(["reverse", "rear"]);
@@ -91,6 +91,7 @@ const CamFeel = (function () {
     cockpit:    { base: 64, widen: 14, scale: 1,   dep: 3 },
     hood:       { base: 64, widen: 14, scale: 1,   dep: 3 },
     visor:      { base: 64, widen: 14, scale: 1,   dep: 3 },
+    helmet:     { base: 64, widen: 14, scale: 1,   dep: 3 },   // the cockpit's lens; the visor frame is CSS
     overhead:   { base: 46, widen: 0,  scale: 1,   dep: 0 },
     heli:       { base: 36, widen: 8,  scale: 0.5, dep: 2 },
     reverse:    { base: 60, widen: 12, scale: 1,   dep: 0 },

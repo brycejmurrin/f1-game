@@ -41,12 +41,47 @@ const TrackStamps = (function () {
     return { Rc, n };
   }
 
+  // ── clothoid entry / exit (an Euler spiral each side of the arc) ──────────
+  // SPIRAL m on a curved stamp: the curvature ramps 0 → 1/Rc over Ls' m, holds
+  // on the arc, and ramps back down (https://en.wikipedia.org/wiki/Euler_spiral)
+  // — the transition a real corner has, instead of a step in curvature at each
+  // end. Each spiral turns Ls'/(2Rc), so the arc keeps A − Ls'/Rc and the stamp's
+  // total heading change stays exactly A. Ls' is whole chords of the arc's own
+  // step (≈ 10°, 8.5-25 m): the engine's UNIFORM Catmull-Rom ripples wherever
+  // the control spacing changes, and measured, a one-chord spiral only adds
+  // that ripple to the easing the engine's two Laplacian passes already give a
+  // plain arc — so under two chords there is no spiral. Ls' is capped so two
+  // chords of true arc stay at the apex (a piece at a time on CHICANE / S-BEND):
+  // a corner that is all spiral builds measurably wider than its radius.
+  const LS_MAX = 80;
+  /** One spiral of a stamped arc (R requested, A radians, Ls m): { Rc, n, Ls, sweep, arc }
+   *  — Ls the length each spiral runs (0: the plain arc), sweep the heading
+   *  each turns, arc the sweep left on Rc (n: arcFor's steps for the plain arc). */
+  function spiralSweep(R, Ls, A) {
+    A = A > 0 ? A : Math.PI / 2;
+    const { Rc, n } = arcFor(R, A), len = Rc * A, cMin = SPACING + 0.5;
+    const h = Math.min(CHORD_MAX, Math.max(cMin, 10 * DEG * Rc));
+    const m = Math.min(Math.round(Math.min(LS_MAX, Math.max(0, +Ls || 0)) / h), Math.floor(len / h) - 2);
+    const L = m >= 2 ? m * h : 0;
+    return { Rc, n, Ls: L, sweep: L / (2 * Rc), arc: Math.max(0, A - L / Rc) };
+  }
+  /** Spiral in → arc → mirrored spiral out from the pose cur() returns; each piece's end is a tangent point. */
+  function spiralArc(cur, R, A, dir, Ls, push) {
+    const sp = spiralSweep(R, Ls, A), k = 1 / sp.Rc, STEP = 10 * DEG;
+    if (!(sp.Ls > 0)) { push(S.arcPts(cur(), sp.Rc, dir * A, 0, sp.n)); return; }   // too short to ease: the plain arc
+    // Chords keep half a metre over the spacing rule: the 0.25 m save lattice moves each end.
+    const cMin = SPACING + 0.5;
+    push(S.clothoidPts(cur(), 0, k, sp.Ls, dir, cMin, CHORD_MAX, STEP));
+    if (sp.arc * sp.Rc > 1e-6) push(S.arcPts(cur(), sp.Rc, dir * sp.arc, 0, S.arcSteps(sp.Rc, sp.arc, cMin, CHORD_MAX)));
+    push(S.clothoidPts(cur(), k, 0, sp.Ls, dir, cMin, CHORD_MAX, STEP));
+  }
+
   const KINDS = {
     straight: { label: "STRAIGHT", params: { L: 300 }, min: { L: 30 }, max: { L: 1500 } },
-    corner:   { label: "CORNER",   params: { R: 60, deg: 90, dir: 1 }, min: { R: R_MIN, deg: 10 }, max: { R: 600, deg: 270 } },
-    hairpin:  { label: "HAIRPIN",  params: { R: 18, dir: 1 }, min: { R: R_MIN }, max: { R: 25 } },
-    chicane:  { label: "CHICANE",  params: { R: 20, deg: 35, dir: 1 }, min: { R: R_MIN, deg: 15 }, max: { R: 60, deg: 60 } },
-    sbend:    { label: "S-BEND",   params: { R: 45, deg: 45, dir: 1 }, min: { R: R_MIN, deg: 15 }, max: { R: 300, deg: 120 } },
+    corner:   { label: "CORNER",   params: { R: 60, deg: 90, dir: 1, Ls: 0 }, min: { R: R_MIN, deg: 10, Ls: 0 }, max: { R: 600, deg: 270, Ls: LS_MAX } },
+    hairpin:  { label: "HAIRPIN",  params: { R: 18, dir: 1, Ls: 0 }, min: { R: R_MIN, Ls: 0 }, max: { R: 25, Ls: LS_MAX } },
+    chicane:  { label: "CHICANE",  params: { R: 20, deg: 35, dir: 1, Ls: 0 }, min: { R: R_MIN, deg: 15, Ls: 0 }, max: { R: 60, deg: 60, Ls: LS_MAX } },
+    sbend:    { label: "S-BEND",   params: { R: 45, deg: 45, dir: 1, Ls: 0 }, min: { R: R_MIN, deg: 15, Ls: 0 }, max: { R: 300, deg: 120, Ls: LS_MAX } },
   };
   function clampParams(kind, p) {
     const k = KINDS[kind]; if (!k) return null;
@@ -65,7 +100,10 @@ const TrackStamps = (function () {
     const p = clampParams(kind, params); if (!p) return null;
     const pts = [], ends = new Set(); let cur = pose;
     const push = (r) => { pts.push(...r.pts); ends.add(r.pts[r.pts.length - 1]); cur = r.end; };
-    const arc = (R, deg, dir) => { const a = arcFor(R, deg * DEG); push(S.arcPts(cur, a.Rc, dir * deg * DEG, 0, a.n)); };
+    const arc = (R, deg, dir) => {
+      if (p.Ls > 0) return spiralArc(() => cur, R, deg * DEG, dir, p.Ls, push);
+      const a = arcFor(R, deg * DEG); push(S.arcPts(cur, a.Rc, dir * deg * DEG, 0, a.n));
+    };
     const run = (L) => push(S.straightPts(cur, L, 25));
     switch (kind) {
       case "straight": run(p.L); break;
@@ -155,6 +193,6 @@ const TrackStamps = (function () {
     return S.resample(pts, 25, true);
   }
 
-  return { KINDS, R_MIN, SPACING, compensate, arcFor, clampParams, sample, splice, seedFromSegments };
+  return { KINDS, R_MIN, SPACING, LS_MAX, compensate, arcFor, spiralSweep, clampParams, sample, splice, seedFromSegments };
 })();
 Object.freeze(TrackStamps);
