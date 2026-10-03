@@ -318,3 +318,15 @@ test("every row in the paint editor says what it paints", () => {
   const missing = [...rows].filter((k) => !hinted.has(k)).sort();
   assert.deepEqual(missing, [], "editor rows with no LIV_ROW_HINT entry");
 });
+
+// The car STUDIO (tools/carview.html — render-car.mjs, the car-shot workflow)
+// builds the livery it shoots from Liveries.FIELDS, the same list the game's
+// resolveLivery copies. A hand copy there had drifted ten fields short
+// (bodySplit, lower, sponsors, ...), so studio shots silently showed a car the
+// game never builds — a two-tone `lower` rendered as single-colour.
+test("the car studio passes every livery field the game does", () => {
+  const html = fs.readFileSync(path.join(ROOT, "tools/carview.html"), "utf8");
+  const fn = html.slice(html.indexOf("function resolveLiv(team)"), html.indexOf("function resolveLivOver(team)"));
+  assert.match(fn, /for \(const f of Liveries\.FIELDS\) o\[f\] = /, "resolveLiv copies Liveries.FIELDS");
+  assert.doesNotMatch(fn, /stripe: l\.stripe \|\| null/, "no hand-copied field list");
+});
