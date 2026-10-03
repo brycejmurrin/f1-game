@@ -289,6 +289,7 @@ const FULL = [
   "js/ui/settings-export.js",
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
+  "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
@@ -634,6 +635,7 @@ const HARD_EDGES = [
   ["js/career/career.js", "js/race/quali-model.js"],    // quali reads Career.rnd/devFor for its spread
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create() at eval time
+  ["js/fx/car-fx.js", "js/game.js"],         // game.js calls CarFx.create(G, { skids }) at eval time
   ["js/render/shared/mirror-pass.js", "js/game.js"],   // game.js calls MirrorPass.create(G, deps) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/sporting-regs.js", "js/game.js"],  // game.js calls SportingRegs.createPassWatch() at eval time
