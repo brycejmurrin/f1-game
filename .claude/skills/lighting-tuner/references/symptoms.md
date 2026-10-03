@@ -50,7 +50,10 @@ node tools/shot/apex-capture.mjs cameras monza scratch/captures/apex-capture/lig
 ```
 
 Or in a Playwright page: `setTimeOfDay("night")`, wait ~1400 ms for the dark
-rebuild, `orbit(0.15, 45, 20, 60)`, then screenshot `canvas#game`.
+rebuild, `orbit(0.15, 45, 20, 60)`, then `await __apex.awaitPresent()` and capture via
+`screenshotPresentedCanvas()` from `tools/shot/probe-page.mjs` (or
+`screenshotGameCanvas()`); GLX/TLX software output may be `#game-soft`.
+A timing sleep alone does not prove presented pixels.
 
 ## Symptom → field → knob
 

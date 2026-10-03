@@ -7,6 +7,25 @@ Log.info("input", "SteerTuning.create");
 // Stable helpers from the game.js closure.
 const { $, store, clamp } = G;
 if ((typeof BrakeCue !== "undefined") && BrakeCue.create) BrakeCue.create(G);
+if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.create(G);
+
+
+// GRIP STEER row is injected (not baked into index.html) so shellNodes stays
+// inside its ceiling — same ADVANCED CAR HANDLING group as DRIVING HELP.
+(function ensureGripSteerRow() {
+  if ($("pm-gripsteer")) return;
+  const help = $("pm-help");
+  const host = help && help.closest ? help.closest(".adv-item") : null;
+  if (!host || typeof document === "undefined") return;
+  const row = document.createElement("label");
+  row.className = "tune-row";
+  row.innerHTML = '<span class="tune-label">GRIP STEER <b id="pm-gripsteer-v">OFF</b></span>'
+    + '<input id="pm-gripsteer" type="range" min="1" max="10" step="1" value="1" aria-label="Grip steer assist">';
+  const tipEl = host.querySelector(".adv-help");
+  if (tipEl) host.insertBefore(row, tipEl);
+  else host.appendChild(row);
+})();
+
 
 let hapRepaintWired = false;   // the gamepadconnected repaint is wired once
 let trigHapWired = false;      // TRIGGER HAPTICS row paint + gamepadconnected
@@ -37,6 +56,9 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 //  pm-adaptbtn ADAPTIVE BUTTONS 1..10 mix of the digital-steer rate half of
 //                             SPEED STEER + analog travel. v1 = OFF, default 6.
 //  pm-brakecue BRAKE CUE      1 = OFF; 2..10 = pulse-rate cue + lookahead.
+//  pm-gripsteer GRIP STEER    1 = OFF; own-state peak-slip cap (js/physics/grip-steer.js).
+//  pm-audiocues AUDIO DRIVING CUES  1 = OFF; 2..10 = braking tone + L/R
+//                             corner calls (js/audio/driving-cues.js). Injected.
 //  pm-line     RACING LINE    assist: 0 off, +pull to line, -push wide.
 // The car is planted (understeer-only): DRIFT defaults to 0 so the rear never
 // steps out — overcooking a corner washes the front wide, it never snaps round.
@@ -180,7 +202,7 @@ const PRESETS = {
   // than the three that were named, which is what caught this.
   rookie:   { tiltDeg: 4, steerSmooth: 9, steerRate: 2,
               steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 9, raceLine: 4,
-              adaptiveButtons: 9, brakeCue: 9 },
+              adaptiveButtons: 9, brakeCue: 9, audioCues: 7, gripSteer: 8 },
   /* RELAX IS STEER_LEVELS.easy EXACTLY: the same calm rack STANDARD uses, with
      less lock and an earlier speed taper. Off a named FEEL level, clicking RELAX
      leaves the STEERING row reading CUSTOM (sliders.spec.js), and a quicker
@@ -188,7 +210,7 @@ const PRESETS = {
      (presets.spec.js). */
   relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 2,
               steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 8, raceLine: 2,
-              adaptiveButtons: 8, brakeCue: 8 },
+              adaptiveButtons: 8, brakeCue: 8, audioCues: 6, gripSteer: 6 },
   // STANDARD is the SHIPPED car, so it must equal the store fallbacks in
   // applySteerTuning() exactly — activePreset() compares the two and a fresh
   // install reads CUSTOM the moment they disagree. The shipped profile is a
@@ -196,16 +218,16 @@ const PRESETS = {
   // taper.
   standard: { tiltDeg: 8, steerSmooth: 3, steerRate: 2,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
-              adaptiveButtons: 5, brakeCue: 4 },
+              adaptiveButtons: 5, brakeCue: 4, audioCues: 1, gripSteer: 1 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
-              adaptiveButtons: 4, brakeCue: 4 },
+              adaptiveButtons: 4, brakeCue: 4, audioCues: 1, gripSteer: 1 },
 };
 const PRESET_STORE = {  // slider store-key  ->  preset field
   tiltDeg: "tiltDeg", steerSmooth: "steerSmooth",
   steerRate: "steerRate", steerExpo: "steerExpo", steerLock: "steerLock",
   steerSpeed: "steerSpeed", drivingHelp: "drivingHelp", raceLine: "raceLine",
-  adaptiveButtons: "adaptiveButtons", brakeCue: "brakeCue",
+  adaptiveButtons: "adaptiveButtons", brakeCue: "brakeCue", audioCues: "audioCues", gripSteer: "gripSteer",
 };
 
 // FEEL. NORMAL must be the shipped car for the same reason STANDARD must be:
@@ -322,7 +344,7 @@ function refreshMacros() {
 // Log ring buffer whether or not anyone was watching. A migration that quietly
 // changes a player's stored settings and leaves no record is indistinguishable
 // from a bug, both to them and to us.
-const STEER_SCHEMA = 4;
+const STEER_SCHEMA = 5;
 
 // The v2 pace grid. Kept for ONE reader — v3's regrid, which has to know what a
 // stored notch used to mean. Nothing else may call it.
@@ -433,6 +455,16 @@ const STEER_MIGRATIONS = [
       if (from === 0) migSet(4, "adaptiveButtons", 1, "OFF stays OFF on the 1..10 strength slider");
       else if (from === 1) migSet(4, "adaptiveButtons", 6, "old ON becomes mid strength");
   } },
+
+  // Grip steer is new. Unset stores get OFF (1) via store.get default; a store
+  // that somehow carried a non-number is reset so applySteerTuning never feeds
+  // NaN into GripSteer.assistK. Existing players stay OFF unless they pick
+  // ROOKIE / RELAX (which write 8 / 6).
+  { to: 5, apply() {
+      const from = store.get("gripSteer", null);
+      if (from !== null && !(typeof from === "number" && isFinite(from)))
+        migSet(5, "gripSteer", 1, "grip steer OFF: non-number store cleared");
+  } },
 ];
 
 function migrateSteerStore() {
@@ -485,6 +517,9 @@ function applySteerTuning() {
   G.STEER_MAX_SLIP = lockFromSlider(lock);
   G.STEER_SPEED_REF = speedRefFromSlider(spdsteer);
   G.ROAD_FOLLOW    = helpFromSlider(help);
+  const gripRaw = store.get("gripSteer", 1);
+  const grip = clamp(typeof gripRaw === "number" && isFinite(gripRaw) ? gripRaw : 1, SLIDER_MIN, SLIDER_MAX);
+  if ((typeof GripSteer !== "undefined") && GripSteer.setLevel) GripSteer.setLevel(grip);
   G.YAW_INERTIA    = weightFromSlider(weight);
   G.YAW_DAMP       = yawDampFromSlider(weight);
   Input.setTiltSmoothing(cutoffFromSmooth(smooth));
@@ -534,6 +569,9 @@ function applySteerTuning() {
   const cueRaw = store.get("brakeCue", 1);
   const cue = clamp(typeof cueRaw === "number" && isFinite(cueRaw) ? cueRaw : 1, SLIDER_MIN, SLIDER_MAX);
   if ((typeof BrakeCue !== "undefined")) BrakeCue.setLevel(cue);
+  const audioRaw = store.get("audioCues", 1);
+  const audioCues = clamp(typeof audioRaw === "number" && isFinite(audioRaw) ? audioRaw : 1, SLIDER_MIN, SLIDER_MAX);
+  if ((typeof DrivingCues !== "undefined")) DrivingCues.setLevel(audioCues);
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;
   $("pm-smooth").value  = smooth;  $("pm-smooth-v").textContent  = smooth;
@@ -543,6 +581,15 @@ function applySteerTuning() {
   if ($("pm-weight")) { $("pm-weight").value = weight; $("pm-weight-v").textContent = weight; }
   if ($("pm-adaptbtn")) { $("pm-adaptbtn").value = adapt; $("pm-adaptbtn-v").textContent = adaptLabel(adapt); }
   if ($("pm-brakecue")) { $("pm-brakecue").value = cue; $("pm-brakecue-v").textContent = ((typeof BrakeCue !== "undefined") && BrakeCue.labelOf) ? BrakeCue.labelOf(cue) : (cue <= 1 ? "OFF" : "CUE " + cue); }
+  if ($("pm-gripsteer")) {
+    $("pm-gripsteer").value = grip;
+    $("pm-gripsteer-v").textContent = ((typeof GripSteer !== "undefined") && GripSteer.labelOf) ? GripSteer.labelOf(grip) : (grip <= 1 ? "OFF" : "GRIP " + grip);
+  }
+  if ($("pm-audiocues")) {
+    $("pm-audiocues").value = audioCues;
+    $("pm-audiocues-v").textContent = ((typeof DrivingCues !== "undefined") && DrivingCues.labelOf)
+      ? DrivingCues.labelOf(audioCues) : (audioCues <= 1 ? "OFF" : "CUES " + audioCues);
+  }
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
@@ -624,6 +671,19 @@ if ($("pm-brakecue")) $("pm-brakecue").oninput = (e) => {
   if ((typeof BrakeCue !== "undefined")) BrakeCue.setLevel(v);
   $("pm-brakecue-v").textContent = ((typeof BrakeCue !== "undefined") && BrakeCue.labelOf) ? BrakeCue.labelOf(v) : (v <= 1 ? "OFF" : "CUE " + v);
   clearPreset();   // preset-owned (PRESET_STORE), same as every sibling slider
+};
+if ($("pm-gripsteer")) $("pm-gripsteer").oninput = (e) => {
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("gripSteer", v);
+  if ((typeof GripSteer !== "undefined") && GripSteer.setLevel) GripSteer.setLevel(v);
+  $("pm-gripsteer-v").textContent = ((typeof GripSteer !== "undefined") && GripSteer.labelOf) ? GripSteer.labelOf(v) : (v <= 1 ? "OFF" : "GRIP " + v);
+  clearPreset();
+};
+if ($("pm-audiocues")) $("pm-audiocues").oninput = (e) => {
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("audioCues", v);
+  if ((typeof DrivingCues !== "undefined")) DrivingCues.setLevel(v);
+  $("pm-audiocues-v").textContent = ((typeof DrivingCues !== "undefined") && DrivingCues.labelOf)
+    ? DrivingCues.labelOf(v) : (v <= 1 ? "OFF" : "CUES " + v);
+  clearPreset();
 };
 $("pm-help").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("drivingHelp", v);

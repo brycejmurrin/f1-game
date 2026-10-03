@@ -11,7 +11,7 @@ Portrait UI uses `{width:390,height:844}`; in-race shots must use **landscape**
 `{width:844,height:390}` to avoid the `#rotate-device` overlay.
 
 `apex-capture` exits non-zero and lists any shot that came back `blank:true`
-(< ~5 KB) — so a broken render fails CI-style without opening every file. Both
+(including near-black checks for soft captures; byte size alone is not proof) — so a broken render fails CI-style without opening every file. Both
 tools start their own server + Chromium; no setup beyond `npm install`.
 
 ## `apex-capture cameras` — 12 modes, no drift
@@ -45,13 +45,10 @@ helped asset fetch; they are not the current harness.
 
 ## Environment gotchas (already handled in the tools — replicate in custom harnesses)
 
-1. **Chromium version mismatch.** The npm `playwright` build may not match the
-   image's preinstalled browser (`npx playwright install` is blocked / wasteful).
-   Launch with the preinstalled binary:
-   ```js
-   chromium.launch({ executablePath: "/opt/pw-browsers/chromium",
-     args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"] });
-   ```
+1. **Chromium selection.** Use `launchChromium()` from
+   `tools/lib/harness.mjs`, which honors `PW_CHROMIUM`, cached/system binaries
+   and DISPLAY cleanup. Backend flags come from `chromiumArgsForBackend()`
+   and `installProbeInit()`, never a hardcoded `/opt` executable.
 2. **Resolve playwright from the project** when your script lives outside it
    (e.g. scratchpad):
    ```js
@@ -63,9 +60,9 @@ helped asset fetch; they are not the current harness.
    collide with a leftover server.
 4. **Wait for readiness**: every rendering-page `waitForFunction` needs
    `{ polling: 100 }` (default rAF polling starves under SwiftShader):
-   `waitForFunction(() => window.__apex != null, { polling: 100 })` then
+   `waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS })` then
    `race(id)` then
-   `waitForFunction(() => __apex.info().track === id, { polling: 100 })` then a
+   `waitForFunction(t => __apex.info().track === t, id, { polling: 100, timeout: BOOT_MS })` then a
    ~1.6 s settle for the mesh build before probing/shooting.
 5. **Viewports**: in-race shots use **landscape** `{844,390}` (avoids the
    `#rotate-device` overlay); DOM screens (menu/results) use a larger viewport.
@@ -95,35 +92,36 @@ helped asset fetch; they are not the current harness.
    frame identically — if you add anything to the camera's inputs, wire all of
    them, or a snapped/preview shot will silently disagree with the live view.
 
-## Custom-harness skeleton
+## Custom-harness skeleton (parent-owned browser)
 
 ```js
-import { createRequire } from "node:module";
-const require = createRequire(process.cwd() + "/"); // run from repo root
-const { chromium } = require("playwright");
-// startStaticServer() -> port; open(browser, port) -> page; race(page,id);
-const port = await startStaticServer();
-const results = await Promise.all(TRACKS.map(async (id) => {
-  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium",
-    args: ["--use-angle=swiftshader","--enable-unsafe-webgpu"] });
-  try {
-    const page = await open(browser, port);
-    await race(page, id);
-    return page.evaluate(() => ({ corners: __apex.corners().length, light: __apex.lightState().numLights }));
-  } finally {
-    await browser.close();
+import {launchChromium, shutdown, startStaticServer} from "./tools/lib/harness.mjs";
+import {installProbeInit, screenshotPresentedCanvas, chromiumArgsForBackend} from "./tools/shot/probe-page.mjs";
+const srv = await startStaticServer(process.cwd());
+try {
+  const browser = await launchChromium({args:chromiumArgsForBackend("webgl2")});
+  for (const id of TRACKS) { // serialize; never Promise.all browser boots
+    const page = await browser.newPage({viewport:{width:844,height:390}});
+    try {
+      await installProbeInit(page, {backend:"webgl2"});
+      await page.goto(srv.url);
+      await page.waitForFunction(() => window.__apex != null, null, {polling:100,timeout:45000});
+      await page.evaluate(t => { __apex.seed(42); __apex.race(t); }, id);
+      await page.waitForFunction(t => __apex.info().track === t, id, {polling:100,timeout:45000});
+      await page.evaluate(() => { __apex.go(); __apex.jump(0.1,30); __apex.snapCam(); });
+      await page.evaluate(() => __apex.awaitPresent());
+      const capture = await screenshotPresentedCanvas(page);
+      // capture.buf is the PNG Buffer; persist below artifacts/ and validate pixels.
+    } finally { await page.close(); }
   }
-}));
+} finally { await shutdown(); }
 ```
 
-Use this to validate work from the camera / track / state debug skills
-(`cameras.md`, and **agent-view**'s track-geometry and state hooks) at scale. For single
-deterministic screenshots, `tools/shot/shot.mjs` is simpler. It clips
-the presented canvas (`#game-soft` when the HeadlessChrome overlay exists,
-else `#game`) with `page.screenshot({ clip })` after `awaitSoftPresent` — do
-not use `locator("canvas#game").screenshot()`, which waits for element
-stability a live WebGL canvas never reaches and reads the opacity-0 GPU
-buffer on HeadlessChrome GLX.
+Use `screenshotPresentedCanvas()` / `screenshotGameCanvas()` for rendered output;
+these route soft-present surfaces through bounded CDP capture and avoid live
+canvas locator stability waits. A small file is only a warning: inspect near-black
+pixel checks and renderer readiness before calling pixels valid. DOM-only
+`page.screenshot()` remains appropriate with the game canvas hidden.
 
 ## Shared Playwright fixtures (`tests/helpers/fixtures.js`)
 
@@ -143,6 +141,6 @@ test('example', async ({ page, pageErrors, racePage }) => {
 });
 ```
 
-`racePage` navigates to `/` and waits for `window.__apex` (10 s timeout) before
+`racePage` navigates to `/` and waits for `window.__apex` (`BOOT_MS` from the fixtures) before
 handing the page to the test. `pageErrors` collects every `pageerror` event.
 ```

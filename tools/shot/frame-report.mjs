@@ -19,6 +19,11 @@
  *   node tools/shot/frame-report.mjs --track monaco --u 0.55,0.6  # exact points
  *   node tools/shot/frame-report.mjs --track bahrain --frames 18 --thumb 0
  *   node tools/shot/frame-report.mjs --track monza --shots scratch/shots.json
+ *   node tools/shot/frame-report.mjs --track monza --shots scratch/editor.js --trusted-shots-js
+ *
+ * --shots reads JSON data by default. The explicit --trusted-shots-js CLI
+ * option accepts legacy editor literals using a bounded separate VM. The
+ * read-only MCP wrapper accepts JSON only and never enables this option.
  *   node tools/shot/frame-report.mjs --track monza --pose=520,12,300:480,1,330:40 --subject corner:first
  *   node tools/shot/frame-report.mjs --track monza --json > artifacts/fr.json
  *
@@ -49,20 +54,31 @@ import { makeFlags, CliArgError, runCli } from "../lib/cli-args.mjs";
 import * as FM from "../lib/frame-math.mjs";
 import * as FF from "../lib/frame-fleet.mjs";
 import { spawnSync } from "node:child_process";
+import { readBlob, shotErrors } from "../gen/bake-flyby.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 
 const KNOWN = ["--track", "--u", "--frames", "--shots", "--pose", "--subject", "--json", "--out",
                "--thumb", "--aspect", "--range", "--res", "--quiet",
-               "--fleet", "--tracks", "--worst", "--diff", "--min-delta", "--help", "-h"];
+               "--fleet", "--tracks", "--worst", "--diff", "--min-delta",
+               "--trusted-shots-js", "--help", "-h"];
 const SELF = fileURLToPath(import.meta.url);
 const FLEET_OUT = "artifacts/frame-report/fleet.json";
 
-function readShots(file) {
+/** JSON is the read-only default. Legacy editor JS literals require explicit
+ * CLI opt-in and use the bounded literal parser, never this process's eval. */
+export function readShots(file, { trustedJs = false } = {}) {
+  if (fs.statSync(path.resolve(file)).size > 1024 * 1024) throw new CliArgError("shots file exceeds 1 MiB");
   const raw = fs.readFileSync(path.resolve(file), "utf8");
-  const body = raw.replace(/^\s*(?:window\.)?[A-Za-z_$][\w$]*\s*=\s*/, "").replace(/;\s*$/, "");
-  try { return JSON.parse(body); } catch (_) { return (0, eval)("(" + body + ")"); }
+  let list;
+  try { list = trustedJs ? readBlob(raw) : JSON.parse(raw); }
+  catch (e) { throw new CliArgError(`shots must contain JSON data (legacy JS literals require --trusted-shots-js): ${e.message}`); }
+  if (!Array.isArray(list)) throw new CliArgError("shots must be a shot-list array");
+  if (list.length > 256) throw new CliArgError("shots must have at most 256 entries");
+  const errors = list.length ? shotErrors(list) : [];
+  if (errors.length) throw new CliArgError(errors.join("; "));
+  return list;
 }
 
 // The live flyby's length, read from its owner so a retune cannot desync
@@ -397,6 +413,7 @@ async function fleet(F) {
   if (F.has("--pose")) throw new CliArgError("--fleet judges the flyby; --pose is a one-circuit question");
   const pass = [];
   if (F.has("--shots")) pass.push("--shots", path.resolve(F.flag("--shots")));
+  if (F.has("--trusted-shots-js")) pass.push("--trusted-shots-js");
   for (const k of ["--frames", "--u", "--aspect", "--res", "--range"]) if (F.has(k)) pass.push(k + "=" + F.flag(k));
   const rec = {
     kind: FF.FLEET_KIND, version: FF.FLEET_VERSION, createdAt: new Date().toISOString(), head: gitHead(),
@@ -477,7 +494,8 @@ Accepts: ${KNOWN.filter((k) => k.startsWith("--")).join(" ")}`);
   const cols = Math.max(24, (thumbCols || 48) * res), rows = Math.max(12, rasterRows * res);
   const range = +F.flag("--range", 2500);
   const opts = { aspect, cols, rows, thumbCols, thumbRows };
-  const shots = F.has("--shots") ? readShots(F.flag("--shots")) : null;
+  if (F.has("--trusted-shots-js") && !F.has("--shots")) throw new CliArgError("--trusted-shots-js needs --shots");
+  const shots = F.has("--shots") ? readShots(F.flag("--shots"), { trustedJs: F.has("--trusted-shots-js") }) : null;
 
   const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
   const t0 = Date.now();
@@ -585,4 +603,4 @@ Accepts: ${KNOWN.filter((k) => k.startsWith("--")).join(" ")}`);
   }
 }
 
-runCli(main);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) runCli(main);

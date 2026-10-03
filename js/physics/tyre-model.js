@@ -5,8 +5,9 @@
  * WHY A MODULE AND NOT LINES IN game.js: tests/data/ratchets.json ratchets
  * game.js at its current size, and the grip seam there already takes external
  * scalars (DebrisWorld.marbleGrip). This follows js/race/reliability.js: a
- * small, mostly stateless rules module with an explicit LEVELS scale that
- * SHIPS OFF, plus a create(G) for the session-bound reads.
+ * small, mostly stateless rules module with an explicit LEVELS scale. The
+ * shipped default is "real" (js/data/settings-defaults.js); create(G) seeds
+ * from G.raceTyreWear so cold boot matches the store.
  *
  * THE NUMBER THAT MATTERS MOST IS NOT A PHYSICS NUMBER. Lap options are
  * 3/5/10/25/FULL, and a full Monza is 53 laps of ~124 s — 110 minutes. Real
@@ -37,10 +38,9 @@ const TyreModel = (function () {
   // and it lives in js/data/settings-defaults.js, NOT at the call site:
   // store.get's _def() makes SettingsDefaults outrank the fallback argument, so
   // the `store.get("tyreWear", ...)` literal in js/game.js decides nothing.
-  // The assertion at the foot of tests/unit/tyre-model.test.mjs does NOT guard
-  // the shipped default: it checks that the setter calls tyres.setLevel. The browser
-  // fixtures still pin OFF so a physics baseline measures the driving model
-  // rather than this month's default, which is why no spec would notice.
+  // create(G) seeds `level` from G.raceTyreWear; the G setter also pushes on
+  // write. The browser fixtures still pin OFF so a physics baseline measures
+  // the driving model rather than this month's default.
   // A set's life is nominal / LEVELS[level] laps — see planLaps().
   const LEVELS = { off: 0, light: 0.55, real: 1 };
   function isLevel(v) { return Object.prototype.hasOwnProperty.call(LEVELS, v); }
@@ -612,7 +612,12 @@ const TyreModel = (function () {
   // ── SESSION ───────────────────────────────────────────────────────────────
   function create(G) {
     Log.info("game", "TyreModel.create");
-    let level = "off";
+    // Cold-boot sync: G.raceTyreWear already holds the store / shipped default
+    // (SettingsDefaults "real"). Starting at "off" left planLaps() on the
+    // whole-race branch until the next setter write or gridUp — so the
+    // STRATEGY preview on a fresh boot claimed "NO STOP" while the UI said
+    // wear was on. The setter still pushes on write; this is the create half.
+    let level = (G && isLevel(G.raceTyreWear)) ? G.raceTyreWear : "off";
 
     function on() { return LEVELS[level] > 0; }
     function setLevel(v) { if (isLevel(v)) level = v; return level; }

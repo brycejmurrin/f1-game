@@ -1,6 +1,6 @@
 ---
 name: scenery-dress
-description: Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback, or migrate scenery emitters to TrackGraph.instance / check graph parity / debug batches()/bakeOnly. For a picture-driven accuracy pass (survey first) use survey-track.
+description: "Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback, or migrate scenery emitters to TrackGraph.instance / check graph parity / debug batches()/bakeOnly. For a picture-driven accuracy pass (survey first) use survey-track."
 ---
 
 # Dress a circuit's scenery
@@ -12,7 +12,7 @@ merges one mesh. Full reference: `docs/SCENERY-API.md`.
 
 ## Placement model
 
-Every helper takes `(k, side, dist, …)`:
+Node-based helpers take `(k, side, dist, …)`:
 - `k` — node index `0 … n-1`. Lap fraction: `Math.round(s * n) % n`.
 - `side` — `-1` left / `+1` right of racing direction.
 - `dist` — metres **beyond the road edge**.
@@ -57,3 +57,7 @@ accuracy / floating-tree survey → **survey-track** (Montreal already ships
 - `TrackGraph.instance` migration, `apex_graph_parity` / `BASE=` parity,
   `batches()` / `bakeOnly`, `__apex.trackGraph()` stats →
   [references/instancing.md](references/instancing.md).
+
+Node helpers use `(k,side,dist,...)`; `grandstand` / `grandstandEx` instead take
+a lap fraction `(s,side,...)`, range helpers take fraction endpoints, and raw
+primitives take world coordinates. Use `api.K(s)` for wrapped node indices.
