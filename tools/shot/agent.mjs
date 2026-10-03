@@ -30,6 +30,7 @@
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
+import { chromiumArgsForBackend, installProbeInit } from "./probe-page.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const COMMANDS = {
@@ -57,7 +58,7 @@ if (!argv.length || argv[0] === "-h" || argv[0] === "--help") {
   console.log("usage: node tools/shot/agent.mjs <track> <command> [options]\n");
   for (const [k, v] of Object.entries(COMMANDS)) console.log(`  ${k.padEnd(9)} ${v}`);
   console.log("\nstaging:  --at <frac 0-1>  --speed <m/s>  --lateral <m>  "
-            + "--weather dry|wet|rain|overcast|fog  --tod dawn|day|dusk|night");
+            + "--weather dry|wet|rain|overcast|fog  --tod dawn|day|dusk|night  --seed <uint32>");
   process.exit(0);
 }
 
@@ -70,6 +71,8 @@ if (!COMMANDS[cmd]) {
 }
 
 const flag = (name, def) => {
+  const equal = argv.find((arg) => arg.startsWith("--" + name + "="));
+  if (equal != null) return equal.slice(name.length + 3);
   const i = argv.indexOf("--" + name);
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : def;
 };
@@ -81,6 +84,7 @@ const num = (name, def) => {
 
 const opts = {
   cmd,
+  seed: num("seed", 1),
   // staging position as a lap fraction. A value >1 is not a fraction — it is a
   // stale `survey --at <count>` invocation, and passing it to jump() would wrap
   // to 0 and stage at the start line while looking deliberate. Fall back to the
@@ -132,16 +136,28 @@ const opts = {
   toS: has("to") ? num("to", 0) : null,           // query: arc window end (m)
 };
 
+if (!Number.isInteger(opts.seed) || opts.seed < 0 || opts.seed > 0xffffffff) { console.error("seed must be a uint32"); process.exit(2); }
+
+// Budgets sized off measurements, shared with apex-eval.mjs.
+const BOOT_MS = 45000, TRACK_MS = 45000;
+
+
 (async () => {
   const srv = await startStaticServer(ROOT);
   try {
     const browser = await launchChromium({
-      args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu",
-             "--disable-background-timer-throttling"],
+      args: chromiumArgsForBackend("three"),
     });
     const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
-    await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
+    await installProbeInit(page, { backend: "three" });
+    await page.goto(srv.url + "?seed=" + opts.seed);
+    // BOOT_MS, polling: 100 — both halves. An idle container defines __apex
+    // 10.3-12.6 s after goto (3 boots, 2026-10-02) and a fresh Chromium is
+    // slower, so 15 s failed this tool 2 of 2 through apex_agent; and rAF
+    // polling on a rendering page can starve the timeout itself
+    // (tools/check/wait-polling-lint.mjs).
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });
+
 
     if (opts.cmd === "help") {
       console.log(JSON.stringify(await page.evaluate(() => window.__apex.agentHelp()), null, 2));
@@ -150,7 +166,9 @@ const opts = {
 
     await page.evaluate(([t, w, tod]) => window.__apex.race(t, tod || undefined, w || undefined),
                         [track, opts.weather, opts.tod]);
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 20000 });
+    // A TLX monza build measures 16.6 s on SwiftShader (apex-eval.mjs TRACK_MS).
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: TRACK_MS, polling: 100 });
+
     await sleep(1600);                       // mesh build
 
     // Stage the car, then let frames actually draw. visible() reads the LAST

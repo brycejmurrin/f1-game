@@ -71,6 +71,9 @@ const CLASSICS = {
 
 // GeoJSON [lon,lat] ring → { len, pts:[[x,z],…] } in the def.path convention.
 export function project(coords) {
+  if (!Array.isArray(coords) || coords.length < 3 || coords.length > 100000
+      || !coords.every((p) => Array.isArray(p) && p.length >= 2 && p.slice(0, 2).every(Number.isFinite)))
+    throw new Error("Circuit coordinates must contain 3..100000 finite lon/lat pairs");
   const n = coords.length;
   let lon0 = 0, lat0 = 0;
   for (const [lon, lat] of coords) { lon0 += lon; lat0 += lat; }
@@ -117,7 +120,7 @@ export function signedArea(pts) {
 
 async function loadSource(file) {
   if (file) return JSON.parse(await fs.readFile(file, "utf8"));
-  const res = await fetch(SOURCE);
+  const res = await fetch(SOURCE, { signal: AbortSignal.timeout(30000) });
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${SOURCE}`);
   return res.json();
 }
@@ -173,7 +176,20 @@ function centre(pts) {
 
 /* ---------- main ---------- */
 
-const argv = process.argv.slice(2);
+export async function main(argv = process.argv.slice(2)) {
+const allowed = new Set(["--help", "-h", "--json", "--source", "--self-check", "--classics"]);
+for (let i = 0; i < argv.length; i++) {
+  const a = argv[i];
+  if (a.startsWith("-") && !allowed.has(a)) throw new Error(`Unknown option: ${a}`);
+  if (a === "--source") {
+    if (!argv[i + 1] || argv[i + 1].startsWith("-")) throw new Error("--source requires a file path");
+    i++;
+  }
+}
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log("Usage: import-circuit-path.mjs [--source file] [--json] (--self-check [circuit ids…] | --classics | gameId:featureId…)");
+  return 0;
+}
 const asJson = argv.includes("--json");
 const selfCheck = argv.includes("--self-check");
 const wantClassics = argv.includes("--classics");
@@ -182,7 +198,18 @@ const sourceFile = sourceIdx >= 0 ? argv[sourceIdx + 1] : null;
 const positional = argv.filter((a, i) =>
   !a.startsWith("--") && !(sourceIdx >= 0 && i === sourceIdx + 1));
 
+if (selfCheck && wantClassics) throw new Error("Choose --self-check or --classics");
+if (wantClassics && positional.length) throw new Error("--classics does not take circuit pairs");
+const KNOWN = { ...COMMITTED, ...CLASSICS };
+if (selfCheck) {
+  const unsupported = positional.filter((id) => !Object.hasOwn(KNOWN, id));
+  if (unsupported.length) throw new Error(`Unsupported self-check circuits: ${unsupported.join(", ")}`);
+} else if (!wantClassics) {
+  if (!positional.length) throw new Error("Pass --self-check, --classics, or gameId:featureId pairs");
+  for (const pair of positional) if (!/^[a-z0-9_]+:[a-zA-Z0-9_-]+$/.test(pair)) throw new Error(`Expected gameId:featureId, got "${pair}"`);
+}
 const geo = await loadSource(sourceFile);
+if (!geo || !Array.isArray(geo.features)) throw new Error("Source must be a GeoJSON FeatureCollection");
 const features = new Map(geo.features.map((f) => [f.properties.id, f]));
 
 if (selfCheck) {
@@ -192,13 +219,16 @@ if (selfCheck) {
   const KNOWN = { ...COMMITTED, ...CLASSICS };
   const ids = positional.length ? positional : Object.keys(KNOWN);
   const committed = await loadCommitted();
-  let worst = 0, failures = 0;
+  let worst = 0, failures = 0, checked = 0;
+  const skipped = [], results = [];
   for (const gameId of ids) {
     const featureId = KNOWN[gameId];
     const feature = featureId && features.get(featureId);
     const have = committed[gameId];
     if (!feature || !have) {
-      console.log(`SKIP ${gameId}: no ${!feature ? "upstream feature" : "committed entry"}`);
+      const reason = `no ${!feature ? "upstream feature" : "committed entry"}`;
+      skipped.push({ gameId, reason });
+      if (!asJson) console.log(`SKIP ${gameId}: ${reason}`);
       continue;
     }
     const made = project(feature.geometry.coordinates);
@@ -206,16 +236,20 @@ if (selfCheck) {
     // 2 m is the agreed bar: comfortably above observed digitisation noise
     // (0.4-1.1 m) and far below any real projection mistake, which lands in the
     // hundreds of metres.
+    checked++;
     const ok = cmp.err <= 2;
+    results.push({ gameId, ok, errorM: Number.isFinite(cmp.err) ? cmp.err : null, points: made.pts.length, committedPoints: have.pts.length });
     if (!ok) failures++;
     worst = Math.max(worst, cmp.err);
-    console.log(
+    if (!asJson) console.log(
       `${ok ? "OK  " : "FAIL"} ${gameId.padEnd(13)} err=${cmp.err.toFixed(2)} m  ` +
       `pts ${made.pts.length}/${have.pts.length}  len ${made.len}/${have.len}` +
       `${cmp.reversed ? "  (stored reversed)" : ""}`);
   }
-  console.log(`\nworst ${worst.toFixed(2)} m across ${ids.length} circuit(s); ${failures} over the 2 m bar`);
-  process.exit(failures ? 1 : 0);
+  const ok = checked > 0 && !failures && !skipped.length;
+  if (asJson) console.log(JSON.stringify({ ok, requested: ids.length, checked, skipped, failures, worstM: Number.isFinite(worst) ? worst : null, results }, null, 2));
+  else console.log(`\nworst ${worst.toFixed(2)} m; requested ${ids.length}, checked ${checked}, skipped ${skipped.length}; ${failures} over the 2 m bar`);
+  return ok ? 0 : 1;
 }
 
 const wanted = wantClassics
@@ -228,7 +262,7 @@ const wanted = wantClassics
 
 if (!wanted.length) {
   console.error("nothing to do — pass --self-check, --classics, or <gameId>:<featureId> pairs");
-  process.exit(2);
+  return 2;
 }
 
 for (const [gameId, featureId] of wanted) {
@@ -244,4 +278,12 @@ for (const [gameId, featureId] of wanted) {
       `stated ${p.length} m, projected ${entry.len} m, trace winding ${winding}.`);
   }
   console.log(emit(gameId, entry, asJson));
+}
+
+return 0;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { process.exitCode = await main(); }
+  catch (e) { console.error(`import-circuit-path: ${e.message}`); process.exitCode = 1; }
 }

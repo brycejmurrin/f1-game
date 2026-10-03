@@ -1,6 +1,6 @@
 #!/bin/bash
 # SessionStart hook: AGENTS.md §Verification 1 as a script, not a rule.
-# A fresh container with no node_modules or no headless shell fails as a
+# A fresh container with no node_modules or usable Chromium fails as a
 # total-red run that looks like a boot regression. Idempotent and quiet:
 # one status line to stdout (which lands in context), nothing else.
 #
@@ -28,17 +28,17 @@ else
   status+=("node_modules: fresh")
 fi
 
-# The headless shell lives wherever Playwright looks; PLAYWRIGHT_BROWSERS_PATH
-# wins, else the default cache. Only download when it is genuinely absent.
-BROWSERS="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
-if ls -d "$BROWSERS"/chromium_headless_shell-* >/dev/null 2>&1; then
-  status+=("chromium-headless-shell: present")
+# Reuse the same executable as the harness and MCP wrapper, including system
+# Chromium on PATH. The installer chooses a writable cache if none is present.
+CHROMIUM="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
+if [ -n "$CHROMIUM" ] && [ -f "$CHROMIUM" ] && [ -x "$CHROMIUM" ]; then
+  status+=("Chromium: present ($CHROMIUM)")
 elif [ "${APEX_SKIP_BROWSER_INSTALL:-}" = "1" ]; then
-  status+=("chromium-headless-shell: MISSING (install skipped)")
-elif npx playwright install chromium-headless-shell >artifacts/session-browsers.log 2>&1; then
-  status+=("chromium-headless-shell: installed")
+  status+=("Chromium: MISSING (install skipped)")
+elif bash "$ROOT/tools/env/install-browsers.sh" >artifacts/session-browsers.log 2>&1; then
+  status+=("Chromium: installed")
 else
-  status+=("chromium-headless-shell: MISSING — run bash tools/env/cloud-agent-install.sh")
+  status+=("Chromium: MISSING — run bash tools/env/install-browsers.sh (artifacts/session-browsers.log)")
 fi
 
 # ORIENTATION IN THE SAME LINE (2026-09-16): the branch, its distance from

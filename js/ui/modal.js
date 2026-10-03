@@ -40,6 +40,9 @@ window.TopModal = (function () {
   function wire(el) {
     if (!el || wired.has(el) || typeof el.showModal !== "function") return;
     wired.add(el);
+    // Native browsers are tracked at their prototype; isolated hosts may only
+    // provide dialog instances. Do not wrap an inherited native wrapper twice.
+    if (typeof HTMLDialogElement === "undefined" && window.UiLayers && window.UiLayers.trackDialog) window.UiLayers.trackDialog(el);
     // Let the dialog itself take focus when Tab wraps past the last control
     // (otherwise Chromium lands on <body> for a blank step).
     if (!el.hasAttribute("tabindex")) el.tabIndex = -1;
@@ -130,8 +133,7 @@ window.TopModal = (function () {
   function topModalInside(layer) {
     let modals = null;
     try { modals = document.querySelectorAll(":modal"); } catch (_) { return false; }
-    const m = modals && modals.length ? modals[modals.length - 1] : null;
-    return !!m && m !== layer && !!layer.contains && layer.contains(m);
+    return !!modals && Array.from(modals).some((m) => m !== layer && !!layer.contains && layer.contains(m));
   }
 
   function onEscape(e) {

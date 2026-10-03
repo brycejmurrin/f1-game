@@ -1,18 +1,14 @@
 ---
 name: survey-ui-matrix
-context: fork
-agent: general-purpose
-description: Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play).
+description: "Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — to find layout defects before a restructure, prove a CSS change regressed no other shape, or check every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play)."
 ---
 
 # Surveying the whole UI across the whole matrix
 
-Runs FORKED (`context: fork`, `agent: general-purpose`): a matrix walk is
-dozens of `browser_*` snapshots, so the cells and their measurements stay in the
-fork and the parent gets the defect table (screen × shape × scale × pointer,
-one row per finding, screenshot paths under `artifacts/`). The fork edits
-nothing: fixes are the parent's, one cell at a time, via `css-play` or
-`ui-menu-a11y`.
+The parent runs the browser matrix with one Chromium session. Delegate only
+browser-free catalog checks and artifact analysis. Subagents return defect tables
+with screenshot paths and missing cells; the parent applies fixes via `css-play`
+or `ui-menu-a11y`. This follows AGENTS.md rule 10.
 
 ## Prerequisites (always)
 
@@ -32,7 +28,7 @@ viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
 ```sh
 # BROWSER-FREE (safe anywhere; exits before any launch): --help, --list, --report
 node tools/ui/layout-audit.mjs --help
-node tools/ui/layout-audit.mjs --list            # 48 screens x 11 viewports (2026-09-30); the enumeration step
+node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (browser-free; 49×11 as of 2026-10-01)
 # BROWSER-ONLY (launch Chromium: check /proc/loadavg < 3, no Playwright run live):
 node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
@@ -40,9 +36,9 @@ node tools/ui/layout-audit.mjs --screen=settings # one cell
 node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
 # Numbers companion (type/spacing floors): node tools/ui/fit-audit.mjs
 # Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21
-# Both of those LAUNCH CHROMIUM on any argv — they have no --help, so a
-# probe for usage starts a browser. `layout-audit.mjs --list` is the
-# browser-free way to see what a sweep would cover.
+# Both of those LAUNCH CHROMIUM unless `--help` is passed (added 2026-10-01);
+# a bare probe for usage used to start a browser. Prefer `layout-audit.mjs --list`
+# for the catalog without launching.
 ```
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /

@@ -28,11 +28,17 @@
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 let setupApiMocks = null;
 try { ({ setupApiMocks } = await import("../../tests/helpers/f1-api-mock.js")); } catch { /* hub degrades to its empty state */ }
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `fit-audit — numbers matrix: tap / type / spacing / overflow floors
+
+  node tools/ui/fit-audit.mjs [--only=select,menu] [--sizes=852x393,…] [--scale=100,130]
+
+Browser-only. Prefer layout-audit.mjs --list / --help to see the catalog without launching.`);
 const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : null; };
 const ONLY = arg("only") ? arg("only").split(",").filter(Boolean) : null;
 // The interface-size axis (tools/ui/ui-scale-axis.mjs). Crossed with SIZES below,

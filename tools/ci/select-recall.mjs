@@ -40,16 +40,12 @@ export const CASES = [
     catches: "tests/specs/terrain-over-road.spec.js",
   },
   {
-    // PARTLY COVERED OUTSIDE THE SELECTOR (2026-09-22). This row reads "MISSED
-    // but NAMED" because the catching spec declares 1500 s against the gate's
-    // 180 s per-test cap — a real limit of the SELECTED gate, and still worth
-    // reading as one. tests/unit/props-over-road.test.mjs now runs the same
-    // audit in test:sweeps, which the Pages gate runs on a js/track diff
-    // blocking, so the class is guarded on the diffs that cause it. PARTLY,
-    // not wholly: that suite audits tools/lib/track-build-vm.cjs's build, and
-    // the browser builds at least one monza prop the VM does not (measured;
-    // docs/notes/DEFECT-LEDGER.md). So do not read this row as "this defect
-    // class can ship", and do not read it as fully covered either.
+    // CLOSED ON THE SELECTED GATE (2026-09-30). Was "MISSED but NAMED" because
+    // the catching spec declared 1500 s against the gate's 180 s per-test
+    // cap. props-over-road.spec.js is now one test per circuit at 120 s, so a
+    // js/track edit can select it again. tests/unit/props-over-road.test.mjs
+    // still runs the VM build in test:sweeps (Pages gate); the browser copy
+    // sees pack geometry the VM does not (docs/notes/DEFECT-LEDGER.md).
     name: "street-barrier chord-cut hung a panel over the racing line (c0bd0abe)",
     changed: ["js/track/tracks.js"],
     catches: "tests/specs/props-over-road.spec.js",
@@ -154,18 +150,18 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
      outright.
 
      THE OTHER FOUR ARE NOT ONE PROBLEM, and this footer said they were until
-     2026-09-22. Three (terrain-over-road 1500 s, props-over-road 1500 s,
-     audio-smoke 180 s) are specs a PATH RULE routes that declare >= the gate's
-     per-test budget, excluded by the deliberate `>=` policy in
-     select-specs.mjs. The fourth, touch-steer.spec.js, is excluded by
-     ARITHMETIC, not policy: it declares 25 tests against a 10-test cap, so it
-     lands in `unreachable` and no budget this gate could be given would admit
-     it — only splitting the file would. Attributing it to the `>=` policy
-     pointed the fix at the wrong knob, which is why the verdict line above now
-     names the bucket for each row rather than listing all three.
+     2026-09-22. Two remaining (terrain-over-road 1500 s, audio-smoke 180 s)
+     are specs a PATH RULE routes that declare >= the gate's per-test budget,
+     excluded by the deliberate `>=` policy in select-specs.mjs.
+     props-over-road left that set on 2026-09-30 (one test per circuit at
+     120 s). touch-steer.spec.js was excluded by ARITHMETIC (25 tests against
+     a 10-test cap) and has since been split. Attributing every miss to the
+     `>=` policy pointed the fix at the wrong knob, which is why the verdict
+     line above now names the bucket for each row rather than listing all
+     three.
 
-     All four are real limits of the selected gate, and ones that should be
-     read rather than buried under a routine line.
+     All remaining over-budget misses are real limits of the selected gate,
+     and ones that should be read rather than buried under a routine line.
 
      Raise this when the selector genuinely improves. Never lower it to make a
      red go away: below the floor means recall REGRESSED, which is the whole
