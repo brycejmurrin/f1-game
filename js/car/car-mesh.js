@@ -916,6 +916,127 @@ function getCockpitWheel(liv, style) {
   cockpitWheelMesh = _gfx.createMesh(_rigMaterials(out));
   return cockpitWheelMesh;
 }
+// STEERING LOCK. The wheel used to roll a fixed 0.80 rad (±46 deg) at full
+// steer, behind a second λ6 damp stacked on the already-damped steerVis: a
+// hairpin turned the wheel a quarter of what a real one does, a beat late.
+// Progressive now: the centre keeps the shipped 0.80 rad slope (small
+// corrections read exactly as before) and a cubic term takes full lock to
+// 1.5 rad (~86 deg — a 2026 car's ±90 deg lock), behind a λ12 visual damp
+// that still settles rather than flicks. The sign is the shipped one.
+const WHEEL_ROLL_LIN = 0.80, WHEEL_ROLL_CUBE = 0.70, WHEEL_ROLL_LAMBDA = 12;
+function cockpitWheelRoll(steer) {
+  const v = Math.max(-1, Math.min(1, steer || 0));
+  return -(WHEEL_ROLL_LIN * v + WHEEL_ROLL_CUBE * v * v * v);
+}
+// FOREARMS. The gloves end at their cuffs, so on their own they floated —
+// worst at full lock, where the outside hand hangs at twelve o'clock with
+// nothing running back to the driver. A sleeve in the SUIT colour now runs
+// from inside each cuff (wheel-local: it rolls with the wheel) to an elbow
+// fixed in CAR space beside the seat (it does not): one cached unit tube,
+// stretched between the two per frame. The elbow rides the seat (CockpitOpts
+// layout wheelY/wheelZ), low and only 8 cm behind the hub, so the sleeve
+// DROPS out of the bottom of the frame the way an onboard shows forearms
+// rising to the grips. That is forced by the 0.30 m near plane, not taste: the
+// eye is only 0.46 m behind the wheel, and an elbow set back where a real one
+// is pulled the sleeve through the near plane IN FRAME at full lock (the
+// outside hand at twelve o'clock), worst from the HELMET eye under braking.
+// Here every stretch of sleeve nearer than 0.33 m is already >= 42 deg under
+// the eye line (the widest stock FOV shows 40.5) — tests/unit/cockpit-wheels.
+const ARM_WRIST = [0.1895, -0.140, 0.004];   // wheel-local, inside the glove cuff (_wheelHands)
+const ARM_ELBOW = [0.215, -0.30, -0.08];     // car-local x; y and z relative to the wheel hub
+const ARM_R = 0.016, ARM_TAPER = 1.6;        // sleeve radius at the wrist (m); elbow / wrist
+// The exterior driver's SUIT (car3d part "driver": c2 x 0.62 + 0.05), with the
+// cockpit's pale-accent rule (car3d _ckAcc) first: a white suit dims to a grey
+// so a pale accent never fills the bottom of the view.
+function suitColour(liv) {
+  let c = liv && liv.c2 ? liv.c2 : [0.30, 0.30, 0.33];
+  const mn = Math.min(c[0], c[1], c[2]);
+  if (mn >= 0.45) c = [c[0] * 0.42 / mn, c[1] * 0.42 / mn, c[2] * 0.42 / mn];
+  return [c[0] * 0.62 + 0.05, c[1] * 0.62 + 0.05, c[2] * 0.62 + 0.05];
+}
+let _armMesh = null, _armKey = "";
+const _armC2 = [NaN, NaN, NaN];   // the c2 the cached sleeve was built from: a per-frame check that allocates nothing
+// Unit sleeve: +z from the wrist (z 0, radius 1) to the elbow (z 1, ARM_TAPER),
+// a little fuller at the forearm's belly. Radial normals, so the per-frame
+// stretch (radius on x/y, length on z) leaves them pointing the right way.
+function getForearm(liv) {
+  const c2 = liv && liv.c2;
+  if (_armMesh && c2 && c2[0] === _armC2[0] && c2[1] === _armC2[1] && c2[2] === _armC2[2]) return _armMesh;
+  _armC2[0] = c2 ? c2[0] : NaN; _armC2[1] = c2 ? c2[1] : NaN; _armC2[2] = c2 ? c2[2] : NaN;
+  const col = suitColour(liv), key = col.map((v) => v.toFixed(2)).join(",");
+  if (_armMesh && _armKey !== key) { if (_gfx.freeMesh) _gfx.freeMesh(_armMesh); _armMesh = null; }
+  if (_armMesh) return _armMesh;
+  _armKey = key;
+  const out = { pos: [], nrm: [], col: [], idx: [] }, N = 10, T = [0, 0.3, 0.65, 1];
+  for (const t of T) {
+    const r = 1 + (ARM_TAPER - 1) * t + 0.12 * Math.sin(Math.PI * t);
+    for (let j = 0; j < N; j++) {
+      const a = j / N * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+      out.pos.push(c * r, s * r, t); out.nrm.push(c, s, 0); out.col.push(col[0], col[1], col[2]);
+    }
+  }
+  for (let i = 0; i < T.length - 1; i++) for (let j = 0; j < N; j++) {
+    const a = i * N + j, b = i * N + (j + 1) % N;
+    out.idx.push(a, b, b + N, a, b + N, a + N);
+  }
+  // Flat caps with their own normals (the elbow end is below the frame, the
+  // wrist end inside the cuff, but a closed tube never shows a hole).
+  for (const end of [0, T.length - 1]) {
+    const c0 = out.pos.length / 3, z = T[end], nz = end ? 1 : -1;
+    out.pos.push(0, 0, z); out.nrm.push(0, 0, nz); out.col.push(col[0], col[1], col[2]);
+    for (let j = 0; j < N; j++) {
+      const p = (end * N + j) * 3;
+      out.pos.push(out.pos[p], out.pos[p + 1], z); out.nrm.push(0, 0, nz); out.col.push(col[0], col[1], col[2]);
+    }
+    for (let k = 0; k < N; k++) {
+      const a = c0 + 1 + k, b = c0 + 1 + (k + 1) % N;
+      out.idx.push(...(end ? [c0, a, b] : [c0, b, a]));
+    }
+  }
+  _rigMark(out, 0, 22);   // suit fabric: the gloves' matte surface, not the generic panel
+  _armMesh = _gfx.createMesh(out);
+  return _armMesh;
+}
+// A point through a column-major 4x4 (no M4: the node tests load this file alone).
+function _xf(m, x, y, z, out) {
+  out[0] = m[0] * x + m[4] * y + m[8] * z + m[12];
+  out[1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+  out[2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+  return out;
+}
+// Wrist (through the rolled wheel matrix) and elbow (through the car body
+// matrix) for one side, both in the space the two matrices map into.
+function forearmEnds(rig, base, lay, side, wrist, elbow) {
+  _xf(rig, side * ARM_WRIST[0], ARM_WRIST[1], ARM_WRIST[2], wrist);
+  _xf(base, side * ARM_ELBOW[0], lay.wheelY + ARM_ELBOW[1], lay.wheelZ + ARM_ELBOW[2], elbow);
+}
+const _armW = [0, 0, 0], _armE = [0, 0, 0], _armM = new Float32Array(16);
+// The unit sleeve stretched from wrist to elbow: a right-handed basis whose x/y
+// span the cross-section (ARM_R) and whose z IS the wrist-to-elbow vector.
+function forearmMatrix(wrist, elbow, up, out) {
+  const dx = elbow[0] - wrist[0], dy = elbow[1] - wrist[1], dz = elbow[2] - wrist[2];
+  const L = Math.hypot(dx, dy, dz) || 1, ux = dx / L, uy = dy / L, uz = dz / L;
+  let ax = uy * up[2] - uz * up[1], ay = uz * up[0] - ux * up[2], az = ux * up[1] - uy * up[0];
+  const al = Math.hypot(ax, ay, az);
+  if (al < 1e-6) { ax = 1; ay = 0; az = 0; } else { ax /= al; ay /= al; az /= al; }
+  const bx = uy * az - uz * ay, by = uz * ax - ux * az, bz = ux * ay - uy * ax;   // u x a
+  out[0] = ax * ARM_R; out[1] = ay * ARM_R; out[2] = az * ARM_R; out[3] = 0;
+  out[4] = bx * ARM_R; out[5] = by * ARM_R; out[6] = bz * ARM_R; out[7] = 0;
+  out[8] = dx; out[9] = dy; out[10] = dz; out[11] = 0;
+  out[12] = wrist[0]; out[13] = wrist[1]; out[14] = wrist[2]; out[15] = 1;
+  return out;
+}
+// Both sleeves, two draws a frame. rig = the rolled wheel matrix (car-draw
+// _rigB), base = the car body matrix, lay = CockpitOpts.layout() of the seat.
+const _armUp = [0, 1, 0];
+function drawForearms(rig, base, lay, liv, opt) {
+  const mesh = getForearm(liv);
+  _armUp[0] = base[4]; _armUp[1] = base[5]; _armUp[2] = base[6];
+  for (let side = -1; side <= 1; side += 2) {
+    forearmEnds(rig, base, lay, side, _armW, _armE);
+    _gfx.draw(mesh, forearmMatrix(_armW, _armE, _armUp, _armM), opt);
+  }
+}
 // The COLUMN AND BULKHEAD a wheel clips onto, for VISOR — the cockpit with the
 // wheel taken off (js/camera/vantage.js) — and for the NONE cockpit interior. Without them the view looked down
 // onto a bare deck with the halo pillar hanging in the air. Wheel-local like
@@ -1157,21 +1278,32 @@ function getCockpitGlass(kind) {
   return _glassMeshes[kind];
 }
 const _ledMeshes = {};
+// THE SHIFT LIGHTS ARE THE BIGGEST THING ON THE WHEEL. At 3.4 mm the fifteen
+// lenses were specks at the wheel's 0.46 m; a real 2026 row runs right across
+// the top of the display at about a centimetre a lens. Each row sits inside its
+// own fascia's top edge (the _wheelScreen outlines): GT's top is lower, and the
+// YOKE's sits so close over its LCD that its row is a hair smaller and narrower.
+// `half` is the centre-to-centre half-span; 15 lenses at 2r + 1 mm each.
+const LED_ROWS = { std: { y: 0.082, half: 0.077, r: 0.005 }, gt: { y: 0.076, half: 0.077, r: 0.005 },
+  yoke: { y: 0.0625, half: 0.070, r: 0.0045 } };
 // `lit` 0-8 lights that many LEDs left-to-right. 9 is SHIFT NOW: the whole
 // row blue, the cue a driver actually upshifts on (8 lit and 8 lit-plus-past-
 // it looked identical). The strip never goes DARK at the limiter — the caller
 // (car-draw.js) alternates 8 and 9, steady 9 under reduced motion.
-function getLedStrip(lit) {
-  if (_ledMeshes[lit]) return _ledMeshes[lit];
-  const out = { pos: [], nrm: [], col: [], idx: [] };
+// `style` picks the row (LED_ROWS); anything else — the 2000s wheel scales the
+// standard row onto its own LCD — gets the standard one.
+function getLedStrip(lit, style) {
+  const rowId = LED_ROWS[style] ? style : "std", key = rowId + lit;
+  if (_ledMeshes[key]) return _ledMeshes[key];
+  const out = { pos: [], nrm: [], col: [], idx: [] }, row = LED_ROWS[rowId];
   const COLS = [[0.2,1.3,0.35],[1.2,0.82,0.12],[0.35,0.55,1.5]];
   const count = Math.round(Math.max(0, Math.min(8, lit)) / 8 * 15);
   for (let i = 0; i < 15; i++) {
     const col = lit === 9 ? [0.35,0.55,1.5] : i < count ? COLS[Math.floor(i/5)] : [0.055,0.06,0.065];
-    _rigDisc(out, -0.070 + i*0.010, 0.082, -0.030, 0.0034, 8, col);
+    _rigDisc(out, -row.half + i * row.half / 7, row.y, -0.030, row.r, 8, col);
   }
-  _ledMeshes[lit] = _gfx.createMesh(out);
-  return _ledMeshes[lit];
+  _ledMeshes[key] = _gfx.createMesh(out);
+  return _ledMeshes[key];
 }
 // MIRROR GLASS FALLBACK: the cockpit housings' glass is near-black because the
 // HUD mirror pass is the reflection. While that pass is not drawing (MIRROR
@@ -1502,6 +1634,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, getMirrorFallback, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
+    cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);
