@@ -4562,6 +4562,13 @@ const TLX = (function () {
                   // SHARED_UNIFORMS — valid on a software adapter too.
                   o.rUbo = inf.memory.uniformBuffers;
                   o.rUboKB = inf.memory.uniformBuffersSize != null ? +(inf.memory.uniformBuffersSize / 1024).toFixed(1) : null;
+                  // Live RenderObjects (three's _objects cache). The per-object
+                  // arm's buffer count is only comparable PER render object:
+                  // prunePool drops a wrapper's render object after 20 s idle
+                  // (dropWrapper), so the raw count follows how long a sample
+                  // took, not the layout.
+                  const ro = renderer._objects && renderer._objects._renderObjects;
+                  o.rObj = ro && typeof ro.size === "number" ? ro.size : null;
                 }
                 if (inf.render) { o.calls = inf.render.calls; }
               }
