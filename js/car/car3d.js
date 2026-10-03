@@ -5,10 +5,10 @@ const Car3D = (function () {
   const SURFACES = Object.freeze({
     custom: 0, paint: 20, carbon: 21, rubber: 22,
     metal: 23, glass: 24, visor: 32,   // 32 is glass-like but DIELECTRIC, not chrome: glsl-lit.js baseRefl
-    emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27,
+    emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27, sidewall: 33,   // 33: satin tyre sidewall (glsl-lit.js)
   });
   // A livery FINISH is a surface-id remap on painted vertices, not a material
-  // uniform: the shaders classify car surfaces 20-32 and branch per id, so a new
+  // uniform: the shaders classify car surfaces 20-33 and branch per id, so a new
   // finish costs an id in that chain (js/render/glx/shaders/glsl-lit.js and its WGSL/TSL
   // mirrors) and one row here. `carbon` gets id 31 rather than reusing
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
@@ -513,9 +513,9 @@ const Car3D = (function () {
       // and through the spoke gaps — with nothing to z-fight. That was the whole
       // "translucent tyre" bug: double-wound coincident faces flickering on real
       // mobile depth precision (SwiftShader tolerated it, so it looked solid headless).
-      addQuad(out, B0, B1, R1, R0, TYRE, SURFACES.rubber);
+      addQuad(out, B0, B1, R1, R0, TYRE, SURFACES.sidewall);
       const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
-      addQuad(out, A0, A1, L1, L0, TYRE, SURFACES.rubber);
+      addQuad(out, A0, A1, L1, L0, TYRE, SURFACES.sidewall);
       // The COVER, in three rings instead of one flat fan from the rim to a
       // point. The fan was geometrically fine and read as a plain grey disc at
       // every distance: it ran straight into the tyre with no edge, and its apex
@@ -624,7 +624,7 @@ const Car3D = (function () {
         const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
         const outer = 0.96 * edgeRm, inner = Math.max(0.76 * edgeRm, outer - bandWidth);
         const A = P(r * outer, a0), B = P(r * outer, a1), C = P(r * inner, a1), D = P(r * inner, a0);
-        addQuad(out, A, B, C, D, BAND, SURFACES.rubber);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
+        addQuad(out, A, B, C, D, BAND, SURFACES.sidewall);   // single face (wheel drawn cull-off → shows both sides, no z-fight)
       }
     }
     // Raised sidewall lettering ring(s): proud dark annulus inboard of the band
@@ -639,7 +639,7 @@ const Car3D = (function () {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
           const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
           addQuad(out, P(r * ring[1], a0), P(r * ring[1], a1),
-                       P(r * ring[0], a1), P(r * ring[0], a0), SW, SURFACES.rubber);
+                       P(r * ring[0], a1), P(r * ring[0], a0), SW, SURFACES.sidewall);
         }
       }
     }
