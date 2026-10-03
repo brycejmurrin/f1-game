@@ -277,7 +277,7 @@ const CarDraw = (function () {
         const c = G.cars[i];
         try {
           if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
-          if (c.isPlayer && CamModes.CAM_MODES[G.camMode].id === "cockpit") cockpitBodyMesh(c.team, c);
+          if (c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c);
           getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
           if (casters) teamMesh(c.team, c, true);
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
@@ -321,7 +321,7 @@ const CarDraw = (function () {
         try {
           if (c.isPlayer) {
             playerBodyMesh(c.team, c, visualKey);
-            if (CamModes.CAM_MODES[G.camMode].id === "cockpit") cockpitBodyMesh(c.team, c, visualKey);
+            if (["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c, visualKey);
           } else teamBodyMesh(c.team, c);
           const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
           if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
@@ -507,16 +507,17 @@ const CarDraw = (function () {
       }
       // Roll the wheel about the (car-local) column axis by the smoothed steering —
       // works identically for tilt / buttons / touch (steerVis is the resolved,
-      // damped steering whatever the input mode). A second, slower damping stage
-      // gives the wheel visual WEIGHT (it settles rather than flicking), the lock
-      // is modest (~±46°), and the sign is flipped — it was rotating backwards.
-      c._whlVis = deps.damp(c._whlVis == null ? 0 : c._whlVis, M4.clamp(c.steerVis || 0, -1, 1), 6, dt);
-      const a = -c._whlVis * 0.80;
+      // damped steering whatever the input mode). A second, light damping stage
+      // (λ12) gives the wheel visual WEIGHT (it settles rather than flicking);
+      // the lock is progressive to ~±86° (CarMesh.cockpitWheelRoll).
+      c._whlVis = deps.damp(c._whlVis == null ? 0 : c._whlVis, M4.clamp(c.steerVis || 0, -1, 1), CarMesh.WHEEL_ROLL_LAMBDA, dt);
+      const a = CarMesh.cockpitWheelRoll(c._whlVis);
       const ca = Math.cos(a), sa = Math.sin(a);
       _rigR[0] = ca; _rigR[1] = sa; _rigR[4] = -sa; _rigR[5] = ca;
       M4.mulTo(_rigA, base, _rigT);
       M4.mulTo(_rigB, _rigA, _rigR);
       G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, opt);   // style + livery keyed: team grips/marker/gloves
+      CarMesh.drawForearms(_rigB, base, lay, deps.resolveLivery(c.team), opt);   // suit sleeves: cuff (rolls) to elbow (car-fixed)
       // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the
       // HUD shows gear and speed instead (js/camera/mode-switch.js).
       if (wheelStyle === "retro") {
@@ -532,7 +533,7 @@ const CarDraw = (function () {
       const rpmF = M4.clamp(((c.rpm || PhysicsConsts.IDLE_RPM) - PhysicsConsts.IDLE_RPM) / (PhysicsConsts.MAX_RPM - PhysicsConsts.IDLE_RPM), 0, 1);
       // At the limiter the strip stays LIT: full ramp <-> all-blue SHIFT NOW at
       // ~7 Hz (it went 9 <-> 0 — dark half the frames), steady blue under reduced motion.
-      G.gfx.draw(getLedStrip(rpmF > 0.965 ? (motionReduced() || G.raceT * 14 % 1 < 0.5 ? 9 : 8) : Math.round(rpmF * 8)), _rigB, fx);
+      G.gfx.draw(getLedStrip(rpmF > 0.965 ? (motionReduced() || G.raceT * 14 % 1 < 0.5 ? 9 : 8) : Math.round(rpmF * 8), wheelStyle), _rigB, fx);
       drawWheelExtras(_rigB, c, G.raceT);   // ACTIVE AERO lamp + flap-travel bar (car-mesh.js)
       // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
       // reversing glitch) would otherwise stringify with a "-" character that

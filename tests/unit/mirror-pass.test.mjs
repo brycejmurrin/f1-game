@@ -53,7 +53,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     performance: { now: () => 0 },
     GameCams: { vantage: (_t, m, s, x, spd) => { vant.push({ m, s, x, spd }); pooled.eye[0] = 0; pooled.eye[1] = 4; pooled.eye[2] = s - 12;
       pooled.tgt[0] = 0; pooled.tgt[1] = 1; pooled.tgt[2] = s + 20; return pooled; } },
-    CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }] },
+    CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }, { id: "helmet" }] },
     // A straight road along +Z; the track's +x-right is world −X (AGENTS.md).
     Tracks: {
       sample: (_t, s, out) => { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1;
@@ -79,7 +79,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const player = { isPlayer: true, s: 100, team: "p" };
   const behind = { s: 80, team: "b" }, ahead = { s: 130, team: "a" }, far = { s: -100, team: "f" };   // far: 200 m back
   const G = {
-    gfx, state, player, cars: [player, behind, ahead, far], track: { total: 5000 }, camMode: ["chase", "far", "drift", "cockpit"].indexOf(cam),
+    gfx, state, player, cars: [player, behind, ahead, far], track: { total: 5000 }, camMode: ["chase", "far", "drift", "cockpit", "helmet"].indexOf(cam),
     dbgCam: null, hideMeshes: {}, frozen: false,
     store: { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; } },
   };
@@ -110,6 +110,9 @@ test("AUTO shows the mirror in an onboard view on a hardware renderer, and not i
   assert.equal(onboard.mp.state().shown, true);
   assert.equal(onboard.frameEl.hidden, false);
   assert.ok(onboard.classes.has("hud-mirror-on"), "the radio card / flag step-down class");
+  const helmet = boot({ cam: "helmet" });
+  helmet.render();
+  assert.equal(helmet.mp.state().shown, true, "HELMET is an onboard view with no road behind it, like COCKPIT");
   const chase = boot({ cam: "chase" });
   chase.render();
   assert.equal(chase.mp.state().shown, false);
