@@ -33,6 +33,23 @@ function skillTree(dir, fm = 'name: demo\ndescription: "Use when debugging: demo
   fs.symlinkSync("../../.claude/skills/demo", path.join(dir, ".agents/skills/demo"));
 }
 
+test("doctor checks the inspected package Node engine rather than a stale minimum", (t) => {
+  const dir = fixture(t);
+  skillTree(dir);
+  const check = (nodeVersion) => diagnose({ root: dir, nodeVersion }).checks.find((c) => c.id === "runtime.node");
+  put(dir, "package.json", JSON.stringify({ engines: { node: ">=22" } }));
+  assert.equal(check("20.19.0").status, "fail");
+  assert.equal(check("21.7.3").status, "fail");
+  assert.equal(check("22.0.0").status, "pass");
+  assert.match(check("22.0.0").message, />=22/);
+  put(dir, "package.json", JSON.stringify({ engines: { node: ">=22.3.1" } }));
+  assert.equal(check("22.3.0").status, "fail");
+  assert.equal(check("22.3.1").status, "pass");
+  assert.equal(check("23.0.0").status, "pass");
+  put(dir, "package.json", JSON.stringify({ engines: { node: ">=22 <24" } }));
+  assert.equal(check("25.0.0").status, "warn", "unsupported ranges must remain unverified");
+});
+
 test("doctor parses real YAML and rejects colon descriptions and duplicate keys", (t) => {
   const dir = fixture(t);
   skillTree(dir);
