@@ -13,15 +13,34 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { selectionReceipt } from "../../tools/ci/pick-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const run = (args, opts = {}) => {
   try {
-    return { out: execFileSync("node", args, { cwd: ROOT, encoding: "utf8", ...opts }), status: 0 };
+    return { out: execFileSync(process.execPath, args, { cwd: ROOT, encoding: "utf8", ...opts }), status: 0 };
   } catch (e) {
     return { out: (e.stdout || "") + (e.stderr || ""), status: e.status };
   }
 };
+
+// Keep verdict tests bounded and offline. A plan never needs these stubs;
+// a run's CI advisory must not read real git refs or contact GitHub here.
+function driverEnv(t, { stubFastGate = false } = {}) {
+  const tmpRoot = path.join(ROOT, "artifacts/tmp");
+  fs.mkdirSync(tmpRoot, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(tmpRoot, "change-driver-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, "git"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  if (stubFastGate) {
+    fs.writeFileSync(path.join(dir, "node"), `#!${process.execPath}
+const tool = process.argv[2];
+if (tool === "tools/ci/bump-cache.mjs") console.log(JSON.stringify({consistent: true}));
+else if (tool !== "tools/ci/tooling-fast.mjs") process.exit(90);
+`, { mode: 0o755 });
+  }
+  return { ...process.env, PATH: dir + path.delimiter + process.env.PATH };
+}
 
 // ── verify-change --plan ─────────────────────────────────────────────────────
 
@@ -77,7 +96,7 @@ test("verify-change --plan on a docs-only change selects no browser batches", ()
   assert.deepEqual(plan.batches, [], "no browser minutes for a prose change");
 });
 
-test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", () => {
+test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", (t) => {
   // The asymmetry above was the bug: that test pins "an empty batch list is
   // correct for prose" and never asserts the VERDICT, so an empty batch list
   // from the opposite cause — no rule claimed the files at all — reported the
@@ -88,7 +107,7 @@ test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", ()
   // apex_verify_change_fast — so an agent asking "did I break anything?" after
   // a .github/, package.json, playwright.config.js, icons/ or vendor/ edit was
   // told no, on the strength of one advisory cache-check. PERF-FINDINGS 2j.
-  const r = run(["tools/ci/verify-change.mjs", "--fast", "--json", ".github/workflows/ci.yml"]);
+  const r = run(["tools/ci/verify-change.mjs", "--fast", "--json", ".github/workflows/ci.yml"], { env: driverEnv(t) });
   const out = JSON.parse(r.out);
   assert.equal(out.verdict, "unmatched",
     "a diff no rule claimed must not report pass — the selection is not trustworthy");
@@ -104,21 +123,41 @@ test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", ()
   assert.equal(ok.fast.toolingFast, true);
 });
 
-test("verify-change derives its reason the same way pick-tests publishes it", () => {
-  // Two copies of one rule drift. pick-tests.mjs's --json `reason` is the definition; this
-  // asserts verify-change computes the identical expression over the identical
-  // inputs (its `groups` is pick-tests' `named`, same filter, same sort), so a
-  // change to the contract cannot silently apply to only one of them.
-  const vc = fs.readFileSync(path.join(ROOT, "tools/ci/verify-change.mjs"), "utf8");
-  const pt = fs.readFileSync(path.join(ROOT, "tools/ci/pick-tests.mjs"), "utf8");
-  const shape = /!files\.length \? "none" : \((?:groups|named)\.length \? "matched" : "unmatched"\)/;
-  assert.match(vc, shape, "verify-change must compute the three-way reason");
-  assert.match(pt, shape, "pick-tests must still be the definition this mirrors");
-  // ORDER matters, not just presence: the unmatched check has to run BEFORE the
-  // pass path, or it is dead code sitting under the bug it exists to prevent.
-  // An index comparison says that plainly; a regex spanning both would not.
-  assert.ok(vc.indexOf('selReason === "unmatched"') < vc.indexOf('? "partial" : "pass"'),
-    "the unmatched check must come before the pass path, or it can never fire");
+test("verify-change and pick-tests publish the shared per-path selection receipt", (t) => {
+  const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
+  assert.deepEqual(selectionReceipt([], scripts), { reason: "none", receipts: [], unclaimed: [] });
+  for (const [files, expectedReason] of [
+    [["docs/TESTING.md"], "matched"],
+    [["playwright.config.js"], "unmatched"],
+    [["docs/TESTING.md", "playwright.config.js"], "partial"],
+    [[".claude/skills/check-changes/SKILL.md"], "matched"],
+  ]) {
+    const receipt = selectionReceipt(files, scripts);
+    assert.equal(receipt.reason, expectedReason);
+    const selected = run(["tools/ci/pick-tests.mjs", "--json", ...files]);
+    const planned = run(["tools/ci/verify-change.mjs", "--plan", ...files]);
+    assert.equal(selected.status, 0, selected.out);
+    assert.equal(planned.status, 0, planned.out);
+    const pick = JSON.parse(selected.out), plan = JSON.parse(planned.out);
+    assert.equal(pick.reason, receipt.reason);
+    assert.equal(plan.selection, receipt.reason);
+    for (const key of ["receipts", "unclaimed"]) {
+      assert.deepEqual(pick[key], receipt[key], `pick-tests ${key} must preserve per-path coverage`);
+      assert.deepEqual(plan[key], receipt[key], `verify-change ${key} must preserve per-path coverage`);
+    }
+  }
+
+  // Exercise the actual finish path with a simulated successful fast gate.
+  // A claimed docs path must never conceal an uncovered configuration path,
+  // even when no batches remain and the ordinary finish path would say pass.
+  const result = run(["tools/ci/verify-change.mjs", "--json", "docs/TESTING.md", "playwright.config.js"],
+    { env: driverEnv(t, { stubFastGate: true }) });
+  assert.equal(result.status, 2, result.out);
+  const verdict = JSON.parse(result.out);
+  assert.equal(verdict.verdict, "partial");
+  assert.deepEqual(verdict.unclaimed, ["playwright.config.js"]);
+  assert.deepEqual(verdict.receipts, selectionReceipt(["docs/TESTING.md", "playwright.config.js"], scripts).receipts);
+  assert.ok(verdict.phases.every((phase) => phase.ok), "partial comes from coverage, not a failed gate");
 });
 
 // ── bump-cache against a fixture shell (never the real one) ─────────────────

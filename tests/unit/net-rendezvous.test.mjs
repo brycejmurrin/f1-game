@@ -37,6 +37,26 @@ globalThis.NetBytes = eval(fs.readFileSync(path.join(ROOT, "js/net/bytes.js"), "
 const NetRendezvous = eval(
   fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8") + ";NetRendezvous");
 
+test("a successful response arriving after cancellation never publishes a payload", async () => {
+  const nativeFetch = globalThis.fetch;
+  const previousUrl = NetRendezvous.baseUrl();
+  NetRendezvous.setUrl("http://127.0.0.1:9");
+  let resolve, started;
+  const entered = new Promise((r) => { started = r; });
+  globalThis.fetch = () => { started(); return new Promise((r) => { resolve = r; }); };
+  const token = { cancelled: false };
+  try {
+    const waiting = NetRendezvous.waitFor("ABC234", "offer", token);
+    await entered;
+    token.cancelled = true;
+    resolve(new Response(JSON.stringify({ payload: "stale-offer" }), { status: 200 }));
+    const result = await waiting;
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "cancelled");
+    assert.equal(result.payload, undefined);
+  } finally { globalThis.fetch = nativeFetch; NetRendezvous.setUrl(previousUrl); }
+});
+
 // ---------------------------------------------------------------------------
 // A stand-in for worker/rendezvous.js, same contract.
 // ---------------------------------------------------------------------------

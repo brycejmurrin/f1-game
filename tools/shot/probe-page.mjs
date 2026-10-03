@@ -425,6 +425,7 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
   };
   const session = await page.context().newCDPSession(page);
   let buf;
+  let timeoutHandle;
   try {
     const params = { format, clip, captureBeyondViewport: false };
     if (format === "jpeg" && opts.quality != null) params.quality = opts.quality;
@@ -435,13 +436,14 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
       const budget = opts.timeout;
       buf = await Promise.race([
         capture,
-        new Promise((_, rej) => setTimeout(() => rej(new Error(
-          `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget)),
+        new Promise((_, rej) => { timeoutHandle = setTimeout(() => rej(new Error(
+          `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget); }),
       ]);
     } else {
       buf = await capture;
     }
   } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     try { await session.detach(); } catch (_) { /* already closed */ }
   }
   if (opts.path) writeFileSync(opts.path, buf);
@@ -470,7 +472,7 @@ export async function screenshotGameCanvas(page, outPath, opts = {}) {
   await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
   try {
     const shot = await screenshotPresentedCanvas(page, {
-      path: outPath, skipAwait: true, forceCdp: true, timeout: 60000,
+      path: outPath, skipAwait: true, forceCdp: true, timeout: opts.timeout ?? 60000,
     });
     return { bytes: shot.bytes, clip: shot.clip, via: shot.via || shot.id || "cdp" };
   } finally {
