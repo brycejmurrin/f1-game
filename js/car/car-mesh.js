@@ -14,6 +14,9 @@ const CAR_DECAL_CACHE_MAX = 24;
 // indexOf+splice reorder on every hit; a race uses only a handful of distinct
 // (level, fin, drs, anchor) keys, far under the 24-entry cap, so eviction —
 // and the FIFO/LRU distinction — is never reached in practice.
+// Is this decal sheet for the ROUNDED car? The same switch Car3D.build reads
+// (CarShade.on(teamId)); an imported body never is.
+const decalRound = (legacyBody, teamId) => !legacyBody && typeof CarShade !== "undefined" && CarShade.on(teamId);
 function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
@@ -24,7 +27,10 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   const anchorParts = legacyBody ? null : parts;
   // spineHeight lifts the engine-cover crown the spine crest sits on (cf/cr
   // below read coverAt().top), so the decal takes the same anchors as the mesh.
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight) : null;
+  // `round`: the rounded car (CarShade on for this team, as Car3D.build decides
+  // it) carries the coke-bottle cover and the downwash ramp in its anchors.
+  const round = decalRound(legacyBody, teamId);
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, round) : null;
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
   const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / SH, vB: 1 - (r.y + r.h) / SH });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
@@ -43,6 +49,15 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     for (let k = 0; k < 4; k++) {
       out.pos.push(c[k][0], c[k][1], c[k][2]);
       out.nrm.push(n[0], n[1], n[2]);
+      out.uv.push(uvs[k][0], uvs[k][1]);
+    }
+    out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  };
+  const quadN = (c, ns, uvs) => {   // quadUv with a normal per corner: a strip that bends shades as one
+    const i = out.pos.length / 3;
+    for (let k = 0; k < 4; k++) {
+      out.pos.push(c[k][0], c[k][1], c[k][2]);
+      out.nrm.push(ns[k][0], ns[k][1], ns[k][2]);
       out.uv.push(uvs[k][0], uvs[k][1]);
     }
     out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
@@ -140,22 +155,49 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     // coplanar with it (0.9 mm) and the hatches stand 9 mm proud of it.
     const sZ = [-0.66, -1.90], V_TOP = 0.96, V_BOT = 0.06;
     const PROUD = (Car3D.COVER_STACK && Car3D.COVER_STACK.flankDecal) || 0.014;
+    // The rounded car's flank runs from its pinched FOOT (coverProfile pts[0],
+    // the coke-bottle xb) to the shoulder (pts[1]); the flat car's is 0.28x lean.
+    const foot = (p) => (round && p.pts ? p.pts[0][0] : p.x);
     const flank = (z) => {
       const c = anchors ? anchors.coverAt(z) : (z > -1 ? { x: 0.27, bottom: 0.20, top: 0.81 } : { x: 0.20, bottom: 0.23, top: 0.69 });
       const p = Car3D.coverProfile ? Car3D.coverProfile(c) : { x: c.x, bottom: c.bottom, shoulder: c.top };
-      const h = p.shoulder - p.bottom, nl = Math.hypot(h, 0.28 * p.x), nx = h / nl, ny = 0.28 * p.x / nl;
-      const at = (v) => [p.x * (1 - 0.28 * v) + nx * PROUD, p.bottom + h * v + ny * PROUD];
+      const lean = round && p.pts ? p.pts[0][0] - p.pts[1][0] : 0.28 * p.x;
+      const h = p.shoulder - p.bottom, nl = Math.hypot(h, lean), nx = h / nl, ny = lean / nl;
+      const at = (v) => [(round && p.pts ? foot(p) - lean * v : p.x * (1 - 0.28 * v)) + nx * PROUD, p.bottom + h * v + ny * PROUD];
       return { b: at(V_BOT), t: at(V_TOP), nx, ny };
     };
-    const a = flank(sZ[0]), b = flank(sZ[1]);
-    quad([[a.b[0], a.b[1], sZ[0]], [b.b[0], b.b[1], sZ[1]], [b.t[0], b.t[1], sZ[1]], [a.t[0], a.t[1], sZ[0]]],
-         [a.nx, a.ny, 0], R.spineSide);
-    // Under the det −1 model matrix the +x quad above renders as the car's
-    // RIGHT flank (canvas-left at the rear) and this −x quad as its LEFT
-    // (canvas-left at the front) — LiveryTex.FLANKS authors each in that
-    // side's outside view. A stale atlas without this region mirrors the first.
-    quad([[-b.b[0], b.b[1], sZ[1]], [-a.b[0], a.b[1], sZ[0]], [-a.t[0], a.t[1], sZ[0]], [-b.t[0], b.t[1], sZ[1]]],
-         [-a.nx, a.ny, 0], R.spineSideL || R.spineSide);
+    if (round && typeof CarShade !== "undefined" && CarShade.COVER_Z) {
+      // ROUNDED: the coke pinch curves the foot between stations, and one
+      // straight quad edge from -0.66 to -1.90 is a chord across that curve:
+      // measured, up to 40 mm off the skin at the waist (coke 1.38) against
+      // 14 mm at its ends, so the band floats free. So the band is a strip of
+      // sub-quads at the rings the cover is lofted at (CarShade.COVER_Z), u by
+      // z and a normal per corner, which keeps it its PROUD off the skin.
+      const zs = [sZ[0]].concat(CarShade.COVER_Z.filter((z) => z < sZ[0] && z > sZ[1]), [sZ[1]]);
+      const F = zs.map(flank), f = (z) => (sZ[0] - z) / (sZ[0] - sZ[1]);   // 0 at the front, 1 at the rear
+      const uR = uvOf(R.spineSide), uL = uvOf(R.spineSideL || R.spineSide);
+      const uRight = (z) => uR.uR + (uR.uL - uR.uR) * f(z), uLeft = (z) => uL.uL + (uL.uR - uL.uL) * f(z);
+      for (let i = 0; i < zs.length - 1; i++) {
+        const a = F[i], b = F[i + 1], za = zs[i], zb = zs[i + 1];
+        // Same corner order and u pre-flip as the flat quads below: +x front at uR, -x front at uL.
+        quadN([[a.b[0], a.b[1], za], [b.b[0], b.b[1], zb], [b.t[0], b.t[1], zb], [a.t[0], a.t[1], za]],
+              [[a.nx, a.ny, 0], [b.nx, b.ny, 0], [b.nx, b.ny, 0], [a.nx, a.ny, 0]],
+              [[uRight(za), uR.vB], [uRight(zb), uR.vB], [uRight(zb), uR.vT], [uRight(za), uR.vT]]);
+        quadN([[-b.b[0], b.b[1], zb], [-a.b[0], a.b[1], za], [-a.t[0], a.t[1], za], [-b.t[0], b.t[1], zb]],
+              [[-b.nx, b.ny, 0], [-a.nx, a.ny, 0], [-a.nx, a.ny, 0], [-b.nx, b.ny, 0]],
+              [[uLeft(zb), uL.vB], [uLeft(za), uL.vB], [uLeft(za), uL.vT], [uLeft(zb), uL.vT]]);
+      }
+    } else {
+      const a = flank(sZ[0]), b = flank(sZ[1]);
+      quad([[a.b[0], a.b[1], sZ[0]], [b.b[0], b.b[1], sZ[1]], [b.t[0], b.t[1], sZ[1]], [a.t[0], a.t[1], sZ[0]]],
+           [a.nx, a.ny, 0], R.spineSide);
+      // Under the det −1 model matrix the +x quad above renders as the car's
+      // RIGHT flank (canvas-left at the rear) and this −x quad as its LEFT
+      // (canvas-left at the front) — LiveryTex.FLANKS authors each in that
+      // side's outside view. A stale atlas without this region mirrors the first.
+      quad([[-b.b[0], b.b[1], sZ[1]], [-a.b[0], a.b[1], sZ[0]], [-a.t[0], a.t[1], sZ[0]], [-b.t[0], b.t[1], sZ[1]]],
+           [-a.nx, a.ny, 0], R.spineSideL || R.spineSide);
+    }
   }
   // The fin's blade height is a recipe knob, so the decal has to be placed on
   // the SAME outline the mesh used. sharkFinPanel/sharkFinBadge default to a
@@ -271,8 +313,9 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
 function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
   const anchorParts = legacyBody ? null : parts;
-  // spineHeight reaches the cache key through anchors.key (the lift is in it).
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight) : { key: "legacy" };
+  // spineHeight reaches the cache key through anchors.key (the lift is in it),
+  // and so does the rounded car ("|r": its flank is draped at the loft's rings).
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, decalRound(legacyBody, teamId)) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
   // anchors.key covers the engine-cover fields and the team, NOT the aero
   // recipe — so a fin-height change alone would hit a cached decal mesh built
