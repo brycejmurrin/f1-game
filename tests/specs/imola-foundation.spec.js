@@ -6,56 +6,54 @@ async function loadImola(racePage, time = "day") {
   await racePage.waitForFunction(() => window.__apex.info().track === "imola");
 }
 
-test.describe("Imola track-owned foundation", () => {
-  test("validates terrain, models, barriers, elevation, and night rebuild", async ({ racePage, pageErrors }) => {
-    test.setTimeout(420000);
-    await loadImola(racePage);
-    const result = await racePage.evaluate(() => {
-      const profile = window.__apex.trackProfile(500);
-      const at = (frac) => profile[Math.round(frac * (profile.length - 1))].y;
-      const ys = profile.map((point) => point.y);
-      const shoulderGaps = [];
-      for (let i = 0; i < 240; i++) {
-        const frac = i / 240;
-        for (const lat of [-10, 10]) {
-          const gap = window.__apex.groundY(frac, lat).gap;
-          if (gap != null) shoulderGaps.push({ frac, lat, gap });
-        }
+async function imolaDayDiag(racePage) {
+  test.setTimeout(420000);
+  await loadImola(racePage);
+  return racePage.evaluate(() => {
+    const profile = window.__apex.trackProfile(500);
+    const at = (frac) => profile[Math.round(frac * (profile.length - 1))].y;
+    const ys = profile.map((point) => point.y);
+    const shoulderGaps = [];
+    for (let i = 0; i < 240; i++) {
+      const frac = i / 240;
+      for (const lat of [-10, 10]) {
+        const gap = window.__apex.groundY(frac, lat).gap;
+        if (gap != null) shoulderGaps.push({ frac, lat, gap });
       }
-      return {
-        def: window.TrackDefs.find((track) => track.id === "imola"),
-        geometry: window.__apex.geometryDiagnostics(),
-        models: window.__apex.modelDiagnostics(),
-        walls: window.__apex.wallStats(),
-        shoulderGaps,
-        elevation: {
-          // 7a173519 moved the start line (startFrac 0.495 -> 0.0), rotating
-          // racing fractions by the arc shift (+0.5094); the corners themselves
-          // did not move. Probes re-located onto the corners in the new frame
-          // (headless VM, extremum scan around old frac + shift):
-          //   flat approach 0.15 -> 0.66  (y 0.11)
-          //   Piratella crest 0.34 -> 0.848 (local max 0.8474, y 14.04)
-          //   Acque Minerali 0.48 -> 0.994 (local min 0.9934, y -9.96)
-          //   Variante Alta 0.64 -> 0.148 (local max 0.1487, y 16.10)
-          //   Rivazza 0.80 -> 0.310 (local min 0.3094, y -13.98)
-          flatApproach: at(0.66),
-          piratella: at(0.848),
-          acqueMinerali: at(0.994),
-          varianteAlta: at(0.148),
-          rivazza: at(0.310),
-          range: Math.max(...ys) - Math.min(...ys),
-        },
-      };
-    });
+    }
+    return {
+      def: window.TrackDefs.find((track) => track.id === "imola"),
+      geometry: window.__apex.geometryDiagnostics(),
+      models: window.__apex.modelDiagnostics(),
+      walls: window.__apex.wallStats(),
+      shoulderGaps,
+      elevation: {
+        // 7a173519 moved the start line (startFrac 0.495 -> 0.0), rotating
+        // racing fractions by the arc shift (+0.5094); the corners themselves
+        // did not move. Probes re-located onto the corners in the new frame
+        // (headless VM, extremum scan around old frac + shift):
+        //   flat approach 0.15 -> 0.66  (y 0.11)
+        //   Piratella crest 0.34 -> 0.848 (local max 0.8474, y 14.04)
+        //   Acque Minerali 0.48 -> 0.994 (local min 0.9934, y -9.96)
+        //   Variante Alta 0.64 -> 0.148 (local max 0.1487, y 16.10)
+        //   Rivazza 0.80 -> 0.310 (local min 0.3094, y -13.98)
+        flatApproach: at(0.66),
+        piratella: at(0.848),
+        acqueMinerali: at(0.994),
+        varianteAlta: at(0.148),
+        rivazza: at(0.310),
+        range: Math.max(...ys) - Math.min(...ys),
+      },
+    };
+  });
+}
 
+test.describe("Imola track-owned foundation", () => {
+  // Split 2026-09-30 so an ADAPTED mutant can redden required-models without
+  // reddening every named catcher (twin-fidelity asymmetry).
+  test("required models and pit supersedes", async ({ racePage, pageErrors }) => {
+    const result = await imolaDayDiag(racePage);
     expect(pageErrors).toEqual([]);
-    expect(result.def.sceneryCoordinates).toBe("racing");
-    expect(result.def.terrainOuter).toBe(120);
-    expect(result.def.dressingExclusions).toEqual([
-      { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
-    ]);
-    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
-    expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
     expect(result.models.invalid).toEqual([]);
     // A PIT SUPERSEDE IS BY DESIGN, AND IS STILL PINNED EXACTLY.
     // js/track/scenery/pits.js builds the garages from track.pit, so a circuit's
@@ -75,6 +73,18 @@ test.describe("Imola track-owned foundation", () => {
       "santerno-footbridge",
       ...Array.from({ length: 9 }, (_, i) => `santerno-water-${i}`),
     ]));
+  });
+
+  test("terrain, elevation, walls and night rebuild", async ({ racePage, pageErrors }) => {
+    const result = await imolaDayDiag(racePage);
+    expect(pageErrors).toEqual([]);
+    expect(result.def.sceneryCoordinates).toBe("racing");
+    expect(result.def.terrainOuter).toBe(120);
+    expect(result.def.dressingExclusions).toEqual([
+      { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
+    ]);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
     expect(result.walls.anyNaN).toBe(false);
     expect(result.walls.minOverHw).toBeGreaterThan(0);
     expect(result.walls.tightFrac).toBeGreaterThan(0.3);

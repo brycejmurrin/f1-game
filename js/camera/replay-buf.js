@@ -241,7 +241,10 @@ const ReplayBuf = (function () {
         if (menu) menu.hidden = true;
         Log.info("game", "ReplayBuf.scrub t=" + scrubT.toFixed(2));
       };
-      resume.parentNode.insertBefore(b, resume.nextSibling);
+      // First tile of the pause card's RACE TOOLS tray when it exists.
+      const tray = document.getElementById("pm-quick-doors");
+      if (tray) tray.insertBefore(b, tray.firstChild);
+      else resume.parentNode.insertBefore(b, resume.nextSibling);
     }
     function ensureDock() {
       if (typeof document === "undefined") return null;
