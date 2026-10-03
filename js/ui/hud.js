@@ -417,7 +417,7 @@ function radioTopSlot(root, bcast) {
   hStyle(root, "--radio-top-w", (right - RADIO_TOP_GAP - x).toFixed(1) + "px");
   hStyle(root, "--radio-top-h", t.height.toFixed(1) + "px");
 }
-function fitHud() {
+function fitHud(force) {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
   // Measuring then is a forced reflow on a 0×0 box (~10 Hz) that cannot
   // change a cap — skip until the HUD is visible again (className is in
@@ -471,7 +471,10 @@ function fitHud() {
   const mult = _cssMult;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale * mult;
   const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
-  if (key === _fitKey && --_fitWait > 0) return;
+  // refreshHud(true) / jump() / camera() must re-measure even on the same key:
+  // the 3 s backoff is for idle 10 Hz ticks, not for an explicit flush while
+  // SwiftShader is about to starve the next frames.
+  if (key === _fitKey && !force && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
   // tick ≈ 3 s between forced layout reads while nothing changed.
@@ -778,7 +781,9 @@ function fitHud() {
   // --hud-top-h is consumed in the tower's own zoom space. Publishing it
   // before the cap write left the CSS var one pass behind --hud-z-top, so a
   // probe that required |rect/zoom − published| ≤ 0.1px could miss for the
-  // whole same-key backoff after a camera class change.
+  // whole same-key backoff after a camera class change. Flush so currentCSSZoom
+  // matches the cap we just wrote, then publish.
+  if (_hudTop) void _hudTop.offsetHeight;
   hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
   // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
   // cap between BUTTON SIZE and 1 still has to be written.
@@ -904,7 +909,7 @@ function updateHud(force, dtMs) {
   if (!force && hudT > 0) return;
   hudT = HUD_TICK_MS;
   syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
-  fitHud();                    // below the throttle: this reads layout, per TICK not per frame
+  fitHud(!!force);             // below the throttle; force also skips the 3 s same-key backoff
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).

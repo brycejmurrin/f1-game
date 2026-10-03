@@ -33,7 +33,9 @@ test("broadcast layout probe waits for camera and published tower height, not co
   // fitHud re-publishes --hud-top-h AFTER writing --hud-z-top so a zoom cap
   // in the same pass cannot leave the wait 0.1px behind.
   const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
-  const fit = hud.slice(hud.indexOf("function fitHud()"), hud.indexOf("function paintInstruments"));
+  const fit = hud.slice(hud.indexOf("function fitHud("), hud.indexOf("function paintInstruments"));
+  assert.match(fit, /if \(key === _fitKey && !force && --_fitWait > 0\) return/,
+    "refreshHud(true) must re-fit, not sit in the 3 s same-key backoff");
   const zTop = fit.indexOf('set("--hud-z-top"');
   const republish = fit.indexOf('hStyle(root, "--hud-top-h"', zTop);
   assert.ok(zTop >= 0 && republish > zTop, "--hud-top-h must be published after the top zoom cap");
