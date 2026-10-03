@@ -5971,7 +5971,7 @@ function updateCar(c, dt, ranked) {
       const Ld = clamp(Math.abs(c.speed) * 1.2, 22, 70);
       lineDelta = raceLineAssist * LINE_PURSUIT * WHEELBASE * 2 * (lineX - c.x) / (Ld * Ld) * offAssistFade;
     }
-    const delta = clamp(driverDelta + assistDelta + lineDelta, -0.7, 0.7);
+    // delta filled inside PlayerForces after muF (GripSteer caps driverDelta).
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
     // power (a touch of throttle-on looseness) — emergent, not a special case.
@@ -6008,7 +6008,7 @@ function updateCar(c, dt, ranked) {
     // soft tyre Fy → yaw/vLat/head. Explicit ctx bag — no new G members.
     // Frenet world writeback (px/pz → s,x) stays below.
     playerForces.step(c, {
-      dt, delta, onThrottle, throttleLvl, gearMult, deploy, braking,
+      dt, driverDelta, assistDelta, lineDelta, onThrottle, throttleLvl, gearMult, deploy, braking,
       surfaceMu, kerbGrip, bankMu, modsCornering: mods.cornering,
       loadF, loadR, vertLoad, af, ar, sp, steer,
       weatherGrip: gripMult(c), aeroDf: aeroDfMult(c),

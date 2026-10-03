@@ -250,7 +250,8 @@ const FULL = [
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
-  "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A)
+  "js/physics/grip-steer.js",
+  "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
@@ -683,10 +684,13 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
+  ["js/core/mat4.js", "js/physics/grip-steer.js"],       // GripSteer binds M4.clamp/lerp at eval
+  ["js/physics/grip-steer.js", "js/physics/player-forces.js"], // PlayerForces.step caps via GripSteer.forPlayer
   ["js/core/mat4.js", "js/physics/player-forces.js"],    // PlayerForces binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/player-forces.js"], // …and reads PhysicsConsts at eval
   ["js/physics/tyre-model.js", "js/physics/player-forces.js"], // lateralCurve / brakeBeta
   ["js/physics/player-forces.js", "js/game.js"],         // updateCar calls PlayerForces.create(G)
+
   ["js/core/mat4.js", "js/race/pit-lane.js"],            // PitLane binds M4.clamp at eval
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
   ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
@@ -1213,6 +1217,7 @@ const MOVED = {
   "js/game/aerozones.js": "js/physics/aero-zones.js",
   "js/game/bodyattitude.js": "js/physics/body-attitude.js",
   "js/game/brake-cue.js": "js/physics/brake-cue.js",
+  "js/game/grip-steer.js": "js/physics/grip-steer.js",
   "js/game/driving-cues.js": "js/audio/driving-cues.js",
   "js/game/debrisworld.js": "js/physics/debris-world.js",
   "js/game/incidentsim.js": "js/physics/incident-sim.js",
