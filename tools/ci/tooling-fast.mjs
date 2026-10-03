@@ -452,6 +452,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // for the garage one defeats its whole purpose — a dropped material column
   // looks exactly like the bug it guards against.
   "tests/unit/parts-ladder.test.mjs",
+  // Locked SIGNATURE → equivalent (not DEFAULTS). ~0.1 s; without it a
+  // Faenza Street fit on McLaren silently photographed as medium.
+  "tests/unit/parts-locked-equivalent.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
