@@ -111,8 +111,15 @@
  *     mirrorRect([x,y,w,h] | null, flip = true)  canvas fractions, top-left origin:
  *     present() composites the last mirror image there, FLIPPED left-right (flip
  *     false: straight — the broadcast PiP reuses the target) and tone-mapped with
- *     the frame's exposure. mirrorState() -> {ready,dead,w,h,renders,composites,flip}.
+ *     the frame's exposure. mirrorState() -> {ready,dead,w,h,renders,composites,glass,flip}.
  *     js/render/shared/mirror-pass.js is the one caller.
+ *     drawMirrorGlass(mesh, model, opts) -> bool   the cockpit's LIVE GLASS, inside
+ *     the main pass: that target on a createTexMesh mesh whose uv addresses the
+ *     RAW image, v = 0 its bottom (car-mesh.js getMirrorGlass bakes the glass
+ *     flip into u) — unlit, opaque, depth and alpha 1 written, both faces; no
+ *     second render. false = nothing drawn, and car-draw.js lays its fallback:
+ *     no image yet, a dead target, flip false (the PiP owns it), or a mirror
+ *     pass still open. opts is reserved (none read). mirrorState().glass counts it.
  *   begin(frame)              clear + bind scene target; upload frame uniforms.
  *   draw(mesh, model, opts) / drawChunked(mesh, model, opts)
  *   drawSky(sky)              OPAQUE FIRST, THEN SKY — not the other way round.

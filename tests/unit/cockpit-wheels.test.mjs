@@ -33,7 +33,7 @@ function loadOpts(disk, search = "", withCams = false) {
   return { opts: ctx.CockpitOpts, cams: ctx.GameCams, store };
 }
 
-function loadMesh(extra = {}) {
+function loadMesh(extra = {}, gfxExtra = {}) {
   const made = [], freed = [], draws = [];
   const ctx = { Log: { info() {}, warn() {}, error() {} }, GaragePrims: { block() {} }, ...extra };
   ctx.window=ctx;
@@ -45,6 +45,7 @@ function loadMesh(extra = {}) {
     createMesh(d) { const m = { d }; made.push(m); return m; },
     freeMesh(m) { freed.push(m); },
     draw(m,mat,opt) { draws.push({mesh:m.d,mat:[...mat],opt:{...opt}}); },
+    ...gfxExtra,
   });
   return { CarMesh: ctx.CarMesh, made, freed, draws };
 }
@@ -327,7 +328,60 @@ test("the mirror fallback covers each cockpit lens just driver-side, and the lim
   }
   const draw=read("js/car/car-draw.js");
   assert.match(draw,/getLedStrip\(rpmF > 0\.965 \? \(motionReduced\(\) \|\| [^)]*\? 9 : 8\)/,"limiter alternates SHIFT and full ramp, never 0");
-  assert.match(draw,/mp && mp\.drawing\(\)/,"fallback only while the mirror pass is not drawing");
+  // The live glass is TRIED only while the pass draws; the fallback is drawn
+  // whenever it is not shown (car-presentation-canary runs the either/or).
+  assert.match(draw,/mp && mp\.drawing\(\) && typeof gfx\.drawMirrorGlass === "function" \? getMirrorGlass\(quads\)/,
+    "the live glass only while the mirror pass is drawing");
+});
+
+// LIVE MIRROR GLASS (2026-10-03): while the HUD mirror pass draws, each lens
+// shows THAT pass's image (gfx.drawMirrorGlass) on getMirrorGlass — the same
+// lens quads UV'd onto the RAW rear-camera target, the glass flip baked into U.
+// It must lie ON the lens, map each glass to its own side of the image, and
+// keep the target's texels square on the 3.75:1 lens.
+test("the live mirror glass lies on each lens, flips per side in U, and keeps texels square",()=>{
+  const {Car3D,Teams,Parts}=loadCar3D();
+  const {CarMesh}=loadMesh({}, { createTexMesh(d) { return { d, tex: true }; } });
+  // The target's aspect, from the frame the pass sizes it from (css/hud.css).
+  const css=read("css/hud.css").match(/#hud-mirror \{[^}]*height: calc\(var\(--mir-w\) \* (\d+) \/ (\d+)\)/);
+  assert.ok(css,"#hud-mirror's height rule moved");
+  const targetAspect=Number(css[2])/Number(css[1]);
+  assert.equal(targetAspect,3.5,"the HUD mirror frame is 7:2");
+  const len=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+  for(const team of Teams.LIST.slice(0,3))for(const setup of [Parts.DEFAULTS,Parts.getFactorySetup(team)]){
+    const tiers=Parts.getVisualTiers(setup,team), sc=tiers._visual&&tiers._visual.cockpit&&tiers._visual.cockpit.mirror;
+    const mesh=Car3D.build(team.color,team.color2,{teamId:team.id,parts:tiers,cockpit:true,noWheels:true,noDriver:true,measure:true});
+    const quads=Car3D.cockpitMirrorGlass(sc), g=CarMesh.getMirrorGlass(quads);
+    assert.equal(CarMesh.getMirrorGlass(quads),g,"cached per quads");
+    const d=g.d;
+    assert.equal(d.pos.length/3,8,"one quad per glass");
+    assert.deepEqual([...d.idx],[0,1,2,0,2,3,4,5,6,4,6,7]);
+    for(let i=0;i<8;i++){
+      const p=d.pos.slice(i*3,i*3+3);
+      assert.deepEqual([...p],[...quads[i>>2][i&3]],`${team.id}: glass vertex ${i} is lens corner ${i&3}`);
+      assert.equal(firstMaterial(mesh,[p[0],p[1],p[2]-0.0005],[p[0],p[1],p[2]+0.004]),Car3D.SURFACES.mirror,`${team.id}: glass vertex ${i} lies on the lens`);
+    }
+    // [a inboard-low, b outboard-low, c outboard-high, d inboard-high] per glass.
+    // The target is the RAW rear image (the HUD composite flips it): the LEFT
+    // glass reads the image's right side, outboard edge u = 1; the right glass
+    // the left, outboard u = 0; each a tenth past the centre line inboard.
+    const uv=(i)=>[d.uv[i*2],d.uv[i*2+1]];
+    const want=[[0.4,0.22],[1,0.22],[1,0.78],[0.4,0.78],[0.6,0.22],[0,0.22],[0,0.78],[0.6,0.78]];
+    for(let i=0;i<8;i++)for(let k=0;k<2;k++)
+      assert.ok(Math.abs(uv(i)[k]-want[i][k])<1e-9,`${team.id}: glass vertex ${i} uv ${uv(i)} (want ${want[i]})`);
+    assert.ok(quads[0][1][0]<quads[0][0][0]&&quads[0][0][0]<0,"quad 0 is the left glass, b outboard of a");
+    assert.ok(quads[1][1][0]>quads[1][0][0]&&quads[1][0][0]>0,"quad 1 is the right glass, b outboard of a");
+    // SQUARE TEXELS: texels across / texels up, scaled by the lens's own
+    // width / height, is 1 — the glass shows the rear view undistorted.
+    for(let q=0;q<2;q++){
+      const [a,b,,dd]=quads[q], o=q*4;
+      const du=Math.abs(uv(o+1)[0]-uv(o)[0]), dv=Math.abs(uv(o+3)[1]-uv(o)[1]);
+      const texAspect=du*targetAspect/dv, lensAspect=len(a,b)/len(a,dd);
+      assert.ok(Math.abs(texAspect/lensAspect-1)<0.02,`${team.id} glass ${q}: texel aspect ${(texAspect/lensAspect).toFixed(4)} (lens ${lensAspect.toFixed(3)}:1)`);
+    }
+  }
+  // A backend without textured meshes gets no glass mesh (car-draw.js lays the fallback).
+  assert.equal(loadMesh().CarMesh.getMirrorGlass(Car3D.cockpitMirrorGlass(1)),null);
 });
 
 test("the faired halo adds a broad carbon crown with bounded geometry cost",()=>{

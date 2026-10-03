@@ -1525,5 +1525,19 @@ void main() {
   if (uHdr > 0.5) c = acesTonemap(c * uExposure / uWhitePoint);
   outColor = vec4(c, 1.0);
 }`;
-  window.GLXShaders = Object.assign(window.GLXShaders || {}, { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, SGSR_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS, MIRROR_FS });
+  // THE COCKPIT'S LIVE MIRROR GLASS (post.js mirror.glass, behind DECAL_VS):
+  // the same target, drawn INTO the scene on the housings' glass. Unlit and
+  // opaque — the target already holds this frame's lit rear view in the scene's
+  // own range (HDR exactly when the scene is), so the main composite tone-maps
+  // it with everything else. The flip is in the mesh's U (car-mesh.js
+  // getMirrorGlass), not here. Alpha 1 is the "not car paint" SSR tag.
+  const MIRROR_GLASS_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+out vec4 outColor;
+void main() {
+  outColor = vec4(texture(uTex, vUV).rgb, 1.0);
+}`;
+  window.GLXShaders = Object.assign(window.GLXShaders || {}, { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, SGSR_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS, MIRROR_FS, MIRROR_GLASS_FS });
 })();

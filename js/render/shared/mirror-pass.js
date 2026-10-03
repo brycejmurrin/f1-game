@@ -598,14 +598,17 @@ const MirrorPass = (function () {
       setSubject,
       setPipMode,
       mode: () => mode,
-      // Is the rear-view actually drawing this frame? (car-draw.js lays a sky-tint
-      // fallback on the cockpit housings' glass when it is not.)
+      // Is the rear-view actually drawing this frame? (car-draw.js puts its
+      // image on the cockpit housings' glass while it is — gfx.drawMirrorGlass —
+      // and a sky-tint fallback when it is not.)
       drawing: () => _shown && !!_rect && !_dead,
-      // __apex.mirror(): the setting, what this frame resolved, and the backend's own count.
+      // __apex.mirror(): the setting, what this frame resolved, the backend's own
+      // count, and the cockpit glass (car-draw.js glassState: live vs fallback).
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         preparing: !!_preparation, prepared: _prepared,
         pip: { mode: pipMode, shown: _pipShown, code: _sub ? _sub.code : null, cam: _subMode, rect: _pipRect },
-        backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null }),
+        backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null,
+        glass: typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance() ? CarDraw.instance().glassState() : null }),
     });
   }
 
