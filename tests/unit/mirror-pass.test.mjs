@@ -29,7 +29,11 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   let mirrorPressed = false;
   const classes = new Set(bc ? ["bc-on"] : []), props = {};
   const on = (o) => Object.assign(o, { handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } });
-  const frameEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114, right: 840, bottom: 184 }) });
+  const styles = new Map(), timers = new Map();
+  let timerId = 0;
+  const style = { getPropertyValue: k => styles.get(k)?.value || "", getPropertyPriority: k => styles.get(k)?.priority || "",
+    setProperty: (k, value, priority = "") => styles.set(k, { value, priority }), removeProperty: k => styles.delete(k) };
+  const frameEl = on({ hidden: true, style, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114, right: 840, bottom: 184 }) });
   const chipEl = on({ hidden: true });
   const pipEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 900, top: 60, width: 360, height: 202, right: 1260, bottom: 262 }) });
   // The TV rig: a POOLED answer, as js/camera/vantage.js returns — the pass must copy it.
@@ -37,6 +41,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const canvasEl = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }) };
   const ctx = vm.createContext({
     Math, Float32Array, Array, Object, Number, Infinity, innerWidth: 1280,
+    setTimeout: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms }); return id; }, clearTimeout: id => timers.delete(id),
     document: {
       getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl : id === "bc-pip" ? pipEl
         : boxes[id] ? { hidden: false, getBoundingClientRect: () => boxes[id] } : null),
@@ -95,7 +100,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0, tune };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
-  return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render,
+  return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
     press: () => { mirrorPressed = true; }, setTier: (t) => { tier = t; } };
 }
 
@@ -402,4 +407,132 @@ test("standDown (the GARAGE preview frame) hides the mirror and clears the compo
   b.render();
   assert.equal(b.mp.state().shown, true, "the next race frame shows it again");
   assert.equal(b.frameEl.hidden, false);
+});
+
+test("race preparation lets the main warm run first, then draws the actual hidden rear view at its real size", async () => {
+  const h = boot({ state: "count" });
+  const originalBox = h.frameEl.getBoundingClientRect;
+  h.frameEl.style.setProperty("visibility", "collapse", "important");
+  h.frameEl.getBoundingClientRect = () => {
+    assert.equal(h.frameEl.hidden, false, "layout is measurable");
+    assert.equal(h.frameEl.style.getPropertyValue("visibility"), "hidden", "never visible even without a cover");
+    return originalBox();
+  };
+  let warming = false;
+  h.gfx.warming = () => warming;
+  const ready = h.mp.prepareRace();
+  assert.equal(h.mp.prepareRace(), ready, "duplicate entry shares its pending preparation");
+  assert.equal(h.mp.preparing(), true);
+  h.render();
+  assert.equal(h.calls.some(c => c[0] === "begin"), false, "first slot allows the main present to start its queued warm");
+  warming = true; h.render();
+  assert.equal(h.calls.some(c => c[0] === "begin"), false, "never draws across renderer compile ownership");
+  warming = false; h.render();
+  assert.equal(await ready, true);
+  assert.equal(h.mp.preparing(), false); assert.equal(h.timers.size, 0);
+  assert.equal(h.frameEl.hidden, true);
+  assert.equal(h.frameEl.style.getPropertyValue("visibility"), "collapse");
+  assert.equal(h.frameEl.style.getPropertyPriority("visibility"), "important");
+  assert.equal(h.mp.state().shown, false); assert.equal(h.classes.has("hud-mirror-on"), false);
+  assert.ok(h.calls.filter(c => c[0] === "rect").every(c => c[1] === null), "no composite during preparation");
+  const begin = h.calls.find(c => c[0] === "begin");
+  assert.deepEqual(begin.slice(1, 3), [800, 228]);
+  assert.notEqual(begin[3], h.mainVP, "the real reverse camera is used");
+  assert.deepEqual(h.calls.filter(c => c[0] === "draw").map(c => c[1]), ["mesh:b", "mesh:f"], "actual rear rivals, never player/ahead");
+  assert.equal(h.frame.viewProj, h.mainVP); assert.equal(h.frameSky.invViewProj, h.mainInv);
+  assert.equal(h.G.state, "count", "does not impersonate race state");
+  h.frameEl.getBoundingClientRect = originalBox;
+  h.G.state = "race"; h.render();
+  assert.equal(h.calls.filter(c => c[0] === "begin").length, 2, "first visible frame still draws fresh");
+  assert.deepEqual(h.calls.filter(c => c[0] === "begin")[1].slice(1, 3), [800, 228], "same-sized real target can be reused");
+});
+
+test("preparation follows real eligibility, quality and current layout", async () => {
+  for (const options of [{mode:"off"}, {cam:"chase"}, {soft:true}, {bc:true}, {state:"race"}]) {
+    const h = boot({state:"count", ...options});
+    assert.equal(await h.mp.prepareRace(), false);
+    assert.equal(h.mp.preparing(), false); assert.equal(h.timers.size, 0);
+  }
+  const h = boot({state:"count", mode:"on", cam:"chase", soft:true, tier:4});
+  const ready = h.mp.prepareRace(); h.render();
+  h.frameEl.getBoundingClientRect = () => ({width:500,height:140});
+  h.render(); assert.equal(await ready, true);
+  assert.deepEqual(h.calls.find(c => c[0] === "begin").slice(1,3), [400,112], "latest layout and min quality, not a guessed fixed target");
+  h.G.state="race"; h.render();
+  assert.equal(h.calls.filter(c => c[0] === "begin").length, 2, "even cadence-limited quality draws the first live frame");
+});
+
+test("preparation retries a temporarily unavailable target and has a bounded deadline", async () => {
+  const h = boot({state:"count"});
+  const begin = h.gfx.mirrorBegin;
+  let available = false;
+  h.gfx.mirrorBegin = (...args) => available ? begin(...args) : false;
+  const ready = h.mp.prepareRace(); h.render(); h.render();
+  assert.equal(h.mp.preparing(), true); assert.equal(h.calls.some(c=>c[0]==="end"), false);
+  assert.equal(h.frame.viewProj, h.mainVP);
+  available = true; h.render(); assert.equal(await ready, true);
+  const timeout = h.mp.prepareRace();
+  const timer = [...h.timers.values()][0]; assert.equal(timer.ms, 30000);
+  timer.fn(); assert.equal(await timeout, false); assert.equal(h.mp.preparing(), false);
+  assert.equal(h.timers.size, 0);
+});
+
+test("cancel, standDown, stale subjects and in-place backend replacement settle without drawing", async () => {
+  for (const change of [h=>h.mp.cancelPreparation(), h=>h.mp.standDown(), h=>{h.G.state="menu";},
+    h=>{h.G.player={};}, h=>{h.G.track={};}, h=>{h.G.gfx={};}, h=>{h.gfx.mirrorBegin=()=>true;}, h=>{h.gfx.mirrorEnd=()=>{};}, h=>h.mp.setMode("off")]) {
+    const h=boot({state:"count"}); const ready=h.mp.prepareRace(); h.render(); change(h); h.render();
+    assert.equal(await ready,false); assert.equal(h.mp.preparing(),false);
+    assert.equal(h.calls.some(c=>c[0]==="begin"),false); assert.equal(h.timers.size,0);
+  }
+  const h=boot({state:"count"}); const old=h.mp.prepareRace(), staleTimer=[...h.timers.values()][0].fn;
+  h.mp.cancelPreparation(); assert.equal(await old,false);
+  const latest=h.mp.prepareRace(); staleTimer(); assert.equal(h.mp.preparing(),true,"expired owner cannot cancel newer preparation");
+  h.render();h.render();assert.equal(await latest,true);
+});
+
+test("preparation failure restores both hidden layout and swapped frame fields", async () => {
+  for (const where of ["measure","world","end"]) {
+    const h=boot({state:"count",throwInWorld:where==="world"});
+    if(where==="measure") h.frameEl.getBoundingClientRect=()=>{throw new Error("measure failed");};
+    if(where==="end") h.gfx.mirrorEnd=()=>{throw new Error("end failed");};
+    const ready=h.mp.prepareRace(); h.render(); assert.doesNotThrow(()=>h.render());
+    assert.equal(await ready,false);assert.equal(h.mp.preparing(),false);assert.equal(h.timers.size,0);
+    assert.equal(h.frameEl.hidden,true);assert.equal(h.frameEl.style.getPropertyValue("visibility"),"");
+    assert.equal(h.frame.viewProj,h.mainVP);assert.equal(h.frameSky.invViewProj,h.mainInv);
+    assert.deepEqual(h.frame.eye,[0,5,90]);assert.equal(h.frame.proj,"P");assert.equal(h.frame.invProj,"IP");
+  }
+});
+
+test("a visible mirrorEnd failure still restores the main frame before propagating", () => {
+  const h=boot({mode:"on"});h.gfx.mirrorEnd=()=>{throw new Error("end failed");};
+  assert.throws(()=>h.render(),/end failed/);
+  assert.equal(h.frame.viewProj,h.mainVP);assert.equal(h.frameSky.invViewProj,h.mainInv);
+  assert.deepEqual(h.frame.eye,[0,5,90]);assert.equal(h.frame.proj,"P");assert.equal(h.frame.invProj,"IP");
+});
+
+test("a restart hides the old mirror and a skipped entry clears old preparation success", async () => {
+  const h=boot({mode:"on"});h.render();
+  assert.equal(h.frameEl.hidden,false);assert.equal(h.mp.state().shown,true);
+  h.G.state="count";const ready=h.mp.prepareRace();
+  assert.equal(h.frameEl.hidden,true);assert.equal(h.mp.state().shown,false);
+  assert.equal(h.classes.has("hud-mirror-on"),false);
+  assert.equal(h.calls.at(-1)[1],null,"old composite cleared before any preparation frame");
+  h.render();h.render();assert.equal(await ready,true);assert.equal(h.mp.state().prepared,true);
+  h.mp.setMode("off");assert.equal(await h.mp.prepareRace(),false);assert.equal(h.mp.state().prepared,false);
+});
+
+test("caught backend failures and stale ready targets do not claim preparation success", async () => {
+  for(const state of [{dead:true,ready:false},{dead:false,ready:false},{dead:false,ready:true,renders:3}]) {
+    const h=boot({state:"count"});
+    // Initial target is valid enough to attempt preparation; mirrorEnd can
+    // catch an error and report dead/not-ready, or retain a stale ready target.
+    let ended=false;
+    h.gfx.mirrorState=()=>ended?state:{dead:false,ready:true,renders:3};
+    h.gfx.mirrorEnd=()=>{ended=true;};
+    const ready=h.mp.prepareRace();h.render();h.render();
+    assert.equal(await ready,false);assert.equal(h.mp.state().prepared,false);
+    assert.equal(h.frame.viewProj,h.mainVP);assert.equal(h.frameSky.invViewProj,h.mainInv);
+  }
+  const h=boot({state:"count"});h.gfx.mirrorState=()=>{throw new Error("dead backend");};
+  assert.equal(await h.mp.prepareRace(),false,"optional preparation remains non-throwing");
 });
