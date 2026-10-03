@@ -281,7 +281,8 @@ test("the mirror fallback covers each cockpit lens just driver-side, and the lim
     assert.equal(fb.pos.length/3,16,"two gradient bands per side");
     for(let i=0;i<fb.pos.length;i+=3){
       const p=[fb.pos[i],fb.pos[i+1],fb.pos[i+2]], tgt=[p[0],p[1],p[2]+0.004];
-      assert.equal(firstMaterial(mesh,[p[0],p[1],p[2]-0.0005],tgt),Car3D.SURFACES.glass,`${team.id}: fallback vertex ${i/3} lies on the lens`);
+      // The lens is SURFACES.mirror since the cockpit redesign (#781); glass before it.
+      assert.equal(firstMaterial(mesh,[p[0],p[1],p[2]-0.0005],tgt),Car3D.SURFACES.mirror,`${team.id}: fallback vertex ${i/3} lies on the lens`);
     }
     assert.ok(fb.col.some(c=>c>0.6)&&fb.col.every(c=>c<0.9),"pale sky top, no white-out");
   }
