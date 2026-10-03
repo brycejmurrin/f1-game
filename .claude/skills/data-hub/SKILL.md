@@ -1,6 +1,6 @@
 ---
 name: data-hub
-description: Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs are being changed or a tab is empty/stale/wrong season or year. Not for menu layout of the hub (ui-menu-a11y) or in-race physState telemetry (agent-view).
+description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs are being changed or a tab is empty/stale/wrong season or year, or WATCH/HIGHLIGHTS loads the wrong driver/race after a picker change. Not for standalone Season configuration (season-mode), menu layout of the hub (ui-menu-a11y) or in-race physState telemetry (agent-view)."
 ---
 
 # Data Hub / F1API
@@ -11,7 +11,7 @@ In-race slip/grip/timing is **agent-view** (`references/state.md`), not this ove
 
 ## Tabs
 
-| id | Loader | Cache age (`MAX_AGE`) |
+| id | Loader | Overlay node reuse age (`MAX_AGE`) |
 |---|---|---|
 | schedule | `loadSchedule` | 6 h |
 | standings | `loadStandings` | 60 min |
@@ -20,6 +20,10 @@ In-race slip/grip/timing is **agent-view** (`references/state.md`), not this ove
 | telemetry | `loadTelemetry` | 15 min |
 | race | `loadRealRace` | 60 min |
 | export | `loadExport` | 24 h |
+
+`MAX_AGE` controls reuse of tab DOM nodes; it is independent of the API cache
+TTL in `js/data/api.js` (schedule responses: 24 h). Refreshing a tab can reuse
+a cached API response.
 
 RACE IT (`js/data/real-race-tab.js`) builds one Grand Prix's timing into the
 script `js/race/real-race.js` replays (grid, per-lap pace, stops, flags,
@@ -62,9 +66,9 @@ derives the Jolpica season from the clock per call (`season()`, `js/data/api.js`
 standings" = wrong system clock, a stale `apex26.api.*` cache entry, or a mock
 still answering 2026 (`tests/helpers/f1-api-mock.js` pins `season: "2026"`).
 
-Tests: `tests/specs/data-lifecycle.spec.js` and `telemetry-compare.spec.js` are
-BROWSER specs (group `hooks`, background only — AGENTS.md rule 5):
-`node tools/ci/test-bg.mjs hooks`. Node-only, seconds, run first:
+Start with `tests/specs/data-lifecycle.spec.js` or the telemetry comparison
+spec through `test-solo.mjs <path>` in the background with a log (parent-owned browser). Reserve the
+`test-bg.mjs hooks` group for changes that need its wider surface. Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-results`,
 `data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The group
 `lifecycle-unit` is `async-lifecycle` + `tlx-chunked-lifecycle` (the first

@@ -456,8 +456,7 @@ for (const a of argv) {
 }
 // `all` on an enum axis expands to the real list — the same registries the
 // in-page validator reads, loaded here so `--plan` can count the matrix.
-function expandAllValues() {
-  if (!axes.some((ax) => ax.values.includes("all"))) return;
+function designRegistries() {
   const M = loadParts();
   const LT = M.LiveryTex, C3 = M.Car3D;
   const ids = (reg, extra) => { const l = Array.isArray(reg) ? reg.slice() : Object.keys(reg || {}); if (extra && !l.includes(extra)) l.push(extra); return l; };
@@ -469,6 +468,11 @@ function expandAllValues() {
     finHandoff: ["match", "contrast", "hardCut"], wingCarbon: ["paint", "carbon"], bodySplit: ["off", "lr"],
     finish: ["gloss"].concat(ids(C3.FINISH_SURFACE)), driver: ["0", "1"],
   };
+  return { M, ENUMS };
+}
+function expandAllValues() {
+  if (!axes.some((ax) => ax.values.includes("all"))) return;
+  const { M, ENUMS } = designRegistries();
   for (const ax of axes) {
     if (!ax.values.includes("all")) continue;
     let list = ENUMS[ax.field];
@@ -492,7 +496,7 @@ function explicitDesigns(raw) {
     ? JSON.parse(t)
     : t.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => JSON.parse(l));
   const list = Array.isArray(parsed) ? parsed : [parsed];
-  if (!list.length || list.some((d) => !d || typeof d !== "object")) {
+  if (!list.length || list.some((d) => !d || typeof d !== "object" || Array.isArray(d))) {
     console.error("--design must be a JSON object, an array of them, or @file with one per line");
     process.exit(1);
   }
@@ -1808,12 +1812,33 @@ async function finishRun(A, B, ctx) {
   console.log(`${meta}  [sheet: ${A.sheetHead}]`);
 }
 
-async function main() {
-  if (argvHas("--reset") && existsSync(outDir)) {
-    rmSync(outDir, { recursive: true, force: true });
-    console.log(`reset: cleared ${outDir}`);
+function validateDesigns() {
+  if (!designs) return;
+  const { M, ENUMS } = designRegistries();
+  const known = loadAtlas().Liveries.FIELDS;
+  const lightContext = vm.createContext({ Math, Object });
+  vm.runInContext(readFileSync(new URL("../../js/lighting/knobs.js", import.meta.url), "utf8"), lightContext);
+  const knobs = vm.runInContext("LightKnobs.TUNE_DEFS", lightContext);
+  for (const design of designs) for (const [key, value] of Object.entries(design)) {
+    const raw = String(value);
+    if (key === "name") continue;
+    if (key.startsWith("part.")) {
+      const category = M.Parts.CATALOG.find((c) => c.id === key.slice(5));
+      if (!category || !category.options?.some((o) => o.id === raw)) throw new Error(`invalid ${key}: ${raw}`);
+    } else if (key.startsWith("light.")) {
+      const knob = knobs.find((d) => d.id === key.slice(6));
+      if (!knob || !Number.isFinite(Number(value))) throw new Error(`invalid ${key}: ${raw}`);
+    } else if (key === "driver") {
+      if (!ENUMS.driver.includes(raw)) throw new Error(`invalid driver: ${raw}`);
+    } else {
+      if (!known.includes(key)) throw new Error(`unknown livery field: ${key}`);
+      if (ENUMS[key] && !ENUMS[key].includes(raw)) throw new Error(`invalid ${key}: ${raw} (have ${ENUMS[key].join(",")})`);
+      if (raw.startsWith("#") && !/^#[0-9a-fA-F]{6}$/.test(raw)) throw new Error(`invalid colour ${key}: ${raw}`);
+    }
   }
-  mkdirSync(outDir, { recursive: true });
+}
+async function main() {
+  validateDesigns();
   const items = designs
     ? designs.map((d) => ({ design: d }))
     : liveries.map((l) => ({ livery: l }));
@@ -1842,6 +1867,11 @@ async function main() {
     }, null, 2));
     return;
   }
+  if (argvHas("--reset") && existsSync(outDir)) {
+    rmSync(outDir, { recursive: true, force: true });
+    console.log(`reset: cleared ${outDir}`);
+  }
+  mkdirSync(outDir, { recursive: true });
   for (const i of inert) {
     console.warn(`WARNING ${i.field} paints NOTHING on ${JSON.stringify(i.design)} — ${i.why}`);
   }

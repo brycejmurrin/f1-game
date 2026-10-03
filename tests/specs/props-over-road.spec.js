@@ -87,25 +87,8 @@ const BASELINE = {
   // the engine's track.hw, so the outer rung sampled past the tarmac. Scaled
   // by track.hw (out to 0.9 of it) all of them read 0.00 in the node port
   // (tests/unit/props-over-road.test.mjs, 2026-09-23) and are held to TOL.
-  // mont_tremblant: a forest crown leaning over the road, not an intrusion at
-  // the edge — dark green [0.10,0.20,0.09] spanning y 9.96-12.46 with the road
-  // at 7.33, so 4.74 m of clearance a car drives under. Same category as the
-  // miami note above, and deliberate: the scenery engine keeps FOOTINGS out
-  // and lets crowns reach over (js/track/scenery/nature.js tree() guards with
-  // `onTrack(x, z, 4, h * 0.3)`; js/track/scenery/models.js: "a tree's canopy
-  // tier whose underside is well above the road may reach over the complex's
-  // edge, the way a crown reaches over a verge"). This circuit's whole
-  // identity is a forest tunnel — it builds an explicit ceiling over the
-  // cutting with overRoad() at 9.5-16 m, which clears CEIL and is exempt; this
-  // one crown sits just under it.
-  //
-  // Never a regression: mont_tremblant did not exist before 06833f3d ("add 11
-  // circuits recovered from OpenStreetMap"), so it has never passed this spec.
-  // It was dressed from its brief in e4524517 and read 4.74 at the old
-  // mesh-scaled 0.75 rung; the node port reads the same crown at 4.97 on the
-  // track.hw-scaled 0.9 rung.
-  mont_tremblant: 5.0,
-  mont_tremblant_note: "forest crown over the cutting ~4.7m up — car clears",
+  // Full-tree footprint clearance removed Mont Tremblant's overhanging
+  // crown; it now uses the default TOL, as in the Node companion.
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 
@@ -207,6 +190,9 @@ test.describe("Apex 26 — props over road", () => {
       expect(r.err, `${trk}: ${r.err}`).toBeUndefined();
       if (trk === "shanghai") {
         expect(r.max, "Shanghai track-owned props remain at the shared clean tolerance").toBeLessThanOrEqual(TOL);
+      }
+      if (trk === "mont_tremblant") {
+        expect(r.max, "Mont Tremblant forest crowns remain at the shared clean tolerance").toBeLessThanOrEqual(TOL);
       }
       const cap = ALLOW.has(trk) ? Infinity : (BASELINE[trk] ?? TOL);
       expect(

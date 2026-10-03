@@ -231,6 +231,9 @@ const ScreenLooks = (function () {
   const PEEK_ONLY = Object.freeze({
     title: Object.freeze({ id: "title", title: "TITLE SCREEN", fold: "pm-titlescreen",
       peekable: () => { const o = byId("overlay"); return !!o && !o.hidden; } }),
+    // DISPLAY › HUD › MOVE & SIZE (js/ui/hud-layout.js): only a race has a HUD.
+    hud: Object.freeze({ id: "hud", title: "RACE HUD", fold: "pm-hudlayout",
+      peekable: () => !!doc && !!doc.body && doc.body.classList.contains("in-race") }),
   });
   const BY_ID = {};
   for (const s of SCREENS) BY_ID[s.id] = s;

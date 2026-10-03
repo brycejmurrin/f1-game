@@ -63,17 +63,24 @@ test("verdict precedence: open PR, merged, too recent, absorbed, no history, sup
   assert.equal(v({ ageDays: NaN }), "active", "an unreadable age is never old");
 });
 
-test("the survey is branches that never had a PR and have had no commit for 48 hours", () => {
+test("the survey: no PR ever, or the last PR closed UNMERGED 48 h ago, and no commit for 48 hours", () => {
   assert.equal(SURVEY_QUIET_HOURS, 48);
   const now = 1_800_000_000, H = 3600;
-  const prs = indexPrs([{ number: 1, state: "CLOSED", headRefName: "had-pr", mergedAt: null }, { number: 2, state: "OPEN", headRefName: "open-pr" }]);
+  const iso = (hoursAgo) => new Date((now - hoursAgo * H) * 1000).toISOString();
+  const prs = indexPrs([
+    { number: 1, state: "CLOSED", headRefName: "closed-old", mergedAt: null, closedAt: iso(72) },
+    { number: 2, state: "CLOSED", headRefName: "closed-new", mergedAt: null, closedAt: iso(10) },
+    { number: 3, state: "CLOSED", headRefName: "closed-no-date", mergedAt: null },
+    { number: 4, state: "MERGED", headRefName: "merged", mergedAt: iso(300) },
+    { number: 5, state: "OPEN", headRefName: "open-pr" }]);
   const b = (name, hoursAgo) => ({ name, sha: name, time: now - hoursAgo * H });
   const pick = (list) => list.filter((x) => inSurvey(x, { prs, now })).map((x) => x.name);
-  assert.deepEqual(pick([b("quiet", 49), b("busy", 47), b("had-pr", 300), b("open-pr", 300), b("claude/claims/x", 300),
-    { name: "no-time", sha: "n", time: NaN }]), ["quiet"],
-    "a closed PR still counts as a PR; a commit inside 48 h, a claims marker or an unreadable time keeps a branch out");
+  assert.deepEqual(pick([b("quiet", 49), b("busy", 47), b("closed-old", 300), b("closed-new", 300), b("closed-no-date", 300),
+    b("merged", 300), b("open-pr", 300), b("claude/claims/x", 300), b("claude/claims-board", 300),
+    { name: "no-time", sha: "n", time: NaN }]), ["quiet", "closed-old"],
+    "a PR closed unmerged 48 h+ ago is surveyed; a recent or undated close, a merged or open PR, a commit inside 48 h, claims and an unreadable time keep a branch out");
   assert.deepEqual([inSurvey(b("q", 10), { prs, now, quietHours: 6 }), inSurvey(b("q", 10), { prs, now, quietHours: 12 })], [true, false]);
-  assert.match(surveyScope(48), /never had a pull request and have had no commit for 48\+ hours/);
+  assert.match(surveyScope(48), /never had a pull request, or whose last one closed unmerged 48\+ hours ago, and have had no commit for 48\+ hours/);
 });
 
 test("the CLI refuses to survey without the PR list (an unknown PR set would survey everything)", () => {

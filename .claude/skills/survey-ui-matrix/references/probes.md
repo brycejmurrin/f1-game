@@ -103,7 +103,8 @@ const hOverflow = document.documentElement.scrollWidth - innerWidth;
 settles ~1.2 s), which reads as "the screen isn't there":
 
 ```js
-await new Promise(r => { const t = setInterval(() => {
+await new Promise((r,reject) => { const deadline=Date.now()+15000; const t = setInterval(() => {
+  if(Date.now()>deadline){clearInterval(t); reject(new Error('screen transition timed out: '+sel)); return;}
   const el = document.querySelector(sel); if (!el) return clearInterval(t), r();
   const a = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
   if (!a.some(x => x.playState === 'running') && getComputedStyle(el).opacity !== '0') { clearInterval(t); r(); }
@@ -142,7 +143,7 @@ screens nobody had opened.
 |---|---|
 | `#overlay` | boot |
 | `#select` | `mb-race` |
-| `#carsetup` | `mb-race`, `sel-car` |
+| `#carsetup` | `mb-garage` |
 | `#race-settings` | `mb-race`, `sel-go` |
 | `#career` | `mb-career` |
 | `#season-setup` | `mb-season` (SEASON setup screen — `season-ui.js`) |
@@ -193,7 +194,7 @@ return { computed: getComputedStyle(el).minHeight, ruleInCSSOM: found };
 ```
 
 If `ruleInCSSOM` is the OLD text, the browser cached the stylesheet: hard-reload (tags stay `?v=dev`; do not hand-bump `?v=N`)
-and `version.json`, then reload. If the rule is present but the computed value
+then verify the shell build without hand-editing `version.json`. If the rule is present but the computed value
 differs, it is losing a cascade fight — check `@layer` order first (unlayered
 beats every layer; later layers beat earlier ones) and remember a container query
 adds no specificity.
@@ -244,3 +245,11 @@ re-bless them deliberately rather than by reflex.
   that produces false timeouts.
 - Testing only at UI scale 100 — players can still dial 115–150 via SETTINGS,
   and several layout bugs historically only showed above 100%.
+
+## Capture CLI boundaries
+
+`layout-audit.mjs --report` reads the standard gallery manifest by default.
+One-screen capture forwards its chosen scale; multiple scales are rejected for
+single-cell mode rather than silently dropped. Gallery mode expands scale cells.
+A readiness/transition timeout records the cell/root and failure; incomplete
+or skipped cells remain absent evidence in the report, never full matrix green.

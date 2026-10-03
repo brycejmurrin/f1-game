@@ -29,7 +29,7 @@ a real device shows a black screen.
    that is a documented look gap, not a hoist miss.
 
 3. **Spec-invalid resources.** WebGPU allows ONLY sample counts 1 and 4 —
-   `MSAA_COUNT` is 4 (1 in lite); a 2 invalidates every MS pipeline.
+   `MSAA_COUNT` is 1 by default, 4 for desktop ULTRA, and 1 on software/mobile/lite paths; a 2 invalidates every MS pipeline.
    `rg11b10ufloat` is color-renderable only behind
    `rg11b10ufloat-renderable` — `create()` requests it when the adapter has
    it, else `POST_HDR_FORMAT` downgrades to `rgba16float`. Re-derive the
@@ -46,7 +46,7 @@ a real device shows a black screen.
 Persisted per origin in `apex26.gfxWgxLevel`; one `device.lost` = one rung
 up + one reload:
 
-- rung 0 full — desktop (MSAA 4, timestamp-query, 2048 shadows)
+- rung 0 full — desktop (MSAA 1 by default, ULTRA 4, timestamp-query, 2048 shadows); rung and graphics preset are independent axes
 - rung 1 lite — phone parity (MSAA 1, 1024 shadows). Phones/WebKit apply the
   lite stack immediately via `WGX_LITE = IS_MOBILE || IS_WEBKIT || _litePref`
   (`_litePref` is the persisted `apex26.gfxWgxLite`) while
