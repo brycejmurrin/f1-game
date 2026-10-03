@@ -162,6 +162,34 @@ const CamFeel = (function () {
     else for (const k in _fol) delete _fol[k];
   }
 
+  // Per-mode live motion. The offsets live in drive-chase / drive-broadcast /
+  // drive-onboard so a heli does not dolly like a chase cam. One-shot solves
+  // (no dt) and Reduce Motion return the rig untouched. Lambda is how fast
+  // THAT camera catches the car: a crane is slow, a drift cam is not.
+  const DRIVE_LAM = Object.freeze({
+    chase: 4.5, far: 2.0, drift: 7.5, low: 5.0, reverse: 3.2,
+    heli: 1.6, side: 4.2, cinematic: 1.3, overhead: 2.4, drone: 1.5,
+    rival: 3.0, pitwall: 2.2, trackside: 2.0,
+    cockpit: 3.0, hood: 4.0, visor: 2.8, tcam: 4.5, rear: 5.5,
+  });
+  function drive(mode, eye, tgt, fov, extra, spN) {
+    if (!extra || !(extra.dt > 0) || extra.reduceMotion) return fov;
+    const dt = extra.dt;
+    const att = extra.att || {};
+    const lam = DRIVE_LAM[mode] || 3;
+    let delta = null;
+    const ctx = {
+      sp: follow("sp:" + mode, clamp(spN || 0, 0, 1), lam, dt),
+      yaw: follow("yaw:" + mode, clamp((att.yawRateCur || 0) / 1.1, -1, 1), lam, dt),
+      brake: follow("brk:" + mode, clamp((att.baPitch || 0) / 0.025, 0, 1), Math.min(8, lam + 2), dt),
+      slip: follow("slp:" + mode, clamp((extra.slipLat || 0) / 6, -1, 1), lam, dt),
+    };
+    if (typeof DriveChase !== "undefined") delta = DriveChase.apply(mode, eye, tgt, ctx);
+    if (delta == null && typeof DriveBroadcast !== "undefined") delta = DriveBroadcast.apply(mode, eye, tgt, ctx);
+    if (delta == null && typeof DriveOnboard !== "undefined") delta = DriveOnboard.apply(mode, eye, tgt, ctx);
+    return delta == null ? fov : fov + delta;
+  }
+
   /* opts: { mode, dt, comfort, racing, lookHeld, stickX, stickY, mouseDx, mouseDy, spN }
      Call once per rendered race frame from game.js BEFORE vantage so look-back
      and free-look offsets are current for that solve. */
@@ -310,7 +338,7 @@ const CamFeel = (function () {
     shouldLookBack, lookBackLatch, setLookBackLatch,
     speedVignette, setSpeedVignette,
     applyFreeLook, applyAim, tick, tickRace, freeLookState, resetFreeLook, resetLatch,
-    follow, resetFollow,
+    follow, resetFollow, drive,
     initUI, loadSettings,
   };
 })();

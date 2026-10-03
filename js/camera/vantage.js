@@ -537,13 +537,6 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const gP = (extra.att && extra.att.baPitch) || 0;
       eye[0] += hx * gP * CHASE_G_DOLLY; eye[2] += hz * gP * CHASE_G_DOLLY;   // +heading = toward the car
       tgt[1] -= gP * CHASE_G_AIM;
-      // Live only: slide a little to the outside of the yaw so a turn reads
-      // before the road-frame corner lead catches up. +yawRate swings the nose
-      // toward +right, so the outside is −right. One-shot solves skip this.
-      if (!far && extra.dt > 0 && extra.att && typeof CamFeel !== "undefined") {
-        const swing = CamFeel.follow("chaseYaw", clamp((extra.att.yawRateCur || 0) / 1.2, -1, 1), 5, extra.dt);
-        eye[0] -= rx * swing * 1.8; eye[2] -= rz * swing * 1.8;
-      }
     } else {
       eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = rideEye + eyeUp + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
       const avC = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one
@@ -575,6 +568,9 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
     tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
   }
+  // Speed / brake / yaw motion. Before the ground clamp so a dip cannot put
+  // the eye under the road. No-op without a timestep.
+  if (typeof CamFeel !== "undefined" && CamFeel.drive) fov = CamFeel.drive(mode, eye, tgt, fov, extra, spN);
   // Open-circuit wall / building avoidance for broadcast cams (street circuits
   // already use `corr`). Steps toward the road, then lifts over roofs — see
   // js/camera/cam-avoid.js. Runs before the ground floor so a lifted eye is

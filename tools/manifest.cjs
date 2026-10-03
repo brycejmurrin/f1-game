@@ -312,6 +312,9 @@ const FULL = [
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
+  "js/camera/drive-chase.js",      // per-mode live motion (before feel.js dispatches)
+  "js/camera/drive-broadcast.js",
+  "js/camera/drive-onboard.js",
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
