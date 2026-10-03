@@ -172,7 +172,7 @@ test("race-entry ticks pump input and network while holding physics and governor
     PerfGov: { tick: dt => calls.push(["governor", dt]) },
     performance: { now: () => 260 },
     Input: { poll: () => calls.push("input"), clearEdges: () => calls.push("clear") },
-    BrakeCue: { tick() {} }, onboard: { tick() {} },
+    BrakeCue: { tick() {} }, onboard: { tick() {} }, director: { tick() {} },
     netPlay: { tick: () => calls.push("network") },
     render: dt => calls.push(["render", dt]),
   };
