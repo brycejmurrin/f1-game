@@ -2161,6 +2161,7 @@ function redFlagRestart() {
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
+    c.gear = 1; c.rpm = IDLE_RPM;   // a standing start in 2nd+ has gearLo > 0, so manual drive is zero until a downshift
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wake = 0; c.wheelLock = 0;
     clearRacingScratch(c);
     // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
@@ -4693,6 +4694,13 @@ function update(dt) {
   // !finished: a flagged human coasts on advancing prog — don't band toward it.
   for (const c of cars) if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
 
+  // Traffic scans read last step's poses. Writing prog/x/speed inside
+  // updateCar and then scanning the next car made a side-by-side look like a
+  // pass in array order.
+  for (let i = 0; i < cars.length; i++) {
+    const s = cars[i];
+    s._snapProg = s.prog; s._snapX = s.x; s._snapSpeed = s.speed;
+  }
   for (const c of cars) updateCar(c, dt, ranked);
 
   collide.resolveCollisions(ranked, dt);
@@ -4976,14 +4984,14 @@ function updateCar(c, dt, ranked) {
     for (let i = 0; i < ranked.length; i++) {
       const o = ranked[i];
       if (o === c || o.finished) continue;
-      let dprog = o.prog - c.prog;
+      let dprog = o._snapProg - c.prog;
       if (!Number.isFinite(dprog)) continue;
       // Cheap reject before wrap — same pattern as pairContact (PERF-FINDINGS Δprog 5.01%).
       const ad = dprog < 0 ? -dprog : dprog;
       if (ad > REJ && ad < L - REJ) continue;
       dprog = ((dprog + L / 2) % L + L) % L - L / 2;
       if (dprog < -BACK || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
-      const dx = o.x - c.x;
+      const dx = o._snapX - c.x;
       const adp = dprog < 0 ? -dprog : dprog;
       if (adp < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
@@ -5017,8 +5025,8 @@ function updateCar(c, dt, ranked) {
     // defendPull was the only answer the AI had. Speeds compare to each other,
     // never to a literal, so the window holds at every OVERALL SPEED.
     // BLUE FLAGS ONLY (AiDrive.letPassCase): the chaser must be LAPPING us — a lap or more ahead in progress.
-    const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser.speed : 0,
-      c.speed, vTop() / VMAX, !!chaser && chaser.prog - c.prog > track.total * 0.5);
+    const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser._snapSpeed : 0,
+      c.speed, vTop() / VMAX, !!chaser && chaser._snapProg - c.prog > track.total * 0.5);
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);
@@ -5035,8 +5043,8 @@ function updateCar(c, dt, ranked) {
   if (!c.human && c.energy > 0.02) {
     _aiBoost.traits = aiT; _aiBoost.energy = c.energy; _aiBoost.otActive = c.otT > 0;
     _aiBoost.kAhead60 = Tracks.curvature(track, wrapS(c.s + 60));
-    _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar.speed : 0; _aiBoost.speed = c.speed;
-    _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser.speed : 0;
+    _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar._snapSpeed : 0; _aiBoost.speed = c.speed;
+    _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser._snapSpeed : 0;
     _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
     _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen;
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
@@ -5073,7 +5081,7 @@ function updateCar(c, dt, ranked) {
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
   for (const o of ranked) {
     if (o === c || o.finished) continue;
-    const dp = o.prog - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
+    const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
     const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
     if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
   }
@@ -5147,14 +5155,14 @@ function updateCar(c, dt, ranked) {
         // inside this |dx| < TOW_HALF_W window on a narrow circuit, and a
         // stationary wreck does not punch a hole in the air.
         if (o === c || o.finished || o.retired) continue;
-        let dprog = o.prog - c.prog;
+        let dprog = o._snapProg - c.prog;
         if (!Number.isFinite(dprog)) continue;
         const ad = dprog < 0 ? -dprog : dprog;
         if (ad > TOW_RANGE + 0.1 && ad < L - TOW_RANGE - 0.1) continue;
         dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-        if (dprog > 0.5 && dprog < tg && Math.abs(o.x - c.x) < TOW_HALF_W) { tc = o; tg = dprog; }
+        if (dprog > 0.5 && dprog < tg && Math.abs(o._snapX - c.x) < TOW_HALF_W) { tc = o; tg = dprog; }
       }
-      if (tc) c.wake = wakeOf(tg, tc.x - c.x);
+      if (tc) c.wake = wakeOf(tg, tc._snapX - c.x);
       if (tc && !braking && Math.abs(c.steerVis || 0) < 0.12) {
         c.towing = c.wake;
         vmax *= 1 + AiDrive.towGain(!!track.street) * c.towing;
@@ -5620,7 +5628,7 @@ function updateCar(c, dt, ranked) {
     // ai-drive.js for the measured chatter that produced.
     if (c.passOf) {
       const po = c.passOf;
-      let dp = po.prog - c.prog;
+      let dp = po._snapProg - c.prog;
       dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
       const sideRoom = c.passSide > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL);   // the ROAD's room, not the run-off's
       if (po.finished || po.retired || cautionLevel() >= 2 || dp > AI_PASS_LATCH_M || !Number.isFinite(dp)) { c.passOf = null; }   // lost it, or a VSC / safety car came out: no penalty
@@ -5707,7 +5715,7 @@ function updateCar(c, dt, ranked) {
     }
     else c.atkOn = c.atkWant = false;
     if (c.passOf && raceCtl.level >= 2) c.passOf = null;   // a move under way when the SC/VSC comes out is abandoned
-    if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
+    if (c.passOf) overtake = AiDrive.passTarget(c.passOf._snapX, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what
     // stops the AI covering a line it has already decided to concede.
     let yieldPull = 0;
@@ -5720,7 +5728,7 @@ function updateCar(c, dt, ranked) {
     if (chaser && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
-      _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser.speed;
+      _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x;
       _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
       defend = AiDrive.defendPull(_aiDefend);
@@ -5988,7 +5996,7 @@ function updateCar(c, dt, ranked) {
     const axEstTarget = braking ? -surfaceBrake * brakeLvl
       : (onThrottle
           ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu
-          : -COAST_DRAG);
+          : -COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0)));
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
