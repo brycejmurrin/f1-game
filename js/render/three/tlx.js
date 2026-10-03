@@ -2025,6 +2025,16 @@ const TLX = (function () {
       // compile it once per vertex layout already in the pool: the pipeline also
       // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
       const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      // THE LAUNCH'S FX VARIANTS (FieldLod warm, js/car/field-lod.js): the
+      // throttle-lift exhaust flame (car-draw.js _flameOpts, alpha < 1) and the
+      // ERS strip's two phases (_ersLightOpts, alpha 1 / 0.6) are first drawn when
+      // the field lifts after the lights. Their meshes are one flat quad
+      // (car-mesh.js _flatQuadData), so they compile on THAT layout only — a
+      // probe geometry built the same way — in both winding signs, not on every
+      // layout in the pool like the ring above. apex26.fieldLod=0 skips them.
+      const _LATE_FX = [{ roughness: 1, specular: 0, noAlphaWrite: true, alpha: 0.5 },
+        { roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 }];
+      const _lateFxOn = () => typeof FieldLod === "undefined" || FieldLod.on;
       function _layoutKey(g) {
         let k = g.index ? g.index.array.constructor.name : "-";
         for (const n of Object.keys(g.attributes).sort()) {
@@ -2041,6 +2051,7 @@ const TLX = (function () {
       function mintLateLit() {
         if (!_warmFx || !lit || _drawMatMode || vizMat) return;
         for (const o of _LATE_LIT) materialFor(o, false, false);
+        if (_lateFxOn()) for (const o of _LATE_FX) materialFor(o, false, false);
       }
       async function warmLateLit() {
         if (!_warmFx || !lit || _drawMatMode || vizMat) return;
@@ -2071,6 +2082,19 @@ const TLX = (function () {
             await renderer.compileAsync(m, camera, scene);
           }
         }
+        if (!_lateFxOn()) return;
+        const quad = buildGeometry({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
+          col: [2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25], idx: [0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3] });   // HDR colour: packAttr keeps it float, as on the real flame
+        for (const o of _LATE_FX) {
+          const mat = materialFor(o, false, false);
+          for (const sx of [1, -1]) {
+            const m = new THREE.Mesh(quad, mat);
+            m.frustumCulled = false;
+            m.scale.x = sx; m.updateMatrixWorld(true);
+            await renderer.compileAsync(m, camera, scene);
+          }
+        }
+        _warmStages.lateFx = _LATE_FX.length;
       }
       // AUTO (unset) = ON for three's WebGL2 backend only. There compileAsync
       // links with KHR_parallel_shader_compile and polls COMPLETION_STATUS, but

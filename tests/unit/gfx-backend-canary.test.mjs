@@ -3559,7 +3559,9 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
   assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
-  assert.match(game, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05\) \{/, "the flame draws for every car, not only the player");
+  // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
+  assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");
+  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2\)\)/, "for every drawn car");
   const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(eng, /\(1 - 0\.35 \* tow\) \* windOpen/, "the wind drops in a tow");
 });
