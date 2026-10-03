@@ -428,6 +428,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-nav-spatial.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
+  "tests/unit/mirror-lights.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",
