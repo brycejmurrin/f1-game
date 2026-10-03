@@ -3282,7 +3282,10 @@ const Car3D = (function () {
     const exhDia = (cx, cy, z, r) => [
       [cx, cy - r, z], [cx + r, cy, z], [cx, cy + r, z], [cx - r, cy, z],
     ];
-    const EXH_OUT = 0.34, EXH_Y = 0.40;   // between crash (0.12) and tyre inner (0.57)
+    const EXH_OUT = 0.34;
+    // Twins stay low beside the crash structure; the single tip shares the
+    // rain-light cavity so stock / megaphone mouths read around the red square.
+    const EXH_Y = exhTwin ? 0.40 : 0.50;
     const heatOf = (c) => {
       const g = glazeOf(c);
       return [exhMetal[0]*0.55 + g[0]*0.45, exhMetal[1]*0.55 + g[1]*0.45,
@@ -3290,6 +3293,7 @@ const Car3D = (function () {
     };
     const tipZ = exhTwin ? -2.55 : -2.58;   // at/behind the rain-light plane so tips read from rear
     const exits = exhTwin ? [-EXH_OUT, EXH_OUT] : [0];
+    const tipRShow = exhTwin ? exhR : Math.max(exhR * 1.35, 0.095);
     if (exhTwin) {
       addTube(out, [[0, EXH_Y, -2.00], [0, EXH_Y, -2.10]], exhR * 0.55, 8,
               exhMetal, SURFACES.metal);
@@ -3304,19 +3308,21 @@ const Car3D = (function () {
       } else {
         // Single tip reaches the rear face so stock / megaphone are not buried
         // ahead of the lamp (the chase-shot failure mode).
-        addTube(out, [[0, EXH_Y, -2.04], [0, EXH_Y, tipZ]], exhR, 8, exhMetal, SURFACES.metal);
+        addTube(out, [[0, EXH_Y, -2.04], [0, EXH_Y, tipZ]], tipRShow * 0.85, 8,
+                exhMetal, SURFACES.metal);
       }
       const flame = exhTwin ? fTwin : fuelFlame;
+      const rPipe = tipRShow;
       addTube(out, [[cx, EXH_Y, tipZ + 0.10], [cx, EXH_Y, tipZ + 0.01]],
-              exhR * (exhTwin ? 1.10 : 1.08), 8, heatOf(flame), SURFACES.metal);
+              rPipe * 1.08, 8, heatOf(flame), SURFACES.metal);
       addStationLoft(out, [
-        exhDia(cx, EXH_Y, tipZ + 0.08, exhR),
-        exhDia(cx, EXH_Y, tipZ, exhR * (exhTwin ? 1.05 : 1.12)),
+        exhDia(cx, EXH_Y, tipZ + 0.08, rPipe),
+        exhDia(cx, EXH_Y, tipZ, rPipe * 1.08),
       ], exhMetal, null, SURFACES.metal);
-      addBox(out, cx, EXH_Y, tipZ + 0.008, exhR * 1.55, exhR * 1.55, 0.018,
+      addBox(out, cx, EXH_Y, tipZ + 0.008, rPipe * 1.55, rPipe * 1.55, 0.018,
              [0.05, 0.04, 0.04], SURFACES.carbon);
-      addBox(out, cx, EXH_Y, tipZ - 0.004, exhR * (exhTwin ? 1.25 : 0.90),
-             exhR * (exhTwin ? 1.25 : 0.90), 0.014, glazeOf(flame), SURFACES.metal);
+      addBox(out, cx, EXH_Y, tipZ - 0.004, rPipe * (exhTwin ? 1.25 : 1.05),
+             rPipe * (exhTwin ? 1.25 : 1.05), 0.014, glazeOf(flame), SURFACES.metal);
     }
     if (exhTwin && (exhStyle.wastegate || 0) >= 1) {
       addBox(out, 0, EXH_Y + exhR + 0.055, tipZ + 0.02, EXH_OUT * 2.05, 0.028, 0.045,
@@ -3327,13 +3333,13 @@ const Car3D = (function () {
       // Megaphone: a WIDER mouth at the rear face, not a U-bracket over the lamp.
       const flareMul = exhTwin ? 0.55 : 1.15;
       for (const cx of exits) {
-        const tip = exhR * (1 + flareMul * exhFlare);
+        const tip = tipRShow * (1 + flareMul * exhFlare);
         const z0 = tipZ + 0.06, z1 = tipZ - 0.025;
         if (!exhTwin) {
-          addLoft(out, z0, 0, EXH_Y, exhR * 2, exhR * 2, z1, 0, EXH_Y, tip * 2, tip * 2,
+          addLoft(out, z0, 0, EXH_Y, tipRShow * 2, tipRShow * 2, z1, 0, EXH_Y, tip * 2, tip * 2,
                   exhFlareC, SURFACES.metal);
         }
-        addStationLoft(out, [exhDia(cx, EXH_Y, z0, exhR), exhDia(cx, EXH_Y, z1, tip)],
+        addStationLoft(out, [exhDia(cx, EXH_Y, z0, tipRShow), exhDia(cx, EXH_Y, z1, tip)],
                        exhFlareC, null, SURFACES.metal);
         addBox(out, cx, EXH_Y, z1 - 0.010, tip * 2.10, tip * 2.10, 0.016,
                [0.22, 0.22, 0.24], SURFACES.metal);
@@ -3398,7 +3404,7 @@ const Car3D = (function () {
         }
       }
     }
-    exhTipRForLamp = exhTwin ? exhR : (exhFlare > 0 ? exhR * (1 + 1.15 * exhFlare) : exhR * 1.12);
+    exhTipRForLamp = tipRShow * (exhFlare > 0 && !exhTwin ? (1 + 1.15 * exhFlare) : 1);
 
     part("sharkFin");
     // liv.finShape picks the outline (FIN_SHAPES); "none" builds no blade at
