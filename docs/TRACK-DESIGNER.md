@@ -90,7 +90,7 @@ down to 5 m, tapering gently in and out (never steeper than 1 m in 20 m);
 step it back up to the half-width and the stretch is full width again. It
 only narrows — the road never gets wider than its half-width — and a circuit
 keeps up to 24 such stretches. They stay on their points when you add, delete
-or stamp elsewhere. Two rows of chips live here too:
+or stamp elsewhere. Three rows of chips live here too:
 
 - **RANDOMISE · TRACK OF THE DAY · START FROM…** — three ways to a new
   circuit. **TRACK OF THE DAY** draws the same circuit for everyone on the
@@ -98,9 +98,39 @@ or stamp elsewhere. Two rows of chips live here too:
   opens a card for every shipped circuit; pick one and its real layout becomes
   your design, named `<CIRCUIT> REMIX`, ready to change. Your previous design is
   one UNDO away, and SAVE adds the remix as a new circuit.
-- **REVERSE · START HERE · DELETE POINT · UNDO · REDO · FIT VIEW · SPEED** —
-  **SPEED** colours the road by how fast a car takes it, yellow (slow) through
+- **REVERSE · START HERE · DELETE POINT · UNDO · REDO · FIT VIEW · SPEED · TEST HERE** —
+  **TEST HERE** drives from the selected point (see Test drive). **SPEED** colours the road by how fast a car takes it, yellow (slow) through
   orange and red to purple (flat out); press it again to turn it off.
+- **FAST · TECHNICAL · MIXED** — designed randomise: the designer draws 16
+  circuits, keeps the ones that pass every check, scores them for the style and
+  shows the best four as cards (`4.8 km · 14 corners · 2 passing`). **FAST**
+  favours long flat-out running and places to overtake; **TECHNICAL** many
+  corners of many different radii; **MIXED** variety in both corners and speed.
+  Every amber check costs a card points. **USE** loads a card as your design
+  (one UNDO takes it back; SAVE adds it as a new circuit); **MORE LIKE THIS**
+  nudges two or three of that card's points (never within 300 m of the start
+  line) into four new cards. The same circuit always gives the same cards.
+
+## Elevation — hills and dips
+
+The strip under the canvas is the circuit's height profile, start line on the
+left, as the game builds it. Its dots are the hills you added (each a smooth
+cosine bump), the short ticks along the bottom your points, the red line the
+point selected on the canvas, and amber dots the slope, crest and dip warnings.
+
+- **Add a hill** — tap the strip where it should go (or, on the strip, Enter
+  adds one at the point selected on the canvas). A new hill is 6 m high and
+  320 m long.
+- **Shape it** — drag its dot up or down for the height (a dip is a negative
+  height), sideways to move it, and with Shift held sideways to make it longer
+  or shorter. The road never gets steeper than 8 %: a short hill cannot be a
+  tall one, so the height stops at the limit.
+- **Remove it** — press and hold its dot, or Delete with it selected.
+- **On a phone or a pad** — with a hill selected, **HILL m**, **HILL LENGTH m**
+  and **REMOVE HILL** appear at the end of 4 DETAILS. On a phone held sideways
+  the strip is hidden to give the canvas the height.
+
+Every change is one UNDO step. Up to 24 hills per circuit.
 
 ## TURNS — every corner, tappable
 
@@ -133,7 +163,8 @@ and lists what it finds:
   first corner 250 m or more after the line and turning at least 45°, at most
   2 % of slope along the start straight, 12 m of road, at most 5.7° of
   banking), and *No overtaking spot* means no 400 m flat-out run into a heavy
-  braking zone. Many real circuits break one or two; they never block anything
+  braking zone. *Crest* rows are where the car goes light over the top of a
+  hill at speed, *Dip* rows where it is squashed into the bottom of one. Many real circuits break one or two; they never block anything
   and FIX ALL leaves them alone.
 - Tap a row to jump to the spot on the canvas.
 - **FIX** on a row repairs that one problem; **FIX ALL** (next to the 5 CHECKS
@@ -149,10 +180,25 @@ and lists what it finds:
   your circuit chosen. It also sits under the **MY CIRCUITS** chip there.
 - In the **MY CIRCUITS** tab: **EDIT**, **RACE** and **DELETE** (press twice).
 
+## Test drive
+
+Select a point and press **TEST HERE** (the last chip under 4 DETAILS, or in
+the press-and-hold row on the canvas). The designer saves the circuit and drops
+you on that point at a standstill in a **time trial** — your stored weather and
+laps, no race-settings sheet, no rivals. The run up to the start line is an
+out-lap; the timed lap begins when you cross it, and lands on the circuit's
+time-trial board like any other. **PAUSE → QUIT** brings you straight back to
+the designer with the same point selected.
+
 ## SHARE, EXPORT, IMPORT
 
 - **SHARE** copies a link. Whoever opens it gets the exact circuit, theme and
   all. If the copy is blocked, the link waits in the **SHARE CODE** field.
+- **CARD** makes a 640×360 picture of the circuit — its outline, name, length,
+  corners, estimated lap and the share link — and opens your device's share
+  sheet with it (the full link rides along as text). Where the browser cannot
+  share files (desktop Firefox, for one) the picture is saved as a `.png`
+  instead.
 - **SHARE CODE → LOAD** takes a pasted link or code.
 - **EXPORT** saves the circuit as a small `.apextrack.json` file; **IMPORT**
   loads one back (up to 64 KB).
@@ -161,9 +207,9 @@ and lists what it finds:
 
 | Input | How |
 |---|---|
-| Touch | Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan. |
+| Touch | Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE / TEST HERE · pinch to zoom, drag empty space to pan. |
 | Mouse | Drag a point · click the road to add one · double-click a point to delete it · wheel to zoom, drag empty space to pan · shift-click a second point to select the stretch between them. |
-| Keyboard | Tab to the canvas · `[` and `]` step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it. |
+| Keyboard | Tab to the canvas · `[` and `]` step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it · on the elevation strip under the canvas, Enter adds a hill at the selected point, `[` and `]` pick one, Up/Down set its height (5 m with Shift), Left/Right move it 10 m (with Shift: 40 m shorter / longer), Delete removes it. |
 | Gamepad | The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer. |
 
 ## Limits

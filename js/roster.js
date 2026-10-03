@@ -274,6 +274,7 @@
     "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
+    "js/editor/profile.js",
     "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
@@ -300,6 +301,10 @@
     [
       "js/editor/shape.js",
       "js/editor/canvas.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/profile.js"
     ],
     [
       "js/editor/shape.js",
@@ -332,6 +337,10 @@
     [
       "js/editor/canvas.js",
       "js/editor/designer.js"
+    ],
+    [
+      "js/editor/profile.js",
+      "js/editor/designer.js"
     ]
   ],
     TRACK_VM: [
@@ -357,6 +366,7 @@
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
+    "js/track/scenery/venue.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
     "js/garage/experience.js",

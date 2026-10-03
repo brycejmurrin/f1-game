@@ -106,3 +106,7 @@ Deep references:
 ## Load on demand
 
 - Active-save gate, weekend/quali/reliability flow, settlement, common mistakes → [references/workflow.md](references/workflow.md).
+
+Slot mutation results must retain `ok`, `durable`, and `reason`; a session-only
+deletion is not a permanent deletion. Use the updated structured deletion result
+(including slots) and inspect save conflict/quota state before reporting success.

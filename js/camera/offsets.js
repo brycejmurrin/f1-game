@@ -47,6 +47,13 @@ const CAM_TUNE_DEFS = [
   // amount also stops the panel opening on a lying 0 while 0.54 is live.
   { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.02, def: 0.54, unit: "", modes: ["chase", "far", "drone"],
     help: "Let the chase/drone camera lead and swing INTO corners. Chase/far ship at 0.54; drone ships its own look-ahead (~0.55) when unset. 0 locks flat behind the car; 1 is the full corner-following aim. Purely visual — never affects the car." },
+  // CORNER HANG is the live outside-of-the-bend move (chase, drift, reverse,
+  // overhead, and the broadcast cams). Like CORNER LEAD it is a scale on the
+  // shipped amount, not a metre offset, so def is 1 and 0 has to stay stored.
+  // CamTune.apply() does not read it. vantage.js multiplies that camera's hang.
+  { id: "cornerHang", label: "CORNER HANG", min: 0, max: 2, step: 0.05, def: 1, unit: "",
+    modes: ["chase", "drift", "reverse", "overhead", "heli", "side", "cinematic", "drone"],
+    help: "How far this camera steps to the outside of a bend. 1 is the shipped hang. 0 holds the line with no extra swing. 2 is twice the shipped move. The pit wall does not have it. Purely visual — never affects the car." },
 ];
 const DEF_BY_ID = {};
 for (const d of CAM_TUNE_DEFS) DEF_BY_ID[d.id] = d;
@@ -99,7 +106,7 @@ const PRESETS = Object.freeze({
   flat: Object.freeze({
     label: "FLAT CHASE",
     help: "Lock chase/far flat behind the car (corner lead 0) — no swing into bends.",
-    modes: { chase: { cornerLead: 0 }, far: { cornerLead: 0 } },
+    modes: { chase: { cornerLead: 0, cornerHang: 0 }, far: { cornerLead: 0 } },
     global: null, comfort: null,
   }),
   calm: Object.freeze({
@@ -215,6 +222,16 @@ function cornerLead(mode) {
   return null;
 }
 
+// null = shipped hang (1). 0 is a real "don't swing" and must not collapse
+// back to 1 the way an unstored key does.
+function cornerHang(mode) {
+  const d = DEF_BY_ID.cornerHang;
+  if (!d || !d.modes || d.modes.indexOf(mode) < 0) return null;
+  if (stored(mode, "cornerHang")) return clamp(getModeOnly(mode, "cornerHang"), d.min, d.max);
+  if (storedGlobal("cornerHang")) return clamp(getGlobal("cornerHang"), d.min, d.max);
+  return null;
+}
+
 function exportEdits() {
   const out = {};
   for (const mode of Object.keys(_store)) {
@@ -305,7 +322,7 @@ function buzzAmp(spV, deploying, reduceMotion, wet) {
 }
 function rollTarget(roadCamRoll, slipSm, baRoll, reduceMotion) {
   if (reduceMotion) return 0;
-  return (roadCamRoll + slipSm * 0.07 + baRoll) * rollLean();
+  return (roadCamRoll + slipSm * 0.16 + baRoll) * rollLean();
 }
 
 function copyFrom(srcMode, dstMode) {
@@ -539,7 +556,7 @@ function apply(mode, eye, tgt, fov) {
 
 return { CAM_TUNE_DEFS, COMFORT_DEFS, PRESETS, FOV_MIN, FOV_MAX, GLOBAL_MODE, SHARE_MAGIC,
          KEY, KEY_GLOBAL, KEY_COMFORT,
-         apply, values, get, getModeOnly, getGlobal, stored, storedGlobal, cornerLead,
+         apply, values, get, getModeOnly, getGlobal, stored, storedGlobal, cornerLead, cornerHang,
          exportEdits, exportGlobal, exportComfort, exportPack,
          set, setGlobal, reset, resetGlobal, resetAll,
          count, countGlobal, tunedModes, all, globalAll, load, loadGlobal, loadComfort, persist,

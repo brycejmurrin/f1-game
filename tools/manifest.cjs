@@ -177,6 +177,7 @@ const FULL = [
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
+  "js/track/scenery/venue.js",
   // buildProps orchestration (guards nested for a later peel). Tracks.build calls it.
   "js/track/scenery/build-props.js",
   ...circuitFiles,
@@ -194,7 +195,7 @@ const FULL = [
   "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
   "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
-  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=, default OFF)
+  "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=0 opts out, default ON)
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/input.js",
@@ -249,7 +250,8 @@ const FULL = [
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
-  "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A)
+  "js/physics/grip-steer.js",
+  "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
@@ -287,10 +289,12 @@ const FULL = [
   "js/ui/settings-export.js",
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
+  "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
+  "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
   "js/ui/watch-transport.js",
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
@@ -300,9 +304,12 @@ const FULL = [
   "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
+  "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
+  "js/camera/results-cam.js",   // ResultsCam.create(G): chequered cut, results orbit, highlights reel
   "js/lighting/tuner-panel.js",
   "js/camera/tuner-panel.js",
   "js/physics/brake-cue.js",
+  "js/audio/driving-cues.js",
   "js/input/steer-tuning.js",
   "js/perf/governor.js",
   "js/perf/loop-health.js",
@@ -311,12 +318,18 @@ const FULL = [
   "js/perf/renderer-picker.js",
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
+  "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
+  "js/camera/drive-chase.js",      // per-mode live motion (before feel.js dispatches)
+  "js/camera/drive-broadcast.js",
+  "js/camera/drive-onboard.js",
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
-  "js/ui/hud-tyres.js",      // FL/FR/RL/RR band + ΔT helpers for GameHud
+  "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
+  "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
+  "js/ui/hud-layout.js",     // per-element HUD move/size (cockpit + other layouts); builds DISPLAY › HUD › MOVE & SIZE
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
@@ -465,6 +478,7 @@ const TRACK_VM = [
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
+  "js/track/scenery/venue.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -498,7 +512,9 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/appearance-opts.js"],
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
   ["js/core/store.js", "js/ui/hud-elements.js"],
+  ["js/core/store.js", "js/ui/hud-layout.js"],    // binds GameStore.store and applies the layout at eval
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
+  ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
@@ -574,6 +590,7 @@ const HARD_EDGES = [
   ["js/track/scenery/city.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],    // SceneryPits.build last
+  ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/build-props.js", "js/track/tracks.js"],          // Tracks.build → TrackBuildProps.build
   ["js/track/core/space.js", "js/track/core/surface.js"],
   ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
@@ -582,6 +599,9 @@ const HARD_EDGES = [
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
   ["js/physics/consts.js", "js/ui/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
   ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
+  ["js/camera/director.js", "js/game.js"],          // game.js calls Director.create(G) at eval time
+  ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
+  ["js/camera/results-cam.js", "js/game.js"],        // game.js calls ResultsCam.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
@@ -618,6 +638,7 @@ const HARD_EDGES = [
   ["js/career/career.js", "js/race/quali-model.js"],    // quali reads Career.rnd/devFor for its spread
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create() at eval time
+  ["js/fx/car-fx.js", "js/game.js"],         // game.js calls CarFx.create(G, { skids }) at eval time
   ["js/render/shared/mirror-pass.js", "js/game.js"],   // game.js calls MirrorPass.create(G, deps) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/sporting-regs.js", "js/game.js"],  // game.js calls SportingRegs.createPassWatch() at eval time
@@ -661,6 +682,7 @@ const HARD_EDGES = [
   ["js/audio/announcer.js", "js/game.js"],     // game.js calls Announcer.inert() at eval time
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],  // the announcer borrows speakable() and the per-channel tune
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
+  ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
@@ -671,10 +693,13 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
+  ["js/core/mat4.js", "js/physics/grip-steer.js"],       // GripSteer binds M4.clamp/lerp at eval
+  ["js/physics/grip-steer.js", "js/physics/player-forces.js"], // PlayerForces.step caps via GripSteer.forPlayer
   ["js/core/mat4.js", "js/physics/player-forces.js"],    // PlayerForces binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/player-forces.js"], // …and reads PhysicsConsts at eval
   ["js/physics/tyre-model.js", "js/physics/player-forces.js"], // lateralCurve / brakeBeta
   ["js/physics/player-forces.js", "js/game.js"],         // updateCar calls PlayerForces.create(G)
+
   ["js/core/mat4.js", "js/race/pit-lane.js"],            // PitLane binds M4.clamp at eval
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
   ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
@@ -685,6 +710,8 @@ const HARD_EDGES = [
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"], // RadioVoice.create builds a VoicePack
   ["js/race/race-radio.js", "js/game.js"],               // game.js calls RaceRadio.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
+  ["js/audio/driving-cues.js", "js/input/steer-tuning.js"], // SteerTuning.create calls DrivingCues.create(G)
+  ["js/audio/driving-cues.js", "js/game.js"],             // game.js calls DrivingCues.tick() each frame
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
@@ -822,9 +849,10 @@ const LAZY_EDITOR = [
   "js/editor/fixes.js",       // TrackFixes: one-click remedies for the validator's issues (start, length, spacing, smoothing, bridge, clearance)
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
   "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
+  "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (hills as cosine bumps → callbacks)
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
-// stamps / randomise / validate / insight / fixes / canvas destructure TrackShape at eval — the
+// stamps / randomise / validate / insight / fixes / canvas / profile destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/designer.js")
@@ -1037,7 +1065,6 @@ const MOVED = {
   "tools/parts-ladder.mjs": "tools/car/parts-ladder.mjs",
   "tools/crest-sweep.mjs": "tools/car/crest-sweep.mjs",
   "tools/logo-authored-sweep.mjs": "tools/car/logo-authored-sweep.mjs",
-  "tools/trace-logo.mjs": "tools/car/trace-logo.mjs",
   "tools/cockpit-pale-sweep.mjs": "tools/car/cockpit-pale-sweep.mjs",
   "tools/career-economy.mjs": "tools/car/career-economy.mjs",
   "tools/layout-audit.mjs": "tools/ui/layout-audit.mjs",
@@ -1151,6 +1178,7 @@ const MOVED = {
   "js/game/results.js": "js/ui/results-sheet.js",
   "js/game/settings-nav.js": "js/ui/settings-tabs.js",
   "js/game/ui-scale.js": "js/ui/scale.js",
+  "js/game/dock-layout.js": "js/ui/dock-layout.js",
   "js/track/maps.js": "js/ui/track-maps.js",
   "js/game/garage-scene.js": "js/garage/scene.js",
   "js/game/setup-ui.js": "js/garage/setup-sheet.js",
@@ -1198,6 +1226,8 @@ const MOVED = {
   "js/game/aerozones.js": "js/physics/aero-zones.js",
   "js/game/bodyattitude.js": "js/physics/body-attitude.js",
   "js/game/brake-cue.js": "js/physics/brake-cue.js",
+  "js/game/grip-steer.js": "js/physics/grip-steer.js",
+  "js/game/driving-cues.js": "js/audio/driving-cues.js",
   "js/game/debrisworld.js": "js/physics/debris-world.js",
   "js/game/incidentsim.js": "js/physics/incident-sim.js",
   "js/game/racecontrol.js": "js/race/race-control.js",

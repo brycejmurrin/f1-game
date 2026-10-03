@@ -164,7 +164,7 @@ test("a wet race puts the AI field on the tread the weather wants, and nobody pi
   await g.race("bahrain", "day", "rain", { laps: 5 });
   const { G } = g;
   const T = vm.runInContext("TyreModel", g.ctx);
-  const want = T.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
+  const want = T.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
   assert.ok(want > 0, `rain wants a wet tread: ${want}`);
   const ai = G.cars.filter((c) => !c.human && !c.retired);
   assert.ok(ai.length > 5, "a field");

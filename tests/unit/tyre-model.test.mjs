@@ -786,13 +786,10 @@ test("the AI's compound classes agree with the same classifier", () => {
 });
 
 test("the TYRE WEAR setting reaches the live model, not just the store", () => {
-  // planLaps() divides by LEVELS[level], and `level` was written ONLY by
-  // gridUp(). So the race-settings sheet's STRATEGY bar — which calls
-  // pits.planFor() -> planLaps() before any grid exists — planned against the
-  // PREVIOUS race's level, and on a fresh boot against the model's initial
-  // "off": that takes the `Math.max(1, lapsTarget)` branch, so every compound
-  // "lasted" the whole race and a full-length GP at REAL wear previewed
-  // "NO STOP". The G setter is where the two halves are kept in step.
+  // planLaps() divides by LEVELS[level]. The setter pushes on write; create()
+  // must also seed from G.raceTyreWear. Without create sync, a fresh boot kept
+  // the model at "off" until the next write or gridUp — STRATEGY previewed
+  // "NO STOP" while the UI said wear was on.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const setter = src.match(/set raceTyreWear\(v\) \{[\s\S]*?\n  \},/);
   assert.ok(setter, "could not find the raceTyreWear setter in js/game.js");
@@ -800,6 +797,32 @@ test("the TYRE WEAR setting reaches the live model, not just the store", () => {
     "setting TYRE WEAR must push the level into the model the STRATEGY preview reads");
   // gridUp's rule is the one to mirror: a time trial runs the model off.
   assert.match(setter[0], /isTimeTrial\(\) \? "off" : v/);
+});
+
+test("TyreModel.create seeds level from G.raceTyreWear (cold-boot sync)", () => {
+  // Behavioural half of the store/model seam: create() alone, no setLevel,
+  // no gridUp. A soft at REAL must not plan as whole-race life.
+  const base = {
+    lapsTarget: 53, track: { total: 5386, def: {} }, LAT_MAX: 22,
+    aTop: () => 7, vTop: () => 60, raceWeather: "dry",
+  };
+  const real = T.create({ ...base, raceTyreWear: "real" });
+  assert.equal(real.level(), "real");
+  assert.equal(real.on(), true);
+  assert.ok(real.planLaps(0.74, 53) < 53,
+    `REAL wear must plan a soft shorter than the GP: ${real.planLaps(0.74, 53)}`);
+
+  const light = T.create({ ...base, raceTyreWear: "light" });
+  assert.equal(light.level(), "light");
+  assert.ok(light.planLaps(0.74, 53) > real.planLaps(0.74, 53),
+    "LIGHT lasts longer than REAL");
+
+  const off = T.create({ ...base, raceTyreWear: "off" });
+  assert.equal(off.level(), "off");
+  assert.equal(off.planLaps(0.74, 53), 53, "OFF: honest answer is the whole race");
+
+  const missing = T.create(base);
+  assert.equal(missing.level(), "off", "no G.raceTyreWear: stay inert");
 });
 
 test("authored tyreSeverity stays in [0.4, 2.0] and the seven P5 anchors hold", () => {
@@ -885,4 +908,28 @@ test("info() reports trackTemp above ambient in the dry", () => {
   const c = freshCar(s, 0.74);
   const info = s.info(c);
   assert.ok(info.trackTemp > info.ambient, `${info.trackTemp} vs ambient ${info.ambient}`);
+});
+
+test("belowWindow preserves info's rounding, missing-state and non-finite behavior", () => {
+  const s = ctxFor({ laps: 10 });
+  for (const level of ["off", "light", "real"]) {
+    s.setLevel(level);
+    const cars = [null, {}, { tyreTs: 60 }, { tyre: T.classRecord("medium") }];
+    for (const life of [null, undefined, 0, 0.48, 0.7414, 0.7415, 0.88, 1.05, NaN, Infinity]) {
+      const opt = +T.optTemp(life).toFixed(1);
+      for (const ts of [null, undefined, NaN, -Infinity, Infinity, -0, -40, 400,
+                        opt - T.T_WINDOW - 0.051, opt - T.T_WINDOW - 0.049,
+                        opt - T.T_WINDOW + 0.049, opt - T.T_WINDOW + 0.051]) {
+        cars.push({ tyre: { life }, tyreTs: ts });
+      }
+    }
+    for (const c of cars) {
+      const info = s.info(c);
+      const expected = info && info.tempOpt != null && info.tempS != null
+        ? Math.max(0, (info.tempOpt - info.tempWindow) - info.tempS) : 0;
+      const before = c && { ...c };
+      assert.equal(s.belowWindow(c), expected, `${level}: life=${c?.tyre?.life}, ts=${c?.tyreTs}`);
+      assert.deepEqual(c, before, "reading a cold-window deficit changed the car");
+    }
+  }
 });

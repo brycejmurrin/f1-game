@@ -338,24 +338,31 @@
       // Wave-4 hero: Tribunas / Sector M facade — yellow+green Brazilian trim
       // over the generic grandstandEx (Monza Tribuna Centrale pattern).
       {
-        const a = anchor(K(0.01), -1, 12);
-        if (!onTrack(a.c[0], a.c[2], 8)) {   // margin is past the road EDGE: under the 12 m gap, or the guard always hits
+        // Rear Sector M facade, behind BOTH the generic stand (outer shell
+        // 22.5 m) and the packed upper terrace at .02 (gap 30..49.2 m).
+        // Its nearer upper face is 8.5 m toward the track: gap 62 keeps that
+        // face behind the terrace, including the neighbouring frame's turn.
+        const a = anchor(K(0.01), -1, 62);
+        if (!onTrack(a.c[0], a.c[2], 8)) {   // margin is past the road EDGE and inside the facade's 62 m gap
           const b = [a.r, a.u, a.t];
           modelGroup("interlagos-main-tribuna", {
-            center: vadd(a.c, a.u, 9), size: [16, 18, 110], basis: b,
+            center: vadd(a.c, a.u, 9), size: [18, 18, 110], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
             const GREY_A = [0.62, 0.62, 0.64], GREY_B = [0.56, 0.56, 0.58];
             addBox(stage, vadd(a.c, a.u, 4.0), [14, 8.0, 100], GREY_A, b);
             addBox(stage, vadd(vadd(a.c, a.r, 2.5), a.u, 10.5), [12, 6.5, 90], GREY_B, b);
-            // Yellow / green fascia strip — Sector M identity from race photos.
+            // Attached track-facing trim: side -1 faces the track along +r.
+            // Each 0.10 m panel embeds 1 cm in its own wall and stands 9 cm
+            // proud, so Brazilian colours remain visible without a free rail.
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 7.5),
-              [0.45, 1.2, 96], RAIL_Y, b);
-            addBox(stage, vadd(vadd(a.c, a.r, -6.5), a.u, 8.9),
-              [0.45, 1.2, 96], RAIL_G, b);
-            // Flat canopy lip.
-            addBox(stage, vadd(a.c, a.u, 14.2), [13, 0.6, 92], [0.72, 0.74, 0.78], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 7.04), a.u, 6.8),
+              [0.10, 1.2, 96], RAIL_Y, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 8.54), a.u, 12.2),
+              [0.10, 1.2, 86], RAIL_G, b);
+            // The lip rests on the upper block's 13.75 m top and projects
+            // 0.5 m beyond its track-facing wall.
+            addBox(stage, vadd(vadd(a.c, a.r, 2.5), a.u, 14.05), [13, 0.6, 92], [0.72, 0.74, 0.78], b);
           }, { required: true });
         }
       }

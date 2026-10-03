@@ -11,9 +11,10 @@
  * Run in the MENU state, where the game loop doesn't call setEngine, so our
  * controlled values aren't overwritten.
  *
- * Usage:  (serve the repo first, e.g. `python3 -m http.server 8099`)
- *   node tools/check/audio-test.cjs            # uses http://localhost:8099
- *   node tools/check/audio-test.cjs <baseURL>
+ * Usage:
+ *   node tools/check/audio-test.cjs            # starts its own static server
+ *   node tools/check/audio-test.cjs <baseURL>  # reuse an already-running server
+ *   node tools/check/audio-test.cjs --help
  *
  * What to look for:
  *   - within a gear, rate rises monotonically with rev (climb)
@@ -21,13 +22,38 @@
  *   - boost adds a few percent
  */
 const { chromium } = require("playwright");
-const BASE = process.argv[2] || "http://localhost:8099";
+const path = require("node:path");
+
+const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`audio-test — objective engine-audio pitch probe (Chromium + WebAudio)
+
+  node tools/check/audio-test.cjs            # starts an in-process static server
+  node tools/check/audio-test.cjs <baseURL>  # reuse a server already listening
+  node tools/check/audio-test.cjs --help
+`);
+  process.exit(0);
+}
 
 (async () => {
   // Chromium from harness.mjs's ladder (CHROME / PW_CHROMIUM / the known
   // paths), like offline-precache-check: playwright's own registry pin may
   // not be installed in a container whose egress blocks cdn.playwright.dev.
-  const exe = (await import("../lib/harness.mjs")).pickChromium();
+  // Same harness starts the static server when no baseURL is passed — the
+  // prior default (localhost:8099) failed with ERR_CONNECTION_REFUSED, and
+  // `--help` was treated as a URL.
+  const harness = await import("../lib/harness.mjs");
+  const ROOT = path.resolve(__dirname, "../..");
+  let BASE = argv[0] || null;
+  let ownServer = false;
+  if (!BASE) {
+    const srv = await harness.startStaticServer(ROOT);
+    BASE = srv.url.replace(/\/$/, "");
+    ownServer = true;
+  }
+  const exe = harness.pickChromium();
+  let exitCode = 1;
+  try {
   const b = await chromium.launch({ headless: true, ...(exe ? { executablePath: exe } : {}),
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"] });
   const page = await b.newPage();
@@ -72,7 +98,7 @@ const BASE = process.argv[2] || "http://localhost:8099";
     return { rate, cen, boostOff: bo, boostOn: bn, coast, pull };
   }, revs);
   await b.close();
-  if (errs.length) { console.log("pageerrors:", errs.join(" | ")); process.exit(1); }
+  if (errs.length) { console.log("pageerrors:", errs.join(" | ")); return; }
 
   console.log("playbackRate (exact pitch x)   rows=gear  cols=rev " + JSON.stringify(revs));
   for (let g = 1; g <= 8; g++) console.log(`  g${g}: ${r.rate[g].map((x) => x.toFixed(3)).join("  ")}`);
@@ -125,7 +151,7 @@ const BASE = process.argv[2] || "http://localhost:8099";
     return out;
   }, VOICES);
   await b2.close();
-  if (errs2.length) { console.log("pageerrors (voices):", errs2.join(" | ")); process.exit(1); }
+  if (errs2.length) { console.log("pageerrors (voices):", errs2.join(" | ")); return; }
 
   console.log("voice          rates(rev .2/.5/.8)      centroid  debug");
   for (const v of VOICES) {
@@ -144,5 +170,10 @@ const BASE = process.argv[2] || "http://localhost:8099";
   if (!(rel("Ferrari") > 1.01)) { ok = false; console.log("FAIL: Ferrari not pitched above default"); }
   if (!(rel("Audi") < 0.995)) { ok = false; console.log("FAIL: Audi not pitched below default"); }
   console.log(ok ? "PASS: all voices monotonic; manufacturer trims audible in rate" : "CHECK FAILED");
-  process.exit(ok ? 0 : 1);
+  exitCode = ok ? 0 : 1;
+  } finally {
+    if (ownServer) await harness.shutdown();
+    process.exitCode = exitCode;   // early page-error returns must fail after cleanup too
+  }
+  process.exit(exitCode);
 })();

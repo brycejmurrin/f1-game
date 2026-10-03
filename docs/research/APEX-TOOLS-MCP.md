@@ -190,6 +190,59 @@ All eight already boot via `harness.mjs` (`startStaticServer` + own Chromium).
 replaces the recipe (layout-audit first-wins); an MCP pass-through would
 become a full `layout-audit`.
 
+## Week-6 (2026-10-02: session checks, and a live re-test of every wrap)
+
+| Tool | CLI | Pin |
+|---|---|---|
+| `apex_session_status` | `session-status.mjs --json` | No args |
+| `apex_who_is_on_it` | `who-is-on-it.mjs --json [--hours N] [--no-fetch] [paths…]` | Never `--claim` / `--release`; a path starting `-` is refused |
+| `apex_ci_status` | `ci-watch.mjs --once --sha <hex\|HEAD>` | One poll; exits 0/1/2/124 are verdicts in `out.verdict` |
+
+Live re-test of all twelve wraps (idle container, loadavg < 0.1) found three
+browser wraps broken and fixed them at the CLI, not the wrap:
+
+- `apex_agent` failed 2 of 2 on `waitForFunction: Timeout 15000ms` —
+  `agent.mjs` had no `polling: 100` and a 15 s boot / 20 s build budget.
+  `__apex` lands 10.3–12.6 s after `goto` on an idle box (3 boots) and a TLX
+  monza build is 16.6 s. Now 45 s / 45 s with timer polling: `world` in 22 s.
+- `apex_eval` failed its first call and passed the retry: same 15 s boot.
+- `apex_shot` exited 0 having saved an all-transparent PNG, then on a second
+  run the menu's garage scene, as monza. The first TLX present after the
+  camera move took 17.6 s; `awaitPresentedFrame`'s 8 s default timed out
+  silently and the capture read the previous blit. It now returns
+  true/false/null, `shot.mjs` waits up to 90 s and refuses a stale or blank
+  (sharp stats, not byte count) frame.
+- `parseOut` returned `563.528` for `apex_shot`: the line-by-line fallback
+  parsed an indented number from inside the JSON. The fallback now takes the
+  last column-0 `{`/`[` block, objects and arrays only.
+
+## Week-7 (2026-10-03: async calls, cancellation, client timeouts)
+
+A second agent's re-test (deploy tip `ff109fc`, 14/15 pass) found `apex_agent`
+cut off by its CLIENT at 60 s while the CLI itself answered in 97 s — and
+worse, the server kept running it: `spawnSync` blocked the whole process (not
+even `apex_status` could answer) and the lock stayed held, so the next call got
+`lock_held`. Fixed in the server:
+
+- Every wrap spawns asynchronously (`runSpawn` returns a promise); the child
+  leads its own process group, so a timeout kills the Chromium it launched too.
+- `notifications/cancelled` aborts the call: the process group is killed, the
+  lock is released when the child exits, and no response is sent for that id
+  ([spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/cancellation)).
+  Measured over stdio: `apex_status` answered at 4.1 s during an `apex_agent`
+  run; cancel at 8 s; lock free and no browser left at 13 s.
+- `.mcp.json` / `.cursor/mcp.json` set `"timeout": 900000` on `apex-tools`,
+  matching `.codex/config.toml`'s `tool_timeout_sec = 900`. Claude Code's CLI
+  has no 60 s stdio limit (default ~28 h; a per-server `timeout` overrides
+  `MCP_TOOL_TIMEOUT`: https://code.claude.com/docs/en/mcp), but the Desktop app
+  cancels stdio calls at ~60 s regardless — now a clean cancel, not a stuck lock.
+- `apex_rotate_markings_check` parses its rows into `out` (`wouldChange`,
+  `circuits[]`); `who-is-on-it.mjs` lists each touched commit once, with every
+  branch carrying it in `branches`.
+
+Not a bug: `apex_shot`'s `frame.camera.mode` is the GAME camera underneath;
+the free cam that framed the shot is `dbgCamActive: true`.
+
 ### Locking
 
 Exclusive `scratch/apex-browser.lock` (gitignored). Week-1 including

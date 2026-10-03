@@ -21,6 +21,7 @@ and Meta IWER 2.5.0 behaviour under SwiftShader.
 - IWER `XRWebGLLayer.framebuffer` is **null** → three `WebGLState.drawBuffers` WeakMap throws every frame. TLX remaps `backend.state.currentDrawbuffers` to a `Map` when the FBO is null (emulation-only; Quest gives a real FBO).
 - IWER cannot test projection layers, multiview, MSAA>1, foveation effect, or `XRGPUBinding`.
 - **Do not** use the Chrome Web Store Immersive Web Emulator on Chrome 147+ (three [#33414](https://github.com/mrdoob/three.js/issues/33414)); use pinned `tests/vendor/iwer-*.min.js` in Playwright.
+- While presenting, window.rAF (and page-timer polls) are starved; `session.requestAnimationFrame` still runs. Specs must wait on `frameCount` via Node-side `waitXrFrames` in `tests/helpers/iwer-install.mjs` (CDP evaluate poll — never `page.waitForFunction`, and never a competing `session.requestAnimationFrame` waiter that starves the game loop under IWER). That was the Emulated VR red on deploy tip `eec9a1fbb` (CI run 37083868797): session started, frames advanced, waiter never re-sampled. Soft-GL cold XR ticks are ~5 s/frame under Playwright + SwiftShader — `waitXrFrames` allows ~45 s for a small delta while still failing a zero-frame hang.
 
 ## On-device
 

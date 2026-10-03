@@ -24,8 +24,13 @@ Start the server first (`python3 -m http.server 3456`), then in
 `browser_evaluate` / `evaluate_script`:
 
 ```js
-await new Promise(r => { const t = setInterval(() => {
-  if (window.__apex && window.__apex.race) { clearInterval(t); r(); } }, 100); });
+await new Promise((resolve, reject) => {
+  const deadline = Date.now() + 45000;
+  const timer = setInterval(() => {
+    if (window.__apex?.race) { clearInterval(timer); resolve(); }
+    else if (Date.now() >= deadline) { clearInterval(timer); reject(new Error("apex readiness timed out: " + location.href)); }
+  }, 100);
+});
 window.__apex.headless(true);
 const g = document.getElementById('game');
 if (g) g.style.visibility = 'hidden';
