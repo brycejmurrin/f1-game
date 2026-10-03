@@ -308,6 +308,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-panel.test.mjs",
   "tests/unit/flyby-pose-inverse.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
+  "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
   // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.

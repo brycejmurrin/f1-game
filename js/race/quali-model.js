@@ -147,27 +147,13 @@ const Quali = (function () {
 
     // The reference POLE a time-trial medal is measured against: a top-rated
     // driver (skill 1) in the tier-0 car on a flying lap — the same model
-    // capFor()/lapTime() grid a field with, minus the standing start — at the
+    // capFor()/lapTime() grid a field with (both flying laps) — at the
     // current pace, difficulty and weather grip. 0 with no track loaded.
     function referencePole() {
       const track = G.track;
       if (!track || !track.n) return 0;
       const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
       return lapTime(track, G.vTop() * Teams.TIER_V[0] * dd.ai * QUALI_TRIM, G.gripMult());
-    }
-
-    // What a STANDING start costs, in seconds, for a car whose flying pace is
-    // `cap`. lapTime() integrates a lap that is already up to speed, so a car
-    // leaving the line from rest is behind that model by the time it loses
-    // accelerating to it: reaching v under constant a takes v/a and covers
-    // v^2/(2a), a distance the flying lap covers in v/(2a) — so the loss is the
-    // difference, v/(2a). Roughly two and a half seconds at F1 pace, and it
-    // applies to every modelled car exactly as it applies to the driven one.
-    function standingLoss(cap) {
-      // Same scale as `cap`, which comes from G.vTop(): both pace-scaled, so the
-      // standing loss stays ~2.5 s at every pace instead of ballooning as the
-      // numerator shrank against a fixed denominator.
-      return cap / (2 * Math.max(G.aTop() || 12, 1));
     }
 
     // One car's qualifying lap. Deterministic for a given (seed, round, car).
@@ -181,7 +167,8 @@ const Quali = (function () {
     // for exactly this substitution — js/race/reliability.js already does it.
     function simLap(c, track, grip, round, seed) {
       const cap = capFor(c);
-      const base = lapTime(track, cap, grip) + standingLoss(cap);
+      // A FLYING lap, like the player's (js/race/flying-start.js): no standing start to charge.
+      const base = lapTime(track, cap, grip);
       const r = DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat));
       const spread = EXEC_SPREAD * (1 - r.consistency / 100);
       const draw = Career.hash(seed, round, "quali", c.driverId || c.code) - 0.5;

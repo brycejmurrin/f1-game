@@ -5,15 +5,15 @@
       "lines": 2515
     },
     "js/agent/apex.js": {
-      "codeLines": 2289,
-      "lines": 3240
+      "codeLines": 2290,
+      "lines": 3241
     },
     "js/car/car3d.js": {
       "lines": 3435
     },
     "js/game.js": {
-      "codeLines": 4816,
-      "gMembers": 285,
+      "codeLines": 4819,
+      "gMembers": 286,
       "lines": 8982,
       "topLets": 149
     },
