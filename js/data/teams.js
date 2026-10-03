@@ -84,7 +84,7 @@ const Teams = (function () {
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
         // The MCL40 runs a STEPPED fin (Motorsport.com) — anthracite, the c2 it inherits.
-        // LOWER: the MCL40's anthracite under the papaya, below the sidepod line (CarShade.lowerZone) — its own c2.
+        // LOWER: the MCL40's anthracite under the papaya — pod flanks and lower chassis (CarShade.lowerZone) — its own c2.
         logo3: [0.06, 0.06, 0.08], finShape: "stepped", spineHeight: "raised", spineLogo: "panel", spineSide: "wordmark",
         lower: [0.122, 0.122, 0.122] },
       color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122],     /* papaya #FF8000 / anthracite #1F1F1F */
@@ -161,7 +161,7 @@ const Teams = (function () {
          black carbon areas of last year's car replaced by more large white areas
          and additional red accents" (Sky Sports), both 19 Jan 2026. Red on the
          wings and a red block on the engine cover (`panel`); the remaining black
-         is low bodywork: the `lower` zone, below the sidepod line.
+         is low bodywork: the `lower` zone (pod flanks, lower chassis).
          OUTLINE (logo3) is TEAM DATA: the white monogram on the white cover is
          1.03:1 bare — a dark rim, the same row a player uses for the same job. */
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "number",

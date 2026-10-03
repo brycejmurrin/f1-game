@@ -1,7 +1,7 @@
 /* body-split.test.mjs — the two whole-body colour splits.
  *   liv.bodySplit "lr": left c1 / right c2 (Cadillac).
  *   liv.lower: UPPER/LOWER two-tone — the body below a fixed line along the
- *   sidepods (pod fraction 0.31, z -2.00..+0.70) in `lower`, triangles CUT
+ *   sidepods (pod fraction 0.80, z -2.00..+1.05) in `lower`, triangles CUT
  *   along the line (CarShade.lowerZone). It runs only where CarShade is loaded,
  *   as in the game, so those cases build through loadParts({ shade: true }).
  */
@@ -78,11 +78,12 @@ const buildMcl = (lower, opts) => {
   return S.Car3D.build(mcl.color, mcl.color2, Object.assign({
     livery, teamId: "mclaren", num: 4, parts: mclParts, noWheels: true, measure: true }, opts));
 };
-// THE LINE, derived here, not read from CarShade: pod fraction 0.31 of the
-// pod's own bottom..top, between z -2.00 and +0.70.
+// THE LINE, derived here, not read from CarShade: pod fraction 0.80 of the
+// pod's own bottom..top (podAt holds the end stations beyond them), between
+// z -2.00 and +1.05, the monocoque/nose joint.
 const anchors = S.Car3D.bodyAnchors(mclParts, "mclaren", mcl.livery.spineHeight);
-const lineY = (z) => { const p = anchors.podAt(z); return p.bottom + 0.31 * (p.top - p.bottom); };
-const signed = (y, z) => (z > 0.70 || z < -2.00 ? 1 : y - lineY(z));   // < 0: below the line
+const FRONT = 1.05, lineY = (z) => { const p = anchors.podAt(z); return p.bottom + 0.80 * (p.top - p.bottom); };
+const signed = (y, z) => (z > FRONT || z < -2.00 ? 1 : y - lineY(z));   // < 0: below the line
 const colAt = (m, v) => [m.col[v * 3], m.col[v * 3 + 1], m.col[v * 3 + 2]];
 const is = (m, v, c) => m.col[v * 3] === c[0] && m.col[v * 3 + 1] === c[1] && m.col[v * 3 + 2] === c[2];
 // The zone covers chassis..livery: it runs just before part("cockpit").
@@ -110,8 +111,8 @@ for (const smooth of [true, false]) {
       if (is(two, v, LOW)) {
         low++;
         assert.equal(two.mat[v], PAINT, "only paint takes the lower colour");
-        assert.ok(signed(y, z) <= 1e-6 || Math.abs(z - 0.70) < 1e-6, `lower vertex above the line at y ${y.toFixed(4)} z ${z.toFixed(4)}`);
-      } else if (is(two, v, C1) && two.mat[v] === PAINT && z < 0.70 - 1e-6) {
+        assert.ok(signed(y, z) <= 1e-6 || Math.abs(z - FRONT) < 1e-6, `lower vertex above the line at y ${y.toFixed(4)} z ${z.toFixed(4)}`);
+      } else if (is(two, v, C1) && two.mat[v] === PAINT && z < FRONT - 1e-6) {
         assert.ok(signed(y, z) >= -1e-6, `primary vertex below the line at y ${y.toFixed(4)} z ${z.toFixed(4)}`);
       }
     }
@@ -162,7 +163,7 @@ for (const smooth of [true, false]) {
   });
 }
 
-test("lower: the line sits at pod fraction 0.31 down the sidepod flank", () => {
+test("lower: the line sits at pod fraction 0.80 down the sidepod flank — the sponsor board's top edge", () => {
   const { two } = builds[true], end = liveryEnd(two);
   // The SEAM: lower vertices that share a position with a primary one.
   const key = (v) => [0, 1, 2].map((k) => Math.round(two.pos[v * 3 + k] * 1e7)).join(",");
@@ -172,16 +173,81 @@ test("lower: the line sits at pod fraction 0.31 down the sidepod flank", () => {
   for (let v = 0; v < end; v++) {
     if (!is(two, v, LOW) || !primary.has(key(v))) continue;
     const x = two.pos[v * 3], y = two.pos[v * 3 + 1], z = two.pos[v * 3 + 2];
-    if (Math.abs(z - 0.70) < 1e-6) continue;   // the vertical edge where the zone stops: the nose stays primary
+    if (Math.abs(z - FRONT) < 1e-6) continue;   // the vertical edge where the zone stops: the nose stays primary
     seam++;
     assert.ok(Math.abs(y - lineY(z)) < 1e-6, `seam vertex ${((y - lineY(z)) * 1000).toFixed(3)} mm off the line at z ${z.toFixed(3)}`);
     const p = anchors.podAt(z);
     if (z < 0.62 && z > -1.48 && Math.abs(Math.abs(x) - p.x) < 0.001) {
       flank++;
-      assert.ok(Math.abs((y - p.bottom) / (p.top - p.bottom) - 0.31) < 1e-6, "the flank seam is at pod fraction 0.31");
+      assert.ok(Math.abs((y - p.bottom) / (p.top - p.bottom) - 0.80) < 1e-6, "the flank seam is at pod fraction 0.80");
     }
   }
   assert.ok(seam > 50 && flank >= 12, `seam ${seam}, on the pod flanks ${flank}: the line was not cut`);
+});
+
+// The front-most triangle along a ray from outside the car (+x or -x) at (y, z).
+function frontMost(m, s, y, z) {
+  let best = -Infinity, hit = -1;
+  for (let t = 0; t < m.idx.length; t += 3) {
+    const [a, b, c] = [m.idx[t], m.idx[t + 1], m.idx[t + 2]];
+    const az = m.pos[a * 3 + 2], ay = m.pos[a * 3 + 1], bz = m.pos[b * 3 + 2], by = m.pos[b * 3 + 1], cz = m.pos[c * 3 + 2], cy = m.pos[c * 3 + 1];
+    const ar = (bz - az) * (cy - ay) - (by - ay) * (cz - az);
+    if (Math.abs(ar) < 1e-14) continue;
+    const w0 = ((bz - z) * (cy - y) - (by - y) * (cz - z)) / ar, w1 = ((cz - z) * (ay - y) - (cy - y) * (az - z)) / ar, w2 = 1 - w0 - w1;
+    if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+    const d = s * (w0 * m.pos[a * 3] + w1 * m.pos[b * 3] + w2 * m.pos[c * 3]);
+    if (d > best) { best = d; hit = a; }
+  }
+  return hit;
+}
+
+test("lower: the sponsor board is opaque over the flank and its top edge IS the line, so the seam never shows on it", () => {
+  for (const smooth of [true, false]) {
+    const { two } = builds[smooth];
+    // Rays from either side over the board's footprint (z 0.46..-0.34, pod fractions 0.32..0.80) all meet the board first.
+    for (const s of [1, -1]) for (let z = 0.44; z > -0.33; z -= 0.11) {
+      const p = anchors.podAt(z);
+      for (const f of [0.34, 0.45, 0.56, 0.67, 0.78]) {
+        const v = frontMost(two, s, p.bottom + f * (p.top - p.bottom), z);
+        assert.ok(v >= 0 && two.mat[v] === S.Car3D.SURFACES.panel, `${smooth ? "rounded" : "flat"}: the flank shows through the board at z ${z.toFixed(2)} fraction ${f}`);
+      }
+    }
+    // Its top edge, station by station, is the line.
+    for (const z of [0.46, 0.22, -0.34]) {
+      let top = -Infinity;
+      for (let v = 0; v < two.pos.length / 3; v++) {
+        if (two.mat[v] === S.Car3D.SURFACES.panel && Math.abs(two.pos[v * 3 + 2] - z) < 1e-9 && two.pos[v * 3] > 0) top = Math.max(top, two.pos[v * 3 + 1]);
+      }
+      assert.ok(Math.abs(top - lineY(z)) < 1e-9, `board top ${top.toFixed(4)} vs line ${lineY(z).toFixed(4)} at z ${z}`);
+    }
+  }
+});
+
+test("lower READS from the side: 15-40 % of the body paint seen from the side (the 0.31 line showed 8 %)", () => {
+  // Orthographic side view from +x, depth-buffered at 8 mm: of the visible
+  // pixels whose surface is body paint (primary or lower), the lower share.
+  for (const smooth of [true, false]) {
+    const { two: m } = builds[smooth], R = 0.008, Z0 = -2.9, Y0 = -0.05, W = Math.ceil(5.8 / R), H = Math.ceil(1.2 / R);
+    const depth = new Float64Array(W * H).fill(-Infinity), owner = new Int32Array(W * H).fill(-1);
+    for (let t = 0; t < m.idx.length; t += 3) {
+      const q = [m.idx[t], m.idx[t + 1], m.idx[t + 2]], X = q.map((v) => (m.pos[v * 3 + 2] - Z0) / R), Y = q.map((v) => (m.pos[v * 3 + 1] - Y0) / R);
+      const ar = (X[1] - X[0]) * (Y[2] - Y[0]) - (Y[1] - Y[0]) * (X[2] - X[0]);
+      if (Math.abs(ar) < 1e-12) continue;
+      for (let py = Math.max(0, Math.floor(Math.min(...Y))); py <= Math.min(H - 1, Math.ceil(Math.max(...Y))); py++) {
+        for (let px = Math.max(0, Math.floor(Math.min(...X))); px <= Math.min(W - 1, Math.ceil(Math.max(...X))); px++) {
+          const x = px + 0.5, y = py + 0.5;
+          const w0 = ((X[1] - x) * (Y[2] - y) - (Y[1] - y) * (X[2] - x)) / ar, w1 = ((X[2] - x) * (Y[0] - y) - (Y[2] - y) * (X[0] - x)) / ar, w2 = 1 - w0 - w1;
+          if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+          const d = w0 * m.pos[q[0] * 3] + w1 * m.pos[q[1] * 3] + w2 * m.pos[q[2] * 3], k = py * W + px;
+          if (d > depth[k]) { depth[k] = d; owner[k] = q[0]; }
+        }
+      }
+    }
+    let low = 0, prim = 0;
+    for (const v of owner) if (v >= 0) { if (is(m, v, LOW)) low++; else if (is(m, v, C1)) prim++; }
+    const share = low / (low + prim);
+    assert.ok(share > 0.15 && share < 0.40, `${smooth ? "rounded" : "flat"}: lower is ${(share * 100).toFixed(1)} % of the side-view body paint`);
+  }
 });
 
 test("lower absent is today's car: no lower = lower:null, and the flat build matches one that never heard of CarShade", () => {

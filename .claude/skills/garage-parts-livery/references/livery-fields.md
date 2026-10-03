@@ -51,7 +51,7 @@ rear mainplane block (absent = `c2`, today's look); the garage greys WINGS and R
 `cover` is the ENGINE COVER colour zone — the airbox, roll structure, cover loft and snorkel
 take it instead of `c1` (the SF-26's white top on a red car); the atlas inks the crest and the
 spine designs against it through `coverPaint`, or a light cover swallows a light crest.
-`lower` is the LOWER BODY zone: bare `c1` paint below a fixed line along the pods (pod fraction 0.31 of `podAt(z)`, z −2.00..+0.70, between the c2 band and the sponsor panel) takes it, its triangles CUT along the line by `CarShade.lowerZone` before smoothing — not a design fill (not in `FILL_SURFACES`), overridden by `bodySplit: "lr"`, and absent it the build is byte-identical. Body details:
+`lower` is the LOWER BODY zone: bare `c1` paint below a fixed line takes it — pod fraction 0.80 of `podAt(z)` (the opaque sponsor board's top edge, so the seam hides behind it), held at the end stations, z −2.00..+1.05 (the monocoque/nose joint) — its triangles CUT along the line by `CarShade.lowerZone` before smoothing; the c2 band and its strip decal sit inside it unchanged. Not a design fill (not in `FILL_SURFACES`), overridden by `bodySplit: "lr"`, and absent it the build is byte-identical. Body details:
 `tcam` (`Car3D.TCAM_IDS`, mesh colour only) and `coverVents` (`Car3D.COVER_VENT_IDS`,
 geometry, also in `SP_HULL_GEOM_FIELDS`); `spineHeight` (`Car3D.SPINE_HEIGHT_IDS`,
 lifts the cover crown top-only through `bodyAnchors(parts, teamId, spineHeight)` —
