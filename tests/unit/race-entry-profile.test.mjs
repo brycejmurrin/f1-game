@@ -173,6 +173,9 @@ test("race-entry ticks pump input and network while holding physics and governor
     performance: { now: () => 260 },
     Input: { poll: () => calls.push("input"), clearEdges: () => calls.push("clear") },
     BrakeCue: { tick() {} }, onboard: { tick() {} },
+    // Deploy tip's tickBody also ticks the TV director; stub it so this
+    // fixture stays about entry-prep (port of 9f174759c).
+    director: { tick() {} },
     netPlay: { tick: () => calls.push("network") },
     render: dt => calls.push(["render", dt]),
   };
