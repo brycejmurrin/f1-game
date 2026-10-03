@@ -1059,7 +1059,6 @@ const MOVED = {
   "tools/parts-ladder.mjs": "tools/car/parts-ladder.mjs",
   "tools/crest-sweep.mjs": "tools/car/crest-sweep.mjs",
   "tools/logo-authored-sweep.mjs": "tools/car/logo-authored-sweep.mjs",
-  "tools/trace-logo.mjs": "tools/car/trace-logo.mjs",
   "tools/cockpit-pale-sweep.mjs": "tools/car/cockpit-pale-sweep.mjs",
   "tools/career-economy.mjs": "tools/car/career-economy.mjs",
   "tools/layout-audit.mjs": "tools/ui/layout-audit.mjs",
