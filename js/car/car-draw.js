@@ -269,15 +269,26 @@ const CarDraw = (function () {
     function warmCarAssets() {
       if (carModelBuf) return;   // a GLB body is one piece with no procedural build to warm
       const at = performance.now();
+      // The car and lamp shadow passes (js/render/shared/shadow-pass.js) fetch every
+      // caster with teamMesh(team, car, true) on the FIRST countdown frame: ~12 builds
+      // there, unless they are built here behind the loading cover. Same gates as the passes.
+      const casters = shadowCastersWanted();
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         try {
           if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
           if (c.isPlayer && CamModes.CAM_MODES[G.camMode].id === "cockpit") cockpitBodyMesh(c.team, c);
           getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
+          if (casters) teamMesh(c.team, c, true);
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
-      Log.info("gfx", "race car assets ready", { cars: G.cars.length, cpuMs: Math.round(performance.now() - at) });
+      Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, cpuMs: Math.round(performance.now() - at) });
+    }
+    function shadowCastersWanted() {
+      const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};
+      if (G.headlessMode || !LT) return false;
+      const tier = typeof PerfGov === "undefined" ? 0 : PerfGov.tier();
+      return !!((gfx.carShadowBegin && LT.carShadow && tier < 3) || (gfx.lampShadowBegin && LT.lampShadow && tier < 2));
     }
     // Prepare visual descriptors only: do not call makeCars(), advance the seeded
     // simulation, replace the live field, or arm a race from a menu. Existing bounded
