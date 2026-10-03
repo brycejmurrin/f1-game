@@ -90,7 +90,10 @@ export const THRESHOLDS = Object.freeze({
 const GREY1 = [0.50, 0.50, 0.50], GREY2 = [0.55, 0.55, 0.55];
 
 // ── loading ────────────────────────────────────────────────────────────────
-export function loadParts() {
+// `shade: true` also loads js/car/car-shade.js (CarShade), as the game does:
+// rounded sections + smooth shading by default, and the livery `lower` zone,
+// which skips without it. Off by default, so every existing caller is unchanged.
+export function loadParts({ shade = false } = {}) {
   const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array,
                 JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
   ctx.globalThis = ctx;
@@ -103,7 +106,8 @@ export function loadParts() {
   // carDecalData) — but that is the boundary: anything that RASTERISES a livery
   // texture still needs a browser and stays in tests/specs/.
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
-                   "js/car/liverytex.js", "js/car/helmets.js", "js/car/car3d.js", "js/car/car-mesh.js"])
+                   "js/car/liverytex.js", "js/car/helmets.js", ...(shade ? ["js/car/car-shade.js"] : []),
+                   "js/car/car3d.js", "js/car/car-mesh.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   // Every one of these is `const X = (function(){})()` at script level — a
   // LEXICAL binding, which never becomes a property of the vm's global object,
@@ -111,7 +115,7 @@ export function loadParts() {
   // the same context instead (the pattern in tools/car/cockpit-pale-sweep.mjs).
   const grab = (n) => vm.runInContext(n, ctx);
   return { Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams"),
-           CarMesh: grab("CarMesh"), LiveryTex: grab("LiveryTex") };
+           CarMesh: grab("CarMesh"), LiveryTex: grab("LiveryTex"), CarShade: shade ? grab("CarShade") : null };
 }
 
 // The one way this whole sweep can lie in the direction that looks like a
