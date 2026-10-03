@@ -2218,7 +2218,7 @@ const Car3D = (function () {
     const profiles = { standard:[0,0,0,0,0], sculpted:[-0.045,-0.008,0.025,-0.040,0.026],
       wide:[0.12,0,0.11,0.025,0.010], tapered:[-0.08,-0.015,-0.045,-0.020,-0.040], stepped:[0.04,0,0.055,-0.025,0.038] };
     const profile = profiles[ckpt && opts.cockpitBody] || profiles.standard;
-    const hR = ckpt ? { z: 0.58, y: 0.59, w: 0.66, h: 0.13, t: 0.58 }
+    const hR = ckpt ? { z: 0.62, y: 0.604, w: 0.62, h: 0.118, t: 0.58 }
                     : { z: 0.30, y: 0.545, w: 0.42, h: 0.13, t: 0.58 };   // stops at the aperture (0.28), top 0.610 onto the tub line
     hR.w += profile[0]; hR.y += profile[1];
     const deck = ckpt ? [hF, { z: 0.86, y: 0.56, w: 0.58, h: 0.12, t: 0.62 }, hR] : [hF, hR];
@@ -2241,15 +2241,15 @@ const Car3D = (function () {
     if (ckpt) {
       for (const s of [-1, 1]) {
         // Six shoulder stations resolve the curvature beside the driver's arms.
-        const stations = [[1.50,0.30,0.52,0.62],[0.94,0.285,0.54,0.69],[0.44,0.265,0.52,0.723],
-          [-0.12,0.292,0.53,0.749],[-0.80,0.307,0.55,0.754],[-2.56,0.32,0.55,0.754]];
+        const stations = [[1.50,0.30,0.52,0.62],[0.94,0.280,0.52,0.702],[0.44,0.255,0.50,0.735],
+          [-0.12,0.282,0.50,0.749],[-0.80,0.307,0.55,0.754],[-2.56,0.32,0.55,0.754]];
         const rings = stations.map(([z,inner,outer,y])=>{
           const waist = Math.exp(-Math.pow((z-0.15)/0.65,2));
           outer += profile[2] + profile[3]*waist;
           const top=Math.min(0.754,y+profile[4]*Math.exp(-Math.pow((z-0.55)/0.40,2)));
-          const x=inner+(outer-inner)*0.54;
+          const x=inner+(outer-inner)*0.38; // visor refs: crowned lip, not a broad painted shelf
           return [[s*inner,0.34,z],[s*outer,0.30,z],[s*outer,top-0.080,z],
-            [s*(outer-0.025),top-0.018,z],[s*x,top,z],[s*(inner+0.014),y-0.008,z],[s*inner,y-0.040,z]];
+            [s*(outer-0.035),top-0.025,z],[s*x,top,z],[s*(inner+0.014),y-0.008,z],[s*inner,y-0.040,z]];
         });
         const start=out.pos.length/3;
         for(let i=0;i<rings.length-1;i++) for(let j=2;j<6;j++) {
@@ -2994,6 +2994,9 @@ const Car3D = (function () {
         smoothSkin(out,start);
         for(const i of [0,rings.length-1]) { const q=i===0?rings[i].slice().reverse():rings[i]; addQuad(out,q[0],q[1],q[2],q[3],hc,SURFACES.carbon); }
       } else {
+        // F1/Sky visor views: drop the nearby side crown, preserving the front
+        // apex and rear mounts, so perspective does not turn the hoop into a U.
+        for(const p of path) p[1]-=0.055*Math.min(1,Math.max(0,(p[2]+0.80)/0.98))*Math.pow(Math.abs(p[0])/0.28,2);
         const start=out.pos.length/3;
         addTube(out,path,0.029*hk,10,hc,SURFACES.carbon);
         for(let i=start;i<out.pos.length/3;i++) out.pos[i*3+1]=path[Math.floor((i-start)/10)][1]+(out.pos[i*3+1]-path[Math.floor((i-start)/10)][1])*0.64;

@@ -270,7 +270,7 @@ export const RULES = [
   // mention the art would have put boot-guard and logging — the two
   // slowest-per-test specs in the tree — back into every source edit.
   [/^index\.html/, ["baseline"], "the #title-car art the baseline PNGs pixel-compare"],
-  [/^index\.html/, ["tiny", "ui"], "script tags + DOM shell"],
+  [/^(index|cockpit-view)\.html/, ["tiny", "ui"], "script tags + DOM shell"],
   [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
   [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],
   [/^assets\//, ["hooks"], "the baked pack loader"],

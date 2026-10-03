@@ -46,6 +46,12 @@ const QS_RE = /querySelector(?:All)?\(\s*"#([A-Za-z0-9_-]+)"/g;
 /** A lookup whose argument is not a string literal — unknowable statically. */
 const DYNAMIC_RE = /(?:document\.getElementById|(?<![.\w$])\$)\(\s*(?!["'])([^)]{1,60})\)/g;
 
+// These literal reads run in the isolated preview document, never index.html.
+// Verify against that actual host rather than treating its IDs as exemptions.
+const AUXILIARY_HOSTS = {
+  "js/camera/cockpit-preview.js": { shell: "cockpit-view.html", ids: ["view", "hud", "tip", "err"] },
+};
+
 /** Ids that exist at runtime but are declared by neither the shell nor a plain
  *  `.id =` assignment — each is built by a helper that takes the id as an
  *  ARGUMENT, so no static scan can see the declaration. Same contract as
@@ -103,13 +109,25 @@ export function scan(root = ROOT) {
 
   const read = new Map();      // id -> first site
   const dynamic = [];          // { file, line, expr }
+  const auxiliaryMissing = [], auxiliarySites = new Set();
   for (const f of files) {
     const rel = path.relative(root, f).replace(/\\/g, "/");
+    const auxiliary = AUXILIARY_HOSTS[rel];
+    const auxiliaryPath = auxiliary && path.join(root, auxiliary.shell);
+    const auxiliaryIds = new Set(auxiliaryPath && fs.existsSync(auxiliaryPath)
+      ? [...fs.readFileSync(auxiliaryPath,"utf8").matchAll(/\sid="([^"]+)"/g)].map((m)=>m[1]) : []);
     fs.readFileSync(f, "utf8").split("\n").forEach((line, i) => {
       for (const re of [READ_RE, QS_RE]) {
         re.lastIndex = 0;
         let m;
-        while ((m = re.exec(line))) if (!read.has(m[1])) read.set(m[1], `${rel}:${i + 1}`);
+        while ((m = re.exec(line))) {
+          const site = `${rel}:${i + 1}`;
+          if (!read.has(m[1])) read.set(m[1], site);
+          if (auxiliary && auxiliary.ids.includes(m[1])) {
+            auxiliarySites.add(site + "|" + m[1]);
+            if (!auxiliaryIds.has(m[1]) && !auxiliaryMissing.some((v)=>v.id===m[1])) auxiliaryMissing.push({id:m[1],site});
+          }
+        }
       }
       DYNAMIC_RE.lastIndex = 0;
       let d;
@@ -117,8 +135,8 @@ export function scan(root = ROOT) {
     });
   }
 
-  const missing = [...read.keys()].filter((id) => !declared.has(id) && !(id in RUNTIME_IDS)).sort()
-    .map((id) => ({ id, site: read.get(id) }));
+  const missing = [...read.keys()].filter((id) => !declared.has(id) && !(id in RUNTIME_IDS) && !auxiliarySites.has(read.get(id) + "|" + id))
+    .map((id) => ({ id, site: read.get(id) })).concat(auxiliaryMissing).sort((a,b)=>a.id.localeCompare(b.id));
   return { declared, read, missing, dynamic, duplicates,
     counts: { declared: declared.size, read: read.size, missing: missing.length, dynamic: dynamic.length, duplicates: duplicates.length } };
 }

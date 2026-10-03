@@ -55,6 +55,10 @@ const CarDraw = (function () {
     }
     // ── team-caches ─────────────────────────────────────────────────
     const teamMeshes = {}, teamMeshOrder = [];   // factory full mesh (shadows / ghost / glb)
+    if (typeof CockpitPreview !== "undefined") CockpitPreview.bind(() => {
+      const team = G.player ? G.player.team : Teams.LIST[G.teamIdx];
+      return { teamId: team.id, livery: deps.resolveLivery(team), parts: Parts.getVisualTiers(G.getTeamParts(team.id), team), units: AppearanceOpts.units() };
+    });
     const teamBodies = {}, teamBodyOrder = [];   // factory body-only (visible AI — wheels drawn planted)
     const TEAM_MESH_CACHE_MAX = 40, DECAL_TEX_CACHE_MAX = 48;   // 12 teams × (2 painted + 1 :sh) = 36; headroom for ghost/custom. Was 48 while seat-keyed :sh briefly doubled casters.
     // ── player-parts ────────────────────────────────────────────────
@@ -454,7 +458,10 @@ const CarDraw = (function () {
       // Car-local like the body (base), never rolled with the wheel.
       const cab = CockpitOpts.interior();
       G.gfx.draw(getCockpitCabin(cab, deps.resolveLivery(c.team)), base, opt);
-      if (cab === "classic") G.gfx.draw(getCockpitGlass(cab), base, _glassOpts);
+      if (cab === "classic") {
+        CarMesh.drawClassicTelemetry(base,c,G.dashKph(c.speed || 0),opt);
+        G.gfx.draw(getCockpitGlass(cab), base, _glassOpts);
+      }
       // The wheel mount follows the seat: hub and scale from the layout.
       _rigT[0] = _rigT[5] = _rigT[10] = lay.wheelS; _rigT[13] = lay.wheelY; _rigT[14] = lay.wheelZ;
       // The cockpit body includes the FRONT wing, whose top elements are active

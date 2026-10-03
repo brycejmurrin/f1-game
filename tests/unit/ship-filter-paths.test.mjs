@@ -39,11 +39,12 @@ function emitStagedPathList() {
   return r.stdout.trim().split("\n").filter(Boolean);
 }
 
-test("stage-files.mjs allow-list is non-empty and has the expected 12 names", () => {
+test("stage-files.mjs allow-list is non-empty and has the expected 13 names", () => {
   const names = [...stagedNames()].sort();
   assert.ok(names.length > 0, "stagedNames() must never be empty");
-  assert.equal(names.length, 12, `expected 12 staged names, got ${names.length}: ${names.join(",")}`);
-  assert.equal(STAGE_ROOT_FILES.length + STAGE_DIRS.length, 12);
+  assert.equal(names.length, 13, `expected 13 staged names, got ${names.length}: ${names.join(",")}`);
+  assert.equal(STAGE_ROOT_FILES.length + STAGE_DIRS.length, 13);
+  assert.ok(names.includes("cockpit-view.html"), "player cockpit preview must ship");
   assert.deepEqual(names, [...STAGE_ROOT_FILES, ...STAGE_DIRS].sort());
 });
 
@@ -68,6 +69,6 @@ test("pages.yml stages via stage.mjs (same allow-list the ship-filter reads)", (
 test("emitted staged path list matches stage-files.mjs (ship-filter / Pages drift)", () => {
   const emitted = emitStagedPathList();
   assert.ok(emitted.length > 0, "emitted list must not be empty");
-  assert.equal(emitted.length, 12);
+  assert.equal(emitted.length, 13);
   assert.deepEqual(emitted, [...stagedNames()].sort());
 });
