@@ -124,4 +124,3 @@ it sets `rPrevPx`/`rPrevPz` and the other render anchors) — verified: same `pa
 correctly oriented, at the exact `physState()` position. If a screenshot ever
 shows the car detached from the road again, checking `rPrevPx` vs `px` is the
 first move, not distrusting the shot.
-

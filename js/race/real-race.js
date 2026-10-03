@@ -835,7 +835,7 @@ const RealRace = (function () {
                watch: !!active.watch, reel: !!active.reel, replay: replay ? replay.status() : null, handover: handover ? +handover.t.toFixed(2) : 0 };
     }
 
-    live = { stage, launch, stop, update, status, intro, raceT0: () => raceT0, isActive: () => !!active, current: () => active && active.script,
+    live = { stage, launch, stop, update, status, intro, raceT0: () => raceT0, isActive: () => !!active, isWatch: () => !!active && !!active.watch, current: () => active && active.script,
              owns: (c) => !!replay && replay.owns(c), replay };
     return live;
   }

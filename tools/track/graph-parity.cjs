@@ -22,7 +22,6 @@
 "use strict";
 
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const { execFileSync } = require("child_process");
 
@@ -31,15 +30,17 @@ const { buildContext } = require("./verify-track.cjs");
 
 const POS_TOL = 1e-6;
 
-function materialiseBaseline(ref) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-graph-parity-"));
-  // `git archive` gives a clean tree at `ref` without touching the working copy
-  // or the index — safe to run mid-edit, which is exactly when this tool is used.
-  const tar = execFileSync("git", ["archive", "--format=tar", ref], {
-    cwd: ROOT, maxBuffer: 1 << 30,
-  });
-  execFileSync("tar", ["-x", "-C", dir], { input: tar, maxBuffer: 1 << 30 });
-  return dir;
+function materialiseBaseline(ref, { scratchRoot = path.join(ROOT, "scratch"), run = execFileSync } = {}) {
+  if (typeof ref !== "string" || !ref || ref.startsWith("-") || /[\x00-\x1f]/.test(ref)) throw new Error("baseline must be a git ref, not a CLI flag");
+  fs.mkdirSync(scratchRoot, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(scratchRoot, "apex-graph-parity-"));
+  // Archive without touching the working tree or index. Keep generated data
+  // under scratch, and remove partial archives on extraction/ref failures.
+  try {
+    const tar = run("git", ["archive", "--format=tar", ref], { cwd: ROOT, maxBuffer: 1 << 30 });
+    run("tar", ["-x", "-C", dir], { input: tar, maxBuffer: 1 << 30 });
+    return dir;
+  } catch (e) { fs.rmSync(dir, { recursive: true, force: true }); throw e; }
 }
 
 function buildTrack(Tracks, id) {
@@ -86,14 +87,13 @@ function compareGeo(name, a, b) {
   return { problems, maxPos };
 }
 
-function main() {
-  const args = process.argv.slice(2);
-  const baseRef = process.env.BASE || "HEAD";
+function main({ args = process.argv.slice(2), baseRef = process.env.BASE || "HEAD",
+                explicitBase = !!process.env.BASE, materialise = materialiseBaseline, loadContext = buildContext } = {}) {
   // The default baseline is HEAD vs the WORKING TREE — meaningful only while
   // there are uncommitted engine/circuit edits. On a clean tree it diffs HEAD
   // against itself and "passes" vacuously, which has been mistaken for a real
   // parity result. Refuse that run instead of blessing it.
-  if (!process.env.BASE) {
+  if (!explicitBase) {
     const dirty = require("child_process")
       .execSync("git status --porcelain -- js/track js/circuits", { cwd: ROOT })
       .toString().trim();
@@ -103,115 +103,121 @@ function main() {
         "js/track/ and js/circuits/, so the default BASE=HEAD would diff a tree " +
         "against itself and always pass.\n" +
         "Pass the baseline explicitly: BASE=<ref> node tools/track/graph-parity.cjs --all");
-      process.exit(2);
+      return 2;
     }
   }
-  const baseDir = materialiseBaseline(baseRef);
-
-  let baseTracks, headTracks;
+  let baseDir;
   try {
-    baseTracks = buildContext(baseDir, { instancing: false });
-  } catch (e) {
-    console.error(`FAIL: baseline ${baseRef} did not load: ${e.message}`);
-    process.exit(1);
-  }
-  headTracks = buildContext(ROOT, { instancing: false });
+    baseDir = materialise(baseRef);
 
-  const ids = args.includes("--all") || !args.length
-    ? headTracks.LIST.map((d) => d.id)
-    : args;
-
-  let failures = 0;
-  let totUnique = 0, totFused = 0, totNodes = 0, totModels = 0;
-  // Per-emitter roll-up across tracks. Models are per-BUILD, so the same emitter
-  // on two circuits mints two model sets — summing them is the honest total
-  // (each track uploads its own library).
-  const kindTotals = {};
-  let totInst = 0, totBake = 0, totBatch = 0, totModelVerts = 0, totInstBytes = 0;
-
-  for (const id of ids) {
-    let base, head;
+    let baseTracks, headTracks;
     try {
-      base = buildTrack(baseTracks, id);
-      head = buildTrack(headTracks, id);
+      baseTracks = loadContext(baseDir, { instancing: false });
     } catch (e) {
-      console.error(`FAIL ${id}: build threw — ${e.message}`);
-      failures++;
-      continue;
+      console.error(`FAIL: baseline ${baseRef} did not load: ${e.message}`);
+      return 1;
     }
+    headTracks = loadContext(ROOT, { instancing: false });
 
-    const problems = [];
-    let maxPos = 0;
-    for (const buf of ["propsGeo", "glassGeo", "waterGeo", "roadGeo", "terrainGeo"]) {
-      const r = compareGeo(buf, base[buf], head[buf]);
-      problems.push(...r.problems);
-      if (r.maxPos > maxPos) maxPos = r.maxPos;
-    }
-    // The semantic registry must not drift either — it is what the agent view reads.
-    if (base.props && head.props && base.props.count !== head.props.count)
-      problems.push(`props.count ${head.props.count} vs baseline ${base.props.count}`);
+    const ids = args.includes("--all") || !args.length
+      ? headTracks.LIST.map((d) => d.id)
+      : args;
 
-    const g = head.graph ? head.graph.stats() : null;
-    // Exercise the instanced-draw handoff on every real track: it must cover the
-    // nodes, and the un-instanceable remainder is the number worth watching.
-    if (head.graph) {
-      const b = head.graph.batches();
-      let inst = 0, mverts = 0, bytes = 0;
-      for (const batch of b.batches) {
-        inst += batch.count; mverts += batch.verts;
-        bytes += batch.matrices.byteLength + (batch.colors ? batch.colors.byteLength : 0);
+    let failures = 0;
+    let totUnique = 0, totFused = 0, totNodes = 0, totModels = 0;
+    // Per-emitter roll-up across tracks. Models are per-BUILD, so the same emitter
+    // on two circuits mints two model sets — summing them is the honest total
+    // (each track uploads its own library).
+    const kindTotals = {};
+    let totInst = 0, totBake = 0, totBatch = 0, totModelVerts = 0, totInstBytes = 0;
+
+    for (const id of ids) {
+      let base, head;
+      try {
+        base = buildTrack(baseTracks, id);
+        head = buildTrack(headTracks, id);
+      } catch (e) {
+        console.error(`FAIL ${id}: build threw — ${e.message}`);
+        failures++;
+        continue;
       }
-      totInst += inst; totBake += b.bakeOnly.length; totBatch += b.batches.length;
-      totModelVerts += mverts; totInstBytes += bytes;
-    }
-    if (g) {
-      totUnique += g.uniqueVerts; totFused += g.fusedVerts;
-      totNodes += g.nodes; totModels += g.models;
-      for (const kind in g.byKind) {
-        const src = g.byKind[kind];
-        const dst = kindTotals[kind] || (kindTotals[kind] = { nodes: 0, models: 0, fusedVerts: 0, uniqueVerts: 0, reuse: 0 });
-        dst.nodes += src.nodes; dst.models += src.models;
-        dst.fusedVerts += src.fusedVerts; dst.uniqueVerts += src.uniqueVerts;
-        dst.reuse = dst.uniqueVerts ? dst.fusedVerts / dst.uniqueVerts : 0;
+
+      const problems = [];
+      let maxPos = 0;
+      for (const buf of ["propsGeo", "glassGeo", "waterGeo", "roadGeo", "terrainGeo"]) {
+        const r = compareGeo(buf, base[buf], head[buf]);
+        problems.push(...r.problems);
+        if (r.maxPos > maxPos) maxPos = r.maxPos;
+      }
+      // The semantic registry must not drift either — it is what the agent view reads.
+      if (base.props && head.props && base.props.count !== head.props.count)
+        problems.push(`props.count ${head.props.count} vs baseline ${base.props.count}`);
+
+      const g = head.graph ? head.graph.stats() : null;
+      // Exercise the instanced-draw handoff on every real track: it must cover the
+      // nodes, and the un-instanceable remainder is the number worth watching.
+      if (head.graph) {
+        const b = head.graph.batches();
+        let inst = 0, mverts = 0, bytes = 0;
+        for (const batch of b.batches) {
+          inst += batch.count; mverts += batch.verts;
+          bytes += batch.matrices.byteLength + (batch.colors ? batch.colors.byteLength : 0);
+        }
+        totInst += inst; totBake += b.bakeOnly.length; totBatch += b.batches.length;
+        totModelVerts += mverts; totInstBytes += bytes;
+      }
+      if (g) {
+        totUnique += g.uniqueVerts; totFused += g.fusedVerts;
+        totNodes += g.nodes; totModels += g.models;
+        for (const kind in g.byKind) {
+          const src = g.byKind[kind];
+          const dst = kindTotals[kind] || (kindTotals[kind] = { nodes: 0, models: 0, fusedVerts: 0, uniqueVerts: 0, reuse: 0 });
+          dst.nodes += src.nodes; dst.models += src.models;
+          dst.fusedVerts += src.fusedVerts; dst.uniqueVerts += src.uniqueVerts;
+          dst.reuse = dst.uniqueVerts ? dst.fusedVerts / dst.uniqueVerts : 0;
+        }
+      }
+      const gTxt = g
+        ? `graph ${g.nodes} nodes / ${g.models} models, ${g.fusedVerts} fused -> ${g.uniqueVerts} unique verts (reuse ${g.reuse.toFixed(2)}x)`
+        : "graph absent";
+
+      if (problems.length) {
+        failures++;
+        console.error(`FAIL ${id}: ${problems.join("; ")}`);
+      } else {
+        console.log(`OK   ${id}: parity exact (max |Δpos| ${maxPos.toExponential(1)} m) — ${gTxt}`);
       }
     }
-    const gTxt = g
-      ? `graph ${g.nodes} nodes / ${g.models} models, ${g.fusedVerts} fused -> ${g.uniqueVerts} unique verts (reuse ${g.reuse.toFixed(2)}x)`
-      : "graph absent";
 
-    if (problems.length) {
-      failures++;
-      console.error(`FAIL ${id}: ${problems.join("; ")}`);
-    } else {
-      console.log(`OK   ${id}: parity exact (max |Δpos| ${maxPos.toExponential(1)} m) — ${gTxt}`);
+    console.log(`\n${ids.length - failures}/${ids.length} tracks at parity with ${baseRef}`);
+    if (totModels) {
+      console.log(`graph totals: ${totNodes} nodes across ${totModels} models — ` +
+        `${totFused} fused verts would be ${totUnique} instanced (reuse ${(totFused / totUnique).toFixed(2)}x)`);
+      if (totInst || totBake) {
+        const VB = 40;   // interleaved bytes/vertex in the shipped VBO (pos+nrm+col+mat)
+        console.log(`instanced handoff: ${totBatch} batches, ${totInst} instances ` +
+          `(+${totBake} un-instanceable -> bake), ` +
+          `${(totModelVerts * VB / 1048576).toFixed(2)} MB of models + ` +
+          `${(totInstBytes / 1048576).toFixed(2)} MB of transforms`);
+      }
+      const kinds = Object.keys(kindTotals).sort((a, b) => kindTotals[b].fusedVerts - kindTotals[a].fusedVerts);
+      if (kinds.length) {
+        console.log("\nby emitter (reuse 1.00x = continuous parameters, needs re-parameterising before it instances):");
+        for (const kind of kinds) {
+          const e = kindTotals[kind];
+          console.log(`  ${kind.padEnd(14)} ${String(e.nodes).padStart(6)} nodes  ${String(e.models).padStart(6)} models  ` +
+            `${String(e.fusedVerts).padStart(9)} -> ${String(e.uniqueVerts).padStart(9)} verts  reuse ${e.reuse.toFixed(2)}x`);
+        }
+      }
     }
+    return failures ? 1 : 0;
+  } catch (e) {
+    console.error(`FAIL: graph-parity could not complete: ${e.message}`);
+    return 1;
+  } finally {
+    if (baseDir) fs.rmSync(baseDir, { recursive: true, force: true });
   }
-
-  fs.rmSync(baseDir, { recursive: true, force: true });
-
-  console.log(`\n${ids.length - failures}/${ids.length} tracks at parity with ${baseRef}`);
-  if (totModels) {
-    console.log(`graph totals: ${totNodes} nodes across ${totModels} models — ` +
-      `${totFused} fused verts would be ${totUnique} instanced (reuse ${(totFused / totUnique).toFixed(2)}x)`);
-    if (totInst || totBake) {
-      const VB = 40;   // interleaved bytes/vertex in the shipped VBO (pos+nrm+col+mat)
-      console.log(`instanced handoff: ${totBatch} batches, ${totInst} instances ` +
-        `(+${totBake} un-instanceable -> bake), ` +
-        `${(totModelVerts * VB / 1048576).toFixed(2)} MB of models + ` +
-        `${(totInstBytes / 1048576).toFixed(2)} MB of transforms`);
-    }
-    const kinds = Object.keys(kindTotals).sort((a, b) => kindTotals[b].fusedVerts - kindTotals[a].fusedVerts);
-    if (kinds.length) {
-      console.log("\nby emitter (reuse 1.00x = continuous parameters, needs re-parameterising before it instances):");
-      for (const kind of kinds) {
-        const e = kindTotals[kind];
-        console.log(`  ${kind.padEnd(14)} ${String(e.nodes).padStart(6)} nodes  ${String(e.models).padStart(6)} models  ` +
-          `${String(e.fusedVerts).padStart(9)} -> ${String(e.uniqueVerts).padStart(9)} verts  reuse ${e.reuse.toFixed(2)}x`);
-      }
-    }
-  }
-  process.exit(failures ? 1 : 0);
 }
 
-if (require.main === module) main();
-module.exports = { compareGeo };
+if (require.main === module) process.exitCode = main();
+module.exports = { compareGeo, materialiseBaseline, main };

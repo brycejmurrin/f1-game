@@ -481,8 +481,9 @@ const DataRealRace = (function () {
     let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
     let traces = null;     // the real positions for the painted script, once loaded
     let loading = null;    // {done, total} while the positions load
-    let traceLoadGen = 0, replayUi = null, traceError = "", partialTraces = null;
+    let requestGen = 0, replayUi = null, traceError = "", partialTraces = null;
     let driveAction = null;
+    function cancel() { ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; }
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
@@ -510,8 +511,11 @@ const DataRealRace = (function () {
     }
 
     function loadRealRace() {
+      cancel();
+      const generation = bodyGen;
       return ensureSession(false).then(() => {
         const wrap = el("div");
+        if (generation !== bodyGen) return wrap;
         wrap.appendChild(buildPicker((meta) => renderBody(meta, body)));
         const body = el("div");
         wrap.appendChild(body);
@@ -521,6 +525,8 @@ const DataRealRace = (function () {
     }
 
     function renderBody(meta, body) {
+      ++requestGen;
+      loading = null; replayUi = null; driveAction = null; traceError = "";
       const myGen = ++bodyGen;
       clear(body);
       if (!meta || meta.sessionKey == null) { body.appendChild(emptyMsg(NO_RACE_MSG)); return; }
@@ -609,13 +615,14 @@ const DataRealRace = (function () {
       const highlights = mk("HIGHLIGHTS", "Watch the highlights of the race, recreated", () => watch(script, slot, 1, true));
       const full = mk("WATCH FROM L" + startLap, "Watch the race recreated from lap " + startLap, () => watch(script, slot, startLap, false));
       const cancel = mk("CANCEL DOWNLOAD", "Cancel the real positions download", () => {
-        traceLoadGen++; loading = null; traceError = "Download cancelled. RETRY keeps the cars already loaded.";
+        requestGen++; loading = null; traceError = "Download cancelled. RETRY keeps the cars already loaded.";
         F1API.cancelAll(); updateReplayRow();
       });
       replayUi = { script, slot, state, progress, load, highlights, full, cancel };
       updateReplayRow();
+      const generation = requestGen;
       if (!have && !loading) traceGet(script.sessionKey).then((hit) => {
-        if (hit && replayUi && replayUi.script.sessionKey === script.sessionKey && slot.isConnected !== false && !loading) { traces = hit; traceError = ""; updateReplayRow(); }
+        if (generation === requestGen && (!isOpen || isOpen()) && hit && replayUi && replayUi.slot === slot && replayUi.script.sessionKey === script.sessionKey && slot.isConnected !== false && !loading) { traces = hit; traceError = ""; updateReplayRow(); }
       });
       return row;
     }
@@ -632,22 +639,24 @@ const DataRealRace = (function () {
       u.highlights.disabled = u.full.disabled = !!loading; u.cancel.hidden = !busy;
     }
     function loadTraces(script, slot, then) {
-      if (loading) return;
-      const mine = ++traceLoadGen;
+      if (loading) return false;
+      const mine = ++requestGen;
+      const current = () => mine === requestGen && (!isOpen || isOpen()) && (!slot || slot.isConnected !== false);
       loading = { done: 0, total: script.drivers.length, sessionKey: script.sessionKey }; traceError = ""; updateReplayRow();
       fetchTraces(script, (done, total, tr) => {
-        if (mine !== traceLoadGen) return;
+        if (!current()) return;
         partialTraces = tr; loading = { done, total, sessionKey: script.sessionKey }; updateReplayRow();
       }, traces && traces.sessionKey === script.sessionKey ? traces : partialTraces)
         .then((tr) => {
-          if (mine !== traceLoadGen) return;
+          if (!current()) return;
           traces = tr; partialTraces = tr; loading = null; updateReplayRow();
           if (then) then(tr);
         }, (e) => {
-          if (mine !== traceLoadGen) return;
+          if (!current()) return;
           loading = null; traceError = "Could not load real positions. Check your connection and RETRY.";
           Log.warn("data", "real positions: " + (e && e.message || e)); updateReplayRow();
         });
+      return true;
     }
     /** WATCH / HIGHLIGHTS: the positions first (if not yet), then the replay in the DRIVE AS seat. */
     function watch(script, slot, fromLap, reel) {
@@ -662,8 +671,7 @@ const DataRealRace = (function () {
         return !!RealRace.launch(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
       };
       if (traces && traces.sessionKey === script.sessionKey) return go(traces);
-      loadTraces(script, slot, go);
-      return true;
+      return loadTraces(script, slot, go);
     }
 
     /** The race lap by lap: one row per lap with what it held and a JUMP IN; a
@@ -840,11 +848,12 @@ const DataRealRace = (function () {
       return !!RealRace.launch(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
     }
 
-    return { loadRealRace, scriptFor, jumpIn, lapEvents, watch, loadTraces,
+    return { loadRealRace, scriptFor, jumpIn, lapEvents, watch, loadTraces, cancel,
              traces: () => traces, setTraces: (tr) => { traces = tr || null; return traces; },
              setDistance: (f) => { distance = DISTANCES.includes(f) ? f : 1; return distance; },
              setStartLap: (n) => { startLap = Math.max(1, n | 0); return startLap; },
-             setSeat: (code) => { seatCode = code || null; return seatCode; } };
+             setSeat: (code) => { seatCode = code || null; return seatCode; },
+             setWatchCamera: (camera) => { watchCamera = camera; return watchCamera; } };
   }
 
   return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached,

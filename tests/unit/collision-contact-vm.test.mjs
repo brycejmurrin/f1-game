@@ -464,12 +464,24 @@ test("ordinary cars still exchange speed, separate and respect barriers with no 
 });
 
 test("paused WATCH keeps overlapping traces and ignores manual recover in the real game update", async () => {
+  await g.race("monza");
+  g.apex.headless(true);
+  const advanceLoop = () => {
+    const start = g.sandbox.performance.now();
+    for (let i = 1; i <= 240; i++) g.pumpFrame(start + i * 1000 / 60);
+  };
+  advanceLoop();
+  const pause = () => g.G.els.pausebtn.onclick();
+  const instantReplayButton = () => g.sandbox.document.getElementById("pm-replay");
+  pause();
+  assert.equal(instantReplayButton().hidden, false, "the actual solo loop offers instant replay after three seconds");
+  g.sandbox.document.getElementById("pm-resume").onclick();
   vm.runInContext(readFileSync(join(ROOT_C, "js/data/real-race-tab.js"), "utf8"), g.ctx);
   const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
   const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
   const fixture = JSON.parse(readFileSync(join(ROOT_C, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
   const script = Data.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
-  const line = (p, speed, x) => ({ t: [0, 1, 2], prog: [p, p + speed, p + 2 * speed], x: [x, x, x] });
+  const line = (p, speed, x) => ({ t: [0, 2, 8], prog: [p, p + 2 * speed, p + 8 * speed], x: [x, x, x] });
   Real.launch(script, { seat: "STR", watch: true, traces: { frame: "track", cars: {
     63: line(100, 40, 0), 16: line(103, 20, 0), 18: line(400, 30, 12),
   } } });
@@ -477,6 +489,11 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
   g.step(2); g.apex.go();
   const replay = Real.replay();
   try {
+    advanceLoop();
+    assert.ok(replay.status().T > 3, "WATCH has run long enough to expose a competing instant-replay ring");
+    pause();
+    assert.equal(instantReplayButton().hidden, true, "WATCH reserves pose ownership and hides the competing replay door");
+    g.sandbox.document.getElementById("pm-resume").onclick();
     replay.seek(0.1); replay.setPaused(true);
     const watched = ["RUS", "LEC", "STR"].map((code) => g.G.cars.find((c) => c.code === code));
     assert.ok(watched.every((c) => replay.owns(c)), "the actual game director owns all three traced cars");

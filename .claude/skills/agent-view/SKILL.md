@@ -1,6 +1,6 @@
 ---
 name: agent-view
-description: Use when the user wants to see or drive Apex 26 without screenshots: world()/field()/rollout(), headless laps, deterministic runs, what the car or agent is doing, telemetry, slip/grip, field order and gaps, sector timing, lightState, the headless obs/act/reset loop; and the TRACK GEOMETRY hooks — corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits. Read-only: circuit edits are new-track, AI behaviour ai-racecraft, handling tune-physics.
+description: "Use when the user wants to see or drive Apex 26 without screenshots: world()/field()/rollout(), headless laps, deterministic runs, what the car or agent is doing, telemetry, slip/grip, field order and gaps, sector timing, lightState, the headless obs/act/reset loop; and the TRACK GEOMETRY hooks — corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits. Read-only: circuit edits are new-track, AI behaviour ai-racecraft, handling tune-physics."
 ---
 
 # Agent view — perceive and drive the game as text
@@ -21,7 +21,7 @@ under headless — stage first).
 
 **Three ways in** (cost differs — details in surface.md): CLI one-shot boot,
 `apex-eval.mjs` multi-call one boot, or live `page.evaluate` after staging
-(`race` → `go` → `jump` + frames). Cap parallel CLI boots at 2–3.
+(`race` → `go` → `jump` + frames). Serialize browser CLI boots; use the Node VM for numeric batches.
 
 **Vocab:** `frac` = lap 0→1; `s` = metres along centreline; `lateralM` = +right.
 

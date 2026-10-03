@@ -12,6 +12,7 @@
 //   await runMenuGallery({ jobs: 2, force: false });
 //
 // CLI: node tools/ui/layout-audit.mjs --gallery | --screen=ID | --list | --report
+import { menuReady } from "./menu-readiness.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -129,13 +130,7 @@ async function resetToTitle(page, base, hideGame) {
 }
 
 async function waitScreenReady(page, screen) {
-  await page.waitForFunction((sel) => {
-    const el = document.querySelector(sel);
-    if (!el) return true;
-    const anims = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
-    if (anims.some((a) => a.playState === "running")) return false;
-    return getComputedStyle(el).opacity !== "0";
-  }, screen.root, { polling: 50, timeout: 5000 }).catch(() => {});
+  await page.waitForFunction(menuReady, screen.root, { polling: 100, timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(150);
   if (screen.id.split("#")[0] === "select") {
     await page.waitForFunction(() => {
