@@ -295,6 +295,34 @@ test.describe("Track designer", () => {
     expect((await page.evaluate(() => TrackDesigner.save())).ok).toBe(true);
   });
 
+  test("TECHNICAL shows 4 cards; USE is green", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 7);
+    const pane = page.locator('#trackdesigner .td-pane[data-pane="design"]');
+    const tech = pane.locator("button", { hasText: /^TECHNICAL$/ });
+    // The cards are the design pane's second .td-grid (START FROM's is the first, hidden).
+    const grid = pane.locator(".td-grid").nth(1);
+    const t0 = Date.now();
+    await tech.click();
+    await expect(tech).toHaveAttribute("aria-pressed", "true");
+    await page.waitForFunction(() => {
+      const g = document.querySelectorAll('#trackdesigner .td-pane[data-pane="design"] .td-grid')[1];
+      return !!g && !g.hasAttribute("aria-busy") && TrackDesigner.state().candidates.length === 4;
+    }, null, { polling: 100, timeout: 30_000 });
+    test.info().annotations.push({ type: "designed-ms", description: String(Date.now() - t0) });
+    const cards = grid.locator(".td-card");
+    await expect(cards).toHaveCount(4);
+    await expect(cards.nth(0).locator(".td-card-meta")).toHaveText(/^\d+\.\d km · \d+ corners · \d+ passing$/);
+    const before = await page.evaluate(() => TrackDesigner.state());
+    await cards.nth(0).locator("button", { hasText: /^USE$/ }).click();
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.red).toBe(0);
+    expect(after.undo, "USE is one UNDO entry").toBe(before.undo + 1);
+    expect(after.design.seed).toBe(before.candidates[0].seed);
+  });
+
   test("TEST HERE drives from the selected point and returns", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);
