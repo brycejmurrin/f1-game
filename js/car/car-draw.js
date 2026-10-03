@@ -15,7 +15,7 @@ const CarDraw = (function () {
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
     FieldLod.init(G.store);   // apex26.fieldLod, read once at boot (0 = no rival LOD)
-    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass,
+    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback,
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
     // ── cache-helpers ───────────────────────────────────────────────
@@ -270,25 +270,35 @@ const CarDraw = (function () {
     function warmCarAssets() {
       if (carModelBuf) return;   // a GLB body is one piece with no procedural build to warm
       const at = performance.now();
+      // The car and lamp shadow passes (js/render/shared/shadow-pass.js) fetch every
+      // caster with teamMesh(team, car, true) on the FIRST countdown frame: ~12 builds
+      // there, unless they are built here behind the loading cover. Same gates as the passes.
+      const casters = shadowCastersWanted();
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         try {
           if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
           if (c.isPlayer && CamModes.CAM_MODES[G.camMode].id === "cockpit") cockpitBodyMesh(c.team, c);
           getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
-          // What the LAUNCH first draws (FieldLod): the sun/lamp caster silhouette,
-          // the mirror's and the far-LOD whole-car mesh, the planted field wheels
-          // and the exhaust flame quad — each was built on its first draw, after
-          // the lights, in the frame the field pulled away.
+          if (casters) teamMesh(c.team, c, true);
+          // What the LAUNCH first draws (FieldLod): the mirror's and the far-LOD
+          // whole-car mesh, the planted field wheels and the exhaust flame quad —
+          // each was built on its first draw, after the lights, in the frame the
+          // field pulled away. (The caster silhouette is the line above.)
           if (FieldLod.on) {
-            teamMesh(c.team, c, true);
             if (!c.isPlayer) { teamMesh(c.team, c); getFieldWheelMeshes(c.team, c); }
             CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame);
             if (c.isPlayer) CarMesh.getErsLight();
           }
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
-      Log.info("gfx", "race car assets ready", { cars: G.cars.length, cpuMs: Math.round(performance.now() - at) });
+      Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, cpuMs: Math.round(performance.now() - at) });
+    }
+    function shadowCastersWanted() {
+      const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};
+      if (G.headlessMode || !LT) return false;
+      const tier = typeof PerfGov === "undefined" ? 0 : PerfGov.tier();
+      return !!((gfx.carShadowBegin && LT.carShadow && tier < 3) || (gfx.lampShadowBegin && LT.lampShadow && tier < 2));
     }
     // Prepare visual descriptors only: do not call makeCars(), advance the seeded
     // simulation, replace the live field, or arm a race from a menu. Existing bounded
@@ -445,6 +455,10 @@ const CarDraw = (function () {
     const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
     const _digM = new Float32Array(16);
     // Windscreen / aeroscreen glass: a faint tint that still shows the road.
+    const _mirrorFbOpts = { doubleSided: true, roughness: 0.08, specular: 0.7, emissive: 0.55 };
+    const _rmq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    const motionReduced = () => !!(_rmq && _rmq.matches)   // the OS flag OR MOTION: REDUCED (html[data-motion]), as game.js
+      || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
     function drawCockpitRig(c, base, dt, paint, noWheel) {
@@ -461,6 +475,14 @@ const CarDraw = (function () {
       // seat (its eye is vantage.js VISOR_EYE_*) and no wheel.
       const wheelStyle = noWheel ? "none" : CockpitOpts.wheel(), lay = CockpitOpts.layout(wheelStyle, noWheel ? "std" : null);
       G.gfx.draw(cockpitBodyMesh(c.team, c), base, paint);
+      // The housings' glass is near-black (the HUD mirror is the reflection);
+      // with no mirror pass drawing it gets a sky-tint fallback (car-mesh.js).
+      const mp = typeof MirrorPass !== "undefined" ? MirrorPass.instance() : null;
+      if (!carModelBuf && !(mp && mp.drawing())) {
+        const cm = teamDecalState(c.team, true).parts, vis = cm && cm._visual && cm._visual.cockpit;
+        _mirrorFbOpts.emissive = nite ? 0.08 : 0.55;
+        G.gfx.draw(getMirrorFallback(Car3D.cockpitMirrorGlass(vis && vis.mirror)), base, _mirrorFbOpts);
+      }
       // INTERIOR: carbon or team trim; CLASSIC adds gauges and an aeroscreen.
       // Car-local like the body (base), never rolled with the wheel.
       const cab = CockpitOpts.interior();
@@ -518,7 +540,9 @@ const CarDraw = (function () {
       const fx = _rigFx;
       G.gfx.draw(getGearDigit(M4.clamp(c.gear || 1, 0, 9)), _rigB, fx);
       const rpmF = M4.clamp(((c.rpm || PhysicsConsts.IDLE_RPM) - PhysicsConsts.IDLE_RPM) / (PhysicsConsts.MAX_RPM - PhysicsConsts.IDLE_RPM), 0, 1);
-      G.gfx.draw(getLedStrip(rpmF > 0.965 ? (G.raceT * 14 % 1 < 0.5 ? 9 : 0) : Math.round(rpmF * 8)), _rigB, fx);
+      // At the limiter the strip stays LIT: full ramp <-> all-blue SHIFT NOW at
+      // ~7 Hz (it went 9 <-> 0 — dark half the frames), steady blue under reduced motion.
+      G.gfx.draw(getLedStrip(rpmF > 0.965 ? (motionReduced() || G.raceT * 14 % 1 < 0.5 ? 9 : 8) : Math.round(rpmF * 8)), _rigB, fx);
       drawWheelExtras(_rigB, c, G.raceT);   // ACTIVE AERO lamp + flap-travel bar (car-mesh.js)
       // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
       // reversing glitch) would otherwise stringify with a "-" character that
@@ -670,6 +694,7 @@ const CarDraw = (function () {
       return true;
     }
     function pitCrewDrawn() { const n = _crewDrawn; _crewDrawn = 0; return n; }
+    const VIS_WHEELBASE = WHEELS[0].z - WHEELS[2].z;   // the DRAWN axle spacing (3.3 m)
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
       const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team, c);
       c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt) % (Math.PI * 2);
@@ -679,7 +704,19 @@ const CarDraw = (function () {
       const spR = Math.sin(c.wheelSpin), cpR = Math.cos(c.wheelSpin);
       const spF = Math.sin(c.wheelSpinF), cpF = Math.cos(c.wheelSpinF);
       const flat = (c.flatSpot || 0) * 0.004 * (0.5 + 0.5 * cpF);
-      const steerA = M4.clamp(c.steerVis || 0, -1, 1) * PhysicsConsts.WHEEL_STEER_VIS;
+      // FRONT-WHEEL ANGLE (visual). An AI's `steer` is a lane-change command,
+      // not a steering angle — its TURNING is the arc it follows — so steerVis
+      // sat near 0 through every bend and the field cornered on straight
+      // wheels. An AI car adds the Ackermann angle atan(L·k) of the bend under
+      // it (kCur; L = the drawn wheelbase; +k is a LEFT turn, +steer is right).
+      // AI-ONLY: the arc must not reach a human car (docs/PHYSICS.md). A
+      // human's wheels show the driver's input, tapered with speed by the
+      // driving model's OWN lock taper (updateCar's lockTaper, 1/(1 + vStd/
+      // STEER_SPEED_REF)) — a twitch at 300 km/h no longer draws hairpin lock.
+      const WSV = PhysicsConsts.WHEEL_STEER_VIS;
+      let steerA = M4.clamp(c.steerVis || 0, -1, 1) * WSV;
+      if (!c.human) steerA = M4.clamp(steerA - Math.atan(VIS_WHEELBASE * (c.kCur || 0)), -WSV, WSV);
+      else if (G.STEER_SPEED_REF > 0) steerA /= 1 + Math.abs(c.speed || 0) * PhysicsConsts.VMAX / (G.vTop() * G.STEER_SPEED_REF);
       const ws = wScale || 1;   // widen the tyre along its axle (cockpit view)
       // The stop, seen (PitLane.stopAnim): a car held in its box is up on its
       // jacks and its wheels come off outward along their axles.
@@ -703,6 +740,15 @@ const CarDraw = (function () {
       // Within 120 m of a rival; the player always.
       const spinRate = (c.speed / PhysicsConsts.WHEEL_R) * dt;
       const blur = !lite && camD2 < 120 * 120 ? Math.min(1, Math.max(0, (Math.abs(spinRate) - 0.6) / 1.2)) : 0;
+      // PAST THE RINGS (a rival beyond 40 m): one cheap additive flare per FRONT
+      // disc (Particles.flare — this frame only, outside the pool) on the same
+      // brakeHeat. Mostly a night cue: `opt.emissive` is the wheels' night term
+      // (game.js sets 0.12 after dark, 0 by day), so by day it is a faint fleck
+      // and after dark a braking zone lights up down the straight. Out to
+      // 240 m; past that a 0.4 m disc is under a pixel.
+      const heatF = c.brakeHeat || 0;
+      const flareA = !c.isPlayer && heatF > 0.15 && camD2 >= 40 * 40 && camD2 < 240 * 240 && typeof Particles !== "undefined"
+        ? (heatF - 0.15) / 0.85 * (opt && opt.emissive > 0 ? 0.9 : 0.3) : 0;
       for (let w = 0; w < WHEELS.length; w++) {
         const wd = WHEELS[w];
         if (frontsOnly && wd.rear) continue;   // cockpit: rears sit beside the camera and blob the corners
@@ -718,7 +764,17 @@ const CarDraw = (function () {
         L[12] = wd.x + (wd.x < 0 ? -1 : 1) * ((ws - 1) * 0.16 + off); L[13] = wd.y + (wd.front ? flat : 0) + lift; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
         M4.mulTo(_wheelWorld, base, L);
         G.gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
-        if (lite) continue;   // brake rings are already off past 40 m
+        if (lite) {
+          // Past the LOD distance only the rotating wheel draws, but the far
+          // brake flare (40-240 m, Particles, outside the pool) is exactly this
+          // range's cue, so it still fires here.
+          if (flareA > 0 && wd.front) {
+            const tx = (wd.x < 0 ? -1 : 1) * 0.19, W = _wheelWorld;
+            Particles.flare(W[12] + W[0] * tx, W[13] + W[1] * tx, W[14] + W[2] * tx,
+              0.16 + 0.10 * heatF, 2.4, 0.85, 0.22, flareA);
+          }
+          continue;   // brake rings are already off past 40 m
+        }
         const F = _fixedWheelLocal;
         F[0] = cs*ws; F[1] = 0; F[2] = -ss*ws; F[3] = 0;
         F[4] = 0; F[5] = 1; F[6] = 0; F[7] = 0;
@@ -782,6 +838,10 @@ const CarDraw = (function () {
           _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
           _rqMesh[_rqN] = null;   // the brake ring
           _rqN++;
+        } else if (flareA > 0 && wd.front) {
+          const tx = (wd.x < 0 ? -1 : 1) * 0.19, W = _wheelWorld;
+          Particles.flare(W[12] + W[0] * tx, W[13] + W[1] * tx, W[14] + W[2] * tx,
+            0.16 + 0.10 * heatF, 2.4, 0.85, 0.22, flareA);
         }
       }
       // Run 1: the fixed wheel layers, one bind for up to four draws, then

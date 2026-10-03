@@ -12,13 +12,19 @@ const SkidMarks = (function () {
   // dashes, while the particle emitters beside it in render() were already
   // rate·dt gated. The physics step is the natural unit — 5 steps at 60 Hz.
   const STAMP_EVERY_S = 5 / 60;
+  // Other cars' marks (stampFor: an AI lock-up, js/fx/car-fx.js) may hold at
+  // most this many slots of the shared ring at once — a third — so a field of
+  // locking rivals never flushes the player's own trail.
+  const AI_CAP = 40;
 
   function create() {
     Log.info("game", "SkidMarks.create");
     const marks = Array.from({ length: MAX_SKID }, () => new Float32Array(16));
     let active = 0;               // how many marks are live (grows to MAX_SKID then stays)
     let idx = 0;
-    let stampT = 0;               // seconds until the next stamp may be laid
+    const own = { t: 0 };         // the player's cadence: seconds until the next stamp may be laid
+    const other = new Uint8Array(MAX_SKID);   // 1 = the slot holds another car's mark
+    let otherLive = 0;
 
     const verts = new Float32Array(MAX_SKID * 6 * 5);
     let vertCount = 0;
@@ -48,21 +54,40 @@ const SkidMarks = (function () {
     // Clear the trail. Called from startRace() — marks are per-session, and a
     // second race on the same circuit must not inherit the first one's rubber.
     function reset() {
-      active = 0; idx = 0; stampT = 0; dirty = true;
+      active = 0; idx = 0; own.t = 0; other.fill(0); otherLive = 0; dirty = true;
     }
 
-    function stamp(mat, laying, dt) {
-      if (!laying) { stampT = 0; return; }
-      stampT -= dt > 0 ? dt : 1 / 60;   // no dt (an old caller) charges one nominal frame
-      if (stampT > 0) return;
+    // One car's cadence: true when a stamp is due. `timer.t` is its countdown.
+    function due(timer, laying, dt) {
+      if (!laying) { timer.t = 0; return false; }
+      timer.t -= dt > 0 ? dt : 1 / 60;   // no dt (an old caller) charges one nominal frame
+      if (timer.t > 0) return false;
       // Carry the remainder, so a 30 Hz frame (33 ms) does not round the 83 ms
       // period up to 100 ms — but never more than one period of debt, so a
       // long frame after a stall does not lay a burst of catch-up marks.
-      stampT = Math.max(-STAMP_EVERY_S, stampT) + STAMP_EVERY_S;
+      timer.t = Math.max(-STAMP_EVERY_S, timer.t) + STAMP_EVERY_S;
+      return true;
+    }
+    function lay(mat, isOther) {
+      if (active >= MAX_SKID && other[idx]) otherLive--;   // overwriting the oldest
+      other[idx] = isOther ? 1 : 0;
+      if (isOther) otherLive++;
       marks[idx].set(mat);
       idx = (idx + 1) % MAX_SKID;
       if (active < MAX_SKID) active++;
       dirty = true;               // rebuild the batched trail next render
+    }
+
+    // The player's marks.
+    function stamp(mat, laying, dt) {
+      if (due(own, laying, dt)) lay(mat, false);
+    }
+    // Another car's marks, on its OWN cadence (`timer` = { t: 0 }, one per car,
+    // owned by the caller) and inside the AI_CAP share. True when one was laid.
+    function stampFor(timer, mat, laying, dt) {
+      if (!timer || !due(timer, laying, dt) || otherLive >= AI_CAP) return false;
+      lay(mat, true);
+      return true;
     }
 
     function draw(gfx, camEye) {
@@ -79,9 +104,9 @@ const SkidMarks = (function () {
       }
     }
 
-    return { reset, stamp, draw, get count() { return active; } };
+    return { reset, stamp, stampFor, draw, get count() { return active; }, get otherCount() { return otherLive; } };
   }
 
-  return { create, MAX_SKID };
+  return { create, MAX_SKID, AI_CAP };
 })();
 Object.freeze(SkidMarks);

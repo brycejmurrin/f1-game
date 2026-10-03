@@ -2191,7 +2191,7 @@ const TLX = (function () {
           } catch (e) {
             _warmStages.failed++;
             _warmRequested = _warmAttempts < 2;
-            try { Log.warn("gfx", "TLX program warm failed", String(e)); } catch (_) { /* logging is optional */ }
+            try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
@@ -2257,7 +2257,6 @@ const TLX = (function () {
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
           if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
-          try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
           const byMat = meshByGeo.get(m.geometry);
           if (byMat) {
             // Drop the wrapper from its occurrence list; an emptied list and an
@@ -2272,10 +2271,44 @@ const TLX = (function () {
           }
           // NEVER dispose the geometry or the material here — both are owned by
           // the caller (tracks.js, the chunk system, matCache) and are still
-          // live. Only the wrapper is ours to drop.
-          m.geometry = null; m.material = null;
+          // live. Only the wrapper is ours to drop (dropWrapper: and its
+          // render object with it, or three keeps the geometry anyway).
+          dropWrapper(m);
         }
         meshPool.length = w;
+      }
+
+      // A WRAPPER WE DROP MUST SAY SO TO THREE. three's render-object cache
+      // (Renderer._objects._renderObjects) keys one RenderObject per [object,
+      // material, renderContext, lightsNode] and keeps it — with the geometry
+      // and its vertex buffers — until the OBJECT or the MATERIAL dispatches
+      // "dispose"; a geometry's own dispose() only nulls the attribute mirror.
+      // Mesh has no dispose(), so a wrapper dropped from the pool kept every
+      // chunk of every freed track resident: measured 2026-10-02 on the picker
+      // (monza→monaco→spa, three cycles), the JS heap after GC climbed ~17 MB
+      // per pick with the track object itself already collected, and the heap
+      // diff was +676 RenderObjects / +863 GPUBuffers / +53 MB array data per
+      // cycle, all reached through _renderObjects. The event is the contract
+      // three's RenderObject listens for (object.addEventListener("dispose")).
+      // NOT WHILE A WARM IS IN FLIGHT: compileAsync collects (object, material)
+      // pairs synchronously, then awaits one pipeline at a time, and between
+      // those awaits present() runs — a wrapper dropped there is re-fetched by
+      // the warm with its render object gone and its geometry null ("Cannot
+      // read properties of null (reading 'addEventListener')", measured on a
+      // race→race switch). Queue the drop; flushDropped() finishes it on the
+      // first present after the warm settles, when no compile holds the mesh.
+      const _dropQueue = [];
+      function dropWrapper(m) {
+        try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+        m.visible = false;
+        if (_warmPending) { _dropQueue.push(m); return; }
+        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        m.geometry = null; m.material = null;
+      }
+      function flushDropped() {
+        if (_warmPending || !_dropQueue.length) return;
+        for (const m of _dropQueue) dropWrapper(m);
+        _dropQueue.length = 0;
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
@@ -2288,11 +2321,11 @@ const TLX = (function () {
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
           if (m.geometry !== geo) { meshPool[w++] = m; continue; }
-          try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
-          m.geometry = null; m.material = null;
+          dropWrapper(m);
         }
         meshPool.length = w;
         meshByGeo.delete(geo);
+        if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
       }
 
       function disposeGeometry(geo) {
@@ -3895,6 +3928,7 @@ const TLX = (function () {
           _poolBatch++;
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
           prunePool(_poolNow);
+          flushDropped();
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
           // survives its z-sort in BOTH lists. Opaques still render before
@@ -4552,6 +4586,13 @@ const TLX = (function () {
                   // SHARED_UNIFORMS — valid on a software adapter too.
                   o.rUbo = inf.memory.uniformBuffers;
                   o.rUboKB = inf.memory.uniformBuffersSize != null ? +(inf.memory.uniformBuffersSize / 1024).toFixed(1) : null;
+                  // Live RenderObjects (three's _objects cache). The per-object
+                  // arm's buffer count is only comparable PER render object:
+                  // prunePool drops a wrapper's render object after 20 s idle
+                  // (dropWrapper), so the raw count follows how long a sample
+                  // took, not the layout.
+                  const ro = renderer._objects && renderer._objects._renderObjects;
+                  o.rObj = ro && typeof ro.size === "number" ? ro.size : null;
                 }
                 if (inf.render) { o.calls = inf.render.calls; }
               }

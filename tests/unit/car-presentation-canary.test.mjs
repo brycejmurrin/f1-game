@@ -167,3 +167,21 @@ test("orbit / agent-view read the mirrored world pose for the field", () => {
   assert.match(view, /if \(c\.px != null\) return \[c\.px, c\.pz\];/);
   assert.doesNotMatch(view, /c\.human && c\.px != null/);
 });
+
+test("race warm-up builds the shadow casters the first countdown frame would", () => {
+  // The car and lamp shadow passes fetch teamMesh(team, car, true) for every car
+  // in range on their first frame. warmCarAssets builds the same keys behind the
+  // loading cover, under the passes' own gates, so lights-out builds none.
+  const cd = read("js/car/car-draw.js");
+  const sp = read("js/render/shared/shadow-pass.js");
+  const warm = cd.slice(cd.indexOf("function warmCarAssets()"), cd.indexOf("async function prepareMenuCarAssets("));
+  assert.match(warm, /const casters = shadowCastersWanted\(\);/);
+  assert.match(warm, /if \(casters\) teamMesh\(c\.team, c, true\);/, "the caster key is the pass's own call");
+  assert.match(sp, /deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\)/, "the pass still fetches casters by (team, car, true)");
+  // The gate mirrors the passes: car shadow below tier 3, lamp shadow below tier 2.
+  assert.match(sp, /G\.gfx\.carShadowBegin && LT\.carShadow && PerfGov\.tier\(\) < 3/);
+  assert.match(sp, /G\.gfx\.lampShadowBegin && LT\.lampShadow && PerfGov\.tier\(\) < 2/);
+  assert.match(warm, /gfx\.carShadowBegin && LT\.carShadow && tier < 3\) \|\| \(gfx\.lampShadowBegin && LT\.lampShadow && tier < 2\)/);
+  // An agent's headless race never renders a shadow: no caster builds there.
+  assert.match(warm, /if \(G\.headlessMode \|\| !LT\) return false;/);
+});

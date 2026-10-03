@@ -139,7 +139,9 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
   assert.match(cd, /const lite = !c\.isPlayer && FieldLod\.wheelsLite\(camD2\)/);
-  assert.match(cd, /if \(lite\) continue;/, "lite: the rotating wheel draw, then nothing else for that wheel");
+  // lite: the rotating wheel draw, then only the far brake flare (a Particles
+  // flare outside the pool, 40-240 m) before the wheel's other layers are skipped.
+  assert.match(cd, /if \(lite\) \{[\s\S]{0,600}?Particles\.flare\([\s\S]{0,200}?continue;/, "lite: the rotating wheel, the far flare, then nothing else for that wheel");
 });
 
 // ── mirror cap ──────────────────────────────────────────────────────────────

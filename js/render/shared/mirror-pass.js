@@ -586,6 +586,9 @@ const MirrorPass = (function () {
       setSubject,
       setPipMode,
       mode: () => mode,
+      // Is the rear-view actually drawing this frame? (car-draw.js lays a sky-tint
+      // fallback on the cockpit housings' glass when it is not.)
+      drawing: () => _shown && !!_rect && !_dead,
       // __apex.mirror(): the setting, what this frame resolved, and the backend's own count.
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         preparing: !!_preparation, prepared: _prepared,
