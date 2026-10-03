@@ -19,7 +19,8 @@ const FieldLod = (function () {
     WHEEL_EXTRAS_M: 50,   // beyond: the 4 rotating wheels only (no fixed layers, spin discs, compound stripes)
     FLAPS_M: 80,          // active-aero flaps within (was 150)
     FLAME_M: 60,          // throttle-lift exhaust flame within (was ungated)
-    WHOLE_CAR_M: 120,     // beyond: the whole-car teamMesh as ONE draw — no wheels, no decal
+    NO_DECAL_M: 120,      // beyond: no livery decal (body + the 4 rotating wheels). Not a whole-car
+                          // mesh: pre-building one per rival cost ~5 s of CPU at track build (game-vm)
     SHADOW_CAST_M: 50,    // sun / lamp shadow-map caster within (blob shadow unchanged)
     MIRROR_CARS: 6,       // nearest rivals the rear-view mirror / PiP redraws
     LEGACY_FLAPS_M: 150,  // the off-switch's flap gate
@@ -41,10 +42,10 @@ const FieldLod = (function () {
     const dx = p[0] - eye[0], dy = p[1] - eye[1], dz = p[2] - eye[2];
     return dx * dx + dy * dy + dz * dz;
   }
-  // 0 full detail, 1 lite wheels (beyond WHEEL_EXTRAS_M), 2 whole-car mesh (beyond WHOLE_CAR_M).
+  // 0 full detail, 1 lite wheels (beyond WHEEL_EXTRAS_M), 2 lite wheels and no decal (beyond NO_DECAL_M).
   function tier(dist2) {
     if (!on) return 0;
-    return dist2 > sq(T.WHOLE_CAR_M) ? 2 : dist2 > sq(T.WHEEL_EXTRAS_M) ? 1 : 0;
+    return dist2 > sq(T.NO_DECAL_M) ? 2 : dist2 > sq(T.WHEEL_EXTRAS_M) ? 1 : 0;
   }
   function wheelsLite(dist2) { return on && dist2 > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
@@ -70,9 +71,9 @@ const FieldLod = (function () {
   function parts(dist2, isPlayer) {
     const t = isPlayer ? 0 : tier(dist2), lite = !isPlayer && wheelsLite(dist2);
     return {
-      tier: t, wholeCar: t === 2, body: t < 2, decal: t < 2, wheels: t < 2,
-      fixedWheels: t < 2 && !lite, spinDisc: t < 2 && !lite && (isPlayer || dist2 < sq(120)),
-      compound: t < 2 && !lite && (isPlayer || dist2 < sq(60)),
+      tier: t, body: true, decal: t < 2, wheels: true,
+      fixedWheels: !lite, spinDisc: !lite && (isPlayer || dist2 < sq(120)),
+      compound: !lite && (isPlayer || dist2 < sq(60)),
       flaps: isPlayer || dist2 < sq(flapsM()), flame: isPlayer || flame(dist2),
       castsShadow: isPlayer || castsShadow(dist2),
     };

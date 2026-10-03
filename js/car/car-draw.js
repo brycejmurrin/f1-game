@@ -281,12 +281,13 @@ const CarDraw = (function () {
           if (c.isPlayer && CamModes.CAM_MODES[G.camMode].id === "cockpit") cockpitBodyMesh(c.team, c);
           getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
           if (casters) teamMesh(c.team, c, true);
-          // What the LAUNCH first draws (FieldLod): the mirror's and the far-LOD
-          // whole-car mesh, the planted field wheels and the exhaust flame quad —
-          // each was built on its first draw, after the lights, in the frame the
-          // field pulled away. (The caster silhouette is the line above.)
+          // What the LAUNCH first draws (FieldLod): the planted field wheels and
+          // the exhaust flame quad — each was built on its first draw, after the
+          // lights, in the frame the field pulled away. (The caster silhouette is
+          // the line above.) NOT the mirror's whole-car teamMesh: one per rival
+          // cost ~5 s of CPU here (game-vm track build 4 s -> 9 s); it stays lazy.
           if (FieldLod.on) {
-            if (!c.isPlayer) { teamMesh(c.team, c); getFieldWheelMeshes(c.team, c); }
+            if (!c.isPlayer) getFieldWheelMeshes(c.team, c);
             CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame);
             if (c.isPlayer) CarMesh.getErsLight();
           }

@@ -35,7 +35,7 @@ const at = (m) => m * m;
 test("the table: a rival's parts by camera distance; the player is never reduced", () => {
   const { FieldLod: L } = loadLod();
   assert.ok(Object.isFrozen(L.T), "one frozen thresholds table");
-  assert.deepEqual([L.T.WHEEL_EXTRAS_M, L.T.FLAPS_M, L.T.FLAME_M, L.T.WHOLE_CAR_M, L.T.SHADOW_CAST_M, L.T.MIRROR_CARS],
+  assert.deepEqual([L.T.WHEEL_EXTRAS_M, L.T.FLAPS_M, L.T.FLAME_M, L.T.NO_DECAL_M, L.T.SHADOW_CAST_M, L.T.MIRROR_CARS],
     [50, 80, 60, 120, 50, 6]);
   const near = L.parts(at(30), false);
   assert.deepEqual([near.tier, near.body, near.decal, near.fixedWheels, near.compound, near.spinDisc, near.flaps, near.flame, near.castsShadow],
@@ -48,7 +48,7 @@ test("the table: a rival's parts by camera distance; the player is never reduced
   const p100 = L.parts(at(100), false);
   assert.deepEqual([p100.tier, p100.body, p100.flaps], [1, true, false], "100 m: body + decal + wheels, no flaps");
   const far = L.parts(at(130), false);
-  assert.deepEqual([far.tier, far.wholeCar, far.body, far.decal, far.wheels], [2, true, false, false, false],
+  assert.deepEqual([far.tier, far.body, far.decal, far.wheels, far.fixedWheels], [2, true, false, true, false],
     "130 m: the whole-car teamMesh, ONE draw, no decal");
   const me = L.parts(at(400), true);
   assert.deepEqual([me.tier, me.fixedWheels, me.compound, me.flaps, me.flame, me.castsShadow], [0, true, true, true, true, true]);
@@ -133,8 +133,8 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   const cull = g.indexOf("if (_out) continue;", legacy);
   const lod = g.indexOf("if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2));");
   assert.ok(legacy > 0 && cull > legacy && lod > cull, "legacy push before the frustum test, the LOD push after it");
-  assert.match(g, /carDraw\.modelBuf \|\| _lod === 2 \? null/, "past 120 m: no body-only mesh, the whole-car branch");
-  assert.match(g, /if \(_lod < 2\) queueCarDecals/, "and no decal for a far rival");
+  assert.match(g, /const body = carDraw\.modelBuf \? null/, "every procedural rival keeps its body mesh (no whole-car swap)");
+  assert.match(g, /if \(_lod < 2\) queueCarDecals\(c\.team, tmpMat/, "and no decal for a rival past 120 m");
   assert.match(g, /< FieldLod\.flapsM\(\) \*\* 2/, "flaps gate from the table");
   assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
@@ -223,11 +223,14 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
   assert.match(tlx, /await warmLateLit\(\);/);
 });
 
-test("warm: warmCarAssets builds the caster silhouette, the mirror mesh, the field wheels and the flame", () => {
+test("warm: warmCarAssets builds the caster silhouette, the field wheels and the flame (not a whole-car mesh per rival)", () => {
   const cd = read("js/car/car-draw.js");
   const body = cd.slice(cd.indexOf("function warmCarAssets()"), cd.indexOf("async function prepareMenuCarAssets"));
   assert.match(body, /teamMesh\(c\.team, c, true\)/, ":sh silhouette");
-  assert.match(body, /teamMesh\(c\.team, c\); getFieldWheelMeshes\(c\.team, c\)/, "mirror / far-LOD mesh + field wheels");
+  assert.match(body, /if \(!c\.isPlayer\) getFieldWheelMeshes\(c\.team, c\)/, "field wheels");
+  // NOT the whole-car teamMesh per rival: ~240 ms of CPU each, it doubled the
+  // game-vm track build (4 s -> 9 s) and failed "boot and track build do not hang".
+  assert.doesNotMatch(body, /teamMesh\(c\.team, c\);/, "no per-rival whole-car pre-build");
   assert.match(body, /CarMesh\.getExhaustFlame\(c\.fuelVisual && c\.fuelVisual\.fxFlame\)/, "flame quad (same key the draw uses)");
   assert.match(cd, /FieldLod\.init\(G\.store\)/, "the off-switch is read once at boot");
 });

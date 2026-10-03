@@ -141,8 +141,7 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.match(cd, /function cockpitBodyMesh\(team, car, visualKey = playerVisualKey\)/);
   assert.match(read("js/garage/setup-camera.js"), /function garageSeat\(\)/);
   const draw = game.match(
-    // `_lod === 2`: a rival past 120 m is the whole-car teamMesh in one draw (js/car/field-lod.js).
-    /const body = carDraw\.modelBuf \|\| _lod === 2 \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
+    /const body = carDraw\.modelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
   // The caster passes live in js/render/shared/shadow-pass.js (teamMesh through deps, the player through G).
