@@ -2,7 +2,7 @@
 name: survey-track
 context: fork
 agent: track-surveyor
-description: Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, or do a picture-driven accuracy pass (gaps, terrain channels/steps, sunk water). Orchestrate first; scenery(api) prop edits after the survey flags them → scenery-dress. Geometry hooks only → agent-view.
+description: "Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, or do a picture-driven accuracy pass (gaps, terrain channels/steps, sunk water). Orchestrate first; scenery(api) prop edits after the survey flags them → scenery-dress. Geometry hooks only → agent-view."
 ---
 
 # Survey & update a track
@@ -11,8 +11,8 @@ Orchestrator for taking one circuit from "roughly dressed" to "reads like the
 real place". Work one circuit at a time.
 
 Runs FORKED as the **track-surveyor** subagent (`context: fork`,
-`agent: track-surveyor`): the survey framings and probe output stay in the
-fork, its edits are confined to that circuit's pair of files, and it stops at
+`agent: track-surveyor`): the browser-free measurements and source diagnosis stay in the
+fork; the parent captures survey framings, its edits are confined to that circuit's pair of files, and it stops at
 `verify-track` — engine work and the fleet gate below are the PARENT's, after
 the fork returns.
 
@@ -41,8 +41,8 @@ circuit's pair — def + scenery closure; no browser runs).
    landmarks-by-lap-position. Start here.
 2. No-browser layout check (corner order / sector lengths / elevation): `js/circuits/<id>.js`
    `turns` × `path.len` = metres per corner, `sectors` × `path.len` = sector lengths;
-   `tests/data/f1-circuit-reference.geojson` = OSM length; elevation = `js/track/circuit-elevations.js`
-   (64 samples). A wrong LAYOUT → **new-track**. Probe flags are NOT findings until confirmed off lat 0
+   `tests/data/f1-circuit-reference.geojson` = OSM length; elevation = conditional baked override in `js/track/circuit-elevations.js`;
+   when absent, inspect authored/default elevation in the def and core/def.js. A wrong LAYOUT → **new-track**. Probe flags are NOT findings until confirmed off lat 0
    ([loop.md](references/loop.md), "Artefacts" paragraph).
 3. Real-place photos: `WebSearch` / image search. Treat heights/distances as
    best-effort.
@@ -50,7 +50,7 @@ circuit's pair — def + scenery closure; no browser runs).
 ## Short loop
 
 1. Read the brief — 3–5 highest-leverage fixes.
-2. `survey-track.mjs <id> before` — aerial + orbit/EYE at 0/25/50/75 % +
+2. Parent captures `survey-track.mjs <id> before` — aerial + orbit/EYE at 0/25/50/75 % +
    flagged probe (`--` holes, >1 m steps, sag). Add `--oblique` when you need
    a bounds-fitted topdown and N/E/S/W high obliques (floating props, floor voids).
 3. Edit dressing in `js/circuits/scenery/<id>.js` (the closure; the def
@@ -59,7 +59,7 @@ circuit's pair — def + scenery closure; no browser runs).
    `js/track/tracks.js` — that is **engine** work (parent / not
    **track-surveyor**).
 4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
-5. `survey-track.mjs <id> after` — same framings; flags should clear.
+5. Parent captures `survey-track.mjs <id> after` — same framings; flags should clear.
 6. Per-circuit gate: `node tools/track/verify-track.cjs <id>`. The fork stops here. Parent ship, after it returns (optional fleet; a browser run is blocked inside the fork): `node tools/ci/test-bg.mjs circuits` + `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). The
    **track-surveyor** subagent stops at verify-track / coplanar / float-audit.
 
@@ -70,3 +70,7 @@ before re-applying that fix.
 
 - Full loop, probe flags, Montreal worked example, gotchas →
   [references/loop.md](references/loop.md).
+
+Per-circuit research briefs describe the reference place; verify implementation
+claims against source. The baked PBR asset pack ships ON and degrades to the
+procedural fallback. A missing baked elevation entry is not a flatness verdict.

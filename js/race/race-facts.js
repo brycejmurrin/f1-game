@@ -32,7 +32,7 @@ const RaceFacts = (function () {
   const inPits = (c) => !!(c && c.pitState && c.pitState !== "none");
 
   function create() {
-    let t = 0, lapLen = 0, cars = null, nextId = 1;
+    let t = 0, lapLen = 0, cars = null, nextId = 1, pairVisit = 0;
     const st = new Map();          // car -> per-car timing + edge memory
     const pairs = new Map();       // "id|id" -> { ahead, pend }
     const battles = new Map();     // "id|id" -> { since, a, b }
@@ -45,7 +45,7 @@ const RaceFacts = (function () {
     let leadLap = 0;               // the highest lap any leader has started (the leaderLap edge)
 
     function reset() {
-      t = 0; lapLen = 0; cars = null; nextId = 1;
+      t = 0; lapLen = 0; cars = null; nextId = 1; pairVisit = 0;
       st.clear(); pairs.clear(); battles.clear(); hist.clear();
       order = []; fastest = { time: Infinity, car: null };
       pitEndT = -1e9;   // last race's pit exit must not mute this race's pace calls
@@ -94,9 +94,9 @@ const RaceFacts = (function () {
     };
     // PER PHYSICS STEP (race-radio ticks this every step): the ranking fills
     // the one `order` array in place with a hoisted comparator, pair / battle
-    // keys are integers and the per-tick Sets are reused — this ran ~70
-    // allocations a step (strings, arrays, Sets) before.
-    const _seen = new Set(), _live = new Set(), _shoved = new Set();
+    // keys are integers. Pair records mark their last visit rather than
+    // rebuilding a membership Set each step; battle / shoved Sets are reused.
+    const _live = new Set(), _shoved = new Set();
     const pairKey = (x, y) => x * 1048576 + y;   // ids are small ints; exact below 2^53
     // The car's own flag time when it has one: a VS FRIEND rival is drawn
     // ~100 ms in the past, so the tick race-facts SAW it cross is late.
@@ -219,15 +219,15 @@ const RaceFacts = (function () {
         else for (const k of pairs.keys()) if (_shoved.has(Math.floor(k / 1048576)) || _shoved.has(k % 1048576)) pairs.delete(k);
         _shoved.clear();
       }
-      const seen = _seen; seen.clear();
+      pairVisit++;
       for (let i = 0; i < order.length; i++) {
         for (let j = i + 1; j <= i + PAIR_SPAN && j < order.length; j++) {
           const a = order[i], b = order[j];
           const ia = bag(a).id, ib = bag(b).id;
           const key = ia < ib ? pairKey(ia, ib) : pairKey(ib, ia);
-          seen.add(key);
           let r = pairs.get(key);
-          if (!r) { pairs.set(key, { ahead: a, pend: 0 }); continue; }
+          if (!r) { pairs.set(key, { ahead: a, pend: 0, key, visit: pairVisit }); continue; }
+          r.visit = pairVisit;
           if (r.ahead === a) { r.pend = 0; continue; }
           r.pend += dt;
           if (r.pend < HOLD_S) continue;
@@ -240,7 +240,7 @@ const RaceFacts = (function () {
         }
       }
 
-      for (const k of pairs.keys()) if (!seen.has(k)) pairs.delete(k);   // deleting while iterating a Map is defined
+      for (const r of pairs.values()) if (r.visit !== pairVisit) pairs.delete(r.key);   // deletion during Map iteration is defined
 
       // ── the player's position, with the same hold ───────────────────────
       const raw = order.indexOf(p) + 1;

@@ -210,6 +210,9 @@ const TrackModels = (function () {
     function modelGroup(id, bounds, emit, options) {
       const required = !!(options && options.required);
       const kind = options && options.kind || "model";
+      // trial: caller is probing sites (SceneryVenue search). A reject must not
+      // pin a suppressed id — foundation specs list every suppressed model.
+      const trial = !!(options && options.trial);
       if (!id || !bounds || !finiteArray(bounds.center, 3) || !validSize(bounds.size)) {
         diagnostics.invalid.push({ id: id || "(unnamed)", required, reason: "invalid bounds" });
         return false;
@@ -220,8 +223,10 @@ const TrackModels = (function () {
       // circuit's hand-placed pit block is exactly what the complex replaces.
       const verdict = preflight(Object.assign({ id }, bounds));
       if (verdict !== true) {
-        const pit = verdict === "pit";
-        diagnostics.suppressed.push({ id, required: pit ? false : required, reason: pit ? "superseded by the pit complex" : "footprint rejected" });
+        if (!trial) {
+          const pit = verdict === "pit";
+          diagnostics.suppressed.push({ id, required: pit ? false : required, reason: pit ? "superseded by the pit complex" : "footprint rejected" });
+        }
         return false;
       }
       const stage = emptyBuffer();
@@ -278,8 +283,10 @@ const TrackModels = (function () {
       const actual = emittedBox(stage, bounds);
       const emitted = actual ? preflight(Object.assign({ id }, actual)) : true;
       if (emitted !== true) {
-        const pit = emitted === "pit";
-        diagnostics.suppressed.push({ id, required: pit ? false : required, reason: pit ? "emitted footprint superseded by the pit complex" : "emitted footprint rejected" });
+        if (!trial) {
+          const pit = emitted === "pit";
+          diagnostics.suppressed.push({ id, required: pit ? false : required, reason: pit ? "emitted footprint superseded by the pit complex" : "emitted footprint rejected" });
+        }
         return false;
       }
       appendBuffer(out, stage, id);

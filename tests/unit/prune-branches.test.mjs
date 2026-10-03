@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { selectPrunable, parseRefs, parseHeads, DEPLOY } from "../../tools/ci/prune-branches.mjs";
+import { selectPrunable, parseRefs, parseHeads, archiveRefs, migrateTagRefs, landedRefs, archiveFallback, DEPLOY } from "../../tools/ci/prune-branches.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NOW = 1_800_000_000, DAY = 86400;
@@ -58,11 +58,41 @@ test("an ABSORBED verdict prunes; a judgement verdict only when opted in, and th
   assert.deepEqual(opted.prune, ["abs", "sup"]);
 });
 
-test("--also refuses a verdict that is not a judgement call (merged/unmerged/active)", async () => {
+test("a lossy prune is archived to refs/archive (outside any clone) first; merged, absorbed and expired claims are not", () => {
+  const reasons = new Map([["m", "merged"], ["a", "absorbed"], ["claude/claims/c", "expired claim"], ["u", "unmerged"], ["n", "no-history"]]);
+  assert.deepEqual(archiveRefs([...reasons.keys()], reasons, (n) => "sha-" + n),
+    ["sha-u:refs/archive/u", "sha-n:refs/archive/n"]);
+});
+
+test("the first run's archive TAGS move to refs/archive, and nothing else is touched", () => {
+  const got = migrateTagRefs("s1 refs/tags/archive/cursor/x-1\ns2 refs/tags/v1.0\n\ns3 refs/tags/archive/zz\n");
+  assert.deepEqual(got, { push: ["s1:refs/archive/cursor/x-1", "s3:refs/archive/zz"], tags: ["refs/tags/archive/cursor/x-1", "refs/tags/archive/zz"] });
+});
+
+test("push results are read per ref: a refused ref falls back to a tag, the rest count as landed", () => {
+  // Run 37086262369: GitHub refused 71 of 81 refs/archive pushes (commits that
+  // touch .github/workflows/ need a `workflows` permission the Actions token
+  // lacks) and landed 10 in the same batch.
+  const out = "To https://github.com/o/r\n*\taaa:refs/archive/ok\t[new reference]\n" +
+    "!\tbbb:refs/archive/wf\t[remote rejected] (refusing to allow a GitHub App to create or update workflow)\n" +
+    "-\t:refs/tags/archive/ok\t[deleted]\nDone\n";
+  const landed = landedRefs(out);
+  assert.deepEqual([...landed].sort(), ["refs/archive/ok", "refs/tags/archive/ok"]);
+  assert.deepEqual(archiveFallback(["aaa:refs/archive/ok", "bbb:refs/archive/wf"], landed), ["bbb:refs/tags/archive/wf"]);
+  assert.deepEqual([...landedRefs("")], []);
+});
+
+test("the claims board is never pruned, however old or unmerged", () => {
+  const { prune, kept } = selectPrunable([b("claude/claims-board", 30)], { now: NOW, isMerged: () => true });
+  assert.deepEqual(prune, []);
+  assert.equal(kept[0].why, "protected name");
+});
+
+test("--also refuses a verdict that is not a judgement call (merged/active)", async () => {
   const { main } = await import("../../tools/ci/prune-branches.mjs");
   const err = console.error; let said = "";
   console.error = (m) => { said += m; };
-  try { assert.equal(main(["--also", "unmerged"]), 2); } finally { console.error = err; }
+  try { assert.equal(main(["--also", "active"]), 2); } finally { console.error = err; }
   assert.match(said, /--also takes/);
 });
 

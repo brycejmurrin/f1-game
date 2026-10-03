@@ -115,3 +115,11 @@ pointer) and the unrun tool in the PR.
 - Forgetting that `zoom` changes layout boxes.
 - Using `requestAnimationFrame` for non-visual ARIA/scroll bookkeeping that
   must also run when rendering is suspended.
+
+## Reduced motion
+
+Check OS `prefers-reduced-motion` and the in-game MOTION setting separately.
+Inspect view transitions, looping HUD cues and programmatic focus scrolling.
+The tokens.css reduced-motion declarations are static evidence; native animation
+and scroll behavior still require the parent browser check. Modal rank must come
+from managed opening order, never querySelectorAll document order.
