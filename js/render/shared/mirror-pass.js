@@ -94,6 +94,7 @@ const MirrorPass = (function () {
     // the render buffer, which the governor's dynamic resolution rescales every
     // few seconds on a phone — each rescale reallocated the mirror target.
     let _cssW = 0, _cssH = 0;
+    let _preparation = null, _prepared = null;
     // THE PiP: the subject car and its TV shot (broadcast.js via G.setPip), the frame, its rect and CSS box.
     let _sub = null, _subMode = "tcam", _pipEl = null, _pipShown = false, _pipRect = null, _pipMeasureIn = 0;
     let _pipCssW = 0, _pipCssH = 0;
@@ -159,12 +160,12 @@ const MirrorPass = (function () {
     // behind full-screen. Never for performance (QUALITY scales it instead);
     // AUTO alone skips a SOFTWARE renderer, where a second world pass is
     // seconds a frame (and every CI run would pay it in the cockpit default).
-    function wanted() {
+    function wanted(preparing) {
       if (mode === "off") return false;
       if (bcOn()) return false;   // a WATCH: the TV picture has no mirror (T-CAM is one of the director's shots); the PiP owns the target
       const g = G.gfx;
       if (!g || typeof g.mirrorBegin !== "function") return false;
-      if (G.state !== "race") return false;
+      if (G.state !== "race" && !(preparing && G.state === "count")) return false;
       if (!G.player || !G.track || G.dbgCam) return false;
       if (document.body.classList.contains("hud-hidden")) return false;
       if (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(camId(),
@@ -295,10 +296,85 @@ const MirrorPass = (function () {
       }
     }
 
+    function finishPreparation(job, ready) {
+      if (_preparation !== job) return;
+      clearTimeout(job.timer);
+      _preparation = null; _prepared = ready;
+      _lastW = 0;   // preparation never spends the first visible frame's draw
+      job.resolve(ready);
+    }
+    function cancelPreparation() { if (_preparation) finishPreparation(_preparation, false); }
+    function currentPreparation(job) {
+      return G.state === "count" && G.player === job.player && G.track === job.track && G.gfx === job.gfx
+        && G.gfx.mirrorBegin === job.begin && G.gfx.mirrorEnd === job.end && !_collapsed && wanted(true);
+    }
+    // The caller holds the entry cover and countdown until this optional pass
+    // settles. It is driven by render(), not a timer that draws out of frame.
+    function prepareRace() {
+      try {
+        if (_preparation && currentPreparation(_preparation)) return _preparation.promise;
+        standDown();   // a restart may still have the previous race's mirror up
+        _prepared = false;
+        checkDead();
+        if (G.state !== "count" || _collapsed || !wanted(true)) return Promise.resolve(false);
+      } catch (_) { cancelPreparation(); _prepared = false; return Promise.resolve(false); }
+      const job = { player: G.player, track: G.track, gfx: G.gfx,
+        begin: G.gfx.mirrorBegin, end: G.gfx.mirrorEnd, primed: false, timer: null, resolve: null, promise: null };
+      job.promise = new Promise(resolve => { job.resolve = resolve; });
+      _preparation = job; _prepared = null;
+      job.timer = setTimeout(() => finishPreparation(job, false), 30000);
+      return job.promise;
+    }
+    function prepareFrame(frame, frameSky, night, wet, floodEmit) {
+      const job = _preparation;
+      try {
+        checkDead();
+        if (!currentPreparation(job)) { finishPreparation(job, false); return; }
+        const g = job.gfx;
+        if (g.mirrorRect) g.mirrorRect(null);
+        // The main present services any queued gfx.warm() first. Its mirror
+        // shader warm uses a tiny target; our actual-size pass must follow it.
+        if (!job.primed) { job.primed = true; return; }
+        if (g.warming && g.warming()) return;
+        const e = el();
+        if (!e || !e.style) { finishPreparation(job, false); return; }
+        const hidden = e.hidden, visibility = e.style.getPropertyValue("visibility"), priority = e.style.getPropertyPriority("visibility");
+        let box;
+        try {
+          e.style.setProperty("visibility", "hidden", "important"); e.hidden = false;
+          box = e.getBoundingClientRect();
+        } finally {
+          e.hidden = hidden;
+          if (visibility) e.style.setProperty("visibility", visibility, priority);
+          else e.style.removeProperty("visibility");
+        }
+        if (!(box.width > 4 && box.height > 4)) { finishPreparation(job, false); return; }
+        quality(g);
+        const sz = targetSize(box.width, box.height, _q.res), w = sz[0], h = sz[1];
+        if (w < 16 || h < 8) { finishPreparation(job, false); return; }
+        const before = g.mirrorState ? g.mirrorState() : null;
+        if (rearPass(frame, frameSky, night, wet, floodEmit, w, h)) {
+          const after = g.mirrorState ? g.mirrorState() : null;
+          // Backends can catch their own render failure. A successful begin
+          // alone must not report a prepared target that was never written.
+          const painted = !after || (!after.dead && after.ready !== false
+            && (!before || typeof before.renders !== "number" || after.renders > before.renders));
+          finishPreparation(job, currentPreparation(job) && painted);
+        }
+      } catch (_) { finishPreparation(job, false); }   // an optimisation cannot strand race entry
+    }
+    function quality(g) {
+      const tier = PerfGov.tier();
+      const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0;
+      if (qi !== _qWant) { _qWant = qi; _qHeld = 0; }
+      if (qi !== _qi && (_qi < 0 || ++_qHeld >= Q_DWELL)) _qi = qi;
+      _q = QUALITY[_qi];
+    }
     function render(frame, frameSky, night, wet, floodEmit) {
       if (G.state === "race" && typeof Input !== "undefined" && Input.consumeMirror && Input.consumeMirror()) toggle();
       const g = G.gfx;
       wire();
+      if (_preparation) { prepareFrame(frame, frameSky, night, wet, floodEmit); return; }
       const eligible = wanted();
       const want = eligible && !_collapsed;
       const chipOn = eligible && _collapsed;
@@ -333,24 +409,22 @@ const MirrorPass = (function () {
       // Every frame — a mirror that updates at half rate reads as lag — except
       // at governor tier 2+, where the frame rate itself is the problem.
       _frame++;
-      const tier = PerfGov.tier();
-      const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0;
-      if (qi !== _qWant) { _qWant = qi; _qHeld = 0; }
-      if (qi !== _qi && (_qi < 0 || ++_qHeld >= Q_DWELL)) _qi = qi;
-      _q = QUALITY[_qi];
+      quality(g);
       const sz = targetSize(_cssW, _cssH, _q.res), w = sz[0], h = sz[1];
       if (w < 16 || h < 8) return;
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;
       if (_frame % _q.every !== 0 && !G.frozen && same && _drawn > 0) return;
-
+      rearPass(frame, frameSky, night, wet, floodEmit, w, h);
+    }
+    function rearPass(frame, frameSky, night, wet, floodEmit, w, h) {
       pose(G.player);
       const fl = Math.hypot(_F[0], _F[2]) || 1;
       _bx = -_F[0] / fl; _bz = -_F[2] / fl;
       // U is up in world terms (R × F with the track's +x-right convention).
       _eye[0] = _P[0] + _U[0] * EYE_UP; _eye[1] = _P[1] + _U[1] * EYE_UP; _eye[2] = _P[2] + _U[2] * EYE_UP;
       _tgt[0] = _eye[0] + _bx * LOOK_M; _tgt[1] = _eye[1] - LOOK_DROP; _tgt[2] = _eye[2] + _bz * LOOK_M;
-      pass(frame, frameSky, night, wet, floodEmit, w, h, 2 * Math.atan(Math.tan(H_FOV / 2) / (w / h)), G.player, G.player);
+      return pass(frame, frameSky, night, wet, floodEmit, w, h, 2 * Math.atan(Math.tan(H_FOV / 2) / (w / h)), G.player, G.player);
     }
 
     // THE PiP FRAME: the subject on its TV shot — GameCams.vantage, the very rig
@@ -421,15 +495,18 @@ const MirrorPass = (function () {
           _drawn++;
         }
       } finally {
-        if (began) g.mirrorEnd();
-        frame.viewProj = sv.viewProj; frame.view = sv.view; frame.proj = sv.proj; frame.invProj = sv.invProj;
-        frame.invViewProj = sv.invViewProj; frame.eye = sv.eye; frame.cullDist = sv.cullDist;
-        frame.mirrorLite = sv.lite;
-        frame.tune = sv.tune;
-        frameSky.invViewProj = sv.sky;
-        sv.viewProj = sv.view = sv.proj = sv.invProj = sv.invViewProj = sv.eye = sv.sky = null;
-        sv.tune = undefined;
+        try { if (began) g.mirrorEnd(); }
+        finally {
+          frame.viewProj = sv.viewProj; frame.view = sv.view; frame.proj = sv.proj; frame.invProj = sv.invProj;
+          frame.invViewProj = sv.invViewProj; frame.eye = sv.eye; frame.cullDist = sv.cullDist;
+          frame.mirrorLite = sv.lite;
+          frame.tune = sv.tune;
+          frameSky.invViewProj = sv.sky;
+          sv.viewProj = sv.view = sv.proj = sv.invProj = sv.invViewProj = sv.eye = sv.sky = null;
+          sv.tune = undefined;
+        }
       }
+      return began;
     }
 
     function setMode(v) {
@@ -452,6 +529,7 @@ const MirrorPass = (function () {
     // backend's rect up, and present() composited the stale mirror image over
     // the car. Hides the frame, the chip and the PiP and clears the rect.
     function standDown() {
+      cancelPreparation();
       if (_shown) { _shown = false; const e = el(); if (e) e.hidden = true; document.body.classList.toggle("hud-mirror-on", false); document.body.classList.toggle("hud-mirror-side", false); }
       if (_chipShown) { _chipShown = false; const c = chip(); if (c) c.hidden = true; }
       if (_pipShown) { _pipShown = false; const e = pipEl(); if (e) e.hidden = true; }
@@ -464,6 +542,9 @@ const MirrorPass = (function () {
     return (_instance = {
       MODES,
       render,
+      prepareRace,
+      preparing: () => !!_preparation,
+      cancelPreparation,
       standDown,
       toggle,
       setMode,
@@ -472,6 +553,7 @@ const MirrorPass = (function () {
       mode: () => mode,
       // __apex.mirror(): the setting, what this frame resolved, and the backend's own count.
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
+        preparing: !!_preparation, prepared: _prepared,
         pip: { mode: pipMode, shown: _pipShown, code: _sub ? _sub.code : null, cam: _subMode, rect: _pipRect },
         backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null }),
     });

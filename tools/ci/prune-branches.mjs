@@ -26,7 +26,10 @@
 //     byte; `git ls-remote origin 'refs/archive/*'` lists them and
 //     `git fetch origin refs/archive/<branch> && git push origin
 //     FETCH_HEAD:refs/heads/<branch>` brings one back (an agent container may
-//     push refs/heads/claude/* only). Tags under refs/tags/archive/ — where
+//     push refs/heads/claude/* only). GitHub refuses the Actions token a
+//     non-tag ref at a commit that touches .github/workflows/, so such a
+//     branch is archived as the TAG archive/<branch> instead (archiveFallback;
+//     `git fetch origin tag archive/<branch>` restores it). Tags under refs/tags/archive/ — where
 //     the first archive run (2026-10-02, 81 branches) put them — are moved
 //     there by every --apply (migrateTagRefs);
 //   * no OPEN pull request has it as its head;
@@ -50,7 +53,7 @@
 // createdAt`, the report's CI column. (--open-heads / --merged-heads, plain
 // line files, still work.) Without a PR list the tool refuses --apply: an
 // unknown PR set is not an empty one.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { audit, indexPrs, indexRuns, inSurvey, parseRefs, readJson, renderMarkdown, surveyScope, SURVEY_QUIET_HOURS, VERDICTS } from "./branch-audit.mjs";
 
@@ -79,6 +82,25 @@ export function migrateTagRefs(text) {
 
 /** The `<sha>:refs/archive/<branch>` refspecs to push before deleting:
  *  one per pruned branch whose reason is not LOSSLESS. shaOf(name) -> sha. */
+/** `git push --porcelain` stdout -> Set of destination refs that landed
+ *  (flags ' ', '+', '*', '-', '='; '!' is rejected). */
+export function landedRefs(stdout) {
+  const out = new Set();
+  for (const line of String(stdout || "").split("\n")) {
+    const m = /^([ +*\-=!])\t([^\t]*)\t/.exec(line);
+    if (!m || m[1] === "!") continue;
+    const to = m[2].slice(m[2].indexOf(":") + 1);
+    out.add(to);
+  }
+  return out;
+}
+
+/** The refs/archive pushes that did not land, retargeted to refs/tags/archive/. */
+export function archiveFallback(specs, landed) {
+  return specs.filter((s) => !landed.has(s.slice(s.indexOf(":") + 1)))
+    .map((s) => s.replace(":" + ARCHIVE_PREFIX, ":" + OLD_ARCHIVE_TAGS));
+}
+
 export function archiveRefs(prune, reasons, shaOf) {
   return prune.filter((n) => !LOSSLESS.has(reasons.get(n))).map((n) => `${shaOf(n)}:${ARCHIVE_PREFIX}${n}`);
 }
@@ -189,27 +211,43 @@ export function main(argv = process.argv.slice(2)) {
   if (also.length) console.log("opted in: " + also.map((v) => `${v} (${VERDICTS[v]})`).join("; "));
   for (const n of prune) console.log(`${apply ? "delete" : "would delete"} ${n}  [${reasons.get(n)}]`);
   if (!apply) { console.log("= prune dry-run " + prune.length); return 0; }
+  // Per-ref results (`git push --porcelain`), never per batch: GitHub refuses
+  // ONE ref of a batch and lands the rest. Measured 2026-10-03 (run
+  // 37086262369): the Actions token may not create a non-tag ref at a commit
+  // that changes .github/workflows/ ("refusing to allow a GitHub App to create
+  // or update workflow ... without `workflows` permission"), so 71 of 81 moves
+  // to refs/archive/* were refused while tags at the same commits are not.
+  // Such a branch is archived as a tag instead (archiveFallback).
+  const pushRefs = (specs) => {
+    const landed = new Set();
+    for (let i = 0; i < specs.length; i += 50) {
+      const r = spawnSync("git", ["push", "--porcelain", "origin", ...specs.slice(i, i + 50)], { encoding: "utf8", maxBuffer: 16 << 20 });
+      for (const ref of landedRefs(r.stdout)) landed.add(ref);
+      if (r.status !== 0) process.stderr.write((r.stderr || "").split("\n").filter((l) => /rejected|error/.test(l)).slice(0, 5).join("\n") + "\n");
+    }
+    return landed;
+  };
   // MIGRATE the first run's archive TAGS to refs/archive/* (tags download with
   // every clone). A tag is deleted only once its refs/archive copy landed.
   try { execFileSync("git", ["fetch", "--quiet", "origin", `+${OLD_ARCHIVE_TAGS}*:${OLD_ARCHIVE_TAGS}*`], { stdio: "inherit" }); } catch (_) { /* none yet */ }
   const old = migrateTagRefs(git("for-each-ref", "--format=%(objectname) %(refname)", OLD_ARCHIVE_TAGS));
-  for (let i = 0; i < old.push.length; i += 50) {
-    try {
-      execFileSync("git", ["push", "origin", ...old.push.slice(i, i + 50)], { stdio: "inherit" });
-      execFileSync("git", ["push", "origin", "--delete", ...old.tags.slice(i, i + 50)], { stdio: "inherit" });
-    } catch (_) { console.error("prune-branches: moving a batch of archive tags failed — the tags are kept"); }
+  if (old.push.length) {
+    const moved = pushRefs(old.push);
+    const drop = old.tags.filter((t) => moved.has(ARCHIVE_PREFIX + t.slice(OLD_ARCHIVE_TAGS.length)));
+    if (drop.length) pushRefs(drop.map((t) => ":" + t));
+    console.log(`moved ${drop.length} of ${old.tags.length} archive tags to ${ARCHIVE_PREFIX}; ${old.tags.length - drop.length} stay tags (refused)`);
   }
-  if (old.push.length) console.log(`moved ${old.push.length} archive tags to ${ARCHIVE_PREFIX}`);
-  // ARCHIVE FIRST: a lossy prune is deleted only after its refs/archive copy landed.
+  // ARCHIVE FIRST: a lossy prune is deleted only after its archive landed —
+  // refs/archive/<b>, or the tag archive/<b> when GitHub refused that.
   const shaOf = new Map(branches.map((b) => [b.name, b.sha]));
   const refs = archiveRefs(prune, reasons, (n) => shaOf.get(n));
-  const unarchived = new Set();
-  for (let i = 0; i < refs.length; i += 50) {
-    const batch = refs.slice(i, i + 50);
-    try { execFileSync("git", ["push", "origin", ...batch], { stdio: "inherit" }); }
-    catch (_) { for (const r of batch) unarchived.add(r.slice(r.indexOf(ARCHIVE_PREFIX) + ARCHIVE_PREFIX.length)); console.error(`prune-branches: archiving a batch of ${batch.length} failed — those branches are kept`); }
-  }
-  if (refs.length) console.log(`archived ${refs.length - unarchived.size} as ${ARCHIVE_PREFIX}<branch>`);
+  const first = pushRefs(refs);
+  const retry = archiveFallback(refs, first);
+  const second = retry.length ? pushRefs(retry) : new Set();
+  const unarchived = new Set(refs.map((r) => r.slice(r.indexOf(ARCHIVE_PREFIX) + ARCHIVE_PREFIX.length))
+    .filter((n) => !first.has(ARCHIVE_PREFIX + n) && !second.has(OLD_ARCHIVE_TAGS + n)));
+  if (unarchived.size) console.error(`prune-branches: ${unarchived.size} could not be archived — those branches are kept`);
+  if (refs.length) console.log(`archived ${refs.length - unarchived.size} (${first.size} as ${ARCHIVE_PREFIX}<branch>, ${second.size} as tags)`);
   const doomed = prune.filter((n) => !unarchived.has(n));
   // Batches of 50 refs per push: one push per branch is ~475 round trips.
   let failed = unarchived.size;

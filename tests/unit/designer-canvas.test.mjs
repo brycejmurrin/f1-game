@@ -7,7 +7,9 @@
 // dashed COL.ghost polyline drawn only while a previewFn is set and a handle is
 // hovered / selected; the measurement chip reads "R <n> m" / STRAIGHT while a
 // handle is dragged and "<n> m" over a selected span; a touch press widens the
-// hit radius to HIT_TOUCH. The screen-level twin is track-designer-dom.test.mjs.
+// hit radius to HIT_TOUCH; SPEED (setHeat) fills one COL.spd* polygon per run
+// of nodes in one speed bucket, and the static thumb() strokes an outline and
+// its start tick. The screen-level twin is track-designer-dom.test.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
@@ -30,12 +32,13 @@ function boot(hooksExtra = {}, pts = null) {
   const DC = ctx.DesignerCanvas;
   const canvas = dom.document.createElement("canvas");
   canvas._rect = { left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400 };
-  const rec = { strokes: [], dashes: [], texts: [], arcs: [] };
+  const rec = { strokes: [], dashes: [], texts: [], arcs: [], fills: [] };
   canvas.getContext = () => {
     const st = { _dash: [] };
     return new Proxy(st, {
       get: (t, k) => {
         if (k === "stroke") return () => rec.strokes.push({ style: t.strokeStyle, dash: t._dash.slice() });
+        if (k === "fill") return () => rec.fills.push(t.fillStyle);
         if (k === "setLineDash") return (d) => { t._dash = d.slice(); rec.dashes.push(d.slice()); };
         if (k === "fillText") return (s) => rec.texts.push(String(s));
         if (k === "arc") return (x, y, r) => rec.arcs.push(r);
@@ -236,4 +239,55 @@ test("touch targets: a press 27 px from a handle picks it with pointerType touch
   assert.equal(plainR(), 4.5 * 1.5, "an unselected handle under touch");
   h.fire("pointermove", { clientX: 5, clientY: 5 }, 9, { pointerType: "mouse" });
   assert.equal(plainR(), 4.5, "…and under a mouse again");
+});
+
+test("SPEED: setHeat fills one COL.spd* polygon per run of a speed bucket (the wrap merged); null, stale and one-bucket rings", () => {
+  const h = boot();
+  const V = h.ctx.TrackValidate, TR = h.ctx.TrackRandom;
+  const d = (pts) => ({ name: "Heat", seed: 7, theme: "parkland", baseHW: 7, pts });
+  const r = TR.generateValid(7, (pts) => V.check(d(pts)).ok, 12);
+  const tr = V.check(d(r.pts)).tr, v = V.speedProfile(tr), n = tr.n;
+  const C = h.DC.COL, SPD = [C.spd0, C.spd1, C.spd2, C.spd3, C.spd4];
+  assert.deepEqual(SPD, ["#f0f921", "#fca636", "#e16462", "#b12a90", "#6a00a8"], "the plasma ramp, slow → fast");
+  const bucket = (x) => (x < 40 ? 0 : x < 55 ? 1 : x < 70 ? 2 : x < 85 ? 3 : 4);
+  let runs = 0;
+  for (let k = 0; k < n; k++) if (bucket(v[k]) !== bucket(v[(k - 1 + n) % n])) runs++;
+  assert.ok(runs >= 4, "a circuit with slow and fast parts: " + runs + " runs");
+  h.cv.setBuilt(tr);
+  const spdFills = () => h.rec.fills.filter((f) => SPD.includes(f));
+  h.rec.fills.length = 0; h.rec.texts.length = 0;
+  h.cv.setHeat(v);
+  assert.equal(spdFills().length, runs, "one polygon per run");
+  const used = new Set(spdFills());
+  for (let k = 0; k < n; k++) assert.ok(used.has(SPD[bucket(v[k])]), "node " + k + "'s colour is painted");
+  assert.ok(h.rec.texts.includes("SLOW → FAST"), "the legend");
+  h.rec.fills.length = 0; h.rec.texts.length = 0;
+  h.cv.setHeat(new Float64Array(n).fill(92));
+  assert.deepEqual(spdFills(), [C.spd4], "one bucket all the way round: one ring");
+  h.rec.fills.length = 0;
+  h.cv.setHeat(v.slice(0, n - 1));
+  assert.equal(spdFills().length, 0, "speeds for another road are ignored");
+  h.rec.fills.length = 0; h.rec.texts.length = 0;
+  h.cv.setHeat(null);
+  assert.equal(spdFills().length, 0); assert.ok(!h.rec.texts.includes("SLOW → FAST"));
+});
+
+test("thumb(): one fitted outline in the asked colour and the start tick; nothing for a missing road", () => {
+  const h = boot();
+  const V = h.ctx.TrackValidate;
+  const tr = V.check({ name: "T", seed: 7, theme: "parkland", baseHW: 7, pts: h.ctx.TrackRandom.generate(7, { targetL: 3800 }).pts }).tr;
+  const c = h.dom.document.createElement("canvas");
+  c.width = 160; c.height = 110;
+  const strokes = [], moves = [];
+  c.getContext = () => new Proxy({}, {
+    get: (t, k) => (k === "stroke" ? () => strokes.push(t.strokeStyle) : k === "moveTo" || k === "lineTo" ? (x, y) => moves.push([x, y]) : k in t ? t[k] : () => {}),
+    set: (t, k, val) => { t[k] = val; return true; },
+  });
+  assert.equal(h.DC.thumb(c, tr, { color: "#abcdef", width: 2 }), true);
+  assert.deepEqual(strokes, ["#abcdef", h.DC.COL.start], "the outline, then the start tick");
+  assert.ok(moves.every(([x, y]) => x >= 0 && x <= 160 && y >= 0 && y <= 110), "fitted inside the card");
+  assert.equal(h.DC.thumb(c, null), false);
+  strokes.length = 0;
+  h.DC.thumb(c, tr, { start: false });
+  assert.deepEqual(strokes, [h.DC.COL.centre], "no tick when asked");
 });

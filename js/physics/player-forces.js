@@ -35,9 +35,10 @@ const PlayerForces = (function () {
 
   // Combined slip → axle µ → Fy → yaw/vLat/head. Writes force fields on `c`.
   // ctx (all required unless noted):
-  //   dt, delta, onThrottle, throttleLvl, gearMult, deploy, braking,
+  //   dt, driverDelta, assistDelta, lineDelta, onThrottle, throttleLvl, gearMult, deploy, braking,
   //   surfaceMu, kerbGrip, bankMu, modsCornering, loadF, loadR, vertLoad,
   //   af, ar, sp, steer, weatherGrip, aeroDf, dirtyMul, coastCut, vTopNow, tyres
+  // delta is derived after muF via GripSteer.forPlayer (identity at OFF).
   function step(c, ctx) {
     const dt = ctx.dt;
     const onThrottle = ctx.onThrottle;
@@ -52,7 +53,10 @@ const PlayerForces = (function () {
     const bankMu = ctx.bankMu;
     const modsCornering = ctx.modsCornering;
     const af = ctx.af, ar = ctx.ar;
-    const delta = ctx.delta;
+    let delta = 0;   // filled after muF — GripSteer then + assist/line
+    const driverDelta = ctx.driverDelta;
+    const assistDelta = ctx.assistDelta || 0;
+    const lineDelta = ctx.lineDelta || 0;
     const sp = ctx.sp;
     const steer = ctx.steer;
     const weatherGrip = ctx.weatherGrip;
@@ -165,6 +169,11 @@ const PlayerForces = (function () {
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * weatherGrip * modsCornering * bankMu * (1 + vertLoad) * marbleMu * tyreMu;
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
     const muF = Math.max(0.5, muBase * bbSlipF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
+    // Grip steer: own-state driverDelta cap (js/physics/grip-steer.js). Identity at OFF.
+    const gripped = (typeof GripSteer !== "undefined" && GripSteer.forPlayer)
+      ? GripSteer.forPlayer(driverDelta, c, { muF, csFront: CS_FRONT, af, ar, braking, shaped: steer, dt })
+      : driverDelta;
+    delta = clamp(gripped + assistDelta + lineDelta, -0.7, 0.7);
     const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
