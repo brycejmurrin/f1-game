@@ -143,10 +143,17 @@ export function verdict(rows) {
   return { ok: over.length === 0 && loose.length === 0, over, loose, rows };
 }
 
-export async function update(data = load()) {
+export function updateReceipt(rows, { lowerOnly = false } = {}) {
+  const changes = rows.filter((r) => !r.missing && r.value !== r.ceiling);
+  return { changes: changes.filter((r) => !lowerOnly || r.value < r.ceiling),
+    skippedRaises: changes.filter((r) => lowerOnly && r.value > r.ceiling),
+    missing: rows.filter((r) => r.missing) };
+}
+
+export async function update(data = load(), { dryRun = false, lowerOnly = false } = {}) {
   const rows = await measure(data);
-  for (const r of rows) {
-    if (r.missing) continue;
+  if (dryRun) return rows;
+  for (const r of updateReceipt(rows, { lowerOnly }).changes) {
     const bag = r.tree ? data.tree : data.files[r.file];
     const raw = bag[r.metric];
     bag[r.metric] = typeof raw === "number" ? r.value : { ...raw, ceiling: r.value };
@@ -274,9 +281,17 @@ async function main() {
     process.exitCode = compareToBase(ref, { maxRaise: mr ? Number(mr.split("=")[1]) || 40 : 40, advisory: argv.includes("--advisory") });
     return;
   }
-  if (argv.includes("--update")) {
-    const rows = await update();
-    for (const r of rows) console.log(`${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);
+  if (argv.includes("--update") || argv.includes("--preview") || argv.includes("--lower-only")) {
+    const dryRun = argv.includes("--preview"), lowerOnly = argv.includes("--lower-only");
+    const rows = await update(load(), { dryRun, lowerOnly });
+    const receipt = updateReceipt(rows, { lowerOnly });
+    if (argv.includes("--json")) console.log(JSON.stringify({ ok: receipt.missing.length === 0, dryRun, lowerOnly, ...receipt }, null, 2));
+    else {
+      for (const r of receipt.changes) console.log(`${dryRun ? "WOULD " : ""}${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);
+      for (const r of receipt.skippedRaises) console.log(`SKIP RAISE ${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);
+      for (const r of receipt.missing) console.error(`MISSING ${r.file}`);
+    }
+    process.exitCode = receipt.missing.length ? 1 : 0;
     return;
   }
   const auto = argv.find((a) => a.startsWith("--auto-raise"));

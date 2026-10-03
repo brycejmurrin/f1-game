@@ -160,7 +160,7 @@ const ALLOWED = [
   },
   {
     file: "js/game.js", expr: "c.speed < 5",
-    code: "(c.speed < 5 && raceT > 2 && !unstuckActive && !(queued && pits.inLane(c))));",
+    code: "(c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));",
     // Re-keyed 2026-09-16: a car QUEUED in the pit lane behind a stop is held by
     // a car, not stuck (rescuing it fired it into the parked car ahead).
     // The `(c.contactT || 0) === 0` clause that used to sit in this conjunction
@@ -169,6 +169,9 @@ const ALLOWED = [
     // pair stayed welded for the rest of the race. Contact is now a patience
     // knob on the delay instead (AiDrive.aiRescueDelay); the absolute-speed
     // justification below is unchanged, because the threshold itself is.
+    // Re-keyed 2026-09-30: digOutEscalated lets rescue arm while dig-out is
+    // still on (`!unstuckActive || digEsc`); laneQueueOk keeps the pit-queue
+    // exempt unless dig-out has already failed. Same absolute crawl bound.
     why: "AI standstill detector — exactly |REVERSE_MAX|, the absolute crawl bound",
   },
   // ── world-space visual emission ──

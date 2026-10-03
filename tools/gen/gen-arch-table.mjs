@@ -24,8 +24,15 @@
  *   node tools/gen/gen-arch-table.mjs --rows     # print the rows as JSON (debug)
  *
  * A merge that adds a rostered file after ARCHITECTURE was last regenerated
- * leaves the committed row count stale (207 vs 208 on ship tip 2edb33cdb);
- * regenerate here — do not hand-edit the count line.
+ * leaves the committed table short of that row until someone regenerates —
+ * `--check` catches it; do not hand-edit the block.
+ *
+ * The summary line deliberately carries NO total row count. Two PRs that each
+ * add one module both regenerate `_N+1 rows over D directories_` from the same base N,
+ * git merges the identical count lines, and the union is one short with a
+ * clean merge (ship tip after #697 + #740, 2026-10-02: 265 committed, 266
+ * rows). Directory count alone rarely collides that way; the rows themselves
+ * merge. Same class as the old committed ladder figures (removed 2026-09-30).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -146,9 +153,10 @@ export function collect() {
 
 export function renderBlock() {
   const groups = collect();
-  const total = groups.reduce((n, g) => n + g.rows.length, 0);
+  // No leading "N rows" — that digit collides across concurrent module-adding
+  // PRs (see file header). Directory count stays; it almost never moves.
   const out = [
-    `_${total} rows over ${groups.length} directories, in load order. \`tag\` = a \`<script>\` in index.html (FULL);` +
+    `_Module index over ${groups.length} directories, in load order. \`tag\` = a \`<script>\` in index.html (FULL);` +
     " every other roster is injected by js/game.js when needed._",
     "",
   ];

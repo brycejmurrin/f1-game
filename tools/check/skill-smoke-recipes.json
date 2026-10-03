@@ -1,0 +1,788 @@
+{
+  "schemaVersion": 1,
+  "recipes": [
+    {
+      "skill": "agent-view",
+      "task": "Exercise AgentView.create() still returns the whole documented surface",
+      "fixture": "tests/unit/agentview-api-contract.test.mjs",
+      "pattern": "AgentView\\.create\\(\\)\\ still\\ returns\\ the\\ whole\\ documented\\ surface",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "ai-racecraft",
+      "task": "Exercise traits defaults match the mid-grid fallback",
+      "fixture": "tests/unit/ai-drive.test.mjs",
+      "pattern": "traits\\ defaults\\ match\\ the\\ mid\\-grid\\ fallback",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "asset-pack",
+      "task": "Exercise GLTF accessors stay inside their declared bufferView and reject invalid stride",
+      "fixture": "tests/unit/assets-pack.test.mjs",
+      "pattern": "GLTF\\ accessors\\ stay\\ inside\\ their\\ declared\\ bufferView\\ and\\ reject\\ invalid\\ stride",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "audio-debug",
+      "task": "Exercise a context rebuild replaces cached noise and keeps the delayed sample fallback",
+      "fixture": "tests/unit/audio-recovery.test.mjs",
+      "pattern": "a\\ context\\ rebuild\\ replaces\\ cached\\ noise\\ and\\ keeps\\ the\\ delayed\\ sample\\ fallback",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "career-mode",
+      "task": "Exercise a multi-year contract suppresses the winter market until it expires",
+      "fixture": "tests/unit/career-settle.test.mjs",
+      "pattern": "a\\ multi\\-year\\ contract\\ suppresses\\ the\\ winter\\ market\\ until\\ it\\ expires",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "check-changes",
+      "task": "Retain mixed unclaimed paths, route skill Markdown and reject malformed flags",
+      "fixture": "tests/unit/validation-cli.test.mjs",
+      "pattern": "selection receipts|selector and verifier reject",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "css-play",
+      "task": "Exercise parseCssPlayArgs: screen, css hot-swap, sel, no-shot, json",
+      "fixture": "tests/unit/css-play.test.mjs",
+      "pattern": "parseCssPlayArgs:\\ screen,\\ css\\ hot\\-swap,\\ sel,\\ no\\-shot,\\ json",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "data-hub",
+      "task": "Exercise a failed data predecessor never evaluates hub; retry reuses evaluated siblings",
+      "fixture": "tests/unit/data-lazy-loader.test.mjs",
+      "pattern": "a\\ failed\\ data\\ predecessor\\ never\\ evaluates\\ hub;\\ retry\\ reuses\\ evaluated\\ siblings",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "f1-animation-cameras",
+      "task": "Exercise flat road: the chase rig frames exactly as its constants say",
+      "fixture": "tests/unit/camera-ride.test.mjs",
+      "pattern": "flat\\ road:\\ the\\ chase\\ rig\\ frames\\ exactly\\ as\\ its\\ constants\\ say",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "garage-parts-livery",
+      "task": "Exercise a SIGNATURE row never changes the pecking order it clones",
+      "fixture": "tests/unit/parts-ladder.test.mjs",
+      "pattern": "a\\ SIGNATURE\\ row\\ never\\ changes\\ the\\ pecking\\ order\\ it\\ clones",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "input-controls",
+      "task": "Exercise a rebind moves the action to the new key and the old key stops answering",
+      "fixture": "tests/unit/key-binds.test.mjs",
+      "pattern": "a\\ rebind\\ moves\\ the\\ action\\ to\\ the\\ new\\ key\\ and\\ the\\ old\\ key\\ stops\\ answering",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "lighting-tuner",
+      "task": "Validate snapshot/delta keys/knobs/grid and check-mode read-only change receipts",
+      "fixture": "tests/unit/validation-cli.test.mjs",
+      "pattern": "lighting snapshots|lighting check mode",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "mcp-probe",
+      "task": "Exercise daemon health requires service/root identity, missing tmux is actionable, failed stop retains state",
+      "fixture": "tests/unit/bootstrap-doctor.test.mjs",
+      "pattern": "daemon\\ health\\ requires\\ service/root\\ identity,\\ missing\\ tmux\\ is\\ actionable,\\ failed\\ stop\\ retains\\ state",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "multiplayer-debug",
+      "task": "Exercise no_slot rolls back the car role and disposes the unadopted session",
+      "fixture": "tests/unit/net-authority.test.mjs",
+      "pattern": "no_slot\\ rolls\\ back\\ the\\ car\\ role\\ and\\ disposes\\ the\\ unadopted\\ session",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "new-track",
+      "task": "Exercise TrackSpace converts source and racing fractions reversibly",
+      "fixture": "tests/unit/track-foundation.test.mjs",
+      "pattern": "TrackSpace\\ converts\\ source\\ and\\ racing\\ fractions\\ reversibly",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "playwright-probe",
+      "task": "Exercise cellRecorded requires both png and dom",
+      "fixture": "tests/unit/menu-capture.test.mjs",
+      "pattern": "cellRecorded\\ requires\\ both\\ png\\ and\\ dom",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "pwa-cache-service-worker",
+      "task": "Exercise activation preserves prior caches while only INSTALL_COMPLETE is set",
+      "fixture": "tests/unit/service-worker.test.mjs",
+      "pattern": "activation\\ preserves\\ prior\\ caches\\ while\\ only\\ INSTALL_COMPLETE\\ is\\ set",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "race-incidents-control",
+      "task": "Exercise a winner never ends the race while a human is still driving",
+      "fixture": "tests/unit/race-control.test.mjs",
+      "pattern": "a\\ winner\\ never\\ ends\\ the\\ race\\ while\\ a\\ human\\ is\\ still\\ driving",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "replay-camera",
+      "task": "Validate offline replay fixture, track identity, frame bounds and read-only plan before live entry/seek/follow/exit/reentry",
+      "fixture": "tests/unit/capture-tools-regressions.test.mjs",
+      "pattern": "replay fixture plan is offline and bounded",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "scenery-dress",
+      "task": "Exercise api.K wraps negative and over-lap fracs",
+      "fixture": "tests/unit/scenery-api-contract.test.mjs",
+      "pattern": "api\\.K\\ wraps\\ negative\\ and\\ over\\-lap\\ fracs",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "season-mode",
+      "task": "Exercise an active season keeps its saved rules when seasonCfg changes elsewhere",
+      "fixture": "tests/unit/season-cal.test.mjs",
+      "pattern": "an\\ active\\ season\\ keeps\\ its\\ saved\\ rules\\ when\\ seasonCfg\\ changes\\ elsewhere",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "slim-bloat",
+      "task": "Reject invalid extraction ranges and retain explicit missing-scope coverage",
+      "fixture": "tests/unit/validation-cli.test.mjs",
+      "pattern": "extraction rejects|bloat scan reports",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "steward",
+      "task": "Exercise the slug carries the SESSION",
+      "fixture": "tests/unit/who-is-on-it.test.mjs",
+      "pattern": "the\\ slug\\ carries\\ the\\ SESSION",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "survey-track",
+      "task": "Exercise TrackModels ground helpers sample terrain instead of one endpoint",
+      "fixture": "tests/unit/track-foundation.test.mjs",
+      "pattern": "TrackModels\\ ground\\ helpers\\ sample\\ terrain\\ instead\\ of\\ one\\ endpoint",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "survey-ui-matrix",
+      "task": "Exercise parseMenuGalleryArgv picks screens and viewports",
+      "fixture": "tests/unit/menu-capture.test.mjs",
+      "pattern": "parseMenuGalleryArgv\\ picks\\ screens\\ and\\ viewports",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "tune-physics",
+      "task": "Exercise step writes axle/force/yaw fields without NaN",
+      "fixture": "tests/unit/player-forces.test.mjs",
+      "pattern": "step\\ writes\\ axle/force/yaw\\ fields\\ without\\ NaN",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "ui-menu-a11y",
+      "task": "Exercise the LAST-SHOWN dialog is top",
+      "fixture": "tests/unit/uilayers-modal-order.test.mjs",
+      "pattern": "the\\ LAST\\-SHOWN\\ dialog\\ is\\ top",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "webgl-debug",
+      "task": "Exercise setOutputTarget routes the final pass",
+      "fixture": "tests/unit/glx-output-target.test.mjs",
+      "pattern": "setOutputTarget\\ routes\\ the\\ final\\ pass",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "webgpu-debug",
+      "task": "Exercise WebGPU releases textures if decal or material-array view creation fails",
+      "fixture": "tests/unit/webgpu-lifecycle.test.mjs",
+      "pattern": "WebGPU\\ releases\\ textures\\ if\\ decal\\ or\\ material\\-array\\ view\\ creation\\ fails",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    }
+  ]
+}

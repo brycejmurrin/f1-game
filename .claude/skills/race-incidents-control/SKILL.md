@@ -65,7 +65,7 @@ Commands:
 
 ```sh
 npm run test:tooling-fast
-node --test tests/unit/race-control.test.mjs   # 35 tests, <1 s; also incident-gate, reliability (4 tests), debris-*.test.mjs
+node --test tests/unit/race-control.test.mjs   # focused rules tests, <1 s; also incident-gate, reliability (4 tests), debris-*.test.mjs
 node tools/ci/test-bg.mjs physics-core   # race-control.spec rides here; background
 ```
 

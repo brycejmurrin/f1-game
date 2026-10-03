@@ -72,7 +72,7 @@ judging a `graph-parity` mismatch.
    Default `BASE=HEAD` only checks working-tree drift; on a clean `js/track`+`js/circuits` it refuses (exit 2, verified: prints "nothing to compare"; the MCP tool requires `base`).
    Tolerance is 1e-6 m on positions; indices and `mat` must match exactly.
 
-   Re-parameterising `pine` so geometry is linear (not affine) in scale is a
+   Pine now uses canonical geometry and uniform placement scale. Its historical remesh was a
    documented **look change** (SCENE-GRAPH-PLAN §6/S4). Parity vs a
    pre-re-param `HEAD` is *expected* to fail for pine — move `BASE` forward
    before judging, and accept the look change behind regenerated visual
@@ -86,8 +86,8 @@ judging a `graph-parity` mismatch.
    ```
    Target reuse ≫ 1. `reuse ≈ 1` means every placement minted a distinct
    model — re-parameterise (factor height into `place.s`, split variants into
-   discrete keys) before expecting instancing savings. Pine reuse sits at
-   ~1.00× today because dimensions are affine in height.
+   discrete keys) before expecting instancing savings. Pine already batches: canonical 12 m geometry is uniformly scaled per placement.
+   Discrete sparse/tier/lean/jitter keys determine the remaining variants.
 
 5. **Fast contract** (`node --test tests/unit/track-graph.test.mjs`, 20 tests, <1 s) **then GL wiring** (browser):
    ```sh
@@ -116,6 +116,6 @@ result; Not run: `gfx` group / `instanced-draw.spec.js` (browser).
 - **Ignoring `bakeOnly`** — partially suppressed nodes or radial ops with
   non-uniform XZ scale cannot instanced-draw; omitting `bake()` puts geometry
   back on tarmac.
-- **Expecting pine to batch** without re-param.
+- **Assuming height keys still prevent pine batching.** Pine already uses canonical 12 m geometry with uniform placement scale; discrete sparse/tier/lean/jitter variants still control reuse.
 - **Forgetting `meta.kind`** — `stats().byKind` becomes `"(unkeyed)"`.
 - **Editing `js/` during a Playwright run** — use a worktree.
