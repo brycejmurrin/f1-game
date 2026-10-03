@@ -397,8 +397,8 @@ test.describe("UI scale", () => {
     // not in the CI gate). Reading __apex.uiScale().min/max keeps it honest
     // through any future range change.
     const bounds = await page.evaluate(() => {
-      const u = __apex.uiScale();
-      return { min: u.min, max: u.max };
+      const u = __apex.uiScale(), h = __apex.hudScale();
+      return { min: h.min, max: u.max };   // HUD SIZE floors at its own 70 % text minimum
     });
     const cs = await page.evaluate(() => {
       const s = getComputedStyle(document.documentElement);

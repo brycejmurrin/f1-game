@@ -193,9 +193,7 @@ const RaceEngineer = (function () {
         if (wear >= WEAR_STEPS[i] && i > b.step) { step = i; break; }
       }
       const ax = tyres.axleSplit(c);
-      const info = tyres.info(c);
-      const belowWindow = info && info.tempOpt != null && info.tempS != null
-        ? Math.max(0, (info.tempOpt - info.tempWindow) - info.tempS) : 0;
+      const belowWindow = tyres.belowWindow(c);
       // The wrong tread in EITHER direction — slicks in the rain and wets on a
       // drying track — read exactly as PitLane.think reads it for an AI car, so
       // the advice the player gets and the call the field makes cannot diverge.

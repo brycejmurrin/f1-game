@@ -194,6 +194,23 @@ test("cold tyres are called on the out-lap and never after it", () => {
   assert.equal(line({ outLap: false, belowWindow: 40 }), "", "the driver knows by lap three");
 });
 
+test("cold advice keeps rounded thresholds without constructing tyre telemetry", () => {
+  const { eng, tyres } = sessionFor();
+  const c = carOn(tyres);
+  c.tyreLap0 = c.lap;
+  Object.defineProperty(tyres, "info", { get() { throw new Error("engineer requested full tyre telemetry"); } });
+  const edge = T.optTemp(c.tyre.life) - T.T_WINDOW - E.COLD_CALL;
+  for (const [delta, cold] of [[-0.051, true], [-0.049, true], [0.049, true], [0.051, false]]) {
+    c.tyreTs = edge + delta;
+    const state = eng.senseOf(c);
+    assert.equal(state.belowWindow >= E.COLD_CALL, cold, `temperature offset ${delta}`);
+    const call = eng.callFor(state);
+    assert.equal(call ? call[1] : "", cold ? "cold" : "");
+  }
+  c.tyreTs = null;
+  assert.equal(eng.senseOf(c).belowWindow, 0, "missing temperature must not trigger cold advice");
+});
+
 test("rain is called in LAPS, singular and plural, because a driver counts laps", () => {
   assert.match(line({ rainInLaps: 1 }), /RAIN IN 1 LAP —/);
   assert.match(line({ rainInLaps: 4 }), /RAIN IN 4 LAPS/);

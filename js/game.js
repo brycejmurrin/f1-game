@@ -3060,7 +3060,7 @@ async function startRaceBody() {
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
-  dbgCam = null; replayBuf.onRaceStart(cars); // fresh race — drop free-cam; arm solo replay ring
+  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); // fresh race — drop free-cam + TV director; arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
@@ -3073,6 +3073,13 @@ async function startRaceBody() {
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
+
+  // Warm the actual rear view at its HUD size while the grid is covered.
+  // startRace's promise includes this so multiplayer cannot arm green early.
+  const entryPlayer = player;
+  if (!headlessMode && !document.hidden)
+    await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
+  if (player !== entryPlayer || state !== "count") return false;
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -3359,7 +3366,7 @@ function endRace(forcedOrder) {
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
   // quali's qualiTrack + qualiMode stamps refuse it on another circuit or mode.
-  dbgCam = null;
+  dbgCam = null; resultsCam.onFlag();
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   els.results.hidden = false;
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
@@ -3825,7 +3832,7 @@ const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
-const onboard = Onboard.create(G), replayBuf = ReplayBuf.create(G); // coach + solo replay ring
+const onboard = Onboard.create(G), director = Director.create(G), replayBuf = ReplayBuf.create(G), resultsCam = ResultsCam.create(G); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -4267,7 +4274,9 @@ function raceIntro(go) {
   if (flybyShots) flybyShots = FlybySeq.withoutSlot(flybyShots);   // nobody knows your slot on a random grid; a small grid has empty boxes
   if (flybyShots && real && (real.watch || real.startLap > 1)) flybyShots = FlybySeq.withoutGrid(flybyShots);
   const info = loadingInfo();   // before the duration: a real race's read (info.readMs) may stretch the flyby
-  const flyMs = loadingScreen.nextFlyMs(info.readMs);
+  // Habitual short flyby only after the backend's warm is done — shortening into
+  // a still-compiling first frame was a freeze under a shorter card.
+  const flyMs = loadingScreen.nextFlyMs(info.readMs, info.warmReady = !(gfx && gfx.warming && gfx.warming()));
   FlybySeq.setDuration(flyMs);   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
@@ -4474,15 +4483,16 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
-  Ghost.flush(); replayBuf.clear(); cancelIntro();
+  Ghost.flush(); replayBuf.clear(); resultsCam.reset(); cancelIntro();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
-  if (announcer.stop) announcer.stop();   // the results commentary ran on over the title for up to 16 s
+  if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
+  mirrorPass.cancelPreparation();
   closeLightTuner(false);
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
@@ -5971,7 +5981,7 @@ function updateCar(c, dt, ranked) {
       const Ld = clamp(Math.abs(c.speed) * 1.2, 22, 70);
       lineDelta = raceLineAssist * LINE_PURSUIT * WHEELBASE * 2 * (lineX - c.x) / (Ld * Ld) * offAssistFade;
     }
-    const delta = clamp(driverDelta + assistDelta + lineDelta, -0.7, 0.7);
+    // delta filled inside PlayerForces after muF (GripSteer caps driverDelta).
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
     // shifts load to the front under braking (sharper turn-in) and the rear on
     // power (a touch of throttle-on looseness) — emergent, not a special case.
@@ -6008,7 +6018,7 @@ function updateCar(c, dt, ranked) {
     // soft tyre Fy → yaw/vLat/head. Explicit ctx bag — no new G members.
     // Frenet world writeback (px/pz → s,x) stays below.
     playerForces.step(c, {
-      dt, delta, onThrottle, throttleLvl, gearMult, deploy, braking,
+      dt, driverDelta, assistDelta, lineDelta, onThrottle, throttleLvl, gearMult, deploy, braking,
       surfaceMu, kerbGrip, bankMu, modsCornering: mods.cornering,
       loadF, loadR, vertLoad, af, ar, sp, steer,
       weatherGrip: gripMult(c), aeroDf: aeroDfMult(c),
@@ -6875,7 +6885,7 @@ function armBackendProbe() {
 }
 function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
-  if (headlessMode) { if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
+  if (headlessMode) { mirrorPass.cancelPreparation(); if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   if (gfx.warming && gfx.warming()) return;
   if (uiExperience && uiExperience.renderHome(dt)) return;
   // The live Home garage returned above. Other menus hide undrawn canvases
@@ -6901,7 +6911,7 @@ function render(dt) {
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
-  if (state === "results") return;
+  if (state === "results" && !resultsCam.live()) return; // ResultsCam owns chequered/orbit/highlights
   // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0);
@@ -8416,7 +8426,7 @@ function render(dt) {
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
-  RaceEntryProfile.afterPresent(loadingScreen, gfx);
+  RaceEntryProfile.afterPresent(loadingScreen, gfx, mirrorPass.preparing());
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
   // reverts on the next boot, which is the whole point of it.
@@ -8475,13 +8485,19 @@ function tickBody(now) {
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
-  if (!paused && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
+  if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick();
-  onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
+  onboard.tick(dt); director.tick(dt); // coach marks + TV director (dbgCam only)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
   netPlay.tick(now, _poseAt); if (gfx.warming && gfx.warming()) { Input.clearEdges(); return; }
+  // Preparation renders but charges neither the countdown nor physics/governor.
+  if (mirrorPass.preparing()) {
+    Input.clearEdges(); render(0);
+    lastFrame = Math.max(now, performance.now());
+    return;
+  }
   if (paused && !netPlay.active()) {
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire
@@ -8567,7 +8583,7 @@ function tickBody(now) {
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
-  render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
+  if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20)); render(Math.min(dt, 1 / 20)); // results orbit + frame dt
   if (state === "race" || state === "count") updateHud(false, _dtMs);
 }
 
@@ -9512,6 +9528,7 @@ function _disarmProbeOnLeave() {
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) _disarmProbeOnLeave();
+  if (document.hidden) mirrorPass.cancelPreparation();   // rAF stops; optional warm must not hold entry
   if (document.hidden && (state === "race" || state === "count")) setPaused(true, "hidden-tab");
   // Sentinel: a hidden tab that never comes back was killed in the BACKGROUND —
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
@@ -9529,7 +9546,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && netPlay.active()) _netHiddenPump = setInterval(() => netPlay.tick(performance.now()), 500);
 });
 let _netHiddenPump = 0;
-window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); });
+window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); mirrorPass.cancelPreparation(); });
 // LOSING FOCUS WHILE STILL VISIBLE pauses too. visibilitychange only fires when
 // the page is HIDDEN (MDN, Page Visibility API): an Alt-Tab to a second monitor,
 // or an overlay taking focus, left the car coasting off-line while the field

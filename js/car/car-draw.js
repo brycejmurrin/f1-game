@@ -14,7 +14,7 @@
 const CarDraw = (function () {
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
-    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass,
+    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback,
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
     // ── cache-helpers ───────────────────────────────────────────────
@@ -438,6 +438,10 @@ const CarDraw = (function () {
     const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
     const _digM = new Float32Array(16);
     // Windscreen / aeroscreen glass: a faint tint that still shows the road.
+    const _mirrorFbOpts = { doubleSided: true, roughness: 0.08, specular: 0.7, emissive: 0.55 };
+    const _rmq = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    const motionReduced = () => !!(_rmq && _rmq.matches)   // the OS flag OR MOTION: REDUCED (html[data-motion]), as game.js
+      || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
     function drawCockpitRig(c, base, dt, paint, noWheel) {
@@ -454,6 +458,14 @@ const CarDraw = (function () {
       // seat (its eye is vantage.js VISOR_EYE_*) and no wheel.
       const wheelStyle = noWheel ? "none" : CockpitOpts.wheel(), lay = CockpitOpts.layout(wheelStyle, noWheel ? "std" : null);
       G.gfx.draw(cockpitBodyMesh(c.team, c), base, paint);
+      // The housings' glass is near-black (the HUD mirror is the reflection);
+      // with no mirror pass drawing it gets a sky-tint fallback (car-mesh.js).
+      const mp = typeof MirrorPass !== "undefined" ? MirrorPass.instance() : null;
+      if (!carModelBuf && !(mp && mp.drawing())) {
+        const cm = teamDecalState(c.team, true).parts, vis = cm && cm._visual && cm._visual.cockpit;
+        _mirrorFbOpts.emissive = nite ? 0.08 : 0.55;
+        G.gfx.draw(getMirrorFallback(Car3D.cockpitMirrorGlass(vis && vis.mirror)), base, _mirrorFbOpts);
+      }
       // INTERIOR: carbon or team trim; CLASSIC adds gauges and an aeroscreen.
       // Car-local like the body (base), never rolled with the wheel.
       const cab = CockpitOpts.interior();
@@ -514,7 +526,9 @@ const CarDraw = (function () {
       const fx = _rigFx;
       G.gfx.draw(getGearDigit(M4.clamp(c.gear || 1, 0, 9)), _rigB, fx);
       const rpmF = M4.clamp(((c.rpm || PhysicsConsts.IDLE_RPM) - PhysicsConsts.IDLE_RPM) / (PhysicsConsts.MAX_RPM - PhysicsConsts.IDLE_RPM), 0, 1);
-      G.gfx.draw(getLedStrip(rpmF > 0.965 ? (G.raceT * 14 % 1 < 0.5 ? 9 : 0) : Math.round(rpmF * 8)), _rigB, fx);
+      // At the limiter the strip stays LIT: full ramp <-> all-blue SHIFT NOW at
+      // ~7 Hz (it went 9 <-> 0 — dark half the frames), steady blue under reduced motion.
+      G.gfx.draw(getLedStrip(rpmF > 0.965 ? (motionReduced() || G.raceT * 14 % 1 < 0.5 ? 9 : 8) : Math.round(rpmF * 8)), _rigB, fx);
       drawWheelExtras(_rigB, c, G.raceT);   // ACTIVE AERO lamp + flap-travel bar (car-mesh.js)
       // Clamp to 0: a negative c.speed (e.g. hard braking to a near-stop, or a
       // reversing glitch) would otherwise stringify with a "-" character that

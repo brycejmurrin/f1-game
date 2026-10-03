@@ -152,6 +152,7 @@ export const RULES = [
   [/^js\/game\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the loop: physics, AI, race logic"],
   [/^js\/physics\/consts\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
   [/^js\/physics\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
+  [/^js\/physics\/grip-steer\.js/, ["input", "steering-unit"], "own-state grip-steer cap + the steering sheet that hosts it"],
   [/^js\/audio\/driving-cues\.js/, ["steering-unit", "audio-unit"], "assist-gated braking tone + L/R corner calls"],
   [/^js\/physics\/body-attitude\.js/, ["ui"], "a visual-only layer"],
   // `sweeps` because debris-world's hazard query projects bodies back onto the
@@ -223,6 +224,7 @@ export const RULES = [
   [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
   [/^js\/ui\/hud-elements\.js/, ["state-unit", "ui"], "hud-elements.test.mjs"],
   [/^js\/ui\/hud-tyres\.js/, ["state-unit", "ui"], "hud-tyres.test.mjs"],
+  [/^js\/ui\/hud-readouts\.js/, ["state-unit", "ui"], "hud-readouts.test.mjs"],
   [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
   [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
   [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],

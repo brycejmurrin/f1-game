@@ -288,7 +288,13 @@ test("2026 body keeps a scooped pod, floor teeth, under-fences and a round halo"
   assert.match(SRC, /function haloHoopPath\(/);
   assert.match(SRC, /crownY \+ HALO_RISE \* Math\.sin\(a\)/);
   assert.match(SRC, /haloHoopPath\(0\.235, 0\.505, -0\.46, 0\.30, 0\.02, crownY, 0\.49\)/);
-  assert.match(SRC, /addTube\(out, hoop, hr, 6/);
+  // The tube is drawn along `hoopT`: the same 15-point hoop, or with CarShade
+  // rounding on (js/car/car-shade.js) a Catmull-Rom spline through those points
+  // at 12 sides, because 6 sides on 15 points kinked every ~30 degrees. This
+  // file loads car3d WITHOUT CarShade, so everything it builds is the 6-sided
+  // tube on the hoop itself; tests/unit/car-shade.test.mjs covers the spline.
+  assert.match(SRC, /hoopT = hoop && _round \? CarShade\.fine\(hoop, 3\) : hoop/);
+  assert.match(SRC, /addTube\(out, hoopT, hr, _round \? 12 : 6/);
   assert.match(SRC, /inlet\.width \* 0\.48/);
 });
 

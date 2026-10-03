@@ -332,6 +332,7 @@ interface TyreSession {
   /** Wear as a fraction of the compound's life, 0..2. */
   spent(c: CarState): number;
   info(c: CarState): Record<string, unknown> | null;
+  belowWindow(c: CarState | null): number;
   severity(): number;
   level(): TyreLevel;
   setLevel(v: TyreLevel): TyreLevel;
@@ -845,6 +846,7 @@ declare const NetPlay: GameModuleFactory;
 declare const Photomode: GameModuleFactory;
 declare const FreeCam: GameModuleFactory;
 declare const ReplayBuf: GameModuleFactory;
+declare const ResultsCam: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
@@ -864,6 +866,7 @@ declare const HomeWorld: GameModuleFactory;
 declare const PhotoStudio: GameModuleFactory;
 declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
+declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;

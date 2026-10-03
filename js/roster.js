@@ -270,6 +270,7 @@
     "js/editor/stamps.js",
     "js/editor/randomise.js",
     "js/editor/validate.js",
+    "js/editor/insight.js",
     "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
@@ -287,6 +288,10 @@
     [
       "js/editor/shape.js",
       "js/editor/validate.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/insight.js"
     ],
     [
       "js/editor/shape.js",
@@ -310,6 +315,10 @@
     ],
     [
       "js/editor/validate.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/insight.js",
       "js/editor/designer.js"
     ],
     [

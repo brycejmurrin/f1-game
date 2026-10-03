@@ -216,6 +216,33 @@ browser wraps broken and fixed them at the CLI, not the wrap:
   parsed an indented number from inside the JSON. The fallback now takes the
   last column-0 `{`/`[` block, objects and arrays only.
 
+## Week-7 (2026-10-03: async calls, cancellation, client timeouts)
+
+A second agent's re-test (deploy tip `ff109fc`, 14/15 pass) found `apex_agent`
+cut off by its CLIENT at 60 s while the CLI itself answered in 97 s — and
+worse, the server kept running it: `spawnSync` blocked the whole process (not
+even `apex_status` could answer) and the lock stayed held, so the next call got
+`lock_held`. Fixed in the server:
+
+- Every wrap spawns asynchronously (`runSpawn` returns a promise); the child
+  leads its own process group, so a timeout kills the Chromium it launched too.
+- `notifications/cancelled` aborts the call: the process group is killed, the
+  lock is released when the child exits, and no response is sent for that id
+  ([spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/cancellation)).
+  Measured over stdio: `apex_status` answered at 4.1 s during an `apex_agent`
+  run; cancel at 8 s; lock free and no browser left at 13 s.
+- `.mcp.json` / `.cursor/mcp.json` set `"timeout": 900000` on `apex-tools`,
+  matching `.codex/config.toml`'s `tool_timeout_sec = 900`. Claude Code's CLI
+  has no 60 s stdio limit (default ~28 h; a per-server `timeout` overrides
+  `MCP_TOOL_TIMEOUT`: https://code.claude.com/docs/en/mcp), but the Desktop app
+  cancels stdio calls at ~60 s regardless — now a clean cancel, not a stuck lock.
+- `apex_rotate_markings_check` parses its rows into `out` (`wouldChange`,
+  `circuits[]`); `who-is-on-it.mjs` lists each touched commit once, with every
+  branch carrying it in `branches`.
+
+Not a bug: `apex_shot`'s `frame.camera.mode` is the GAME camera underneath;
+the free cam that framed the shot is `dbgCamActive: true`.
+
 ### Locking
 
 Exclusive `scratch/apex-browser.lock` (gitignored). Week-1 including

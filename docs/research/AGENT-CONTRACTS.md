@@ -25,6 +25,27 @@ signals, and marks conflicting plugin installation observations unresolved.
 Its Drive file-reference adapter explicitly requests `include_base64:false`;
 it makes no Drive call and does not select files or create documents.
 
+Result normalization inspects structured data and every parseable JSON text
+block for explicit failures. Multiple JSON payloads retain their envelope;
+no candidate is arbitrarily selected. Cycles, the depth limit and a 256-node
+inspection budget leave the result incomplete rather than successful. Failed
+dependency responses cannot establish plugin enablement or readiness, even
+when a separate permission response reports installation.
+
+For catalog diagnostics, put each reference receipt in `skills[].resources`
+as `{uri,ok}` (or use top-level `resources`). A recovered reference does not
+clear a missing sibling. Remote read receipts remain supplied evidence: the
+doctor itself makes no remote request. Include `requiresFilesystem:true` for
+skills whose helpers need a mount, and `skill_root` only when the host supplies
+an absolute filesystem path. A URI or relative path cannot establish a mount;
+an absolute path's form alone does not prove it exists or can execute helpers.
+
+The doctor checks the inspected package's `engines.node` minimum, including
+minor and patch versions. It supports `>=minimum` ranges; other declared
+ranges remain unverified instead of receiving a compatibility pass.
+References: [Node absolute paths](https://nodejs.org/api/path.html#pathisabsolutepath)
+and [npm engine constraints](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#engines).
+
 The session catalog and the repository MCP catalog are different inputs.
 Browser Use tools do not provide the deterministic Browser skill's DOM,
 console and local-runtime interfaces. The repository Playwright harness is the
