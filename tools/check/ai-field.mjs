@@ -94,6 +94,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 
 const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`ai-field — AI field behaviour (spread / passes / dwell / contact)
+
+  node tools/check/ai-field.mjs [--track monza] [--diff normal] [--seconds 240] [--runs 1] [--json]
+  every run: --wear off|light|real  (default off); --seconds floor 60
+
+Owned by ai-racecraft.`);
+  process.exit(0);
+}
 const flag = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
 const TRACK = flag("track", "monza"), DIFF = flag("diff", "normal");
 // Default OFF — the harness pin, so the tables already in the research notes

@@ -946,26 +946,29 @@ function extraEnv(name, args) {
   return {};
 }
 
-/** The CLI's JSON result: the whole stdout (any JSON value — apex_eval may
- *  print a bare number), else the LAST block that opens with `{` or `[` at
- *  column 0 and runs to the end (a text line, then pretty-printed JSON). The
- *  fallback takes only an object or array: a line-by-line scan returned
- *  `563.528` for apex_shot, an indented number from inside its JSON. */
-export function parseOut(stdout) {
+/** Split a CLI's stdout into its JSON result and the text before it.
+ *  `out` is the whole stdout (any JSON value — apex_eval may print a bare
+ *  number), else the LAST block that opens with `{` or `[` at column 0 and
+ *  runs to the end (a text line, then pretty-printed JSON). The fallback
+ *  takes only an object or array: a line-by-line scan returned `563.528` for
+ *  apex_shot, an indented number from inside its JSON. `rest` is the stdout
+ *  with that block removed — the JSON is never returned twice. */
+export function splitOut(stdout) {
   const text = String(stdout || "").trim();
-  if (!text) return null;
+  if (!text) return { out: null, rest: "" };
   const isDoc = (v) => v !== null && typeof v === "object";
-  try { return JSON.parse(text); } catch { /* fall through */ }
+  try { return { out: JSON.parse(text), rest: "" }; } catch { /* fall through */ }
   const lines = text.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!/^[{[]/.test(lines[i])) continue;
     try {
       const v = JSON.parse(lines.slice(i).join("\n"));
-      if (isDoc(v)) return v;
+      if (isDoc(v)) return { out: v, rest: lines.slice(0, i).join("\n").trim() };
     } catch { /* an earlier opener may hold the whole block */ }
   }
-  return null;
+  return { out: null, rest: text };
 }
+export function parseOut(stdout) { return splitOut(stdout).out; }
 
 function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) {
   const started = Date.now();
@@ -978,17 +981,20 @@ function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) 
     maxBuffer: 8 * 1024 * 1024,
   });
   const durationMs = Date.now() - started;
-  const stdout = r.stdout || "";
   const stderr = r.stderr || "";
   const exit = r.status == null ? (r.signal ? 1 : 0) : r.status;
+  // stdout carries only what `out` does not: returning the raw JSON beside its
+  // parse doubled every result, and apex_who_is_on_it reached 60 KB — over
+  // the host's inline limit, so the caller got a file path, not an answer.
+  const { out, rest } = splitOut(r.stdout);
   const body = {
     ok: exit === 0,
     exit,
     argv,
     env: Object.keys(env).length ? env : undefined,
-    stdout,
+    stdout: rest,
     stderr,
-    out: parseOut(stdout),
+    out,
     durationMs,
   };
   if (r.error) {
@@ -1015,7 +1021,12 @@ export function ciVerdict(stdout) {
 }
 function withCiVerdict(result) {
   const body = JSON.parse(result.content[0].text);
-  if (!body.error) body.out = ciVerdict(body.stdout);
+  // The job lines and the verdict move into `out`; stdout keeps the raw text
+  // only when nothing parsed (no token, API down) so the reason survives.
+  if (!body.error) {
+    body.out = ciVerdict(body.stdout);
+    if (body.out.verdict) body.stdout = "";
+  }
   result.content[0].text = JSON.stringify(body);
   return result;
 }
