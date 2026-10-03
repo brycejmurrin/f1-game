@@ -3833,7 +3833,9 @@ const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
-const onboard = Onboard.create(G), director = Director.create(G), replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()); // coach + TV director + live solo replay ring
+const onboard = Onboard.create(G),
+  director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
+  replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()); // coach + live TV (solo only) + replay ring
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).

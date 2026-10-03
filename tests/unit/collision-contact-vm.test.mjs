@@ -498,6 +498,16 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     const watched = ["RUS", "LEC", "STR"].map((code) => g.G.cars.find((c) => c.code === code));
     assert.ok(watched.every((c) => replay.owns(c)), "the actual game director owns all three traced cars");
     assert.equal(g.G.player.code, "STR");
+    const liveDirector = vm.runInContext("Director.live()", g.ctx);
+    g.G.setCamMode(0, { persist: false });
+    for (const flag of ["retired", "finished"]) {
+      watched[2][flag] = true;
+      g.pumpFrame(g.sandbox.performance.now() + 1000 / 60);
+      assert.equal(g.G.camMode, 0, "a finished/retired WATCH seat retains the viewer's camera");
+      assert.equal(g.G.dbgCam, null, "live TV cannot override the recorded broadcast picture");
+      assert.equal(liveDirector.status().cuts, 0);
+      watched[2][flag] = false;
+    }
     assert.ok(watched[2].x > Tracks.wallAt(g.G.track, watched[2].s, 1), "the replay pit-lane pose lies beyond the local driving barrier");
     const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, speed: c.speed, px: c.px, pz: c.pz,
       lap: c.lap, penalty: c.penalty, tyreWear: c.tyreWear }));
