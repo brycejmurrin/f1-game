@@ -67,20 +67,25 @@ lockout blocker): they cost monaco passes. Measure: `ai-race.mjs tactics`.
 ## Stuck / unstuck (AI wedged, never recovers)
 
 Two timers live in `updateCar` (`game.js`; search `stuckT` / `rescueT`).
-`stuckT` grows under the boxed slow-car condition. `AiDrive.stuckThreshold(aiT)`
-reads a traits object (for example `{awareness:0.75}`), not a scalar. Past it,
-`unstuckActive` cancels braking and adds sideways pull, steering floor and crawl.
+`stuckT` grows while speed is below 7 and `AiDrive.isBoxed` finds no room both
+sides or a close blocker. `AiDrive.stuckThreshold(aiT)` reads a traits object
+(for example `{awareness:0.75}`), not a scalar. Past it, `unstuckActive`
+cancels braking and adds sideways pull, steering floor and crawl. If dig-out
+outlasts `AiDrive.digOutBudget`, `digOutEscalated` lets slow-speed rescue arm
+while dig-out remains active and uses the shorter rescue delay. This prevents
+permanent wall-piles where dig-out used to veto rescue.
 `beachedAt(c)` tests offroad plus a pace-scaled slow-speed threshold; it has no
-half-second `offT` gate. The slow-speed rescue branch requires `!unstuckActive`.
-Pit-box, queued-lane and red-held states have separate gates. Road rescue restores
-`Math.min(vTop(), Math.max(existingSpeed, 14*Math.max(PACE,0.05)))`; pit-lane
-rescue uses its own lane/floor rule. A persistent boxed case needs behavioral
-inspection before blaming the rescue timer.
+half-second `offT` gate. Pit-box and red-held states remain exempt. A queued
+pit-lane car can escalate after failed dig-out and is rescued onto `pits.laneX`.
+Road rescue preserves existing speed with a pace-scaled floor; pit-lane rescue
+uses its own lane/floor rule.
 Use `cars()` / `field()` to identify the car, then `__apex.carAt(idx)` for
 `stuckT` / `rescueT`; `field()` contains no `stuckS`. Record track, seed, car,
-timers, `pitState`, `pits.inLane(c)` and room left/right. VM behavioral check:
-`node --test --test-name-pattern='stopped player' tests/unit/ai-stuck-vm.test.mjs`.
-Browser collision/appearance evidence remains separate.
+timers, `pitState`, `pits.inLane(c)` and room left/right. VM behavioral checks:
+`node --test tests/unit/ai-stuck-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs`.
+`ai-field.mjs` reports dwell/contact only (`--seconds` floor 60); it does not
+count rescues. Browser collision/appearance evidence remains separate.
+
 
 ```sh
 node --test tests/unit/ai-drive.test.mjs      # ~100 tests, ~1 s

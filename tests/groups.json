@@ -463,6 +463,8 @@
     "// that stands between a dispatch input and a shell, and the run pick. Pure, instant.",
     "tests/unit/remote-group.test.mjs",
     "tests/unit/renderer-soft-lifecycle.test.mjs",
+    "// Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.",
+    "tests/unit/replay-buf.test.mjs",
     "// repo-size.yml's full-history size report: refuses a shallow clone (one",
     "// sized this repo wrong on 2026-10-01), real-git fixture. ~1 s.",
     "tests/unit/repo-size.test.mjs",
@@ -772,6 +774,7 @@
         "tests/unit/aero-zones-vm.test.mjs",
         "tests/unit/agent-anchors-vm.test.mjs",
         "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -828,6 +831,7 @@
         "tests/unit/aero-zones-vm.test.mjs",
         "tests/unit/agent-anchors-vm.test.mjs",
         "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -901,6 +905,7 @@
     "test:game-vm-b2": {
       "files": [
         "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
