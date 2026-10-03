@@ -107,11 +107,14 @@ test("every livery field a team names is one the renderer knows", () => {
   //   bodySplit (2026-09-09): Cadillac's black/white L/R body. Car3D.applyBodySplit
   //   recolours paint verts by sign(x); absent means today's single c1 body.
   //   ridgeTint / airboxTint folded into spineTint / cover (2026-09-10).
+  //   rearWing / wingCarbon (2026-10-03): already in Liveries.FIELDS, now
+  //   NAMED by teams — the SF-26's black rear wing (its c2 is white) and the
+  //   VCARB 03's bare-carbon flaps. Both are read by Car3D.build.
   const KNOWN = new Set(["cover", "finStyle", "finBadge", "finShape", "finArt", "fin",
     "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "saddleTint",
     "coverBind", "finHandoff", "tcam", "coverVents", "stripe",
     "noseStripe", "accent", "nose", "pod", "wing", "halo", "logo", "logo2", "logo3",
-    "finish", "numFont", "sponsors", "bodySplit"]);
+    "finish", "numFont", "sponsors", "bodySplit", "rearWing", "wingCarbon"]);
   for (const t of M.Teams.LIST) {
     if (!t.livery) continue;
     for (const k of Object.keys(t.livery)) {
