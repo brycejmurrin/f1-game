@@ -1076,12 +1076,16 @@ body:not(.desktop) {
   --text: #f6f6f9; --dim: #9a9aa8; --bg: #0c0c14;
   --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
   --plate-line: rgba(255, 255, 255, 0.16); --card-line: rgba(255, 255, 255, 0.12);
+  /* and the INHERITED ink: .hud-value, #hud-speed and friends set no colour of
+     their own, so they inherit body's already-resolved (dark) --text. */
+  color: var(--text);
 }
 @media (prefers-color-scheme: light) {
   :root[data-ui-theme="system"] #hud {
     --text: #f6f6f9; --dim: #9a9aa8; --bg: #0c0c14;
     --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
     --plate-line: rgba(255, 255, 255, 0.16); --card-line: rgba(255, 255, 255, 0.12);
+    color: var(--text);
   }
 }
 :root[data-ui-contrast="high"] #hud {

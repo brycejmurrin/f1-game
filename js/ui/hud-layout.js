@@ -84,16 +84,11 @@ const HudLayout = (function () {
     }),
     other: fz({}),
   });
-  // TOUCH COCKPIT: the pedal/OT/AERO/BOOST buttons fill the right-hand third
-  // from about 50% height down (measured 844x390: x 715+, y 198+), so on a touch
-  // device the OVERTAKE/AERO readouts ride up into the sky beside them instead
-  // (measured: unmoved they sit at y 347; -50vh lands them at 152, below the
-  // sector box that ends near 130px and above BOOST at 198). Laid over SHIPPED.cockpit
-  // while <body> lacks .desktop (js/game.js sets it from the input seen).
-  const TOUCH_COCKPIT = fz({
-    ot: { x: 30, y: -50, s: 100 },
-    aero: { x: 30, y: -50, s: 100 },
-  });
+  // TOUCH DEVICES keep the cockpit's shipped hide of ENERGY / OVERTAKE / AERO /
+  // BRAKE BIAS (css/track-detail.css): the OT / AERO / BOOST buttons carry those
+  // states, and on a phone the pedal and steer columns leave no room beside the
+  // wheel at any fixed offset (tests/specs/hud-layout.spec.js measured clashes on
+  // every phone shape). A piece the player PLACES carries data-hl-user and shows.
   // PRESETS: [id, label, partial offsets laid over the set's shipped layout].
   const PRESETS = Object.freeze([
     ["shipped", "SHIPPED", {}],
@@ -122,8 +117,7 @@ const HudLayout = (function () {
   const isDefEl = (e) => e.x === 0 && e.y === 0 && e.s === 100;
   const sameEl = (a, b) => a.x === b.x && a.y === b.y && a.s === b.s;
   /** The shipped {x, y, s} of element `id` in layout `sn`. */
-  const touchDevice = () => !!(doc && doc.body && doc.body.classList && !doc.body.classList.contains("desktop"));
-  const shippedEl = (id, sn) => normEl((sn === "cockpit" && touchDevice() && TOUCH_COCKPIT[id]) || (SHIPPED[sn] && SHIPPED[sn][id]));
+  const shippedEl = (id, sn) => normEl(SHIPPED[sn] && SHIPPED[sn][id]);
   /** One stored layout: only the elements that differ from that set's shipped layout. */
   function normSet(v, sn) {
     const out = {};
@@ -168,7 +162,7 @@ const HudLayout = (function () {
 
   function apply() {
     if (!doc) return;
-    const a = all()[shown()];
+    const st = stored(), a = effective(st, shown());
     for (const [id, , sel, origin] of ELEMENTS) {
       const el = doc.querySelector(sel);
       if (!el || !el.style) continue;
@@ -183,6 +177,8 @@ const HudLayout = (function () {
         el.removeAttribute("data-hl");
         for (const p of ["--hl-x", "--hl-y", "--hl-s", "--hl-o"]) el.style.removeProperty(p);
       }
+      if (st[shown()][id]) el.setAttribute("data-hl-user", "");
+      else if (el.hasAttribute("data-hl-user")) el.removeAttribute("data-hl-user");
       if (selected === id && preview) el.setAttribute("data-hl-sel", "");
       else if (el.hasAttribute("data-hl-sel")) el.removeAttribute("data-hl-sel");
     }

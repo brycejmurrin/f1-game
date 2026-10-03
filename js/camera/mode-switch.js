@@ -56,6 +56,10 @@ window.CamModes = (function () {
       // the chosen wheel HAS one (js/camera/cockpit-opts.js WHEEL).
       document.body.classList.toggle("cockpit-cam", CAM_MODES[G.camMode].id === "cockpit"
         && (typeof CockpitOpts === "undefined" || CockpitOpts.wheelHasScreen()));
+      // MOVE & SIZE swaps its cockpit / other layout on the SAME frame: waiting
+      // for the HUD's 10 Hz tick (js/ui/hud.js) left one tick of chips at the
+      // cockpit offsets over the touch buttons after leaving the cockpit.
+      if (typeof HudLayout !== "undefined") HudLayout.setCam(CAM_MODES[G.camMode].id);
     }
     function setCamMode(m, opts) {
       const prev = G.camMode;

@@ -393,6 +393,10 @@ body.hud-met-compact #hud-ot,
 body.hud-met-compact #hud-aero,
 body.hud-met-timing #hud-bb,
 body.hud-met-compact #hud-bb { display: none !important; }
+/* BRAKE BIAS is a desktop readout by default: on a touch device its extra row
+   lifted OVERTAKE / AERO into the sector box (hud-layout.spec broadcast + heli).
+   A player who places it in MOVE & SIZE (data-hl-user) still gets it. */
+body:not(.desktop) #hud-bb:not([data-hl-user]) { display: none; }
 body.hud-met-driver #hud-sectors,
 body.hud-met-driver #hud-box-best,
 body.hud-met-compact #hud-sectors,
