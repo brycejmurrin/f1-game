@@ -3863,7 +3863,7 @@ const { renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust } = setu
 // per-frame car map, night lamp map, the caster pools and the blob flush.
 const shadowPass = ShadowPass.create(G, { teamMesh, vStd });
 // The HUD rear-view mirror (js/render/shared/mirror-pass.js): a second camera, rendered in the env probe's slot below.
-const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, teamMesh, renderPosOf, playerAnchor, yawVisInterp, basisMat,
+const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, drawCar: carDraw.drawMirrorCar, renderPosOf, playerAnchor, yawVisInterp, basisMat,
   carPaint: (wet, night) => carPaintMat(wet ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)),
   onModeChange: () => paintHudDetailsSummary() });
 
