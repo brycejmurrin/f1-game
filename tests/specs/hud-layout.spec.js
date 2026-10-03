@@ -117,11 +117,12 @@ async function race(page, steer, manual, ins, opts) {
     e.hidden = false;
   });
   if (o.profile === "broadcast") {
-    // CI UI shard 1 (37091528411): a fixed 300 ms sampled the tower over
-    // both map and gaps; retry passed. Those anchors consume --hud-top-h,
-    // published by fitHud AFTER the camera classes change. Wait for that
-    // measured input, not for the overlap assertions themselves to turn green.
-    // toFixed(1) in fitHud rounds the own-unit height to the nearest 0.1px.
+    // CI selected-specs 37100340716: broadcast+heli timed out here at 5 s
+    // while cockpit passed. camera() now refreshHud(true)s like jump(), so
+    // hud-bcam and --hud-top-h publish without waiting for a starved heli
+    // frame. Still wait for that published input — not for overlap to go
+    // green, and not a longer timeout. toFixed(1) in fitHud rounds own-unit
+    // height to 0.1px.
     // API: https://playwright.dev/docs/api/class-page#page-wait-for-function
     await page.waitForFunction((broadcastCamera) => {
       const tower = document.querySelector(".hud-top");

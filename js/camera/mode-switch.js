@@ -66,6 +66,12 @@ window.CamModes = (function () {
       // for the HUD's 10 Hz tick (js/ui/hud.js) left one tick of chips at the
       // cockpit offsets over the touch buttons after leaving the cockpit.
       if (typeof HudLayout !== "undefined") HudLayout.setCam(CAM_MODES[G.camMode].id);
+      // hud-bcam / hud-prof-* and --hud-top-h live in that same tick. A player
+      // (or __apex.camera) cut must not wait for rAF either — software GL can
+      // block the thread longer than layout probes budget.
+      if ((G.state === "race" || G.state === "count") && typeof G.refreshHud === "function") {
+        G.refreshHud(true);
+      }
     }
     function setCamMode(m, opts) {
       const prev = G.camMode;

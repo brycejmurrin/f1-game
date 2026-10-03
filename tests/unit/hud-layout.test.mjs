@@ -30,6 +30,13 @@ test("broadcast layout probe waits for camera and published tower height, not co
   published="0px"; assert.equal(ready(true),false,"initial zero height is stale");
   published="40px"; assert.equal(ready(true),false,"old tower height is stale");
   published="66.0px"; assert.equal(ready(true),true,"own units honor zoom and toFixed(1) rounding");
+  // fitHud re-publishes --hud-top-h AFTER writing --hud-z-top so a zoom cap
+  // in the same pass cannot leave the wait 0.1px behind.
+  const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  const fit = hud.slice(hud.indexOf("function fitHud()"), hud.indexOf("function paintInstruments"));
+  const zTop = fit.indexOf('set("--hud-z-top"');
+  const republish = fit.indexOf('hStyle(root, "--hud-top-h"', zTop);
+  assert.ok(zTop >= 0 && republish > zTop, "--hud-top-h must be published after the top zoom cap");
   height=0; published="0px"; assert.equal(ready(true),false,"hidden tower is not ready");
   height=132; zoom=1; published="132px"; assert.equal(ready(true),true);
 });

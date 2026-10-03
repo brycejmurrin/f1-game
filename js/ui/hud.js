@@ -775,6 +775,11 @@ function fitHud() {
   };
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
+  // --hud-top-h is consumed in the tower's own zoom space. Publishing it
+  // before the cap write left the CSS var one pass behind --hud-z-top, so a
+  // probe that required |rect/zoom − published| ≤ 0.1px could miss for the
+  // whole same-key backoff after a camera class change.
+  hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
   // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
   // cap between BUTTON SIZE and 1 still has to be written.
   set("--hud-z-dock", capDock, Math.max(1, btnScale));
