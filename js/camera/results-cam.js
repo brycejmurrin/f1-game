@@ -54,12 +54,17 @@ const ResultsCam = (function () {
     return out.reverse();
   }
 
-  function create(G) {
+  function create(G, eligible) {
     Log.info("game", "ResultsCam.create");
     let phase = "idle";   // idle | chequered | orbit | highlights | done
     let age = 0, orbitYaw = 0, frameAcc = 0;
     let reel = [], reelIdx = 0, clipAge = 0;
     let replayApi = null;
+    const allowed = () => enabled(G) && (!eligible || eligible()) &&
+      !(G.netPlay && G.netPlay.active && G.netPlay.active());
+    function endHighlights() {
+      if (phase === "highlights" && replayApi) replayApi.endScrub();
+    }
 
     function attachReplay(api) { replayApi = api || null; }
 
@@ -70,15 +75,20 @@ const ResultsCam = (function () {
       return { phase, age, live: live(), clips: reel.length, clip: reelIdx };
     }
     function reset() {
+      endHighlights();
       phase = "idle"; age = 0; orbitYaw = 0; frameAcc = 0;
       reel = []; reelIdx = 0; clipAge = 0;
       if (G.dbgCam && G.dbgCam._resultsCam) G.dbgCam = null;
+      if (typeof document !== "undefined") {
+        const b = document.getElementById("res-highlights");
+        if (b) b.hidden = true;
+      }
     }
     function publish(pose) {
       if (!pose || !pose.eye) return;
       G.dbgCam = {
         eye: pose.eye.slice(), target: pose.target.slice(),
-        fov: pose.fov || 55, _resultsCam: true,
+        fov: pose.fov || 55, far: 6000, _resultsCam: true,
       };
     }
     function subject() {
@@ -96,7 +106,7 @@ const ResultsCam = (function () {
       const mode = "side";
       const v = G.camVantage(mode, p.s || 0, p.x || 0, p.speed || 0, 0, chequeredExtra(p));
       if (!v || !v.eye) return null;
-      return { eye: v.eye, target: v.target || [p.px, p.py || 1, p.pz], fov: v.fov || 58 };
+      return { eye: v.eye, target: v.tgt || v.target || [p.px, p.py || 1, p.pz], fov: v.fov || 58 };
     }
     function doOrbit() {
       const p = subject();
@@ -105,8 +115,7 @@ const ResultsCam = (function () {
     }
     function onFlag() {
       reset();
-      if (!enabled(G)) return false;
-      if (G.netPlay && G.netPlay.active && G.netPlay.active()) return false;
+      if (!allowed()) return false;
       phase = "chequered"; age = 0;
       const pose = cheqPose();
       if (pose) publish(pose);
@@ -114,14 +123,15 @@ const ResultsCam = (function () {
       return true;
     }
     function startOrbit() {
-      if (!enabled(G)) return false;
+      if (!live() || !allowed()) return false;
+      endHighlights();
       phase = "orbit"; age = 0; orbitYaw = 0;
       const pose = doOrbit();
       if (pose) publish(pose);
       return true;
     }
     function startHighlights() {
-      if (!enabled(G)) return false;
+      if (!live() || !allowed() || phase === "highlights") return false;
       const buf = replayApi;
       if (!buf || !buf.window) return false;
       const w = buf.window();
@@ -131,7 +141,7 @@ const ResultsCam = (function () {
         const dur = Math.min(HIGHLIGHT_CLIP_S, Math.max(1, w.t1 - w.t0));
         reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: 0 }];
       }
-      if (!reel.length) return false;
+      if (!reel.length || !buf.beginScrub(false)) return false;
       phase = "highlights"; reelIdx = 0; clipAge = 0; age = 0;
       applyHighlightFrame();
       return true;
@@ -141,20 +151,13 @@ const ResultsCam = (function () {
       const clip = reel[reelIdx];
       if (!buf || !clip) return;
       const t = clip.t0 + Math.min(clip.t1 - clip.t0, clipAge);
-      const snap = buf.at && buf.at(t);
-      if (snap && snap.cars && G.cars) {
-        const n = Math.min(G.cars.length, snap.cars.length);
-        for (let i = 0; i < n; i++) {
-          const c = G.cars[i], p = snap.cars[i];
-          c.s = p.s; c.x = p.x; c.head = p.head; c.speed = p.speed;
-          c.px = p.px; c.py = p.py; c.pz = p.pz; c.steer = p.steer;
-        }
-      }
+      buf.apply(t);
       const pose = cheqPose() || doOrbit();
       if (pose) publish(pose);
     }
     function tick(dt) {
       if (!live()) return false;
+      if (!allowed()) { reset(); return false; }
       frameAcc += dt;
       if (frameAcc < FRAME_DT) return true;   // still live, but skip work
       const step = frameAcc; frameAcc = 0;
@@ -176,7 +179,7 @@ const ResultsCam = (function () {
         const clip = reel[reelIdx];
         if (!clip || clipAge >= (clip.t1 - clip.t0)) {
           reelIdx++; clipAge = 0;
-          if (reelIdx >= reel.length) { phase = "orbit"; age = 0; return true; }
+          if (reelIdx >= reel.length) return startOrbit();
         }
         applyHighlightFrame();
         return true;
@@ -185,11 +188,13 @@ const ResultsCam = (function () {
     }
     function ensureHighlightsButton() {
       if (typeof document === "undefined") return;
-      if (document.getElementById("res-highlights")) return;
+      const existing = document.getElementById("res-highlights");
+      if (existing) { existing.hidden = !live() || !allowed(); return; }
       const menu = document.getElementById("res-menu");
       if (!menu || !menu.parentNode) return;
       const b = document.createElement("button");
       b.id = "res-highlights";
+      b.hidden = !live() || !allowed();
       b.type = "button";
       b.textContent = "HIGHLIGHTS";
       b.onclick = () => { startHighlights(); };

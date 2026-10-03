@@ -198,7 +198,7 @@ const ReplayBuf = (function () {
         c.rPrevHead = p.head; c.rPrevYawVis = p.yawVis;
       }
     }
-    function beginScrub() {
+    function beginScrub(showControls = true) {
       if (!allowed()) return false;
       if (!scrubbing) discardTimeline(G.raceT);   // a paused clock jump can precede the next sample
       if (scrubbing || count < 2) return false;
@@ -210,8 +210,7 @@ const ReplayBuf = (function () {
       const last = lastTag();
       scrubT = (last && last.t >= w.t0 && last.t <= w.t1) ? last.t : Math.max(w.t0, w.t1 - 5);
       apply(scrubT);
-      showDock();
-      paintDock();
+      if (showControls) { showDock(); paintDock(); }
       return true;
     }
     function apply(t) {
