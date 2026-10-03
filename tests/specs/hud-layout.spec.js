@@ -116,7 +116,24 @@ async function race(page, steer, manual, ins, opts) {
     document.getElementById("announce-text").textContent = "CAUTION — CHEAPER STOP, ABOUT 23s LOST";
     e.hidden = false;
   });
-  await page.waitForTimeout(300);
+  if (o.profile === "broadcast") {
+    // CI UI shard 1 (37091528411): a fixed 300 ms sampled the tower over
+    // both map and gaps; retry passed. Those anchors consume --hud-top-h,
+    // published by fitHud AFTER the camera classes change. Wait for that
+    // measured input, not for the overlap assertions themselves to turn green.
+    // toFixed(1) in fitHud rounds the own-unit height to the nearest 0.1px.
+    // API: https://playwright.dev/docs/api/class-page#page-wait-for-function
+    await page.waitForFunction((broadcastCamera) => {
+      const tower = document.querySelector(".hud-top");
+      if (!tower || document.body.classList.contains("hud-bcam") !== broadcastCamera) return false;
+      const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
+      const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
+      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
+    }, o.cam === "heli", { polling: 100, timeout: 5_000 });
+    // These cases measure DOM layout; stop the expensive software renderer
+    // once its HUD inputs have settled, keeping camera/profile and DOM intact.
+    await page.evaluate(() => window.__apex.headless(true));
+  } else await page.waitForTimeout(300);
 }
 
 const measure = (page, ctrl, hud, W, H, ins) => page.evaluate(([c, h, w, ht, i]) => {

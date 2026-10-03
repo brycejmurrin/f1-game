@@ -244,3 +244,49 @@ test("the moon disc hangs on the night key light, not a constant, on every backe
       `${name}: the moon disc must be placed on the sun/moon key direction uniform`);
   }
 });
+
+test("car materials: wet look, ground AO, metal env, sidewall and carbon agree on every backend", () => {
+  // The car-material batch of 2026-10-03, pinned constant for constant. Each
+  // backend spells the same maths in its own language, and a drift here is a
+  // car that looks different on one renderer and nowhere else.
+  const src = {
+    GLX: read("js/render/glx/shaders/glsl-lit.js"),
+    TLX: read("js/render/three/tsl-lit.js"),
+    WGX: read("js/render/webgpu/wgsl-chunks.js"),
+  };
+  const pins = {
+    // The road's world-keyed wet block (noise puddles, ripple cells) must not
+    // reach a car: in rain they slid across the moving body.
+    roadWetSkipsCars: { GLX: /if \(uWetness > 0\.001 && !classifiedCar\)/,
+                        TLX: /If\(U\.wetness\.greaterThan\(0\.001\)\.and\(classifiedCar\.not\(\)\)/,
+                        WGX: /if \(wetness > 0\.001 && !classifiedCar\)/ },
+    carWetDarken: { GLX: /albedo \*= 1\.0 - 0\.20 \* uWetness;/,
+                    TLX: /albedo\.mulAssign\(U\.wetness\.mul\(0\.20\)\.oneMinus\(\)\)/,
+                    WGX: /albedo = albedo \* \(1\.0 - 0\.20 \* wetness\);/ },
+    carWetGloss: { GLX: /rough \*= 1\.0 - 0\.25 \* uWetness;/,
+                   TLX: /rough\.mulAssign\(U\.wetness\.mul\(0\.25\)\.oneMinus\(\)\)/,
+                   WGX: /rough = rough \* \(1\.0 - 0\.25 \* wetness\);/ },
+    groundAO: { GLX: /1\.0 - smoothstep\(0\.02, 0\.40, vObjPos\.y\)[\s\S]{0,40}vec3 amb = mix\(uAmbGround \* \(1\.0 - 0\.50 \* gpao\), uAmbSky \* \(1\.0 - 0\.06 \* gpao\)/,
+                TLX: /smoothstep\(0\.02, 0\.40, objP\.y\)\.oneMinus\(\)[\s\S]{0,80}mul\(gpao\.mul\(0\.50\)\.oneMinus\(\)\)[\s\S]{0,40}mul\(gpao\.mul\(0\.06\)\.oneMinus\(\)\)/,
+                WGX: /1\.0 - smoothstep\(0\.02, 0\.40, in\.objPos\.y\)[\s\S]{0,120}F\.ambGround\.xyz \* \(1\.0 - 0\.50 \* gpao\), F\.ambSky\.xyz \* \(1\.0 - 0\.06 \* gpao\)/ },
+    metalEnv: { GLX: /F_Schlick\(NoV, albedo, 1\.0 - rough \* 0\.5\) \* \(metalness \* \(1\.0 - rough \* 0\.7\) \* ccTrans\)/,
+                TLX: /F_Schlick\(NoV, albedo, rough\.mul\(0\.5\)\.oneMinus\(\)\)\)\s*\.mul\(metalness\.mul\(rough\.mul\(0\.7\)\.oneMinus\(\)\)\.mul\(ccTrans\)\)/,
+                WGX: /F_Schlick\(NoV, albedo, 1\.0 - rough \* 0\.5\) \* \(metalness \* \(1\.0 - rough \* 0\.7\) \* ccTrans\)/ },
+    sidewallRough: { GLX: /if \(sidewallSurface\) rough = clamp\(rough, 0\.55, 0\.65\);/,
+                     TLX: /If\(sidewallSurface, \(\) => \{ rough\.assign\(clamp\(rough, 0\.55, 0\.65\)\); \}\)/,
+                     WGX: /if \(sidewallSurface\) \{ rough = clamp\(rough, 0\.55, 0\.65\); \}/ },
+    carbonLacquer: { GLX: /\(carbonSurface \|\| carbonFinish\) \? min\(uClearcoat, 0\.30\)/,
+                     TLX: /select\(carbonSurface\.or\(carbonFinish\), min\(matU\.clearcoat, 0\.30\)/,
+                     WGX: /if \(carbonSurface \|\| carbonFinish\) \{ clearcoat = min\(D\.mat1\.z, 0\.30\); \}/ },
+    weaveNormal: { GLX: /N = normalize\(N \+ \(wT \* wvT\.x \+ wB \* wvT\.y\) \* 0\.18\);/,
+                   TLX: /N\.assign\(normalize\(N\.add\(wT\.mul\(wvT\.x\)\.add\(wB\.mul\(wvT\.y\)\)\.mul\(0\.18\)\)\)\)/,
+                   WGX: /N = normalize\(N \+ \(wT \* wvT\.x \+ wB \* wvT\.y\) \* 0\.18\);/ },
+  };
+  for (const [what, by] of Object.entries(pins))
+    for (const [name, re] of Object.entries(by))
+      assert.match(src[name], re, `${name}: ${what} drifted from the other two backends`);
+  // The ground AO is an AMBIENT term: it may never multiply the final colour.
+  for (const [name, s] of Object.entries(src))
+    assert.ok(!/color\s*(\*=|\.mulAssign\()[^;\n]*gpao/.test(s) && !/color = color \*[^;\n]*gpao/.test(s),
+      `${name}: the ground AO darkens the whole colour — it must stay on the ambient term`);
+});

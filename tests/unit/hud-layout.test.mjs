@@ -11,6 +11,29 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
 const CSS = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
 
+test("broadcast layout probe waits for camera and published tower height, not collision results", () => {
+  const spec=fs.readFileSync(path.join(ROOT,"tests/specs/hud-layout.spec.js"),"utf8");
+  const predicate=spec.match(/await page\.waitForFunction\((\(broadcastCamera\) => \{[\s\S]*?\n    \}), o\.cam/);
+  assert.ok(predicate,"the broadcast helper carries its bounded input-readiness predicate");
+  let broadcast=false, published="", height=132.04, zoom=2;
+  const ctx=vm.createContext({document:{
+    body:{classList:{contains:()=>broadcast}},
+    querySelector:(selector)=>{
+      assert.equal(selector,".hud-top","readiness must not wait for map/gap overlap results");
+      return {currentCSSZoom:zoom,getBoundingClientRect:()=>({height})};
+    },
+    documentElement:{style:{getPropertyValue:()=>published}},
+  }});
+  const ready=vm.runInContext("("+predicate[1]+")",ctx);
+  assert.equal(ready(true),false,"camera class has not caught up");
+  broadcast=true; assert.equal(ready(true),false,"height is not published yet");
+  published="0px"; assert.equal(ready(true),false,"initial zero height is stale");
+  published="40px"; assert.equal(ready(true),false,"old tower height is stale");
+  published="66.0px"; assert.equal(ready(true),true,"own units honor zoom and toFixed(1) rounding");
+  height=0; published="0px"; assert.equal(ready(true),false,"hidden tower is not ready");
+  height=132; zoom=1; published="132px"; assert.equal(ready(true),true);
+});
+
 function fakeEl() {
   const props = {}, attrs = {};
   return {

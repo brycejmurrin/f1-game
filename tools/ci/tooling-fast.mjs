@@ -134,6 +134,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the whole point — the front-wing assertion this file ports sat red on the
   // deploy tip through five consecutive green Pages runs because the browser
   // group that held it is not gated at all.
+  // car-fx.js (plank sparks, AI lock-up marks) + the particle pool's scrape /
+  // flare / spray-plume discipline, in a VM with seeded Math.random; ~0.2 s.
+  "tests/unit/car-fx.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
@@ -453,6 +456,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // for the garage one defeats its whole purpose — a dropped material column
   // looks exactly like the bug it guards against.
   "tests/unit/parts-ladder.test.mjs",
+  // Locked SIGNATURE → equivalent (not DEFAULTS). ~0.1 s; without it a
+  // Faenza Street fit on McLaren silently photographed as medium.
+  "tests/unit/parts-locked-equivalent.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",

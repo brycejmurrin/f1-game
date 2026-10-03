@@ -4312,6 +4312,7 @@ function loadingInfo() {
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create();
+const carFx = CarFx.create(G, { skids });   // plank sparks + AI lock-up marks (js/fx/car-fx.js)
 DrivingLine.setMode(store.get("drivingLine", "full"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
@@ -7856,19 +7857,20 @@ function render(dt) {
     // clamped pitch/roll/heave offsets. Render-only — applied to the BODY basis
     // (tmpMat) below; _groundMat (wheels/contact/shadow) is already built and is
     // never touched. When disabled these all come back 0 (rigid chassis).
-    // ygV = speed × road slope (smp2.t normalized above): the ground's vertical
-    // velocity under the car, analytic — bodyattitude never differentiates height.
-    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1], aeroDfMult(c) * Math.min(1, Math.abs(c.speed || 0) / vTop()) ** 2);
+    // ygV = speed × road slope (smp2.t normalized above): the ground's vertical velocity
+    // under the car, analytic (never a height difference). _vF = |v|/vTop(): kerb strikes.
+    const _vF = Math.min(1, Math.abs(c.speed || 0) / vTop());
+    const _ba = bodyAttitude.update(c, tmpP[1], dt, (c.speed || 0) * smp2.t[1], aeroDfMult(c) * _vF * _vF, _vF);
     const _baPitch = _ba.pitch, _baRoll = _ba.roll, _baHeave = _ba.heave;
-    // Pitch: rotate forward+up around the right axis (positive = nose up). This
-    // gives throttle-squat (nose lifts) and brake-dive (nose dips) without moving
-    // the contact point — it's purely a mesh animation.
+    // Pitch: rotate forward+up around the right axis, POSITIVE = NOSE DOWN — the c.baPitch
+    // sign (braking > 0; vantage.js reads it so). It rotated nose-UP until 2026-10-02, so
+    // brake-dive lifted the nose; now the nose dips on the brakes and lifts on power.
     if (_baPitch) {
       const cp = Math.cos(_baPitch), sp = Math.sin(_baPitch);
       for (let i = 0; i < 3; i++) {
         const f = tmpF[i], u = tmpU[i];
-        tmpF[i] = f * cp + u * sp;
-        tmpU[i] = u * cp - f * sp;
+        tmpF[i] = f * cp - u * sp;
+        tmpU[i] = u * cp + f * sp;
       }
     }
     // Cornering lean (render-only) comes from the C2 visual-suspension roll
@@ -8006,27 +8008,26 @@ function render(dt) {
             dirt ? 0.46 : 0.30, dirt ? 0.40 : 0.36, dirt ? 0.26 : 0.15,
             dt * 30);
         }
-        // Rain spray: every car at speed on a wet road drags a rooster tail —
-        // lighter on "wet" (drying line) than under full "rain".
+        // Rain spray: every car at speed on a wet road drags a lingering plume
+        // (Particles.spray: ~1.5 s clouds, so 9-30/s here holds what 0.7 s puffs
+        // at 14-48/s did) — lighter on "wet" (drying line) than under "rain".
         // vStd on BOTH halves: 15 and the /45 span describe a fraction of the
         // car's envelope (spray starts at ~21 % of top speed and is full at
         // ~83 %), so fed a raw ground speed they moved with the OVERALL SPEED
         // slider — at pace 0.5 the strength could never exceed (36-15)/45 = 0.47
         // and full spray was unreachable, at pace 1.3 it was pinned at 1 down
-        // every straight. The particle VELOCITY below stays real m/s: it is
-        // world-space motion, not a threshold (A16).
+        // every straight. The particle VELOCITY stays real m/s (A16).
         if (wet && vStd(c.speed) > 15) {
           const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
-          if (str > 0) {
-            const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre
-            Particles.spray(
-              tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,
-              tmpMat[13] + 0.28,
-              tmpMat[14] + tmpMat[2] * sxo - tmpF[2] * 2.1,
-              -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
-              dt * (14 + 34 * str));
-          }
+          const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre (str > 0: vStd > 15)
+          Particles.spray(
+            tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,
+            tmpMat[13] + 0.28,
+            tmpMat[14] + tmpMat[2] * sxo - tmpF[2] * 2.1,
+            -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
+            dt * (9 + 21 * str));
         }
+        carFx.emit(c, _groundMat, dt, state);   // plank sparks + an AI lock-up's marks (js/fx/car-fx.js)
       }
     }
     if (c.isPlayer && (cockpitRigOnly || visorEye)) {
@@ -8117,10 +8118,9 @@ function render(dt) {
     if (preGrid ? gridFlash
                 : ersCode >= 0 ? ersCode === 1
                 : ((wet && _ledStrobe) || (!wet && night))) {
-      // Rivals: 40 m gate like brake rings. Player always draws. The grid spans
-      // 22 x 8 m, so pre-race it opens up or the field ahead of you sits dark.
-      const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];
-      const lGate = preGrid ? 200 : 40;
+      // Rivals: 40 m like the brake rings; 150 m WET (in spray the rain light IS the car
+      // ahead); 200 m on the 22 x 8 m grid or the field ahead sits dark. Player always.
+      const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2], lGate = preGrid ? 200 : wet ? 150 : 40;
       if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < lGate * lGate) {
         // Wet, grid and ERS-code lights stay full-bright — a status light must
         // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).

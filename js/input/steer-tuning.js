@@ -248,19 +248,25 @@ const STEER_DEFAULTS = { steerRate: 2, steerExpo: 6, steerLock: 7, steerSpeed: 7
 const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSlider)
 const HELP_LABEL = { low: "LOW", med: "MEDIUM", high: "HIGH" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
-const LINE_FOLD = { off: "LINE OFF", corner: "CORNERS", full: "FULL" };
+const LINE_FOLD = { off: "LINE OFF", corner: "CORNERS", full: "FULL", custom: "CUSTOM" };
 // The three FEEL / AIDS setting rows (js/ui/setting-row.js). CUSTOM is a shown
 // but unpickable option: the state the ADVANCED sliders leave behind.
 const FEEL_VALUES = STEER_LEVEL_ORDER.map((n) => [n, STEER_LEVEL_LABEL[n]]).concat([["custom", "CUSTOM", true]]);
 const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]);
-const LINE_VALUES = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
+// CUSTOM is display-only (like FEEL's CUSTOM): PUSH notches (-5..-1) and any
+// non-named PULL value must not fold into CORNERS, or a later LINE STEERING
+// sync can write PULL 3 over a deliberate PUSH.
+const LINE_VALUES = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"], ["custom", "CUSTOM", true]];
 function helpBand() {
   const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
   return dh <= 3 ? "low" : dh <= 7 ? "med" : "high";
 }
 function lineBand() {
   const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
-  return rl === 0 ? "off" : rl >= 5 ? "full" : "corner";
+  if (rl === LINE_LEVELS.off) return "off";
+  if (rl === LINE_LEVELS.full) return "full";
+  if (rl === LINE_LEVELS.corner) return "corner";
+  return "custom";
 }
 
 // Slider + its readout, the pair every row in this panel repeats.
@@ -775,6 +781,7 @@ SettingRow.wire("pm-helplevel", { values: HELP_VALUES, read: helpBand, write: (n
   if (G.soundOn) GameAudio.uiSelect();
 } });
 SettingRow.wire("pm-linemode", { values: LINE_VALUES, read: lineBand, write: (n) => {
+  if (n === "custom" || LINE_LEVELS[n] == null) return;
   store.set("raceLine", LINE_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
 } });
