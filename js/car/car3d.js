@@ -3267,9 +3267,15 @@ const Car3D = (function () {
     }
 
     part("exhaust");
+    // Tip radius for the rain light below. Cockpit builds keep a cheap stub —
+    // full tip layouts are !ckpt only (cockpit triangle ceiling is 1500).
     let exhTipRForLamp = 0.07;
     const exhTwin = exhStyle.pipes != null ? exhStyle.pipes >= 3
       : (engStyle ? !!engStyle.twin : tier("engine") === 2);
+    if (ckpt) {
+      addTube(out, [[0, 0.40, -2.04], [0, 0.40, -2.20]], 0.07, 6,
+              [0.16, 0.16, 0.17], SURFACES.metal);
+    } else {
     const exhBore = Math.max(0.7, Math.min(1.5, exhStyle.bore));
     const exhR0 = (engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
                           : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07)) * exhBore;
@@ -3378,33 +3384,35 @@ const Car3D = (function () {
     if (exhLip >= 1) {
       for (const cx of exits) {
         const colR = exhR * (1 + (exhTwin ? 0.18 : 0.22) * exhLip);
-        addBox(out, cx, EXH_Y, tipZ + (exhTwin ? 0.08 : 0.12),
+        // Lip collar ahead of the tip face so megaphone reads as a wider mouth.
+        addBox(out, cx, EXH_Y, tipZ + (exhTwin ? 0.14 : 0.22),
                colR * (exhTwin ? 2.0 : 2.15), colR * (exhTwin ? 2.0 : 2.15),
                exhTwin ? 0.06 : 0.09, CARBON, SURFACES.carbon);
         if (!exhTwin) {
-          addBox(out, 0, EXH_Y, tipZ + 0.07, colR * 1.95, colR * 1.95, 0.03,
+          addBox(out, 0, EXH_Y, tipZ + 0.16, colR * 1.95, colR * 1.95, 0.03,
                  [0.20, 0.20, 0.22], SURFACES.metal);
         }
       }
     }
     if (exhLip >= 2 && !exhTwin) {
       const colR = exhR * 1.44;
-      addBox(out, 0, EXH_Y, tipZ + 0.18, colR * 2.35, colR * 2.35, 0.06, CARBON, SURFACES.carbon);
+      addBox(out, 0, EXH_Y, tipZ + 0.28, colR * 2.35, colR * 2.35, 0.06, CARBON, SURFACES.carbon);
     }
     if (exhStyle.shield) {
       for (const cx of exits) {
-        addBox(out, cx, EXH_Y + exhR + 0.028, tipZ + (exhTwin ? 0.10 : 0.15),
-               Math.max(exhTwin ? 0.10 : 0.12, exhR * (exhTwin ? 2.4 : 2.6)), 0.010,
+        addBox(out, cx, EXH_Y + tipRShow + 0.028, tipZ + (exhTwin ? 0.16 : 0.22),
+               Math.max(exhTwin ? 0.10 : 0.12, tipRShow * (exhTwin ? 2.4 : 2.6)), 0.010,
                exhTwin ? 0.14 : 0.16, [0.32, 0.30, 0.28], SURFACES.metal);
         if (!exhTwin) {
           for (const s of [-1, 1]) {
-            addBox(out, s * (exhR + 0.022), EXH_Y + exhR * 0.45, tipZ + 0.15,
-                   0.010, exhR * 1.05, 0.13, [0.28, 0.26, 0.24], SURFACES.metal);
+            addBox(out, s * (tipRShow + 0.022), EXH_Y + tipRShow * 0.45, tipZ + 0.22,
+                   0.010, tipRShow * 1.05, 0.13, [0.28, 0.26, 0.24], SURFACES.metal);
           }
         }
       }
     }
     exhTipRForLamp = tipRShow * (exhFlare > 0 && !exhTwin ? (1 + 1.15 * exhFlare) : 1);
+    } // !ckpt exhaust tip layouts
 
     part("sharkFin");
     // liv.finShape picks the outline (FIN_SHAPES); "none" builds no blade at
@@ -3742,11 +3750,14 @@ const Car3D = (function () {
       const tipR = exhTipRForLamp;
       const lampW = Math.min(0.042, tipR * 0.70);
       const lampH = Math.min(0.052, tipR * 0.85);
-      addSpan(out, { z: -2.47, x: 0, y: 0.50, w: 0.14, h: 0.19, t: 0.78 },
-                   { z: -2.57, x: 0, y: 0.50, w: 0.115, h: 0.155, t: 0.62 }, DARK);
-      addBox(out, 0, 0.50, -2.585, lampW, lampH, 0.03,
+      // Lamp sits slightly ABOVE the single tip centreline so the mouth rim
+      // (y 0.50) stays visible under the bloom on stock / megaphone.
+      const lampY = 0.545;
+      addSpan(out, { z: -2.47, x: 0, y: lampY, w: 0.14, h: 0.16, t: 0.78 },
+                   { z: -2.57, x: 0, y: lampY, w: 0.115, h: 0.13, t: 0.62 }, DARK);
+      addBox(out, 0, lampY, -2.585, lampW, lampH, 0.03,
              [2.6, 0.08, 0.06], SURFACES.emissive);
-      addBox(out, 0, 0.50, -2.60, lampW * 0.45, lampH * 0.42, 0.02,
+      addBox(out, 0, lampY, -2.60, lampW * 0.45, lampH * 0.42, 0.02,
              [3.4, 0.12, 0.05], SURFACES.emissive);   // brake-light core
 
       const diffW  = (0.72 + aLvl * 0.145) * Math.max(0.78, Math.min(1.3, aeroStyle.floorEdge));
