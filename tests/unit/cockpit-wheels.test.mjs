@@ -179,11 +179,20 @@ test("the rig draws the chosen wheel, seat and interior; a screenless wheel give
   const gate = rig.indexOf("if (!CockpitOpts.wheelHasScreen(wheelStyle)) return;"), gear = rig.indexOf("getGearDigit(");
   assert.ok(none > 0 && none < wheel, "NONE (and VISOR) return with the column and bulkhead before any wheel");
   assert.ok(wheel < gate && gate < gear, "no screen, no gear/LED/speed/ERS/OT draws");
+  // The forearms ride with the hands: after the wheel (so NONE and VISOR, which
+  // return before it, have no arms) and before the screen gate (so every wheel
+  // with gloves, screen or not, has them).
+  const arms = rig.indexOf("CarMesh.drawForearms(_rigB, base, lay, ");
+  assert.ok(wheel < arms && arms < rig.indexOf('if (wheelStyle === "retro")') && arms < gate, "both sleeves draw with every gloved wheel, and only then");
+  // The lock: progressive, through the shared roll curve, behind a λ12 damp (was a flat 0.80 rad behind λ6).
+  assert.match(rig, /deps\.damp\(c\._whlVis == null \? 0 : c\._whlVis, M4\.clamp\(c\.steerVis \|\| 0, -1, 1\), CarMesh\.WHEEL_ROLL_LAMBDA, dt\);/);
+  assert.match(rig, /const a = CarMesh\.cockpitWheelRoll\(c\._whlVis\);/);
+  assert.match(rig, /getLedStrip\([^;]*, wheelStyle\), _rigB, fx\)/, "each fascia gets its own shift-light row");
   assert.match(draw, /":H" \+ haloSz \+ ":B" \+ CockpitOpts\.body\(\)/, "the cockpit body is cached per halo size");
   assert.match(read("js/car/car3d.js"), /opts\.halo === true \? 1 : \[0, 0\.64, 1, 1\.44\]/, "car3d sizes the first-person hoop");
   const ms = read("js/camera/mode-switch.js");
-  assert.match(ms, /"cockpit-cam", CAM_MODES\[G\.camMode\]\.id === "cockpit"\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/,
-    "body.cockpit-cam (which hides the HUD gear/speed) needs a wheel with a screen");
+  assert.match(ms, /"cockpit-cam", \(camId === "cockpit" \|\| camId === "helmet"\)\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/,
+    "body.cockpit-cam (which hides the HUD gear/speed) needs a wheel with a screen — in COCKPIT and in HELMET, which looks at the same wheel");
   assert.match(ms, /CockpitOpts\.onWheel\(refreshCamBtn\);/, "a mid-race change re-evaluates it");
   const exp = read("js/ui/settings-export.js");
   for (const [k, def, one] of [["cockpitWheel", "f1", '"f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"'], ["cockpitSeat", "std", '"std", "low", "high", "fwd"'],
@@ -197,7 +206,8 @@ test("the rig draws the chosen wheel, seat and interior; a screenless wheel give
 test("all cockpit geometry has finite unit normals, valid indices and non-degenerate triangles", () => {
   const { CarMesh } = loadMesh();
   const meshes = [...CarMesh.COCKPIT_WHEELS.map(w => CarMesh.getCockpitWheel(LIV,w).d),
-    ...["carbon","team","suede","ribbed","classic"].map(k=>CarMesh.getCockpitCabin(k,LIV).d), CarMesh.getCockpitDash().d];
+    ...["carbon","team","suede","ribbed","classic"].map(k=>CarMesh.getCockpitCabin(k,LIV).d), CarMesh.getCockpitDash().d,
+    CarMesh.getForearm(LIV).d, ...[0, 8, 9].flatMap((n) => ["f1", "gt", "yoke"].map((s) => CarMesh.getLedStrip(n, s).d))];
   for(const d of meshes) {
     assert.equal(d.pos.length,d.nrm.length); assert.equal(d.pos.length,d.col.length);
     assert.ok(d.pos.every(Number.isFinite) && d.nrm.every(Number.isFinite));
@@ -217,6 +227,35 @@ test("fifteen shift lenses keep the existing ramp/flash states, with the origina
   assert.equal(off.pos.length/3,15*9,"15 eight-sided round lenses");
   assert.equal(full.pos.length,off.pos.length); assert.equal(flash.pos.length,off.pos.length);
   assert.ok(full.col.some(c=>c>1)); assert.ok(off.col.every(c=>c<0.1));
+  // BIG ENOUGH TO READ at the wheel's 0.46 m: ~5 mm lenses (were 3.4), never
+  // touching, each row inside its own fascia's top edge (the _wheelScreen
+  // outline), above the LCD and clear of the side buttons.
+  for (const style of ["f1", "gt", "butterfly", "yoke", "endurance"]) {
+    const d = CarMesh.getLedStrip(0, style).d, lens = (i) => bounds({ pos: d.pos.slice(i * 27, i * 27 + 27) });
+    const r = (lens(0).mx[0] - lens(0).mn[0]) / 2, gap = lens(1).mn[0] - lens(0).mx[0], all = bounds(d);
+    assert.ok(r >= 0.0044 && r <= 0.0052, `${style}: lens radius ${(r * 1000).toFixed(1)} mm`);
+    assert.ok(gap > 0.0005, `${style}: lenses ${(gap * 1000).toFixed(2)} mm apart — a row of lamps, not a bar`);
+    // The fascia plate's driver-side face (_rigPlate z 0.014, depth 0.042) is
+    // the only geometry at z -0.007 inboard of the gloves (|x| >= 0.169); its
+    // convex outline must hold the row.
+    const wheel = CarMesh.getCockpitWheel(LIV, style).d, plate = [];
+    for (let i = 0; i < wheel.pos.length; i += 3)
+      if (Math.abs(wheel.pos[i + 2] + 0.007) < 1e-9 && Math.abs(wheel.pos[i]) < 0.15) plate.push([wheel.pos[i], wheel.pos[i + 1]]);
+    // Convex hull (monotone chain, counter-clockwise), then every edge must
+    // have the point on its inner side — with a millimetre's grace.
+    const pts = plate.slice().sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+    const turn = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const half = (list) => { const h = []; for (const p of list) { while (h.length > 1 && turn(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop(); h.push(p); } h.pop(); return h; };
+    const hull = [...half(pts), ...half(pts.slice().reverse())];
+    const inside = (x, y) => hull.every((a, i) => {
+      const b = hull[(i + 1) % hull.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      return turn(a, b, [x, y]) / L >= -0.001;
+    });
+    for (const [x, y] of [[all.mx[0], all.mx[1]], [all.mn[0], all.mx[1]], [all.mx[0], all.mn[1]], [all.mn[0], all.mn[1]]])
+      assert.ok(inside(x, y), `${style}: the row's corner (${x.toFixed(3)}, ${y.toFixed(3)}) overhangs the fascia`);
+    assert.ok(all.mn[1] >= 0.0575, `${style}: the row sits above the LCD, not on it`);
+    assert.equal(CarMesh.getLedStrip(0, style), CarMesh.getLedStrip(0, style), "cached per row");
+  }
   const gear=CarMesh.getGearDigit(8).d, {mn,mx}=bounds(gear);
   assert.ok(Math.abs((mn[0]+mx[0])/2-0.014)<1e-9,"gear keeps its original LCD cell");
   assert.ok(mn[0]>-0.056&&mx[0]<0.056&&mn[1]>-0.010&&mx[1]<0.058,"glyph stays on LCD");
@@ -360,9 +399,10 @@ test("every interior blocks road rays through the lower footwell from every seat
     const d = CarMesh.getCockpitCabin(interior, LIV).d;
     const mesh = { ...d, mat: Array(d.pos.length / 3).fill(1) };
     for (const seat of opts.CHOICES.seat.values) {
-      const l = opts.layout("f1", seat), eye = [0, l.eyeU, l.eyeF];
-      for (const x of [-0.55,-0.28,0,0.28,0.55]) for (const z of [-0.10,0.25,0.65,1.25,2.0])
-        assert.equal(firstMaterial(mesh, eye, [x,0,z], 1, true), 1, `${interior}/${seat}: road leak toward ${x},${z}`);
+      const l = opts.layout("f1", seat);
+      for (const eye of [[0, l.eyeU, l.eyeF], ...headEyes(l)])   // the seat at rest, and the head shifted (vantage.js HEAD_*)
+        for (const x of [-0.55,-0.28,0,0.28,0.55]) for (const z of [-0.10,0.25,0.65,1.25,2.0])
+          assert.equal(firstMaterial(mesh, eye, [x,0,z], 1, true), 1, `${interior}/${seat} eye ${eye.map((v) => v.toFixed(3))}: road leak toward ${x},${z}`);
     }
   }
 });
@@ -381,12 +421,12 @@ test("cockpit shoulders continue behind every seat when looking sideways or into
       mat: mesh.mat.concat(Array(cabin.pos.length / 3).fill(1)) };
     const rear = Math.min(...mesh.pos.slice(start * 3, end * 3).filter((_, i) => i % 3 === 2));
     for (const seat of opts.CHOICES.seat.values) {
-      const l = opts.layout("f1", seat), eye = [0, l.eyeU, l.eyeF];
+      const l = opts.layout("f1", seat);
       assert.ok(rear < l.eyeF - 2.0, `${cockpitBody}/${seat}: shoulders terminate too close behind the eye`);
-      for (const sign of [-1, 1]) for (const deg of [70, 90, 110, 130, 150]) {
+      for (const eye of [[0, l.eyeU, l.eyeF], ...headEyes(l)]) for (const sign of [-1, 1]) for (const deg of [70, 90, 110, 130, 150]) {
         const a = deg * Math.PI / 180;
-        const target = [sign * 1.5 * Math.sin(a), 0.10, l.eyeF + 1.5 * Math.cos(a)];
-        assert.notEqual(firstMaterial(shoulders, eye, target, 1, true), null, `${cockpitBody}/${seat}: exposed shoulder end at ${sign * deg} degrees`);
+        const target = [eye[0] + sign * 1.5 * Math.sin(a), 0.10, eye[2] + 1.5 * Math.cos(a)];
+        assert.notEqual(firstMaterial(shoulders, eye, target, 1, true), null, `${cockpitBody}/${seat} eye ${eye.map((v) => v.toFixed(3))}: exposed shoulder end at ${sign * deg} degrees`);
       }
     }
   }
@@ -397,11 +437,13 @@ test("every cockpit trim encloses the rear floor and bulkhead from all seats", (
   for (const interior of opts.CHOICES.interior.values) {
     const d = CarMesh.getCockpitCabin(interior, LIV).d, mesh = { ...d, mat: Array(d.pos.length / 3).fill(1) };
     for (const seat of opts.CHOICES.seat.values) {
-      const l = opts.layout("f1", seat), eye = [0, l.eyeU, l.eyeF];
-      for (const x of [-0.7, -0.3, 0, 0.3, 0.7]) for (const z of [-0.45, -0.9, -1.5, -2.5])
-        assert.equal(firstMaterial(mesh, eye, [x, 0, z], 1, true), 1, `${interior}/${seat}: rear road leak toward ${x},${z}`);
-      for (const x of [-0.35, 0, 0.35]) for (const y of [0.45, 0.65, 0.80])
-        assert.equal(firstMaterial(mesh, eye, [x, y, -2], 1, true), 1, `${interior}/${seat}: open rear bulkhead toward ${x},${y}`);
+      const l = opts.layout("f1", seat);
+      for (const eye of [[0, l.eyeU, l.eyeF], ...headEyes(l)]) {
+        for (const x of [-0.7, -0.3, 0, 0.3, 0.7]) for (const z of [-0.45, -0.9, -1.5, -2.5])
+          assert.equal(firstMaterial(mesh, eye, [x, 0, z], 1, true), 1, `${interior}/${seat} eye ${eye.map((v) => v.toFixed(3))}: rear road leak toward ${x},${z}`);
+        for (const x of [-0.35, 0, 0.35]) for (const y of [0.45, 0.65, 0.80])
+          assert.equal(firstMaterial(mesh, eye, [x, y, -2], 1, true), 1, `${interior}/${seat} eye ${eye.map((v) => v.toFixed(3))}: open rear bulkhead toward ${x},${y}`);
+      }
     }
   }
 });
@@ -435,9 +477,9 @@ test("the rear enclosure covers the halo mounting ends during an oblique glance"
     for (const interior of opts.CHOICES.interior.values) {
       const d = CarMesh.getCockpitCabin(interior, LIV).d, cabin = { ...d, mat: Array(d.pos.length / 3).fill(1) };
       for (const seat of opts.CHOICES.seat.values) {
-        const l = opts.layout("f1", seat), eye = [0,l.eyeU,l.eyeF];
-        for (const target of mounts)
-          assert.equal(firstMaterial(cabin, eye, target, 1, true), 1, `${halo}/${interior}/${seat}: floating rear halo end`);
+        const l = opts.layout("f1", seat);
+        for (const eye of [[0,l.eyeU,l.eyeF], ...headEyes(l, true)]) for (const target of mounts)   // the costliest sweep: the two widest eyes (all five pass, 2026-10-03)
+          assert.equal(firstMaterial(cabin, eye, target, 1, true), 1, `${halo}/${interior}/${seat} eye ${eye.map((v) => v.toFixed(3))}: floating rear halo end`);
       }
     }
   }
@@ -488,4 +530,124 @@ test("pedal indicators and speed-unit legends follow live state, with a bounded 
   const count=made.length;
   for(let i=0;i<30;i++)CarMesh.drawWheelExtras(mat,{throttleDemand:1,brakeDemand:0},i);
   assert.equal(made.length,count,"holding a pedal never rebuilds the status mesh");
+});
+
+// THE ARMS AND THE LOCK (js/car/car-mesh.js cockpitWheelRoll / forearm*). The
+// gloves ended at their cuffs and floated, worst at full lock; the wheel turned
+// a flat ±46° a beat late. Checked in CAR space with the rig matrices the draw
+// builds (base = identity), for every gloved wheel, seat, steer and side.
+const _mul = (a, b) => { const o = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c*4+r] += a[k*4+r] * b[c*4+k]; return o; };
+const _I = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+function rigFor(CarMesh, L, steer) {
+  const a = CarMesh.cockpitWheelRoll(steer), ca = Math.cos(a), sa = Math.sin(a);
+  return _mul([L.wheelS,0,0,0, 0,L.wheelS,0,0, 0,0,L.wheelS,0, 0,L.wheelY,L.wheelZ,1], [ca,sa,0,0, -sa,ca,0,0, 0,0,1,0, 0,0,0,1]);
+}
+
+test("the wheel turns progressively to a real lock, with the shipped centre feel and a lighter lag", () => {
+  const { CarMesh } = loadMesh();
+  const roll = CarMesh.cockpitWheelRoll;
+  assert.equal(Math.abs(roll(0)), 0, "centred steer, centred wheel");
+  const lock = Math.abs(roll(1));
+  assert.ok(lock >= 1.4 && lock <= 1.6, `full lock rolls ${lock.toFixed(2)} rad — a 2026 wheel turns ~±90°, not the old ±46°`);
+  assert.ok(Math.abs(roll(-1) + roll(1)) < 1e-12 && Math.abs(roll(0.3) + roll(-0.3)) < 1e-12, "left and right are mirror images");
+  assert.ok(Math.abs(roll(1e-4) / 1e-4 + 0.80) < 1e-3, "small corrections keep the shipped 0.80 rad slope (and its sign)");
+  for (let v = 0.05; v <= 1; v += 0.05) assert.ok(Math.abs(roll(v)) > Math.abs(roll(v - 0.05)), "more steer is always more lock");
+  assert.equal(Math.abs(roll(3)), lock, "steer past ±1 is clamped");
+  assert.ok(CarMesh.WHEEL_ROLL_LAMBDA >= 10, "the visual damp stacked on steerVis is light (was λ6)");
+});
+
+test("each forearm runs from inside its cuff to a car-fixed elbow, clear of the near plane at any lock", () => {
+  const { CarMesh } = loadMesh(), { opts } = loadOpts({});
+  for (const style of CarMesh.COCKPIT_WHEELS) {
+    // The sleeve starts INSIDE the glove: the cuff's lowest point is under the wrist anchor.
+    const glove = CarMesh.getCockpitWheel(LIV, style).d, mid = [0, 0, 0];
+    CarMesh.forearmEnds(_I, _I, { wheelY: 0, wheelZ: 0 }, 1, mid, [0, 0, 0]);
+    let cuffLow = Infinity;
+    for (let i = 0; i < glove.pos.length; i += 3)
+      if (Math.abs(glove.pos[i] - mid[0]) < 0.03 && Math.abs(glove.pos[i + 2] - mid[2]) < 0.03 && glove.pos[i + 1] < -0.09) cuffLow = Math.min(cuffLow, glove.pos[i + 1]);
+    assert.ok(cuffLow < mid[1] - 0.01, `${style}: the sleeve starts ${((cuffLow - mid[1]) * 1000).toFixed(0)} mm into the cuff`);
+    for (const seat of opts.CHOICES.seat.values) {
+      const L = opts.layout(style, seat);
+      for (let steer = -1; steer <= 1.0001; steer += 0.25) for (const side of [-1, 1]) {
+        const W = [0, 0, 0], E = [0, 0, 0];
+        CarMesh.forearmEnds(rigFor(CarMesh, L, steer), _I, L, side, W, E);
+        // From the seat AND from the most-forward head (HELMET eye under braking):
+        // the wrist is past the 0.30 m near plane, and any stretch of sleeve that
+        // comes nearer than it (plus the sleeve's own radius) is already under the
+        // frame's bottom edge — 40.5° at the widest stock FOV — so the cut never shows.
+        for (const eye of [[0, L.eyeU, L.eyeF], headEyes(L)[3]]) {
+          assert.ok(W[2] - eye[2] >= 0.30, `${style}/${seat} steer ${steer}: the wrist is ${(W[2] - eye[2]).toFixed(3)} m ahead of the eye (near plane 0.30)`);
+          for (let t = 0; t <= 1.0001; t += 0.05) {
+            const p = W.map((v, k) => v + (E[k] - v) * t), depth = p[2] - eye[2];
+            if (depth >= 0.30 + CarMesh.ARM_R * CarMesh.ARM_TAPER * 1.15) continue;
+            const below = Math.atan2(eye[1] - p[1], depth) * 180 / Math.PI;
+            assert.ok(below >= 42, `${style}/${seat} steer ${steer}: sleeve at ${(depth).toFixed(3)} m is only ${below.toFixed(1)}° under the eye — the near plane would cut it in frame`);
+          }
+        }
+        assert.ok(Math.sign(E[0]) === side, "each elbow stays on its own side of the seat");
+        const elbowBelow = Math.atan2(L.eyeU - E[1], E[2] - L.eyeF) * 180 / Math.PI;
+        assert.ok(elbowBelow >= 42, `${style}/${seat}: the elbow end is ${elbowBelow.toFixed(1)}° under the eye — its cap would show at the frame's bottom edge`);
+        const len = Math.hypot(E[0] - W[0], E[1] - W[1], E[2] - W[2]);
+        assert.ok(len > 0.12 && len < 0.50, `${style}/${seat}: a ${len.toFixed(2)} m sleeve — an arm, never a rope, even at full lock`);
+      }
+    }
+  }
+  // The stretch: the unit sleeve's wrist and elbow land exactly on the two ends,
+  // its cross-section is ARM_R and square to the axis, and the basis is right-handed.
+  const W = [0.15, 0.59, 0.26], E = [0.215, 0.49, 0.11], m = CarMesh.forearmMatrix(W, E, [0, 1, 0], new Array(16));
+  const at = (x, y, z) => [0, 1, 2].map((k) => m[k] * x + m[4 + k] * y + m[8 + k] * z + m[12 + k]);
+  assert.deepEqual(at(0, 0, 0).map((v) => +v.toFixed(9)), W);
+  assert.deepEqual(at(0, 0, 1).map((v) => +v.toFixed(9)), E);
+  const X = m.slice(0, 3), Y = m.slice(4, 7), Z = m.slice(8, 11), dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  assert.ok(Math.abs(Math.hypot(...X) - CarMesh.ARM_R) < 1e-12 && Math.abs(Math.hypot(...Y) - CarMesh.ARM_R) < 1e-12);
+  assert.ok(Math.abs(dot(X, Z)) < 1e-12 && Math.abs(dot(Y, Z)) < 1e-12 && Math.abs(dot(X, Y)) < 1e-12);
+  assert.ok(dot([X[1] * Y[2] - X[2] * Y[1], X[2] * Y[0] - X[0] * Y[2], X[0] * Y[1] - X[1] * Y[0]], Z) > 0, "right-handed, so the sleeve's winding is not mirrored");
+  // Drawn twice a frame from one cached mesh, rebuilt only when the suit colour changes.
+  const { CarMesh: M2, draws, made } = loadMesh();
+  const L = opts.layout("f1", "std"), rig = rigFor(M2, L, 0.5);
+  M2.drawForearms(rig, _I, L, LIV, {}); const n = made.length;
+  M2.drawForearms(rig, _I, L, LIV, {});
+  assert.equal(made.length, n, "no per-frame rebuild");
+  assert.equal(draws.length, 4, "two sleeves a frame");
+  assert.ok(draws.every((d) => d.mat.every(Number.isFinite)));
+  assert.notEqual(M2.getForearm({ ...LIV, c2: [0.1, 0.2, 0.8] }).d, draws[0].mesh, "a livery change rebuilds the sleeve");
+});
+
+// THE HEAD MOVES (js/camera/vantage.js HEAD_*): outward under lateral g,
+// forward and down under braking, and HELMET seats the eye further forward
+// still. Every sightline sweep that guards "the eye never sees past the trim"
+// has to hold from those eyes too, not just from the seat at rest.
+let _cams = null;
+function headEyes(l, few = false) {
+  const cams = _cams || (_cams = loadOpts({}, "", true).cams), H = cams.HEAD_MAX, f = H.fwd + cams.HELMET_EYE_FWD;
+  // The sweeps below test both sides of the car, so one lateral sign stands
+  // for both (mirror symmetry); `few` keeps the two that move the eye most.
+  const all = [[H.lat, l.eyeU, l.eyeF], [-H.lat, l.eyeU, l.eyeF],
+    [H.lat, l.eyeU - H.down, l.eyeF + H.fwd], [-H.lat, l.eyeU - H.down, l.eyeF + f], [H.lat, l.eyeU, l.eyeF + f]];
+  return few ? [all[0], all[3]] : all;
+}
+
+test("the head shift is small and bounded, and the shifted eye stays well clear of every cockpit surface", () => {
+  const { cams } = loadOpts({}, "", true), { opts } = loadOpts({}), { Car3D } = loadCar3D();
+  assert.ok(cams.HEAD_MAX.lat >= 0.02 && cams.HEAD_MAX.lat <= 0.03, "2-3 cm outward at full lateral g");
+  assert.ok(cams.HEAD_MAX.fwd > 0 && cams.HEAD_MAX.fwd <= 0.02 && cams.HEAD_MAX.down > 0 && cams.HEAD_MAX.down <= 0.01, "a nod, not a lunge");
+  assert.ok(cams.HELMET_EYE_FWD > 0 && cams.HELMET_EYE_FWD <= 0.08, "HELMET is the cockpit eye moved forward slightly");
+  // Nearest cockpit vertex (body x halo x seat) from every shifted eye: a head
+  // needs room, and the closest thing today (the roll structure behind the
+  // HIGH seat) is ~10 cm away.
+  const near = (mesh, e) => {
+    let best = Infinity;
+    for (let i = 0; i < mesh.pos.length; i += 3) best = Math.min(best, Math.hypot(mesh.pos[i] - e[0], mesh.pos[i + 1] - e[1], mesh.pos[i + 2] - e[2]));
+    return best;
+  };
+  for (const halo of [0, 2, 4]) for (const cockpitBody of opts.CHOICES.body.values) {
+    const mesh = Car3D.build(LIV.c1, LIV.c2, { cockpit: true, halo, cockpitBody, noWheels: true, noDriver: true });
+    for (const seat of opts.CHOICES.seat.values) {
+      const l = opts.layout("f1", seat);
+      for (const e of headEyes(l)) {
+        const d = near(mesh, e);
+        assert.ok(d >= 0.08, `${cockpitBody}/halo ${halo}/${seat}: a shifted eye is ${(d * 100).toFixed(1)} cm from the bodywork`);
+      }
+    }
+  }
 });

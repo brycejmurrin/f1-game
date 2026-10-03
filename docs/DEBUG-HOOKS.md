@@ -458,7 +458,7 @@ display label such as `"TV SIDE"` — returns `false`.
 | `tv` | TV | Live TV director (`js/camera/director.js`): auto-cuts between broadcast shots on battles/leader; auto-spectates after finish/retire in solo. Writes `dbgCam` only — never car forces. Status: `Director.live().status()` |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone","tv"] }
+__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone","tv","helmet"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
 __apex.camera("tcam");      // → { mode:"tcam", index:11 }
 __apex.camera("trackside"); // → { mode:"trackside", index:14 }

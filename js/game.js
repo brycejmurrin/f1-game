@@ -1985,7 +1985,7 @@ GarageScene.init(gfx);
 // js/fx/particles.js; same injected-renderer pattern as CarMesh above.
 Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
-        getBrakeRing, drawRearLights, drawMirrorLights, getExhaustFlame, getErsLight,
+        getBrakeRing, drawRearLights, drawMirrorLights,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
@@ -6265,9 +6265,6 @@ function restoreLightTune(undo) { return ltStore.restore(undo); }
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in
 // js/lighting/frame-lights.js (LightTune.setFrameLights / appendCarTailLights).
 const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
-const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
-const _ringWorld = new Float32Array(16);   // scratch for the ERS light / exhaust flame placement
-const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
 const _lightFwd = [0, 0, 0];   // camera-forward scratch for the ahead-biased cull
 function setFrameLights(eye, scale, fwd, srcSet) {
   LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier, srcSet);
@@ -6678,7 +6675,7 @@ function render(dt) {
   // lambda or the eye lags behind/into the bodywork at speed.
   const racing = state === "race" || state === "count";
   const camId = CAM_MODES[camMode].id;
-  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "tcam");
+  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet" || camId === "tcam");
   // Just after a cut, ease the external cams in with a gentler lambda so the angle
   // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
   const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
@@ -6695,7 +6692,7 @@ function render(dt) {
   const softCam = camId === "drone" || camId === "rival" || camId === "pitwall";
   const raceLam = softCam ? (camComfort() ? 6 : (camId === "drone" ? 12 : 14)) : ((camId === "heli" || camId === "side" || camId === "cinematic" || camId === "overhead" || camId === "low" || camId === "trackside") ? 9 : 18);
   const lE = onboard ? 400 : (racing ? raceLam : 1.6) * cutEase;
-  const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
+  const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? raceLam + (softCam ? 1 : 2) : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
@@ -6794,7 +6791,7 @@ function render(dt) {
   // they keep 0.3 and every other view takes a near plane that buys back a lot
   // of depth resolution for free.
   const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
-  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor") ? 0.3 : 0.9;
+  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor" || _projMode === "helmet") ? 0.3 : 0.9;
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   if (homeTrack && !dbgCam) { const view = uiExperience.trackCamera(); _mProj[8] = view.shiftX; _mProj[9] = view.shiftY; }
@@ -7366,7 +7363,7 @@ function render(dt) {
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
-  const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "cockpit";
+  const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "helmet");
   // VISOR is the cockpit WITHOUT ITS STEERING WHEEL (a phone in the hand is the
   // wheel): the same rig — tub, halo, mirrors, front wheels — around an eye
   // closer to the front and lower (js/camera/vantage.js VISOR_EYE_*); the player
@@ -7444,9 +7441,8 @@ function render(dt) {
       // grown by the near plane) — a 3.4 m radius hid a rival ALONGSIDE in the onboard
       // views as the player drew level. Local player is never culled. Y without bank is
       // fine for the near-eye test.
-      // Side frustum is applied AFTER the car is queued for the shadow map —
-      // a rival just off a ~60° chase FOV can still throw a sun/car shadow
-      // onto the visible road (the car map is a ±42 m ortho around the player).
+      // Side frustum: AFTER the shadow enqueue with apex26.fieldLod=0 (an off-FOV
+      // rival casting onto the visible road); FieldLod moves it after the test.
       if (!c.isPlayer) {
         const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
         if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
@@ -7523,9 +7519,9 @@ function render(dt) {
     // On the jacks (PitLane.stopAnim): the body rises with the wheels, which
     // drawPlayerWheels lifts by the same number off _groundMat.
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
-    shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
-    // Side frustum: 8 m sphere, same planes as propBatches. After the
-    // shadow enqueue so an off-camera rival still casts. Player never culled.
+    if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
+    const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2);   // rival LOD by camera distance (js/car/field-lod.js)
+    // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
       const x = tmpP[0], y = tmpP[1], z = tmpP[2], r = 8;
       let _out = false;
@@ -7535,6 +7531,7 @@ function render(dt) {
       }
       if (_out) continue;
     }
+    if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2));   // visible cars only; rivals cast into the maps within 50 m
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the same yawVis as the body
     // (heading vs road tangent) so the nose rotates when the car does. Pitch,
@@ -7680,7 +7677,7 @@ function render(dt) {
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
     if (body) {
       gfx.draw(body, tmpMat, paint);
-      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      if (_lod < 2) queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // crew + kit, on the ground beside it
@@ -7702,20 +7699,16 @@ function render(dt) {
     // on the HUD alone would be a lie about what the physics is doing.
     // Skipped in cockpit view (that branch `continue`s well above this) and for
     // a loaded GLB body, whose wings are somebody else's geometry.
-    // Distance-gated for RIVALS, exactly as the brake rings above are and for
-    // the same reason — a wing element is ~1 m x 0.15 m, and 4 flaps x 21 AI is
-    // ~84 draws a frame, every one a VAO bind + drawElements (each flap is its
-    // own mesh, so the bind never hits the cache). The cue this exists to sell
-    // is the car AHEAD of you opening its wings, not one two straights away.
-    // 150 m is deliberately generous next to the rings' 40 m: the rings are a
-    // glow that genuinely goes sub-pixel, whereas a rear wing swinging is still
-    // legible at distance. The player is never gated — it is the car you are
-    // looking at.
+    // Distance-gated for RIVALS like the brake rings — 4 flaps x 21 AI is ~84
+    // draws a frame, each its own mesh. The cue is the car AHEAD opening its
+    // wings: FieldLod.flapsM() is 80 m (150 m with apex26.fieldLod=0, generous
+    // next to the rings' 40 m because a swinging wing stays legible). The
+    // player is never gated — it is the car you are looking at.
     if (!carDraw.modelBuf) {
       let drawFlaps = true;
       if (!c.isPlayer) {
         const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
-        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < 150 * 150;
+        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < FieldLod.flapsM() ** 2;
       }
       if (drawFlaps) {
         const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
@@ -7779,29 +7772,9 @@ function render(dt) {
         drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(c.team.id, cm && cm.mirror));
       }
     }
-    // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
-    if (c.isPlayer && isErsDeploying(c)) {
-      const W = _ringWorld;
-      W.set(tmpMat);
-      W[12] += W[4] * 0.605 - W[8] * 2.615;
-      W[13] += W[5] * 0.605 - W[9] * 2.615;
-      W[14] += W[6] * 0.605 - W[10] * 2.615;
-      _ersLightOpts.alpha = 0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2);
-      gfx.draw(getErsLight(), W, _ersLightOpts);
-    }
-    // Brief fuel-coloured throttle-lift after-fire, visible at any time of day.
-    if ((c.exhaustPop || 0) > 0.05) {   // every car — the transient lasts ~0.2 s
-      const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
-      const W = _ringWorld;
-      W.set(tmpMat);
-      // 3 cm forward of the boost quad in the same clear pocket (see above) —
-      // at z -2.24 it hides behind the rain-light housing from chase cam.
-      W[12] += W[4] * 0.40 - W[8] * 2.63;
-      W[13] += W[5] * 0.40 - W[9] * 2.63;
-      W[14] += W[6] * 0.40 - W[10] * 2.63;
-      _flameOpts.alpha = (0.30 + 0.55 * fl) * c.exhaustPop;
-      gfx.draw(getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W, _flameOpts);
-    }
+    // The player's ERS strip and every car's throttle-lift after-fire (rivals
+    // within 60 m, FieldLod): js/car/car-draw.js drawExhaustFx.
+    carDraw.drawExhaustFx(c, tmpMat, c.isPlayer && isErsDeploying(c), FieldLod.flame(_lodD2));
   }
   // Flush all accumulated car decals in one decal-program block — not
   // interleaved with the lit body draws (~2 program+state flips per car).

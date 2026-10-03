@@ -26,6 +26,7 @@ window.CamModes = (function () {
     { id: "pitwall",   label: "PIT WALL",   cut: 0.45 },    // pit-lane / pit-exit wall cam (optional auto-cut)
     { id: "drone",     label: "DRONE",      cut: 0.5 },     // smoothed tether with corner look-ahead (heli alternative)
     { id: "tv",        label: "TV",        cut: 0.5 },      // live TV director (js/camera/director.js) — append only; index is apex26.camMode
+    { id: "helmet",    label: "HELMET",     cut: 0 },       // the cockpit from inside the lid: eye forward, visor frame (css/hud.css)
   ];
   const HOLD_MS = 340;   // CAM button hold before the picker opens
 
@@ -54,9 +55,13 @@ window.CamModes = (function () {
         b.setAttribute("aria-label", `AUTO camera, ${CAM_MODES[G.camMode].label}`);
       } else if (b) { b.textContent = CAM_MODES[G.camMode].label; b.setAttribute("aria-label", `${CAM_MODES[G.camMode].label} camera`); }
       // cockpit-cam hides the HUD readouts the wheel's LCD carries — only while
-      // the chosen wheel HAS one (js/camera/cockpit-opts.js WHEEL).
-      document.body.classList.toggle("cockpit-cam", CAM_MODES[G.camMode].id === "cockpit"
+      // the chosen wheel HAS one (js/camera/cockpit-opts.js WHEEL). HELMET looks
+      // at the same wheel; it also wears the visor frame (css/hud.css), keyed on
+      // an attribute because the cssClasses ratchet has no room for a class.
+      const camId = CAM_MODES[G.camMode].id;
+      document.body.classList.toggle("cockpit-cam", (camId === "cockpit" || camId === "helmet")
         && (typeof CockpitOpts === "undefined" || CockpitOpts.wheelHasScreen()));
+      document.body.toggleAttribute("data-helmet-cam", camId === "helmet");
       // MOVE & SIZE swaps its cockpit / other layout on the SAME frame: waiting
       // for the HUD's 10 Hz tick (js/ui/hud.js) left one tick of chips at the
       // cockpit offsets over the touch buttons after leaving the cockpit.

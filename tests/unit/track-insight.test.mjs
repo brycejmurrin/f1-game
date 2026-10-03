@@ -7,8 +7,10 @@
 // crafted to break it and only ever as an AMBER, fia-coded, fix-less issue
 // that TrackFixes refuses; TRACK OF THE DAY is one seed per UTC day; START FROM
 // traces Monza / Spa / Monaco into a 60–120 point lattice loop that builds to
-// within 3 % of the real lap. The fleet calibration (≤ 45 fia-* on the 52
-// circuits, ≤ 15 per code, none RED) is in track-validate-fleet.test.mjs.
+// within 3 % of the real lap; a short sharp hill on the start straight reads
+// as a crest (the car goes light) and a deep dip as a compression. The fleet
+// calibration (≤ 60 fia-* circuit-codes on the 52 circuits, ≤ 15 per code, a
+// dip on ≤ 3, none RED) is in track-validate-fleet.test.mjs.
 //
 // Run: node --test tests/unit/track-insight.test.mjs
 import test from "node:test";
@@ -127,6 +129,40 @@ test("FIA Grade 1: each rule fires on a design built to break it — AMBER, fia-
   }
   assert.ok(V.check(cases[0][1]).stats.passZones >= 1, "the long straight is a passing zone");
   assert.equal(V.check(cases[4][1]).stats.passZones, 0);
+});
+
+test("crests and dips: a 30 m-half, 1.5 m hill on the start straight lifts the car; a 3 m dip compresses it — AMBER, one per stretch, at the spot", () => {
+  const L = V.check(design({ pts: BOX })).tr.total, at = 200 / L;   // 200 m after the line: flat out
+  const bump = (rise, n = 1) => design({ pts: BOX, elevations: Array.from({ length: n }, () => ({ s: at, halfM: 30, rise })) });
+  const check = (v, code) => {
+    const hits = v.issues.filter((i) => i.code === code);
+    for (const i of hits) {
+      assert.equal(i.level, "amber", code + " is advice, never a gate");
+      assert.ok(Number.isFinite(i.s), code + " has a place on the lap");
+      assert.equal(i.fix, undefined); assert.equal(F.canFix(i), false, "FIX ALL leaves " + code + " alone");
+    }
+    return hits;
+  };
+  const crest = V.check(bump(1.5));
+  assert.equal(crest.red, 0, codes(crest));
+  const c = check(crest, "fia-crest");
+  assert.equal(c.length, 1, "one crest, one row: " + codes(crest));
+  assert.ok(Math.abs(c[0].s - at * L) <= 12, "at the hill's top: " + c[0].s + " vs " + at * L);
+  assert.match(c[0].msg, /^Crest at \d+\.\d km: the car goes light \(\d+\.\d g\) at \d+ km\/h$/);
+  assert.equal(check(crest, "fia-sag").length, 0, "a hill is no dip");
+  // One grade-capped dip (|rise| ≤ halfM / 19.6, under 8 %) peaks at ~1.6 g over
+  // the 40 m window — under the 2.5 g limit; two stacked on one spot (a 3 m
+  // hole, each bump inside the cap) compress the car past it.
+  assert.equal(check(V.check(bump(-1.5)), "fia-sag").length, 0, "a single capped −1.5 m dip stays under 2.5 g");
+  const dip = V.check(bump(-1.5, 2));
+  const d = check(dip, "fia-sag");
+  assert.equal(d.length, 1, "one dip, one row: " + codes(dip));
+  assert.ok(Math.abs(d[0].s - at * L) <= 12, "at the dip's bottom: " + d[0].s);
+  assert.match(d[0].msg, /^Dip at \d+\.\d km: \d+\.\d g compression at \d+ km\/h$/);
+  assert.equal(dip.red, 0, codes(dip));
+  // verticalG on its own: the same answer, and nothing on the flat box.
+  assert.deepEqual(plain(I.verticalG(V.check(design({ pts: BOX })).tr)), []);
+  assert.deepEqual(plain(I.verticalG(crest.tr).map((x) => x.code)), ["fia-crest"]);
 });
 
 test("passing zones: a long flat-out run into a heavy stop, seen across the line, one per braking point", () => {

@@ -387,6 +387,7 @@ const FULL = [
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
+  "js/car/field-lod.js",  // FieldLod: rival-car distance LOD table + selectors (wheels / flaps / flame / whole-car / shadow casters / mirror cap)
   "js/car/car-draw.js",   // car mesh/atlas caches, decal queue, cockpit rig, planted wheels (CarDraw.create(G, deps)), extracted from game.js
   "js/render/shared/shadow-pass.js",   // sun / car / lamp shadow maps, snap caches, caster pools (ShadowPass.create(G, deps)), extracted from game.js
   "js/render/shared/mirror-pass.js",   // HUD rear-view mirror: second camera + rival poses, gfx.mirrorBegin/End (MirrorPass.create(G, deps))
@@ -916,9 +917,10 @@ const LAZY_EDITOR = [
   "js/editor/fixes.js",       // TrackFixes: one-click remedies for the validator's issues (start, length, spacing, smoothing, bridge, clearance)
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
   "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
+  "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (hills as cosine bumps → callbacks)
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
-// stamps / randomise / validate / insight / fixes / canvas destructure TrackShape at eval — the
+// stamps / randomise / validate / insight / fixes / canvas / profile destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/designer.js")

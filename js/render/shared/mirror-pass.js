@@ -30,7 +30,7 @@
 const MirrorPass = (function () {
   const MODES = ["auto", "on", "off"];
   // AUTO's views: the ones with no view of the road behind at all.
-  const ONBOARD = { cockpit: 1, hood: 1, visor: 1, tcam: 1 };
+  const ONBOARD = { cockpit: 1, hood: 1, visor: 1, tcam: 1, helmet: 1 };
   const H_FOV = 56 * Math.PI / 180;   // horizontal; the vertical follows the rect's aspect
   const NEAR = 0.5, FAR = 700;
   // QUALITY LADDER. The mirror is never hidden for performance — a player
@@ -89,6 +89,10 @@ const MirrorPass = (function () {
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
     let _collapsed = false, _chip = null, _chipShown = false, _wired = false;
     let _bx = 0, _bz = -1;   // the mirror's look direction (the player's back), horizontal unit
+    let _coneTan = 1;        // tan(horizontal half-FOV) of the pass in flight (pass())
+    // FIELD LOD candidate pool (drawCarsLod): a pooled matrix, car and eye
+    // distance squared per rival that survives the arc / behind-eye / cone tests.
+    const _cMats = [], _cCars = [], _cD2 = [], _cKeep = [];
     let _q = QUALITY[0], _qi = -1, _qWant = -1, _qHeld = 0;
     // The frame's CSS box (measure()): the target is sized from THAT, not from
     // the render buffer, which the governor's dynamic resolution rescales every
@@ -284,6 +288,7 @@ const MirrorPass = (function () {
       if (hide && hide.cars) return;
       const ex = _eye[0], ez = _eye[2];
       const paint = carPaint(wet, night);
+      if (typeof FieldLod !== "undefined" && FieldLod.on) return drawCarsLod(paint, reach, centre, skip);
       for (const c of G.cars) {
         if (skip && (c === skip || c.isPlayer)) continue;
         const ds = Math.abs(c.s - centre.s);
@@ -294,6 +299,35 @@ const MirrorPass = (function () {
         basisMat(_R, _U, _F, _P, _mat);
         G.gfx.draw(teamMesh(c.team, c), _mat, paint);
         _cars++;
+      }
+    }
+
+    // FIELD LOD (js/car/field-lod.js; apex26.fieldLod=0 keeps the loop above):
+    // the same tests, then the MIRROR also drops a car outside its horizontal
+    // view cone (+5 m for the car's half-length), and only the nearest
+    // FieldLod.mirrorCap() (6) to the eye are drawn. The PiP keeps no cone (a
+    // TV shot can look steeply down) and always draws its subject.
+    function drawCarsLod(paint, reach, centre, skip) {
+      const track = G.track, ex = _eye[0], ez = _eye[2];
+      let n = 0, force = -1;
+      for (const c of G.cars) {
+        if (skip && (c === skip || c.isPlayer)) continue;
+        const ds = Math.abs(c.s - centre.s);
+        if (Math.min(ds, track.total - ds) > reach) continue;
+        pose(c);
+        const dx = _P[0] - ex, dz = _P[2] - ez;
+        const fwd = dx * _bx + dz * _bz;
+        if (fwd < -3) continue;   // ahead of the eye: out of a rear view
+        if (skip && Math.abs(dx * _bz - dz * _bx) > fwd * _coneTan + 5) continue;   // outside the mirror's cone
+        const m = _cMats[n] || (_cMats[n] = new Float32Array(16));
+        basisMat(_R, _U, _F, _P, m);
+        if (c === centre && !skip) force = n;
+        _cCars[n] = c; _cD2[n] = dx * dx + dz * dz; n++;
+      }
+      FieldLod.nearest(_cD2, n, FieldLod.mirrorCap(), _cKeep, force);
+      for (let i = 0; i < n; i++) {
+        if (_cKeep[i]) { G.gfx.draw(teamMesh(_cCars[i].team, _cCars[i]), _cMats[i], paint); _cars++; }
+        _cCars[i] = null;
       }
     }
 
@@ -469,6 +503,7 @@ const MirrorPass = (function () {
       M4.perspectiveTo(_proj, fovY, aspect, NEAR, FAR);
       M4.lookAtTo(_view, _eye, _tgt, _up);
       M4.mulTo(_vp, _proj, _view);
+      _coneTan = Math.tan(fovY / 2) * aspect;
       M4.invertTo(_invVP, _vp);
       M4.invertTo(_invProj, _proj);
 

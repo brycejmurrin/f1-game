@@ -126,7 +126,7 @@ test("the CAM button's accessible name starts with the word it shows", () => {
   };
   const sb = {
     Log: { info() {} }, setTimeout, clearTimeout,
-    document: { body: { classList: { toggle() {}, contains: () => false } }, addEventListener() {} },
+    document: { body: { classList: { toggle() {}, contains: () => false }, toggleAttribute() {} }, addEventListener() {} },
     CamTunerPanel: { refresh() {} },
   };
   sb.window = sb;

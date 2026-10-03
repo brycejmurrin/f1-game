@@ -275,7 +275,7 @@ test("CamModes.setCamMode({persist:false}) skips store.write", () => {
     camCutT: 0,
     store: { set(k, v) { writes.push([k, v]); } },
   };
-  const ctx = vm.createContext({ console, Math, document: { body: { classList: { toggle() {} } }, getElementById: () => null } });
+  const ctx = vm.createContext({ console, Math, document: { body: { classList: { toggle() {} }, toggleAttribute() {} }, getElementById: () => null } });
   seedLog(ctx);
   ctx.window = ctx;
   ctx.CamTunerPanel = { refresh() {} };

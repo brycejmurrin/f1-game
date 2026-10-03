@@ -156,6 +156,7 @@
   "TrackFixes",
   "TrackDesigner",
   "DesignerCanvas",
+  "DesignerProfile",
   "TunerPanel",
   "WallClamp",
   "WeatherArc",

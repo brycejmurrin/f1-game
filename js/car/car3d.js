@@ -2533,8 +2533,8 @@ const Car3D = (function () {
         paint: SURFACES.paint, glass: SURFACES.visor,
         maxSplit: (sil || field) ? 0 : undefined, simplePaint: sil || field,
       });
-      // No brow box and no rear spoiler box: the traced shell carries its own
-      // ridge over the aperture and its own aero lip at the back.
+      // No boxes bolted on here: the rear gurney, top intake and visor strip are
+      // lofts on the shell itself (helmets.js buildAero), built with the lid.
     }
 
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..
@@ -2554,7 +2554,7 @@ const Car3D = (function () {
 
     part("halo");
     if (!ckpt) {
-      const haloC = haloTint || HALO;   // livery-tinted hoop, else brushed titanium
+      const haloC = haloTint || HALO, haloS = haloTint && Math.max(...haloTint) - Math.min(...haloTint) > 0.15 ? SURFACES.paint : SURFACES.metal;   // a COLOURED livery hoop is paint (Alpine pink: the metal env mirror washed it white); grey stays metal (titanium, Cadillac chrome)
       // Round titanium hoop with a LEVEL, gently arched top bar: one
       // continuous tube, collars (±0.235, 0.505, -0.46) rising to a crown
       // that holds y 0.845 (+HALO_RISE shallow arch) from mid to mid while
@@ -2567,20 +2567,20 @@ const Car3D = (function () {
       // centreline as a co-axial tube.
       // Front centre pillar rises to y 0.83 — overlapping the flat bar's
       // underside (0.845 - 0.028 = 0.817) by ~1.3 cm, never stopping short.
-      if (_round) CarShade.strut(out, [0, 0.53, 0.47], [0, 0.83, 0.47], 0.05, 0.035, haloC, addTri, SURFACES.metal, { taper: 0.8, n: 10 }); else addBox(out, 0, 0.68, 0.47, 0.035, 0.30, 0.05, haloC, SURFACES.metal);
-      addTube(out, hoopT, hr, _round ? 12 : 6, haloC, SURFACES.metal);
+      if (_round) CarShade.strut(out, [0, 0.53, 0.47], [0, 0.83, 0.47], 0.05, 0.035, haloC, addTri, haloS, { taper: 0.8, n: 10 }); else addBox(out, 0, 0.68, 0.47, 0.035, 0.30, 0.05, haloC, haloS);
+      addTube(out, hoopT, hr, _round ? 12 : 6, haloC, haloS);
       // The real strut SPLITS into a V at the top, meeting the ring at two
       // points either side of the apex — the wishbone silhouette head-on.
       for (const s of [-1, 1])
         addBeamBetween(out, [0, 0.775, 0.468], [s * 0.105, crownY - hr * 0.4, 0.474],
-                       0.015, haloC, SURFACES.metal);
+                       0.015, haloC, haloS);
       if (haloSty === 2) {
         // Fenced hoop: three small crest vanes riding the crown bar (hoop
         // indices 5/7/9 = mid-left, apex, mid-right of the 7-point bar).
         for (const hi of [5, 7, 9]) {
           const p = hoop[hi];
           addBox(out, p[0], p[1] + hr + 0.012, p[2], 0.012, 0.026, 0.055,
-                 haloC, SURFACES.metal);
+                 haloC, haloS);
         }
       }
     }

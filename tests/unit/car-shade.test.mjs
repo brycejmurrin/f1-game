@@ -431,3 +431,26 @@ test("the rounded car keeps what is placed against its small parts: endplate boa
     for (const p of part("cockpit")) assert.ok(Math.hypot(p[0], p[1] - 0.715, p[2] + 0.075) > 0.15, `${teamId}: the headrest cuts the helmet`);
   }
 });
+
+// A COLOURED livery halo is paint, a grey one metal. Since the metal surface
+// (23) mirrors the environment (car materials, #798), Alpine's pink hoop drew
+// as a white sky reflection; a painted hoop keeps the team colour, while
+// Cadillac's chrome and the untinted titanium hoop stay metal.
+test("a coloured livery halo is painted; a grey or untinted one stays metal", () => {
+  const { Car3D: C } = load(true);
+  const haloMats = (teamId, livery) => {
+    const out = C.build([0.0, 0.576, 0.8], [1.0, 0.529, 0.737], { teamId, livery, measure: true, noWheels: true });
+    let from = 0;
+    for (const p of out.parts) { if (p.name === "halo") break; from += p.vertices; }
+    const halo = out.parts.find((p) => p.name === "halo");
+    assert.ok(halo, "the build has a halo part");
+    return new Set(out.mat.slice(from, from + halo.vertices));
+  };
+  const PAINT = 20, METAL = 23;
+  const pink = haloMats("alpine", { halo: [1.0, 0.529, 0.737] });
+  assert.ok(pink.has(PAINT) && !pink.has(METAL), "Alpine's pink hoop is paint: " + [...pink]);
+  const chrome = haloMats("cadillac", { halo: [0.86, 0.88, 0.92] });
+  assert.ok(chrome.has(METAL) && !chrome.has(PAINT), "Cadillac's chrome hoop stays metal: " + [...chrome]);
+  const plain = haloMats("mclaren", {});
+  assert.ok(plain.has(METAL) && !plain.has(PAINT), "an untinted hoop is titanium metal: " + [...plain]);
+});
