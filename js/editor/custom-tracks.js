@@ -296,12 +296,30 @@ const CustomTracks = (function () {
     });
     return _editorLoad;
   }
+  // TEST HERE's way back (TrackDesigner.testHere): { id, sel, span, s } of the
+  // design the test drive left from. MEMORY ONLY, never localStorage — a reload
+  // must not reopen the designer over the title screen.
+  let _ret = null;
+  /** Arm the return the next consumeTrackHash() outside a race takes (quitToMenu calls it). */
+  function armReturn(r) { _ret = r && typeof r === "object" ? r : null; }
   /** A #track=<APXT1 code> link (TrackCodec.shareUrl): load the designer and
    *  open the shared design in it, then strip the fragment so a reload does not
    *  re-open it. Mid-race it waits, fragment intact, for the menu (game.js
    *  re-reads it on quit, as it does the #ghost= link). Resolves true when a
    *  design opened, false when the link was refused or absent, null when deferred. */
   function consumeTrackHash() {
+    // An armed test-drive return goes first: mid-race it waits (kept armed),
+    // else it is taken once and the designer reopens on the same point.
+    if (_ret) {
+      if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) return Promise.resolve(null);
+      const r = _ret; _ret = null;
+      return ensureEditor().then((ok) => {
+        if (!ok || typeof TrackDesigner === "undefined") return false;
+        Log.info("track", "back from the test drive on " + r.id);
+        TrackDesigner.open({ resume: r });
+        return true;
+      }).catch((e) => { Log.warn("track", "test drive return failed: " + (e && e.message || e)); return false; });
+    }
     const hash = typeof location !== "undefined" ? String(location.hash || "") : "";
     if (!/[#&]track=/.test(hash)) return Promise.resolve(false);
     if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) { Log.info("track", "share link deferred: racing"); return Promise.resolve(null); }
@@ -335,6 +353,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, sanitize, sanitizeName, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create };
+  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, sanitize, sanitizeName, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
 })();
 Object.freeze(CustomTracks);
