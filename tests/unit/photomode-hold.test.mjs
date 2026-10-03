@@ -32,6 +32,10 @@ test('online Photo camera input integrates while shared physics continues; solo 
     const sandbox = { Math, lastFrame: 0, paused: true, state: 'race', gfx: { warming: () => false },
       Input: { poll() {}, clearEdges() {}, setTimeScale() {} }, BrakeCue: { tick() {} }, onboard: { tick() {} },
       netPlay: { tick() {}, active: () => online }, PerfGov: { tick() {}, recordSimulation() {} },
+      // Deploy tip's tickBody also ticks the TV director and gates on mirror
+      // preparation; stub both so this fixture stays about Photo / shared-physics.
+      director: { tick() {}, reset() {} },
+      mirrorPass: { preparing: () => false },
       replayBuf: { isScrubbing: () => false, tickScrub() {}, onTick() {} }, raceT: 0,
       _poseAt: null, photoMode: photo, setupPreviewOn: false,
       els: { lighting: { hidden: true }, camtune: { hidden: true }, flyby: { hidden: true } },
