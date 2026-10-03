@@ -505,7 +505,7 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   // QUIT and only while music is live; it is not a menu action.
   const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]).filter((id) => !/^pm-(prev|play|skip)$/.test(id));
   // Pause exposes specific race tasks; full preferences retain the Settings index.
-  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-practice", "pm-review", "pm-photo", "pm-appearance", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-howto", "pm-standings", "pm-quit"]);
+  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-review", "pm-practice", "pm-photo", "pm-howto", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-standings", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"],

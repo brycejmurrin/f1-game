@@ -246,13 +246,21 @@ test("Car3D: OFF is the build that never heard of CarShade; ON (the default) is 
     return b; };
   const bOn = bounds(on), bRef = bounds(ref);
   for (let k = 0; k < 6; k++) assert.ok(Math.abs(bOn[k] - bRef[k]) < 1e-6, "same overall bounds: the round section stays inside the trapezoid");
-  // Only the body sections (nose/tub, deck, sidepods) change; every other part is vertex-for-vertex the same.
+  // Only the parts CarShade reshapes change; every other part is vertex-for-vertex the same.
+  // Body sections (nose/tub, deck, sidepods) first; then (2026-10-02, batch 3) the small
+  // parts hung off them: floor and cockpit tub (chassis), bolsters, airbox (engineCover),
+  // headrest (cockpit), mirrors, the driver's arms (every beam is a rod), halo, exhaust
+  // core, nose pylons (frontWing), endplates/pylon/diffuser (rearAssembly), brake ducts
+  // and wishbones (suspension). Paint, decal substrates, helmet and wheels stay as built.
+  const ROUNDED = new Set(["chassis", "hood", "sidepods", "bolsters", "engineCover", "cockpit", "mirrors", "driver",
+                           "halo", "exhaust", "frontWing", "rearAssembly", "brakeDucts", "suspension"]);
   const byName = (m) => Object.fromEntries(m.parts.map((p) => [p.name, p]));
   const pOn = byName(on), pRef = byName(ref);
   for (const name of Object.keys(pRef)) {
-    if (name === "chassis" || name === "hood" || name === "sidepods") continue;
+    if (ROUNDED.has(name)) continue;
     assert.equal(pOn[name].vertices, pRef[name].vertices, name + " untouched");
   }
+  for (const name of ["livery", "helmet", "sharkFin", "sponsorBoard", "bodyDetail", "wheels"]) assert.ok(pRef[name], name + " is still a part");
   assert.ok(ms < 1500, `a smoothed build stays cheap enough for a garage pick (${ms} ms)`);
   // The cockpit (first-person) build never rounds or smooths its body; only the
   // tyres it shows follow the page's switch (shaded shoulders, no vertex moved).
@@ -267,14 +275,20 @@ test("a shadow caster (silhouette build) keeps the rounded shape but skips the s
   const { Car3D: Plain } = load(false);
   const c1 = [0.9, 0.5, 0.1], c2 = [0.1, 0.1, 0.1], opts = { teamId: "mclaren", silhouette: true };
   // Triangles whose three normals differ: only a smoothing pass (or a tube) makes one.
-  const soft = (m) => { let n = 0; const N = m.nrm, I = m.idx;
-    for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+  // A tube's ring vertices are SHARED (indexed) and smooth as built — and the rounded
+  // car's halo is a finer tube than the plain one (12 sides along a spline), so tubes
+  // are left out by that mark: a triangle of unshared vertices with differing normals
+  // can only have come from the smoothing pass.
+  const soft = (m) => { let n = 0; const N = m.nrm, I = m.idx, uses = new Uint32Array(N.length / 3);
+    for (const v of I) uses[v]++;
+    for (let t = 0; t < I.length; t += 3) { if (uses[I[t]] > 1 || uses[I[t + 1]] > 1 || uses[I[t + 2]] > 1) continue;
+      const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
       if (N[a] !== N[b] || N[a + 1] !== N[b + 1] || N[a + 2] !== N[b + 2] || N[a] !== N[c] || N[a + 1] !== N[c + 1] || N[a + 2] !== N[c + 2]) n++; }
     return n; };
   const caster = Car3D.build(c1, c2, opts), plainCaster = Plain.build(c1, c2, opts);
   const painted = Car3D.build(c1, c2, { teamId: "mclaren" }), plainPainted = Plain.build(c1, c2, { teamId: "mclaren" });
   assert.notDeepEqual(Array.from(caster.pos), Array.from(plainCaster.pos), "the caster is the ROUNDED shape (its shadow matches the body)");
-  assert.equal(soft(caster), soft(plainCaster), "no smoothed triangles beyond the tubes a plain caster already has");
+  assert.equal(soft(caster), soft(plainCaster), "no smoothed triangles beyond what a plain caster already has");
   assert.ok(soft(painted) > soft(plainPainted) + 1000, "the painted car IS smoothed (its caster is the only build that skips it)");
 });
 
@@ -293,4 +307,127 @@ test("tyres, with the switch on for any car: the tread shoulder is shaded from i
   assert.ok(b.nrm.some((v, i) => i % 3 === 0 && Math.abs(v) > 0.05 && b.mat[i / 3] === On.SURFACES.rubber), "shoulder normals tilt");
   const layers = On.buildWheelLayers(0.34, [0.9, 0.9, 0.9]);
   assert.ok(layers.rotating.pos.length > 0 && layers.fixed.pos.length > 0, "the layered wheel builds too");
+});
+
+// ---- Small parts (2026-10-02, batch 3): struts, rounded blocks, shaped plates ----
+function collect() {   // positions only
+  const out = { tris: [] };
+  out.tri = (o, a, b, c) => o.tris.push([a, b, c]);
+  return out;
+}
+const key6 = (p) => p.map((v) => v.toFixed(6)).join(",");
+// Closed and consistently wound: every DIRECTED edge once and its reverse once;
+// and wound OUT, so the signed volume is positive.
+function assertClosedOut(tris, what) {
+  const dir = new Map();
+  let vol = 0;
+  for (const [a, b, c] of tris) {
+    for (const [p, q] of [[a, b], [b, c], [c, a]]) { const k = key6(p) + ">" + key6(q); dir.set(k, (dir.get(k) || 0) + 1); }
+    vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
+  }
+  for (const [k, n] of dir) {
+    assert.equal(n, 1, `${what}: edge ${k} used ${n} times one way`);
+    const [p, q] = k.split(">");
+    assert.equal(dir.get(q + ">" + p), 1, `${what}: open edge ${k}`);
+  }
+  assert.ok(vol > 0, `${what} faces out (signed volume ${vol})`);
+}
+
+test("small-part primitives are closed solids that face out: strut, bent pipe, rounded block, C tub, plate, tunnel, floor", () => {
+  const C = [1, 0, 0];
+  const cases = {
+    strut: (o) => CarShade.strut(o, [0.1, 0.2, 1.0], [0.6, 0.3, 1.1], 0.05, 0.016, C, o.tri, null, { n: 6, taper: 0.7 }),
+    "vertical strut": (o) => CarShade.strut(o, [0.1, 0.09, 2.46], [0.1, 0.29, 2.46], 0.17, 0.055, C, o.tri, null, { n: 10 }),
+    "strut along z": (o) => CarShade.strut(o, [0, 0.4, -2.17], [0, 0.4, -2.20], 0.05, 0.05, C, o.tri),
+    "headrest (a U: its ends side by side)": (o) => CarShade.headrest(o, C, o.tri),
+    "rounded block": (o) => CarShade.block(o, [[0.24, 0.42, 0.14], [0.40, 0.42, 0.14], [0.40, 0.60, 0.10], [0.24, 0.58, 0.10],
+      [0.24, 0.44, -0.42], [0.40, 0.44, -0.42], [0.40, 0.62, -0.44], [0.24, 0.60, -0.44]], C, o.tri, null, { r: [0, 0.03, 0.07, 0.02] }),
+    "round box": (o) => CarShade.box(o, 0, 0.4, -2.185, 0.05, 0.05, 0.03, C, o.tri),
+    "C tub": (o) => CarShade.cTub(o, [{ z: 0.28, y: 0.386, w: 0.572, h: 0.457, t: 0.86, open: 0.2, rail: 0.534 },
+      { z: 0.05, y: 0.395, w: 0.60, h: 0.48, t: 0.86, open: 0.2, rail: 0.585 }], 0.47, C, o.tri),
+    "endplate plate": (o) => CarShade.endplate(o, Car3D.endplate(2), -1, C, C, null, o.tri),
+    tunnel: (o) => CarShade.tunnel(o, 1, 0.12, 0.46, 0.57, 0.105, 0.25, 0.405, C, C, o.tri),
+    floor: (o) => CarShade.floor(o, Car3D.CHASSIS.floor, 0.07, (z) => (z > 0.78 ? 0.70 : 0.62), C, o.tri),
+  };
+  for (const [what, make] of Object.entries(cases)) {
+    const o = collect();
+    make(o);
+    assert.ok(o.tris.length > 8, what + " built");
+    // The endplate is two solids, plate then crown strip: the plate is every triangle up to the crown's first.
+    const tris = what === "endplate plate" ? o.tris.slice(0, o.tris.findIndex((t) => t.some((p) => Math.abs(Math.abs(p[0]) - 0.5045) > 0.0166))) : o.tris;
+    assertClosedOut(tris, what);
+  }
+});
+
+test("a block rounded all the way runs through its faces' centre lines; fine() keeps the points it was given", () => {
+  const q = [[0, 0, 1], [0.2, 0, 1], [0.2, 0.1, 1], [0, 0.1, 1], [0, 0, 0], [0.2, 0, 0], [0.2, 0.1, 0], [0, 0.1, 0]];
+  const o = collect();
+  CarShade.block(o, q, [1, 0, 0], o.tri);
+  const pts = new Set(o.tris.flat().map(key6));
+  for (const m of [[0.1, 0, 1], [0.2, 0.05, 1], [0.1, 0.1, 1], [0, 0.05, 1]]) assert.ok(pts.has(key6(m)), "edge midpoint " + m + " is on the skin");
+  for (const p of o.tris.flat()) assert.ok(p[0] >= -1e-12 && p[0] <= 0.2 + 1e-12 && p[1] >= -1e-12 && p[1] <= 0.1 + 1e-12, "inside the box it replaces");
+  const path = [[0, 0, 0], [0.3, 0.1, 0], [0.5, 0.4, 0.1], [0.6, 0.9, 0.3]];
+  const f = CarShade.fine(path, 3);
+  assert.equal(f.length, 3 * (path.length - 1) + 1);
+  path.forEach((p, i) => assert.ok(f[3 * i].every((v, k) => Math.abs(v - p[k]) < 1e-12), "point " + i + " kept"));
+  assert.equal(JSON.stringify(CarShade.fine(path, 3, 1, 3)), JSON.stringify(f.slice(3, 7)), "a run of the curve is the same curve");
+});
+
+test("earcut covers a non-convex polygon exactly once", () => {
+  // The cockpit C: an arc under the opening and the notch of the opening itself.
+  const C = [[-0.3, 0.6, 0], [-0.32, 0.3, 0], [0, 0.1, 0], [0.32, 0.3, 0], [0.3, 0.6, 0], [0.2, 0.6, 0], [0.2, 0.47, 0], [-0.2, 0.47, 0], [-0.2, 0.6, 0]];
+  const area = (r) => r.reduce((s, p, i) => { const q = r[(i + 1) % r.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0) / 2;
+  const T = CarShade.earcut(C);
+  assert.equal(T.length, C.length - 2);
+  let sum = 0;
+  for (const t of T) { const a = area(t.map((i) => C[i])); assert.ok(a > 0, "wound like the polygon"); sum += a; }
+  assert.ok(Math.abs(sum - area(C)) < 1e-12, "the triangles tile the polygon");
+});
+
+test("the rounded car keeps what is placed against its small parts: endplate board, light and crown; mirror light; floor clear of the rear tyre; headrest clear of the helmet", () => {
+  for (let lvl = 0; lvl <= 4; lvl++) {
+    const ep = Car3D.endplate(lvl), nb = Car3D.numberBoard(lvl), o = collect();
+    CarShade.endplate(o, ep, 1, [0, 0, 0], [1, 1, 1], null, o.tri);
+    // The plate's outer face (x 0.521) holds the number board's footprint (car3d part
+    // "sponsorBoard": z -2.27..-2.57) and its rear edge the endplate light (car-mesh.js
+    // drawRearLights: y 0.62 +- 0.017 at z -2.69).
+    const outer = o.tris.filter((t) => t.every((p) => Math.abs(p[0] - 0.521) < 1e-9));
+    const inside = (z, y) => outer.some(([a, b, c]) => {
+      const s = (p, q) => (q[2] - p[2]) * (y - p[1]) - (q[1] - p[1]) * (z - p[2]);
+      const d1 = s(a, b), d2 = s(b, c), d3 = s(c, a);
+      return (d1 >= -1e-12 && d2 >= -1e-12 && d3 >= -1e-12) || (d1 <= 1e-12 && d2 <= 1e-12 && d3 <= 1e-12);
+    });
+    // Every board corner the flat plate held (at level 0 the board's top already rose
+    // past the plate's sloped top edge at its front end, z -2.27) is still held.
+    const flat = (z, y) => { const u = (z - ep.front.z) / (ep.rear.z - ep.front.z);
+      return u >= 0 && u <= 1 && y >= ep.front.bottom + (ep.rear.bottom - ep.front.bottom) * u && y <= ep.front.top + (ep.rear.top - ep.front.top) * u; };
+    let held = 0;
+    for (const z of [-2.27, -2.57]) for (const y of [nb.cy - nb.h / 2, nb.cy + nb.h / 2]) if (flat(z, y)) {
+      held++;
+      assert.ok(inside(z, y), `level ${lvl}: board corner z ${z} y ${y.toFixed(3)} on the plate`);
+    }
+    assert.ok(held >= 3, `level ${lvl}: the flat plate held the board`);
+    for (const y of [0.603, 0.637]) assert.ok(inside(ep.rear.z + 1e-6, y), `level ${lvl}: the rear edge carries the light at y ${y}`);
+    const all = o.tris.flat();
+    assert.ok(Math.max(...all.map((p) => p[1])) <= ep.rear.top + 0.009 + 1e-9, `level ${lvl}: the crown stays where the flat strip was`);
+    assert.ok(Math.min(...all.map((p) => p[2])) >= ep.rear.z - 1e-9, `level ${lvl}: nothing behind the plate's rear face`);
+  }
+  for (const teamId of ["mclaren", "mercedes", "audi", "williams"]) {
+    const m = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], { teamId, measure: true });
+    const part = (name) => {
+      const i = m.parts.findIndex((q) => q.name === name), from = m.parts.slice(0, i).reduce((n, q) => n + q.vertices, 0), pts = [];
+      for (let v = from; v < from + m.parts[i].vertices; v++) pts.push([m.pos[v * 3], m.pos[v * 3 + 1], m.pos[v * 3 + 2]]);
+      return pts;
+    };
+    // Mirror light (car-mesh.js) anchors 4 mm off the housing's outboard tip at mid-height.
+    const [, R] = Car3D.mirrorLightAnchors(teamId, 1), mir = part("mirrors");
+    const xMax = Math.max(...mir.map((p) => p[0])), tip = mir.filter((p) => Math.abs(p[0] - xMax) < 1e-9);
+    assert.ok(Math.abs(xMax - (R.x - 0.004)) < 1e-9, `${teamId}: the housing's outboard end is where the light anchors`);
+    assert.ok(Math.min(...tip.map((p) => p[1])) < R.y - 0.02 && Math.max(...tip.map((p) => p[1])) > R.y + 0.02, `${teamId}: the tip spans the light's height`);
+    // Floor: nothing low in the chassis inside the rear tyre (inner face x 0.57, z -1.94..-1.26).
+    for (const p of part("chassis")) if (p[1] < 0.11 && p[2] < -1.30 && p[2] > -1.94)
+      assert.ok(Math.abs(p[0]) <= 0.556, `${teamId}: floor at x ${p[0].toFixed(3)} z ${p[2].toFixed(3)} is in the rear tyre`);
+    // Headrest (part "cockpit") wraps the helmet (centre (0, 0.715, -0.075), r 0.145) without cutting it.
+    for (const p of part("cockpit")) assert.ok(Math.hypot(p[0], p[1] - 0.715, p[2] + 0.075) > 0.15, `${teamId}: the headrest cuts the helmet`);
+  }
 });

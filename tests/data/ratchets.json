@@ -9,12 +9,12 @@
       "lines": 3235
     },
     "js/car/car3d.js": {
-      "lines": 3421
+      "lines": 3420
     },
     "js/game.js": {
       "codeLines": 4830,
       "gMembers": 285,
-      "lines": 9000,
+      "lines": 9002,
       "topLets": 149
     },
     "js/lighting/presets.js": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2131,
+      "ceiling": 2130,
       "slack": 25
     },
     "subFloorFontSize": {

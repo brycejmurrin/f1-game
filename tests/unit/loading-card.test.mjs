@@ -778,11 +778,21 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
   const game = read("js/game.js");
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
-  assert.match(intro, /const info = loadingInfo\(\);[^\n]*\n\s*const flyMs = loadingScreen\.nextFlyMs\(info\.readMs\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
+  assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady = !\(gfx && gfx\.warming && gfx\.warming\(\)\)\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
   assert.match(intro, /loadingScreen\.run\(info, go\);/);
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");
-  assert.match(read("js/ui/loading-screen.js"), /flyMsFor\(readSkips\(\), info\.readMs\)/);
+  assert.match(read("js/ui/loading-screen.js"), /flyMsFor\(readSkips\(\), info\.readMs, info\.warmReady\)/);
+});
+
+test("flyMsFor: habitual short cut waits for warmReady (would fail before the warm gate)", () => {
+  const { flyMsFor, FLY_MS, SHORT_FLY_MS } = LS;
+  assert.equal(flyMsFor(3, 0, true), SHORT_FLY_MS, "warm done: short applies");
+  assert.equal(flyMsFor(3, 0, false), FLY_MS, "still warming: keep the full cut");
+  assert.equal(flyMsFor(3, 50000, false), 50000, "still warming: may stretch for a real-race read, but never SHORTEN");
+  assert.equal(flyMsFor(3, 0, { warmReady: false }), FLY_MS, "opts form");
+  assert.equal(flyMsFor(3, 0, undefined), SHORT_FLY_MS, "absent warmReady keeps today's short");
+  assert.equal(flyMsFor(0, 0, false), FLY_MS, "no streak: full cut either way");
 });
 
 test("metaRows: a circuit gets its facts; a real race joined mid-race gets the lap, your place, tyres, stops, leader and flag", () => {

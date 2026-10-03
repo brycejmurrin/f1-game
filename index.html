@@ -669,15 +669,19 @@
       <button id="pm-resume" autofocus>RESUME</button>
       <button id="pm-restart">RESTART RACE</button>
       <button id="pm-settings">SETTINGS&hellip;</button>
+      <!-- RACE TOOLS: one compact grid of short labels (REPLAY joins it from
+           js/camera/replay-buf.js), so the card reads as RESUME, two doors,
+           a tool tray and QUIT instead of fourteen full-size buttons.
+           REWIND & RETRY is a tile too: open, it takes the tray's full width.
+           APPEARANCE lives in SETTINGS only. -->
       <nav id="pm-quick-doors" aria-label="Race tools">
-        <button id="pm-strategy" type="button">PIT STRATEGY</button>
+        <button id="pm-strategy" type="button">STRATEGY</button>
+        <button id="pm-review" type="button">REVIEW</button>
         <button id="pm-practice" type="button">PRACTICE</button>
-        <button id="pm-review" type="button">INCIDENTS &amp; REVIEW</button>
-        <button id="pm-photo" type="button">PHOTO STUDIO</button>
-        <button id="pm-appearance" type="button">APPEARANCE</button>
+        <button id="pm-photo" type="button">PHOTO</button>
+        <button id="pm-howto" type="button">HOW TO PLAY</button>
+        <details id="pm-checkpoint"><summary>REWIND &amp; RETRY</summary><div class="balanced-row"><button id="pm-checkpoint-save" type="button">SAVE START</button><button id="pm-checkpoint-retry" type="button" disabled>TRY AGAIN</button><button id="pm-checkpoint-rewind" type="button" disabled>REWIND 10s</button></div><p id="pm-checkpoint-state" class="adv-help"></p></details>
       </nav>
-      <details id="pm-checkpoint"><summary>CHECKPOINT &amp; REWIND</summary><div class="balanced-row"><button id="pm-checkpoint-save" type="button">SAVE START</button><button id="pm-checkpoint-retry" type="button" disabled>TRY AGAIN</button><button id="pm-checkpoint-rewind" type="button" disabled>REWIND 10s</button></div><p id="pm-checkpoint-state" class="adv-help"></p></details>
-      <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
       <button id="pm-quit">QUIT TO MENU</button>
       <!-- NOW PLAYING — shown only while music is actually playing
@@ -3618,6 +3622,7 @@
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/replay-buf.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/results-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/brake-cue.js?v=dev"></script>

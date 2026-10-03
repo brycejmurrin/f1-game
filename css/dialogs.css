@@ -331,6 +331,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 :root[data-pause-layout="wide"] #pausemenu .sheet-body.stack { display: flex; flex-direction: row; flex-wrap: wrap; }   /* .stack is a column: a row is the point */
 :root[data-pause-layout="wide"] #pausemenu .sheet-body.stack > button { flex: 1 1 0; min-width: calc(var(--tap-0) * 3); }
 :root[data-pause-layout="wide"] :is(#pm-now-card, #pm-build) { flex-basis: 100%; }
+:root[data-pause-layout="wide"] :is(#pm-race-context, #pm-quick-doors) { flex-basis: 100%; }   /* the race card and the tool tray keep their own row */
 :root[data-pause-layout="wide"] #pausemenu .sheet #pm-quit { margin-top: 0; }
 :root[data-pause-layout="wide"] #pm-quit::before { content: none; }
 /* VERTICAL POSITION (ScreenLooks, the lookPause vpos knob). Declared after
