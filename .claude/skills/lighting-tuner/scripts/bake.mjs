@@ -81,7 +81,9 @@ if (!oldMatch) { console.error("Could not find the window.LightPresets assignmen
 let changes;
 try {
   const oldLiteral = oldMatch[0].replace(/^window\.LightPresets\s*=\s*/, "").replace(/;\s*$/, "");
-  const oldObj = JSON.parse(oldLiteral);
+  let oldObj;
+  try { oldObj = JSON.parse(oldLiteral); }
+  catch { oldObj = vm.runInNewContext("(" + oldLiteral + ")", {}, { timeout: 1000 }); }
   changes = presetChanges(oldObj, obj);
   const oldKeys = Object.keys(oldObj).length;
   const newKeys = Object.keys(obj).length;

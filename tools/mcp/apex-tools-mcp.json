@@ -35,6 +35,9 @@
     "apex_select_specs",
     "apex_rotate_markings_check",
     "apex_graph_parity",
-    "apex_frame_report"
+    "apex_frame_report",
+    "apex_session_status",
+    "apex_who_is_on_it",
+    "apex_ci_status"
   ]
 }

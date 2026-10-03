@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, writeFileSync, existsSync, rmSync, symlinkSync, truncateSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import vm from 'node:vm';
 import sharp from 'sharp';
 import { screenshotPresentedCanvas } from '../../tools/shot/probe-page.mjs';
 import { parseCssPlayArgs, screenClicks, SCREENS, swapStylesheet } from '../../tools/ui/css-play.mjs';
@@ -13,6 +14,31 @@ import { pendingWatchCancellation } from '../../tools/check/lifecycle-census.mjs
 import { recordCapture, stageRace, runBoundedCapture, visibleScreen, waitNextGameRender, captureContextOptions, captureFailureSnapshot, captureOperationBudget, captureOperation } from '../../tools/shot/capture-runtime.mjs';
 import { registerTeardownResource, shutdown } from '../../tools/lib/harness.mjs';
 import { cameraDelta, loadFixture, exitReplayThroughUi, preflightReplayFixture, cameraOnlyFixture, controlClickGuard, verifiedControlClick } from '../../tools/shot/replay-camera-probe.mjs';
+
+test('agent help boots once with the selected seed and measured startup budget', async () => {
+  const source = readFileSync(resolve(ROOT, 'tools/shot/agent.mjs'), 'utf8')
+    .replace(/^#!.*$/m, '').replace(/^import .*;$/gm, '')
+    .replace(/^const ROOT = .*;$/m, 'const ROOT = "/fixture";');
+  const calls = []; let cleaned = 0;
+  const page = {
+    goto: async (url) => calls.push(['goto', url]),
+    waitForFunction: async (_fn, _args, options) => calls.push(['wait', options.timeout, options.polling]),
+    evaluate: async () => ({ commands: ['help'] }),
+  };
+  const processStub = { argv: ['node', 'agent.mjs', 'help', '--seed', '0'], exitCode: 0,
+    exit: (code) => { throw new Error(`unexpected exit ${code}`); } };
+  await vm.runInNewContext(source, {
+    process: processStub, console: { log() {}, error() {} },
+    startStaticServer: async () => ({ url: 'http://fixture/' }),
+    launchChromium: async () => ({ newPage: async () => page }),
+    installProbeInit: async () => calls.push(['init']),
+    chromiumArgsForBackend: () => [], sleep: async () => {},
+    shutdown: async () => { cleaned++; },
+  });
+  assert.deepEqual(calls, [['init'], ['goto', 'http://fixture/?seed=0'], ['wait', 45000, 100]]);
+  assert.equal(processStub.exitCode, 0);
+  assert.equal(cleaned, 1);
+});
 
 test('successful and rejected CDP capture clear deadline and detach session', async () => {
   const originalSet = globalThis.setTimeout, originalClear = globalThis.clearTimeout;

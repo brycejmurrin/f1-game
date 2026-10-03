@@ -1,7 +1,8 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Only twelve CLIs are wrapped as `apex_*` (thirteen tools: `apex_garage` is a
+do the work. Only fifteen CLIs are wrapped as `apex_*` (sixteen tools: `apex_garage` is a
+
 session over one of them).
 
 ```
@@ -158,13 +159,15 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Twelve wraps, thirteen tools (30 → 11 on 2026-09: the audits, startline,
+names the CLI. Fifteen wraps, sixteen tools (30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
 `apex_frame_report`, a node-VM framing report that answers in seconds what a
 flyby render answers in minutes; 12 → 13 on 2026-10-01 for the read-only
-`apex_doctor` capability and skill diagnostics).
+`apex_doctor` capability and skill diagnostics; 13 → 16 on 2026-10-02 for
+`apex_session_status`, `apex_who_is_on_it` and `apex_ci_status`, the three
+read-only session checks).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -178,6 +181,9 @@ flyby render answers in minutes; 12 → 13 on 2026-10-01 for the read-only
 | `apex_rotate_markings_check` | `track/rotate-markings.cjs` | tree | new-track |
 | `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
+| `apex_session_status` | `ci/session-status.mjs` | tree | steward |
+| `apex_who_is_on_it` | `ci/who-is-on-it.mjs` | tree | steward |
+| `apex_ci_status` | `ci/ci-watch.mjs` | tree | steward |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
@@ -196,6 +202,11 @@ Pins the wrap always applies (you cannot override them):
   existing JSON file under `artifacts/` or `scratch/` (symlinks resolved); never
   `--out` / `--fleet` / `--diff` / `--pose`. The fleet sweep
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
+- `apex_who_is_on_it` → `--json`, never `--claim` / `--release` (they push refs);
+  `paths` that start with `-` are refused so none reaches the CLI as a flag
+- `apex_ci_status` → `ci-watch.mjs --once --sha <hex|HEAD>`, never `--timeout` /
+  `--pages`; exits 0/1/2/124 are verdicts (`ok:true`, `out.verdict`), 3 (no
+  token / API down) is a tool error. Watching a run stays a Monitor on the CLI
 - Browser wraps never take `--url`; output paths (`out`) must stay under
   `artifacts/` or `scratch/`
 
