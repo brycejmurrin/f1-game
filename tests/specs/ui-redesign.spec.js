@@ -472,10 +472,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // evenly. It used to: --hud-scale followed --ui-scale, which this spec leaves at
   // 2, and 96 x 2 = 192 is on the grid. The owner's baked coarse default pins it to
   // 1.24 instead — 96 x 1.24 = 119.04, snapped DOWN to 119.03125, back over 1.24 =
-  // 95.99294. The rule under test is which of 96 / 112 / 140 applies, and those are
-  // 16px apart, so a nearest-px read discriminates exactly as well as equality did.
+  // 95.99294. The rule under test is which of 110 / 128 / 160 applies, and those are
+  // 18px+ apart, so a nearest-px read discriminates exactly as well as equality did.
   expect(Math.round(parseFloat(compactHud.mmCss)),
-    "compact minimap width " + compactDump).toBe(96);
+    "compact minimap width " + compactDump).toBe(110);
   await page.evaluate(() => {
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();

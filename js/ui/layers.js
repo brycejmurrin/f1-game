@@ -103,27 +103,35 @@ window.UiLayers = (function () {
     try { return !!(el.matches && el.matches(":modal")); } catch (_) { return false; }
   }
 
+  // Selector results have DOM order, including :modal. Record actual openings
+  // at the native seam, including dynamically-created telemetry dialogs.
+  const modalOrder = new WeakMap();
+  let modalSerial = 0;
+  const tracked = new WeakSet();
+  function trackDialog(target) {
+    if (!target || tracked.has(target) || typeof target.showModal !== "function") return;
+    const show = target.showModal;
+    target.showModal = function (...args) {
+      if (isModal(this)) return show.apply(this, args);
+      const previous = modalOrder.get(this);
+      modalOrder.set(this, ++modalSerial); // native focusing runs synchronously
+      try { return show.apply(this, args); }
+      catch (error) {
+        if (previous == null) modalOrder.delete(this); else modalOrder.set(this, previous);
+        throw error;
+      }
+    };
+    tracked.add(target);
+  }
+  if (typeof HTMLDialogElement !== "undefined") trackDialog(HTMLDialogElement.prototype);
+
   /* The topmost open layer. Layers stack (the team picker over the select
      screen, the pause settings over the pause menu) and z-index is how the CSS
      expresses that order — but a showModal() dialog is in the TOP LAYER, above
-     every z-index there is, so it wins outright. DOM order breaks the ties. */
+     every z-index there is, so it wins outright. Opening order ranks dialogs;
+     DOM order breaks z-index ties between non-modal layers. */
   function top() {
-    // TOP-LAYER ORDER IS NOT DOM ORDER. Every open showModal() dialog used to
-    // rank Infinity and the `>=` tie-break then took the LAST IN DOM ORDER —
-    // which is only ever right by luck. The spec orders the result of
-    // `querySelectorAll(":modal")` by top-layer position (bottom first), and
-    // the top layer is a STACK: the most recently shown dialog is last. So
-    // rank a modal by its index there, which is the browser's own answer to
-    // "which dialog is on top", and one a caller cannot get wrong by opening
-    // two dialogs out of DOM order. Non-modal layers keep the z-index
-    // ranking, always below any modal (the +1 base clears a 0-index modal).
-    let modals = null;
-    try { modals = document.querySelectorAll(":modal"); } catch (_) { modals = null; }
-    const modalRank = (el) => {
-      if (!modals) return Infinity;             // no :modal support — old behaviour
-      for (let i = 0; i < modals.length; i++) if (modals[i] === el) return i + 1;
-      return Infinity;                          // matched :modal but absent here
-    };
+    const modalRank = (el) => modalOrder.get(el) || 0;
     let best = null;
     let bestRank = -Infinity;
     let bestModal = false;
@@ -208,5 +216,5 @@ window.UiLayers = (function () {
   }
   function inRace() { return !!(raceGetter && raceGetter()); }
 
-  return { LAYER_IDS, top, anyOpen, navOpen, shown, inRace, setRaceGetter };
+  return { LAYER_IDS, top, anyOpen, navOpen, shown, inRace, setRaceGetter, trackDialog };
 })();

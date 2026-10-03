@@ -54,11 +54,29 @@ test("the scenario list matches the browser spec verbatim", () => {
 // own test so a divergence is named by scenario and the per-test wall stays
 // well under the 5 s budget. reset() between scenarios is what the browser
 // spec does too — the run order is the recipe.
+//
+// A3: grip-sensitive baselines assume dry. createGame({track}) races with
+// wx||"dry", but we re-pin and assert wetness so a leftover wet enum / arc
+// cannot silently rescale gripMult under the committed numbers.
 let g = null;
-before(async () => { g = await createGame({ track: "monza" }); });
+before(async () => {
+  g = await createGame({ track: "monza", wx: "dry" });
+  g.apex.weather("dry");
+  g.apex.step(0, 1);
+});
 after(() => { if (g) g.close(); });
 
+test("A3: characterization boot pins dry weather and zero wetness", () => {
+  assert.equal(g.G.raceWeather, "dry");
+  assert.equal(g.G.trackWetness(), 0);
+  assert.equal(g.G.trackWetness(), 0);
+  assert.equal(g.G.frame.wetness, 0);
+  assert.equal(g.G.gripMult({ tread: 0 }), 1);
+});
+
 function run(a, s) {
+  a.weather("dry");
+  a.step(0, 1);
   a.seed(s.seed);
   a.reset(s.frac, s.speed, s.x || 0);
   const trace = [];

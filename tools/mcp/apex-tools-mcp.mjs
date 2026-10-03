@@ -5,7 +5,7 @@
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
  * One of the THREE .mcp.json servers (beside chrome-devtools and
- * playwright-official; catalog trimmed 7 → 3 and wraps 30 → 11 on 2026-09; 12 with apex_frame_report).
+ * playwright-official; catalog trimmed 7 → 3 and wraps 30 → 11 on 2026-09; 16 with framing, doctor and session checks).
  * Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md — map: docs/AGENT-SURFACE.md
  *
@@ -24,13 +24,14 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.6.0";
+const SERVER_VERSION = "1.7.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -227,8 +228,9 @@ function lockInfo() {
   try {
     raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
   } catch {
-    return { held: true, stale: true, error: "unreadable" };
+    return { held: true, stale: false, error: "unreadable" };
   }
+  if (!isObject(raw) || !Number.isInteger(Number(raw.pid)) || Number(raw.pid) <= 0) return { held: true, stale: false, error: "invalid owner" };
   const pid = Number(raw.pid);
   if (!alive(pid)) return { held: false, stale: true, pid };
   return { held: true, pid, since: raw.since || null, tool: raw.tool || null };
@@ -279,12 +281,16 @@ function occupancyRefuse() {
   return null;
 }
 
-function acquireLock(tool) {
+export function acquireLock(tool) {
   const busy = occupancyRefuse();
   if (busy) return busy;
   fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
   const payload = { pid: process.pid, since: Date.now(), tool };
-  fs.writeFileSync(LOCK_PATH, JSON.stringify(payload));
+  try { fs.writeFileSync(LOCK_PATH, JSON.stringify(payload), { flag: "wx" }); }
+  catch (e) {
+    if (e.code === "EEXIST") return refuse("lock_held", "another tool claimed the browser lock", "Retry after the owner exits.");
+    throw e;
+  }
   const again = lockInfo();
   if (!again.held || again.pid !== process.pid) {
     return refuse(
@@ -296,7 +302,7 @@ function acquireLock(tool) {
   return null;
 }
 
-function releaseLock() {
+export function releaseLock() {
   try {
     if (!fs.existsSync(LOCK_PATH)) return;
     const raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
@@ -358,6 +364,12 @@ const CATALOG = [
     name: "apex_status",
     week: 1,
     description: "Tree — read-only occupancy: lock, chrome /healthz, test-bg, playwright PIDs, loadavg. Does not take the lock. Call before any browser apex_*.",
+    inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
+  },
+  {
+    name: "apex_doctor",
+    kind: "tree",
+    description: "Tree — read-only local tool readiness and prerequisite report; no browser, network, installation or writes.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
   },
   {
@@ -505,13 +517,62 @@ const CATALOG = [
         track: { type: "string", description: "Circuit id (required) — one of Tracks.LIST (tools/manifest.cjs CIRCUITS)." },
         u: { type: "array", items: { type: "number" }, description: "Exact flyby points 0..1 (max 64). Not with frames." },
         frames: { type: "integer", description: "N evenly spaced frames (1..120). Not with u. Default: each shot's start/mid/end." },
-        shots: { type: "string", description: "Shot-list JSON/JS file under scratch/ or artifacts/ (default FlybySeq.DEFAULT)." },
+        shots: { type: "string", description: "Shot-list JSON data file under scratch/ or artifacts/ (default FlybySeq.DEFAULT); executable JS is refused." },
         json: { type: "boolean", description: "Full JSON report (parsed into out) instead of the text table + thumbs." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
       },
       required: ["track"],
+    },
+  },
+  // 12 → 15 on 2026-10-02: the three read-only checks AGENTS.md rule 12 runs
+  // every session (status block for the PR body, who else is on a red, one CI
+  // poll after a push). Each answers in 0.1–2 s and only reads.
+  {
+    name: "apex_session_status",
+    week: 6,
+    kind: "tree",
+    description: "Tree — this branch's handoff block as JSON (sessions, commits vs the deploy branch, dirty/unpushed, each test log's verdict, a live run): the PR body's status section. Read-only. Skill: steward.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_who_is_on_it",
+    week: 6,
+    kind: "tree",
+    description: "Tree — recent pushes per branch, who touched these paths, live claims (--json): the check before fixing a red you did not cause. Read-only: never --claim / --release (run the CLI for those). Skill: steward.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        hours: { type: "number", description: "Look-back window in hours (1..168, default 6)." },
+        paths: { type: "array", items: { type: "string" }, description: "Repo-relative paths whose recent authors to list." },
+        noFetch: { type: "boolean", description: "Skip the git fetch (faster, may be stale)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_ci_status",
+    week: 6,
+    kind: "tree",
+    description: "Tree — ONE poll of a SHA's CI runs (ci-watch --once): per-job lines, a red's failing step, and the `= ci <verdict>` line parsed into out. Never waits — arm a Monitor on ci-watch.mjs for that. Read-only GETs. Skill: steward.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sha: { type: "string", description: "Commit SHA (7–40 hex) or HEAD (default)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
     },
   },
 ];
@@ -539,6 +600,32 @@ function assertSafeOut(raw) {
       ),
     });
   }
+  // The final file may not exist yet. Resolve its nearest existing ancestor
+  // so a directory (or existing file) symlink cannot turn a lexical in-tree
+  // path into an out-of-tree write. Never create directories during preflight.
+  let ancestor = resolved;
+  while (!fs.existsSync(ancestor)) {
+    try {
+      fs.lstatSync(ancestor); // a dangling symlink is not a missing directory
+      badArgs(`output path has an unresolved symlink: ${s}`);
+    } catch (e) {
+      if (e.refuse) throw e;
+      if (e.code !== "ENOENT") throw e;
+    }
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) badArgs(`cannot resolve output path: ${s}`);
+    ancestor = parent;
+  }
+  const real = path.join(fs.realpathSync(ancestor), path.relative(ancestor, resolved));
+  const realInside = [ARTIFACTS_DIR, SCRATCH_DIR].some((base) => {
+    let realBase;
+    try { realBase = fs.realpathSync(base); } catch { realBase = base; }
+    const rel = path.relative(realBase, real);
+    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  });
+  if (!realInside) throw Object.assign(new Error("path_escaped"), {
+    refuse: refuse("path_escaped", `output symlink escapes artifacts/ or scratch/ (got ${s})`, "Use an output directory inside the permitted roots."),
+  });
   return resolved;
 }
 
@@ -587,6 +674,98 @@ function knownCircuits() {
   return circuitIds;
 }
 
+// The same schemas are published and enforced. Keep bounds at the wrapper
+// seam: malformed input must fail before occupancy checks or expensive boots.
+for (const tool of CATALOG) {
+  const schema = tool.inputSchema;
+  schema.additionalProperties = false;
+  for (const [key, spec] of Object.entries(schema.properties)) {
+    if (spec.type === "string") spec.maxLength = key === "expr" ? 65536 : 4096;
+    if (spec.type === "array") spec.maxItems = 256;
+  }
+  if (schema.properties.track) schema.properties.track.enum = knownCircuits();
+}
+const schemaFor = (name) => CATALOG.find((t) => t.name === name).inputSchema;
+const bound = (name, key, extra) => Object.assign(schemaFor(name).properties[key], extra);
+schemaFor("apex_select_specs").required = ["since"];
+schemaFor("apex_graph_parity").required = ["base"];
+schemaFor("apex_graph_parity").anyOf = [{ required: ["id"] }, { required: ["all"], properties: { all: { const: true } } }];
+schemaFor("apex_frame_report").required = ["track"];
+bound("apex_graph_parity", "id", { enum: knownCircuits() });
+bound("apex_pick_tests", "files", { items: { type: "string", minLength: 1, maxLength: 4096 } });
+bound("apex_select_specs", "budgetMin", { exclusiveMinimum: 0, maximum: 120 });
+bound("apex_shot", "frac", { minimum: 0, maximum: 1 });
+bound("apex_shot", "cam", { enum: ["park", "eye", "orbit", "cinematic", "trackside"] });
+bound("apex_shot", "dist", { exclusiveMinimum: 0, maximum: 10000 });
+bound("apex_shot", "az", { minimum: -36000, maximum: 36000 });
+bound("apex_shot", "el", { minimum: -90, maximum: 90 });
+bound("apex_shot", "side", { enum: [-1, 1] });
+bound("apex_agent", "at", { minimum: 0, maximum: 1 });
+bound("apex_agent", "speed", { minimum: 0, maximum: 300 });
+bound("apex_agent", "lateral", { minimum: -10000, maximum: 10000 });
+bound("apex_agent", "radius", { minimum: 0, maximum: 10000 });
+bound("apex_agent", "limit", { type: "integer", minimum: 0, maximum: 1000 });
+bound("apex_agent", "seconds", { minimum: 0, maximum: 120 });
+bound("apex_agent", "command", { enum: ["help", "world", "track", "field", "atmosphere", "objective", "describe", "query", "scene", "render", "rollout", "car", "visible", "frame", "plan", "survey", "model"] });
+bound("apex_agent", "weather", { enum: ["dry", "wet", "rain", "overcast", "fog"] });
+for (const name of ["apex_agent", "apex_shot"]) bound(name, "tod", { enum: ["dawn", "day", "dusk", "night"] });
+bound("apex_garage", "seat", { type: "integer", enum: [0, 1] });
+bound("apex_garage", "frame", { anyOf: [{ type: "string", maxLength: 4096 }, { type: "object" }] });
+bound("apex_garage", "diff", { minItems: 2, maxItems: 2, items: { type: "string", maxLength: 4096 } });
+bound("apex_frame_report", "u", { minItems: 1, maxItems: 64, items: { type: "number", minimum: 0, maximum: 1 } });
+bound("apex_frame_report", "frames", { minimum: 1, maximum: 120 });
+
+const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+function validateValue(value, schema, label) {
+  if (schema.anyOf) {
+    const fits = schema.anyOf.some((part) => { try { validateValue(value, part, label); return true; } catch { return false; } });
+    if (!fits) badArgs(`${label} must match one of the advertised types`);
+  }
+  if (Object.hasOwn(schema, "const") && value !== schema.const) badArgs(`${label} must equal ${JSON.stringify(schema.const)}`);
+  const type = schema.type;
+  const validType = !type || (type === "object" ? isObject(value)
+    : type === "array" ? Array.isArray(value)
+    : type === "integer" ? Number.isInteger(value)
+    : type === "number" ? typeof value === "number" && Number.isFinite(value)
+    : typeof value === type);
+  if (!validType) badArgs(`${label} must be ${type}`);
+  if (schema.enum && !schema.enum.includes(value)) badArgs(`${label} must be one of ${schema.enum.join(", ")}`);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) badArgs(`${label} must be finite`);
+    if (schema.minimum != null && value < schema.minimum || schema.maximum != null && value > schema.maximum
+        || schema.exclusiveMinimum != null && value <= schema.exclusiveMinimum) {
+      badArgs(`${label} outside permitted range ${schema.minimum ?? `>${schema.exclusiveMinimum}`}..${schema.maximum ?? "unbounded"}`);
+    }
+  }
+  if (typeof value === "string") {
+    if (schema.minLength != null && value.length < schema.minLength || schema.maxLength != null && value.length > schema.maxLength) badArgs(`${label} has invalid length`);
+    if (/[\u0000-\u001f]/.test(value) && label !== "expr") badArgs(`${label} contains control characters`);
+  }
+  if (Array.isArray(value)) {
+    if (schema.minItems != null && value.length < schema.minItems || schema.maxItems != null && value.length > schema.maxItems) badArgs(`${label} must have ${schema.minItems ?? 0}..${schema.maxItems ?? "unbounded"} items`);
+    if (schema.items) value.forEach((item, i) => validateValue(item, schema.items, `${label}[${i}]`));
+  }
+  if (isObject(value)) {
+    for (const key of schema.required || []) if (!(key in value)) badArgs(`${label === "arguments" ? "tool" : label} needs ${key}`);
+    for (const [key, child] of Object.entries(value)) {
+      const spec = schema.properties && Object.hasOwn(schema.properties, key) ? schema.properties[key] : null;
+      if (!spec && schema.additionalProperties === false) badArgs(`unknown argument ${key}`);
+      if (spec) validateValue(child, spec, key);
+    }
+  }
+}
+
+function validateArgs(tool, args) {
+  validateValue(args, tool.inputSchema, "arguments");
+  // These values reach CLI parsers as positional names or option values.
+  // shell:false prevents shell injection; it does not prevent flag injection.
+  for (const key of ["since", "base", "track", "id", "command", "detail", "what", "team", "livery"]) {
+    if (typeof args[key] === "string" && args[key].startsWith("-")) badArgs(`${key} may not start with a CLI flag`);
+  }
+  if (typeof args.expr === "string" && args.expr.startsWith("--")) badArgs("expr may not start with a CLI flag");
+  for (const file of args.files || []) if (file.startsWith("-")) badArgs("files must be paths, not CLI flags");
+}
+
 /** apex_frame_report argv. Every value is validated here; nothing the caller
  *  passes reaches the CLI as a free-form flag. */
 function frameReportArgv(args) {
@@ -614,13 +793,26 @@ function frameReportArgv(args) {
     if (!Number.isInteger(n) || n < 1 || n > 120) badArgs(`frames must be an integer 1..120 (got ${JSON.stringify(n)})`);
     argv.push(`--frames=${n}`);
   }
-  if (args.shots != null && args.shots !== "") argv.push("--shots", assertSafeIn(args.shots, "shots"));
+  if (args.shots != null && args.shots !== "") {
+    const file = assertSafeIn(args.shots, "shots");
+    if (path.extname(file).toLowerCase() !== ".json") badArgs("shots must be a JSON data file; JavaScript is not permitted by this read-only tool");
+    if (fs.statSync(file).size > 1024 * 1024) badArgs("shots JSON exceeds 1 MiB");
+    let shots;
+    try { shots = JSON.parse(fs.readFileSync(file, "utf8")); } catch { badArgs("shots must contain valid JSON data"); }
+    if (!Array.isArray(shots)) badArgs("shots JSON must contain a shot-list array");
+    if (shots.length > 256) badArgs("shots JSON must have at most 256 entries");
+    const invalid = shots.length ? shotErrors(shots) : [];
+    if (invalid.length) badArgs(`shots JSON: ${invalid.join("; ")}`);
+    argv.push("--shots", file);
+  }
   if (args.json) argv.push("--json");
   return argv;
 }
 
 function buildArgv(name, args) {
   switch (name) {
+    case "apex_doctor":
+      return [...nodeTool("check/doctor.mjs"), "--tree", "--json"];
     case "apex_frame_report":
       return frameReportArgv(args);
     case "apex_verify_change_fast": {
@@ -714,6 +906,36 @@ function buildArgv(name, args) {
       }
       return argv;
     }
+    case "apex_session_status":
+      return [...nodeTool("ci/session-status.mjs"), "--json"];
+    case "apex_who_is_on_it": {
+      const argv = [...nodeTool("ci/who-is-on-it.mjs"), "--json"];
+      if (args.hours != null) {
+        const h = Number(args.hours);
+        if (!Number.isFinite(h) || h < 1 || h > 168) badArgs(`hours must be 1..168 (got ${JSON.stringify(args.hours)})`);
+        argv.push("--hours", String(h));
+      }
+      if (args.noFetch) argv.push("--no-fetch");
+      if (args.paths != null) {
+        if (!Array.isArray(args.paths)) badArgs("paths must be an array of repo-relative paths");
+        for (const p of args.paths) {
+          // A path is a positional: one that starts with "-" would reach the
+          // CLI as a flag, and --claim / --release write refs.
+          if (typeof p !== "string" || !p || p.startsWith("-")) {
+            badArgs(`paths must be repo-relative paths, not flags (got ${JSON.stringify(p)})`);
+          }
+          argv.push(p);
+        }
+      }
+      return argv;
+    }
+    case "apex_ci_status": {
+      const sha = args.sha == null || args.sha === "" ? "HEAD" : String(args.sha);
+      if (sha !== "HEAD" && !/^[0-9a-f]{7,40}$/i.test(sha)) {
+        badArgs(`sha must be 7–40 hex characters or HEAD (got ${sha})`, 'Pass {"sha":"e21bcf4"}.');
+      }
+      return [...nodeTool("ci/ci-watch.mjs"), "--once", "--sha", sha];
+    }
     default:
       throw new Error(`no argv builder for ${name}`);
   }
@@ -724,21 +946,29 @@ function extraEnv(name, args) {
   return {};
 }
 
-function parseOut(stdout) {
+/** Split a CLI's stdout into its JSON result and the text before it.
+ *  `out` is the whole stdout (any JSON value — apex_eval may print a bare
+ *  number), else the LAST block that opens with `{` or `[` at column 0 and
+ *  runs to the end (a text line, then pretty-printed JSON). The fallback
+ *  takes only an object or array: a line-by-line scan returned `563.528` for
+ *  apex_shot, an indented number from inside its JSON. `rest` is the stdout
+ *  with that block removed — the JSON is never returned twice. */
+export function splitOut(stdout) {
   const text = String(stdout || "").trim();
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    const lines = text.split("\n").filter(Boolean);
-    for (let i = lines.length - 1; i >= 0; i--) {
-      try {
-        return JSON.parse(lines[i]);
-      } catch { /* continue */ }
-    }
-    return null;
+  if (!text) return { out: null, rest: "" };
+  const isDoc = (v) => v !== null && typeof v === "object";
+  try { return { out: JSON.parse(text), rest: "" }; } catch { /* fall through */ }
+  const lines = text.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!/^[{[]/.test(lines[i])) continue;
+    try {
+      const v = JSON.parse(lines.slice(i).join("\n"));
+      if (isDoc(v)) return { out: v, rest: lines.slice(0, i).join("\n").trim() };
+    } catch { /* an earlier opener may hold the whole block */ }
   }
+  return { out: null, rest: text };
 }
+export function parseOut(stdout) { return splitOut(stdout).out; }
 
 function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) {
   const started = Date.now();
@@ -751,17 +981,20 @@ function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) 
     maxBuffer: 8 * 1024 * 1024,
   });
   const durationMs = Date.now() - started;
-  const stdout = r.stdout || "";
   const stderr = r.stderr || "";
   const exit = r.status == null ? (r.signal ? 1 : 0) : r.status;
+  // stdout carries only what `out` does not: returning the raw JSON beside its
+  // parse doubled every result, and apex_who_is_on_it reached 60 KB — over
+  // the host's inline limit, so the caller got a file path, not an answer.
+  const { out, rest } = splitOut(r.stdout);
   const body = {
     ok: exit === 0,
     exit,
     argv,
     env: Object.keys(env).length ? env : undefined,
-    stdout,
+    stdout: rest,
     stderr,
-    out: parseOut(stdout),
+    out,
     durationMs,
   };
   if (r.error) {
@@ -773,6 +1006,29 @@ function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {} } = {}) 
     body.ok = true;
   }
   return toolResult(body, { isError: !body.ok });
+}
+
+/** ci-watch prints text: lift its terminal `= ci <verdict> (…)` line, and
+ *  the per-job lines, into `out` so a caller need not regex stdout. */
+export function ciVerdict(stdout) {
+  const lines = String(stdout || "").split("\n").filter((l) => l.startsWith("[ci-watch]"));
+  const term = lines.map((l) => /\]\s*= ci (\S+)\s*(.*)$/.exec(l)).filter(Boolean).pop();
+  return {
+    verdict: term ? term[1] : null,
+    summary: term ? term[2].trim() : null,
+    jobs: lines.filter((l) => !/\]\s*= ci /.test(l)).map((l) => l.replace(/^\[ci-watch\]\s*/, "")),
+  };
+}
+function withCiVerdict(result) {
+  const body = JSON.parse(result.content[0].text);
+  // The job lines and the verdict move into `out`; stdout keeps the raw text
+  // only when nothing parsed (no token, API down) so the reason survives.
+  if (!body.error) {
+    body.out = ciVerdict(body.stdout);
+    if (body.out.verdict) body.stdout = "";
+  }
+  result.content[0].text = JSON.stringify(body);
+  return result;
 }
 
 function mockSuccess(name, argv, env = {}) {
@@ -887,6 +1143,20 @@ function pinOk(name, argv) {
       );
     }
   }
+  if (name === "apex_who_is_on_it" && (argv.includes("--claim") || argv.includes("--release"))) {
+    return refuse(
+      "pin_violated",
+      "apex_who_is_on_it is read-only — never --claim / --release",
+      "Run `node tools/ci/who-is-on-it.mjs --claim \"<text>\"` from a shell when you mean to claim.",
+    );
+  }
+  if (name === "apex_ci_status" && (!argv.includes("--once") || argv.includes("--timeout") || argv.includes("--pages"))) {
+    return refuse(
+      "pin_violated",
+      "apex_ci_status is one poll — --once, never a wait",
+      "Arm a Monitor on `node tools/ci/ci-watch.mjs --sha <sha> --timeout 30` to watch a run.",
+    );
+  }
   if (argv.includes("--url")) {
     return refuse(
       "pin_violated",
@@ -930,23 +1200,34 @@ function garageArgv(args) {
   if (args.livery) argv.push("--livery", String(args.livery));
   return argv;
 }
-function garageClose(reason) {
+function settleGarageReady(g, value) {
+  if (g.readyTimer) clearTimeout(g.readyTimer);
+  g.readyTimer = null;
+  if (g.readyResolve) { const resolve = g.readyResolve; g.readyResolve = null; resolve(value); }
+}
+export function garageClose(reason) {
   if (!garage) return null;
   const g = garage;
   garage = null;
+  g.failure = reason;
+  settleGarageReady(g, null);
   for (const p of g.pending.values()) { clearTimeout(p.timer); p.reject(new Error(`garage closed: ${reason}`)); }
-  if (g.readyTimer) clearTimeout(g.readyTimer);
-  try { g.child.stdin.end(); } catch { /* gone */ }
-  const kill = setTimeout(() => { try { g.child.kill("SIGTERM"); } catch { /* gone */ } }, 8000);
-  kill.unref();
-  releaseLock();
+  g.pending.clear();
+  if (g.exited) releaseLock();
+  else {
+    try { g.child.stdin.end(); } catch { /* gone */ }
+    g.killTimer = setTimeout(() => { try { g.child.kill("SIGTERM"); } catch { /* gone */ } }, 8000);
+    g.killTimer.unref();
+    // The child still owns its browser while it shuts down. The exit handler
+    // releases the lock; the closed session cannot open another browser yet.
+  }
   return { closed: true, reason, uptimeMs: Date.now() - g.started, shots: g.shots };
 }
 function garageOnLine(line) {
   let msg;
   try { msg = JSON.parse(line); } catch { return; }
   if (!garage) return;
-  if (msg.ready) { if (garage.readyResolve) garage.readyResolve(msg); return; }
+  if (msg.ready) { settleGarageReady(garage, msg); return; }
   if (msg.event) { garage.events.push(msg); return; }
   const p = garage.pending.get(msg.id);
   if (!p) return;
@@ -966,19 +1247,25 @@ function garageSend(cmd, timeoutMs) {
     garage.child.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
   });
 }
-async function garageOpen(args) {
+export async function garageOpen(args, { spawnChild = spawn, readyTimeoutMs = 180000 } = {}) {
   if (garage) {
     const st = await garageSend({ status: true }, 30000).catch((e) => ({ ok: false, error: e.message }));
     return toolResult({ ok: true, op: "open", alreadyOpen: true, argv: garage.argv, ...st });
   }
+  const argv = garageArgv(args); // validate paths before taking ownership
   const busy = occupancyRefuse();
   if (busy) return busy;
   const took = acquireLock("apex_garage");
   if (took) return took;
-  const argv = garageArgv(args);
-  const child = spawn(argv[0], argv.slice(1), { cwd: ROOT, stdio: ["pipe", "pipe", "pipe"], env: process.env });
-  garage = { child, argv, pending: new Map(), seq: 0, buf: "", events: [], started: Date.now(), shots: 0,
-             readyResolve: null, readyTimer: null };
+  let child;
+  try { child = spawnChild(argv[0], argv.slice(1), { cwd: ROOT, stdio: ["pipe", "pipe", "pipe"], env: process.env }); }
+  catch (e) { releaseLock(); return refuse("garage_boot_failed", `garage spawn failed: ${e.message}`, "Check the garage CLI and Node executable."); }
+  const g = garage = { child, argv, pending: new Map(), seq: 0, buf: "", events: [], started: Date.now(), shots: 0,
+             readyResolve: null, readyTimer: null, killTimer: null, exited: false };
+  const readiness = new Promise((resolve) => {
+    g.readyResolve = resolve;
+    g.readyTimer = setTimeout(() => settleGarageReady(g, null), readyTimeoutMs);
+  });
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (d) => {
     if (!garage || garage.child !== child) return;
@@ -992,14 +1279,19 @@ async function garageOpen(args) {
   });
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (d) => log(`[garage] ${String(d).trim().slice(0, 400)}`));
-  child.on("exit", (code, sig) => { if (garage && garage.child === child) garageClose(`exit ${code ?? sig}`); });
-  child.on("error", (e) => { if (garage && garage.child === child) garageClose(`spawn: ${e.message}`); });
-  const ready = await new Promise((resolve) => {
-    garage.readyResolve = resolve;
-    garage.readyTimer = setTimeout(() => resolve(null), 180000);
+  child.on("exit", (code, sig) => {
+    g.exited = true;
+    if (g.killTimer) clearTimeout(g.killTimer);
+    if (garage === g) garageClose(`exit ${code ?? sig}`);
+    else { settleGarageReady(g, null); releaseLock(); }
   });
-  if (!ready) {
-    const why = garageClose("not ready within 180s");
+  child.on("error", (e) => {
+    if (!child.pid) g.exited = true; // a failed spawn emits error without exit
+    if (garage === g) garageClose(`spawn: ${e.message}`);
+  });
+  const ready = await readiness;
+  if (!ready || garage !== g || g.exited) {
+    const why = garage === g ? garageClose(`not ready within ${readyTimeoutMs}ms`) : { reason: g.failure };
     return refuse("garage_boot_failed", "garage-angles --serve never reported ready", "Check loadavg and orphan Chromium (apex_status); see the server log.", why);
   }
   return toolResult({ ok: true, op: "open", argv, ...ready });
@@ -1052,6 +1344,7 @@ function garageCommand(op, args) {
 process.on("exit", () => { if (garage) garageClose("server exit"); });
 
 function dispatch(name, args = {}) {
+  if (typeof name !== "string") return refuse("bad_args", "tool name must be a string", "Use a name from tools/list.");
   if (!name.startsWith(PREFIX)) {
     return refuse(
       "bad_prefix",
@@ -1067,6 +1360,9 @@ function dispatch(name, args = {}) {
       "list-tools for the apex_* catalog.",
     );
   }
+
+  try { validateArgs(known, args); }
+  catch (e) { return e.refuse || refuse("bad_args", String(e.message || e), "See the tool inputSchema."); }
 
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
@@ -1107,9 +1403,14 @@ function dispatch(name, args = {}) {
     }
   }
 
+  if (name === "apex_ci_status") {
+    // ci-watch exits: 0 green / no run, 1 red, 2 cancelled, 124 still running
+    // — each a verdict, not a tool failure. 3 (no token / API down) is one.
+    return withCiVerdict(runSpawn(argv, { timeoutMs: 60000, allowExit: new Set([0, 1, 2, 124]), env }));
+  }
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
-    || name === "apex_frame_report";
+    || name === "apex_frame_report" || name === "apex_who_is_on_it";
   const timeoutMs = longTree ? 180000 : 60000;
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
@@ -1185,10 +1486,25 @@ async function cmdCall(name, argsJson) {
   return result.isError ? 1 : 0;
 }
 
+function rpcError(id, code, message) {
+  return { jsonrpc: "2.0", id, error: { code, message } };
+}
+
 async function handleRpc(msg) {
-  const mid = msg.id;
+  // MCP 2025-06-18 removed JSON-RPC batching. Reject arrays and primitive
+  // envelopes without dereferencing them or terminating the shared server.
+  // Spec: https://modelcontextprotocol.io/specification/2025-06-18/basic
+  if (!isObject(msg) || msg.jsonrpc !== "2.0" || typeof msg.method !== "string" || !msg.method) {
+    return rpcError(null, -32600, "Invalid Request: expected a JSON-RPC 2.0 object; batches are not supported");
+  }
+  const hasId = Object.hasOwn(msg, "id");
+  const mid = hasId ? msg.id : null;
+  if (hasId && mid !== null && typeof mid !== "string" && !(typeof mid === "number" && Number.isFinite(mid))) {
+    return rpcError(null, -32600, "Invalid Request: id must be a string, number or null");
+  }
+  if (Object.hasOwn(msg, "params") && !isObject(msg.params)) return rpcError(mid, -32602, "params must be an object");
   const method = msg.method;
-  if (method == null || mid == null) return null;
+  if (!hasId) return null;
 
   if (method === "initialize") {
     return {
@@ -1212,8 +1528,10 @@ async function handleRpc(msg) {
   }
   if (method === "tools/call") {
     const params = msg.params || {};
+    if (typeof params.name !== "string" || !params.name) return rpcError(mid, -32602, "tools/call needs a string name");
+    if (Object.hasOwn(params, "arguments") && !isObject(params.arguments)) return rpcError(mid, -32602, "tools/call arguments must be an object");
     try {
-      return { jsonrpc: "2.0", id: mid, result: await dispatch(params.name || "", params.arguments || {}) };
+      return { jsonrpc: "2.0", id: mid, result: await dispatch(params.name, params.arguments ?? {}) };
     } catch (e) {
       return {
         jsonrpc: "2.0",
@@ -1233,6 +1551,11 @@ function cmdServe() {
     input: process.stdin,
     crlfDelay: Infinity,
   });
+  const pending = new Set();
+  let closing = false;
+  const finish = () => {
+    if (closing && !pending.size) { garageClose("stdio closed"); process.exitCode = 0; }
+  };
   rl.on("line", (line) => {
     line = line.trim();
     if (!line) return;
@@ -1240,11 +1563,15 @@ function cmdServe() {
     try {
       msg = JSON.parse(line);
     } catch {
+      writeRpc(rpcError(null, -32700, "Parse error: body must be JSON"));
       return;
     }
-    handleRpc(msg).then((out) => { if (out) writeRpc(out); });
+    const task = handleRpc(msg).then((out) => { if (out) writeRpc(out); })
+      .catch(() => writeRpc(rpcError(null, -32603, "Internal error")))
+      .finally(() => { pending.delete(task); finish(); });
+    pending.add(task);
   });
-  rl.on("close", () => process.exit(0));
+  rl.on("close", () => { closing = true; finish(); });
   return 0;
 }
 
@@ -1279,13 +1606,23 @@ function cmdServeHttp() {
     }
     if (req.method === "POST" && (url === "/mcp" || url === "/")) {
       const chunks = [];
-      req.on("data", (c) => chunks.push(c));
+      let bytes = 0;
+      let oversized = false;
+      req.on("data", (c) => {
+        bytes += c.length;
+        if (bytes > 1024 * 1024) {
+          if (!oversized) sendHttpJson(res, 413, rpcError(null, -32600, "Request exceeds 1 MiB"));
+          oversized = true;
+          chunks.length = 0;
+        } else if (!oversized) chunks.push(c);
+      });
       req.on("end", () => {
+        if (oversized) return;
         let msg;
         try {
-          msg = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+          msg = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         } catch {
-          sendHttpJson(res, 400, { error: "body must be JSON-RPC" });
+          sendHttpJson(res, 400, rpcError(null, -32700, "Parse error: body must be JSON-RPC"));
           return;
         }
         handleRpc(msg).then((out) => {
@@ -1295,7 +1632,7 @@ function cmdServeHttp() {
             return;
           }
           sendHttpJson(res, 200, out);
-        });
+        }).catch(() => sendHttpJson(res, 200, rpcError(null, -32603, "Internal error")));
       });
       return;
     }
@@ -1329,6 +1666,15 @@ function main(argv) {
   return 2;
 }
 
-Promise.resolve(main(process.argv.slice(2))).then((code) => {
-  if (process.argv[2] !== "serve" && process.argv[2] !== "serve-http") process.exitCode = code;
-});
+// Symlink entry points run; imports with synthetic argv paths stay inert.
+let isEntryPoint = false;
+if (process.argv[1]) {
+  try { isEntryPoint = fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url); }
+  catch { /* An importing host may use a synthetic argv path. */ }
+}
+if (isEntryPoint) {
+
+  Promise.resolve(main(process.argv.slice(2))).then((code) => {
+    if (process.argv[2] !== "serve" && process.argv[2] !== "serve-http") process.exitCode = code;
+  });
+}

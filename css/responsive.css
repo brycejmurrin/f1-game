@@ -153,9 +153,9 @@ body.desktop #pm-calib { display: none !important; }
   .hud-box { padding: 5px 16px; }
   .hud-value { font-size: 23px; }
   .hud-label { font-size: var(--fs-micro); }
-  /* minimap is 140px here — gaps dock beside it (10+140+8), top-aligned with it
+  /* minimap is 160px here — gaps dock beside it (10+160+8), top-aligned with it
      by the base rule. */
-  .hud-gaps { left: calc(158px + var(--sal) / var(--hud-z)); }
+  .hud-gaps { left: calc(178px + var(--sal) / var(--hud-z)); }
   /* `.hud-top` is taller here (.hud-box padding 5px 16px, .hud-value 23px): its
      bottom sits at 68 in the widget's own zoomed units against 58 on the base
      ladder, so the dropped state clears by the same 4px. */
@@ -172,7 +172,7 @@ body.desktop #pm-calib { display: none !important; }
      height to spare. A monitor does, and at this size the cluster hugging the
      edge reads as something that fell off the screen. */
   #hud-dock { bottom: calc(22px + var(--sab)); }
-  #minimap { width: 140px; height: 140px; }
+  #minimap { width: 160px; height: 160px; }
 }
 
 /* Short-landscape HUD shrink used to live here behind

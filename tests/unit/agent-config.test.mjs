@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parse as parseYAML } from "yaml";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -391,7 +392,11 @@ test("the always-on instruction surface stays inside its budget", () => {
   let descWords = 0;
   for (const d of skills) {
     const { fm } = stripFrontmatter(read(`.claude/skills/${d.name}/SKILL.md`));
-    descWords += fm.split(/\s+/).filter(Boolean).length;
+    // Measure the described surface, not YAML keys, name fields or scalar
+    // quoting/folding syntax. Parsing also refuses malformed descriptions.
+    const description = parseYAML(fm)?.description;
+    assert.equal(typeof description, "string", `${d.name}: description must be a YAML string`);
+    descWords += description.split(/\s+/).filter(Boolean).length;
   }
   assert.ok(descWords <= 1600,
     `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1600) — tighten one, or retire a skill`);
