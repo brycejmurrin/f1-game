@@ -456,7 +456,7 @@ display label such as `"TV SIDE"` — returns `false`.
 | `drone` | DRONE | Smoothed tether camera with corner look-ahead — a calmer, more usable alternative to HELI |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone"] }
+__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone","helmet"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
 __apex.camera("tcam");      // → { mode:"tcam", index:11 }
 __apex.camera("trackside"); // → { mode:"trackside", index:14 }

@@ -140,7 +140,7 @@ const GameAudio = (function () {
     tv:      Object.freeze({ engine: 0.55, cut: 0.55, wind: 0.30, rivals: 1.25, reverb: 1.80 }),
   });
   const CAM_KIND = Object.freeze({
-    cockpit: "onboard", hood: "onboard", tcam: "onboard", rear: "onboard", visor: "onboard",
+    cockpit: "onboard", hood: "onboard", tcam: "onboard", rear: "onboard", visor: "onboard", helmet: "onboard",
     chase: "chase", far: "chase", drift: "chase", reverse: "chase",
     overhead: "tv", heli: "tv", side: "tv", cinematic: "tv", low: "tv", trackside: "tv",
     rival: "tv", pitwall: "tv", drone: "tv",

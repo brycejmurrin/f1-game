@@ -105,14 +105,57 @@ function seatUp(mode) {
   return typeof CockpitOpts !== "undefined" ? CockpitOpts.layout().eyeU : COCKPIT_EYE_UP;
 }
 
+// HELMET: the cockpit seen from INSIDE the driver's lid — the same rig and seat
+// as COCKPIT (seatFwd/seatUp fall through to the chosen seat), the eye a few
+// centimetres further forward where the eyes sit behind the visor, and the
+// visor's own frame round the picture (css/hud.css, body[data-helmet-cam]).
+const HELMET_EYE_FWD = 0.05;
+// THE DRIVER'S HEAD MOVES INSIDE THE CAR. Under lateral g the neck gives and
+// the head goes 2-3 cm to the OUTSIDE of the corner; under braking it nods
+// forward and down. Both read off the SMOOTHED body attitude
+// (js/physics/body-attitude.js: baRoll leans outward, ±0.055 rad at full grip;
+// baPitch > 0 is brake dive, capped 0.024) — never raw accel, so it cannot
+// jitter. It moves the EYE and not the rig: cockpitViewmodelAxes subtracts the
+// same offset, so the tub, wheel and halo stay on the car while the view shifts
+// inside them (measured clear: tests/unit/cockpit-wheels.test.mjs sweeps every
+// seat at these extremes). REDUCE MOTION and COMFORT › HEAD BOB both scale it.
+const HEAD_ROLL_MAX = 0.055, HEAD_DIVE_MAX = 0.024;   // body-attitude.js ROLL_MAX / PITCH_MAX
+const HEAD_LAT = 0.45;        // m outward per rad of body roll: 2.5 cm at full grip
+const HEAD_NOD_FWD = 0.6;     // m forward per rad of brake dive: 1.4 cm at full braking
+const HEAD_NOD_DOWN = 0.35;   // m down per rad of dive: 0.8 cm
+const HEAD_NOD_AIM = 8;       // m the 30 m aim point drops per rad of dive: a ~0.4 deg nod
+const HEAD_MAX = Object.freeze({ lat: HEAD_ROLL_MAX * HEAD_LAT, fwd: HEAD_DIVE_MAX * HEAD_NOD_FWD, down: HEAD_DIVE_MAX * HEAD_NOD_DOWN });
+// The live camera's head offset [lat (+right), up, fwd, aim drop], car frame.
+// Published only by the call that carries the player's attitude (extra.att —
+// the race camera and snapCam), so a PiP or debug solve between that call and
+// the car loop cannot move the rig anchor under it.
+const _head = [0, 0, 0, 0], _headScr = [0, 0, 0, 0];
+function headOffset(mode, extra, out) {
+  out[0] = out[1] = out[2] = out[3] = 0;
+  if (mode !== "cockpit" && mode !== "visor" && mode !== "helmet") return out;
+  if (mode === "helmet") out[2] = HELMET_EYE_FWD;
+  const a = extra.att;
+  if (!a || extra.reduceMotion) return out;
+  const k = typeof CamTune !== "undefined" && CamTune.bob ? CamTune.bob() : 1;
+  const roll = clamp(a.baRoll || 0, -HEAD_ROLL_MAX, HEAD_ROLL_MAX), dive = clamp(a.baPitch || 0, 0, HEAD_DIVE_MAX);
+  out[0] = -roll * HEAD_LAT * k;   // +roll tilts the body's top toward -R (game.js rollTot): the outside
+  out[1] = -dive * HEAD_NOD_DOWN * k;
+  out[2] += dive * HEAD_NOD_FWD * k;
+  out[3] = dive * HEAD_NOD_AIM * k;
+  return out;
+}
+function headState() { return { lat: _head[0], up: _head[1], fwd: _head[2], nod: _head[3] }; }
+
 // Cockpit viewmodel basis: same yawVis as the drawn body (heading vs road
 // tangent), origin subtracted along those axes so the eye stays at
 // (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in rig space — or at (fwd, up) when a mode
 // seats it elsewhere (VISOR), which keeps the rig on the CAR while the eye
 // moves inside it. Pitch/roll/lean stay off this basis — those shoved the eye
-// into the carbon. Writes into the caller-owned out* slots; nothing is allocated.
+// into the carbon. The live head offset (_head) comes off too, so the head
+// shift and the HELMET eye move the view and never the tub.
+// Writes into the caller-owned out* slots; nothing is allocated.
 function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up) {
-  const eF = fwd == null ? COCKPIT_EYE_FWD : fwd, eU = up == null ? COCKPIT_EYE_UP : up;
+  const eF = (fwd == null ? COCKPIT_EYE_FWD : fwd) + _head[2], eU = (up == null ? COCKPIT_EYE_UP : up) + _head[1];
   const cy = Math.cos(yv), sy = Math.sin(yv);
   for (let i = 0; i < 3; i++) {
     outF[i] = sF[i] * cy + sR[i] * sy;
@@ -122,7 +165,7 @@ function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up) 
   outU[1] = outR[2] * outF[0] - outR[0] * outF[2];
   outU[2] = outR[0] * outF[1] - outR[1] * outF[0];
   for (let i = 0; i < 3; i++)
-    outP[i] = eye[i] - outU[i] * eU - outF[i] * eF;
+    outP[i] = eye[i] - outR[i] * _head[0] - outU[i] * eU - outF[i] * eF;
 }
 
 const CHASE_SIDE_FRAC = 0.3;
@@ -267,7 +310,10 @@ function onboardAttitude(mode, eye, tgt, extra, s, spN) {
   // REDUCE MOTION drops the rib shiver (a high-frequency oscillation); heave/pitch are the car's own motion.
   const kerb = a.onKerb && !extra.reduceMotion ? Math.sin(s * (2 * Math.PI / KERB_RIB_M)) * KERB_AMP * spN : 0;
   eye[1] += heave + kerb;
-  tgt[1] += heave + pitch * 24;
+  // baPitch > 0 is brake DIVE (nose down, the chase rig's convention above), so
+  // the aim DROPS with it: the view dips into a braking zone and lifts under
+  // power. It was `+ pitch * 24` — the cockpit tilted UP as the car dived.
+  tgt[1] += heave - pitch * 24;
 }
 
 const _vantEye = [0, 0, 0], _vantTgt = [0, 0, 0];
@@ -275,6 +321,7 @@ const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60 };
 
 function vantage(track, mode, s, x, spd, now, extra) {
   extra = extra || {};
+  if (extra.att) headOffset(mode, extra, _head);   // the live camera publishes the rig's head offset
   _vTrack = track; _vS = s;
   const wrapS = _vWrapS;
   const bankDy = extra.bankDy || 0;
@@ -298,7 +345,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // with the chassis by even a centimetre would float in the cockpit — matching
   // the car matters more there than smoothness, and riding the car's own bumps
   // is what an onboard camera is FOR.
-  const onboard = _vOnboard = mode === "cockpit" || mode === "hood" || mode === "visor";
+  const onboard = _vOnboard = mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "helmet";
   const p = _vantP;
   p[0] = cvA.p[0] + cvA.r[0] * x;
   p[1] = (onboard ? cvA.p[1] : centreY(track, s)) + bankDy;
@@ -338,8 +385,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
       tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
       fov = 50;
     }
-  } else if (mode === "cockpit" || mode === "hood" || mode === "visor") {
-    const driver = mode === "cockpit" || mode === "visor";   // a driver's eye (visor = cockpit, further forward)
+  } else if (onboard) {
+    const driver = mode !== "hood";   // a driver's eye: cockpit, visor (no wheel), helmet (inside the lid)
     const eyeFwd = driver ? seatFwd(mode) : 0.55;   // the cockpit INTERIOR's seat (CockpitOpts.layout)
     const eyeUp  = driver ? seatUp(mode) : 0.95;
     if (extra.carPos) {
@@ -383,6 +430,17 @@ function vantage(track, mode, s, x, spd, now, extra) {
         tgt[0] = av[0]; tgt[1] = av[1]; tgt[2] = av[2];
       }
       fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(64, 78, spFov) + dep * 3;             // wider = faster feel
+    }
+    // The head inside the car (HEAD_* above): along the axes the rig is built
+    // on — the car's heading in the free world, the road frame otherwise
+    // (R = F x up, the track's +x-right). A solve without the player's
+    // attitude (PiP, debug previews) still seats the HELMET eye.
+    const h = extra.att ? _head : headOffset(mode, extra, _headScr);
+    if (driver && (h[0] || h[1] || h[2] || h[3])) {
+      const fx = extra.carPos ? Math.sin(extra.carHead || 0) : t[0], fz = extra.carPos ? Math.cos(extra.carHead || 0) : t[2];
+      const dx = -fz * h[0] + fx * h[2], dz = fx * h[0] + fz * h[2];
+      eye[0] += dx; eye[1] += h[1]; eye[2] += dz;
+      tgt[0] += dx; tgt[1] += h[1] - h[3]; tgt[2] += dz;
     }
   } else if (mode === "overhead") {
     eye[0] = p[0] - t[0] * 9; eye[1] = p[1] + 34; eye[2] = p[2] - t[2] * 9;
@@ -575,10 +633,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
   //
   // Clamp the eye to the ground beneath it plus a small clearance. The ground
   // is the same lateral profile the terrain ribbon is built from, plus the
-  // corner's banking, so this agrees with what is actually drawn. Cockpit and
-  // hood are exempt — they ride the car, and their eye is already on the
-  // surface by construction.
-  if (mode !== "cockpit" && mode !== "hood" && mode !== "visor" && track.surface) {
+  // corner's banking, so this agrees with what is actually drawn. The onboard
+  // eyes (cockpit/hood/visor/helmet) are exempt — they ride the car, and their
+  // eye is already on the surface by construction.
+  if (!onboard && track.surface) {
     const n = track.n;
     // INTERPOLATE THE FLOOR BETWEEN NODES. surface.heightAt() rounds its node
     // index and reads py at that node, so asking it once at Math.round(s) makes
@@ -659,5 +717,6 @@ function vantage(track, mode, s, x, spd, now, extra) {
   return _vantOut;
 }
 
-return { init, vantage, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
+return { init, vantage, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
+  HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT };
 })();

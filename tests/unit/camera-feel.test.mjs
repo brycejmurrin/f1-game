@@ -119,6 +119,10 @@ test("buzz / free-look scope tables stay aligned", () => {
   assert.deepEqual([...CamFeel.LOOKBACK_SKIP], ["reverse", "rear"]);
   for (const m of CamFeel.BUZZ_MODES) assert.equal(CamFeel.isBuzzMode(m), true);
   assert.equal(CamFeel.isBuzzMode("chase"), false);
+  // HELMET is bolted to the chassis like the cockpit it is: buzz, free-look and the cockpit's lens.
+  assert.equal(CamFeel.isBuzzMode("helmet"), true);
+  assert.equal(CamFeel.isFreeLookMode("helmet"), true);
+  for (const sp of [0, 0.5, 1]) assert.equal(CamFeel.modeFov("helmet", sp, 1), CamFeel.modeFov("cockpit", sp, 1));
 });
 
 test("speed vignette defaults off and persists", () => {

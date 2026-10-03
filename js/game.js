@@ -2350,7 +2350,7 @@ const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraFollowsBank(mode) {
   return mode === "chase" || mode === "far" || mode === "drift" ||
-         mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "reverse" ||
+         mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "helmet" || mode === "reverse" ||
          mode === "low" || mode === "tcam" || mode === "rear" ||
          mode === "rival" || mode === "drone";   // pitwall is a tripod on the wall
 }
@@ -7018,7 +7018,7 @@ function render(dt) {
   // lambda or the eye lags behind/into the bodywork at speed.
   const racing = state === "race" || state === "count";
   const camId = CAM_MODES[camMode].id;
-  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "tcam");
+  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet" || camId === "tcam");
   // Just after a cut, ease the external cams in with a gentler lambda so the angle
   // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
   const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
@@ -7035,7 +7035,7 @@ function render(dt) {
   const softCam = camId === "drone" || camId === "rival" || camId === "pitwall";
   const raceLam = softCam ? (camComfort() ? 6 : (camId === "drone" ? 9 : 11)) : 14;
   const lE = onboard ? 400 : (racing ? raceLam : 1.6) * cutEase;
-  const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
+  const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? (softCam ? raceLam + 1 : 16) : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
@@ -7134,7 +7134,7 @@ function render(dt) {
   // they keep 0.3 and every other view takes a near plane that buys back a lot
   // of depth resolution for free.
   const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
-  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor") ? 0.3 : 0.9;
+  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor" || _projMode === "helmet") ? 0.3 : 0.9;
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   if (homeTrack && !dbgCam) { const view = uiExperience.trackCamera(); _mProj[8] = view.shiftX; _mProj[9] = view.shiftY; }
@@ -7714,7 +7714,7 @@ function render(dt) {
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
-  const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "cockpit";
+  const cockpitRigOnly = !dbgCam && (state === "race" || state === "count") && (CAM_MODES[camMode].id === "cockpit" || CAM_MODES[camMode].id === "helmet");
   // VISOR is the cockpit WITHOUT ITS STEERING WHEEL (a phone in the hand is the
   // wheel): the same rig — tub, halo, mirrors, front wheels — around an eye
   // closer to the front and lower (js/camera/vantage.js VISOR_EYE_*); the player

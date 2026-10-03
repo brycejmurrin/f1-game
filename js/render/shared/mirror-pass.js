@@ -30,7 +30,7 @@
 const MirrorPass = (function () {
   const MODES = ["auto", "on", "off"];
   // AUTO's views: the ones with no view of the road behind at all.
-  const ONBOARD = { cockpit: 1, hood: 1, visor: 1, tcam: 1 };
+  const ONBOARD = { cockpit: 1, hood: 1, visor: 1, tcam: 1, helmet: 1 };
   const H_FOV = 56 * Math.PI / 180;   // horizontal; the vertical follows the rect's aspect
   const NEAR = 0.5, FAR = 700;
   // QUALITY LADDER. The mirror is never hidden for performance — a player
