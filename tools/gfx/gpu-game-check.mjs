@@ -553,6 +553,7 @@ try {
   if (extraLs.some((kv) => /^apex26\.gcScene=("?)pack\1$/.test(kv))) {
     const sample = (label, ms) => bounded(() => page.evaluate(async ([label, ms]) => {
       const A = window.__apex, d = [];
+      const tl = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m0 = tl && tl.memState ? tl.memState() : null;
       await new Promise((res) => { let last = performance.now(); const t0 = last;
         const f = (t) => { d.push(t - last); last = t; if (t - t0 < ms) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
       d.sort((x, y) => x - y);
@@ -561,14 +562,31 @@ try {
       const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
       let gms = null; try { const gt = A.gpuTimer(); gms = gt && gt.ms > 0 ? +gt.ms.toFixed(2) : null; } catch (_) { /* absent */ }
       return { label, frames: d.length, mean: +(d.reduce((a, b) => a + b, 0) / Math.max(1, d.length)).toFixed(1),
-        p50: q(0.5), p95: q(0.95), max: +d[d.length - 1].toFixed(1), draws: m ? m.draws : null, calls: m ? m.calls : null,
+        p50: q(0.5), p95: q(0.95), max: +d[d.length - 1].toFixed(1), draws: m ? m.draws : null,
+        // three's info.render.calls is cumulative here: the delta over the
+        // window divided by the frames is draw calls PER FRAME.
+        callsPerFrame: m && m0 && m.calls != null && m0.calls != null ? Math.round((m.calls - m0.calls) / Math.max(1, d.length)) : null,
+        pool: m ? m.pool : null,
         gpuMs: gms, scale: g ? g.scale : null, tier: g ? g.tier : null };
     }, [label, ms]), ms + 30000, "pack-" + label).catch((e) => ({ label, error: String((e && e.message) || e).slice(0, 120) }));
     out.pack = { note: "player at the back of the frozen grid (near) vs half a lap away (far)" };
     out.pack.setup = await bounded(() => page.evaluate(async () => {
-      const A = window.__apex; A.camera("chase"); A.go();
-      await new Promise((r) => setTimeout(r, 6000));   // lights + warm, field still on the grid
-      A.freeze(true); A.snapCam && A.snapCam(); return { cam: A.camera().mode };
+      const A = window.__apex; A.camera("chase");
+      // Same quality for both windows: floor the tier at 1 (where the governor
+      // took the first run's FAR window on its own) and stop resolution scaling.
+      try { PerfGov.setUserTier(1); PerfGov.setAutoRes(false); } catch (_) { /* older build */ }
+      A.go();
+      // Wait out the lights AND TLX's warm, so the NEAR window measures the
+      // field, not the compile stalls of the first seconds.
+      const t0 = performance.now();
+      while (performance.now() - t0 < 45000) {
+        const i = A.info(); const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+        if (i && i.state === "race" && !(t && t.warming && t.warming())) break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+      A.freeze(true); A.snapCam && A.snapCam();
+      return { cam: A.camera().mode, waitedMs: Math.round(performance.now() - t0) };
     }), 60000, "pack-setup").catch((e) => ({ error: String((e && e.message) || e).slice(0, 120) }));
     await new Promise((r) => setTimeout(r, 2000));
     out.pack.near = await sample("near", 6000);
