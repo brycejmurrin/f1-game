@@ -80,6 +80,10 @@
 <!-- @gen-shell:preload -->
 <link rel="preload" href="css/tokens.css?v=dev" as="style">
 <link rel="preload" href="css/components.css?v=dev" as="style">
+<link rel="preload" href="css/dialogs.css?v=dev" as="style">
+<link rel="preload" href="css/settings.css?v=dev" as="style">
+<link rel="preload" href="css/settings-controls.css?v=dev" as="style">
+<link rel="preload" href="css/dialog-platform.css?v=dev" as="style">
 <!-- /@gen-shell:preload -->
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
@@ -102,11 +106,20 @@
 <!-- @gen-shell:css -->
 <link rel="stylesheet" href="css/tokens.css?v=dev">
 <link rel="stylesheet" href="css/components.css?v=dev">
+<link rel="stylesheet" href="css/dialogs.css?v=dev">
+<link rel="stylesheet" href="css/settings.css?v=dev">
+<link rel="stylesheet" href="css/settings-controls.css?v=dev">
+<link rel="stylesheet" href="css/dialog-platform.css?v=dev">
 <link rel="stylesheet" href="css/tuner.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/title.css?v=dev">
 <link rel="stylesheet" href="css/menus.css?v=dev">
+<link rel="stylesheet" href="css/select.css?v=dev">
+<link rel="stylesheet" href="css/race-setup.css?v=dev">
 <link rel="stylesheet" href="css/carsetup.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/touch-controls.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/loading.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=dev">
 <link rel="stylesheet" href="css/track-detail.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=dev" media="print" onload="this.media='all'">
@@ -3388,6 +3401,9 @@
 <script defer crossorigin="anonymous" src="js/core/native.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/native-download.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/roster.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/script-loader.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/lazy-bundles.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/wake-lock.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/glx-facade.js?v=dev"></script>
 <!-- GLX, TLX and WGX implementations have no script tags. game.js injects
      only the selected backend, with GLX available as the lazy fallback. -->
@@ -3400,6 +3416,7 @@
 <script defer crossorigin="anonymous" src="js/render/shared/inst-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/vertex-pack.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/gfx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/renderer-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/driving-line.js?v=dev"></script>
@@ -3496,10 +3513,20 @@
 <script defer crossorigin="anonymous" src="js/editor/track-themes.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/editor/custom-tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-geometry.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-wheels.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-shade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car3d.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/bindings.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/pad-menu.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/haptics.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/hold-buttons.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/signal.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/soundtrack.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/radio-fx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/tone-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/engine.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/music-lib.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/spotify.js?v=dev"></script>
@@ -3515,6 +3542,7 @@
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/livery-graphics.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost-share.js?v=dev"></script>
@@ -3653,6 +3681,7 @@
 <script defer crossorigin="anonymous" src="js/ui/photo-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-menu.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/title-flow.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-net.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/custom-team.js?v=dev"></script>
@@ -3667,6 +3696,7 @@
 <script defer crossorigin="anonymous" src="js/car/car-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/shadow-pass.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/mirror-pass.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/platform-session.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>
 <!-- /@gen-shell:scripts -->
 </body></html>

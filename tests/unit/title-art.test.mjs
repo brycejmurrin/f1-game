@@ -8,6 +8,7 @@
  * These are the structural facts a redraw must not break. They are cheap, they
  * run in the fast tier, and each one is a mistake that was actually made.
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -16,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-const CSS = fs.readFileSync(path.join(ROOT, "css", "menus.css"), "utf8");
+const CSS = readCssSource("css/menus.css");
 
 const OPEN = "<!-- @gen-shell:title-art -->";
 const CLOSE = "<!-- @gen-shell:/title-art -->";

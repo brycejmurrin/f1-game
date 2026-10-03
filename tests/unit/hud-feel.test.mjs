@@ -23,6 +23,7 @@
  *
  * Run: node --test tests/unit/hud-feel.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -335,14 +336,14 @@ test("the POS box flashes on a position change and the gap chips carry the neigh
 });
 
 test("timing columns use the bundled condensed numerals with tabular figures", () => {
-  const comp = cssRules(read("css/components.css"));
+  const comp = cssRules(readCssSource("css/components.css"));
   for (const sel of [".res-pos", ".res-pts"]) {
     assert.equal(decl(comp, sel, "font-family"), "var(--font-hud)", sel + " reads the HUD face");
     assert.equal(decl(comp, sel, "font-variant-numeric"), "tabular-nums", sel + " keeps digits from reflowing");
   }
   const hud = cssRules(read("css/hud.css"));
   assert.match(decl(hud, '#hud-pos[data-delta="up"]', "color") || "", /--faster/);
-  const results = read("css/components.css");
+  const results = readCssSource("css/components.css");
   assert.match(results, /prefers-reduced-motion: no-preference\)[^}]*#results-table \.res-row \{ animation: row-in/s,
     "the results stagger lives inside the no-preference query");
 });
@@ -572,10 +573,10 @@ test("MOTION: REDUCED stops every HUD pulse, not only the OS query", () => {
   }
   // The touch OVERTAKE pulse lives in css/overlays.css on #btn-ot: covered
   // because the shell gives it .touchbtn.
-  assert.match(read("css/overlays.css"), /#btn-ot\.armed \{[^}]*animation: pulse/);
+  assert.match(readCssSource("css/overlays.css"), /#btn-ot\.armed \{[^}]*animation: pulse/);
   assert.match(html, /<button id="btn-ot" class="touchbtn"/);
   // The HUD-HIDDEN hint's fade has the same twin as its OS rule, so it stays put.
-  assert.match(read("css/overlays.css"), /:root\[data-motion="reduce"\] #hud-restore::after \{ animation: none; \}/);
+  assert.match(readCssSource("css/overlays.css"), /:root\[data-motion="reduce"\] #hud-restore::after \{ animation: none; \}/);
 });
 
 function pitBoot(opts) {

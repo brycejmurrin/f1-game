@@ -104,7 +104,9 @@ const KNOWN_EXTERNAL_READS = {
   "js/editor/codec.js": ["__APEX_BUILD"],             // the track file envelope stamps the shell build id, like the backup
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
-  "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
+  "js/game.js": ["__APEX_BUILD", "__apexReportError"], // shell build id (ghost meta) + error-report callback
+  "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
+  "js/core/lazy-bundles.js": ["__TEST_MODE"], // Playwright init-script flag enabling the agent surface
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
   "js/race/session-records.js": ["__APEX_BUILD"], // TT input-ghost meta stamps the same shell build
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts

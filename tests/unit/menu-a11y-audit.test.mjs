@@ -27,6 +27,7 @@
  *
  * Run: node --test tests/unit/menu-a11y-audit.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -626,7 +627,7 @@ function resolveColor(value, tokens, bg) {
 
 test("menus.css text colours clear AA over the darkest sheet ground", () => {
   const tokens = cssRules(read("css/tokens.css"));
-  const menus = cssRules(read("css/menus.css"));
+  const menus = cssRules(readCssSource("css/menus.css"));
   const bg = decl(tokens, ":root", "--bg");
   assert.equal(bg, "#0c0c14", "the darkest ground a sheet can sit over");
   for (const sel of ["#customize .cz-sep", "#customize .cz-row"]) {
@@ -639,8 +640,8 @@ test("menus.css text colours clear AA over the darkest sheet ground", () => {
 
 test("menu touch targets are token-sized, and the touch ladder lifts every token to ≥ 44px", () => {
   const tokens = cssRules(read("css/tokens.css"));
-  const menus = cssRules(read("css/menus.css"));
-  const comps = cssRules(read("css/components.css"));
+  const menus = cssRules(readCssSource("css/menus.css"));
+  const comps = cssRules(readCssSource("css/components.css"));
   const floor = (v) => parseFloat((v || "").match(/max\((\d+)px/)?.[1] || "0");
   // Primary controls: --tap is 44px on a mouse pointer and 52px on touch.
   assert.ok(floor(decl(tokens, ":root", "--tap")) >= 44, `--tap ${decl(tokens, ":root", "--tap")}`);

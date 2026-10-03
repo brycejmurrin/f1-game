@@ -9,8 +9,6 @@ const GameAudio = (function () {
   // 0..1 mixer levels, restored by the caller from storage on boot.
   let sfxVol = 1;
   let sfxEnabled = true;      // the SOUND EFFECTS switch — music is unaffected
-  let musicVol = 0.5;
-  const MUSIC_FULL = 0.52;
   let isEnabled = true;
 
   // Engine voice (persistent while racing)
@@ -148,112 +146,11 @@ const GameAudio = (function () {
   let camMix = CAM_MIX.chase, camKind = "chase";
   let rivalVoices = [];           // { filt, gain, pan, detune, start, stop, setPitch }
 
-  // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
-  // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
-  // function of rev — so tools/check/audio-test.cjs's invariants (pitch monotonic in
-  // rev per gear, gear1 < gear4 at redline) hold for every voice by
-  // construction. rateTrim ±3% pitch offset · detune cents on the sample ·
-  // formantHz/Gain a peaking EQ between engFilter and engGain (0 gain = no
-  // node) · cutTrim scales the lowpass (bright vs muffled) · whineHz/Lvl the
-  // turbo/MGU character · synthSpread/subLvl shape the oscillator fallback.
-  const ENGINE_VOICES = {
-    "default":       { rateTrim: 1.00, detune: 0,   formantHz: 0,    formantGain: 0, cutTrim: 1.00, whineHz: 1500, whineLvl: 1.0, synthSpread: 1.009, subLvl: 1.0 },
-    "Mercedes":      { rateTrim: 1.00, detune: 0,   formantHz: 1250, formantGain: 3, cutTrim: 1.05, whineHz: 1600, whineLvl: 0.9, synthSpread: 1.007, subLvl: 0.9 },
-    "Ferrari":       { rateTrim: 1.03, detune: 25,  formantHz: 1900, formantGain: 5, cutTrim: 1.12, whineHz: 1500, whineLvl: 0.8, synthSpread: 1.013, subLvl: 0.8 },
-    "Red Bull Ford": { rateTrim: 0.99, detune: -15, formantHz: 800,  formantGain: 4, cutTrim: 0.96, whineHz: 1350, whineLvl: 0.7, synthSpread: 1.018, subLvl: 1.2 },
-    "Honda":         { rateTrim: 1.01, detune: 10,  formantHz: 1500, formantGain: 2, cutTrim: 1.04, whineHz: 1750, whineLvl: 1.1, synthSpread: 1.005, subLvl: 0.95 },
-    "Audi":          { rateTrim: 0.98, detune: -20, formantHz: 950,  formantGain: 3, cutTrim: 0.92, whineHz: 2100, whineLvl: 1.5, synthSpread: 1.010, subLvl: 1.1 },
-  };
+  const { ENGINE_VOICES, TUNE_DEF, TUNE_RANGE, LAYER_DEF, SOUND_PROFILES } = GameAudioToneModel;
   let voice = ENGINE_VOICES["default"];
   let voiceName = "default";
-
-  // PLAYER TUNE — a second trim layered OVER the manufacturer voice, owned by
-  // the player instead of the team. It keeps the SAME constant-timbre contract
-  // ENGINE_VOICES states above: every field is a fixed multiplier, never a
-  // function of rev, so tools/check/audio-test.cjs's invariants (pitch
-  // monotonic in rev per gear, gear1 < gear4 at redline) hold by construction.
-  //
-  // THE PITCH CURVE IS FOUR KNOBS, and they are independent on purpose.
-  //   rate(rev) = (IDLE_RATE * idle + SPAN_RATE * revRange * rev^curve) * pitch
-  // The first cut had only `pitch` and `revRange`, and `pitch` scaled BOTH
-  // ends: the only way to a lower, lumpier idle was to pull the whole curve
-  // down, and REV RANGE topped out well before it could put the redline back.
-  // Measured: PITCH 0.6 + REV RANGE 2.5 reached a redline rate of 0.83 against
-  // the stock 0.70 — a fifth of an octave, for a slider that reads "2.5x". A
-  // low grumble at idle with a proper scream at the top was simply not in the
-  // reachable set. So `idle` now moves the idle end ALONE, `revRange` the span
-  // alone, `pitch` transposes the finished curve, and `curve` bends the path
-  // between them — an exponent on rev, so above 1 the note hangs low through
-  // the mid-range and climbs late, which is the V10-era shape; below 1 it
-  // rises early and flattens.
-  //
-  // Every one of them is clamped strictly positive and none is a function of
-  // rev, which is exactly what monotonicity needs: the rev term keeps its sign
-  // (rev^curve is increasing for any curve > 0), and both gears take the same
-  // factors, so the ordering is untouched. `sub` weights the sub-octave;
-  // `gravel` the crank-rate roughness that fades with rev; `brakes` the
-  // carbon-brake roar; `shift` the gear-change crack.
-  //
-  // The LIMITER is three knobs because a chop has three things to hear:
-  // `limiter` is the DEPTH of the cut, `limRate` how many times a second it
-  // cuts (13 Hz stock), `limPitch` how far the note sags on each cut, which is
-  // the rpm dropping under a dead ignition. BOOST is two: `boost` the level of
-  // the ERS whine and the deploy whoosh, `boostPitch` the rev lift under
-  // deploy (4% stock). `harvest`, `wind`, `screech` and `rivals` are levels
-  // for layers that only had a switch.
-  // The SHIPPED voice, no longer a pure identity trim over the sample core:
-  // pitch down and the rev range widened so the climb to the limiter is
-  // longer, detune off (the chorus that blurred the top end), the sub layer
-  // well back, a hard fast limiter, and the hybrid whine halved. Every value is
-  // inside TUNE_RANGE below; the panel's step table still lands on each one.
-  const TUNE_DEF = Object.freeze({
-    pitch: 0.85, idle: 1, revRange: 1.3, curve: 1, detune: 0, brightness: 1, gravel: 1, sub: 0.25,
-    limiter: 2.25, limRate: 0.8, limPitch: 0, boost: 1, boostPitch: 1,
-    whine: 0.5, harvest: 1, wind: 1, screech: 1, brakes: 1, shift: 1, rivals: 1, reverb: 1, overrun: 1,
-  });
-  // WIDER THAN IS SENSIBLE, on purpose. The first cut of these ranges was
-  // conservative enough that several trims could not be pushed far enough to
-  // hear at all — a tuner whose extremes sound like its middle is a tuner
-  // nobody can learn. Every range still contains 1.0 EXACTLY (the panel's step
-  // table is chosen so an integer slider position lands on it), and the four
-  // pitch-curve fields stay strictly positive, which is the whole of what the
-  // pitch invariants need. The far ends are meant to be too much; that is what
-  // ends are for. Reach, at the corners, on the sample core: idle rate 0.075
-  // (IDLE 0.5 x PITCH 0.6) up to a redline rate of 3.96 (IDLE 1.6, REV RANGE
-  // 4, PITCH 1.8) — a 50:1 spread against the stock 2.8:1.
-  const TUNE_RANGE = Object.freeze({
-    pitch:      [0.60, 1.80], idle:  [0.50, 1.60], revRange: [0.20, 4.00], curve: [0.40, 2.50],
-    detune:     [0, 4],       brightness: [0.30, 2.50], gravel: [0, 4],    sub: [0, 4],
-    limiter:    [0, 3],       limRate: [0.40, 3.00], limPitch: [0, 4],
-    boost:      [0, 4],       boostPitch: [0, 4],
-    whine:      [0, 4],       harvest: [0, 4],     wind:     [0, 4],    screech: [0, 4],
-    brakes:     [0, 4],       shift: [0, 3],       rivals:   [0, 4],    reverb:  [0, 4],   overrun: [0, 4],
-  });
   let tune = Object.assign({}, TUNE_DEF);
-
-  // Layer switches. Each names a node that already exists, so muting one is a
-  // gain target of 0 — and because every muted layer goes through aimGain, its
-  // steady state costs no per-frame scheduling at all (the _apexAimTgt guard,
-  // the same idiom limGain/lfoG use further down).
-  const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true, sub: true, gravel: true, brakes: true, rivals: true, reverb: true, overrun: true });
   let layers = Object.assign({}, LAYER_DEF);
-
-  // Named tune presets the player picks INSTEAD of inheriting the team's
-  // engine. "team" is the shipped behaviour: identity trims, and ENGINE_VOICES
-  // still keys off team.engine. The rest layer over whatever voice the team
-  // gave, so a Ferrari on COCKPIT is still recognisably a Ferrari.
-  // Fields a profile omits fall back to TUNE_DEF (setProfile), so a preset
-  // only names what it moves.
-  const SOUND_PROFILES = Object.freeze({
-    team:      null,
-    broadcast: { pitch: 1.02, detune: 0.9, revRange: 1.05, brightness: 1.18, whine: 1.30, sub: 0.80, limiter: 1.00, gravel: 0.60, brakes: 0.90, shift: 1.10, boost: 1.20, rivals: 1.20, wind: 0.80 },
-    trackside: { pitch: 0.99, detune: 1.3, revRange: 1.00, brightness: 0.82, whine: 0.65, sub: 1.15, limiter: 0.85, idle: 0.95, gravel: 1.40, brakes: 1.20, shift: 0.90, wind: 1.40, screech: 1.30, rivals: 1.50, limPitch: 0.70 },
-    cockpit:   { pitch: 1.00, detune: 1.0, revRange: 0.92, brightness: 0.68, whine: 0.85, sub: 1.60, limiter: 1.35, curve: 0.95, gravel: 1.30, brakes: 1.50, shift: 1.40, limPitch: 1.30, harvest: 1.20, wind: 0.70, boost: 1.10 },
-    // A V10 idles low and lazy, hangs there, then climbs to a shriek: low idle,
-    // wide span, a late curve, almost none of the turbo-era roughness, a hard
-    // fast limiter — and no hybrid, so the ERS layers all but vanish.
-    v10:       { pitch: 1.07, detune: 2.2, revRange: 1.60, brightness: 1.28, whine: 0.10, sub: 0.70, limiter: 1.15, idle: 0.85, curve: 1.25, gravel: 0.30, brakes: 0.80, shift: 1.20, limRate: 1.30, limPitch: 1.50, boost: 0.15, boostPitch: 0.50, harvest: 0.20 },
-  });
   let profileName = "team";
 
   // Schedule a gain target only when it has MOVED. A muted layer converges to 0
@@ -339,74 +236,11 @@ const GameAudio = (function () {
   // The SUB-OCTAVE layer still needs it to know the engine's own fundamental.
   let enginePeriod = 0;
 
-  // Dominant period of the loop region, by autocorrelation. Bounded on BOTH
-  // axes so this stays a ~10 ms main-thread cost paid once: an 8192-sample
-  // window (the loop is steady, so more buys nothing) and lags spanning
-  // 50 Hz-800 Hz, which covers any engine recording worth looping.
-  function detectPeriod(buf) {
-    const d = buf.getChannelData(0), sr = buf.sampleRate;
-    const from = Math.floor(d.length * 0.3);
-    const n = Math.min(8192, d.length - from);
-    if (n < 2048) return 0;
-    const x = d.subarray(from, from + n);
-    const loLag = Math.max(2, Math.floor(sr / 800)), hiLag = Math.min(n >> 1, Math.ceil(sr / 50));
-    // NORMALISED, and then the SHORTEST lag that is nearly as good as the best.
-    // Raw autocorrelation octave-errors: a signal periodic at P is also
-    // periodic at 2P and 4P, and the longer lags win on plain sum-of-products.
-    // Measured on f1_engine.mp3 this picked 335 samples where the true period
-    // is ~82 — a 4th subharmonic. PSOLA fed a period 4x too long cuts grains
-    // covering eight real cycles, so each grain carries the RECORDING's pitch
-    // and the output sings at that instead of the rev it was asked for, which
-    // is the exact failure this whole rewrite exists to avoid.
-    const score = new Float32Array(hiLag);
-    let best = 0;
-    for (let lag = loLag; lag < hiLag; lag++) {
-      let acc = 0, e1 = 0, e2 = 0;
-      for (let i = 0; i + lag < n; i++) { const a1 = x[i], b1 = x[i + lag]; acc += a1 * b1; e1 += a1 * a1; e2 += b1 * b1; }
-      const d = Math.sqrt(e1 * e2);
-      const v = d > 0 ? acc / d : 0;
-      score[lag] = v;
-      if (v > best) best = v;
-    }
-    if (!(best > 0)) return 0;
-    const floor = best * 0.9;
-    for (let lag = loLag; lag < hiLag; lag++) if (score[lag] >= floor) return lag;
-    return 0;
-  }
   let engSrcIdle = null, engGainIdle = null;
   let usingSamples = false;
   let dbgAnalyser = null;          // taps the engine output so tests can measure pitch
   const SFX_ENGINE = "assets/sfx/f1_engine.mp3";   // sustained F1 drone (primary)
 
-  // Music: streamed CC0 tracks (assets/music/), lazy-loaded + cached
-  let musicOn = false;
-  let musicEnabled = true;        // separate from the master sound toggle
-  let lastTrackIdx = -1;
-  let musicGain = null;
-  let musicSrc = null;
-  let musicToken = 0;
-  const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
-  const _musicLoads = {};                  // url -> in-flight fetch+decode (see playIndex)
-  const _bufKeys = [];                     // insertion order of cached urls (bound: MUSIC_CACHE)
-  // Decoded PCM is ~90 MB per four-minute track at a 48 kHz context. Desktop
-  // keeps the 2 most recent so a two-track playlist alternates without a
-  // re-decode; a PHONE keeps only the playing track — the second buffer was
-  // the largest single item in a phone's heap, and on a rotating playlist it
-  // is hit once per full rotation. GLX loads before this file (manifest order);
-  // the typeof guard is the standalone harness.
-  const MUSIC_CACHE = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 1 : 2;
-  const MENU_TRACK = "assets/music/menu.mp3";
-  const PLAYLIST = [
-    { id: "builtin:menu", name: "menu", url: MENU_TRACK, builtin: true },
-    { id: "builtin:song2", name: "song2", url: "assets/music/song2.mp3", builtin: true },
-    { id: "builtin:song3", name: "song3", url: "assets/music/song3.mp3", builtin: true },
-    { id: "builtin:song4", name: "song4", url: "assets/music/song4.mp3", builtin: true },
-    { id: "builtin:song5", name: "song5", url: "assets/music/song5.mp3", builtin: true },
-    { id: "builtin:song6", name: "song6", url: "assets/music/song6.mp3", builtin: true },
-  ];
-  let musicIndex = 0;
-  let source = "all";
-  let backend = null;
   let listenersAttached = false;
   let rebuildTries = 0;
   let lastFailedResume = 0;
@@ -445,35 +279,20 @@ const GameAudio = (function () {
     return v;
   }
 
-  const _loopMemo = new WeakMap();
-  function findStableLoop(buf) {
-    const memo = _loopMemo.get(buf);
-    if (memo) return memo;
-    const r = _findStableLoopUncached(buf);
-    _loopMemo.set(buf, r);
-    return r;
-  }
-  function _findStableLoopUncached(buf) {
-    const d = buf.getChannelData(0), sr = buf.sampleRate, N = d.length;
-    const hopN = Math.max(1, Math.floor(sr * 0.1));
-    const zc = [];
-    for (let a = 0; a + hopN < N; a += hopN) {
-      let c = 0, prev = d[a];
-      for (let j = a + 1; j < a + hopN; j++) { const v = d[j]; if ((v >= 0) !== (prev >= 0)) c++; prev = v; }
-      zc.push(c);
-    }
-    const w = Math.round(2.0 / 0.1);                 // ~2s window
-    if (zc.length < w + 2) return { start: buf.duration * 0.1, end: buf.duration * 0.9 };
-    let bestCV = Infinity, bi = 0;
-    for (let i = 0; i + w < zc.length; i++) {
-      let m = 0; for (let k = i; k < i + w; k++) m += zc[k]; m /= w;
-      if (m <= 0) continue;
-      let v = 0; for (let k = i; k < i + w; k++) { const dv = zc[k] - m; v += dv * dv; } v /= w;
-      const cv = Math.sqrt(v) / m;
-      if (cv < bestCV) { bestCV = cv; bi = i; }
-    }
-    return { start: bi * 0.1, end: (bi + w) * 0.1 };
-  }
+  // These services are functions so a rebuild never leaves a module holding the old context.
+  const signal = GameAudioSignal.create({ context: () => ctx, bus: () => sfxBus, sfxOk, now });
+  const { env, blip, noiseBuf, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise } = signal;
+  const { detectPeriod, findStableLoop } = GameAudioSignal;
+  const soundtrack = GameAudioSoundtrack.create({
+    context: () => ctx, master: () => master, enabled, engineRunning: () => engineOn,
+    sfxOk, clamp01, now, resumeRejected,
+  });
+  const { startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck } = soundtrack;
+  const radio = GameAudioRadioFx.create({
+    context: () => ctx, master: () => master, bus: () => sfxBus, enabled, sfxOk, now,
+  }, signal);
+  const { decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx } = radio;
+  let ctxGen = 0;
 
   function createCtx() {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -482,7 +301,7 @@ const GameAudio = (function () {
     applySessionType();
 
     ctx = new AC();
-    _loopNoise.clear();
+    signal.resetContext();
     ctxGen++;   // buffers decoded on the old context are stale (js/audio/voice-pack.js)
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
     // player never makes the gesture the listeners below wait for. Our own
@@ -617,10 +436,10 @@ const GameAudio = (function () {
   }
 
   function rebuildCtx() {
-    const wasMusic = musicOn;
-    const wasTrack = lastTrackIdx;
+    const wasMusic = soundtrack.isPlaying();
+    const wasTrack = soundtrack.lastTrack();
     const wasEngine = engineOn;
-    if (musicOn) stopMusic();
+    if (soundtrack.isPlaying()) stopMusic();
     engineOn = false;               // old nodes died with the old context
     // A TRY/CATCH CANNOT SWALLOW A REJECTION, and close() returns a Promise.
     // The "already closed" this catch was written for is exactly the case the
@@ -635,24 +454,14 @@ const GameAudio = (function () {
     master = null;
     sfxBus = null;
     limiter = null;
-    musicGain = null;
     rainStopping = false;
     rainPending = null;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
-    for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
-    for (const k in _musicLoads) delete _musicLoads[k];    // decodes in flight were against the OLD ctx
-    _bufKeys.length = 0;
-    // Ctx-bound too, and the biggest single object in the heap. Without this the
-    // OLD track stayed resident while the new context decoded the next one — two
-    // full buffers at ~150 MB, on the iOS resume path, which is exactly when the
-    // device is already short.
-    musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
+    soundtrack.resetContext();
     engBuf = null; samplesReady = false;                    // ctx-bound; reload for new ctx
     _irCache.clear();                                       // AudioBuffers are ctx-bound too
-    _voiceChains.clear();                                   // the shared voice chains are ctx-bound nodes
-    radioBed = null;        // its nodes died with the old ctx; stopping them would throw
-    noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
-                                                            // old ctx throws on the new one
+    radio.resetContext();
+    signal.resetContext();
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
                             // teardown, so without this a stale analyser on the closed ctx would
                             // survive and centroidHz() would read a dead node (latent: only
@@ -665,16 +474,10 @@ const GameAudio = (function () {
 
   function onVisibility() {
     if (document.hidden) {
-      resumeMusic = musicOn;
+      resumeMusic = soundtrack.isPlaying();
       resumeEngine = engineOn;
       resumeRain = rainWanted;
-      // stopMusic() drops the resume position along with the decoded track, and
-      // a hide/show is the exact case playMusicBuffer's offset exists for — so
-      // carry it across the stop by hand. musicBuffers still holds the buffer,
-      // so re-taking the reference costs nothing.
-      const hidBuf = musicResumeBuf, hidAt = musicResumeAt, hidOff = musicResumeOff;
-      if (musicOn) stopMusic();
-      if (resumeMusic) { musicResumeBuf = hidBuf; musicResumeAt = hidAt; musicResumeOff = hidOff; }
+      soundtrack.suspendMusic();
       if (engineOn) stopEngine();
       if (rainWanted) stopRain(true);
       // SUSPEND THE CONTEXT, not only its sources. Stopping the nodes leaves
@@ -703,7 +506,7 @@ const GameAudio = (function () {
       } catch (_) { /* a context mid-teardown must not break the hide path */ }
     } else {
       resumeIfNeeded();
-      if (resumeMusic) startMusic(lastTrackIdx); // restarts re-synced to the clock
+      if (resumeMusic) startMusic(soundtrack.lastTrack()); // restarts re-synced to the clock
       if (resumeEngine) startEngine();
       if (resumeRain) startRain();
       resumeMusic = resumeEngine = resumeRain = false;
@@ -724,89 +527,6 @@ const GameAudio = (function () {
   }
 
   function now() { return ctx ? ctx.currentTime : 0; }
-
-  function env(gainNode, t0, peak, attack, decay) {
-    const g = gainNode.gain;
-    g.cancelScheduledValues(t0);
-    g.setValueAtTime(0.0001, t0);
-    g.linearRampToValueAtTime(peak, t0 + attack);
-    g.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
-  }
-
-  function blip(freq, type, peak, attack, decay, slideTo, when) {
-    if (!sfxOk()) return;
-    const t0 = now() + (when || 0);
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t0);
-    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + attack + decay);
-    env(g, t0, peak, attack, decay);
-    osc.connect(g).connect(sfxBus);
-    osc.start(t0);
-    osc.stop(t0 + attack + decay + 0.05);
-    osc.onended = () => { osc.disconnect(); g.disconnect(); };
-  }
-
-  function noiseBuf(seconds) {
-    const len = Math.ceil(ctx.sampleRate * seconds);
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    return buf;
-  }
-
-  /* ONE shared white-noise buffer for the one-shots, instead of a fresh
-     allocation per hit. noiseBuf() fills every sample with Math.random() on the
-     MAIN THREAD, and the one-shots fire while driving: rumble() is
-     noise(0.09, 0.05, 320) throttled to every 0.07 s over a kerb, so a kerb
-     strike was ~14 allocations a second at ~4,800 floats each. thunder() was
-     worse — three calls totalling ~2.9 s, about 140k Math.random() calls in one
-     synchronous burst, mid-race, at an unpredictable moment.
-
-     White noise is stationary, so one buffer played from a RANDOM OFFSET is
-     indistinguishable from a freshly-generated one — and two hits in a row
-     still differ, which a fixed offset would not give. The looping sources
-     keep independent buffers; engine loops reuse theirs within this context,
-     while rain in particular needs its own seamless 4 s loop.
-
-     Context-bound like engBuf, so rebuildCtx() must clear it. */
-  const NOISE_POOL_S = 3;
-  let noisePoolBuf = null;
-  // Separate layer keys preserve independent noise even at equal durations.
-  // Buffers are immutable after generation; sources remain single-use. Cleared
-  // with every new context so a resume rebuild never retains the old PCM.
-  const _loopNoise = new Map();
-  function loopNoise(name, seconds) {
-    let buf = _loopNoise.get(name);
-    if (!buf) { buf = noiseBuf(seconds); _loopNoise.set(name, buf); }
-    return buf;
-  }
-  function noisePool() {
-    if (!noisePoolBuf) noisePoolBuf = noiseBuf(NOISE_POOL_S);
-    return noisePoolBuf;
-  }
-  function bindNoise(src, needS) {
-    if (needS >= NOISE_POOL_S) { src.buffer = noiseBuf(needS); return 0; }
-    src.buffer = noisePool();
-    return Math.random() * (NOISE_POOL_S - needS);
-  }
-
-  function noise(peak, decay, filterFreq, when) {
-    if (!sfxOk()) return;
-    const t0 = now() + (when || 0);
-    const src = ctx.createBufferSource();
-    const off = bindNoise(src, decay + 0.15);
-    const f = ctx.createBiquadFilter();
-    f.type = "lowpass";
-    f.frequency.value = filterFreq;
-    const g = ctx.createGain();
-    env(g, t0, peak, 0.005, decay);
-    src.connect(f).connect(g).connect(sfxBus);
-    src.start(t0, off);
-    src.stop(t0 + decay + 0.1);
-    src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
-  }
 
   function startEngineBody() {
     flushDying();   // kill the fading previous graph before building another
@@ -1206,7 +926,7 @@ const GameAudio = (function () {
   function stopEngine() {
     if (!engineOn) return;
     const t0 = now();
-    if (musicGain) { musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL * radioDuck, t0, 0.3); musicGain._apexDuckTgt = null; }   // release the engine duck (a line still on air keeps its own)
+    soundtrack.releaseEngineDuck(t0, true);   // a line still on air keeps its own duck
     engGain.gain.cancelScheduledValues(t0);
     engGain.gain.setTargetAtTime(0, t0, 0.06);
     whineGain.gain.setTargetAtTime(0, t0, 0.06);
@@ -1568,11 +1288,7 @@ const GameAudio = (function () {
     // hit; threshold it instead. Below 0.5% of full scale the 250 ms ramp is
     // inaudible, so re-scheduling buys nothing and costs a cross-thread
     // timeline insertion per physics step.
-    const duckTgt = musicVol * MUSIC_FULL * (1 - 0.25 * rev) * radioDuck;
-    if (musicGain && !(Math.abs((musicGain._apexDuckTgt ?? -1) - duckTgt) < 0.005)) {
-      musicGain.gain.setTargetAtTime(duckTgt, t, 0.25);
-      musicGain._apexDuckTgt = duckTgt;
-    }
+    soundtrack.duckForEngine(rev, t);
     const deploy = clamp01(ph.deploy || 0);
     const energy = ph.energy != null ? clamp01(ph.energy) : 1;
     const low = energy < 0.2 ? energy / 0.2 : 1;
@@ -1965,35 +1681,15 @@ const GameAudio = (function () {
   // from a slider and from localStorage, and a NaN reaching playbackRate throws
   // the whole engine graph out for the rest of the session.
   function setTune(patch) {
-    if (patch) for (const k of Object.keys(TUNE_DEF)) {
-      const v = patch[k];
-      if (typeof v !== "number" || !isFinite(v)) continue;
-      const [lo, hi] = TUNE_RANGE[k];
-      tune[k] = Math.max(lo, Math.min(hi, v));
-    }
+    GameAudioToneModel.patchTune(tune, patch);
     // A trim that no longer matches the named profile makes the name a LIE —
     // and profile() is what the panel lights and what __apex.audio() reports,
     // so the lie would be visible in two places. Recomputed rather than set
     // unconditionally: restoring a saved tune that happens to equal its profile
     // must stay on that profile, not read as hand-edited.
-    profileName = nameForTune();
+    profileName = GameAudioToneModel.nameForTune(tune, profileName);
     applyTuneNodes();
     return Object.assign({}, tune);
-  }
-
-  // The profile the live tune actually IS, or "custom". Derived rather than
-  // latched: dragging a slider away and back again should relight the preset it
-  // matches, and a one-way flip to "custom" would leave the row dark until the
-  // player pressed RESET. The current name wins any tie so identical presets
-  // could never make the row jump between two equally-true labels.
-  function nameForTune() {
-    const fits = (name) => {
-      if (!Object.prototype.hasOwnProperty.call(SOUND_PROFILES, name)) return false;
-      const want = Object.assign({}, TUNE_DEF, SOUND_PROFILES[name] || {});
-      return Object.keys(TUNE_DEF).every((k) => Math.abs(tune[k] - want[k]) < 1e-9);
-    };
-    if (fits(profileName)) return profileName;
-    return Object.keys(SOUND_PROFILES).find(fits) || "custom";
   }
 
   // A profile is a named tune. Picking one REPLACES the trims (any field it
@@ -2131,41 +1827,6 @@ const GameAudio = (function () {
     noise(0.26 * (0.4 + 0.6 * k), 0.18, 900);
     if (k > 0.6) blip(70, "sine", 0.3 * (k - 0.6) / 0.4, 0.004, 0.3, 40);   // the bang under a real hit
   }
-  // A falling band-passed hiss — air venting. f0 -> f1 over the decay, so a
-  // wastegate dump starts sharp and rounds off as the pressure goes. Shares
-  // the noise pool like every other one-shot.
-  function hiss(peak, decay, f0, f1) {
-    if (!sfxOk() || !(peak > 0)) return;   // TURBO at 0 is a silent turbo, not a zero-height envelope
-    const t0 = now();
-    const src = ctx.createBufferSource();
-    const off = bindNoise(src, decay + 0.15);
-    const f = ctx.createBiquadFilter();
-    f.type = "bandpass"; f.Q.value = 1.4;
-    f.frequency.setValueAtTime(f0, t0);
-    f.frequency.exponentialRampToValueAtTime(f1, t0 + decay);
-    const g = ctx.createGain();
-    env(g, t0, peak, 0.008, decay);
-    src.connect(f).connect(g).connect(sfxBus);
-    src.start(t0, off);
-    src.stop(t0 + decay + 0.1);
-    src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
-  }
-  // Band-passed noise burst — metal on barrier. Shares the noise pool.
-  function scrapeNoise(peak, decay) {
-    if (!sfxOk()) return;
-    const t0 = now();
-    const src = ctx.createBufferSource();
-    const off = bindNoise(src, decay + 0.15);
-    const f = ctx.createBiquadFilter();
-    f.type = "bandpass"; f.frequency.value = 2600; f.Q.value = 1.2;
-    const g = ctx.createGain();
-    env(g, t0, peak, 0.02, decay);
-    src.connect(f).connect(g).connect(sfxBus);
-    src.start(t0, off);
-    src.stop(t0 + decay + 0.1);
-    src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
-  }
-
   function offtrack() {
     noise(0.14, 0.14, 480);
     blip(95, "square", 0.14, 0.01, 0.1, 60);
@@ -2292,157 +1953,6 @@ const GameAudio = (function () {
    * streamed and looped through the AudioContext. startMusic(trackIdx) -> a
    * race loop; startMusic(-1) -> menu loop.
    */
-  function ensureMusicGain() {
-    if (!musicGain && ctx && master) {
-      musicGain = ctx.createGain();
-      musicGain.gain.value = musicVol * MUSIC_FULL;   // music sits under the engine
-      musicGain.connect(master);
-    }
-  }
-
-  let musicResumeBuf = null, musicResumeAt = NaN, musicResumeOff = 0;
-  // A TRACK THAT CANNOT LOAD MOVES THE LIST ON. Only a source's onended
-  // advanced the playlist, and a failed fetch/decode (an upload in a format
-  // decodeAudioData refuses, a 404, offline) never made one: silence, with
-  // the UI naming the dead track. Skip it; a whole list that fails stops.
-  let _musicFails = 0;
-  function musicLoadFailed(token) {
-    if (!musicOn || token !== musicToken) return;   // superseded: not ours to skip
-    // Capped at the ELIGIBLE count: nextTrack only cycles the selected source,
-    // so a PLAYLIST.length cap re-fetched one dead upload up to that many times.
-    if (++_musicFails >= Math.max(1, eligibleCount())) { _musicFails = 0; stopInternal(); return; }
-    nextTrack(1);
-  }
-  function playMusicBuffer(buf, token) {
-    if (!ctx || !musicOn || token !== musicToken) return;  // superseded
-    _musicFails = 0;
-    ensureMusicGain();
-    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    // A PLAYLIST, so no per-source loop: each track hands over to the next when
-    // it ends, and the list wraps. (A single looping source could never reach
-    // the second song.)
-    src.loop = false;
-    src.connect(musicGain);
-    src.onended = function () {
-      if (src !== musicSrc || token !== musicToken || !musicOn) return;
-      nextTrack(1);
-    };
-    // Resume where the same song left off: a tab-hide stops the source and
-    // the return restarted it from 0:00 — every lock or app switch rewound
-    // the track. The offset is kept per BUFFER so a different song starts clean.
-    let off = 0;
-    if (musicResumeBuf === buf && Number.isFinite(musicResumeAt) && buf.duration > 0) {
-      off = Math.max(0, (ctx.currentTime - musicResumeAt) + musicResumeOff) % buf.duration;
-    }
-    src.start(0, off);
-    musicResumeBuf = buf; musicResumeAt = ctx.currentTime; musicResumeOff = off;
-    musicSrc = src;
-  }
-
-  function eligible(i) {
-    const e = PLAYLIST[i];
-    if (!e) return false;
-    return source === "all" || (source === "builtin" ? !!e.builtin : !e.builtin);
-  }
-  function anyEligible() {
-    for (let i = 0; i < PLAYLIST.length; i++) if (eligible(i)) return true;
-    return false;
-  }
-  function eligibleCount() {
-    let n = 0;
-    for (let i = 0; i < PLAYLIST.length; i++) if (eligible(i)) n++;
-    return n;
-  }
-  function seekEligible(from, step) {
-    const n = PLAYLIST.length;
-    if (!n) return -1;
-    const d = step < 0 ? -1 : 1;
-    for (let k = 1; k <= n; k++) {
-      const i = ((from + d * k) % n + n) % n;
-      if (eligible(i)) return i;
-    }
-    return eligible(from) ? from : -1;
-  }
-
-  function nextTrack(step) {
-    if (!PLAYLIST.length) return;
-    const i = seekEligible(musicIndex, step || 1);
-    if (i < 0) { stopInternal(); return; }
-    musicIndex = i;
-    playIndex(musicIndex);
-  }
-
-  /* Pick which part of the library plays. Returns the source actually applied —
-     a selection with nothing in it (MY TRACKS before anything is uploaded)
-     is refused rather than leaving the game silent with no explanation. */
-  function setMusicSource(s) {
-    const want = (s === "builtin" || s === "user") ? s : "all";
-    const prev = source;
-    source = want;
-    if (!anyEligible()) { source = prev; return prev; }
-    if (backend) return source;
-    if (!eligible(musicIndex)) {
-      const i = seekEligible(musicIndex, 1);
-      if (i >= 0) { musicIndex = i; if (musicOn) playIndex(i); }
-    }
-    return source;
-  }
-  function musicSource() { return source; }
-  function sourceCounts() {
-    let builtin = 0, user = 0;
-    for (const e of PLAYLIST) { if (e.builtin) builtin++; else user++; }
-    return { builtin, user, total: PLAYLIST.length };
-  }
-
-  // Start (or restart) at a given playlist slot, regardless of what is playing.
-  function playIndex(i) {
-    if (!ctx || !musicEnabled || backend || !PLAYLIST.length) return;
-    musicIndex = ((i % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
-    const url = PLAYLIST[musicIndex].url;
-    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
-    musicSrc = null;
-    musicOn = true;
-    const token = ++musicToken;
-    const builtin = !!PLAYLIST[musicIndex].builtin;
-    // Never wake a context the hide path suspended: onVisibility's show branch resumes it.
-    if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(resumeRejected("music")); }
-    if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
-    // ONE DECODE IN FLIGHT PER URL. musicToken suppresses stale PLAYBACK but
-    // never cancelled the fetch or the decode, and decodeAudioData allocates the
-    // full PCM before it resolves — two taps on NEXT put ~150 MB of decoded
-    // audio in the air at once, three ~225 MB, none of it bounded by the
-    // MUSIC_CACHE eviction that only runs afterwards.
-    if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); else musicLoadFailed(token); }, () => {}); return; }
-    const _load = fetch(url)
-      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
-      .then((ab) => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
-      .then((buf) => {
-        // Every track, builtin or uploaded, is cached under the same bound
-        // (MUSIC_CACHE), rather than holding builtins for the life of the
-        // context (five decoded songs) and re-fetching and re-decoding an
-        // uploaded MP3 on EVERY repeat.
-        musicBuffers[url] = buf;
-        _bufKeys.push(url);
-        while (_bufKeys.length > MUSIC_CACHE) delete musicBuffers[_bufKeys.shift()];
-        playMusicBuffer(buf, token);
-        return buf;
-      })
-      .catch((err) => {
-        // Music is optional and the game plays on without it. Retained rather
-        // than printed: a soundtrack that never starts is otherwise invisible.
-        Log.warn("audio", "music load/decode failed for " + url + ": " + ((err && err.message) || err));
-        musicLoadFailed(token);
-        return null;
-      });
-    _musicLoads[url] = _load;
-    // Dropped on settle either way, so a later tap retries a failed load rather
-    // than replaying its null forever.
-    _load.then(function () { if (_musicLoads[url] === _load) delete _musicLoads[url]; },
-               function () { if (_musicLoads[url] === _load) delete _musicLoads[url]; });
-  }
-
   /* ---------------- mixer ----------------
      Two independent levels under the master mute: the SFX bus (engine, skids,
      rain, UI) and the music gain. Both take 0..1 and apply immediately, so a
@@ -2462,519 +1972,10 @@ const GameAudio = (function () {
     // SFX go off (sfxOk()), so release it here the way stopEngine() does.
     // musicGain hangs off master, not sfxBus: without this the music stayed up
     // to 25% down for the rest of the race.
-    if (!sfxEnabled && musicGain) {
-      musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL, now(), 0.3);
-      musicGain._apexDuckTgt = null;
-    }
+    if (!sfxEnabled) soundtrack.releaseEngineDuck(now(), false);
     return sfxEnabled;
   }
-  // THE RADIO DUCK. Speech bypasses sfxBus, master and the limiter entirely —
-  // nothing in this graph gets out of its own way — so the music has to be told.
-  // A factor inside the per-frame duck expression rather than a direct write to
-  // musicGain, because that expression is recomputed every frame and would stomp
-  // an external write within 16 ms. The engine deliberately does NOT duck: the
-  // engine is the game.
-  /* ── TEAM RADIO FX: THE FRAME AROUND THE VOICE ──────────────────────────
-   *
-   * THE WORDS THEMSELVES ARE OUT OF REACH, and everything below is built
-   * around that one fact. speechSynthesis has no node in this graph (the
-   * header of js/audio/radio-voice.js says why it lives outside GameAudio at
-   * all), and no browser exposes its output as a capturable stream — the Web
-   * Speech API has carried an open request for exactly that since 2019 and
-   * nothing implements it. So a band-pass ON the voice, which is how every
-   * other medium makes a radio sound like a radio, is not available here at
-   * any price short of shipping a WASM speech model — and a game with no
-   * build step that boots from static files is the wrong shape to pay a
-   * 300 MB model for one effect.
-   *
-   * So the radio character is the FRAME: the key-up click, the band-limited
-   * hiss that runs under the line, and the squelch tail when the mic closes.
-   * That is also the part the ear actually identifies. The words in a real
-   * team radio are what you strain to hear THROUGH those three things.
-   *
-   * THE BAND IS MEASURED, NOT PICKED. Analogue and digital voice radio alike
-   * carry 300 Hz – 3.4 kHz, and that shared band is why every handheld on
-   * earth sounds like the same device. The hiss is shaped to it so the bed
-   * and the (unshapeable) voice read as one source rather than two.
-   *
-   * IT FIRES ON THE CARD, NOT ON THE UTTERANCE. showAnnounce is the one place
-   * a line reaches the screen, and the SPOKEN radio ships OFF — hanging this
-   * on the utterance would have meant almost nobody ever heard it. On the
-   * card it inherits the same ANN_PRI queue the voice does, and a player who
-   * never turns speech on still gets a race that sounds like team radio.
-   */
-  const RADIO_LO = 300, RADIO_HI = 3400;
-  /* Per channel, because they are not the same source. `control` is a race
-     control feed: clean, brief, no tail. `radio` is the engineer talking to a
-     car at 300 km/h and gets the full treatment. `coach` gets NOTHING — the
-     driving coach is not on a radio, and a squelch on it would be a lie about
-     where the line comes from. A channel missing from this table is silent by
-     construction, which is the safe direction for a table keyed by a string
-     that arrives from js/game.js. */
-  const RADIO_CH = Object.freeze({
-    // `tune` is [hz, seconds, level] per note, played back to back. See the
-    // COURTESY TONE block above for where the engineer's four notes come from.
-    control: { click: 0.05, hiss: 0.012, tail: 0,    hi: 4200,    toneAmp: 0.030,
-      tune: [[991, 0.10, 1], [1184, 0.12, 0.9]] },
-    radio:   { click: 0.09, hiss: 0.030, tail: 0.13, hi: RADIO_HI, toneAmp: 0.038,
-      tune: [[1055, 0.105, 0.75], [775, 0.09, 1], [1184, 0.09, 0.85], [991, 0.11, 0.95]] },
-  });
-  const RADIO_FX_MAX = 1.5;
-  let radioFx = 1;        // the player's level; 0 is off
-  const RADIO_PRESETS = Object.freeze({
-    modern: { name: "MODERN RADIO", lo: 300, hi: 3400, drive: 2.2, noise: 1, cue: true },
-    clean: { name: "CLEAN HEADSET", lo: 100, hi: 9000, drive: 1.1, noise: 0, cue: false },
-    vintage: { name: "VINTAGE RADIO", lo: 450, hi: 2800, drive: 3.2, noise: 1.5, cue: true },
-  });
-  let radioPreset = "modern";
-  function setRadioPreset(id) {
-    if (!Object.prototype.hasOwnProperty.call(RADIO_PRESETS, id)) return radioPreset;
-    radioStingStop(); radioPreset = id;
-    return radioPreset;
-  }
-  let radioBed = null;    // the live hiss, or null
-
-  /* THE COURTESY TONE — the beep before the message.
-   *
-   * A beep is NOT only a walkie-talkie convention F1 does not have: F1 team
-   * radio has one, it is called a COURTESY TONE, and to anyone who watches the sport it is the
-   * most recognisable thing about team radio — you hear the beep, then the
-   * driver.
-   *
-   * GENERIC, NOT A COPY, for two reasons that point the same way. F1's own tone
-   * is not published — the one public thread asking for its frequency has no
-   * answer — so an "exact" number here would be invented and dressed up as
-   * research. And a distinctive broadcast signature is the kind of thing sound
-   * trademarks exist for, which an unofficial fan game should not be cloning.
-   * So this is a tone in the documented tradition rather than a reproduction.
-   *
-   * THE TRADITION IS WELL SPECIFIED even where F1's instance is not — but only
-   * half of it transfers.
-   *
-   * NASA's Quindar tones marked the start and end of a transmission at 2525 Hz
-   * and 2475 Hz for 250 ms. Those are the numbers everyone quotes, and they are
-   * the answer to a problem THIS TONE DOES NOT HAVE: Quindar was IN-BAND
-   * SIGNALLING. Its tones rode the same telephone line as live speech and had
-   * to key a remote transmitter without ever being mistaken for a voice, which
-   * is what pins them just above where speech has its energy. A broadcast
-   * courtesy tone plays BEFORE the clip, sharing the channel with nothing, so
-   * it is free to sit lower and warmer — and at 2.4-2.6 kHz it lands exactly
-   * where the ear is most sensitive and reads thin and piercing instead.
-   *
-   * WHAT DOES TRANSFER is the shape: a short, near-pure sine, inside the
-   * 300 Hz-3.4 kHz voice band. That last part is also why these need no filter
-   * of their own — they are already inside the band the hiss is shaped to, so
-   * filtering would add three nodes and change nothing you can hear.
-   *
-   * IT IS FOUR NOTES, NOT ONE. The one CC0 recreation of the F1 beep on
-   * Freesound (a synthesiser imitation by its author's own description, never
-   * a broadcast rip) FFT'd in its single loudest window reads "a near-pure
-   * 786 Hz, 22 dB clear of anything else" — but one window of a melody can
-   * only ever see one note of it. A spectrogram across the whole file
-   * (2048-point frames, 512 hop) shows a four-note figure:
-   *
-   *     t≈232 ms  1055 Hz  ~105 ms      C6      +14 cents
-   *     t≈348 ms   775 Hz  ~ 90 ms      G5      -20 cents
-   *     t≈441 ms  1184 Hz  ~ 90 ms      D6      +14 cents
-   *     t≈534 ms   991 Hz  ~110 ms      B5      + 6 cents
-   *
-   * Down a fourth, up a fifth, down a minor third. Every note lands within a
-   * fifth of a semitone of equal temperament and the FFT bin is 21.5 Hz, so the
-   * note names are safe and somebody clearly played them on a keyboard. The
-   * MEASURED hz are what this table carries even so: the note names are the
-   * interpretation, the numbers are the evidence, and 14 cents is inaudible.
-   *
-   * RACE CONTROL KEEPS ITS OWN, SHORTER CUE — two notes from the same set. The
-   * broadcast does not put the team-radio sting over race control either, and
-   * two channels that open identically are one channel.
-   */
-  /** The figure, one oscillator per note, scheduled back to back from `at`.
-   *  Returns the seconds it occupies, so the caller can hold the bed over it. */
-  function radioTune(seq, peak, at, keep) {
-    if (!(peak > 0) || !Array.isArray(seq) || !seq.length) return 0;
-    let t = at;
-    for (const [hz, secs, lvl] of seq) {
-      if (!(hz > 0) || !(secs > 0)) continue;
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = hz;
-      // A softer attack than the click's 4 ms: a sine snapped on at full level
-      // clicks on its own, and five clicks is not what this is. The decay runs
-      // just past the note so consecutive notes overlap by a few milliseconds
-      // rather than leaving a gap the ear reads as a stutter.
-      env(g, t, peak * (lvl == null ? 1 : lvl), 0.012, secs);
-      osc.connect(g).connect(sfxBus);
-      osc.start(t);
-      osc.stop(t + secs + 0.04);
-      osc.onended = () => { osc.disconnect(); g.disconnect(); };
-      if (keep) keep.push(osc);
-      t += secs;
-    }
-    return t - at;
-  }
-
-  /** One band-limited noise transient — the key click and the squelch tail.
-   *  Both ends of the band, unlike the plain noise() one-shots above: a click
-   *  with its bottom left in reads as a thud off the car, not a mic. */
-  function radioBurst(peak, decay, hi, at) {
-    if (!(peak > 0)) return null;
-    const src = ctx.createBufferSource();
-    const off = bindNoise(src, decay + 0.15);
-    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = RADIO_LO;
-    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = hi;
-    const g = ctx.createGain();
-    env(g, at, peak, 0.004, decay);
-    src.connect(hp).connect(lp).connect(g).connect(sfxBus);
-    src.start(at, off);
-    src.stop(at + decay + 0.1);
-    src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
-    return src;
-  }
-
-  /** Cut a transmission short — the card was hidden, the game was paused, or
-   *  a higher-priority line preempted this one. */
-  function radioStingStop() {
-    if (!radioBed) return;
-    const b = radioBed;
-    radioBed = null;
-    const t = now();
-    try {
-      b.gain.gain.cancelScheduledValues(t);
-      b.gain.gain.setValueAtTime(b.gain.gain.value, t);
-      b.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-      b.src.stop(t + 0.08);
-    } catch (e) { /* already stopped, or a ctx torn down under us */ }
-    // The figure and the squelch tail are scheduled ahead: stopping only the
-    // bed left the squelch to fire seconds later, over the pause menu.
-    for (const x of b.extra || []) { try { x.stop(t); } catch (e) { /* already ended */ } }
-  }
-
-  /** One transmission: key-up, a hiss bed held for `seconds`, then squelch.
-   *
-   *  SELF-TERMINATING — the bed carries its own stop time — so a caller that
-   *  never closes cannot leak a looping noise source into the race. Re-entrant
-   *  for the same reason showAnnounce is: a penalty cutting off the engineer
-   *  is a case this game produces on its own. */
-  function radioSting(channel, seconds) {
-    radioStingStop();
-    const preset = RADIO_PRESETS[radioPreset];
-    const base = RADIO_CH[channel];
-    const ch = base && channel === "radio" ? Object.assign({}, base, {
-      lo: preset.lo, hi: preset.hi, click: base.click * preset.noise, hiss: base.hiss * preset.noise,
-      tail: base.tail * preset.noise, toneAmp: preset.cue ? base.toneAmp : 0,
-    }) : base;
-    if (channel === "radio" && !preset.cue) return false;
-    if (!sfxOk() || !ch || radioFx <= 0) return false;
-    const t0 = now();
-    // KEY, THEN THE FIGURE, THEN THE LINE — the order the ear expects: the mic
-    // opens (a click, which is a noise burst and not an oscillator), and the
-    // courtesy figure follows a hair later rather than landing on top of it.
-    radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
-    const extra = [];
-    const tuneS = 0.03 + radioTune(ch.tune, ch.toneAmp * radioFx, t0 + 0.03, extra);
-    // THE BED MUST OUTLAST THE FIGURE. `seconds` is the card's life, and a short
-    // card is shorter than four notes — scheduling the squelch tail off that
-    // alone closed the mic while the cue was still playing, which is backwards:
-    // the tail is the END of a transmission the figure has only just opened.
-    const hold = Math.max(0.25, tuneS + 0.12, Math.min(8, +seconds || 1.5));
-    const src = ctx.createBufferSource();
-    src.loop = true;
-    src.buffer = noisePool();
-    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = ch.lo || RADIO_LO;
-    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
-    const g = ctx.createGain();
-    const peak = ch.hiss * radioFx;
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(peak, t0 + 0.03);
-    g.gain.setValueAtTime(peak, t0 + hold);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + hold + 0.12);
-    src.connect(hp).connect(lp).connect(g).connect(sfxBus);
-    src.start(t0, Math.random() * (NOISE_POOL_S - 0.5));
-    src.stop(t0 + hold + 0.2);
-    src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
-    radioBed = { src, gain: g, extra };
-    // The tail is the single most recognisable part of a two-way radio: the
-    // burst you hear AFTER the talking stops, when the mic un-keys.
-    if (ch.tail > 0) { const tail = radioBurst(ch.tail * radioFx, 0.07, ch.hi, t0 + hold); if (tail) extra.push(tail); }
-    return true;
-  }
-
-  /* RECORDED RADIO VOICE (js/audio/voice-pack.js). The clips are clean studio
-   * renders, so the radio is made here: the same 300 Hz-3.4 kHz band as the
-   * hiss bed, a soft-clip for the cheap mic being shouted into, and a
-   * compressor so a spliced line of clips from different sentences comes out
-   * at one level. Into MASTER, not the effects bus: the SOUND EFFECTS switch
-   * does not silence the engineer, the same as speech synthesis, which never
-   * went through WebAudio at all. `spotter` keys its own mic (a click in, a
-   * squelch out) because it has no card, and so no radioSting, to open it. */
-  // `fx` picks the sound, `channel` the transmission slot: the commentator,
-  // race control and the coach are all on the card's slot (one line at a time)
-  // but do not all sound like a team radio. The commentator is the broadcast —
-  // full band, barely driven — and race control a cleaner radio than the pit wall's.
-  const VOICE_CH = Object.freeze({
-    radio:     { lo: RADIO_LO, hi: RADIO_HI, drive: 2.2, level: 0.95, click: 0 },
-    spotter:   { lo: RADIO_LO, hi: RADIO_HI, drive: 2.8, level: 1.0,  click: 0.07 },
-    control:   { lo: RADIO_LO, hi: RADIO_HI, drive: 1.6, level: 0.9,  click: 0 },
-    coach:     { lo: 90,       hi: 9000,     drive: 1.1, level: 0.9,  click: 0 },
-    announcer: { lo: 90,       hi: 9000,     drive: 1.1, level: 0.85, click: 0 },
-  });
-  /* ONE CHAIN PER SOUND, built once per context and shared by every line: a
-   * filter pair, the soft-clip and a compressor were built (and torn down) per
-   * LINE, and on a phone a DynamicsCompressor is not a free node. A line now
-   * adds only its buffer sources and one gain, its own so that cutting it off
-   * fades this line and not the one that replaced it. */
-  const _voiceChains = new Map();   // fx -> { ctx, input }
-  function voiceChain(fx, ch) {
-    const have = _voiceChains.get(fx);
-    if (have && have.ctx === ctx) return have.input;
-    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = ch.lo;
-    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
-    const ws = ctx.createWaveShaper(); ws.curve = softClip(ch.drive);
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -26; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.12;
-    hp.connect(lp).connect(ws).connect(comp).connect(master);
-    _voiceChains.set(fx, { ctx, input: hp });
-    return hp;
-  }
-  const _shapes = new Map();
-  function softClip(k) {
-    let c = _shapes.get(k);
-    if (c) return c;
-    c = new Float32Array(1024);
-    const n = Math.tanh(k);
-    for (let i = 0; i < c.length; i++) { const x = i / (c.length - 1) * 2 - 1; c[i] = Math.tanh(k * x) / n; }
-    _shapes.set(k, c);
-    return c;
-  }
-  /** Decode one clip's bytes. Rejects without a context. */
-  function decodeClip(ab) {
-    if (!ctx) return Promise.reject(new Error("no audio context"));
-    return new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
-  }
-  let voicesLive = 0;
-  let ctxGen = 0;
-  const CLIP_OVERLAP_S = 0.05;
-  /** Play decoded clips back to back from `at` (numbers in `parts` are pauses,
-   *  in seconds). Returns { end, stop } or null when nothing can play. */
-  function radioVoice(parts, at, o) {
-    if (!ctx || !master || !isEnabled || !Array.isArray(parts)) return null;
-    // A suspended context (an iOS interruption, no gesture yet) keeps its
-    // clock still: lines scheduled on it all play at once when it resumes.
-    if (ctx.state && ctx.state !== "running") return null;
-    const fx = VOICE_CH[o && o.fx] ? o.fx : VOICE_CH[o && o.channel] ? o.channel : "radio";
-    const preset = RADIO_PRESETS[radioPreset];
-    const isRadio = fx === "radio" || fx === "spotter";
-    const ch = isRadio ? Object.assign({}, VOICE_CH[fx], {
-      lo: preset.lo, hi: preset.hi, drive: preset.drive * (fx === "spotter" ? 2.8 / 2.2 : 1), click: VOICE_CH[fx].click * preset.noise,
-    }) : VOICE_CH[fx];
-    const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
-    if (!(vol > 0)) return null;
-    const t0 = Math.max(now(), +at || 0);
-    const g = ctx.createGain(); g.gain.value = ch.level * vol;
-    g.connect(voiceChain(isRadio ? fx + ":" + radioPreset : fx, ch));
-    const srcs = [];
-    let t = t0, joined = false;
-    for (const p of parts) {
-      if (typeof p === "number") { t += Math.max(0, p); joined = false; continue; }
-      if (!p || !(p.duration > 0)) continue;
-      // Two clips back to back overlap a little: each fragment was rendered
-      // alone and decays like the end of a sentence, and running the next one
-      // over that tail is what makes a splice sound like one breath.
-      if (joined) t = Math.max(t0, t - CLIP_OVERLAP_S);
-      const s = ctx.createBufferSource();
-      s.buffer = p;
-      s.connect(g);
-      s.start(t);
-      srcs.push(s);
-      t += p.duration;
-      joined = true;
-    }
-    const nodes = [g];
-    let dead = false;
-    const teardown = () => {
-      if (dead) return;
-      dead = true; voicesLive--;
-      for (const s of srcs) { try { s.disconnect(); } catch (e) { /* gone */ } }
-      for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
-    };
-    if (!srcs.length) { dead = true; for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } } return null; }
-    voicesLive++;
-    srcs[srcs.length - 1].onended = teardown;
-    let tail = null;   // the closing squelch: cancelled with the line, or it lands inside whatever cut it
-    if (ch.click > 0 && radioFx > 0) {
-      radioBurst(ch.click * radioFx, 0.04, ch.hi, Math.max(now(), t0 - 0.05));
-      tail = radioBurst(ch.click * 1.3 * radioFx, 0.06, ch.hi, t + 0.02);
-    }
-    return {
-      end: t,
-      stop() {
-        if (dead) return;
-        const tt = now();
-        try { g.gain.setTargetAtTime(0, tt, 0.015); } catch (e) { /* torn down */ }
-        for (const s of srcs) { try { s.stop(tt + 0.06); } catch (e) { /* not started, or ended */ } }
-        if (tail) { try { tail.stop(tt); } catch (e) { /* already played */ } }
-        setTimeout(teardown, 120);
-      },
-    };
-  }
-
-  function setRadioFx(v) {
-    const n = +v;
-    radioFx = Number.isFinite(n) ? Math.max(0, Math.min(RADIO_FX_MAX, n)) : 1;
-    if (radioFx <= 0) radioStingStop();
-    return radioFx;
-  }
-
-  let radioDuck = 1;
-  function setRadioDuck(on) {
-    const want = on ? 0.35 : 1;
-    if (want === radioDuck) return radioDuck;
-    radioDuck = want;
-    if (musicGain) musicGain._apexDuckTgt = null;   // invalidate the equality cache so the ramp re-aims
-    // setEngine applies the duck, and it is not running with the engine off
-    // (the pre-race check, after the flag) or SOUND EFFECTS off.
-    if (musicGain && ctx && (!engineOn || !sfxOk())) musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL * radioDuck, now(), 0.15);
-    return radioDuck;
-  }
-  function setMusicVolume(v) {
-    musicVol = clamp01(typeof v === "number" ? v : 0.5);
-    if (musicGain) { musicGain.gain.value = musicVol * MUSIC_FULL; musicGain._apexDuckTgt = null; }   // a direct write invalidates the duck cache
-    if (backend) { try { backend.setVolume(musicVol); } catch (e) { /* a broken backend must not take the audio down */ } }
-    return musicVol;
-  }
-  function volumes() { return { sfx: sfxVol, music: musicVol }; }
-
-  function skipTrack() {
-    if (!musicEnabled) return null;
-    if (backend) { try { return backend.skip(); } catch (e) { return null; } }
-    if (!ctx) return null;
-    nextTrack(1);
-    return trackName();
-  }
-  function prevTrack() {
-    if (!musicEnabled) return null;
-    if (backend) {
-      try { return backend.prev ? backend.prev() : backend.name(); } catch (e) { return null; }
-    }
-    if (!ctx) return null;
-    nextTrack(-1);
-    return trackName();
-  }
-  function trackName() {
-    if (backend) { try { return backend.name(); } catch (e) { return null; } }
-    const e = PLAYLIST[musicIndex];
-    return e ? e.name : "";
-  }
-
-  /* ------- playlist management (used by MusicLib for uploaded files) -------
-     Uploaded tracks arrive as { id, name, url } with url an object URL owned by
-     the caller — WE NEVER REVOKE IT, because the same blob may be re-added and
-     the owner needs to decide when it dies. */
-  function tracks() {
-    return PLAYLIST.map((e) => ({ id: e.id, name: e.name, builtin: !!e.builtin }));
-  }
-  function indexOfId(id) {
-    for (let i = 0; i < PLAYLIST.length; i++) if (PLAYLIST[i].id === id) return i;
-    return -1;
-  }
-  function addTracks(list) {
-    if (!list || !list.length) return 0;
-    let n = 0;
-    for (const t of list) {
-      if (!t || !t.id || !t.url || indexOfId(t.id) >= 0) continue;
-      PLAYLIST.push({ id: t.id, name: t.name || "track", url: t.url, builtin: false });
-      n++;
-    }
-    return n;
-  }
-  function removeTrack(id) {
-    const i = indexOfId(id);
-    if (i < 0) return false;
-    const wasPlaying = musicOn && i === musicIndex;
-    delete musicBuffers[PLAYLIST[i].url];
-    PLAYLIST.splice(i, 1);
-    if (i < musicIndex) musicIndex--;
-    if (!PLAYLIST.length) { stopInternal(); musicIndex = 0; return true; }
-    musicIndex = ((musicIndex % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
-    // The next track the SOURCE allows (MY TRACKS stays MY TRACKS); none left: stop.
-    if (wasPlaying) { const j = eligible(musicIndex) ? musicIndex : seekEligible(musicIndex, 1); if (j < 0) stopInternal(); else playIndex(j); }
-    return true;
-  }
-  function playTrackId(id) {
-    const i = indexOfId(id);
-    if (i < 0 || backend || !musicEnabled) return false;
-    playIndex(i);
-    return musicOn;
-  }
-  function currentTrackId() {
-    if (!musicOn || backend) return null;
-    const e = PLAYLIST[musicIndex];
-    return e ? e.id : null;
-  }
-
-  /* ------- external music backend (Spotify) -------
-     Installing one silences the built-in playlist and routes every music call
-     to the backend; removing it hands the soundtrack back, resuming where the
-     built-in playlist left off rather than restarting from track one. */
-  function setMusicBackend(b) {
-    if (b === backend) return;
-    backend = b || null;
-    if (backend) {
-      stopInternal();
-      try {
-        backend.setVolume(musicVol);
-        if (musicEnabled && isEnabled) backend.start();
-      } catch (e) { /* a broken backend must not take the audio down */ }
-    } else if (musicEnabled && isEnabled && ctx) {
-      playIndex(musicIndex);
-    }
-  }
-  function musicBackend() { return backend; }
-
-  function setMusicEnabled(b) {
-    musicEnabled = !!b;
-    if (!musicEnabled) stopMusic();
-    else if (ctx || backend) startMusic(lastTrackIdx);
-  }
-
-  function startMusic(trackIdx) {
-    const idx = (typeof trackIdx === "number") ? trackIdx : 0;
-    lastTrackIdx = idx;
-    if (!musicEnabled) return;
-    // Delegated: the backend owns play/pause, and needs no AudioContext.
-    if (backend) { try { backend.start(); } catch (e) { /* a broken backend must not take the audio down */ } return; }
-    if (!ctx) return;                    // remember the track but stay silent if music is off
-    // The menu and the race share one playlist, so a state change must NOT
-    // interrupt it — going to the grid must not restart the track from zero.
-    // Whatever is playing keeps playing; we only start something if silent.
-    if (musicOn && musicSrc) return;
-    playIndex(musicIndex);
-  }
-
-  function stopInternal() {
-    musicOn = false;
-    musicToken++;                                // cancel any in-flight load
-    // stop() and disconnect() get their OWN try each. Sharing one meant a throw
-    // from stop() (stop-before-start is the documented case) skipped the
-    // disconnect, stranding a BufferSource that keeps rendering AND pins its
-    // 71-83 MB buffer — the same shape as the two stranded GainNodes.
-    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); } } catch (e) { /* stop-before-start is the documented case */ }
-    try { if (musicSrc) musicSrc.disconnect(); } catch (e) { /* Already detached, or the ctx closed under it: unreachable either way, and musicSrc is nulled below. */ }
-    musicSrc = null;
-    // THE RESUME BUFFER IS A WHOLE DECODED TRACK — 71-83 MB at a 48 kHz context,
-    // measured from the shipped MP3 frame headers. It was never nulled anywhere:
-    // not here, not in stopMusic/setMusicEnabled, and not in rebuildCtx, which
-    // clears every OTHER ctx-bound cache by name. So MUSIC OFF freed nothing.
-    // Dropping the offset with it is correct: music that was stopped resumes
-    // from the top, and the offset only means anything while a track is live.
-    musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
-  }
-
-  function stopMusic() {
-    stopInternal();
-    if (backend) { try { backend.stop(); } catch (e) { /* a broken backend must not take the audio down */ } }
-  }
+  function volumes() { return { sfx: sfxVol, music: soundtrack.volume() }; }
 
   let _onInterrupted = null;
   /** fn() when the platform interrupts the audio session (an iOS call, Siri). */
@@ -2986,28 +1987,18 @@ const GameAudio = (function () {
     decodeClip,
     now,
     radioVoice,
-    radioVoicesLive: () => voicesLive,
+    radioVoicesLive: radio.radioVoicesLive,
     ctxGen: () => ctxGen,
     radioSting,
     radioStingStop,
     setRadioFx,
-    setRadioPreset,
-    radioPreset: () => radioPreset,
-    radioPresets: () => Object.entries(RADIO_PRESETS).map(([id, p]) => [id, p.name]),
-    radioFxLevel: () => radioFx,
-    /** How long `channel`'s courtesy figure runs, in seconds, at the current
-     *  level — 0 when it would not play at all. The VOICE waits this out so the
-     *  words land after the cue instead of under it (js/audio/radio-voice.js
-     *  plan(), `lead`), and it is derived from the same table that plays it so
-     *  the two cannot drift. */
-    radioLeadS(channel) {
-      const ch = RADIO_CH[channel];
-      if (channel === "radio" && !RADIO_PRESETS[radioPreset].cue) return 0;
-      if (!ch || radioFx <= 0 || !Array.isArray(ch.tune)) return 0;
-      return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
-    },
-    radioFxMax: () => RADIO_FX_MAX,
-    radioChannels: () => Object.keys(RADIO_CH),
+    setRadioPreset: radio.setRadioPreset,
+    radioPreset: radio.radioPreset,
+    radioPresets: radio.radioPresets,
+    radioFxLevel: radio.radioFxLevel,
+    radioLeadS: radio.radioLeadS,
+    radioFxMax: radio.radioFxMax,
+    radioChannels: radio.radioChannels,
     setEnabled,
     enabled,
     startEngine,

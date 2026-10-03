@@ -115,3 +115,15 @@ test("the zero-spacing-token sheet list only shrinks", () => {
   assert.deepEqual(fixed, [],
     `${fixed.join(", ")} now reads spacing tokens — remove it from KNOWN_ZERO in this file to lock that in.`);
 });
+
+test("density adoption follows a split screen while new sheets retain their own gate", () => {
+  const title = { name: "title.css", src: "#title { margin: 10px; }" };
+  const menus = { name: "menus.css", src: "#menu-buttons { gap: var(--gap); }" };
+  const newScreen = { name: "new-screen.css", src: ".new-screen { padding: 10px; }" };
+  assert.deepEqual(zeroSpacingSheets([title, menus]), [],
+    "the title and its menu controls are one density-responsive screen");
+  assert.deepEqual(zeroSpacingSheets([title, menus, newScreen]), ["new-screen.css"],
+    "a responsive family cannot exempt an unrelated sheet");
+  assert.deepEqual(zeroSpacingSheets([title, { ...menus, src: "#menu-buttons { gap: 10px; }" }]), ["menus.css"],
+    "removing spacing tokens from the family must fail its original screen gate");
+});

@@ -1,7 +1,10 @@
 // @ts-check
 // Regression coverage for the browser-hunt UI defects fixed together in Track B.
 import { test, expect } from "@playwright/test";
+import { createRequire } from "node:module";
 import { BOOT_MS } from "../helpers/fixtures.js";
+
+const { LAZY_DATA } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
 async function waitReady(page) {
   await page.goto("/");
@@ -20,9 +23,7 @@ async function dataReady(page) {
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
   for (const url of [
     "/js/core/log.js", "/js/ui/modal.js", "/js/core/mat4.js", "/js/ui/dom.js",
-    "/js/data/api.js", "/js/data/telemetry.js", "/js/data/export.js",
-    "/js/data/schedule.js", "/js/data/standings.js", "/js/data/results.js",
-    "/js/data/live.js", "/js/data/real-race-tab.js", "/js/data/hub.js",
+    ...LAZY_DATA.map((file) => "/" + file),
   ]) await page.addScriptTag({ url });
   await page.evaluate(() => {
     const meta = {

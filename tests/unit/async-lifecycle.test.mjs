@@ -7,8 +7,10 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const scanSource = await readFile(new URL("../../js/net/scan.js", import.meta.url), "utf8");
 const musicSource = await readFile(new URL("../../js/audio/music-lib.js", import.meta.url), "utf8");
-const apiSource = await readFile(new URL("../../js/data/api.js", import.meta.url), "utf8");
-const liveSource = await readFile(new URL("../../js/data/live.js", import.meta.url), "utf8");
+const apiSource = (await Promise.all(["api-transport", "api"].map((name) =>
+  readFile(new URL(`../../js/data/${name}.js`, import.meta.url), "utf8")))).join("\n");
+const liveSource = (await Promise.all(["tab-utils", "live"].map((name) =>
+  readFile(new URL(`../../js/data/${name}.js`, import.meta.url), "utf8")))).join("\n");
 const dataCss = await readFile(new URL("../../css/data.css", import.meta.url), "utf8");
 const audioPanelSource = await readFile(new URL("../../js/audio/panel.js", import.meta.url), "utf8");
 
@@ -460,6 +462,40 @@ test("LIVE position/interval requests use watermarks and never touch localStorag
   assert.equal(state.positionCursor, "2026-07-26T14:44:30Z");
   assert.equal(state.intervals[44], 0);
   assert.deepEqual(h.sets, [], "LIVE history/deltas must remain memory-only");
+});
+
+test("snapshot and delta classification share row mapping while retaining their empty-response shapes", async () => {
+  const older = "2026-07-26T14:43:00Z", newer = "2026-07-26T14:44:00Z";
+  const positions = [
+    { driver_number: 44, position: 3, date: older },
+    { driver_number: 4, position: 2, date: newer },
+    { driver_number: 44, position: 1, date: newer },
+    { driver_number: 4, position: 4, date: older },
+    { driver_number: 7, position: null, date: newer }
+  ];
+  const intervals = [
+    { driver_number: 44, gap_to_leader: 0, date: newer },
+    { driver_number: 4, gap_to_leader: " +1 LAP ", date: newer },
+    { driver_number: 4, gap_to_leader: 3, date: older }
+  ];
+  const h = dataApiHarness([positions, positions, intervals, intervals, [], [], [], []]);
+  const snapshot = await h.api.positions(7, 0);
+  const delta = await h.api.livePositions(7, older);
+  assert.deepEqual(Array.from(snapshot, (row) => [row.num, row.pos]), [[44, 1], [4, 2], [7, null]]);
+  assert.deepEqual(Array.from(delta.values, (row) => [row.num, row.pos]), Array.from(snapshot, (row) => [row.num, row.pos]));
+  assert.equal(delta.cursor, newer);
+  const gaps = await h.api.intervals(7, 0);
+  const gapDelta = await h.api.liveIntervals(7, older);
+  assert.equal(gaps[4], "+1 LAP");
+  assert.equal(gapDelta.values[4], gaps[4]);
+  assert.equal(gapDelta.values[44], 0);
+  assert.equal(gapDelta.cursor, newer);
+  assert.equal(await h.api.positions(7, 0), null);
+  assert.equal((await h.api.livePositions(7, newer)).values.length, 0);
+  assert.equal(await h.api.intervals(7, 0), null);
+  const empty = await h.api.liveIntervals(7, newer);
+  assert.equal(Object.keys(empty.values).length, 0);
+  assert.equal(empty.cursor, null);
 });
 
 test("ordinary API writes sweep the cache at most once per five-minute window", async () => {

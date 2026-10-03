@@ -1,4 +1,5 @@
 /* title-menu-even.test.mjs — title doors stay even without px-capped columns. */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -9,7 +10,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 
 test("title 2-up rows share equal flex cells and fill them", () => {
-  const menus = read("css/menus.css");
+  const menus = readCssSource("css/menus.css");
   assert.match(menus, /#menu-primary\s*\{[^}]*--balance-min:\s*calc\(50%/);
   assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-basis:\s*5\.5rem/);
   assert.match(menus, /#menu-explore\s*\{[^}]*--balance-basis:\s*7rem/);
@@ -26,7 +27,7 @@ test("title 2-up rows share equal flex cells and fill them", () => {
 });
 
 test("compact landscape title doors fit without a nested scroller", () => {
-  const menus = read("css/menus.css");
+  const menus = readCssSource("css/menus.css");
   assert.match(
     menus,
     /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-buttons \{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.35\)/,
@@ -50,7 +51,7 @@ test("compact landscape title doors fit without a nested scroller", () => {
 });
 
 test("tall title leftover-row is not gated on compact density", () => {
-  const menus = read("css/menus.css");
+  const menus = readCssSource("css/menus.css");
   // A 393×844 phone is tall and still above --compact-at (600). The
   // leftover-row used to require both, so secondaries sat under the fold
   // with no working parent scroller.
@@ -72,7 +73,7 @@ test("tall title leftover-row is not gated on compact density", () => {
 });
 
 test("title overlay columns grow with --vwz instead of a pixel cap", () => {
-  const menus = read("css/menus.css");
+  const menus = readCssSource("css/menus.css");
   const responsive = read("css/responsive.css");
   assert.match(menus, /#menu-hero, #menu-primary, #menu-explore, #menu-secondary \{ width: min\(calc\(78 \* var\(--vwz\)\), 100%\)/);
   assert.match(menus, /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
@@ -108,7 +109,7 @@ test("title scrollers never paint a ScrollFade thumb", () => {
   // #472 hid the thumb on #overlay; the real title scroller is #menu-buttons
   // (zoom rides `#overlay > *`). A 6px accent thumb with no sheet-body padding
   // lane clipped CAREER / DAILY labels on a narrow landscape column.
-  const css = read("css/components.css");
+  const css = readCssSource("css/components.css");
   assert.match(css, /#overlay\.sf-scroll::before,\s*#menu-buttons\.sf-scroll::before\s*\{\s*display:\s*none/,
     "both title scrollers hide the thumb; fades still say there is more");
 });

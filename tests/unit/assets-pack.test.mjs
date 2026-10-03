@@ -1067,10 +1067,10 @@ test("modelsReady gives up at its cap when the pack hangs, and never rejects on 
 });
 
 test("ensureScenery awaits Assets.modelsReady before any build", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const i = game.indexOf("function ensureScenery(");
-  assert.ok(i >= 0);
-  const fn = game.slice(i, game.indexOf("\n}\n", i));
+  const src = fs.readFileSync(path.join(ROOT, "js/core/lazy-bundles.js"), "utf8");
+  const i = src.indexOf("function ensureScenery(");
+  assert.ok(i >= 0, "ensureScenery lives in LazyBundles after the extract");
+  const fn = src.slice(i, src.indexOf("\n}\n", i));
   assert.match(fn, /Assets\.modelsReady\(\)/, "ensureScenery no longer waits for the baked model pack");
   assert.match(fn, /Promise\.all\(\[p, models\]\)/, "the scenery script and the model pack must be awaited together");
   assert.match(fn, /return models\.then/, "a resident or inline scenery must still wait for the pack");

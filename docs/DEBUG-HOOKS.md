@@ -1009,7 +1009,7 @@ eyeballing — e.g. sweep `lat` across a verge to see the cross-section profile.
 ## Engine sound
 
 The engine voice is two layers: a per-manufacturer **voice** picked from
-`team.engine` (`ENGINE_VOICES` in `js/audio/engine.js`), and a player **tune**
+`team.engine` (`ENGINE_VOICES` in `js/audio/tone-model.js`), and a player **tune**
 layered over it — the profiles and sliders under MUSIC & SOUND -> ENGINE TONE.
 
 Both obey one contract: **every field is a constant multiplier, never a
