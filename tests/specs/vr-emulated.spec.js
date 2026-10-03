@@ -84,7 +84,7 @@ test("pinned IWER vendor is present and ENTER VR appears; session starts/exits/r
   expect(started.backend).toBe("webgl2");
   await expect(btn).toHaveText(/EXIT VR/i);
 
-  // XR frames advance while presenting (Node CDP poll — see waitXrFrames).
+  // XR frames advance while presenting (in-page settle+poll — see waitXrFrames).
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
   await endVr(page);

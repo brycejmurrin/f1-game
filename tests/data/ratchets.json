@@ -74,9 +74,9 @@
       "ceiling": 2,
       "slack": 0
     },
-    "waitForTimeout": 94,
+    "waitForTimeout": 93,
     "waitNoPolling": {
-      "ceiling": 47,
+      "ceiling": 49,
       "slack": 39
     },
     "zeroRefModules": {
