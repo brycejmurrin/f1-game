@@ -274,6 +274,22 @@ const CarDraw = (function () {
       // caster with teamMesh(team, car, true) on the FIRST countdown frame: ~12 builds
       // there, unless they are built here behind the loading cover. Same gates as the passes.
       const casters = shadowCastersWanted();
+      // FieldLod launch warm is VISUAL only. Skip it when there is no hitch to
+      // hide: headlessMode, or an inert gfx stub (game-vm omits mirrorBegin /
+      // present — see tools/lib/game-vm.cjs). Warming a full painted teamMesh
+      // for every rival added ~3 s of Car3D.build with no GPU gain, and under
+      // tooling-fast --jobs=4 that blew the 12 s boot+track hang gate
+      // (CI: boot 607 + track 16983). Cap whole-car meshes to the mirror budget
+      // (6): on the grid nobody is past WHOLE_CAR_M yet, and the far-LOD key is
+      // the same mesh, built lazily when a rival first crosses 120 m. Field
+      // wheels stay per-rival (cheap, shared by parts key).
+      // game-vm's inert gfx omits mirrorBegin on purpose (and has no casters);
+      // a real backend always exposes the mirror API even when the HUD mirror
+      // is off. `present` alone is not the tell — the stub implements it.
+      const gfx = G.gfx || {};
+      const lodWarm = FieldLod.on && !G.headlessMode &&
+        !!(casters || typeof gfx.mirrorBegin === "function");
+      let mirrorWarmLeft = lodWarm ? FieldLod.mirrorCap() : 0;
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         try {
@@ -281,18 +297,17 @@ const CarDraw = (function () {
           if (c.isPlayer && CamModes.CAM_MODES[G.camMode].id === "cockpit") cockpitBodyMesh(c.team, c);
           getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
           if (casters) teamMesh(c.team, c, true);
-          // What the LAUNCH first draws (FieldLod): the mirror's and the far-LOD
-          // whole-car mesh, the planted field wheels and the exhaust flame quad —
-          // each was built on its first draw, after the lights, in the frame the
-          // field pulled away. (The caster silhouette is the line above.)
-          if (FieldLod.on) {
-            if (!c.isPlayer) { teamMesh(c.team, c); getFieldWheelMeshes(c.team, c); }
+          if (lodWarm) {
+            if (!c.isPlayer) {
+              if (mirrorWarmLeft > 0) { teamMesh(c.team, c); mirrorWarmLeft--; }
+              getFieldWheelMeshes(c.team, c);
+            }
             CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame);
             if (c.isPlayer) CarMesh.getErsLight();
           }
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
-      Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, cpuMs: Math.round(performance.now() - at) });
+      Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, lodWarm, cpuMs: Math.round(performance.now() - at) });
     }
     function shadowCastersWanted() {
       const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};

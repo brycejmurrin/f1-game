@@ -13,8 +13,8 @@
  *     LOD off;
  *   - the WARM: TLX compiles the flame / ERS lit variants during the lights
  *     (their material keys equal the ones game.js draws with), and
- *     warmCarAssets builds the :sh caster, the mirror mesh, the field wheels
- *     and the flame quad.
+ *     warmCarAssets builds the :sh caster, up to mirrorCap() whole-car meshes,
+ *     the field wheels and the flame quad (skipped when headless).
  * No browser (~0.1 s). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -223,11 +223,19 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
   assert.match(tlx, /await warmLateLit\(\);/);
 });
 
-test("warm: warmCarAssets builds the caster silhouette, the mirror mesh, the field wheels and the flame", () => {
+test("warm: warmCarAssets builds the caster silhouette, capped mirror meshes, field wheels and the flame", () => {
   const cd = read("js/car/car-draw.js");
   const body = cd.slice(cd.indexOf("function warmCarAssets()"), cd.indexOf("async function prepareMenuCarAssets"));
   assert.match(body, /teamMesh\(c\.team, c, true\)/, ":sh silhouette");
-  assert.match(body, /teamMesh\(c\.team, c\); getFieldWheelMeshes\(c\.team, c\)/, "mirror / far-LOD mesh + field wheels");
+  // Whole-car teamMesh is capped to FieldLod.mirrorCap() (6): warming all 21
+  // full cars blew the game-vm hang gate under tooling-fast --jobs=4. Far-LOD
+  // shares the same key and builds lazily past WHOLE_CAR_M. Headless / inert
+  // gfx (no mirrorBegin/present) skips the visual extras — no launch hitch.
+  assert.match(body, /FieldLod\.mirrorCap\(\)/, "mirror-budget cap on whole-car warm");
+  assert.match(body, /!G\.headlessMode/, "headless skips the visual FieldLod warm");
+  assert.match(body, /mirrorBegin/, "inert gfx stub (game-vm) skips the visual warm");
+  assert.match(body, /teamMesh\(c\.team, c\); mirrorWarmLeft--/, "mirror whole-car mesh");
+  assert.match(body, /getFieldWheelMeshes\(c\.team, c\)/, "field wheels per rival");
   assert.match(body, /CarMesh\.getExhaustFlame\(c\.fuelVisual && c\.fuelVisual\.fxFlame\)/, "flame quad (same key the draw uses)");
   assert.match(cd, /FieldLod\.init\(G\.store\)/, "the off-switch is read once at boot");
 });
