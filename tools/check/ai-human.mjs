@@ -67,6 +67,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 
 const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`ai-human — how the AI races a SCRIPTED player on the racing line
+
+  node tools/check/ai-human.mjs [--track monza] [--seconds 240] [--runs 1] [--pace 0.97] [--json]
+  every run: --wear off|light|real  (default off); --seconds floor 30
+
+Owned by ai-racecraft.`);
+  process.exit(0);
+}
 const flag = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
 const TRACK = flag("track", "monza");
 // Default OFF, the harness pin, so the recorded yield/contact rates hold.

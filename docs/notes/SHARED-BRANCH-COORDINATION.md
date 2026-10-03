@@ -72,13 +72,18 @@ answer to one collision is not to serialise every push.
 
 What it does ask for, since 2026-09-22, is a CLAIM that touches no working
 branch: `node tools/ci/who-is-on-it.mjs --claim "<what you are on>"` pushes one
-empty-tree commit to `claude/claims/<slug of your branch>`, every run of the
+empty-tree commit to `claude/claims/<slug of your branch>` (see below: now the claims board), every run of the
 tool lists the live claims with their age, and `--release` overwrites yours
 with a `released` tombstone. It is advisory — a stale claim (> 2 h) prints as
 stale and blocks nobody — and it costs one tiny push, not a commit on the
 deploy branch. A tombstone rather than a delete because the containers' git
 proxy refuses ref deletion over git and the API alike (measured); delete
 tombstoned claim branches by hand from a machine that may.
+
+Since 2026-10-03 the claims live on ONE branch, `claude/claims-board`: a claim
+is a file there, a release a commit removing it, and every write drops claims
+older than a day. One branch per claim had piled up 182, then 73 more within a
+day, because nothing in a container can delete a ref.
 
 If collisions recur after this, the structural option is the one worth paying
 for: a PR per session into the deploy branch with required checks, which removes

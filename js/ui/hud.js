@@ -144,6 +144,8 @@ function syncHudCamClasses() {
     body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
     body.classList.toggle("hud-prof-minimal", prof === "minimal");
     body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+    // MOVE & SIZE keeps one layout for the cockpit cameras, one for the rest.
+    if (typeof HudLayout !== "undefined") HudLayout.setCam(modeId);
   }
   // MAP/GAPS (and broadcast park) must re-run when only the setting
   // changes — camera+profile stay put, so the key above does not.
@@ -904,18 +906,9 @@ function updateHud(force, dtMs) {
       const txt = left == null || spent >= 1 ? "" : "~" + Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
-    // FOUR CORNER CELLS + ΔT (js/ui/hud-tyres.js). Axle model projected to
-    // FL/FR/RL/RR; colour = cold / working / hot vs the compound window.
-    if (typeof HudTyres !== "undefined" && tyres.info) {
-      const info = tyres.info(player);
-      // Lateral proxy for outer-tyre bias: steer (+ = right). skidIntensity
-      // alone has no sign; vLat is the bicycle model's signed lateral speed.
-      const lat = player.vLat != null
-        ? Math.max(-1, Math.min(1, player.vLat / 8))
-        : (player.steer || 0);
-      const practice = !!(timeTrial || G.session === "practice" || G.session === "quali");
-      HudTyres.paint(els.tyre, info, lat, { practice: false }); // plan cleared below
-    }
+    // TYRE TEMPERATURE (js/ui/hud-tyres.js): the compound letter turns blue
+    // when the set is below its window and red above it — one fact, no cells.
+    if (typeof HudTyres !== "undefined" && tyres.info) HudTyres.paint(els.tyre, tyres.info(player));
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
     // is called by holding the car on the pit side at the entry, so the dwell
     // has to be visible: without it a driver cannot tell the gesture is
@@ -954,7 +947,7 @@ function updateHud(force, dtMs) {
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
-    // Practice / TT / quali: hide the race strategy line (corners + ΔT stay).
+    // Practice / TT / quali: hide the race strategy line.
     const practice = !!(timeTrial || G.session === "practice" || G.session === "quali");
     const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
@@ -1222,13 +1215,15 @@ function drawMinimap() {
   const root = document.documentElement, body = document.body;
   const measureKey = window.innerWidth + "x" + window.innerHeight + "|" + body.className
     + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
-    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1);
+    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
+    + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
   if (_mmKey !== measureKey || _fitKey === "" || !minimapBg) {
     _mmKey = measureKey;
     _mmCssW = els.minimap.clientWidth || 140;
     _mmCssH = els.minimap.clientHeight || 140;
     _mmRatio = Math.min(3, Math.max(1,
-      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+      (els.minimap.currentCSSZoom || 1) * (window.devicePixelRatio || 1)
+      * (parseFloat(els.minimap.style.getPropertyValue("--hl-s")) || 1)));
     _mmBgKey = _mmCssW + "|" + _mmCssH + "|" + _mmRatio;
   }
   const cssW = _mmCssW, cssH = _mmCssH, ratio = _mmRatio;

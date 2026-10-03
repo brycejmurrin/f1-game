@@ -21,7 +21,8 @@ the browser loses nothing.
 ## The 60-second start
 
 1. The first time you open it, **RANDOMISE** has already drawn a legal circuit.
-   Press RANDOMISE again for another one.
+   Press RANDOMISE again for another one, **TRACK OF THE DAY** for the one
+   everybody gets today, or **START FROM…** to trace a real circuit.
 2. Drag a few white points to make it yours.
 3. Check **5 CHECKS** at the bottom of the rail: green means ready.
 4. **SAVE**, then **RACE** or **TIME TRIAL**.
@@ -73,8 +74,28 @@ and AUTUMN COUNTRYSIDE. The night themes race under floodlights.
 ## 4 DETAILS
 
 Name the circuit (24 characters) and set **HALF-WIDTH m**, half the road's
-width, from 5 to 8 m. RANDOMISE, REVERSE, START HERE, DELETE POINT, UNDO, REDO,
-FIT VIEW and TEST HERE (see Test drive) live here too.
+width, from 5 to 8 m. Two rows of chips live here too:
+
+- **RANDOMISE · TRACK OF THE DAY · START FROM…** — three ways to a new
+  circuit. **TRACK OF THE DAY** draws the same circuit for everyone on the
+  same day (UTC), so you can race your friends' times on it. **START FROM…**
+  opens a card for every shipped circuit; pick one and its real layout becomes
+  your design, named `<CIRCUIT> REMIX`, ready to change. Your previous design is
+  one UNDO away, and SAVE adds the remix as a new circuit.
+- **REVERSE · START HERE · DELETE POINT · UNDO · REDO · FIT VIEW · SPEED · TEST HERE** —
+  **TEST HERE** drives from the selected point (see Test drive). **SPEED** colours the road by how fast a car takes it, yellow (slow) through
+  orange and red to purple (flat out); press it again to turn it off.
+
+## TURNS — every corner, tappable
+
+Under **5 CHECKS**, **TURNS** lists the corners in driving order, for example
+`T3 · RIGHT 92° · R 45 m · 118 km/h · 140 m`: which way it turns, how far, its
+tightest radius, the slowest speed through it and how long it is. Tap a row
+(or Enter on it) and the designer selects that corner's stretch of road,
+centres the view on it and sets **CORNER** (or **HAIRPIN**) to the arc that
+fits it. **REPLACE THE SELECTED SPAN** then rebuilds that corner from the
+settings — tighten the radius or change the angle first to reshape it. UNDO
+puts it back.
 
 ## 5 CHECKS and FIX
 
@@ -84,7 +105,13 @@ and lists what it finds:
 - **Red** blocks SAVE, RACE and SHARE — a lap under 2.5 km or over 7 km, a
   corner too tight to drive, the road crossing itself without a bridge, too
   little straight around the start line.
-- **Amber** is a warning; you can still race.
+- **Amber** is a warning; you can still race. Rows that start **FIA:** are the
+  FIA's Grade 1 layout advice for a real circuit (no straight over 2 km, the
+  first corner 250 m or more after the line and turning at least 45°, at most
+  2 % of slope along the start straight, 12 m of road, at most 5.7° of
+  banking), and *No overtaking spot* means no 400 m flat-out run into a heavy
+  braking zone. Many real circuits break one or two; they never block anything
+  and FIX ALL leaves them alone.
 - Tap a row to jump to the spot on the canvas.
 - **FIX** on a row repairs that one problem; **FIX ALL** (next to the 5 CHECKS
   label, while a red problem can be repaired) repairs everything it can in one
