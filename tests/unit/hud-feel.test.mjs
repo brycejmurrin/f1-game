@@ -542,11 +542,13 @@ test("MOTION: REDUCED stops every HUD pulse, not only the OS query", () => {
   // still got the redline, OVERTAKE, pit-arrow, limits and VSC-flag pulses —
   // every one of them stopped only for an OS that asked.
   const hud = cssRules(read("css/hud.css"));
-  const back = hud.find((r) => r.selector.includes(':root[data-motion="reduce"] :is(#hud, #announce) *')
+  const back = hud.find((r) => r.selector.includes(':root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *')
     && !r.context.some((c) => c.startsWith("@media")));
   assert.ok(back, "css/hud.css carries a data-motion backstop over #hud and #announce, outside any @media");
   assert.match(back.selector, /:root\[data-motion="reduce"\] :is\(#hud, #announce, \.touchbtn\)/,
     "…and over the elements themselves, the touch buttons included (the dock groups start outside #hud)");
+  assert.match(back.selector, /:is\(#hud, #announce, \.touchbtn\) \*::before/,
+    "…and over the touch buttons' DESCENDANTS and pseudo-elements, not only the button box");
   assert.match(back.selector, /\*::before/); assert.match(back.selector, /\*::after/);
   assert.equal(back.decls.get("animation-iteration-count"), "1 !important", "nothing repeats");
   assert.match(back.decls.get("animation-duration") || "", /^0\.0\d*ms !important$/, "one-shots land at once");

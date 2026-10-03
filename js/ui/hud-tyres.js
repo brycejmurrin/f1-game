@@ -2,7 +2,9 @@
    The physics model is axle-level with one shared surface temperature, so the
    HUD shows ONE fact about heat: whether the set is cold, working or hot
    against the compound's window. It paints that as a colour on the compound
-   letter (data-temp on #hud-tyre, css/hud.css) — no extra cells, no number.
+   letter (data-temp on #hud-tyre, css/hud.css) — no extra cells, no number —
+   AND as a glyph after the letter (❄ cold, ▲ hot; the sheet's ::after), because
+   blue-vs-red is a colour-only cue. The aria-label carries all of it in words.
    Pure: no DOM until paint(). */
 const HudTyres = (function () {
   "use strict";
@@ -28,14 +30,36 @@ const HudTyres = (function () {
     return band(+info.tempS, +info.tempOpt, win);
   }
 
-  /** Write data-temp on #hud-tyre; the compound letter takes the colour. */
-  function paint(tyreEl, info) {
+  const NAMES = { S: "Soft", M: "Medium", H: "Hard", I: "Intermediate", W: "Wet" };
+
+  /** The spoken twin of the chip: "Medium tyres, cold, about 5 laps left".
+   *  temp ok says nothing (the normal state is not news); a worn-out set says so. */
+  function label(code, temp, lapsLeft, spent) {
+    const name = NAMES[code] || (code ? String(code) : "Unknown");
+    let out = name + " tyres";
+    if (temp === "cold" || temp === "hot") out += ", " + temp;
+    if (spent >= 1) out += ", worn out";
+    else if (lapsLeft != null && isFinite(lapsLeft)) {
+      const n = Math.max(0, Math.min(99, Math.round(lapsLeft)));
+      out += ", about " + n + (n === 1 ? " lap" : " laps") + " left";
+    }
+    return out;
+  }
+
+  /** Write data-temp on #hud-tyre; the compound letter takes the colour and
+   *  the glyph. With `extra` ({code, lapsLeft, spent, plan}) also writes the
+   *  aria-label (#hud-tyre is role="img", so the label is all a reader gets). */
+  function paint(tyreEl, info, extra) {
     if (!tyreEl || !tyreEl.dataset) return false;
     const s = state(info);
     if (tyreEl.dataset.temp !== s) tyreEl.dataset.temp = s;
+    if (extra && typeof tyreEl.setAttribute === "function") {
+      const l = label(extra.code, s, extra.lapsLeft, extra.spent) + (extra.plan ? ", " + extra.plan : "");
+      if (tyreEl.getAttribute("aria-label") !== l) tyreEl.setAttribute("aria-label", l);
+    }
     return true;
   }
 
-  return { BAND_FRAC, band, state, paint };
+  return { BAND_FRAC, NAMES, band, state, label, paint };
 })();
 Object.freeze(HudTyres);

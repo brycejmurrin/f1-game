@@ -304,6 +304,7 @@ const FULL = [
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
   "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
+  "js/camera/results-cam.js",   // ResultsCam.create(G): chequered cut, results orbit, highlights reel
   "js/lighting/tuner-panel.js",
   "js/camera/tuner-panel.js",
   "js/physics/brake-cue.js",
@@ -323,6 +324,7 @@ const FULL = [
   "js/ui/appearance-opts.js",
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
+  "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-layout.js",     // per-element HUD move/size (cockpit + other layouts); builds DISPLAY › HUD › MOVE & SIZE
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
@@ -508,6 +510,7 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/hud-elements.js"],
   ["js/core/store.js", "js/ui/hud-layout.js"],    // binds GameStore.store and applies the layout at eval
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
+  ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
@@ -594,6 +597,7 @@ const HARD_EDGES = [
   ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
   ["js/camera/director.js", "js/game.js"],          // game.js calls Director.create(G) at eval time
   ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
+  ["js/camera/results-cam.js", "js/game.js"],        // game.js calls ResultsCam.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
@@ -1055,7 +1059,6 @@ const MOVED = {
   "tools/parts-ladder.mjs": "tools/car/parts-ladder.mjs",
   "tools/crest-sweep.mjs": "tools/car/crest-sweep.mjs",
   "tools/logo-authored-sweep.mjs": "tools/car/logo-authored-sweep.mjs",
-  "tools/trace-logo.mjs": "tools/car/trace-logo.mjs",
   "tools/cockpit-pale-sweep.mjs": "tools/car/cockpit-pale-sweep.mjs",
   "tools/career-economy.mjs": "tools/car/career-economy.mjs",
   "tools/layout-audit.mjs": "tools/ui/layout-audit.mjs",
