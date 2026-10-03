@@ -193,7 +193,8 @@ const TitleLayout = (function () {
 
   function build() {
     const panel = document.getElementById("pm-panel-appearance");
-    if (!panel || document.getElementById("pm-titlelayout")) return;
+    if (!panel) return;
+    if (document.getElementById("pm-titlelayout")) { if (ui) ui.paintAll(); return; }
     Log.info("ui", "TitleLayout.build");
     const d = document;
     const el = (tag, props, kids) => {

@@ -263,7 +263,8 @@ function buildResults(order, race) {
     // c.classified) is paid by SeasonCal.award / Career.settleRound: the row
     // shows those points, and its reason stays in the name suffix above.
     const paid = !dnf || (c.classified && !c.dsq);
-    pt.textContent = paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : outLabel(dnf);
+    pt.textContent = G.practice && !watched ? "Unscored"
+      : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : outLabel(dnf);
     row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
         isFinite(carData.lap) && carData.lap === timing.winnerLap) {

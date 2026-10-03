@@ -2936,7 +2936,8 @@ function endRace(forcedOrder) {
   // rule covers (PitLane.twoCompoundApplies — the AI planner's own test). Not in
   // a room: a remote car's compound is not replicated.
   const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && cmpApplies;
-  const dsq = SportingRegs.applyCompoundRule(cars, { applies: cmpOn, suspended });
+  // WATCH uses the published classification, not the simulated tyre log.
+  const dsq = realRace.status().watch ? cars.filter((c) => c.dsq) : SportingRegs.applyCompoundRule(cars, { applies: cmpOn, suspended });
   for (const c of dsq) Log.info("game", "DSQ car=" + c.code + " why=" + c.dsq);   // B6.3.6: a suspended race pays +30 s instead, carried in c.penalty
   const fin = cars.filter((c) => c.finished && !c.retired && !c.dsq).sort(RaceControl.finishOrder);   // laps, then the clock
   // A running car's time penalty is served on the road: its seconds, at the
@@ -3461,7 +3462,10 @@ const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
-const onboard = Onboard.create(G), director = Director.create(G), replayBuf = ReplayBuf.create(G), resultsCam = ResultsCam.create(G); resultsCam.attachReplay(replayBuf);
+const onboard = Onboard.create(G),
+  director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
+  replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
+  resultsCam = ResultsCam.create(G); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -3987,7 +3991,7 @@ DebrisWorld.create(G);
 const incidentSim = IncidentSim.create(G);
 // Car-to-car contact (js/physics/collide.js). collideFx stays here (shake /
 // hit-stop are camera state) and rides in as the second argument, not a G member.
-const collide = Collide.create(G, collideFx);
+const collide = Collide.create(G, collideFx, (c) => realRace.owns(c));
 // Two-player racing (js/net/netplay.js) and the VS FRIEND lobby
 // (js/net/lobby.js) — LAZY_NET, so neither exists until ensureNet() runs.
 // These are `let`, and every reader goes through the G.netPlay / G.netLobby
@@ -4208,7 +4212,7 @@ function update(dt) {
      universal bind for this across Forza, PolyTrack and Slow Roads.
      Race only: there is nothing to recover from during the countdown, and the
      same call mid-count would hand the player a free re-place on the grid. */
-  if (state === "race" && Input.consumeRecover() && player && !player.retired) {
+  if (state === "race" && Input.consumeRecover() && player && !player.retired && !realRace.owns(player)) {
     // A saved practice checkpoint makes RECOVER the driver's TRY AGAIN; coach.retry() is false everywhere else.
     // No banner: rescuePlayer() is the one place a recovery is reported, so one
     // keypress never gets the same word from two speakers (COACH and RADIO).
@@ -4294,7 +4298,7 @@ function update(dt) {
     return;
   }
   if (state !== "race") return;
-  raceT += dt;
+  if (!realRace.owns(player)) raceT += dt;   // WATCH's transport owns its clock, including paused seeks
   if (netGreen && !netPlay.active()) netGreen = null;   // the rival left: a solo pause must not add its wall time on resume
   if (netGreen) {   // never runs BEHIND the shared clock; never ahead of it (the sim cannot outrun wall time)
     const w = (netGreen.now() - netGreen.base) / 1000;
@@ -4326,7 +4330,7 @@ function update(dt) {
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
   }
-  if (!isPractice() && !isQuali()) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+  if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
 
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
   _leadHuman = null;
@@ -8112,7 +8116,8 @@ function tickBody(now) {
     // to place shots in the world, and without this gate it parked dbgCam on a
     // frame nothing was redrawing, so the screen kept showing the race the
     // player paused out of.
-    // THE ONLY PER-FRAME updatePhotoCam CALL SITE, on purpose: the free camera
+    // Solo photo-camera integration; online sessions update it before rendering
+    // below while the shared simulation keeps running. The free camera
     // (the lighting tuner's, or the FREE CAMERA panel's) is only reachable from
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
@@ -8185,7 +8190,9 @@ function tickBody(now) {
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
-  if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20)); render(Math.min(dt, 1 / 20)); // results orbit + frame dt
+  if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
+  if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20));
+  render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
   if (state === "race" || state === "count") updateHud(false, _dtMs);
 }
 

@@ -228,8 +228,9 @@ const RealReplay = (function () {
       for (const c of G.cars) {
         const d = o.seats.get(c);
         const tr = d ? built.byNum.get(d.num) : null;
-        cars.set(c, { num: d ? d.num : null, d, tr: tr || null, posed: false, parked: false });
+        cars.set(c, { num: d ? d.num : null, d, tr: tr && tr.n ? tr : null, posed: false, parked: false });
       }
+      if (![...cars.values()].some((f) => f.tr)) return false;
       const list = highlightsFor(script);
       const reel = o.reel ? reelFor(list) : null;
       let T = 0;
@@ -248,7 +249,7 @@ const RealReplay = (function () {
       pose(true);
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
       let follow = null;
-      for (const [c, f] of cars) if (f.d && f.d.code === o.follow) follow = c;
+      for (const [c, f] of cars) if (f.tr && f.d && f.d.code === o.follow) follow = c;
       if (!follow) for (const [c, f] of cars) if (f.tr && !follow) follow = c;
       setFollow(follow);
       if (reel && reel.length) cutTo(reel[0]);
@@ -311,7 +312,11 @@ const RealReplay = (function () {
       // A discontinuity must release the prior audio and all broadcast history.
       if (run.audio) { run.audio.pause(); run.audio = null; }
       if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= run.T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
-      pose(true); if (bc) bc.resetTiming(); if (G.snapGameCam) G.snapGameCam(true);
+      pose(true);
+      if (G.raceT != null) G.raceT = Math.max(0, run.T);
+      if (bc) { bc.resetTiming(); bc.refresh(bcState); }
+      if (G.refreshHud) G.refreshHud(true);
+      if (G.snapGameCam) G.snapGameCam(true);
       if (transport) transport.paint();
     }
     function setPaused(v) {
@@ -364,10 +369,10 @@ const RealReplay = (function () {
     function pose(discontinuous) {
       const track = G.track, total = track.total;
       for (const [c, f] of run.cars) {
-        if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = c.dnf || "dns"; c.speed = 0; } continue; }
+        if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dns ? "dns" : f.d && f.d.dnf ? "dnf" : null; c.speed = 0; } continue; }
         sampleAt(f.tr, run.T, at);
         if (at.before && !discontinuous) { if (f.posed) { c.speed = 0; } continue; }   // a seek before the trace reposes its first sample
-        if (at.ended && !discontinuous) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = c.dnf || "accident"; c.speed = 0; c.dnfAt = null; } continue; }
+        if (at.ended && !discontinuous) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; c.speed = 0; c.dnfAt = null; } continue; }
         f.posed = true; f.parked = false; c.dnf = null;
         const lap = Math.floor(at.prog / total) + 1;
         const s = at.prog - (lap - 1) * total;
@@ -379,7 +384,7 @@ const RealReplay = (function () {
         c.head = Math.atan2(smp.t[0], smp.t[2]);
         if (discontinuous || c.rPrevPx === undefined) { c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head; }
         c.retired = at.ended; c.finished = false;
-        if (at.ended) { f.parked = true; c.dnf = "accident"; c.speed = 0; c.dnfAt = null; }
+        if (at.ended) { f.parked = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; c.speed = 0; c.dnfAt = null; }
         const v = at.speed / (G.vTop ? G.vTop() : 90);   // a fraction of the top speed: the tacho reads the real car's pace, whatever PACE the sim runs at
         c.gear = v > 0.7 ? 8 : v > 0.45 ? 6 : v > 0.2 ? 4 : 2;
         c.braking = false;
@@ -422,7 +427,30 @@ const RealReplay = (function () {
     function finish() {
       if (!run || run.finished) return;
       run.finished = true;
-      const order = [...run.cars.keys()].sort((a, b) => (b.prog || 0) - (a.prog || 0));
+      // A position feed ending says nothing about the sporting result. Restore
+      // the published classification, including drivers whose download failed.
+      for (const [c, f] of run.cars) {
+        const d = f.d;
+        c.speed = 0; c.dnfAt = null; c.finished = false; c.finishT = null; c.penalty = 0; c.dsq = null;
+        c.retired = !d || !!(d.dnf || d.dns);
+        c.dnf = !d || d.dns ? "dns" : d.dnf ? "dnf" : null;
+        if (!d) continue;
+        if (typeof d.code === "string" && d.code.trim()) c.code = d.code.trim();
+        if (typeof d.name === "string" && d.name.trim()) c.name = d.name.trim();
+        if (d.dsq) { c.retired = false; c.dnf = null; c.dsq = "real race classification"; }
+        const done = d.lapsDone > 0 ? d.lapsDone | 0 : (d.laps || []).filter((t) => t > 0).length;
+        if (done) c.lap = done + 1;
+        if (!c.retired && !d.dsq && d.pos > 0) {
+          c.finished = true;
+          const last = done - 1, starts = d.lapStart || [], laps = d.laps || [];
+          c.finishT = last >= 0 && starts[last] != null && laps[last] > 0 ? starts[last] + laps[last] : null;
+        }
+      }
+      const order = [...run.cars.keys()].sort((a, b) => {
+        const da = run.cars.get(a).d, db = run.cars.get(b).d;
+        const pa = da && da.pos > 0 ? da.pos : Infinity, pb = db && db.pos > 0 ? db.pos : Infinity;
+        return pa - pb || (b.prog || 0) - (a.prog || 0);
+      });
       Log.info("game", "RealReplay.finish T=" + run.T.toFixed(1));
       if (G.endRace) G.endRace(order);
     }
@@ -443,10 +471,9 @@ const RealReplay = (function () {
         if (!h || run.T > h.t + HOLD_S) skip();
         return;
       }
-      const lead = (run.script.drivers || []).find((d) => d.pos === 1);
-      const tr = lead ? run.cars.get([...run.cars.keys()].find((c) => run.cars.get(c).num === lead.num)) : null;
-      const end = tr && tr.tr ? tr.tr.end : 0;
-      if (end > 0 && run.T > end + FINISH_S) finish();
+      // A missing or truncated winner download must not end another driver's
+      // usable replay early, or leave a replay running beyond all its positions.
+      if (run.T > run.duration + FINISH_S) finish();
     }
 
     function status() {

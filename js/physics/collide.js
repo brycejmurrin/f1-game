@@ -2,10 +2,11 @@
 // Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket
 // broadphase, the mass-weighted relaxation passes, the hard separation pass,
 // the barrier clamp and the world-pose writeback. Extracted from game.js
-// (Collide.create(G, collideFx)); game.js keeps collideFx (shake/hit-stop/
+// (Collide.create(G, collideFx, ownsPose)); game.js keeps collideFx (shake/hit-stop/
 // rumble — game feel state) and hands it in as the second argument, the rest
 // (track/player/netPlay/PACE/wrapS/worldFromTrack) through G. The takeover
-// owner is IncidentSim's static owns()/notifyCar(). Physics-visible: every
+// incident owner is IncidentSim's static owns()/notifyCar(); ownsPose excludes
+// externally posed replay puppets from local collision state. Physics-visible: every
 // number here is gated by tests/specs/physics-characterization.spec.js.
 
 const Collide = (() => {
@@ -76,7 +77,7 @@ const Collide = (() => {
   // — while nothing moves. Measured at dProg = -4.75.
     const CORR_EPS = 1e-3;
 
-  function create(G, collideFx) {
+  function create(G, collideFx, ownsPose = () => false) {
     Log.info("game", "Collide.create");
     const wrapS = G.wrapS;
     const incidentSim = IncidentSim;   // static owns()/notifyCar() — one instance per page
@@ -144,13 +145,13 @@ const Collide = (() => {
       // ~2π "rotation" and its swept contact was skipped every such step.
       for (let i = 0; i < ranked.length; i++) {
         const a = ranked[i], pa = motion.get(a);
-        if (!pa || incidentSim.owns(a) || netPlay.owns(a)) continue;
+        if (!pa || ownsPose(a) || incidentSim.owns(a) || netPlay.owns(a)) continue;
         sweepMotion(a, pa, dt);
         if (!pa.sweepEligible) continue;
         const da = pa.sweepD, xa = pa.sweepX;
         for (let k = i + 1; k < ranked.length; k++) {
           const b = ranked[k], pb = motion.get(b);
-          if (!pb || incidentSim.owns(b) || netPlay.owns(b)) continue;
+          if (!pb || ownsPose(b) || incidentSim.owns(b) || netPlay.owns(b)) continue;
           sweepMotion(b, pb, dt);
           if (!pb.sweepEligible) continue;
           const db = pb.sweepD, xb = pb.sweepX;
@@ -266,6 +267,9 @@ const Collide = (() => {
     // resolveCollisions so each phys step does not allocate a nested function.
     // Exact cheap-reject before wrap: |dProg| in (LCAR, L-LCAR) cannot contact.
     function pairContact(a, b) {
+      // Trace-owned replay cars keep their recorded pose and speed, including
+      // overlaps and pit-lane positions. They are never local contact bodies.
+      if (ownsPose(a) || ownsPose(b)) return null;
       // Net remotes draw from delayed sample() but contact must use predict()
       // (netplay tick writes _nOk/_nProg/_nX/_nSpd). Local cars keep prog/x/speed.
       const aProg = a._nOk ? a._nProg : a.prog;
@@ -506,7 +510,7 @@ const Collide = (() => {
       motionTime = G.raceT;
       // AI cars mirrored their world pose BEFORE this pass (updateCar's tail), so a
       // shove rendered one step late; snapshot so the clamp loop can re-mirror.
-      for (const c of ranked) if (!c.human) { c._preColS = c.s; c._preColX = c.x; }
+      for (const c of ranked) if (!ownsPose(c) && !c.human) { c._preColS = c.s; c._preColX = c.x; }
       sweepContacts(ranked, dt || FIXED_DT);
       // PRE-STEP CLOSING SPEED, for the restitution reference only. aSp/bSp are
       // read LIVE, and _colResolvePair mutates .speed as it goes, so in a
@@ -519,7 +523,7 @@ const Collide = (() => {
       // it is actually correcting. Only `e` moves to the snapshot.
       // Mirrors aSp/bSp for a net-owned car, whose predicted speed is the
       // reference and is not ours to mutate.
-      for (const c of ranked) c._preColSpd = c._nOk ? c._nSpd : c.speed;
+      for (const c of ranked) if (!ownsPose(c)) c._preColSpd = c._nOk ? c._nSpd : c.speed;
       // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
       const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || FIXED_DT);
@@ -568,7 +572,7 @@ const Collide = (() => {
       }
       // keep everyone inside the per-side barriers after being shoved around
       for (const c of ranked) {
-        if (incidentSim.owns(c)) continue;   // Rapier owns the clamp for this car
+        if (ownsPose(c) || incidentSim.owns(c)) continue;   // the pose owner supplies its own boundary
         const wr = Tracks.wallAt(track, c.s, 1), wl = Tracks.wallAt(track, c.s, -1);
         if (c.x > wr) c.x = wr; else if (c.x < -wl) c.x = -wl;
         if (!c.human && (c.s !== c._preColS || c.x !== c._preColX)) {
@@ -585,13 +589,14 @@ const Collide = (() => {
       // per-frame feedback loop; with a reconstruction that is not quite the
       // inverse of the read (see worldFromTrack) the loop has gain < 1 and drags
       // the car onto the centreline. Untouched frames must leave the car's own integration alone.
-      if (player && player.px != null && !player.finished && !incidentSim.owns(player) &&
+      if (player && player.px != null && !player.finished && !ownsPose(player) && !incidentSim.owns(player) &&
           (player.s !== _preColS || player.x !== _preColX)) {
         const w = G.worldFromTrack(player.s, player.x);
         player.px = w.x;
         player.pz = w.z;
       }
       for (const c of ranked) {
+        if (ownsPose(c)) { motion.delete(c); continue; }   // no sweep from a prior driving pose after handback
         let p = motion.get(c); if (!p) { p = {}; motion.set(c, p); }
         p.prog = c.prog; p.x = c.x; p.angle = bodyAngle(c);
       }

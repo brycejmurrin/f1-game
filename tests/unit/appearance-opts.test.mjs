@@ -258,10 +258,15 @@ test("defaults apply at eval: dark / brand / team data attrs", () => {
 test("profile restore updates live appearance caches and rows without another persistence batch", () => {
   const { M, written, dataset, rows } = load();
   M.restore({ uiTheme: "light", menuAccent: "cyan", hudAccent: "violet", menuAccentHex: "#ffffff", hudAccentHex: "#123456",
-    textSize: "large", uiContrast: "high", speedUnits: "mph", menuHelp: "off" });
+    textSize: "large", uiContrast: "high", cvdMode: "deutan", speedUnits: "mph", menuHelp: "off" });
   assert.equal(M.theme(), "light"); assert.equal(M.menuAccent(), "cyan"); assert.equal(M.hudAccent(), "violet");
   assert.equal(dataset.uiContrast, "high"); assert.equal(dataset.menuHelp, "off"); assert.equal(M.speed(287), 178);
+  assert.equal(M.cvdMode(), "deutan"); assert.equal(dataset.cvd, "deutan");
+  assert.equal(rows.get("pm-cvd").read(), "deutan"); assert.equal(rows.get("pm-cvd")._painted, "deutan");
   assert.equal(rows.get("pm-uitheme").read(), "light"); assert.deepEqual(written, {});
+  M.restore({ cvdMode: "invalid" });
+  assert.equal(M.cvdMode(), "off"); assert.equal(dataset.cvd, undefined);
+  assert.equal(rows.get("pm-cvd")._painted, "off"); assert.deepEqual(written, {});
 });
 
 test("menu custom colours receive the same safe ink selection as swatches", () => {

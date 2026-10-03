@@ -58,6 +58,45 @@ function rawBaku() {
   return raw;
 }
 
+test("WATCH downloads cannot launch a replaced view and keep the seat selected when requested", async () => {
+  for (const detached of [true, false]) {
+    let resolveLocation, open = true, closed = 0;
+    const launches = [];
+    const { D } = load({ F1API: { locationData: () => new Promise((resolve) => { resolveLocation = resolve; }) },
+      RealRace: { launch: (script, options) => { launches.push({ script, options }); return {}; } } });
+    const tab = D.create({ isOpen: () => open, close: () => { closed++; open = false; } });
+    const slot = { isConnected: true }, script = { sessionKey: 1, t0: 100000, laps: 1, drivers: [{ num: 1, lapStart: [0], laps: [30] }] };
+    tab.setSeat("AAA"); tab.watch(script, slot, 1, false);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    assert.equal(typeof resolveLocation, "function");
+    tab.setSeat("BBB");
+    if (detached) { slot.isConnected = false; open = false; open = true; }
+    resolveLocation([{ date: 100000, x: 0, y: 0 }, { date: 101000, x: 10, y: 10 }]);
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    assert.equal(closed, detached ? 0 : 1);
+    assert.equal(launches.length, detached ? 0 : 1);
+    if (!detached) assert.equal(launches[0].options.seat, "AAA");
+  }
+});
+
+test("WATCH can start after the followed driver's retirement while JUMP IN still protects its seat", () => {
+  const { ctx, Teams } = load({ Tracks: { LIST: TRACKS }, RealReplay: { create: () => ({ stop() {} }) } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx);
+  const R = vm.runInContext("RealRace", ctx);
+  const seated = Teams.LIST.find((t) => !t.custom && !t.legends && t.drivers && t.drivers.length);
+  const driver = { num: 1, code: seated.drivers[0].code, teamId: seated.id, dnf: true, lapsDone: 5 };
+  const script = { trackId: "monza", laps: 50, drivers: [driver] };
+  const director = R.create({});
+  assert.equal(director.isWatch(), false, "ordinary solo has no recorded pose owner");
+  assert.equal(director.stage(script, { watch: true, traces: {}, seat: driver.code, startLap: 40 }).startLap, 40);
+  assert.equal(director.isWatch(), true, "WATCH reserves poses before the replay is armed");
+  director.stop();
+  assert.equal(director.isWatch(), false, "leaving WATCH releases pose ownership");
+  assert.equal(director.stage(script, { seat: driver.code, startLap: 40 }).startLap, 5);
+  assert.equal(director.isWatch(), false, "JUMP IN retains ordinary instant replay");
+});
+
 test("the 2026 Baku race builds into a 22-driver, 51-lap script with the pre-start grid", () => {
   const { D, findTeam } = load();
   const s = host(D.build(rawBaku(), findTeam, TRACKS));
