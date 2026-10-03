@@ -130,10 +130,11 @@ const CockpitPreview = (function () {
       if (s.interior === "classic") GLX.draw(CarMesh.getCockpitGlass(s.interior),base,{doubleSided:true,alpha:.25});
       rig[0]=rig[5]=rig[10]=lay.wheelS; rig[13]=lay.wheelY; rig[14]=lay.wheelZ; M4.mulTo(worldRig,base,rig);
       GLX.draw(s.wheel === "none" ? CarMesh.getCockpitDash() : CarMesh.getCockpitWheel(s.livery,s.wheel),worldRig,paint);
+      if (s.wheel !== "none") CarMesh.drawForearms(worldRig,base,lay,s.livery,paint);
       const c = {gear:1,speed:0,energy:1,rpm:PhysicsConsts.IDLE_RPM};
       if (s.wheel === "retro") CarMesh.drawRetroTelemetry(worldRig,c,0,0);
       else if (s.wheel !== "round" && s.wheel !== "none") {
-        GLX.draw(CarMesh.getGearDigit(1),worldRig,fx); GLX.draw(CarMesh.getLedStrip(0),worldRig,fx); CarMesh.drawWheelExtras(worldRig,c,0);
+        GLX.draw(CarMesh.getGearDigit(1),worldRig,fx); GLX.draw(CarMesh.getLedStrip(0,s.wheel),worldRig,fx); CarMesh.drawWheelExtras(worldRig,c,0);
         digit[12]=-.034;digit[13]=.022;digit[14]=-.0335;M4.mulTo(worldDigit,worldRig,digit); GLX.draw(CarMesh.getSpeedDigit(0),worldDigit,fx);
         digit[12]=.048;digit[13]=.001;digit[14]=-.0315;M4.mulTo(worldDigit,worldRig,digit); GLX.draw(CarMesh.getErsBar(),worldDigit,fx);
       }

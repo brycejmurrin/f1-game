@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/profile.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -898,6 +898,99 @@ test("START FROM…: a card per shipped circuit; a pick traces it into a new des
   assert.equal(b.D.undo(), true);
   assert.deepEqual(plain(b.D.state().design.pts), d0.pts, "UNDO brings the design back");
   assert.equal(b.D.startFrom("custom-nope"), false);
+});
+
+// ── the elevation strip (js/editor/profile.js) ─────────────────────────────
+test("the elevation strip: tap / keys / Delete commit elev:add | elev:move | elev:del (one UNDO each); hills survive an insert and save byte-equal; HILL steppers while one is selected; Escape lets go first", () => {
+  const b = bootScreen();
+  const win = [];
+  b.ctx.addEventListener = (type, fn, cap) => win.push({ type, fn, cap });   // window === the VM global here
+  const kinds = [];
+  const dbg = b.ctx.Log.debug;
+  b.ctx.Log.debug = (ns, msg) => { const m = /designer edit: (\S+)/.exec(String(msg)); if (m) kinds.push(m[1]); };
+  let hooks = null;
+  const real = b.DC;
+  b.ctx.DesignerCanvas = Object.assign({}, real, { create: (c, h) => { hooks = h; return real.create(c, h); } });
+  try {
+    const d0 = openGreen(b);
+    const strip = b.root.querySelector('canvas[data-role="profile"]'), stage = b.root.querySelector(".td-stage");
+    assert.ok(strip, "the strip is built");
+    assert.equal(stage.children.indexOf(strip), stage.children.indexOf(b.root.querySelector("canvas")) + 1, "straight under the main canvas");
+    assert.equal(strip.tabIndex, 0); assert.equal(strip.getAttribute("role"), null);
+    assert.equal(strip.dataset.arrows, "pass");
+    const rows = walk(b.root).filter((e) => e.classList.contains("td-row") && /^HILL/.test(e.children[0].textContent));
+    assert.deepEqual(rows.map((r) => r.children[0].textContent), ["HILL m", "HILL LENGTH m"]);
+    const circuit = b.root.querySelector(".td-input").parentNode;   // 4 DETAILS: the name field's group
+    const remove = chipsIn(circuit, "REMOVE HILL")[0];
+    assert.equal(circuit.children.at(-1), remove.parentNode, "appended at the END of 4 DETAILS");
+    assert.ok(rows.every((r) => r.hidden) && remove.parentNode.hidden, "hidden with no hill selected");
+    // A tap on the empty strip: a hill there, { halfM 160, rise +6 }, one UNDO entry.
+    const u0 = b.D.state().undo, L = b.D.preview().tr.total;
+    b.dom.dispatch(strip, { type: "pointerdown", pointerId: 1, clientX: 160, clientY: 390 });
+    b.dom.dispatch(strip, { type: "pointerup", pointerId: 1, clientX: 160, clientY: 390 });
+    assert.equal(kinds.at(-1), "elev:add");
+    let st = b.D.state();
+    assert.equal(st.undo, u0 + 1);
+    assert.equal(st.design.elevations.length, 1);
+    const h0 = st.design.elevations[0];
+    assert.equal(h0.halfM, 160); assert.equal(h0.rise, 6);
+    near(h0.s * L, L / 4, 1, "a quarter of the strip is a quarter of the lap");
+    assert.equal(strip.dataset.arrows, "own", "the new hill is selected");
+    assert.ok(rows.every((r) => !r.hidden), "…so its steppers show");
+    assert.equal(rows[0].querySelector(".td-num").textContent, "+6");
+    assert.equal(rows[1].querySelector(".td-num").textContent, "320", "the length shown is the whole hill, 2 × halfM");
+    // The stepper and the strip's own keys: elev:move, one entry each.
+    chipsIn(rows[0], "+")[0].click();
+    assert.equal(kinds.at(-1), "elev:move");
+    assert.equal(b.D.state().design.elevations[0].rise, 7);
+    strip.focus();
+    b.dom.dispatch(strip, { type: "keydown", key: "ArrowUp" });
+    assert.equal(b.D.state().design.elevations[0].rise, 8);
+    assert.equal(b.D.state().undo, u0 + 3);
+    chipsIn(rows[0], "+")[0].click();
+    assert.equal(b.D.state().design.elevations[0].rise, 8, "the 8 % cap (160 / 19.6 → 8 m on the lattice) holds");
+    assert.equal(b.D.state().undo, u0 + 3, "a refused step commits nothing");
+    // Escape / B with the strip focused: let go of the hill first, and keep focus.
+    const back = win.filter((l) => l.cap && l.type === "keydown");
+    const esc = { type: "keydown", key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+    for (const l of back) l.fn(esc);
+    assert.equal(esc.defaultPrevented, true); assert.equal(esc.stopped, true, "the screen's close door never sees it");
+    assert.equal(strip.dataset.arrows, "pass");
+    assert.ok(rows.every((r) => r.hidden), "steppers hidden again");
+    assert.equal(b.dom.document.activeElement, strip, "focus stays on the strip");
+    const again = { type: "keydown", key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+    for (const l of back) l.fn(again);
+    assert.equal(again.defaultPrevented, false, "a second Escape closes the screen as before");
+    // What the strip stores is what the registry keeps, byte for byte.
+    const before = plain(b.D.state().design);
+    assert.equal(JSON.stringify(b.C.sanitize(before).elevations), JSON.stringify(before.elevations));
+    // An insert on the main canvas upstream of the hill keeps it on the same road (REMAP).
+    b.dom.dispatch(strip, { type: "keydown", key: "]" });
+    const k = 2, mid = [(before.pts[k][0] + before.pts[k + 1][0]) / 2, (before.pts[k][1] + before.pts[k + 1][1]) / 2];
+    const ins = before.pts.slice(0, k + 1).concat([mid], before.pts.slice(k + 1));
+    hooks.onChange(ins, "insert");
+    const after = b.D.state().design;
+    assert.equal(after.pts.length, before.pts.length + 1);
+    assert.equal(after.elevations.length, 1);
+    samePlace(pointAt(after.pts, after.elevations[0].s), pointAt(before.pts, before.elevations[0].s), 1e-3, "the hill stays on its piece of road");
+    // (A remap leaves s off the 1/65535 lattice — every zone list does — and SAVE puts it back.)
+    const kept = b.C.sanitize(after).elevations[0];
+    near(kept.s, after.elevations[0].s, 1 / 65535, "sanitize snaps the remapped hill to the lattice");
+    assert.deepEqual([kept.halfM, kept.rise], [after.elevations[0].halfM, after.elevations[0].rise]);
+    // Delete on the strip: elev:del, and UNDO brings the hill back.
+    b.D.selectBump(0);
+    b.dom.dispatch(strip, { type: "keydown", key: "Delete" });
+    assert.equal(kinds.at(-1), "elev:del");
+    assert.equal(b.D.state().design.elevations.length, 0);
+    b.D.undo();
+    assert.deepEqual(plain(b.D.state().design.elevations), plain(after.elevations));
+    // The cap on hills: 24, then a message.
+    const many = Array.from({ length: 24 }, (_, i) => ({ s: i / 24, halfM: 40, rise: 1 }));
+    b.D.load(Object.assign({}, d0, { elevations: many }));
+    b.D.preview();
+    assert.equal(b.D.addBump(100), -1);
+    assert.match(msgText(b), /24 hills/);
+  } finally { b.ctx.Log.debug = dbg; }
 });
 
 test("DESIGNED RANDOMISE: FAST fills four cards (busy while it runs), USE loads one in one UNDO, MORE LIKE THIS replaces them", async () => {

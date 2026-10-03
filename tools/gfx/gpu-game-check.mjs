@@ -541,6 +541,62 @@ try {
       { polling: 100, timeout: 120000 }), 130000, "track-ready");
   checkpoint("track-ready");
   await bounded(() => page.evaluate(() => window.__apexMark("trackReady")), 10000, "mark-track-ready");
+  // THE PACK SCENE (--ls apex26.gcScene=pack). The owner's report: TLX lags at
+  // the start "with other cars being rendered" and recovers once the car leads.
+  // park(0.1) puts the player alone, so no leg ever measured the field in view.
+  // Here the race starts with the player at the back of the grid, the field is
+  // FROZEN in place (rendering continues), and two windows are sampled from
+  // raw rAF intervals: NEAR (all rivals in view, chase cam) and FAR (the player
+  // jumped half a lap away from the same frozen field). The difference is the
+  // per-rival render cost on this GPU. The governor's scale/tier ride along so
+  // an automatic resolution shed cannot hide it.
+  if (extraLs.some((kv) => /^apex26\.gcScene=("?)pack\1$/.test(kv))) {
+    const sample = (label, ms) => bounded(() => page.evaluate(async ([label, ms]) => {
+      const A = window.__apex, d = [];
+      const tl = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m0 = tl && tl.memState ? tl.memState() : null;
+      await new Promise((res) => { let last = performance.now(); const t0 = last;
+        const f = (t) => { d.push(t - last); last = t; if (t - t0 < ms) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+      d.sort((x, y) => x - y);
+      const q = (p) => +d[Math.min(d.length - 1, Math.floor(p * d.length))].toFixed(1);
+      let g = null; try { g = A.renderScale(); } catch (_) { /* absent */ }
+      const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
+      let gms = null; try { const gt = A.gpuTimer(); gms = gt && gt.ms > 0 ? +gt.ms.toFixed(2) : null; } catch (_) { /* absent */ }
+      return { label, frames: d.length, mean: +(d.reduce((a, b) => a + b, 0) / Math.max(1, d.length)).toFixed(1),
+        p50: q(0.5), p95: q(0.95), max: +d[d.length - 1].toFixed(1), draws: m ? m.draws : null,
+        // three's info.render.calls is cumulative here: the delta over the
+        // window divided by the frames is draw calls PER FRAME.
+        callsPerFrame: m && m0 && m.calls != null && m0.calls != null ? Math.round((m.calls - m0.calls) / Math.max(1, d.length)) : null,
+        pool: m ? m.pool : null,
+        gpuMs: gms, scale: g ? g.scale : null, tier: g ? g.tier : null };
+    }, [label, ms]), ms + 30000, "pack-" + label).catch((e) => ({ label, error: String((e && e.message) || e).slice(0, 120) }));
+    out.pack = { note: "player at the back of the frozen grid (near) vs half a lap away (far)" };
+    out.pack.setup = await bounded(() => page.evaluate(async () => {
+      const A = window.__apex; A.camera("chase");
+      // Same quality for both windows: floor the tier at 1 (where the governor
+      // took the first run's FAR window on its own) and stop resolution scaling.
+      try { PerfGov.setUserTier(1); PerfGov.setAutoRes(false); } catch (_) { /* older build */ }
+      A.go();
+      // Wait out the lights AND TLX's warm, so the NEAR window measures the
+      // field, not the compile stalls of the first seconds.
+      const t0 = performance.now();
+      while (performance.now() - t0 < 45000) {
+        const i = A.info(); const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+        if (i && i.state === "race" && !(t && t.warming && t.warming())) break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+      A.freeze(true); A.snapCam && A.snapCam();
+      return { cam: A.camera().mode, waitedMs: Math.round(performance.now() - t0) };
+    }), 60000, "pack-setup").catch((e) => ({ error: String((e && e.message) || e).slice(0, 120) }));
+    await new Promise((r) => setTimeout(r, 2000));
+    out.pack.near = await sample("near", 6000);
+    await bounded(() => page.evaluate(() => { const A = window.__apex; A.freeze(false); A.jump(0.5, 60, 0); A.freeze(true); A.snapCam && A.snapCam(); }), 20000, "pack-jump").catch(() => null);
+    await new Promise((r) => setTimeout(r, 2000));
+    out.pack.far = await sample("far", 6000);
+    checkpoint("pack", out.pack);
+    console.log("PACK " + JSON.stringify(out.pack));
+    await bounded(() => page.evaluate(() => window.__apex.freeze(false)), 10000, "pack-unfreeze").catch(() => null);
+  }
   out.parkCall = await bounded(() => page.evaluate(() => { window.__apexMark("parked"); return window.__apex.park(0.1); }), 60000, "park");
   // WHAT IS THE FRAME BOUND BY. The one question that decides whether "render
   // only what we can see" is the right lever: occlusion culling removes

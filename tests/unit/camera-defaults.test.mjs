@@ -76,6 +76,48 @@ test("CORNER LEAD's registry default is the shipped lead, so 0 is storable", () 
   assert.equal(CamTune.cornerLead("cockpit"), null);
 });
 
+// HELMET (js/camera/mode-switch.js) is its own camera to the CAMERA TUNER: the
+// panel edits CAM_MODES[camMode].id (tuner-panel.js curMode), so looking
+// through HELMET tunes "helmet" — never the cockpit it shares a rig with.
+test("the CAMERA TUNER tunes HELMET as its own camera, apart from COCKPIT", () => {
+  const CamTune = loadCamTune();
+  CamTune.set("helmet", "height", 0.5);
+  assert.equal(CamTune.getModeOnly("helmet", "height"), 0.5);
+  assert.equal(CamTune.stored("cockpit", "height"), false, "the cockpit is untouched");
+  const eye = [0, 1, 0], tgt = [0, 1, 30];
+  CamTune.apply("helmet", eye, tgt, 64);
+  assert.ok(Math.abs(eye[1] - 1.5) < 1e-9, "the helmet solve takes its own HEIGHT");
+  const ce = [0, 1, 0];
+  CamTune.apply("cockpit", ce, [0, 1, 30], 64);
+  assert.equal(ce[1], 1, "and the cockpit solve does not");
+  const panel = fs.readFileSync(path.join(root, "js/camera/tuner-panel.js"), "utf8");
+  assert.match(panel, /function curMode\(\) \{ return \(CAM_MODES\[G\.camMode\] \|\| CAM_MODES\[0\]\)\.id; \}/, "the panel edits the live mode's id");
+  assert.match(panel, /CamTune\.set\(curMode\(\), d\.id/);
+});
+
+test("CORNER HANG ships at 1 and 0 stays stored", () => {
+  const CamTune = loadCamTune();
+  const def = CamTune.CAM_TUNE_DEFS.find((d) => d.id === "cornerHang");
+  assert.equal(def.def, 1);
+  assert.ok(def.modes.indexOf("chase") >= 0);
+  assert.ok(def.modes.indexOf("heli") >= 0);
+  assert.ok(def.modes.indexOf("drone") >= 0);
+  assert.equal(def.modes.indexOf("far"), -1, "far has no second hang");
+  assert.equal(def.modes.indexOf("pitwall"), -1, "the pit wall stays put");
+  assert.equal(CamTune.cornerHang("chase"), null, "unset means the rig uses its shipped hang");
+  assert.equal(CamTune.values("chase").cornerHang, 1);
+  CamTune.set("chase", "cornerHang", 0);
+  assert.equal(CamTune.stored("chase", "cornerHang"), true);
+  assert.equal(CamTune.cornerHang("chase"), 0);
+  CamTune.set("chase", "cornerHang", 1);
+  assert.equal(CamTune.stored("chase", "cornerHang"), false);
+  assert.equal(CamTune.cornerHang("cockpit"), null);
+  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
+  assert.match(src, /hangScale\("chase"\)/);
+  assert.match(src, /hangScale\("heli"\)/);
+  assert.match(src, /CamTune\.cornerHang\(mode\)/);
+});
+
 test("the six geometric knobs stay deltas defaulting to 0", () => {
   const CamTune = loadCamTune();
   for (const id of ["height", "dist", "side", "pitch", "yaw", "fov"]) {

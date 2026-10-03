@@ -1626,4 +1626,24 @@ body.bc-on #hud-sectors, body.bc-on #hud-limits { display: none !important; }
   color: var(--text); background: rgba(8, 8, 14, 0.82);
 }
 #bc-pip .bc-pip-label:empty { display: none; }
+/* HELMET CAM (js/camera/mode-switch.js sets body[data-helmet-cam] — an
+   attribute, because the cssClasses ratchet has no room for a class): the
+   world seen through the visor. The eye port is a wide lens, so its upper edge
+   ARCHES — thin over the nose, dropping toward the temples — the cheek pads
+   close in soft at either side, and the shield lays a faint tint over the lot.
+   Under the HUD's own children (the first thing #hud paints), never over a
+   number; static, so REDUCE MOTION has nothing to take out; and gone with the
+   HUD when the player hides it. */
+body[data-helmet-cam] #hud::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 72% 66% at 50% 64%, transparent 82%,
+      color-mix(in oklab, var(--bg) 78%, transparent) 94%, color-mix(in oklab, var(--bg) 92%, transparent) 100%),
+    linear-gradient(to right, color-mix(in oklab, var(--carbon) 70%, transparent),
+      transparent 7%, transparent 93%, color-mix(in oklab, var(--carbon) 70%, transparent)),
+    color-mix(in oklab, var(--bg) 7%, transparent);
+}
 } /* @layer hud */

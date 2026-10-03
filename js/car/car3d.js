@@ -3203,8 +3203,8 @@ const Car3D = (function () {
         paint: SURFACES.paint, glass: SURFACES.visor,
         maxSplit: (sil || field) ? 0 : undefined, simplePaint: sil || field,
       });
-      // No brow box and no rear spoiler box: the traced shell carries its own
-      // ridge over the aperture and its own aero lip at the back.
+      // No boxes bolted on here: the rear gurney, top intake and visor strip are
+      // lofts on the shell itself (helmets.js buildAero), built with the lid.
     }
 
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..

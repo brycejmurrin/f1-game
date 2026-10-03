@@ -266,7 +266,7 @@ test("the mottle is resolution-free — the same doodle at any tessellation", ()
 });
 
 test("a quad splits only where the paint changes, and never moves the shell", () => {
-  const S = { paint: 7, glass: 9 };
+  const S = { paint: 7, glass: 9, aero: false };   // the shell alone: the aero lofts sit OFF it by design (tested below)
   const build = (design) => {
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     Helmets.build(out, 0, 0, 0, design, S);
@@ -300,7 +300,7 @@ test("a quad splits only where the paint changes, and never moves the shell", ()
 test("maxSplit 0 is the unsplit grid, even on a busy design", () => {
   const base = Helmets.RINGS * Helmets.SLICES * 2;
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
-  Helmets.build(out, 0, 0, 0, Helmets.designFor(1, [0.9, 0.35, 0.05]), { paint: 7, glass: 9, maxSplit: 0 });
+  Helmets.build(out, 0, 0, 0, Helmets.designFor(1, [0.9, 0.35, 0.05]), { paint: 7, glass: 9, maxSplit: 0, aero: false });
   assert.equal(out.idx.length / 3, base, `maxSplit 0 emitted ${out.idx.length / 3}, not the ${base}-tri grid`);
 });
 
@@ -314,7 +314,7 @@ test("simplePaint keeps the shell and visor without evaluating detailed zones pe
     };
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     Helmets.build(out, 0, 0, 0, design,
-      { paint: 7, glass: 9, maxSplit: 0, simplePaint: true });
+      { paint: 7, glass: 9, maxSplit: 0, simplePaint: true, aero: false });
     assert.equal(out.idx.length / 3, Helmets.FIELD_RINGS * Helmets.FIELD_SLICES * 2,
       "simple field paint must use the lower-detail shell intended for tens of pixels");
     assert.ok(out.idx.length / 3 < Helmets.RINGS * Helmets.SLICES,
@@ -325,6 +325,69 @@ test("simplePaint keeps the shell and visor without evaluating detailed zones pe
   } finally {
     delete Helmets.ZONES.__testCount;
   }
+});
+
+// THE AERO A REAL LID CARRIES (helmets.js buildAero): the chase camera sees the
+// back and the top of the head, and a bare traced ovoid there reads as a ball.
+// What is pinned is that each part exists where it belongs, stays a small loft
+// rooted on the shell, and never moves the traced proportions above.
+test("the lid carries a rear gurney, a top intake and a visor strip, all small and on the shell", () => {
+  const S = { paint: 7, glass: 9 };
+  const make = (aero, extra = {}) => {
+    const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    Helmets.build(out, 0, 0, 0, Helmets.designFor(44, null), { ...S, aero, ...extra });
+    return out;
+  };
+  const bare = make(false), full = make(undefined);
+  const aero = { pos: full.pos.slice(bare.pos.length), nrm: full.nrm.slice(bare.nrm.length), col: full.col.slice(bare.col.length) };
+  const tris = (full.idx.length - bare.idx.length) / 3;
+  assert.ok(tris > 60 && tris <= 160, `aero costs ${tris} triangles — tests/unit/car-wing-foil.test.mjs carries the body ceiling`);
+  // where each part is: off the centre plane at the back, on the centreline on top, across the front
+  const verts = [];
+  for (let i = 0; i < aero.pos.length; i += 3) verts.push(aero.pos.slice(i, i + 3));
+  const crownY = Helmets.SHAPE.Y[0] * 1.107;
+  assert.ok(verts.some((p) => p[2] < -0.12 && p[1] > 0.02), "a gurney across the upper back");
+  assert.ok(verts.some((p) => Math.abs(p[0]) < 0.03 && p[1] > crownY - 0.05 && p[2] > 0.03), "an intake on the crown's front");
+  assert.ok(verts.some((p) => p[2] > 0.13 && Math.abs(p[0]) < 0.02 && p[1] < 0.06), "a strip over the eye port");
+  assert.ok(verts.some((p) => p[2] > 0.06 && Math.abs(p[0]) > 0.08 && p[1] < 0.06), "...running round toward the temples");
+  // small: nothing more than 2 cm off the traced shell, and the lid's extent is the shell's
+  let worst = 0;
+  for (const p of verts) {
+    const az = Math.atan2(p[0], p[2]);
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (Helmets.pointAt(m, az)[1] > p[1]) lo = m; else hi = m; }
+    const q = Helmets.pointAt((lo + hi) / 2, az);
+    worst = Math.max(worst, Math.hypot(q[0] - p[0], q[2] - p[2]));
+  }
+  assert.ok(worst < 0.02, `an aero vertex stands ${(worst * 1000).toFixed(1)} mm off the shell — a loft, not a lump`);
+  const ext = (o, k, f) => f(...o.pos.filter((_, i) => i % 3 === k));
+  for (const k of [0, 1, 2]) {
+    assert.ok(ext(full, k, Math.max) <= ext(bare, k, Math.max) + 1e-9 && ext(full, k, Math.min) >= ext(bare, k, Math.min) - 1e-9,
+      `axis ${k}: the aero pushes past the traced shell's extent`);
+  }
+  for (let i = 0; i < aero.nrm.length; i += 3) assert.ok(Math.abs(Math.hypot(aero.nrm[i], aero.nrm[i + 1], aero.nrm[i + 2]) - 1) < 1e-6, "aero normals are unit");
+  assert.ok(aero.col.every((c) => c >= 0 && c <= 1), "aero paint stays in display range");
+  // field and shadow builds keep the silhouette parts, drop the strip, and never run the design's zones
+  let zoneCalls = 0;
+  Helmets.ZONES.__aeroCount = () => { zoneCalls++; return false; };
+  try {
+    const design = { name: "F", base: [0.8, 0.2, 0.1], alt: [0.1, 0.2, 0.8], visor: [0, 0, 0], zones: [{ k: "__aeroCount", c: [1, 1, 1] }] };
+    const out = { pos: [], nrm: [], col: [], mat: [], idx: [] }, shell = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    Helmets.build(out, 0, 0, 0, design, { ...S, maxSplit: 0, simplePaint: true });
+    Helmets.build(shell, 0, 0, 0, design, { ...S, maxSplit: 0, simplePaint: true, aero: false });
+    const fieldAero = (out.idx.length - shell.idx.length) / 3;
+    assert.ok(fieldAero > 0 && fieldAero < tris, `field aero ${fieldAero} keeps the gurney and intake, without the strip (${tris})`);
+    assert.equal(zoneCalls, 0, "field aero paints the base, not the zones");
+  } finally {
+    delete Helmets.ZONES.__aeroCount;
+  }
+});
+
+test("car3d's helmet note describes the lid helmets.js builds", () => {
+  const car3d = read("js/car/car3d.js");
+  assert.doesNotMatch(car3d, /carries its own ridge over the aperture and its own aero lip at the back/,
+    "the traced shell has no aero lip — helmets.js buildAero adds the gurney, intake and visor strip");
+  assert.match(car3d, /buildAero/, "the comment at the helmet build points at where the aero lives");
 });
 
 test("helmet-sheet.mjs --help exits 0 without rasterising", () => {

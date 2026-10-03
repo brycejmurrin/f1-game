@@ -32,7 +32,7 @@ const TrackDesigner = (function () {
     GESTURES: Object.freeze([
       { input: "Touch", text: "Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan." },
       { input: "Mouse", text: "Drag a point to move it · click the road to add one · double-click a point to delete it · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
-      { input: "Keyboard", text: "Tab to the canvas · [ and ] step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it." },
+      { input: "Keyboard", text: "Tab to the canvas · [ and ] step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it · on the elevation strip under the canvas, Enter adds a hill at the selected point, [ and ] pick one, Up/Down set its height and Left/Right move it." },
       { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer." },
     ]),
     LIMITS: "2.5–7 km a lap · 8–200 points · 24 saved circuits · no online play on your own circuits yet.",
@@ -202,6 +202,7 @@ const TrackDesigner = (function () {
     if (cv) { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); }
     renderIssues(); renderStats(); announceChecks();
     renderInsight();
+    renderProfile();
     const blocked = !verdict.ok;
     for (const b of [ui.save, ui.race, ui.tt]) if (b) { b.disabled = blocked; b.setAttribute("aria-disabled", blocked ? "true" : "false"); }
     return verdict;
@@ -500,6 +501,7 @@ const TrackDesigner = (function () {
       onContext: (i, at) => showCtx(i, at),
     });
     canvasTool();
+    buildProfile(stage);
     // Window CAPTURE, ahead of TopModal's document-capture Escape and the
     // dialog's own cancel (a pad's B arrives as `cancel`): with a point
     // selected the focused canvas owns the arrows, so Escape / B first lets go
@@ -770,6 +772,7 @@ const TrackDesigner = (function () {
     ui.undo.disabled = !undo.length; ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
     ui.hint.textContent = ui.toolHint.textContent = toolHint();
+    syncProfile();
     if (ui.testHere) ui.testHere.setAttribute("aria-disabled", sel >= 0 ? "false" : "true");
   }
   // ── FIX: TrackFixes (the editor fixes module) repairs what it can; each is one UNDO entry ──
@@ -872,6 +875,7 @@ const TrackDesigner = (function () {
     return true;
   }
   function onBack(ev) {
+    if (profileBack(ev)) return;
     if (!openFlag || !canvas || sel < 0 || document.activeElement !== canvas) return;
     if (ev.type === "keydown" && ev.key !== "Escape") return;
     ev.preventDefault(); ev.stopPropagation();
@@ -1076,6 +1080,109 @@ const TrackDesigner = (function () {
       requestAnimationFrame(next);
     };
     requestAnimationFrame(next);
+  }
+
+  // ── elevation: the strip under the canvas (DesignerProfile) ──
+  // prof: the strip's api. Its hills are the design's `elevations` (cosine
+  // bumps, s a fraction of the BUILT lap — the frame tracks.js builds them in);
+  // every edit is one commit kind elev:add | elev:move | elev:del, one UNDO entry.
+  // Known and pre-existing: remapZones keeps a hill's fraction of the CONTROL
+  // polygon across an insert / delete / stamp, while the engine reads it as a
+  // fraction of the built lap — the two differ by ~1–2 % of a lap. Not fixed here.
+  let prof = null;
+  const hillOf = (b) => (typeof DesignerProfile !== "undefined" ? DesignerProfile.hill(b) : b);
+  const hills = () => (design && Array.isArray(design.elevations) ? design.elevations : []);
+  /** The strip under the main canvas, and the selected hill's steppers at the
+   *  END of 4 DETAILS (the touch / pad path; shown only while a hill is selected). */
+  function buildProfile(stage) {
+    if (typeof DesignerProfile === "undefined" || !stage) return;
+    ui.profile = el("canvas");
+    ui.profile.setAttribute("data-role", "profile");
+    ui.profile.setAttribute("aria-label", "Elevation profile");
+    stage.insertBefore(ui.profile, ui.stats);           // straight under the main canvas
+    prof = DesignerProfile.create(ui.profile, {
+      onAdd: (sM) => addBump(sM),
+      onChange: (i, patch, live) => { if (!live) setBump(i, patch); },
+      onRemove: (i) => removeBump(i),
+      onSelect: () => refreshHill(),
+    });
+    const cur = () => hills()[prof.selected()] || null;
+    const at = (patch) => { const i = prof.selected(); if (i >= 0) setBump(i, patch); };
+    ui.hill = stepper("HILL m", () => (cur() ? cur().rise : 0), (v) => at({ rise: v }), 1, (v) => (v > 0 ? "+" : "") + v);
+    // The stepper moves halfM by 20 and shows the hill's whole length (2·halfM), as the strip's label does.
+    ui.hillLen = stepper("HILL LENGTH m", () => (cur() ? cur().halfM : DesignerProfile.ADD.halfM), (v) => at({ halfM: v }), 20, (v) => String(2 * v));
+    ui.hillRow = el("div", "td-chips");
+    ui.hillRow.appendChild(btn("REMOVE HILL", "sel-chip", () => { const i = prof.selected(); if (i >= 0) removeBump(i); }));
+    const circuit = ui.width && ui.width.parentNode;
+    for (const r of [ui.hill, ui.hillLen, ui.hillRow]) { r.hidden = true; if (circuit) circuit.appendChild(r); }
+  }
+  /** A hill at sM metres along the built lap: { halfM 160, rise +6 } (under the 8 % cap). */
+  function addBump(sM) {
+    const tr = verdict && verdict.tr, list = hills();
+    if (!design || !tr || !Number.isFinite(sM)) { message("Build a loop first, then add hills to it", true); return -1; }
+    if (list.length >= CustomTracks.LIMITS.zones) { message("A circuit holds " + CustomTracks.LIMITS.zones + " hills — remove one to add another", true); return -1; }
+    const ADD = typeof DesignerProfile !== "undefined" ? DesignerProfile.ADD : { halfM: 160, rise: 6 };
+    const b = hillOf({ s: sM / tr.total, halfM: ADD.halfM, rise: ADD.rise });
+    commit(Object.assign({}, design, { elevations: list.concat([b]) }), "elev:add");
+    const i = hills().length - 1;
+    if (prof) prof.select(i);
+    refreshHill();
+    message("Hill added — drag it up or down on the strip, sideways to move it");
+    return i;
+  }
+  /** Reshape hill i: patch { s (lap fraction), rise, halfM }, clamped onto the stored lattice. */
+  function setBump(i, patch) {
+    const list = hills();
+    if (!(i >= 0 && i < list.length)) return false;
+    const o = list[i], b = hillOf(Object.assign({}, o, patch));
+    if (b.s === o.s && b.halfM === o.halfM && b.rise === o.rise) { refreshHill(); return false; }
+    const next = list.slice(); next[i] = b;
+    commit(Object.assign({}, design, { elevations: next }), "elev:move");
+    if (prof) prof.select(i);
+    refreshHill();
+    return true;
+  }
+  function removeBump(i) {
+    const list = hills();
+    if (!(i >= 0 && i < list.length)) return false;
+    commit(Object.assign({}, design, { elevations: list.filter((_, j) => j !== i) }), "elev:del");
+    if (prof) prof.select(-1);
+    refreshHill();
+    message("Hill removed — UNDO brings it back");
+    return true;
+  }
+  function selectBump(i) { if (!prof) return -1; prof.select(i); refreshHill(); return prof.selected(); }
+  function refreshHill() {
+    if (!ui.hill) return;
+    const on = !!(prof && hills()[prof.selected()]);
+    ui.hill.hidden = ui.hillLen.hidden = ui.hillRow.hidden = !on;
+    if (on) { ui.hill._refresh(); ui.hillLen._refresh(); }
+  }
+  /** The strip follows the design (its hills, the main canvas's selected point as a cursor). */
+  function syncProfile() {
+    if (!prof || !design) return;
+    prof.setBumps(hills());
+    const tr = verdict && verdict.tr, pts = design.pts;
+    let at = null;
+    if (tr && sel >= 0 && sel < pts.length) { const c = cumArc(pts); at = c[sel] / (c[pts.length] || 1) * tr.total; }   // the control polygon's share: near the built arc
+    prof.setCursor(at);
+    refreshHill();
+  }
+  /** After each preview: the built heights, speeds, control loop and the grade / crest / dip issues. */
+  function renderProfile() {
+    if (!prof) return;
+    prof.setBuilt(verdict && verdict.tr, heatV, design && design.pts);
+    prof.setIssues(verdict ? verdict.issues : []);
+    syncProfile();
+  }
+  /** Escape / B with the strip focused and a hill selected: let go of the hill first. */
+  function profileBack(ev) {
+    if (!openFlag || !prof || !ui.profile || document.activeElement !== ui.profile || prof.selected() < 0) return false;
+    if (ev.type === "keydown" && ev.key !== "Escape") return false;
+    ev.preventDefault(); ev.stopPropagation();
+    prof.select(-1);
+    refreshHill();
+    return true;
   }
 
   // ── DESIGNED RANDOMISE: FAST / TECHNICAL / MIXED, USE, MORE LIKE THIS ──
@@ -1378,6 +1485,7 @@ const TrackDesigner = (function () {
 
   return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
-    designed, useCandidate, moreLikeThis };
+    designed, useCandidate, moreLikeThis,
+    addBump, setBump, removeBump, selectBump };
 })();
 Object.freeze(TrackDesigner);
