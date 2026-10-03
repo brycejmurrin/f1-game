@@ -110,3 +110,4 @@ const FlyingStart = (function () {
 
   return { create, runUpMetres, HANDOVER_S, MARGIN_S, MIN_RUN_M, MAX_RUN_FRAC };
 })();
+Object.freeze(FlyingStart);
