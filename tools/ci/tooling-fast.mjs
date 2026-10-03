@@ -504,6 +504,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
+  // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
+  "tests/unit/replay-buf.test.mjs",
   // repo-size.yml's full-history size report: refuses a shallow clone (one
   // sized this repo wrong on 2026-10-01), real-git fixture. ~1 s.
   "tests/unit/repo-size.test.mjs",
