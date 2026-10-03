@@ -48,10 +48,26 @@ async function startLiveRace(page) {
     window.__apex.go();
     try { window.__apex.rivals([]); } catch (_) { /* older builds */ }
   });
-  const live = await page.evaluate(() => {
-    try { return !!(window.__apex && window.__apex.info().track != null); } catch (_) { return false; }
+  // The on-track window recipe is measured on bahrain. A shared worker that
+  // previously raced another circuit (car-effects uses monza) must re-race —
+  // reusing "any live track" left Monza loaded and held lock left the road
+  // (CI 37082214838 / 37080085921: held.x 7.567 vs hw−0.5 6.3).
+  const track = await page.evaluate(() => {
+    try {
+      const i = window.__apex && window.__apex.info();
+      return i && i.track != null ? i.track : null;
+    } catch (_) { return null; }
   });
-  if (live) { await clearField(); return; }
+  if (track === "bahrain") { await clearField(); return; }
+  if (track != null) {
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(
+      () => window.__apex && window.__apex.info().track === "bahrain",
+      null, { polling: 100, timeout: BOOT_MS }
+    );
+    await clearField();
+    return;
+  }
   await page.goto("/");
   // Wait for boot BEFORE #mb-race: the click is a bare evaluate with no
   // actionability poll, so firing it before the title handlers attach leaves
@@ -74,7 +90,7 @@ async function startLiveRace(page) {
   await page.evaluate(() => document.getElementById("rs-go").click());
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(
-    () => window.__apex && window.__apex.info().track != null,
+    () => window.__apex && window.__apex.info().track === "bahrain",
     null, { polling: 100, timeout: BOOT_MS }
   );
   await clearField();
