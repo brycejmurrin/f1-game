@@ -2349,11 +2349,9 @@ const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: nu
   rival: null, playerProg: 0, snap: false };
 const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
-function cameraFollowsBank(mode) {
-  return mode === "chase" || mode === "far" || mode === "drift" ||
-         mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "reverse" ||
-         mode === "low" || mode === "tcam" || mode === "rear" ||
-         mode === "rival" || mode === "drone";   // pitwall is a tripod on the wall
+function cameraBankScale(mode) {
+  return mode === "heli" || mode === "side" || mode === "cinematic" || mode === "overhead" ? 0.35
+       : mode === "pitwall" || mode === "trackside" ? 0 : 1;
 }
 
 // Build the grounded transform needed by the pre-scene car-shadow pass. The main
@@ -2786,7 +2784,7 @@ function snapGameCam(paint) {
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
   camFov = v.fov;
-  camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
+  camRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
   // Re-anchor too: render() damps the eye and target in the CAR's frame, from last frame's
   // anchor to this one. A car that was just moved (a mid-race JUMP IN drops it half a lap
   // from the grid) would otherwise carry the grid's look OFFSET across, so the cockpit
@@ -6977,7 +6975,7 @@ function render(dt) {
     // read camMode so this frame's vantage matches the cut.
     if (typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
     const mode = CAM_MODES[camMode].id;
-    roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
+    roadCamRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
     // The free-world chase/onboard rig needs the car's world pose too — but
@@ -6995,7 +6993,7 @@ function render(dt) {
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
-    _vantExtra.carHead = headInterp(player);
+    _vantExtra.carHead = headInterp(player); _vantExtra.dt = dt;
     // CamFeel (free-look / look-back latch / speed vignette) ticks BEFORE the
     // vantage solve so this frame's offsets land in the same eye/tgt.
     if (typeof CamFeel !== "undefined") {
@@ -7008,7 +7006,7 @@ function render(dt) {
       _vantExtra.snap = false;
     }
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), _vantExtra);
-    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
+    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; if (vant.cut) camSnapNext = true;
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
@@ -7062,12 +7060,12 @@ function render(dt) {
   // panning — cockpit/hood ease the target gently, like a driver's eyes
   // leading into a corner rather than their whole head whipping around.
   // DRONE carries its own tether smooth inside ExtraRigs; comfort softens the
-  // outer damp further. RIVAL / PIT WALL use the broadcast λ (calmer than chase).
+  // outer damp further. Chase λ18, broadcast pans at 9, rival/pit wall calmer.
   const softCam = camId === "drone" || camId === "rival" || camId === "pitwall";
-  const raceLam = softCam ? (camComfort() ? 6 : (camId === "drone" ? 9 : 11)) : 14;
+  const raceLam = softCam ? (camComfort() ? 6 : (camId === "drone" ? 12 : 14)) : ((camId === "heli" || camId === "side" || camId === "cinematic" || camId === "overhead" || camId === "low" || camId === "trackside") ? 9 : 18);
   const lE = onboard ? 400 : (racing ? raceLam : 1.6) * cutEase;
   const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
-  const lT = gentleHead ? 7 : onboard ? 400 : (racing ? (softCam ? raceLam + 1 : 16) : 10) * cutEase;
+  const lT = gentleHead ? 7 : onboard ? 400 : (racing ? raceLam + (softCam ? 1 : 2) : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
   // breathes with frame time: MEASURED, a 16-38 ms vsync wobble swings it
