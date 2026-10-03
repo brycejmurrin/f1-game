@@ -3766,7 +3766,9 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
 test("WGX SAA widens roughness before wet like GLX", () => {
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const saa = chunks.indexOf("let saaVar = mix(saaVarGeo, saaVarPeel");
-  const wet = chunks.indexOf("if (wetness > 0.001)");
+  // Prefix, not the full condition: the road block is gated off car surfaces
+  // ("&& !classifiedCar") and the car wet look follows it — both after SAA.
+  const wet = chunks.indexOf("if (wetness > 0.001");
   assert.ok(saa > 0 && wet > saa,
     "SAA after wet extra-widens puddle edges — GLX widens, then polishes");
   assert.match(chunks, /a = rough \* rough;/,
