@@ -1068,7 +1068,7 @@ directly. Two always-judged checks close that:
 |---|---|---|
 | **Draft PR** | `pull_request` + draft | Fast tier: guards (incl. behind-ship), unit-plan / node slices, parts census, driving-model, change-aware `select`/`selected`. Heavy jobs skipped: geometry sweeps, wide smoke shards, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. |
 | **Ready PR** | `ready_for_review` / non-draft | Full tier on the same head: smoke + sweeps + ship-filter, plus path-gated renderer-macos / xr when the diff reaches them. Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
-| **Ship push** | push to deploy branch | Fast tier only; green poke starts the Pages train. Each tip push keys its own concurrency group on `github.sha` (no cancel of earlier merges; costs more runner minutes / queue during bursts). |
+| **Ship push** | push to deploy branch | Fast tier only; a green run pokes the Pages train from the tip, or from a superseded commit when no train is queued or running. Pushes share one no-cancel `ship-fast` group: the running fast tier finishes and only the newest waiting push stays queued (`docs/notes/CI-MERGE-BURST-2026-10-03.md`). |
 | **Pages train** | poke / dispatch / cron | Full gate against live `before_sha`; gate group never cancels. |
 | **Nightly** | `ci.yml` schedule `17 3 * * *` | Rotating browser group (`nightly-group.mjs`) instead of smoke-only; renderer / gfx on real GPU; coverage for the ~61 specs `select-specs` never picks. `gpu-census.yml` shares the cron for adapter identity. |
 

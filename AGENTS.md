@@ -190,6 +190,10 @@ stop and report. Detail: `docs/TESTING.md` §Merge train / §Flaky tests and
 `docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md`. Flakes: CI retries
 default to 1; quarantine in `tests/data/flaky-quarantine.json` only; fix real
 failures; re-run a failed job at most once for timeout/infra; never skip a
-test to get green.
+test to get green. MERGE PACING (2026-10-03): batch small tooling/doc fixes
+into ONE PR, and arm auto-merge on at most two PRs at a time per session — a
+30-merge burst held the site 30 PRs behind (`docs/notes/CI-MERGE-BURST-2026-10-03.md`;
+merge queue is not available on this personal-account repo). Never cancel
+another session's runs to free slots: it re-runs them.
 ### Watching CI and Pages
 `node tools/ci/ci-watch.mjs [--sha S] [--pages] [--once]` is the watcher (rule 12): it polls by `head_sha`, reads the newest run per workflow (so rule 8's dedupe is not a red), and says `= ci none` for a push that starts no run — docs-only, or a topic branch with no PR yet (ci.yml runs on push for the deploy branch only; a DRAFT PR gets the fast tier, a ready one the full tier). Do not conflate PR CI, ship-push CI, and Pages (`pages.yml` `295002043`). Poll by `head_sha`; a green PR does not prove Pages. On red, name the exact test, assertion and lane. After every push list all check runs on the head (incl. ready-state jobs), read every failed log, fix at the root; never report done with a red or pending check. Procedure and diagnosis notes: `docs/notes/` (SHARED-BRANCH-COORDINATION, deploy-research). Claim live only after Pages and `version.json` confirm. `deploy.mjs --train` prints the branch's last ci/pages conclusions AND the nightly rota BY JOB (a `cancelled` run hides a FAILED one — that is how a red sat unread for five days); the rota is the only scheduled coverage for the 61 specs `select-specs` never picks.
