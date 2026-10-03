@@ -766,6 +766,7 @@
         "tests/unit/aero-zones-vm.test.mjs",
         "tests/unit/agent-anchors-vm.test.mjs",
         "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -822,6 +823,7 @@
         "tests/unit/aero-zones-vm.test.mjs",
         "tests/unit/agent-anchors-vm.test.mjs",
         "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/classification-vm.test.mjs",
@@ -895,6 +897,7 @@
     "test:game-vm-b2": {
       "files": [
         "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
