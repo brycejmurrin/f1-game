@@ -129,7 +129,22 @@ async function race(page, steer, manual, ins, opts) {
       if (!tower || document.body.classList.contains("hud-bcam") !== broadcastCamera) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
+      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) return false;
+      // The var is an *input* to the left-column stack. Matching it is not the
+      // same as the map/gaps having consumed it (CI 37102141279: cockpit
+      // clashed .hud-top with both after a 4.4s height match). Visible
+      // anchors in that column must sit at or below the tower's bottom.
+      const tr = tower.getBoundingClientRect();
+      for (const sel of ["#minimap", ".hud-gaps"]) {
+        const el = document.querySelector(sel);
+        if (!el || el.hidden) continue;
+        const cs = getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden") continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        if (r.top + 0.5 < tr.bottom) return false;
+      }
+      return true;
     }, o.cam === "heli", { polling: 100, timeout: 5_000 });
     // These cases measure DOM layout; stop the expensive software renderer
     // once its HUD inputs have settled, keeping camera/profile and DOM intact.

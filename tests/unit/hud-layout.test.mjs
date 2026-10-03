@@ -19,11 +19,11 @@ test("broadcast layout probe waits for camera and published tower height, not co
   const ctx=vm.createContext({document:{
     body:{classList:{contains:()=>broadcast}},
     querySelector:(selector)=>{
-      assert.equal(selector,".hud-top","readiness must not wait for map/gap overlap results");
-      return {currentCSSZoom:zoom,getBoundingClientRect:()=>({height})};
+      if (selector!==".hud-top") return null;
+      return {currentCSSZoom:zoom,getBoundingClientRect:()=>({height,top:8,bottom:8+height})};
     },
     documentElement:{style:{getPropertyValue:()=>published}},
-  }});
+  }, getComputedStyle:()=>({display:"block",visibility:"visible"})});
   const ready=vm.runInContext("("+predicate[1]+")",ctx);
   assert.equal(ready(true),false,"camera class has not caught up");
   broadcast=true; assert.equal(ready(true),false,"height is not published yet");
@@ -41,6 +41,14 @@ test("broadcast layout probe waits for camera and published tower height, not co
   assert.ok(zTop >= 0 && republish > zTop, "--hud-top-h must be published after the top zoom cap");
   height=0; published="0px"; assert.equal(ready(true),false,"hidden tower is not ready");
   height=132; zoom=1; published="132px"; assert.equal(ready(true),true);
+  const towerEl = {currentCSSZoom:1,getBoundingClientRect:()=>({height:132,top:8,bottom:140})};
+  const mapEl = {hidden:false,getBoundingClientRect:()=>({width:40,height:40,top:8,bottom:48})};
+  ctx.document.querySelector = (selector) => selector === ".hud-top" ? towerEl
+    : selector === "#minimap" ? mapEl : null;
+  ctx.getComputedStyle = () => ({ display: "block", visibility: "visible" });
+  assert.equal(ready(true), false, "a visible map still on the tower is not stacked yet");
+  mapEl.getBoundingClientRect = () => ({ width: 40, height: 40, top: 140, bottom: 180 });
+  assert.equal(ready(true), true, "map below the tower has consumed --hud-top-h");
 });
 
 function fakeEl() {
