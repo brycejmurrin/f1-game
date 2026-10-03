@@ -217,6 +217,55 @@ function crY(p0, p1, p2, p3, t) {
 // slope at both ends (v = floor+k and v = floor-k), which is what a hard max
 // cannot do. Only ever returns >= floor, so it never weakens the guarantee it
 // implements.
+// How far a live camera hangs off the racing line through a bend. +kA is a
+// left-hander, and +right is the outside of it. One-shot solves (no dt) and
+// Reduce Motion return 0 so a parked frame stays the shipped pose. `gain` is
+// metres at a hairpin; a fast kink gets less.
+const _hangOut = Object.create(null);
+const _hangFast = Object.create(null);
+function bendHang(key, kA, dt, reduce, gain, lambda) {
+  if (!(dt > 0) || reduce || !gain) return 0;
+  if (!kA) { _hangOut[key] = 0; _hangFast[key] = 0; return 0; }
+  const raw = clamp(kA * 18, -1, 1);
+  const prev = _hangOut[key] || 0;
+  // A chicane flips sign before a hairpin-rate head can arrive, and the two
+  // sides cancel. Catch faster for a short stretch after the flip, then go
+  // back to the lazy rate. A hairpin never takes this path.
+  let fast = _hangFast[key] || 0;
+  if (prev * raw < -0.02) fast = 0.45;
+  else fast = Math.max(0, fast - dt);
+  _hangFast[key] = fast;
+  const lam = fast > 0 ? lambda * 3.2 : lambda;
+  const eased = typeof CamFeel !== "undefined" ? CamFeel.follow(key, raw, lam, dt) : raw;
+  _hangOut[key] = eased;
+  return eased * gain;
+}
+// Metres the rig opens along the view as speed rises. Not a second dolly:
+// one-shot solves (no dt, and not a snap) stay on the shipped distance.
+// Far opens further and later than chase. The return is 0 at rest.
+function speedOpen(key, spN, dt, reduce, snap, metres, lambda) {
+  if (reduce || !(metres > 0)) return 0;
+  const target = clamp(spN, 0, 1) * metres;
+  if (!(dt > 0) && !snap) return 0;
+  if (typeof CamFeel === "undefined") return target;
+  if (!(dt > 0)) { CamFeel.follow(key, target, lambda, 0); return target; }
+  return CamFeel.follow(key, target, lambda, dt);
+}
+function pullBack(eye, tgt, metres) {
+  if (!(metres > 0)) return;
+  let fx = tgt[0] - eye[0], fz = tgt[2] - eye[2];
+  const fl = Math.hypot(fx, fz);
+  if (fl < 1e-4) return;
+  eye[0] -= (fx / fl) * metres;
+  eye[2] -= (fz / fl) * metres;
+}
+// 1 when the tuner has not touched CORNER HANG. 0 is a stored "hold the line".
+function hangScale(mode) {
+  if (typeof CamTune === "undefined" || typeof CamTune.cornerHang !== "function") return 1;
+  const v = CamTune.cornerHang(mode);
+  return v == null ? 1 : v;
+}
+
 function softFloor(v, floor, k) {
   const d = v - floor;
   if (d > k) return v;
@@ -312,10 +361,17 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // tcam, rear, drift, low, overhead and reverse — i.e. in every mode anyone
   // actually races in — to throw the answer away.
   let kA = 0;
-  if (mode === "heli" || mode === "side" || mode === "cinematic") {
+  if (mode === "heli" || mode === "side" || mode === "cinematic"
+      || mode === "chase" || mode === "far" || mode === "drift"
+      || mode === "overhead" || mode === "reverse") {
+    const kHere = Tracks.curvature(track, wrapS(s));
     const kNear = Tracks.curvature(track, wrapS(s + lerp(15, 45, spN)));
     const kFar = Tracks.curvature(track, wrapS(s + lerp(35, 65, spN)));
-    kA = Math.abs(kFar) > Math.abs(kNear) + 0.0003 ? kFar : kNear;
+    const kAhead = Math.abs(kFar) > Math.abs(kNear) + 0.0003 ? kFar : kNear;
+    // Hold the corner you're in. Look-ahead only sets the camera up while the
+    // road under the car is still straight, so a chicane can't steal the hang
+    // for the kink 40 m further on.
+    kA = Math.abs(kHere) > 0.012 ? kHere : kAhead;
   }
   // Street-circuit camera corridor: city tracks run a continuous building wall a
   // few metres past the barriers, and the wide broadcast offsets (15-25 m) put
@@ -389,7 +445,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // shows the corner you're arriving at instead of a fixed patch of asphalt.
     // The one-shot path (no dt) keeps the shipped 12 m lead.
     const ohLead = extra.dt > 0 ? 8 + 16 * spN : 12;
-    eye[0] = p[0] - t[0] * 9; eye[1] = p[1] + 34; eye[2] = p[2] - t[2] * 9;
+    const ohOut = bendHang("ohBend", kA, extra.dt, extra.reduceMotion, 7 * hangScale("overhead"), 2.2);
+    eye[0] = p[0] - t[0] * 9 + r[0] * ohOut; eye[1] = p[1] + 34; eye[2] = p[2] - t[2] * 9 + r[2] * ohOut;
     tgt[0] = p[0] + t[0] * ohLead; tgt[1] = p[1]; tgt[2] = p[2] + t[2] * ohLead;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 46;
   } else if (mode === "heli") {
@@ -402,14 +459,18 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const sgnRaw = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendHeli", sgnRaw, 2.4, extra.dt || 0) : sgnRaw;
     const hl = Math.min(18, corr);              // stay inside the street canyon
-    eye[0] = cvB.p[0] + cvB.r[0] * hl * sgn;
+    const hlLat = hl * hangScale("heli");
+    eye[0] = cvB.p[0] + cvB.r[0] * hlLat * sgn;
     eye[1] = centreY(track, s - 26) + 17 + (18 - hl) * 0.6 + bankDy;
-    eye[2] = cvB.p[2] + cvB.r[2] * hl * sgn;
+    eye[2] = cvB.p[2] + cvB.r[2] * hlLat * sgn;
+    eye[1] += speedOpen("heliClimb", spN, extra.dt, extra.reduceMotion, extra.snap, 2.2, 1.4);
     const heliAim = aheadPt(14, 0.9, x * 0.2);
     tgt[0] = heliAim[0]; tgt[1] = heliAim[1]; tgt[2] = heliAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
   } else if (mode === "reverse") {
     eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
+    const revOut = bendHang("revBend", kA, extra.dt, extra.reduceMotion, 3.6 * hangScale("reverse"), 5);
+    eye[0] += r[0] * revOut; eye[2] += r[2] * revOut;
     tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(60, 72, spFov);
   } else if (mode === "side") {
@@ -417,7 +478,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const sgnRaw = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
     const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendSide", sgnRaw, 2.6, extra.dt || 0) : sgnRaw;
     const sl = Math.min(25, corr);              // stay inside the street canyon
-    eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 6.0 + (25 - sl) * 0.30; eye[2] = p[2] + r[2] * sgn * sl;
+    const slLat = sl * hangScale("side");
+    eye[0] = p[0] + r[0] * sgn * slLat; eye[1] = p[1] + 6.0 + (25 - sl) * 0.30; eye[2] = p[2] + r[2] * sgn * slLat;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
     // Corridor widen stays local; speed widen shares CamFeel.speedFov (mild scale).
     const sideBase = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 44;
@@ -432,9 +494,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const base = typeof CamFeel !== "undefined" ? CamFeel.follow("bendCine", baseRaw, 2.2, extra.dt || 0) : baseRaw;
     const a = base + Math.sin(now * 0.00022) * 0.25;
     const od = Math.min(22, corr);
+    const odLat = od * hangScale("cinematic");
     const dir = _dirScr;
     dir[0] = Math.cos(a) * t[0] + Math.sin(a) * r[0]; dir[1] = 0; dir[2] = Math.cos(a) * t[2] + Math.sin(a) * r[2];
-    eye[0] = p[0] + dir[0] * od; eye[1] = p[1] + 6.5 + (22 - od) * 0.45; eye[2] = p[2] + dir[2] * od;
+    eye[0] = p[0] + dir[0] * odLat; eye[1] = p[1] + 6.5 + (22 - od) * 0.45; eye[2] = p[2] + dir[2] * odLat;
     const cinAim = aheadPt(lerp(12, 22, spN), 0.85, x * 0.15);
     tgt[0] = cinAim[0]; tgt[1] = cinAim[1]; tgt[2] = cinAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(50, 60, spFov);
@@ -476,7 +539,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const slipRaw = clamp((extra.slipLat || 0) / 8, -1, 1);
     const slipN = typeof CamFeel !== "undefined" ? CamFeel.follow("driftSlip", slipRaw, 7, extra.dt || 0) : slipRaw;
     Tracks.sample(track, wrapS(s - 6.2), cvB);
-    const cx = x * 0.5 - slipN * 6.5;
+    const bend = bendHang("driftBend", kA, extra.dt, extra.reduceMotion, 1, 6.5);
+    const cx = x * 0.5 - slipN * 6.5 + bend * 5.5 * hangScale("drift");
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 6.2) + 2.4 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.75; tgt[2] = p[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(55, 70, spFov) + dep * 3;
@@ -542,6 +606,19 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const avC = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one
       tgt[0] = avC[0]; tgt[1] = rideTgtAhead + tgtUp; tgt[2] = avC[2];
     }
+    // Chase hangs outside and looks into the apex. Far does not: its length
+    // already swings it, and a second hang was cancelling that.
+    if (!far) {
+      const chaseOut = bendHang("chaseBend", kA, extra.dt, extra.reduceMotion, 4.6 * hangScale("chase"), 6);
+      eye[0] += r[0] * chaseOut; eye[2] += r[2] * chaseOut;
+      const aimIn = chaseOut * 0.7;
+      tgt[0] -= r[0] * aimIn; tgt[2] -= r[2] * aimIn;
+    }
+    // Open along the view with speed. Far goes further back, and later.
+    // `back` itself stays put: the ride height is sampled over that arc.
+    const openM = far ? 3.2 : 1.6;
+    const openL = far ? 1.15 : 2.6;
+    pullBack(eye, tgt, speedOpen(far ? "farOpen" : "chaseOpen", spN, extra.dt, extra.reduceMotion, extra.snap, openM, openL));
     fov = typeof CamFeel !== "undefined"
       ? CamFeel.modeFov(far ? "far" : "chase", spFov, dep)
       : lerp(57, 63, spFov) + (far ? 4 : 0) + dep * 3;

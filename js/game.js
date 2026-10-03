@@ -2348,11 +2348,18 @@ const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: nu
   rival: null, playerProg: 0, snap: false };
 const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
+function cameraBankScale(mode) {
+  if (mode === "chase" || mode === "far" || mode === "drift" ||
+      mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "reverse" ||
+      mode === "low" || mode === "tcam" || mode === "rear" ||
+      mode === "rival" || mode === "drone") return 1;
+  // Broadcast views. Full bank roll tips the horizon over. A fraction is
+  // enough to read a banked corner. The pit wall stays a tripod (0).
+  if (mode === "heli" || mode === "side" || mode === "cinematic" || mode === "overhead") return 0.35;
+  return 0;
+}
 function cameraFollowsBank(mode) {
-  return mode === "chase" || mode === "far" || mode === "drift" ||
-         mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "reverse" ||
-         mode === "low" || mode === "tcam" || mode === "rear" ||
-         mode === "rival" || mode === "drone";   // pitwall is a tripod on the wall
+  return cameraBankScale(mode) > 0;
 }
 
 // Build the grounded transform needed by the pre-scene car-shadow pass. The main
@@ -2785,7 +2792,7 @@ function snapGameCam(paint) {
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
   camFov = v.fov;
-  camRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
+  camRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
   // Re-anchor too: render() damps the eye and target in the CAR's frame, from last frame's
   // anchor to this one. A car that was just moved (a mid-race JUMP IN drops it half a lap
   // from the grid) would otherwise carry the grid's look OFFSET across, so the cockpit
@@ -6946,7 +6953,7 @@ function render(dt) {
     // read camMode so this frame's vantage matches the cut.
     if (typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
     const mode = CAM_MODES[camMode].id;
-    roadCamRoll = bankCam && cameraFollowsBank(mode) ? -bankCam.roll : 0;
+    roadCamRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
     // The free-world chase/onboard rig needs the car's world pose too — but

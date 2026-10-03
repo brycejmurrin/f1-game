@@ -162,27 +162,40 @@ const CamFeel = (function () {
     else for (const k in _fol) delete _fol[k];
   }
 
-  // Per-mode live motion. The offsets live in drive-chase / drive-broadcast /
-  // drive-onboard so a heli does not dolly like a chase cam. One-shot solves
-  // (no dt) and Reduce Motion return the rig untouched. Lambda is how fast
-  // THAT camera catches the car: a crane is slow, a drift cam is not.
-  const DRIVE_LAM = Object.freeze({
-    chase: 4.5, far: 2.0, drift: 7.5, low: 5.0, reverse: 3.2,
-    heli: 1.6, side: 4.2, cinematic: 1.3, overhead: 2.4, drone: 1.5,
-    rival: 3.0, pitwall: 2.2, trackside: 2.0,
-    cockpit: 3.0, hood: 4.0, visor: 2.8, tcam: 4.5, rear: 5.5,
+  // How fast the LENS catches the car. The rig owns the pose. These rates
+  // must not move the eye: a second dolly on top of vantage was the double
+  // image. One-shot solves (no dt) and Reduce Motion return the fov untouched.
+  const DRIVE_RESPONSE = Object.freeze({
+    chase:     { sp: 4.2, yaw: 2.2, brake: 9, slip: 3.2 },
+    far:       { sp: 1.3, yaw: 1.0, brake: 1.6, slip: 1.0 },
+    drift:     { sp: 6.0, yaw: 6.5, brake: 7.5, slip: 12 },
+    low:       { sp: 5.5, yaw: 4.0, brake: 9, slip: 4.0 },
+    reverse:   { sp: 2.4, yaw: 2.0, brake: 8, slip: 2.0 },
+    heli:      { sp: 1.8, yaw: 0.75, brake: 1.2, slip: 1.0 },
+    side:      { sp: 6.5, yaw: 3.5, brake: 4, slip: 3 },
+    cinematic: { sp: 1.05, yaw: 0.9, brake: 1.0, slip: 0.9 },
+    overhead:  { sp: 2.2, yaw: 2.2, brake: 1.4, slip: 2 },
+    drone:     { sp: 1.2, yaw: 0.65, brake: 1.0, slip: 0.8 },
+    rival:     { sp: 3.2, yaw: 2.4, brake: 6, slip: 2.5 },
+    pitwall:   { sp: 2.2, yaw: 2.2, brake: 7, slip: 2 },
+    trackside: { sp: 2.0, yaw: 1.6, brake: 2, slip: 2 },
+    cockpit:   { sp: 3.5, yaw: 3, brake: 8, slip: 3 },
+    hood:      { sp: 4.5, yaw: 4, brake: 9, slip: 4 },
+    visor:     { sp: 3.0, yaw: 3, brake: 3, slip: 3 },
+    tcam:      { sp: 5.0, yaw: 4, brake: 8, slip: 4 },
+    rear:      { sp: 5.5, yaw: 7, brake: 8, slip: 4 },
   });
   function drive(mode, eye, tgt, fov, extra, spN) {
     if (!extra || !(extra.dt > 0) || extra.reduceMotion) return fov;
     const dt = extra.dt;
     const att = extra.att || {};
-    const lam = DRIVE_LAM[mode] || 3;
+    const rate = DRIVE_RESPONSE[mode] || { sp: 3, yaw: 3, brake: 5, slip: 3 };
     let delta = null;
     const ctx = {
-      sp: follow("sp:" + mode, clamp(spN || 0, 0, 1), lam, dt),
-      yaw: follow("yaw:" + mode, clamp((att.yawRateCur || 0) / 1.1, -1, 1), lam, dt),
-      brake: follow("brk:" + mode, clamp((att.baPitch || 0) / 0.025, 0, 1), Math.min(8, lam + 2), dt),
-      slip: follow("slp:" + mode, clamp((extra.slipLat || 0) / 6, -1, 1), lam, dt),
+      sp: follow("sp:" + mode, clamp(spN || 0, 0, 1), rate.sp, dt),
+      yaw: follow("yaw:" + mode, clamp((att.yawRateCur || 0) / 1.1, -1, 1), rate.yaw, dt),
+      brake: follow("brk:" + mode, clamp((att.baPitch || 0) / 0.025, 0, 1), rate.brake, dt),
+      slip: follow("slp:" + mode, clamp((extra.slipLat || 0) / 6, -1, 1), rate.slip, dt),
     };
     if (typeof DriveChase !== "undefined") delta = DriveChase.apply(mode, eye, tgt, ctx);
     if (delta == null && typeof DriveBroadcast !== "undefined") delta = DriveBroadcast.apply(mode, eye, tgt, ctx);
