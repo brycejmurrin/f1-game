@@ -452,15 +452,21 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      axis, NOT --ui-scale) keeps the painted floor at 24px; at >=100% the
      literals win and nothing moves. The only tap targets inside any
      HUD-zoom subtree (2026-08 axis audit). */
+  /* THE PLAYER'S SLIDER CANNOT SHRINK THE DOCK: BUTTON SIZE (and HUD SIZE,
+     which it follows while unset) only GROWS the buttons — max(1, …) is the
+     same floor css/hud.css puts on --hud-btn-z for CAM/PAUSE, so the 54/72px
+     literals below never paint under 44px (WCAG 2.5.5) from a setting. Only
+     fitHud's --hud-z-dock cap may still go under 1, because a dock that does
+     not fit the screen loses BRAKE off the edge, which is worse. */
   body:not(.desktop) .dock {
-    --tap: max(54px, calc(24px / var(--hud-btn-scale)));
-    --hold: max(72px, calc(24px / var(--hud-btn-scale)));
+    --tap: max(54px, calc(24px / max(1, var(--hud-btn-scale))));
+    --hold: max(72px, calc(24px / max(1, var(--hud-btn-scale))));
     /* --hud-z-dock: fitHud's height cap for the pedal/shift columns — the
        raw slider let the 2-high pedal stack outgrow a 390px landscape
        viewport from 150% and put BRAKE off the top edge. Same mechanism as
        the --hud-z-top/bot caps on the readout clusters; absent when the
        player's setting fits. */
-    zoom: var(--hud-z-dock, var(--hud-btn-scale));
+    zoom: var(--hud-z-dock, max(1, var(--hud-btn-scale)));
   }
   body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-micro); }
   body:not(.desktop) .dock .pedal,
@@ -489,8 +495,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   @media (max-width: 700px) {
     /* Same HUD-axis floor as the base dock values above. */
     body:not(.desktop) .dock {
-      --tap: max(48px, calc(24px / var(--hud-btn-scale)));
-      --hold: max(64px, calc(24px / var(--hud-btn-scale)));
+      --tap: max(48px, calc(24px / max(1, var(--hud-btn-scale))));
+      --hold: max(64px, calc(24px / max(1, var(--hud-btn-scale))));
     }
     body:not(.desktop) .dock .touchbtn { font-size: var(--fs-micro); }
     body:not(.desktop) .dock .pedal,
