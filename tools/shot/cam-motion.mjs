@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // cam-motion.mjs — does each camera come out of the RIG different, and does
 // the live lens leave that pose alone?
+// @doc Chase/far/heli speed-open and per-mode corner pose, from the rig not a second dolly.
 //
 //   node tools/shot/cam-motion.mjs
 //

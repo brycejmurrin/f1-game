@@ -20,3 +20,4 @@ const DriveOnboard = (function () {
 
   return { apply: apply, modes: MODES };
 })();
+Object.freeze(DriveOnboard);

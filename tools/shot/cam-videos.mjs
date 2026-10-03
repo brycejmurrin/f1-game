@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // cam-videos.mjs — one short mp4 per camera, for an HTML page to play.
+// @doc Record one silent mp4 per camera, plus a page a phone can autoplay.
 //
 // Headless recordVideo does not pick up this game's WebGL canvas (the file
 // stays on the first cockpit frame while the sim moves on). Each frame is
@@ -122,10 +123,10 @@ try {
   page.setDefaultTimeout(180000);
   await installProbeInit(page, { backend: "webgl2", motion: true });
   await page.goto(srv.url, { waitUntil: "domcontentloaded", timeout: 180000 });
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 180000 });
   log("booted");
   await page.evaluate(() => window.__apex.race("monaco", "day", "dry", { laps: 1 }));
-  await page.waitForFunction(() => window.__apex.info().track === "monaco", null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__apex.info().track === "monaco", null, { polling: 100, timeout: 180000 });
   log("track up");
   await page.evaluate(() => {
     window.__apex.renderScale(0.75);

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // cam-corners.mjs — how much does each camera CHANGE between a straight and
 // a corner, on real circuits? A flat number means the rig is glued to the car.
+// @doc Straight-vs-corner camera swing on Monaco, Spa, Suzuka, Monza, and Zandvoort.
 //
 //   node tools/shot/cam-corners.mjs
 import fs from "node:fs";

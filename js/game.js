@@ -2349,17 +2349,8 @@ const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: nu
 const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraBankScale(mode) {
-  if (mode === "chase" || mode === "far" || mode === "drift" ||
-      mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "reverse" ||
-      mode === "low" || mode === "tcam" || mode === "rear" ||
-      mode === "rival" || mode === "drone") return 1;
-  // Broadcast views. Full bank roll tips the horizon over. A fraction is
-  // enough to read a banked corner. The pit wall stays a tripod (0).
-  if (mode === "heli" || mode === "side" || mode === "cinematic" || mode === "overhead") return 0.35;
-  return 0;
-}
-function cameraFollowsBank(mode) {
-  return cameraBankScale(mode) > 0;
+  return mode === "heli" || mode === "side" || mode === "cinematic" || mode === "overhead" ? 0.35
+       : mode === "pitwall" || mode === "trackside" ? 0 : 1;
 }
 
 // Build the grounded transform needed by the pre-scene car-shadow pass. The main

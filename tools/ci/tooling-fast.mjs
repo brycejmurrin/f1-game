@@ -121,6 +121,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/branch-audit.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
+  "tests/unit/cam-motion.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
