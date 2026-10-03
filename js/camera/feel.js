@@ -162,35 +162,32 @@ const CamFeel = (function () {
     else for (const k in _fol) delete _fol[k];
   }
 
-  // Live camera motion. One-shot solves (no dt) and Reduce Motion return the
-  // rig untouched, so parked framing and the ride-height tests stay exact.
-  // A racing frame dollies out with speed, pushes in on the brakes, and
-  // swings to the outside of the yaw. Onboard and fixed cameras are left
-  // alone — a dolly there puts the eye in the bodywork or swims a cut.
-  const DRIVE_SKIP = Object.freeze(["cockpit", "hood", "visor", "tcam", "rear", "trackside", "rival", "pitwall"]);
+  // Per-mode live motion. The offsets live in drive-chase / drive-broadcast /
+  // drive-onboard so a heli does not dolly like a chase cam. One-shot solves
+  // (no dt) and Reduce Motion return the rig untouched. Lambda is how fast
+  // THAT camera catches the car: a crane is slow, a drift cam is not.
+  const DRIVE_LAM = Object.freeze({
+    chase: 4.5, far: 2.0, drift: 7.5, low: 5.0, reverse: 3.2,
+    heli: 1.6, side: 4.2, cinematic: 1.3, overhead: 2.4, drone: 1.5,
+    rival: 3.0, pitwall: 2.2, trackside: 2.0,
+    cockpit: 3.0, hood: 4.0, visor: 2.8, tcam: 4.5, rear: 5.5,
+  });
   function drive(mode, eye, tgt, fov, extra, spN) {
     if (!extra || !(extra.dt > 0) || extra.reduceMotion) return fov;
-    if (DRIVE_SKIP.indexOf(mode) >= 0) return fov;
     const dt = extra.dt;
     const att = extra.att || {};
-    const sp = follow("drvSp", clamp(spN || 0, 0, 1), 3.2, dt);
-    const yaw = follow("drvYaw", clamp((att.yawRateCur || 0) / 1.1, -1, 1), 5.5, dt);
-    const brake = follow("drvBrk", clamp((att.baPitch || 0) / 0.025, 0, 1), 7, dt);
-    const slip = follow("drvSlip", clamp((extra.slipLat || 0) / 6, -1, 1), 5, dt);
-    let fx = tgt[0] - eye[0], fz = tgt[2] - eye[2];
-    const fl = Math.hypot(fx, fz) || 1;
-    fx /= fl; fz /= fl;
-    const rx = fz, rz = -fx;
-    const broadcast = mode === "heli" || mode === "side" || mode === "cinematic" || mode === "overhead" || mode === "drone";
-    const back = (broadcast ? 4.2 : mode === "far" ? 2.8 : 2.2) * sp - (broadcast ? 0.6 : 1.6) * brake;
-    eye[0] -= fx * back; eye[2] -= fz * back;
-    eye[1] += (broadcast ? 1.1 : 0.55) * sp - 0.35 * brake;
-    const swing = (broadcast ? 5.5 : 3.4) * yaw + (mode === "drift" ? 2.4 : 0.8) * slip;
-    eye[0] -= rx * swing; eye[2] -= rz * swing;
-    tgt[1] -= brake * (broadcast ? 0.2 : 0.45);
-    tgt[0] += rx * yaw * (broadcast ? 1.6 : 0.5);
-    tgt[2] += rz * yaw * (broadcast ? 1.6 : 0.5);
-    return fov + (broadcast ? 7 : 4.5) * sp + (mode === "drift" ? 4 : 2) * Math.abs(yaw) + 2.5 * brake;
+    const lam = DRIVE_LAM[mode] || 3;
+    let delta = null;
+    const ctx = {
+      sp: follow("sp:" + mode, clamp(spN || 0, 0, 1), lam, dt),
+      yaw: follow("yaw:" + mode, clamp((att.yawRateCur || 0) / 1.1, -1, 1), lam, dt),
+      brake: follow("brk:" + mode, clamp((att.baPitch || 0) / 0.025, 0, 1), Math.min(8, lam + 2), dt),
+      slip: follow("slp:" + mode, clamp((extra.slipLat || 0) / 6, -1, 1), lam, dt),
+    };
+    if (typeof DriveChase !== "undefined") delta = DriveChase.apply(mode, eye, tgt, ctx);
+    if (delta == null && typeof DriveBroadcast !== "undefined") delta = DriveBroadcast.apply(mode, eye, tgt, ctx);
+    if (delta == null && typeof DriveOnboard !== "undefined") delta = DriveOnboard.apply(mode, eye, tgt, ctx);
+    return delta == null ? fov : fov + delta;
   }
 
   /* opts: { mode, dt, comfort, racing, lookHeld, stickX, stickY, mouseDx, mouseDy, spN }

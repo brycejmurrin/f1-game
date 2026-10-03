@@ -22,7 +22,9 @@ function loadCamFeel(disk) {
     document: undefined,
   };
   vm.runInNewContext(
-    fs.readFileSync(path.join(root, "js/camera/feel.js"), "utf8") + "\nthis.exported = CamFeel;",
+    ["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"]
+      .map((f) => fs.readFileSync(path.join(root, "js/camera", f), "utf8")).join("\n")
+      + "\nthis.exported = CamFeel;",
     ctx);
   return { CamFeel: ctx.exported, store };
 }
@@ -47,11 +49,26 @@ test("drive dollies with speed only while a frame has dt", () => {
   assert.ok(eye[1] > 2, "and lifts it");
   assert.ok(moved > 57, "fov opens with speed");
   const locked = [0, 2, 0];
-  assert.equal(CamFeel.drive("cockpit", locked, [0, 1, 10], 64, { dt: 0.05, att: {} }, 1), 64);
-  assert.equal(locked[2], 0, "onboard cams are not dollied");
+  assert.equal(CamFeel.drive("cockpit", locked, [0, 1, 10], 64, { dt: 0.05, att: {} }, 1), 65.5);
+  assert.equal(locked[0], 0, "cockpit eye stays bolted");
+  assert.equal(locked[1], 2, "cockpit eye stays bolted");
+  assert.equal(locked[2], 0, "cockpit eye stays bolted");
   const still = [0, 2, 0];
   CamFeel.drive("chase", still, [0, 1, 10], 57, { dt: 0.05, reduceMotion: true, att: {} }, 1);
   assert.equal(still[2], 0, "reduce motion skips the dolly");
+  // Same inputs, different cameras: the eye must not take the same path.
+  CamFeel.resetFollow();
+  const chaseEye = [0, 2, -8], heliEye = [0, 2, -8], wallEye = [0, 2, -8];
+  const aim = [0, 1, 0];
+  const ex = { dt: 1, att: { yawRateCur: 0.8, baPitch: 0 }, slipLat: 0 };
+  CamFeel.drive("chase", chaseEye, aim.slice(), 57, ex, 1);
+  CamFeel.drive("heli", heliEye, aim.slice(), 36, ex, 1);
+  CamFeel.drive("trackside", wallEye, aim.slice(), 42, ex, 1);
+  assert.ok(Math.abs(chaseEye[1] - heliEye[1]) > 0.5, "heli lifts differently from chase");
+  assert.ok(Math.abs(chaseEye[0] - heliEye[0]) > 0.5 || Math.abs(chaseEye[2] - heliEye[2]) > 0.5, "they do not swing as one");
+  assert.equal(wallEye[0], 0, "trackside eye stays put");
+  assert.equal(wallEye[1], 2, "trackside eye stays put");
+  assert.equal(wallEye[2], -8, "trackside eye stays put");
 });
 
 test("speedFov is one shared curve scaled per mode", () => {
