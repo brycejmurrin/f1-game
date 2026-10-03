@@ -653,10 +653,23 @@ const Parts = (function () {
     return true;
   }
 
+  // When the save asks for an option this team cannot fit (SIGNATURE teams
+  // list, manufacturer suppliers, or a career regulation), prefer that
+  // option's `equivalent` over the category DEFAULT. DEFAULTS.tyres is
+  // `medium`; a locked `sig_rb_street` must still draw `supersoft` (its peer),
+  // not the yellow medium ring. Mesh, band, stats and label all come from the
+  // resolved option — one path, so the garage name matches what is on the car.
+  // (sig_mercedes_tyre's peer is medium, same as DEFAULTS; the visible proof
+  // of the path is any signature whose equivalent is not the default.)
   function _resolve(cat, setup, team) {
     const selId = setup[cat.id] !== undefined ? setup[cat.id] : DEFAULTS[cat.id];
     let opt = cat.options.find((o) => o.id === selId);
-    if (opt && !isOptionAvailable(opt, team)) opt = null;
+    if (opt && !isOptionAvailable(opt, team)) {
+      const eq = opt.equivalent
+        ? cat.options.find((o) => o.id === opt.equivalent)
+        : null;
+      opt = (eq && isOptionAvailable(eq, team)) ? eq : null;
+    }
     return opt || cat.options.find((o) => o.id === DEFAULTS[cat.id]) || cat.options[0];
   }
 
@@ -795,9 +808,9 @@ const Parts = (function () {
   }
 
   // { engine: 0|1|2, aero: 0|1|2, ... } — the resolved cosmetic tier per
-  // category for Car3D.build(opts.parts). Shares resolveSetup's supplier-lock
-  // fallback, so an option locked out of the setup UI can never resolve to a
-  // visual tier either; an untagged option falls back to tier 1.
+  // category for Car3D.build(opts.parts). Shares resolveSetup's lock
+  // fallback (equivalent, then DEFAULTS), so a locked-out option never
+  // keeps a foreign visual tier; an untagged option falls back to tier 1.
   function getVisualTiers(setup, team) {
     const resolved = resolveSetup(setup, team);
     const out = Object.assign({}, resolved.tiers);
