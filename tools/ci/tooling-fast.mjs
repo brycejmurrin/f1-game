@@ -319,6 +319,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/fuzz-untrusted-inputs.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/game-ctx-surface.test.mjs",
+  // Expensive game-systems CLIs (ai-pace/field/line/human, player-dyn,
+  // physics-tune-sweep, career-economy) must answer --help without booting
+  // the VM / Chromium. Measured 2026-10-01: --help silently ran the full work.
+  "tests/unit/game-tools-help.test.mjs",
   // The Node VM game harness (tools/lib/game-vm.cjs): boots js/game.js headless in
   // ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the
   // driving-model gate runs here in seconds rather than in a browser job.
@@ -353,6 +357,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",

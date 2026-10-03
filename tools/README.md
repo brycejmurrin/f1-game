@@ -71,7 +71,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run) as Markdown or `--json`. | check-changes |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
-| **ci/who-is-on-it.mjs** | Recent pushes per branch, who touched your paths, live `claude/claims/*` claims: the check before fixing a shared red. | check-changes |
+| **ci/who-is-on-it.mjs** | Recent pushes per branch, who touched your paths, live claims on the `claude/claims-board` branch: the check before… | check-changes |
 
 ### `tools/check/`
 

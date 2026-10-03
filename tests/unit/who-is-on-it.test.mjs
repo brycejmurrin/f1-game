@@ -11,7 +11,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseClaims, claimCommit, claimSlug, sessionId, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
+import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, readBoard, pushBoard, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NOW = 1_800_000_000;
@@ -125,4 +125,35 @@ test("a FAILED fetch must not print as an empty claim list", () => {
   // reachable ONLY when the fetch actually succeeded.
   const empty = /if \(!active\.length\) \{\s*console\.log\(fetched\s*\?/;
   assert.match(src, empty, "the empty-claims wording must branch on `fetched`");
+});
+
+test("the claims BOARD: one file per claim, a release removes it, a write drops day-old claims", () => {
+  const f = (slug, ageMin, text = "on it") => ({ slug, content: `${NOW - ageMin * 60}\tClaude\t${text}\n` });
+  const [c] = parseBoard([f("fix-a-s1", 30, "fixing\tthe red")], NOW);
+  assert.deepEqual([c.slug, c.who, c.text, c.ageMin, c.stale, c.released], ["fix-a-s1", "Claude", "fixing\tthe red", 30, false, false]);
+  const board = [f("a-s1", 10), f("b-s2", BOARD_MAX_MIN + 1), f("c-s3", 5)];
+  assert.deepEqual(nextBoard(board, "a-s1", null, NOW).map((x) => x.slug), ["c-s3"], "release removes mine, the day-old one goes");
+  assert.deepEqual(nextBoard(board, "d-s4", "x", NOW).map((x) => x.slug), ["a-s1", "c-s3", "d-s4"], "a claim adds, never touches another session's");
+});
+
+test("against real git: two sessions claim on one board, one releases, and a stale tip still lands", () => {
+  const dir = path.join(ROOT, "artifacts", `claims-board-test-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    g(dir, "init", "-q", "--bare", "origin.git");
+    for (const w of ["a", "b"]) { g(dir, "init", "-q", w); g(path.join(dir, w), "remote", "add", "origin", path.join(dir, "origin.git")); }
+    const A = path.join(dir, "a"), B = path.join(dir, "b");
+    const at = Math.floor(Date.now() / 1000);
+    assert.equal(pushBoard("a-s1", `${at}\tA\tclaim A\n`, { cwd: A }).ok, true, "the first write creates the board");
+    assert.equal(pushBoard("b-s2", `${at}\tB\tclaim B\n`, { cwd: B }).ok, true);
+    // A's tracking ref is now behind (it never saw B's write): pushBoard refetches.
+    assert.equal(pushBoard("a-s1", null, { cwd: A }).ok, true);
+    g(B, "fetch", "-q", "origin", `+refs/heads/${CLAIMS_BOARD}:refs/remotes/origin/${CLAIMS_BOARD}`);
+    assert.deepEqual(readBoard(`refs/remotes/origin/${CLAIMS_BOARD}`, B).map((x) => x.slug), ["b-s2"], "A released, B's claim survived");
+    assert.match(g(B, "ls-remote", "origin"), new RegExp(`refs/heads/${CLAIMS_BOARD}`), "ONE branch, however many claims");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
