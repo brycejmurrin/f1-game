@@ -79,7 +79,6 @@ const WatchTransport = (function () {
       const s = replay.status(); if (!s) { stop(); return; }
       refs.play.textContent = s.paused ? "▶" : "Ⅱ";
       refs.play.setAttribute("aria-label", s.paused ? "Play replay" : "Pause replay");
-      refs.play.setAttribute("aria-pressed", String(s.paused));
       if (!scrubbing) refs.seek.value = String(Math.max(0, s.T));
       refs.seek.setAttribute("aria-valuetext", clock(s.T) + " of " + clock(s.duration));
       refs.time.textContent = clock(s.T); refs.speed.value = String(s.speed);

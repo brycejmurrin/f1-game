@@ -391,7 +391,9 @@ function create(G) {
       { key: "brake", ask: "Now press the BRAKE pedal all the way…", done: "Brake found." },
     ];
     let running = false;
+    let stepTimer = 0;   // the 600 ms gap; a cancel+restart inside it ran two wizards
     abortWheel = () => {
+      clearTimeout(stepTimer);
       if (!running) return;
       running = false;
       Input.beginAxisCapture(null);
@@ -399,6 +401,7 @@ function create(G) {
     };
     const finish = (map, msg) => {
       running = false;
+      clearTimeout(stepTimer);
       // A captured rest offset belongs to the axis (and sign) it was measured
       // on; carried onto a different steering axis it would steer the car on
       // its own, and it is stored, so across reloads too. Drop it.
@@ -438,7 +441,8 @@ function create(G) {
           else if (st.key === "throttle") map.pedalInvert = dir > 0 ? 1 : -1;
           i++;
           tick();
-          setTimeout(step, 600);   // let the pedal come back up before listening again
+          clearTimeout(stepTimer);
+          stepTimer = setTimeout(step, 600);   // let the pedal come back up before listening again
         });
       };
       step();

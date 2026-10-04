@@ -120,14 +120,20 @@ window.SettingRow = (function () {
   function wire(h, opts) {
     const p = parts(h);
     if (!p || !p.sel) return null;
+    if (opts.values) fill(p.sel, opts.values);
+    /* Re-wiring (AppearanceStudio re-runs owners' wireRows on every snapshot)
+       must not stack listeners: one "change" listener per select, which reads
+       the LATEST read/write so a later wire with new callbacks still wins. */
     const read = opts.read;
     const write = opts.write;
-    if (opts.values) fill(p.sel, opts.values);
-    p.sel.addEventListener("change", (e) => {
+    const fresh = !p.sel._srLive;
+    p.sel._srLive = { read, write };
+    if (fresh) p.sel.addEventListener("change", (e) => {
       if (e && e.stopPropagation) e.stopPropagation();
+      const cur = p.sel._srLive;
       const v = p.sel.value;
-      if (v !== S(read())) write(v);
-      paint(p.el, read());
+      if (v !== S(cur.read())) cur.write(v);
+      paint(p.el, cur.read());
     });
     const stop = (e) => { if (e && e.stopPropagation) e.stopPropagation(); };
     if (p.prev) p.prev.onclick = (e) => { stop(e); step(p, -1, read, write); };
