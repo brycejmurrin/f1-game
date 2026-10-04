@@ -914,3 +914,100 @@ test("the published snapshot carries the pose time the game loop hands in", () =
   net.tick(40000, 39000);                        // a second old: a stall, not last frame
   assert.deepEqual(ticks.slice(2), [30000, 40000], "out-of-bounds pose times fall back to the frame");
 });
+
+// ---- L8-e netcode polish: arrival stamps, a fixed 20 Hz, one relay datagram per guest ----
+function stateSession() {
+  const s = fakeSession();
+  s.states = [];
+  s.onState = function (fn) { this._state = fn; return this; };
+  s.sendState = function (bytes) { this.states.push(NetSnapshot.decodeSnapshot(bytes)); return true; };
+  s.feed = function (tick, id, car, at) { this._state(NetSnapshot.encodeSnapshot(tick, [{ id, car }]), at); };
+  return s;
+}
+function poseG(n) {
+  if (!globalThis.Tracks.sample) globalThis.Tracks.sample = (_t, _s, out) => { out.t[0] = 0; out.t[2] = 1; return out; };
+  const G = stubG(n);
+  G.lapsTarget = 5; G.raceT = 10;
+  G.worldFromTrack = (sv, x) => ({ x, y: 0, z: sv, nx: 0, nz: 1 });
+  return G;
+}
+const lapPose = (sv) => ({ s: sv, x: 0, head: 0, speed: 60, gear: 5, lap: 1 });
+
+test("the host relays every other guest's car in ONE aged datagram per guest, each with its own stamp", () => {
+  const G = poseG(4);
+  const net = NetPlay.create(G);
+  const ss = { a: stateSession(), b: stateSession(), c: stateSession() };
+  assert.equal(net.start({ role: "host", session: ss.a,
+    sessions: Object.entries(ss).map(([id, session]) => ({ id, session })),
+    peers: [{ id: "a" }, { id: "b" }, { id: "c" }] }).ok, true);
+  // a → cars[1], b → cars[2], c → cars[3] (pickRemoteSlot walks the grid in order).
+  let t = 10_000;
+  for (let k = 0; k < 12; k++, t += 50) {
+    for (const s of Object.values(ss)) s.states.length = 0;
+    ss.a.feed(t - 30, 1, lapPose(100 + k), t - 10);
+    ss.b.feed(t - 70, 2, lapPose(200 + k), t - 10);
+    ss.c.feed(t - 50, 3, lapPose(300 + k), t - 10);
+    G.netNow = t;
+    net.tick(t);
+  }
+  for (const [name, own] of [["a", 1], ["b", 2], ["c", 3]]) {
+    const got = ss[name].states;
+    const relays = got.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
+    assert.equal(relays.length, 1, `guest ${name}: one relay datagram per publish, not one per car`);
+    assert.deepEqual(relays[0].cars.map((c) => c.id).sort(), [1, 2, 3].filter((i) => i !== own),
+      `guest ${name}: every OTHER guest, never its own car`);
+    assert.equal(got.length, 2, `guest ${name}: the host's own car + ONE relay (was 1 + 2)`);
+  }
+  net.stop();
+});
+
+test("a guest poses each entry of an aged relay at ITS OWN stamp (tick − age)", () => {
+  const G = poseG(3);
+  const net = NetPlay.create(G);
+  const s = stateSession();
+  // A guest seats the host and the relayed second guest (the lobby's roster).
+  assert.equal(net.start({ role: "guest", session: s, peers: [{ id: "peer" }, { id: "g2" }] }).ok, true);
+  // The host relays cars 1 and 2 posed 0 and 40 ms before the header tick;
+  // the packet lands at 5010. Each entry's lag is arrival − ITS OWN stamp.
+  s._state(NetSnapshot.encodeAged([
+    { id: 1, car: lapPose(100), at: 5000 }, { id: 2, car: lapPose(200), at: 4960 },
+  ]), 5010);
+  const lag = Object.fromEntries(net.status().remotes.map((r) => [r.wire, Math.round(r.timing.lagMs)]));
+  assert.deepEqual(lag, { 1: 10, 2: 50 });
+  net.stop();
+});
+
+test("the publish rate is a fixed 20 Hz at 30, 60 and 144 fps", () => {
+  for (const fps of [30, 60, 144]) {
+    const G = poseG(2);
+    const net = NetPlay.create(G);
+    const s = stateSession();
+    assert.equal(net.start({ role: "guest", session: s }).ok, true);
+    const frame = 1000 / fps;
+    for (let t = 10_000; t < 20_000; t += frame) { G.netNow = t; net.tick(t); }
+    const own = s.states.filter((p) => p && p.type === NetSnapshot.TYPE_SNAPSHOT).length;
+    assert.ok(Math.abs(own - 200) <= 2, `${fps} fps published ${own} in 10 s, want 200 (20 Hz)`);
+    net.stop();
+  }
+});
+
+test("a rival's lag is measured from the transport's ARRIVAL stamp, not the frame that drained it", () => {
+  const run = (stamp) => {
+    const G = poseG(2);
+    const net = NetPlay.create(G);
+    const s = stateSession();
+    assert.equal(net.start({ role: "guest", session: s }).ok, true);
+    // Every packet ARRIVES 40 ms after its tick and is drained by a frame 30 ms later.
+    for (let k = 0; k < 80; k++) {
+      const tick = 10_000 + k * 50;
+      G.netNow = tick + 70;
+      s.feed(tick, 1, lapPose(100 + k), stamp ? tick + 40 : undefined);
+    }
+    const timing = net.status().remotes[0].timing;
+    net.stop();
+    return timing;
+  };
+  const arrived = run(true), drained = run(false);
+  assert.ok(Math.abs(arrived.lagMs - 40) < 3, "lag read from the arrival stamp: " + arrived.lagMs);
+  assert.ok(Math.abs(drained.lagMs - 70) < 3, "no stamp: the frame time, as before: " + drained.lagMs);
+});
