@@ -204,6 +204,81 @@ test("same-resource callers share one fetch, then cancelAll detaches the next ge
   assert.equal((await reopened).rainfall, 3);
 });
 
+function pacedHarness(firstStatus = 200) {
+  let now = 1_000_000, nextId = 0;
+  const timers = new Map(), calls = [];
+  class Clock extends Date { static now() { return now; } }
+  const context = vm.createContext({
+    Date: Clock, AbortController,
+    localStorage: { getItem: () => null },
+    setTimeout(fn, ms) { const id = ++nextId; timers.set(id, { fn, at: now + ms }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    fetch: async (url) => {
+      calls.push({ url, at: now });
+      const status = calls.length === 1 ? firstStatus : 200;
+      return { ok: status === 200, status, headers: { get: () => null }, json: async () => [], text: async () => "" };
+    },
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context);
+  const flush = () => new Promise((r) => setImmediate(r));
+  async function advance(ms) {
+    const target = now + ms;
+    for (;;) {
+      const next = [...timers].sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next || next[1].at > target) break;
+      timers.delete(next[0]); now = next[1].at; next[1].fn(); await flush();
+    }
+    now = target; await flush();
+  }
+  return { api: context.api, calls, timers, flush, advance };
+}
+
+test("cancel during OpenF1 pacing releases work without erasing the actual minute budget", async () => {
+  const h = pacedHarness();
+  const openf1 = (n) => h.api.request("https://api.openf1.org/v1/laps?session_key=" + n, 0, { cache: false });
+  for (let i = 0; i < 28; i++) {
+    const p = openf1(i); await h.flush(); if (i) await h.advance(400); await p;
+  }
+  const cancelled = openf1(28).catch((e) => e);
+  await h.flush();
+  assert.equal(h.calls.length, 28);
+  assert.equal([...h.timers.values()][0].at - h.calls.at(-1).at, 49250);
+
+  // Provider separation also matters before cancellation: a standings fetch
+  // does not spend OpenF1 quota and must not wait for it.
+  await h.api.request("https://api.jolpi.ca/ergast/f1/2026.json", 0, { cache: false });
+  assert.equal(h.calls.length, 29);
+  assert.equal(h.api.cancelAll(), 0, "the blocked request has no fetch controller yet");
+  await h.flush();
+  assert.equal(h.timers.size, 0, "the obsolete pacing timer is reclaimed immediately");
+  assert.equal((await cancelled).cancelled, true);
+
+  let done = false;
+  const fresh = openf1(29).then(() => { done = true; });
+  await h.flush();
+  await h.advance(49249);
+  assert.equal(done, false, "closing the hub cannot reset the server's quota window");
+  assert.equal(h.calls.length, 29);
+  await h.advance(1); await fresh;
+  assert.equal(h.calls.length, 30);
+  assert.equal(h.calls.at(-1).at - h.calls[0].at, 60050);
+  const next = openf1(30); await h.flush(); await h.advance(400); await next;
+  assert.equal(h.calls.length, 31, "cancelled reservations did not consume extra quota");
+});
+
+test("cancel during retry backoff rejects promptly and never retries", async () => {
+  const h = pacedHarness(429);
+  const p = h.api.request("https://api.openf1.org/v1/laps", 0, { cache: false }).catch((e) => e);
+  await h.flush();
+  assert.equal(h.timers.size, 1);
+  h.api.cancelAll(); await h.flush();
+  assert.equal(h.timers.size, 0);
+  assert.equal((await p).cancelled, true);
+  await h.advance(10000);
+  assert.equal(h.calls.length, 1);
+});
+
 test("a response stuck after headers is abortable and releases the shared queue on close", async () => {
   const calls = [];
   const context = vm.createContext({
@@ -413,4 +488,17 @@ test("a full quota drops the disposable api cache and the save lands", async () 
   assert.equal(r.durable, true);
   assert.equal([...m.keys()].filter((k) => k.startsWith("apex26.api.")).length, 0);
   assert.equal(run("GameStore.store.rawSet('apex26.x', 'y'.repeat(300000))"), true);
+});
+
+
+test("pit duration prefers OpenF1 lane_duration and accepts cached legacy pit_duration", async () => {
+  const rows = [{ lane_duration: 22.2, pit_duration: 99 }, { pit_duration: 23.4 },
+    { lane_duration: null, pit_duration: 24.5 }, { lane_duration: 0, pit_duration: 30 }];
+  const context = vm.createContext({ fetch: async () => ({ ok: true, status: 200,
+    headers: { get: () => null }, json: async () => rows, text: async () => JSON.stringify(rows) }),
+    AbortController, Date, setTimeout, clearTimeout });
+  seedLog(context);
+  const api = vm.runInContext(apiSource + ";F1API", context);
+  const pits = await api.pits(1);
+  assert.deepEqual(Array.from(pits, (p) => p.duration), [22.2, 23.4, 24.5, 0]);
 });

@@ -9,6 +9,15 @@ const DataHub = (function () {
   const NO_RESULT_MSG = "No classification for this session yet — results are published " +
     "shortly after the chequered flag. Pick another session above.";
 
+  // THE OS flag OR SETTINGS › APPEARANCE › MOTION: REDUCED (html[data-motion],
+  // js/ui/title-fx.js), both read live — the same pair js/ui/hud.js reads.
+  function motionReduced() {
+    const mq = typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    return !!(mq && mq.matches) || (typeof document !== "undefined" && !!document.documentElement &&
+      !!document.documentElement.dataset && document.documentElement.dataset.motion === "reduce");
+  }
+
   const MINUTE = 60 * 1000;
   // re-fetch a tab if its rendered content is older than this when shown again
   const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, results: 60 * MINUTE, live: 5 * MINUTE, telemetry: 15 * MINUTE, race: 60 * MINUTE, export: 24 * 60 * MINUTE };
@@ -258,8 +267,11 @@ const DataHub = (function () {
     // Scroll the active tab button into view on narrow screens where tabs overflow
     const activeBtn = tabButtons[id];
     if (contentEl && activeBtn) contentEl.setAttribute("aria-labelledby", activeBtn.id);
+    // An explicit `behavior` beats CSS scroll-behavior, so neither reduced-
+    // motion backstop (the OS query, MOTION: REDUCED's html[data-motion])
+    // reaches this scroll: ask both here, as js/ui/hud.js motionReduced does.
     if (activeBtn && activeBtn.scrollIntoView) {
-      activeBtn.scrollIntoView({ inline: "nearest", behavior: "smooth", block: "nearest" });
+      activeBtn.scrollIntoView({ inline: "nearest", behavior: motionReduced() ? "auto" : "smooth", block: "nearest" });
     }
     // Mark content area so CSS can zero-out padding for split-layout tabs
     if (contentEl) contentEl.classList.toggle("dh-has-split", id === "live" || id === "telemetry");
@@ -506,11 +518,18 @@ const DataHub = (function () {
 
     let sesIndex = {};
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
-    // A pick made here and answered after the player left this tab does nothing:
-    // its onPick → invalidateOther would bump the generation of the tab now
-    // loading and leave it spinning forever. The first fill (userChanged false)
-    // still runs on a box its tab has not attached yet.
-    function detached(userChanged) { return userChanged && box.isConnected === false; }
+    // A pick made here and answered after the player left this tab must not
+    // call onPick: its invalidateOther would bump the generation of the tab now
+    // loading and leave it spinning forever. But `sel` already moved, so drop
+    // the OTHER session tabs' cached nodes (this one included) — otherwise a
+    // return within MAX_AGE shows this picker stuck on "loading…" over the old
+    // session's body. The first fill (userChanged false) still runs on a box
+    // its tab has not attached yet.
+    function detached(userChanged) {
+      if (!userChanged || box.isConnected !== false) return false;
+      invalidateOther(active);
+      return true;
+    }
 
     gpSel.addEventListener("change", function () {
       cancelRealRace();

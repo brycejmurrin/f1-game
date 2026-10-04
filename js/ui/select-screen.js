@@ -812,7 +812,7 @@ function updateTrackPreview() {
       e.setAttribute("aria-label", "Edit " + t.name + " in the track designer");
       e.onclick = () => {
         if (G.soundOn) GameAudio.uiSelect();
-        CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id) }); });
+        CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id), originId: t.id }); });
       };
       factsEl.appendChild(e);
     }

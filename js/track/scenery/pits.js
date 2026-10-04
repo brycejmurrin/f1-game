@@ -35,7 +35,7 @@ const SceneryPits = (function () {
   }
 
   function build(ctx) {
-    const { track, out, rawBox, upOf, bankOffsetAt } = ctx;
+    const { track, out, rawBox, rawEmit, upOf, bankOffsetAt } = ctx;
     const p = track && track.pit;
     if (!p || !out) return { bays: 0, wall: false, lamps: 0 };
     const night = !!ctx.night;
@@ -70,6 +70,90 @@ const SceneryPits = (function () {
       return [f.p[0] + f.r[0] * lat + f.u[0] * by, f.p[1] + f.r[1] * lat + f.u[1] * by, f.p[2] + f.r[2] * lat + f.u[2] * by];
     };
     const pushMat = (count, m) => { if (out.mat) for (let i = 0; i < count; i++) out.mat.push(m); };
+
+    // A bounded folded crown on the EXISTING row. All gameplay geometry,
+    // garage bays, decals and canopy lights stay in their ordinary passes.
+    // Shared exact-arc stations close the roof without per-bay end caps.
+    const foldedRoof = () => {
+      const a = p.architecture, row = p.row, B = p.bay;
+      if (!a || !row || !B || typeof rawEmit !== "function" ||
+          !Array.isArray(row.boxes) || row.boxes.length < 1 || row.boxes.length > 24) return null;
+      const span = wrap(row.s1 - row.s0), profile = a.roofProfile;
+      if (!(span > 0) || !Number.isFinite(span) || !Array.isArray(profile)) return null;
+      const stations = profile.map((knot) => knot[0]);
+      for (let i = 0; i <= row.boxes.length; i++) stations.push(i / row.boxes.length);
+      stations.sort((x, y) => x - y);
+      const us = stations.filter((u, i) => i === 0 || u - stations[i - 1] > 1e-9);
+      if (us.length < 2 || us.length > 25) return null;
+      const stage = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 };
+      const roofCol = a.roofColor || ROOF, fasciaCol = a.fasciaColor || SHELL;
+      const soffitCol = a.soffitColor || SHELL, edgeCol = a.edgeColor || roofCol;
+      const baseY = B.h + 4.2 + 2 * TrackGeom.MIN_SEP, thickness = 0.25;
+      const frames = us.map((u) => {
+        const s = wrap(row.s0 + u * span), f = frameAtS(s), k = kOf(s);
+        let j = 0;
+        while (j + 2 < profile.length && u > profile[j + 1][0]) j++;
+        const l = profile[j], r = profile[j + 1], blend = (u - l[0]) / (r[0] - l[0]);
+        const heights = [l[1] + (r[1] - l[1]) * blend, l[2] + (r[2] - l[2]) * blend];
+        const point = (q, y) => atF(f, sd * (f.hw + o.workOut + q), y, k);
+        return { u: f.u, r: f.r, t: f.t,
+                 top: [point(0, heights[0]), point(B.depth, heights[1])],
+                 low: [point(0, heights[0] - thickness), point(B.depth, heights[1] - thickness)],
+                 base: [point(0, baseY), point(B.depth, baseY)] };
+      });
+      let valid = true;
+      const triangle = (points, col, material, outward) => {
+        if (!valid) return;
+        if (!points.every((P) => P.every(Number.isFinite))) { valid = false; return; }
+        const ab = points[1].map((v, i) => v - points[0][i]);
+        const ac = points[2].map((v, i) => v - points[0][i]);
+        if (Math.hypot(...TrackGeom.cross(ab, ac)) < 1e-8) { valid = false; return; }
+        // A warped panel's volume centroid can be ABOVE one of its top
+        // triangles. Orient each triangle against its intended exterior.
+        const ref = centre(points).map((v, i) => v - outward[i]);
+        stage._mat = material;
+        if (rawEmit(stage, points, col, ref) === false) valid = false;
+      };
+      const quad = (points, col, material, outward) => {
+        // Changing cross-slopes or the sampled road can warp a quad. Each
+        // triangle gets its own geometric normal and outward winding.
+        triangle([points[0], points[1], points[2]], col, material, outward);
+        triangle([points[0], points[2], points[3]], col, material, outward);
+      };
+      const centre = (points) => [0, 1, 2].map((axis) => points.reduce((sum, P) => sum + P[axis], 0) / points.length);
+      for (let i = 0; i + 1 < frames.length; i++) {
+        const l = frames[i], r = frames[i + 1];
+        const up = TrackGeom.norm(l.u.map((v, axis) => v + r.u[axis]));
+        const across = TrackGeom.norm(l.r.map((v, axis) => v + r.r[axis]));
+        quad([l.top[0], l.top[1], r.top[1], r.top[0]], roofCol, MAT.ROOF, up);
+        quad([l.base[0], r.base[0], r.base[1], l.base[1]], soffitCol, MAT.METAL, up.map((v) => -v));
+        for (const side of [0, 1]) {
+          const outward = across.map((v) => v * sd * (side === 0 ? -1 : 1));
+          quad([l.top[side], r.top[side], r.low[side], l.low[side]], edgeCol, MAT.METAL, outward);
+          quad([l.low[side], r.low[side], r.base[side], l.base[side]], fasciaCol, MAT.METAL, outward);
+        }
+      }
+      for (const i of [0, frames.length - 1]) {
+        const f = frames[i], outward = f.t.map((v) => v * (i === 0 ? -1 : 1));
+        quad([f.top[0], f.top[1], f.low[1], f.low[0]], edgeCol, MAT.METAL, outward);
+        quad([f.low[0], f.low[1], f.base[1], f.base[0]], fasciaCol, MAT.METAL, outward);
+      }
+      const vertices = stage.pos.length / 3, triangles = stage.idx.length / 3;
+      if (!valid || vertices > 1400 || triangles > 500 ||
+          stage.nrm.length !== stage.pos.length || stage.col.length !== stage.pos.length ||
+          stage.mat.length !== vertices ||
+          ![stage.pos, stage.nrm, stage.col].every((values) => Array.from(values).every(Number.isFinite)) ||
+          !Array.from(stage.idx).every((index) => Number.isInteger(index) && index >= 0 && index < vertices)) return null;
+      // Same staged-buffer remap as TrackModels' private appendBuffer: VM
+      // primitive captures still refer to stage until shipped() maps them.
+      const base = out.pos.length / 3;
+      (out.__blocks || (out.__blocks = [])).push({ base, from: stage, count: vertices, id: "pit-architecture-roof" });
+      for (const key of ["pos", "nrm", "col", "mat"]) {
+        if (out[key]) for (const value of stage[key]) out[key].push(value);
+      }
+      for (const index of stage.idx) out.idx.push(base + index);
+      return { vertices, triangles, segments: us.length - 1, spanM: span };
+    };
 
     // ── 1. The platform, the wall and the lane-side barrier ────────────────
     // Swept along the nodes where the wall has grown (v ~ 1): one continuous
@@ -495,7 +579,7 @@ const SceneryPits = (function () {
     }
 
     // ── 3. The garages: the setup screen's bay, once per team, on the row ──
-    let bays = 0, lamps = 0;
+    let bays = 0, lamps = 0, roof = null;
     const placed = [];
     // The team's SIGN on each lintel: a 5.2 x 0.7 m quad a centimetre proud
     // of the fascia, laid out here as pure numbers (track.pitSigns — the
@@ -657,6 +741,7 @@ const SceneryPits = (function () {
                                  aimAt: [wc[0] + bs[2][0] * along, wc[1] + bs[2][1] * along, wc[2] + bs[2][2] * along] })) lamps++;
         }
       }
+      roof = foldedRoof();
       // Race control, stepped up at the exit end of the row: 12 m square,
       // its near face 3 m past the last bay's end wall, inside the row's
       // keep-out tail (TrackPit ROW_TAIL). Offset along the LAST BAY's own
@@ -682,7 +767,7 @@ const SceneryPits = (function () {
     if (signs.cells.length || signs.boards.length) track.pitSigns = signs;
     if (signal.quads.length) track.pitSignal = signal;
     return { bays, wall: wallBuilt, lamps, entryLamps, signs: signs.cells.length, boards: signs.boards.length,
-             panels: signs.panels.length, crests: signs.crests.length };
+             panels: signs.panels.length, crests: signs.crests.length, ...(roof ? { roof } : {}) };
   }
 
   return { build };
