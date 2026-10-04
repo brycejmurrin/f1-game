@@ -216,9 +216,9 @@
     ]
   ],
   "_blessed": {
-    "sha": "09ffe00acb85bffd613f58c3f727e54e8f453cee",
-    "reason": "BRAKE_STAB: a stamp on the brakes at the cornering limit no longer spins the car toward the apex (owner report 2026-09-29); reset() clears the new brakeStab damper; only the trail-brake scenario moves",
-    "at": "2026-09-29T16:13:01.587Z",
+    "sha": "79f1f7ffea8179f80145c54e66704f40233e9544",
+    "reason": "re-bless on the deploy tip: 09ffe00 was blessed on a since-deleted branch; data unchanged (hash identical, tests/unit/physics-characterization-vm.test.mjs reproduces every scenario number for number on this tree)",
+    "at": "2026-10-04T11:39:16.128Z",
     "hash": "cc81005d6db3e63eb50c8b1c8a832b1229cc61e9421dc83300d3906d5814a29f"
   }
 }
