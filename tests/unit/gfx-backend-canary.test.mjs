@@ -4842,7 +4842,8 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
       { id: "b", drivers: [{ num: 3 }] },
       { id: "custom", custom: true, drivers: [{ num: 4 }] }
     ], isReal: (t) => !!t && !t.custom && !t.legends };   // mirrors js/data/teams.js
-    const Career = { gridDrivers: t => t.drivers, driverOverride: (id, di) => id === "a" && di === 1 ? { num: 99 } : null };
+    const Career = { gridDrivers: t => t.drivers, driverOverride: (id, di) => id === "a" && di === 1 ? { num: 99 } : null,
+                     inCareer: () => false };
     const calls = [], CamModes = { CAM_MODES: [{ id: "cockpit" }] };
     let clock = 0;
     const Log = { info() {}, warn() {} }, performance = { now: () => (clock += 8) };
@@ -4857,8 +4858,12 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     let casters = false;
     const shadowCastersWanted = () => casters;
     const teamMesh = (t, c, sil) => calls.push(["caster", c.num, sil, c.visSh || "sh"]);
-    const Parts = { CATALOG: [{ id: "aero" }, { id: "tyres" }] };
+    const WORKS = { aero: "w", tyres: "w" };
+    const Parts = { CATALOG: [{ id: "aero" }, { id: "tyres" }], getFactorySetup: () => WORKS,
+                    resolveSetup: (s) => ({ ids: Object.assign({}, WORKS, s) }) };
     G.getTeamParts = () => ({ aero: "hi" });
+    // makeCars' and the prep's ONE stamp helper, the real one (it reads Career / Parts above).
+    const carVisual = eval("(" + fnSource(read("js/car/car-draw.js"), "function carVisual(") + ")");
     const setTimeout = fn => {
       yields++;
       if (yields === 2) {

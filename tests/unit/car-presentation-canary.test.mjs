@@ -22,7 +22,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fnSource } from "../helpers/fn-source.mjs";
 import vm from "node:vm";
-import { carDrawVm } from "../helpers/car-draw-vm.mjs";
+import { carDrawVm, WORKS } from "../helpers/car-draw-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -286,18 +286,97 @@ test("the menu prep builds the shadow casters under shadowCastersWanted(), keyed
   assert.match(prep, /const casters = shadowCastersWanted\(\);/, "warmCarAssets' own gate");
   assert.match(prep, /const steps = casters \? field\.flatMap\(c => \[c, \{ caster: c \}\]\) : field;/, "a step of its own after its car");
   assert.match(prep, /for \(const step of steps\) \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*if \(performance\.now\(\) - sliceAt >= 8\) \{/, "the same slice discipline");
-  assert.match(prep, /if \(step\.caster\) teamMesh\(c\.team, c\.isPlayer \? ownCaster\(c\) : c, true\);/, "the shadow passes' (team, car, true)");
+  assert.match(prep, /if \(step\.caster\) teamMesh\(c\.team, c, true\);/, "the shadow passes' (team, car, true)");
   const warm = cd.slice(cd.indexOf("function warmCarAssets()"), cd.indexOf("async function prepareMenuCarAssets("));
   assert.match(warm, /if \(casters\) teamMesh\(c\.team, c, true\);/, "warmCarAssets keeps the call: the safety net, hits after the menu");
-  // The player's caster keys on its OWN build: makeCars' stamp, character for character.
-  const norm = (m, v) => m.replace(new RegExp("\\b" + v + "\\b", "g"), "S");
-  const mine = cd.match(/const stamp = own \? (Parts\.CATALOG\.map\(\(cat\) => own\[cat\.id\] \|\| ""\)\.join\(","\)) : "";/);
-  const theirs = game.match(/const visStamp = visualSetup \? (Parts\.CATALOG\.map\(\(cat\) => visualSetup\[cat\.id\] \|\| ""\)\.join\(","\)) : "";/);
-  assert.ok(mine && theirs, "both stamps present");
-  assert.equal(norm(mine[1], "own"), norm(theirs[1], "visualSetup"), "the menu's stamp is makeCars' stamp");
-  assert.match(cd, /visSh: stamp \? stamp \+ ":sh" : ""/);
-  assert.match(game, /visSh: visStamp \? visStamp \+ ":sh" : ""/);
-  assert.match(game, /const visualSetup = \(isP \|\| mate\) \? getTeamParts\(team\.id\)/, "the player's visualSetup is getTeamParts");
+  // ONE stamp helper (CarDraw.carVisual) keys every car in BOTH places: makeCars
+  // (the player and MY TEAM's hire on getTeamParts, a career rival on its shelf)
+  // and the menu prep's field, with the same `own` rule.
+  assert.match(game, /\.\.\.CarDraw\.carVisual\(team, d\.num, isP \|\| mate, getTeamParts\),/, "makeCars stamps through the shared helper");
+  assert.match(prep, /carVisual\(team, d\.num, ti === teamPick && \(isPlayer \|\| !!team\.custom\), G\.getTeamParts\)/, "…and so does the menu prep");
+  assert.match(game, /const mate = !isP && ti === teamIdx && !!team\.custom;/, "the prep's own rule is makeCars' mate rule");
+  const stampExpr = 'Parts.CATALOG.map((cat) => setup[cat.id] || "").join(",")';
+  assert.equal(cd.split(stampExpr).length - 1, 1, "car-draw builds a stamp in ONE place");
+  assert.equal((fnSource(game, "function makeCars(") + prep).split("Parts.CATALOG.map(").length - 1, 0, "neither makeCars nor the prep builds its own");
+  const helper = fnSource(cd, "function carVisual(");
+  assert.match(helper, /const setup = own \? getTeamParts\(team\.id\) : \(Career\.inCareer\(\) && Career\.aiSetup \? Career\.aiSetup\(team\) : null\);/);
+  assert.match(helper, /visPaint: stamp \? stamp \+ ":" \+ num : "", visSh: stamp \? stamp \+ ":sh" : ""/);
+});
+
+// carVisual on the real CarDraw: a build that RESOLVES to the factory parts is
+// the factory car (no stamp, no setup — the factory key), whatever object holds it.
+test("carVisual: a career shelf equal to the works build keys the factory; an upgrade keys its own build", () => {
+  const up = Object.assign({}, WORKS, { aero: "outwash_max" });
+  const v = carDrawVm({ career: {} });
+  const team = v.teams[0], other = v.teams[1];
+  v.careerOn({ [team.id]: Object.assign({}, WORKS), [other.id]: up });
+  const cv = (t, own) => ({ ...v.ctx.CarDraw.carVisual(t, 7, own, v.G.getTeamParts) });
+  assert.deepEqual(cv(team, false), { visualSetup: null, visStamp: "", visPaint: "", visSh: "" }, "R&D seeded with the works shelf: the factory car");
+  const stamp = Object.values(up).join(",");
+  assert.deepEqual(cv(other, false), { visualSetup: up, visStamp: stamp, visPaint: stamp + ":7", visSh: stamp + ":sh" }, "a real upgrade: its own key");
+  assert.deepEqual(cv(v.teams[2], false), { visualSetup: null, visStamp: "", visPaint: "", visSh: "" }, "no bag yet: factory");
+  assert.equal(cv(team, true).visStamp, ["hi-df", "", "", "", "", "", "", "soft", "", "", "", ""].join(","), "own: the saved build, stamped as before");
+  v.careerOn(null);
+  assert.equal(cv(other, false).visStamp, "", "outside career every rival is the factory car");
+});
+
+// THE CAREER RACE ENTRY. Once a career's R&D has started, CareerAiDev.ensureSeed
+// gives a team a fitted shelf — a copy of the works build until a step lands —
+// and makeCars stamped every such rival with its own key, while the menu prep
+// keyed the factory: ~21 bodies and ~11 casters (~32 ms each) rebuilt behind the
+// race-entry card, and the prep's 21 + the race's 21 bodies past the 40-entry LRU.
+// MY TEAM's hire races the saved build and was prepped as a factory car too.
+test("a career field and MY TEAM's hire: after the menu prep, race entry builds no body and no caster", async () => {
+  const cap = Number(read("js/car/car-draw.js").match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/)[1]);
+  const shelf = (v, upgraded) => Object.fromEntries(v.teams.filter((t) => v.ctx.Teams.isReal(t)).map((t, i) =>
+    [t.id, upgraded.includes(i) ? Object.assign({}, WORKS, { aero: "up" + i }) : Object.assign({}, WORKS)]));
+  const count = (v, k, from = 0) => v.rec.builds.slice(from).filter((b) => b.kind === k).length;
+  const raceEntry = (v, menu, label) => {
+    v.field((c, i) => 3000 - 9 * i);
+    v.carDraw.warmCarAssets();
+    assert.deepEqual(v.rec.builds.slice(menu), [], label + ": every body and caster a cache hit at race entry");
+    const mp = v.mirror();
+    v.draw(mp);
+    v.classes.add("bc-on");
+    for (const c of v.G.cars) { mp.setSubject(c, "tcam"); v.draw(mp); }
+    assert.deepEqual(v.rec.builds.slice(menu), [], label + ": the mirror and the PiP over every car: no build");
+    assert.equal(v.rec.freed, 0, label + ": no live mesh evicted");
+  };
+  // (1) R&D under way: every rival seeded, two teams upgraded — prepped with the career known.
+  {
+    const v = carDrawVm({ casters: true, career: {} });
+    v.careerOn(shelf(v, [1, 6]));
+    v.G.teamIdx = 3; v.G.driverIdx = 0;
+    await v.carDraw.prepareMenuCarAssets(() => true);
+    const bodies = count(v, "body") - 1, casters = count(v, "sh");
+    assert.deepEqual([count(v, "whole"), bodies, casters], [0, 21, 12],
+      "21 rival bodies (2 upgraded teams on their own keys); a :sh per team (an upgrade's own) + the player's build");
+    assert.ok(bodies <= cap && casters <= cap);
+    raceEntry(v, v.rec.builds.length, "career");
+  }
+  // (2) The prep ran BEFORE the career's shelves existed (factory keys), and the
+  // race runs on works-copy shelves: still the factory car, still all hits.
+  {
+    const v = carDrawVm({ casters: true });
+    v.G.teamIdx = 3; v.G.driverIdx = 0;
+    await v.carDraw.prepareMenuCarAssets(() => true);
+    const menu = v.rec.builds.length;
+    v.careerOn(shelf(v, []));
+    raceEntry(v, menu, "works-copy shelves");
+  }
+  // (3) MY TEAM: you and the hire, both on the saved build.
+  {
+    const v = carDrawVm({ casters: true, career: {} });
+    const T = v.ctx.Teams;
+    v.teams.push(Object.assign({}, T.DEFAULT_CUSTOM, { drivers: [{ name: "You", code: "YOU", num: 99 }, { name: "Hire", code: "HIR", num: 98 }] }));
+    v.careerOn(shelf(v, [2]));
+    v.G.teamIdx = v.teams.length - 1; v.G.driverIdx = 0;
+    await v.carDraw.prepareMenuCarAssets(() => true);
+    const hire = v.rec.builds.filter((b) => b.kind === "body" && b.num === 98);
+    assert.equal(hire.length, 1, "the hire's body is prepped once, on the saved build's key");
+    raceEntry(v, v.rec.builds.length, "MY TEAM");
+    assert.ok(v.G.cars.find((c) => c.num === 98).visStamp, "the hire races the saved build (its own stamp)");
+  }
 });
 
 // TEAM_MESH_CACHE_MAX bounds teamMeshes AND teamBodies (two LRUs of 40). What
