@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @doc Every menu and popup, then the Display survey panels, into one HTML preview.
 // show-menus.mjs — every menu and popup, then the Display survey, into the preview.
 //
 //   node tools/shot/show-menus.mjs

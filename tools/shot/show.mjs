@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @doc One phone-page HTML preview: menus, then the car from each side (embedded JPEGs).
 // show.mjs — one phone page of the game: menus, then the car from each side.
 //
 //   node tools/shot/show.mjs
