@@ -60,6 +60,10 @@ test("the survey's tables lockstep the game's: CamModes, HudLayout, HudElements,
   }
   assert.ok(onboardSrc != null, "an onboard camera table in hud.js or cam-groups.js");
   assert.deepEqual([...onboardSrc.matchAll(/([a-z]+): 1/g)].map((m) => m[1]).sort(), [...M.ONBOARD_IDS].sort(), "ONBOARD_IDS = the game's onboard cameras");
+  const cockpitSrc = (read(camGroups).match(/const COCKPIT_LAYOUT = Object\.freeze\(\{([^}]*)\}/) || [])[1];
+  assert.ok(cockpitSrc != null, "CamGroups.COCKPIT_LAYOUT in cam-groups.js");
+  assert.deepEqual([...cockpitSrc.matchAll(/([a-z]+): 1/g)].map((m) => m[1]).sort(), [...M.COCKPIT_LAYOUT_IDS].sort(), "COCKPIT_LAYOUT_IDS = CamGroups.COCKPIT_LAYOUT");
+  assert.match(read("js/camera/mode-switch.js"), new RegExp(M.COCKPIT_LAYOUT_IDS.map((c) => `camId === "${c}"`).join(" \\|\\| ")), "body.cockpit-cam is the same pair");
   for (const t of M.HUD_TARGETS) if (t.sel.startsWith("#")) assert.ok(read("index.html").includes(`id="${t.sel.slice(1)}"`), `${t.sel} is static DOM`);
 });
 
@@ -150,7 +154,7 @@ test("applyCell resets every live knob, in order, and reports a failing knob ins
       step: log("step"), snapCam: log("snapCam"), hud: (v) => (v === undefined ? true : (calls.push(["hud", v]), v)) } },
     AppearanceOpts: { setTheme: log("theme"), setCvdMode: log("cvd"), setContrast: log("contrast"), setTextSize: log("textSize") },
     HudElements: { ELEMENTS: [["pos"], ["gear"]], set: log("el") },
-    HudLayout: { resetSet: log("reset"), camSet: (c) => (c === "cockpit" ? "cockpit" : "other"), applyPreset: log("preset"), set: log("hlset"),
+    HudLayout: { PROFILES: ["standard", "minimal", "broadcast"], resetSet: log("reset"), camSet: (c) => (c === "cockpit" ? "cockpit" : "other"), applyPreset: log("preset"), set: log("hlset"),
       shown: () => "other", presetOf: () => "clean" },
     Event: function Event(t) { this.type = t; },
   } });
@@ -160,6 +164,9 @@ test("applyCell resets every live knob, in order, and reports a failing knob ins
   assert.deepEqual(r.errors.filter((e) => !/mirror/.test(e)), []);
   assert.ok(names.indexOf("camera") < names.indexOf("preset") && names.indexOf("preset") < names.indexOf("jump"), names.join(" "));
   assert.deepEqual(calls.filter((c) => c[0] === "preset").map((c) => c[2]), ["cockpit", "other"], "presetSet both writes both sets");
+  assert.deepEqual(calls.filter((c) => c[0] === "preset").map((c) => c[3]), [undefined, undefined], "presetProf shown: the style on screen");
+  assert.deepEqual(calls.filter((c) => c[0] === "reset").map((c) => c[1] + "/" + c[2]),
+    ["cockpit/standard", "other/standard", "cockpit/minimal", "other/minimal", "cockpit/broadcast", "other/broadcast"], "every style is reset");
   assert.deepEqual(calls.filter((c) => c[0] === "el"), [["el", "pos", true], ["el", "gear", true], ["el", "gear", false]]);
   assert.ok(calls.some((c) => c[0] === "change" && c[1] === "pm-hudmap-sel" && c[2] === "auto"), "MAP goes through its settings row");
   assert.ok(calls.some((c) => c[0] === "hud" && c[1] === false));
@@ -168,6 +175,11 @@ test("applyCell resets every live knob, in order, and reports a failing knob ins
   // A row with no such option is a reported knob error, not a crash.
   const bad = vm.runInContext(`(${applyCell.toString()})(${JSON.stringify({ ...cell, map: "bogus" })})`, ctx);
   assert.ok(bad.errors.some((e) => /^map: .*no option bogus/.test(e)), bad.errors.join("; "));
+  // presetProf: inline offsets written into a named style's layout (lead 5).
+  calls.length = 0;
+  const into = { ...M.normalizeCell({ preset: { map: { y: 10 } }, presetProf: "broadcast", profileLive: "broadcast" }), frac: 0.2 };
+  vm.runInContext(`(${applyCell.toString()})(${JSON.stringify(into)})`, ctx);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.filter((c) => c[0] === "hlset"))), [["hlset", "map", { y: 10 }, "other", "broadcast"]]);
 });
 
 test("hudFitState and runExtras read the fit caps, colours, a label clip and a settle time", async () => {
@@ -333,7 +345,19 @@ test("lead checks decide from the numbers, and merge re-decides across shards", 
   assert.equal(shift.severity, "info", shift.detail);   // 72px at 720 = 10 %
   const ov = ev(mk([{ type: "noOverlap", a: "mirror", b: ["announce", "flag"] }]));
   assert.deepEqual(ov.map((x) => x.severity), ["high", "info"]);
-  assert.equal(ev(mk([{ type: "camConsistency" }]))[0].severity, "medium", "cockpit layout set but no cockpit-cam / map-hide");
+  assert.equal(ev(mk([{ type: "camConsistency" }]))[0].severity, "medium", "chase given the cockpit layout set");
+  // CamGroups: VISOR / HOOD are onboard (MAP AUTO hides) with no wheel (other set, no cockpit-cam).
+  const camCell = (cam, layoutSet, bodyHud) => ({ id: "c", cell: M.normalizeCell({ name: "c", cam, map: "auto", checks: [{ type: "camConsistency" }], lead: "L" }),
+    records: [], state: { layoutSet, bodyHud } });
+  for (const cam of ["visor", "hood"]) {
+    const [f] = ev(camCell(cam, "other", "desktop hud-hide-map"));
+    assert.equal(f.severity, "info", f.detail);
+    assert.equal(ev(camCell(cam, "cockpit", "desktop hud-hide-map"))[0].severity, "medium", `${cam} on the cockpit set is a defect`);
+  }
+  assert.equal(ev(camCell("cockpit", "cockpit", "desktop hud-hide-map cockpit-cam"))[0].severity, "info");
+  assert.equal(ev(camCell("helmet", "other", "desktop hud-hide-map cockpit-cam"))[0].severity, "medium", "helmet draws the wheel");
+  assert.deepEqual(M.camGroupFacts(M.normalizeCell({ cam: "chase", map: "auto" })), { layoutSet: "other", mapAutoHides: false, cockpitCam: false });
+  assert.equal(M.camGroupFacts(M.normalizeCell({ cam: "chase", map: "auto", profile: "minimal" })).mapAutoHides, true, "MAP AUTO hides under MINIMAL");
   const lowContrast = ev(mk([{ type: "contrast", sel: ".v", min: 4.5 }], { extras: [{ fg: "rgb(200, 200, 200)", bg: "rgba(255, 255, 255, 0.9)" }] }))[0];
   assert.equal(lowContrast.severity, "high");
   assert.equal(ev(mk([{ type: "settle", var: "--hud-z-top", maxMs: 500 }], { extras: [{ before: "0.9", after: "0.7", lastChangeMs: 900 }] }))[0].severity, "medium");

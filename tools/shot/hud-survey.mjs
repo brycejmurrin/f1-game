@@ -22,7 +22,8 @@
 //   --wait <s boot budget, 180>  --json (summary JSON as the last stdout block)
 //   --list (cells, no browser)  --plan  --self-test  --merge <dir…>
 //   one-cell knobs: --device --cam --profile --layout --map --gaps --mirror
-//   --preset (name or inline JSON offsets) --preset-set cam|both --theme --cvd
+//   --preset (name or inline JSON offsets) --preset-set cam|both
+//   --preset-prof shown|standard|minimal|broadcast (the HUD style written) --theme --cvd
 //   --contrast --text-size --hud-scale --ui-scale --btn-scale --tyres --hud
 //   --tod --steer --profile-live --off <HudElements ids,…> --name. --url is NOT supported: local tree only.
 //
@@ -33,7 +34,8 @@
 // reaches with set-then-reload, for one boot instead of two. Every other knob
 // is LIVE: camera (__apex.camera), MAP / GAPS / MIRROR (their SETTINGS rows,
 // #pm-hudmap/-hudgaps/-hudmirror: set the select, dispatch change), MOVE & SIZE
-// (HudLayout.resetSet + applyPreset / set on the camera's set, or both),
+// (HudLayout.resetSet on every style + applyPreset / set on the camera's set,
+// or both, of the style on screen or the cell's presetProf),
 // HudElements toggles (all on, then the cell's offs), theme / CVD / contrast /
 // text size (AppearanceOpts), HUD / UI / BUTTON SIZE (__apex.hudScale /
 // uiScale / btnScale), tyre wear (__apex.tyres), time of day
@@ -74,7 +76,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const require = createRequire(import.meta.url);
 
 const CELL_FLAGS = { "--device": "device", "--cam": "cam", "--profile": "profile", "--layout": "layout", "--map": "map",
-  "--gaps": "gaps", "--mirror": "mirror", "--preset": "preset", "--preset-set": "presetSet", "--theme": "theme",
+  "--gaps": "gaps", "--mirror": "mirror", "--preset": "preset", "--preset-set": "presetSet", "--preset-prof": "presetProf", "--theme": "theme",
   "--cvd": "cvd", "--contrast": "contrast", "--text-size": "textSize", "--hud-scale": "hudScale", "--ui-scale": "uiScale",
   "--btn-scale": "btnScale", "--tyres": "tyres", "--hud": "hud", "--tod": "tod", "--steer": "steer", "--profile-live": "profileLive", "--off": "off", "--name": "name" };
 export const KNOWN_FLAGS = ["--matrix", "--track", "--frac", "--only", "--shard", "--out", "--no-shots", "--backend", "--gl",
@@ -204,12 +206,13 @@ export function applyCell(c) {
   step("go", () => a.go());
   step("camera", () => a.camera(c.cam));
   step("preset", () => {
-    HudLayout.resetSet("cockpit");
-    HudLayout.resetSet("other");
+    // Every style: a previous cell's presetProf write must not leak.
+    for (const pn of HudLayout.PROFILES || [undefined]) { HudLayout.resetSet("cockpit", pn); HudLayout.resetSet("other", pn); }
     const sets = c.presetSet === "both" ? ["cockpit", "other"] : [HudLayout.camSet(c.cam)];
+    const pn = c.presetProf && c.presetProf !== "shown" ? c.presetProf : undefined;
     for (const sn of sets) {
-      if (typeof c.preset === "string") { if (!HudLayout.applyPreset(c.preset, sn)) throw new Error("unknown preset " + c.preset); }
-      else for (const [id, v] of Object.entries(c.preset)) HudLayout.set(id, v, sn);
+      if (typeof c.preset === "string") { if (!HudLayout.applyPreset(c.preset, sn, pn)) throw new Error("unknown preset " + c.preset); }
+      else for (const [id, v] of Object.entries(c.preset)) HudLayout.set(id, v, sn, pn);
     }
   });
   if (c.profileLive && c.profileLive !== "none") step("profileLive", () => row("pm-hudprofile", c.profileLive));
@@ -395,13 +398,26 @@ async function runGroup(browser, group, plan, log) {
         // measure-only runs force one with a 1x1 capture (awaitPresentedFrame
         // did not: its probe still read the previous cell). Then re-probe
         // until two reads agree (fitHud re-fits on its own tick), 3 s cap.
+        // ONE HUD REFRESH, FRAMED. The sim is frozen, so the HUD's own ~10 Hz tick
+        // (fitHud: band caps, the radio card's slot, --mir-paint-b) does not run
+        // between cells; and a layout change lands only when a frame is produced.
+        // So: a frame (1x1 capture) to land the cell's layout, then a forced
+        // re-fit (GameHud.invalidateFit + __apex.jump's refreshHud(true) at the
+        // same spot), then the measured frame. Without it the leads compared one
+        // cell's caps against the previous cell's (2026-10-04: --radio-top-*
+        // identical before and after the slot fix).
+        await cdpShot(page, null);
+        await page.evaluate((frac) => {
+          try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
+          const a = window.__apex;
+          a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
+        }, plan.frac);
+        await cdpShot(page, null);
         if (plan.shots) {
           const file = path.join(plan.out, "shots", `${cell.id}.png`);
           await cdpShot(page, file);
           rec.shot = path.relative(ROOT, file);
           rec.shotRel = path.relative(plan.out, file);
-        } else {
-          await cdpShot(page, null);
         }
         let records = await page.evaluate(probeHudElements, { targets, fonts: true });
         for (let k = 0, prev = JSON.stringify(round(records)); k < 20; k++) {

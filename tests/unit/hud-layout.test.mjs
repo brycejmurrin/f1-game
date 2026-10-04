@@ -237,6 +237,53 @@ test("presets are pure data laid over the set's shipped layout", () => {
   assert.equal(H.presetLayout("nope", "other"), null);
 });
 
+// The desktop chase layout the presets are laid over, measured by the
+// hud-survey at 1280x720 (bottom and top zoom as shipped): [left, top, w, h]
+// in screen px. At 1920x1080 the centred pieces sit +320 / +360 (the bottom
+// band is bottom-anchored, the map and gap strip are left-anchored, the tower
+// is centred). Each preset must leave every piece it moves clear of every
+// piece it keeps, on screen, at both widths — hud-survey Y2 / Y3.
+const DESK = {
+  tower: [459, 8, 362, 51], map: [10, 8, 160, 160], gaps: [178, 8, 78, 18],
+  gearbox: [225, 582, 262, 65], speed: [507, 592, 87, 47], energy: [614, 606, 190, 18],
+  tyre: [291, 648, 130, 42], ot: [824, 595, 89, 41], aero: [933, 595, 121, 41], bb: [520, 662, 62, 27],
+};
+const ANCHOR = { tower: "centre", map: "left", gaps: "left" };
+function deskRect(id, e, W, H, orig) {
+  let [x, y, w, h] = DESK[id];
+  const a = ANCHOR[id] || "centre";
+  if (a === "centre") x += (W - 1280) / 2;
+  if (!ANCHOR[id]) y += H - 720;
+  const s = e.s / 100, o = orig[id];
+  // Scale origin: HudLayout.ELEMENTS (the centred tower grows about the centre line).
+  if (id === "tower") { x -= w * (s - 1) / 2; }
+  else if (/bottom center/.test(o)) { x -= w * (s - 1) / 2; y -= h * (s - 1); }
+  w *= s; h *= s;
+  return [x + e.x * W / 100, y + e.y * H / 100, w, h];
+}
+const hit = (a, b) => Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]) > 0.5 && Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]) > 0.5;
+
+test("BIG and CORNERS clear the desktop row at 1280 and 1920 (hud-survey Y2 / Y3)", () => {
+  const { H } = load();
+  const orig = Object.fromEntries(H.ELEMENTS.map((e) => [e[0], e[3]]));
+  for (const pid of ["big", "corners"]) {
+    const lay = H.presetLayout(pid, "other");
+    const moved = Object.keys(H.PRESETS.find((p) => p[0] === pid)[2]);
+    for (const [W, Ht] of [[1280, 720], [1920, 1080]]) {
+      const box = {};
+      for (const id of Object.keys(DESK)) box[id] = deskRect(id, lay[id] || { x: 0, y: 0, s: 100 }, W, Ht, orig);   // SPEED is not a MOVE & SIZE element
+      for (const id of moved) {
+        const r = box[id];
+        assert.ok(r[0] >= 4 && r[1] >= 4 && r[0] + r[2] <= W - 4 && r[1] + r[3] <= Ht - 4, `${pid} ${id} on screen at ${W}: ${r.map(Math.round)}`);
+        for (const other of Object.keys(DESK)) {
+          if (other === id) continue;
+          assert.ok(!hit(r, box[other]), `${pid} at ${W}: ${id} ${r.map(Math.round)} on ${other} ${box[other].map(Math.round)}`);
+        }
+      }
+    }
+  }
+});
+
 test("apply a preset to the edited set, tweak it, CUSTOM detection", () => {
   const { H, written } = load();
   assert.equal(H.presetOf("other"), "shipped");
@@ -263,6 +310,17 @@ test("css/track-detail.css: cockpit hides only speed/gear, not the OT/AERO/ENERG
   assert.match(hide[1], /#hud-gearbox/);
   assert.match(hide[1], /#hud-speed/);
   for (const id of ["hud-ot", "hud-aero", "hud-energy", "hud-tyre"]) assert.doesNotMatch(hide[1], new RegExp("#" + id + "\\b"));
+});
+
+test("touch cockpit: TYRES joins the strip's hide in the CSS and in hiddenReason (hud-survey Y1)", () => {
+  const touch = TD.match(/body\.cockpit-cam:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
+  assert.ok(touch, "the touch-cockpit hide rule exists");
+  const hidden = touch[1].split(",").map((x) => x.trim()).sort();
+  assert.deepEqual(hidden, ["#hud-aero", "#hud-bb", "#hud-energy", "#hud-ot", "#hud-tyre"]);
+  // Every piece the shipped cockpit strip moves is in that hide.
+  const { H } = load();
+  const sel = Object.fromEntries(H.ELEMENTS.map((e) => [e[0], e[2]]));
+  for (const id of Object.keys(H.SHIPPED.standard.cockpit)) assert.ok(hidden.includes(sel[id]), id);
 });
 
 test("module has no Tracks / curvature reads", () => {
@@ -425,6 +483,10 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.match(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("gearbox").reason, /wheel/);
   const touch = h({ classes: ["cockpit-cam"], live: false }).hiddenReason("ot");
   assert.equal(touch.soft, true, "a touch cockpit chip shows once placed: sliders stay");
+  const tyT = h({ classes: ["cockpit-cam"], live: false }).hiddenReason("tyre");
+  assert.equal(tyT.soft, true, "TYRES too: hidden on a touch cockpit until placed");
+  assert.match(tyT.reason, /touch cockpit/);
+  assert.equal(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("tyre"), null, "a desktop cockpit shows TYRES beside the wheel");
   assert.equal(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("ot"), null);
   assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason("tower"), null);
   assert.equal(h({ live: false }).hiddenReason("flag").soft, true, "event chips are edited blind, not locked");
