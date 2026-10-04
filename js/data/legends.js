@@ -300,15 +300,24 @@ const Legends = (function () {
          file spends on silhouette rather than stats. */
       factory: parts(l.id),
       /* THE MARQUE CREST, where the game has one — so a legend wears the badge of
-       * the car he is: Ferrari, McLaren, Williams, Red Bull, Mercedes. The
-       * badge is the game's own ORIGINAL emblem for that team (all eleven are
-       * path data in js/car/crest-paths.js, built by tools/car/emblems.mjs), not
-       * the real marque logo — this is an unofficial fan game.
+       * the car he is: Ferrari, McLaren, Williams, Red Bull, Mercedes.
        *
-       * Four wear none: Lotus (Clark, Hill), Tyrrell (Stewart) and Vanwall
-       * (Moss) are not on the 2026 roster, so the game has no emblem of its own
-       * for them, and they keep the generic monogram lettered with the team's
-       * NAME rather than borrowing another team's badge. */
+       * CORRECTION. This said the game had "eight hand-drawn vector crests and
+       * no others", wrong twice. The eight in js/car/crest-paths.js are TRACED
+       * from bitmaps, not hand-drawn — and they are not all of them: mercedes,
+       * haas and audi keep GEOMETRIC constructions in js/car/liverytex.js
+       * (MARK_PARTS), because a ring and a three-point star are exact as maths
+       * and only approximate as a trace. Eleven marks exist, not eight. The
+       * error was reading one file and generalising, and it cost Fangio his
+       * Silver Arrow badge for a deploy.
+       *
+       * Four still wear none, and that is a SOURCE problem, not an oversight:
+       * Lotus (Clark, Hill), Tyrrell (Stewart) and Vanwall (Moss) are
+       * TYPOGRAPHIC marks — a roundel with script, a wordmark — and
+       * tools/car/trace-logo.mjs is explicit that memory is the wrong source
+       * (hand-drawing Red Bull from memory produced "a pair of pigs"). A
+       * geometric badge can be constructed; a wordmark cannot be remembered,
+       * and a wrong crest is worse than none. */
       crest: l.marque || null,
       name: "Legends", short: "LGD", engine: l.car,
       tier: head >= 95 ? 0 : head >= 90 ? 1 : head >= 85 ? 2 : 3,
