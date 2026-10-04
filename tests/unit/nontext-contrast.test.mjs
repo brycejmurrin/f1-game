@@ -311,16 +311,17 @@ test("every team's --accent-ink is READABLE on that team's --accent, and is the 
   // #f5f5f5. 4.5:1 is asserted rather than the 3:1 large-text allowance the
   // 26px plate would earn, so the plate can shrink without this going quiet.
   //
-  // The ink is also not a free choice: only --text and --bg are on offer, and
+  // The ink is also not a free choice: only the fixed dark-HUD neutrals are on offer, and
   // the test recomputes both and insists the sheet named the winner. That is
   // what makes adding a team mechanical instead of a judgement call.
   const skins = [...read("css/tokens.css").matchAll(/:root\[data-team="([\w-]+)"\]\s*\{([^}]*)\}/g)];
-  const CANDIDATES = { "var(--text)": resolve(token("--text")), "var(--bg)": resolve(token("--bg")) };
+  // Root --text/--bg reverse in Light/System; inherited ink must not follow them.
+  const CANDIDATES = { "var(--hud-ink-light)": resolve(token("--hud-ink-light")), "var(--hud-ink-dark)": resolve(token("--hud-ink-dark")) };
   for (const [, team] of skins) {
     const sel = `:root[data-team="${team}"]`;
     const accent = resolve(decl(tokens, sel, "--accent"));
     const inkName = decl(tokens, sel, "--accent-ink");
-    assert.ok(CANDIDATES[inkName], `${sel} sets --accent-ink to ${inkName}; only var(--text) and var(--bg) are on offer`);
+    assert.ok(CANDIDATES[inkName], `${sel} sets --accent-ink to ${inkName}; only theme-independent HUD neutrals are on offer`);
     const scored = Object.entries(CANDIDATES)
       .map(([name, c]) => [name, ratio(accent, c)])
       .sort((a, b) => b[1] - a[1]);

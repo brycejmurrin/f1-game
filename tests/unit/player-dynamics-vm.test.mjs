@@ -234,3 +234,31 @@ test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", 
     assert.ok(rev < 0.9 * REVERSE_MAX, `at f=${f}: ${rev.toFixed(2)} m/s after 1 s; the flat crawl reaches ${REVERSE_MAX}`);
   } finally { a.clearInput(); a.setPhysics(physicsBefore); }
 });
+
+// Manual gearbox bog: (speed - lo)/(hi - lo) with reverse speed drives gearMult
+// to 0, so throttle cannot leave REVERSE_MAX until rescue (~1 s). Own boot —
+// the shared g is auto gears (gearMult stays 1). Before fix: mid05 stayed at
+// -5 (d=0); after: d≈+2.4 within 0.5 s, rescueT < 0.9.
+test("manual gearbox: throttle leaves reverse within 0.5 s (no rescue)", async () => {
+  const gm = await createGame({
+    track: "monza",
+    storage: { difficulty: "normal", autoThrottle: false, manual: true },
+  });
+  try {
+    await gm.race("monza", "day", "dry");
+    const a = gm.apex;
+    a.setPhysics({ pace: 1, drift: 0 });
+    a.jump(0.0, 0, 0);
+    gm.G.player.energy = 0;
+    for (let i = 0; i < 90; i++) { a.setInput({ steer: 0, brake: true }); a.step(1 / 60, 1); }
+    const rev = a.physState().speed;
+    assert.ok(rev < -2 && rev > -9, `reverse crawl: ${rev.toFixed(2)} m/s`);
+    for (let i = 0; i < 30; i++) { a.setInput({ steer: 0, throttle: true }); a.step(1 / 60, 1); }
+    const mid = a.physState().speed;
+    a.clearInput();
+    assert.ok(mid > rev + 1.5,
+      `manual reverse throttle must accelerate within 0.5s (before rescue); rev=${rev.toFixed(2)} mid=${mid.toFixed(2)}`);
+    assert.ok((gm.G.player.rescueT || 0) < 0.9,
+      `must not rely on rescue to leave reverse; rescueT=${gm.G.player.rescueT}`);
+  } finally { gm.close(); }
+});

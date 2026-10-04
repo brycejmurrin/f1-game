@@ -1703,6 +1703,8 @@ const PitLane = (function () {
       if (onSet == null || onSet * 1.1 >= left) return 99;
       return Math.max(0, Math.round(((G.lapsTarget - fresh) + (lap + onSet)) / 2) - lap);
     }
+    const _pitCtx = { stopsLeft: 0, lapsToStop: 0, rivalBehindBoxed: false, stuckBehind: false, rivalUsed: false, fits: true,
+      react: 0, attack: 0, cautionLevel: 0, wear: 0, wrongTread: false, lapsLeft: 0, pitLossLaps: 0, scripted: false };
     function think(c) {
       const plan = c && c.pitPlan;
       // A HUMAN's plan is advice (planFor): nothing here ever arms it.
@@ -1751,21 +1753,23 @@ const PitLane = (function () {
         const life = nextCls && TyreModel.AI_CLASS[nextCls] ? G.tyres.planLaps(TyreModel.AI_CLASS[nextCls].life, G.lapsTarget) / (plan.loadK || 1) : Infinity;
         fits = (nextStop != null ? nextStop : G.lapsTarget) - (c.lap || 0) <= life * 1.1;
       }
-      const why = AiDrive.pitNow({
-        stopsLeft,
-        lapsToStop,
-        rivalBehindBoxed: !!(near && near.behind), stuckBehind: !!(near && near.stuck && stuckLong),
-        rivalUsed: !!c._rivalStop, fits,
-        react: temper ? temper.react : 0, attack: temper ? temper.attack : 0,
-        cautionLevel: caution,   // per AI per tick: the allocation-free read
-        wear,
-        wrongTread,
-        // …so the worn rule can ask whether the stop has laps left to pay for
-        // itself (AiDrive.wornPays).
-        lapsLeft: Math.max(0, (G.lapsTarget || 0) - (c.lap || 0)),
-        pitLossLaps: plan.pitLossLaps,
-        scripted: !!plan.scripted,   // a real race's plan (js/race/real-race.js planFor)
-      });
+      // ONE context, every field rewritten per call (pitNow is pure and keeps nothing):
+      // a 13-field literal per AI per tick was ~1.3k objects/s of garbage.
+      const q = _pitCtx;
+      q.stopsLeft = stopsLeft;
+      q.lapsToStop = lapsToStop;
+      q.rivalBehindBoxed = !!(near && near.behind); q.stuckBehind = !!(near && near.stuck && stuckLong);
+      q.rivalUsed = !!c._rivalStop; q.fits = fits;
+      q.react = temper ? temper.react : 0; q.attack = temper ? temper.attack : 0;
+      q.cautionLevel = caution;   // per AI per tick: the allocation-free read
+      q.wear = wear;
+      q.wrongTread = wrongTread;
+      // …so the worn rule can ask whether the stop has laps left to pay for
+      // itself (AiDrive.wornPays).
+      q.lapsLeft = Math.max(0, (G.lapsTarget || 0) - (c.lap || 0));
+      q.pitLossLaps = plan.pitLossLaps;
+      q.scripted = !!plan.scripted;   // a real race's plan (js/race/real-race.js planFor)
+      const why = AiDrive.pitNow(q);
       if (!why) return "";
       // A weather stop fits what the WEATHER wants; any other stop follows the
       // plan. Without the first branch a car pits, fits another slick, is still

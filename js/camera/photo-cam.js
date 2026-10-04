@@ -35,7 +35,9 @@ function initPhotoCam() {
 // flew off in that direction until the player pressed the same control again.
 // Split out of initPhotoCam so blur can release the input WITHOUT also
 // re-deriving the pose from the game camera, which would teleport the shot.
+const altitudeHeld = { up: false, down: false };
 function releasePhotoInput() {
+  altitudeHeld.up = altitudeHeld.down = false;
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
   photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoMouse.pid = null;
   G.photoAlt = 0; G.photoVertT = 0;
@@ -234,8 +236,9 @@ function wirePhotoHold(id, on, off) {
 }
 wirePhotoStick("pc-move", photoMove);
 wirePhotoStick("pc-look", photoLook);
-wirePhotoHold("pc-up", () => G.photoAlt = 1, () => G.photoAlt = 0);
-wirePhotoHold("pc-down", () => G.photoAlt = -1, () => G.photoAlt = 0);
+const altitude = (id, held) => { altitudeHeld[id] = held; G.photoAlt = Number(altitudeHeld.up) - Number(altitudeHeld.down); };
+wirePhotoHold("pc-up", () => altitude("up", true), () => altitude("up", false));
+wirePhotoHold("pc-down", () => altitude("down", true), () => altitude("down", false));
 /* Drag anywhere on the scene (outside the sticks) to look — mouse or a spare
    finger. THE DRAG BELONGS TO ONE POINTER, which it did not used to:
    `pointermove` on `window` accepted every pointer, so with a drag live the

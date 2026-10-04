@@ -24,6 +24,18 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
+test("rotation never resurfaces the pause card over an active photo camera", () => {
+  const source = src("js/game.js");
+  const fn = source.slice(source.indexOf("function syncRotateBlocker("), source.indexOf("if (rotateBlockMql.addEventListener)"));
+  for (const photoMode of [false, true]) for (const active of [false, true]) {
+    const box = { setAttribute() {} }, pausemenu = { hidden: false };
+    const ctx = vm.createContext({ $: () => box, getComputedStyle: () => ({ display: active ? "flex" : "none" }),
+      rotateBlockMql: { matches: true }, paused: true, photoMode, els: { pausemenu } });
+    vm.runInContext(fn, ctx); ctx.syncRotateBlocker(false);
+    assert.equal(pausemenu.hidden, active || photoMode);
+  }
+});
+
 test('online Photo camera input integrates while shared physics continues; solo Photo holds physics', () => {
   const source = src('js/game.js');
   const tick = source.slice(source.indexOf('function tickBody(now) {'), source.indexOf('// ---------- car setup panel ----------'));
@@ -119,4 +131,16 @@ test("fly-cam UP hold survives the boundary pointerleave and a capture steal; a 
   assert.equal(G.photoAlt, 1);
   dom.dispatch(el, { type: "pointerup", pointerId: 8 });
   assert.equal(G.photoAlt, 0, "a plain lift still releases");
+});
+
+test("opposite altitude holds cancel together and releasing either preserves the other pointer", () => {
+  for (const first of ["up", "down"]) {
+    const { dom, G } = boot(), second = first === "up" ? "down" : "up";
+    dom.dispatch(dom.byId("pc-" + first), { type: "pointerdown", pointerId: 1 });
+    dom.dispatch(dom.byId("pc-" + second), { type: "pointerdown", pointerId: 2 });
+    assert.equal(G.photoAlt, 0, "opposing holds cancel");
+    dom.dispatch(dom.byId("pc-" + first), { type: "pointerup", pointerId: 1 });
+    assert.equal(G.photoAlt, second === "up" ? 1 : -1, "the other pointer remains held");
+    dom.dispatch(dom.byId("pc-" + second), { type: "pointercancel", pointerId: 2 }); assert.equal(G.photoAlt, 0);
+  }
 });

@@ -148,10 +148,21 @@ const Collide = (() => {
         if (!pa || ownsPose(a) || incidentSim.owns(a) || netPlay.owns(a)) continue;
         sweepMotion(a, pa, dt);
         if (!pa.sweepEligible) continue;
-        const da = pa.sweepD, xa = pa.sweepX;
+        const da = pa.sweepD, xa = pa.sweepX, reachA = LCAR_MAX + Math.abs(da) + 1;
         for (let k = i + 1; k < ranked.length; k++) {
           const b = ranked[k], pb = motion.get(b);
-          if (!pb || ownsPose(b) || incidentSim.owns(b) || netPlay.owns(b)) continue;
+          if (!pb) continue;
+          // FAR APART on the arc, decided before the ownership calls and
+          // sweepMotion (each pair paid both, 231 pairs a step). A pair that
+          // reaches the arc test below passes it only if |x0| - |da| - |db| <=
+          // LCAR_MAX, and an eligible b has |db| <= its own sweep bound (the
+          // hypot gate in sweepMotion), so past that sum (+1 m for rounding)
+          // every path below ends in `continue` anyway. sweepMotion is a
+          // per-generation cache of live state: computed later, it is the same.
+          // A NaN sweep (non-finite prog or NaN x skips that hypot gate) never rejects here.
+          const sx = b.x - pb.x, sd = b.prog - pb.prog;
+          if (sx === sx && sd - sd === 0 && Math.abs(deltaS(pa.prog - pb.prog)) > reachA + Math.max(6, Math.abs(b.speed) * dt * 2 + 1)) continue;
+          if (ownsPose(b) || incidentSim.owns(b) || netPlay.owns(b)) continue;
           sweepMotion(b, pb, dt);
           if (!pb.sweepEligible) continue;
           const db = pb.sweepD, xb = pb.sweepX;

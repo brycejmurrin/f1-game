@@ -18,27 +18,24 @@ floating tree and not reach the line that places it.
 
 ## The loop
 
-1. `node tools/track/survey-track.mjs <id>` — the one-shot survey (grounding, floats,
-   terrain gaps). This tool launches Chromium as a **probe**, not a Playwright
-   test group. ITS FLAGS ARE NOT FINDINGS: the `⚠ STEP` rows and
-   `agent.mjs survey`'s `groundCliffs` both sample at lat 0, where the raycast
-   falls through the terrain ribbon (it starts ~10 m out, past baseHW + runoff)
-   to `floorY`, so a flat circuit reports a cliff at every frac. Confirm with a
-   lateral `apex-eval.mjs <id> "a.groundY(…)"` sweep at lat 4/6/8/10/14/24
-   before calling one real — estoril's four STEPs and all 17 groundCliffs were
-   this artefact (2026-09-22). A blank first capture is the same class: the
-   probe's pre-present frame, not missing scenery. Read `.claude/skills/survey-track/SKILL.md` for how to read the
-   output. Skip that skill's "Test & ship" / `test-bg` steps — those are the
-   parent. Engine edits (`js/track/tracks.js` LIST whitelist) are parent-only.
-2. Diagnose with the real `agent.mjs` verbs (unknown names exit 1):
+1. Read the assigned brief, source pair and parent-supplied baseline screenshots,
+   camera framings and real-place references. Record source URL, document year,
+   measured value and uncertainty separately; a brief's labels or a source's
+   approximate slope are not built-world measurements. The parent captures all
+   browser evidence. If a framing is missing, report what the parent must capture.
+2. Establish numerical baselines without a browser:
    ```sh
-   node tools/shot/agent.mjs <id> survey
-   node tools/shot/agent.mjs <id> track --what corners
+   node tools/track/verify-track.cjs <id>
+   node tools/track/float-audit.cjs <id> --json
    ```
-   `groundY` / `scan` / `wallStats` are `__apex` hooks, not `agent.mjs`
-   commands — use `node tools/shot/apex-eval.mjs <id> "a.groundY(…)"` if the
-   survey table is not enough (also Chromium; still not a test group).
-3. Edit the pair only — `js/circuits/<id>.js` (geometry, metadata, palette) and
+   Use `tools/lib/track-build-vm.cjs` for retained geometry and emitted-model
+   measurements; `verify-track.cjs` exports `buildContext()` for centreline
+   probes. Browser-probe flags supplied by the parent are hypotheses: lat 0
+   terrain rays may fall through to the floor. Check lateral ground/road
+   samples before calling a cliff real. Float-audit checks props, not every
+   terrain-over-road or water defect. No `survey-track.mjs`, `agent.mjs`,
+   `apex-eval.mjs`, `ground-profile.mjs`, Chromium or cloudBrowser in this fork.
+3. Edit the assigned pair only — `js/circuits/<id>.js` (geometry, metadata, palette) and
    `js/circuits/scenery/<id>.js` (the `scenery(api)` dressing). Frac-keyed
    tables MUST respect `def._sceneryShift` — consume via the compensated idiom
    (`bankingProfile`, `buildCenterline`); a raw `frac` read places things 2/3
@@ -47,20 +44,28 @@ floating tree and not reach the line that places it.
    and `bakedModel(id, k, side, …)` remaps correctly on shifted circuits (both
    fixed 2026-09; `scenery-dress/references/rules.md` §Frames), so wrapped helpers
    are safe inside `along()`. Keep `if (!bakedModel(…))` fallbacks anyway.
-4. After EVERY edit:
+   `startFrac` and width zones use control-index fractions; built `s/total`
+   uses arc fractions. Curated turns/sectors and `{ turn: N }` anchors already
+   use racing space. Measure the built centreline rather than multiplying every
+   authored fraction by `path.len`. Missing copied fields belong to the parent
+   (`TrackDef.fromRaw` in `js/track/core/def.js`).
+4. After completing all assigned pair edits, verify once:
    ```sh
    node tools/track/verify-track.cjs <id>
    node tools/track/coplanar-audit.cjs <id>
    node tools/track/float-audit.cjs <id>    # if the survey flagged floats
    ```
-5. Report: what moved, the before/after survey numbers, and the exact baseline
-   deltas (file + count) if any — the parent decides whether a baseline moves.
+5. Report: what moved, source/year evidence, before/after numerical measurements,
+   exact baseline deltas (file + count), uncertainties and required parent
+   captures. Browser visual sign-off and baseline decisions belong to the parent.
 
 ## Scope rules
 
-- The ONE circuit file is your only write. Never `js/track/` (the engine),
-  other circuits, baselines (`tools/track/*-baseline.json`), tests, `index.html`,
-  or `version.json`. Report the change unverified rather than running a group.
+- The assigned circuit PAIR is your only write. Never `js/track/` (the engine),
+  other circuits, landmark registries (`tests/data/landmarks/`), baselines,
+  tests, `index.html` or `version.json`. New def fields, shared engine changes,
+  registries and gates are parent work. Report visual checks unverified rather
+  than launching a browser or running a group.
 - NEVER flip a curvature sign without a rendered lap (+k = LEFT-hand turn).
 - Unless `.claude/settings.json` sets `worktree.baseRef: "head"`, a worktree
   starts STALE: first `git checkout -B <branch> <the session SHA>` and verify
@@ -73,3 +78,7 @@ that way at 10 turns, and a completed research pass at 18; track-surveyor lost
 11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+
+No other browser launch, capture or automation, including Chromium probes or
+cloudBrowser. A live test run also forbids source edits in its checkout;
+coordinate the edit batch with the parent.

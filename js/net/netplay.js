@@ -599,8 +599,14 @@ const NetPlay = (function () {
             // never saw guest A's lap times (3+ players). Mirrors
             // broadcastStrategy: the host's checked copy, to everyone but the
             // sender, named by the car the host seated for that connection.
+            // The OWNER's lap, not the host's posed one: fr.car.lap trails the
+            // crossing by the interp delay, so relaying it with `fin` made
+            // guest B finishLap() on a stale number and mark the rival done
+            // a lap early (or park fin under the wrong _nFinLap).
             if (role === "host" && fr) {
-              const out = { lap: fr.car.lap, time: ltOk ? lt : null, best: bestOk ? best : null,
+              const ownerLap = Number(d.lap);
+              const lapOut = Number.isFinite(ownerLap) ? Math.floor(ownerLap) : fr.car.lap;
+              const out = { lap: lapOut, time: ltOk ? lt : null, best: bestOk ? best : null,
                 code: fr.car.code, driverId: fr.car.driverId, fin: finOk ? fin : undefined, invalid: !!d.invalid,
                 retired: ret || undefined };
               for (const [sid, os] of sessions) {

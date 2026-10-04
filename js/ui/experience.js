@@ -62,7 +62,7 @@ const UiExperience = (function () {
   function create(G, deps) {
     const { $ } = G;
     const overlay = $("overlay"), panel = $("menu-buttons");
-    let home = false, signature = "", elapsed = 0, painted = false, failure = false;
+    let home = false, signature = "", elapsed = 0, painted = false, failure = false, photoHomeCamera = null;
     const variation = homeVariation(GameStore.store);
     const world = HomeWorld.create(G, { prepareTrack: deps.prepareTrack, worldReady: deps.trackReady,
       capture: deps.captureTrackCamera, restore: deps.restoreTrackCamera, contextKey: deps.trackKey,
@@ -158,7 +158,7 @@ const UiExperience = (function () {
     });
     window.addEventListener("apex26:photo-background", stamp);
     stamp();
-    function stopHome() {
+    function stopHome(preservePhoto = false) {
       // Clear FX/post `_last` ONLY when tearing down a live Home present.
       // renderHome() calls stopHome() every race frame once the overlay is
       // hidden; clearing then zeroes bloom/fxaa between presents and races any
@@ -166,6 +166,8 @@ const UiExperience = (function () {
       // 36966538881: M8 day wait saw fxaa, evaluate saw bloom false, diag later
       // saw bloom true). Track/pitlane Home uses world.active(), not `home`.
       const leaving = home || !!(world.active && world.active());
+      if (!preservePhoto) photoHomeCamera = null;
+      else if (home) photoHomeCamera = deps.setupCam.captureCamera();
       if (home) deps.setupCam.endHome();
       world.end();
       home = false; signature = ""; elapsed = 0; painted = false;
@@ -187,11 +189,12 @@ const UiExperience = (function () {
       if (previewBusy) return false;
       let s = scene();
       const photoOpen = $("photo-studio") && !$("photo-studio").hidden;
+      if (!photoOpen) photoHomeCamera = null;
       const visible = G.state === "menu" && overlay && !overlay.hidden && !document.hidden
         && !G.setupPreviewOn && (["garage", "night", "studio", "track", "pitlane"].includes(s.mode) || photoOpen);
       // Only the title scene and its own photo dock can own this camera.
       const covered = overlay.inert && !photoOpen;
-      if (!visible || covered || failure) { variation.leave(); stopHome(); return false; }
+      if (!visible || covered || failure) { variation.leave(); stopHome(photoOpen && G.state === "menu" && !G.setupPreviewOn); return false; }
       const selected = AppearanceStudio.scene();
       s = { ...selected, ...variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen) };
       const motion = s.motion === "ambient" && TitleFx.mode() !== "reduce" && !photoOpen ? "ambient" : "still";
@@ -201,11 +204,15 @@ const UiExperience = (function () {
         pane: rect ? GarageExperience.freePane(rect, { left: 0, top: 0, right: innerWidth, bottom: innerHeight, width: innerWidth, height: innerHeight }) : null };
       const sig = s.mode + ":" + s.shot + ":" + motion + ":" + photoOpen + ":" + window.innerWidth + ":" + window.innerHeight + ":" + pane;
       if (signature !== sig) {
-        stopHome(); stamp();
+        stopHome(photoOpen); stamp();
         if (["track", "pitlane"].includes(s.mode)) {
           world.begin(s.mode, worldView); signature = sig;
         } else deps.setupCam.beginHome(["garage", "night", "studio"].includes(s.mode) ? s.mode : "garage", { motion, shot: s.shot, panel: photoOpen ? null : panel });
         home = !!deps.setupCam.homeState(); if (!home && !world.wantsTrack()) return false; signature = sig;
+        // Layout refreshes borrow a new Home session, but a photo's shot belongs
+        // to the player until DONE, including across a temporary hidden tab.
+        if (home && photoOpen && photoHomeCamera) deps.setupCam.restoreCamera(photoHomeCamera);
+        photoHomeCamera = null;
       }
       if (["track", "pitlane"].includes(s.mode)) {
         world.begin(s.mode, worldView);

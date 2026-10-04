@@ -45,27 +45,37 @@ const CarDraw = (function () {
         if (order) {
           const i = order.indexOf(key);
           if (i >= 0) order.splice(i, 1);
+          const st = _lruStamp.get(order); if (st) st.delete(key);
         }
       });
     }
     // Bound a key→mesh cache to `max` most-recent entries. Evicted meshes are freed
     // via gfx.freeMesh exactly once (deleted from the map before free). `freeOne`
     // optional — defaults to freeMesh(mesh); wheel pairs pass a custom freer.
+    // A hit promotes, the least recently used evicts — by STAMP: a hit writes one
+    // number (it was an indexOf + splice + push per drawn car per pass), and only
+    // an eviction, a miss past `max`, scans `order` for the oldest stamp.
+    // `order` stays the key list every clear (length = 0) and invalidation edits.
+    const _lruStamp = new WeakMap();   // order array -> Map(key -> last-use tick)
+    let _lruTick = 0;
     function putBoundedMesh(cache, order, key, create, max, freeOne) {
-      if (cache[key]) {
-        if (order[order.length - 1] !== key) {
-          const i = order.indexOf(key);
-          if (i >= 0) order.splice(i, 1);
-          order.push(key);
-        }
-        return cache[key];
-      }
+      let st = _lruStamp.get(order);
+      if (!st) { st = new Map(); _lruStamp.set(order, st); }
+      if (cache[key]) { st.set(key, ++_lruTick); return cache[key]; }
       const mesh = create();
       cache[key] = mesh;
       order.push(key);
+      st.set(key, ++_lruTick);
       const free = freeOne || ((m) => { if (m && G.gfx.freeMesh) G.gfx.freeMesh(m); });
       while (order.length > max) {
-        const old = order.shift();
+        let oi = 0, ot = Infinity;
+        for (let i = 0; i < order.length; i++) {
+          const t = st.get(order[i]);
+          if (t === undefined) { oi = i; break; }   // a key with no stamp is older than any stamped one
+          if (t < ot) { ot = t; oi = i; }
+        }
+        const old = order.splice(oi, 1)[0];
+        st.delete(old);
         const victim = cache[old];
         delete cache[old];
         free(victim);
@@ -210,20 +220,29 @@ const CarDraw = (function () {
     // G.getLiveryId() is a store read (two string concats + a JSON decode) and this
     // ran once per drawn car per FRAME — ~22 times — for a value that only moves
     // when something is written to the store.
+    // The entry also memoises each FULL key (prefix + num [+ ":P"]) like
+    // teamMeshKeyFor, so a per-car-per-frame hit concatenates nothing.
     const _decalPrefixCache = new Map();
-    function decalKeyPrefix(team) {
+    function decalKeyEntry(team) {
       const c = _decalPrefixCache.get(team.id);
-      if (c && c.rev === G.store.rev) return c.val;
+      if (c && c.rev === G.store.rev) return c;
       const val = team.id + ":" + G.getLiveryId(team.id) + ":";
-      _decalPrefixCache.set(team.id, { val, rev: G.store.rev });
-      return val;
+      const e = { val, rev: G.store.rev, full: new Map(), fullP: new Map() };
+      _decalPrefixCache.set(team.id, e);
+      return e;
+    }
+    function decalKeyFor(team, num, isPlayer) {
+      const e = decalKeyEntry(team), m = isPlayer ? e.fullP : e.full;
+      let k = m.get(num);
+      if (k === undefined) { k = e.val + (num == null ? "_" : num) + (isPlayer ? ":P" : ""); m.set(num, k); }
+      return k;
     }
     function getCarDecalTexture(team, num, isPlayer) {
       if (typeof LiveryTex === "undefined" || !G.gfx.createTexture) return null;
       // isPlayer is part of the key: on the mobile tier the player's atlas uploads
       // at 512² and AI atlases at 256², so a team the player later switches to
       // must not reuse a cached AI-resolution atlas (and vice versa).
-      const key = decalKeyPrefix(team) + (num == null ? "_" : num) + (isPlayer ? ":P" : "");
+      const key = decalKeyFor(team, num, isPlayer);
       if (!(key in _decalTexCache)) {
         let t = null;
         try { t = G.gfx.createTexture(LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer)); }
@@ -488,17 +507,26 @@ const CarDraw = (function () {
     // the driver helmet the camera sits inside. Cached per team like playerBodies.
     const cockpitBodies = {};
     const cockpitBodyOrder = [];
+    // The last key's inputs, so the per-frame call (default camera) builds no
+    // string and no closure on a hit — the hoisted factory reads _cb*.
+    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "";
+    function buildPendingCockpitBody() {
+      const team = _cbTeam, liv = deps.resolveLivery(team);
+      return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
+        { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
+          parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
+    }
     function cockpitBodyMesh(team, car, visualKey = playerVisualKey) {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
       // is always this team's key — no per-frame partsVisualKey() rebuild.
       const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick, 4 faired
-      const key = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
-      return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
-        const liv = deps.resolveLivery(team);
-        return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-          { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: haloSz, num,
-            parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
-      }, COCKPIT_BODY_CACHE_MAX);
+      const body = CockpitOpts.body();
+      if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum) {
+        _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
+        _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbNum = num;
+      }
+      _cbTeam = team;
+      return putBoundedMesh(cockpitBodies, cockpitBodyOrder, _cbKey, buildPendingCockpitBody, COCKPIT_BODY_CACHE_MAX);
     }
     // THE PLAYER'S SHADOW CASTER IN A FIRST-PERSON VIEW (ShadowPass.resolvePlayer,
     // deps.cockpitCaster): in cockpit, helmet and visor, the mesh and matrix the
@@ -634,7 +662,8 @@ const CarDraw = (function () {
       M4.mulTo(_rigA, base, _rigT);
       M4.mulTo(_rigB, _rigA, _rigR);
       G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, opt);   // style + livery keyed: team grips/marker/gloves
-      CarMesh.drawForearms(_rigB, base, lay, deps.resolveLivery(c.team), opt);   // suit sleeves: cuff (rolls) to elbow (car-fixed)
+      // No forearm sleeves (CarMesh.drawForearms): the tubes from the cuffs to
+      // the bottom of the frame read as pipes on the wheel (user, 2026-10-04).
       // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the
       // HUD shows gear and speed instead (js/camera/mode-switch.js).
       if (wheelStyle === "retro") {

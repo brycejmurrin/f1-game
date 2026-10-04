@@ -188,6 +188,10 @@ const SPEC = [
   { k: "cvdMode", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js COLOUR VISION", oneOf: ["off", "deutan", "protan", "tritan"] },
   { k: "speedUnits", lane: "json", group: "appearance", def: "kmh", src: "js/ui/appearance-opts.js SPEED UNITS", oneOf: ["kmh", "mph"] },
   { k: "menuHelp", lane: "json", group: "appearance", def: "on", src: "js/ui/appearance-opts.js HELP TEXT (on = SHOW | off = HIDE)", oneOf: ["on", "off"] },
+  { k: "homeScene", lane: "json", group: "appearance", def: "garage", src: "js/ui/appearance-studio.js", oneOf: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"] },
+  { k: "backgroundMotion", lane: "json", group: "appearance", def: "still", src: "js/ui/appearance-studio.js", oneOf: ["still", "ambient"] },
+  { k: "homeCamera", lane: "json", group: "appearance", def: "auto", src: "js/ui/appearance-studio.js", oneOf: ["auto", "hero", "front", "side", "rear"] },
+  { k: "appearanceProfiles", lane: "json", group: "appearance", def: [], src: "js/ui/appearance-studio.js", normalize: (v) => Array.isArray(v) ? (!v.length ? [] : typeof AppearanceStudio !== "undefined" ? AppearanceStudio.normalizeProfiles(v) : undefined) : undefined },
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
   { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js", oneOf: ["easy", "normal", "hard"] },
@@ -245,7 +249,7 @@ const SPEC = [
   { k: "metricsLogLvl", lane: "raw", group: "metrics", def: "warn", src: "js/perf/metrics-overlay.js" },
 ];
 
-const EXCLUDED = "garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, leaderboards, ghosts, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags";
+const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, leaderboards, ghosts, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags";
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 function same(a, b) {
@@ -291,7 +295,8 @@ function collect(mode, G) {
   const where = {};
   const changed = [];
   for (const row of SPEC) {
-    const stored = readStored(row);
+    const raw = readStored(row);
+    const stored = row.normalize && raw !== null ? row.normalize(raw) ?? null : raw;
     const def = defaultOf(row, G);
     const has = stored !== null;
     let diff = has && !row.info && (row.changed ? row.changed(stored) : !same(stored, def));
@@ -389,7 +394,8 @@ function applySettings(file, G) {
     if (row.info) continue;
     const g = groups[row.group];
     if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
-    const v = g[row.k];
+    const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
+    if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
@@ -718,7 +724,7 @@ function create(G) {
     const note = document.createElement("p");
     note.className = "adv-help";
     note.setAttribute("data-help", "keep");   // HELP TEXT: HIDE keeps it — it is the only word on what LOAD does
-    note.textContent = "Back up preferences, tuners and control bindings with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads. Career progress and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
+    note.textContent = "Back up preferences, appearance profiles, tuners and control bindings with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads. Photos, personal background images, career progress and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
 
     host.append(h,
       saveBtn("pm-settings-changed", "SAVE CHANGED SETTINGS",
@@ -780,7 +786,7 @@ function create(G) {
 }
 
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
-         applySettings, applyGarage, applyCareer, isGarageKey, isCareerKey, create,
+         applySettings, applyGarage, applyCareer, isGarageKey, isCareerKey, garageValue, create,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();
