@@ -407,6 +407,44 @@ test("host: a LAP `fin` far from this race clock is refused", () => {
   assert.equal(carA.finishT, G.raceT - 1);
 });
 
+test("host: a guest's short-distance fin cannot raise or relay the chequered flag", () => {
+  const { G, net, sA, sB, carA, pose } = hostWithGuest();
+  carA.lap = 1;
+  sA.deliver("lap", { lap: 1, code: carA.code, fin: G.raceT, invalid: true });
+  assert.notEqual(carA.finished, true, "the opening crossing cannot finish a car");
+  assert.equal(carA._nFin, null);
+  carA.lap = 2;
+  sA.deliver("lap", { lap: 2, code: carA.code, fin: G.raceT, invalid: true });
+  pose({ s: 100, lap: 2 }, 10);
+  assert.notEqual(carA.finished, true, "the target is three laps and no winner has finished");
+  assert.equal(G.cars.some((c) => c.finished), false);
+  assert.ok(sB.sent.filter((m) => m.t === "lap").every((m) => m.d.fin === undefined), "guests cannot receive an unapproved finish");
+  G.raceT += 6;
+  pose({ s: 200, lap: 2 }, 10);
+  assert.equal(carA._nFin, null, "an early claim expires instead of waiting for the eventual real flag");
+  G.player.finished = true; G.player.lap = 4;
+  pose({ s: 300, lap: 2 }, 10);
+  assert.notEqual(carA.finished, true, "a later legitimate winner cannot resurrect the early claim");
+  net.stop();
+});
+
+test("host: a lapped fin preceding the winner's interpolated pose waits, then relays", () => {
+  const { G, net, sA, sB, carA, pose } = hostWithGuest();
+  carA.lap = 2;
+  sA.deliver("lap", { lap: 2, code: carA.code, fin: G.raceT - 0.1, invalid: true });
+  pose({ s: 100, lap: 2 }, 10);
+  assert.notEqual(carA.finished, true);
+  assert.equal(sB.sent.filter((m) => m.t === "lap").at(-1).d.fin, undefined);
+  G.player.finished = true; G.player.lap = 4;
+  pose({ s: 200, lap: 2 }, 10);
+  assert.equal(carA.finished, true);
+  assert.equal(carA.finishT, G.raceT - 0.1);
+  const relayed = sB.sent.filter((m) => m.t === "lap").at(-1).d;
+  assert.equal(relayed.fin, carA.finishT);
+  assert.equal(relayed.lap, 2, "the deferred finish retains the owner's finishing crossing");
+  net.stop();
+});
+
 test("host: lap times outside what can be driven never reach the car", () => {
   const { sA, carA } = hostWithGuest();
   // total 5000 m / 200 m/s wire ceiling = 25 s is the floor; QUALI_MAX_S the roof.

@@ -280,10 +280,10 @@ function load() {
   // writing that back erased the circuit for good, or blanked a finished season.
   const lossy = !!raw && (season !== raw || (rawIds != null && season.config.trackIds.length !== rawIds));
   lastLossy = lossy;   // boot's migrate-and-save reads it: never write a lossy read back
-  if (raw && !lossy) save(season);
+  if (raw && !lossy) save(season, { migration: true });
   return season;
 }
-function save(season) {
+function save(season, options) {
   if (!season || typeof season !== "object") {
     lastSave = { ok: false, durable: false, reason: "invalid" };
     return lastSave;
@@ -296,9 +296,9 @@ function save(season) {
   }
   activeCfg = frozenConfig(season.config || activeCfg || config());
   season.config = activeCfg;
-  if (typeof store.write === "function") lastSave = store.write(SAVE_KEY, season);
+  if (typeof store.write === "function") lastSave = store.write(SAVE_KEY, season, options);
   else {
-    const durable = store.set(SAVE_KEY, season) !== false;
+    const durable = store.set(SAVE_KEY, season, options) !== false;
     lastSave = { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
   }
   armRevision(season);
