@@ -12,9 +12,9 @@
       "lines": 3474
     },
     "js/game.js": {
-      "codeLines": 4800,
+      "codeLines": 4802,
       "gMembers": 286,
-      "lines": 8945,
+      "lines": 8949,
       "topLets": 148
     },
     "js/lighting/presets.js": {
@@ -39,7 +39,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 641,
+      "ceiling": 642,
       "slack": 5
     },
     "dynamicIdReads": {

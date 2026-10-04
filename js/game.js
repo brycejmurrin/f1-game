@@ -4099,7 +4099,11 @@ function clearMenuScreens() {
 const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)") : { matches: false };
 function syncRotateBlocker(moveFocus) {
   const box = $("rotate-device"); if (!box) return false;
+  // Does the GATE want to show? css/responsive.css hides it under the pause card, which this function decides about: probe past that rule.
+  document.body.classList.add("rotate-probe");
   const active = getComputedStyle(box).display !== "none";
+  document.body.classList.remove("rotate-probe");
+  // From the INTENT, not this instant's paint: a nested call (setPaused re-enters with the card up) read "hidden" and left the shown gate aria-hidden.
   box.setAttribute("aria-hidden", active ? "false" : "true");
   // The pause CARD and an active blocker never share the screen. #pausemenu is
   // a modal <dialog> (TopModal), so left open it sits in the top layer ABOVE
