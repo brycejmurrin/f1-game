@@ -173,8 +173,8 @@ const updates = UpdateCheck.create({
 const chip = $("update-chip");
 if (chip) chip.addEventListener("click", () => { updates.apply(); });
 if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", () => updates.newerActive());
+document.addEventListener("visibilitychange", () => updates.onVisible());
 document.addEventListener("visibilitychange", () => {
-  updates.onVisible();
   if (document.hidden) disarmProbeOnLeave();
   if (document.hidden && cancelMirrorPrep) cancelMirrorPrep();   // rAF stops; optional warm must not hold entry
   if (document.hidden && (G.state === "race" || G.state === "count")) setPaused(true, "hidden-tab");
