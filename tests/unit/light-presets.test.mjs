@@ -106,10 +106,14 @@ test("shipped presets never pin wetness (look=drive)", () => {
 const TOD = ["dawn", "day", "dusk", "night"];
 const WX = ["dry", "wet", "rain", "fog", "overcast"];
 
-test("B1 fallthrough circuits ship a full tod×weather grid with no wetness pins", () => {
-  // B1a fuji/okayama + B1b korea/jerez — each had zero track| keys before bake.
+test("every circuit ships a full tod×weather grid with no wetness pins", () => {
+  // B1a fuji/okayama + B1b korea/jerez (2026-09-30), then the last eight (2026-10-04,
+  // each copied from its nearest green-theme sibling) — each had zero track| keys
+  // and resolved to "*" alone. Every js/circuits/<id>.js now ships its own grid.
   const P = presets();
-  for (const track of ["fuji", "okayama", "korea", "jerez"]) {
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files found — the scan broke`);
+  for (const track of circuits) {
     const keys = TOD.flatMap((tod) => WX.map((wx) => `${track}|${tod}|${wx}`));
     const missing = keys.filter((k) => !P[k] || typeof P[k] !== "object");
     assert.deepEqual(missing, [], `${track} must ship all 20 tod×weather keys (not "*" fallthrough)`);
