@@ -479,6 +479,20 @@ function rank(season, a, b) {
   return 0;
 }
 
+// Keep constructor ties consistent with career winter goals and history:
+// points first, then the existing team-tier policy, then a stable team ID.
+function rankTeams(season, a, b) {
+  const pts = (season && season.teamPts) || {};
+  const d = (pts[b] || 0) - (pts[a] || 0);
+  if (d) return d;
+  const ta = Teams.LIST.find((t) => t.id === a);
+  const tb = Teams.LIST.find((t) => t.id === b);
+  const tierA = ta && Number.isFinite(ta.tier) ? ta.tier : Infinity;
+  const tierB = tb && Number.isFinite(tb.tier) ? tb.tier : Infinity;
+  if (tierA !== tierB) return tierA - tierB;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 const SPRINT_SEED_OFFSET = 1000;
 function drawRound(season) {
   const r = season ? season.round : 0;
@@ -562,7 +576,7 @@ return {
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
-  award, scored, rank, netPts, drawRound,
+  award, scored, rank, rankTeams, netPts, drawRound,
   presetIds, preset, shuffled, gpName,
 };
 })();

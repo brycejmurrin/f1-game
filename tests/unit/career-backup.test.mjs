@@ -54,7 +54,7 @@ function loadHarness(options = {}) {
   const disk = options.disk || new Map();
   const listeners = new Map();
   const team = {
-    id: "haas", tier: 4, stats: {},
+    id: "haas", name: "Haas", tier: 4, stats: {},
     drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }],
   };
   const ctx = vm.createContext({
@@ -85,7 +85,7 @@ function loadHarness(options = {}) {
       isReal: (t) => !!t && !t.custom && !t.legends,
     },
     Tracks: { LIST: [{ id: "a" }], SEASON: [{ id: "a" }], seasonIndex: () => 0 },
-    Parts: { getFactorySetup: () => ({}), setLegality() {} },
+    Parts: { CATALOG: [], getFactorySetup: () => ({}), getCost: () => 0, setLegality() {} },
     DriverRatings: {
       get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }),
       overall: () => 50,
@@ -501,7 +501,7 @@ test("garbage MY TEAM identity values are dropped without throwing", () => {
 
 /* ── mini-dom UI: EXPORT / IMPORT on slot cards ─────────────────────────── */
 
-test("career slot cards expose EXPORT and IMPORT buttons", () => {
+function bootBackupUi(options = {}) {
   const dom = makeDom({
     tagFor: (id) => (/^(cr-back|cr-go|cr-garage|co-back|ch-back|cg-back)$/.test(id) ? "button" : "div"),
   });
@@ -514,7 +514,7 @@ test("career slot cards expose EXPORT and IMPORT buttons", () => {
     myteam: [{ used: false }, { used: false }, { used: false }],
   };
   let ptr = { flavour: "driver", i: 0 };
-  const Career = {
+  const Career = options.Career || {
     SLOTS: 3, FLAVOURS: ["driver", "myteam"],
     slots: (fl) => (fl ? [fl] : Career.FLAVOURS).flatMap((f) => data[f].map((s, i) =>
       ({ ...s, flavour: f, i, live: !!s.used && ptr.flavour === f && ptr.i === i }))),
@@ -527,18 +527,19 @@ test("career slot cards expose EXPORT and IMPORT buttons", () => {
     conflicted: () => false, seasonDone: () => false,
   };
   const exports = [];
-  const CareerBackup = {
+  const CareerBackup = options.CareerBackup || {
     MAX_BYTES: 5 * 1024 * 1024,
     exportAll: async () => { exports.push(1); return { ok: true }; },
     validate: () => ({ ok: true }),
     apply: () => ({ ok: true, written: [], needsConfirm: false }),
   };
+  const notices = [];
   const G = {
     $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") },
     soundOn: false, flow: "gp", session: "race", season: null,
     store: { get: (k, d) => d, set() {} },
     cssCol: () => "#fff", openCareer() {}, openGarage() {}, openRaceSettings() {},
-    refreshCareerButton() {}, qualiClear() {}, announce() {},
+    refreshCareerButton() {}, qualiClear() {}, announce: (text) => notices.push(text),
     armConfirm: (btn, txt, act) => { act(); return true; },
   };
   const sb = {
@@ -573,6 +574,27 @@ test("career slot cards expose EXPORT and IMPORT buttons", () => {
   const ui = sb.CareerUI.create(G);
   ui.openSlots();
 
+  function clickImport(side = "left") {
+    const button = G.$("cr-" + side).querySelector('[data-cr-act="import"]');
+    assert.ok(button);
+    // mini-dom does not clear children on textContent="", unlike the browser.
+    G.$("cr-left").replaceChildren(); G.$("cr-right").replaceChildren();
+    button.onclick({ stopPropagation() {} });
+  }
+  async function selectBackup(envelope, side = "left") {
+    clickImport(side);
+    const picker = dom.document.body.querySelector("input");
+    const text = JSON.stringify(envelope);
+    picker.files = [{ size: text.length, text: async () => text }];
+    picker.onchange();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+  return { G, dom, ui, exports, notices, clickImport, selectBackup };
+}
+
+test("career slot cards expose EXPORT and IMPORT buttons", () => {
+  const { G, exports } = bootBackupUi();
   const left = G.$("cr-left");
   const acts = left.querySelectorAll("[data-cr-act]").map((n) => n.textContent);
   assert.ok(acts.includes("EXPORT"), "used slot must offer EXPORT");
@@ -591,4 +613,110 @@ test("career slot cards expose EXPORT and IMPORT buttons", () => {
   assert.ok(emptyActs.includes("IMPORT"));
   assert.ok(!emptyActs.includes("EXPORT"), "empty slots do not EXPORT");
   assert.equal(right.querySelectorAll(".cr-slot-del").length, 0, "empty slots have no DELETE");
+});
+
+
+test("IMPORT confirmation keeps the reviewed revision and previews backup destinations", async () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  h.store.set("career.driver.1", save({ money: 100 }));
+  const envelope = { format: h.CareerBackup.FORMAT,
+    slots: [{ flavour: "driver", i: 1, data: save({ money: 50, year: 2027, round: 2 }) }] };
+  const ui = bootBackupUi(h);
+  await ui.selectBackup(envelope);
+  assert.equal(ui.G.$("cr-left").querySelector('[data-cr-act="import"]').textContent, "IMPORT?");
+  const preview = ui.G.$("cr-left").querySelectorAll(".cr-note").map((n) => n.textContent).join(" ");
+  assert.match(preview, /Driver career · 2027 · 2 rounds completed · Destination slot 2/);
+  h.disk.set("apex26.career.driver.1", JSON.stringify(save({ money: 200 })));
+  h.foreign("apex26.career.driver.1");
+  ui.clickImport();
+  assert.equal(ui.notices.at(-1), "SAVE CONFLICT — IMPORT REFUSED");
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.1")).money, 200);
+});
+
+for (const focus of ["driver", "myteam"]) {
+  test(`ALL MODES after ${focus} imports only the remaining mode and preserves later progress`, async () => {
+    const a = deviceA();
+    a.store.set("career.driver.0", save({ money: 123 }));
+    a.store.set("daily.v1", { best: 10 });
+    a.store.set("records", { laps: 1 });
+    const envelope = JSON.parse(JSON.stringify(a.CareerBackup.build()));
+    const h = loadHarness();
+    const ui = bootBackupUi(h);
+    const side = focus === "driver" ? "left" : "right";
+    await ui.selectBackup(envelope, side);
+    ui.clickImport(side);
+    assert.equal(ui.notices.at(-1), "CAREER RESTORED — CONFIRM OTHER MODE?");
+    const other = focus === "driver" ? "myteam" : "driver";
+    assert.equal(h.disk.has(`apex26.career.${other}.0`), false);
+    const key = `career.${focus}.0`;
+    const progressed = h.store.get(key);
+    progressed.money = 9999;
+    h.store.set(key, progressed);
+    h.store.set("daily.v1", { best: 20 });
+    h.store.set("records", { laps: 2 });
+    ui.clickImport(side);
+    assert.equal(ui.notices.at(-1), "CAREER RESTORED");
+    assert.equal(h.store.get(key).money, 9999, "the first mode is never replayed");
+    assert.equal(h.store.get(`career.${other}.0`).money, other === "myteam" ? 5150 : 123);
+    assert.equal(h.store.get("daily.v1").best, 20, "shared progress is not replayed either");
+    assert.equal(h.store.get("records").laps, 2);
+    assert.equal(h.store.get("customTeam").name, "Murrin GP", "MY TEAM identity accompanies its own mode");
+  });
+}
+
+test("ALL MODES refuses changes to the remaining mode since file selection", async () => {
+  const envelope = JSON.parse(JSON.stringify(deviceA().CareerBackup.build()));
+  envelope.slots.push({ flavour: "driver", i: 1, data: save({ money: 123 }) });
+  // build() already includes empty rows; use its existing driver destination.
+  envelope.slots = envelope.slots.filter((row) => row.data != null);
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  const ui = bootBackupUi(h);
+  await ui.selectBackup(envelope);
+  ui.clickImport();
+  h.disk.set("apex26.career.myteam.0", JSON.stringify(save({ flavour: "myteam", team: "custom", money: 8000 })));
+  h.foreign("apex26.career.myteam.0");
+  ui.clickImport();
+  assert.equal(ui.notices.at(-1), "SAVE CONFLICT — IMPORT REFUSED");
+  assert.equal(h.store.get("career.myteam.0").money, 8000);
+  assert.equal(h.store.get("customTeam", null), null, "conflicted import cannot replace team identity");
+});
+
+test("the MY TEAM replacement market does not offer a departed driver", () => {
+  const h = loadHarness();
+  h.Career.start({ flavour: "myteam", teamId: "haas", seed: 2, hire: "DVL" });
+  h.Career.engage(true);
+  const departed = h.Career.data().roster[0];
+  departed.pending = { kind: "left", ask: 0 };
+  h.Career.save();
+  h.Career.load();
+  assert.equal(h.Career.hireDriver(departed.code, 1), false, "departure survives reload");
+  const ui = bootBackupUi(h);
+  ui.G.$("cr-left").replaceChildren(); ui.G.$("cr-right").replaceChildren();
+  ui.ui.openHub();
+  const names = ui.G.$("cr-right").querySelectorAll(".cr-seat-role").map((n) => n.textContent);
+  assert.ok(names.length > 0, "other drivers remain available");
+  assert.ok(!names.includes(departed.name), "the driver who has left cannot be picked again");
+  const replacement = ui.G.$("cr-right").querySelector(".cr-seat");
+  ui.G.$("cr-left").replaceChildren(); ui.G.$("cr-right").replaceChildren();
+  replacement.onclick();
+  assert.equal(h.Career.hirePending(), null);
+  assert.notEqual(h.Career.data().roster[0].code, departed.code);
+});
+
+
+test("IMPORT leaves a changed empty backup destination alone while restoring populated slots", async () => {
+  const a = loadHarness();
+  a.store.set("career.driver.0", save({ money: 50 }));
+  const envelope = JSON.parse(JSON.stringify(a.CareerBackup.build()));
+  const h = loadHarness();
+  const ui = bootBackupUi(h);
+  await ui.selectBackup(envelope);
+  h.disk.set("apex26.career.driver.1", JSON.stringify(save({ money: 200 })));
+  h.foreign("apex26.career.driver.1");
+  ui.clickImport();
+  assert.equal(ui.notices.at(-1), "CAREER RESTORED");
+  assert.equal(h.store.get("career.driver.0").money, 50);
+  assert.equal(h.store.get("career.driver.1").money, 200, "a null row neither overwrites nor conflicts");
 });

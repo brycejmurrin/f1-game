@@ -109,6 +109,12 @@ async function sameId(CD, C, d, label, resanitize = true) {
   return { it, back };
 }
 
+test("fractional hill lengths retain the sender's content id in a share code", async () => {
+  const { CD, C } = bootEditor();
+  await sameId(CD, C, design({ elevations: [{ s: 0.5, halfM: 22.2, rise: 60 }],
+    bridges: [{ s: 0.8, halfM: 22.2, rise: -60 }] }), "fractional hills at both grade caps");
+});
+
 test("id equality: an hwZone without `ease`, 24 of every zone list, and fractions ≈ 1", async () => {
   const { CD, C } = bootEditor();
   // (i) No ease: whatever the store keeps (absent, or the 0.025 default) the code carries.

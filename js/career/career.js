@@ -1203,7 +1203,9 @@ function teamStandings() {
   const rows = Teams.LIST
     .filter((t) => Teams.isReal(t) || t.id === career.team)
     .map((t) => ({ id: t.id, tier: t.tier, pts: career.season.teamPts[t.id] || 0 }));
-  rows.sort((a, b) => b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : 1));
+  rows.sort((a, b) => (typeof SeasonCal !== "undefined" && SeasonCal.rankTeams)
+    ? SeasonCal.rankTeams(career.season, a.id, b.id)
+    : (b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
   rows.forEach((r, i) => { r.pos = i + 1; });
   return rows;
 }
@@ -1363,6 +1365,8 @@ function renewHire(years) {
 }
 function hireDriver(code, years) {
   if (!career || careerConflict || career.flavour !== "myteam") return false;
+  const hire = career.roster && career.roster[0];
+  if (hire && hire.pending && hire.pending.kind === "left" && hire.code === code) return false;
   const agent = FREE_AGENTS.find((x) => x.code === code);
   if (!agent) return false;
   career.roster = [rosterEntry(agent, clamp(years | 0 || 1, 1, 3))];
