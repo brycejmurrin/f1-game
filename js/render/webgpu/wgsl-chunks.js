@@ -1567,8 +1567,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // effect is gated on carPaint>0 AND on a non-dark albedo — non-paint meshes
   // (carPaint=0) and the dark carbon/tyre parts stay untouched. Cells in object
   // space (in.objPos / GLX vObjPos) so glitter stays welded to the bodywork.
+  // Faded out at range AND inside 4 m, where a cell is several pixels (GLX).
   if (carPaint > 0.001 && litNoL > 0.0 && sparkle > 0.001) {
-    var spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * sparkle;
+    var spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * smoothstep(1.5, 4.0, vDist) * sparkle;
     spFade = spFade * smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b)));
     if (spFade > 0.01) {
       let cell = floor(in.objPos * 220.0);
@@ -1601,11 +1602,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let skyT = pow(max(Rw.y, 1e-4), 0.40);
     var envColor = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyT);
     // the live env probe (params5.x) replaces the gradient near the car (GLX
-    // uEnvStr; faded with eye distance — one cube is parallax-wrong far away)
+    // uEnvStr; faded with eye distance — one cube is parallax-wrong far away).
+    // Read with -y like every other probe tap: the faces are stored y-down
+    // (see RgEnv above); the raw Rw showed wet road and glass the probe upside down.
     if (F.params5.x > 0.001) {
       let probeW = clamp(F.params5.x, 0.0, 1.0) * clamp(1.0 - (vDist - 60.0) / 90.0, 0.0, 1.0);
       if (probeW > 0.001) {
-        envColor = mix(envColor, textureSampleLevel(envCube, envCubeSamp, Rw, rough * 2.5).rgb, probeW);
+        envColor = mix(envColor, textureSampleLevel(envCube, envCubeSamp, vec3<f32>(Rw.x, -Rw.y, Rw.z), rough * 2.5).rgb, probeW);
       }
     }
     let envSunAlign = max(dot(Rw, F.sunDir.xyz), 0.0);
