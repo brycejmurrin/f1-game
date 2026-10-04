@@ -562,3 +562,15 @@
    we say so plainly — hence a distinct state rather than the same grey text. */
 #vsfriend .vs-status.vs-error { color: #ff8a80; opacity: 1; }
 } /* @layer overlays */
+
+/* INSTALL APP (js/ui/platform-session.js installChip): the browser's install
+   offer, on the title screen only; bottom-left, clear of the safe area. */
+#install-chip {
+  position: fixed; z-index: 9000;
+  left: calc(var(--sal) + var(--gap)); bottom: calc(var(--sab) + var(--gap));
+  min-height: var(--tap); padding: 0 var(--gap);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+}
+#install-chip[hidden] { display: none; }

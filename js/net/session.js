@@ -268,6 +268,10 @@ const NetSession = (function () {
       synced,
       // -- liveness --
       alive: () => alive,
+      // The silence that ends this session. The lobby keeps the 6 s default;
+      // NetPlay raises it for a race, where a silent rival is covered by the
+      // local AI meanwhile (netplay.js RACE_GRACE_MS).
+      setTimeoutMs(ms) { if (Number.isFinite(ms) && ms > 0) cfg.timeoutMs = ms; return cfg.timeoutMs; },
       lastHeard: () => lastHeardAt,
       close() {
         // Release whatever `alive` says: a path that flips `alive` first

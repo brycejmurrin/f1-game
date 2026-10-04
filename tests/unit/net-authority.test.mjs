@@ -1011,3 +1011,69 @@ test("a rival's lag is measured from the transport's ARRIVAL stamp, not the fram
   assert.ok(Math.abs(arrived.lagMs - 40) < 3, "lag read from the arrival stamp: " + arrived.lagMs);
   assert.ok(Math.abs(drained.lagMs - 70) < 3, "no stamp: the frame time, as before: " + drained.lagMs);
 });
+
+// ---- L8-f: AI replication + the race silence grace (docs/notes/MULTIPLAYER-AI-REPLICATION.md) ----
+test("the host publishes its AI field at 10 Hz in each guest's aged packet, never that guest's own car", () => {
+  const G = poseG(5);                 // cars[0] host, [1] guest a, [2..4] AI
+  const net = NetPlay.create(G);
+  const a = stateSession();
+  assert.equal(net.start({ role: "host", session: a }).ok, true);
+  let t = 10_000;
+  a.feed(t - 20, 1, lapPose(50), t - 10);
+  for (let k = 0; k < 20; k++, t += 50) { G.netNow = t; net.tick(t); }   // 20 publishes = 1 s
+  const aged = a.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
+  assert.equal(aged.length, 10, "AI rides every other publish: 10 Hz");
+  for (const p of aged) assert.deepEqual(p.cars.map((c) => c.id).sort(), [2, 3, 4], "the AI only — not the host (own packet), not guest a's own car");
+  assert.equal(a.states.filter((p) => p && p.type === NetSnapshot.TYPE_SNAPSHOT).length, 20, "the host's own car still at 20 Hz");
+  net.stop();
+});
+
+test("a guest seats the host's AI as host-owned remotes and poses them from the packet", () => {
+  const G = poseG(4);                 // cars[0] guest (local), [1] host, [2..3] AI
+  const net = NetPlay.create(G);
+  const s = stateSession();
+  assert.equal(net.start({ role: "guest", session: s }).ok, true);
+  const ai = G.cars[2];
+  assert.equal(net.status().hostAi, 2, "both AI cars are the host's");
+  assert.equal(net.owns(ai), true, "updateCar skips it: this screen never simulates the host's AI");
+  assert.equal(ai.human, false, "its role stays AI");
+  for (let k = 0; k < 10; k++) {
+    const tick = 10_000 + k * 100;
+    s._state(NetSnapshot.encodeAged([{ id: 2, car: lapPose(400 + k * 5), at: tick }, { id: 3, car: lapPose(900), at: tick }]), tick + 30);
+    G.netNow = tick + 30; net.tick(tick + 30);
+  }
+  assert.ok(ai.s > 400 && ai.s < 450, "posed from the host's packets: s=" + ai.s);
+  assert.equal(net.owns(G.cars[1]), true, "the host's own car is a human rival as before");
+  // Without replication (hostAi: false) the guest simulates its own AI, as before.
+  const G2 = poseG(4), net2 = NetPlay.create(G2);
+  assert.equal(net2.start({ role: "guest", session: stateSession(), hostAi: false }).ok, true);
+  assert.equal(net2.owns(G2.cars[2]), false);
+  net.stop(); net2.stop();
+});
+
+test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire when it speaks; the race session waits 25 s", () => {
+  const G = poseG(3);
+  const net = NetPlay.create(G);
+  const s = stateSession();
+  let timeout = null;
+  s.setTimeoutMs = (ms) => { timeout = ms; return ms; };
+  assert.equal(net.start({ role: "host", session: s }).ok, true);
+  assert.equal(timeout, 25_000, "the race session's silence grace (the lobby keeps 6 s)");
+  const rival = G.cars[1];
+  let t = 10_000;
+  s.feed(t, 1, lapPose(100), t + 10);
+  G.netNow = t + 20; net.tick(t + 20);
+  assert.equal(net.owns(rival), true);
+  assert.equal(rival.human, true);
+  t += 2_100; G.netNow = t; net.tick(t);                       // 2.1 s of nothing
+  assert.equal(net.owns(rival), false, "silent: the local AI drives it, it is not parked on the line");
+  assert.equal(rival.human, false);
+  assert.equal(rival.dnfAt, null, "no stale AI reliability plan may retire it meanwhile");
+  assert.deepEqual(net.status().stale, [1]);
+  s.feed(t + 100, 1, lapPose(300), t + 110);                   // it speaks again
+  t += 150; G.netNow = t; net.tick(t);
+  assert.equal(net.owns(rival), true, "back on the wire");
+  assert.equal(rival.human, true);
+  assert.deepEqual(net.status().stale, []);
+  net.stop();
+});

@@ -91,6 +91,34 @@ if ($("pm-fullscreen")) {
   if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) dismiss(); });
   setTimeout(dismiss, 15000);
 })();
+// INSTALL APP where the browser offers it (Android / desktop Chromium): the
+// iOS nudge above was the only install door, so those players met at most a
+// mini-infobar. https://web.dev/articles/customize-install — preventDefault,
+// stash the event, call prompt() from a tap (once: the event is single-use),
+// and appinstalled covers every other route in. A suggestion, like the nudge.
+(function installChip() {
+  const chip = $("install-chip");
+  if (!chip) return;
+  let deferred = null;
+  const hide = () => { chip.hidden = true; };
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferred = e;
+    if (store.get("installChipSeen", false) || UiLayers.inRace()) return;
+    chip.hidden = false;
+    setTimeout(hide, 20000);
+  });
+  chip.addEventListener("click", async () => {
+    hide(); store.set("installChipSeen", true);
+    const e = deferred; deferred = null;
+    if (!e) return;
+    try { await e.prompt(); const c = await e.userChoice; Log.info("game", "install prompt " + ((c && c.outcome) || "?")); }
+    catch (err) { Log.warn("game", "install prompt failed: " + ((err && err.message) || err)); }
+  });
+  window.addEventListener("appinstalled", () => { hide(); deferred = null; store.set("installChipSeen", true); });
+  const ov = $("overlay");
+  if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) hide(); });
+})();
 }
 
 function wirePhone() {

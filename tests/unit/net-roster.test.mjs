@@ -112,11 +112,32 @@ test("host: a guest's session closing broadcasts LEFT for that wire id to the ot
   assert.equal(left[0].d.wire, carA.idx);
 });
 
-test("guest: LEFT from the host hands the named rival back to AI", () => {
+// With AI replication (docs/notes/MULTIPLAYER-AI-REPLICATION.md) the car a
+// guest left is the HOST's AI from then on, posed from the host's packets like
+// the rest of the field; `hostAi: false` is the pre-replication behaviour,
+// where the guest's own AI took it. Both: no longer a human, no stale DNF plan.
+test("guest: LEFT from the host hands the named rival to the HOST's AI (posed from the wire)", () => {
   const G = stubG(3);
   const net = NetPlay.create(G);
   const s = fakeSession();
   const r = net.start({ role: "guest", session: s, peers: [{ id: "h" }, { id: "c" }] });
+  assert.equal(r.ok, true, r.error || "");
+  const wires = net.status().remotes.map((x) => x.wire);
+  const gone = G.cars.find((c) => c.idx === wires[1]);
+  const kept = G.cars.find((c) => c.idx === wires[0]);
+  s.deliver("left", { wire: gone.idx, why: "peer_closed" });
+  assert.equal(gone.human, false, "not a human any more");
+  assert.equal(net.owns(gone), true, "the host's AI drives it; this screen poses it, never re-simulates it");
+  assert.deepEqual(net.status().remotes.map((x) => x.wire), [kept.idx], "gone from the human rivals");
+  assert.equal(net.owns(kept), true, "the other rival is untouched");
+  assert.equal(net.active(), true);
+});
+
+test("guest without AI replication: LEFT from the host hands the named rival back to local AI", () => {
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  const r = net.start({ role: "guest", session: s, peers: [{ id: "h" }, { id: "c" }], hostAi: false });
   assert.equal(r.ok, true, r.error || "");
   const remotes = net.status().remotes.map((x) => x.wire);
   assert.equal(remotes.length, 2);

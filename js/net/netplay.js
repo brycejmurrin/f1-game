@@ -5,6 +5,15 @@ const NetPlay = (function () {
   const PUBLISH_HZ = 20;                  // snapshots per second
   const PUBLISH_MS = 1000 / PUBLISH_HZ;
   const INTERP_DELAY_MS = 100;            // how far in the past rivals are drawn
+  // AI REPLICATION (docs/notes/MULTIPLAYER-AI-REPLICATION.md): the host's AI
+  // poses ride every AI_EVERY-th publish (10 Hz) in each guest's aged packet.
+  const AI_EVERY = 2;
+  // RACE SILENCE GRACE: a rival silent this long is driven by the LOCAL AI
+  // (never an immovable car parked on the line) until its packets return; the
+  // race session itself tolerates RACE_GRACE_MS of silence before the car is
+  // the AI's for good. A transport that CLOSES still ends the peer at once.
+  const STALE_MS = 2000;
+  const RACE_GRACE_MS = 25000;
 
   const EV = {
     MODEL: "model", STRATEGY: "strategy", // versioned reliable compatibility + tyre/pit state
@@ -232,6 +241,33 @@ const NetPlay = (function () {
     let localCar = null;
     const remotes = new Map();
     const remoteList = () => [...remotes.values()];
+    // GUEST ONLY: wireId -> remote for an AI car the HOST simulates. Kept apart
+    // from `remotes` (the human rivals), which seats, arming and status read.
+    const aiRemotes = new Map();
+    let publishN = 0;
+    let aiReplicated = false;
+    function makeRemote(car, opts, extra) {
+      return Object.assign({
+        car, profile: null, heardAt: null, everHeard: false, stale: false, hostAi: false,
+        interp: NetSnapshot.createInterp({
+          total: G.track.total,
+          delayMs: opts.interpDelayMs != null ? opts.interpDelayMs : INTERP_DELAY_MS,
+          adaptive: opts.interpDelayMs == null,
+        }),
+      }, extra || null);
+    }
+    // A silent rival goes to the local AI; its packets bring it back.
+    function goLocal(r) {
+      r.stale = true;
+      if (!r.hostAi) G.setCarRole(r.car, false, false);
+      r.car._nOk = false; r.car.netInput = null;
+      r.car.dnfAt = null; r.car.dnfWhy = null;   // as handBackToAI: no instant DNF off an old plan
+      r.car.incidentInvalidLap = true; r.car.lapTime = 0; r.car._secT0 = null;
+    }
+    function goWire(r) {
+      r.stale = false;
+      if (!r.hostAi) G.setCarRole(r.car, true, false);
+    }
     let lastPublish = -Infinity, lastStrategy = -Infinity;
     // The strategy phase, as three compared scalars rather than a joined key.
     let lastPhaseA = null, lastPhaseB = null, lastPhaseC = null;
@@ -432,8 +468,12 @@ const NetPlay = (function () {
       const arrival = Number.isFinite(arrivedAt) ? arrivedAt : G.netNow;
       for (const entry of pkt.cars) {
         if (ownOnly != null && entry.id !== ownOnly) continue;
-        const r = remotes.get(entry.id);
-        if (r) r.interp.push(t - (entry.age || 0), entry, arrival);   // an aged (relayed) entry keeps its own stamp
+        // A guest also takes the host's AI (aiRemotes); a host never has any.
+        const r = remotes.get(entry.id) || aiRemotes.get(entry.id);
+        if (r && r.interp.push(t - (entry.age || 0), entry, arrival)) {   // an aged (relayed) entry keeps its own stamp
+          r.heardAt = Number.isFinite(arrival) ? arrival : (G.netNow != null ? G.netNow : r.heardAt);
+          r.everHeard = true;
+        }
       }
     }
 
@@ -623,7 +663,16 @@ const NetPlay = (function () {
           // Only the host speaks for the roster; a guest naming a wire id
           // could otherwise park any rival it liked.
           if (name === EV.LEFT && role === "guest" && d && Number.isFinite(d.wire) && remotes.has(d.wire)) {
-            handBackToAI(d.why || "peer_closed", d.wire);
+            if (aiReplicated) {
+              // The HOST's AI drives that car now and publishes it with the
+              // rest of the field: pose it from the wire, never re-simulate it.
+              const r = remotes.get(d.wire);
+              G.setCarRole(r.car, false, false);
+              remotes.delete(d.wire);
+              r.hostAi = true; r.stale = false;
+              aiRemotes.set(d.wire, r);
+              if (G.announce) G.announce("RIVAL DISCONNECTED", 2);
+            } else handBackToAI(d.why || "peer_closed", d.wire);
           }
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
@@ -632,6 +681,12 @@ const NetPlay = (function () {
     }
 
     function handBackToAI(reason, id) {
+      if (id == null) {
+        // Whole session over: the host's AI poses stop coming, the local AI
+        // resumes every car from where it was last posed.
+        for (const r of aiRemotes.values()) { r.car._nOk = false; r.car.dnfAt = null; r.car.dnfWhy = null; }
+        aiRemotes.clear();
+      }
       const gone = id == null ? remoteList() : [remotes.get(id)].filter(Boolean);
       for (const r of gone) {
         G.setCarRole(r.car, false, false);
@@ -716,15 +771,7 @@ const NetPlay = (function () {
         G.setCarRole(car, true, false);
         car._nFin = null; car._nFinLap = null; car._nMid = false;     // gateLap / pending-fin state, per race
         car.mods = j.mods || car.mods || null;
-        remotes.set(G.wireId(car), {
-          car,
-          profile: j.profile || null,
-          interp: NetSnapshot.createInterp({
-            total: G.track.total,
-            delayMs: opts.interpDelayMs != null ? opts.interpDelayMs : INTERP_DELAY_MS,
-            adaptive: opts.interpDelayMs == null,
-          }),
-        });
+        remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
       }
       if (!localCar || !remotes.size) {
         // start() adopts the lobby's sessions, but a failed adoption must not
@@ -752,9 +799,27 @@ const NetPlay = (function () {
         const s = entry.session || entry;
         sessions.set(id, s);
         bindSession(id, s);
+        // The race's silence grace (STALE_MS hands a silent car to the local
+        // AI meanwhile); the lobby's 6 s stays the lobby's.
+        if (typeof s.setTimeoutMs === "function") s.setTimeoutMs(RACE_GRACE_MS);
       }
       session = sessionList()[0] || null;
       separateGrid();
+
+      // AI REPLICATION, guest side: every car that is neither ours nor a human
+      // rival's is the HOST's to simulate. Seat it as a host-owned remote —
+      // owns() is then true, updateCar skips it and poseRemote poses it from
+      // the host's packets, exactly as a human rival. Its role stays AI.
+      aiRemotes.clear();
+      aiReplicated = role === "guest" && opts.hostAi !== false;
+      if (aiReplicated) {
+        for (const c of G.cars || []) {
+          const wid = G.wireId(c);
+          if (c === localCar || wid < 0 || remotes.has(wid) || c.human) continue;
+          aiRemotes.set(wid, makeRemote(c, opts, { hostAi: true }));
+        }
+      }
+      publishN = 0;
 
       lastPublish = -Infinity; lastStrategy = -Infinity;
       lastPhaseA = lastPhaseB = lastPhaseC = null;
@@ -941,6 +1006,7 @@ const NetPlay = (function () {
 
     const _pubOwn = { id: -1, car: null }, _pubOne = [_pubOwn];   // publish scratch: one entry per packet
     const _relay = [];                                             // host relay scratch: {id, car, at}
+    const _poseMaps = [remotes, aiRemotes];
     // `poseAt` (optional): when the local car's pose is, on the same clock as
     // `now` — the game loop publishes last frame's physics, which is older
     // than the frame. Absent (a test pumping by hand), the pose is `now`.
@@ -1005,7 +1071,16 @@ const NetPlay = (function () {
       // Pose remotes FIRST. Host relay encodes r.car; if that write runs after
       // the snapshot, guests receive last tick's parked pose (or the grid
       // spawn) while this tick's interp sample sits unused.
-      for (const r of remotes.values()) {
+      for (const map of _poseMaps) for (const r of map.values()) {
+        // SILENCE: past STALE_MS the local AI drives the car (owns() is false
+        // for it) instead of it standing on the line; a packet brings it back.
+        // A human rival that has never spoken stays posed where it is (it is
+        // still building its circuit); a host AI car the host never names (a
+        // grid the two screens disagree on) is the local AI's after STALE_MS.
+        if (r.heardAt == null) r.heardAt = now;
+        const quiet = (r.hostAi || r.everHeard) && now - r.heardAt > STALE_MS;
+        if (quiet !== r.stale) { if (quiet) goLocal(r); else goWire(r); }
+        if (r.stale) continue;
         // Per-remote scratch (the ._smp precedent): poseRemote copies fields
         // out and pred is consumed below, so neither object escapes the tick.
         const st = r.interp.sample(now, r._smpSt || (r._smpSt = {}));
@@ -1056,12 +1131,22 @@ const NetPlay = (function () {
         // in a four-player room, ~75 % of each SCTP/DTLS/UDP datagram overhead.
         // An aged packet (NetSnapshot.encodeAged) keeps each car's own
         // presentedAt stamp, which is why it was split in the first place.
-        if (role === "host" && sessions.size > 1) {
+        // …and, every AI_EVERY-th publish, the host's AI field (plus any human
+        // slot the local AI is covering through a silence): guests pose these
+        // instead of simulating their own (docs/notes/MULTIPLAYER-AI-REPLICATION.md).
+        const withAi = role === "host" && (++publishN % AI_EVERY) === 0;
+        if (role === "host" && (sessions.size > 1 || withAi)) {
           _relay.length = 0;
-          for (const r of remotes.values()) {
+          if (sessions.size > 1) for (const r of remotes.values()) {
             const id = G.wireId(r.car), at = r.interp.presentedAt ? r.interp.presentedAt() : now;
-            if (id < 0 || !Number.isFinite(at)) continue;   // nothing posed yet: nothing to relay
+            if (r.stale || id < 0 || !Number.isFinite(at)) continue;   // nothing posed yet: nothing to relay
             _relay.push({ id, car: r.car, at });
+          }
+          if (withAi) for (const c of G.cars || []) {
+            if (c === localCar) continue;
+            const id = G.wireId(c), r = id >= 0 ? remotes.get(id) : null;
+            if (id < 0 || (r && !r.stale)) continue;   // a live human rival is relayed above
+            _relay.push({ id, car: c, at });
           }
           if (_relay.length) {
             for (const [sid, s] of sessions) {
@@ -1096,7 +1181,11 @@ const NetPlay = (function () {
       // updateCar() consults this: a car posed from the network must not also
       // be simulated locally, or the two fight every frame. A membership test
       // now rather than an identity one, the same shape incidentSim.owns has.
-      owns: (c) => active && c != null && remotes.has(G.wireId(c)) && remotes.get(G.wireId(c)).car === c,
+      owns: (c) => {
+        if (!active || c == null) return false;
+        const id = G.wireId(c), r = remotes.get(id) || aiRemotes.get(id);
+        return !!r && r.car === c && !r.stale;   // a silent rival is the local AI's until it speaks
+      },
       rivalDriverIds: () => remoteList().map((r) => r.car.driverId).filter((x) => x != null),
       active: () => active,
       role: () => role,
@@ -1117,6 +1206,8 @@ const NetPlay = (function () {
           driverId: r.car.driverId, buffered: r.interp.size(), timing: r.interp.timing ? r.interp.timing() : null,
         })),
         slotFallback: lastSlotFallback,
+        hostAi: aiRemotes.size,                    // guest: AI cars posed from the host
+        stale: [...remotes.values(), ...aiRemotes.values()].filter((r) => r.stale).map((r) => G.wireId(r.car)),
         net: session ? session.stats() : null,
         buffered: remoteList().length ? remoteList()[0].interp.size() : 0,
         events: eventLog.length,

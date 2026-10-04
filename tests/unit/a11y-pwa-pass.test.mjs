@@ -119,6 +119,60 @@ test("manifest.json asks for fullscreen, then standalone", () => {
   assert.equal(m.display, "standalone", "display stays the fallback for browsers without display_override");
 });
 
+// L8-f: identity, richer install UI, a shortcut, and an install door outside iOS.
+// `id` resolves against start_url's ORIGIN, and an app installed before it had
+// one is identified by its start_url (https://brycejmurrin.github.io/f1-game/),
+// so "/f1-game/" keeps every existing install the same app.
+// https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/id
+test("manifest.json: id keeps the installed identity, screenshots and shortcuts point at shipped files", () => {
+  const m = JSON.parse(read("manifest.json"));
+  assert.equal(m.id, "/f1-game/");
+  assert.ok(m.screenshots.length >= 1);
+  for (const sh of m.screenshots) {
+    assert.ok(fs.existsSync(path.join(ROOT, sh.src)), sh.src + " exists");
+    assert.match(sh.sizes, /^\d+x\d+$/);
+    assert.equal(sh.form_factor, "wide");
+    assert.ok(sh.label, "a screenshot is labelled for assistive tech");
+  }
+  for (const sc of m.shortcuts) {
+    assert.ok(sc.name && sc.url, "name + url");
+    assert.ok(fs.existsSync(path.join(ROOT, sc.url.split(/[?#]/)[0])), sc.url + " is a page that ships");
+    for (const ic of sc.icons || []) assert.ok(fs.existsSync(path.join(ROOT, ic.src)));
+  }
+});
+
+test("INSTALL APP: beforeinstallprompt is stashed, prompt() only from the tap, once; appinstalled hides it", async () => {
+  const ps = read("js/ui/platform-session.js");
+  const body = ps.slice(ps.indexOf("(function installChip()"), ps.indexOf("})();", ps.indexOf("(function installChip()")) + 5);
+  const win = new Map(), stored = new Map();
+  const chip = { hidden: true, listeners: new Map(), addEventListener(t, fn) { this.listeners.set(t, fn); } };
+  const sb = {
+    window: { addEventListener: (t, fn) => win.set(t, fn) },
+    $: (id) => (id === "install-chip" ? chip : null),
+    store: { get: (k, d) => (stored.has(k) ? stored.get(k) : d), set: (k, v) => stored.set(k, v) },
+    UiLayers: { inRace: () => false },
+    Log: { info() {}, warn() {} },
+    setTimeout: () => 0,
+  };
+  vm.createContext(sb);
+  vm.runInContext(body, sb);
+  let prevented = 0, prompted = 0;
+  const ev = { preventDefault: () => prevented++, prompt: async () => { prompted++; }, userChoice: Promise.resolve({ outcome: "accepted" }) };
+  win.get("beforeinstallprompt")(ev);
+  assert.equal(prevented, 1, "no mini-infobar: our chip instead");
+  assert.equal(chip.hidden, false);
+  assert.equal(prompted, 0, "never prompted without a tap");
+  await chip.listeners.get("click")();
+  assert.equal(prompted, 1);
+  assert.equal(chip.hidden, true);
+  assert.equal(stored.get("installChipSeen"), true);
+  await chip.listeners.get("click")();
+  assert.equal(prompted, 1, "the event is single-use");
+  win.get("beforeinstallprompt")(ev);
+  assert.equal(chip.hidden, true, "a player who has seen it is not asked again");
+  assert.match(read("index.html"), /<button id="install-chip" type="button" hidden>INSTALL APP<\/button>/);
+});
+
 test("the CAM button's accessible name starts with the word it shows", () => {
   const attrs = {};
   const btn = {
