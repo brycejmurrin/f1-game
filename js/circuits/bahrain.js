@@ -4,10 +4,20 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "bahrain",
-    pit: { side: -1 },   // the pit complex (TrackPit): the paddock is on the left of the main straight
+    // The pit complex (TrackPit) sits on the start straight, on its RIGHT (east):
+    // OSM pit-lane way 187123422 measures 9.5-11.8 m right of the built
+    // centreline, the main grandstand (way 187123419) 39 m left.
+    pit: { side: 1 },
     reverse: false,  // driving direction flipped (manual override of the GPS-trace auto-audit)
-    // Bounded only (START-LINES: Not located — OSM pit way is a weak proxy). Keep until a better source.
-    startFrac: 0.2250,
+    // Start/finish on the real pit straight (docs/tracks/START-LINES.md, bahrain):
+    // the start coordinate 26.0325N 50.5106E snaps 3.8 m off the trace's own
+    // vertex 0 (runner-up branch 186 m), the OSM pit-lane way runs alongside
+    // the same straight, and the first apex after it is the T1 RIGHT hairpin.
+    // 0.2250 put the line on a 370 m diagonal whose first apex was a LEFT.
+    startFrac: 0.0000,
+    // The scenery (js/circuits/scenery/bahrain.js), dressingExclusions,
+    // elevations and bankZones were authored against 0.2250: keep them in place.
+    sceneryStartFrac: 0.2250,
     name: "BAHRAIN",
     gp: "Bahrain GP",
     country: "Bahrain",
@@ -38,7 +48,7 @@
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.28, 0.62],
-    turns: [0.0480, 0.0705, 0.1165, 0.1870, 0.2030, 0.3370, 0.3950, 0.4065, 0.4520, 0.4610, 0.6080, 0.8335, 0.8510, 0.8710, 0.9800],
+    turns: [0.1038, 0.1213, 0.1413, 0.2503, 0.3183, 0.3408, 0.3868, 0.4573, 0.4733, 0.6073, 0.6653, 0.6768, 0.7223, 0.7313, 0.8783],
     // Sakhir: sparse desert — cool-white lamps, thin palm line (not oasis green)
     furniture: { tree: "palm",  fol: [0.30, 0.40, 0.18], lamp: "arm",   lc: [0.88, 0.94, 1.0], sparse: true },
     kit: { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },

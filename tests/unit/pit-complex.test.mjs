@@ -25,7 +25,11 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm.cjs"));
 
-const FULL = "silverstone", CORRIDOR = "albert_park", STREET = "monaco", LEFT = "bahrain";
+// LEFT was bahrain until its start line moved onto the real pit straight
+// (2026-10-04): its pits are on the RIGHT there (OSM pit-lane way) and its
+// 1 km straight holds the full window. Miami is a full complex on the left
+// whose window sits on the floor.
+const FULL = "silverstone", CORRIDOR = "albert_park", STREET = "monaco", LEFT = "miami";
 
 const ctxOnce = (() => { let c = null; return () => (c || (c = buildContext())); })();
 const tracksOnce = () => ctxOnce().Tracks;
@@ -538,7 +542,7 @@ test("the entry road's MOUTH stands on the straight wherever the straight allows
     const p = buildOnce(id).pit;
     assert.ok(p.entryM < P.ENTRY_MAX && p.entryM >= P.ENTRY_MIN, `${id}: the window gave the road its straight (entryM ${p.entryM})`);
   }
-  // Bahrain's window is on the floor (T15's exit bends inside it): unchanged.
+  // LEFT's (miami's) window is on the floor: a corner bends inside it.
   assert.equal(buildOnce(LEFT).pit.entryM, P.ENTRY_MIN);
 });
 

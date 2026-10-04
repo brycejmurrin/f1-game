@@ -38,7 +38,7 @@
     "silverstone": 40,
     "singapore": 4,
     "sochi": 4,
-    "spa": 22,
+    "spa": 12,
     "suzuka": 4,
     "vegas": 4,
     "watkins_glen": 1,
@@ -60,7 +60,7 @@
     "paul_ricard": 5,
     "qatar": 2,
     "shanghai": 2,
-    "spa": 4,
+    "spa": 3,
     "suzuka": 5
   },
   "flatCoplanar": {
@@ -99,7 +99,7 @@
     "silverstone": 8,
     "singapore": 5,
     "sochi": 8,
-    "spa": 3,
+    "spa": 1,
     "vegas": 6,
     "zandvoort": 7,
     "zolder": 4
