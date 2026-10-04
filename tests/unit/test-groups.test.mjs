@@ -187,9 +187,14 @@ test("the manual suites stay out of default discovery", () => {
   // tests/manual/ renders hundreds of SwiftShader frames and emits review
   // images. Letting it into the default run would take a 3-minute group to an
   // hour, silently — the failure mode is a timeout nobody attributes.
+  // Since 2026-10-04 the rule lives in MANUAL_IGNORE, repeated in every
+  // project (a project's testIgnore replaces the top-level one); the test
+  // "Playwright collects tests/specs/*.spec.js by default" below runs it.
   const cfg = read("playwright.config.js");
-  assert.match(cfg, /testIgnore:\s*\[[^\]]*manual/,
+  assert.match(cfg, /MANUAL_IGNORE = MANUAL_RUN \? \[\] : \["\*\*\/manual\/\*\*"\]/,
     "playwright.config.js must keep **/manual/** out of default discovery");
+  assert.equal((cfg.match(/testIgnore: (\[[^\]]*)?\.{0,3}MANUAL_IGNORE/g) || []).length, 4,
+    "the manual ignore is applied at the top level AND in each of the three projects");
   assert.ok(fs.existsSync(path.join(ROOT, "tests/manual/README.md")),
     "tests/manual/ needs a README saying what is in it and how to run it");
 });
@@ -360,4 +365,46 @@ test("no test group names the same spec file twice", () => {
     tfSeen.add(f);
   }
   assert.deepEqual(offenders, [], "a group lists a spec twice — the generated npm script carries the repeat");
+});
+
+test("Playwright collects tests/specs/*.spec.js by default — no unit file, no manual suite", async () => {
+  /* 2026-10-04: testDir "./tests" with Playwright's default testMatch
+     collected all 493 tests/unit node:test files on a bare `npm test`, and the
+     headless project's testIgnore REPLACED the top-level `**\/manual/**`
+     (takeFirst(project, config)), so tests/manual/ came along. Asserted with
+     Playwright's own matcher and its own precedence, no browser. */
+  const { createRequire } = await import("node:module");
+  const require = createRequire(import.meta.url);
+  const { createFileMatcher } = require("playwright/lib/util");
+  const cp = await import("node:child_process");
+  const cfgPath = path.join(ROOT, "playwright.config.js");
+  const cfg = (await import(cfgPath)).default;
+  const files = [];
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) { if (e.name !== "node_modules" && !e.name.endsWith("-snapshots")) walk(p); }
+    else files.push(p);
+  } };
+  walk(path.join(ROOT, "tests"));
+  const take = (a, b, d) => (a !== undefined ? a : b !== undefined ? b : d);
+  const collected = new Set();
+  for (const proj of cfg.projects) {
+    const match = createFileMatcher(take(proj.testMatch, cfg.testMatch, "**/*.@(spec|test).?(c|m)[jt]s?(x)"));
+    const ignore = createFileMatcher(take(proj.testIgnore, cfg.testIgnore, []));
+    for (const f of files) if (match(f) && !ignore(f)) collected.add(path.relative(ROOT, f).split(path.sep).join("/"));
+  }
+  const stray = [...collected].filter((f) => !/^tests\/specs\/[^/]+\.spec\.js$/.test(f));
+  assert.deepEqual(stray, [], "default discovery reaches outside tests/specs/*.spec.js");
+  const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`);
+  assert.deepEqual([...collected].sort(), specs.sort(), "every spec is still collected by some project");
+  // A command line that names a manual suite still runs it (tests/manual/README.md).
+  const probe = (argv) => cp.execFileSync(process.execPath, ["--input-type=module", "-e",
+    `process.argv.push(${JSON.stringify(argv)}); const m = await import(${JSON.stringify(cfgPath)}); ` +
+    `process.stdout.write(JSON.stringify([m.TEST_MATCH, m.default.projects.map((p) => p.testIgnore)]))`],
+    { cwd: ROOT, encoding: "utf8", env: { ...process.env, APEX_MANUAL_RUN: "" } });
+  const [mm, ign] = JSON.parse(probe("tests/manual/blank-scan.spec.js"));
+  assert.ok(mm.includes("manual/**/*.spec.js"), "a manual path on the command line opts that run into manual discovery");
+  assert.ok(ign.every((l) => !(l || []).includes("**/manual/**")), "…in every project");
+  const [dm] = JSON.parse(probe("tests/specs/smoke.spec.js"));
+  assert.deepEqual(dm, ["specs/**/*.spec.js"]);
 });
