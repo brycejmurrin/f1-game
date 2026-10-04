@@ -266,6 +266,16 @@ so an agent sees the frame without a Read. The server also lists three
 resources (`resources/list` / `resources/read`): DEBUG-HOOKS.md, AGENT-SURFACE.md
 and this file — read without booting anything; any other URI is -32002.
 
+A second re-test (all 16 tools PASS on `dd69887`) found Chromium outliving
+the lock after a cancel: killing the CLI's process group missed the browser,
+because Playwright starts Chromium in its OWN group, and it ran ~7 s after the
+lock read free. Every cancel, timeout, session close and job cancel now
+snapshots the whole process tree first (`processTree`: a re-parented browser
+is unreachable later), kills it (`killTreeAndWait`: TERM, KILL after 3 s) and
+only then releases the lock. Measured: browser gone at 9 s after an 8 s
+cancel, 0 seconds with a browser under a free lock (was ~18 s); `apex_track`
+close returns `{survivors:0, lockFree:true}` and a status right after reads free.
+
 Not built: `apex_car_shot` — an `apex_garage` session already renders any team
 from any angle in seconds, and `render-car.mjs` needs a server on :3456.
 

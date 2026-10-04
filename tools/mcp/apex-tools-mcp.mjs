@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
-import { createExtras, JOB_KINDS } from "./apex-extras.mjs";
+import { createExtras, JOB_KINDS, processTree, killTreeAndWait } from "./apex-extras.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -1131,11 +1131,14 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
     try {
       child = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, detached: true });
     } catch (e) { spawnErr = e; }
+    // On a timeout or cancel: snapshot the WHOLE tree first (Playwright puts
+    // Chromium in its own process group, so a group kill missed it and the
+    // browser outlived the lock by ~7 s), kill it, and settle only once it is gone.
+    let treeGone = null;
     const killTree = (why) => {
       if (!child || child.exitCode != null || stopped) return;
       stopped = why;
-      try { process.kill(-child.pid, "SIGTERM"); } catch { try { child.kill("SIGTERM"); } catch { /* gone */ } }
-      setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* gone */ } }, 3000).unref();
+      treeGone = killTreeAndWait(processTree(child.pid));
     };
     const timer = setTimeout(() => killTree("timeout"), timeoutMs);
     const onAbort = () => killTree("cancelled");
@@ -1174,7 +1177,8 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
       } else if (allowExit && allowExit.has(exit)) {
         body.ok = true;
       }
-      resolve(toolResult(body, { isError: !body.ok }));
+      const result = toolResult(body, { isError: !body.ok });
+      if (treeGone) treeGone.then(() => resolve(result)); else resolve(result);
     };
     if (!child) return finish(null, null);
     running.add(child);

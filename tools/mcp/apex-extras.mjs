@@ -14,12 +14,47 @@
 //   apex_car_audit / apex_track_audit — the offline checks agents ran by hand.
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import sharp from "sharp";
 
 const TRACK_TOOL = "tools/shot/track-session.mjs";
 const ID_RE = /^[a-z0-9_]{2,40}$/;
 const LIST_RE = /^[a-z0-9*_,.-]{1,200}$/i;
+
+/** A process and every descendant, read BEFORE anything is killed: Playwright
+ *  starts Chromium in its own process group, so killing the CLI's group left
+ *  the browser running ~7 s after the lock read free (2026-10-03 re-test), and
+ *  once its parent exits a browser is re-parented to init and unreachable. */
+export function processTree(rootPid) {
+  if (!rootPid) return [];
+  let rows;
+  try { rows = execFileSync("ps", ["-eo", "pid=,ppid="], { encoding: "utf8", timeout: 5000 }); } catch { return [rootPid]; }
+  const kids = new Map();
+  for (const line of rows.split("\n")) {
+    const [pid, ppid] = line.trim().split(/\s+/).map(Number);
+    if (pid && ppid) { if (!kids.has(ppid)) kids.set(ppid, []); kids.get(ppid).push(pid); }
+  }
+  const out = [rootPid];
+  for (let i = 0; i < out.length; i++) for (const k of kids.get(out[i]) || []) out.push(k);
+  return out;
+}
+const alive = (pid) => {
+  try { return !/^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${pid}/stat`, "utf8")); }   // a zombie is gone
+  catch { try { process.kill(pid, 0); return true; } catch { return false; } }
+};
+/** SIGTERM every pid (and the root's group), SIGKILL survivors after graceMs,
+ *  resolve once all are gone or maxMs passes. Release a lock only after this. */
+export async function killTreeAndWait(pids, { graceMs = 3000, maxMs = 15000 } = {}) {
+  const sig = (s) => { for (const p of pids) { try { process.kill(p, s); } catch { /* gone */ } } try { process.kill(-pids[0], s); } catch { /* not a leader */ } };
+  sig("SIGTERM");
+  const t0 = Date.now();
+  let killed = false;
+  while (pids.some(alive) && Date.now() - t0 < maxMs) {
+    if (!killed && Date.now() - t0 > graceMs) { sig("SIGKILL"); killed = true; }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return { pids: pids.length, survivors: pids.filter(alive) };
+}
 
 /** An MCP image block for a PNG: a 640-px JPEG thumbnail, so an agent sees the
  *  frame in the result instead of spending a Read on it. */
@@ -48,15 +83,24 @@ export function createExtras(ctx) {
 
   // ── apex_track: one persistent track-session.mjs child ───────────────────
   let sess = null;
+  /** Close the session; the returned promise settles once its whole process
+   *  tree is gone and the lock is free, so a status right after close is true. */
   function sessClose(reason) {
     if (!sess) return null;
     const s = sess; sess = null;
     for (const p of s.pending.values()) { clearTimeout(p.timer); p.reject(new Error(`session closed: ${reason}`)); }
+    const tree = processTree(s.child.pid);
     try { s.child.stdin.end(); } catch { /* gone */ }
-    const kill = setTimeout(() => { try { process.kill(-s.child.pid, "SIGTERM"); } catch { /* gone */ } }, 8000);
-    kill.unref();
-    if (s.exited) releaseLock();
-    return { closed: true, reason, uptimeMs: Date.now() - s.started, shots: s.shots };
+    const summary = { closed: true, reason, uptimeMs: Date.now() - s.started, shots: s.shots };
+    s.closing = (async () => {
+      // A clean EOF shutdown first (track-session closes its browser), then the tree.
+      const t0 = Date.now();
+      while (!s.exited && Date.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 150));
+      const left = await killTreeAndWait(tree);
+      releaseLock();
+      return { ...summary, survivors: left.survivors.length };
+    })();
+    return summary;
   }
   function sessSend(cmd, timeoutMs = 240000) {
     return new Promise((resolve, reject) => {
@@ -98,12 +142,12 @@ export function createExtras(ctx) {
     child.on("exit", (code, sig) => {
       s.exited = true;
       s.onReady(null);
-      if (sess === s) sessClose(`exit ${code ?? sig}`);
-      releaseLock();
+      if (sess === s) sessClose(`exit ${code ?? sig}`);   // releases once the tree is gone
     });
     const r = await ready;
     if (!r || !r.ready) {
       const why = sess === s ? sessClose("not ready") : null;
+      if (s.closing) await s.closing;
       return refuse("track_boot_failed", `track session never became ready${r && r.error ? `: ${r.error}` : ""}`, "Check apex_status (load, orphan Chromium) and retry.", why);
     }
     return toolResult({ ok: true, op: "open", ...r, hint: "Now op shot / eval / track / sheet / diff; op close when done (the browser lock is held until then)." });
@@ -113,7 +157,11 @@ export function createExtras(ctx) {
     try {
       if (op === "open") return await trackOpen(args);
     } catch (e) { if (e.refuse) return e.refuse; return refuse("bad_args", String(e.message || e), "See the apex_track inputSchema."); }
-    if (op === "close") return toolResult({ ok: true, op, ...(sessClose("close") || { closed: false, reason: "not open" }) });
+    if (op === "close") {
+      const s = sess;
+      if (!sessClose("close")) return toolResult({ ok: true, op, closed: false, reason: "not open" });
+      return toolResult({ ok: true, op, ...(await s.closing), lockFree: true });
+    }
     if (!sess) return refuse("track_not_open", "no track session", 'Call apex_track {"op":"open","track":"spa"} first.');
     const cmd = {};
     if (op === "shot") {
@@ -213,7 +261,8 @@ export function createExtras(ctx) {
       j.ended = Date.now();
       j.exit = code ?? sig;
       if (j.state === "running") j.state = code === 0 ? "done" : "failed";
-      if (j.browser) releaseLock();
+      // A cancelled browser job frees the lock from jobCancel, after its tree is gone.
+      if (j.browser && !j.cancelTree) releaseLock();
     });
     child.on("error", (e) => { j.state = "failed"; j.exit = String(e.message); j.ended = Date.now(); if (j.browser) releaseLock(); });
     return toolResult({ ok: true, ...jobView(j), hint: "apex_job_status {jobId} for progress; the result lands in out when state is done." });
@@ -224,15 +273,17 @@ export function createExtras(ctx) {
     if (!j) return refuse("unknown_job", `no job ${args.jobId} in this server process`, "apex_job_status {} lists them.");
     return toolResult({ ok: j.state !== "failed", ...jobView(j, true) }, { isError: j.state === "failed" });
   }
-  function jobCancel(args) {
+  async function jobCancel(args) {
     const j = jobs.get(String(args.jobId || ""));
     if (!j) return refuse("unknown_job", `no job ${args.jobId}`, "apex_job_status {} lists them.");
+    let survivors;
     if (j.state === "running") {
       j.state = "cancelled";
-      try { process.kill(-j.child.pid, "SIGTERM"); } catch { /* gone */ }
-      setTimeout(() => { try { process.kill(-j.child.pid, "SIGKILL"); } catch { /* gone */ } }, 3000).unref();
+      j.cancelTree = processTree(j.child.pid);
+      survivors = (await killTreeAndWait(j.cancelTree)).survivors.length;
+      if (j.browser) releaseLock();
     }
-    return toolResult({ ok: true, ...jobView(j) });
+    return toolResult({ ok: true, ...jobView(j), survivors });
   }
   process.on("exit", () => {
     for (const j of jobs.values()) if (j.state === "running") { try { process.kill(-j.child.pid, "SIGKILL"); } catch { /* gone */ } }
