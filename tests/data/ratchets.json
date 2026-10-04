@@ -12,9 +12,9 @@
       "lines": 3474
     },
     "js/game.js": {
-      "codeLines": 4795,
+      "codeLines": 4798,
       "gMembers": 286,
-      "lines": 8946,
+      "lines": 8943,
       "topLets": 148
     },
     "js/lighting/presets.js": {
@@ -27,7 +27,7 @@
       "lines": 2788
     },
     "js/track/tracks.js": {
-      "lines": 703
+      "lines": 702
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
