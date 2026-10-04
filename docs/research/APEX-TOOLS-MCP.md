@@ -243,6 +243,32 @@ even `apex_status` could answer) and the lock stayed held, so the next call got
 Not a bug: `apex_shot`'s `frame.camera.mode` is the GAME camera underneath;
 the free cam that framed the shot is `dbgCamActive: true`.
 
+## Week-8 (2026-10-03: sessions, jobs, UI, audits — 16 → 24 tools)
+
+Measured live over stdio (`apex-tools-mcp.sh serve`, idle container):
+
+| Tool | What | Measured |
+|---|---|---|
+| `apex_track` | persistent `track-session.mjs --serve`: open once, then shot / eval / track / sheet / diff | open 27 s; shots 10–25 s (60 s once under a concurrent `verify_all` job); eval 7 ms; switch circuit 3 s |
+| `apex_job_start` / `_status` / `_cancel` | minutes-long CLIs in the background, ≤ 2 at once, browser kinds hold the lock | `verify_all` done in 136 s; `parts_sweep` cancelled; a third start → `jobs_busy` |
+| `apex_ui_fit` | layout-audit geometry, one screen × viewport | 19 s, `settings` clean |
+| `apex_ui_shot` | layout-audit `--screen`, PNG + DOM + thumbnail | 19 s |
+| `apex_car_audit` | `parts-ladder` (0.24 s) or `crest-sweep` (~34 s) | ladder: 12 rows |
+| `apex_track_audit` | `verify-track --quiet` + `float-audit --json` in parallel | 3.3 s, monza 0 clusters |
+
+A session shot waits for TWO soft presents: the first resolved on a present
+already in flight from the previous camera, and an orbit and an eye shot came
+back 0.5 % apart (the same frame). With two waits they are 99 % apart.
+
+Screenshot tools (`apex_shot`, `apex_track` shot / sheet / diff, `apex_ui_shot`)
+attach a 640-px JPEG thumbnail as an MCP image block (`image:false` opts out),
+so an agent sees the frame without a Read. The server also lists three
+resources (`resources/list` / `resources/read`): DEBUG-HOOKS.md, AGENT-SURFACE.md
+and this file — read without booting anything; any other URI is -32002.
+
+Not built: `apex_car_shot` — an `apex_garage` session already renders any team
+from any angle in seconds, and `render-car.mjs` needs a server on :3456.
+
 ### Locking
 
 Exclusive `scratch/apex-browser.lock` (gitignored). Week-1 including
