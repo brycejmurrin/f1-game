@@ -207,13 +207,15 @@
       // ── Sakhir Tower — wave-2 hero over T1 braking (flat cap, no sail) ────
       // Research + aerial: multi-layered cylindrical shaft at the inside of T1,
       // wrapped full-height in bright LED video bands. Flat capped roof — the
-      // cone/sail silhouette is wrong. required modelGroup so a silent onTrack
-      // drop becomes a thrown build (wave-1 Monaco pattern).
+      // cone/sail silhouette is wrong. required:true so a missing emit fails
+      // the foundation spec (wave-1 Monaco pattern).
       (function sakhirTower() {
         // Inside (right) of the real T1, over its braking zone.
         const kT = K(T1F - 0.012);
-        const a = anchor(kT, 1, 50), b = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 18)) return;
+        // 40 m, not 50: at 50 m the 18.7 m AABB reaches 13 m of the T2/T4
+        // arm (racing 0.117) and the onTrack(18) guard skipped the required
+        // model — bahrain-foundation, #878. 40 m leaves 19 m of extra.
+        const a = anchor(kT, 1, 40), b = [a.r, a.u, a.t];
         const BASE = a.c;
         const TOWER_H = 42;   // ~10–11 storeys
         const TOWER_R = 7.2;
@@ -252,7 +254,12 @@
           addCyl(stage, vadd(BASE, b[1], TOWER_H + 1.3), 0.35, 4.2, STEEL, 5, b);
           addBox(stage, vadd(BASE, b[1], TOWER_H + 5.4), [1.8, 0.7, 1.8], BEACON_WARM, b);
           stage._mat = 0;
-          addBox(stage, vadd(BASE, b[1], 0.15), [18.0, 0.30, 18.0], POOL, b);
+          // Seat the plaza on local terrain — BASE is the road-height
+          // Frenet origin 40 m infield, and the SRTM/dune mesh sits ~0.1 m
+          // above it (ground-audit buried the 18 m pad when the tower returned).
+          const plaza = terrainYAt(BASE[0], BASE[2]);
+          const plazaLift = (plaza != null ? plaza - BASE[1] : 0) + 0.15;
+          addBox(stage, vadd(BASE, b[1], plazaLift), [18.0, 0.30, 18.0], POOL, b);
         }, { required: true });
       })();
 
