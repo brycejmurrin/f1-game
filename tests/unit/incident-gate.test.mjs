@@ -273,3 +273,36 @@ test("handback reads a world drift toward the car's right as +vLat", () => {
   assert.ok(Math.abs(cars[0].speed - 10) < 1e-9, `forward speed (got ${cars[0].speed})`);
   assert.ok(Math.abs(cars[0].vLat - 3) < 1e-9, `drift toward -X at head 0 is +vLat, sliding right (got ${cars[0].vLat})`);
 });
+
+// HANDBACK SIGN, AI. An AI car moves along the road (c.s += c.speed*dt), so a
+// rival Rapier spun 180 deg while it was still sliding FORWARD along the road
+// must come back with positive speed. Read against the body's heading it came
+// back at -20 m/s and reversed down the track into the pack.
+test("an AI car spun round but still sliding forwards is handed back driving forwards", () => {
+  let pose = null;
+  const ctx = { console, Math, Number, Map, Set, Array, Object, JSON };
+  ctx.globalThis = ctx;
+  ctx.Log = { info() {}, debug() {}, warn() {} };
+  ctx.localStorage = { getItem() { return null; } };
+  ctx.M4 = { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) };
+  ctx.Tracks = { sample(track, s, o) { o.t = [0, 0, 1]; o.p = [0, 0, s]; o.hw = 7; return o; }, wallAt() { return 20; } };
+  ctx.RaceControl = { lineTransition() { return null; } };
+  ctx.DebrisWorld = { active: () => true, rapierReady: () => true, worldGen: () => 1,
+    promoteCarDynamic() { return true; }, demoteCarKinematic() {}, carBodyPose() { return pose; } };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "\nglobalThis.IncidentSim = IncidentSim;", ctx);
+  const car = { human: false, s: 500, x: 0, speed: 40, vLat: 0, yawRateCur: 0, head: 0, px: 0, pz: 500, prog: 500 };
+  const G = { cars: [car], track: { total: 5000 }, smp: {}, PACE: 1, vTop: () => 72, lapsTarget: 5, raceT: 10,
+    trackFrom(px, pz) { return { s: pz, x: -px }; }, worldFromTrack(s, x) { return { x: -x, z: s }; } };
+  const IS = ctx.IncidentSim.create(G);
+  IS.notifyWall(car, 1, 999);
+  IS.preStep(1 / 60);
+  assert.equal(IS.owns(car), true, "the wall strike hands the car to Rapier");
+  // Body yawed PI (quaternion about Y), travelling +Z (forwards along the road) at 20 m/s.
+  for (let k = 0; k < 400 && IS.owns(car); k++) {
+    pose = { x: 0, z: car.pz + 20 / 60, qx: 0, qy: 1, qz: 0, qw: 1e-9, vx: 0, vz: 20, wx: 0, wy: 0, wz: 0, sleeping: false };
+    IS.postStep(1 / 60);
+  }
+  assert.equal(IS.owns(car), false, "handed back");
+  assert.ok(car.speed > 0, `handed back at ${car.speed} m/s — an AI car rolling forwards must not reverse`);
+});

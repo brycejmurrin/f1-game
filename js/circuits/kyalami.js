@@ -1,5 +1,8 @@
 /* Apex 26 — KYALAMI GRAND PRIX CIRCUIT definition (data only).
-   Retired circuit (`classic: true`): last South African GP 1993.
+   Retired from F1 (`classic: true`): last South African GP 1993, on the 1992
+   layout. The trace below is the 2016 rebuild's 4.5 km layout, run clockwise
+   (`reverse: true` on this source; built lap's net turning is -360°, T1
+   Crowthorne a right-hander).
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
@@ -17,6 +20,12 @@
     lengthKm: 4.5,
     baseHW: 7.5,
     sceneryCoordinates: "racing",
+    // The pit complex (TrackPit): LEFT of the main straight in the (clockwise)
+    // racing direction — the OUTSIDE of the lap, as the 2016 pit building
+    // stands (IGTC 9 Hour briefing pit-lane map: pit wall and exit on the left,
+    // T1 Crowthorne a right-hander). Engine -1 here is scenery side +1, where
+    // the circuit's own paddock (scenery/kyalami.js) is built.
+    pit: { side: -1 },
     terrainOuter: 120,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },

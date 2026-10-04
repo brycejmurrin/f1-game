@@ -471,6 +471,14 @@
   text-indent: 0.18em;
   padding: 10px 0;
 }
+/* Private relay tokens are copied/shared; allow their longer secret to wrap. */
+#pm-phonepad-code[data-private="true"],
+#vsfriend .vs-bigcode[data-private="true"] {
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-indent: 0;
+  overflow-wrap: anywhere;
+}
 #vsfriend .vs-codebox {
   text-align: center;
   font-size: 22px;
@@ -478,6 +486,7 @@
   text-indent: 0.16em;
   text-transform: uppercase;
 }
+#vsfriend .vs-codebox[maxlength="64"] { font-size: 14px; letter-spacing: 0.02em; text-indent: 0; }
 #vsfriend #vs-code-entry { margin-top: calc(var(--gap) * 0.5); }
 
 /* Compact multiplayer is an information-dense workflow, not a splash screen.
