@@ -1871,62 +1871,69 @@ const Car3D = (function () {
       const engLed = engT === 2 ? [0.95, 0.22, 0.10] : engT === 0 ? [0.12, 0.82, 0.38] : [0.90, 0.62, 0.12];
       for (const lx of [-0.06, 0, 0.06])
         addBox(out, lx, 0.868, -0.30, 0.02, 0.014, 0.02, engLed, SURFACES.metal);
-      // FUEL: per-option filler cap colour.
+      // FUEL: per-option filler cap colour. Rooted on the cover skin the same
+      // way the tank breather is — literals at y 0.795/0.828/0.85 left the
+      // collar floating ~13 cm over a short cover and buried under a tall one.
       const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60]);
       const fuelDisplay = fuelColor.map((value) => Math.min(value, 1));
-      addBox(out, 0.12, 0.795, -0.50, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12], SURFACES.carbon);   // housing
+      const fuelX = 0.12, fuelZ = -0.50;
+      const fy = coverSurfaceY(anchors.coverAt(fuelZ), fuelX);
+      addBox(out, fuelX, fy - 0.018, fuelZ, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12], SURFACES.carbon);   // housing
       const fuelSurface = SURFACES.metal;
-      addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
-      addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelDisplay, fuelSurface);            // cap dot
+      addBox(out, fuelX, fy + 0.015, fuelZ, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
+      addBox(out, fuelX, fy + 0.037, fuelZ, 0.035, 0.03, 0.05, fuelDisplay, fuelSurface);            // cap dot
       const fuelFiller = Math.max(0, Math.min(2, Math.round(fuelStyle.filler || 0)));
       if (fuelFiller >= 1) {
-        const fuelPorts = [{ x: 0.12, z: -0.50, s: 1 }];
-        if (fuelFiller >= 2) fuelPorts.push({ x: 0.12, z: -0.66, s: 0.85 });
+        const fuelPorts = [{ x: fuelX, z: fuelZ, s: 1 }];
+        if (fuelFiller >= 2) fuelPorts.push({ x: fuelX, z: -0.66, s: 0.85 });
         for (const p of fuelPorts) {
           const s = p.s;
+          const py = coverSurfaceY(anchors.coverAt(p.z), p.x);
           addBeveledSpan(out,
-            { z: p.z + 0.082 * s, x: p.x, y: 0.812, w: 0.108 * s, h: 0.036 * s, t: 0.88 },
-            { z: p.z - 0.086 * s, x: p.x, y: 0.798, w: 0.060 * s, h: 0.022 * s, t: 0.70 },
+            { z: p.z + 0.082 * s, x: p.x, y: py - 0.001, w: 0.108 * s, h: 0.036 * s, t: 0.88 },
+            { z: p.z - 0.086 * s, x: p.x, y: py - 0.015, w: 0.060 * s, h: 0.022 * s, t: 0.70 },
             0.007 * s, [0.10, 0.10, 0.12], null, SURFACES.carbon);
-          addBox(out, p.x, 0.868, p.z, 0.042 * s, 0.028 * s, 0.042 * s,
+          addBox(out, p.x, py + 0.055, p.z, 0.042 * s, 0.028 * s, 0.042 * s,
                  [0.22, 0.22, 0.24], fuelSurface);
-          addBox(out, p.x, 0.886, p.z, 0.050 * s, 0.010 * s, 0.050 * s,
+          addBox(out, p.x, py + 0.073, p.z, 0.050 * s, 0.010 * s, 0.050 * s,
                  fuelDisplay, fuelSurface);
-          const r = 0.016 * s, fy = 0.894, n = 6;
-          const ctr = [p.x, fy, p.z];
+          const r = 0.016 * s, capY = py + 0.081, n = 6;
+          const ctr = [p.x, capY, p.z];
           for (let i = 0; i < n; i++) {
             const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
             addTri(out, ctr,
-              [p.x + Math.cos(a1) * r, fy, p.z + Math.sin(a1) * r],
-              [p.x + Math.cos(a0) * r, fy, p.z + Math.sin(a0) * r],
+              [p.x + Math.cos(a1) * r, capY, p.z + Math.sin(a1) * r],
+              [p.x + Math.cos(a0) * r, capY, p.z + Math.sin(a0) * r],
               [0.06, 0.06, 0.07], SURFACES.carbon);
           }
         }
         if (fuelFiller >= 2) {
           addSpan(out,
-            { z: -0.50, x: 0.02, y: 0.845, w: 0.018, h: 0.018 },
-            { z: -0.50, x: 0.02, y: 0.945, w: 0.014, h: 0.014 },
+            { z: fuelZ, x: 0.02, y: fy + 0.032, w: 0.018, h: 0.018 },
+            { z: fuelZ, x: 0.02, y: fy + 0.132, w: 0.014, h: 0.014 },
             fuelDisplay, null, fuelSurface);
-          addBox(out, 0.02, 0.956, -0.50, 0.016, 0.012, 0.016, fuelDisplay, fuelSurface);
+          addBox(out, 0.02, fy + 0.143, fuelZ, 0.016, 0.012, 0.016, fuelDisplay, fuelSurface);
         }
       }
       const fuelHatch = Math.max(0, Math.min(1, Math.round(fuelStyle.hatch || 0)));
       if (fuelHatch) {
         const lift = fuelFiller >= 1 ? 0.055 : 0.028;
+        const hy0 = coverSurfaceY(anchors.coverAt(-0.40), fuelX);
+        const hy1 = coverSurfaceY(anchors.coverAt(-0.58), fuelX);
         addSpan(out,
-          { z: -0.40, x: 0.12, y: 0.872, w: 0.108, h: 0.012, t: 0.92 },
-          { z: -0.58, x: 0.12, y: 0.872 + lift, w: 0.096, h: 0.010, t: 0.88 },
+          { z: -0.40, x: fuelX, y: hy0 + 0.059, w: 0.108, h: 0.012, t: 0.92 },
+          { z: -0.58, x: fuelX, y: hy1 + 0.059 + lift, w: 0.096, h: 0.010, t: 0.88 },
           [0.08, 0.08, 0.09], null, SURFACES.carbon);
-        addBox(out, 0.12, 0.870, -0.405, 0.092, 0.010, 0.016,
+        addBox(out, fuelX, hy0 + 0.057, -0.405, 0.092, 0.010, 0.016,
                [0.24, 0.24, 0.26], SURFACES.metal);
       }
       const fuelVent = Math.max(0, Math.min(1, Math.round(fuelStyle.vent || 0)));
       if (fuelVent) {
         addSpan(out,
-          { z: -0.50, x: 0.205, y: 0.845, w: 0.016, h: 0.016 },
-          { z: -0.50, x: 0.205, y: 0.930, w: 0.012, h: 0.012 },
+          { z: fuelZ, x: 0.205, y: fy + 0.032, w: 0.016, h: 0.016 },
+          { z: fuelZ, x: 0.205, y: fy + 0.117, w: 0.012, h: 0.012 },
           fuelDisplay, null, fuelSurface);
-        addBox(out, 0.205, 0.940, -0.50, 0.014, 0.012, 0.014,
+        addBox(out, 0.205, fy + 0.127, fuelZ, 0.014, 0.012, 0.014,
                [0.10, 0.10, 0.12], SURFACES.carbon);
       }
       // Tank breather across the spine from the filler (filler x +0.12, vent
@@ -1947,9 +1954,11 @@ const Car3D = (function () {
         }
       }
       if (fuelStyle.line) {
+        const lineFront = anchors.coverAt(-0.56);
         const lineRear = anchors.coverAt(-1.30);
+        const ly = coverSurfaceY(lineFront, fuelX);
         addSpan(out,
-          { z: -0.56, x: 0.12, y: 0.80, w: 0.018 * fuelStyle.line, h: 0.018 },
+          { z: -0.56, x: fuelX, y: ly - 0.011, w: 0.018 * fuelStyle.line, h: 0.018 },
           { z: -1.30, x: coverFlankX(lineRear, lineRear.top - 0.15) + 0.006, y: lineRear.top - 0.15,
             w: 0.015 * fuelStyle.line, h: 0.015 },
           fuelDisplay, null, fuelSurface);
