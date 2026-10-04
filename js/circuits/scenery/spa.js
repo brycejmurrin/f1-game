@@ -144,6 +144,10 @@
         opts = opts || {};
         const rows = opts.rows || 7, pitch = 6.4, len = bays * pitch;
         const fans = opts.fans || ARD_FANS;
+        // `roof: false` leaves the terrace open: seen from the chase camera a
+        // roofed terrace is a run of dark-green slats and nothing else (the
+        // Blanchimont report, 2026-10). `skip` is the empty-seat hash floor.
+        const roofed = opts.roof !== false, skip = opts.skip != null ? opts.skip : 0.38;
         const backH = 2.2 + rows * 1.3;
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         const IN = -side;                        // +1 along a.r faces the track
@@ -155,9 +159,9 @@
             const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
             stage._mat = MAT.METAL;
             seat.cyl(stage, vadd(p, a.r, IN * 5.0), 0.15, 2.2, ARD_STEEL, 5, b);
-            seat.cyl(stage, vadd(p, a.r, -IN * 5.0), 0.17, backH + 4.2, ARD_STEEL, 5, b);
+            seat.cyl(stage, vadd(p, a.r, -IN * 5.0), 0.17, (roofed ? backH + 4.2 : backH + 1.2), ARD_STEEL, 5, b);
             addBox(stage, vadd(p, a.u, backH * 0.45), [10.2, 0.14, 0.14], ARD_STEEL, b);
-            addBox(stage, vadd(p, a.u, backH + 2.6), [11.4, 0.16, 0.16], ARD_STEEL, b);
+            if (roofed) addBox(stage, vadd(p, a.u, backH + 2.6), [11.4, 0.16, 0.16], ARD_STEEL, b);
           }
           for (let t = 0; t < rows; t++) {
             const lat = IN * (4.5 - t * 1.26), y = 1.2 + t * 1.3;
@@ -168,20 +172,26 @@
             stage._mat = MAT.FABRIC;
             for (let j = 0; j * 0.92 < len - 3; j++) {
               const h2 = hash(k * 29 + t * 71 + j * 37);
-              if (h2 < 0.38) continue;
+              if (h2 < skip) continue;
               seat.box(stage,
                 vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.5 + j * 0.92), a.u, y + 0.9),
                 [0.52, 0.95, 0.44], fans[Math.floor(h2 * 71) % fans.length], b);
             }
           }
           stage._mat = MAT.METAL;
-          for (let i = 0; i * 1.5 < len; i++) {
-            const p = vadd(a.c, a.t, -len / 2 + i * 1.5 + 0.75);
-            addBox(stage, vadd(vadd(p, a.r, -IN * 0.4), a.u, backH + 3.3),
-              [11.8, 0.24, 0.8], (i % 2) ? ARD_ROOF : [0.18, 0.28, 0.21], b);
+          if (roofed) {
+            for (let i = 0; i * 1.5 < len; i++) {
+              const p = vadd(a.c, a.t, -len / 2 + i * 1.5 + 0.75);
+              addBox(stage, vadd(vadd(p, a.r, -IN * 0.4), a.u, backH + 3.3),
+                [11.8, 0.24, 0.8], (i % 2) ? ARD_ROOF : [0.18, 0.28, 0.21], b);
+            }
+            addBox(stage, vadd(vadd(a.c, a.r, IN * 5.5), a.u, backH + 3.0),
+              [0.34, 0.34, len], [0.50, 0.52, 0.54], b);
+          } else {
+            // Open terrace: a galvanised crush rail along the back row instead.
+            addBox(stage, vadd(vadd(a.c, a.r, -IN * 5.0), a.u, backH + 1.0),
+              [0.12, 0.12, len], ARD_STEEL, b);
           }
-          addBox(stage, vadd(vadd(a.c, a.r, IN * 5.5), a.u, backH + 3.0),
-            [0.34, 0.34, len], [0.50, 0.52, 0.54], b);
           stage._mat = 0;
         });
       }
@@ -239,26 +249,22 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // Stepped banking slabs climbing the R hillside — seat.box (underside on grade).
-      {
-        const slabs = [
-          [0.066, 22, [10, 2.4, 16], GOLD3],
-          [0.074, 26, [11, 3.4, 18], [0.44, 0.45, 0.48]],
-          [0.082, 30, [12, 4.6, 20], [0.42, 0.43, 0.46]],
-          [0.090, 34, [13, 5.6, 18], [0.40, 0.41, 0.44]],
-          [0.098, 38, [12, 4.2, 16], [0.43, 0.44, 0.47]],
-        ];
-        for (const [s, dist, sz, col] of slabs) {
-          const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
-          seat.box(out, a.c, sz, col, b);
-        }
-      }
+      // Grass spectator bank climbing the R hillside behind the Gold-3 row.
+      // Was five free-standing grey slabs (seat.box, one per anchor, 16-20 m
+      // long with 8+ m gaps between them): from the outside they read as
+      // disconnected concrete blocks stepped down the hill. spectatorHill walks
+      // the arc, so the bank is continuous, carries a standing crowd and
+      // indexes its own footprint against the treelines.
+      spectatorHill(0.072, 0.100, 1, 24, { rows: 5, rise: 1.5, density: 0.6, step: 6,
+        grass: [0.22, 0.36, 0.18], riser: [0.34, 0.33, 0.30] });
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
       ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
       grandstandEx(0.16, 1, 8, 30, null, null,
         { livery: "orange", roof: "flat", endWalls: true });
       ardennesTerrace("spa-terrace-fagnes", K(0.60), -1, 16, 6, { rows: 6 });
-      ardennesTerrace("spa-terrace-busstop", K(0.905), 1, 15, 5, { rows: 6 });
+      // Blanchimont (racing 0.862) outside terrace: open (no slat roof hiding
+      // the crowd from the chase camera), longer, and a fuller crowd.
+      ardennesTerrace("spa-terrace-busstop", K(0.905), 1, 15, 7, { rows: 6, roof: false, skip: 0.12 });
       // Bus Stop chicane: braking-zone stand facing the final complex.
       grandstandEx(0.92, 1, 8, 28, null, null, { livery: "steel", roof: "cantilever", pylons: true, endWalls: true });
       grandstandEx(0.848, 1, 12, 36, null, null,
@@ -352,11 +358,24 @@
             const row = i % 2, col = (i / 2) | 0;
             const off = (col - count / 4) * 9;
             const base = vadd(vadd(a.c, a.t, off), a.r, -side * (row * 9));
+            // Re-seat each unit on its own ground: the camp spans ~36 m of
+            // Ardennes hillside and a0's height buried caravans up to 7 m.
+            // The lower of two samples 3 m apart along the unit, so its
+            // downhill end never hangs.
+            {
+              const g0 = terrainYAt(base[0] + a.t[0] * 2.6, base[2] + a.t[2] * 2.6);
+              const g1 = terrainYAt(base[0] - a.t[0] * 2.6, base[2] - a.t[2] * 2.6);
+              // Clamped to +/-3 m of the anchor: K(0.075)'s camp straddles the
+              // terrain seam between the climb and the pit straight, and an
+              // unclamped drop grew its emitted box onto the road (rejected).
+              if (g0 != null && g1 != null)
+                base[1] = Math.max(a.c[1] - 3, Math.min(a.c[1] + 3, Math.min(g0, g1)));
+            }
             if (hash(k * 3 + i) < 0.55) {
               const vc = vanCols[(hash(k * 7 + i) * 4) | 0];
               stage._mat = MAT.METAL;
-              addBox(stage, vadd(base, a.u, 1.9), [3.0, 2.6, 6.2], vc, b);          // caravan body
-              addBox(stage, vadd(base, a.u, 3.3), [3.1, 0.5, 6.2],
+              addBox(stage, vadd(base, a.u, 1.25), [3.0, 2.6, 6.2], vc, b);         // caravan body (skirted to grade)
+              addBox(stage, vadd(base, a.u, 2.65), [3.1, 0.5, 6.2],
                      [vc[0] * 0.8, vc[1] * 0.8, vc[2] * 0.8], b);                 // roof cap
               stage._mat = 0;
             } else {
@@ -492,6 +511,94 @@
         col: PINE_D, col2: PINE_M, pineFrac: 0.90 });
       forestEdge(0.88, 0.98, -1, 16, { density: 0.70, hMin: 12, hMax: 22,
         col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
+      // ARDENNES FOREST MASS (2026-10 survey). The forestEdge belts above are
+      // ONE rank of trunks 15-20 m off the edge (~35 trees per side per 140 m,
+      // measured); behind them the hillsides ran bare grass out to the
+      // mountain ring, so Eau Rouge, Kemmel, Les Combes and Pouhon read as
+      // isolated pines on lawn. Real Spa sits in spruce/beech forest that
+      // closes in right behind the run-off. Deeper staggered ranks of
+      // instanced pine fill that, except where the dressing keeps ground open.
+      // OPEN windows are AUTHORED fracs [s0, s1, dMin, dMax] (m beyond the
+      // edge). This file's frame: authored = racing + 0.0423 (measured from
+      // the built centreline), e.g. Eau Rouge racing 0.143 = authored 0.185.
+      {
+        const OPEN = {
+          "1": [
+            [0.975, 1.001, 0, 200], [0.0, 0.045, 0, 200],   // pit straight / La Source stands
+            [0.060, 0.116, 0, 80],    // Gold-3 row, grass bank, jumbotron, Raidillon terrace, camp
+            [0.127, 0.143, 30, 76],   // camp K(0.135)
+            [0.148, 0.172, 0, 34],    // orange stand 0.16, catch fence
+            [0.168, 0.214, 0, 72],    // old Eau Rouge road + its own trees
+            [0.200, 0.220, 52, 92],   // chalets
+            [0.294, 0.306, 50, 82],   // chalet
+            [0.555, 0.595, 0, 52],    // Pouhon outside spectator bank
+            [0.714, 0.726, 54, 86],   // chalet
+            [0.765, 0.800, 0, 26],    // Stavelot run-off
+            [0.812, 0.829, 30, 68],   // camp
+            [0.838, 0.862, 0, 52],    // concrete stand 0.848, Blanchimont shelter
+            [0.886, 0.900, 0, 20],    // Blanchimont camera tower
+            [0.897, 0.936, 0, 50],    // Blanchimont terrace, Bus Stop stand
+          ],
+          "-1": [
+            [0.975, 1.001, 0, 200], [0.0, 0.118, 0, 200],   // paddock, old pits, village, brook
+            [0.123, 0.147, 0, 76],    // Kemmel terrace, chalet
+            [0.186, 0.218, 0, 36],    // Raidillon spectator bank
+            [0.345, 0.358, 0, 20],    // Les Combes camera tower
+            [0.474, 0.488, 34, 72],   // camp
+            [0.518, 0.566, 0, 34],    // Pouhon inside bank
+            [0.544, 0.556, 48, 78],   // chalet
+            [0.558, 0.573, 0, 42],    // recovery bay
+            [0.594, 0.607, 0, 42],    // Fagnes terrace
+            [0.654, 0.676, 0, 28],    // Fagnes bank
+            [0.700, 0.712, 50, 82],   // chalet
+            [0.740, 0.782, 30, 86],   // broadcast compound + pads
+          ],
+        };
+        const isOpen = (side, f, dist) => {
+          for (const w of OPEN[side]) {
+            if (f >= w[0] && f <= w[1] && dist + 4 >= w[2] && dist - 4 <= w[3]) return true;
+          }
+          return false;
+        };
+        const forestRank = (s0, s1, gap, stepM, hMin, hMax, seed) => {
+          for (const side of [-1, 1]) {
+            along(s0, s1, stepM, (k) => {
+              const r1 = hash(k * 17.3 + side * 5.1 + seed);
+              const r2 = hash(k * 31.7 + side * 2.3 + seed * 3.7);
+              if (r1 < 0.08) return;                        // natural clearing
+              const dist = gap + (r2 - 0.5) * stepM * 0.8;  // stagger off the rank line
+              if (isOpen(side, k / n, dist)) return;
+              const h = hMin + r1 * (hMax - hMin);
+              if (!crownClear(k, side, dist, h)) return;
+              pine(k, side, dist, h, [0.07 + r2 * 0.05, 0.22 + r1 * 0.09, 0.10 + r2 * 0.05]);
+            });
+          }
+        };
+        // Front rank on the La Source -> Eau Rouge descent (authored
+        // 0.115-0.18), where the forestEdge belts deliberately stop.
+        forestRank(0.115, 0.180, 14, 6, 12, 22, 1);
+        // Deep ranks, lap-wide minus the OPEN windows: taller toward the back
+        // so the canopy steps up into a wall.
+        forestRank(0.000, 0.999, 28, 8, 15, 26, 2);
+        forestRank(0.000, 0.999, 44, 12, 17, 29, 3);
+        forestRank(0.000, 0.999, 62, 16, 18, 31, 4);
+      }
+
+      // Pouhon (racing 0.515-0.548): the grass spectator bank on the OUTSIDE
+      // of the double-left, behind the run-off. (A Raidillon left bank at
+      // authored 0.192-0.212 was tried and dropped: it pushed one forestEdge
+      // tree onto the road guard, a new suppression. Its OPEN window stays so
+      // the deep ranks leave that verge as the open grass it is.)
+      spectatorHill(0.560, 0.590,  1, 20, { rows: 4, density: 0.55, step: 6 });
+      // Kemmel straight marshal posts, and broadcast camera towers at the
+      // Raidillon crest, the Les Combes braking zone and Blanchimont.
+      for (const [s, side] of [[0.245, -1], [0.285, 1], [0.325, -1]]) marshalPost(K(s), side, 4.2);
+      if (api.cameraTower) {
+        api.cameraTower(K(0.212), 1, 9, { h: 12 });
+        api.cameraTower(K(0.352), -1, 10, { h: 13 });
+        api.cameraTower(K(0.893), 1, 10, { h: 12 });
+      }
+
       // Sparse fir accents on pit / Les Combes verges (not broadleaf oaks).
       for (const [s, side] of [[0.01, 1], [0.16, 1], [0.30, -1], [0.62, 1], [0.78, -1]]) {
         for (let j = 0; j < 3; j++) {
@@ -526,17 +633,48 @@
         const OLD_TAR  = [0.29, 0.29, 0.30];
         const OLD_EDGE = [0.62, 0.61, 0.57];
         const ARMCO    = [0.74, 0.75, 0.76];
+        // Each slab spans ITS OWN chord between two re-seated centreline points
+        // and is tilted to the ground under it (pitch from the chord, roll from
+        // samples 4.6 m either side). The old form laid sixteen level boxes all
+        // facing a0's tangent, each seated at its own centre: on this hillside
+        // they read from the outside as grey slabs stepped down the slope
+        // (2026-10 survey), buried their downhill ends up to 1.4 m, and opened
+        // wedge gaps where the road curves away from a0's heading.
+        const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+        const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+        const unit = (p) => { const l = Math.hypot(p[0], p[1], p[2]) || 1; return [p[0] / l, p[1] / l, p[2] / l]; };
+        const crs = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+        const roadAt = (i) => seatY(vadd(vadd(a0.c, dir, 14 + i * 15), rgt, i * i * 0.16));
         let laid = 0;
         for (let i = 0; i < 16; i++) {
-          const c = seatY(vadd(vadd(a0.c, dir, 14 + i * 15), rgt, i * i * 0.16));
+          const p0 = roadAt(i - 0.5), p1 = roadAt(i + 0.5);
+          const c = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2];
           if (onTrack(c[0], c[2], 18)) continue;
+          const t = unit(sub(p1, p0));
+          // Horizontal right of the chord, on the same side as the track's right.
+          let rh = unit([t[2], 0, -t[0]]);
+          if (dot(rh, rgt) < 0) rh = [-rh[0], -rh[1], -rh[2]];
+          const pl = seatY(vadd(c, rh, -4.6)), pr = seatY(vadd(c, rh, 4.6));
+          let rr = sub(pr, pl);
+          rr = unit(sub(rr, [t[0] * dot(rr, t), t[1] * dot(rr, t), t[2] * dot(rr, t)]));
+          // rr (right), uu (up), t (forward) point the same ways as a0's
+          // [rgt, up, dir], so the basis keeps its handedness (face winding).
+          let uu = unit(crs(t, rr));
+          if (uu[1] < 0) uu = [-uu[0], -uu[1], -uu[2]];
+          const bb = [rr, uu, t];
+          // Seat on the LOWER of the centre and the chord-mid ground so a
+          // convex crest never leaves the slab's middle hanging.
+          const cy = seatY([c[0], c[1], c[2]]);
+          const base = [c[0], Math.min(c[1], cy[1]) + 0.04, c[2]];
+          const L = Math.hypot(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]) + 0.6;
           // Old road is NARROW: two lanes of a 1960s Ardennes highway.
-          addBox(out, vadd(c, up, 0.09), [8.2, 0.16, 15.4], OLD_TAR, b);
-          addBox(out, vadd(vadd(c, rgt, -4.6), up, 0.13), [1.2, 0.2, 15.4], OLD_EDGE, b);
-          addBox(out, vadd(vadd(c, rgt,  4.6), up, 0.13), [1.2, 0.2, 15.4], OLD_EDGE, b);
+          addBox(out, vadd(base, uu, 0.08), [8.2, 0.24, L], OLD_TAR, bb);
+          addBox(out, vadd(vadd(base, rr, -4.6), uu, 0.12), [1.2, 0.26, L], OLD_EDGE, bb);
+          addBox(out, vadd(vadd(base, rr,  4.6), uu, 0.12), [1.2, 0.26, L], OLD_EDGE, bb);
           if (i % 2 === 0) {
-            addBox(out, vadd(vadd(c, rgt, -5.6), up, 0.62), [0.14, 0.34, 15.0], ARMCO, b);
-            addCyl(out, vadd(c, rgt, -5.6), 0.09, 0.62, [0.55, 0.55, 0.56], 4, b);
+            const post = seatY(vadd(base, rr, -5.6));
+            addBox(out, vadd(post, [0, 1, 0], 0.62), [0.14, 0.34, L - 0.6], ARMCO, bb);
+            addCyl(out, vadd(post, [0, 1, 0], -0.3), 0.09, 0.92, [0.55, 0.55, 0.56], 4, bb);
           }
           laid++;
         }
