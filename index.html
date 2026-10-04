@@ -395,7 +395,10 @@
 })();
 </script>
 </head>
-<body><canvas id="game" aria-hidden="true"></canvas>
+<body>
+<!-- Storage-unavailable banner: js/ui/select-screen.js unhides it when store.broken. -->
+<aside id="save-warning" role="alert" hidden><strong>SESSION ONLY — SAVING UNAVAILABLE</strong><span id="save-warning-detail">Progress will be lost when this page closes or reloads.</span><button id="save-retry" type="button">RETRY SAVE</button><button id="save-export" type="button">EXPORT RECOVERY</button></aside>
+<canvas id="game" aria-hidden="true"></canvas>
 <!-- BODY DENSITY, BEFORE THE BROWSER CAN PAINT ANYTHING.
      body[data-density] selects #overlay's one- vs two-column title grid
      (css/menus.css, css/responsive.css). js/ui/sheet-shape.js owns this answer

@@ -155,6 +155,13 @@ const DockLayout = (function () {
       setEditing(!editing);
       if (editing && G.announce) G.announce("Drag the touch controls. Tap DONE when finished.", 3, "coach");
     };
+    // Editing lives only while SETTINGS is open: left on, data-dock-edit
+    // follows the player into the race and a GAS press both throttles and drags.
+    const settings = $("pmsettings");
+    if (settings && typeof MutationObserver !== "undefined") {
+      new MutationObserver(() => { if (settings.hidden && editing) setEditing(false); })
+        .observe(settings, { attributes: true, attributeFilter: ["hidden"] });
+    }
     const resetBtn = $("pm-dock-reset");
     if (resetBtn) resetBtn.onclick = () => {
       const s = schemeOf();
