@@ -107,6 +107,31 @@ test("NativeDownload.saveBlob writes CACHE then Share.share", async () => {
   assert.ok(shares[0].url.includes("trace.json"));
 });
 
+test("renderer screenshots await native saving and report its failure", async () => {
+  const src = readFileSync(join(ROOT, "js/perf/renderer-picker.js"), "utf8");
+  const fn = src.slice(src.indexOf("function saveScreenshot()"), src.indexOf("function ensureAdvHost()"));
+  for (const fail of [false, true]) {
+    let release, saved;
+    const held = new Promise((resolve, reject) => { release = () => fail ? reject(new Error("disk full")) : resolve(); });
+    const button = { textContent: "SAVE SCREENSHOT" };
+    const ctx = vm.createContext({
+      document: { getElementById: (id) => id === "pm-save-shot" ? button : id === "game" ? { toDataURL: () => "data:image/png;base64,AQID" } : null,
+        createElement() { throw new Error("native screenshot must not use a download anchor"); } },
+      NativeDownload: { viable: () => true, saveBlob: async (blob, name) => { saved = { blob, name }; await held; } },
+      readBackend: () => "tlx", fetch, setTimeout() {},
+    });
+    vm.runInContext(fn + "\nsaveScreenshot();", ctx);
+    for (let i = 0; i < 20 && !saved; i++) await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(saved);
+    assert.equal(saved.name, "apex26-tlx.png");
+    assert.deepEqual([...new Uint8Array(await saved.blob.arrayBuffer())], [1, 2, 3]);
+    assert.equal(button.textContent, "SAVE SCREENSHOT", "no success before the share completes");
+    release();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.match(button.textContent, fail ? /FAILED$/ : /SAVED$/);
+  }
+});
+
 test("safeName strips path separators", () => {
   const { sandbox } = loadNative();
   assert.equal(sandbox.NativeDownload.safeName("../../x.json"), ".._.._x.json");
