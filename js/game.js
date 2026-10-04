@@ -8045,10 +8045,7 @@ function render(dt) {
   if (!_backendProved && ++_provedFrames >= PROVE_FRAMES) {
     _backendProved = true;
     if (_probeArmed) { _probeArmed = false; try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* nothing was armed if storage is blocked */ } }
-    // A backend that PROVED itself owes nothing for an older strike — without
-    // this, one kill months ago plus one today retires the pick on what looks
-    // like a first failure.
-    try { localStorage.removeItem("apex26.gfxProbeStrikes"); } catch (_) { /* blocked storage */ }
+    rendererBoot.proved();   // clears an older crash strike — only when the PICK ran, not its GLX fallback
   }
 }
 

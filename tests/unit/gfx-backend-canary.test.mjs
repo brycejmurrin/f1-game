@@ -359,6 +359,29 @@ test("GLX create* / draw* fail closed when the context is lost", () => {
   assert.equal(h.GLX.updateInstances(batch, new Float32Array(32), 1), 0, "updateInstances reports nothing resident");
 });
 
+test("GLX's third visible context loss says so instead of leaving a silent dead canvas", () => {
+  // Two counted reloads per tab, then GLX (nothing beneath it) stopped with
+  // no exception, so the error overlay never painted. TLX reports the same
+  // cap through __apexReportError; GLX now matches it.
+  for (const prior of ["0", "2"]) {
+    const h = bootGlx();
+    const reports = [];
+    h.sandbox.__apexReportError = (where, err) => reports.push([where, err && err.message]);
+    h.sandbox.sessionStorage.setItem("apex26.ctxLostReloads", prior);
+    h.sandbox.__timers.length = 0;
+    h.loseContext();
+    if (prior === "0") {
+      assert.equal(reports.length, 0, "a first loss is a quiet counted reload");
+      assert.equal(h.sandbox.__timers.length, 1, "the self-heal reload timer");
+    } else {
+      assert.equal(h.sandbox.__timers.length, 0, "past the cap: no reload loop");
+      assert.equal(reports.length, 1, "past the cap the player is told");
+      assert.equal(reports[0][0], "gfx");
+      assert.match(reports[0][1], /keeps getting lost \(3 times\)/);
+    }
+  }
+});
+
 test("GLX re-reads the canvas box after a viewport change, even when a frame read it too early", () => {
   // THE DEFECT (docs/PERF-FINDINGS.md §2u). cssDirty is edge-triggered and
   // consumed unconditionally, so ONE resize() landing before the canvas box has
@@ -3112,6 +3135,84 @@ test("the boot canary holds across a run of frames, and no path arms it behind s
   assert.doesNotMatch(tlx.slice(cf, cf + 900), /setItem\("apex26\.gfxBackendProbe"/,
     "a path that sets gfxClaimFail must not arm the canary: skipClaim blocks the revert " +
     "that would clear it, so it fires on an unrelated cold boot instead");
+});
+
+// RendererBoot.start() itself, booted in a VM: the canary's strike ledger
+// across cold boots that share one localStorage. `bindPick` = the deferred
+// backend's create() succeeds; GLX always attaches.
+function rendererBootRun(ls, { bindPick = true } = {}) {
+  const ss = new Map();
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED: { three: ["tlx.js"], webgpu: ["wgx.js"], webgl2: ["glx.js"] } },
+    localStorage: {
+      getItem: (k) => (ls.has(k) ? ls.get(k) : null),
+      setItem: (k, v) => { ls.set(k, String(v)); }, removeItem: (k) => { ls.delete(k); },
+    },
+    sessionStorage: {
+      getItem: (k) => (ss.has(k) ? ss.get(k) : null),
+      setItem: (k, v) => { ss.set(k, String(v)); }, removeItem: (k) => { ss.delete(k); },
+    },
+    navigator: {}, location: { reload() { throw new Error("no reload expected"); } },
+    document: { createElement: () => ({}), head: { appendChild() {} } },
+    Event: class { constructor(type) { this.type = type; } },
+    GLX: { init: () => true },
+    Gfx: { create: async () => (bindPick ? { api: "three" } : null) },
+  });
+  ctx.window = ctx;
+  ctx.dispatchEvent = () => true;
+  seedLog(ctx);
+  vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx);
+  return vm.runInContext("RendererBoot", ctx).create({
+    $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async () => {},
+  });
+}
+
+test("a GLX fallback boot that proves itself does not erase the pick's crash strike", async () => {
+  // A phone whose THREE dies inside its first ~5 s (before PROVE_FRAMES). The
+  // first strike reverts ONE boot to GLX and keeps the pick; game.js then
+  // calls proved() after 300 GLX frames. That used to clear the strike, so the
+  // second kill read as a first one again: crash → GLX → crash → GLX, forever.
+  const ls = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxBackendProbe", "three"]]);
+  let rb = rendererBootRun(ls);
+  let boot = await rb.start();
+  assert.equal(boot.bound, false, "first strike: this boot runs GLX");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "1");
+  assert.equal(ls.get("apex26.gfxBackend"), "three", "one strike keeps the pick");
+  assert.equal(rb.proved(), false, "GLX presenting 300 frames proves nothing about THREE");
+  assert.equal(ls.get("apex26.gfxProbeStrikes"), "1", "the strike must survive the GLX fallback boot");
+  // Next cold boot: THREE binds, game.js re-arms the probe at the first world
+  // present, and the tab is killed again before the run of frames completes.
+  rb = rendererBootRun(ls);
+  boot = await rb.start();
+  assert.equal(boot.bound, true);
+  ls.set("apex26.gfxBackendProbe", "three");   // armBackendProbe(); no proved()
+  rb = rendererBootRun(ls);
+  boot = await rb.start();
+  assert.equal(boot.bound, false);
+  assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "the second consecutive strike retires the pick");
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "retiring resets the ledger");
+});
+
+test("a pick that proves itself still pays off an older strike", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxProbeStrikes", "1"]]);
+  const rb = rendererBootRun(ls);
+  assert.equal((await rb.start()).bound, true);
+  assert.equal(rb.proved(), true);
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "a proved THREE run owes nothing for a months-old kill");
+  // A refused create() lands on GLX with the pick kept: not proof either.
+  const refused = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxProbeStrikes", "1"]]);
+  const rb2 = rendererBootRun(refused, { bindPick: false });
+  assert.equal((await rb2.start()).bound, false);
+  assert.equal(rb2.proved(), false);
+  assert.equal(refused.get("apex26.gfxProbeStrikes"), "1");
+  // game.js owns WHEN (PROVE_FRAMES); RendererBoot owns WHETHER. A second
+  // unconditional removeItem in game.js would reopen the loop.
+  const game = readFile("js/game.js").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(game, /gfxProbeStrikes/, "game.js must not touch the strike ledger itself");
+  const at = game.indexOf("++_provedFrames >= PROVE_FRAMES");
+  assert.ok(at > 0, "the PROVE_FRAMES block moved — check this test, not the code");
+  assert.match(game.slice(at, at + 400), /rendererBoot\.proved\(\);/,
+    "the PROVE_FRAMES block hands the strike clear to rendererBoot.proved()");
 });
 
 // The canary must describe what BOUND, not what was picked.
