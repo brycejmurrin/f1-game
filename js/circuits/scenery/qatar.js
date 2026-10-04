@@ -193,11 +193,24 @@
       // https://tilke.de/portfolio/lusail-race-track-qatar/
       // https://www.qatar-tribune.com/article/86488/front/ashghal-sets-guinness-world-record-for-longest-motorsport-pitlane-building-at-lusail-intl-circuit
       // https://visitqatar.com/intl-en/things-to-do/adventure-sports/sports-venues/lusail-international-circuit
+      //
+      // THE PIT-STRAIGHT FRONTAGE IS RE-KEYED THROUGH sl() (the brands_hatch
+      // idiom). This file's s = 0 is the scenery origin (sceneryStartFrac 0.80),
+      // not the start line — bankZones' 0.0415 apex is a corner in this frame —
+      // so K(0.00) stood the 402 m slab at engine frac ~0.695, in the T12-T14
+      // complex, 0.3 of a lap from the engine pit lane (0.94-0.04, left) and
+      // the start gantry. sl(f) lands at engine frac f: the slab, offices,
+      // halls, pit wall, timing mast, media centre and the main stand opposite
+      // now stand on the real pit straight. The rest of the file keeps its
+      // authoring frame. 1 - def._sceneryShift at the 4 dp brands_hatch uses.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
       (function pitSlab() {
-        // Anchor gap must clear half the footprint width (rejBox). Half of 18 m
-        // is 9 m; 10.5 m leaves a small shoulder so the 402 m slab never clips
-        // the pit-lane tarmac.
-        const a = anchor(K(0.00), -1, 10.5), b = [a.r, a.u, a.t];
+        // BEHIND the engine pit complex (TrackPit), which owns the lane and the
+        // bays: its keep-out reaches 30.1 m past the road edge along the row
+        // (measured), and at the old 10.5 m gap the slab stood in it and was
+        // superseded whole. 40 m = 30.1 + half the 18 m footprint + a shoulder.
+        const a = anchor(K(sl(0.00)), -1, 40), b = [a.r, a.u, a.t];
         const PIT_LEN = 402; // Guinness: 402.1 m — nearest whole metre
         const PIT_H = 12;
         const c = vadd(a.c, a.u, PIT_H * 0.55);
@@ -243,24 +256,24 @@
       })();
       // Secondary hospitality / team offices behind the pit face (not the
       // Guinness slab — that is qatar-pit-slab above).
-      building(K(0.01), -1, 24, 12, 8, 80,
+      building(K(sl(0.01)), -1, 24, 12, 8, 80,
         { kind: "slab", wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
       // Pit-lane keep-out wall; garage doors are modelled on the slab above.
-      wall(0.96, 0.08, -1, 3, 1.0, [0.85, 0.85, 0.85]);
+      wall(sl(0.96), sl(0.08), -1, 3, 1.0, [0.85, 0.85, 0.85]);
 
       for (let i = 0; i < 6; i++) {
         const s = (0.965 + i * 0.024) % 1;
         const hf = hash(i * 11 + 7);
         const hallH = 6 + hf * 3;
-        building(K(s), -1, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,
+        building(K(sl(s)), -1, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,
           { kind: "hall", wall: WHITE, window: WIN_COOL, floor: 3.0 });
         const roofTop = hallH * 0.5;
-        const a = anchor(K(s), -1, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(s)), -1, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, roofTop - 0.05), [14, 0.55, 16], WHITE, b);
       }
 
       (function paddockMediaCentre() {
-        const a = anchor(K(0.925), -1, 72), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.925)), -1, 72), b = [a.r, a.u, a.t];
         modelGroup("qatar-paddock-media-centre", {
           center: vadd(a.c, a.u, 5.5), size: [30, 12, 76], basis: b,
         }, (stage) => {
@@ -278,11 +291,9 @@
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
       // alone put gantry(0.012) — and the start lamps it carries — 1.6 km away.
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
       gantry(sl(0.0), 7.5, [0.12, 0.12, 0.14]);
       // Slim timing mast at S/F (race control lives on qatar-pit-slab).
-      tower(K(0.985), -1, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
+      tower(K(sl(0.985)), -1, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
 
       // Main grandstand (R): long covered stand along the pit straight —
       // upgraded capacity ~40,000 (racingcircuits.info / PlanetF1). A continuous
@@ -294,7 +305,7 @@
       (function mainGrandstand() {
         for (let i = 0; i < 5; i++) {
           const s = 0.950 + i * 0.020;
-          qatarStand(`qatar-main-stand-${i}`, s % 1, 1, 15, 80,
+          qatarStand(`qatar-main-stand-${i}`, sl(s % 1), 1, 15, 80,
             [0.86, 0.86, 0.84], [0.18, 0.18, 0.22], i === 0);
         }
       })();

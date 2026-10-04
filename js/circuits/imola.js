@@ -13,6 +13,11 @@
     // A start line is always on a straight: docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     sceneryStartFrac: 0.4950,
+    // The pit complex (TrackPit) on the LEFT of the start straight, where
+    // scenery/imola.js builds the Tilke pit blocks, Racetrack Tower and pit
+    // wall (docs/tracks/imola.md: pits L, Partenza stands R). Without this the
+    // engine built lane and garages on the default right, under the stands.
+    pit: { side: -1 },
     sceneryCoordinates: "racing",
     name: "IMOLA",
     gp: "Emilia Romagna GP",
