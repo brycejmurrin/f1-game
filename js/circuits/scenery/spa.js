@@ -69,7 +69,20 @@
       // 1-3 floated 8-15 m up. Skip a pine whose full crown would be clipped.
       const crownClear = (k, side, dist, h) => {
         const a = anchor(k, side, dist);
-        return !onTrack(a.c[0], a.c[2], h * 0.32);
+        if (onTrack(a.c[0], a.c[2], h * 0.32)) return false;
+        // ~100 m of relief leaves steep banks where two legs' terrain meets
+        // (right of Bruxelles, racing 0.45: 20 m within a crown's width). A
+        // pine seated there hangs its crown over the drop (ground-audit
+        // unsupported, 25-39 m gaps) — skip a footprint whose ground varies
+        // more than a steep-hillside slope across the crown.
+        const r = h * 0.3;
+        let lo = Infinity, hi = -Infinity;
+        for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
+          const y = terrainYAt(a.c[0] + dx, a.c[2] + dz);
+          if (y == null) continue;
+          if (y < lo) lo = y; if (y > hi) hi = y;
+        }
+        return !(hi - lo > 2 + r * 0.6);   // a real slope (≲30 %) passes; a cliff does not
       };
       every(44, (k) => {
         for (const side of [-1, 1]) {
@@ -484,7 +497,9 @@
       forestEdge(0.00, 0.04, 1, 44, { density: 0.70, hMin: 11, hMax: 20,
         col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
 
-      spectatorHill(0.525, 0.560, -1, 11, { rows: 4, density: 0.55, step: 6 });
+      // Pouhon inside bank. Ends at 0.539: on the new 7-9 % descent its top
+      // treads met a roadside slab flush at authored 0.544 (ground-audit flat).
+      spectatorHill(0.525, 0.539, -1, 11, { rows: 4, density: 0.55, step: 6 });
       spectatorHill(0.658, 0.672, -1, 10, { rows: 3, density: 0.42, step: 6 });
 
       chalet(K(0.205),  1, 64, 7, 4.8, 10, [0.72, 0.69, 0.62], [0.28, 0.19, 0.15]);
