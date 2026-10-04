@@ -196,7 +196,7 @@ const NetLobby = (function () {
         const s = sessions.get(id);
         if (s) { try { s.close(); } catch (e) { /* already gone */ } }
         sessions.delete(id);
-        _peers.delete(id); _ready.delete(id);
+        _peers.delete(id); _ready.delete(id); _verify.delete(id);
         clashDrop(id);
         // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
@@ -277,7 +277,7 @@ const NetLobby = (function () {
       sessions.clear();
       session = null;
       for (const t of transports.values()) { try { t.close(); } catch (e) { /* already gone */ } }
-      transports.clear();
+      transports.clear(); _verify.clear();
       if (transport) { try { transport.close(); } catch (e) { /* already gone */ } }
       transport = null;
       pendingId = null;
@@ -410,6 +410,9 @@ const NetLobby = (function () {
       if (transport === t) { transport = null; pendingId = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
+      if (typeof NetRendezvous !== "undefined" && NetRendezvous.verifyFor) NetRendezvous.verifyFor(t.pc).then((v) => {
+        if (v && transports.get(id) === t) { _verify.set(id, v); say("Connected. Check both screens show code " + v + "."); renderRoom(); }
+      });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
       if (codeReopen && transports.size < MAX_GUESTS) {
         const again = codeReopen;
@@ -572,6 +575,7 @@ const NetLobby = (function () {
     const HELLO_RATE = 5, EVENT_WINDOW_MS = 1000;   // per connection, per event
     const _peers = new Map();
     const _ready = new Map();
+    const _verify = new Map();   // connection id -> 4-letter code from both DTLS fingerprints
     const firstPeer = () => (_peers.size ? [..._peers.values()][0] : null);
     const peerIds = () => new Set([..._peers.keys(), ..._ready.keys()]);
     // Everyone has to be ready, and there has to BE somebody: an empty room
@@ -1029,9 +1033,9 @@ const NetLobby = (function () {
           return el;
         };
         const rows = document.createDocumentFragment();
-        if (ids.length) ids.forEach((k, i) => rows.appendChild(row(driverLine(
+        if (ids.length) ids.forEach((k, i) => rows.appendChild(verifyRow(row(driverLine(
               willYield(k) ? null : (_peers.get(k) || null),
-              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k)))));
+              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k))), k)));
         else rows.appendChild(row(driverLine(null, "Them", false)));
         replace(e.them, rows);
       }
@@ -1049,6 +1053,32 @@ const NetLobby = (function () {
         e.start.hidden = !host;
         e.start.disabled = !(selfReady && peersReady());
       }
+    }
+
+    // The verification code on a DIRECT connection's row; the host also gets
+    // REMOVE, for a guest whose screen shows a different code (a middleman).
+    function verifyRow(el, id) {
+      const v = _verify.get(id);
+      if (!v) return el;
+      const tag = span("", v);
+      tag.dataset.verify = v;
+      tag.title = "Verification code: it must match the code on their screen";
+      el.appendChild(tag);
+      if (role === "host") {
+        const b = document.createElement("button");
+        b.type = "button"; b.dataset.verifyRemove = id; b.textContent = "REMOVE";
+        b.setAttribute("aria-label", "Remove this player — their code is not " + v);
+        b.addEventListener("click", () => removeGuest(id));
+        el.appendChild(b);
+      }
+      return el;
+    }
+    function removeGuest(id) {
+      const t = role === "host" ? transports.get(id) : null;
+      if (!t) return false;
+      Log.info("net", "host removed " + id);
+      try { t.close(); } catch (e) { /* its close handler is the cleanup */ }
+      return true;
     }
 
     function startFromRoom() {
@@ -1165,6 +1195,12 @@ const NetLobby = (function () {
 
     async function host() {
       const gen = beginOperation();
+      // INVITE ANOTHER -> HOST A RACE after a code join: the reopened room code
+      // stayed advertised (six relay sockets, the dead offer reposted every
+      // 5 s) while this generation ignored its answers — a friend told the
+      // code sat on Connecting... and got a NAT error. codeHost does the same.
+      stopCodeWait(); codeReopen = null;
+      clearTimeout(codeReopenTimer); codeReopenTimer = null;
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
       show("hosting");
@@ -1339,6 +1375,13 @@ const NetLobby = (function () {
       if (e.codeHint) e.codeHint.textContent = hint || "";
       if (e.codeShow) e.codeShow.hidden = mode !== "show";
       if (e.codeInputWrap) e.codeInputWrap.hidden = mode !== "input";
+      const privateRelay = NetRendezvous.usingPrivateRelay();
+      if (e.codeIn) {
+        e.codeIn.maxLength = privateRelay ? 64 : 8;
+        e.codeIn.placeholder = privateRelay ? "Paste their 32-character token" : "ABC234";
+        e.codeIn.setAttribute("aria-label", privateRelay ? "Private room token" : "Room code");
+      }
+      if (e.codeValue) e.codeValue.setAttribute("data-private", String(privateRelay));
     }
 
     // HOST: make a code, publish the invite under it, wait for the answer.
@@ -1353,12 +1396,15 @@ const NetLobby = (function () {
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const initialTransport = transport;
       const code = opts.code || NetRendezvous.makeCode();
+      if (!code) { say("This browser cannot create a secure room token. Use the invite link instead.", true); return { ok: false, error: "crypto" }; }
       // The room is CLOSED while our own ICE runs and reopened afterwards (see
       // onJoiner), so this path runs twice per guest. The second time we are
       // already in the waiting room and must not drag the player back to the
       // code screen.
       if (!opts.quiet) {
-        showCodeStep("show", "Your room code", "Read this to your friend.");
+        const privateRelay = NetRendezvous.usingPrivateRelay();
+        showCodeStep("show", privateRelay ? "Your private room token" : "Your room code",
+          privateRelay ? "Copy or share this token with your friend, who needs the same private relay configured. Keep it private." : "Read this to your friend.");
         const e = els();
         if (e.codeValue) e.codeValue.textContent = code;
         say("Preparing… (this can take a few seconds)");
@@ -1452,9 +1498,12 @@ const NetLobby = (function () {
               // A rejected answer must not stay blacklisted either: the guest
               // may repost the same string against a transport that is by then
               // ready for it.
+              // EXCEPT wrong_offer: guest 2's repost of an answer to offer A (dropped
+              // in flight above) landing after the reopen minted offer B. No later
+              // transport can take it, so it stays seen and silent, like guest 1's.
               answerInFlight = false;
-              answersSeen.delete(answer);
-              if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
+              if (acc.error !== "wrong_offer") answersSeen.delete(answer);
+              if (acc.error !== "already_answered" && acc.error !== "wrong_offer") say(acc.message || "That answer could not be read.", true);
               return;
             }
             if (acc.peer) _peers.set(id, acc.peer);
@@ -1514,7 +1563,9 @@ const NetLobby = (function () {
       const raw = codeIn != null ? codeIn : (e.codeIn ? e.codeIn.value : "");
       const code = NetRendezvous.normalise(raw);
       if (!NetRendezvous.valid(code)) {
-        say("That is not a room code — six letters and numbers.", true);
+        say(NetRendezvous.usingPrivateRelay()
+          ? "Private rooms need a new 32-character token. Ask the host to share a new token, or use the invite link."
+          : "That is not a room code — six letters and numbers.", true);
         return { ok: false, error: "bad_code" };
       }
       await readyIce();
@@ -1751,7 +1802,9 @@ const NetLobby = (function () {
       on("vs-invite-more", inviteAnother);
       on("vs-code-host", tiltToo(() => codeHost()));   // never the click event as opts
       on("vs-code-join", () => {
-        showCodeStep("input", "Enter their code", "Six letters and numbers.");
+        const privateRelay = NetRendezvous.usingPrivateRelay();
+        showCodeStep("input", privateRelay ? "Paste their private room token" : "Enter their code",
+          privateRelay ? "Paste all 32 characters shared by your friend. Both players need the same private relay configured." : "Six letters and numbers.");
         const box = $("vs-code-in");
         if (box) { box.value = ""; box.focus(); }
       });
@@ -1759,7 +1812,7 @@ const NetLobby = (function () {
       on("vs-code-copy", () => copy(($("vs-code-value") || {}).textContent || ""));
       on("vs-code-share", () => {
         const c = ($("vs-code-value") || {}).textContent || "";
-        return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
+        return handOff({ title: "Apex 26", text: "Race me on Apex 26 — " + (NetRendezvous.usingPrivateRelay() ? "private room token " : "room code ") + c }, c);
       });
       on("vs-start", tiltToo(startFromRoom));
       on("vs-close", () => {
@@ -1848,7 +1901,8 @@ const NetLobby = (function () {
       scan, stopScan, pasteInto, deliver,
       codeHost, codeJoin, stopCodeWait,
       watchForOpen: waitForOpen,
-      roomChanged, setReady, startFromRoom, renderRoom,
+      roomChanged, setReady, startFromRoom, renderRoom, removeGuest,
+      verifyCodes: () => Object.fromEntries(_verify),
       // Mint a further invite without disturbing the room. Host only, capped.
       inviteAnother,
       peerSeats,

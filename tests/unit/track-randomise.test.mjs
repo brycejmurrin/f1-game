@@ -53,9 +53,12 @@ const sig = (list) => list.map((c) => [c.seed, c.pts]);
 
 test("design: the top four are deterministic, unique, best first, all green; 16 seeds well under 2 s", () => {
   const { TR, V, run } = DZ;
-  const t0 = performance.now();
+  // CPU time, not wall time (2026-10-04): tooling-fast runs this beside other
+  // files and other agents' work, and at loadavg 36 the same 16 seeds read
+  // 3061 ms of WALL time. The bound is about the design search's work.
+  const t0 = process.cpuUsage();
   const a = run(11, "MIXED");
-  const ms = performance.now() - t0;
+  const used = process.cpuUsage(t0), ms = (used.user + used.system) / 1000;
   console.log(`  design(n=16, MIXED): ${ms.toFixed(0)} ms, top ${a.map((c) => c.seed + ":" + c.score.toFixed(2)).join(" ")}`);
   assert.ok(ms < 2000, "n=16 in " + ms.toFixed(0) + " ms");
   assert.equal(a.length, 4, "four candidates");

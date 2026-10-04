@@ -402,7 +402,9 @@ test("a share link while the screen is open keeps the return focus; EDIT → SAV
   const first = b.D.save();
   assert.equal(first.ok, true);
   const item = b.C.get(first.id);
-  b.D.load(item, "library", item.id);
+  // The picker entry point must retain edit identity just like library EDIT.
+  assert.match(read("js/ui/select-screen.js"), /TrackDesigner\.open\(\{ design: CustomTracks\.get\(t\.id\), originId: t\.id \}\)/);
+  b.D.open({ design: item, originId: item.id });
   b.D.setStart(3); b.D.preview();
   const second = b.D.save();
   assert.equal(second.ok, true); assert.notEqual(second.id, first.id);
@@ -410,6 +412,8 @@ test("a share link while the screen is open keeps the return focus; EDIT → SAV
   b.D.setWidth(6); b.D.preview();
   const third = b.D.save();
   assert.deepEqual(plain(b.D.state().library), [third.id], "…on every later SAVE too");
+  b.D.open({ design: b.C.get(third.id), originId: third.id, shared: true });
+  assert.equal(b.D.state().design.originId, undefined, "a shared import never replaces a local design");
   // A full library: RACE on a NEW design is refused with the limit named.
   for (let i = 0; b.C.list().length < b.C.LIMITS.items; i++) assert.equal(b.C.upsert(Object.assign({}, b.C.get(third.id), { seed: 1000 + i })).ok, true);
   b.D.randomise(23); b.D.preview();

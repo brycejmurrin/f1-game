@@ -38,4 +38,9 @@ runs:
         done
         if [ "$ok" != 1 ]; then echo "::error::mesa-xvfb: apt could not install Mesa/Xvfb in 3 bounded attempts (runner mirror down?)"; exit 1; fi
         Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+        # WAIT FOR THE DISPLAY (2026-10-04): the first Chromium launch raced a
+        # server that had not created its socket yet. Xvfb makes
+        # /tmp/.X11-unix/X99 once it accepts connections; 5 s, then say so.
+        for i in $(seq 50); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
+        [ -S /tmp/.X11-unix/X99 ] || echo "::warning::mesa-xvfb: Xvfb :99 has no socket after 5 s; the first browser launch may fail"
         echo "DISPLAY=:99" >> "$GITHUB_ENV"

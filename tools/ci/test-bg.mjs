@@ -87,7 +87,29 @@ const mergeByPid = (disk, mine) => {
   const seen = new Set(mine.map((r) => r.pid));
   return [...disk.filter((r) => !seen.has(r.pid)), ...mine];
 };
-const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (_) { return false; } };
+/* LIVENESS IS PID + START TIME (2026-10-04). `kill(pid, 0)` alone read any
+ * process that later took a recorded pid as this run: after a container
+ * restart (artifacts/ survives, pids restart low) or a pid wrap, a stale entry
+ * stayed "running" forever, the one-group cap refused every start, and
+ * --stop / a supersede sent SIGTERM then SIGKILL to the process GROUP of an
+ * unrelated process. A run now records its /proc/<pid>/stat starttime (field
+ * 22 — the identity .claude/hooks/live-run.py prints) and the kernel boot id,
+ * and is alive only while both still match. An old record without them falls
+ * back to the pid test. */
+export function procStart(pid) {
+  try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim().split(/\s+/)[19] || null; }
+  catch (_) { return null; }
+}
+const BOOT_ID = (() => { try { return fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim(); } catch (_) { return null; } })();
+export function aliveRun(run, { kill = (p) => process.kill(p, 0), start = procStart, boot = BOOT_ID } = {}) {
+  const pid = run && +run.pid;
+  if (!(pid > 0)) return false;
+  try { kill(pid); } catch (_) { return false; }
+  if (run.bootId && boot && run.bootId !== boot) return false;
+  if (run.starttime && start(pid) !== String(run.starttime)) return false;
+  return true;
+}
+const alive = (run) => aliveRun(run);
 const loadavgLine = () => {
   try {
     const [a, b, c] = os.loadavg().map((n) => n.toFixed(2));
@@ -120,8 +142,8 @@ const sleepSync = (ms) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)
    Playwright groups end with live-reporter's "= run <status>" line, and
    node --test groups end with a TAP summary. A group whose log matches neither
    really did die early. */
-function outcome(run) {
-  if (alive(run.pid)) return "running";
+export function outcome(run) {
+  if (alive(run)) return "running";
   let text = "";
   try { text = fs.readFileSync(run.log, "utf8"); } catch (_) { return "gone (no log)"; }
   return outcomeOf(text);
@@ -167,7 +189,7 @@ function status() {
   say(`status ${loadavgLine()} mode=${s.mode || "?"}`);
   for (const r of s.runs) {
     const started = r.started ? Date.parse(r.started) : NaN;
-    const dur = alive(r.pid) ? `elapsed=${fmtDur(Date.now() - started)}`
+    const dur = alive(r) ? `elapsed=${fmtDur(Date.now() - started)}`
       : (r.ended ? `duration=${fmtDur(Date.parse(r.ended) - started)}` : "");
     say(`${r.group.padEnd(16)} pid=${String(r.pid).padEnd(8)} ${outcome(r).padEnd(34)} ${dur} ${path.relative(ROOT, r.log)}`);
   }
@@ -176,7 +198,7 @@ function status() {
 async function waitForRunning() {
   // Re-read the registry every poll: a group another shell starts while this
   // waits is part of "everything still running" (it used to be read once).
-  const running = () => readState().runs.filter((r) => alive(r.pid));
+  const running = () => readState().runs.filter((r) => alive(r));
   const deadline = waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
   while (running().length) {
     if (Date.now() > deadline) {
@@ -196,7 +218,7 @@ async function waitForRunning() {
   // a group another shell started while this one waited is not clobbered.
   const stamped = new Map();
   for (const r of readState().runs) {
-    if (!alive(r.pid) && !r.ended) {
+    if (!alive(r) && !r.ended) {
       const ended = new Date().toISOString();
       stamped.set(r.pid, ended);
       const started = r.started ? Date.parse(r.started) : NaN;
@@ -264,7 +286,7 @@ function sweep() {
 
 function stop({ graceMs = 4000, doSweep = false } = {}) {
   const s = readState();
-  const live = s.runs.filter((r) => alive(r.pid));
+  const live = s.runs.filter((r) => alive(r));
   let n = 0;
   for (const r of live) if (signal(r.pid, "SIGTERM")) n++;
   say(`sent SIGTERM to ${n} run group(s)`);
@@ -272,7 +294,7 @@ function stop({ graceMs = 4000, doSweep = false } = {}) {
   if (doSweep) setTimeout(sweep, graceMs + 500);
   const deadline = Date.now() + graceMs;
   const spin = () => {
-    const still = live.filter((r) => alive(r.pid));
+    const still = live.filter((r) => alive(r));
     if (!still.length) return say("all stopped");
     if (Date.now() < deadline) return setTimeout(spin, 250);
     for (const r of still) { signal(r.pid, "SIGKILL"); say(`SIGKILL ${r.group} (pgid ${r.pid})`); }
@@ -290,7 +312,7 @@ function stop({ graceMs = 4000, doSweep = false } = {}) {
 // door. Same SIGTERM-then-SIGKILL ladder as --stop, but synchronous, because it
 // has to be finished before the replacement is spawned.
 function supersede(groups, { graceMs = 4000 } = {}) {
-  const doomed = readState().runs.filter((r) => alive(r.pid) && groups.includes(r.group));
+  const doomed = readState().runs.filter((r) => alive(r) && groups.includes(r.group));
   if (!doomed.length) return;
   for (const r of doomed) {
     const ok = signal(r.pid, "SIGTERM");
@@ -299,10 +321,10 @@ function supersede(groups, { graceMs = 4000 } = {}) {
       : `WARNING: could not signal the running test:${r.group} (pid ${r.pid}); it may still be writing to ${path.relative(ROOT, r.log)}`);
   }
   const deadline = Date.now() + graceMs;
-  let still = doomed.filter((r) => alive(r.pid));
+  let still = doomed.filter((r) => alive(r));
   while (still.length && Date.now() < deadline) {
     sleepSync(250);
-    still = still.filter((r) => alive(r.pid));
+    still = still.filter((r) => alive(r));
   }
   for (const r of still) {
     signal(r.pid, "SIGKILL");
@@ -372,7 +394,7 @@ function spawnGroup(group, pkg, { lastFailed = false } = {}) {
   // Persist whether this group actually owns Chromium. Consumers that guard
   // browser automation must not mistake Node-only groups (tooling-fast,
   // sweeps) for Playwright merely because test-bg launched them.
-  return { group, pid: child.pid, log, started, browser: forward.length > 0 };
+  return { group, pid: child.pid, starttime: procStart(child.pid), bootId: BOOT_ID, log, started, browser: forward.length > 0 };
 }
 
 function start(groups, { force = false, parallel = false, lastFailed = false } = {}) {
@@ -407,7 +429,7 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // is: counting it would refuse the ordinary "re-run the group I am already
   // running" on a box that has room. The cap check runs FIRST so that a refusal
   // never kills a live run and then declines to replace it.
-  const running = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+  const running = readState().runs.filter((r) => alive(r) && !groups.includes(r.group));
 
   if (!parallel && !force && groups.length > 1) {
     // Sequential multi-group start without --wait: launch ONLY the first, and
@@ -464,7 +486,7 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // between our earlier read and this write keeps its stamp.
   let prior = [];
   updateState((s) => {
-    prior = s.runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+    prior = s.runs.filter((r) => alive(r) && !groups.includes(r.group));
     return { runs: mergeByPid(prior, runs), started: new Date().toISOString(), workers: WORKERS, mode };
   });
   if (prior.length) say(`still running from an earlier start: ${prior.map((r) => r.group).join(", ")}`);

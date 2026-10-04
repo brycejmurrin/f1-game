@@ -120,7 +120,7 @@ try {
     // which Gfx.create treats as unavailable and falls through to GLX.
     if (pref === "three") preloadThreeVendor();
     await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
-    const backend = await Gfx.create(canvas, {});
+    const backend = await Gfx.create(canvas, { backend: pref });
     if (backend) {
       // game.js and tracks.js take the backend by injection (the `gfx` handle
       // / Tracks.build's opts.gfx) and need no patch. The descriptor-copy

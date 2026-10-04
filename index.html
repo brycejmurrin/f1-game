@@ -807,9 +807,9 @@
             <p id="pm-phonepad-status" class="adv-help" role="status"></p>
             <div id="pm-phonepad-pair" hidden>
               <div id="pm-phonepad-text">
-                <p class="adv-help" data-help="keep">ROOM CODE</p>
+                <p class="adv-help" data-help="keep">ROOM CODE / PRIVATE TOKEN</p>
                 <output id="pm-phonepad-code" aria-live="polite"></output>
-                <p class="adv-help" data-help="keep">On the phone: scan the code with the camera, or open <span id="pm-phonepad-url"></span> and type the room code. Both devices need internet to pair; the same Wi&#8209;Fi gives the quickest steering.</p>
+                <p class="adv-help" data-help="keep">On the phone: scan the code with the camera, or open <span id="pm-phonepad-url"></span> and type the room code or paste the private token. Both devices need internet to pair; the same Wi&#8209;Fi gives the quickest steering.</p>
               </div>
               <figure class="vs-qr-wrap" id="pm-phonepad-qr-wrap" hidden>
                 <canvas id="pm-phonepad-qr" width="320" height="320" role="img"
@@ -2287,7 +2287,7 @@
              everything else in this game is static files that cannot break,
              while this one depends on a service somebody keeps alive. -->
         <div id="vs-code-entry">
-          <p class="vs-hint">…or use a short room code.</p>
+          <p class="vs-hint">…or use a room code.</p>
           <div class="vs-actions">
             <button id="vs-code-host" class="bigbtn minibtn">NEW CODE</button>
             <button id="vs-code-join" class="bigbtn alt minibtn">ENTER CODE</button>
@@ -3080,7 +3080,7 @@
         <dd>After the flag: the finishing order and points (+FL marks a season&rsquo;s fastest-lap point), YOUR RACE, any new badges and, with the coach on, a COACH INSIGHT that opens the DRIVING page. With tyre wear on, each car shows its tyre stints. MENU leaves; NEXT reads RACE AGAIN, NEXT ROUND in a season, or TRY AGAIN in a time trial.
           <br>A time trial shows your best against your ghost, a MEDAL (gold beats the reference pole time, silver is within 3%, bronze within 7%) and a leaderboard for the same setup and conditions. COPY LINK, COPY CODE or DOWNLOAD shares your ghost lap; a friend who opens the link races it in a time trial as a RIVAL GHOST. COPY DAILY RESULT shares a daily challenge.</dd>
         <dt id="htp-friends">RACE A FRIEND</dt>
-        <dd>Race 2&ndash;4 players. The host creates an invite, sends it and pastes the reply to connect. In the same room, you can scan QR codes instead. Or use a short room code: the host taps NEW CODE and everyone else ENTER CODE. Everyone needs the same game version.
+        <dd>Race 2&ndash;4 players. The host creates an invite, sends it and pastes the reply to connect. In the same room, you can scan QR codes instead. Or use a short room code: the host taps NEW CODE and everyone else ENTER CODE. Private relays use a longer token: copy or share it, then paste it to join. Everyone needs the same game version.
           <br>On a phone, USE AS CONTROLLER on the title menu steers a game on another screen: type the room code it shows.</dd>
       </dl>
     </div>
@@ -3406,6 +3406,10 @@
 }
 </script>
 
+<!-- UPDATE READY (js/ui/update-check.js): a newer build is live. Shown outside
+     races only; a tap flushes saves and reloads into the new build. -->
+<button id="update-chip" type="button" hidden>UPDATE READY · RELOAD</button>
+
 <!-- @gen-shell:scripts -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/mat4.js?v=dev"></script>
@@ -3718,6 +3722,7 @@
 <script defer crossorigin="anonymous" src="js/render/shared/shadow-pass.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/mirror-pass.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/platform-session.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/update-check.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>
 <!-- /@gen-shell:scripts -->
 </body></html>

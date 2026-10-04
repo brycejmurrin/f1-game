@@ -22,6 +22,11 @@ test.describe("Monza track-owned foundation migration", () => {
       const out = {
         coordinates: def.sceneryCoordinates,
         terrainOuter: def.terrainOuter,
+        timingOffsetsM: (() => {
+          const { sectors, total } = window.__apex.info();
+          return [(def.turns[3] - sectors[0]) * total,
+                  (def.turns[7] - sectors[1]) * total];
+        })(),
         // 7a173519 moved the start line (startFrac 0.0125 -> 0.0), rotating
         // racing fractions by the arc shift (+0.0867); the dip and the crest
         // did not move physically. Re-pinned onto their measured new locations
@@ -65,6 +70,10 @@ test.describe("Monza track-owned foundation migration", () => {
 
     expect(result.coordinates).toBe("racing");
     expect(result.terrainOuter).toBe(120);
+    // FIA's 2025 map puts timing lines BEFORE T4/T8 by 233/215 m.
+    // Measure the built racing arc, which differs from raw path metadata.
+    expect(result.timingOffsetsM[0]).toBeCloseTo(233, 1);
+    expect(result.timingOffsetsM[1]).toBeCloseTo(215, 1);
     expect(result.roggiaY).toBeLessThan(-1);
     expect(result.lesmoY).toBeGreaterThan(4);
     expect(result.maxY - result.minY).toBeLessThan(7);

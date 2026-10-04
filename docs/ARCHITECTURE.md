@@ -217,6 +217,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
 | `platform-session.js` | `PlatformSession` | tag | PlatformSession: platform UI, phone controller and session interruptions. create(G, deps) exposes staged wiring so entry boot order stays explicit. |
+| `update-check.js` | `UpdateCheck` | tag | UpdateCheck: an in-session "a newer build is live" check and its UPDATE READY chip. index.html's shell version guard runs ONCE, at boot; an installed PWA or a… |
 
 **`js/track/core/`**
 
@@ -1649,10 +1650,11 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
-- **SCENE MSAA (2026-10-01):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
-  4× on its desktop WebGL2 backend (`tlx.js` passes `sceneSamples` into
+- **SCENE MSAA (2026-10-01; preset-driven on TLX 2026-10-04):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
+  the same rule on its desktop WebGL2 backend (`tlx.js` `sceneSamplesFor` passes `sceneSamples` into
   `tlx-post.js`'s scene target; r186's WebGL backend resolves the depth texture
-  by blit, so SSAO/SSR/godray read a resolved depth), **TLX-WebGPU and WGX gap**:
+  by blit, so SSAO/SSR/godray read a resolved depth). Neither WebGL2 backend asks
+  for canvas MSAA: the canvas only receives the FXAA quad. **TLX-WebGPU and WGX gap**:
   core WebGPU cannot resolve a depth attachment, so the native path stays
   single-sample with FXAA alone (`docs/research/WEBGPU-PARITY.md`). Phones: no
   scene MSAA on any backend (the mobile recipe).

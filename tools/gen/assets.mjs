@@ -1829,8 +1829,8 @@ async function main() {
   }
 }
 
-// Only when RUN, not when imported: other tools may import decodePNG /
-// encodePNG rather than adding a third copy of each to the tree (there is
-// already a second decoder in import-models.mjs).
+// Only when RUN, not when imported. tools/car/trace-logo.mjs reuses decodePNG and
+// tools/car/crest-sweep.mjs reuses encodePNG rather than adding a third copy of
+// each to the tree (there is already a second decoder in import-models.mjs).
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
   main().catch((e) => fail(e && e.stack ? e.stack : String(e)));
