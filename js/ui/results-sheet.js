@@ -43,6 +43,14 @@ function ptsLabel(season, driverId) {
   const net = SeasonCal.netPts(season, driverId);
   return net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
 }
+// CONSTRUCTORS ORDER, the same as Career.teamStandings: points, then the
+// lower (stronger) tier, then id. A points-only sort left ties in teamPts
+// insertion order, so on equal points this sheet could show the player's team
+// P8 while Career settled the teamPos goal and history as P9.
+function byConstructor(a, b) {
+  const tier = (id) => { const t = Teams.LIST.find((x) => x.id === id); return t && Number.isFinite(t.tier) ? t.tier : 99; };
+  return b[1] - a[1] || tier(a[0]) - tier(b[0]) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+}
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
@@ -364,7 +372,7 @@ function buildResults(order, race) {
     tmHead.className = "sel-label";
     tmHead.textContent = "CONSTRUCTORS";
     els.resultsTable.appendChild(tmHead);
-    const tmList = Object.entries(season.teamPts).sort((a, b) => SeasonCal.rankTeams(season, a[0], b[0])).slice(0, 5);
+    const tmList = Object.entries(season.teamPts).sort(byConstructor).slice(0, 5);
     tmList.forEach(([teamId, pts], i) => {
       const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
       rankRow(els.resultsTable, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
@@ -598,7 +606,7 @@ function buildStandings() {
   body.appendChild(tmHead);
 
   const tmList = Object.entries(season.teamPts)
-    .sort((a, b) => SeasonCal.rankTeams(season, a[0], b[0]));
+    .sort(byConstructor);
   tmList.forEach(([teamId, pts], i) => {
     const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
     rankRow(body, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);

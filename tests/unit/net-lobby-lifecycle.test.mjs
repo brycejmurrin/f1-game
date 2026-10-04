@@ -874,6 +874,18 @@ test("join()'s late prompt does not wipe an error said during its ICE wait", asy
   } finally { h.lobby.cancel(); }
 });
 
+test("HOST A RACE (link) closes a room code left open by a code join", () => {
+  // INVITE ANOTHER -> HOST A RACE after a guest joined by code: the reopened
+  // room kept advertising a dead offer for up to JOIN_TIMEOUT_MS, and a friend
+  // told the code waited on Connecting… for a NAT error. host() must stop it,
+  // exactly as codeHost() does before its own generation.
+  const at = SOURCE.indexOf("async function host()");
+  assert.ok(at > 0, "host() present");
+  const body = SOURCE.slice(at, SOURCE.indexOf("await readyIce()", at));
+  assert.match(body, /stopCodeWait\(\)/);
+  assert.match(body, /codeReopen = null/);
+  assert.match(body, /clearTimeout\(codeReopenTimer\)/);
+});
 
 test("private room entry accepts a full shared token and public entry still asks for six characters", () => {
   for (const privateRelay of [true, false]) {

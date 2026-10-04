@@ -1165,6 +1165,12 @@ const NetLobby = (function () {
 
     async function host() {
       const gen = beginOperation();
+      // INVITE ANOTHER -> HOST A RACE after a code join: the reopened room code
+      // stayed advertised (six relay sockets, the dead offer reposted every
+      // 5 s) while this generation ignored its answers — a friend told the
+      // code sat on Connecting... and got a NAT error. codeHost does the same.
+      stopCodeWait(); codeReopen = null;
+      clearTimeout(codeReopenTimer); codeReopenTimer = null;
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
       show("hosting");

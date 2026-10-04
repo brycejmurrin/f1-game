@@ -4114,6 +4114,7 @@ function syncRotateBlocker(moveFocus) {
   // Measured WITHOUT css/responsive.css's pause-card rule (body.rotate-measure):
   // that rule hides the gate while the card is up, and the card is what this
   // function decides to hide — read through it, the gate could never return.
+  // Guard when there is no document (node VM harnesses / photomode-hold).
   const body = typeof document !== "undefined" ? document.body : null;
   if (body) body.classList.add("rotate-measure");
   const active = getComputedStyle(box).display !== "none";
