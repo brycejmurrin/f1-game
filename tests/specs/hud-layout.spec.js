@@ -102,10 +102,19 @@ async function race(page, steer, manual, ins, opts) {
     `:root{--sal:${ins.sal}px;--sar:${ins.sar}px;--sat:${ins.sat}px;--sab:${ins.sab}px;}` });
   await page.evaluate(() => window.__apex.race("monza"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 60, 0); });
+  await page.evaluate(() => window.__apex.go());
   // The CAMERA decides half the adaptive rules (ONBOARD_IDS / BCAM_IDS in
   // js/ui/hud.js), so a spec that never leaves chase cannot see them.
-  if (o.cam) await page.evaluate((c) => { window.__apex.camera(c); }, o.cam);
+  await page.evaluate(([camera, hold]) => {
+    // headless alone leaves physics/HUD ticks running. Hold the broadcast
+    // probe's inputs before selecting its camera and refreshing the real HUD,
+    // in one turn: no renderer warm-up or changing lap text can intervene.
+    if (hold) { window.__apex.freeze(true); window.__apex.headless(true); }
+    if (camera) window.__apex.camera(camera);
+    // jump synchronously refreshes HUD classes/fit, bypassing tickBody's
+    // GPU/mirror warm-up gate. It must follow the camera choice.
+    window.__apex.jump(0.1, 60, 0);
+  }, [o.cam || null, o.profile === "broadcast"]);
   // THE RADIO CARD, shown with its longest tenant so its box is measured: the
   // engineer's longest line on the driver's channel. The DOM is poked
   // directly — there is no __apex hook for a banner, and a real one would
@@ -116,7 +125,26 @@ async function race(page, steer, manual, ins, opts) {
     document.getElementById("announce-text").textContent = "CAUTION — CHEAPER STOP, ABOUT 23s LOST";
     e.hidden = false;
   });
-  await page.waitForTimeout(300);
+  if (o.profile === "broadcast") {
+    // CI selected-specs 37100340716: broadcast+heli timed out here at 5 s
+    // while cockpit passed. camera() now refreshHud(true)s like jump(), so
+    // hud-bcam and --hud-top-h publish without waiting for a starved heli
+    // frame. Still wait for that published input — not for overlap to go
+    // green, and not a longer timeout. toFixed(1) in fitHud rounds own-unit
+    // height to 0.1px.
+    // API: https://playwright.dev/docs/api/class-page#page-wait-for-function
+    await page.waitForFunction(async (broadcastCamera) => {
+      // Published inputs can precede Chromium's sibling style invalidation:
+      // captured rules/vars were correct while map/gaps still had base top:8px.
+      // Cross a paint boundary within this same 5 s budget before measuring.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const tower = document.querySelector(".hud-top");
+      if (!tower || document.body.classList.contains("hud-bcam") !== broadcastCamera) return false;
+      const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
+      const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
+      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
+    }, o.cam === "heli", { polling: 100, timeout: 5_000 });
+  } else await page.waitForTimeout(300);
 }
 
 const measure = (page, ctrl, hud, W, H, ins) => page.evaluate(([c, h, w, ht, i]) => {
@@ -168,7 +196,52 @@ const measure = (page, ctrl, hud, W, H, ins) => page.evaluate(([c, h, w, ht, i])
   const unsafe = [...vis, ...hb].filter((e) => e.x < i.sal - 0.5 || e.r > w - i.sar + 0.5
                                 || e.y < i.sat - 0.5 || e.b > ht - i.sab + 0.5)
                     .map((e) => e.id);
-  return { overlaps, hudClash, unsafe, count: vis.length };
+  let diagnostics = null;
+  if (hudClash.length) {
+    const root = document.documentElement;
+    const topRules = (el) => {
+      const matched = [];
+      const walk = (rules, href, nesting) => {
+        for (const rule of rules) {
+          if (rule.media && !matchMedia(rule.media.mediaText).matches) continue;
+          if (rule.constructor.name === "CSSSupportsRule" && !CSS.supports(rule.conditionText)) continue;
+          if (rule.selectorText && rule.style && rule.style.getPropertyValue("top")) {
+            try {
+              if (el.matches(rule.selectorText)) matched.push({ href, nesting,
+                selector: rule.selectorText, top: rule.style.getPropertyValue("top"),
+                priority: rule.style.getPropertyPriority("top") });
+            } catch { /* A browser-specific selector is not diagnostic evidence. */ }
+          }
+          if (rule.cssRules) walk(rule.cssRules, href,
+            [...nesting, rule.cssText.slice(0, rule.cssText.indexOf("{")).trim()]);
+        }
+      };
+      for (const sheet of document.styleSheets) {
+        if (sheet.disabled || (sheet.media.length && !matchMedia(sheet.media.mediaText).matches)) continue;
+        try { walk(sheet.cssRules, sheet.href || "inline", []); }
+        catch { /* Cross-origin sheets cannot be inspected. */ }
+      }
+      return matched;
+    };
+    const detail = (selector) => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const cs = getComputedStyle(el), rect = el.getBoundingClientRect();
+      return { rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: rect.bottom },
+        currentCSSZoom: el.currentCSSZoom, zoom: cs.zoom, transform: cs.transform,
+        cssHeight: cs.height, top: cs.top, display: cs.display, fontSize: cs.fontSize,
+        inlineStyle: el.style.cssText,
+        variables: Object.fromEntries(["--hud-top-h", "--hud-z", "--sat", "--hud-scale"]
+          .map((name) => [name, cs.getPropertyValue(name)])), matchedTopRules: topRules(el) };
+    };
+    diagnostics = { hb, bodyClass: document.body.className,
+      publishedHeight: root.style.getPropertyValue("--hud-top-h"),
+      publishedZoom: root.style.getPropertyValue("--hud-z-top"),
+      computedHeight: getComputedStyle(root).getPropertyValue("--hud-top-h"),
+      computedZoom: getComputedStyle(root).getPropertyValue("--hud-z-top"),
+      tower: detail(".hud-top"), map: detail("#minimap"), gaps: detail(".hud-gaps") };
+  }
+  return { overlaps, hudClash, unsafe, count: vis.length, diagnostics };
 }, [ctrl, hud, W, H, ins]);
 
 for (const v of VIEWS) {
@@ -245,7 +318,7 @@ for (const c of [
       const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
       await race(page, "buttons", false, v, { profile: c.profile, cam: c.cam });
       const r = await measure(page, CTRL, [...HUD, ...HUD_LANDSCAPE_ONLY], v.w, v.h, v);
-      const dump2 = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash, unsafe: r.unsafe });
+      const dump2 = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash, unsafe: r.unsafe, diagnostics: r.diagnostics });
       expect(r.overlaps, "controls must not sit on each other" + dump2).toEqual([]);
       // The one this pass exists for: a HUD readout painting over another HUD
       // readout. A hidden element has no box, so a profile that legitimately

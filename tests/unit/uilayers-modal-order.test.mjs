@@ -83,6 +83,18 @@ test("with no dialogs open the z-index ranking is unchanged", () => {
   assert.equal(U.top().id, "select");
 });
 
+test("Photo Studio owns focus and Escape above its borrowed fly-camera controls", () => {
+  const html = read("index.html");
+  const layerZ = (file, id) => {
+    const match = read(file).match(new RegExp(`#${id}\\s*\\{[^}]*z-index:\\s*(\\d+)`));
+    assert.ok(match, id + " has a stacking level"); return Number(match[1]);
+  };
+  const layers = [{ id: "photo-studio", z: layerZ("css/photo-studio.css", "photo-studio") },
+    { id: "photo-controls", z: layerZ("css/hud.css", "photo-controls") }];
+  layers.sort((a, b) => html.indexOf(`id="${a.id}"`) - html.indexOf(`id="${b.id}"`));
+  assert.equal(fakeDom(layers, []).top().id, "photo-studio");
+});
+
 test("topmodal does not preventDefault a non-cancelable focusin (F9)", () => {
   const src = read("js/ui/modal.js");
   assert.doesNotMatch(src, /focusin[\s\S]{0,1200}?e\.preventDefault\(\)/,

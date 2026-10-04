@@ -180,6 +180,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it
   // stays in the edit loop where a cockpit geometry change is actually made.
   "tests/unit/cockpit-crest-stripe.test.mjs",
+  "tests/unit/cockpit-preview.test.mjs",
   // The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.
   "tests/unit/cockpit-wheels.test.mjs",
   "tests/unit/comment-citations.test.mjs",
@@ -240,6 +241,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // → onContext, the stamp tool's ghost polyline, the drag / span measurement
   // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
   "tests/unit/designer-canvas.test.mjs",
+  // The designer's elevation strip (js/editor/profile.js) alone: tap adds a hill,
+  // a grip drag sets height (8 % cap) / place / Shift length and commits once,
+  // long-press and Delete remove, data-arrows own/pass, the hill's aria-label.
+  "tests/unit/designer-profile.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-builder-config.test.mjs",
   "tests/unit/desktop-native.test.mjs",
@@ -278,6 +283,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
+  // Rival-car distance LOD (js/car/field-lod.js): the table, the shadow-caster
+  // gate, the mirror cap and the launch warm. Real shadow/mirror passes in VMs, ~0.1 s.
+  "tests/unit/field-lod.test.mjs",
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
@@ -300,6 +308,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-panel.test.mjs",
   "tests/unit/flyby-pose-inverse.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
+  "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
   // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
@@ -429,6 +438,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-nav-spatial.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
+  "tests/unit/mirror-lights.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",
@@ -503,6 +513,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // lines wait for the straight and die when stale, commentary only while
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
+  "tests/unit/race-session-fixes.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP

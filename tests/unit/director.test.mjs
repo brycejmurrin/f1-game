@@ -14,10 +14,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
-function boot() {
+function boot(globals = {}) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, isFinite, parseFloat, parseInt,
     Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
+    ...globals,
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
@@ -118,10 +119,88 @@ test("create().tick writes dbgCam from camVantage and never mutates car speed", 
   assert.equal(G.dbgCam, null);
 });
 
-test("CAM_MODES appends tv last — save-format index contract", () => {
+test("CAM_MODES keeps tv at its shipped index — save-format index contract", () => {
   const text = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...text.matchAll(/\{\s*id:\s*"([^"]+)"/g)].map((m) => m[1]);
   assert.ok(ids.includes("tv"), "tv mode must be in CAM_MODES");
-  assert.equal(ids[ids.length - 1], "tv", "tv is appended — never reorder earlier ids");
+  // apex26.camMode stores the index: tv shipped at 18, later modes (HELMET) append after it.
+  assert.equal(ids.indexOf("tv"), 18, "tv keeps index 18 — never reorder earlier ids");
   assert.ok(ids.indexOf("visor") < ids.indexOf("tv"), "visor stays before tv");
+});
+
+function cameraScene() {
+  const D = boot({ CamModes: { CAM_MODES: [{ id: "chase" }, { id: "tv" }] } });
+  const car = { code: "VER", prog: 100, s: 100, speed: 50 };
+  const G = {
+    state: "race", paused: false, photoMode: false, camMode: 1,
+    player: car, cars: [car], track: {}, dbgCam: null,
+    netPlay: { active: () => false },
+    setCamMode(i) { G.camMode = i; },
+    camVantage(_shot, s) { return { eye: [s, 5, 0], tgt: [s + 10, 2, 0], fov: 50 }; },
+  };
+  let eligible = true;
+  const api = D.create(G, () => eligible);
+  return { D, G, car, api, eligibility(v) { eligible = v; } };
+}
+
+test("WATCH or scrub ownership prevents live TV cuts and retired-seat auto-spectate", () => {
+  const { G, car, api, eligibility } = cameraScene();
+  eligibility(false);
+  for (const mode of [0, 1]) {
+    G.camMode = mode;
+    for (const flag of ["finished", "retired"]) {
+      car[flag] = true;
+      api.tick(20);
+      assert.equal(G.camMode, mode, "recorded playback keeps the selected camera");
+      assert.equal(G.dbgCam, null);
+      assert.equal(api.status().cuts, 0);
+      car[flag] = false;
+    }
+  }
+  eligibility(true);
+  api.tick(1);
+  assert.ok(G.dbgCam, "ordinary solo TV still takes shots");
+  eligibility(false);
+  api.tick(20);
+  assert.equal(G.dbgCam, null, "replay ownership releases a previously owned live shot");
+});
+
+test("Pause holds the director's shot and clock without forcing a retired-seat camera", () => {
+  const { G, car, api } = cameraScene();
+  api.tick(1);
+  const camera = G.dbgCam, status = api.status();
+  const pose = JSON.parse(JSON.stringify(camera));
+  G.paused = true;
+  car.s = 400;
+  api.tick(30);
+  assert.equal(G.dbgCam, camera);
+  assert.deepEqual(JSON.parse(JSON.stringify(G.dbgCam)), pose);
+  assert.deepEqual(api.status(), status, "no elapsed wall time or cuts while paused");
+  G.camMode = 0;
+  car.retired = true;
+  api.tick(30);
+  assert.equal(G.camMode, 0, "auto-spectate cannot change a paused camera");
+  assert.equal(G.dbgCam, null, "a different paused camera selection releases the held TV shot");
+});
+
+test("Photo and foreign debug cameras keep ownership through TV ticks, reset and exit", () => {
+  const { G, api } = cameraScene();
+  api.tick(1);
+  const photo = { eye: [4, 8, 12], target: [14, 8, 12], fov: 70 };
+  G.dbgCam = photo;
+  G.photoMode = true;
+  api.tick(20);
+  assert.equal(G.dbgCam, photo, "Photo retains its published pose");
+  G.photoMode = false;
+  api.tick(20);
+  assert.equal(G.dbgCam, photo, "an external tool's camera retains ownership too");
+  assert.equal(api.status().on, false, "director does not report a foreign camera as its own");
+  G.state = "menu";
+  api.tick(1);
+  api.reset();
+  assert.equal(G.dbgCam, photo, "release and reset must not delete another camera");
+  G.state = "race";
+  G.dbgCam = null;
+  api.tick(1);
+  assert.ok(G.dbgCam, "TV resumes after the tool releases its camera");
 });

@@ -74,6 +74,19 @@ test("a renamed shell id is caught", () => {
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
+test("isolated cockpit document IDs are checked against their own host", () => {
+  const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "apex-cockpit-host-"));
+  try {
+    fs.mkdirSync(path.join(tmp,"js/camera"),{recursive:true});
+    fs.writeFileSync(path.join(tmp,"index.html"),'<div id="view"></div>');
+    fs.writeFileSync(path.join(tmp,"cockpit-view.html"),'<canvas id="view"></canvas><div id="err"></div>');
+    fs.writeFileSync(path.join(tmp,"js/camera/cockpit-preview.js"),'document.getElementById("view");\ndocument.getElementById("err");');
+    assert.deepEqual(scan(tmp).missing,[]);
+    fs.writeFileSync(path.join(tmp,"cockpit-view.html"),'<canvas id="renamed"></canvas><div id="err"></div>');
+    assert.deepEqual(scan(tmp).missing.map((m)=>m.id),["view"],"index.html cannot satisfy a lookup in the iframe");
+  } finally { fs.rmSync(tmp,{recursive:true,force:true}); }
+});
+
 test("every RUNTIME_IDS entry is still read, and carries a reason", () => {
   // A stale exemption is worse than none: it hides the next real break behind
   // an id nobody looks up any more.

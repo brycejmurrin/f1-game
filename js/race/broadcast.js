@@ -337,10 +337,11 @@ const Broadcast = (function () {
       towerT -= dt;
       if (towerT <= 0) { towerT = TOWER_TICK_S; paintTower(st); pipTick(st); }
     }
+    function refresh(st) { if (on && st) { paintTower(st); pipTick(st); } }
     function status() { return on ? { auto, locked, manual: wall < manualUntil, manualRemaining: Math.max(0, manualUntil - wall), shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,
                                       pip: pip ? { code: pip.key.code || null, label: pip.label } : null } : null; }
 
-    return { start, stop, tick, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
+    return { start, stop, tick, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
   }
 
   return { create, towerAt, crossAt, doneBy, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };

@@ -116,10 +116,14 @@ test("a networked race clock is anchored to the SHARED green, so a peer that los
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
   assert.match(game, /netGreen = netStart \? \{ base: netStart\.at - raceT \* 1000, now: netStart\.now \} : null;/,
     "set at EVERY green (a red-flag restart re-bases on the clock it resumes from); a solo green clears it");
-  const body = game.match(/ {2}raceT \+= dt;\n {2}if \(netGreen && !netPlay\.active\(\)\) netGreen = null;[^\n]*\n {2}if \(netGreen\) \{[\s\S]*?\n {2}\}/)[0];
+  const clock = game.match(/ {2}if \(!realRace\.owns\(player\)\) raceT \+= dt;[^\n]*\n {2}if \(netGreen && !netPlay\.active\(\)\) netGreen = null;[^\n]*\n {2}if \(netGreen\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(clock, "the real simulation clock and shared-green catch-up are present");
+  const body = clock[0];
   // Run the real catch-up: 5 s in a background tab -> the local sim summed only
   // 0.25 s (the dt clamp); wall time since green is 65 s.
   let raceT = 60, dt = 0.25, now = 1000 + 65000, live = true;
+  let watching = false;
+  const player = {}, realRace = { owns: (c) => watching && c === player };
   const netPlay = { active: () => live };
   let netGreen = { base: 1000, now: () => now };
   eval(body.replace(/^ {2}/gm, ""));
@@ -133,6 +137,9 @@ test("a networked race clock is anchored to the SHARED green, so a peer that los
   eval(body.replace(/^ {2}/gm, ""));
   assert.ok(Math.abs(raceT - 70.016) < 1e-9, "no wall-clock catch-up once netPlay stopped");
   assert.equal(netGreen, null, "the shared anchor is dropped for good");
+  watching = true; raceT = 90; dt = 0.25;
+  eval(body.replace(/^ {2}/gm, ""));
+  assert.equal(raceT, 90, "WATCH keeps the transport's clock instead of adding simulation time");
 });
 
 test("a reopened room code remembers the answers it already took (a guest's reposts are not a new joiner)", async () => {

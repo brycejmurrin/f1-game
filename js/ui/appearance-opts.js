@@ -407,11 +407,12 @@ const AppearanceOpts = (function () {
     hudHex = normHex(v.hudAccentHex, PRESET_HEX.brand);
     textSize = oneOf(v.textSize, TEXT_SIZES, "normal");
     contrast = oneOf(v.uiContrast, CONTRASTS, "off");
+    cvdMode = oneOf(v.cvdMode, CVD_MODES, "off");
     units = oneOf(v.speedUnits, UNITS, "kmh");
     help = oneOf(v.menuHelp, HELPS, "on");
     applyAll();
     for (const [id, value] of [["pm-uitheme", theme], ["pm-menuaccent", menuAccent], ["pm-hudaccent", hudAccent],
-      ["pm-textsize", textSize], ["pm-contrast", contrast], ["pm-units", units], ["pm-helptext", help]]) paintRow(id, value);
+      ["pm-textsize", textSize], ["pm-contrast", contrast], ["pm-cvd", cvdMode], ["pm-units", units], ["pm-helptext", help]]) paintRow(id, value);
   }
 
   function initUI() {

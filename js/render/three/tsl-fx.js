@@ -329,6 +329,32 @@
       return m;
     }
 
+    // THE COCKPIT'S LIVE MIRROR GLASS (GLX MIRROR_GLASS_FS; tlx.js
+    // drawMirrorGlass): the mirror target on the housings' glass, in the MAIN
+    // scene pass. Unlit and OPAQUE — not an fxMaterial: it writes depth and,
+    // with no mrtNode of its own, takes the scene MRT's ssrTag 1 ("not car
+    // paint"); its alpha is 1. Sampled at the mesh's (u, v) as given: three's
+    // TextureNode flips a render-target texture itself on WebGPU (setupUV,
+    // isRenderTargetTexture), so v = 0 is the image bottom on both of three's
+    // paths. One material per target texture — mirRT.texture survives setSize.
+    let _glassMat = null;
+    function mirrorGlassMaterial(tex) {
+      if (_glassMat && _glassMat.__tlxTex === tex) return _glassMat;
+      if (_glassMat) _evicted.push(_glassMat);   // still in this frame's drawList: present() disposes
+      const m = new THREE.MeshBasicNodeMaterial();
+      m.side = THREE.DoubleSide;
+      m.transparent = false;
+      m.depthWrite = true;
+      m.depthTest = true;
+      m.fog = false;
+      m.lights = false;
+      m.colorNode = texture(tex).rgb;
+      m.opacityNode = float(1.0);
+      m.customProgramCacheKey = () => "tlx-fx-mirror-glass";
+      m.__tlxTex = tex;
+      return (_glassMat = m);
+    }
+
     /** begin(frame) -> decal-pass uniforms (js/render/glx/glx.js semantics: the
      * AMBIENT and KEY LIGHT sliders re-light the sponsor marks too). */
     function updateFrame(frame) {
@@ -350,7 +376,7 @@
     }
 
     return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, linePalette, lineOpacity,
-             particleMats, setSsrMrt, decalMaterialFor, releaseTexture, updateFrame, flushEvicted };
+             particleMats, setSsrMrt, decalMaterialFor, releaseTexture, mirrorGlassMaterial, updateFrame, flushEvicted };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { fx });

@@ -76,10 +76,10 @@ const Director = (function () {
   let _live = null;
   function live() { return _live; }
 
-  function create(G) {
+  function create(G, eligible = () => true) {
     Log.info("game", "Director.create");
     let wall = 0, lastCut = -1e9, cuts = 0, onAirShot = null, subject = null;
-    let owningDbg = false, autoSpectate = true, forcedTv = false;
+    let ownCamera = null, autoSpectate = true, forcedTv = false;
     const scratchEye = [0, 0, 0], scratchTgt = [0, 0, 0];
 
     function camIdx(id) {
@@ -103,8 +103,8 @@ const Director = (function () {
       return out;
     }
     function clearDbg() {
-      if (owningDbg && G.dbgCam) G.dbgCam = null;
-      owningDbg = false;
+      if (ownCamera && G.dbgCam === ownCamera) G.dbgCam = null;
+      ownCamera = null;
     }
     function applyShot(car, shot) {
       if (!car || !G.track || !G.camVantage) return false;
@@ -117,8 +117,7 @@ const Director = (function () {
       if (!v || !v.eye || !v.tgt) return false;
       scratchEye[0] = v.eye[0]; scratchEye[1] = v.eye[1]; scratchEye[2] = v.eye[2];
       scratchTgt[0] = v.tgt[0]; scratchTgt[1] = v.tgt[1]; scratchTgt[2] = v.tgt[2];
-      G.dbgCam = { eye: scratchEye, target: scratchTgt, fov: v.fov || 55, far: 6000 };
-      owningDbg = true;
+      ownCamera = G.dbgCam = { eye: scratchEye, target: scratchTgt, fov: v.fov || 55, far: 6000 };
       onAirShot = shot;
       subject = car;
       return true;
@@ -133,6 +132,14 @@ const Director = (function () {
     function tick(dt) {
       const st = G.state;
       if (st !== "race" && st !== "count") { clearDbg(); return; }
+      // WATCH and instant replay own the picture; Photo/tools may replace our
+      // camera too. Release only our own object, before any auto-spectate cut.
+      if (!eligible() || G.photoMode) { clearDbg(); return; }
+      if (G.dbgCam && G.dbgCam !== ownCamera) { ownCamera = null; return; }
+      if (G.paused) {
+        if (modeId() !== "tv") clearDbg();   // a paused camera selection still takes effect
+        return;   // hold the paused shot and dwell clock
+      }
       const net = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
       const player = G.player;
       const finished = !!(player && player.finished);
@@ -171,7 +178,7 @@ const Director = (function () {
     }
     function status() {
       return {
-        on: modeId() === "tv" && owningDbg,
+        on: modeId() === "tv" && !!ownCamera && G.dbgCam === ownCamera,
         shot: onAirShot,
         cuts,
         subject: subject && subject.code ? subject.code : null,

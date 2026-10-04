@@ -14,11 +14,11 @@ const GLXPost = (function () {
 
   function init(core) {
     const gl = core.gl;
-    const { useProg, bindVAO, setBlend, setDepthMask, link, locs, beginLinks, resolveLinks } = core;
+    const { useProg, bindVAO, setBlend, setDepthMask, setCull, link, locs, beginLinks, resolveLinks } = core;
     const MOBILE_TIER = core.MOBILE_TIER;
     const IS_MOBILE = core.IS_MOBILE;
     const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS,
-            COMPOSITE_FS, FXAA_FS, SGSR_FS, MIRROR_FS } = GLXShaders;
+            COMPOSITE_FS, FXAA_FS, SGSR_FS, MIRROR_FS, DECAL_VS, MIRROR_GLASS_FS } = GLXShaders;
     const F = core.frame;
 
     let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
@@ -1047,16 +1047,26 @@ const GLXPost = (function () {
     // lit shaders write the same range they write into sceneTex.
     let mirFBO = null, mirTex = null, mirDepthRB = null, mirW = 0, mirH = 0, mirHdr = false;
     let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null, mirFlip = true;
-    let mirRenders = 0, mirComposites = 0;
+    let mirRenders = 0, mirComposites = 0, mirGlass = 0;
     // MIPMAPPED: the target is supersampled (js/render/shared/mirror-pass.js SS)
     // and minified into the HUD rect, so a plain LINEAR read skipped texels and
-    // the image still shimmered. The chain is rebuilt lazily at composite time
-    // (mirMipsDirty), when the OUTPUT framebuffer is bound — never while the
-    // texture is the draw target. generateMipmap needs a colour-renderable,
+    // the image still shimmered. The chain is rebuilt in end(), right after the
+    // pass and BEFORE the main one — the cockpit's live glass (glass() below)
+    // samples it in that pass, the composite after it — with the OUTPUT
+    // framebuffer bound, never while the texture is the draw target, and on a
+    // spare unit (5, drawDecal's): unit 0 keeps the shadow map the lit pass
+    // reads all frame. generateMipmap needs a colour-renderable,
     // filterable level 0: RGBA8 always is, RGBA16F is filterable in WebGL2 core
     // and mirrorTarget's completeness check has already proved it renderable —
     // so no getError probe (drainGlErrors owns that queue for the GPU gate).
-    let mirMipsDirty = false;
+    function mirrorMips() {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, core.outputFBO());
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, mirTex);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.activeTexture(gl.TEXTURE0);
+    }
     function mirrorFree() {
       if (mirFBO) gl.deleteFramebuffer(mirFBO);
       if (mirDepthRB) gl.deleteRenderbuffer(mirDepthRB);
@@ -1128,7 +1138,6 @@ const GLXPost = (function () {
       bindVAO(core.skyVAO);   // POST_VS is a gl_VertexID triangle; WebGL2 still wants a VAO
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, mirTex);
-      if (mirMipsDirty) { gl.generateMipmap(gl.TEXTURE_2D); mirMipsDirty = false; }
       gl.uniform1i(mirU.uTex, 0);
       gl.uniform1f(mirU.uHdr, mirHdr ? 1 : 0);
       gl.uniform1f(mirU.uExposure, opts && opts.exposure !== undefined ? opts.exposure : 1.0);
@@ -1145,15 +1154,51 @@ const GLXPost = (function () {
       gl.viewport(ov[0], ov[1], ov[2], ov[3]);
       mirComposites++;
     }
+    // THE COCKPIT'S LIVE GLASS (gfx.js drawMirrorGlass; glx.js forwards here):
+    // the mirror target mapped onto the housings' glass INSIDE the main pass —
+    // DECAL_VS's pos/nrm/uv layout (createTexMesh), MIRROR_GLASS_FS unlit and
+    // opaque, depth written, alpha 1 written (the SSR "not car paint" tag), both
+    // faces. drawDecal cannot do it: lit, alpha-discarded, alpha masked.
+    // false = nothing to show, and the caller lays the sky-tint fallback: no
+    // image yet, a dead target, flip false (the broadcast PiP owns the target),
+    // or a mirror pass still open (sampling the bound target is a feedback loop).
+    // The texture rides spare unit 5 like drawDecal's; unit 0 stays the shadow map.
+    let glassProg = null, glassU = null, glassFailed = false;
+    function mirrorGlass(mesh, model) {
+      if (mirActive || mirDead || !mirTex || !mirRenders || !mirFlip || !mesh || !mesh.vao || !mesh.count || !model || core.ctxGone()) return false;
+      if (!glassProg) {
+        if (glassFailed) return false;
+        glassProg = link(DECAL_VS, MIRROR_GLASS_FS);
+        if (!glassProg) { glassFailed = true; Log.warn("gfx", "GLX mirror glass program failed — fallback glass"); return false; }
+        glassU = locs(glassProg, ["uModel", "uViewProj", "uTex"]);
+      }
+      useProg(glassProg);
+      gl.uniformMatrix4fv(glassU.uModel, false, model);
+      gl.uniformMatrix4fv(glassU.uViewProj, false, F.viewProj);
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, mirTex);
+      gl.uniform1i(glassU.uTex, 5);
+      gl.activeTexture(gl.TEXTURE0);   // unit 0 active again, still bound to the shadow map
+      setBlend(false);
+      setDepthMask(true);
+      setCull(false);
+      gl.colorMask(true, true, true, true);
+      bindVAO(mesh.vao);
+      gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+      setCull(true);
+      mirGlass++;
+      return true;
+    }
     const mirror = {
       begin(w, h) { if (!mirrorTarget(w, h)) return false; mirActive = true; return true; },
-      end() { if (!mirActive) return; mirActive = false; mirRenders++; mirMipsDirty = true; },
+      end() { if (!mirActive) return; mirActive = false; mirRenders++; mirrorMips(); },
       active: () => mirActive,
       bindTarget: bindMirrorTarget,
       rect(r, flip) { mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; mirFlip = flip !== false; },
       composite: mirrorComposite,
+      glass: mirrorGlass,
       state: () => ({ ready: !!mirTex && mirRenders > 0, dead: mirDead, w: mirW, h: mirH, hdr: mirHdr,
-        renders: mirRenders, composites: mirComposites, rect: mirRect, flip: mirFlip }),
+        renders: mirRenders, composites: mirComposites, glass: mirGlass, rect: mirRect, flip: mirFlip }),
     };
 
     function invalidateUniformCache() {

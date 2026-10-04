@@ -1080,6 +1080,7 @@ const TLX = (function () {
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
       let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFlip = true;   // flip false: the broadcast PiP
+      let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
       // attribute.array.constructor on that first compile — the env probe's
@@ -2025,6 +2026,16 @@ const TLX = (function () {
       // compile it once per vertex layout already in the pool: the pipeline also
       // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
       const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      // THE LAUNCH'S FX VARIANTS (FieldLod warm, js/car/field-lod.js): the
+      // throttle-lift exhaust flame (car-draw.js _flameOpts, alpha < 1) and the
+      // ERS strip's two phases (_ersLightOpts, alpha 1 / 0.6) are first drawn when
+      // the field lifts after the lights. Their meshes are one flat quad
+      // (car-mesh.js _flatQuadData), so they compile on THAT layout only — a
+      // probe geometry built the same way — in both winding signs, not on every
+      // layout in the pool like the ring above. apex26.fieldLod=0 skips them.
+      const _LATE_FX = [{ roughness: 1, specular: 0, noAlphaWrite: true, alpha: 0.5 },
+        { roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 }];
+      const _lateFxOn = () => typeof FieldLod === "undefined" || FieldLod.on;
       function _layoutKey(g) {
         let k = g.index ? g.index.array.constructor.name : "-";
         for (const n of Object.keys(g.attributes).sort()) {
@@ -2041,6 +2052,7 @@ const TLX = (function () {
       function mintLateLit() {
         if (!_warmFx || !lit || _drawMatMode || vizMat) return;
         for (const o of _LATE_LIT) materialFor(o, false, false);
+        if (_lateFxOn()) for (const o of _LATE_FX) materialFor(o, false, false);
       }
       async function warmLateLit() {
         if (!_warmFx || !lit || _drawMatMode || vizMat) return;
@@ -2071,6 +2083,19 @@ const TLX = (function () {
             await renderer.compileAsync(m, camera, scene);
           }
         }
+        if (!_lateFxOn()) return;
+        const quad = buildGeometry({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
+          col: [2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25], idx: [0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3] });   // HDR colour: packAttr keeps it float, as on the real flame
+        for (const o of _LATE_FX) {
+          const mat = materialFor(o, false, false);
+          for (const sx of [1, -1]) {
+            const m = new THREE.Mesh(quad, mat);
+            m.frustumCulled = false;
+            m.scale.x = sx; m.updateMatrixWorld(true);
+            await renderer.compileAsync(m, camera, scene);
+          }
+        }
+        _warmStages.lateFx = _LATE_FX.length;
       }
       // AUTO (unset) = ON for three's WebGL2 backend only. There compileAsync
       // links with KHR_parallel_shader_compile and polls COMPLETION_STATUS, but
@@ -2161,6 +2186,27 @@ const TLX = (function () {
               await renderer.compileAsync(scene, camera);
               // The composite, like all post quads, draws under the main MRT.
               renderer.setMRT(usePost ? _ssrMrtNode() : null);
+              // So does the cockpit's live glass (drawMirrorGlass), in the scene
+              // pass: compiled here on createTexMesh's layout, both winding signs
+              // (the pipeline keys on the matrix's determinant), or its first
+              // mirror frame would build it mid-race.
+              if (fx && fx.mirrorGlassMaterial) {
+                renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+                if (!_glassProbeGeo) {
+                  _glassProbeGeo = new THREE.BufferGeometry();
+                  _glassProbeGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3));
+                  _glassProbeGeo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1]), 3));
+                  _glassProbeGeo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2));
+                  _glassProbeGeo.setIndex(new THREE.BufferAttribute(new Uint32Array([0, 1, 2, 0, 2, 3]), 1));
+                }
+                const gm = fx.mirrorGlassMaterial(mirRT.texture);
+                for (const sx of [1, -1]) {
+                  const m = new THREE.Mesh(_glassProbeGeo, gm);
+                  m.frustumCulled = false;
+                  m.scale.x = sx; m.updateMatrixWorld(true);
+                  await renderer.compileAsync(m, camera, scene);
+                }
+              }
               if (post.warmMirror) await post.warmMirror(mirRT.texture);
               _warmStages.mirror = Math.round(performance.now() - _tStage);
             }
@@ -3438,7 +3484,20 @@ const TLX = (function () {
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, flip: _mirFlip, error: _mirErr };
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr };
+        },
+        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
+        // rendered in mirrorEnd before this pass records, on the glass mesh as
+        // one opaque draw record (tsl-fx.js mirrorGlassMaterial). Refused — the
+        // caller lays its fallback — with no image yet, a dead target, the PiP
+        // (flip false), or a mirror pass still recording (it would sample the
+        // target it is about to render into).
+        drawMirrorGlass(mesh, model, opts) {
+          if (_mirActive || _mirDead || !mirRT || _mirRenders <= 0 || !_mirFlip || !fx || !fx.mirrorGlassMaterial
+              || !mesh || !mesh.geo || !model) return false;
+          pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
+          _mirGlass++;
+          return true;
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.

@@ -66,7 +66,8 @@ function boot() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(read("js/input/input.js"), ctx, { filename: "js/input/input.js" });
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+    vm.runInContext(read(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el());
   const pedal = el("btn-throttle");
@@ -161,8 +162,9 @@ test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt ze
   assert.match(fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8"), /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
   const rot = input.match(/function onScreenRotate\(\) \{[\s\S]*?\n  \}/)[0];
   assert.doesNotMatch(rot, /calibrate/, "a rotation must not re-sample the neutral mid-corner");
+  const bindings = fs.readFileSync(path.join(ROOT, "js/input/bindings.js"), "utf8");
   for (const k of ["AltLeft", "AltRight", "ControlLeft", "ControlRight"])
-    assert.match(input, new RegExp(`KEY_RESERVED = \\{[^}]*${k}: 1`), `${k} cannot be bound`);
+    assert.match(bindings, new RegExp(`KEY_RESERVED = \\{[^}]*${k}: 1`), `${k} cannot be bound`);
   const lobby = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
   for (const id of ["vs-host", "vs-join", "vs-ready", "vs-start", "vs-code-host", "vs-code-go"])
     assert.match(lobby, new RegExp(`on\\("${id}", tiltToo\\(`), `${id} asks for tilt inside its click`);

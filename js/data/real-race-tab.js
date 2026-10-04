@@ -660,9 +660,10 @@ const DataRealRace = (function () {
     }
     /** WATCH / HIGHLIGHTS: the positions first (if not yet), then the replay in the DRIVE AS seat. */
     function watch(script, slot, fromLap, reel) {
-      const seat = seatCode, camera = watchCamera;
+      const myGen = bodyGen, seat = seatCode, camera = watchCamera;
       const go = (tr) => {
         if (typeof RealRace === "undefined" || !RealRace.launch) return false;
+        if (myGen !== bodyGen || (slot && slot.isConnected === false)) return false;
         if (isOpen && !isOpen()) return false;   // the positions landed after the hub closed (or a JUMP IN left it): nothing to watch from
         startLap = fromLap;
         Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seat);

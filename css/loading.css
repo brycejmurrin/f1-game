@@ -1,0 +1,252 @@
+@layer overlays {
+/* Apex 26 — loading styles. Load order: tools/manifest.cjs CSS. */
+/* ---------- pre-race loading screen (js/ui/loading-screen.js) ---------- */
+/* NO SCRIM OF ITS OWN in the fly phase: the WebGL canvas behind it is the
+   picture, and a wash here would be the one thing that makes a cinematic look
+   like a menu. The vignette is a gradient with a TRANSPARENT centre, so the
+   world stays legible while the edges carry the letterbox mood — which is why
+   it is not `.dim`, whose whole job is to flatten what is behind it. */
+#loading {
+  /* ABOVE EVERY MENU SCREEN. The .screen class carries no z-index of its own,
+     so without this the plain div fell to auto and painted UNDER #overlay (20),
+     #select (25) and #carsetup (35) — caught in a capture where the title
+     screen's buttons drew straight over the card. 36 clears the tallest of
+     them; the iOS install banner at 40 stays above on purpose, and the modal
+     <dialog> screens are in the top layer where z-index is not consulted. */
+  z-index: 36;
+  place-items: end center;
+  pointer-events: auto;      /* swallow the click that skips the flyby */
+  background: radial-gradient(ellipse at 50% 45%, transparent 38%, var(--scrim-heavy) 100%);
+}
+/* The card is laid out from the first frame and only its OPACITY animates.
+   Building it at reveal time would run layout during the phase whose entire
+   job is to be the still thing the synchronous track build stalls behind. */
+#ld-card {
+  /* PLAYER GEOMETRY — the three numbers the flyby editor authors and
+     js/ui/loading-screen.js writes here as inline custom properties. The
+     fallbacks in the var()s ARE the shipped card, so a browser that never gets
+     them (no storage, the editor never opened) renders exactly what it always
+     did. --ld-card-scale is a bare number; the two offsets carry their units.
+
+     THE WIDTH DIVIDES BY THE SCALE. `scale` is a paint-time transform: the
+     layout box stays the width the cap gave it and the paint spills past the
+     viewport, so a card at 100% and size 1.6 hung 60% of a phone screen off the
+     right-hand edge with no scrollbar to show it. Dividing the cap gives the
+     scaled card the same "never wider than the screen" guarantee the plain one
+     has, while --sheet-w still caps it on a desktop. */
+  width: min(calc(100% / var(--ld-card-scale, 1)), var(--sheet-w, 560px));
+  /* Individual transform properties, NOT `transform`: the reveal below animates
+     `transform` and would otherwise overwrite the player's placement the frame
+     the card faded in. These compose with it (translate, then scale, then
+     transform) and animate independently. */
+  translate: var(--ld-card-x, 0px) var(--ld-card-y, 0px);
+  scale: var(--ld-card-scale, 1);
+  /* Bottom centre, because that is where the card is ANCHORED (#loading's
+     place-items: end center). Scaling about the default 50% 50% pushed the
+     plate's bottom edge down past its own margin and off the screen. */
+  transform-origin: 50% 100%;
+  /* Above the letterbox bars (#loading::before/::after), which are positioned
+     and would otherwise paint over the plate where they overlap it. */
+  position: relative;
+  z-index: 1;
+  margin-bottom: clamp(var(--gap), 6vh, calc(4 * var(--pad)));
+  padding: var(--gap) var(--pad);
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  box-shadow: var(--edge), var(--lift-2);
+  opacity: 0;
+  transform: translateY(var(--gap));
+  transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+/* Both live phases show the card: "run" is the flyby with the card up, "card"
+   is the no-world fallback where the card is all there is. "handoff" is the
+   same card held after either, disarmed, while the backend compiles the race's
+   first frame (LoadingScreen.handoff): it gives way to the grid, not to a wait. */
+#loading[data-phase="run"] #ld-card,
+#loading[data-phase="card"] #ld-card,
+#loading[data-phase="hold"] #ld-card,
+#loading[data-phase="build"] #ld-card,
+#loading[data-phase="handoff"] #ld-card { opacity: 1; transform: none; }
+/* The reveal starts from [hidden] (display: none), which gives a transition
+   nothing to start from: without this the card snapped in and the fade and rise
+   above never ran. */
+@starting-style {
+  #loading[data-phase] #ld-card { opacity: 0; transform: translateY(var(--gap)); }
+}
+/* THE SKIP HINT. The flyby has always been skippable and nothing said so. A
+   pseudo-element, not a node: the shell is at its node ceiling, and the hint
+   is decoration of the card, not content of its own. Pinned just above the
+   card's top-right corner, so it follows the player's authored placement, and
+   faded in after ~3 s: long enough that it does not compete with the card
+   arriving, soon enough that a player who wants to skip learns how. Run phase
+   only — the no-world card is gone in 700 ms and the editor's hold is not
+   skippable. Under reduced motion the tokens.css backstop makes the fade
+   instant; the delay stays, so the hint still waits its turn. */
+#loading[data-phase="run"] #ld-card::after {
+  content: "PRESS ANY KEY TO RACE";
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5 * var(--gap));
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-4);
+  /* Over the moving 3D scene, not a themed plate: light in every UI theme (the
+     LIGHT theme's dark --text on this dark halo was unreadable). */
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  animation: ld-hint 0.6s ease-out 3s both;
+}
+@media (hover: none) and (pointer: coarse) {
+  #loading[data-phase="run"] #ld-card::after { content: "TAP TO RACE"; }
+}
+@keyframes ld-hint { to { opacity: 0.85; } }
+/* HOLD is the flyby editor's live preview of the card, shown under the docked
+   panel while its size and position sliders move. It is not a loading screen:
+   the scrim would hide the scene the card is being framed against, and the
+   full-screen click-swallow would eat every click meant for the panel. */
+#loading[data-phase="hold"] { background: none; pointer-events: none; }
+/* GARAGE is the car driving out of the setup screen's garage before the flyby
+   (LoadingScreen.garage): the shot is the car's, so no scrim over it, and the
+   card (hidden by default above) waits for the flyby. */
+#loading[data-phase="garage"] { background: none; }
+/* Out of the accessibility tree too, not just transparent: a screen reader would
+   otherwise read a card no sighted player can see yet. */
+#loading[data-phase="garage"] #ld-card { visibility: hidden; }
+/* LETTERBOX — 2.35:1 bars over the flyby, which is what makes the same shots
+   read as a title sequence rather than a paused game. One bar per pseudo so
+   each moves on `transform` alone (compositor-only; the flyby is already
+   spending the main thread on the scene), in from the edges at the start and
+   OPEN on the last beat, so the widescreen frame gives way to the grid.
+   --ld-fly is the run's own budget (js/ui/loading-screen.js), falling back to
+   the shipped 24 s.
+
+   RUN ONLY: never the no-world card or the editor's hold, which is a preview
+   of the card, not a cinematic. LANDSCAPE ONLY: in portrait the bars would
+   eat most of the screen, and on a 21:9-or-wider monitor the height clamps to
+   zero on its own. NOT under reduced motion: bars that slide in and out are
+   exactly the full-screen movement that setting asks us to leave out.
+
+   The card stays readable because it sits ABOVE the bars (z-index below): its
+   anchored lower third overlaps the bottom bar, and its plate is opaque. */
+#loading::before,
+#loading::after {
+  content: none;
+  position: absolute;
+  inset-inline: 0;
+  z-index: 0;
+  height: max(0px, calc((100vh - 100vw / 2.35) / 2));
+  background: #000;   /* cinema bars, not a themed surface: the LIGHT theme's --bg made them white */
+  pointer-events: none;
+}
+#loading::before { top: 0; }
+#loading::after { bottom: 0; }
+@media (orientation: landscape) and (prefers-reduced-motion: no-preference) {
+  #loading[data-phase="run"]::before,
+  #loading[data-phase="run"]::after {
+    content: "";
+    animation: var(--ld-fly, 24s) linear both;
+  }
+  #loading[data-phase="run"]::before { animation-name: ld-bar-top; }
+  #loading[data-phase="run"]::after { animation-name: ld-bar-bottom; }
+}
+/* The same shape for both bars, mirrored: in over the first ~3 %, held, and
+   open over the last ~6 % (about 1.4 s of a 24 s flyby). */
+@keyframes ld-bar-top {
+  0%, 100% { transform: translateY(-100%); }
+  3%, 94% { transform: none; }
+}
+@keyframes ld-bar-bottom {
+  0%, 100% { transform: translateY(100%); }
+  3%, 94% { transform: none; }
+}
+/* MENU ANIMATIONS: REDUCED (html[data-motion], js/ui/title-fx.js) is the in-game
+   form of the OS setting above. Its backstop in css/responsive.css reaches a
+   .screen's DESCENDANTS only, and the bars are #loading's own pseudo-elements. */
+:root[data-motion="reduce"] #loading::before,
+:root[data-motion="reduce"] #loading::after { content: none; }
+/* The wordmark is #title's recipe at card scale — same italic, same skewed red
+   underline — because this IS the title screen's brand arriving on the grid. */
+#ld-wordmark {
+  margin: 0 0 var(--gap);
+  font-size: clamp(var(--fs-6), 3.4vw, calc(2 * var(--fs-6)));   /* plain vw: #loading is not zoomed, so --vwz (1vw / UI SIZE) shrank it as UI SIZE grew */
+  font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-2);
+  color: var(--text);
+  text-shadow: 0 0 30px color-mix(in oklab, var(--red) 70%, transparent);
+}
+#ld-wordmark::after {
+  content: ""; display: block;
+  height: var(--r-xs); width: 100%;
+  margin: calc(0.5 * var(--gap)) 0 0;
+  background: var(--red);
+  transform: skewX(-30deg);
+}
+/* Map beside the text, not above it: the card is a lower third, and stacking
+   the outline would push it into the middle of the screen where the flyby is.
+   Wraps on a phone, where 560px of card is not available. */
+#ld-body { display: flex; align-items: center; gap: var(--pad); flex-wrap: wrap; }
+#ld-map {
+  flex: 0 0 auto;
+  display: block;
+  max-width: 45%;
+  height: auto;
+  /* fitCanvas pins an inline px width AND height, so when the 45% cap binds (a
+     portrait phone, a big CARD SIZE) the height does not follow and the outline
+     and the grid graphic were squashed sideways; contain keeps the raster's own
+     aspect, as the picker's maps do. */
+  object-fit: contain;
+}
+#ld-text { flex: 1 1 14rem; min-width: 0; }
+#ld-head { display: flex; align-items: center; gap: var(--gap); }
+#ld-flag { display: block; width: calc(2 * var(--fs-6)); flex: 0 0 auto; line-height: 0; }
+#ld-flag svg, #ld-flag img { display: block; width: 100%; height: auto; border-radius: 2px; }
+#ld-name { font-size: var(--fs-3); font-weight: 700; letter-spacing: var(--ls-1); }
+#ld-gp { font-size: var(--fs-micro); opacity: 0.75; letter-spacing: var(--ls-2); }
+/* auto-fit, not a fixed count: five facts sit on one row on a desktop and wrap
+   to two or three on a phone without a breakpoint deciding where. */
+#ld-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(6 * var(--fs-micro)), 1fr));
+  gap: var(--gap);
+  margin: var(--gap) 0 0;
+}
+#ld-meta dt { font-size: var(--fs-micro); opacity: 0.6; letter-spacing: var(--ls-3); }
+#ld-meta dd { margin: calc(0.2 * var(--gap)) 0 0; font-size: var(--fs-2); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  #ld-card { transition: none; transform: none; }
+}
+
+/* ---------- WebXR ENTER VR (Phase 0) ---------- */
+/* Hidden until XrSession probe() reports immersive-vr support. Fixed corner
+   affordance — Quest Browser / Immersive Web Emulator; not a HUD overlay. */
+#xr-enter {
+  position: fixed;
+  right: var(--safe-r);
+  bottom: var(--safe-b);
+  z-index: 60;
+  pointer-events: auto;
+  padding: var(--gap) calc(var(--gap) * 1.5);
+  border: 1px solid color-mix(in oklab, var(--text) 55%, transparent);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--bg) 55%, transparent);
+  color: var(--text);
+  font: 600 var(--fs-micro)/1.2 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: var(--ls-2);
+  cursor: pointer;
+  opacity: 0.85;
+}
+#xr-enter:focus-visible { opacity: 1; }
+@media (hover: hover) {
+  #xr-enter:hover { opacity: 1; }
+}
+#xr-enter[aria-pressed="true"] {
+  border-color: var(--text);
+  color: var(--text);
+  opacity: 1;
+}
+#xr-enter[hidden] { display: none !important; }
+} /* @layer overlays */

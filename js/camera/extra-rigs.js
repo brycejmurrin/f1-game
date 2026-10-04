@@ -19,6 +19,7 @@ const ExtraRigs = (function () {
   const _idealEye = [0, 0, 0], _idealTgt = [0, 0, 0];
   const _droneEye = [0, 0, 0], _droneTgt = [0, 0, 0];
   let _droneLive = false;
+  let _droneSideSign = 0;
   let _autoPrev = -1;            // camMode restored after a pit auto-cut (-1 = idle)
   let _autoOn = false;           // we currently hold an ephemeral pitwall cut
   let _wasInPit = false;
@@ -150,12 +151,21 @@ const ExtraRigs = (function () {
     // Mild sway on the outside of the next bend — broadcast-only curvature read.
     let side = 1.8;
     if (!comfort && typeof Tracks.curvature === "function") {
-      const kA = Tracks.curvature(track, wrapS(track, s + lerp(20, 50, spN)));
+      const kHere = Tracks.curvature(track, wrapS(track, s));
+      const kAhead = Tracks.curvature(track, wrapS(track, s + lerp(20, 50, spN)));
+      const kA = Math.abs(kHere) >= Math.abs(kAhead) ? kHere : kAhead;
       const mag = Math.abs(kA) > 0.001 ? 3.2 : 1.8;
       const sgn = Math.abs(kA) > 0.001 ? (kA > 0 ? 1 : -1) : 1;
+      const flipping = _droneSideSign !== 0 && _droneSideSign !== sgn;
+      _droneSideSign = sgn;
+      const lam = flipping ? 6.2 : 2.4;
       side = (typeof CamFeel !== "undefined")
-        ? CamFeel.follow("droneSide", sgn * mag, 2.4, (extra && extra.dt) || 0)
+        ? CamFeel.follow("droneSide", sgn * mag, lam, (extra && extra.dt) || 0)
         : sgn * mag;
+    }
+    if (typeof CamTune !== "undefined" && typeof CamTune.cornerHang === "function") {
+      const hang = CamTune.cornerHang("drone");
+      if (hang != null) side *= hang;
     }
     _idealEye[0] = cx - hx * DRONE_BACK + (-hz) * side;
     _idealEye[1] = cy + DRONE_UP;

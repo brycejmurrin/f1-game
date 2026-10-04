@@ -52,7 +52,7 @@ export function loadAtlas() {
   sb.globalThis = sb;
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js",
-                   "js/car/crest-paths.js", "js/car/liverytex.js"])
+                   "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   const grab = (n) => vm.runInContext(n, sb);
   return { LT: grab("LiveryTex"), Teams: grab("Teams"), Liveries: grab("Liveries"),

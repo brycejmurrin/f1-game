@@ -5,17 +5,17 @@
       "lines": 2515
     },
     "js/agent/apex.js": {
-      "codeLines": 2288,
-      "lines": 3235
+      "codeLines": 2290,
+      "lines": 3241
     },
     "js/car/car3d.js": {
-      "lines": 4105
+      "lines": 3435
     },
     "js/game.js": {
-      "codeLines": 5348,
-      "gMembers": 285,
-      "lines": 9757,
-      "topLets": 160
+      "codeLines": 4823,
+      "gMembers": 286,
+      "lines": 8988,
+      "topLets": 149
     },
     "js/lighting/presets.js": {
       "lines": 17181
@@ -24,7 +24,7 @@
       "lines": 1884
     },
     "js/render/glx/glx.js": {
-      "lines": 2787
+      "lines": 2788
     },
     "js/track/tracks.js": {
       "lines": 703
@@ -76,7 +76,7 @@
     },
     "waitForTimeout": 93,
     "waitNoPolling": {
-      "ceiling": 49,
+      "ceiling": 47,
       "slack": 39
     },
     "zeroRefModules": {

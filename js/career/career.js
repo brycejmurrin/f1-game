@@ -1005,7 +1005,17 @@ function objectiveFor(r) { return objectiveAt(r, objectivePick(r)); }
 // with the answer in hand.
 function objectiveLocked() {
   const s = career && career.season;
-  return !!(s && (s.stage || s.qualiOrder || s.sprintOrder));
+  return !!(s && (s.stage || s.qualiOrder || s.sprintOrder || s.startedRound === s.round));
+}
+// A SIMULATED qualifying is never persisted (qualiOrder stays empty) and a career
+// has no sprint stage, so simulating quali — or starting the race and quitting —
+// unlocked the briefs again with the grid already known. Stamp the round as under
+// way at either; keyed on the round, so the next round starts unlocked.
+function markWeekendStarted() {
+  const s = career && career.season;
+  if (!s || careerConflict || s.startedRound === s.round) return;
+  s.startedRound = s.round;
+  save();
 }
 function chooseObjective(i) {
   if (!career || careerConflict || seasonDone() || objectiveLocked()) return false;
@@ -1663,7 +1673,7 @@ return {
   paceMult, teamStats, aiSetup,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
-  OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked,
+  OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked, markWeekendStarted,
   driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex,
 };

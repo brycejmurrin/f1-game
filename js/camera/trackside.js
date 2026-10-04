@@ -121,7 +121,8 @@ const TracksideCams = (function () {
     }
     // A fixed 42° lens makes the car a speck once it is a straight away, and
     // a fisheye when it passes the camera. Hold ~FOV_SPAN metres of circuit
-    // in frame and clamp so neither end blows out.
+    // in frame and clamp so neither end blows out. `cut` is the auto-switch:
+    // the live rig snaps instead of damping across the circuit.
     const dist = Math.hypot(_tgt[0] - _eye[0], _tgt[1] - _eye[1], _tgt[2] - _eye[2]) || 1;
     let fov = 2 * Math.atan((FOV_SPAN * 0.5) / dist) * (180 / Math.PI);
     if (fov < FOV_FAR) fov = FOV_FAR;

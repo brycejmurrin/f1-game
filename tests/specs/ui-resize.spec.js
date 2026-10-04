@@ -104,10 +104,10 @@ async function openGarage(page) {
   // ~1 s each; after that a frame is ~17 ms (measured 2026-10-03, headless(true)
   // on; the same on ff109fc1, so not a regression). SheetShape.watchScale
   // reclassifies in a rAF, so a uiScale() write inside that window waited behind
-  // it: "a UI SIZE change re-classifies" missed its 5 s wait on CI (3960070) and
-  // in 2 of 3 local runs, while the flip itself takes ~55 ms once the frames
+  // it: "a UI SIZE change re-classifies" missed its wait on CI (3960070 / PR 791)
+  // and in 2 of 3 local runs, while the flip itself takes ~55 ms once the frames
   // settle. Three frames covers the expensive ones; the 400 ms sleep it replaces
-  // covered none of them.
+  // covered none of them. (Port of a746d014e / claude/ui-resize-garage-warmup.)
   await page.evaluate(() => new Promise((resolve) => {
     let n = 0;
     const step = () => (++n >= 3 ? resolve() : requestAnimationFrame(step));
@@ -242,18 +242,22 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // zoom-only box changes, so density stayed "compact" while panelW was
     // already the scaled width (CI scheduled Smoke shard 2 on ce3ec4db).
     await page.evaluate(() => window.__apex.uiScale(50));
+    // 15s, not 5s. watchScale reclassifies on the next rAF, and this file's
+    // header measured that callback taking over 7s when a SwiftShader frame
+    // starves the event loop. The selected-specs shard hit the 5s cap twice
+    // on PR 791; the density answer itself is covered by the unit twin.
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
-      return el.dataset.density === "normal";
-    }, null, { polling: 50, timeout: 5_000 });
+      return el && el.dataset.density === "normal";
+    }, null, { polling: 50, timeout: 15_000 });
     const at50 = await readState(page);
     expect(at50.density, "not compact at UI SIZE 50% on this viewport").toBe("normal");
 
     await page.evaluate(() => window.__apex.uiScale(150));
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
-      return el.dataset.density === "compact";
-    }, null, { polling: 50, timeout: 5_000 });
+      return el && el.dataset.density === "compact";
+    }, null, { polling: 50, timeout: 15_000 });
     const at150 = await readState(page);
 
     expect(at150.density, "compact once the sheet is short in its own units").toBe("compact");
@@ -264,8 +268,8 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     await page.evaluate(() => window.__apex.uiScale(50));
     await page.waitForFunction(() => {
       const el = document.getElementById("cs-inner");
-      return el.dataset.density === "normal";
-    }, null, { polling: 50, timeout: 5_000 });
+      return el && el.dataset.density === "normal";
+    }, null, { polling: 50, timeout: 15_000 });
     expect((await readState(page)).density, "back to normal when the scale drops").toBe("normal");
   });
 

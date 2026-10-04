@@ -41,6 +41,10 @@ export async function installIwer(page, opts = {}) {
     try {
       localStorage.setItem("apex26.tlxForceGL", "1");
       localStorage.setItem("apex26.gfxBackend", "three");
+      // This suite qualifies the XR lifecycle, not desktop HIGH performance.
+      // IWER shares the canvas framebuffer; SwiftShader renders both eyes on
+      // the CPU. Keep the existing LOW preset from competing with XR timers.
+      localStorage.setItem("apex26.gfxPreset", JSON.stringify("low"));
     } catch (_) { /* */ }
     const root = globalThis.IWER || {};
     if (!root.XRDevice || !root.metaQuest3) {
@@ -72,48 +76,54 @@ export async function waitXrReady(page, timeout = 60_000) {
 }
 
 /**
- * Wait while immersive-vr is presenting until frameCount advances by `delta`.
+ * Wait for immersive-vr progress without repeatedly submitting CDP evaluations.
  *
- * History (measured 2026-10-03):
- * - `page.waitForFunction({ polling })` re-arms via page timers/rAF; immersive
- *   XR can starve those, so the waiter never re-samples (CI 37083868797).
- * - Node CDP `page.evaluate` every ~200 ms during the cold first immersive
- *   tick (shader compile under IWER + SwiftShader/llvmpipe) freezes session
- *   rAF — frameCount stuck at 0–2 for the whole budget (CI 37091997066:
- *   `waitXrFrames(+2) timed out … base=0, fc=2`, then green on retry /
- *   APEX_FAIL_ON_FLAKY).
- * - A competing `session.requestAnimationFrame` waiter serialises with the
- *   game's onXRFrame under IWER and stalls frameCount at 0–1.
+ * Real immersive XR owns its session clock. Pinned IWER instead drives that
+ * clock through window.rAF plus synchronous software-GL work. Repeated CDP
+ * evaluation can stall its cold frames: CI job 111141505102 repeated base=0/fc=2
+ * with one evaluation blocked for the entire 45 s budget. The single-promise
+ * approach was also verified locally by commit d08906b2a (10/10 twice).
  *
- * Fix: one evaluate that settles (no poll) for `settleMs`, then samples with
- * in-page `setTimeout` only — no CDP chatter during the cold tick. Assertion
- * unchanged: must clear `base + delta`. Soft-GL budget stays 45 s.
+ * Do NOT schedule our own `session.requestAnimationFrame` to wait either —
+ * IWER effectively serialises XR callbacks, so a lightweight waiter steals
+ * slots from the game's onXRFrame and frameCount stalls at 0–1. Read the
+ * baseline and poll inside ONE evaluation, letting the initial XR work settle.
+ * The settle is inside the budget. A Node watchdog still rejects when page
+ * timers or the evaluation itself are starved; neither can extend the budget.
+ *
+ * Soft-GL first XR ticks are slow (~5 s/frame cold under Playwright +
+ * SwiftShader); allow up to 45 s for a small delta so ENTER VR still proves
+ * frames advance without hiding a zero-frame hang.
  */
 export async function waitXrFrames(page, delta = 2, opts = {}) {
   const timeout = opts.timeout ?? 45_000;
-  const interval = opts.interval ?? 100;
-  const settleMs = opts.settleMs ?? 2000;
+  const interval = opts.interval ?? 200;
   const need = (delta | 0) || 2;
-  const result = await page.evaluate(({ need, timeout, settleMs, interval }) => new Promise((resolve) => {
-    let base = 0;
-    try { base = XrSession.frameCount(); } catch (_) { /* */ }
-    const t0 = performance.now();
-    const tick = () => {
-      let fc = base;
-      try { fc = XrSession.frameCount(); } catch (_) { /* */ }
-      if (fc > base + need) return resolve({ ok: true, base, fc });
-      if (performance.now() - t0 > timeout) return resolve({ ok: false, base, fc });
-      setTimeout(tick, interval);
-    };
-    // First delay lets the cold immersive tick finish before we poll.
-    setTimeout(tick, settleMs);
-  }), { need, timeout, settleMs, interval });
-  if (!result.ok) {
+  let watchdog;
+  const budget = new Promise((_, reject) => {
+    watchdog = setTimeout(() => reject(new Error(
+      `waitXrFrames(+${need}) timed out after ${timeout}ms (page evaluation or timers stalled)`,
+    )), timeout);
+  });
+  try {
+    const result = await Promise.race([budget, page.evaluate(({ need, timeout, interval }) => new Promise((resolve) => {
+      const deadline = performance.now() + timeout;
+      const base = XrSession.frameCount();
+      const tick = () => {
+        const fc = XrSession.frameCount();
+        if (performance.now() >= deadline) return resolve({ ok: false, base, fc });
+        if (fc > base + need) return resolve({ ok: true, base, fc });
+        setTimeout(tick, interval);
+      };
+      setTimeout(tick, Math.min(2000, timeout));
+    }), { need, timeout, interval })]);
+    if (result.ok) return result.base;
     throw new Error(
       `waitXrFrames(+${need}) timed out after ${timeout}ms (base=${result.base}, fc=${result.fc})`,
     );
+  } finally {
+    clearTimeout(watchdog);
   }
-  return result.base;
 }
 
 /**

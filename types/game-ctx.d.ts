@@ -363,6 +363,8 @@ interface GameCtx {
   readonly track: TrackModel | null;
   readonly cars: CarState[];
   readonly player: CarState | null;
+  /** js/race/flying-start.js — the qualifying / time-trial rolling start (stop() hands the wheel back). */
+  readonly flyingStart: { update(dt: number): void; stop(): void; owns(c: CarState): boolean; active(): boolean };
   season: SeasonState | null;
   /** flow/session are the authority; seasonMode/timeTrial are derived views. */
   flow: FlowMode;
@@ -411,7 +413,7 @@ interface GameCtx {
   readonly trackWetness: () => number;
   readonly recordControls: () => Record<string, unknown>;
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
-  readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown> };
+  readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
   readonly openCoachDetails: () => void;
   /**
    * The radio's VOICE — js/audio/radio-voice.js. Always an object: create()
@@ -860,6 +862,7 @@ declare const StartLights: GameModuleFactory;
 declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
+declare const FlyingStart: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
@@ -886,3 +889,7 @@ declare const SettingsExport: GameModuleFactory;
 declare const SessionRecords: GameModuleFactory;
 declare const DrivingCoach: GameModuleFactory;
 declare const RaceInsights: GameModuleFactory;
+
+declare const PlatformSession: GameModuleFactory;
+
+declare const TitleFlow: GameModuleFactory;

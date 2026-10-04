@@ -52,6 +52,16 @@ about to lay down, for example `CORNER R 60 m × 90° LEFT`:
 - **ANGLE °** — how far it turns.
 - **TURNS LEFT / TURNS RIGHT** — which way it turns (a chicane or S-bend: the
   way its first part turns).
+- **SPIRAL m** (CORNER, HAIRPIN, CHICANE, S-BEND; 0–80 m) — eases into and out
+  of the corner on an [Euler spiral](https://en.wikipedia.org/wiki/Euler_spiral):
+  the road tightens steadily to the radius over that length, holds it, and
+  opens out the same way, so the steering builds instead of snapping. The
+  corner still turns exactly its angle and keeps its radius at the apex; it
+  just takes a little more road, and the rejoin absorbs that. The length is
+  rounded to whole steps of the arc (8.5–25 m), a spiral under two steps
+  is left out (the engine's own smoothing already eases that much), and two
+  steps of true arc always stay at the apex — so a short, tight corner may
+  take less spiral than you asked for, or none. 0 is the plain arc.
 
 Then tap the point where the shape should begin: it replaces the road after
 that point and rejoins the loop. **STAMP AT SELECTED POINT** does the same for
@@ -74,7 +84,13 @@ and AUTUMN COUNTRYSIDE. The night themes race under floodlights.
 ## 4 DETAILS
 
 Name the circuit (24 characters) and set **HALF-WIDTH m**, half the road's
-width, from 5 to 8 m. Two rows of chips live here too:
+width, from 5 to 8 m. **SPAN WIDTH m**, under it, narrows just the stretch
+you have selected (tap a point, shift-tap a second, or tap a row under TURNS)
+down to 5 m, tapering gently in and out (never steeper than 1 m in 20 m);
+step it back up to the half-width and the stretch is full width again. It
+only narrows — the road never gets wider than its half-width — and a circuit
+keeps up to 24 such stretches. They stay on their points when you add, delete
+or stamp elsewhere. Three rows of chips live here too:
 
 - **RANDOMISE · TRACK OF THE DAY · START FROM…** — three ways to a new
   circuit. **TRACK OF THE DAY** draws the same circuit for everyone on the
@@ -85,6 +101,36 @@ width, from 5 to 8 m. Two rows of chips live here too:
 - **REVERSE · START HERE · DELETE POINT · UNDO · REDO · FIT VIEW · SPEED · TEST HERE** —
   **TEST HERE** drives from the selected point (see Test drive). **SPEED** colours the road by how fast a car takes it, yellow (slow) through
   orange and red to purple (flat out); press it again to turn it off.
+- **FAST · TECHNICAL · MIXED** — designed randomise: the designer draws 16
+  circuits, keeps the ones that pass every check, scores them for the style and
+  shows the best four as cards (`4.8 km · 14 corners · 2 passing`). **FAST**
+  favours long flat-out running and places to overtake; **TECHNICAL** many
+  corners of many different radii; **MIXED** variety in both corners and speed.
+  Every amber check costs a card points. **USE** loads a card as your design
+  (one UNDO takes it back; SAVE adds it as a new circuit); **MORE LIKE THIS**
+  nudges two or three of that card's points (never within 300 m of the start
+  line) into four new cards. The same circuit always gives the same cards.
+
+## Elevation — hills and dips
+
+The strip under the canvas is the circuit's height profile, start line on the
+left, as the game builds it. Its dots are the hills you added (each a smooth
+cosine bump), the short ticks along the bottom your points, the red line the
+point selected on the canvas, and amber dots the slope, crest and dip warnings.
+
+- **Add a hill** — tap the strip where it should go (or, on the strip, Enter
+  adds one at the point selected on the canvas). A new hill is 6 m high and
+  320 m long.
+- **Shape it** — drag its dot up or down for the height (a dip is a negative
+  height), sideways to move it, and with Shift held sideways to make it longer
+  or shorter. The road never gets steeper than 8 %: a short hill cannot be a
+  tall one, so the height stops at the limit.
+- **Remove it** — press and hold its dot, or Delete with it selected.
+- **On a phone or a pad** — with a hill selected, **HILL m**, **HILL LENGTH m**
+  and **REMOVE HILL** appear at the end of 4 DETAILS. On a phone held sideways
+  the strip is hidden to give the canvas the height.
+
+Every change is one UNDO step. Up to 24 hills per circuit.
 
 ## TURNS — every corner, tappable
 
@@ -96,6 +142,13 @@ centres the view on it and sets **CORNER** (or **HAIRPIN**) to the arc that
 fits it. **REPLACE THE SELECTED SPAN** then rebuilds that corner from the
 settings — tighten the radius or change the angle first to reshape it. UNDO
 puts it back.
+
+While a row is selected, **SELECTED TURN · T3** shows under the list with one
+stepper, **BANK °**: FLAT, then 2° to 30° in steps of 2. It banks that corner
+at its apex over the corner's own length, cambered toward the inside; FLAT
+takes the banking away. Over 5.7° the checks add an FIA amber (Grade 1 allows
+5.7°; it is advice, not a block). A banked or narrowed corner says so on its
+row: `T3 · RIGHT 92° · R 45 m · 118 km/h · 140 m · BANK 6° · 12 m WIDE`.
 
 ## 5 CHECKS and FIX
 
@@ -110,7 +163,8 @@ and lists what it finds:
   first corner 250 m or more after the line and turning at least 45°, at most
   2 % of slope along the start straight, 12 m of road, at most 5.7° of
   banking), and *No overtaking spot* means no 400 m flat-out run into a heavy
-  braking zone. Many real circuits break one or two; they never block anything
+  braking zone. *Crest* rows are where the car goes light over the top of a
+  hill at speed, *Dip* rows where it is squashed into the bottom of one. Many real circuits break one or two; they never block anything
   and FIX ALL leaves them alone.
 - Tap a row to jump to the spot on the canvas.
 - **FIX** on a row repairs that one problem; **FIX ALL** (next to the 5 CHECKS
@@ -155,7 +209,7 @@ the designer with the same point selected.
 |---|---|
 | Touch | Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE / TEST HERE · pinch to zoom, drag empty space to pan. |
 | Mouse | Drag a point · click the road to add one · double-click a point to delete it · wheel to zoom, drag empty space to pan · shift-click a second point to select the stretch between them. |
-| Keyboard | Tab to the canvas · `[` and `]` step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it. |
+| Keyboard | Tab to the canvas · `[` and `]` step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it · on the elevation strip under the canvas, Enter adds a hill at the selected point, `[` and `]` pick one, Up/Down set its height (5 m with Shift), Left/Right move it 10 m (with Shift: 40 m shorter / longer), Delete removes it. |
 | Gamepad | The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer. |
 
 ## Limits

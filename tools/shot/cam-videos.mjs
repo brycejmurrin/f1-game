@@ -5,7 +5,9 @@
 // Headless recordVideo does not pick up this game's WebGL canvas (the file
 // stays on the first cockpit frame while the sim moves on). Each frame is
 // stepped, rendered once, and read off the canvas, then ffmpeg stitches the
-// jpegs into an h264 mp4 a phone can play.
+// jpegs into a silent h264 mp4. WebKit will autoplay a file with no audio
+// track when the page is muted, playsinline, and looping. Each clip also
+// gets a one-video HTML page.
 //
 //   node tools/shot/cam-videos.mjs --cam chase --out /path/to/dir
 //   node tools/shot/cam-videos.mjs --only chase,heli --out /path/to/dir
@@ -75,18 +77,40 @@ function inputAt(i, n) {
 
 function encode(id, pattern, fps) {
   const dest = join(OUT, `${id}.mp4`);
+  // No audio track. WebKit only autoplays a video that is silent or muted,
+  // and a silent file is the one iPhone will start inside this preview.
   const ff = spawnSync("ffmpeg", [
     "-y", "-framerate", String(fps), "-start_number", "0", "-i", pattern,
-    "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-    "-map", "0:v:0", "-map", "1:a:0", "-shortest",
-    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1",
-    "-c:v", "libx264", "-profile:v", "baseline", "-level", "3.1", "-pix_fmt", "yuv420p",
-    "-preset", "veryfast", "-crf", "18",
-    "-c:a", "aac", "-b:a", "64k",
+    "-an",
+    "-vf", "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,setsar=1",
+    "-c:v", "libx264", "-profile:v", "baseline", "-level", "3.0", "-pix_fmt", "yuv420p",
+    "-preset", "veryfast", "-crf", "20", "-r", String(fps),
     "-movflags", "+faststart", dest,
   ], { encoding: "utf8" });
   if (ff.status !== 0) throw new Error(`encode ${id}: ${(ff.stderr || "").slice(-300)}`);
   return dest;
+}
+
+function writePage(id, title) {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  video { display: block; width: 100%; height: auto; background: #000; }
+</style>
+</head>
+<body>
+<video autoplay muted loop playsinline webkit-playsinline preload="auto" width="640" height="360">
+  <source src="/cams/${id}.mp4#t=0.001" type="video/mp4">
+</video>
+</body>
+</html>
+`;
+  writeFileSync(join(OUT, `${id}.html`), html);
 }
 
 const srv = await startStaticServer("/workspace/f1-game");
@@ -99,10 +123,10 @@ try {
   page.setDefaultTimeout(180000);
   await installProbeInit(page, { backend: "webgl2", motion: true });
   await page.goto(srv.url, { waitUntil: "domcontentloaded", timeout: 180000 });
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 180000 });
   log("booted");
   await page.evaluate(() => window.__apex.race("monaco", "day", "dry", { laps: 1 }));
-  await page.waitForFunction(() => window.__apex.info().track === "monaco", null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__apex.info().track === "monaco", null, { polling: 100, timeout: 180000 });
   log("track up");
   await page.evaluate(() => {
     window.__apex.renderScale(0.75);
@@ -169,6 +193,7 @@ try {
       if (camArg) log(`  ${id} ${Math.min(start + batch, frames)}/${frames}`);
     }
     encode(id, join(framesDir, `${id}-%03d.jpg`), camArg ? PLAY_FPS : 4);
+    writePage(id, title);
     clips.push({
       id, title, note, src: `${id}.mp4`, fov: [fov0, fov1], speed, mode,
       full: !!camArg,

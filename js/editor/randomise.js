@@ -119,6 +119,82 @@ const TrackRandom = (function () {
     return last;
   }
 
-  return { generate, generateValid, pushApart, fixAngles, longestStraight };
+  // ── DESIGNED RANDOMISE: many seeds, judged and ranked for a style ─────────
+  /** The style weights TrackInsight.score reads (named, not pinned by a test). */
+  const STYLES = Object.freeze({
+    FAST: Object.freeze({ F: 2, P: 0.5, Hv: 0.5, A: -0.3, C: -0.2, cFree: 3 }),     // flat out, a place to pass, a varied speed trace
+    TECHNICAL: Object.freeze({ Hc: 1.5, C: 0.4, F: -1, P: 0.2, A: -0.3 }),          // many corners of many radii
+    MIXED: Object.freeze({ Hc: 1, Hv: 1, P: 0.3, A: -0.3 }),                         // the variety of both
+  });
+  /** A well-spread uint32 (Hash32.mix; its murmur finaliser inline when Hash32 is not loaded). */
+  function mix32(h) {
+    if (typeof Hash32 !== "undefined" && Hash32.mix) return Hash32.mix(h >>> 0);
+    h >>>= 0; h ^= h >>> 16; h = Math.imul(h, 0x7feb352d); h ^= h >>> 15; h = Math.imul(h, 0x846ca68b); h ^= h >>> 16;
+    return h >>> 0;
+  }
+  /** The i-th candidate seed of a design run (golden-ratio stride, then mixed). */
+  const designSeed = (baseSeed, i) => mix32((baseSeed + Math.imul(i + 1, 0x9e3779b9)) >>> 0);
+  /** One candidate of a design run: generateValid(seed_i) judged by opts.check
+   *  (a design → verdict; the caller's validator), scored by opts.score(verdict,
+   *  style) → a number or { score, feats }. The verdict's tr / stats / issues
+   *  ride along so nothing rebuilds. null when no try was green. */
+  function designOne(baseSeed, i, style, opts) {
+    const base = opts.base || {};
+    let last = null;
+    const r = generateValid(designSeed(baseSeed, i), (pts) => (last = opts.check(Object.assign({}, base, { pts }))).ok, opts.tries || 3);
+    if (!r.ok || !last || !last.ok) return null;
+    const sc = opts.score ? opts.score(last, style) : 0, num = typeof sc === "number" ? sc : sc && sc.score;
+    return { seed: r.seed, pts: r.pts, score: Number.isFinite(num) ? num : -Infinity, feats: sc && typeof sc === "object" ? sc.feats : undefined, tr: last.tr, stats: last.stats, issues: last.issues, amber: last.amber, turns: last.turns };
+  }
+  /** Unique by seed, best score first (ties: the lower seed), the top `keep`. */
+  function rank(list, keep = 4) {
+    const seen = new Set(), out = [];
+    for (const c of list) if (c && !seen.has(c.seed)) { seen.add(c.seed); out.push(c); }
+    out.sort((a, b) => (b.score - a.score) || (a.seed - b.seed));
+    return out.slice(0, keep);
+  }
+  /** DESIGNED RANDOMISE: opts.n (16) seeds from baseSeed, opts.tries (3) each,
+   *  the green ones ranked by opts.score for `style` → the top 4
+   *  [{ seed, pts, score, feats, tr, stats, issues }]. Deterministic per
+   *  (baseSeed, style); the validator and the scorer are passed IN. */
+  function design(baseSeed, style, opts) {
+    opts = Object.assign({ n: 16, tries: 3 }, opts);
+    if (typeof opts.check !== "function") throw new Error("TrackRandom.design needs opts.check");
+    const list = [];
+    for (let i = 0; i < opts.n; i++) list.push(designOne(baseSeed >>> 0, i, style, opts));
+    return rank(list, opts.keep || 4);
+  }
+  /** MORE LIKE THIS: 2–3 controls more than 300 m from the start line (both
+   *  ways round, so the start straight survives) each moved up to 60 m at a
+   *  random angle, re-spaced (8 m) and on the lattice; up to 8 attempts, the
+   *  first that opts.check(pts).ok accepts. { pts, ok, seed, verdict }. */
+  function mutate(pts, seed, opts) {
+    opts = opts || {};
+    const rnd = S.rng((seed ^ 0x5bd1e995) >>> 0), N = pts.length;
+    const arc = [0];
+    for (let i = 0; i < N; i++) { const a = pts[i], b = pts[(i + 1) % N]; arc.push(arc[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    const L = arc[N], keepM = opts.keepM != null ? opts.keepM : 300, maxM = opts.maxM != null ? opts.maxM : 60;
+    const free = [];
+    for (let i = 1; i < N; i++) if (arc[i] > keepM && L - arc[i] > keepM) free.push(i);
+    let last = { pts: pts.map((p) => [p[0], p[1]]), ok: false, seed: seed >>> 0, verdict: null, moved: [] };
+    if (free.length < 3) return last;
+    for (let attempt = 0; attempt < (opts.attempts || 8); attempt++) {
+      const k = 2 + (rnd() < 0.5 ? 1 : 0), pick = new Set();
+      while (pick.size < k) pick.add(free[Math.floor(rnd() * free.length)]);
+      const next = pts.map((p) => [p[0], p[1]]);
+      for (const i of pick) {
+        const rho = (maxM - 0.25) * (0.25 + 0.75 * rnd()), th = rnd() * 2 * Math.PI;
+        next[i] = [next[i][0] + rho * Math.cos(th), next[i][1] + rho * Math.sin(th)];
+      }
+      // Lattice first (ρ stops 0.25 m short of maxM, so the snap stays inside it), then the spacing floor.
+      const out = S.enforceSpacing(next.map((p) => [Math.round(p[0] * 4) / 4, Math.round(p[1] * 4) / 4]), 8);
+      const verdict = opts.check ? opts.check(out) : null;
+      last = { pts: out, ok: !opts.check || !!(verdict && verdict.ok), seed: seed >>> 0, verdict, moved: [...pick].sort((a, b) => a - b) };
+      if (last.ok) return last;
+    }
+    return last;
+  }
+
+  return { generate, generateValid, pushApart, fixAngles, longestStraight, STYLES, designSeed, designOne, rank, design, mutate };
 })();
 Object.freeze(TrackRandom);

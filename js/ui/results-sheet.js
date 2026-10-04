@@ -263,7 +263,8 @@ function buildResults(order, race) {
     // c.classified) is paid by SeasonCal.award / Career.settleRound: the row
     // shows those points, and its reason stays in the name suffix above.
     const paid = !dnf || (c.classified && !c.dsq);
-    pt.textContent = paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : outLabel(dnf);
+    pt.textContent = G.practice && !watched ? "Unscored"
+      : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : outLabel(dnf);
     row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
         isFinite(carData.lap) && carData.lap === timing.winnerLap) {
@@ -460,7 +461,7 @@ function buildTTResults() {
     btn.id = "res-daily-share";
     btn.textContent = "COPY DAILY RESULT";
     btn.onclick = () => {
-      const text = G.daily.shareText(Ghost.medal());
+      const text = G.daily.shareText();   // today's medal, from today's best (daily-challenge.js)
       ApexClipboard.write(text).then((ok) => {
         btn.textContent = ok ? "COPIED" : text;
       }, () => { btn.textContent = text; });
