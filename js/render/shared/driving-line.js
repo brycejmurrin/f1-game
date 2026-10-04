@@ -90,18 +90,27 @@ window.DrivingLine = (function () {
   function getOpacity() { return opacity; }
   function opacityMul() { return _opMul; }
 
-  /* The banked surface's lift at lateral o, the road mesh's own formula
-     (js/track/core/mesh.js bankOffsetAt, index-keyed there) at the nearest
-     centreline node — so the ribbon rides a banked corner where the road does. */
+  /* The banked surface's lift at lateral o: the road mesh's own formula
+     (js/track/core/mesh.js bankOffsetAt, index-keyed there) at nodes i and j,
+     LERPED with Tracks.sample()'s fi maths — the road mesh is piecewise-linear
+     between nodes ~4 m apart, so a nearest-node lift let the tarmac rise above
+     the ribbon's LIFT where the banking changes fast (7.8 cm at Zandvoort). */
+  function nodeBank(bp, hw, k, o) {
+    const lift = bp.lift[k];
+    if (!(lift > 0)) return 0;
+    const w = hw[k];
+    const frac = clamp((bp.bsign[k] * o + w) / (2 * w), 0, 1);
+    return lift * (frac - 0.5);
+  }
   function bankOffset(track, s, o) {
     const bp = track && track.bankP;
     if (!bp) return 0;
-    const n = track.n, k = ((Math.round(s / track.total * n) % n) + n) % n;
-    const lift = bp.lift[k];
-    if (!(lift > 0)) return 0;
-    const w = track.hw[k];
-    const frac = clamp((bp.bsign[k] * o + w) / (2 * w), 0, 1);
-    return lift * (frac - 0.5);
+    const n = track.n, L = track.total;
+    s %= L; if (s < 0) s += L;
+    const fi = s / L * n;
+    const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
+    const a = nodeBank(bp, track.hw, i, o), b = nodeBank(bp, track.hw, j, o);
+    return a + (b - a) * f;
   }
 
   /* Lateral offset of the line at s: the assist's formula (game.js lineX) with
@@ -263,6 +272,6 @@ window.DrivingLine = (function () {
 
   return { MODES, PALETTES, OPACITIES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
            setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
-           build, draw, speedAt, zoneAt, cue, reset,
+           build, draw, speedAt, zoneAt, cue, reset, bankOffset,
            _cache: () => cache };
 })();

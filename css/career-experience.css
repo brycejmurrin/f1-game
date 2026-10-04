@@ -30,7 +30,8 @@
    "George" into Geor/ge under the sticky player row on phone portrait, and
    on short landscape the name line vanished so slots looked empty
    (layout-audit 2026-10-04). Wrap only at spaces; never mid-word; keep the
-   line from being flex-shrunk away; team may ellipsis. */
+   line from being flex-shrunk away. Team labels (Mercedes-AMG, Red Bull
+   Racing) wrap the same way — never one-line ellipsis on phone portrait. */
 [data-results-part="podium"] > li {
   flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.35);
@@ -55,7 +56,9 @@
 [data-results-part="podium"] small {
   flex: 0 0 auto; min-width: 0; max-width: 100%;
   color: var(--dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-micro); line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: normal; word-break: normal; hyphens: none;
 }
 /* Short phone landscape: the story + podium was taller than the sheet body,
    so overflow:hidden on .sheet clipped the name row and left P1–P3 looking

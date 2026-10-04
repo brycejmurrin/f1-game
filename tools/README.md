@@ -180,6 +180,8 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | replay-camera |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
 | **shot/shot.mjs** | One deterministic framed screenshot via `__apex` camera hooks: `shot.mjs <trackId> <frac> [cam] [out.png]`. | playwright-probe |
+| **shot/show-menus.mjs** | Shoot every menu/popup plus the Display survey into one preview HTML page. | playwright-probe |
+| **shot/show.mjs** | One phone HTML page: menus then car angles, with embedded JPEGs for offline preview. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 
 ### `tools/gfx/`
