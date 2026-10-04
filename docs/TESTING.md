@@ -396,7 +396,7 @@ tools directly.)
 
 | Group | What it runs |
 |---|---|
-| `physics-core` | the driving model proper: physics-characterization, physics-fixes, physics-hotpath, longitudinal, projection, world-physics, off-track, the Rapier debris side-world and race control. ~35 tests, nearly all FAST. `physics-characterization` also runs in Node as `game-vm` in seconds — run that first |
+| `physics-core` | the driving model proper: physics-boot (the cheap selected-gate pin), physics-characterization, physics-fixes, physics-hotpath, longitudinal, projection, world-physics, off-track, the Rapier debris side-world and race control. ~37 tests, nearly all FAST. `physics-characterization` also runs in Node as `game-vm` in seconds — run that first |
 | `collisions` | car-to-car and wall contact: `collision*.spec.js` (collisions, collisions-deep, collision-ai-fixes). ~32 tests and the SLOWEST set in the suite (26–34 s each) — the multi-car pack separation runs a whole race |
 | `aero` | the aero and handling model: aero-zones (the slowest single spec at ~48 s/test), active-aero, drift, understeer-cue. ~37 tests |
 | `hooks` | the `__apex` contract end to end: dev-tools, headless, obs/act, data lifecycle, telemetry compare, assets, logging, persistence, the race wake lock, output paths, the map + new hook contracts, and the agent world view (world, trackInfo, scene, rollout, determinism, the drive bench). Union of the old `api` + `hooks` + `agent` + `map` + `paths` |
@@ -1208,6 +1208,7 @@ what it covers.
 | Spec | What it covers |
 |---|---|
 | `world-physics.spec.js` | the player integrates a bicycle model in WORLD space; `(s, x)` is read back, not authoritative |
+| `physics-boot.spec.js` | the BLOCKING physics-core gate for the change-aware selected job: boots Monza headless, drives briefly, and asserts `physState()` combined-slip fields (`axFrac`/`slipFactor`/`vLat`/`yawRate`) stay finite through a steered pull and a brake-to-standstill (dirS blend). Deliberately cheap — no `test.slow`, no `test.setTimeout`, two tests — because every other `test:physics-core` spec is fixed-gate, VM-twinned, or declares 300–540 s against the selected gate's 180 s cap, which emptied the plan on a `js/physics/` PR (`dropped=2`, Selected specs verdict red) |
 | `physics-fixes.spec.js` | the physics/collision robustness pass |
 | `physics-hotpath.spec.js` | leftover AiDrive ctx literals in `updateCar` stay pooled — wraps the eight helpers and asserts the same scratch object is reused across steps |
 | `longitudinal.spec.js` | longitudinal + grip physics and full-lap progress |
