@@ -198,7 +198,11 @@ const Quali = (function () {
       // constant 0 — routing it through raceIndex made the grid depend on how many
       // races the session had already run, which the career-isolation grid test
       // (correctly) forbids. Career keeps its own round.
-      const round = inCareer ? Career.round() : (G.seasonMode ? G.seasonRound : 0);
+      // drawRound(), not season.round: a sprint weekend runs TWO qualifying sessions
+      // on one round, and the bare round gave both the identical field and grid
+      // (reliability, launch, AI mistakes and weather already draw this way).
+      const round = inCareer ? Career.round()
+        : (G.seasonMode ? (typeof SeasonCal !== "undefined" && SeasonCal.drawRound && G.season ? SeasonCal.drawRound(G.season) : G.seasonRound) : 0);
       const seed = inCareer ? Career.seasonSeed() : G.simSeed();   // the year too — see Career.seasonSeed
       const real = drivenMap(driven);
 

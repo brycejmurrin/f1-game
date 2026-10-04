@@ -513,6 +513,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // lines wait for the straight and die when stale, commentary only while
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
+  "tests/unit/race-session-fixes.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP

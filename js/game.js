@@ -2524,6 +2524,7 @@ function raceProfile() { return RaceEntryProfile.legs(); }
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
+  if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -5831,12 +5832,15 @@ function updateCar(c, dt, ranked) {
   // The FIELD's sector bests — the timing screen's purple is the session best
   // of ANY car, so every car's forward crossing is timed (a per-car index and
   // start stamp; the player's curated split logic below stays as it is).
+  // S3 closes AT THE LINE, inside this step: take off the time past it, as
+  // RaceControl.lineTransition does for the lap (or S1+S2+S3 ran a step long).
+  const s3Past = dLine > 0 && oldS > L * 0.5 && c.s < L * 0.5 && dt > 0 ? dt * (1 - Math.min(1, Math.max(0, (L - oldS) / dLine))) : 0;
   if (state === "race" && track) {
     const ns = sectorAt(c.s);
     if (ns !== c._secIdx) {
       const fwd = ds > 0 && c._secIdx != null && (c._secIdx < ns || (c._secIdx === 2 && ns === 0));
       if (fwd && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
-        const e = c.lapTime - c._secT0;
+        const e = c.lapTime - (ns === 0 ? s3Past : 0) - c._secT0;
         if (e >= 2 && e < fieldSectorBests[c._secIdx]) fieldSectorBests[c._secIdx] = e;
       }
       c._secIdx = ns; c._secT0 = c.lapTime;
@@ -5858,7 +5862,7 @@ function updateCar(c, dt, ranked) {
         // entry: a backward crossing skips the record but resets sectorStartT,
         // so the next forward crossing times a fraction (measured: 0.217 s "S1").
         if (c.lap >= 1 && !c.incidentInvalidLap && sectorValid) {
-          const elapsed = c.lapTime - sectorStartT;
+          const elapsed = c.lapTime - (newSector === 0 ? s3Past : 0) - sectorStartT;
           const prevSector = sectorIdx;
           const prevBest = sectorBests[prevSector];
           sectorLast[prevSector] = elapsed;
@@ -5897,6 +5901,7 @@ function updateCar(c, dt, ranked) {
     if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
+      else if (c.isPlayer && isQuali()) c.qualiCut = true;   // ANY deleted quali lap (a takeover, a practice rewind — not only a cut) is NO TIME, never the model's
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
       // Tell the rival about our lap. Times are authored by whoever OWNS the
@@ -8468,6 +8473,7 @@ function reportModelQuali() {
 }
 $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
+  if (isCareer()) Career.markWeekendStarted();   // the briefs lock: the grid is known now
   // Keep the model's time for us — but a rival who has already driven theirs
   // does not lose it because we could not be bothered to drive ours.
   quali.simulate(qualiNet.driven(player && player.qualiCut ? Infinity : 0));   // a deleted lap is not traded for the model's
