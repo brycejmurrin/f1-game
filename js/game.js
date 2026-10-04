@@ -2425,6 +2425,8 @@ function snapGameCam(paint) {
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
   const mode = CAM_MODES[camMode].id;
   if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(mode);
+  // A snap is a CUT: no chase hang, speed-FOV kick, glance or latched look-back carries over.
+  if (typeof CamFeel !== "undefined") { CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch(); } GameCams.resetSmoothing();
   const v = camVantage(mode, player.s, player.x, player.speed || 0, 0, {
     bankDy: bankCam ? bankCam.dy : 0, deploy: player.deploying, slipLat: player.vLat || 0, att: player,
     // Same car pose the live rig uses. Without it snapCam() silently fell back to
@@ -4772,10 +4774,8 @@ function updateCar(c, dt, ranked) {
   let throttleLvl = 1;
   if (c.human) {
     braking = inp ? !!inp.brake : Input.braking();
-    // `?? 1`, symmetric with throttleLevel below — the rule the comment under
-    // it states was only ever implemented on the throttle arm. Nothing sets
-    // brakeLevel today: this is for the next caller, not a live regression.
-    brakeLvl = inp ? (inp.brakeLevel ?? 1) : Math.max(0.15, Input.brakeLevel());
+    // `?? 1`, symmetric with throttleLevel below (the rule the comment under it states).
+    brakeLvl = inp ? (inp.brakeLevel ?? 1) : Input.brakeLevel();   // continuous from 0; the floor is in the braking branch
     // A replicated or scripted input is a boolean by construction, so it means
     // FULL travel unless it says otherwise — which keeps every __apex.setInput
     // caller (and every physics spec built on one) exactly as it was.
@@ -5050,7 +5050,8 @@ function updateCar(c, dt, ranked) {
     if (c.speed > 0) {
       // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md). The AI earns it too: its
       // `tread: null` resolves to the right compound for braking as well as cornering.
-      c.speed = Math.max(0, c.speed - surfaceBrake * brakeLvl * dt);
+      // `braking` skips the coast drag, so a LIVE pedal never slows less than lifting (the old max(0.15, level) step's job); scripted input is exact.
+      c.speed = Math.max(0, c.speed - (c.human && !inp ? Math.max(surfaceBrake * brakeLvl, COAST_DRAG) : surfaceBrake * brakeLvl) * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -6658,13 +6659,10 @@ function render(dt) {
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; if (vant.cut) camSnapNext = true;
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
-      // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
-      // OFFSET, not the trauma — shake still decays on its own clock, so cues
-      // keyed to it are untouched. CamTune.shakeOffset also applies COMFORT › HEAD BOB.
-      // SCOPE: trauma shake applies to EVERY race camera (docs/notes/CAMERA-FEEL.md).
-      const amt = CamTune.shakeOffset(shake, camComfort());
-      eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
-      tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
+      // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the OFFSET, not the trauma
+      // (cues keyed to it stay timed); CamTune.shakeOffset also applies COMFORT › HEAD BOB. SCOPE: every
+      // race camera (docs/notes/CAMERA-FEEL.md). Real-time noise, fps-independent; onboard it stays in the tub.
+      if (typeof CamFeel !== "undefined") CamFeel.shake(eyeT, tgtT, CamTune.shakeOffset(shake, camComfort()), performance.now() * 0.001, CamFeel.isBuzzMode(mode));
     }
     // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/visor/tcam). Amp via
     // CamTune.buzzAmp (REDUCE MOTION / COMFORT › HEAD BOB). Off when wet (SSR flicker).
@@ -6734,6 +6732,7 @@ function render(dt) {
   }
   camAncX = ancX; camAncZ = ancZ;
   camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
+  if (typeof CamFeel !== "undefined" && CamFeel.consumeAimSnap()) { for (let i = 0; i < 3; i++) camTgt[i] = tgtT[i]; camRoll = -camRoll; }   // LOOK BACK flipped: a cut for the AIM, roll mirrored (feel.js)
   // A CUT LANDS WHOLE. Damping exists to smooth a moving vantage; across a shot
   // boundary there is nothing to smooth — the two vantages are unrelated, and
   // easing between them turns a cut into a long swim through whatever lies
@@ -6766,7 +6765,7 @@ function render(dt) {
     // LEAN scales via CamTune.rollTarget (camComfort still forces level above).
     const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
     camSlipSm = damp(camSlipSm, clamp(slipRaw, -1, 1), 10, dt);
-    camRoll = damp(camRoll, CamTune.rollTarget(roadCamRoll, camSlipSm, (onboard && player ? (player.baRoll || 0) * 0.85 : 0), false), 7, dt);
+    camRoll = damp(camRoll, (typeof CamFeel !== "undefined" && CamFeel.lookingBackNow() ? -1 : 1) * CamTune.rollTarget(roadCamRoll, camSlipSm, (onboard && player ? (player.baRoll || 0) * 0.85 : 0), false), 7, dt);
   }
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
   // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting

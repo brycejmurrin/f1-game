@@ -70,6 +70,7 @@ const Input = (function () {
   let padThrottleVal = 0;
   let padBrakeVal = 0;
   let padPrevButtons = [];     // previous frame's pressed state, for rising edges
+  let padPrevKey = null;       // padKey of the pad padPrevButtons belongs to
   let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
   let padDpadT = 0;            // last d-pad ramp timestamp, ms
   /* THE DRIVING DEAD ZONE IS A PLAYER KNOB WITH A SMALL DEFAULT, and the two
@@ -508,29 +509,46 @@ const Input = (function () {
      rather than against zero is what makes it work on a wheel at all: a pedal
      axis rests at -1, not 0, so "largest absolute value" would pick an
      untouched pedal every time. */
+  /* EVERY connected device is watched, not just the driving one: the
+     wizard used to snapshot activePad(), so with an idle standard pad also
+     connected it listened to the pad and never saw the wheel being turned.
+     Rests are per device (padKey); a device that appears mid-wizard is
+     snapshotted on first sight. The answer comes from whichever device moved,
+     and that movement is also USE (notePadUse), so the wheel drives after. */
   const AXIS_CAPTURE_MOVE = 0.45;
+  function snapshotRests(pads, into) {
+    for (let i = 0; pads && i < pads.length; i++) {
+      const p = pads[i];
+      if (p && p.connected && p.axes && !into.has(padKey(p, i))) into.set(padKey(p, i), Array.prototype.slice.call(p.axes));
+    }
+    return into;
+  }
   function beginAxisCapture(cb) {
     axisCaptureCb = typeof cb === "function" ? cb : null;
     axisCaptureRest = null;
     if (!axisCaptureCb) return;
-    const pad = activePad();
-    if (pad && pad.axes) axisCaptureRest = Array.prototype.slice.call(pad.axes);
+    axisCaptureRest = snapshotRests(readPads(), new Map());
   }
-  function pollAxisCapture(pad) {
-    if (!axisCaptureCb) return;
-    const axes = pad.axes || [];
-    if (!axisCaptureRest) { axisCaptureRest = Array.prototype.slice.call(axes); return; }
-    let best = -1, bestI = -1;
-    for (let i = 0; i < axes.length; i++) {
-      const rest = typeof axisCaptureRest[i] === "number" ? axisCaptureRest[i] : 0;
-      const d = Math.abs((axes[i] || 0) - rest);
-      if (d > best) { best = d; bestI = i; }
+  function pollAxisCapture(pads) {
+    if (!axisCaptureCb || !pads) return;
+    if (!axisCaptureRest) { axisCaptureRest = snapshotRests(pads, new Map()); return; }
+    let best = -1, bestI = -1, bestRest = 0, bestV = 0;
+    for (let j = 0; j < pads.length; j++) {
+      const p = pads[j];
+      if (!p || !p.connected) continue;
+      const rests = axisCaptureRest.get(padKey(p, j));
+      if (!rests) { snapshotRests([p], axisCaptureRest); continue; }
+      const axes = p.axes || [];
+      for (let i = 0; i < axes.length; i++) {
+        const rest = typeof rests[i] === "number" ? rests[i] : 0;
+        const d = Math.abs((axes[i] || 0) - rest);
+        if (d > best) { best = d; bestI = i; bestRest = rest; bestV = axes[i] || 0; }
+      }
     }
     if (bestI < 0 || best < AXIS_CAPTURE_MOVE) return;
     const cb = axisCaptureCb;
-    const rest = typeof axisCaptureRest[bestI] === "number" ? axisCaptureRest[bestI] : 0;
     axisCaptureCb = null; axisCaptureRest = null;
-    cb(bestI, Math.sign((axes[bestI] || 0) - rest) || 1);
+    cb(bestI, Math.sign(bestV - bestRest) || 1);
   }
   function setPadAxisMap(saved) {
     padAxisMap = Object.assign({}, PAD_AXIS_DEF);
@@ -597,8 +615,15 @@ const Input = (function () {
      a continuous ramp from 0 at the boundary to 1 at full deflection, and
      folding saturation into the same divisor means a worn stick that tops out
      at 0.85 still reaches full lock. */
+  /* The rest offset is rescaled PER SIDE before any of that: subtracting it
+     and clamping left a stick calibrated at rest 0.15 topping out at 0.85
+     toward the drift side (66 % road-wheel lock after STEER_EXPO), while the
+     other side still reached 1. Dividing each half by the travel it actually
+     has puts both full deflections at exactly ±1. |rest| <= 0.5
+     (calibratePad / setPadRest refuse more), so neither divisor is below 0.5. */
   function padAxisShape(raw) {
-    const v = clamp(raw - padRestOffset, -1, 1);
+    const d = raw - padRestOffset;
+    const v = clamp(d >= 0 ? d / (1 - padRestOffset) : d / (1 + padRestOffset), -1, 1);
     const a = Math.abs(v);
     if (a <= padDeadzone) return 0;
     const span = Math.max(0.05, 1 - padDeadzone - padSaturation);
@@ -619,6 +644,14 @@ const Input = (function () {
     const v = raw * padAxisMap.pedalInvert;
     return clamp((v + 1) / 2, 0, 1);
   }
+  /* TRIGGER / PEDAL TRAVEL IS A RESCALED DEAD ZONE, NOT A GATE. `v > 0.12 ? v : 0`
+     jumped from 0 to 12 % throttle at the threshold (and game.js floored any
+     brake at 15 %), removing exactly the light-pressure band trail braking and
+     a throttle pick-up live in. The 0.12 still swallows a trigger's resting
+     slop; above it travel ramps continuously from 0 to 1. A face button (1)
+     and a full pedal stay exactly 1. */
+  const PAD_PEDAL_DZ = 0.12;
+  function padPedalLevel(v) { return v > PAD_PEDAL_DZ ? clamp((v - PAD_PEDAL_DZ) / (1 - PAD_PEDAL_DZ), 0, 1) : 0; }
   function padDpadSteer(pad) {
     const t = nowMs();
     const dt = (padDpadT ? Math.min(0.1, (t - padDpadT) / 1000) : 0) * timeScale;
@@ -940,36 +973,80 @@ const Input = (function () {
   });
   const { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease } = holdButtons;
 
-  // First connected pad, or null. (getGamepads() can return holes / stale slots.)
-  function activePad() {
+  // getGamepads(), or null when the API is absent or throws (warned once).
+  function readPads() {
     if (typeof navigator === "undefined" || !navigator.getGamepads) return null;
-    let pads;
-    try { pads = navigator.getGamepads(); } catch (e) {
+    try { return navigator.getGamepads(); } catch (e) {
       if (!padPollWarned) {
         padPollWarned = true;
         Log.warn("input", `gamepad poll failed: ${(e && e.message) || e}`);
       }
       return null;
     }
-    return pickPad(pads);
   }
-  /* WHICH PAD DRIVES. getGamepads() lists pads in connection-slot order, so
-     first-connected-wins lets a wheel base, a flight stick or an idle second
-     controller in slot 0 ignore the pad in the player's hands. A "standard" mapping is the layout every button
-     index in this file assumes, so it ranks first; among equals the most
-     recently USED one wins (Gamepad.timestamp advances on each state change),
-     and slot order breaks exact ties so an idle pair stays stable.
+  // The pad that drives, or null. (getGamepads() can return holes / stale slots.)
+  function activePad() { return pickPad(readPads()); }
+  /* WHICH PAD DRIVES: THE ONE BEING USED. getGamepads() lists pads in
+     connection-slot order, so first-connected-wins let a wheel base, a flight
+     stick or an idle second controller in slot 0 ignore the pad in the
+     player's hands. The fix that shipped next ranked a "standard" mapping
+     first, and that was wrong the other way: a wheel enumerates with mapping
+     "" (see AXIS MAP), so an Xbox pad left on its dongle or a DualSense
+     charging over USB silently took the car — and the wheel wizard, which
+     snapshots the driving pad — away from the wheel being turned.
+     So USE ranks first: notePadUse() stamps a pad when a button goes down or
+     an axis travels PAD_WAKE from where it last rested, and the most recently
+     used pad drives. That is the hysteresis: the driving pad keeps the car
+     until another pad is actually USED, so a wheel's pot jitter or a pad
+     being picked up off the desk does not flip it. Gamepad.timestamp is not
+     the signal — it advances on every noisy reading. Only when no pad has
+     been used yet (a fresh page) does the old order decide: standard first,
+     then the newest timestamp, then slot order so an idle pair stays stable.
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/mapping
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
-  function pickPad(pads) {
-    if (!pads) return null;
-    let best = null, bestStd = false, bestT = -Infinity;
+  const PAD_WAKE = 0.3;
+  const padUse = new Map();    // padKey -> { axes, btn, usedAt }
+  function padKey(p, slot) { return (Number.isInteger(p.index) ? p.index : slot) + ":" + p.id; }
+  function notePadUse(pads, t) {
+    if (!pads) return;
+    const live = new Set();
     for (let i = 0; i < pads.length; i++) {
       const p = pads[i];
       if (!p || !p.connected) continue;
+      const k = padKey(p, i), axes = p.axes || [], nb = p.buttons ? p.buttons.length : 0;
+      live.add(k);
+      let rec = padUse.get(k), used = false;
+      if (!rec) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
+      else {
+        for (let a = 0; a < axes.length; a++) {
+          if (typeof rec.axes[a] === "number" && Math.abs(readPadAxis(axes, a) - rec.axes[a]) >= PAD_WAKE) used = true;
+        }
+        for (let b = 0; b < nb; b++) if (btnDown(p, b) && !rec.btn[b]) used = true;
+      }
+      // The rest reference moves only on use (or first sight), so a slow drift
+      // cannot creep past PAD_WAKE a frame at a time without ever counting.
+      if (used || !rec.axes.length) for (let a = 0; a < axes.length; a++) rec.axes[a] = readPadAxis(axes, a);
+      for (let b = 0; b < nb; b++) rec.btn[b] = btnDown(p, b);
+      if (used) rec.usedAt = t > 0 ? t : 1;
+    }
+    for (const k of padUse.keys()) if (!live.has(k)) padUse.delete(k);
+  }
+  // `lastUse(pad, slot)` -> ms of its last use, 0 = never. Defaults to the
+  // module's own record; the unit test passes its own.
+  function pickPad(pads, lastUse) {
+    if (!pads) return null;
+    const useOf = typeof lastUse === "function" ? lastUse
+      : (p, i) => { const r = padUse.get(padKey(p, i)); return r ? r.usedAt : 0; };
+    let best = null, bestU = 0, bestStd = false, bestT = -Infinity;
+    for (let i = 0; i < pads.length; i++) {
+      const p = pads[i];
+      if (!p || !p.connected) continue;
+      const u = +useOf(p, i) || 0;
       const std = p.mapping === "standard";
       const t = Number.isFinite(p.timestamp) ? p.timestamp : 0;
-      if (!best || (std && !bestStd) || (std === bestStd && t > bestT)) { best = p; bestStd = std; bestT = t; }
+      const better = !best || u > bestU ||
+        (u === bestU && ((std && !bestStd) || (std === bestStd && t > bestT)));
+      if (better) { best = p; bestU = u; bestStd = std; bestT = t; }
     }
     return best;
   }
@@ -1025,6 +1102,7 @@ const Input = (function () {
   // and their header comment for why B needs its own branch.
   let remoteWas = false;        // the phone was live on the previous poll
   function pollGamepad() {
+    haptics.flush();   // opens the frame for the rumble mixer: one effect per frame (js/input/haptics.js)
     // A PHONE CONTROLLER GOING QUIET is the same interruption as an unplugged
     // pad (a call, an app switch, a flat battery): its pedals already zero at
     // REMOTE_STALE_MS, but the race ran on with the car coasting into a wall.
@@ -1043,7 +1121,9 @@ const Input = (function () {
       if (!activePad()) return;
       padConnected = true;   // fall through and read it this frame
     }
-    const pad = activePad();
+    const pads = readPads();
+    notePadUse(pads, nowMs());
+    const pad = pickPad(pads);
     if (!pad) {
       padConnected = false;
       padSteer = 0; padThrottle = false; padBrake = false;
@@ -1052,11 +1132,23 @@ const Input = (function () {
       lookStickX = 0; lookStickY = 0;
       padDpadVal = 0; padDpadT = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
+      padPrevKey = null;
       padMenu.reset();
       if (inputSource === "controller") inputSource = null;
       return;
     }
     padConnected = true;
+    // EDGES ARE PER DEVICE. padPrevButtons holds the LAST pad's buttons, so
+    // when another pad takes over, a button already held on it would read as
+    // a fresh press (a boost, a shift, a camera cut). Reseed from the new
+    // pad. Not on first connection: the press that woke a pad is a real one.
+    const key = padKey(pad, Array.prototype.indexOf.call(pads, pad));
+    if (padPrevKey !== null && key !== padPrevKey) {
+      const nb = pad.buttons ? pad.buttons.length : 0;
+      padPrevButtons.length = nb;
+      for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
+    }
+    padPrevKey = key;
     // The indices below are the W3C "standard" layout and nothing here remaps.
     // A pad the browser could not map reports mapping "" and shuffles them —
     // log it once so a "throttle is on LB" report has its cause on record.
@@ -1068,8 +1160,15 @@ const Input = (function () {
     const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert);
     // Right stick (standard mapping axes 2/3) → free-look. Menu nav still uses
     // both sticks via padNavDir; free-look is only consumed in-race by CamFeel.
+    // ONLY ON A STANDARD PAD, and never an axis the wheel wizard took: a wheel
+    // (mapping "") puts whatever its maker chose on 2/3 — usually a pedal that
+    // RESTS at -1, which held the cockpit camera at full yaw — and a mapped
+    // throttle/brake/steer axis is a control, not a stick (pad-menu's
+    // padNavDirOf skips the mapped pedals for the same reason).
     {
-      const rx = readPadAxis(axes, 2), ry = readPadAxis(axes, 3);
+      const lookAxis = (i) => pad.mapping === "standard" &&
+        i !== padAxisMap.steer && i !== padAxisMap.throttle && i !== padAxisMap.brake;
+      const rx = lookAxis(2) ? readPadAxis(axes, 2) : 0, ry = lookAxis(3) ? readPadAxis(axes, 3) : 0;
       const mag = Math.hypot(rx, ry);
       if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
       else {
@@ -1086,15 +1185,15 @@ const Input = (function () {
     padSteerAnalog = Math.abs(stick) > 0.001;
     padSteer = padSteerAnalog ? stick : dpad;
     // pedals: analog triggers, a wheel's pedal AXES, or the A/B face buttons.
-    padThrottleVal = Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle"));
-    padBrakeVal = Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake"));
-    padThrottle = padThrottleVal > 0.12;
-    padBrake = padBrakeVal > 0.12;
+    padThrottleVal = padPedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle")));
+    padBrakeVal = padPedalLevel(Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake")));
+    padThrottle = padThrottleVal > 0;
+    padBrake = padBrakeVal > 0;
     // A connected pad is not active input. Record only a real deflection or a
     // newly pressed button, so an idle Bluetooth pad cannot steal Help/coach
     // wording from the keyboard or touch player.
     let padActive = Math.abs(stick) > 0.05 || Math.abs(dpad) > 0.05 ||
-      padThrottleVal > 0.12 || padBrakeVal > 0.12;
+      padThrottleVal > 0 || padBrakeVal > 0;
     if (!padActive && pad.buttons) {
       for (let i = 0; i < pad.buttons.length; i++) {
         if (btnDown(pad, i) && !padPrevButtons[i]) { padActive = true; break; }
@@ -1106,7 +1205,7 @@ const Input = (function () {
       // axis steers?" must not also steer the car sitting behind the sheet.
       padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
       padSteerAnalog = false; padLookBack = false; padMenu.releaseDirection();
-      pollAxisCapture(pad);
+      pollAxisCapture(pads);
     } else if (padCaptureCb) {
       // A CONTROLS slot is waiting for a button: the first rising edge is its
       // answer and the frame ends here — the press must not also walk the
@@ -1175,7 +1274,7 @@ const Input = (function () {
      0 is a true off: callers do not have to check. */
   const haptics = InputHaptics.create({
     clamp, activePad, padConnected: () => padConnected, remoteActive,
-    remoteHaptics: () => remoteHaptics,
+    remoteHaptics: () => remoteHaptics, now: nowMs,
   });
   const { setHaptics, setTriggerHaptics, triggerHapticsEnabled, hapticsSupported,
     triggerRumbleSupported, primeHaptics, vibrate, rumble } = haptics;
@@ -1268,13 +1367,13 @@ const Input = (function () {
     if (keyThrottle) return 1;
     if (btnThrottle && !navBlocksTouch()) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
     if (remoteThrottle()) return remThr;
-    return padThrottleVal > 0.12 ? padThrottleVal : 0;
+    return padThrottleVal;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
     if (btnBrake && !navBlocksTouch()) return btnBrakeVal;
     if (remoteBrake()) return remBrk;
-    return padBrakeVal > 0.12 ? padBrakeVal : 0;
+    return padBrakeVal;
   }
 
   function consumeBoostToggle() {
@@ -1340,6 +1439,9 @@ const Input = (function () {
   /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
      (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas. */
   function lookStick() { return { x: lookStickX, y: lookStickY }; }
+  // RMB is DOWN: a glance held still is still a glance (CamFeel holds the
+  // angle instead of recentring on a frame with no mouse delta).
+  function lookMouseHeld() { return lookMouseDown; }
   function consumeLookMouse() {
     const o = { dx: lookMouseDx, dy: lookMouseDy };
     lookMouseDx = 0; lookMouseDy = 0;
@@ -1862,6 +1964,7 @@ const Input = (function () {
     consumeMirror,
     lookingBack,
     lookStick,
+    lookMouseHeld,
     consumeLookMouse,
     lockEscape, unlockEscape, lockLandscape, unlockLandscape,
     tiltActive,

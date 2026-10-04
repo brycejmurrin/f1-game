@@ -266,6 +266,11 @@ function crY(p0, p1, p2, p3, t) {
 // metres at a hairpin; a fast kink gets less.
 const _hangOut = Object.create(null);
 const _hangFast = Object.create(null);
+// snapGameCam's half of a cut: the CamFeel follows are reset beside this.
+function resetSmoothing() {
+  for (const k in _hangOut) delete _hangOut[k];
+  for (const k in _hangFast) delete _hangFast[k];
+}
 function bendHang(key, kA, dt, reduce, gain, lambda) {
   if (!(dt > 0) || reduce || !gain) return 0;
   if (!kA) { _hangOut[key] = 0; _hangFast[key] = 0; return 0; }
@@ -810,6 +815,6 @@ function vantage(track, mode, s, x, spd, now, extra) {
   return _vantOut;
 }
 
-return { init, vantage, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
+return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
   HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT };
 })();
