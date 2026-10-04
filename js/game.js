@@ -5212,7 +5212,7 @@ function updateCar(c, dt, ranked) {
   // --- lateral ---
   let steer, gripScale;
   if (c.human) {
-    steer = inp ? (inp.steer ?? 0) : Input.steer();
+    steer = inp ? (inp.steer ?? 0) : Input.steer(dt);   // dt: ramps advance per physics step
   }
   else {
     // Adaptive preferred lane: under traffic density, slowly bias toward the

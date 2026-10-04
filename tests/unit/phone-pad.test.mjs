@@ -973,3 +973,34 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
     assert.ok(el.body.classes.has("menu"), why + ": the phone shows the MENU PAD");
   }
 });
+
+/* P3 INPUT PASS (2026-10-04): an XR thumbstick is a STICK, not a lean; and a
+ * burst of phone samples delivered in one millisecond is not a duplicate. */
+test("an XR stick steers directly: no tilt filter lag, and lamp 1's calibrate cannot capture it", () => {
+  const { Input, clock } = bootInput();
+  clock.t = 1000;
+  Input.remoteSample({ steer: 0.5, thr: 0, brk: 0, held: 0 });
+  assert.ok(Input.remoteSteers(), "a stick sample steers");
+  assert.equal(Input.steer(), 0.5, "the first frame already carries the stick (no One-Euro, no 8/s slew)");
+  Input.calibrate();                               // lamp 1 with the stick held over
+  Input.remoteSample({ steer: 0, thr: 0, brk: 0, held: 0 });
+  assert.equal(Input.steer(), 0, "centred stick is centre: the held deflection was not taken as the race's zero");
+  Input.remoteSample({ steer: -0.8, thr: 0, brk: 0, held: 0 });
+  assert.equal(Input.steer(), -0.8);
+  assert.equal(Input.debugState().remote.stick, -0.8);
+  Input.remoteLost();
+  assert.equal(Input.remoteSteers(), false, "a lost link drops the stick at once");
+});
+
+test("phone samples bunched into one millisecond still reach the filter", () => {
+  const { Input, clock } = bootInput();
+  clock.t = 1000;
+  Input.remoteSample({ seq: 1, roll: 0, thr: 0, brk: 0, held: 0 });
+  clock.t = 1100;
+  Input.remoteSample({ seq: 2, roll: 0, thr: 0, brk: 0, held: 0 });
+  Input.remoteSample({ seq: 3, roll: 20, thr: 0, brk: 0, held: 0 });   // same host millisecond as seq 2
+  // The newer roll entered the filter: steering heads right on the next frames.
+  let v = 0;
+  for (let i = 0; i < 30; i++) { clock.t += 16; v = Input.steer(); }
+  assert.ok(v > 0.1, "the burst's newer roll was applied, not dropped (odt 0 returned the old value): " + v);
+});

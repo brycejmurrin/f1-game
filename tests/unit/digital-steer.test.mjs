@@ -35,7 +35,7 @@ function boot() {
   });
   const sb = {
     Math, Object, Array, Number, isFinite, JSON, Map, Set, Date,
-    performance: { now: () => clock.t },
+    performance: { now: () => clock.t }, DeviceOrientationEvent: function DeviceOrientationEvent() {},
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
     removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
@@ -49,14 +49,17 @@ function boot() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
-  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
-  Input.init(el());
+  const canvasL = {};
+  const canvas = Object.assign(el(), { addEventListener: (t, f) => { (canvasL[t] ||= []).push(f); } });
+  Input.init(canvas);
+  const onCanvas = (t, e) => (canvasL[t] || []).forEach((f) => f(Object.assign({ preventDefault() {} }, e)));
   const key = (k, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: k, code: k, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
   const fire = (t, e) => (listeners[t] || []).forEach((f) => f(e || {}));
-  return { Input, key, clock, sb, fire };
+  return { Input, key, clock, sb, fire, onCanvas };
 }
 
 const STEP = 1000 / 60;
@@ -204,4 +207,70 @@ test("free-look reads the right stick only on a standard pad, never a mapped whe
   const wheel = padRig("");
   wheel.pad.axes[2] = -1; wheel.pad.axes[3] = -1; wheel.Input.poll();
   assert.deepEqual({ ...wheel.Input.lookStick() }, { x: 0, y: 0 }, "a wheel's resting pedal on axis 2/3 never yaws the camera");
+});
+
+/* P3 INPUT PASS (2026-10-04). */
+test("ramps advance per PHYSICS step: two substeps in one frame are two steps", () => {
+  const { Input, key, clock } = boot();
+  Input.reset(); Input.setAdaptiveButtons(0); Input.setSpeedStd(0);
+  clock.t = 1000;
+  key("ArrowRight", true);
+  const a = Input.steer(1 / 60);
+  const b = Input.steer(1 / 60);                // same wall time: the second substep of one frame
+  assert.ok(a > 0, "the first substep advances: " + a);
+  assert.ok(b > a, `the second substep advances too (${a} -> ${b}); it used to get ~0 ms`);
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), 1, "15 substeps (250 ms of sim) reach full lock with the clock never moving");
+});
+
+test("last key wins: RIGHT pressed while LEFT is still held steers right", () => {
+  const { Input, key, clock } = boot();
+  Input.reset(); Input.setAdaptiveButtons(0); Input.setSpeedStd(0);
+  clock.t = 1000;
+  key("ArrowLeft", true);
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), -1, "full left");
+  key("ArrowRight", true);                      // the roll-over: LEFT not yet released
+  for (let i = 0; i < 40; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), 1, "the newer key owns the wheel (both held used to mean straight)");
+  key("ArrowRight", false);
+  for (let i = 0; i < 40; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), -1, "releasing it hands back to the still-held LEFT");
+});
+
+test("coalesced pointer samples move the finger only when they ARE the finger", () => {
+  const { Input, onCanvas } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 7, clientX: 150 }] });
+  const coalesced = (pointerType) => ({ pointerType, isPrimary: true,
+    getCoalescedEvents: () => [{ clientX: 160 }, { clientX: 290 }] });
+  onCanvas("pointermove", coalesced("mouse"));
+  assert.equal(Input.debugState().touchSteer, 0, "a mouse on a touch laptop does not drag the finger's wheel");
+  onCanvas("pointermove", coalesced("pen"));
+  assert.equal(Input.debugState().touchSteer, 0, "nor does a pen");
+  onCanvas("pointermove", coalesced("touch"));
+  assert.ok(Input.debugState().touchSteer > 0, "the finger's own coalesced samples still land");
+});
+
+test("re-entering TILT zeroes on a fresh reading, not the lean the player left tilt with", () => {
+  const { Input, fire, clock } = boot();
+  const lean = (deg) => { clock.t += 16; fire("deviceorientation", { beta: 0, gamma: deg }); };
+  Input.setSteerMode("tilt");
+  return Input.requestGyro().then((ok) => {
+    assert.equal(ok, true);
+    lean(0); Input.calibrate();
+    lean(25);                                   // last reading before leaving tilt: a 25° lean
+    Input.setSteerMode("buttons");              // detaches the sensor
+    Input.setSteerMode("tilt");
+    return Input.requestGyro();
+  }).then(() => {
+    Input.calibrate();                          // game.js enableTilt: before any new reading
+    lean(0);                                    // the player now holds it level
+    const st = Input.debugState();
+    let worst = 0;
+    for (let i = 0; i < 60; i++) { lean(0); worst = Math.max(worst, Math.abs(Input.steer())); }
+    assert.ok(worst < 1e-9, "level is centre (a stale zero at 25° steered hard left): " + worst);
+    assert.equal(st.steerMode, "tilt");
+  });
 });

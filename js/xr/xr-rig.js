@@ -152,14 +152,14 @@ const XrRig = (function () {
     };
   }
 
-  /** Thumbstick X ∈ [-1,1] → tilt-roll degrees for Input.steerToTilt. */
+  /** Thumbstick X ∈ [-1,1] → a −1..1 steer command past a dead zone (Input's stick source). */
   function stickToSteer(x, deadzone) {
     const dz = deadzone == null ? 0.12 : deadzone;
     const v = +x || 0;
     if (Math.abs(v) < dz) return 0;
     const s = Math.sign(v);
     const mag = (Math.abs(v) - dz) / (1 - dz);
-    return s * mag;   // −1..1 steer command; caller maps through Input.steerToTilt
+    return s * mag;   // −1..1 steer command; XrInput.inject sends it as remoteSample({ steer })
   }
 
   return {

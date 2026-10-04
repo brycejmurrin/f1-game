@@ -29,6 +29,7 @@ const Input = (function () {
   let keyThrottle = false;
   let keySteerVal = 0;        // ramped -1..1
   let keySteerT = 0;          // last ramp timestamp, ms (0 = unset)
+  let keySeq = 0, keyLeftSeq = 0, keyRightSeq = 0;   // press order, for last-key-wins
 
   let overtakePressed = false;
   let boostTogglePressed = false;
@@ -158,6 +159,11 @@ const Input = (function () {
   let remThr = 0, remBrk = 0;    // 0..1 pedal travel from the phone
   let remHeld = 0;               // REMOTE_HELD bits
   let remRoll = false;           // the last sample carried a roll: a phone with no sensor sends null
+  let remStick = false, remSteer = 0;   // the last sample carried a STICK command (XR): -1..1, no tilt pipeline
+  let remSeq = null;             // the last roll sample's seq (burst dt, below)
+  // PhonePad sends at most every MIN_SAMPLE_GAP_MS (15 ms, js/input/phone-pad.js):
+  // the least sender time a seq step can stand for.
+  const REMOTE_SAMPLE_GAP_S = 0.015;
   let remoteHaptics = null;      // (ms) => void, forwards vibrate() to the phone
 
   let onPauseCb = null;
@@ -218,6 +224,7 @@ const Input = (function () {
     lastOrientMs = n;
     tiltSmoothed = oneEuro(tiltRaw, odt);
     tiltSeen = true; tiltRemote = false;
+    if (calibPending) calibrate();
   }
 
   function attachGyro() {
@@ -232,6 +239,7 @@ const Input = (function () {
     gyroAttached = false;
     window.removeEventListener("deviceorientation", onOrient);
     tiltSeen = false;
+    if (!tiltRemote) { oeInit = false; lastOrientMs = 0; }   // the next stint filters from its own first reading
   }
 
   // Must be called from a user gesture (iOS permission prompt).
@@ -271,7 +279,17 @@ const Input = (function () {
     return Promise.resolve(true);
   }
 
+  /* A ZERO NEEDS A FRESH READING. detachGyro keeps tiltRaw, so switching back
+     to TILT mid-session (enableTilt calibrates the moment requestGyro
+     resolves, before any new deviceorientation) zeroed on the lean the player
+     held when they LEFT tilt, and the car steered off-centre until RECALIBRATE
+     or the next lamp 1. While the local sensor is attached but has not read
+     yet, the calibration is taken on the first reading that arrives instead.
+     (A phone controller's roll and a detached sensor keep the immediate zero.) */
+  let calibPending = false;
   function calibrate() {
+    if (gyroAttached && !tiltSeen && !remoteSteers()) { calibPending = true; return; }
+    calibPending = false;
     tiltZero = tiltRaw;
     oePrev = tiltRaw; oeDPrev = 0; oeInit = true;
     tiltSmoothed = tiltRaw;
@@ -289,15 +307,31 @@ const Input = (function () {
   // STEERS, not merely active: a phone with no motion sensor (a tablet with
   // none, a permission refused) is pedals and buttons only, and must not sit
   // in steer() ahead of the on-screen arrows or a drag on the glass.
-  function remoteSteers() { return remoteActive() && remRoll; }
+  function remoteSteers() { return remoteActive() && (remRoll || remStick); }
   // One sample from the phone: {roll (deg, may be null), thr, brk, held}.
   function remoteSample(s) {
     if (!s) return false;
     const n = nowMs();
-    remRoll = typeof s.roll === "number" && isFinite(s.roll);
+    // A STICK (an XR thumbstick, js/xr/xr-input.js) is an analog steer
+    // command, not a lean: it used to be dressed up as a roll (steerToTilt) and
+    // ride the phone's One-Euro filter, tilt dead zone and 8/s slew, and lamp 1's
+    // calibrate() captured whatever deflection was held as the race's zero.
+    remStick = typeof s.steer === "number" && isFinite(s.steer);
+    remSteer = remStick ? clamp(s.steer, -1, 1) : 0;
+    remRoll = !remStick && typeof s.roll === "number" && isFinite(s.roll);
     if (remRoll) {
       tiltRaw = s.roll;
-      const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
+      let odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;
+      // A BURST IS NOT A DUPLICATE. odt is HOST arrival time, so two samples
+      // the network delivered in the same millisecond (Wi-Fi power save does
+      // this routinely) gave odt 0 and oneEuro() dropped the newer roll. The
+      // seq gap says how much SENDER time at least passed between them.
+      const seqOk = Number.isInteger(s.seq);
+      if (seqOk && remSeq != null) {
+        const gap = s.seq - remSeq;
+        if (gap >= 1 && gap < 30) odt = Math.max(odt, Math.min(0.1, gap * REMOTE_SAMPLE_GAP_S));
+      }
+      remSeq = seqOk ? s.seq : null;
       lastOrientMs = n;
       tiltSmoothed = oneEuro(tiltRaw, odt);
       tiltSeen = tiltRemote = true;
@@ -341,7 +375,7 @@ const Input = (function () {
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
   // keep steering a device whose own sensor is not attached.
   function remoteLost() {
-    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false;
+    remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0; remSeq = null;
     if (tiltRemote || !gyroAttached) tiltSeen = false;
   }
   function setRemoteHaptics(fn) { remoteHaptics = typeof fn === "function" ? fn : null; }
@@ -363,7 +397,7 @@ const Input = (function () {
   }
   // Reset the tilt filter/slew/zero state so a fresh emulation run starts clean.
   function simTiltReset() {
-    oeInit = false; oePrev = 0; oeDPrev = 0;
+    oeInit = false; oePrev = 0; oeDPrev = 0; calibPending = false;
     tiltSmoothed = 0; tiltSteerVal = 0; tiltZero = 0; tiltRaw = 0;
   }
   function steerToTilt(cmd) {
@@ -392,10 +426,24 @@ const Input = (function () {
     return tiltSteerVal;
   }
 
+  /* RAMPS ADVANCE PER PHYSICS STEP. game.js calls steer(stepDt) once per
+     fixed substep; every ramp below took its dt from the wall clock at call
+     time instead, so in a frame with two substeps the first got the whole
+     frame's ramp and the second ~0 ms, and a 0-substep frame deferred it —
+     the input timeline was quantised to RENDER frames, and "handling
+     identical at 30 / 120 fps" did not hold for keys, on-screen arrows, tilt
+     or a drag. With a step dt the ramp spends exactly the sim time that step
+     covers; hit-stop is already in it (fewer steps), so no timeScale. A call
+     without one (a probe, a test) keeps the wall-clock behaviour. */
+  let rampDt = null;
+  function rampDtSince(lastT, t) {
+    if (rampDt != null) return rampDt;
+    // timeScale belongs to the LIVE path only — see its declaration.
+    return (lastT ? Math.min(0.1, (t - lastT) / 1000) : 0) * timeScale;
+  }
   function tiltSteering() {
     const t = nowMs();
-    // timeScale belongs to the LIVE path only — see its declaration.
-    const dt = (tiltSteerT ? Math.min(0.1, (t - tiltSteerT) / 1000) : 0) * timeScale;
+    const dt = rampDtSince(tiltSteerT, t);
     tiltSteerT = t;
     return tiltSlew(tiltTarget(), dt);
   }
@@ -450,9 +498,14 @@ const Input = (function () {
 
   function keyboardSteer() {
     const t = nowMs();
-    const dt = (keySteerT ? Math.min(0.1, (t - keySteerT) / 1000) : 0) * timeScale;
+    const dt = rampDtSince(keySteerT, t);
     keySteerT = t;
-    const target = (keyRight ? 1 : 0) - (keyLeft ? 1 : 0);
+    // LAST KEY WINS. right − left centred the wheel whenever both were down,
+    // which is every left→right roll-over in a chicane (RIGHT pressed before
+    // LEFT is released): the car went straight until LEFT came up. Opposite
+    // directions held together resolve to the one pressed most recently.
+    const target = keyLeft && keyRight ? (keyRightSeq > keyLeftSeq ? 1 : -1)
+      : (keyRight ? 1 : 0) - (keyLeft ? 1 : 0);
     keySteerVal = digitalStep(keySteerVal, target, dt);
     return keySteerVal;
   }
@@ -774,8 +827,8 @@ const Input = (function () {
     }
     const edge = down && !e.repeat;
     switch (act) {
-      case "left": keyLeft = down; if (down) e.preventDefault(); break;
-      case "right": keyRight = down; if (down) e.preventDefault(); break;
+      case "left": if (down && !keyLeft) keyLeftSeq = ++keySeq; keyLeft = down; if (down) e.preventDefault(); break;
+      case "right": if (down && !keyRight) keyRightSeq = ++keySeq; keyRight = down; if (down) e.preventDefault(); break;
       case "throttle": keyThrottle = down; if (down) e.preventDefault(); break;
       case "brake": keyBrake = down; if (down) e.preventDefault(); break;
       // preventDefault on both edges: the default BOOST key is Space, which
@@ -830,6 +883,9 @@ const Input = (function () {
      recommends and Safari takes the else branch. */
   function onCanvasPointerMove(e) {
     if (steerMode !== "touch" || touches.size !== 1) return;
+    // A mouse or pen moving on a touch laptop is not the finger: its coalesced
+    // samples overwrote the one touch's x and jumped the drag steering.
+    if (e.pointerType !== "touch" || e.isPrimary === false) return;
     if (!canvasTouchIsDriving()) return;
     if (typeof e.getCoalescedEvents !== "function") return;
     let list;
@@ -938,7 +994,7 @@ const Input = (function () {
 
   function touchSteering() {
     const t = nowMs();
-    const dt = (touchSteerT ? Math.min(0.1, (t - touchSteerT) / 1000) : 0) * timeScale;
+    const dt = rampDtSince(touchSteerT, t);
     touchSteerT = t;
     if (touchActive) { touchSteerVal = dragFilter(touchSteer, dt > 0 ? dt : 0.016); return touchSteerVal; }
     dragOeInit = false;   // a fresh press starts from where the finger lands, not from the last lap
@@ -948,7 +1004,7 @@ const Input = (function () {
 
   function buttonSteering() {
     const t = nowMs();
-    const dt = (btnSteerT ? Math.min(0.1, (t - btnSteerT) / 1000) : 0) * timeScale;
+    const dt = rampDtSince(btnSteerT, t);
     btnSteerT = t;
     const left = btnSteerLeft ? (1 + (btnSteerLeftVal - 1) * adaptiveMix) : 0;
     const right = btnSteerRight ? (1 + (btnSteerRightVal - 1) * adaptiveMix) : 0;
@@ -1322,7 +1378,11 @@ const Input = (function () {
     return clamp(shaped * analogSpeedGain(), -1, 1);
   }
 
-  function steer() {
+  function steer(stepDt) {
+    rampDt = (typeof stepDt === "number" && stepDt > 0 && isFinite(stepDt)) ? Math.min(0.1, stepDt) : null;
+    try { return steerNow(); } finally { rampDt = null; }
+  }
+  function steerNow() {
     const k = keyboardSteer();
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
     // The d-pad half of padSteer is digital and already ramped — it must not
@@ -1330,7 +1390,7 @@ const Input = (function () {
     if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, "pad") : padSteer;
     // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
     // whatever the local mode. Pedals-only phones fall through to it.
-    if (remoteSteers()) return analogShape(tiltSteering(), "tilt");
+    if (remoteSteers()) return remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");
     // On-screen buttons and the drag wheel. A friend race keeps simulating
     // under the pause menu; the pad already zeroes itself while a menu is open.
     // Gate on anyOpen(), NOT navOpen(): navOpen() is also true on the title
@@ -1927,7 +1987,8 @@ const Input = (function () {
       padAxisMap: getPadAxisMap(),
       hapticScale: haptics.scale(),
       lookingBack: lookingBack(),
-      remote: { active: remoteActive(), steers: remoteSteers(), roll: tiltRaw, thr: remThr, brk: remBrk, held: remHeld,
+      remote: { active: remoteActive(), steers: remoteSteers(), roll: tiltRaw, stick: remStick ? remSteer : null,
+                thr: remThr, brk: remBrk, held: remHeld,
                 ageMs: remoteMs ? Math.round(nowMs() - remoteMs) : null },
       canvasTouches: touches.size,
       holdPointers: holdButtons.pointerCounts(),   // pressed-pointer count per hold button

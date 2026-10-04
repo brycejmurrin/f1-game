@@ -18,8 +18,12 @@ and never sits here, `js/input/phone-pad.js`) > on-screen buttons (`steerMode
 "buttons"`) > tilt (fresh gyro) > canvas touch (drag from touch-down). The
 phone's roll enters the SAME tilt pipeline (`remoteSample` writes what
 `onOrient` writes), so the TILT sliders and RECALIBRATE act on it; the roll
-math itself is `js/input/tilt-roll.js`, shared with `controller.html`. Digital sources share `KEY_RAMP_IN` /
-`KEY_RAMP_OUT` so arrows and finger-up are not a light switch.
+math itself is `js/input/tilt-roll.js`, shared with `controller.html`. An XR
+thumbstick rides the same seam as a STICK (`remoteSample({ steer })`): no tilt
+filter, slew or recalibration. Digital sources share `KEY_RAMP_IN` /
+`KEY_RAMP_OUT` so arrows and finger-up are not a light switch; every ramp
+advances per PHYSICS step (`Input.steer(stepDt)`), and opposite arrows held
+together resolve last-key-wins.
 
 ## Assists
 
