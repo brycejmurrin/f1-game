@@ -281,6 +281,8 @@ const PhonePad = (function () {
       createInvite: (t, p) => NetHandshake.createInvite(t, p),
       acceptAnswer: (t, c) => NetHandshake.acceptAnswer(t, c),
       hostRoom: (o) => NetRendezvous.hostRoom(o),
+      usingPrivateRelay: () => NetRendezvous.usingPrivateRelay(),
+      swap: (o) => NetRendezvous.swap(o),
       makeCode: () => NetRendezvous.makeCode(),
     }, deps || {});
     const say = (t, bad) => { if (ui.say) { try { ui.say(t, !!bad); } catch (e) { /* ui's problem */ } } };
@@ -323,7 +325,7 @@ const PhonePad = (function () {
         qr(url, code);
         say("Scan the code with your phone's camera, or open the link and type the room code.");
         let accepted = false;
-        const sub = await deps.hostRoom({
+        const roomOptions = {
           code, mine: invite.code, token,
           onTick: () => { if (phase === "waiting") say("Waiting for your phone… (room code " + code + ")"); },
           onFail: (r) => {
@@ -362,7 +364,21 @@ const PhonePad = (function () {
               },
             });
           },
-        });
+        };
+        // A private relay has one offer/answer mailbox, exactly what one phone
+        // needs. hostRoom is the public relay's multi-guest subscription only.
+        if (deps.usingPrivateRelay()) {
+          const got = await deps.swap({ code, mine: invite.code, slot: "offer", want: "answer", token, onTick: roomOptions.onTick });
+          if (phase !== "waiting") return;
+          if (got.ok) await roomOptions.onJoiner(null, got.payload);
+          if (phase === "waiting") {
+            phase = "failed";
+            if (!got.ok) say(got.message || "Could not open a room — check the connection.", true);
+            dropRoom(); transport.close(); transport = null;
+          }
+          return;
+        }
+        const sub = await deps.hostRoom(roomOptions);
         if (!["waiting", "connecting"].includes(phase)) {
           if (sub && sub.stop) { try { sub.stop(); } catch (e) { /* already stopped */ } }
           return;

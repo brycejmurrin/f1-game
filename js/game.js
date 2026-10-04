@@ -655,12 +655,24 @@ function restartTTRecorders() {
   }
 }
 
+// Finish-dependent effects wait for all motion owners' crossing timestamps.
+// Lap clocks, bests and recorders still update immediately inside updateCar.
+function onCarLineFinish(c, cross) {
+  if (RaceControl.deferLine(c, cross, c.s, onCarLineFinish)) return;
+  if ((cross.lapValid || cross.flagged) && c.local && netPlay.active()) {
+    netPlay.reportLap(cross.lapValid
+      ? { lap: c.lap, time: cross.lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: cross.flagged ? c.finishT : undefined }
+      : { lap: c.lap, time: null, best: isFinite(c.best) ? c.best : null, code: c.code, fin: c.finishT, invalid: true });
+  }
+  if (cross.flagged && c.isPlayer && !raceRadio.callsResult()) announce("FINISH!", 2, "race");
+}
+
 // IncidentSim owns motion during a takeover, but the ordinary line-crossing
 // presentation still belongs here. Core lap/clock/finish state is advanced by
 // RaceControl.lineTransition for both callers; this hook handles only the local
 // side effects that cannot live in a physics module.
 function onIncidentLineCross(c, cross, newS) {
-  if (!c || !cross) return;
+  if (!c || !cross || RaceControl.deferLine(c, cross, newS, onIncidentLineCross)) return;
   if (cross.direction < 0) {
     if (cross.changed && c.isPlayer) {
       sectorIdx = sectorAt(newS); sectorStartT = c.lapTime; sectorValid = false;
@@ -4349,7 +4361,9 @@ function update(dt) {
     const s = cars[i];
     s._snapProg = s.prog; s._snapX = s.x; s._snapSpeed = s.speed;
   }
+  RaceControl.beginLineStep(cars);
   for (const c of cars) updateCar(c, dt, ranked);
+  RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
   collide.resolveCollisions(ranked, dt);
 
@@ -4367,6 +4381,7 @@ function update(dt) {
     DebrisWorld.step(dt);
   }
   incidentSim.postStep(dt);
+  RaceControl.endLineStep();
 
   // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
@@ -5909,26 +5924,13 @@ function updateCar(c, dt, ranked) {
     const lapValid = !c.incidentInvalidLap && !(c.isPlayer && coach.practiceActive());
     // The flag: the distance, or the leader already home (RaceControl.flagOut —
     // a lapped car is flagged at its next crossing, not after the full count).
-    const flagged = lineCross.flagged;
+    lineCross.lapValid = lapValid && c.lap > 1 && !lineCross.recross;
     if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
       else if (c.isPlayer && isQuali()) c.qualiCut = true;   // ANY deleted quali lap (a takeover, a practice rewind — not only a cut) is NO TIME, never the model's
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
-      // Tell the rival about our lap. Times are authored by whoever OWNS the
-      // car — nobody else can time it — and go over the reliable channel,
-      // because a dropped lap time is a wrong RESULT, not a momentary glitch.
-      // `fin` is OUR finishT at the crossing that ends the race: the remote's
-      // pose-time stamp is one interp delay late (netplay.js poseRemote).
-      // A DELETED lap (a track-limits strike now deletes race laps too) still
-      // carries the finish stamp when it is the flag lap — as the incident path
-      // does — with a null time so the rival's timing never adopts it.
-      if ((lapValid || flagged) && c.local && netPlay.active()) {
-        netPlay.reportLap(lapValid
-          ? { lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: flagged ? c.finishT : undefined }   // finishT: the in-step crossing, as classified locally
-          : { lap: c.lap, time: null, best: isFinite(c.best) ? c.best : null, code: c.code, fin: c.finishT, invalid: true });
-      }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else restartTTRecorders(); }
     } else if (c.isPlayer && isTimeTrial()) {
       restartTTRecorders();
@@ -5938,7 +5940,7 @@ function updateCar(c, dt, ranked) {
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
     if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
-    if (flagged && c.isPlayer && !raceRadio.callsResult()) announce("FINISH!", 2, "race");   // the engineer's result call IS the flag card (RaceRadio.callsResult)
+    onCarLineFinish(c, lineCross);
   } else if (lineCross && lineCross.direction < 0) {
     // Backward over the line: give the lap back and put the clock where it was,
     // so the next forward crossing re-times the SAME lap rather than a sliver.
@@ -8863,7 +8865,7 @@ customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips
 // under the display code and a custom-code edit split the player in two.
 // Not over a season load() refused to write back (lossy: a circuit this build
 // does not know) — saving it here erased that circuit, or blanked a finished season.
-if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); if (!SeasonCal.lastLoadLossy()) SeasonCal.save(season); }
+if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); if (!SeasonCal.lastLoadLossy()) SeasonCal.save(season, { migration: true }); }
 teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
