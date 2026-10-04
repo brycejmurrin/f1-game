@@ -448,6 +448,15 @@ TUNE_DEFS default  →  file "*"  →  file "track|tod|wx"  →  player localSto
   - `"*"` — a **global baseline** applied to every condition (currently `carGloss: 0.35` near-matte paint, plus the shipped broadcast HDR grade: blacks/shadows/midtones/highlights/whites/toe/shoulder and small gainR/gainB trims).
   - `"track|tod|wx"` — a per-condition override that wins over `"*"`.
 - A player's live tuner edits always win over the file; RESET falls back to the file.
+- **The sun is keyed by track × time of day.** `sunElev` / `sunAzim` resolve from the
+  `"track|tod|dry"` profile for every weather (shipped and player layers alike), and the
+  tuner writes them there whatever the weather on screen — weather does not move the sun.
+  A weather's own look is its tint: `sunTemp`, `keyMul`, `weatherSunMute`.
+  `light-presets.test.mjs` fails a shipped non-dry profile that sets either.
+- **A weather-arc stage flip cross-fades every knob** over the 25 s `WX_BLEND_S` window
+  (`js/lighting/atmosphere.js`), except the lamp `rebuild` knobs and the bake inputs
+  (`lampNearClamp`, `lampBake`, `tailLightEmit`), which hold their session values until the
+  next un-blended apply (a chip, a slider, a track load) so a mid-race flip never re-bakes.
 
 **Key format:** `trackId|timeOfDay|weather`
 - `timeOfDay` ∈ `dawn | day | dusk | night`  (the session "default" resolves to the track's own day/night)

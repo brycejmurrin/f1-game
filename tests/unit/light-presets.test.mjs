@@ -154,17 +154,22 @@ test("no preset sets a condition-gated knob where its gate is shut (dead entries
   //    arcSeq), so only "rain" profiles are ever read.
   //  - nightAmbLift: read only by _nightAmbientBand() (js/game.js), which
   //    atmosphere.js calls for night sessions alone.
+  //  - sunElev / sunAzim: keyed by track x time of day (js/lighting/profiles.js
+  //    keyFor) — every weather reads the "|dry" profile's value.
   // 12 overcast lightning and 44 dawn|wet nightAmbLift entries were deleted
-  // 2026-10-04 (review-wgx-lighting item 16).
+  // 2026-10-04 (review-wgx-lighting item 16), and 70 per-weather sun offsets
+  // with the track x tod sun (item 2).
   const src = read("js/game.js");
   assert.match(src, /if \(raining && _ltBase && LT\.lightning > 0\)/, "the lightning gate moved — re-check this test");
   assert.match(read("js/lighting/atmosphere.js"), /if \(isNightSession\) _nightAmbientBand\(\);/, "the night-band gate moved — re-check this test");
+  assert.match(read("js/lighting/profiles.js"), /const TOD_KEYED = new Set\(\["sunElev", "sunAzim"\]\);/, "the sun keying moved — re-check this test");
   const P = presets(), dead = [];
   for (const [key, o] of Object.entries(P)) {
     const [, tod, wx] = key.split("|");
     if (!wx) continue;
     if ("lightning" in o && wx !== "rain") dead.push(`${key}.lightning`);
     if ("nightAmbLift" in o && tod !== "night") dead.push(`${key}.nightAmbLift`);
+    for (const id of ["sunElev", "sunAzim"]) if (id in o && wx !== "dry") dead.push(`${key}.${id}`);
   }
   assert.deepEqual(dead, [], "a preset sets a knob its condition never reads");
 });
