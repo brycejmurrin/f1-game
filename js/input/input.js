@@ -69,7 +69,11 @@ const Input = (function () {
   let padBrake = false;
   let padThrottleVal = 0;
   let padBrakeVal = 0;
-  let padPrevButtons = [];     // previous frame's pressed state, for rising edges
+  let padPrevButtons = [];     // previous frame's pressed state, for rising edges — the ACTIVE pad's
+  // One array PER PAD: pickPad can hand a different pad each frame (newest
+  // timestamp), and a single shared array let pad B's frame overwrite pad A's
+  // held Start, so one press fired twice (pause, unpause).
+  const padPrevByIndex = new Map();
   let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
   let padDpadT = 0;            // last d-pad ramp timestamp, ms
   /* THE DRIVING DEAD ZONE IS A PLAYER KNOB WITH A SMALL DEFAULT, and the two
@@ -467,7 +471,7 @@ const Input = (function () {
   }
 
   const bindings = InputBindings.create({
-    onKeysChanged() { keyLeft = keyRight = keyThrottle = keyBrake = false; },
+    onKeysChanged() { keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; },
     onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; },
     activePad,
   });
@@ -687,7 +691,7 @@ const Input = (function () {
        treating it as "let go of everything" free of side effects. Alt gets the
        same treatment for Alt+Tab on Windows, for the same reason. */
     if (down && (e.code === "MetaLeft" || e.code === "MetaRight" || e.code === "AltLeft" || e.code === "AltRight")) {
-      keyLeft = keyRight = keyThrottle = keyBrake = false;
+      keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false;   // look-back is held too
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
         driving gate — but still below a TEXT-FIELD check, because P in a field
@@ -951,7 +955,7 @@ const Input = (function () {
       }
       return null;
     }
-    return pickPad(pads);
+    return pickPad(pads, !!axisCaptureCb || !padAxesAreDefault());
   }
   /* WHICH PAD DRIVES. getGamepads() lists pads in connection-slot order, so
      first-connected-wins lets a wheel base, a flight stick or an idle second
@@ -959,15 +963,19 @@ const Input = (function () {
      index in this file assumes, so it ranks first; among equals the most
      recently USED one wins (Gamepad.timestamp advances on each state change),
      and slot order breaks exact ties so an idle pair stays stable.
+     EXCEPT once a WHEEL is set up (a saved non-default axis map) or its wizard
+     is capturing: a wheel reports mapping "" and an idle Xbox pad beside it
+     won every frame, so the wheel the player had just mapped drove nothing
+     and the wizard captured the pad's axes instead.
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/mapping
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
-  function pickPad(pads) {
+  function pickPad(pads, preferWheel) {
     if (!pads) return null;
     let best = null, bestStd = false, bestT = -Infinity;
     for (let i = 0; i < pads.length; i++) {
       const p = pads[i];
       if (!p || !p.connected) continue;
-      const std = p.mapping === "standard";
+      const std = (p.mapping === "standard") !== !!preferWheel;   // "ranks first", flipped for a wheel
       const t = Number.isFinite(p.timestamp) ? p.timestamp : 0;
       if (!best || (std && !bestStd) || (std === bestStd && t > bestT)) { best = p; bestStd = std; bestT = t; }
     }
@@ -1044,6 +1052,10 @@ const Input = (function () {
       padConnected = true;   // fall through and read it this frame
     }
     const pad = activePad();
+    if (pad) {
+      if (!padPrevByIndex.has(pad.index)) padPrevByIndex.set(pad.index, []);
+      padPrevButtons = padPrevByIndex.get(pad.index);
+    }
     if (!pad) {
       padConnected = false;
       padSteer = 0; padThrottle = false; padBrake = false;
@@ -1052,6 +1064,7 @@ const Input = (function () {
       lookStickX = 0; lookStickY = 0;
       padDpadVal = 0; padDpadT = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
+      padPrevByIndex.clear();
       padMenu.reset();
       if (inputSource === "controller") inputSource = null;
       return;
@@ -1705,6 +1718,7 @@ const Input = (function () {
       padSteerAnalog = false; padLookBack = false;
       padDpadVal = 0; padDpadT = 0;
       padPrevButtons.length = 0;
+      if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
       padMenu.reset();
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
