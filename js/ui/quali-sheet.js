@@ -14,6 +14,10 @@ function span(cls, text) {
 function create(G) {
   Log.info("ui", "QualiSheet.create");
   const { $ } = G;
+  // POLE to the thousandth, like the +0.123 gaps under it: G.fmtTime is the
+  // two-decimal HUD clock (js/game.js), and a classification printed 1:21.16
+  // over a +0.004 gap. Dom.fmtLap is the timing-sheet formatter.
+  const poleClock = (t) => (typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "-") : G.fmtTime(t));
 
   // Paint `rows` (the model's classification, car refs already dropped) into
   // #q-table and retitle. null rows clear the table — the sheet opening on an
@@ -36,7 +40,7 @@ function create(G) {
       sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
       const nm = span("res-name", `${r.code}  ${r.name}`);
       if (driven) nm.appendChild(span("q-real-tag", " DRIVEN"));
-      const tm = span("res-pts q-time", r.noTime ? "NO TIME" : r.pos === 1 ? G.fmtTime(r.t) : `+${r.gap.toFixed(3)}`);
+      const tm = span("res-pts q-time", r.noTime ? "NO TIME" : r.pos === 1 ? poleClock(r.t) : `+${r.gap.toFixed(3)}`);
       row.append(span("res-pos", r.pos), sw, nm, tm);
       body.appendChild(row);
     }

@@ -653,3 +653,19 @@ test("RESULTS: your row keeps its lime ink and OPAQUE sticky ground on the podiu
   }
   assert.match(winner(["res-row", "you"], "border-left").value, /var\(--you\)/, "off the podium, your row draws its own lime rule");
 });
+
+// A CLASSIFICATION READS TO THE THOUSANDTH. The TIME TRIAL board and YOUR BEST
+// used G.fmtTime, the two-decimal HUD clock, so two board entries 0.004 s apart
+// printed as the same time. The sheets use Dom.fmtLap; the HUD keeps its clock.
+test("the TIME TRIAL sheet prints YOUR BEST and the board to the thousandth", () => {
+  const h = bootResults({ season: null, cars: [], seasonMode: false,
+    globals: { GhostShare: { hasGuest: () => false }, Ghost: { hasGhost: () => false, bestTime: () => Infinity, clear() {}, snapshot: () => null } } });
+  Object.assign(h.G, {
+    player: { best: 81.1634 }, ttNewRecord: false, ttSessionTs: 10, fmtTime: (t) => t.toFixed(2),
+    records: { board: () => [{ t: 81.1634, code: "AAA", name: "Alpha", teamId: "red", ts: 11 }, { t: 81.1674, code: "BBB", name: "Bravo", teamId: "blue", ts: 1 }] },
+    teamById: () => null,
+  });
+  h.api.buildTTResults();
+  const pts = h.els.resultsTable.children.flatMap((r) => r.children || []).filter((c) => c.classList.contains("res-pts")).map((c) => c.textContent);
+  assert.deepEqual(pts, ["1:21.163", "1:21.163", "1:21.167"], "two laps 0.004 s apart must not print alike");
+});

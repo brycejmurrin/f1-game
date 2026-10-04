@@ -14,6 +14,13 @@ function correctedFinish(c) {
   return c.finishT + c.penalty;
 }
 
+// A CLASSIFICATION reads to the thousandth. G.fmtTime is the HUD clock (two
+// decimals by design, js/game.js), and on these sheets two laps 0.004 s apart
+// printed identically. Dom.fmtLap is the timing-sheet formatter (1:21.163).
+function lapClock(G, t) {
+  return typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "-") : G.fmtTime(t);
+}
+
 function raceClock(G, seconds) {
   if (!(typeof seconds === "number" && isFinite(seconds) && seconds > 0)) return null;
   if (G && typeof G.fmtTime === "function") return G.fmtTime(seconds);
@@ -393,7 +400,7 @@ function buildTTResults() {
   const hl = document.createElement("span"); hl.className = "res-name";
   hl.textContent = G.ttNewRecord ? "★ NEW RECORD" : "YOUR BEST";
   const hv = document.createElement("span"); hv.className = "res-pts"; hv.style.width = "auto";
-  hv.textContent = isFinite(best) ? G.fmtTime(best) : "-";
+  hv.textContent = isFinite(best) ? lapClock(G, best) : "-";
   head.append(hl, hv);
   els.resultsTable.appendChild(head);
 
@@ -431,7 +438,7 @@ function buildTTResults() {
     if (held) ml.style.color = `var(--${held})`;
     const mv = document.createElement("span"); mv.className = "res-pts"; mv.style.width = "auto";
     const next = Quali.MEDALS.slice().reverse().find(([m]) => !held || Quali.MEDAL_RANK[m] > Quali.MEDAL_RANK[held]);
-    mv.textContent = next ? `NEXT ${next[0].toUpperCase()} ≤ ${G.fmtTime(pole * next[1])}` : `POLE ${G.fmtTime(pole)}`;
+    mv.textContent = next ? `NEXT ${next[0].toUpperCase()} ≤ ${lapClock(G, pole * next[1])}` : `POLE ${lapClock(G, pole)}`;
     mr.append(ml, mv);
     els.resultsTable.appendChild(mr);
   }
@@ -448,7 +455,7 @@ function buildTTResults() {
     const team = G.teamById(e.teamId);
     const name = `${e.code}  ${e.name}${team ? `  · ${team.short}` : ""}`;
     const row = rankRow(els.resultsTable, i, G.cssCol(team ? team.color : [0.5, 0.5, 0.5]), name,
-      G.fmtTime(e.t), e.ts >= G.ttSessionTs ? " you" : "");
+      lapClock(G, e.t), e.ts >= G.ttSessionTs ? " you" : "");
     row.querySelector(".res-pts").style.width = "auto";
   });
 
