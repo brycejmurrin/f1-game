@@ -675,6 +675,8 @@ interface GameCtx {
   readonly announce: (msg: string, dur?: number, kind?: string, still?: () => boolean) => boolean;
   readonly applyCaution: (d: unknown) => void;
   readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
+  /** The interpolated pose a car is drawn at this frame (pooled; read it at once): the TV director's subject. */
+  readonly camPoseOf: (c: CarState) => { s: number; x: number; carPos: number[] | null; carHead: number };
   readonly endRace: (forcedOrder?: CarState[]) => void;
   readonly gridUp: (preOrder?: CarState[]) => void;
   readonly gripMult: (c?: any) => number;
