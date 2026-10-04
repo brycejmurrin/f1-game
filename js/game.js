@@ -4133,12 +4133,12 @@ function quitToMenu() {
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();
   qualiSheet.close();
-  _ltBase = null; _ltFlash = 0; _ltNextT = 0; _thunderT = -1;   // the lightning's saved race base, and a queued strike or thunder, are not the menu's
+  _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
   mirrorPass.cancelPreparation();
-  closeLightTuner(false);
+  closeLightTuner(false); _ltNextT = 0; _thunderT = -1;   // a queued strike or thunder is not the menu's either
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
   // stop is clearMenuScreens(), which startRaceBody() reaches near the END of

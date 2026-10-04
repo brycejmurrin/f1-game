@@ -126,9 +126,23 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);
-    await page.evaluate(() => document.getElementById("pm-resume").click());
+    await clickLive(page, "pm-resume");
     await page.waitForFunction(() => window.__wakeLog.length >= 3, null, WAIT);
 
+    expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release", "request:screen"]);
+  });
+
+  test("pausing releases it; resuming re-acquires it", async ({ page }) => {
+    // The pause card can sit for minutes; holding the screen awake under it
+    // drained a phone for nothing (game.js setPaused, review 2026-10-04).
+    await mockWakeLock(page);
+    await boot(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"), null, WAIT);
+    await clickLive(page, "pausebtn");
+    await page.waitForFunction(() => window.__wakeLog.length >= 2, null, WAIT);
+    await clickLive(page, "pm-resume");
+    await page.waitForFunction(() => window.__wakeLog.length >= 3, null, WAIT);
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release", "request:screen"]);
   });
 
