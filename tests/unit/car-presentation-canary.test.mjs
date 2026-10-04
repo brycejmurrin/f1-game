@@ -71,7 +71,9 @@ test("AI world pose is mirrored after this step's (s, x) writes", () => {
   const game = read("js/game.js");
   const fn = game.match(/function updateCar\([\s\S]*?\nfunction rescuePlayer/);
   assert.ok(fn, "updateCar body present");
-  const adv = fn[0].indexOf("if (!c.human) c.s = wrapS(c.s + c.speed * dt);");
+  // The advance pays the Frenet stretch since 2026-10-04 (verify-physics #2): ground ÷ h.
+  const adv = fn[0].indexOf("if (!c.human) c.s = wrapS(c.s + c.speed * dt / hAi);");
+  assert.match(fn[0], /const hAi = c\.human \? 1 : frenetH\(c\.s, c\.x\);/);
   const mirror = fn[0].lastIndexOf("if (!c.human) {\n    const w = worldFromTrack(c.s, c.x, smp);");
   assert.ok(adv >= 0, "AI advances s in Frenet");
   assert.ok(mirror > adv, "px/pz mirror must follow the s advance (and rescue)");
