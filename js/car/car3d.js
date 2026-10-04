@@ -685,7 +685,10 @@ const Car3D = (function () {
   // Number board anchored low on the plate; shrinks on the tier-0 plank.
   function numberBoard(aLvl, style) {
     const ep = endplateGeom(aLvl, style), gap = 0.05;
-    const h = Math.min(0.20, Math.max(0.12, ep.sy - gap - 0.02));
+    // Cap with mid front/rear height so the board stays inside the plate
+    // (parts-physics boardInside) — on sy 0.22, ep.sy-gap-0.02 alone overshoots.
+    const midH = ((ep.front.top - ep.front.bottom) + (ep.rear.top - ep.rear.bottom)) * 0.5;
+    const h = Math.min(0.20, Math.max(0.12, Math.min(ep.sy - gap - 0.02, midH - 2 * gap - 0.008)));
     return { cy: ep.cy - ep.sy * 0.5 + gap + h * 0.5, h };
   }
   // The blade OUTLINES a livery may pick (liv.finShape). "standard" is the one
@@ -2605,9 +2608,11 @@ const Car3D = (function () {
               [0.16, 0.16, 0.17], SURFACES.metal);
     } else {
     const exhBore = Math.max(0.7, Math.min(1.5, exhStyle.bore));
-    const exhR0 = (engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
-                          : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07)) * exhBore;
-    const exhR = exhTwin ? Math.max(exhR0, 0.095) : exhR0;
+    // Floor the BASE radius for twins, then scale by bore — clamping after bore
+    // collapsed hyper_scav (1.30) onto sig_audi_exh (1.133) at 0.095.
+    const exhBase = engStyle ? (engStyle.twin ? 0.09 : (engStyle.in < 0.9 ? 0.05 : 0.07))
+                          : (tier("engine") === 0 ? 0.05 : tier("engine") === 2 ? 0.09 : 0.07);
+    const exhR = (exhTwin ? Math.max(exhBase, 0.076) : exhBase) * exhBore;
     const fuelFlame = fuelStyle && fuelStyle.flame || [1.15, 0.42, 0.14];
     const fTwin = [fuelFlame[0]*0.9, fuelFlame[1]*0.9, fuelFlame[2]*0.9];
     const exhMetal = [0.16, 0.16, 0.17], exhFlareC = [0.18, 0.18, 0.19];
