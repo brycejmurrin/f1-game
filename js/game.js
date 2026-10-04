@@ -4112,9 +4112,10 @@ const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: port
 function syncRotateBlocker(moveFocus) {
   const box = $("rotate-device"); if (!box) return false;
   // Does the GATE want to show? css/responsive.css hides it under the pause card, which this function decides about: probe past that rule.
-  document.body.classList.add("rotate-probe");
+  const probe = typeof document !== "undefined" && document.body ? document.body.classList : null;   // none in the node VM harnesses
+  if (probe) probe.add("rotate-probe");
   const active = getComputedStyle(box).display !== "none";
-  document.body.classList.remove("rotate-probe");
+  if (probe) probe.remove("rotate-probe");
   // From the INTENT, not this instant's paint: a nested call (setPaused re-enters with the card up) read "hidden" and left the shown gate aria-hidden.
   box.setAttribute("aria-hidden", active ? "false" : "true");
   // The pause CARD and an active blocker never share the screen. #pausemenu is
