@@ -247,4 +247,9 @@ test("SAFETY CAR QUEUE (B5.13): the leader runs SC pace, a car > 1 s adrift clos
   const bumper = { prog: p3.prog + 0.4 };
   const far = { prog: p3.prog + 3 * q };
   assert.equal(RC.scQueueFrac(p3, [p3, bumper, far], 5000, leader, vTop), RC.SC_PACE, "0.4 m ahead: already queued");
+  // The LEADER pits: the first car on track is the front of the queue, not a
+  // car chasing the tail of the field a lap away.
+  const inLane = (o) => o === leader;
+  assert.equal(RC.scQueueFrac(p2, cars, 5000, leader, vTop, inLane), RC.SC_PACE, "P2 leads the queue while P1 pits");
+  assert.equal(RC.scQueueFrac(p3, cars, 5000, leader, vTop, inLane), RC.SC_CATCH, "the rest still close up");
 });
