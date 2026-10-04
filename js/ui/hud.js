@@ -13,6 +13,8 @@ const _rmq = (typeof window !== "undefined" && window.matchMedia)
 const motionReduced = () => !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
 
+// GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
+let _invalidateFit = null;
 function create(G) {
 Log.info("ui", "GameHud.create");
 
@@ -391,6 +393,43 @@ function syncComputedRootVars() {
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
+// THE BUDGET IS THE UN-MOVED LAYOUT. MOVE & SIZE (js/ui/hud-layout.js) paints a
+// player offset on top of each element with `translate` / `scale` (data-hl,
+// --hl-x/-y in screen %, --hl-s, origin --hl-o), and getBoundingClientRect
+// includes both. Budgeting fitHud's bands from those rects made a moved map or
+// a SIZE-200 gearbox shrink the WHOLE band, the pedals and the safe-area
+// insets, so fitHud asks every rect it budgets of the layout the offset sits on.
+// Undone in arithmetic rather than by stripping data-hl for a measuring pass:
+// no style churn, no MutationObserver traffic, nothing a transition could catch
+// mid-way. The screen translate is exactly --hl-x% of innerWidth (the CSS divides
+// by the band zoom for that; HudLayout.fit corrects in the same units). A scale
+// about origin O maps the un-moved box U to O + t + s*(U - O); O sits in the box
+// BEFORE the element's own `transform` (the centred pieces' translateX(-50%)),
+// whose shift d is read as a share of the layout box, so
+// U.left = moved.left - t + (fx*w - d)*(s - 1).
+const _HL_O = { left: 0, right: 1, top: 0, bottom: 1 };
+function layoutRect(el) {
+  const r = el.getBoundingClientRect();
+  if (!r.width || !el.hasAttribute || !el.hasAttribute("data-hl")) return r;
+  const st = el.style, s = +st.getPropertyValue("--hl-s") || 1;
+  const w = r.width / s, h = r.height / s;
+  let left = r.left - (+st.getPropertyValue("--hl-x") || 0) * window.innerWidth / 100;
+  let top = r.top - (+st.getPropertyValue("--hl-y") || 0) * window.innerHeight / 100;
+  if (s !== 1) {
+    let fx = 0.5, fy = 0.5, dx = 0, dy = 0;
+    for (const k of String(st.getPropertyValue("--hl-o") || "").trim().split(/\s+/)) {
+      if (k === "left" || k === "right") fx = _HL_O[k]; else if (k === "top" || k === "bottom") fy = _HL_O[k];
+    }
+    const m = typeof getComputedStyle === "function" ? /matrix\(([^)]*)\)/.exec(getComputedStyle(el).transform || "") : null;
+    if (m) {
+      const v = m[1].split(",").map(Number);
+      if (el.offsetWidth) dx = v[4] / el.offsetWidth * w;
+      if (el.offsetHeight) dy = v[5] / el.offsetHeight * h;
+    }
+    left += (fx * w - dx) * (s - 1); top += (fy * h - dy) * (s - 1);
+  }
+  return { left, top, right: left + w, bottom: top + h, width: w, height: h };
+}
 // THE RADIO CARD'S TOP-ROW SLOT: right of the timing tower, left of the cam /
 // pause buttons, in the tower's own row — off the road and clear of the mirror
 // under the tower (a phone report: the card beside the mirror still sat on the
@@ -412,10 +451,13 @@ function radioTopSlot(root, bcast) {
   const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
   hToggle(document.body, "hud-radio-top", fits);
   if (!fits) return;
+  // MOVE & SIZE then scales the card itself (#announce, origin top left), so
+  // the slot is published at 1/SIZE: the PAINTED card fills it, not s times it.
+  const a = els.announce, as = a && a.style && a.hasAttribute && a.hasAttribute("data-hl") ? +a.style.getPropertyValue("--hl-s") || 1 : 1;
   hStyle(root, "--radio-top-x", x.toFixed(1) + "px");
   hStyle(root, "--radio-top-y", t.top.toFixed(1) + "px");
-  hStyle(root, "--radio-top-w", (right - RADIO_TOP_GAP - x).toFixed(1) + "px");
-  hStyle(root, "--radio-top-h", t.height.toFixed(1) + "px");
+  hStyle(root, "--radio-top-w", ((right - RADIO_TOP_GAP - x) / as).toFixed(1) + "px");
+  hStyle(root, "--radio-top-h", (t.height / as).toFixed(1) + "px");
 }
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
@@ -478,7 +520,7 @@ function fitHud() {
   _fitKey = key; _fitWait = 30;
   const wide = (el) => {
     if (!el) return 0;
-    const r = el.getBoundingClientRect();
+    const r = layoutRect(el);
     if (!r.width) return 0;
     return r.width / (el.currentCSSZoom || 1);
   };
@@ -486,7 +528,7 @@ function fitHud() {
     if (!el) return 0;
     let lo = Infinity, hi = -Infinity;
     for (const c of el.children) {
-      const r = c.getBoundingClientRect();
+      const r = layoutRect(c);
       if (!r.width) continue;
       if (r.left < lo) lo = r.left;
       if (r.right > hi) hi = r.right;
@@ -498,7 +540,16 @@ function fitHud() {
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
   // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
   // 10×/s for as long as the layout stayed empty, i.e. the entire countdown.
-  if (!top) { if (++_fitRetry <= 30) _fitKey = ""; return; }
+  // AN EMPTY TOWER IS NOT AN EMPTY HUD: with POS/LAP/TIME/BEST all switched off
+  // (HUD ELEMENTS) `.hud-top` has no width for the whole race, and returning
+  // here latched with no cap written at all — the dock's included. Only a HUD
+  // with NOTHING laid out returns; an empty tower budgets as zero and falls
+  // through, still retrying (bounded) in case it is merely not populated yet.
+  let retry = !top;
+  if (!top && !wide(els.minimap) && !wide(els.hudSectors) && !span(_hudBottom) && !wide(_dockL) && !wide(_dockR)) {
+    if (++_fitRetry <= 30) _fitKey = "";
+    return;
+  }
   const half = window.innerWidth / 2;
   const map = wide(els.minimap), gaps = wide(els.gapA && els.gapA.parentNode);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
@@ -527,8 +578,8 @@ function fitHud() {
   // rather than on the class, so any future hide rule is covered too; the
   // fallback is the other side's measurement, which is right on every phone
   // whose notch is symmetric in landscape and never worse than 0.
-  const mmR = els.minimap ? els.minimap.getBoundingClientRect() : null;
-  const scR = els.hudSectors ? els.hudSectors.getBoundingClientRect() : null;
+  const mmR = els.minimap ? layoutRect(els.minimap) : null;
+  const scR = els.hudSectors ? layoutRect(els.hudSectors) : null;
   const mz = (els.minimap && els.minimap.currentCSSZoom) || 1;
   const sz = (els.hudSectors && els.hudSectors.currentCSSZoom) || 1;
   const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
@@ -602,7 +653,7 @@ function fitHud() {
   // intrinsic (zoom-invariant) height.
   const tall = (el) => {
     if (!el) return 0;
-    const r = el.getBoundingClientRect();
+    const r = layoutRect(el);
     if (!r.height) return 0;
     return r.height / (el.currentCSSZoom || 1);
   };
@@ -662,8 +713,8 @@ function fitHud() {
   // coordinate space, so the CSS adds its air and nothing else. The BROADCAST
   // tower lives in this column too, so it is a floor on the same measurement.
   const gapsEl = els.gapA ? els.gapA.parentNode : null;
-  const gapsR = gapsEl ? gapsEl.getBoundingClientRect() : null;
-  let leftBot = bcast && _hudTop ? _hudTop.getBoundingClientRect().bottom : 0;
+  const gapsR = gapsEl ? layoutRect(gapsEl) : null;
+  let leftBot = bcast && _hudTop ? layoutRect(_hudTop).bottom : 0;
   if (mmR && mmR.width) leftBot = Math.max(leftBot, mmR.bottom);
   if (gapsR && gapsR.width) leftBot = Math.max(leftBot, gapsR.bottom);
   hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
@@ -763,7 +814,8 @@ function fitHud() {
   // above; a desktop body keeps the backoff, since its docks stay empty
   // forever and re-measuring them every tick is the cost the backoff exists
   // to avoid.
-  if (!dockH && !document.body.classList.contains("desktop")) { if (++_fitRetry <= 30) _fitKey = ""; } else _fitRetry = 0;
+  if (!dockH && !document.body.classList.contains("desktop")) retry = true;
+  if (retry) { if (++_fitRetry <= 30) _fitKey = ""; } else _fitRetry = 0;
   // EACH CAP IS COMPARED AGAINST THE SLIDER THAT DRIVES IT. The readout bands
   // ride --hud-scale; the touch dock rides --hud-btn-scale (BUTTON SIZE, its
   // own slider — css/overlays.css), which defaults to --hud-scale and is only
@@ -1501,9 +1553,15 @@ function resetRace() {
   if (_trace) _trace.reset();
   if (_speak) _speak.reset();
 }
-return { updateHud, invalidateMap, flashSector, resetRace };
+// RE-FIT ON THE NEXT TICK. The fit key reads body.className, but MOVE & SIZE
+// (data-hl on the element) and HUD ELEMENTS (body[data-hud-hide]) change
+// attributes it cannot see, so either waited out the 3 s same-key backoff.
+// HudLayout.apply and HudElements.apply call GameHud.invalidateFit().
+function invalidateFit() { _fitKey = ""; _fitRetry = 0; }
+_invalidateFit = invalidateFit;
+return { updateHud, invalidateMap, flashSector, resetRace, invalidateFit };
 }
 
-return { create };
+return { create, invalidateFit: () => { if (_invalidateFit) _invalidateFit(); } };
 })();
 Object.freeze(GameHud);
