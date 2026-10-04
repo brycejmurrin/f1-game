@@ -575,6 +575,11 @@
 #install-chip {
   position: fixed; z-index: 9000;
   left: calc(var(--sal) + var(--gap)); bottom: calc(var(--sab) + var(--gap));
+  min-height: var(--tap); padding: 0 var(--gap);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+}
 /* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above every
    menu sheet, bottom-right clear of the safe area, a full tap target; never
    shown in a race (the module hides it there). The HUD chip's plate, not the
