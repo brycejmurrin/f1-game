@@ -79,9 +79,16 @@
         ["kyalami-earth-climb", 0.470, 1, 44, 20, 80],     // laterite approach below the climb terrace
       ]) groundPatch(K(s), side, d, [w, 0.16, l], EARTH, { id, samples: 6 });
 
+      // The paddock is on +1 with the engine's pit complex (def `pit.side`:
+      // the outside of the clockwise lap, left of the main straight). The
+      // complex builds the garages 14-27 m out and keeps 30 m of the row's
+      // arc; anything whose footprint enters that is superseded (models.js).
+      // So the brick block and race control stand BEHIND the garages (the
+      // Suzuka idiom), 46 m out, and the block's bays open onto the paddock
+      // (inw = IN(-1): away from the track) rather than at the garage backs.
       {
-        const a = anchor(K(0.982), 1, 16), b = [a.r, a.u, a.t];
-        const bays = 12, pitch = 7.4, len = bays * pitch, inw = IN(1);
+        const a = anchor(K(0.982), 1, 46), b = [a.r, a.u, a.t];
+        const bays = 12, pitch = 7.4, len = bays * pitch, inw = IN(-1);
         modelGroup("kyalami-pit-block", {
           center: vadd(a.c, a.u, 7), size: [20, 15, len + 6], basis: b,
         }, (stage) => {
@@ -112,7 +119,7 @@
         }, { required: true });
       }
       {
-        const a = anchor(K(0.999), 1, 20), b = [a.r, a.u, a.t], inw = IN(1);
+        const a = anchor(K(0.999), 1, 46), b = [a.r, a.u, a.t], inw = IN(1);
         modelGroup("kyalami-race-control", {
           center: vadd(a.c, a.u, 15), size: [20, 34, 18], basis: b,
         }, (stage) => {
@@ -204,11 +211,10 @@
       // place the main spectator bank on the pit-straight (exact bay count and
       // seat total not surveyed — length kept modest ~80 m).
       // Emit body lives in a local fn so BATCH-01's 2200-char required window fits.
-      // Side +1: the engine pit lane + garages (track.pit, s 4150 -> 200 m) run
-      // on -1, so the -1 site sat on the pit lane, its onTrack guard tripped,
-      // and this REQUIRED stand was never emitted (measured 2026-10-04).
+      // Side -1, opposite the pit complex on +1 (def `pit.side`). 16 m out:
+      // the slab's track edge clears the sponsor hoarding 7 m out.
       {
-        const side = 1, dist = 14;
+        const side = -1, dist = 16;
         const a = anchor(K(0.950), side, dist);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t], inw = IN(side);
@@ -494,12 +500,12 @@
       spectatorHill(0.405, 0.425, -1, 22, { ...BANK, density: 0.22 }); // T5 Clubhouse (0.4115)
 
       // 2d. Modern paddock (2015-16 Porsche SA rebuild): glazed hospitality
-      //     units in the paddock BEHIND the engine-built garages (side -1,
-      //     track.pit's working lane ends 14 m out). Non-required kit.
+      //     units in the paddock BEHIND the engine-built garages and the brick
+      //     block (side +1, the block 40-52 m out). Non-required kit.
       if (circuitKit) {
-        circuitKit.hospitality({ id: "kit:kyalami:hospitality-a", frac: 0.012, side: -1, gap: 44,
+        circuitKit.hospitality({ id: "kit:kyalami:hospitality-a", frac: 0.012, side: 1, gap: 58,
           size: [16, 9, 44], modules: 5 });
-        circuitKit.hospitality({ id: "kit:kyalami:hospitality-b", frac: 0.976, side: -1, gap: 44,
+        circuitKit.hospitality({ id: "kit:kyalami:hospitality-b", frac: 0.976, side: 1, gap: 58,
           size: [16, 9, 40], modules: 4 });
       }
       // Kyalami International Convention Centre: a long, low exhibition hall
