@@ -17,10 +17,13 @@ and Meta IWER 2.5.0 behaviour under SwiftShader.
 
 ## IWER / CI only
 
+- The lifecycle suite seeds the existing LOW graphics preset and pins render scale to 0.5 before session attach, with assertions on the actual canvas dimensions. IWER shares that drawing buffer; TLX cannot resize it after attach. The full-resolution fixture stalled the page timers on CI even with one CDP evaluation (jobs 111165229602 and 111165039325). Frame progress still requires more than the requested delta within 45 seconds. This fixture covers sessions, pose, controls and stereo at constrained software-rendered resolution; it does not qualify desktop HIGH quality or headset performance.
+
 - `installRuntime({ forceInstall: true })` + `stereoEnabled = true` (Chrome ≥147 has stub/native `navigator.xr`).
 - IWER `XRWebGLLayer.framebuffer` is **null** → three `WebGLState.drawBuffers` WeakMap throws every frame. TLX remaps `backend.state.currentDrawbuffers` to a `Map` when the FBO is null (emulation-only; Quest gives a real FBO).
 - IWER cannot test projection layers, multiview, MSAA>1, foveation effect, or `XRGPUBinding`.
 - **Do not** use the Chrome Web Store Immersive Web Emulator on Chrome 147+ (three [#33414](https://github.com/mrdoob/three.js/issues/33414)); use pinned `tests/vendor/iwer-*.min.js` in Playwright.
+- Real immersive sessions own their XR frame clock; pinned IWER instead drives its callbacks through window.rAF and synchronous GL work. `page.waitForFunction` polling stalled in CI run 37083868797; repeated CDP frame-count polling also stalled at base 0 / count 2 in CI job 111141505102. `waitXrFrames` in `tests/helpers/iwer-install.mjs` now captures the baseline and polls with page timers inside one evaluation, following the single-promise approach recorded in commit `d08906b2a`. Its initial 2-second settle is inside the unchanged 45-second budget. A Node watchdog enforces that budget even when the page or timers stop responding. Success still requires `frameCount > baseline + delta` before the deadline. Never add a competing `session.requestAnimationFrame` waiter: IWER callback scheduling can interfere with the game loop. Software-GL cold ticks are slow; emulation is not evidence of headset frame times.
 
 ## On-device
 

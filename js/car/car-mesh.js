@@ -14,6 +14,9 @@ const CAR_DECAL_CACHE_MAX = 24;
 // indexOf+splice reorder on every hit; a race uses only a handful of distinct
 // (level, fin, drs, anchor) keys, far under the 24-entry cap, so eviction —
 // and the FIFO/LRU distinction — is never reached in practice.
+// Is this decal sheet for the ROUNDED car? The same switch Car3D.build reads
+// (CarShade.on(teamId)); an imported body never is.
+const decalRound = (legacyBody, teamId) => !legacyBody && typeof CarShade !== "undefined" && CarShade.on(teamId);
 function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
@@ -24,7 +27,10 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   const anchorParts = legacyBody ? null : parts;
   // spineHeight lifts the engine-cover crown the spine crest sits on (cf/cr
   // below read coverAt().top), so the decal takes the same anchors as the mesh.
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight) : null;
+  // `round`: the rounded car (CarShade on for this team, as Car3D.build decides
+  // it) carries the coke-bottle cover and the downwash ramp in its anchors.
+  const round = decalRound(legacyBody, teamId);
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, round) : null;
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
   const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / SH, vB: 1 - (r.y + r.h) / SH });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
@@ -43,6 +49,15 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     for (let k = 0; k < 4; k++) {
       out.pos.push(c[k][0], c[k][1], c[k][2]);
       out.nrm.push(n[0], n[1], n[2]);
+      out.uv.push(uvs[k][0], uvs[k][1]);
+    }
+    out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  };
+  const quadN = (c, ns, uvs) => {   // quadUv with a normal per corner: a strip that bends shades as one
+    const i = out.pos.length / 3;
+    for (let k = 0; k < 4; k++) {
+      out.pos.push(c[k][0], c[k][1], c[k][2]);
+      out.nrm.push(ns[k][0], ns[k][1], ns[k][2]);
       out.uv.push(uvs[k][0], uvs[k][1]);
     }
     out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
@@ -140,22 +155,49 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     // coplanar with it (0.9 mm) and the hatches stand 9 mm proud of it.
     const sZ = [-0.66, -1.90], V_TOP = 0.96, V_BOT = 0.06;
     const PROUD = (Car3D.COVER_STACK && Car3D.COVER_STACK.flankDecal) || 0.014;
+    // The rounded car's flank runs from its pinched FOOT (coverProfile pts[0],
+    // the coke-bottle xb) to the shoulder (pts[1]); the flat car's is 0.28x lean.
+    const foot = (p) => (round && p.pts ? p.pts[0][0] : p.x);
     const flank = (z) => {
       const c = anchors ? anchors.coverAt(z) : (z > -1 ? { x: 0.27, bottom: 0.20, top: 0.81 } : { x: 0.20, bottom: 0.23, top: 0.69 });
       const p = Car3D.coverProfile ? Car3D.coverProfile(c) : { x: c.x, bottom: c.bottom, shoulder: c.top };
-      const h = p.shoulder - p.bottom, nl = Math.hypot(h, 0.28 * p.x), nx = h / nl, ny = 0.28 * p.x / nl;
-      const at = (v) => [p.x * (1 - 0.28 * v) + nx * PROUD, p.bottom + h * v + ny * PROUD];
+      const lean = round && p.pts ? p.pts[0][0] - p.pts[1][0] : 0.28 * p.x;
+      const h = p.shoulder - p.bottom, nl = Math.hypot(h, lean), nx = h / nl, ny = lean / nl;
+      const at = (v) => [(round && p.pts ? foot(p) - lean * v : p.x * (1 - 0.28 * v)) + nx * PROUD, p.bottom + h * v + ny * PROUD];
       return { b: at(V_BOT), t: at(V_TOP), nx, ny };
     };
-    const a = flank(sZ[0]), b = flank(sZ[1]);
-    quad([[a.b[0], a.b[1], sZ[0]], [b.b[0], b.b[1], sZ[1]], [b.t[0], b.t[1], sZ[1]], [a.t[0], a.t[1], sZ[0]]],
-         [a.nx, a.ny, 0], R.spineSide);
-    // Under the det −1 model matrix the +x quad above renders as the car's
-    // RIGHT flank (canvas-left at the rear) and this −x quad as its LEFT
-    // (canvas-left at the front) — LiveryTex.FLANKS authors each in that
-    // side's outside view. A stale atlas without this region mirrors the first.
-    quad([[-b.b[0], b.b[1], sZ[1]], [-a.b[0], a.b[1], sZ[0]], [-a.t[0], a.t[1], sZ[0]], [-b.t[0], b.t[1], sZ[1]]],
-         [-a.nx, a.ny, 0], R.spineSideL || R.spineSide);
+    if (round && typeof CarShade !== "undefined" && CarShade.COVER_Z) {
+      // ROUNDED: the coke pinch curves the foot between stations, and one
+      // straight quad edge from -0.66 to -1.90 is a chord across that curve:
+      // measured, up to 40 mm off the skin at the waist (coke 1.38) against
+      // 14 mm at its ends, so the band floats free. So the band is a strip of
+      // sub-quads at the rings the cover is lofted at (CarShade.COVER_Z), u by
+      // z and a normal per corner, which keeps it its PROUD off the skin.
+      const zs = [sZ[0]].concat(CarShade.COVER_Z.filter((z) => z < sZ[0] && z > sZ[1]), [sZ[1]]);
+      const F = zs.map(flank), f = (z) => (sZ[0] - z) / (sZ[0] - sZ[1]);   // 0 at the front, 1 at the rear
+      const uR = uvOf(R.spineSide), uL = uvOf(R.spineSideL || R.spineSide);
+      const uRight = (z) => uR.uR + (uR.uL - uR.uR) * f(z), uLeft = (z) => uL.uL + (uL.uR - uL.uL) * f(z);
+      for (let i = 0; i < zs.length - 1; i++) {
+        const a = F[i], b = F[i + 1], za = zs[i], zb = zs[i + 1];
+        // Same corner order and u pre-flip as the flat quads below: +x front at uR, -x front at uL.
+        quadN([[a.b[0], a.b[1], za], [b.b[0], b.b[1], zb], [b.t[0], b.t[1], zb], [a.t[0], a.t[1], za]],
+              [[a.nx, a.ny, 0], [b.nx, b.ny, 0], [b.nx, b.ny, 0], [a.nx, a.ny, 0]],
+              [[uRight(za), uR.vB], [uRight(zb), uR.vB], [uRight(zb), uR.vT], [uRight(za), uR.vT]]);
+        quadN([[-b.b[0], b.b[1], zb], [-a.b[0], a.b[1], za], [-a.t[0], a.t[1], za], [-b.t[0], b.t[1], zb]],
+              [[-b.nx, b.ny, 0], [-a.nx, a.ny, 0], [-a.nx, a.ny, 0], [-b.nx, b.ny, 0]],
+              [[uLeft(zb), uL.vB], [uLeft(za), uL.vB], [uLeft(za), uL.vT], [uLeft(zb), uL.vT]]);
+      }
+    } else {
+      const a = flank(sZ[0]), b = flank(sZ[1]);
+      quad([[a.b[0], a.b[1], sZ[0]], [b.b[0], b.b[1], sZ[1]], [b.t[0], b.t[1], sZ[1]], [a.t[0], a.t[1], sZ[0]]],
+           [a.nx, a.ny, 0], R.spineSide);
+      // Under the det −1 model matrix the +x quad above renders as the car's
+      // RIGHT flank (canvas-left at the rear) and this −x quad as its LEFT
+      // (canvas-left at the front) — LiveryTex.FLANKS authors each in that
+      // side's outside view. A stale atlas without this region mirrors the first.
+      quad([[-b.b[0], b.b[1], sZ[1]], [-a.b[0], a.b[1], sZ[0]], [-a.t[0], a.t[1], sZ[0]], [-b.t[0], b.t[1], sZ[1]]],
+           [-a.nx, a.ny, 0], R.spineSideL || R.spineSide);
+    }
   }
   // The fin's blade height is a recipe knob, so the decal has to be placed on
   // the SAME outline the mesh used. sharkFinPanel/sharkFinBadge default to a
@@ -271,8 +313,9 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
 function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
   const anchorParts = legacyBody ? null : parts;
-  // spineHeight reaches the cache key through anchors.key (the lift is in it).
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight) : { key: "legacy" };
+  // spineHeight reaches the cache key through anchors.key (the lift is in it),
+  // and so does the rounded car ("|r": its flank is draped at the loft's rings).
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, decalRound(legacyBody, teamId)) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
   // anchors.key covers the engine-cover fields and the team, NOT the aero
   // recipe — so a fin-height change alone would hit a cached decal mesh built
@@ -645,11 +688,13 @@ function _rigPlate(out, pts, z, depth, col) {
   }
   _rigMark(out,start,Math.max(...col)<.15 && col[2]>col[0]+.005?21:26);
 }
-function _rigRounded(out, x, y, z, w, h, d, r, col) {
+function _rigRounded(out, x, y, z, w, h, d, r, col, surface) {
+  const start=out.pos.length/3;
   const a=w/2, b=h/2, c=Math.min(r,a,b), pts=[];
   for (const [cx,cy,start] of [[a-c,b-c,0],[-a+c,b-c,Math.PI/2],[-a+c,-b+c,Math.PI],[a-c,-b+c,Math.PI*1.5]])
     for(let i=0;i<=4;i++) {const t=start+i*Math.PI/8; pts.push([x+cx+c*Math.cos(t),y+cy+c*Math.sin(t)]);}
   _rigPlate(out,pts,z,d,col);
+  if(surface!=null)_rigMark(out,start,surface);
 }
 // Smooth closed forms for fabric wrapped around a grip, with shared normals.
 function _rigEllipsoid(out, x, y, z, rx, ry, rz, col, angle=0) {
@@ -796,14 +841,14 @@ function _wheelPaddles(out, wide) {
 // Curved backs, individual finger pads, an inboard thumb and tapered cuffs.
 // All styles use the same nine-and-three grip points and rotate with the wheel.
 function _wheelHands(out, acc, c1) {
-  const GLOVE=[0.12,0.135,0.155], SEAM=[0.29,0.31,0.33];
+  const GLOVE=[0.14,0.155,0.175], SEAM=[0.34,0.36,0.38];
   for (const side of [-1,1]) {
     _rigEllipsoid(out,side*.184,-.011,-.013,.023,.046,.024,GLOVE,-side*.12);
     for(let i=0;i<4;i++) _rigEllipsoid(out,side*.169,.030-i*.021,.010,.014,.011,.020,GLOVE,-side*.25);
     _rigEllipsoid(out,side*.154,.015,-.024,.011,.022,.014,GLOVE,-side*.68);
     _rigEllipsoid(out,side*.188,-.077,-.003,.021,.035,.021,GLOVE,-side*.06);
     _rigEllipsoid(out,side*.192,-.126,.005,.024,.039,.024,GLOVE,-side*.08);
-    for(const y of [-.098,-.104]) _rigGrip(out,[[side*.171,y],[side*.182,y-.003],[side*.193,y-.003],[side*.211,y]],.0012,.026,c1||SEAM);
+    for(const y of [-.098,-.104]) _rigGrip(out,[[side*.171,y],[side*.182,y-.003],[side*.193,y-.003],[side*.211,y]],.0012,.026,SEAM);
     for(let i=0;i<3;i++) _rigBar(out,side*.181,.017-i*.013,side*.197,.011-i*.013,-.035,.0008,.001,SEAM);
     _rigBar(out,side*.176,-.043,side*.184,-.080,-.025,.001,.001,SEAM);
   }
@@ -832,7 +877,7 @@ function _wheelRimF1(out, CARB, RUB, GRIP, acc, style) {
   } else if (style === "endurance") {
     _rigGrip(out,[[-0.155,-0.099],[-0.118,-0.127],[-0.060,-0.141],[0,-0.144],[0.060,-0.141],[0.118,-0.127],[0.155,-0.099]],0.013,0.022,RUB);
     _rigGrip(out,[[-0.151,0.103],[-0.130,0.127],[-0.080,0.135],[0,0.135],[0.080,0.135],[0.130,0.127],[0.151,0.103]],0.012,0.022,RUB);
-    for (const side of [-1,1]) _rigBar(out,side*0.080,-0.085,side*0.118,-0.117,0.012,0.024,0.018,CARB);
+    for (const side of [-1,1]) _rigBar(out,side*0.080,-0.085,side*0.118,-0.117,0.012,0.024,0.018,CARB,21);
     _rigRounded(out,0,0.135,-0.004,0.016,0.020,0.033,0.004,acc||GRIP);
   }
   _wheelPaddles(out, true);
@@ -916,6 +961,127 @@ function getCockpitWheel(liv, style) {
   cockpitWheelMesh = _gfx.createMesh(_rigMaterials(out));
   return cockpitWheelMesh;
 }
+// STEERING LOCK. The wheel used to roll a fixed 0.80 rad (±46 deg) at full
+// steer, behind a second λ6 damp stacked on the already-damped steerVis: a
+// hairpin turned the wheel a quarter of what a real one does, a beat late.
+// Progressive now: the centre keeps the shipped 0.80 rad slope (small
+// corrections read exactly as before) and a cubic term takes full lock to
+// 1.5 rad (~86 deg — a 2026 car's ±90 deg lock), behind a λ12 visual damp
+// that still settles rather than flicks. The sign is the shipped one.
+const WHEEL_ROLL_LIN = 0.80, WHEEL_ROLL_CUBE = 0.70, WHEEL_ROLL_LAMBDA = 12;
+function cockpitWheelRoll(steer) {
+  const v = Math.max(-1, Math.min(1, steer || 0));
+  return -(WHEEL_ROLL_LIN * v + WHEEL_ROLL_CUBE * v * v * v);
+}
+// FOREARMS. The gloves end at their cuffs, so on their own they floated —
+// worst at full lock, where the outside hand hangs at twelve o'clock with
+// nothing running back to the driver. A sleeve in the SUIT colour now runs
+// from inside each cuff (wheel-local: it rolls with the wheel) to an elbow
+// fixed in CAR space beside the seat (it does not): one cached unit tube,
+// stretched between the two per frame. The elbow rides the seat (CockpitOpts
+// layout wheelY/wheelZ), low and only 8 cm behind the hub, so the sleeve
+// DROPS out of the bottom of the frame the way an onboard shows forearms
+// rising to the grips. That is forced by the 0.30 m near plane, not taste: the
+// eye is only 0.46 m behind the wheel, and an elbow set back where a real one
+// is pulled the sleeve through the near plane IN FRAME at full lock (the
+// outside hand at twelve o'clock), worst from the HELMET eye under braking.
+// Here every stretch of sleeve nearer than 0.33 m is already >= 42 deg under
+// the eye line (the widest stock FOV shows 40.5) — tests/unit/cockpit-wheels.
+const ARM_WRIST = [0.1895, -0.140, 0.004];   // wheel-local, inside the glove cuff (_wheelHands)
+const ARM_ELBOW = [0.215, -0.30, -0.08];     // car-local x; y and z relative to the wheel hub
+const ARM_R = 0.016, ARM_TAPER = 1.6;        // sleeve radius at the wrist (m); elbow / wrist
+// The exterior driver's SUIT (car3d part "driver": c2 x 0.62 + 0.05), with the
+// cockpit's pale-accent rule (car3d _ckAcc) first: a white suit dims to a grey
+// so a pale accent never fills the bottom of the view.
+function suitColour(liv) {
+  let c = liv && liv.c2 ? liv.c2 : [0.30, 0.30, 0.33];
+  const mn = Math.min(c[0], c[1], c[2]);
+  if (mn >= 0.45) c = [c[0] * 0.42 / mn, c[1] * 0.42 / mn, c[2] * 0.42 / mn];
+  return [c[0] * 0.62 + 0.05, c[1] * 0.62 + 0.05, c[2] * 0.62 + 0.05];
+}
+let _armMesh = null, _armKey = "";
+const _armC2 = [NaN, NaN, NaN];   // the c2 the cached sleeve was built from: a per-frame check that allocates nothing
+// Unit sleeve: +z from the wrist (z 0, radius 1) to the elbow (z 1, ARM_TAPER),
+// a little fuller at the forearm's belly. Radial normals, so the per-frame
+// stretch (radius on x/y, length on z) leaves them pointing the right way.
+function getForearm(liv) {
+  const c2 = liv && liv.c2;
+  if (_armMesh && c2 && c2[0] === _armC2[0] && c2[1] === _armC2[1] && c2[2] === _armC2[2]) return _armMesh;
+  _armC2[0] = c2 ? c2[0] : NaN; _armC2[1] = c2 ? c2[1] : NaN; _armC2[2] = c2 ? c2[2] : NaN;
+  const col = suitColour(liv), key = col.map((v) => v.toFixed(2)).join(",");
+  if (_armMesh && _armKey !== key) { if (_gfx.freeMesh) _gfx.freeMesh(_armMesh); _armMesh = null; }
+  if (_armMesh) return _armMesh;
+  _armKey = key;
+  const out = { pos: [], nrm: [], col: [], idx: [] }, N = 10, T = [0, 0.3, 0.65, 1];
+  for (const t of T) {
+    const r = 1 + (ARM_TAPER - 1) * t + 0.12 * Math.sin(Math.PI * t);
+    for (let j = 0; j < N; j++) {
+      const a = j / N * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+      out.pos.push(c * r, s * r, t); out.nrm.push(c, s, 0); out.col.push(col[0], col[1], col[2]);
+    }
+  }
+  for (let i = 0; i < T.length - 1; i++) for (let j = 0; j < N; j++) {
+    const a = i * N + j, b = i * N + (j + 1) % N;
+    out.idx.push(a, b, b + N, a, b + N, a + N);
+  }
+  // Flat caps with their own normals (the elbow end is below the frame, the
+  // wrist end inside the cuff, but a closed tube never shows a hole).
+  for (const end of [0, T.length - 1]) {
+    const c0 = out.pos.length / 3, z = T[end], nz = end ? 1 : -1;
+    out.pos.push(0, 0, z); out.nrm.push(0, 0, nz); out.col.push(col[0], col[1], col[2]);
+    for (let j = 0; j < N; j++) {
+      const p = (end * N + j) * 3;
+      out.pos.push(out.pos[p], out.pos[p + 1], z); out.nrm.push(0, 0, nz); out.col.push(col[0], col[1], col[2]);
+    }
+    for (let k = 0; k < N; k++) {
+      const a = c0 + 1 + k, b = c0 + 1 + (k + 1) % N;
+      out.idx.push(...(end ? [c0, a, b] : [c0, b, a]));
+    }
+  }
+  _rigMark(out, 0, 22);   // suit fabric: the gloves' matte surface, not the generic panel
+  _armMesh = _gfx.createMesh(out);
+  return _armMesh;
+}
+// A point through a column-major 4x4 (no M4: the node tests load this file alone).
+function _xf(m, x, y, z, out) {
+  out[0] = m[0] * x + m[4] * y + m[8] * z + m[12];
+  out[1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+  out[2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+  return out;
+}
+// Wrist (through the rolled wheel matrix) and elbow (through the car body
+// matrix) for one side, both in the space the two matrices map into.
+function forearmEnds(rig, base, lay, side, wrist, elbow) {
+  _xf(rig, side * ARM_WRIST[0], ARM_WRIST[1], ARM_WRIST[2], wrist);
+  _xf(base, side * ARM_ELBOW[0], lay.wheelY + ARM_ELBOW[1], lay.wheelZ + ARM_ELBOW[2], elbow);
+}
+const _armW = [0, 0, 0], _armE = [0, 0, 0], _armM = new Float32Array(16);
+// The unit sleeve stretched from wrist to elbow: a right-handed basis whose x/y
+// span the cross-section (ARM_R) and whose z IS the wrist-to-elbow vector.
+function forearmMatrix(wrist, elbow, up, out) {
+  const dx = elbow[0] - wrist[0], dy = elbow[1] - wrist[1], dz = elbow[2] - wrist[2];
+  const L = Math.hypot(dx, dy, dz) || 1, ux = dx / L, uy = dy / L, uz = dz / L;
+  let ax = uy * up[2] - uz * up[1], ay = uz * up[0] - ux * up[2], az = ux * up[1] - uy * up[0];
+  const al = Math.hypot(ax, ay, az);
+  if (al < 1e-6) { ax = 1; ay = 0; az = 0; } else { ax /= al; ay /= al; az /= al; }
+  const bx = uy * az - uz * ay, by = uz * ax - ux * az, bz = ux * ay - uy * ax;   // u x a
+  out[0] = ax * ARM_R; out[1] = ay * ARM_R; out[2] = az * ARM_R; out[3] = 0;
+  out[4] = bx * ARM_R; out[5] = by * ARM_R; out[6] = bz * ARM_R; out[7] = 0;
+  out[8] = dx; out[9] = dy; out[10] = dz; out[11] = 0;
+  out[12] = wrist[0]; out[13] = wrist[1]; out[14] = wrist[2]; out[15] = 1;
+  return out;
+}
+// Both sleeves, two draws a frame. rig = the rolled wheel matrix (car-draw
+// _rigB), base = the car body matrix, lay = CockpitOpts.layout() of the seat.
+const _armUp = [0, 1, 0];
+function drawForearms(rig, base, lay, liv, opt) {
+  const mesh = getForearm(liv);
+  _armUp[0] = base[4]; _armUp[1] = base[5]; _armUp[2] = base[6];
+  for (let side = -1; side <= 1; side += 2) {
+    forearmEnds(rig, base, lay, side, _armW, _armE);
+    _gfx.draw(mesh, forearmMatrix(_armW, _armE, _armUp, _armM), opt);
+  }
+}
 // The COLUMN AND BULKHEAD a wheel clips onto, for VISOR — the cockpit with the
 // wheel taken off (js/camera/vantage.js) — and for the NONE cockpit interior. Without them the view looked down
 // onto a bare deck with the halo pillar hanging in the air. Wheel-local like
@@ -978,7 +1144,7 @@ function _rigBeam(out, p0, p1, w, col) {
 }
 // Rounded removable padding: circular sections follow the tub instead of
 // exposing the corners of a rectangular beam at the driver's eye.
-function _rigTube(out, path, r, col) {
+function _rigTube(out, path, r, col, surface=22) {
   const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
   const unit=v=>{const L=Math.hypot(...v);return v.map(x=>x/L);}, start=out.pos.length/3, dirs=[];
   for(let i=0;i<path.length;i++) {
@@ -996,6 +1162,7 @@ function _rigTube(out, path, r, col) {
     const c=out.pos.length/3;out.pos.push(...path[i]);out.nrm.push(...dirs[i].map(x=>i===0?-x:x));out.col.push(...col);
     for(let j=0;j<8;j++) {const a=start+i*8+j,b=start+i*8+(j+1)%8;out.idx.push(c,i===0?b:a,i===0?a:b);}
   }
+  _rigMark(out,start,surface);
 }
 // A flat disc facing the driver (-z) at z = cz: gauge faces.
 function _rigDisc(out, cx, cy, cz, r, n, col) {
@@ -1018,20 +1185,22 @@ function _rigRing(out, cx, cy, cz, r, n, w, d, col) {
     _rigBar(out, cx + x0 - ex, cy + y0 - ey, cx + x1 + ex, cy + y1 + ey, cz, w, d, col);
   }
 }
-// A round gauge: bezel, face and a needle at `turn` (0..1 of its sweep).
-function _rigGauge(out, cx, cy, cz, r, turn, face, bezel) {
+// Fixed labeled faces; the needles are drawn from actual telemetry separately.
+function _rigGauge(out, cx, cy, cz, r, max, label, face, bezel) {
+  const start=out.pos.length/3;
   _rigRing(out, cx, cy, cz, r, 20, r * 0.16, 0.008, bezel);
+  _rigMark(out,start,23);
   _rigDisc(out, cx, cy, cz + 0.002, r * 0.94, 20, face);
   for (let i=0;i<=10;i++) {
     const t = Math.PI*(1.25-1.5*i/10), c = Math.cos(t), s = Math.sin(t);
     _rigBar(out,cx+c*r*0.70,cy+s*r*0.70,cx+c*r*0.86,cy+s*r*0.86,cz-0.001,r*0.035,0.001,[0.11,0.12,0.13]);
   }
-  for(let i=0;i<=8;i+=2){const a=Math.PI*(1.25-1.5*i/8);_rigLabel(out,String(i),cx+Math.cos(a)*r*.51,cy+Math.sin(a)*r*.51,cz-.002,r*.045,[.13,.14,.15]);}
-  const a = Math.PI * (1.25 - 1.5 * turn);
-  _rigBar(out, cx, cy, cx + Math.cos(a) * r * 0.8, cy + Math.sin(a) * r * 0.8, cz - 0.002, r * 0.08, 0.002, [1.4, 0.22, 0.08]);
+  for(let i=0;i<=4;i++) {const a=Math.PI*(1.25-1.5*i/4);_rigLabel(out,String(max*i/4),cx+Math.cos(a)*r*.61,cy+Math.sin(a)*r*.61,cz-.002,r*.032,[.13,.14,.15]);}
+  _rigLabel(out,label,cx,cy-r*.35,cz-.002,r*.040,[.13,.14,.15]);
 }
 // Lofted panels with outward normals and closed ends, rather than box walls.
 function _rigLiner(out, rings, col) {
+  const start=out.pos.length/3;
   const face=(a,b,c,d)=>{
     const u=b.map((v,i)=>v-a[i]), v=c.map((q,i)=>q-a[i]);
     const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]], L=Math.hypot(...n);
@@ -1046,14 +1215,17 @@ function _rigLiner(out, rings, col) {
       const before=out.idx.length; face(q[0],q[j],q[j+1],q[0]); out.idx.length=before+3;
     }
   }
+  _rigMark(out,start,22);
 }
 // A closed lower tub shared by EVERY trim and body choice. Extending behind
 // the eye keeps the near plane from cutting an opening into the road below.
 function _cockpitLowerTub(out, kind, accent) {
   const carbon=[0.065,0.070,0.080], edge=[0.16,0.17,0.19], metal=[0.32,0.34,0.36];
   const pad=kind === "classic" ? [0.14,0.085,0.05] : kind === "suede" ? [0.14,0.13,0.12] : [0.09,0.095,0.105];
+  const start=out.pos.length/3;
   _rigBox(out,0,0.245,-0.725,0.66,0.040,3.65,carbon); // continuous opaque floor
   _rigBox(out,0,0.450,1.08,0.66,0.450,0.040,carbon); // closed footwell end
+  _rigMark(out,start,21);
   for (const side of [-1,1]) {
     const rings=[[-2.55,.326,.690],[-.82,.322,.690],[-.20,.313,.681],[.20,.297,.672],[.48,.280,.665],[1.10,.300,.655]].map(([z,x,y])=>{
       const ring=[[side*.230,.265,z],[side*.255,.245,z],[side*x,y,z],[side*(x-.014),y-.012,z],
@@ -1072,9 +1244,9 @@ function _cockpitLowerTub(out, kind, accent) {
       _rigBar(out,side*0.267,y,side*0.273,y,1.051,0.0015,0.001,[0.025,0.03,0.035]);
     }
   }
-  _rigRounded(out,0,0.56,-0.79,0.66,0.63,0.10,0.025,carbon); // sealed rear bulkhead
-  _rigRounded(out,0,0.79,-0.72,0.48,0.20,0.09,0.04,pad); // rear headrest
-  _rigRounded(out,0,0.345,-0.025,0.44,0.085,0.37,0.018,pad); // seat base
+  _rigRounded(out,0,0.56,-0.79,0.66,0.63,0.10,0.025,carbon,21); // sealed rear bulkhead
+  _rigRounded(out,0,0.79,-0.72,0.48,0.20,0.09,0.04,pad,22); // rear headrest
+  _rigRounded(out,0,0.345,-0.025,0.44,0.085,0.37,0.018,pad,22); // seat base
   _rigBeam(out,[-0.20,0.382,0.10],[0.20,0.382,0.10],0.004,edge);
   _rigBox(out,0,0.320,0.76,0.34,0.050,0.16,carbon); // raised pedal heel rest
   for (const x of [-0.10,0,0.10]) _rigBeam(out,[x,0.349,0.69],[x,0.349,0.83],0.006,edge);
@@ -1095,8 +1267,8 @@ function _teamCabin(out, pad, stitch, kind) {
     if(kind==='team') _rigTube(out,stations.slice(0,4).map(([z,x,y])=>[side*x,y+.023,z]),.003,stitch);
   }
   _rigTube(out,[[-.302,.739,-.80],[-.20,.754,-.82],[0,.765,-.82],[.20,.754,-.82],[.302,.739,-.80]],.024,pad);
-  _rigTube(out,[[-.231,.687,.42],[-.15,.704,.44],[0,.709,.45],[.15,.704,.44],[.231,.687,.42]],.018,CARB);
-  _rigRounded(out,0,.714,.400,.44,.010,.008,.004,CARB);
+  _rigTube(out,[[-.231,.687,.42],[-.15,.704,.44],[0,.709,.45],[.15,.704,.44],[.231,.687,.42]],.018,CARB,21);
+  _rigRounded(out,0,.714,.400,.44,.010,.008,.004,CARB,21);
 }
 function _classicCabin(out, paint) {
   const LEATHER = [0.10, 0.065, 0.043], CHROME = [0.37, 0.39, 0.41], FACE = [0.55, 0.53, 0.48];
@@ -1105,9 +1277,9 @@ function _classicCabin(out, paint) {
     [0.18,0.71,0.40],[0.30,0.69,0.25],[0.30,0.69,-0.05],[0.30,0.72,-0.80],[0,0.75,-0.82]];
   _rigTube(out,rim,0.020,LEATHER);
   _rigRounded(out, 0, 0.745, 0.47, 0.50, 0.13, 0.03, 0.038, paint);        // painted dash panel
-  _rigGauge(out, 0, 0.75, 0.443, 0.045, 0.62, FACE, CHROME);     // rev counter, centre
-  _rigGauge(out, -0.15, 0.745, 0.443, 0.028, 0.35, FACE, CHROME); // oil / water
-  _rigGauge(out, 0.15, 0.745, 0.443, 0.028, 0.45, FACE, CHROME);
+  _rigGauge(out, 0, 0.75, 0.443, 0.045, 16, "RPM X1000", FACE, CHROME);
+  _rigGauge(out, -0.15, 0.745, 0.443, 0.028, 400, "KPH", FACE, CHROME);
+  _rigGauge(out, 0.15, 0.745, 0.443, 0.028, 100, "ERS", FACE, CHROME);
   const scr = _classicScreen();
   for (const [a, b] of scr.frame) _rigBeam(out, a, b, 0.004, CHROME);   // aeroscreen frame
 }
@@ -1135,17 +1307,38 @@ function getCockpitCabin(kind, liv) {
   for(const side of [-1,1]) {
     if(kind==='ribbed') for(let i=0;i<8;i++) {
       const z=-.12+i*.055, x=.282-Math.max(0,z)*.10, y=.708-Math.max(0,z)*.04;
-      _rigRounded(out,side*x,y-.040,z,.028,.065,.037,.012,[.12,.13,.145]);
+      _rigRounded(out,side*x,y-.040,z,.028,.065,.037,.012,[.12,.13,.145],22);
     }
     if(kind==='suede') {
       for(let i=0;i<6;i++) _rigTube(out,[[side*.281,.706,-.14+i*.07],[side*.276,.677,-.14+i*.07]],.0008,[.31,.29,.26]);
-      _rigRounded(out,side*.265,.575,.18,.019,.130,.24,.009,[.15,.135,.12]);
+      _rigRounded(out,side*.265,.575,.18,.019,.130,.24,.009,[.15,.135,.12],22);
     }
     for(const z of [-.32,.06,.39]) _rigDisc(out,side*.282,.638,z,.0035,8,[.24,.26,.29]);
   }
-  if(kind==='carbon') _rigMark(out,0,21);
+
   _cabinMesh = _gfx.createMesh(_rigMaterials(out));
   return _cabinMesh;
+}
+// One shared physical needle, transformed per instrument without allocating
+// meshes as RPM, speed or energy change. Speed scale is always KPH, as labeled.
+let _classicNeedle=null;
+const _gaugeT=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]), _gaugeM=new Float32Array(16);
+function drawClassicTelemetry(mat,c,kph,opt) {
+  if(!_classicNeedle) {
+    const out={pos:[],nrm:[],col:[],idx:[]};
+    _rigBar(out,-.15,0,.80,0,0,.065,.025,[.92,.20,.08]);
+    _rigDisc(out,0,0,-.018,.10,12,[.09,.095,.10]);
+    _classicNeedle=_gfx.createMesh(_rigMaterials(out));
+  }
+
+  for(let i=0;i<3;i++) {
+    const value=i===0?c.rpm/16000:i===1?kph/400:c.energy;
+    const r=i===0?.045:.028, a=Math.PI*(1.25-1.5*Math.max(0,Math.min(1,Number.isFinite(value)?value:0)));
+    const ca=Math.cos(a)*r,sa=Math.sin(a)*r;
+    _gaugeT[0]=ca;_gaugeT[1]=sa;_gaugeT[4]=-sa;_gaugeT[5]=ca;_gaugeT[10]=r;
+    _gaugeT[12]=i===0?0:i===1?-.15:.15;_gaugeT[13]=i===0?.75:.745;_gaugeT[14]=.438;
+    M4.mulTo(_gaugeM,mat,_gaugeT);_gfx.draw(_classicNeedle,_gaugeM,opt);
+  }
 }
 // CLASSIC's aeroscreen glass, drawn with an alpha material (car-draw.js _glassOpts).
 const _glassMeshes = {};
@@ -1157,22 +1350,87 @@ function getCockpitGlass(kind) {
   return _glassMeshes[kind];
 }
 const _ledMeshes = {};
-// `lit` 0-8 lights that many LEDs left-to-right. 9 is the SHIFT FLASH: a real
-// wheel does not just fill the strip and stop — at the shift point the whole
-// row strobes blue, which is the cue a driver actually upshifts on, and it is
-// the one state the fill-only ramp could never express (8 lit and 8 lit-plus-
-// past-it looked identical). The caller alternates 9 and 0 to strobe it.
-function getLedStrip(lit) {
-  if (_ledMeshes[lit]) return _ledMeshes[lit];
-  const out = { pos: [], nrm: [], col: [], idx: [] };
+// THE SHIFT LIGHTS ARE THE BIGGEST THING ON THE WHEEL. At 3.4 mm the fifteen
+// lenses were specks at the wheel's 0.46 m; a real 2026 row runs right across
+// the top of the display at about a centimetre a lens. Each row sits inside its
+// own fascia's top edge (the _wheelScreen outlines): GT's top is lower, and the
+// YOKE's sits so close over its LCD that its row is a hair smaller and narrower.
+// `half` is the centre-to-centre half-span; 15 lenses at 2r + 1 mm each.
+const LED_ROWS = { std: { y: 0.082, half: 0.077, r: 0.005 }, gt: { y: 0.076, half: 0.077, r: 0.005 },
+  yoke: { y: 0.0625, half: 0.070, r: 0.0045 } };
+// `lit` 0-8 lights that many LEDs left-to-right. 9 is SHIFT NOW: the whole
+// row blue, the cue a driver actually upshifts on (8 lit and 8 lit-plus-past-
+// it looked identical). The strip never goes DARK at the limiter — the caller
+// (car-draw.js) alternates 8 and 9, steady 9 under reduced motion.
+// `style` picks the row (LED_ROWS); anything else — the 2000s wheel scales the
+// standard row onto its own LCD — gets the standard one.
+function getLedStrip(lit, style) {
+  const rowId = LED_ROWS[style] ? style : "std", key = rowId + lit;
+  if (_ledMeshes[key]) return _ledMeshes[key];
+  const out = { pos: [], nrm: [], col: [], idx: [] }, row = LED_ROWS[rowId];
   const COLS = [[0.2,1.3,0.35],[1.2,0.82,0.12],[0.35,0.55,1.5]];
   const count = Math.round(Math.max(0, Math.min(8, lit)) / 8 * 15);
   for (let i = 0; i < 15; i++) {
     const col = lit === 9 ? [0.35,0.55,1.5] : i < count ? COLS[Math.floor(i/5)] : [0.055,0.06,0.065];
-    _rigDisc(out, -0.070 + i*0.010, 0.082, -0.030, 0.0034, 8, col);
+    _rigDisc(out, -row.half + i * row.half / 7, row.y, -0.030, row.r, 8, col);
   }
-  _ledMeshes[lit] = _gfx.createMesh(out);
-  return _ledMeshes[lit];
+  _ledMeshes[key] = _gfx.createMesh(out);
+  return _ledMeshes[key];
+}
+// MIRROR GLASS FALLBACK: the cockpit housings' glass is near-black because the
+// HUD mirror pass is the reflection. While that pass is not drawing (MIRROR
+// AUTO on a software GPU, OFF, collapsed) car-draw.js lays this over each
+// glass: a smoked sky gradient, pale at the top to grey-blue at the bottom.
+// `quads` is Car3D.cockpitMirrorGlass(scale); cached on that (frozen) array.
+const _mirrorFbMeshes = new Map();
+function getMirrorFallback(quads) {
+  let m = _mirrorFbMeshes.get(quads);
+  if (m) return m;
+  const out = { pos: [], nrm: [], col: [], idx: [] }, TOP = [0.62, 0.72, 0.84], MID = [0.40, 0.48, 0.58], BOT = [0.20, 0.23, 0.27];
+  const mixV = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);   // per-axis mix of two corners
+  for (const [a, b, c, d] of quads) {
+    for (const [t0, t1, c0, c1] of [[0, 0.55, BOT, MID], [0.55, 1, MID, TOP]]) {
+      // Two bands, colour per row; drawn doubleSided, so the winding is moot.
+      const i0 = out.pos.length / 3;
+      for (const [v, col] of [[mixV(a, d, t0), c0], [mixV(b, c, t0), c0], [mixV(b, c, t1), c1], [mixV(a, d, t1), c1]]) {
+        out.pos.push(v[0], v[1], v[2]); out.nrm.push(0, 0, -1); out.col.push(col[0], col[1], col[2]);
+      }
+      out.idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
+    }
+  }
+  m = _gfx.createMesh(out);
+  _mirrorFbMeshes.set(quads, m);
+  return m;
+}
+// LIVE MIRROR GLASS (gfx.drawMirrorGlass): the same lens quads as a TEXTURED
+// mesh (createTexMesh's pos/nrm/uv) that the backend maps this frame's HUD
+// rear view onto. The target holds the RAW rear-camera image — the HUD
+// composite flips it — so the glass's flip is baked into U, per side s (-1 the
+// left glass, x < 0; +1 the right): outboard u = 0.5 - 0.5s, inboard u =
+// 0.5 + 0.1s — left 1.0 -> 0.4, right 0.0 -> 0.6, each glass its own side of
+// the image and a tenth past the centre line. V runs MIRROR_GLASS_V, v = 0 the
+// image bottom: the lens is 0.191 x 0.051 m (3.75:1) and the target 7:2
+// (css/hud.css #hud-mirror), so 0.6 of its width over 0.56 of its height keeps
+// texels square. Cached per quads like getMirrorFallback; null when the backend
+// has no createTexMesh (the caller then lays the fallback).
+const MIRROR_GLASS_V = [0.22, 0.78];
+const _mirrorGlassMeshes = new Map();
+function getMirrorGlass(quads) {
+  if (_mirrorGlassMeshes.has(quads)) return _mirrorGlassMeshes.get(quads);
+  let m = null;
+  if (_gfx.createTexMesh) {
+    const out = { pos: [], nrm: [], uv: [], idx: [] }, v0 = MIRROR_GLASS_V[0], v1 = MIRROR_GLASS_V[1];
+    for (const [a, b, c, d] of quads) {
+      const s = b[0] < 0 ? -1 : 1, uo = 0.5 - 0.5 * s, ui = 0.5 + 0.1 * s, i0 = out.pos.length / 3;
+      for (const [p, u, v] of [[a, ui, v0], [b, uo, v0], [c, uo, v1], [d, ui, v1]]) {
+        out.pos.push(p[0], p[1], p[2]); out.nrm.push(0, 0, -1); out.uv.push(u, v);
+      }
+      out.idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
+    }
+    m = _gfx.createTexMesh(out);
+  }
+  _mirrorGlassMeshes.set(quads, m);
+  return m;
 }
 // 7-seg digit table, shared by the gear and speed LCD readouts.
 const _SEG7 = [
@@ -1478,6 +1736,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
+    cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);

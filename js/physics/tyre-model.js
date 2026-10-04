@@ -840,6 +840,14 @@ const TyreModel = (function () {
       return Math.max(0, life * (1 - Math.min(1, w)));
     }
 
+    // The engineer needs only the cold-window deficit each physics step.
+    // Keep info()'s tenth-degree rounding: raw temperatures move call thresholds.
+    function belowWindow(c) {
+      if (!c || !c.tyre || c.tyreTs == null) return 0;
+      const tempS = +c.tyreTs.toFixed(1), tempOpt = +optTemp(c.tyre.life).toFixed(1);
+      return Math.max(0, (tempOpt - T_WINDOW) - tempS);
+    }
+
     function info(c) {
       if (!c) return null;
       const t = c.tyre || null;
@@ -878,7 +886,7 @@ const TyreModel = (function () {
     return {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
-      lapsOn, spent, lapsLeft, info, severity, ambient, trackTemp,
+      lapsOn, spent, lapsLeft, belowWindow, info, severity, ambient, trackTemp,
       level: () => level, setLevel, on, planLaps,
       classRecord, optionRecord, applyCompound, startRecord,
     };

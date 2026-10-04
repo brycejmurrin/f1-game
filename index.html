@@ -80,6 +80,10 @@
 <!-- @gen-shell:preload -->
 <link rel="preload" href="css/tokens.css?v=dev" as="style">
 <link rel="preload" href="css/components.css?v=dev" as="style">
+<link rel="preload" href="css/dialogs.css?v=dev" as="style">
+<link rel="preload" href="css/settings.css?v=dev" as="style">
+<link rel="preload" href="css/settings-controls.css?v=dev" as="style">
+<link rel="preload" href="css/dialog-platform.css?v=dev" as="style">
 <!-- /@gen-shell:preload -->
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
@@ -102,11 +106,20 @@
 <!-- @gen-shell:css -->
 <link rel="stylesheet" href="css/tokens.css?v=dev">
 <link rel="stylesheet" href="css/components.css?v=dev">
+<link rel="stylesheet" href="css/dialogs.css?v=dev">
+<link rel="stylesheet" href="css/settings.css?v=dev">
+<link rel="stylesheet" href="css/settings-controls.css?v=dev">
+<link rel="stylesheet" href="css/dialog-platform.css?v=dev">
 <link rel="stylesheet" href="css/tuner.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/title.css?v=dev">
 <link rel="stylesheet" href="css/menus.css?v=dev">
+<link rel="stylesheet" href="css/select.css?v=dev">
+<link rel="stylesheet" href="css/race-setup.css?v=dev">
 <link rel="stylesheet" href="css/carsetup.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/touch-controls.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/loading.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/responsive.css?v=dev">
 <link rel="stylesheet" href="css/track-detail.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=dev" media="print" onload="this.media='all'">
@@ -118,6 +131,7 @@
 <link rel="stylesheet" href="css/photo-studio.css?v=dev">
 <link rel="stylesheet" href="css/experience.css?v=dev">
 <link rel="stylesheet" href="css/editor.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/cockpit-preview.css?v=dev">
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -499,11 +513,16 @@
 
 <!-- race HUD -->
 <div id="hud" hidden>
+  <!-- Each box has its own id: the hide rules (css/hud.css) key on it, never on
+       a child position, so adding or re-ordering a box cannot hide the wrong one.
+       DELTA is static too (js/ui/hud.js paintHudDelta unhides it): vs the ghost
+       when there is one, else vs the player's best lap this race. -->
   <div class="hud-top">
-    <div class="hud-box"><div class="hud-label">POS</div><div id="hud-pos" class="hud-value">-</div></div>
-    <div class="hud-box"><div class="hud-label">LAP</div><div id="hud-lap" class="hud-value">-</div></div>
-    <div class="hud-box"><div class="hud-label">TIME</div><div id="hud-time" class="hud-value">-</div></div>
-    <div class="hud-box"><div class="hud-label">BEST</div><div id="hud-best" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-box-pos"><div class="hud-label">POS</div><div id="hud-pos" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-box-lap"><div class="hud-label">LAP</div><div id="hud-lap" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-box-time"><div class="hud-label">TIME</div><div id="hud-time" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-box-best"><div class="hud-label">BEST</div><div id="hud-best" class="hud-value">-</div></div>
+    <div class="hud-box" id="hud-delta" hidden><div class="hud-label">DELTA</div><div class="hud-value" id="hud-delta-n">&mdash;</div></div>
   </div>
   <div class="hud-gaps">
     <div id="hud-gap-ahead" class="hud-gap"></div>
@@ -529,12 +548,12 @@
         <div id="hud-tach"><div id="hud-rpm-fill"></div></div>
       </div>
       <div id="hud-speed"><span id="hud-speed-n">0</span><span class="hud-unit">KM/H</span></div>
-      <div id="hud-energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ENERGY</div></div>
+      <div id="hud-energy" role="img" aria-label="Energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ERS <span id="hud-energy-n"></span></div></div>
       <!-- TYRES. Sibling of ENERGY on purpose: the two resources a driver
            spends, one over seconds and one over laps. Hidden whenever TYRE WEAR
            is off, which is the shipped default, so the bar costs nothing to a
            player who never turns it on. -->
-      <div id="hud-tyre" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div><span id="hud-plan"></span></div>
+      <div id="hud-tyre" role="img" aria-label="Tyres" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div><span id="hud-plan"></span></div>
       <!-- PIT ENTRY. There is no pit button — a stop is called by steering into
            the entry (js/race/pit-lane.js) — so the window has to announce
            itself, or the gesture is undiscoverable. Shows the distance to the
@@ -550,6 +569,8 @@
       <button id="hud-work" type="button" hidden>WORK ON CAR</button>
       <div id="hud-ot" class="ot-off">OVERTAKE</div>
       <div id="hud-aero" class="ax-off">CORNER MODE</div>
+      <!-- BRAKE BIAS, the set-up sheet's front share (c.brakeBias). -->
+      <div id="hud-bb">BB 56%</div>
     </div>
     <div id="dock-right" class="dock"></div>
   </div>
@@ -656,15 +677,19 @@
       <button id="pm-resume" autofocus>RESUME</button>
       <button id="pm-restart">RESTART RACE</button>
       <button id="pm-settings">SETTINGS&hellip;</button>
+      <!-- RACE TOOLS: one compact grid of short labels (REPLAY joins it from
+           js/camera/replay-buf.js), so the card reads as RESUME, two doors,
+           a tool tray and QUIT instead of fourteen full-size buttons.
+           REWIND & RETRY is a tile too: open, it takes the tray's full width.
+           APPEARANCE lives in SETTINGS only. -->
       <nav id="pm-quick-doors" aria-label="Race tools">
-        <button id="pm-strategy" type="button">PIT STRATEGY</button>
+        <button id="pm-strategy" type="button">STRATEGY</button>
+        <button id="pm-review" type="button">REVIEW</button>
         <button id="pm-practice" type="button">PRACTICE</button>
-        <button id="pm-review" type="button">INCIDENTS &amp; REVIEW</button>
-        <button id="pm-photo" type="button">PHOTO STUDIO</button>
-        <button id="pm-appearance" type="button">APPEARANCE</button>
+        <button id="pm-photo" type="button">PHOTO</button>
+        <button id="pm-howto" type="button">HOW TO PLAY</button>
+        <details id="pm-checkpoint"><summary>REWIND &amp; RETRY</summary><div class="balanced-row"><button id="pm-checkpoint-save" type="button">SAVE START</button><button id="pm-checkpoint-retry" type="button" disabled>TRY AGAIN</button><button id="pm-checkpoint-rewind" type="button" disabled>REWIND 10s</button></div><p id="pm-checkpoint-state" class="adv-help"></p></details>
       </nav>
-      <details id="pm-checkpoint"><summary>CHECKPOINT &amp; REWIND</summary><div class="balanced-row"><button id="pm-checkpoint-save" type="button">SAVE START</button><button id="pm-checkpoint-retry" type="button" disabled>TRY AGAIN</button><button id="pm-checkpoint-rewind" type="button" disabled>REWIND 10s</button></div><p id="pm-checkpoint-state" class="adv-help"></p></details>
-      <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
       <button id="pm-quit">QUIT TO MENU</button>
       <!-- NOW PLAYING — shown only while music is actually playing
@@ -1007,7 +1032,7 @@
               </div>
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
-                <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
+                <input id="pm-hudscale" type="range" min="70" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size.</p>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts
                    compete for the same edges: shrinking the pedals is how a
@@ -1461,7 +1486,7 @@
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
         <input id="pm-help" type="range" min="1" max="10" step="1" value="6" aria-label="Driving help"></label>
-      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob.</p>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob. GRIP STEER (below, and in ROOKIE / RELAX) caps lock at the front peak without reading the road arc.</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
@@ -2150,7 +2175,7 @@
            numbers beside it. The section is the vertical scroller when the
            caption does not fit (a short landscape phone at a raised UI SIZE). -->
       <section class="pane" id="sel-track-section">
-        <div id="practice-brief" hidden><strong>PRACTICE SESSION</strong><p>Choose a goal, then pick your circuit. Save a starting point from Pause to repeat it. Time Trial records are disabled after a checkpoint or rewind.</p><label for="practice-goal">Goal</label> <select id="practice-goal"></select></div>
+        <div id="practice-brief" hidden><strong>PRACTICE SESSION</strong><p>Choose a solo goal, then pick your circuit. Save a starting point from Pause to repeat it. Time Trial records are disabled after a checkpoint or rewind. For rival drills, start a Race and arm Practice from Pause → Driving.</p><label for="practice-goal">Goal</label> <select id="practice-goal"></select></div>
         <h3 class="sel-label" id="sel-circuit-label">CIRCUIT</h3>
         <div id="sel-track-preview">
           <div id="sel-hero">
@@ -2996,7 +3021,7 @@
         <dt>TRACK LIMITS</dt>
         <dd>Every counted cut deletes that lap's time. In a race the first two are warnings, the third brings the black-and-white flag, and the fourth and every one after it add +5 s. The HUD shows the count in every driving camera.</dd>
         <dt id="htp-setup">CAMERA</dt>
-        <dd>Tap the camera button or press your camera binding (keyboard <span data-help-keys="camera">C</span>, controller <span data-help-pad="camera">View</span>) to cycle views. Hold the on-screen button briefly, or right-click it, to open the picker. Your choice is saved. Views: CHASE, FAR, DRIFT, COCKPIT, HOOD, OVERHEAD, HELI, REVERSE, TV SIDE, CINEMATIC, LOW, T-CAM, REAR CAM and VISOR (the cockpit without its wheel, for steering with a phone).</dd>
+        <dd>Tap the camera button or press your camera binding (keyboard <span data-help-keys="camera">C</span>, controller <span data-help-pad="camera">View</span>) to cycle views. Hold the on-screen button briefly, or right-click it, to open the picker. Your choice is saved. Views: CHASE, FAR, DRIFT, COCKPIT, HOOD, OVERHEAD, HELI, REVERSE, TV SIDE, CINEMATIC, LOW, T-CAM, REAR CAM, VISOR (the cockpit without its wheel, for steering with a phone) and HELMET (the cockpit from inside the driver's helmet, framed by the visor).</dd>
         <dt>RACE SETTINGS</dt>
         <dd>Shown before each race: LAPS, WEATHER, CONDITIONS (MIXED lets the weather change), TIME OF DAY, DIFFICULTY, GRID, DUEL, CAUTIONS, RELIABILITY, DRIVING LINE and TYRE WEAR. QUICK RACE, FULL WEEKEND and ENDURANCE set several at once.</dd>
         <dt>SETTINGS</dt>
@@ -3377,6 +3402,9 @@
 <script defer crossorigin="anonymous" src="js/core/native.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/native-download.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/roster.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/script-loader.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/lazy-bundles.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/wake-lock.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/glx-facade.js?v=dev"></script>
 <!-- GLX, TLX and WGX implementations have no script tags. game.js injects
      only the selected backend, with GLX available as the lazy fallback. -->
@@ -3389,6 +3417,7 @@
 <script defer crossorigin="anonymous" src="js/render/shared/inst-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/vertex-pack.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/gfx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/renderer-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/driving-line.js?v=dev"></script>
@@ -3485,10 +3514,20 @@
 <script defer crossorigin="anonymous" src="js/editor/track-themes.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/editor/custom-tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-geometry.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-wheels.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-shade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car3d.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/bindings.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/pad-menu.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/haptics.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/hold-buttons.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/signal.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/soundtrack.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/radio-fx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/tone-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/engine.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/music-lib.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/spotify.js?v=dev"></script>
@@ -3504,6 +3543,7 @@
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/livery-graphics.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost-share.js?v=dev"></script>
@@ -3538,6 +3578,7 @@
 <script defer crossorigin="anonymous" src="js/career/badges.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/grip-steer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-band.js?v=dev"></script>
@@ -3574,13 +3615,16 @@
 <script defer crossorigin="anonymous" src="js/ui/settings-export.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/fx/car-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/sporting-regs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/broadcast.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/director.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/flying-start.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/start-lights.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/marshal-panels.js?v=dev"></script>
@@ -3588,6 +3632,7 @@
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/replay-buf.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/results-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/tuner-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/brake-cue.js?v=dev"></script>
@@ -3602,11 +3647,16 @@
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dock-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/cockpit-preview.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-chase.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-broadcast.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-onboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/pause-opts.js?v=dev"></script>
@@ -3634,6 +3684,7 @@
 <script defer crossorigin="anonymous" src="js/ui/photo-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-menu.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/title-flow.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-net.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/custom-team.js?v=dev"></script>
@@ -3644,9 +3695,11 @@
 <script defer crossorigin="anonymous" src="js/physics/contact-geometry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/collide.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/wall-clamp.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/field-lod.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/shadow-pass.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/mirror-pass.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/platform-session.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>
 <!-- /@gen-shell:scripts -->
 </body></html>

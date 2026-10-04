@@ -116,14 +116,29 @@ const TrackBuildClient = (function () {
     if (msg.taken) return null;
     msg.taken = true;
     const { track, recs } = msg, real = new Array(recs.length), budget = budgetMs > 0 ? budgetMs : 8;
-    for (let i = 0; i < recs.length;) {
-      const t0 = performance.now();
-      do {
-        const r = recs[i];
-        real[i++] = r.op === "mesh" ? gfx.createMesh(...r.args)
-          : r.op === "chunked" ? gfx.createChunkedMesh(...r.args) : gfx.createInstancedBatch(...r.args);
-      } while (i < recs.length && performance.now() - t0 < budget);
-      if (i < recs.length) await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 0)));
+    try {
+      for (let i = 0; i < recs.length;) {
+        const t0 = performance.now();
+        do {
+          const r = recs[i];
+          real[i++] = r.op === "mesh" ? gfx.createMesh(...r.args)
+            : r.op === "chunked" ? gfx.createChunkedMesh(...r.args) : gfx.createInstancedBatch(...r.args);
+        } while (i < recs.length && performance.now() - t0 < budget);
+        if (i < recs.length) await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 0)));
+      }
+    } catch (e) {
+      // An upload that throws part-way: the handles already made have no owner
+      // yet (track.meshes still holds tokens), so release them here.
+      for (let i = 0; i < real.length; i++) {
+        const h = real[i], r = recs[i];
+        if (!h) continue;
+        try {
+          if (r.op === "batch" || (r.op !== "mesh" && r.op !== "chunked")) { if (gfx.freeInstancedBatch) gfx.freeInstancedBatch(h); }
+          else if (r.op === "chunked" && gfx.freeChunkedMesh) gfx.freeChunkedMesh(h);
+          else gfx.freeMesh(h);
+        } catch (_) { /* the replay's error is the one to surface */ }
+      }
+      throw e;
     }
     const swap = (v) => {
       if (Array.isArray(v)) return v.map(swap);

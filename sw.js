@@ -339,7 +339,13 @@ async function precacheAssetLists() {
     "js/circuits/scenery/mont_tremblant.js",
     "js/circuits/scenery/mosport.js",
     // LAZY_DATA — the data hub bundle behind the DATA button
+    "js/data/tab-utils.js",
+    "js/data/api-transport.js",
     "js/data/api.js",
+    "js/data/telemetry-model.js",
+    "js/data/telemetry-render.js",
+    "js/data/telemetry-player.js",
+    "js/data/telemetry-view.js",
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
@@ -370,9 +376,11 @@ async function precacheAssetLists() {
     "js/editor/stamps.js",
     "js/editor/randomise.js",
     "js/editor/validate.js",
+    "js/editor/insight.js",
     "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
+    "js/editor/profile.js",
     "js/editor/designer.js",
     // /@gen-shell:sw-optional
   ]);

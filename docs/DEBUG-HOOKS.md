@@ -455,14 +455,16 @@ display label such as `"TV SIDE"` — returns `false`.
 | `rival` | RIVAL LOCK | Frames the nearest battle rival (ahead or behind) — reuses `Broadcast.battles` when present; falls back to the nearest car within ~2.5 s |
 | `pitwall` | PIT WALL | Pit-lane / pit-exit wall cam on the garage side of the complex; optional auto-cut via `apex26.pitCamAuto` / `__apex.pitCamAuto()` (default OFF — opt-in) |
 | `drone` | DRONE | Smoothed tether camera with corner look-ahead — a calmer, more usable alternative to HELI |
+| `tv` | TV | Live TV director (`js/camera/director.js`): auto-cuts between broadcast shots on battles/leader; auto-spectates after finish/retire in solo. Writes `dbgCam` only — never car forces. Status: `Director.live().status()` |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone"] }
+__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone","tv","helmet"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
 __apex.camera("tcam");      // → { mode:"tcam", index:11 }
 __apex.camera("trackside"); // → { mode:"trackside", index:14 }
 __apex.camera("drone");     // → { mode:"drone", index:17 }
 __apex.camera(3);           // switch by index → cockpit
+__apex.camera("tv");        // live director meta-mode (index 18)
 __apex.pitCamAuto();        // → false (default): the camera stays put in the pits
 __apex.pitCamAuto(true);    // opt in: auto-cut to PIT WALL on pit entry, restore on exit
 ```
@@ -1007,7 +1009,7 @@ eyeballing — e.g. sweep `lat` across a verge to see the cross-section profile.
 ## Engine sound
 
 The engine voice is two layers: a per-manufacturer **voice** picked from
-`team.engine` (`ENGINE_VOICES` in `js/audio/engine.js`), and a player **tune**
+`team.engine` (`ENGINE_VOICES` in `js/audio/tone-model.js`), and a player **tune**
 layered over it — the profiles and sliders under MUSIC & SOUND -> ENGINE TONE.
 
 Both obey one contract: **every field is a constant multiplier, never a
@@ -2525,7 +2527,7 @@ __apex.race("albert_park"); __apex.pitSigns();
 // → { cells: 12, mesh: true, tex: true, drawn: 41, calls: 41 }
 ```
 
-### `mirror(mode?) → {mode, shown, collapsed, rect, cars, drawn, cam, lite, quality, backend} | null`
+### `mirror(mode?) → {mode, shown, collapsed, rect, cars, drawn, cam, lite, quality, backend, glass} | null`
 The HUD rear-view mirror (`js/render/shared/mirror-pass.js`): a second camera
 on the player's car looking back, rendered by the backend into its own target
 BEFORE the main `begin()` and composited, flipped, into the `#hud-mirror`
@@ -2543,9 +2545,14 @@ healthy desktop), `lite` (a phone or governor tier 1: no instanced prop
 batches, glass or water, a 180 m radius, rivals within 140 m, a 60% target,
 every frame), `low` (tier 2-3: half rate, 50%), `min` (tier 4+, e.g.
 GRAPHICS: LOW: a third of the rate, 40%); `lite` is true for all but `full`; `backend` is `gfx.mirrorState()` — `{ready, dead, w, h, hdr,
-renders, composites, rect}`, the backend's OWN count of mirror passes rendered
-and composites drawn (the live evidence `hud-mirror.spec.js` asserts). `null`
-before the game has created the mirror.
+renders, composites, glass, rect}`, the backend's OWN count of mirror passes rendered,
+composites drawn and cockpit-glass draws (the live evidence `hud-mirror.spec.js` asserts).
+`glass` is the cockpit's mirror glass (`js/car/car-draw.js` glassState): while
+the pass draws, the housings' glass shows ITS image (`gfx.drawMirrorGlass`, no
+second render), else a sky-tint fallback — `{live, fallback, screen}`, the two
+draw counts and, per glass, its corners `[a inboard-low, b outboard-low, c
+outboard-high, d inboard-high]` as canvas fractions (top-left origin) projected
+through the main camera, as last drawn. `null` before the game has created the mirror.
 ```js
 __apex.race("redbull"); __apex.go(); __apex.mirror("on");
 // next frames → { mode: "on", shown: true, rect: [0.36, 0.1, 0.27, 0.08], cars: 3, drawn: 12,

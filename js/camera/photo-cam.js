@@ -131,7 +131,9 @@ function photoKeyHandler(e) {
   // moved focus into a slider (or COPY VIEW's textarea) stayed down forever.
   // The Studio's buttons own Space/Enter and menu arrows. Key-up must still
   // release camera input held before focus moved into the dock.
-  if (down && e.code !== "Escape" && ((focused && focused.closest && focused.closest("#ps-panel")) || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
+  const studioControl = focused && focused.closest && focused.closest("#ps-panel");
+  const studioKey = e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter" || /^Arrow/.test(e.code);
+  if (down && e.code !== "Escape" && ((studioControl && studioKey) || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
   const fc = freeCam ? freeCam.key(e.code, down, document.activeElement) : 0;
   if (fc < 0 && down) return;                // an arrow key over the free-cam panel belongs to its focused control
   if (fc > 0) { e.preventDefault(); if (down) e.stopPropagation(); return; }

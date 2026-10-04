@@ -76,7 +76,7 @@ function loadAtlas() {
                 createElement: () => ({ getContext: () => (last = new RecCtx()), width: 0, height: 0 }) } };
   sb.globalThis = sb;
   vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js", "js/car/liverytex.js"])
+  for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   return { LT: vm.runInContext("LiveryTex", sb), Teams: vm.runInContext("Teams", sb),
            Liveries: vm.runInContext("Liveries", sb), ops: () => last.ops };

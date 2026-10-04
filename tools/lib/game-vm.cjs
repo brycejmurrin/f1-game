@@ -305,6 +305,7 @@ function makeGlx(record) {
     "softPresent", "awaitSoftPresent", "invalidateSoftPresent", "capturePixels",
     "__tlx", "shadowCullVP", "lampShadowBegin", "lampShadowEnd", "carShadowBegin",
     "carShadowEnd", "envFaceBegin", "envFaceEnd", "hasPerChunkLights", "then",
+    "mirrorBegin", "mirrorEnd",   // no render targets or automatic frames: entry must not await a mirror pass
     "roadLutReady",   // WGX-only marker: tracks.js adds the GLX ground slab when it is absent
   ]);
   const meshOf = (buf, extra) => {

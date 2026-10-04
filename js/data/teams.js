@@ -7,27 +7,46 @@ const Teams = (function () {
   // folds `livery` into the synthesized "default" (new player + every AI car),
   // while the picker entries in js/car/liveries.js keep the plain cover.
   // Fields: LiveryTex.SPINE_LOGO_IDS / SPINE_SIDE_IDS (crown and flank
-  // graphics), Car3D.SPINE_HEIGHT_IDS / FIN_SHAPE_IDS (shape). No real 2026
-  // car carries a tail fin, so none of them do.
+  // graphics), Car3D.SPINE_HEIGHT_IDS / FIN_SHAPE_IDS (shape).
+  //
+  // SHARK FINS ARE PER TEAM (2026-10-03). This used to say no real 2026 car
+  // carries a tail fin; the launch and shakedown reports say four do. Red Bull
+  // and Ferrari run "a fairly pronounced shark fin thanks to relatively slim
+  // engine covers", Ferrari's and McLaren's STEPPED, Red Bull's not (Motorsport
+  // .com, 2026 early tech trends, /10794222/); Mercedes "a larger shark fin"
+  // over a relatively small engine cover (Autosport, /10791945/). Those four
+  // carry a blade on a `standard` or `raised` spine (a dorsal crown buries it;
+  // `raised` keeps the flank tall enough for the `lockup` side design) — and
+  // the rest keep the fin-less `dorsal` cover. Body shapes (pods, undercut,
+  // airbox) live in the FACTORY_PRESETS engine recipes in js/car/parts.js and
+  // the nose in Car3D.TEAM_STYLE. NAMES are constructor names only: no title
+  // sponsor (Petronas, HP) in a display name — the data hub matches the API's
+  // names by `short` (js/data/hub.js TEAM_KEYS), never by `name`.
   //
   // ONE `livery:` key per team: two sessions each adding one merged without a
   // conflict, the later duplicate key silently won and the earlier design
   // vanished. tests/unit/team-livery.test.mjs is the guard.
-  // `carbon` and `bigmark` are not defaults: on a near-black car (Haas, Audi)
-  // both disappear from a race camera (tools/shot/shot.mjs --team).
+  // `carbon` and `bigmark` are not defaults: on a near-black car (Audi's cover,
+  // Mercedes) both disappear from a race camera (tools/shot/shot.mjs --team).
   const LIST = [
     {
-      id: "mercedes", name: "Mercedes-AMG Petronas", short: "MER",
-      color: [0.045, 0.055, 0.065], color2: [0.0, 0.706, 0.671],   /* black #0B0E10 / Petronas teal #00B4AB (2026 black car) */
+      id: "mercedes", name: "Mercedes-AMG", short: "MER",
+      color: [0.045, 0.055, 0.065], color2: [0.0, 0.706, 0.671],   /* black #0B0E10 / team teal #00B4AB (2026 black car) */
       /* The W17 is a BLACK car with a SILVER engine cover: the launch photos show
          the airbox, roll structure and cover crown in bare-metal silver over a
-         black chassis, with the star flake on the tail. */
+         black chassis, with the star flake on the tail. The team's own launch
+         renders (mercedesamgf1.com, 22 Jan 2026) add a SILVER NOSE TOP edged in
+         teal ("the transition from iconic Mercedes silver to the team's deep
+         black") — `noseStripe` — and a black shark fin carrying the stars. The
+         upper/lower silver-to-black split itself needs a zone the model does
+         not have yet. */
       livery: {
         // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the W17's silver star carries a dark rim on its silver cover — 1.23:1 bare.
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
-        logo3: [0.06, 0.06, 0.08], cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "none", spineHeight: "dorsal",
-                spineLogo: "fade", spineSide: "starfield", coverBind: "spineOnly" },
+        logo3: [0.06, 0.06, 0.08], cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "standard", spineHeight: "raised",
+                spineLogo: "fade", spineSide: "starfield", coverBind: "spineOnly",
+                noseStripe: [0.76, 0.78, 0.82], fin: [0.045, 0.055, 0.065] },
       engine: "Mercedes", tier: 0,
       stats: { speed: 96, accel: 91, cornering: 93, braking: 90 },
       drivers: [
@@ -36,12 +55,15 @@ const Teams = (function () {
       ]
     },
     {
-      id: "ferrari", name: "Scuderia Ferrari HP", short: "FER",
+      id: "ferrari", name: "Scuderia Ferrari", short: "FER",
       color: [0.863, 0.0, 0.0], color2: [1.0, 1.0, 1.0],           /* red #DC0000 / white */
       /* The SF-26's white engine-cover TOP is a SADDLE ZONE on the red body —
          cover stays body red; saddleTint + saddleWrap paint the white block
-         (crown + flanks). Same split as the launch photos, expressed as zones. */
-      livery: { cover: [0.863, 0.0, 0.0], finShape: "none", spineHeight: "dorsal",
+         (crown + flanks). Same split as the launch photos, expressed as zones.
+         Its WINGS are black, not the white c2 they fell back to (launch renders),
+         and it runs a STEPPED fin on a slim cover (see the shark-fin note). */
+      livery: { cover: [0.863, 0.0, 0.0], finShape: "stepped", spineHeight: "standard",
+                wing: [0.06, 0.06, 0.07], rearWing: [0.06, 0.06, 0.07],
                 spineLogo: "cap", spineSide: "shoulder", coverBind: "saddleWrap", finHandoff: "contrast",
                 saddleTint: [0.95, 0.95, 0.96], fin: [0.863, 0.0, 0.0],
                 // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the black horse is 3.75:1 on
@@ -61,7 +83,10 @@ const Teams = (function () {
         // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: papaya speedmark on the papaya cover is 1.04:1 bare — the MCL's mark is rimmed.
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
-        logo3: [0.06, 0.06, 0.08], finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "wordmark" },
+        // The MCL40 runs a STEPPED fin (Motorsport.com) — anthracite, the c2 it inherits.
+        // LOWER: the MCL40's anthracite under the papaya — pod flanks and lower chassis (CarShade.lowerZone) — its own c2.
+        logo3: [0.06, 0.06, 0.08], finShape: "stepped", spineHeight: "raised", spineLogo: "panel", spineSide: "wordmark",
+        lower: [0.122, 0.122, 0.122] },
       color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122],     /* papaya #FF8000 / anthracite #1F1F1F */
       engine: "Mercedes", tier: 1,
       stats: { speed: 93, accel: 94, cornering: 96, braking: 91 },
@@ -72,12 +97,15 @@ const Teams = (function () {
     },
     {
       id: "redbull", name: "Red Bull Racing", short: "RBR",
-      // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the red bulls are 2.27:1 on navy
+      // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the red bulls are dark on the blue
       // wherever they paint WITHOUT the sun disc (bigmark, flank logo). A sun-gold rim reads
-      // 11:1 on navy and vanishes on the disc itself.
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wrap", spineSide: "duo",
-                logo3: [1.0, 0.788, 0.024] },
-      color: [0.086, 0.137, 0.294], color2: [1.0, 0.843, 0.0],     /* navy #16234B / yellow #FFD700 */
+      // on the blue and vanishes on the disc itself.
+      // The RB22 left the matte navy for a GLOSS, brighter "racing blue" (redbull.com and
+      // formula1.com launch reports, 16 Jan 2026; "a richer blue than ever", Robb Report),
+      // keeps the yellow nose, and runs a pronounced, non-stepped fin on a slim cover.
+      livery: { finShape: "standard", spineHeight: "standard", spineLogo: "wrap", spineSide: "duo",
+                logo3: [1.0, 0.788, 0.024], nose: [1.0, 0.788, 0.024], fin: [0.039, 0.184, 0.580] },
+      color: [0.039, 0.184, 0.580], color2: [1.0, 0.843, 0.0],     /* gloss racing blue #0A2F94 / yellow #FFD700 */
       engine: "Red Bull Ford", tier: 2,
       stats: { speed: 90, accel: 88, cornering: 91, braking: 87 },
       drivers: [
@@ -88,13 +116,19 @@ const Teams = (function () {
     {
       id: "alpine", name: "Alpine", short: "ALP",
       /* spineTint must clear the blue cover (≥2:1). Launch pink #FF87BC is only
-         ~1.56:1 on #0093CC and made every crown band invisible to cover-legibility. */
+         ~1.56:1 on #0093CC and made every crown band invisible to cover-legibility.
+         PINK WHERE THE A526 WEARS IT, not wherever c2 falls: a pink nose top
+         ("pink surface on the nose", Motorsport.com), the halo, and the big pink
+         sponsor lettering on otherwise blue sidepods ("the sidepods return to
+         the car's main blue colour, with the logo ... in pink writing on top",
+         The Race, 23 Jan 2026) — `pod`. Wing flaps go blue, not pink. */
       livery: {
         // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the A mark IS the cover blue (1.00:1) — rimmed, as on the A524.
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
         logo3: [0.06, 0.06, 0.08], finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
-                spineTint: [1.0, 1.0, 1.0] },
+                spineTint: [1.0, 1.0, 1.0], pod: [1.0, 0.529, 0.737], noseStripe: [1.0, 0.529, 0.737],
+                halo: [1.0, 0.529, 0.737], wing: [0.0, 0.576, 0.8] },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
       stats: { speed: 83, accel: 80, cornering: 82, braking: 80 },
@@ -109,8 +143,10 @@ const Teams = (function () {
         // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: RB letters on their own blue read 1.00:1 bare — a light rim.
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
+        // The VCARB 03 shows more bare carbon than paint on its wings, and the
+        // family yellow nose tip (launch renders, 15 Jan 2026).
         logo3: [0.97, 0.97, 0.98], finShape: "none", spineHeight: "dorsal", spineLogo: "streaks", spineSide: "sash",
-                spineTint: [0.086, 0.204, 0.796] },
+                spineTint: [0.086, 0.204, 0.796], wingCarbon: "carbon", nose: [1.0, 0.788, 0.024] },
       color: [0.957, 0.941, 0.925], color2: [0.086, 0.204, 0.796], /* white #F4F0EC / blue #1634CB */
       engine: "Red Bull Ford", tier: 3,
       stats: { speed: 82, accel: 82, cornering: 81, braking: 80 },
@@ -121,8 +157,16 @@ const Teams = (function () {
     },
     {
       id: "haas", name: "Haas", short: "HAA",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "number" },
-      color: [0.075, 0.078, 0.086], color2: [0.855, 0.161, 0.11],  /* dark graphite #131416 / red #DA291C (2026 dark car, white+red accents) */
+      /* The VF-26 is a WHITE car: "a predominantly white livery" (ESPN), "the
+         black carbon areas of last year's car replaced by more large white areas
+         and additional red accents" (Sky Sports), both 19 Jan 2026. Red on the
+         wings and a red block on the engine cover (`panel`); the remaining black
+         is low bodywork: the `lower` zone (pod flanks, lower chassis).
+         OUTLINE (logo3) is TEAM DATA: the white monogram on the white cover is
+         1.03:1 bare — a dark rim, the same row a player uses for the same job. */
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "number",
+                logo3: [0.06, 0.06, 0.08], lower: [0.06, 0.06, 0.07] },
+      color: [0.957, 0.957, 0.965], color2: [0.855, 0.161, 0.11],  /* white #F4F4F6 / red #DA291C */
       engine: "Ferrari", tier: 3,
       stats: { speed: 80, accel: 79, cornering: 79, braking: 79 },
       drivers: [
@@ -135,10 +179,11 @@ const Teams = (function () {
       color: [0.059, 0.235, 0.788], color2: [1.0, 1.0, 1.0],       /* blue #0F3CC9 / white */
       /* The FW48's cover is BLACK (a secondary source claimed white; the launch
          photographs and the official release say otherwise — the white is the
-         sidepod and wings). docs/notes/LIVERY-2026-REFERENCE.md. */
+         sidepod and wings). docs/notes/LIVERY-2026-REFERENCE.md. The white
+         sidepod panel is `pod`. */
       livery: { cover: [0.055, 0.058, 0.070], finShape: "none", spineHeight: "dorsal",
                 spineLogo: "ridge", spineSide: "rake", coverBind: "independent",
-                spineTint: [0.0, 0.82, 0.95], sideTint: [0.059, 0.235, 0.788] },
+                spineTint: [0.0, 0.82, 0.95], sideTint: [0.059, 0.235, 0.788], pod: [1.0, 1.0, 1.0] },
       engine: "Mercedes", tier: 3,
       stats: { speed: 82, accel: 78, cornering: 80, braking: 79 },
       drivers: [
@@ -168,9 +213,11 @@ const Teams = (function () {
       /* The AMR26 wears a DARK STRIPE down the spine of a body-green cover
          (launch gallery; docs/notes/LIVERY-2026-REFERENCE.md). `spineTint`,
          not `stripe`: the band otherwise takes the LIME accent, and a dark
-         `stripe` would darken the NOSE, which the photographs contradict. */
+         `stripe` would darken the NOSE, which the photographs contradict.
+         SATIN, not gloss ("the car sports a satin finish", Robb Report, 12 Feb
+         2026), on a compact cover "with vents" (Motorsport.com) — `gills`. */
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "logo",
-                spineTint: [0.008, 0.086, 0.078] },
+                spineTint: [0.008, 0.086, 0.078], finish: "satin", coverVents: "gills" },
       color: [0.0, 0.349, 0.31], color2: [0.718, 0.882, 0.106],    /* green #00594F / lime accents */
       engine: "Honda", tier: 4,
       stats: { speed: 74, accel: 72, cornering: 76, braking: 74 },
@@ -181,9 +228,20 @@ const Teams = (function () {
     },
     {
       id: "cadillac", name: "Cadillac", short: "CAD",
+      /* LEFT WHITE, RIGHT BLACK. bodySplit "lr" paints the car's left (x < 0,
+         measured: js/car/liverytex.js flank frames) in `color`, so white is
+         primary: "its left side will be a grayish white, while its right flank
+         will be black" (Motorsport.com, 9 Feb 2026) and "the left-hand side ...
+         will be white, while the right side will be black" (Crash.net, same
+         day); the team's own left-side launch photo agrees. The swap is the
+         whole fix — it was mirrored. Chrome halo (Robb Report) and a louvred
+         cover (Motorsport.tech) complete the conventional-downwash car.
+         GRAYISH white, as reported — and it is load-bearing: the gold crest
+         must clear 4.2:1 on the dimmed body in the dark garage, which pure
+         white (3.80) does not; logo3 rims it on the bright cover (2.16 bare). */
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate",
-                bodySplit: "lr" },
-      color: [0.039, 0.039, 0.039], color2: [0.961, 0.961, 0.961], /* black #0A0A0A / white #F5F5F5 */
+                bodySplit: "lr", halo: [0.86, 0.88, 0.92], coverVents: "gills", logo3: [0.06, 0.06, 0.08] },
+      color: [0.84, 0.85, 0.86], color2: [0.039, 0.039, 0.039],    /* grayish white #D6D9DB (left) / black #0A0A0A (right) */
       engine: "Ferrari", tier: 4,
       stats: { speed: 73, accel: 73, cornering: 73, braking: 72 },
       drivers: [

@@ -3,7 +3,8 @@
     "apex-tools": {
       "type": "stdio",
       "command": "bash",
-      "args": ["tools/mcp/apex-tools-mcp.sh", "serve"]
+      "args": ["tools/mcp/apex-tools-mcp.sh", "serve"],
+      "timeout": 900000
     },
     "playwright-official": {
       "type": "stdio",

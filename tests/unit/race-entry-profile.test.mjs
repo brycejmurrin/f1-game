@@ -145,11 +145,98 @@ test("requestWarm / raiseHandoff / span / afterPresent keep game.js thin", () =>
 
 const ENTRY_SRC = fs.readFileSync(path.join(ROOT, "js/race/session-entry.js"), "utf8");
 
+test("hidden mirror preparation keeps the handoff up until its main present", () => {
+  const P = load();
+  P.begin("startRace");
+  let stops = 0;
+  const screen = { phase: () => "handoff", stop() { stops++; } };
+  const gfx = { warming: () => false };
+  P.afterPresent(screen, gfx, true);
+  P.afterPresent(screen, gfx, true);
+  assert.equal(stops, 0);
+  assert.ok(!P.snapshot().marks.some((m) => m.n === "present:ready"));
+  P.afterPresent(screen, gfx, false);
+  assert.equal(stops, 1);
+  assert.ok(P.snapshot().marks.some((m) => m.n === "handoff:lower"));
+});
+
+test("race-entry ticks pump input and network while holding physics and governor", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const start = source.indexOf("function tickBody(now) {");
+  const end = source.indexOf("  if (paused && !netPlay.active())", start);
+  const calls = [];
+  let preparing = true, warming = false;
+  const ctx = {
+    lastFrame: 100, paused: false, state: "count", _poseAt: null,
+    mirrorPass: { preparing: () => preparing }, gfx: { warming: () => warming },
+    PerfGov: { tick: dt => calls.push(["governor", dt]) },
+    performance: { now: () => 260 },
+    Input: { poll: () => calls.push("input"), clearEdges: () => calls.push("clear") },
+    BrakeCue: { tick() {} }, onboard: { tick() {} },
+    director: { tick() {} },
+    netPlay: { tick: () => calls.push("network") },
+    render: dt => calls.push(["render", dt]),
+  };
+  vm.runInNewContext(source.slice(start, end) + 'throw new Error("physics reached");\n}', ctx);
+  ctx.tickBody(200);
+  assert.deepEqual(calls, ["input", "network", "clear", ["render", 0]]);
+  assert.equal(ctx.lastFrame, 260, "preparation time must not accumulate into the next tick");
+  preparing = false;
+  assert.throws(() => ctx.tickBody(276), /physics reached/);
+  assert.ok(calls.some(call => Array.isArray(call) && call[0] === "governor" && call[1] === 16));
+  preparing = true;
+  calls.length = 0; warming = true;
+  ctx.tickBody(300);
+  assert.deepEqual(calls, ["input", "network", "clear"], "compiler keeps renderer ownership");
+  warming = false; preparing = false;
+  assert.throws(() => ctx.tickBody(316), /physics reached/);
+  assert.ok(calls.some(call => Array.isArray(call) && call[0] === "governor"));
+});
+
+test("hiding or leaving the page cancels preparation when animation frames stop", () => {
+  // Lifecycle listeners live in PlatformSession.wireLifecycle (extracted from game.js).
+  const source = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8");
+  const start = source.indexOf('document.addEventListener("visibilitychange", () => {');
+  const end = source.indexOf("// LOSING FOCUS", start);
+  assert.ok(start >= 0 && end > start, "PlatformSession wireLifecycle visibilitychange block");
+  const handlers = {}, calls = [];
+  const ctx = {
+    document: { hidden: false, addEventListener: (name, fn) => { handlers[name] = fn; } },
+    window: { addEventListener: (name, fn) => { handlers[name] = fn; } },
+    G: { state: "count", netPlay: { active: () => false } },
+    disarmProbeOnLeave() {},
+    cancelMirrorPrep: () => calls.push("cancel"),
+    setPaused: () => calls.push("pause"),
+    PerfGov: { sentinelArm() {}, sentinelResume() {} },
+    raceWakeLock: { wanted: () => false, hold() {} },
+    clearInterval() {}, setInterval() { return 1; },
+  };
+  vm.runInNewContext(source.slice(start, end), ctx);
+  handlers.visibilitychange();
+  assert.deepEqual(calls, []);
+  ctx.document.hidden = true;
+  handlers.visibilitychange();
+  assert.deepEqual(calls, ["cancel", "pause"]);
+  calls.length = 0; ctx.document.hidden = false;
+  handlers.pagehide();
+  assert.deepEqual(calls, ["cancel"]);
+});
+
 function profileDeferred() {
   let resolve, reject;
   const promise = new Promise((r, j) => { resolve = r; reject = j; });
   return { promise, resolve, reject };
 }
+
+test("a superseded asynchronous preparation cannot mark the next entry", async () => {
+  const P = load(), held = profileDeferred();
+  P.begin("old");
+  const pending = P.spanAsync("mirrorPrepare", () => held.promise);
+  P.begin("new");
+  held.resolve();
+  await pending;
+  assert.deepEqual(Array.from(P.snapshot().marks, m => m.n), ["begin:new"]);
+});
 
 function profileSessionHarness() {
   const observers = [], failures = [];

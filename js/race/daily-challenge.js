@@ -128,6 +128,11 @@ const DailyChallenge = (function () {
       const parts = ["APEX 26 DAILY " + p.day, p.trackName.toUpperCase(),
         e && e.best != null ? G.fmtTime(e.best) : "NO LAP"];
       if (context) parts.push((p.class === "standard" ? "STANDARD CLASS " : "OPEN CLASS ") + Hash32.fnv1a(context).toString(16));
+      // No medal passed: TODAY's, from today's class best. The stored ghost's medal
+      // (Ghost.medal()) belongs to the records context, which has no day in it, so
+      // a later Daily on the same circuit and conditions read another day's GOLD.
+      if (medal === undefined) medal = e && e.best != null && typeof Quali !== "undefined" && G.referencePole
+        ? Quali.medalFor(e.best, G.referencePole()) : null;
       if (medal) parts.push(medal.toUpperCase());
       if (st.last === p.day && st.count > 0) parts.push("STREAK " + st.count);
       return parts.join(" · ");

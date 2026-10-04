@@ -198,10 +198,10 @@ test("the picker knows the custom tail (source contract)", () => {
   assert.match(src, /filter === "season" && \(t\.classic \|\| t\.custom\)/, "SEASON hides customs");
   assert.match(src, /filter === "custom" && !t\.custom/, "MY CIRCUITS shows only customs");
   assert.match(src, /trb trb-custom/, "the CUSTOM badge");
-  assert.match(read("css/menus.css"), /\.trb-custom \{/, "…styled");
+  assert.match(read("css/race-setup.css"), /\.trb-custom \{/, "…styled");
   assert.match(read("js/career/season-ui.js"), /!t\.custom && !used\.has/, "the season shelf never offers a custom");
   assert.match(read("js/net/lobby.js"), /Tracks\.LIST\[d\.track\]\.custom\) return null/, "the guest refuses a custom index");
-  assert.match(read("js/game.js"), /def\.scenery \|\| sceneryResident/, "ensureScenery fetches nothing for an inline closure");
+  assert.match(read("js/core/lazy-bundles.js"), /def\.scenery \|\| sceneryResident/, "ensureScenery fetches nothing for an inline closure");
 });
 
 test("sanitize: bank angle in [1, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {

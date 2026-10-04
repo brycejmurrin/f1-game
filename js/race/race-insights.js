@@ -21,6 +21,7 @@ const RaceInsights = (function () {
     // because "I touched somebody while threading traffic" is the failure
     // whoever it was.
     backmarkers: "Clear three slower cars without contact" });
+  const needsRivals = mode => ["start", "slipstream", "overtake", "defend", "backmarkers"].includes(mode);
   // A drill judges what the CAR did, never the stick. Lateral acceleration says
   // the car changed direction: a pad deflection of 0.35 reads 0.11 after the
   // steer expo, so stick thresholds silently fail every analog driver
@@ -85,7 +86,7 @@ const RaceInsights = (function () {
       // ── the rival drills refuse loudly, because every refusal names the thing
       // the driver has to go and do before the drill means anything ───────────
       let rival = null;
-      if (["slipstream", "overtake", "defend", "backmarkers"].includes(mode)) {
+      if (mode !== "start" && needsRivals(mode)) {
         if (placeOf(c) === 0) { G.announce("THIS DRILL NEEDS OTHER CARS ON TRACK", 2, "practice"); return false; }
         // A caution neutralises the whole field to a delta pace, so nothing
         // rival-relative measured under one means anything.
@@ -537,6 +538,6 @@ const RaceInsights = (function () {
     return { update, reset, event, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
       attempts: mode => (attempts[mode] || []).map(a => ({ ...a })) };
   }
-  return Object.freeze({ create, DRILLS });
+  return Object.freeze({ create, DRILLS, needsRivals });
 })();
 Object.freeze(RaceInsights);

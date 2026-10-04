@@ -87,7 +87,7 @@ function loadAtlas() {
   };
   sb.globalThis = sb;
   vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js", "js/car/liverytex.js"])
+  for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   const LT = vm.runInContext("LiveryTex", sb);
   const Teams = vm.runInContext("Teams", sb), Liveries = vm.runInContext("Liveries", sb);
@@ -472,7 +472,7 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
 test("carbon tail keylines match the crown width", () => {
   // Crown carbon uses W*0.035; the tail continuation used to keep 0.014 and
   // vanished at chase distance. Both arms of drawSpineTop/drawTailTop must agree.
-  const src = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/car/livery-graphics.js"), "utf8");
   const carbons = [...src.matchAll(/id === "carbon"[\s\S]*?(?=else if \(id ===|ctx\.restore\(\))/g)];
   assert.ok(carbons.length >= 2, "crest and tail both paint carbon");
   for (const m of carbons) {

@@ -32,6 +32,12 @@ const M = loadParts();
 const { Car3D, CarMesh, Parts, Teams, LiveryTex } = M;
 const TEAM = Teams.LIST.find((t) => t.id === "ferrari");
 const partsFor = (setup) => Parts.getVisualTiers(setup || {}, TEAM);
+// The ROUNDED car (CarShade on, the game's default): its cover foot is pinched
+// (the coke bottle) and its decal sheet is built from bodyAnchors(.., true).
+const S = loadParts({ shade: true });
+const sPartsFor = (setup) => S.Parts.getVisualTiers(setup || {}, S.Teams.LIST.find((t) => t.id === "ferrari"));
+// The same parts with one engine knob moved (coke: the pinch and the ramp follow it).
+const withEngine = (parts, knobs) => Object.assign({}, parts, { _visual: Object.assign({}, parts._visual, { engine: Object.assign({}, parts._visual.engine, knobs) }) });
 
 // Decal vertices carrying a given atlas region, read back out of the UVs.
 function verticesIn(dec, region) {
@@ -182,12 +188,14 @@ test("the tail strip clears the heat shield and the spine vent on every cover", 
   assert.deepEqual(bad, [], "the tail strip is inside the bodywork:\n" + bad.join("\n"));
 });
 
-test("the flank band clears the pinstripe and the service hatches", () => {
+for (const [label, X, round, pf] of [["flat", M, false, partsFor], ["rounded", S, true, sPartsFor]])
+test(`the flank band clears the pinstripe and the service hatches — ${label} car`, () => {
+  const { Car3D, CarMesh } = X;
   const bad = [];
   for (const spineHeight of Car3D.SPINE_HEIGHT_IDS) {
-    for (const engine of ["stock", "race", "quali_engine"]) {
-      const parts = partsFor({ engine });
-      const anchors = Car3D.bodyAnchors(parts, TEAM.id, spineHeight);
+    for (const [engine, knobs] of [["stock"], ["race"], ["quali_engine"], ["stock", { coke: 1.38 }]]) {   // + the deepest pinch
+      const parts = knobs ? withEngine(pf({ engine }), knobs) : pf({ engine });
+      const anchors = Car3D.bodyAnchors(parts, TEAM.id, spineHeight, round);
       const dec = CarMesh.carDecalData(2, parts, false, TEAM.id, "none", spineHeight);
       const pts = verticesIn(dec, "spineSide");
       assert.ok(pts.length >= 4, `${spineHeight}/${engine}: no flank band`);
@@ -206,6 +214,102 @@ test("the flank band clears the pinstripe and the service hatches", () => {
     }
   }
   assert.deepEqual(bad, [], "the flank band is coplanar with the bodywork on it:\n" + bad.join("\n"));
+});
+
+// ── the flank band on the ROUNDED (coke-bottle) cover ───────────────────────
+// The rounded cover's FOOT is pinched between its stations (CarShade.cokeFoot),
+// so its flank is curved along z. One straight quad edge from z -0.66 to -1.90
+// is a chord across that curve and floats off the skin at the waist (up to
+// 40 mm at coke 1.38, against 14 mm at its ends); the band is a strip of
+// sub-quads at the rings the cover is lofted at (CarShade.COVER_Z).
+// Measured against the REAL rounded mesh: the cover's skin is the triangles in
+// the cover's own (sentinel) colour whose corners all sit on those rings — the
+// airbox and roll hoop share the colour but not the rings.
+const SENT = [0.31, 0.62, 0.93];
+function coverSkin(X, parts, spineHeight) {
+  const car = X.Car3D.build(TEAM.color, TEAM.color2, { livery: { spineHeight, cover: SENT }, teamId: TEAM.id, num: 16, parts, noWheels: true });
+  const rings = new Set(Array.from(X.CarShade.COVER_Z, (z) => z.toFixed(9)));
+  const isCover = (j) => car.col[j * 3] === SENT[0] && car.col[j * 3 + 1] === SENT[1] && car.col[j * 3 + 2] === SENT[2]
+    && rings.has(car.pos[j * 3 + 2].toFixed(9));
+  const tris = [];
+  for (let i = 0; i < car.idx.length; i += 3) {
+    const q = [car.idx[i], car.idx[i + 1], car.idx[i + 2]];
+    if (q.every(isCover)) tris.push(q.map((j) => [car.pos[j * 3], car.pos[j * 3 + 1], car.pos[j * 3 + 2]]));
+  }
+  return tris;
+}
+// One EDGE of a flank region (v at its bottom or top), front to rear, as a polyline.
+function flankEdge(dec, region, top) {
+  const R = LiveryTex.REGIONS[region], SZ = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || SZ;
+  const uL = R.x / SZ, uR = (R.x + R.w) / SZ, v0 = top ? 1 - R.y / SH : 1 - (R.y + R.h) / SH, pts = [];
+  for (let j = 0; j < dec.pos.length / 3; j++) {
+    const u = dec.uv[j * 2], v = dec.uv[j * 2 + 1];
+    if (u < uL - 1e-6 || u > uR + 1e-6 || Math.abs(v - v0) > 1e-6) continue;
+    const p = [dec.pos[j * 3], dec.pos[j * 3 + 1], dec.pos[j * 3 + 2]];
+    if (!pts.some((q) => q.every((x, k) => Math.abs(x - p[k]) < 1e-12))) pts.push(p);
+  }
+  return pts.sort((a, b) => b[2] - a[2]);
+}
+const along = (line, z) => {   // the polyline's point at z
+  const i = Math.max(0, line.findIndex((p, k) => k < line.length - 1 && z <= p[2] + 1e-12 && z >= line[k + 1][2] - 1e-12));
+  const a = line[i], b = line[i + 1], u = (a[2] - z) / (a[2] - b[2]);
+  return [0, 1, 2].map((k) => a[k] + (b[k] - a[k]) * u);
+};
+
+test("rounded: the flank band's edges stay their 14 mm off the coke-bottle skin, sampled every 1 cm", () => {
+  const PROUD = S.Car3D.COVER_STACK.flankDecal, bad = [];
+  let worstStraight = 0;
+  for (const coke of [0.72, 1.38]) for (const spineHeight of S.Car3D.SPINE_HEIGHT_IDS) {
+    const parts = withEngine(sPartsFor({}), { coke }), skin = coverSkin(S, parts, spineHeight);
+    assert.ok(skin.length >= 100, `coke ${coke}/${spineHeight}: only ${skin.length} cover-skin triangles found`);
+    const dec = S.CarMesh.carDecalData(2, parts, false, TEAM.id, "none", spineHeight);
+    for (const region of ["spineSide", "spineSideL"]) for (const top of [false, true]) {
+      const line = flankEdge(dec, region, top), tag = `coke ${coke}/${spineHeight}/${region} ${top ? "top" : "bottom"} edge`;
+      assert.ok(Math.abs(line[0][2] + 0.66) < 1e-9 && Math.abs(line[line.length - 1][2] + 1.90) < 1e-9, `${tag}: does not run -0.66..-1.90`);
+      for (let i = 66; i <= 190; i++) {
+        const z = -i / 100, d = nearest(along(line, z), skin);
+        if (Math.abs(d - PROUD) > 0.002) bad.push(`${tag} at z ${z}: ${(d * 1000).toFixed(1)} mm off the skin (meant ${(PROUD * 1000).toFixed(0)})`);
+        // The straight edge the flat car draws, end to end, against the same skin:
+        // what the strip is for (the test can see a floating band).
+        const a = line[0], b = line[line.length - 1], u = (a[2] - z) / (a[2] - b[2]);
+        worstStraight = Math.max(worstStraight, nearest([0, 1, 2].map((k) => a[k] + (b[k] - a[k]) * u), skin) - PROUD);
+      }
+    }
+  }
+  assert.deepEqual(bad, [], "the flank band floats off (or dives into) the rounded cover:\n" + bad.slice(0, 20).join("\n"));
+  assert.ok(worstStraight > 0.008, `a single straight quad would sit only ${(worstStraight * 1000).toFixed(1)} mm off at coke 1.38 — the strip is not needed`);
+});
+
+test("rounding OFF draws today's decal sheet, and ON moves only the flank band", () => {
+  const strip = (dec) => {   // the sheet without the two flank regions, in emission order
+    const R = LiveryTex.REGIONS, SZ = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || SZ;
+    const inR = (r, u, v) => r && u >= r.x / SZ - 1e-6 && u <= (r.x + r.w) / SZ + 1e-6 && v >= 1 - (r.y + r.h) / SH - 1e-6 && v <= 1 - r.y / SH + 1e-6;
+    const out = [];
+    for (let j = 0; j < dec.pos.length / 3; j++) {
+      const u = dec.uv[j * 2], v = dec.uv[j * 2 + 1];
+      if (inR(R.spineSide, u, v) || inR(R.spineSideL, u, v)) continue;
+      out.push([dec.pos[j * 3], dec.pos[j * 3 + 1], dec.pos[j * 3 + 2], dec.nrm[j * 3], dec.nrm[j * 3 + 1], dec.nrm[j * 3 + 2], u, v]);
+    }
+    return out;
+  };
+  const A = (d) => ({ pos: Array.from(d.pos), nrm: Array.from(d.nrm), uv: Array.from(d.uv), idx: Array.from(d.idx) });
+  for (const spineHeight of Car3D.SPINE_HEIGHT_IDS) {
+    for (const [engine, knobs] of [["stock"], ["race"], ["stock", { coke: 1.38 }], ["stock", { coke: 0.72 }]]) {
+      const today = (() => { const p = knobs ? withEngine(partsFor({ engine }), knobs) : partsFor({ engine });
+        return CarMesh.carDecalData(2, p, false, TEAM.id, "standard", spineHeight); })();   // no CarShade at all
+      const parts = knobs ? withEngine(sPartsFor({ engine }), knobs) : sPartsFor({ engine });
+      S.CarShade.set("0");   // the player's opt-out: CarShade loaded, rounding off
+      let off;
+      try { off = S.CarMesh.carDecalData(2, parts, false, TEAM.id, "standard", spineHeight); } finally { S.CarShade.set(null); }
+      assert.deepEqual(A(off), A(today), `${spineHeight}/${engine}${knobs ? " coke " + knobs.coke : ""}: the opted-out sheet is not today's`);
+      const on = S.CarMesh.carDecalData(2, parts, false, TEAM.id, "standard", spineHeight);
+      assert.deepEqual(strip(on), strip(today), `${spineHeight}/${engine}: rounding moved a decal other than the flank band`);
+      assert.equal(on.idx.length / 3, today.idx.length / 3 + 20, "the flank band is 6 sub-quads a side where it was 1");
+    }
+  }
+  // An imported body never takes the rounded sheet.
+  assert.deepEqual(A(S.CarMesh.carDecalData(2, sPartsFor({}), true, TEAM.id, "standard", "dorsal")),
+                   A(CarMesh.carDecalData(2, partsFor({}), true, TEAM.id, "standard", "dorsal")), "an imported body's sheet changed");
 });
 
 // ── the cockpit nose decal ──────────────────────────────────────────────────

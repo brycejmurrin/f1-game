@@ -1063,7 +1063,7 @@ it lands.
 
 | file | sites (symbol) | channel | why it never reaches the player with assists off |
 |---|---|---|---|
-| `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only BodyAttitude (render-only) |
+| `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only render, and only for AI cars: BodyAttitude's AI roll and CarDraw's AI front-wheel angle (`js/car/car-draw.js`, the bend's Ackermann `atan(L·k)`, inside `!c.human` — `tests/unit/car-fx.test.mjs` guards that a human car's wheels read no curvature) |
 | `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick / next-corner `c.kTurn` / get-a-run | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path. `c.kTurn` (2026-10-01: pass side, the level side-by-side election, the defender's predicted side) and `runExtra`'s read of `k` are the same kind: they move only AI targets. `js/physics/collide.js` reads `kTurn` only for an all-AI pair, so it never picks which car a PLAYER rub scrubs |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
 | `js/game.js` | `drivingLineApi` (feeds `js/render/shared/driving-line.js`) | **surface** | the DRIVING LINE ribbon: the adapter hands the builder the static curvature LUT, read once per circuit to place the line and shade its braking zones; a picture on the road, no car reads it. Same lateral formula as the assist-gated `lineX` so the two agree. The builder it feeds ALSO derives an audible cue — see the `driving-line.js` row |
@@ -1094,3 +1094,9 @@ the overtake arm flag the HUD already draws and `G.aeroZoneAhead`, and write onl
 to `#announce`. `tests/unit/onboard.test.mjs` asserts the source contains no
 `Tracks` read, no `curvature`, and no assignment to a car — which is what keeps
 it out of this table honestly rather than by omission.
+
+**Grip steer** (`js/physics/grip-steer.js`) is likewise absent: it caps the
+player's `driverDelta` from own-state only (`vLat`, yaw rate, speed, `muF`)
+behind `GripSteer.setLevel` (notch 1 = OFF). `tests/unit/grip-steer.test.mjs`
+asserts the source has no `Tracks` / `curvature` / `kCur` and that notch 1 is
+identity.

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
 function load(initial = {}, durable = true, reduced = false, document) {
@@ -14,6 +15,86 @@ function load(initial = {}, durable = true, reduced = false, document) {
   vm.runInContext(source, context); return { studio: context.AppearanceStudio, values, writes, owners };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
+
+function loadWithControls() {
+  const dom = makeDom(), values = {};
+  const panel = dom.byId("pm-panel-appearance"), titleFold = dom.byId("pm-titlescreen"), titleBody = dom.byId("pm-titlescreen-body");
+  titleFold.appendChild(dom.byId("pm-titlescreen-sum")); titleFold.appendChild(titleBody); panel.appendChild(titleFold);
+  titleBody.appendChild(dom.byId("pm-replay-intro"));
+  panel.appendChild(dom.byId("pm-pausemenu-body")); dom.byId("pm-pausemenu-sum"); dom.byId("pausemenu"); dom.byId("overlay");
+  panel.appendChild(dom.byId("pm-contrast"));
+  dom.body.setAttribute("data-shape", "wide");
+  const get = dom.document.getElementById;
+  dom.document.getElementById = id => dom.has(id) ? get(id) : null;
+  const store = { get: (k, d) => k in values ? values[k] : d, set: (k, v) => { values[k] = v; return true; } };
+  const context = vm.createContext({ document: dom.document, GameStore: { store }, Log: { info() {}, warn() {} },
+    setTimeout, clearTimeout, MutationObserver: class { observe() {} }, innerWidth: 1000, innerHeight: 500 });
+  context.window = context;
+  for (const file of ["setting-row", "appearance-opts", "title-layout", "pause-opts"]) {
+    const code = fs.readFileSync(new URL("../../js/ui/" + file + ".js", import.meta.url), "utf8");
+    vm.runInContext(code.replace(/^const\b/gm, "var"), context);
+  }
+  // Keep Studio's illustrative preview unmounted; the advanced controls above
+  // use their real owners and real SettingRow selects.
+  context.document = { readyState: "loading", addEventListener() {} };
+  vm.runInContext(source, context); context.document = dom.document;
+  return { studio: context.AppearanceStudio, appearance: context.AppearanceOpts, dom, values };
+}
+
+test("Colour Vision profiles, reset and Undo update the actual owner, palette and select; screen scope retains the global choice", () => {
+  const { studio, appearance, dom, values } = loadWithControls();
+  const assertMode = mode => {
+    assert.equal(values.cvdMode, mode);
+    assert.equal(studio.snapshot().cvdMode, mode);
+    assert.equal(appearance.cvdMode(), mode);
+    assert.equal(dom.byId("pm-cvd-sel").value, mode);
+    assert.equal(dom.documentElement.dataset.cvd, mode === "off" ? undefined : mode);
+  };
+  for (const [mode] of appearance.CVD_MODES) {
+    appearance.setCvdMode(mode); studio.saveProfile(mode);
+  }
+  assert.equal(studio.profiles().length, 4);
+  appearance.setCvdMode("protan");
+  studio.loadProfile("profile-2"); assertMode("deutan");
+  studio.undo(); assertMode("protan");
+  studio.loadProfile("profile-4"); assertMode("tritan");
+  studio.reset("global"); assertMode("off");
+  studio.undo(); assertMode("tritan");
+  studio.applyPreset("classic", "screen"); assertMode("tritan");
+  studio.reset("screen"); assertMode("tritan");
+  for (const invalid of ["unknown", {}, 1, null]) assert.equal(studio.normalizeSnapshot({ cvdMode: invalid }).cvdMode, "off");
+  studio.applySnapshot({ ...studio.snapshot(), cvdMode: "unknown" }); assertMode("off");
+  studio.undo(); assertMode("tritan");
+});
+
+test("profile restore, Undo and reset repaint mounted title and pause controls without duplicating them", () => {
+  const { studio, dom } = loadWithControls();
+  const snapshot = studio.snapshot(); snapshot.titleLayout = { btns: { x: 18, size: 130 }, layout: "stack", side: "swap" };
+  snapshot.pauseLayout = "sidebar"; snapshot.pauseSide = "right"; snapshot.pauseDim = "off";
+  studio.applySnapshot(snapshot); studio.saveProfile("Custom layout");
+  const titleCount = dom.byId("pm-titlescreen-body").children.length, pauseCount = dom.byId("pm-pausemenu-body").children.length;
+  const assertControls = custom => {
+    assert.equal(dom.byId("pm-tl-btns-x").value, custom ? "18" : "0");
+    assert.equal(dom.byId("pm-tl-btns-size").value, custom ? "130" : "100");
+    assert.equal(dom.byId("pm-tl-layout-sel").value, custom ? "stack" : "grid");
+    assert.equal(dom.byId("pm-tl-side-sel").value, custom ? "swap" : "auto");
+    assert.equal(dom.byId("pm-titlelayout-sum").textContent, "TITLE LAYOUT · " + (custom ? "CUSTOM" : "SHIPPED"));
+    assert.equal(dom.byId("pm-titlescreen-sum").textContent, "TITLE SCREEN · " + (custom ? "CUSTOM" : "SHIPPED"));
+    assert.equal(dom.byId("pm-pauselayout-sel").value, custom ? "sidebar" : "grid");
+    assert.equal(dom.byId("pm-pauseside-sel").value, custom ? "right" : "centre");
+    assert.equal(dom.byId("pm-pausedim-sel").value, custom ? "off" : "full");
+    assert.equal(dom.documentElement.dataset.titleBtns, custom ? "stack" : undefined);
+    assert.equal(dom.documentElement.dataset.pauseLayout, custom ? "sidebar" : undefined);
+    assert.equal(dom.byId("pm-titlescreen-body").children.length, titleCount);
+    assert.equal(dom.byId("pm-pausemenu-body").children.length, pauseCount);
+  };
+  assertControls(true);
+  studio.reset("global"); assertControls(false);
+  studio.loadProfile("profile-1"); assertControls(true);
+  studio.undo(); assertControls(false);
+  studio.undo(); assertControls(true);
+  studio.applyPreset("classic"); assertControls(false);
+});
 
 test("Studio waits for deferred legacy Appearance controls before wrapping them", () => {
   for (const readyState of ["interactive", "complete", "loading"]) {

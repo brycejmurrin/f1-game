@@ -23,7 +23,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC_PATH = process.env.APEX_AUDIO_SRC || path.join(ROOT, "js/audio/engine.js");
-const SRC = fs.readFileSync(SRC_PATH, "utf8").replace(/^const\b/gm, "var");
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js"].map((file) =>
+  fs.readFileSync(path.join(ROOT, file), "utf8"))
+  .concat(fs.readFileSync(SRC_PATH, "utf8")).join("\n").replace(/^const\b/gm, "var");
 
 function param(v) {
   return { value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {},

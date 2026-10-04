@@ -79,10 +79,10 @@ function roundTrip(pos, nrm, col, mat, trk) {
 }
 
 test("every material id in use decodes bit-exactly", () => {
-  // 0-16 are the procedural track materials (Assets.MAT_LAYERS = 17) and 20-32
+  // 0-16 are the procedural track materials (Assets.MAT_LAYERS = 17) and 20-33
   // the car surfaces LIT_FS classifies. Both halves are compared with `==` in
   // the shader, so "close enough" is not enough here.
-  for (let id = 0; id <= 32; id++) {
+  for (let id = 0; id <= 33; id++) {
     const r = roundTrip([0, 0, 0], [0, 1, 0], [1, 1, 1], id);
     assert.equal(r.mat, id, `material ${id} did not decode to itself`);
     // int(aMat + 0.5) in the shader must land on the same integer, which is the

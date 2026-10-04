@@ -83,21 +83,23 @@ const UiExperience = (function () {
     wire("pm-strategy", () => deps.openSettingsPage("driving", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("driving", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("driving", "pm-session-review"));
-    wire("pm-appearance", () => deps.openSettingsPage("appearance"));
     const intro = $("practice-brief");
     function showPractice() {
       if (!intro) return;
       intro.hidden = !wantedPractice;
-      if (wantedPractice) $("practice-goal").focus({ preventScroll: true });
+      if (wantedPractice) {
+        if (RaceInsights.needsRivals(deps.coach.practiceGoal())) deps.coach.setPracticeGoal("free");
+        $("practice-goal").value = deps.coach.practiceGoal(); $("practice-goal").focus({ preventScroll: true });
+      }
     }
     const goal = $("practice-goal");
     if (goal) {
       for (const [id, label] of Object.entries(RaceInsights.DRILLS)) {
+        if (RaceInsights.needsRivals(id)) continue;
         const o = node("option", String(label)); o.value = id; goal.appendChild(o);
       }
       goal.onchange = () => {
-        const existing = $("pm-drill-sel");
-        if (existing) { existing.value = goal.value; existing.dispatchEvent(new Event("change", { bubbles: true })); }
+        deps.coach.setPracticeGoal(goal.value);
       };
     }
     // Normal Time Trial/Race doors always retire the optional practice brief.

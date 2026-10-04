@@ -10,18 +10,32 @@ UI is sized the way it is stays in
 
 ## The component inventory — what exists, who owns it, what is shared
 
-`css/` holds **559 classes in 58 families**, and until this document there was no
+`css/` holds **576 selector class tokens in 60 families**, and until this document there was no
 list of them. That absence has a cost, and it has already been paid: `.res-*` is
 defined in `components.css` *and* `career.css`, which is something I found by
 grepping in the middle of fixing an unrelated cascade-layer bug rather than by
 looking it up. Cross-file coupling you cannot see is cross-file coupling you
 break by accident.
 
-Generated from `css/` and cross-checked against `index.html` and `js/`. The
+Measured from comment-stripped selectors in `css/` and cross-checked against `index.html` and `js/`. The
 family table is asserted by `tests/unit/component-inventory.test.mjs`, so a new family
 cannot appear without this document noticing.
 
 ---
+
+## Stylesheet source families
+
+Three logical stylesheets are split into contiguous physical files. Their order
+and loading mode are asserted by `tests/unit/css-layers.test.mjs`; the source
+map lives in `tools/lib/css-source.mjs`. Historical reuse notes below use
+`components`, `menus`, and `overlays` for these logical families. The ownership
+table lists the physical files that contain the rules now.
+
+| logical family | physical files, in cascade order |
+|---|---|
+| components | `components.css` → `dialogs.css` → `settings.css` → `settings-controls.css` → `dialog-platform.css` |
+| menus | `title.css` → `menus.css` → `select.css` → `race-setup.css` |
+| overlays | `touch-controls.css` → `overlays.css` → `loading.css` |
 
 ## Shared layout primitives
 
@@ -48,12 +62,12 @@ by what the screen is FOR, and both are checkable:
 
 | what | rule | where it is held |
 |---|---|---|
-| **a preference on a settings sheet, or a property of the race about to start** (Settings pages, RACE SETTINGS, the Spotify panel, the injected RENDERER / GRAPHICS / METRICS rows) | the **setting row**: `LABEL  ‹ VALUE ›` — `.set-row` holding a `.tune-label`, then a `div` with `button[data-step=-1]`, a native `<select>`, `button[data-step=1]`. One line at every UI SIZE; the ‹ select › cluster drops to its own line, right-aligned, only when the label cannot share it. Tap the value for the platform picker (every option, a real combo box for a screen reader); the chevrons step for a finger or a mouse and are pointer-only (out of the focus order, `aria-hidden`) — on a keyboard or a pad the select itself answers Left/Right and Up/Down move to the next row; a disabled option (CUSTOM, SPOTIFY unconnected) is shown but skipped. Booleans are the same row, ‹ ON \| OFF › | `js/ui/setting-row.js` (`wire` / `paint` / `disable` / `optionDisabled` / `build`); the rows are static DOM in `index.html`, the options come from the owning module's own value list; CSS in `css/components.css` |
+| **a preference on a settings sheet, or a property of the race about to start** (Settings pages, RACE SETTINGS, the Spotify panel, the injected RENDERER / GRAPHICS / METRICS rows) | the **setting row**: `LABEL  ‹ VALUE ›` — `.set-row` holding a `.tune-label`, then a `div` with `button[data-step=-1]`, a native `<select>`, `button[data-step=1]`. One line at every UI SIZE; the ‹ select › cluster drops to its own line, right-aligned, only when the label cannot share it. Tap the value for the platform picker (every option, a real combo box for a screen reader); the chevrons step for a finger or a mouse and are pointer-only (out of the focus order, `aria-hidden`) — on a keyboard or a pad the select itself answers Left/Right and Up/Down move to the next row; a disabled option (CUSTOM, SPOTIFY unconnected) is shown but skipped. Booleans are the same row, ‹ ON \| OFF › | `js/ui/setting-row.js` (`wire` / `paint` / `disable` / `optionDisabled` / `build`); the rows are static DOM in `index.html`, the options come from the owning module's own value list; CSS in `css/settings-controls.css` |
 | **a pick that is the screen's content** (garage tabs and parts, team and track lists, data-hub pills, steering PRESETS, the circuit filter) and **multi-select toggles** (engine layers) | chips — `.opt-btn` / `.sel-chip` / `.cs-tab` / `.dh-*` etc., one `.active` (or several for toggles), wrapping through `.balanced-row` | their owning files |
 | the chosen chip look | `background: var(--plate-on); border-color: var(--red)` and nothing else — no glow, no side bar, no coloured word inside the control | `css/tokens.css` "THE ONE SELECTED LOOK"; every `.active` chip / tab / pill rule uses exactly those two declarations |
 | a full-card tile | the STRONG tier: `--plate-on-strong` + `--lift-sel` (team tile, career flavour / seat / slot) | `css/tokens.css` |
-| a small square control (a row's ‹ ›, the NOW PLAYING ⏮ ⏸ ⏭ transport on the MUSIC page and in the pause menu) | one shape: a `--chip-h` plate square, `--r-sm` corners; play/pause is the same square, filled | `css/components.css` `.set-row > div > button`, `css/tuner.css` `.as-tbtn` |
-| a status word | gold ON / red OFF via `[data-fold]` — on READOUTS only: the closed fold summaries (`MUSIC · ON · ALL`) and the title-screen sound button. `AriaState.paintOnOff` skips `.opt-btn` | `css/components.css`, `js/ui/aria-state.js` |
+| a small square control (a row's ‹ ›, the NOW PLAYING ⏮ ⏸ ⏭ transport on the MUSIC page and in the pause menu) | one shape: a `--chip-h` plate square, `--r-sm` corners; play/pause is the same square, filled | `css/settings-controls.css` `.set-row > div > button`, `css/tuner.css` `.as-tbtn` |
+| a status word | gold ON / red OFF via `[data-fold]` — on READOUTS only: the closed fold summaries (`MUSIC · ON · ALL`) and the title-screen sound button. `AriaState.paintOnOff` skips `.opt-btn` | `css/settings-controls.css`, `js/ui/aria-state.js` |
 
 Why a row and not a chip row for settings — measured, not argued.
 `tools/ui/layout-audit.mjs` over the four settings pages at UI SIZE 100 / 150 /
@@ -90,48 +104,53 @@ pins the HUD fold's rows.
 
 ## Families, and the file that owns each
 
-"Owner" is the file with the most rules for that prefix; "also" means other files
+Each count is the number of selector rules containing that prefix, counted once
+per rule. "Owner" is the file with the most such rules; "also" means other files
 add to or override it. A family with more than one file is a coupling — usually
 deliberate (`responsive.css` re-tunes `hud-*` for large screens), occasionally
 not.
 
 | family | rules | owner | also in |
 |---|---|---|---|
-| `dh-` | 368 | `data.css` | `components.css` |
+| `dh-` | 264 | `data.css` | `components.css`, `dialog-platform.css`, `tokens.css` |
 | `td-` | 27 | `editor.css` | — |
-| *(unprefixed)* | 226 | `overlays.css` | components, carsetup, career, menus, tuner, hud, responsive, tokens |
-| `cs-` | 132 | `carsetup.css` | components, menus, responsive |
-| `cr-` | 75 | `career.css` | — |
-| `lt-` | 61 | `tuner.css` | hud, components |
-| `pc-` | 56 | `hud.css` | tuner |
-| `vs-` | 38 | `overlays.css` | — |
-| `sheet-` | 37 | `components.css` | tuner, overlays, career, carsetup, menus |
-| `sel-` | 37 | `menus.css` | components, career, carsetup |
-| `res-` | 30 | `components.css` | career |
-| `hud-` | 26 | `overlays.css` | hud, responsive, tokens |
-| `adv-` | 25 | `tuner.css` | components |
-| `as-` | 19 | `tuner.css` | components |
-| `opt-` | 17 | `tuner.css` | components |
-| `tune-` | 15 | `tuner.css` | components |
-| `cz-` | 14 | `menus.css` | components |
-| `photo-` | 14 | `tuner.css` | — |
-| `preset-` | 12 | `tuner.css` | components |
-| `track-` | 12 | `menus.css` | components |
-| `sp-` | 12 | `tuner.css` | — |
-| `team-` | 11 | `menus.css` | components |
-| `steer-` | 10 | `overlays.css` | — |
-| `bc-` | 18 | `hud.css` | — (the REAL RACE WATCH timing tower and picture-in-picture, `js/race/broadcast.js`) |
-| `tdc-` | 10 | `track-detail.css` | — |
-| `co-`, `pm-`, `pane-`, `music-`, `set-` | ~9 each | career / components / components / tuner / components | — |
-
+| *(unprefixed)* | 344 | `career.css` | `touch-controls.css`, `carsetup.css`, `components.css`, `menus.css`, `dialogs.css`, `hud.css`, `race-setup.css`, `dialog-platform.css`, `responsive.css`, `select.css`, `tuner.css`, `overlays.css`, `tokens.css`, `data.css`, `settings-controls.css`, `title.css`, `settings.css` |
+| `cs-` | 165 | `carsetup.css` | `components.css`, `tokens.css` |
+| `cr-` | 85 | `career.css` | — |
+| `lt-` | 56 | `tuner.css` | `hud.css`, `components.css` |
+| `pc-` | 43 | `hud.css` | `tuner.css` |
+| `vs-` | 37 | `overlays.css` | — |
+| `sheet-` | 59 | `components.css` | `tuner.css`, `overlays.css`, `career.css`, `carsetup.css`, `dialogs.css`, `data.css` |
+| `sel-` | 35 | `select.css` | `career.css`, `components.css`, `carsetup.css`, `overlays.css`, `race-setup.css`, `tokens.css` |
+| `res-` | 44 | `components.css` | `career.css`, `overlays.css`, `tokens.css` |
+| `hud-` | 83 | `hud.css` | `touch-controls.css`, `responsive.css`, `tokens.css` |
+| `adv-` | 31 | `tuner.css` | `settings-controls.css`, `components.css`, `carsetup.css`, `overlays.css`, `race-setup.css` |
+| `as-` | 23 | `tuner.css` | `components.css`, `dialogs.css`, `settings.css` |
+| `opt-` | 19 | `tuner.css` | `components.css`, `settings-controls.css`, `settings.css` |
+| `tune-` | 26 | `settings.css` | `tuner.css`, `settings-controls.css`, `components.css`, `race-setup.css` |
+| `cz-` | 18 | `race-setup.css` | `components.css`, `settings-controls.css` |
+| `photo-` | 12 | `tuner.css` | — |
+| `preset-` | 17 | `tuner.css` | `components.css`, `settings-controls.css`, `settings.css`, `race-setup.css` |
+| `track-` | 32 | `select.css` | `race-setup.css`, `components.css` |
+| `sp-` | 10 | `tuner.css` | — |
+| `team-` | 7 | `select.css` | `components.css` |
+| `steer-` | 11 | `touch-controls.css` | — |
+| `bc-` | 25 | `hud.css` | — |
+| `tdc-` | 7 | `track-detail.css` | — |
+| `co-` | 12 | `career.css` | — |
+| `pm-` | 66 | `settings.css` | `settings-controls.css`, `components.css`, `tokens.css` |
+| `pane-` | 9 | `components.css` | — |
+| `music-` | 9 | `tuner.css` | — |
+| `set-` | 17 | `settings-controls.css` | `race-setup.css`, `tuner.css` |
 The long tail (`fb-`, `sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
-`season-`, `pair-`, `build-`, `mb-`, `mirror-`, `duel-`, `session-`, `pad-`) is one file each and needs no map.
+`season-`, `pair-`, `build-`, `mb-`, `mirror-`, `duel-`, `session-`, `pad-`)
+contains fewer rules; physical splits can share these prefixes too.
 `.pad-ring` (`responsive.css`) is the PHONE CONTROLLER's focus ring: `PhonePad.link()` puts it on the
 element the phone's D-pad focused, because a browser need not draw `:focus-visible` for a scripted
 focus (Safari after a touch) or any focus while its window is not the focused one.
-`.session-summary` lives in `menus.css`: it keeps the circuit count and race setup
+`.session-summary` lives in `select.css`: it keeps the circuit count and race setup
 summary readable in their sheet headers, truncating when the header narrows.
 
 **A family leaves this list when it leaves `css/`.** The title screen's old
@@ -157,7 +176,7 @@ this table proves a family left, the ratchet proves the total came down.
 `sel-` shrank the same way and for the same reason: `.sel-section` set one
 declaration on one element in the whole app, and that element already had an id.
 
-**The `(unprefixed)` row is the one to watch.** 226 rules across nine files, on
+**The `(unprefixed)` row is the one to watch.** 344 rules across 18 files, on
 state classes rather than components — `.active`, `.on`, `.armed`, `.desktop`,
 `.p1`, `.you`, `.dim`. State is *meant* to be cross-cutting, so this is not a
 defect, but it is the least discoverable part of the system.
@@ -248,6 +267,28 @@ most-shared class in the project and had no entry at all:
 - `.tune-label` — `components` + `tuner`
 - `.tune-row` — `components` + `tuner`
 
+**Sharing within extracted source families:**
+
+These classes already belonged to one logical stylesheet; extraction makes
+that relationship visible across its physical files.
+
+- `.pm-doors` — `components.css`, `settings-controls.css`, `settings.css`.
+- `.btn-ico` — `menus.css`, `title.css`.
+- `.sur-name` — `race-setup.css`, `select.css`.
+- `.track-row-name` — `race-setup.css`, `select.css`.
+- `.track-row-meta` — `race-setup.css`, `select.css`.
+- `.track-row-rec` — `race-setup.css`, `select.css`.
+- `.trb` — `race-setup.css`, `select.css`.
+- `.track-group-head` — `race-setup.css`, `select.css`.
+- `.season-upcoming-head` — `race-setup.css`, `select.css`.
+- `.sur-rnd` — `race-setup.css`, `select.css`.
+- `.sur-country` — `race-setup.css`, `select.css`.
+- `.pm-groups` — `settings-controls.css`, `settings.css`.
+- `.pm-accent-preview` — `settings-controls.css`, `settings.css`.
+- `.pm-look-h` — `settings-controls.css`, `settings.css`.
+- `.pm-accent-swatches` — `settings-controls.css`, `settings.css`.
+- `.pm-replay-intro` — `settings-controls.css`, `settings.css`.
+- `.pm-pad-tools` — `settings-controls.css`, `settings.css`.
 - `watch-` — `watch-transport.css`: replay transport and its race layout context.
 - `.bc-head` — `hud.css` + `watch-transport.css`, timing header button semantics.
 - `.cr-nextrace` / `.cr-nr-name` — `career.css` + `career-experience.css`, real next-race brief.
@@ -256,7 +297,7 @@ most-shared class in the project and had no entry at all:
 
 ## Dead classes
 
-None, out of 559 — a class defined in `css/` and referenced from neither
+None, out of 576 — a class defined in `css/` and referenced from neither
 `index.html` nor any `js/` file. The three this section used to name
 (`dh-leg-swatch`, `dh-sectors`, `foot-end`) have since been deleted from `css/`,
 and the last of them took its whole class family with it — which is why no

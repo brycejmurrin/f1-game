@@ -24,6 +24,7 @@
 
    Run: node --test tests/unit/perf-try.test.mjs   (~4 s: one shared game-vm boot)
 */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -144,7 +145,7 @@ test("main camera cullDist contains the far-plane corners (not the 300 m probe c
   assert.ok(cull < 900 * 2, `cullDist ${cull} is not a corner-bounding sphere of a 900 m frustum`);
 });
 
-test("AI cars outside an 8 m frustum sphere are not drawn — shadows are enqueued first", () => {
+test("AI cars outside an 8 m frustum sphere are not drawn — shadows enqueued first only with apex26.fieldLod=0", () => {
   // One plane at a time, all others wide open. p·x + d < -r culls, so a plane
   // with normal 0 reads as d < -8: -7.99 keeps every rival, -8.01 drops them.
   const open = [0, 0, 0, 1e6];
@@ -156,16 +157,31 @@ test("AI cars outside an 8 m frustum sphere are not drawn — shadows are enqueu
   // flakes 13 vs 12. Pin lastFrame, then measure both plane sets at the same
   // `now` so dt=0 — only the stub frustum changes.
   const t = 1e6;
-  g.pumpFrame(t);
-  FRUSTUM.planes = withD(-7.99);
-  const kept = counts(pumpNames(t));
-  FRUSTUM.planes = withD(-8.01);
-  const culled = counts(pumpNames(t));
-  FRUSTUM.planes = null;
-  assert.ok(kept.draw > culled.draw + 20, `culling every rival must drop many draws: ${kept.draw} → ${culled.draw}`);
-  assert.ok(kept.decal > culled.decal, "culled rivals draw no decals");
-  assert.equal(kept.shadow, culled.shadow, `shadows must survive side cull (kept ${kept.shadow} vs culled ${culled.shadow})`);
-  assert.ok(culled.shadow >= 2, "the player and the rivals' shadows are still drawn");
+  const measure = (lodOn) => {
+    g.sandbox.FieldLod.setEnabled(lodOn);
+    g.pumpFrame(t);
+    FRUSTUM.planes = withD(-7.99);
+    const kept = counts(pumpNames(t));
+    FRUSTUM.planes = withD(-8.01);
+    const culled = counts(pumpNames(t));
+    FRUSTUM.planes = null;
+    return { kept, culled };
+  };
+  try {
+    // apex26.fieldLod=0: the legacy order — every pooled caster (and its blob)
+    // survives the side cull, so an off-FOV rival still casts onto the road.
+    const legacy = measure(false);
+    assert.ok(legacy.kept.draw > legacy.culled.draw + 20, `culling every rival must drop many draws: ${legacy.kept.draw} → ${legacy.culled.draw}`);
+    assert.ok(legacy.kept.decal > legacy.culled.decal, "culled rivals draw no decals");
+    assert.equal(legacy.kept.shadow, legacy.culled.shadow, `shadows must survive side cull (kept ${legacy.kept.shadow} vs culled ${legacy.culled.shadow})`);
+    assert.ok(legacy.culled.shadow >= 2, "the player and the rivals' shadows are still drawn");
+    // FieldLod (default): a culled rival is not pushed at all — no blob, no
+    // map caster (js/car/field-lod.js); the player's shadow always stays.
+    const lod = measure(true);
+    assert.ok(lod.kept.draw > lod.culled.draw, `culling every rival must drop draws: ${lod.kept.draw} → ${lod.culled.draw}`);
+    assert.ok(lod.kept.shadow > lod.culled.shadow, `culled rivals push no caster (kept ${lod.kept.shadow} vs culled ${lod.culled.shadow})`);
+    assert.ok(lod.culled.shadow >= 1, "the player's shadow is still drawn");
+  } finally { g.sandbox.FieldLod.setEnabled(true); }
 });
 
 test("GLX skips equal tuner-uniform re-uploads (lit / sky / composite)", () => {
@@ -306,7 +322,7 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = \(\) => \{/);
   assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}\)/);  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
-  const rules = cssRules(read("css/components.css"));
+  const rules = cssRules(readCssSource("css/components.css"));
   assert.ok(ruleFor(rules, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/), "the balanced-row child rule exists");
   // Scoped to the settings TAB strip: Appearance's accent swatches are also a
   // four-column grid (two even rows of four pills), which is not a tab row.

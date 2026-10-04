@@ -107,11 +107,16 @@ test("every livery field a team names is one the renderer knows", () => {
   //   bodySplit (2026-09-09): Cadillac's black/white L/R body. Car3D.applyBodySplit
   //   recolours paint verts by sign(x); absent means today's single c1 body.
   //   ridgeTint / airboxTint folded into spineTint / cover (2026-09-10).
+  //   rearWing / wingCarbon (2026-10-03): already in Liveries.FIELDS, now
+  //   NAMED by teams — the SF-26's black rear wing (its c2 is white) and the
+  //   VCARB 03's bare-carbon flaps. Both are read by Car3D.build.
+  //   lower (2026-10-03): the body below the sidepod line in a second colour
+  //   (CarShade.lowerZone) — the MCL40's anthracite, the VF-26's black.
   const KNOWN = new Set(["cover", "finStyle", "finBadge", "finShape", "finArt", "fin",
     "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "saddleTint",
     "coverBind", "finHandoff", "tcam", "coverVents", "stripe",
     "noseStripe", "accent", "nose", "pod", "wing", "halo", "logo", "logo2", "logo3",
-    "finish", "numFont", "sponsors", "bodySplit"]);
+    "finish", "numFont", "sponsors", "bodySplit", "rearWing", "wingCarbon", "lower"]);
   for (const t of M.Teams.LIST) {
     if (!t.livery) continue;
     for (const k of Object.keys(t.livery)) {
@@ -312,4 +317,16 @@ test("every row in the paint editor says what it paints", () => {
   for (const k of ["logo", "logo2", "logo3"]) rows.add(k);
   const missing = [...rows].filter((k) => !hinted.has(k)).sort();
   assert.deepEqual(missing, [], "editor rows with no LIV_ROW_HINT entry");
+});
+
+// The car STUDIO (tools/carview.html — render-car.mjs, the car-shot workflow)
+// builds the livery it shoots from Liveries.FIELDS, the same list the game's
+// resolveLivery copies. A hand copy there had drifted ten fields short
+// (bodySplit, lower, sponsors, ...), so studio shots silently showed a car the
+// game never builds — a two-tone `lower` rendered as single-colour.
+test("the car studio passes every livery field the game does", () => {
+  const html = fs.readFileSync(path.join(ROOT, "tools/carview.html"), "utf8");
+  const fn = html.slice(html.indexOf("function resolveLiv(team)"), html.indexOf("function resolveLivOver(team)"));
+  assert.match(fn, /for \(const f of Liveries\.FIELDS\) o\[f\] = /, "resolveLiv copies Liveries.FIELDS");
+  assert.doesNotMatch(fn, /stripe: l\.stripe \|\| null/, "no hand-copied field list");
 });
