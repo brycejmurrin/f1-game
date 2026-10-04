@@ -323,6 +323,13 @@ const NetPlay = (function () {
     }
 
     const _clamped = {};                  // poseRemote's scratch; never escapes
+    // A below-target finish is a lapped car taking an ALREADY raised flag,
+    // never permission for a guest to raise it. The opening crossing cannot
+    // finish anyone (RaceControl.lineTransition uses the same lap > 1 rule).
+    function finishAllowed(lap) {
+      return lap > 1 && (role !== "host" || lap > G.lapsTarget ||
+        G.cars.some((c) => c.finished && !c.retired));
+    }
     function poseRemote(c, st) {
       // clampWire (module scope) — the same clamp the predicted sample gets.
       st = clampWire(st, (G.track && G.track.total) || 0, G.lapsTarget, _clamped);
@@ -363,13 +370,22 @@ const NetPlay = (function () {
       // The crossing that finishes THIS car: the owner's reported lap when a
       // `fin` is waiting (a lapped car is flagged out short of the target), the
       // target otherwise.
+      // A short finish may arrive before the winner's delayed pose. Hold it
+      // briefly, but never let an early claim survive until a later real flag.
+      if (c._nFinLap <= G.lapsTarget && Number.isFinite(c._nFin) && Math.abs(c._nFin - G.raceT) > FIN_SLACK_S) {
+        c._nFin = null; c._nFinLap = null;
+      }
       const finLap = Number.isFinite(c._nFin) && c._nFinLap != null ? c._nFinLap : G.lapsTarget + 1;
-      if (!c.finished && !c.retired && G.lapsTarget > 0 && c.lap >= finLap && !st.extrapolated) {
+      if (!c.finished && !c.retired && G.lapsTarget > 0 && c.lap >= finLap && !st.extrapolated && finishAllowed(finLap)) {
         // A `fin` that arrived before this pose crossed (LAP handler) is used now.
         const pf = c._nFin;
         c.finished = true;
         c.finishT = Number.isFinite(pf) && Math.abs(pf - G.raceT) <= FIN_SLACK_S ? pf : G.raceT;
         c._nFin = null; c._nFinLap = null;
+        // A held short finish was not relayed before the authoritative flag.
+        if (role === "host" && finLap <= G.lapsTarget && Number.isFinite(pf)) {
+          broadcast(EV.LAP, { lap: finLap, code: c.code, driverId: c.driverId, fin: c.finishT, invalid: true });
+        }
       }
 
       if (G.track) {
@@ -571,7 +587,8 @@ const NetPlay = (function () {
             const total = (G.track && G.track.total) || 0;
             const lt = Number(d.time), best = Number(d.best);
             const ltOk = !d.invalid && lapTimeOk(lt, total), bestOk = lapTimeOk(best, total);
-            const finOk = Number.isFinite(fin) && fin > 0 && Math.abs(fin - (G.raceT || 0)) <= FIN_SLACK_S;
+            const finLap = finishLap(d.lap);
+            const finOk = finLap > 1 && Number.isFinite(fin) && fin > 0 && Math.abs(fin - (G.raceT || 0)) <= FIN_SLACK_S;
             if (fr && ltOk) fr.car.lastLap = lt;
             if (fr && bestOk && !(fr.car.best <= best)) fr.car.best = best;
             if (fr && finOk && !fr.car.retired) {
@@ -582,8 +599,7 @@ const NetPlay = (function () {
               // (RaceControl.lineTransition), and gating on the target parks
               // its `fin` in _nFin for good — the other peer then waits out
               // the 360 s/lap hard cap for a rival that has already finished.
-              const finLap = finishLap(d.lap);
-              if (fr.car.lap >= finLap) { fr.car.finished = true; fr.car.finishT = fin; fr.car._nFin = null; fr.car._nFinLap = null; }
+              if (fr.car.lap >= finLap && finishAllowed(finLap)) { fr.car.finished = true; fr.car.finishT = fin; fr.car._nFin = null; fr.car._nFinLap = null; }
               else { fr.car._nFin = fin; fr.car._nFinLap = finLap; }
             }
             // A RETIREMENT is the owner's word too. The 13 B snapshot has no
@@ -607,7 +623,7 @@ const NetPlay = (function () {
               const ownerLap = Number(d.lap);
               const lapOut = Number.isFinite(ownerLap) ? Math.floor(ownerLap) : fr.car.lap;
               const out = { lap: lapOut, time: ltOk ? lt : null, best: bestOk ? best : null,
-                code: fr.car.code, driverId: fr.car.driverId, fin: finOk ? fin : undefined, invalid: !!d.invalid,
+                code: fr.car.code, driverId: fr.car.driverId, fin: finOk && finishAllowed(finLap) ? fin : undefined, invalid: !!d.invalid,
                 retired: ret || undefined };
               for (const [sid, os] of sessions) {
                 if (sid !== id) { try { os.sendEvent(EV.LAP, out); } catch (e) { /* peer closed */ } }

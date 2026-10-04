@@ -30,8 +30,9 @@ import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
-// 2026-10-04: Spa lowered to 302924 after the bounded woodland/backdrop pass
-// (306198 measured at b532ef5, 306216 old cap). Compaction remains identical.
+// 2026-10-04: Spa lowered 420022 -> 416776 after reconciling the bounded
+// woodland/backdrop pass with the deeper forest and grounding fixes on deploy.
+// Compaction remains identical; other deploy baseline rows are preserved.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 

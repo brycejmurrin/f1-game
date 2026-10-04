@@ -10,7 +10,9 @@ building length. Built photographs support its folded silhouette, pale soffits
 and dark edge treatment; photograph dates and exact roof heights remain unknown.
 Do not use concept renderings as evidence for as-built dimensions.
 
-The active engine pit complex supersedes the four legacy authored Wing groups.
+The active engine pit complex supersedes the four legacy authored Wing groups
+and the separate rear wave-roof group. The latter suppression also occurs on
+the shared branch: its declared footprint intersects the garage keep-out.
 Its optional `pit.architecture.roofProfile` adds a bounded folded crown over
 the existing functional garage row. Knot positions are normalized along that
 actual row and heights are artistic estimates above its local floor. This is

@@ -1339,6 +1339,13 @@ const NetLobby = (function () {
       if (e.codeHint) e.codeHint.textContent = hint || "";
       if (e.codeShow) e.codeShow.hidden = mode !== "show";
       if (e.codeInputWrap) e.codeInputWrap.hidden = mode !== "input";
+      const privateRelay = NetRendezvous.usingPrivateRelay();
+      if (e.codeIn) {
+        e.codeIn.maxLength = privateRelay ? 64 : 8;
+        e.codeIn.placeholder = privateRelay ? "Paste their 32-character token" : "ABC234";
+        e.codeIn.setAttribute("aria-label", privateRelay ? "Private room token" : "Room code");
+      }
+      if (e.codeValue) e.codeValue.setAttribute("data-private", String(privateRelay));
     }
 
     // HOST: make a code, publish the invite under it, wait for the answer.
@@ -1353,12 +1360,15 @@ const NetLobby = (function () {
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const initialTransport = transport;
       const code = opts.code || NetRendezvous.makeCode();
+      if (!code) { say("This browser cannot create a secure room token. Use the invite link instead.", true); return { ok: false, error: "crypto" }; }
       // The room is CLOSED while our own ICE runs and reopened afterwards (see
       // onJoiner), so this path runs twice per guest. The second time we are
       // already in the waiting room and must not drag the player back to the
       // code screen.
       if (!opts.quiet) {
-        showCodeStep("show", "Your room code", "Read this to your friend.");
+        const privateRelay = NetRendezvous.usingPrivateRelay();
+        showCodeStep("show", privateRelay ? "Your private room token" : "Your room code",
+          privateRelay ? "Copy or share this token with your friend, who needs the same private relay configured. Keep it private." : "Read this to your friend.");
         const e = els();
         if (e.codeValue) e.codeValue.textContent = code;
         say("Preparing… (this can take a few seconds)");
@@ -1514,7 +1524,9 @@ const NetLobby = (function () {
       const raw = codeIn != null ? codeIn : (e.codeIn ? e.codeIn.value : "");
       const code = NetRendezvous.normalise(raw);
       if (!NetRendezvous.valid(code)) {
-        say("That is not a room code — six letters and numbers.", true);
+        say(NetRendezvous.usingPrivateRelay()
+          ? "Private rooms need a new 32-character token. Ask the host to share a new token, or use the invite link."
+          : "That is not a room code — six letters and numbers.", true);
         return { ok: false, error: "bad_code" };
       }
       await readyIce();
@@ -1751,7 +1763,9 @@ const NetLobby = (function () {
       on("vs-invite-more", inviteAnother);
       on("vs-code-host", tiltToo(() => codeHost()));   // never the click event as opts
       on("vs-code-join", () => {
-        showCodeStep("input", "Enter their code", "Six letters and numbers.");
+        const privateRelay = NetRendezvous.usingPrivateRelay();
+        showCodeStep("input", privateRelay ? "Paste their private room token" : "Enter their code",
+          privateRelay ? "Paste all 32 characters shared by your friend. Both players need the same private relay configured." : "Six letters and numbers.");
         const box = $("vs-code-in");
         if (box) { box.value = ""; box.focus(); }
       });
@@ -1759,7 +1773,7 @@ const NetLobby = (function () {
       on("vs-code-copy", () => copy(($("vs-code-value") || {}).textContent || ""));
       on("vs-code-share", () => {
         const c = ($("vs-code-value") || {}).textContent || "";
-        return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
+        return handOff({ title: "Apex 26", text: "Race me on Apex 26 — " + (NetRendezvous.usingPrivateRelay() ? "private room token " : "room code ") + c }, c);
       });
       on("vs-start", tiltToo(startFromRoom));
       on("vs-close", () => {

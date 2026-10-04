@@ -117,6 +117,17 @@ test("rewind steps the player back about ten seconds, and never rewinds a penalt
   assert.ok(!d||d.reason!=="position jumped","the rewind itself must not fail the drill");
 });
 
+test("rewind never hands the player's wheel back to the AI (flying-start hand-over role flags)",async()=>{
+  await tt();g.apex.reset(.1,35,0);g.apex.go();g.step(2);
+  const p=g.G.player;
+  p.human=false;                    // every buffered sample sees the hand-over's AI role
+  g.step(700);
+  p.human=true;                     // …then the wheel is the player's again
+  assert.equal(g.G.coach.rewind(),true);
+  assert.equal(p.human,true,"the restored sample's human=false is not carried back");
+  assert.equal(p.isPlayer,true);
+});
+
 test("rewinding a race with other cars puts the WHOLE race back, not just the player",async()=>{
   g.G.duel=true;                        // 2 cars is enough to prove a field rewinds
   await g.race("monza");g.apex.go();g.step(2);

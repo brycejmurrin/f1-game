@@ -123,39 +123,63 @@ test("pinned IWER vendor is present and ENTER VR appears; session starts/exits/r
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 
-test("head pose moves the seated eye; recenter clears XZ drift", async ({ page }) => {
+test("head pose stays seated, preserves physical movement, and repeated recenter is stable", async ({ page }) => {
   test.setTimeout(180_000);
   await bootAndProbe(page);
+  await page.evaluate(() => { globalThis.__iwerDevice.position.y = 1.65; });
   const started = await startVr(page);
   expect(started.ok).toBe(true);
-
-  // Wait for at least one composed eye bag.
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
-  const beforeBag = await sampleXrEye(page);
-  expect(beforeBag && beforeBag.eye).toBeTruthy();
-  const before = beforeBag.eye;
+  // Read real IWER offset-space poses and the composed stereo cameras during
+  // an active XRFrame. Anchor-relative checks also work while the car moves.
+  const sample = (center = false) => page.evaluate((center) => new Promise((resolve) => {
+    const s = XrSession.getSession();
+    if (!s) return resolve(null);
+    s.requestAnimationFrame((_t, frame) => {
+      let stable = true;
+      if (center) {
+        stable = XrSession.recenter(frame);
+        const first = Array.from(XrSession.eyeFrames(null, frame)[0].view);
+        stable = XrSession.recenter(frame) && stable;
+        const second = XrSession.eyeFrames(null, frame)[0].view;
+        stable = stable && first.every((v, i) => Math.abs(v - second[i]) < 1e-5);
+      }
+      const eyes = XrSession.eyeFrames(null, frame);
+      const pose = frame.getViewerPose(XrSession.getRefSpace());
+      if (!eyes || !pose) return resolve(null);
+      const anchor = XrSession.getAnchor();
+      const delta = eyes[0].eye.map((v, i) => (v + eyes[1].eye[i]) / 2 - anchor.eye[i]);
+      resolve({ stable, delta, position: Array.from(pose.transform.matrix).slice(12, 15),
+        gaze: [-pose.transform.matrix[8], -pose.transform.matrix[9], -pose.transform.matrix[10]] });
+    });
+  }), center);
+  const before = await sample();
+  expect(before).toBeTruthy();
+  expect(Math.hypot(...before.delta)).toBeLessThan(0.001);
+  expect(Math.hypot(...before.position)).toBeLessThan(0.001);
 
   await page.evaluate(() => {
     const d = globalThis.__iwerDevice;
     d.position.x += 0.4;
+    d.position.y += 0.2;
     d.position.z -= 0.3;
   });
-  // Give a few XR frames for the new pose to propagate.
   await waitXrFrames(page, 3, { timeout: 45_000 });
+  const moved = await sample();
+  expect(moved.position[1]).toBeCloseTo(0.2, 4);
+  expect(Math.hypot(moved.position[0], moved.position[2])).toBeCloseTo(0.5, 4);
+  expect(Math.hypot(...moved.delta)).toBeCloseTo(Math.hypot(0.5, 0.2), 3);
 
-  const afterBag = await sampleXrEye(page);
-  expect(afterBag && afterBag.eye).toBeTruthy();
-  const after = afterBag.eye;
-  const moved = Math.hypot(after[0] - before[0], after[2] - before[2]);
-  expect(moved).toBeGreaterThan(0.05);
-
-  const recentered = await page.evaluate(() => new Promise((resolve) => {
-    const s = XrSession.getSession();
-    if (!s) return resolve(false);
-    s.requestAnimationFrame((_t, frame) => { resolve(XrSession.recenter(frame)); });
-  }));
-  expect(recentered).toBe(true);
+  const centered = await sample(true);
+  expect(centered.stable).toBe(true);
+  expect(Math.hypot(...centered.delta)).toBeLessThan(0.001);
+  expect(Math.hypot(...centered.position)).toBeLessThan(0.001);
+  centered.gaze.forEach((v, i) => expect(v).toBeCloseTo(before.gaze[i], 4));
+  await waitXrFrames(page, 2, { timeout: 45_000 });
+  const presented = await sample();
+  expect(Math.hypot(...presented.delta)).toBeLessThan(0.001);
+  presented.gaze.forEach((v, i) => expect(v).toBeCloseTo(before.gaze[i], 4));
 
   await endVr(page);
   expect(page.__xrPageErrors || []).toEqual([]);

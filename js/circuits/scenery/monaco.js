@@ -1364,16 +1364,117 @@
       {
         const bear = (deg) => { const r = deg * Math.PI / 180; return [-Math.sin(r), Math.cos(r)]; };
         for (const [deg, dist, w, h, sd, rock] of [
-          [315.2, 1180, 1500,  560, 5,  [0.62, 0.59, 0.52]],   // Tête de Chien
-          [305.7, 1960, 2100,  490, 11, [0.58, 0.56, 0.50]],   // the La Turbie shelf
-          [  5.2, 3260, 3200, 1160, 17, [0.52, 0.51, 0.48]],   // Mont Agel, hazed
-          [ 340.0, 2400, 1700,  620, 23, [0.56, 0.54, 0.48]],  // the Moyenne Corniche flank
-          [  35.0, 2600, 1800,  700, 29, [0.54, 0.53, 0.47]],  // the Roquebrune side
+          // Rock tones are grey limestone, not sand: the old [0.62,0.59,0.52]
+          // lit warm under the Riviera sun read as one more beige plane.
+          [315.2, 1180, 1500,  560, 5,  [0.54, 0.54, 0.50]],   // Tête de Chien
+          [305.7, 1960, 2100,  490, 11, [0.52, 0.52, 0.48]],   // the La Turbie shelf
+          [  5.2, 3260, 3200, 1160, 17, [0.50, 0.51, 0.50]],   // Mont Agel, hazed
+          [ 340.0, 2400, 1700,  620, 23, [0.52, 0.52, 0.47]],  // the Moyenne Corniche flank
+          [  35.0, 2600, 1800,  700, 29, [0.51, 0.52, 0.48]],  // the Roquebrune side
+          // Foothills INSIDE the 900 m far plane (js/game.js farPlane): every
+          // mass above stands 1.2-3.3 km out, so from track level it is
+          // clipped and the floor plane is the horizon. The real terrain
+          // climbs 150-200 m within ~800 m (Moneghetti, Beausoleil, the
+          // Moyenne Corniche), maquis and pine with limestone breaking through.
+          [ 318.0,  820,  900,  190, 31, [0.50, 0.51, 0.46]],  // Moneghetti / Tête de Chien foot
+          [ 352.0,  860, 1000,  230, 37, [0.50, 0.51, 0.46]],  // Beausoleil
+          [  22.0,  880,  900,  200, 41, [0.49, 0.50, 0.45]],  // Saint-Roman slope
+          [ 285.0,  900,  800,  150, 43, [0.50, 0.50, 0.46]],  // Cap d'Ail slope
         ]) {
           const [dx, dz] = bear(deg);
           api.mountain(dx * dist, dz * dist, pyMin - 6, w, h,
             { seg: 14, seed: sd, rough: 0.26, snowline: 1.8,
-              forest: [0.23, 0.30, 0.20], rock });
+              forest: [0.21, 0.29, 0.18], rock });
         }
+      }
+
+      // ── THE OUT-WORLD: OPEN SEA, LE ROCHER, CITY FILL ───────────────────
+      // Root cause of the beige world: beyond the 28 m terrain ribbon every
+      // circuit stands on ONE flat floor slab (js/track/core/mesh.js, colour
+      // pal.grass * 0.88), and Monaco's pal.grass is a warm stone grey for its
+      // pavements. Nothing covered that slab south/east (no sea beyond the
+      // three harbour stations) or inland past the ~100 m city front, so under
+      // the warm sun it read as a tan desert out to the 900 m far plane.
+      // Located from the BUILT world, not the compass: the harbour sheet and
+      // its yachts sit at x -400..-80, z 160..430 (waterField stations
+      // above), the tunnel bore (built nodes 370-430) runs along that basin's
+      // EAST rim from (-366, 428) to (-290, 210), and the sea is beyond the
+      // tunnel's seawall. The trace is rotated against true north, so the
+      // amphitheatre bearings above do not carry over to the coastline.
+      {
+        const FLOOR = pyMin - 1;   // surface.js floorY
+        const inPoly = (poly, x, z) => {
+          let c = false;
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const xi = poly[i][0], zi = poly[i][1], xj = poly[j][0], zj = poly[j][1];
+            if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c;
+          }
+          return c;
+        };
+        // The Mediterranean: everything east of the tunnel seawall, wrapping
+        // round the south-east past the lap's southern end. The harbour basin
+        // is NOT in it — the waterField stations own that, and this sheet must
+        // not lie coplanar under them.
+        const SEA_POLY = [[-420, 4000], [-420, 150], [-400, -100], [-230, -420],
+          [100, -640], [420, -820], [900, -1060], [4000, -1500], [4000, -4200],
+          [-4000, -4200], [-4000, 4000]];
+        const HARBOUR = [[-420, 140], [-50, 140], [-50, 450], [-420, 450]];
+        out._mat = 0;
+        const OPEN = [0.06, 0.23, 0.42];
+        const C = 20, ytop = pyMin - 0.86;   // 4 cm under the harbour sheet, 14 cm over the floor
+        for (let iz = -210; iz < 130; iz++) {
+          let run = null;
+          const z = (iz + 0.5) * C;
+          const flush = () => {
+            if (!run) return;
+            const x0 = run[0] * C, x1 = (run[1] + 1) * C;
+            addBox(out, [(x0 + x1) / 2, (ytop + FLOOR - 0.05) / 2, z],
+                   [x1 - x0, ytop - FLOOR + 0.05, C], OPEN, null);
+            run = null;
+          };
+          for (let ix = -200; ix < 200; ix++) {
+            const x = (ix + 0.5) * C;
+            // The terrain ribbon sloping off the seawall is land: a cell any
+            // corner of which it covers stays dry (ground-audit buried).
+            let sea = inPoly(SEA_POLY, x, z) && !onTrack(x, z, C * 0.75 + 6);
+            for (let q = 0; sea && q < 5; q++) {
+              const g = terrainYAt(x + (q === 4 ? 0 : (q & 1 ? 0.5 : -0.5) * C), z + (q === 4 ? 0 : (q & 2 ? 0.5 : -0.5) * C));
+              if (g != null && Number.isFinite(g) && g > ytop - 0.05) sea = false;
+            }
+            if (sea && run && run[1] === ix - 1) run[1] = ix;
+            else { flush(); if (sea) run = [ix, ix]; }
+          }
+          flush();
+        }
+
+        // City fill: the principality is wall-to-wall six-to-twelve-storey
+        // blocks from the harbour to the French border. One axis-aligned block
+        // per 34 m cell (footprint <= 26 m, so neighbours never touch),
+        // 95 m+ off the road so the authored city front stays in charge.
+        const FILL = [[0.93, 0.89, 0.80], [0.88, 0.76, 0.56], [0.92, 0.82, 0.70],
+          [0.95, 0.93, 0.88], [0.90, 0.74, 0.66], [0.84, 0.80, 0.70]];
+        const ROOF = [0.60, 0.32, 0.22];
+        const CC = 34;
+        for (let iz = -30; iz <= 32; iz++) for (let ix = -32; ix <= 34; ix++) {
+          const h1 = hash(ix * 7.13 + iz * 3.71), h2 = hash(ix * 1.97 + iz * 9.31);
+          if (h1 > 0.62) continue;
+          const x = (ix + 0.5) * CC + (h2 - 0.5) * 6, z = (iz + 0.5) * CC + (h1 - 0.3) * 6;
+          if (Math.hypot(x, z) > 1050) continue;
+          if (inPoly(SEA_POLY, x, z) || inPoly(HARBOUR, x, z)) continue;
+          if (onTrack(x, z, 95)) continue;
+          const w = 16 + h2 * 10, d = 16 + hash(ix * 3.3 + iz * 5.7) * 10;
+          const tall = h1 < 0.05;
+          const h = tall ? 48 + h2 * 40 : 12 + hash(ix * 5.1 + iz * 2.3) * 22;
+          let g = terrainYAt(x, z);
+          if (g == null || !Number.isFinite(g)) g = FLOOR;
+          const base = g - 1;
+          out._mat = MAT.CONCRETE;
+          addBox(out, [x, base + h / 2, z], [w, h, d], FILL[(((ix * 3 + iz * 5) % FILL.length) + FILL.length) % FILL.length], null);
+          if (!tall && h2 > 0.35) {
+            out._mat = MAT.BRICK;
+            addPrism(out, [x, base + h, z], [w, 2.6, d], ROOF, null);
+          }
+        }
+        out._mat = 0;
       }
     };

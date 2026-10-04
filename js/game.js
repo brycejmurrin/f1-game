@@ -655,12 +655,24 @@ function restartTTRecorders() {
   }
 }
 
+// Finish-dependent effects wait for all motion owners' crossing timestamps.
+// Lap clocks, bests and recorders still update immediately inside updateCar.
+function onCarLineFinish(c, cross) {
+  if (RaceControl.deferLine(c, cross, c.s, onCarLineFinish)) return;
+  if ((cross.lapValid || cross.flagged) && c.local && netPlay.active()) {
+    netPlay.reportLap(cross.lapValid
+      ? { lap: c.lap, time: cross.lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: cross.flagged ? c.finishT : undefined }
+      : { lap: c.lap, time: null, best: isFinite(c.best) ? c.best : null, code: c.code, fin: c.finishT, invalid: true });
+  }
+  if (cross.flagged && c.isPlayer && !raceRadio.callsResult()) announce("FINISH!", 2, "race");
+}
+
 // IncidentSim owns motion during a takeover, but the ordinary line-crossing
 // presentation still belongs here. Core lap/clock/finish state is advanced by
 // RaceControl.lineTransition for both callers; this hook handles only the local
 // side effects that cannot live in a physics module.
 function onIncidentLineCross(c, cross, newS) {
-  if (!c || !cross) return;
+  if (!c || !cross || RaceControl.deferLine(c, cross, newS, onIncidentLineCross)) return;
   if (cross.direction < 0) {
     if (cross.changed && c.isPlayer) {
       sectorIdx = sectorAt(newS); sectorStartT = c.lapTime; sectorValid = false;
@@ -4099,7 +4111,13 @@ function clearMenuScreens() {
 const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)") : { matches: false };
 function syncRotateBlocker(moveFocus) {
   const box = $("rotate-device"); if (!box) return false;
+  // Measured WITHOUT css/responsive.css's pause-card rule (body.rotate-measure):
+  // that rule hides the gate while the card is up, and the card is what this
+  // function decides to hide — read through it, the gate could never return.
+  const body = typeof document !== "undefined" ? document.body : null;
+  if (body) body.classList.add("rotate-measure");
   const active = getComputedStyle(box).display !== "none";
+  if (body) body.classList.remove("rotate-measure");
   box.setAttribute("aria-hidden", active ? "false" : "true");
   // The pause CARD and an active blocker never share the screen. #pausemenu is
   // a modal <dialog> (TopModal), so left open it sits in the top layer ABOVE
@@ -4349,7 +4367,9 @@ function update(dt) {
     const s = cars[i];
     s._snapProg = s.prog; s._snapX = s.x; s._snapSpeed = s.speed;
   }
+  RaceControl.beginLineStep(cars);
   for (const c of cars) updateCar(c, dt, ranked);
+  RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
   collide.resolveCollisions(ranked, dt);
 
@@ -4367,6 +4387,7 @@ function update(dt) {
     DebrisWorld.step(dt);
   }
   incidentSim.postStep(dt);
+  RaceControl.endLineStep();
 
   // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
@@ -4459,7 +4480,7 @@ const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] 
 const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
-  Damage.contact(a, b, impact);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
+  Damage.contact(a, b, impact, track.total);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
   if (!a.isPlayer && !b.isPlayer) return;
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
@@ -4501,6 +4522,9 @@ function updateCar(c, dt, ranked) {
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
+  // ...signed along the NOSE for a human (c.speed runs along it): spun past 90 deg on a climb it faces DOWNhill. The sign only, so
+  // ordinary driving (nose within 90 deg of the tangent) is bit-identical to the characterization baseline. AI drive the tangent.
+  const slopeNose = c.human && Math.cos(Math.atan2(smp.t[0], smp.t[2]) - (c.head || 0)) < 0 ? -slopeSin : slopeSin;
   const k = Tracks.curvature(track, c.s);
   c.kCur = k;   // cache for the render loop's body-lean (avoids a 2nd curvature calc/car/frame)
   const dd = DIFF[difficulty] || DIFF.normal;   // an imported settings file can carry any string; quali-model.js falls back the same way
@@ -5087,8 +5111,8 @@ function updateCar(c, dt, ranked) {
   // your own top speed (uncapped overspeed flings the car off at the bottom
   // of a hill), and the pull is magnitude-capped so a steep ramp can't act like an
   // invisible wall. Race-only so the grid doesn't creep during the countdown.
-  if (state === "race" && slopeSin) {
-    const a = clamp(-GRAVITY_SLOPE * slopeSin, -ACCEL * 0.5, ACCEL * 0.5);   // m/s^2
+  if (state === "race" && slopeNose) {
+    const a = clamp(-GRAVITY_SLOPE * slopeNose, -ACCEL * 0.5, ACCEL * 0.5);   // m/s^2
     if (a < 0) {                                   // uphill: gentle bleed
       if (c.speed > 0) c.speed = Math.max(0, c.speed + a * dt);
     } else {                                        // downhill: feed, with a small
@@ -5649,7 +5673,8 @@ function updateCar(c, dt, ranked) {
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
     // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
-    const axEstTarget = braking ? -surfaceBrake * brakeLvl
+    // Brake held at a standstill IS reverse (REVERSE_ACCEL above), not a 30+ m/s^2 stop: charging the pedal locked the fronts and grew a flat spot backing off a wall.
+    const axEstTarget = braking ? (c.speed > 0 ? -surfaceBrake * brakeLvl : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))
       : (onThrottle
           ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu
           : -COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0)));
@@ -5916,26 +5941,13 @@ function updateCar(c, dt, ranked) {
     const lapValid = !c.incidentInvalidLap && !(c.isPlayer && coach.practiceActive());
     // The flag: the distance, or the leader already home (RaceControl.flagOut —
     // a lapped car is flagged at its next crossing, not after the full count).
-    const flagged = lineCross.flagged;
+    lineCross.lapValid = lapValid && c.lap > 1 && !lineCross.recross;
     if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
       else if (c.isPlayer && isQuali()) c.qualiCut = true;   // ANY deleted quali lap (a takeover, a practice rewind — not only a cut) is NO TIME, never the model's
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
-      // Tell the rival about our lap. Times are authored by whoever OWNS the
-      // car — nobody else can time it — and go over the reliable channel,
-      // because a dropped lap time is a wrong RESULT, not a momentary glitch.
-      // `fin` is OUR finishT at the crossing that ends the race: the remote's
-      // pose-time stamp is one interp delay late (netplay.js poseRemote).
-      // A DELETED lap (a track-limits strike now deletes race laps too) still
-      // carries the finish stamp when it is the flag lap — as the incident path
-      // does — with a null time so the rival's timing never adopts it.
-      if ((lapValid || flagged) && c.local && netPlay.active()) {
-        netPlay.reportLap(lapValid
-          ? { lap: c.lap, time: lapDone, best: isFinite(c.best) ? c.best : null, code: c.code, fin: flagged ? c.finishT : undefined }   // finishT: the in-step crossing, as classified locally
-          : { lap: c.lap, time: null, best: isFinite(c.best) ? c.best : null, code: c.code, fin: c.finishT, invalid: true });
-      }
       if (c.isPlayer && isTimeTrial()) { if (lapValid) onTTLap(lapDone); else restartTTRecorders(); }
     } else if (c.isPlayer && isTimeTrial()) {
       restartTTRecorders();
@@ -5945,7 +5957,7 @@ function updateCar(c, dt, ranked) {
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
     if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1 && !raceRadio.callsLastLap()) announce("FINAL LAP", 1.6, "race");
-    if (flagged && c.isPlayer && !raceRadio.callsResult()) announce("FINISH!", 2, "race");   // the engineer's result call IS the flag card (RaceRadio.callsResult)
+    onCarLineFinish(c, lineCross);
   } else if (lineCross && lineCross.direction < 0) {
     // Backward over the line: give the lap back and put the clock where it was,
     // so the next forward crossing re-times the SAME lap rather than a sliver.
@@ -8870,7 +8882,7 @@ customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips
 // under the display code and a custom-code edit split the player in two.
 // Not over a season load() refused to write back (lossy: a circuit this build
 // does not know) — saving it here erased that circuit, or blanked a finished season.
-if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); if (!SeasonCal.lastLoadLossy()) SeasonCal.save(season); }
+if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); if (!SeasonCal.lastLoadLossy()) SeasonCal.save(season, { migration: true }); }
 teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
@@ -8903,7 +8915,7 @@ lastFrame = performance.now();
 XrBoot.bind({ gfx, tickBody, windowTick: tick, getCamMode: () => camMode,
   setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); } });
 XrBoot.mountUi();
-requestAnimationFrame(tick);
+XrBoot.afterTick(tick);
 
 // --- debug / test hook (no effect unless explicitly called) ---
 // Lets a test harness stage the camera anywhere on the track without having to
