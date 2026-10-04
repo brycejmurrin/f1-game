@@ -140,3 +140,85 @@ test("the CAM button's accessible name starts with the word it shows", () => {
   assert.equal(btn.textContent, "COCKPIT");
   assert.ok(attrs["aria-label"].toLowerCase().startsWith(btn.textContent.toLowerCase()), "label in name, after every change");
 });
+
+// ── L8-d: UPDATE READY (js/ui/update-check.js) ─────────────────────────────
+// The shell guard reads version.json once, at boot; an installed PWA then never
+// learned a deploy happened. UpdateCheck re-reads it on return to the tab
+// (≤ 1 per 10 min), shows #update-chip outside races, and its tap persists
+// state, then reloads the way the boot guard does (?b=, query + hash kept).
+// https://developer.chrome.com/docs/workbox/handling-service-worker-updates
+function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false } = {}) {
+  let t = 1_000_000, fetches = 0, replaced = null, persisted = 0;
+  const chip = { hidden: true, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+  const store = new Map();
+  const sb = {
+    Math, Object, Number, JSON, Promise, RegExp, String, URLSearchParams,
+    setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {},
+    Log: { info() {}, warn() {} },
+    sessionStorage: { setItem: (k, v) => store.set(k, v), getItem: (k) => store.get(k) ?? null },
+    document: { hidden: false, querySelector: () => ({ content: String(booted) }) },
+    navigator: { serviceWorker: { controller: controller ? { scriptURL: "https://x.test/sw.js?v=" + controller } : null } },
+  };
+  vm.createContext(sb);
+  vm.runInContext(read("js/ui/update-check.js"), sb, { filename: "js/ui/update-check.js" });
+  const UC = vm.runInContext("UpdateCheck", sb);
+  const u = UC.create({
+    now: () => t, inRace: () => racing, chip: () => chip,
+    fetch: async (url, init) => { fetches++; assert.equal(init.cache, "no-store"); assert.match(url, /^version\.json\?_=\d+$/); return { ok: true, json: async () => ({ build }) }; },
+    persist: () => { persisted++; },
+    location: { pathname: "/f1-game/", search: "?log=net", hash: "#vs=CODE", replace: (u2) => { replaced = u2; } },
+  });
+  return { UC, u, chip, store, advance: (ms) => { t += ms; }, race: (v) => { racing = v; },
+    get fetches() { return fetches; }, get replaced() { return replaced; }, get persisted() { return persisted; } };
+}
+
+test("update check: throttled to one version.json read per 10 min, starting from boot", async () => {
+  const h = bootUpdateCheck({ build: 100 });
+  h.u.onVisible(); await h.u.check(false);
+  assert.equal(h.fetches, 0, "the boot guard just checked — nothing for 10 minutes");
+  h.advance(h.UC.THROTTLE_MS);
+  h.u.onVisible(); await Promise.resolve(); await h.u.check(false);
+  assert.equal(h.fetches, 1, "one read once the throttle has passed");
+  h.advance(60_000); await h.u.check(false);
+  assert.equal(h.fetches, 1, "and not again a minute later");
+  assert.equal(h.chip.hidden, true, "same build: no chip");
+});
+
+test("update check: a newer build shows the chip outside races only, and the tap persists then reloads", async () => {
+  const h = bootUpdateCheck({ build: 105 });
+  assert.equal(await h.u.check(true), true);
+  assert.equal(h.chip.hidden, false, "UPDATE READY in the menus");
+  assert.match(h.chip.attrs["aria-label"], /build 105/);
+  h.race(true); h.u.render();
+  assert.equal(h.chip.hidden, true, "never over a race");
+  assert.equal(await h.u.apply(), false, "and a race is never reloaded out from under the player");
+  h.race(false);
+  assert.equal(await h.u.apply(), true);
+  assert.equal(h.persisted, 1, "transient state is persisted BEFORE the reload");
+  assert.equal(h.replaced, "/f1-game/?log=net&b=105#vs=CODE", "the boot guard's URL shape: ?b=, query and hash kept");
+  assert.equal(h.store.get("apex26.shellReloadedTo"), "105", "so the guard does not reload the new shell again");
+});
+
+test("update check: an older or unreadable version.json never shows the chip", async () => {
+  const h = bootUpdateCheck({ build: 99 });
+  assert.equal(await h.u.check(true), false);
+  assert.equal(h.chip.hidden, true);
+});
+
+test("a newer CONTROLLING worker blocks lazy loads once the session is wired, and raises the chip", () => {
+  const h = bootUpdateCheck({ build: 100, controller: 104 });
+  assert.equal(h.UC.controllerBuild(), 104, "the controller's build comes from its sw.js?v=");
+  assert.equal(h.UC.blocksLazyLoad(), true, "a ?v=100 lazy file would be answered by build 104");
+  assert.equal(h.chip.hidden, false);
+  const same = bootUpdateCheck({ build: 100, controller: 100 });
+  assert.equal(same.UC.blocksLazyLoad(), false, "same build: load as usual");
+});
+
+test("UpdateCheck is wired: #update-chip in the shell, the visibility hook, the loader guard", () => {
+  assert.match(read("index.html"), /<button id="update-chip" type="button" hidden>/);
+  const ps = read("js/ui/platform-session.js");
+  assert.match(ps, /UpdateCheck\.create\(\{/);
+  assert.match(ps, /updates\.onVisible\(\)/);
+  assert.match(ps, /controllerchange/);
+  assert.match(read("js/core/script-loader.js"), /UpdateCheck\.blocksLazyLoad\(\)/);
+});

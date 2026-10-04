@@ -554,19 +554,15 @@ test("install rejects a missing or invalid build instead of creating apex26-0", 
   }
 });
 
-test("activation preserves prior caches unless the current generation is settled", async () => {
-  const harness = createHarness({ fetchImpl: installFetch() });
-  harness.stores.set("apex26-320", new Map([["healthy", new Response("old")]]));
-  harness.stores.set("apex26-321", new Map());
-
-  await harness.lifecycleEvent("activate").done();
-
-  assert.deepEqual(harness.deleted, []);
-  assert.equal(harness.stores.has("apex26-320"), true);
-  assert.equal(harness.claimed, 0);
-});
-
-test("activation preserves prior caches while only INSTALL_COMPLETE is set (background pool still running)", async () => {
+// L8-c: install calls skipWaiting LAST (after SETTLED), so a browser never
+// activates an unsettled generation — the old activate-only "not settled: no
+// claim, no sweep" branch was reachable only by firing activate with no install,
+// as these two tests used to. What remains is the ONE guarded sweep
+// (sweepStaleCaches), for the real case: a worker restarted between install and
+// activate re-reads version.json, and a deploy in that gap names a newer, EMPTY
+// generation. It must claim (it is the active worker) but never sweep below a
+// generation that holds nothing.
+test("activate after a version drift (current generation empty) claims but deletes nothing", async () => {
   const harness = createHarness({ fetchImpl: installFetch() });
   harness.stores.set("apex26-320", new Map([["healthy", new Response("old")]]));
   harness.stores.set("apex26-321", new Map([
@@ -575,8 +571,28 @@ test("activation preserves prior caches while only INSTALL_COMPLETE is set (back
 
   await harness.lifecycleEvent("activate").done();
 
-  assert.deepEqual(harness.deleted, [], "COMPLETE alone must not delete the previous generation");
-  assert.equal(harness.claimed, 0);
+  assert.deepEqual(harness.deleted, [], "COMPLETE alone (or nothing) must not delete the previous generation");
+  assert.equal(harness.stores.has("apex26-320"), true);
+  assert.equal(harness.claimed, 1, "activation always claims; only the sweep is guarded");
+});
+
+test("install writes SETTLED before it calls skipWaiting, so activation always meets a settled cache", async () => {
+  let settledAtSkip = null;
+  const harness = createHarness({ fetchImpl: installFetch({ failOptional: true }) });
+  const install = harness.lifecycleEvent("install");
+  // Observe the order: poll the store until skipWaiting has been called.
+  const watch = (async () => {
+    for (let i = 0; i < 400 && harness.skipped === 0; i++) await new Promise((r) => setTimeout(r, 1));
+    const store = harness.stores.get("apex26-321");
+    settledAtSkip = !!(store && store.has(`${ORIGIN}/__apex_install_settled__`));
+  })();
+  await install.done(); await watch;
+  assert.equal(harness.skipped, 1);
+  assert.equal(settledAtSkip, true, "skipWaiting only after the background pool settled");
+  const src = SW_SOURCE.replace(/\/\/.*$/gm, "");
+  assert.ok(src.indexOf("await self.skipWaiting()") > src.indexOf("cache.put(INSTALL_SETTLED_URL"),
+    "skipWaiting is install's last step");
+  assert.equal((src.match(/self\.skipWaiting\(\)/g) || []).length, 1, "and the only one");
 });
 
 test("activation removes prior caches after a settled successful install", async () => {
@@ -755,13 +771,14 @@ test("offline, a FINISHED install outranks a newer half-written generation", asy
   const fn = src.match(/async function computeCacheOrder\(current\) \{[\s\S]*?\n\}/)[0];
   assert.match(fn, /INSTALL_SETTLED_URL/);
   assert.match(fn, /\(done\.get\(b\) - done\.get\(a\)\) \|\| \(rank\(b\) - rank\(a\)\)/, "completeness first, then current/newest");
-  // skipWaiting runs after the install-critical optional pool; SETTLED is written
-  // after the BACKGROUND pool (scenery / WGX / data / net). Activate deletes
-  // prior gens only on SETTLED — see "activation removes prior caches…".
-  assert.ok(src.indexOf("await self.skipWaiting()") < src.indexOf("cache.put(INSTALL_SETTLED_URL"),
-    "skipWaiting before the background pool settles");
+  // The install-critical pool downloads first, the BACKGROUND pool (scenery /
+  // WGX / data / net) second, SETTLED after both, skipWaiting last — the flag is
+  // only read once install settles (w3c.github.io/ServiceWorker), so an earlier
+  // call bought nothing. See "install writes SETTLED before it calls skipWaiting".
+  assert.ok(src.indexOf("await self.skipWaiting()") > src.indexOf("cache.put(INSTALL_SETTLED_URL"),
+    "skipWaiting after SETTLED");
   assert.match(src, /isInstallCriticalOptional/, "chosen backend (TLX+three) is the install-critical optional set");
-  assert.match(src, /isBackgroundOptional/, "scenery / WGX / data / net background after skipWaiting");
+  assert.match(src, /isBackgroundOptional/, "scenery / WGX / data / net download after it");
 });
 
 test("no fetch-path sweep while the current generation is incomplete", async () => {
@@ -953,4 +970,61 @@ test("a Range request for streamed music bypasses the worker; a whole-file music
   assert.equal((await whole.responsePromise).status, 200, "a plain fetch (the desktop decode path) is still answered");
   const other = harness.fetchEvent({ method: "GET", mode: "same-origin", url: `${ORIGIN}/assets/sfx/f1_engine.mp3`, headers: new Headers({ Range: "bytes=0-" }) });
   assert.ok(other.responsePromise, "only assets/music/ is exempt");
+});
+
+// L8-c: assets/pack/ URLs carry no ?v= (js/render/shared/assets.js asks for bare
+// paths, and the deploy stamps only the shell's own tags), so cache-first served
+// a new build's JS the OLD generation's manifest + strips for a whole session —
+// the layer index IS the MAT id. Network first, the cache as the fallback.
+function packHarness({ net, immediateTimeoutMs } = {}) {
+  const h = createHarness({
+    immediateTimeoutMs,
+    fetchImpl: async (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+      return net(url);
+    },
+  });
+  h.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/assets/pack/manifest.json`, new Response('{"old":true}', { status: 200 })],
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+  ]));
+  return h;
+}
+
+test("the pack manifest is network-first: a new deploy's manifest beats the old generation's copy", async () => {
+  const h = packHarness({ net: async () => new Response('{"new":true}', { status: 200 }) });
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json`));
+  assert.equal(await (await ev.responsePromise).text(), '{"new":true}');
+  await Promise.all(ev.lifetimes);
+  assert.equal(h.stores.get("apex26-321").has(`${ORIGIN}/assets/pack/manifest.json`), true,
+    "the fresh copy is cached under THIS build for offline");
+});
+
+test("offline, the pack falls back to the cached copy; with no copy it errors cleanly", async () => {
+  const h = packHarness({ net: async () => { throw new TypeError("offline"); } });
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json`));
+  assert.equal(await (await ev.responsePromise).text(), '{"old":true}');
+  const miss = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/never-cached.png`));
+  assert.equal((await miss.responsePromise).status, 0, "Response.error(), not a hang");
+});
+
+test("a slow pack fetch loses the race to a cached copy, and its late answer is still cached", async () => {
+  let release;
+  const late = new Promise((r) => { release = r; });
+  const h = packHarness({ immediateTimeoutMs: 3000, net: () => late });
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json`));
+  assert.equal(await (await ev.responsePromise).text(), '{"old":true}', "the cache answers after NAV_RACE_MS");
+  release(new Response('{"new":true}', { status: 200 }));
+  await Promise.all(ev.lifetimes);
+  assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}/assets/pack/manifest.json`).text(), '{"new":true}');
+});
+
+test("an ordinary ?v= asset stays cache-first (only the unversioned pack changed)", async () => {
+  let fetched = 0;
+  const h = packHarness({ net: async () => { fetched++; return new Response("net", { status: 200 }); } });
+  h.stores.get("apex26-320").set(`${ORIGIN}/js/game.js?v=abc`, new Response("cached", { status: 200 }));
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=abc`));
+  assert.equal(await (await ev.responsePromise).text(), "cached");
+  assert.equal(fetched, 0);
 });
