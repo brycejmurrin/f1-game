@@ -658,3 +658,33 @@ test("menu touch targets are token-sized, and the touch ladder lifts every token
   assert.ok(ruleFor(menus, "#sel-track-filter .sel-chip"), "filter chips inherit the chip box (padding-only override)");
   assert.equal(decl(menus, "#sel-track-filter .sel-chip", "min-height"), null, "…and do not shrink it");
 });
+
+// THE SESSION ONLY BANNER (#save-warning). It was injected by insertAdjacentHTML
+// as a role=alert unhidden and filled in one step (the pattern NVDA, JAWS and
+// VoiceOver miss), with 24 px buttons, no way to put it away, and no rule to
+// stand it down in a race — where it sat in .hud-top's top-centre box all
+// session. Static, spoken once, dismissible, and out of the way of the HUD.
+test("the SAVING UNAVAILABLE banner is static, spoken once, dismissible, and stands down in a race", () => {
+  const m = HTML.match(/<aside id="save-warning"([^>]*)>([\s\S]*?)<\/aside>/);
+  assert.ok(m, "index.html owns the banner (AGENTS.md: index.html owns ALL static DOM)");
+  assert.match(m[1], /\bhidden\b/, "it boots hidden");
+  assert.doesNotMatch(m[1], /role="alert"|aria-live/, "not a live region: it is spoken through #announce-live");
+  for (const id of ["save-warning-title", "save-warning-detail", "save-retry", "save-export", "save-dismiss"])
+    assert.match(m[2], new RegExp(`id="${id}"`), `#${id} is part of the static banner`);
+  assert.match(m[2], /<button id="save-dismiss" type="button" aria-expanded="true">/, "DISMISS is a disclosure toggle");
+
+  const sel = code("js/ui/select-screen.js");
+  assert.doesNotMatch(sel, /insertAdjacentHTML\([^)]*save-warning/, "the banner is no longer injected at runtime");
+  assert.match(sel, /store\.writeFailed/, "it asks whether a WRITE failed, not whether anything ever threw");
+  assert.doesNotMatch(sel, /if \(store\.broken\) showSaveWarning/, "a corrupt-key READ must not raise it");
+  assert.match(sel, /\$\("announce-live"\)/, "spoken through the always-present polite region");
+  assert.match(sel, /live\.textContent = "";[\s\S]{0,80}setTimeout\(\(\) => \{ live\.textContent = text; \}/,
+    "emptied, then filled a beat later, so the region hears a change");
+  assert.match(sel, /setAttribute\("aria-expanded", on \? "false" : "true"\)/, "the toggle reports its state");
+
+  const css = cssRules(readCssSource("css/overlays.css"));
+  assert.equal(decl(css, "#save-warning button", "min-height"), "var(--tap)", "≥ 44 px (52 on touch), not the 24 px --tap-min");
+  assert.ok(ruleFor(css, /(^|, )body\.in-race #save-warning(,|$)/), "hidden during a race");
+  assert.ok(ruleFor(css, /body:has\(dialog\[open\]\) #save-warning/), "hidden under an open dialog, where it is inert");
+  assert.equal(decl(css, "#save-warning[data-collapsed] > :not(#save-dismiss)", "display"), "none", "DISMISS folds it to its toggle");
+});
