@@ -74,7 +74,9 @@ test("a context rebuild replaces cached noise and keeps the delayed sample fallb
   await flush();
   A.setEngine(0.6, 0, false, 0.6, 4, {});
   assert.equal(A.debug().usingSamples, true);
-  assert.equal(fresh.buffers.length, buffers, "new-context upgrade also reuses its prepared noise");
+  // +1: the decode keeps only the engine's 2 s loop window, a createBuffer copy (perf-memory M-5a).
+  assert.equal(fresh.buffers.length, buffers + 1, "new-context upgrade also reuses its prepared noise");
+  assert.equal(fresh.buffers[fresh.buffers.length - 1].duration, 2, "and the one new buffer is that loop window");
   assert.ok(started.filter((n) => n.kind === "src" && n.loop && fresh.buffers.includes(n.buffer)).every((n) => !oldBuffers.has(n.buffer)));
 });
 
