@@ -77,6 +77,7 @@ const HudElements = (function () {
     const list = hiddenList();
     if (list.length) document.body.dataset.hudHide = list.join(" ");
     else delete document.body.dataset.hudHide;
+    if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();   // an attribute the fit key cannot see
   }
 
   function isOn(id) { return state[id] !== "off"; }

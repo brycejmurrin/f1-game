@@ -195,8 +195,13 @@
                                [0.62, 1], [0.78, -1], [0.92, 1]]) {
         marshalPost(K(s), side, 4.5);
       }
-      // Start/finish + DRS gantries spanning the track
-      gantry(0.005, 9.5, [0.12, 0.12, 0.16]);
+      // Start/finish + DRS gantries spanning the track. The start one stands
+      // over the REAL line, re-keyed through sl() (the brands_hatch idiom):
+      // this file's s = 0 is the scenery origin, and RS() alone put it — and
+      // the start lamps it carries — 936 m away.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      gantry(sl(0.005), 9.5, [0.12, 0.12, 0.16]);
       gantry(0.50, 8.5, [0.12, 0.12, 0.16]);                       // DRS detection on Strip
       gantry(0.80, 8.5, [0.12, 0.12, 0.16]);
 

@@ -231,6 +231,30 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pausemenu .sheet[data-density="compact"] .build-tag {
   margin: 2px 0 0;
 }
+/* Short landscape phone: the tray's second row (PHOTO / HOW TO PLAY /
+   REWIND & RETRY) was clipped by the sheet edge even after the tray stopped
+   spanning HOW TO full-width (layout-audit 2026-10-04). Drop the pit lines
+   and music/build chrome, shrink the primary row, and let the body scroll
+   so every tray tile stays fully on-card and tappable. max-height keeps
+   desktop alone (desktop sheets sit well above 500px). */
+@media (orientation: landscape) and (max-height: 500px) {
+  #pausemenu .sheet-body.stack { gap: 2px; }
+  #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+    min-height: max(30px, var(--tap-min));
+    padding-block: 3px;
+  }
+  #pausemenu #pm-resume { min-height: max(34px, var(--tap-min)); }
+  #pm-race-context { padding-block: 1px; }
+  #pm-race-context :is(span, small) { display: none; }
+  #pm-quick-doors { gap: 2px; }
+  #pm-quick-doors button,
+  #pm-checkpoint summary { min-height: max(34px, var(--tap-min)); padding-block: 2px; }
+  #pm-now-card, #pm-build { display: none; }
+  #pausemenu .sheet-body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
 /* Opaque enough that leftover HUD cannot read through the card. Color is
    the original dim wash, not carnival inks.
    --pause-wash / --pause-scrim are the PAUSE MENU › BACKGROUND setting

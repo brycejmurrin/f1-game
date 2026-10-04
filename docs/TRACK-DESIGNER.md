@@ -77,9 +77,38 @@ are missing.
 
 ## 3 LOOK — themes
 
-A theme sets the scenery, the time of day and the ground: PARKLAND GP, ALPINE
-FOREST, DESERT OASIS, DESERT NIGHT, HARBOUR STREET, MARINA NIGHT, TILKE MODERN
-and AUTUMN COUNTRYSIDE. The night themes race under floodlights.
+A theme sets the scenery, the sky and the ground. There are sixteen; the line
+under the chips describes the one you picked.
+
+| theme | what you get |
+|---|---|
+| PARKLAND GP | Rolling green grass, broadleaf belts, bright noon sun |
+| ALPINE FOREST | Pine walls, snowy ground beyond the verge, snow-capped peaks |
+| DESERT OASIS | Sand run-off, sparse palms, a pool in the infield |
+| DESERT NIGHT | The oasis under floodlights and a warm night sky |
+| HARBOUR STREET | Street circuit: concrete walls, pastel town, the sea alongside |
+| MARINA NIGHT | Street circuit at night: neon skyline over dark water |
+| TILKE MODERN | Painted run-off, big stands, a hotel over the pit straight |
+| AUTUMN COUNTRYSIDE | Amber trees, low golden sun, mist |
+| TUSCAN HILLS | Golden grass, cypress rows, terracotta stands on rolling hills |
+| CLIFFTOP COAST | Umbrella pines above the sea, headlands on the horizon |
+| SAVANNA PLAINS | Golden grassland, acacias, distant mesas |
+| MISTY FOREST | Grey damp sky, deep pine forest, forested ridges |
+| AIRFIELD | Flat and open under an overcast sky, hangars and windbreaks |
+| RED ROCK CANYON | Rust-red ground and towering sandstone buttes |
+| WINTER SNOW | Snow to the horizon, dark firs, white peaks |
+| TWILIGHT RESORT | Purple dusk, a floodlit lagoon, a hotel by the start |
+
+Three rows under the themes tune the scenery of this circuit:
+
+- **TIME OF DAY** — AUTO keeps the theme's own sky. DAY, DUSK (a low orange
+  sun) or NIGHT (floodlights and lamps along the lap) override it; a street
+  theme switches between its day town and its neon night town.
+- **TREES** — FEW, NORMAL or MANY forest along the straights.
+- **CROWD** — FEW, NORMAL or PACKED grandstands and spectator banks.
+
+They are part of the circuit: a share link or exported file carries them, and
+changing one makes it a new circuit for time-trial boards.
 
 ## 4 DETAILS
 

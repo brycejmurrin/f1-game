@@ -99,7 +99,7 @@ sectors and turns remain racing-lap data.
 | Helper | Contract |
 |---|---|
 | `modelGroup(id, bounds, emit, opts?)` | preflights one complete footprint and commits staged geometry atomically; `emit(stage)` must produce a finite, non-empty group |
-| `overheadSpan(spec)` | intentional cross-track span with explicit `clearance` (minimum 4.8 m) and support-footprint checks; optional `offset` shifts the band laterally |
+| `overheadSpan(spec)` | intentional cross-track span with explicit `clearance` (minimum 4.8 m) and support-footprint checks; optional `offset` shifts the band laterally; `startLights: true` marks the start/finish span — it registers as the start gantry and `js/race/start-lights.js` hangs the countdown lamps on its deck's grid-facing face (a circuit with no gantry at its line gets them on the engine's start gate) |
 | `lampPost(spec)` | registers a light fixture the circuit has drawn itself, so it emits a real point light |
 | `waterSurface(k, side, gap, size, col, opts?)` | typed water emission to the reflective water buffer |
 | `groundPatch(k, side, gap, size, col, opts?)` | subdivided terrain-conforming patch; `opts.collision` optionally registers its visual boundary |

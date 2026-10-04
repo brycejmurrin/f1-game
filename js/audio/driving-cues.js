@@ -60,7 +60,10 @@ const DrivingCues = (function () {
     let level = 1;
     let cfg = fromSlider(level);
     let nextBrakeT = 0, lastMs = 0, lastU = 0;
-    let lastCallS = null, lastCallSide = 0;
+    // callArmed: a SAME-side call needs the road to have run straight since the
+    // last one. Distance alone re-called a turn still inside the lookahead every
+    // CALL_COOLDOWN_M (a 400 m sweeper said "L" six times).
+    let lastCallS = null, lastCallSide = 0, callArmed = true;
     let brakeFired = 0, callFired = 0;
 
     function setLevel(v) {
@@ -90,6 +93,7 @@ const DrivingCues = (function () {
       // OFF path: no curvature reads, no audio. Assists-off contract.
       if (!cfg.on || !G || G.paused || G.state !== "race") {
         nextBrakeT = 0; lastU = 0; lastMs = 0;
+        lastCallS = null; lastCallSide = 0; callArmed = true;   // a new race (or a resume) starts with no call pending
         return;
       }
       const p = G.player, track = G.track;
@@ -138,12 +142,14 @@ const DrivingCues = (function () {
 
       // Corner call — once per turn, +k = LEFT.
       const side = cornerSide(track, p.s, look * 0.85, nS);
-      if (side !== 0) {
+      if (side === 0) callArmed = true;   // straight road between: the next turn is a new one
+      else {
         const ds = lastCallS == null ? Infinity
           : Math.min(Math.abs(p.s - lastCallS), L - Math.abs(p.s - lastCallS));
-        if (side !== lastCallSide || ds > CALL_COOLDOWN_M) {
+        if (side !== lastCallSide || (callArmed && ds > CALL_COOLDOWN_M)) {
           lastCallS = p.s;
           lastCallSide = side;
+          callArmed = false;
           if (G.soundOn && typeof GameAudio !== "undefined" && GameAudio.cornerCall) {
             GameAudio.cornerCall(side > 0 ? "L" : "R");
             callFired++;

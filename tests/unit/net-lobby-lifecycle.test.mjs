@@ -378,8 +378,19 @@ test("the reopen, watch and clash timers are all owned and cancellable", () => {
   // sealRoom/cancel/teardown, generation captured OUTSIDE the callback.
   assert.match(SOURCE, /codeReopenTimer = setTimeout\(/);
   assert.match(SOURCE, /const gen = operationGeneration;\s*\n\s*clearTimeout\(codeReopenTimer\);/);
-  assert.ok(SOURCE.split("clearTimeout(codeReopenTimer)").length >= 4,
-    "sealRoom, cancel and teardown must all clear the reopen timer");
+  assert.ok(SOURCE.split("clearTimeout(codeReopenTimer)").length >= 5,
+    "sealRoom, cancel, teardown and the connect-fail path must all clear the reopen timer");
+  // teardown() and the ICE/timeout fail path must null codeReopen itself —
+  // clearing only the timer left the string set, so the next unrelated
+  // onConnected quietly reopened a dead room code (W4-AUDIT / live tip).
+  const teardownAt = SOURCE.indexOf("function teardown()");
+  assert.ok(teardownAt > 0, "teardown() present");
+  const teardownBody = SOURCE.slice(teardownAt, SOURCE.indexOf("function failureMsg", teardownAt));
+  assert.match(teardownBody, /codeReopen = null/,
+    "teardown() must clear codeReopen, not only codeReopenTimer");
+  assert.match(SOURCE,
+    /connect fail[\s\S]{0,800}?codeReopen = null[\s\S]{0,120}?dropPending\(\)/,
+    "a failed ICE/timeout must clear codeReopen before dropPending/teardown");
   // waitForOpen: the deadline applies even while the transport is still being
   // built — the old early return skipped the timeout check and the poll spun
   // at 4 Hz forever with no message.

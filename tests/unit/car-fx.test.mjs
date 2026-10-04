@@ -17,6 +17,9 @@
  *     stacked copies into a trail).
  *   - THE ARC MUST NOT REACH THE DRIVER: car-draw adds the bend's Ackermann
  *     angle (c.kCur) to AI front wheels only.
+ *   - EXHAUST HEAT HAZE (CarFx.heatHaze): one plume anchor, sustained on
+ *     power and eased in/out; onboard it rides the nearest car ahead on power
+ *     within 40 m. Reads car state, writes none.
  *
  * Run: node --test tests/unit/car-fx.test.mjs   (npm run test:tooling-fast)
  */
@@ -198,4 +201,140 @@ test("source guards: the arc reaches AI wheels only; the emitters run before the
   assert.ok(emit > 0 && cockpit > 0 && emit < cockpit, "carFx.emit must run before the cockpit view's continue");
   assert.equal(game.split("carFx.emit(").length - 1, 1, "one emit site");
   assert.match(game, /const carFx = CarFx\.create\(G, \{ skids \}\);/);
+});
+
+// ── EXHAUST HEAT HAZE (CarFx.heatHaze) ──────────────────────────────────────
+// It read c.exhaustPop — a ~0.2 s pulse on a throttle LIFT — so it flickered at
+// each lift-off, never showed under power, and from an onboard eye (cockpit is
+// a default) its anchor sat behind the camera. Now: sustained on power, eased,
+// and onboard it rides the nearest car AHEAD on power within 40 m. One anchor.
+const LAP = 5000;
+const onPower = (s, over) => Object.assign({ s, speed: 60, rpm: 12000, wasOnThrottle: true, deploying: false }, over || {});
+// A pinhole view-proj looking down +z from the origin: clip w = z, u = x/z, v = y/z.
+const VP = (() => { const m = new Float32Array(16); m[0] = 1; m[5] = 1; m[11] = 1; return m; })();
+/** pick() for `seconds` of frames; the eased strength after each. */
+const run = (haze, cars, player, onboard, seconds) => {
+  const trace = [];
+  for (let i = 0, n = Math.round(seconds / DT); i < n; i++) { haze.pick(cars, player, onboard, LAP, DT); trace.push(haze.state().str); }
+  return trace;
+};
+
+test("haze: from an onboard eye the anchor is the nearest car AHEAD on power within 40 m; else the player", () => {
+  const { fx, CarFx } = load();
+  assert.equal(CarFx.HAZE_RANGE, 40);
+  const me = onPower(1000);
+  const behind = onPower(990), braking = onPower(1020, { wasOnThrottle: false }), near = onPower(1030), far = onPower(1036),
+    gone = onPower(1050), parked = onPower(1010, { speed: 0, rpm: 5000 }), out = onPower(1012, { retired: true });
+  const field = [far, gone, behind, me, braking, near, parked, out];
+  assert.equal(fx.haze.pick(field, me, true, LAP, DT), near,
+    "30 m ahead on power — not the car braking at 20 m, the parked or retired ones, the one behind, nor past 40 m");
+  assert.equal(load().fx.haze.pick(field, me, false, LAP, DT), me, "a chase eye: the player's own wake");
+  // The lap wraps: a car just past the line is 25 m ahead of one just short of it.
+  const last = onPower(LAP - 10), first = onPower(15);
+  assert.equal(load().fx.haze.pick([first, last], last, true, LAP, DT), first);
+});
+
+test("haze: strength eases in under power (ERS deploy and revs scale it) and decays smoothly on a lift", () => {
+  const { fx } = load();
+  const haze = fx.haze, me = onPower(1000), ahead = onPower(1025, { rpm: 15000 });
+  const target = haze.heat(ahead);
+  assert.ok(Math.abs(target - 0.45) < 1e-9, `on power at the limiter: 0.45 (${target})`);
+  assert.ok(Math.abs(haze.heat(onPower(0, { rpm: 5000 })) - 0.225) < 1e-9, "idle revs: half of it");
+  assert.ok(Math.abs(haze.heat(onPower(0, { rpm: 15000, deploying: true })) - 1) < 1e-9, "deploying at the limiter: full");
+  const up = run(haze, [me, ahead], me, true, 0.5);
+  assert.ok(up[0] > 0 && up[0] < target * 0.25, `no step on the first frame: ${up[0]}`);
+  for (let i = 1; i < up.length; i++) assert.ok(up[i] >= up[i - 1], "attack is monotone");
+  assert.ok(up[Math.round(0.3 / DT) - 1] > target * 0.93, `~95 % in 0.3 s: ${up[Math.round(0.3 / DT) - 1]}`);
+  // Lift: the same car keeps the anchor while its plume fades over ~0.3 s.
+  ahead.wasOnThrottle = false;
+  let prev = up[up.length - 1];
+  const down = [];
+  for (let i = 0; i < 30; i++) {
+    haze.pick([me, ahead], me, true, LAP, DT);
+    const { anchor, str } = haze.state();
+    if (str > 0) assert.equal(anchor, ahead, "the fading plume stays on the car that lifted");
+    assert.ok(str <= prev && (str >= prev * 0.8 || (str === 0 && prev < 0.03)), `smooth release: ${prev} -> ${str}`);
+    down.push(prev = str);
+  }
+  assert.ok(down[Math.round(0.1 / DT) - 1] > 0.1, "still there 0.1 s after the lift (the pulse it replaced was gone by 0.2 s at the latest)");
+  assert.equal(down[Math.round(0.35 / DT) - 1], 0, "faded by ~0.35 s");
+});
+
+test("haze: nobody on power — no anchor, no plume; and nothing stale reaches the post", () => {
+  const { fx } = load();
+  const haze = fx.haze, me = onPower(1000, { speed: 0, rpm: 5000 });
+  const grid = [me, onPower(1008, { speed: 0, rpm: 5000 }), onPower(1016, { wasOnThrottle: false })];
+  run(haze, grid, me, true, 1);
+  assert.equal(haze.state().anchor, null, "onboard on the grid: no car ahead on power");
+  assert.equal(haze.state().str, 0);
+  haze.mark(grid[1], ground(0, 30));
+  assert.equal(haze.at(VP), null);
+  run(haze, grid, me, false, 1);
+  assert.equal(haze.state().anchor, me, "chase: the player, parked");
+  assert.equal(haze.state().str, 0, "a parked car raises no plume");
+  haze.mark(me, ground(0, 30));
+  assert.equal(haze.at(VP), null);
+  // A mark is good for ONE frame: a pick with no mark after it (the menu
+  // flyby breaks before any car) presents nothing.
+  const live = load().fx.haze, ahead = onPower(1020);
+  run(live, [me, ahead], me, true, 0.5);
+  live.mark(ahead, ground(0, 23.5));
+  assert.ok(live.at(VP), "marked this frame: a plume");
+  live.pick([me, ahead], me, true, LAP, DT);
+  assert.equal(live.at(VP), null, "not re-marked: nothing");
+});
+
+test("haze: at() projects the anchor's wake — up 0.85, back 3.5 m — and fades with depth", () => {
+  const { fx } = load();
+  const haze = fx.haze, me = onPower(1000), ahead = onPower(1020);
+  run(haze, [me, ahead], me, true, 1);
+  const str = haze.state().str;
+  haze.mark(me, ground(0, 50));   // not the anchor: ignored
+  assert.equal(haze.at(VP), null);
+  haze.mark(ahead, ground(0, 23.5));   // its wake at (0, 0.85, 20)
+  const o = haze.at(VP);
+  assert.ok(o, "a plume");
+  assert.ok(Math.abs(o.u - 0.5) < 1e-6 && Math.abs(o.v - (0.5 + 0.85 / 20 * 0.5)) < 1e-6, `uv ${o.u}, ${o.v}`);
+  assert.ok(Math.abs(o.str - str * 0.9) < 1e-6, "× (1.4 - 20/40) of the eased strength");
+  haze.mark(ahead, ground(0, 60.5));   // 57 m deep: past the fade
+  assert.equal(haze.at(VP), null);
+  haze.mark(ahead, ground(0, 2));   // behind the eye
+  assert.equal(haze.at(VP), null);
+});
+
+test("haze: one anchor — a new car takes it only once the old plume has faded, never a jump", () => {
+  const { fx } = load();
+  const haze = fx.haze, me = onPower(1000), a = onPower(1015), b = onPower(1035);
+  run(haze, [me, a, b], me, true, 0.6);
+  assert.equal(haze.state().anchor, a);
+  a.wasOnThrottle = false;   // A lifts; B, further up the road, is on power
+  const trace = [];
+  for (let i = 0; i < 60; i++) { haze.pick([me, a, b], me, true, LAP, DT); trace.push([haze.state().anchor, haze.state().str]); }
+  const sw = trace.findIndex(([anc]) => anc === b);
+  assert.ok(sw > 5, `A keeps the plume while it fades (switch at frame ${sw})`);
+  assert.ok(trace[sw - 1][1] < 0.02, "the switch waits for the fade");
+  assert.ok(trace[59][1] > 0.3, `then B's plume eases in: ${trace[59][1]}`);
+});
+
+test("haze: the on-power gate is a share of the car's envelope (vStd), like the other emitters", () => {
+  const slow = onPower(0, { speed: 5 });
+  assert.equal(load({ vTop: VMAX }).fx.haze.heat(slow), 0, "5 m/s at pace 5 is crawling");
+  assert.ok(load({ vTop: VMAX * 0.5 }).fx.haze.heat(slow) > 0, "the same 5 m/s at pace 0.5 is 10 vStd m/s: on power");
+});
+
+test("haze source guards: visual only, wired once, the post shaders' opts.haze unchanged", () => {
+  const src = read("js/fx/car-fx.js");
+  const hz = src.slice(src.indexOf("function heatHaze("), src.indexOf("function create("));
+  assert.ok(hz.length > 200, "heatHaze present");
+  assert.doesNotMatch(hz, /\bc\.[A-Za-z_]+\s*(=(?!=)|\+=|-=|\+\+|--)/, "the haze writes no car field (nothing may feed physics)");
+  assert.doesNotMatch(hz, /exhaustPop/, "the after-fire pulse no longer drives the haze");
+  const game = read("js/game.js");
+  const pick = game.indexOf("carFx.haze.pick(cars, player, onboard, ");
+  const loop = game.indexOf("for (const c of cars) {", pick);
+  const mark = game.indexOf("carFx.haze.mark(c, tmpMat);");
+  const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
+  assert.ok(pick > 0 && loop > pick && mark > loop && mark < cockpit, "pick before the car loop, mark in it before the cockpit continue");
+  assert.match(game, /po\.haze = gfx\.mobileTier \? null : carFx\.haze\.at\(_mVP\);/, "one {u, v, str} (or null) for the post; off on phones");
+  for (const f of ["carFx.haze.pick(", "carFx.haze.mark(", "carFx.haze.at("]) assert.equal(game.split(f).length - 1, 1, f + " once");
+  assert.doesNotMatch(game, /_hazeStr|_hazeWorld/, "no second haze path in game.js");
 });

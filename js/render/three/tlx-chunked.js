@@ -389,21 +389,23 @@
     // the radial draw-distance cap when cullDist > 0: the frustum's far plane
     // is the only distance cull, so a pushed-out far plane (free camera) at a
     // high/wide vantage admits the whole ~5 M-vert city at once — a mobile-
-    // tiler OOM. Fog hides the radial edge. Shadow passes call with
-    // cullDist = 0 (an off-camera building can still cast INTO view).
+    // tiler OOM. Fog hides the radial edge; `fog` (frame.cullFog) also drops
+    // what the fog wall has hidden, height-aware (Frustum.radialCulled). Shadow
+    // passes call with cullDist = 0 and no fog (an off-camera building can
+    // still cast INTO view).
     const _visList = [];
-    function cull(mesh, vp, eye, cullDist) {
+    function cull(mesh, vp, eye, cullDist, fog) {
       _visList.length = 0;
       const chunks = mesh && mesh.chunks;
       if (!chunks || !vp) return 0;
       Frustum.extractPlanes(vp, _fcPlanes);
-      const cd = cullDist > 0 ? cullDist : 0, cd2 = cd * cd,
+      const cd = cullDist > 0 ? cullDist : 0, cf = fog || null,
             ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
       let n = 0;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
         if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        if (cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) continue;
+        if (Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
         _visList[n++] = ch;
       }
       _visList.length = n;

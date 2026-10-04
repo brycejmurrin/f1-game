@@ -265,6 +265,10 @@ const NetLobby = (function () {
       consumeHandledInvite(); clearInterval(pollTimer);
       clearInterval(pumpTimer);
       pumpTimer = null;
+      // onJoiner stamps codeReopen before waitForOpen; a failed ICE then
+      // teardowns with nobody connected — leaving the string made the next
+      // unrelated onConnected quietly reopen that dead room code.
+      codeReopen = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       for (const s of sessions.values()) { try { s.close(); } catch (e) { /* already gone */ } }
       sessions.clear();
@@ -384,6 +388,9 @@ const NetLobby = (function () {
           // Only this attempt. A host whose SECOND invite fails still has its
           // first guest sitting in the room, and dropping them for somebody
           // else's bad network would be its own bug.
+          // sessions.size > 0 skips teardown() — clear codeReopen here too.
+          codeReopen = null;
+          clearTimeout(codeReopenTimer); codeReopenTimer = null;
           dropPending();
           if (sessions.size) { show("room"); renderRoom(); }
           else { teardown(); show("pick"); }   // leave the lobby usable, not dead

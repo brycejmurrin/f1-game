@@ -290,8 +290,12 @@
         kind: "notch", wall: [0.82, 0.84, 0.86], window: WIN_LIT, floor: 4, lit: true,
       });
 
-      // Start gantry over the line.
-      gantry(0.004, 9, STEEL);
+      // Start gantry over the line — the REAL line, re-keyed through sl() (the
+      // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
+      // alone put the gantry — and the start lamps it carries — 508 m away.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      gantry(sl(0.004), 9, STEEL);
 
       wall(0.965, 0.05, 1, 6, 1.1, WHITE);
       place(K(0.99), 1, 10, [5, 2.4, 12], CONC);
