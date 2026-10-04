@@ -34,6 +34,7 @@ function spawnWorker() {
     }
   };
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), ctx);
+  // onmessage is async (a build awaits the model pack): send() returns it.
   return { send: (m) => ctx.onmessage({ data: m }), posted };
 }
 const vmFiles = MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.CIRCUITS.map((id) => MANIFEST.circuitPath(id)) : [e]));
@@ -79,7 +80,7 @@ for (const id of ["monza", "vegas"]) {
 
     worker.posted.length = 0;
     const wIdx = MANIFEST.CIRCUITS.indexOf(id);
-    worker.send({ type: "build", seq: 1, idx: wIdx, id, opts: { chunkRibbons: true, retainGraph: false }, scenery: "http://x/" + MANIFEST.sceneryPath(id) + "?v=1" });
+    await worker.send({ type: "build", seq: 1, idx: wIdx, id, opts: { chunkRibbons: true, retainGraph: false }, scenery: "http://x/" + MANIFEST.sceneryPath(id) + "?v=1" });
     const msg = worker.posted[0];
     assert.equal(msg.type, "built", msg.message);
     assert.ok(msg.recs.length > 5 && msg.ms > 0);
@@ -104,7 +105,7 @@ for (const id of ["monza", "vegas"]) {
 test("a ribbon the backend did not chunk is re-seated as tracks.js does it", async () => {
   const def = Tracks.LIST.find((d) => d.id === "monza");
   worker.posted.length = 0;
-  worker.send({ type: "build", seq: 2, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false } });
+  await worker.send({ type: "build", seq: 2, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false } });
   const msg = worker.posted[0];
   const ribbons = Object.keys(msg.track.meshes).filter((k) => k.endsWith("Chunked") && msg.track.meshes[k]);
   assert.ok(ribbons.length > 0, "the worker chunked at least one ribbon");
@@ -118,9 +119,9 @@ test("a ribbon the backend did not chunk is re-seated as tracks.js does it", asy
   assert.equal(await main.TrackBuildClient.replay(msg, def, small.gfx), null, "a message is replayed once");
 });
 
-test("a worker error answers an error message, never a throw", () => {
+test("a worker error answers an error message, never a throw", async () => {
   worker.posted.length = 0;
-  worker.send({ type: "build", seq: 3, idx: 0, id: "not-a-circuit", opts: {} });
+  await worker.send({ type: "build", seq: 3, idx: 0, id: "not-a-circuit", opts: {} });
   assert.equal(worker.posted[0].type, "error");
   assert.equal(worker.posted[0].seq, 3);
 });
@@ -139,7 +140,7 @@ test("BUILD IN BACKGROUND's write flips exactly what enabled() (and loadTrackSte
 test("a replay whose upload throws frees the handles it had already made", async () => {
   const def = Tracks.LIST.find((d) => d.id === "monza");
   worker.posted.length = 0;
-  worker.send({ type: "build", seq: 3, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false } });
+  await worker.send({ type: "build", seq: 3, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false } });
   const msg = worker.posted[0];
   const made = [], freed = [];
   let n = 0;
@@ -153,4 +154,111 @@ test("a replay whose upload throws frees the handles it had already made", async
   await assert.rejects(main.TrackBuildClient.replay(msg, def, gfx), /allocation/);
   assert.ok(made.length >= 2, "uploads landed before the throw");
   assert.deepEqual(made.filter((h) => !freed.includes(h)), [], "every handle the failed replay made was freed");
+});
+
+// ── THE SAME WORLD, WITH WHAT A PAGE HAS (2026-10-04) ──────────────────────
+// Everything above runs both sides WITHOUT the baked model pack, PitSigns or a
+// player's MY TEAM — so it could not see that the worker built a different
+// world: no baked models (assets.js was not in its list), no bay signs
+// (replay never uploaded them) and the default MY TEAM bay (the page's row
+// lives in localStorage). Here the PAGE context has all three, the worker is
+// driven through TrackBuildClient.build (a bridged Worker, structured clones
+// both ways), and the replayed world must equal a synchronous build's.
+const diskFetch = (needAbsolute) => async (u) => {
+  const s = String(u);
+  // A real worker resolves "assets/pack/…" against js/track/build-worker.js:
+  // refuse relative URLs there, so the page-base shim is what makes it work.
+  if (needAbsolute && !/^https?:\/\//.test(s)) return { ok: false, status: 404 };
+  const rel = s.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
+  let b;
+  try { b = fs.readFileSync(path.join(ROOT, rel)); } catch (_) { return { ok: false, status: 404 }; }
+  return { ok: true, json: async () => JSON.parse(b.toString("utf8")), arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) };
+};
+const tick = () => new Promise((r) => setTimeout(r, 0));
+function pageWithWorker({ workerPack = true } = {}) {
+  const T = buildContext(null, { quiet: true, instancing: true });
+  const page = T._vmContext;
+  Object.assign(page, { setTimeout, clearTimeout, performance, URL, fetch: diskFetch(false),
+    location: { href: "http://x/index.html" }, document: { querySelectorAll: () => [], readyState: "complete" },
+    localStorage: { getItem: (k) => (k === "apex26.buildWorker" ? "1" : null), setItem() {} },
+    ApexRoster: { TRACK_VM: vmFiles, TRACK_WORKER_EXTRA: MANIFEST.TRACK_WORKER_EXTRA } });
+  for (const f of ["js/render/shared/assets.js", "js/track/build-client.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), page, { filename: f });
+  const posts = [];
+  page.Worker = class {
+    constructor() {
+      const me = this;
+      const wctx = vm.createContext({ performance, console, URL, setTimeout, clearTimeout,
+        fetch: workerPack ? diskFetch(true) : async () => ({ ok: false, status: 404 }),
+        postMessage: (m) => { const d = structuredClone(m); setTimeout(() => me.onmessage && me.onmessage({ data: d }), 0); } });
+      wctx.self = wctx;
+      wctx.importScripts = (...files) => {
+        for (const f of files) {
+          const rel = f.replace(/^https?:\/\/[^/]+\//, "").replace(/\?.*$/, "");
+          vm.runInContext(fs.readFileSync(path.join(ROOT, rel), "utf8"), wctx, { filename: rel });
+        }
+      };
+      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), wctx);
+      this.wctx = wctx;
+    }
+    postMessage(m) { posts.push(m.type); const d = structuredClone(m); setTimeout(() => this.wctx.onmessage({ data: d }), 0); }
+    terminate() {}
+  };
+  // The player's saved team, spliced in the way custom-team.js does it.
+  const mine = Object.assign(JSON.parse(JSON.stringify(page.Teams.DEFAULT_CUSTOM)),
+    { name: "ZEPHYR RACING", short: "ZEP", color: [0.9, 0.1, 0.5] });
+  page.Teams.LIST.push(mine);
+  // Bay signs: the real painter needs a canvas, so record what it was handed.
+  page.PitSigns = {
+    upload(G, t) {
+      if (!t.pitSigns) return false;
+      t.meshes.pitSigns = G.createMesh({ pos: t.pitSigns.pos, nrm: t.pitSigns.nrm, idx: t.pitSigns.idx });
+      t.meshes.pitSignTex = "atlas:" + t.pit.row.boxes.map((b) => b.name).join("|");
+      return true;
+    },
+    free() {},
+  };
+  return { T, page, posts };
+}
+
+test("worker world == main-thread world WITH baked models, pit signs and MY TEAM", async () => {
+  const { T, page } = pageWithWorker();
+  const id = "monza", def = T.LIST.find((d) => d.id === id);
+  const resident = await page.Assets.loadModels();
+  assert.ok(resident > 20, `premise: the page holds the baked pack (${resident} models)`);
+  const a = recorder();
+  const tA = T.build(def, { gfx: a.gfx, chunkRibbons: true, retainGraph: false });
+  assert.match(String(tA.meshes.pitSignTex), /ZEPHYR RACING/, "premise: the page's own build carries MY TEAM's bay");
+
+  const b = recorder();
+  const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf(id), def,
+    { chunkRibbons: true, retainGraph: false }, b.gfx, MANIFEST.sceneryPath(id));
+  assert.ok(msg, "the worker answered a world");
+  assert.equal(msg.models, resident, "the worker stamped from the same pack");
+  const tB = await page.TrackBuildClient.replay(msg, def, b.gfx);
+  assert.deepEqual(b.log, a.log, "every upload — baked models and the bay-sign mesh included — in order, byte-identical");
+  assert.equal(tB.meshes.pitSignTex, tA.meshes.pitSignTex, "the bay signs carry the page's MY TEAM row");
+  assert.deepEqual(physics(tB), physics(tA), "the physics arrays match");
+
+  // And the pack is what made the difference: an asset-less build differs.
+  const bare = buildContext(null, { quiet: true, instancing: true });
+  const c = recorder();
+  bare.build(bare.LIST.find((d) => d.id === id), { gfx: c.gfx, chunkRibbons: true, retainGraph: false });
+  assert.notDeepEqual(c.log, a.log, "premise: the baked models change the uploads");
+});
+
+test("a worker holding fewer models than the page answers null (build in steps)", async () => {
+  const { T, page } = pageWithWorker({ workerPack: false });
+  await page.Assets.loadModels();
+  const def = T.LIST.find((d) => d.id === "vegas");
+  const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf("vegas"), def, { chunkRibbons: true }, recorder().gfx, MANIFEST.sceneryPath("vegas"));
+  assert.equal(msg, null, "a poorer world is refused, not adopted");
+});
+
+test("a custom circuit never goes to the worker", async () => {
+  const { page, posts } = pageWithWorker();
+  const msg = await page.TrackBuildClient.build(60, { id: "my-loop", custom: true }, {}, recorder().gfx, null);
+  assert.equal(msg, null);
+  assert.deepEqual(posts, [], "no init, no build: the round-trip is skipped");
+  await tick();
 });

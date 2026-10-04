@@ -2085,8 +2085,10 @@ async function loadTrackStepped(idx, live) {
     const opts = trackBuildOpts(sessionDark, wantSlots);
     const msg = typeof TrackBuildClient !== "undefined" && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
     if (track !== null || !live()) return false;   // a sync loadTrack, or the player backed out, meanwhile
-    built = msg ? await TrackBuildClient.replay(msg, def, gfx) : await Tracks.buildPaced(def, opts, live, freeTrackMeshes);
+    // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
+    if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
     if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
+    if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes); }
   } finally {
     try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }

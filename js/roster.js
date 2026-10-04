@@ -515,5 +515,8 @@
     "js/track/circuit-elevations.js",
     "js/track/tracks.js"
   ],
+    TRACK_WORKER_EXTRA: [
+    "js/render/shared/assets.js"
+  ],
   });
 })();
