@@ -843,6 +843,7 @@ function skinAccent(t) {
   const canTell = typeof Teams !== "undefined" && Teams && typeof Teams.isReal === "function";
   // APPEARANCE › HUD ACCENT owns --accent when not TEAM (js/ui/appearance-opts.js).
   if (typeof AppearanceOpts !== "undefined" && AppearanceOpts && !AppearanceOpts.hudUsesTeam()) {
+    if (AppearanceOpts.menuAccent() === "team") AppearanceOpts.applyMenuAccent();
     AppearanceOpts.applyHudAccent();
     return;
   }

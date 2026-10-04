@@ -105,14 +105,16 @@ const AppearanceStudio = (function () {
     const next = snapshot(); if (mode !== undefined) next.homeScene = mode; if (motion !== undefined) next.backgroundMotion = motion;
     return applySnapshot(next);
   }
-  function undo() { const previous = undoStack.pop(); if (!previous) return false; applySnapshot(previous, { history: false }); activePreset = ""; say("Previous visual settings restored."); return true; }
-  function reset(chosenScope = scope) { applySnapshot(DEFAULTS, { scope: chosenScope }); activePreset = ""; render(); say((chosenScope === "screen" ? pageLabel() : "All visual settings") + " reset. Undo restores your previous choices."); }
-  function profiles() {
-    const raw = store.get(PROFILE_KEY, []); if (!Array.isArray(raw)) return [];
+  function durabilityNote(result) { return result.durable ? "." : " for this session; browser storage is unavailable."; }
+  function undo() { const previous = undoStack.pop(); if (!previous) return false; const result = applySnapshot(previous, { history: false }); activePreset = ""; say("Previous visual settings restored" + durabilityNote(result)); return true; }
+  function reset(chosenScope = scope) { const result = applySnapshot(DEFAULTS, { scope: chosenScope }); activePreset = ""; render(); say((chosenScope === "screen" ? pageLabel() : "All visual settings") + " reset" + durabilityNote(result) + " Undo restores your previous choices."); }
+  function normalizeProfiles(raw) {
+    if (!Array.isArray(raw)) return [];
     const ids = new Set();
     return raw.slice(0, 12).filter((p) => isObject(p) && typeof p.id === "string" && /^[a-z0-9-]{1,64}$/i.test(p.id) && typeof p.name === "string" && p.name.trim() && !ids.has(p.id) && ids.add(p.id))
       .map((p) => ({ id: p.id, name: p.name.trim().slice(0, 40), values: normalizeSnapshot(p.values) }));
   }
+  function profiles() { return normalizeProfiles(store.get(PROFILE_KEY, [])); }
   function writeProfiles(rows) {
     const result = store.write ? store.write(PROFILE_KEY, rows) : { ok: true, durable: store.set(PROFILE_KEY, rows) !== false };
     say(result.durable ? "Appearance profile saved." : "Profile saved for this session. Browser storage could not save it for your next visit."); render(); return result;
@@ -125,7 +127,7 @@ const AppearanceStudio = (function () {
     const row = { id: newId, name: label, values: snapshot() }; if (at < 0) rows.push(row); else rows[at] = row;
     selectedProfile = newId; return writeProfiles(rows);
   }
-  function loadProfile(id) { const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id; applySnapshot(p.values); say(p.name + " applied to all visual settings."); return true; }
+  function loadProfile(id) { const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id; const result = applySnapshot(p.values); say(p.name + " applied to all visual settings" + durabilityNote(result)); return true; }
   function deleteProfile(id) { const rows = profiles(); if (!rows.some((p) => p.id === id)) return false; selectedProfile = ""; const result = writeProfiles(rows.filter((p) => p.id !== id)); say(result.durable ? "Profile deleted. Your current appearance stays in place." : "Profile deleted for this session. Browser storage could not save that change for your next visit."); return true; }
   function attach(value) { hooks = value || {}; invoke("applyVisuals", snapshot()); sceneChanged(); }
   function setPreviewFrame(url) {
@@ -148,7 +150,7 @@ const AppearanceStudio = (function () {
     input.addEventListener("change", () => { const v = snapshot(); v[key] = "custom"; v[hexKey] = input.value; applySnapshot(v); }); row.append(name, input); host.appendChild(row); ui.colours.push({ key, hexKey, row, input });
   }
   function range(host, label, key, lo, hi) {
-    const row = node("label", "as-row"), name = node("span", "as-label", label), input = node("input"), out = node("output"); input.type = "range"; input.min = lo; input.max = hi; input.step = 1; input.setAttribute("aria-label", label);
+    const row = node("label", "as-row"), name = node("span", "as-label", label), input = node("input"), out = node("output"); input.type = "range"; input.min = lo; input.max = hi; input.step = .25; input.setAttribute("aria-label", label);
     let before = null; input.addEventListener("pointerdown", () => { before = snapshot(); });
     input.addEventListener("input", () => { if (!before) before = snapshot(); const v = snapshot(); v[key] = Number(input.value); applySnapshot(v, { history: false }); });
     input.addEventListener("change", () => { if (before) { remember(before); before = null; } }); row.append(name, input, out); host.appendChild(row); ui.ranges.push({ key, input, out });
@@ -171,7 +173,8 @@ const AppearanceStudio = (function () {
     plate.style.textAlign = look && look.head === "centre" ? "center" : "left";
     plate.style.setProperty("--preview-density", look && look.density === "tight" ? ".7" : look && look.density === "roomy" ? "1.3" : "1");
     body.dataset.scene = s.homeScene; body.dataset.motion = effectiveSceneMotion();
-    body.style.setProperty("--preview-panel-opacity", (s.hudPanelOpacity || 100) / 100);
+    body.style.setProperty("--preview-panel-opacity", s.uiContrast === "high" ? 1 : (s.hudPanelOpacity || 100) / 100);
+    body.style.setProperty("--preview-hud-accent", typeof getComputedStyle === "function" ? getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "var(--accent)" : "var(--accent)");
   }
   function render() {
     if (!ui) return; const s = snapshot();
@@ -227,5 +230,5 @@ const AppearanceStudio = (function () {
   }
   if (typeof document !== "undefined") { if (document.readyState === "complete") initUI(); else document.addEventListener("DOMContentLoaded", initUI, { once: true }); }
   return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
-    applySnapshot, applyPreset, undo, reset, profiles, saveProfile, loadProfile, deleteProfile, attach, setPreviewFrame, notify: say, initUI });
+    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, attach, setPreviewFrame, notify: say, initUI });
 })();

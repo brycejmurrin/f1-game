@@ -83,3 +83,41 @@ test('Photo retains the selected mixed environment after Settings covers Home, t
   picker.leave();assert.equal(picker.enter('auto','auto').mode,'track');assert.equal(writes,2);
   picker.enter('auto','auto');assert.equal(writes,2,'the normal Home redraw still holds its visit');
 });
+
+test('Home Photo keeps its manual camera through resize and temporary hiding, then releases it on DONE', () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  dom.byId('menu-buttons')._rect = { left: 900, top: 120, right: 1350, bottom: 780, width: 450, height: 660 };
+  let current = { shot: 'garage-before-Home', dist: 8 }, saved = null, owned = false;
+  const setupCam = {
+    captureCamera: () => ({ ...current }), restoreCamera: value => { current = { ...value }; },
+    beginHome(_mode, opts) { if (!owned) saved = { ...current }; owned = true; current = { shot: opts.shot, dist: 8.35 }; return true; },
+    endHome() { if (owned) { current = saved; owned = false; } }, homeState: () => owned ? {} : null, renderHome: () => true,
+  };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener() {}, Log: { warn() {} } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const ui = local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false }, { setupCam, trackReady: () => true });
+  ui.renderHome(1 / 60); dom.byId('photo-studio').hidden = false; ui.renderHome(1 / 60);
+  current = { shot: 'manual-top-orbit', dist: 4.6 };
+  sandbox.innerWidth = 900; sandbox.innerHeight = 1440; ui.renderHome(1 / 60);
+  assert.deepEqual(current, { shot: 'manual-top-orbit', dist: 4.6 });
+  dom.document.hidden = true; assert.equal(ui.renderHome(1 / 60), false);
+  dom.document.hidden = false; ui.renderHome(1 / 60);
+  assert.deepEqual(current, { shot: 'manual-top-orbit', dist: 4.6 });
+  dom.byId('overlay').hidden = true; ui.renderHome(1 / 60);
+  dom.byId('overlay').hidden = false; ui.renderHome(1 / 60);
+  assert.deepEqual(current, { shot: 'manual-top-orbit', dist: 4.6 });
+  dom.byId('photo-studio').hidden = true; ui.renderHome(1 / 60);
+  assert.equal(current.shot, 'hero', 'DONE resumes the configured Home shot');
+  dom.byId('photo-studio').hidden = false; ui.renderHome(1 / 60);
+  assert.equal(current.shot, 'hero', 'a later photo cannot inherit the discarded manual pose');
+  ui.stopHome(); assert.deepEqual(current, { shot: 'garage-before-Home', dist: 8 });
+});
