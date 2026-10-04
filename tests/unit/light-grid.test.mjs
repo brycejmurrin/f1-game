@@ -658,5 +658,28 @@ test("the sun-glint knee and the world env-probe reflection reach every backend"
   ]) assert.match(src, re, `${name}: the world env block weights the live probe by strength x eye-distance fade`);
   assert.match(glx, /envColor = mix\(envColor, textureLod\(uEnvCube, R, rough \* 2\.5\)\.rgb, probeW\)/, "GLX samples the probe at rough*2.5");
   assert.match(tlx, /cubeTexture\(envCubeNode, R, rough\.mul\(2\.5\)\)\.rgb, probeW\)/, "TLX samples the probe at rough*2.5");
-  assert.match(w, /textureSampleLevel\(envCube, envCubeSamp, Rw, rough \* 2\.5\)\.rgb, probeW\)/, "WGX samples the probe at rough*2.5");
+  assert.match(w, /textureSampleLevel\(envCube, envCubeSamp, vec3<f32>\(Rw\.x, -Rw\.y, Rw\.z\), rough \* 2\.5\)\.rgb, probeW\)/, "WGX samples the probe at rough*2.5, -y like every probe tap");
+});
+
+test("WGX: every env-probe tap reads the y-down cube faces with -y", () => {
+  // wgx.js renders the probe faces y-down with GL up-vectors (and swaps the +-Y
+  // cameras), so a tap must flip y to land on the right texel. The world-gloss
+  // tap shipped without it (2026-10-01) and mirrored wet road and glass upside down.
+  const w = read("js/render/webgpu/wgsl-chunks.js");
+  assert.match(w, /let RgEnv = vec3<f32>\(Rg\.x, -Rg\.y, Rg\.z\);/, "the lacquer's tap direction is flipped");
+  const taps = [...w.matchAll(/textureSampleLevel\(envCube, envCubeSamp, (vec3<f32>\([^)]*\)|\w+),/g)].map((m) => m[1].trim());
+  assert.ok(taps.length >= 4, `found the probe taps (${taps.length})`);
+  for (const d of taps) {
+    assert.ok(d === "RgEnv" || /^vec3<f32>\((\w+)\.x, -\1\.y, \1\.z\)$/.test(d), `env tap direction "${d}" is y-flipped`);
+  }
+});
+
+test("car-paint flake sparkle fades out inside 4 m on all three backends", () => {
+  // A flake cell is 4.5 mm of object space: sub-pixel at chase/garage range, but
+  // several pixels at cockpit range, where the sidepods read as white confetti.
+  const near = { GLX: /float spFade = [^;]*smoothstep\(1\.5, 4\.0, vDist\)/, TLX: /const spFade = [^;]*\.mul\(smoothstep\(1\.5, 4\.0, vd\)\)/,
+    WGX: /var spFade = [^;]*smoothstep\(1\.5, 4\.0, vDist\)/ };
+  for (const [name, file] of [["GLX", "js/render/glx/shaders/glsl-lit.js"], ["TLX", "js/render/three/tsl-lit.js"], ["WGX", "js/render/webgpu/wgsl-chunks.js"]]) {
+    assert.match(read(file), near[name], `${name}: the sparkle fade has the near-range term`);
+  }
 });
