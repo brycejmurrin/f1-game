@@ -382,13 +382,26 @@ test("host: toggling s across the line without driving the lap earns nothing", (
   assert.notEqual(carA.finished, true);
 });
 
+test("host: laps faster than the wire's speed ceiling allows are refused", () => {
+  const { G, carA, pose } = hostWithGuest();
+  pose({ s: 4990, lap: 0 }); pose({ s: 5, lap: 1 });
+  assert.equal(carA.lap, 1);
+  // Three packets a "lap", with no race clock passing: 5 laps in 1.5 s of wire.
+  for (let i = 0; i < 6; i++) { pose({ s: 2500, lap: 2 + i }); pose({ s: 4500, lap: 2 + i }); pose({ s: 250, lap: 2 + i }); }
+  assert.equal(carA.lap, 1, "a lap needs total / SPEED_LIMIT of race clock since the last rise");
+  assert.notEqual(carA.finished, true);
+  G.raceT += 90;
+  pose({ s: 2500, lap: 2 }); pose({ s: 4990, lap: 2 }); pose({ s: 5, lap: 2 });
+  assert.equal(carA.lap, 2, "a real lap's worth of clock later, the crossing counts");
+});
+
 test("host: a lap actually driven still counts, through to the finish", () => {
   const { G, carA, pose } = hostWithGuest();
   pose({ s: 4990, lap: 0 });
   for (let lap = 1; lap <= G.lapsTarget + 1; lap++) {
     pose({ s: 5, lap });
     assert.equal(carA.lap, lap, `lap ${lap} counted`);
-    if (lap <= G.lapsTarget) { pose({ s: 2500, lap }); pose({ s: 4990, lap }); }
+    if (lap <= G.lapsTarget) { pose({ s: 2500, lap }); G.raceT += 90; pose({ s: 4990, lap }); }   // a lap takes time
   }
   assert.notEqual(carA.finished, true, "an extrapolated crossing never finishes a car");
   pose({ s: 15, lap: G.lapsTarget + 1 }, 10);

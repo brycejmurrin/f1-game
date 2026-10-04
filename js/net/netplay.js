@@ -65,8 +65,12 @@ const NetPlay = (function () {
   // last rise (so toggling s across the line does not count laps). The grid
   // (lap 0, s just short of the line) crosses once without the mid-lap sight.
   // A lower wire lap is taken as is: it only ranks the sender lower.
+  // AND A LAP TAKES TIME: nothing bounded how far s moved between packets, so
+  // a modified guest cycling s 0.5T -> 0.9T -> 0.05T met the crossing rule
+  // three packets a lap (5 laps in 1.5 s of wire). A rise also needs a whole
+  // lap at the wire's speed ceiling of race clock since the last one.
   const MID_LO = 0.25, MID_HI = 0.75;
-  function gateLap(c, st, total) {
+  function gateLap(c, st, total, now) {
     const prev = Math.max(0, Math.floor(Number(c.lap) || 0));
     let lap = prev;
     if (!(total > 0)) lap = Math.min(st.lap, prev);
@@ -74,9 +78,11 @@ const NetPlay = (function () {
     // A fall re-arms the next rise, so it nets zero: needed when an
     // extrapolated sample crossed early and the next real packet is short.
     else if (st.lap < prev) { lap = st.lap; c._nMid = true; }
-    else if (Number.isFinite(c.s) && c.s - st.s > total * 0.5 && (prev === 0 || c._nMid)) {
+    else if (Number.isFinite(c.s) && c.s - st.s > total * 0.5 && (prev === 0 || c._nMid)
+             && !(Number.isFinite(now) && Number.isFinite(c._nRiseT) && now - c._nRiseT < total / SPEED_LIMIT)) {
       lap = prev + 1;
       c._nMid = false;
+      c._nRiseT = now;   // the grid crossing too: no real lap beats total / SPEED_LIMIT
     }
     if (total > 0 && st.s > total * MID_LO && st.s < total * MID_HI) c._nMid = true;
     return lap;
@@ -327,7 +333,7 @@ const NetPlay = (function () {
       // clampWire (module scope) — the same clamp the predicted sample gets.
       st = clampWire(st, (G.track && G.track.total) || 0, G.lapsTarget, _clamped);
       // HOST: a guest's lap is EARNED, not declared (gateLap, module scope).
-      if (role === "host") st.lap = gateLap(c, st, (G.track && G.track.total) || 0);
+      if (role === "host") st.lap = gateLap(c, st, (G.track && G.track.total) || 0, G.raceT);
       c.s = st.s;
       c.x = st.x;
       c.xVis = st.x;
@@ -703,7 +709,7 @@ const NetPlay = (function () {
         if (!car) continue;
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
         G.setCarRole(car, true, false);
-        car._nFin = null; car._nFinLap = null; car._nMid = false;     // gateLap / pending-fin state, per race
+        car._nFin = null; car._nFinLap = null; car._nMid = false; car._nRiseT = null;   // gateLap / pending-fin state, per race
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), {
           car,
