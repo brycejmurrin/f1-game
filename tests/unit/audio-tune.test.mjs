@@ -52,7 +52,11 @@ function param(v) {
   return p;
 }
 function idleSampleSrc() {
-  return [...live].find((n) => n.kind === "src" && n.loop && n.buffer && n.buffer.duration >= 3);
+  // The idle voice plays the engine's loop WINDOW (engine.js loopWindow, perf
+  // M-5a): a buffer it loops end to end. The full recording stays accepted for
+  // a decode that could not be windowed.
+  return [...live].find((n) => n.kind === "src" && n.loop && n.buffer &&
+    (n.buffer.duration >= 3 || (n.loopStart === 0 && n.loopEnd > 0 && Math.abs(n.loopEnd - n.buffer.duration) < 1e-6)));
 }
 // `live` makes a LEAK observable: a node enters on creation and leaves only on
 // disconnect(), which is the Web Audio contract that matters — a stopped source
