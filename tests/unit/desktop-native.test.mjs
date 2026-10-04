@@ -74,6 +74,10 @@ test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch 
   assert.match(yml, /workflow_dispatch:/);
   assert.match(yml, /desktop-v\*/);
   assert.match(yml, /pull_request:/);
+  assert.match(yml, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "a draft skipped by pack-smoke must be tested when marked ready");
+  assert.match(yml, /name: Assert inspect fuse enabled for the test pack\n\s+working-directory: desktop\n\s+shell: bash/,
+    "the Bash fuse assertion also runs on Windows");
   assert.match(yml, /pack-smoke:/);
   assert.match(yml, /draft == false/);
   assert.match(yml, /pack:test/);

@@ -411,7 +411,7 @@ const CareerBackup = (function () {
       }
     }
 
-    if (typeof Career !== "undefined" && Career && Career.load) Career.load();
+    if (typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
     log("info", "career backup imported " + written.length + " slot(s)");
     return {
       ok: true,

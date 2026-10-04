@@ -120,7 +120,6 @@ function create(G) {
       rawText,
     });
     if (result.ok) {
-      Career.load();
       G.refreshCareerButton();
       if (result.needsConfirm && !otherConfirmed) {
         pendingImport = pending;

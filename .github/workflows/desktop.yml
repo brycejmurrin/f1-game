@@ -22,6 +22,7 @@ name: Desktop packages
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "desktop/**"
       - "tools/desktop/**"
@@ -91,6 +92,7 @@ jobs:
 
       - name: Assert inspect fuse enabled for the test pack
         working-directory: desktop
+        shell: bash
         run: |
           out=$(npm run fuses:read --silent 2>&1 || true)
           echo "$out"

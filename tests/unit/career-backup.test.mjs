@@ -720,3 +720,36 @@ test("IMPORT leaves a changed empty backup destination alone while restoring pop
   assert.equal(h.store.get("career.driver.0").money, 50);
   assert.equal(h.store.get("career.driver.1").money, 200, "a null row neither overwrites nor conflicts");
 });
+
+
+for (const focus of ["driver", "myteam"]) {
+  for (const peerWrite of [false, true]) {
+    test(`ALL MODES after ${focus} preserves an active other-mode revision${peerWrite ? " and refuses a peer edit" : " until confirmation"}`, async () => {
+      const a = deviceA();
+      a.store.set("career.driver.0", save({ money: 123 }));
+      const envelope = JSON.parse(JSON.stringify(a.CareerBackup.build()));
+      const h = loadHarness();
+      const other = focus === "driver" ? "myteam" : "driver";
+      h.Career.start({ flavour: other, teamId: "haas", seed: 1 });
+      const otherKey = `career.${other}.0`;
+      const before = h.disk.get("apex26." + otherKey);
+      const revision = h.Career.slotRevision(other, 0);
+      const ui = bootBackupUi(h);
+      const side = focus === "driver" ? "left" : "right";
+      await ui.selectBackup(envelope, side);
+      ui.clickImport(side);
+      assert.equal(ui.notices.at(-1), "CAREER RESTORED — CONFIRM OTHER MODE?");
+      assert.equal(h.Career.slotRevision(other, 0), revision, "refresh must not re-save the unconfirmed live mode");
+      assert.equal(h.disk.get("apex26." + otherKey), before);
+      if (peerWrite) {
+        const peer = JSON.parse(before);
+        peer.money = 8000;
+        h.disk.set("apex26." + otherKey, JSON.stringify(peer));
+        h.foreign("apex26." + otherKey);
+      }
+      ui.clickImport(side);
+      assert.equal(ui.notices.at(-1), peerWrite ? "SAVE CONFLICT — IMPORT REFUSED" : "CAREER RESTORED");
+      assert.equal(h.store.get(otherKey).money, peerWrite ? 8000 : other === "driver" ? 123 : 5150);
+    });
+  }
+}

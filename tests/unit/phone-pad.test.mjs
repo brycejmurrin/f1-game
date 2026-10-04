@@ -762,6 +762,7 @@ function hostHarness(over = {}) {
   const room = { stopped: 0, onJoiner: null, stop() { room.stopped++; } };
   const deps = Object.assign({
     rtc: () => hostEnd, prefetchIce: async () => null, makeCode: () => "ABC234", relayUrl: () => "https://relay.test/base",
+    usingPrivateRelay: () => false,
     createInvite: async () => ({ ok: true, code: "OFFER" }),
     acceptAnswer: async () => ({ ok: true }),
     hostRoom: async (o) => { room.onJoiner = o.onJoiner; room.onFail = o.onFail; room.token = o.token; return { ok: true, stop: room.stop }; },
@@ -947,7 +948,7 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   // while it drives, and the player's own camera comes back when the phone is gone.
   assert.match(gameJs, /const VISOR_CAM = CamModes\.CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
   assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && G.camMode !== VISOR_CAM\) \{ phonePadCam = G.camMode; G\.setCamMode\(VISOR_CAM, \{ persist: false \}\); \}/, "linking switches to VISOR (not saved as the player's camera) and remembers the camera it left");
-  assert.match(gameJs, /phonePad\.cancel\(\); phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
+  assert.match(gameJs, /phonePad\.cancel\(\);\s+phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
   assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
   assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
   // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
@@ -1080,6 +1081,65 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
     PhonePad.paintHud(el, back);
     assert.ok(el.body.classes.has("menu"), why + ": the phone shows the MENU PAD");
   }
+});
+
+test("wheel pedal axes never feed onboard free-look; an ordinary right stick still does", () => {
+  const { Input, sb, clock } = bootInput();
+  const pad = { index: 0, connected: true, id: "wheel", mapping: "", axes: [0, 0, -1, -1],
+    buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [pad];
+  const cam = vm.createContext({ Input, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } });
+  vm.runInContext(read("js/camera/feel.js"), cam);
+  const feel = vm.runInContext("CamFeel", cam);
+  Input.setPadAxisMap({ throttle: 2, brake: 3 });
+  for (const pedal of [-1, 0, 1]) {
+    pad.axes[2] = pad.axes[3] = pedal;
+    for (let i = 0; i < 120; i++) {
+      clock.t += STEP; Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
+    }
+    assert.deepEqual({ ...feel.freeLookState() }, { yaw: 0, pitch: 0 }, "pedal rest and travel leave the view centered");
+    assert.equal(Input.throttleLevel(), (pedal + 1) / 2, "the mapped throttle still drives");
+    assert.equal(Input.brakeLevel(), (pedal + 1) / 2, "the mapped brake still drives");
+  }
+  Input.setPadAxisMap({ steer: 2, brake: 3 });
+  Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
+  assert.deepEqual({ ...feel.freeLookState() }, { yaw: 0, pitch: 0 }, "a custom steering axis is owned by driving too");
+  Input.setPadAxisMap(null); pad.mapping = "standard";
+  pad.axes[2] = 0.5; pad.axes[3] = -0.5;
+  Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
+  assert.ok(feel.freeLookState().yaw > 0 && feel.freeLookState().pitch > 0, "unmapped right stick retains free-look");
+});
+
+test("PlatformSession: STOP cancels a pending phone load and a fresh attempt owns its host", async () => {
+  const elements = new Map(), loads = [], hosts = [];
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
+    $(id) { if (!elements.has(id)) elements.set(id, {}); return elements.get(id); } };
+  const context = vm.createContext({ G, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+    ensureNet: () => new Promise((resolve) => loads.push(resolve)),
+    PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) {
+      const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h;
+    } },
+  });
+  vm.runInContext(read("js/ui/platform-session.js"), context);
+  vm.runInContext("PlatformSession.create(G, { ensureNet }).wirePhone();", context);
+  const btn = G.$("pm-phonepad"), box = G.$("pm-phonepad-box");
+  btn.onclick(); assert.equal(btn.textContent, "STOP PAIRING");
+  btn.onclick(); assert.equal(box.hidden, true);
+  loads[0](true); await settle();
+  assert.equal(hosts.length, 0, "a cancelled bundle completion cannot start a host");
+  btn.onclick(); btn.onclick(); btn.onclick();
+  loads[1](false); await settle();
+  assert.equal(G.$("pm-phonepad-status").textContent, "Loading…", "stale failures leave the new attempt alone");
+  assert.equal(hosts.length, 0);
+  loads[2](true); await settle();
+  assert.equal(hosts.length, 1, "only the newest start creates a host");
+  hosts[0].options.linked(); assert.equal(G.camMode, 0, "a linked phone switches to visor");
+  btn.onclick();
+  assert.equal(G.camMode, 1, "UNPAIR restores the prior camera");
+  assert.equal(hosts[0].cancelled, 1, "STOP owns and cancels the sole host");
+  assert.equal(box.hidden, true);
+  btn.onclick(); loads[3](false); await settle();
+  assert.equal(btn.textContent, "STEER THIS GAME WITH A PHONE", "a load failure offers retry, not a misleading STOP");
 });
 
 test("host(): private relay swaps one offer/answer and the linked phone can drive", async () => {

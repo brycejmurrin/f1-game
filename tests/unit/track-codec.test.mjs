@@ -79,7 +79,7 @@ test("every bad code is refused with a reason, never an exception", async () => 
 });
 
 test("URL fragment and file envelope helpers", () => {
-  const { CD } = bootEditor();
+  const { CD, ctx } = bootEditor();
   assert.equal(CD.shareUrl("APXT1.p.AAA", "https://x.test/f1/"), "https://x.test/f1/#track=APXT1.p.AAA");
   assert.equal(CD.fromHash("#track=APXT1.p.AAA"), "APXT1.p.AAA");
   assert.equal(CD.fromHash("#ghost=zzz&track=APXT1.p.BBB"), "APXT1.p.BBB");
@@ -92,6 +92,15 @@ test("URL fragment and file envelope helpers", () => {
   assert.deepEqual(plain(CD.fromFile({ format: "apex26.track", design: { pts: [] } })), { design: { pts: [] } });
   assert.equal(CD.fromFile({ format: "apex26-career-backup-v1" }), null);
   assert.equal(CD.fromFile(null), null);
+  for (const origin of ["https://localhost", "app://apex", "capacitor://localhost"]) {
+    ctx.location = { origin, pathname: "/" };
+    ctx.Native = { isNative: () => true };
+    assert.equal(CD.shareUrl("APXT1.p.AAA"), "https://brycejmurrin.github.io/f1-game/#track=APXT1.p.AAA");
+    assert.equal(CD.shareUrl("APXT1.p.AAA", "https://x.test/game/"), "https://x.test/game/#track=APXT1.p.AAA");
+  }
+  ctx.Native = { isNative: () => false };
+  ctx.location = { origin: "https://x.test", pathname: "/game/" };
+  assert.equal(CD.shareUrl("APXT1.p.AAA"), "https://x.test/game/#track=APXT1.p.AAA");
 });
 
 // ── content-id stability (the TT board and ghosts key on the id) ────────────

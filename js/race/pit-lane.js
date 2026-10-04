@@ -1341,9 +1341,10 @@ const PitLane = (function () {
         const fresh = right.filter(function (r) { return !ran.has(r.code); });
         if (fresh.length) right = fresh;
       }
+      // pitStops already counts this box; until fitting, it is THIS stint.
       // …and THE PLAN'S LETTER, when it names one: the HUD and the engineer say
       // "BOX L12 H", so the crew fits an H unless the rule above forbids it.
-      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + 1] : null;
+      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
       const code = cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : null;
       const planned = code ? right.filter(function (r) { return r.code === code; }) : [];
       if (planned.length) right = planned;
@@ -1547,7 +1548,7 @@ const PitLane = (function () {
     function nextCode(c) {
       const plan = c && c.pitPlan;
       if (c && c.local) { const r = nextFor(c); if (r && r.code) return r.code; }
-      const cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + 1] : null;
+      const cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
       return cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : "";
     }
     /** A rival's window, for the gap chips: "IN" while it is stopping, "P<lap>"

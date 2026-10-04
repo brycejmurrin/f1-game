@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["bahrain"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, px, pz, pyMin, hash, vadd,
+      const { K, lapBounds, out, MAT, n, ds, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
@@ -249,8 +249,11 @@
         lit: true, windowCol: WIN_WARM,
       });
 
-      backdrop(K(0.00), 1, 160, [280, 16, 14], SAND_DARK);
-      backdrop(K(0.97), 1, 180, [240, 18, 14], SAND);
+      // (Two backdrop slabs behind the main stand lived here — 280 m / 240 m
+      // along-track at 160/180 m out. backdrop()'s guard is onTrack(c,
+      // sz[0]/2 + 6), so a slab that long is "on track" at any reachable gap
+      // and both were dropped every build. Removed, not re-gapped: the dune
+      // rings already own that horizon.)
 
       // Turn 1 Grandstand — covered single-tier on the outside of the main
       // overtaking / heavy-braking hairpin (bahrain.gp map; oversteer48). Gap
@@ -378,8 +381,6 @@
       for (let i = 0; i < 3; i++) {
         hospitality((K(0.255) + i * 5) % n, 1, 44 + i * 6, 11, 6, 14);
       }
-      // Desert backdrop slab on the L (infield) side at T3 — fills horizon gap
-      backdrop(K(0.24), -1, 120, [200, 14, 12], SAND_DARK);
 
       // Open desert left + grandstand right. Sparse dry scrub only — no green palms.
       for (let i = 0; i < 8; i++) {
@@ -527,9 +528,6 @@
         { kind: "hall", wall: [0.72, 0.67, 0.56], window: WIN_WARM, lit: true, floor: 2 });
       building(K(0.90), -1, 46, 12, 8, 18,
         { kind: "hall", wall: [0.70, 0.65, 0.54], window: WIN_COOL, lit: true, floor: 2 });
-      // Desert backdrop slabs along the back straight left (desert) side
-      backdrop(K(0.75), -1, 130, [300, 16, 13], SAND_DARK);
-      backdrop(K(0.85), -1, 150, [260, 18, 13], SAND);
 
       grandstandEx(0.925, 1, 34, 58, STAND_CREAM, SEAT_BLUE,
         { roof: "truss", suites: true, endWalls: true });
@@ -586,6 +584,43 @@
           const gap = 28 + hash(k * 11) * 18;
           floodMast(k, side, gap, 36 + hash(k * 13) * 6);
         }
+      }
+
+      // ── Infill pole ring: Sakhir's floodlighting is a FOREST, not a ring ──
+      // BIC's 2014 night-race installation (Musco Lighting) is ~495 poles
+      // carrying ~5,000 luminaires around the 5.4 km lap — roughly one pole per
+      // 22 m per side, standing close behind the catch fence. The 55 m ring
+      // above plus the banks were ~240 masts, under half that. This staggered
+      // second ring sits mid-pitch between them and closer in (16 m), shorter
+      // (30-33 m), with no ground pool and no registered light: the 55 m ring
+      // already carries the lamp budget and the pools, so this is silhouette
+      // only — the picket of poles a driver sees at night. Skipped where the
+      // pit complex / main stand own the verge, over the runoff paint, and
+      // wherever a single-point guard finds the next leg's tarmac.
+      if (typeof every === "function" && typeof apiFloodMast === "function") {
+        const half = Math.max(1, Math.round(27.5 / (ds || 4)));
+        const SKIP = [
+          [-1, 0.915, 0.070],   // pit lane, pit buildings, paddock edge
+          [ 1, 0.975, 0.020],   // main grandstand at gap 18
+          [-1, 0.475, 0.560],   // blue runoff paint 9-17 m out
+          [ 1, 0.900, 0.950],   // pink final-corner apron paint
+          [ 1, 0.105, 0.125],   // fold-side legs (ring exceptions above)
+          [-1, 0.195, 0.215],
+          [ 1, 0.815, 0.845],
+        ];
+        const skip = (f, side) => SKIP.some(([sd, lo, hi]) => sd === side &&
+          (lo <= hi ? (f >= lo && f <= hi) : (f >= lo || f <= hi)));
+        every(55, (k0) => {
+          const k = (k0 + half) % n, f = k / n;
+          for (const side of [-1, 1]) {
+            if (skip(f, side)) continue;
+            const a = anchor(k, side, 16);
+            if (onTrack(a.c[0], a.c[2], 7)) continue;
+            apiFloodMast(k, side, 16, {
+              h: 30 + hash(k * 17 + side) * 3, cool: true, pool: false, arms: 2, light: false,
+            });
+          }
+        });
       }
 
       fence(0.10, 0.16,  1, 7, 3.0, [0.70, 0.72, 0.76]);
@@ -811,6 +846,9 @@
       const FROND     = [0.26, 0.34, 0.16];
       const FROND_DRY = [0.32, 0.36, 0.19];
       for (let i = 0; i < 10; i++) {
+        // i = 2 (0.973) and 9 (1.036) found no free ground within +12 m of
+        // their gap (hospitality / wind tower) and were dropped every build.
+        if (i === 2 || i === 9) continue;
         const sf = 0.955 + i * 0.009;
         const k = K(sf), hv = hash(k * 83 + i * 3);
         palm(k, -1, 42 + (i % 2) * 4, 9 + hv * 4, hv < 0.5 ? FROND : FROND_DRY);
@@ -835,6 +873,24 @@
       }
 
       broadcastCompound(K(0.965), -1, 100, { vans: 4, dishes: 3, mastH: 10 });
+
+      // ── Paddock oasis grove ───────────────────────────────────────────────
+      // The paddock is the one irrigated, planted pocket of the site: date
+      // palms ring the team-hospitality buildings and the paddock gardens
+      // (the venue's own "Oasis" naming; Tilke's brief for local Gulf
+      // architecture). Kept to one tight grove BEHIND the hospitality kit
+      // (gap 100-118) and short of the drag strip's west bleachers (~200 m),
+      // so the open desert read everywhere else is untouched — the design
+      // brief's "no green oasis" rule is about the open desert, not the
+      // paddock. Irregular rows, ~1 in 4 slots left empty.
+      for (let c = 0; c < 4; c++) {
+        for (let r = 0; r < 3; r++) {
+          const sf = 0.978 + c * 0.008 + (hash(c * 5.3 + r * 1.9) - 0.5) * 0.003;
+          const k = K(sf % 1), hv = hash(k * 61 + r * 7);
+          if (hv < 0.25) continue;
+          palm(k, -1, 128 + r * 10 + (hv - 0.5) * 4, 8 + hv * 4, hv < 0.6 ? FROND : FROND_DRY);
+        }
+      }
 
       // ── THE DRAG STRIP ───────────────────────────────────────────────────
       // BIC is not one circuit, it is a motorsport COMPLEX: six tracks share
@@ -939,6 +995,14 @@
         [0.605,  1, 92,  28,  50, 2.4],
         [0.705, -1, 78,  24,  42, 2.8],
         [0.845,  1, 86,  32,  58, 3.2],
+        // The open west flank (left of 0.55-0.80, 400 m of nothing to the
+        // perimeter) had dune rings on the skyline and bare sand in the middle
+        // distance; three more shelves give that band the same blasted-rock
+        // edge as the rest of the lap. Held inside ~125 m: the terrain mesh
+        // ends there and a footprint straddling its edge sinks the scree.
+        [0.585, -1, 66,  28,  50, 2.6],
+        [0.665, -1, 70,  30,  56, 3.0],
+        [0.775, -1, 68,  26,  44, 2.4],
       ]) {
         const k = K(sf), a = anchor(k, side, gap + w * 0.5), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 30)) continue;
@@ -948,8 +1012,10 @@
           [0.60 + hv * 0.05, 0.55 + hv * 0.04, 0.45], b);
         addBox(out, vadd(vadd(a.c, a.u, h + 0.35), a.r, w * 0.16),
           [w * 0.62, 0.7, len * 0.74], [0.72 + hv * 0.06, 0.67, 0.55], b);
-        // Scree skirt at the foot, where the blasted rock spilled.
-        addBox(out, vadd(a.c, a.u, 0.22), [w * 1.22, 0.44, len * 1.1],
+        // Scree skirt at the foot, where the blasted rock spilled. Its base
+        // sits 0.06 m under the slab's so the two undersides are not one
+        // plane (ground-audit flatCoplanar counted 3 of the 7 original shelves).
+        addBox(out, vadd(a.c, a.u, 0.16), [w * 1.22, 0.44, len * 1.1],
           [0.56, 0.50, 0.40], b);
       }
 
