@@ -97,11 +97,16 @@ const Collide = (() => {
       p.sweepAngle = bodyAngle(c);
       p.sweepEligible = !(Math.abs(wrapDelta(p.sweepAngle - p.angle, TWO_PI)) > 0.15);
     }
+    // Body velocity in the contact plane (prog, x), +x RIGHT, angle + = nose
+    // toward +x: forward (cs, sn), RIGHT (−sn, cs). c.vLat is +RIGHT (the
+    // PlayerForces frame and game.js's world writeback); until 2026-10-04 both
+    // maps below used the LEFT vector, so a sliding car's lateral motion and a
+    // shove's lateral impulse entered the contact with the wrong sign.
     function body(c, speed, out) {
       const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
       out.angle = bodyAngle(c);
-      out.vx = speed * cs + (c.vLat || 0) * sn;
-      out.vy = speed * sn - (c.vLat || 0) * cs;
+      out.vx = speed * cs - (c.vLat || 0) * sn;
+      out.vy = speed * sn + (c.vLat || 0) * cs;
       out.omega = c.human ? (c.yawRateCur || 0) : 0;
       out.invMass = netPlay.owns(c) ? 0 : c.human ? AiDrive.humanInvMass(!!track.street) : 1;
       out.invInertia = c.human ? out.invMass / ContactGeometry.INERTIA : 0;
@@ -113,7 +118,7 @@ const Collide = (() => {
       const vx = state.vx + dx, vy = state.vy + dy;
       c.speed = Math.max(0, vx * cs + vy * sn);
       if (c.human) {
-        c.vLat = clamp(vx * sn - vy * cs, -40, 40);
+        c.vLat = clamp(vy * cs - vx * sn, -40, 40);   // V · RIGHT, the inverse of body()
         c.yawRateCur = clamp(state.omega + dw, -4, 4);
       }
     }

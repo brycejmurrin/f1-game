@@ -235,6 +235,41 @@ test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", 
   } finally { a.clearInput(); a.setPhysics(physicsBefore); }
 });
 
+// LATERAL BASIS (2026-10-04). PlayerForces integrates +vLat as the car's
+// RIGHT (axle slip vLat ± a·r, transport −u·r, +yawRate = nose right), and the
+// road's right is t × up = (−fz, fx) for a heading (fx, fz). game.js wrote the
+// slip back along (fz, −fx) — the LEFT vector — so the world travel direction
+// carried the body-slip angle MIRRORED: β_world = −β_dyn exactly (VM, monza,
+// 40 m/s steer 0.6: +2.00° vs −2.00°), and a slide swung the car toward the
+// inside of the corner instead of carrying it wide. Every yaw/vLat/force value
+// is identical either way (the writeback is one-way); only the world path moved.
+// Low speed is the kinematic check: at 15 m/s the travel direction sits INSIDE
+// the nose (vLat > 0 in a right-hand turn), which the mirror put outside. The
+// identity is exact (measured residual < 3e-13 rad), so the bound is 1e-9.
+test("the world path carries the body slip the dynamics integrate (travel − heading == atan2(vLat, u))", () => {
+  const a = g.apex, P = g.G.player;
+  try {
+    for (const [v0, inp, label] of [[40, { throttle: true, steer: 0.6 }, "40 m/s at the limit"],
+                                    [15, { steer: 0.8 }, "15 m/s kinematic"]]) {
+      a.jump(0, v0, 0);
+      let px = P.px, pz = P.pz, n = 0, worst = 0;
+      for (let i = 0; i < 40; i++) {
+        a.setInput(inp); a.step(1 / 60, 1);
+        const dx = P.px - px, dz = P.pz - pz; px = P.px; pz = P.pz;
+        const fx = Math.sin(P.head), fz = Math.cos(P.head);
+        const bWorld = Math.atan2(-dx * fz + dz * fx, dx * fx + dz * fz);   // travel vs nose, + = right
+        const bDyn = Math.atan2(P.vLat || 0, Math.max(1, Math.abs(P.speed)));
+        if (Math.abs(bDyn) < 0.004) continue;   // under ~0.25°: the sign is not the question yet
+        n++; worst = Math.max(worst, Math.abs(bWorld - bDyn));
+        assert.ok(Math.sign(bWorld) === Math.sign(bDyn),
+          `${label}, tick ${i}: travel is ${(bWorld * 57.3).toFixed(2)}° off the nose, the dynamics slide ${(bDyn * 57.3).toFixed(2)}° — mirrored`);
+      }
+      assert.ok(n >= 20, `${label}: anti-vacuity — only ${n} ticks carried a slip`);
+      assert.ok(worst < 1e-9, `${label}: world slip differs from the dynamics by up to ${(worst * 57.3).toFixed(3)}°`);
+    }
+  } finally { a.clearInput(); }
+});
+
 // Manual gearbox bog: (speed - lo)/(hi - lo) with reverse speed drives gearMult
 // to 0, so throttle cannot leave REVERSE_MAX until rescue (~1 s). Own boot —
 // the shared g is auto gears (gearMult stays 1). Before fix: mid05 stayed at
