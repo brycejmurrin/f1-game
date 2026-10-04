@@ -60,6 +60,22 @@ const TRACKED = (() => {
   for (const f of files) for (let d = path.dirname(f); d && d !== "."; d = path.dirname(d)) dirs.add(d);
   return { files, dirs };
 })();
+// The .js/.mjs/.cjs files under `roots` that GIT tracks — the same answer in a
+// fresh clone as on a box with untracked scratch files, ignored output or a
+// half-finished move on disk. Outside a checkout, disk is the only answer.
+const codeFiles = (roots) => {
+  const isCode = (f) => /\.(js|mjs|cjs)$/.test(f);
+  if (TRACKED) return [...TRACKED.files].filter((f) => isCode(f) && roots.some((r) => f.startsWith(r + "/")) && fs.existsSync(path.join(ROOT, f)));
+  const files = [];
+  for (const r of roots) (function walk(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
+      else if (isCode(e.name)) files.push(rel);
+    }
+  })(r);
+  return files;
+};
 const linkResolves = (dir, href) => {
   const abs = path.resolve(dir, href);
   if (!fs.existsSync(abs)) return false;
@@ -205,15 +221,7 @@ test("a `file.js:NNN` citation in a comment points inside that file", () => {
   // authority. Out-of-range is the half that is mechanically checkable; prefer
   // naming a function or a symbol over a line number either way, because a
   // citation that stays inside the file can still point at the wrong thing.
-  const roots = ["js", "tools", "tests"];
-  const files = [];
-  for (const r of roots) (function walk(dir) {
-    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
-      const rel = path.join(dir, e.name);
-      if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
-      else if (/\.(js|mjs|cjs)$/.test(e.name)) files.push(rel);
-    }
-  })(r);
+  const files = codeFiles(["js", "tools", "tests"]);
 
   const lineCount = new Map();
   const lines = (rel) => {
@@ -268,22 +276,7 @@ test("source comments reference only files that exist", () => {
   // The js/ -> js/<domain>/ reorganisation left 29 such pointers behind across
   // js/, tools/ and tests/ — each one sending a reader (or an agent) to a path
   // that has not existed for months. This is the only thing that catches them.
-  const roots = ["js", "tools", "tests"];
-  const files = [];
-  (function walk(dir) {
-    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
-      const rel = path.join(dir, e.name);
-      if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
-      else if (/\.(js|mjs|cjs)$/.test(e.name)) files.push(rel);
-    }
-  })(roots[0]);
-  for (const r of roots.slice(1)) (function walk(dir) {
-    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
-      const rel = path.join(dir, e.name);
-      if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
-      else if (/\.(js|mjs|cjs)$/.test(e.name)) files.push(rel);
-    }
-  })(r);
+  const files = codeFiles(["js", "tools", "tests"]);
 
   const broken = [];
   for (const file of files) {

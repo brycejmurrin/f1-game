@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api } from "../../tools/ci/ci-watch.mjs";
+import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy } from "../../tools/ci/ci-watch.mjs";
 import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
@@ -293,4 +293,30 @@ test("job-list API failure cannot turn a completed successful run into a zero-jo
   assert.equal(result.code, 3);
   assert.ok(result.lines.some((line) => line.includes("= ci unknown")));
   assert.ok(!result.lines.some((line) => line.includes("= ci passed")));
+});
+
+test("a pending ship-fast run replaced by a newer push is SUPERSEDED, not a timeout", async () => {
+  const mine = { ...run(50, "CI", "completed", "cancelled", "2026-10-03T08:00:00Z"), workflow_id: 7, head_branch: "claude/f1-game-project-26h3ng", event: "push", head_sha: SHA, html_url: "u/50" };
+  const newer = { ...mine, id: 51, status: "in_progress", conclusion: null, head_sha: "b".repeat(40), html_url: "u/51" };
+  const older = { ...mine, id: 49, head_sha: "c".repeat(40) };
+  // Pure rule: same workflow/branch/event, a newer id and another head — and the run never started a step.
+  assert.equal(supersededBy(mine, [], [older, mine, newer])?.id, 51);
+  assert.equal(supersededBy(mine, [job(1, "guards", "completed", "cancelled", [{ name: "x", started_at: "t", conclusion: "cancelled" }])], [newer]), null,
+    "a run killed mid-way stays rule 8's timeout even with a successor");
+  assert.equal(supersededBy(mine, [], [older, { ...newer, event: "workflow_dispatch" }]), null, "a dispatched run is not the replacement");
+  for (const siblings of [[mine, newer], [mine]]) {
+    const result = await afterThreeMinutes((endpoint) => {
+      if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [mine] } };
+      if (endpoint === "actions/runs/50/jobs?per_page=100") return { json: { jobs: [] } };
+      if (endpoint.startsWith("actions/workflows/7/runs?")) return { json: { workflow_runs: siblings } };
+      throw new Error(endpoint);
+    }, { once: true });
+    if (siblings.length > 1) {
+      assert.equal(result.code, 4);
+      assert.ok(result.lines.some((l) => l.startsWith("= ci superseded") && l.includes(`--sha ${"b".repeat(40)}`)), result.lines.join("\n"));
+    } else {
+      assert.equal(result.code, 2, "no successor: still cancelled");
+      assert.ok(result.lines.some((l) => l.startsWith("= ci cancelled")));
+    }
+  }
 });

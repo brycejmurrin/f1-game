@@ -16,9 +16,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { titlesIn, audit } from "../../tools/ci/test-observed.mjs";
+import { titlesIn, audit, observedTitles } from "../../tools/ci/test-observed.mjs";
 
-const LOGS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../artifacts/logs");
+// The repo root, whose artifacts/logs is what tools/ci/test-observed.mjs reads.
+// (Resolving "../artifacts/logs" from tests/unit pointed at tests/artifacts/logs,
+// which never exists, so the observed half below never ran.)
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("a top-level test carries the file's basename as an implicit suite", () => {
   const src = `import { test } from "./fixtures.js";\ntest("does a thing", async () => {});`;
@@ -91,7 +94,7 @@ test("every spec in the repo parses", () => {
   assert.deepEqual(bad.map((b) => `${b.file}: ${b.parseError}`), []);
 });
 
-test("the audit finds real tests, and its titles match real log lines", () => {
+test("the audit finds real tests, and its titles match real log lines", (t) => {
   // End-to-end anti-vacuity: if the reporter's format drifted, or extraction
   // broke, `observed` would collapse to zero across the board and the tool
   // would report the entire suite as never-run rather than failing.
@@ -99,17 +102,21 @@ test("the audit finds real tests, and its titles match real log lines", () => {
   const declared = rows.reduce((a, r) => a + (r.declared || 0), 0);
   assert.ok(declared > 500, `expected the suite to declare 500+ tests, got ${declared}`);
 
-  // The observed half needs logs to compare against, and `artifacts/` is
-  // GITIGNORED — it does not exist in CI at all, so there every title is
-  // legitimately unobserved. Asserting observed > 0 unconditionally turned CI
-  // red for an environment fact rather than a defect. Run the check where
-  // there is something to check.
-  const logs = fs.existsSync(LOGS)
-    ? fs.readdirSync(LOGS).filter((n) => n.endsWith(".log"))
-    : [];
-  if (!logs.length) return;
+  // The observed half needs Playwright logs to compare against, and
+  // `artifacts/` is GITIGNORED — it does not exist in CI at all, and locally it
+  // often holds only node TAP / gate logs, where every title is legitimately
+  // unobserved. Asserting observed > 0 unconditionally turned CI red for an
+  // environment fact rather than a defect. So gate on a live-reporter result
+  // line naming a spec that still exists (a deleted spec's line can never
+  // match a declared title), and say so when there is nothing to check.
+  const reported = [...observedTitles().keys()]
+    .filter((title) => fs.existsSync(path.join(ROOT, title.split(" › ")[0])));
+  if (!reported.length) {
+    t.skip("no Playwright live-reporter line for a current spec in artifacts/logs — observed half not checkable here");
+    return;
+  }
   const observed = rows.reduce((a, r) => a + (r.observed || 0), 0);
   assert.ok(observed > 0,
-    "no declared title matched any artifacts/logs line — extraction and the " +
-    "live-reporter format have diverged, which makes the tool useless rather than wrong");
+    `${reported.length} live-reporter titles in artifacts/logs, none matching a declared title — ` +
+    "extraction and the live-reporter format have diverged, which makes the tool useless rather than wrong");
 });

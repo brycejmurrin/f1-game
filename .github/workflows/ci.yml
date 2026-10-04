@@ -302,14 +302,15 @@ permissions:
 # pull_request.head.ref, and a later synchronize/ready_for_review cancels the
 # older PR run on that same branch (cancel-in-progress true for pull_request).
 #
-# SHIP PUSHES DO NOT CANCEL EACH OTHER (2026-10). They used to share one
-# `ship-push` group with cancel-in-progress so a merge burst discarded every
-# earlier tip's fast tier. Bryce wants every merge's CI to finish: each deploy-
-# branch push now keys its own group on github.sha, and cancel-in-progress is
-# false for push. Cost: more runner minutes and a longer Actions queue during
-# merge bursts (~20 slots). The deploy path is unchanged: a Pages caller
-# supplies its run id (unique concurrency_key), so every deploy gate has its
-# own group and is cancelled only by pages.yml's own per-branch rule.
+# SHIP PUSHES SHARE ONE NON-CANCELLING GROUP (2026-10-03; see the group
+# comment below). A RUNNING fast tier is never cancelled, but GitHub keeps
+# only one PENDING run per group, so in a merge burst a waiting push run is
+# cancelled when a newer push arrives — superseded, not a timeout; ci-watch.mjs
+# reports it as `= ci superseded` and names the newer run. (A short-lived
+# per-github.sha group ran one fast tier per merge and clogged the queue.)
+# The deploy path is separate: a Pages caller supplies its run id (unique
+# concurrency_key), so every deploy gate has its own group and is cancelled
+# only by pages.yml's own per-branch rule.
 concurrency:
   # A dispatched run gets its own group: it shares the ref with every push,
   # and cancellation killed the first dispatched `ui` group 30 s in when the

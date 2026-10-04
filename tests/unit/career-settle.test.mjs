@@ -954,7 +954,8 @@ test("accepting recomputes the TARGET, because a move re-seats you", () => {
   const c = Career.data();
   c.rep = 50; c.deal.years = 1; c.deal.left = 1;
   Career.rollover();
-  if (!(c.offers || []).length) return;
+  // The fixed seed DOES draw offers; an empty list would skip every assertion.
+  assert.ok((c.offers || []).length > 0, "seed 7 at rep 50 draws winter offers, so the checks below run");
   const o = c.offers[0];
   const deal = Career.acceptOffer(0);
   // The value is derived through the offer's OWN kind, never through champPos.
@@ -973,7 +974,7 @@ test("an offer carrying no goal at all still signs something resolvable", () => 
   const c = Career.data();
   c.rep = 50; c.deal.years = 1; c.deal.left = 1;
   Career.rollover();
-  if (!(c.offers || []).length) return;
+  assert.ok((c.offers || []).length > 0, "seed 7 at rep 50 draws winter offers, so the checks below run");
   delete c.offers[0].goal;
   const deal = Career.acceptOffer(0);
   assert.ok(deal.goal && deal.goal.type, "a goal-less offer still yields a typed goal");

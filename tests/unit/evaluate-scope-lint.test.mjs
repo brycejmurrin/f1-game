@@ -73,7 +73,7 @@ test("it catches the shape that actually broke — both sites", () => {
   assert.deepEqual(bad.map((b) => b.name).sort(), ["CLIMB_LAUNCH", "FLAT_LAUNCH"]);
 });
 
-test("and catches it in the REAL file, wherever history is available", () => {
+test("and catches it in the REAL file, wherever history is available", (t) => {
   // Strongest form of the check, run whenever the clone has the commit: if the
   // analysis ever stops resolving module bindings, the synthetic cases above
   // could keep passing while the lint silently detects nothing in real code.
@@ -85,7 +85,9 @@ test("and catches it in the REAL file, wherever history is available", () => {
     broken = execFileSync("git", ["show", "58614db2:tests/specs/elevation-tracks.spec.js"],
                           { cwd: ROOT, encoding: "utf8", maxBuffer: 8 << 20 });
   } catch (_) {
-    return;   // shallow clone (CI guards job) — the inline shape above still ran
+    // Shallow clone (CI guards job): say so, rather than pass having checked nothing.
+    t.skip("commit 58614db2 is not in this clone (shallow) — the real-file check did not run; the inline shape above did");
+    return;
   }
   const bad = lintSource(broken);
   assert.deepEqual(bad.map((b) => b.name).sort(), ["CLIMB_LAUNCH", "FLAT_LAUNCH"]);

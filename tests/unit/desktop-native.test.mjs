@@ -82,6 +82,15 @@ test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch 
   assert.doesNotMatch(yml, /group:\s*pages\b/);
 });
 
+test("desktop workflow's pull_request paths cover every name stage-files.mjs packages", async () => {
+  const { stagedNames } = await import("../../tools/desktop/stage-files.mjs");
+  const yml = readFileSync(join(ROOT, ".github/workflows/desktop.yml"), "utf8");
+  const block = yml.split(/\n  pull_request:\n/)[1].split(/\n  [a-z_]+:\n/)[0];
+  const paths = [...block.matchAll(/^\s+- "([^"]+)"/gm)].map((m) => m[1]);
+  const missing = [...stagedNames()].filter((n) => !paths.includes(n) && !paths.includes(`${n}/**`));
+  assert.deepEqual(missing, [], "a staged file changes the package, so a PR touching it must run pack-smoke");
+});
+
 function loadSpotify(opts = {}) {
   const disk = new Map(opts.disk || [["apex26.spotify.clientId", "client-1"]]);
   const sandbox = {
