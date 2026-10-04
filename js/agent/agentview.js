@@ -1170,8 +1170,13 @@ const AgentView = (function () {
             holes.push({ frac: +frac.toFixed(3), latM: row[j].latM });
           }
         }
+        // Under the ribbon the ground IS the road: the terrain there is carved
+        // below it and never seen, so reading it found an 8 m "cliff" either
+        // side of Zandvoort's crest at 0.583 (terrain -2.4 under a road at 6.1).
+        // The holes pass above already skips the ribbon for the same reason.
+        const gY = (c) => (Math.abs(c.latM) < ribbonFrom ? r2(roadY) : c.terrainY);
         for (let j = 1; j < row.length; j++) {
-          const a = row[j - 1].terrainY, b = row[j].terrainY;
+          const a = gY(row[j - 1]), b = gY(row[j]);
           const dLat = Math.abs(row[j].latM - row[j - 1].latM) || 1;
           if (a != null && b != null && Math.abs(b - a) / dLat > CLIFF_SLOPE) {
             cliffs.push({ frac: +frac.toFixed(3),
