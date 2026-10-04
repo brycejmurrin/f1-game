@@ -1581,8 +1581,11 @@ const AgentView = (function () {
       }
       if (where) bits.push(body + " " + where);
       if (visM != null && visM < 900) bits.push("visibility ~" + visM + " m");
-      if (sky.stars) bits.push("stars out");
-      if (sky.moon) bits.push("moon up");
+      // The sky shader hides stars and the moon behind the cloud deck (cityCov),
+      // so a rain/storm night (cloud ~0.54-0.74) is not a starry one.
+      const cloud = +sky.cloud || 0, decked = cloud >= 0.6;
+      if (sky.stars) bits.push(decked ? "stars mostly behind cloud" : "stars out");
+      if (sky.moon) bits.push(decked ? "moon behind cloud" : "moon up");
 
       return {
         apiVersion: API_VERSION, seq: ++seq,
@@ -1600,6 +1603,7 @@ const AgentView = (function () {
         visibility: { fogDensity: fog != null ? +fog.toFixed(5) : null,
                       approxRangeM: visM },
         exposure: fr.exposure != null ? r2(fr.exposure) : null,
+        cloudCover: r2(cloud),
         raw: { ambientSky: ambSky ? ambSky.map(r2) : null,
                ambientGround: ambGround ? ambGround.map(r2) : null,
                sunColor: fr.sunColor ? fr.sunColor.slice(0, 3).map(r2) : null,

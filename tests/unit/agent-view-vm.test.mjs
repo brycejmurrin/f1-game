@@ -469,6 +469,22 @@ test("wet weather is called out and matches the grip model", async () => {
   lt(r.grip.gripMult, 1);
 });
 
+test("a rainy night does not claim a starry sky the cloud deck hides", async () => {
+  await load();
+  g.apex.setTimeOfDay("night");
+  g.apex.weather("dry");
+  pump(2);
+  const clear = g.apex.atmosphere();
+  assert.match(clear.brief, /stars out/);
+  g.apex.weather("rain");
+  pump(2);
+  const wet = g.apex.atmosphere();
+  gt(wet.cloudCover, clear.cloudCover);
+  if (wet.cloudCover >= 0.6) assert.doesNotMatch(wet.brief, /stars out|moon up/);
+  else assert.match(wet.brief, /stars out/);
+  g.apex.weather("dry");
+});
+
 test("visibility is a distance, not a raw fog density", async () => {
   await load();
   const v = g.apex.atmosphere().visibility;
