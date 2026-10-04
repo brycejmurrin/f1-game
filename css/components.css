@@ -672,7 +672,12 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 .res-row.you {
   color: var(--you); font-weight: 700; padding-left: 5px;
   background: color-mix(in oklab, var(--you) 8%, var(--surf-1));
-  position: sticky; top: 0; bottom: 0; z-index: 1;
+  /* Sticky TOP only. `bottom: 0` as well parked a late (P17+) row over the
+     story podium on short phone sheets — mid-word names under a green bar on
+     portrait, and empty-looking P1–P3 slots on landscape where the bar ate
+     the whole name block (layout-audit 2026-10-04). Top-sticky still keeps
+     "me vs the front" while scrolling the classification list. */
+  position: sticky; top: 0; z-index: 1;
 }
 /* Reduced transparency swaps --surf-1's ground; keep the sticky row opaque over
    whatever that resolves to rather than re-stating a hex here. */
