@@ -21,24 +21,25 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   return o;
 }`;
 
-  // 1. BLOOM_DOWN — bright-pass threshold + 13-tap downsample.
-  //    Port of GLX BRIGHT_FS js/render/glx/shaders/glsl-post.js folded into DOWN_FS js/render/glx/shaders/glsl-post.js.
-  //    threshold > 0 -> bright-pass gate the result (first mip). threshold == 0
-  //    -> pure downsample (subsequent mips).
+  // 1. BLOOM_DOWN — the bloom chain's downward half, GLX order (post.js):
+  //    level 0 = BRIGHT_FS (one bilinear tap of the scene at the half-res texel
+  //    centre = a 2x2 box, soft-knee gated), level 1 = DOWN_FS with Karis,
+  //    levels 2..N = plain 13-tap DOWN_FS. Karis BEFORE the threshold (the old
+  //    WGX order, 13 full-res taps) halved or erased small lights' bloom.
   //
   //    BIND GROUP 0:
-  //      @binding(0) srcTex  : texture_2d<f32>   scene HDR (mip0) OR previous mip
+  //      @binding(0) srcTex  : texture_2d<f32>   scene HDR (level 0) OR previous level
   //      @binding(1) srcSamp : sampler           linear clamp
   //      @binding(2) U       : uniform  BloomDownU
   //    UNIFORM BloomDownU (16 B):
   //      texel     : vec2<f32>  off 0   (1/srcWidth, 1/srcHeight)
-  //      threshold : f32        off 8   (>0 = bright-pass, 0 = plain downsample)
-  //      _pad      : f32        off 12
+  //      threshold : f32        off 8   (bright-pass threshold, level 0 only)
+  //      mode      : f32        off 12  (2 = bright pass, 1 = Karis 13-tap, 0 = plain 13-tap)
   const BLOOM_DOWN = `
 struct BloomDownU {
   texel     : vec2<f32>,
   threshold : f32,
-  _pad      : f32,
+  mode      : f32,
 };
 @group(0) @binding(0) var srcTex  : texture_2d<f32>;
 @group(0) @binding(1) var srcSamp : sampler;
@@ -47,8 +48,18 @@ ${fullscreenTri}
 ${POST_VS}
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
-  let t  = U.texel;
   let uv = in.uv;
+  if (U.mode > 1.5) {
+    // LEVEL 0 — GLX BRIGHT_FS / TLX bright: quadratic soft knee (half-width =
+    // threshold/2), so a lamp crossing the threshold fades in, not pops.
+    let c = textureSampleLevel(srcTex, srcSamp, uv, 0.0).rgb;
+    let lum = max(max(c.r, c.g), c.b);
+    let knee = U.threshold * 0.5 + 1e-4;
+    var soft = clamp(lum - U.threshold + knee, 0.0, 2.0 * knee);
+    soft = soft * soft / (4.0 * knee);
+    return vec4<f32>(c * (max(soft, lum - U.threshold) / max(lum, 1e-4)), 1.0);
+  }
+  let t  = U.texel;
   // 13-tap Jimenez (COD 2014) — wide, stable, no small-source pulsing.
   let a = textureSampleLevel(srcTex, srcSamp, uv + t * vec2<f32>(-2.0,  2.0), 0.0).rgb;
   let b = textureSampleLevel(srcTex, srcSamp, uv + t * vec2<f32>( 0.0,  2.0), 0.0).rgb;
@@ -71,11 +82,11 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let g3 = (e + f + h + i) * 0.25;
   let g4 = (j + k + l + m) * 0.25;
   var s : vec3<f32>;
-  if (U.threshold > 0.0) {
-    // FIRST mip: Karis partial luma weighting (GLX DOWN_FS parity) — weight
-    // each quad by 1/(1+luma) and renormalise, so a sub-pixel HDR spike (the
-    // bloom "firefly") can't dominate the downsample; uniform regions
-    // renormalise back to the plain average (energy roughly preserved).
+  if (U.mode > 0.5) {
+    // LEVEL 1 (the first downsample of the bright pass): Karis partial luma
+    // weighting (GLX DOWN_FS uKaris) — weight each quad by 1/(1+luma) and
+    // renormalise, so a sub-pixel HDR spike (the bloom "firefly") can't
+    // dominate; uniform regions renormalise back to the plain average.
     let w0 = 0.125 / (1.0 + max(g0.r, max(g0.g, g0.b)));
     let w1 = 0.125 / (1.0 + max(g1.r, max(g1.g, g1.b)));
     let w2 = 0.125 / (1.0 + max(g2.r, max(g2.g, g2.b)));
@@ -83,15 +94,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     let w4 = 0.5   / (1.0 + max(g4.r, max(g4.g, g4.b)));
     s = (g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4)
       / (w0 + w1 + w2 + w3 + w4);
-    // Bright-pass gate with a quadratic soft knee (GLX BRIGHT_FS parity):
-    // pixels ramp into the bloom as they approach the threshold instead of
-    // popping their whole halo on in one frame.
-    let lum  = max(max(s.r, s.g), s.b);
-    let knee = U.threshold * 0.5 + 1e-4;
-    var soft = clamp(lum - U.threshold + knee, 0.0, 2.0 * knee);
-    soft = soft * soft / (4.0 * knee);
-    let bp = max(soft, lum - U.threshold) / max(lum, 1e-4);
-    s = s * bp;
   } else {
     s = (g0 + g1 + g2 + g3) * 0.125 + g4 * 0.5;
   }
@@ -205,7 +207,11 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Guarded like GLX: at a depth silhouette the two derivatives can be parallel
   // or zero, and normalize(0) is NaN — one speckled AO pixel per silhouette
   // edge. Fall back to eye-facing.
-  let crN = cross(dpdx(P), dpdy(P));
+  // -dpdy: WGSL's dpdy steps DOWN the framebuffer (y-down window coords), GL's
+  // dFdy UP — un-negated, N faced AWAY from the camera (no crease AO, dark
+  // convex edges, contact shadows rejecting real occluders). three maps TSL
+  // dFdy to "- dpdy" for the same reason (TLX tsl-post.js, GLX SSAO_FS).
+  let crN = cross(dpdx(P), -dpdy(P));
   let crL = length(crN);
   let N = select(vec3<f32>(0.0, 0.0, 1.0), crN / crL, crL > 1e-6);
   if (dCentre >= 0.99999) { return vec4<f32>(1.0); }   // sky: unoccluded
@@ -661,13 +667,18 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 
   var sceneUV = in.uv;
   if (hazeStr > 0.002) {
-    let hd = (in.uv - U.dirtFx.yz - vec2<f32>(0.0, 0.08)) * vec2<f32>(3.2, 1.0);
+    // The plume anchor (dirtFx.yz) is GL-space (game.js NDC*0.5+0.5, y-up), so
+    // the plume test, its +0.08 "above the pipe" and the rising scroll run in
+    // GL uv (GLX COMPOSITE_FS vUV); the warp's y flips back to texture space.
+    let gUV = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+    let hd = (gUV - U.dirtFx.yz - vec2<f32>(0.0, 0.08)) * vec2<f32>(3.2, 1.0);
     let hm = exp(-dot(hd, hd) * 70.0) * hazeStr;
     if (hm > 0.003) {
       let carHere = 1.0 - smoothstep(0.42, 0.55, textureSampleLevel(sceneTex, samp, in.uv, 0.0).a);
       if (carHere < 0.25) {
-        let hp = in.uv.y * 90.0 - U.fx.z * 11.0;
-        sceneUV = in.uv + vec2<f32>(sin(hp + in.uv.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+        let hp = gUV.y * 90.0 - U.fx.z * 11.0;
+        let hw = vec2<f32>(sin(hp + gUV.x * 70.0), cos(hp * 0.63)) * (0.0075 * hm);
+        sceneUV = in.uv + vec2<f32>(hw.x, -hw.y);
       }
     }
   }
@@ -1432,7 +1443,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     "SSAO",        // half-res  <- sceneDepth
     "BLUR",        // half-res  SSAO denoise + god-ray soften (separable 5-tap)
     "GODRAY",      // half-res  <- depth + sun/lamp shadows
-    "BLOOM_DOWN",  // mip chain (mip0 bright-pass, mips 1..N plain) <- sceneHDR
+    "BLOOM_DOWN",  // mip chain (mip0 bright-pass, mip1 Karis, mips 2..N plain) <- sceneHDR
     "BLOOM_UP",    // mip chain upsample, additive blend -> bloom mip0
     "SSR",         // HALF-res  <- sceneHDR + sceneDepth (full-res)  -> ssrTex (rgba, .a=mix)
     "COMPOSITE",   // full-res LDR <- sceneHDR, bloom, ssao, godray (+ image FX; ssrTex optional)
