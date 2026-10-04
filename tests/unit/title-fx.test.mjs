@@ -315,7 +315,8 @@ test("a title .bigbtn click taps through Input.vibrate, anything else does not",
 });
 
 test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-art; export lists all four", () => {
-  assert.match(CSS, /:root\[data-motion="reduce"\] :is\(#overlay, \.screen\) \*/);
+  assert.match(CSS, /:root\[data-motion="reduce"\] :is\(#overlay, \.screen, #rotate-device\) \*/,
+    "the rotate hint is neither #overlay nor a .screen; its swinging icon needs naming in the backstop");
   assert.match(CSS, /#overlay\[data-paused\]/);
   assert.match(MENUS, /:root\[data-title-art="soft"\] #title-car/);
   assert.match(MENUS, /:root\[data-title-art="off"\] #title-car/);

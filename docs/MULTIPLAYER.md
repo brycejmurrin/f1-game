@@ -74,7 +74,12 @@ reads its own message back. The topic (the plaintext NIP-01 `x` tag) is
 `NetRendezvous.topic()` — HKDF over the PBKDF2-stretched room key, info
 `apex26-rendezvous-v<PROTOCOL>/topic|<slot>` — never a bare hash of the code:
 SHA-256 of a ~30-bit code let anyone reading public relay traffic brute-force
-live codes in minutes; now every guess costs the 120 000-round PBKDF2. The full Trystero room join (its own
+live codes in minutes. The 120 000-round PBKDF2 slows that, but its salt is a
+constant, so the cost is paid ONCE for the whole 31^6 code space (~1e14
+iterations — a GPU-day), not once per room: whoever builds that table can map
+any live topic to its code, open the offer and post an answer. The room code
+is therefore a rendezvous, not an authentication; the VERIFICATION CODE under
+`rendezvous.js` below is what tells two players they are talking to each other. The full Trystero room join (its own
 RTCPeerConnection carrying the answer, which died exactly when ours started;
 its only failure signal a console.warn we had to intercept) was an opt-in
 legacy branch behind apex26.nostrTrystero and was deleted 2026-09-10 — the
@@ -98,12 +103,13 @@ pubkey — never by reputation or uptime
 room codes — the BACKUP way in, and the only part of the game leaning on
 someone else's server. NOTHING TO DEPLOY: a public Nostr relay network is the
 default meeting place (js/net/nostr.js), and worker/rendezvous.js (one
-Cloudflare Durable Object per code) is an optional upgrade when its URL is
+Cloudflare Durable Object per opaque room id) is an optional upgrade when its URL is
 set. On the DEFAULT public path the payload is sealed with AES-GCM under a key
 derived from the room code (`seal()`/`open()`, called by
-`NetNostr.directExchange` on every exchange) and the room id is a hash of the
-code, so a relay operator carries bytes it cannot read and the code is the only
-secret. ENVELOPE v2 (2026-09-10): PBKDF2 runs once per code into a memoised
+`NetNostr.directExchange` on every exchange). Its public routing topic derives
+from the stretched key; recovering a six-character code requires offline
+guessing through PBKDF2. The short code is still the only secret, so this public
+mode does not have the private token's entropy guarantee. ENVELOPE v2 (2026-09-10): PBKDF2 runs once per code into a memoised
 HKDF base, every envelope derives its own AES key from a random 16-byte salt
 (`[salt 16][iv 12][ct+tag]`), and the slot name ("offer"/"answer") is the
 AES-GCM additional data — so a sealed offer replayed into the answer slot fails
@@ -112,20 +118,57 @@ key. v1 (constant salt, no AAD) is not accepted: both peers run the same build.
 Codes are minted by rejection sampling, not `byte % 31` (256 is not a multiple
 of 31, so the modulo made the first eight letters 9/8 as likely).
 
-The optional private Worker path uses the same browser-side envelope as a
-`v2.<base64url>` string. `httpPut` sends versioned ciphertext and `httpGet`
-opens it locally, so the Worker operator cannot read the SDP it carries — and
-cannot ALTER it either, because `openPrivate` refuses anything that is not a
-v2 envelope (the legacy "read a plaintext record" branch is gone, and the
-Worker itself refuses to store one). Because a fresh salt and IV make even
-identical retries produce different bytes, the host also sends a separate
-random owner capability; the Worker uses that stable capability — never
-ciphertext equality — to permit a retry while rejecting another writer. A
-code is DISPOSABLE, not an account: nothing personal is retained and the Worker
-deletes the room after two minutes. It carries the SAME invite/answer strings
-the manual flow uses, so the relay is a courier and never a participant. Every
-call resolves to a typed error, never throws — when the relay is down the lobby
-must fall back to the link/QR, which need nothing.
+VERIFICATION CODE (2026-10-04). Once a connection is up, both screens show a
+4-letter code on that player's row in the room (`NetRendezvous.verifyFor`):
+SHA-256 over the two DTLS fingerprints, sorted, drawn from the room-code
+alphabet. DTLS authenticates exactly those certificates, so someone who opened
+the sealed offer (see the precomputed-table note under `nostr.js`) and sat in
+the middle holds a different certificate on each leg, and the two screens
+show different codes. The host reads the code aloud and REMOVEs a guest whose
+screen disagrees. What it protects: the pairing — that the person in your room
+is the one you invited, on the room-code and the invite-link path alike. What
+it does not: the code has 31^4 ≈ 9.2e5 values, so a middleman who can grind
+that many certificates inside the connect window could collide it; and it
+keeps nobody from READING an offer (host IPs, the HELLO profile) — the room
+code's secrecy is all that does.
+
+The optional private Worker path uses a **32-character private room token**,
+randomly drawn with WebCrypto rejection sampling (>158 bits of entropy). The
+host shares it through COPY/SHARE; both players configure the same Worker URL.
+The public Nostr path still uses six-character spoken codes. The private path
+never accepts those shorter secrets and never falls back to `Math.random`.
+
+The token stays in the peers. HKDF derives a separate 256-bit routing id with
+`apex26-rendezvous-private-v3/room` as its info string. HTTP uses only
+`/v3/r/<64-lowercase-hex-id>/<offer|answer>`, not the token. Encryption keeps the
+existing salted `v2.<base64url>` AES-GCM envelope and its distinct HKDF info and
+slot AAD. The routing id therefore cannot serve as the encryption key material.
+This fixes the old `/r/<six-character-code>` route, which disclosed that material
+to the operator. Merely hashing a short code would still permit offline guessing.
+
+The Worker can observe timing, drop traffic, or replay an existing same-slot
+ciphertext; it cannot decrypt SDP or forge new authenticated contents without the
+shared token. Slot AAD rejects offer-as-answer substitution. A separate random
+owner capability permits host retries despite fresh ciphertext on every write.
+The token is disposable and the Worker expires records after two minutes.
+
+Private protocol 3 must be deployed on the Worker and used by both browsers.
+The Worker refuses legacy `/r/` requests with 426 before allocating a room. New
+clients require `X-Apex-Rendezvous: 3` (CORS-exposed) and report an actionable
+upgrade error for old Workers, rather than retrying a secret-bearing legacy path.
+Deploy the updated Worker, reload both players, and create a new token. Existing
+private room codes are intentionally incompatible; manual invite links/QR remain
+available during rollout. Phone-controller QR links carry the Worker URL beside
+the token in the fragment, which is not sent to the static host. CONNECT applies
+the relay for that document only using `setSessionUrl`, without changing saved
+preferences. That setter accepts HTTPS (or loopback HTTP for development),
+rejects credentials/query/fragment in relay URLs, and can explicitly select the
+public backend with `null`; `undefined` restores the saved preference. Every
+network call resolves to a typed error, never throws. See [the Worker deployment guide](../worker/README.md).
+
+Cryptographic API references: [WebCrypto random values](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
+and [HKDF key derivation](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey).
+
 Shown even when unconfigured: a feature that hides itself on an unset URL
 guarantees nobody discovers it
 
@@ -165,7 +208,13 @@ generation of the scripts actually running, with a version.json fetch only as
 the fallback for an unstamped shell (a tab left open across a deploy used to
 fetch the NEW number while running the OLD code) — and REFUSES a mismatched
 peer: different builds mean different splines, barriers and constants. Scenery
-is deliberately not checked (props never affect physics)
+is deliberately not checked (props never affect physics). AN ANSWER NAMES ITS
+OFFER (`o`, `offerId()`: a 32-bit hash of the offer's ICE ufrag + DTLS
+fingerprint, in the code's JSON tail so an answer without it still decodes):
+an SDP answer carries only the answerer's own credentials, so an answer to an
+older invite was accepted onto a newer pending one and ICE then spun for 60 s.
+`acceptAnswer` now refuses it as `wrong_offer` ("That answer is for an older
+invite"), and the room-code host keeps such a repost seen and silent
 
 ### `js/net/snapshot.js` — `NetSnapshot`
 
@@ -175,7 +224,12 @@ two packets; a late packet EXTRAPOLATES ALONG s, which follows the road by
 construction and so cannot dead-reckon a rival into a barrier. s and head both
 wrap the short way — getting that wrong sends a car backwards down the lap
 once per lap. predict() leads sample(): contact must not be resolved against
-the delayed DRAWN pose
+the delayed DRAWN pose. A second packet type, AGED (type 2, 15 B/car: the
+13 plus a u16 age in ms behind the header tick), carries cars posed at
+different moments — the host's relay — so each keeps its own stamp. Lag and
+jitter are measured from the transport's ARRIVAL stamp, not the frame that
+drained the inbox; own-car snapshots go out at a fixed 20 Hz whatever the
+frame rate (the period is advanced, not reset to `now`)
 
 ### `js/net/session.js` — `NetSession`
 
@@ -185,7 +239,10 @@ and a heartbeat, so an abandoned car can be handed back to the AI instead of
 standing still on track. A PONG is a clock sample only if it echoes an
 outstanding ping's id AND that ping's own t0 (the last eight sent are kept,
 each answered once) — the echoed t0 is what every peer timestamp is converted
-through, and it used to be taken on trust
+through, and it used to be taken on trust. A gap between pumps longer than
+`stallForgiveMs` is forgiven as OUR stall — except while `document.hidden`,
+where the page pumps slowly on purpose and the transport still stamps every
+arrival, so a quit peer is timed out while the tab is in the background
 
 ### `js/net/netplay.js` — `NetPlay`
 
@@ -208,8 +265,9 @@ teamIndex*2 + seat — a byte both peers compute identically, which is what lets
 a snapshot say WHICH car it describes. cars[] index cannot: makeCars() drops
 the custom team unless the local player picked it, so the grids differ in
 length and order. The host RELAYS — guests have no connection to each other,
-so it forwards every rival in one multi-entry snapshot, unaltered and under
-that guest's own id. Authority does not move; it is a courier. A packet with
+so it forwards every rival in ONE aged snapshot per guest (one datagram, not
+one per car — 9 sends a tick became 6 in a four-player room), unaltered and
+under each guest's own id. Authority does not move; it is a courier. A packet with
 an unknown id is DROPPED, never guessed at — which is also how a guest ignores
 its own car coming back round the relay
 

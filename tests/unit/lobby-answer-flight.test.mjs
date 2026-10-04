@@ -22,3 +22,15 @@ test("a second answer during acceptAnswer does not start another negotiation", (
   assert.ok(fn.indexOf("answerInFlight = false;", wait) > wait);
   assert.match(fn, /answersSeen\.delete\(answer\)/);
 });
+
+// L8-a: guest 2's repost of an answer to an OLDER offer (dropped while guest 1's
+// answer was in flight, re-posted after the reopen minted offer B) is refused by
+// the handshake as wrong_offer. It can never become valid, so it stays SEEN and
+// is not said — like guest 1's own reposts — instead of closing the room.
+test("a wrong_offer answer stays blacklisted and silent", () => {
+  const refused = fn.slice(fn.indexOf("if (!acc.ok) {"));
+  assert.match(refused, /if \(acc\.error !== "wrong_offer"\) answersSeen\.delete\(answer\);/);
+  assert.match(refused, /acc\.error !== "already_answered" && acc\.error !== "wrong_offer"\) say\(/);
+  assert.ok(refused.indexOf("return;") < refused.indexOf("codeReopen = code;") || refused.indexOf("codeReopen = code;") < 0,
+    "a refused answer returns before the room is closed for it");
+});

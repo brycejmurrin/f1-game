@@ -151,3 +151,57 @@ test("each rival carries its own power unit's voice, and it follows the car thro
   assert.deepEqual(got.map((r) => [r.arc, r.voice]), [[10, "Audi"], [20, ""], [30, "Ferrari"]],
     "nearest first, each slot keeping ITS car's engine (engine.js falls back to default for \"\")");
 });
+
+// ── voice binding (2026-10-04) ─────────────────────────────────────────────
+// engine.js plays each row on voice `row.slot`. It used to play row i on voice
+// i — the distance RANK — so two rivals swapping places swapped voices: pans
+// glided across each other and each note jumped by the slot-detune delta,
+// exactly when they were side by side.
+
+test("a voice stays with its car through a rank swap", () => {
+  const me = car({ s: 500 });
+  const a = car({ s: 510 }), b = car({ s: 520 });
+  const R = load().create({ track: { total: LAP }, cars: [me, a, b] });
+  const slotOf = (rows, arc) => rows.find((r) => r.arc === arc).slot;
+  let rows = [...R.collect(me)];
+  const slotA = slotOf(rows, 10), slotB = slotOf(rows, 20);
+  assert.notEqual(slotA, slotB, "two cars, two voices");
+  a.s = 525;   // a passes b: the nearest-first order flips
+  rows = [...R.collect(me)];
+  assert.deepEqual(rows.map((r) => r.arc), [20, 25], "the rows are still nearest first");
+  assert.equal(slotOf(rows, 25), slotA, "car a kept its voice");
+  assert.equal(slotOf(rows, 20), slotB, "car b kept its voice");
+});
+
+test("a voice is handed on only when its car leaves the voiced set", () => {
+  const me = car({ s: 500 });
+  const field = [me];
+  for (let i = 1; i <= 4; i++) field.push(car({ s: 500 + i * 10 }));   // 10..40 m ahead
+  const late = car({ s: 700 });                                         // out of range
+  field.push(late);
+  const R = load().create({ track: { total: LAP }, cars: field });
+  const first = [...R.collect(me)].map((r) => ({ arc: r.arc, slot: r.slot }));
+  assert.deepEqual(first.map((r) => r.slot).sort(), [0, 1, 2, 3], "four cars hold the four voices");
+  const slot40 = first.find((r) => r.arc === 40).slot;
+  late.s = 505;   // a newcomer, nearer than all four: the 40 m car drops out
+  const rows = [...R.collect(me)];
+  assert.equal(rows[0].arc, 5);
+  assert.equal(rows[0].slot, slot40, "the newcomer takes the voice the departed car freed");
+  for (const r of rows.slice(1))
+    assert.equal(r.slot, first.find((f) => f.arc === r.arc).slot, `the car at ${r.arc} m kept its voice`);
+});
+
+test("Doppler closing speed is the line-of-sight component: zero when level, full when in line", () => {
+  // -(arc/dist)·Δv, not -sign(arc)·Δv: the old form flipped the full Δv across
+  // arc = 0 — a ~300-cent pitch step in 0.2 m as a car came past.
+  const me = car({ s: 500, x: 0, speed: 60 });
+  const at = (s, x, speed) => make([me, car({ s, x, speed })]).collect(me)[0].approach;
+  assert.equal(Math.abs(at(500, 2, 90)), 0, "a car level with you neither closes nor opens");
+  const ahead = at(530, 0, 40);   // dead ahead, 20 m/s slower: closing at the full 20
+  assert.ok(Math.abs(ahead - 20) < 1e-9, `in line it is the full Δv, got ${ahead}`);
+  const oblique = at(501, 2, 30);   // 1 m ahead, 2 m across, 30 m/s slower
+  assert.ok(Math.abs(oblique - 30 / Math.hypot(1, 2)) < 1e-9, `oblique is (arc/dist)·Δv, got ${oblique}`);
+  const justBehind = at(499.9, 2, 30), justAhead = at(500.1, 2, 30);
+  // ±0.1 m of arc at 2 m across is ±1.5 m/s of closing; the old form jumped 60.
+  assert.ok(Math.abs(justAhead - justBehind) < 4, `crossing arc 0 must not step the closing speed (${justBehind} -> ${justAhead})`);
+});

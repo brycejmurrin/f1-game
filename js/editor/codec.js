@@ -239,7 +239,8 @@ const TrackCodec = (function () {
   // ── URL + file envelopes ────────────────────────────────────────────────
   const HASH_KEY = "track";
   function shareUrl(code, base) {
-    const b = base || (typeof location !== "undefined" ? location.origin + location.pathname : "");
+    const native = typeof Native !== "undefined" && Native.isNative();
+    const b = base || (native ? "https://brycejmurrin.github.io/f1-game/" : (typeof location !== "undefined" ? location.origin + location.pathname : ""));
     return b + "#" + HASH_KEY + "=" + code;
   }
   /** The code in a location hash, or null — also for a malformed %-escape
