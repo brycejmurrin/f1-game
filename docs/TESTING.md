@@ -103,8 +103,12 @@ single spec (`npm test -- tests/specs/<file>.spec.js`) is always preferable to
 its whole group when the change touches that spec's subject and nothing else.
 
 A routed spec that loses the budget to smaller ones rides as **overflow** —
-up to two more `TARGET_SHARD_SEC` jobs' worth, packed with everything else —
-instead of being skipped; what is still left is skipped by name. The
+up to six more `TARGET_SHARD_SEC` jobs' worth, packed with everything else —
+instead of being skipped. A routed spec that declares a per-test timeout at or
+over the gate's 180 s runs in the **over-budget pool** (`overbudget-<k>` jobs,
+up to eight jobs' worth, each capped from its own declaration). What is still
+left is dropped by name, and a dropped spec turns `Selected specs (verdict)`
+red on a pull request (2026-10-04). The
 **nightly** runs the same selector over the last day of deploy-branch merges
 (`ci-resolve-before.sh`'s `schedule` base) with a 60-minute budget, twelve
 jobs' worth of overflow and `--stale-first` ordering — so a routed spec no
@@ -351,8 +355,10 @@ nothing ran could be committed and fail only at tooling-fast or the deploy gate.
 2. **A row in the §5 coverage table** below: what it covers.
 3. **Nothing to regenerate for the counts** — no doc quotes the ladder sizes or an exact spec count (floors like "120+" only; `gen-ladder-figures.mjs` measures).
 4. **A spec only:** add it to `RENDER_SPECS` in `playwright.config.js` if it is
-   GL-heavy, and declare `test.setTimeout` above 180 s if it boots a race, so the
-   selected CI gate excludes it by name instead of timing out on a slow runner.
+   GL-heavy, and declare the `test.setTimeout` it really needs if it boots a
+   race. A declaration at or over the selected gate's 180 s no longer opts a
+   spec out of CI (2026-10-04): a routed one runs in the selector's over-budget
+   pool, in a job whose kill timer derives from that declaration.
 
 A new GROUP is the same plus its `package.json` key, a §2 row here, and a
 `tools/ci/nightly-group.mjs` ROTATION / EXCLUDED / UNSCHEDULED entry.
@@ -1047,19 +1053,25 @@ publish is never cancelled by a later tick.
 
 ### CI aggregator and Selected specs (verdict) (#480 / #507)
 
-Branch protection requires checks by **fixed name**. Matrix job names change
-per run, and path-filtered jobs that skip would block merges if required
-directly. Two always-judged checks close that:
+Branch protection requires checks by **fixed name**, and matrix job names
+change per run. A job skipped by its own `if:` reports **Success** to branch
+protection; only a workflow skipped by a path/branch filter stays Pending
+([GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks)).
+Two always-judged checks give the gate fixed names:
 
 - **`CI`** (`ci-verdict` job, #480): aggregates every sibling job via
-  `tools/ci/ci-verdict.mjs`. A needed job skipped by its `if:` is a pass; a
-  needed failure or cancel fails the aggregator. Advisory jobs
-  (`baseline-trial`) never fail it. This is the one stable required check for
-  the whole workflow.
+  `tools/ci/ci-verdict.mjs`, including `selected-verdict` (2026-10-04 — it
+  needed only `selected`, so an all-dropped plan passed `CI` while the verdict
+  failed). A needed job skipped by its `if:` is a pass; a needed failure or
+  cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
+  It is the only check that also carries smoke, the sweeps, renderer-macos and
+  xr, so branch protection should require it (an owner setting).
 - **`Selected specs (verdict)`** (`selected-verdict` job, #507): one fixed
-  name for the change-aware gate. `select` must succeed; `selected` success
-  passes; `selected` skipped with nothing dropped is an empty-plan pass; a
-  Pages call with unaffordable dropped specs warns rather than fails. Uses
+  name for the change-aware gate. `select` must succeed and `selected` must
+  pass or skip; **any dropped routed spec is a red** on a push or PR
+  (2026-10-04; before, `dropped` was read only when `selected` was skipped).
+  A Pages call with dropped specs warns rather than fails. It also writes the
+  failing-spec carry-forward once, from every shard's junit. Uses
   `!cancelled()` so a draft→ready cancel does not red the superseded run.
 
 ### What runs on PRs versus nightly
@@ -1685,10 +1697,10 @@ what it covers.
 | `career-legends.test.mjs` | The LEGENDS team is grid furniture, not a championship entrant: no legend takes a career grid seat, none appears in the driver or constructor standings, the winter market and contract offers stay inside the real grid, and an unknown team id falls back to MY TEAM rather than to whatever was appended to `Teams.LIST` last. Guards `Teams.isReal`, which replaced a `custom`-only filter that admitted twelve legends to every career |
 | `setup-screens-state.test.mjs` | the SETUP-family sheets (CAREER, SEASON SETUP, GARAGE) as BEHAVIOUR on `tests/helpers/mini-dom.mjs`, from the 2026-09-02 audit: `CareerUI.close()` drops the NEW CAREER draft and an armed DELETE? (siblings of the `draftFrom` leak fixed 2026-09-01), `SetupUI` discards the paint editor and `G.livDraftOverride` when `#carsetup` is hidden (BACK/DONE never cleared them and `resolveLivery()` painted the unsaved draft on the race car), the factory / fitted-cap upgrade cards print `SHORT N cr` when disabled, and the unit/precision pins — team tiles and the RE-SIGN card say `cr / round`, THE CAR Fitted row groups thousands like the garage, history Points carries `pts`, SEASON SETUP distance chips read `N LAPS` with no `(FULL)` (FULL is per-circuit on the race-settings sibling) and the sprint note says `pts`; the title SEASON door (`SeasonUI.refreshTitle`) writes `SEASON · R5 OF 23` into its inner label span (the shell's door shape pinned from `index.html`), keeps `.mb-sub`, carries the round in `aria-label`, and reverts with no progress. CSS through `css-rules.mjs`: the extended lines wrap |
 | `career-cross-tab.test.mjs` | an active career refuses to overwrite a newer foreign save, while an idle career refreshes to the winning tab |
-| `career-backup.test.mjs` | CAREER BACKUP (`js/career/career-backup.js`): export→wipe→import byte-equal across all six slots; a v0 save climbs the migration ladder on the way; hostile payloads (wrong format, NaN money, array-where-object, ghosts, >5 MB) are rejected and change nothing; import over a newer live revision is refused; a driver-card import does not touch MY TEAM without confirm; a sparse backup's empty rows never erase local slots; badges union and a further-along local season is kept; malformed history/offers/moves/roster rows import without crashing `Career.slots()` / `settleRound`; a MY TEAM backup carries and restores the team identity (`customTeam`/`customLogo`/`livery.custom.*`) on an empty device, a driver-only or identity-less backup never erases a local one, garbage identity values are dropped without throwing; mini-dom pin that slot cards expose EXPORT / IMPORT |
+| `career-backup.test.mjs` | CAREER BACKUP (`js/career/career-backup.js`): export→wipe→import byte-equal across all six slots; a v0 save climbs the migration ladder on the way; hostile payloads (wrong format, NaN money, array-where-object, ghosts, >5 MB) are rejected and change nothing; import over a newer live revision is refused; a driver-card import does not touch MY TEAM without confirm; a sparse backup's empty rows never erase local slots; badges union and a further-along local season is kept; a live slot whose revision moved past `Career.armedRevision()` is refused; the daily challenge merges per day and keeps the later streak, `records` only fills gaps; malformed history/offers/moves/roster rows import without crashing `Career.slots()` / `settleRound`; a MY TEAM backup carries and restores the team identity (`customTeam`/`customLogo`/`livery.custom.*`) on an empty device, a driver-only or identity-less backup never erases a local one, garbage identity values are dropped without throwing; mini-dom pin that slot cards expose EXPORT / IMPORT |
 | `reliability.test.mjs` | `js/race/reliability.js` in a VM with a deterministic stub hash: level OFF plans nothing and clears stale plans, a plan is a pure function of the seed (Math.random throws), a weaker tier retires more often and LOW is about half of REAL, and every planned retirement lands inside the race with a known reason |
 | `remote-group.test.mjs` | guards `tools/ci/remote-group.mjs` and `.github/workflows/browser-group.yml`, one browser group sharded on GitHub's runners instead of a local SwiftShader run. The dispatch input is text from whoever dispatched, so the plan step accepts only a `test:*` script that runs Playwright and a listed shard count (a shell fragment, an unknown or node-only group, and `shards 0` are refused), and no `run:` line interpolates an input. The workflow's shard choices match the planner's; a 204 dispatch finds its run by branch, group and time; a shard's red is read from its log's `x FAIL` lines; a red shard is a red before the run ends, and cancelled is not green |
-| `save-migrate.test.mjs` | `js/career/save-migrate.js` as the contract the NEXT rung must keep: `CAREER_V` equals the rung count (source-slice — a rung without the bump never runs, a bump without a rung runs on every load), a v0 save climbs to `CAREER_V` and gains a season, migration is idempotent at every rung (twice equals once, and in place — the two-tabs case), legacy code-keyed points remap exactly once, a save from a NEWER build is stamped back with its unknown keys intact (documented, not endorsed), and a non-object save is refused. `RUNG_INPUTS` is where rung v2's shape goes |
+| `save-migrate.test.mjs` | `js/career/save-migrate.js` as the contract the NEXT rung must keep: `CAREER_V` equals the rung count (source-slice — a rung without the bump never runs, a bump without a rung runs on every load), a v0 save climbs to `CAREER_V` and gains a season, migration is idempotent at every rung (twice equals once, and in place — the two-tabs case), legacy code-keyed points remap exactly once, a save from a NEWER build is stamped back with its unknown keys intact (documented, not endorsed), and a non-object save is refused; the career seat is clamped to the team's grid row (MY TEAM: 0). `RUNG_INPUTS` is where rung v2's shape goes |
 | `clipboard.test.mjs` | `ApexClipboard.write` / `read` (`js/core/clipboard.js`): async clipboard API then textarea `execCommand` fallback; `preferSync` runs `execCommand` first (tuner / free-cam gesture path); `read` surfaces denial; module is on the shell roster |
 | `lobby-codes.test.mjs` | `LobbyCodes` (`js/net/lobby-codes.js`): `codeFrom` trims and unwraps `#vs=` invite URLs; `paintQr` hides the wrap when encoding fails; `canShare` reflects `navigator.share`; module loads ahead of `lobby.js` on the lazy net roster |
 | `lobby-answer-flight.test.mjs` | `js/net/lobby.js` host answer path: `answerInFlight` is set synchronously before `acceptAnswer`, a second answer during the await returns without starting another negotiation, and a refused answer is cleared from `answersSeen` (not blacklisted) so the guest can retry |
@@ -1700,9 +1712,9 @@ what it covers.
 | `game-tools-help.test.mjs` | Expensive game-systems CLIs (`ai-pace` / `ai-field` / `ai-line` / `ai-human`, `player-dyn`, `physics-tune-sweep`, `career-economy`) answer `--help` and exit 0 before the game VM or Chromium boots — measured 2026-10-01, `--help` on each silently ran the full measurement |
 | `driver-ratings-personality.test.mjs` | `DriverRatings.BASE` personality gates: craft/awareness/consistency pairwise |r| < 0.5, column means within ±1.5 of tip, `skill()` is pace-only, `overall()` still ranks elites above rookies |
 | `factory-ai-setup.test.mjs` | Works-car aeroLoad / ERS deploy must differ across FACTORY_PRESETS (McLaren flex vs Williams low-drag), and `makeCars()` must assign those values plus `houseStats` to AI cars instead of the old 0.5 midpoint `null` |
-| `career-ai-dev.test.mjs` | AI constructors develop catalog parts over winters (`js/career/ai-dev.js`): absent `aiParts` leaves fitted null (factory path), a forced winter writes one legal step that leaves the factory row, an era ban never fits a banned option, and `pickStep` stays under the team cap. Pins CAREER-CEILING-FIX §1's cure |
+| `career-ai-dev.test.mjs` | AI constructors develop catalog parts over winters (`js/career/ai-dev.js`): absent `aiParts` leaves fitted null (factory path), a forced winter writes one legal step that leaves the factory row, an era ban never fits a banned option, and `pickStep` stays under the team cap; a works part banned by an era (Ferrari's engine through a powertrain era) is the fitted works part again once it lapses, a banned upgrade is shelved and restored, a bag first seeded under an era owns the works build, and the scrub is a no-op without a ban. Pins CAREER-CEILING-FIX §1's cure |
 | `shared-math.test.mjs` | the shared scalar helpers on `M4` (js/core/mat4.js) — clamp/lerp/`wrapDelta` semantics including the two edges that made the one DIVERGENT clamp copy different (inverted range, non-number argument), `wrapDelta` proved equal to the single-fold ladder every migrated site hand-wrote across four periods, plus a RATCHET: no js/ file may declare a private clamp/lerp again (the sanctioned spelling is the alias `const clamp = M4.clamp;`), with an anti-vacuity case pinning that the regex fires on the shapes it is meant to catch |
-| `store-cross-tab.test.mjs` | `GameStore`'s `storage` listener in a VM over a fake localStorage — two tabs used to silently overwrite each other's saves because `_cache` is filled on first read and never invalidated. Asserts the module ARMS ITS OWN listener, that a foreign apex26. write drops exactly that key (an unrelated key stays cached — invalidating everything would put getItem/JSON.parse back in the render loop), that `rev` bumps, that a foreign `clear()` empties the cache, and that another origin-key's write is inert |
+| `store-cross-tab.test.mjs` | `GameStore`'s `storage` listener in a VM over a fake localStorage — two tabs used to silently overwrite each other's saves because `_cache` is filled on first read and never invalidated. Asserts the module ARMS ITS OWN listener, that a foreign apex26. write drops exactly that key (an unrelated key stays cached — invalidating everything would put getItem/JSON.parse back in the render loop), that `rev` bumps, that a foreign `clear()` empties the cache, and that another origin-key's write is inert; a corrupt key is removed and logged without flagging `broken`, `write(k, undefined)` removes the key, and `writeFailed()` names a failed write until that key is written durably |
 | `incident-gate.test.mjs` | IncidentSim's notifyCar entry gate vs preStep's per-kind authority in a VM — an r2-only config still queues+promotes a launch at `>= R2_CAR_V`, an r3-band contact under that config promotes nothing (enabling one kind never widens the others), sub-threshold bumps never queue, all-off is inert, and the shipped defaults still resolve a relV=30 pair as r2 |
 | `camera-ride.test.mjs` | `GameCams.vantage` in a VM over a synthetic hill: the chase rig must not turn the road's fine undulation into camera bob on a gradient (measured against a raw two-point rig on the same profile), while still framing flat road and constant slopes exactly as before, still climbing the hill, and still honouring the ground clamp. The elevation profile is an argument here, so the threshold pins the CAMERA rather than whatever terrain a circuit happens to ship |
 | `flyby-shots.test.mjs` | The pre-race loading screen's camera (`js/camera/flyby-seq.js`). Walks the shipped shot sequence across an open, a street and a night circuit and asserts the eye is never inside a solid prop — the registry of world-space scenery boxes makes "is the camera in a building" answerable without a browser, which is how the reported clipping went unseen (the old cinematic rig was inside one on 22/400 samples at Monza and 6/400 at Bahrain, and 0 at Monaco, whose street corridor clamp already applied). Also pins shot continuity, that only a shot BOUNDARY reports a cut, that the grid anchor still matches `gridSlot`, and that sparse `structure` hulls are not counted solid. Then the RELATIVE framing that lets one list fit every circuit: a corner's +x is its OUTSIDE (checked against the curvature sign, Monaco's >180° Loews hairpin included — a single heading comparison read it backwards), a landmark bearing of 0 has the track in front of the landmark, and on a street circuit a corner eye stands at the fence rather than in the building behind it. Then the FLEET AUDIT's rules (`tools/lib/flyby-audit.cjs` through `tests/helpers/flyby-audit-rules.mjs`, on monza here — the twelve-circuit sweep and the varied-load sweep are `flyby-fleet.test.mjs`): no one-step vertical jump over 4 m, no lift of 25 m, no eye underground, the grid sightline within 2 m of the road edge, no pan over 45 deg/s at `FLY_MS` (and `REF_S` pinned to it), never inside a solid; a `centre` pose of 0 is the centroid; landmarks exclude gantries and anything on the road and a missing rank becomes a whole-circuit shot; a corner role never lands on a kink or chicane flick; Monza's planned eye is out of the pine canopies |

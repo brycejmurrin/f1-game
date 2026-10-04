@@ -244,3 +244,20 @@ test("an IPv4-mapped IPv6 address is packed as the IPv4 candidate it is", () => 
   const out = NetSdp.unpack(NetSdp.pack(withMapped));
   assert.match(out, /203\.0\.113\.9 40000 typ srflx/);
 });
+
+// ── identity: what binds an answer to its offer (NetHandshake.offerId) ──────
+// The host hashes its OWN verbatim SDP; the guest hashes the one it REBUILT
+// from the packed bytes. Both must read the same ufrag and fingerprint, or
+// every packed answer would be refused as "for an older invite".
+test("identity() reads the same ufrag + fingerprint off the verbatim and the rebuilt SDP", () => {
+  const verbatim = NetSdp.identity(REAL);
+  const rebuilt = NetSdp.identity(NetSdp.unpack(NetSdp.pack(REAL)));
+  assert.ok(verbatim && verbatim.ufrag === "0BnP", "ufrag read");
+  assert.match(verbatim.fp, /^[0-9a-f]{64}$/, "lower-case hex, no colons");
+  assert.deepEqual(rebuilt, verbatim, "pack/unpack does not change the identity");
+  assert.equal(NetSdp.fingerprint(REAL), verbatim.fp);
+  // sha-256 is preferred even when another algorithm is listed first — pack() carries only sha-256.
+  const both = REAL.replace("a=fingerprint:sha-256", "a=fingerprint:sha-384 " + "11:".repeat(47) + "11\r\na=fingerprint:sha-256");
+  assert.equal(NetSdp.fingerprint(both), verbatim.fp);
+  assert.equal(NetSdp.identity("v=0\r\n"), null, "no ufrag/fingerprint, no identity");
+});
