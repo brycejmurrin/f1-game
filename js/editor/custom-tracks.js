@@ -75,9 +75,11 @@ const CustomTracks = (function () {
     const s = frac(z.s), halfM = num(z.halfM, 20, LIMITS.halfM, null);
     let rise = num(z.rise, -LIMITS.rise, LIMITS.rise, null);
     if (s == null || halfM == null || rise == null) return null;
-    const cap = halfM / 19.6;
+    // Cap on the STORED length: clamping before rounding it could shave the
+    // rise again on reload. Keep nearest-quarter rounding so legacy ids hold.
+    const length = Math.round(halfM), cap = length / 19.6;
     if (Math.abs(rise) > cap) rise = Math.sign(rise) * cap;
-    return { s, halfM: Math.round(halfM), rise: q(rise) };
+    return { s, halfM: length, rise: q(rise) };
   };
   // A narrowing never takes the road under the registry's own width floor, and
   // `ease` is ALWAYS stored (the engine's 0.025 default when absent): the share

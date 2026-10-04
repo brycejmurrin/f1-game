@@ -1177,6 +1177,15 @@ Use one isolated track-scoped change at a time.
 - Check `__apex.modelDiagnostics()` for suppressed, invalid, unsafe, or incomplete required entries in both day and night sessions.
 
 ### Collision and shared dressing
+- A circuit can opt into a folded pit roof with `pit.architecture.roofProfile`.
+  Supply two to seven `[u, frontHeightM, backHeightM]` knots, ordered strictly
+  from `u=0` to `u=1` along the actual built garage row. Heights are above its
+  local floor, from 9.6 to 18 m; they do not use scenery fractions. Optional
+  `roofColor`, `fasciaColor`, `soffitColor` and `edgeColor` are RGB triples in
+  `[0,1]`. Invalid recipes retain the ordinary garages. The crown stays within
+  the existing row and garage depth; it changes neither working lanes nor
+  doors, signs, lamps or driving bounds. This is opaque architectural dressing,
+  not a reflective-glass path or a surveyed building footprint.
 - Register collision for every solid visible boundary; use `recordBarrier(0, 1, ...)` for a full lap.
 - Enable `groundPatch({collision:true})` where a visual patch is also a solid boundary.
 - Add narrow `dressingExclusions` for waterfronts, parks, stadium interiors, open desert, and hero-model sightlines.

@@ -283,36 +283,65 @@ const TrackInsight = (function () {
   }
   function totdSeed(day) { return fnv1a("apex26-totd|" + dayKey(day)) >>> 0; }
 
-  /** START FROM: a shipped circuit's built centreline as a design loop — RDP
-   *  with ε binary-searched until 60–120 points, 8 m spacing, centred on the
-   *  map, on the 0.25 m lattice, point 0 the start line. { pts, lengthM, baseHW, centre } or null. */
+  /** START FROM: a shipped circuit as a design loop — RDP with ε binary-searched
+   *  until 60–120 points, 8 m spacing, centred on the map, on the 0.25 m lattice,
+   *  point 0 the start line. { pts, lengthM, baseHW, centre } or null. */
   function fromCircuit(def) {
     if (!def) return null;
     const tr = Tracks.buildCenterline(def, { line: false });
     if (!tr || !(tr.n > 8)) return null;
+    const pack = (raw) => {
+      const closed = raw.concat([raw[0]]);
+      const thin = (eps) => S.rdp(closed, eps).slice(0, -1);
+      // The SMALLEST ε that fits 120 points: the most faithful trace the cap
+      // allows (fewer points cut more corner, and the engine's two Laplacian
+      // passes shrink a cut corner further).
+      let lo = 0.5, hi = 25, pts = thin(lo);
+      if (pts.length > 120) {
+        pts = thin(hi);
+        for (let it = 0; it < 20; it++) {
+          const mid = (lo + hi) / 2, p = thin(mid);
+          if (p.length > 120) lo = mid; else { hi = mid; pts = p; }
+        }
+      }
+      pts = S.enforceSpacing(pts, 8);
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, q = (v) => Math.round(v * 4) / 4;
+      let hw = 0; for (let k = 0; k < tr.n; k++) hw += tr.hw[k];
+      const baseHW = Math.min(8, Math.max(5, Math.round(hw / tr.n * 2) / 2));
+      return { pts: pts.map((p) => [q(p[0] - cx), q(p[1] - cz)]), lengthM: Math.round(tr.total), baseHW, centre: [cx, cz] };
+    };
     const raw = [];
     for (let k = 0; k < tr.n; k++) raw.push([tr.px[k], tr.pz[k]]);
-    const closed = raw.concat([raw[0]]);
-    const thin = (eps) => S.rdp(closed, eps).slice(0, -1);
-    // The SMALLEST ε that fits 120 points: the most faithful trace the cap
-    // allows (fewer points cut more corner, and the engine's two Laplacian
-    // passes shrink a cut corner further).
-    let lo = 0.5, hi = 25, pts = thin(lo);
-    if (pts.length > 120) {
-      pts = thin(hi);
-      for (let it = 0; it < 20; it++) {
-        const mid = (lo + hi) / 2, p = thin(mid);
-        if (p.length > 120) lo = mid; else { hi = mid; pts = p; }
+    let out = pack(raw);
+    // 3D arc-length sampling (Spa's steep elevation) can RDP-away a 2D chicane
+    // — Bus Stop rebuilt as a tarmac fold. The authored path is the 2D layout;
+    // use it when the centreline trace folds, snapped so node 0 stays the line.
+    const P = def.path && def.path.pts;
+    if (out && P && P.length >= 8 && typeof TrackValidate !== "undefined" && TrackValidate.build) {
+      const built = TrackValidate.build({ pts: out.pts, baseHW: out.baseHW });
+      const t = built && built.tr, lim = TrackValidate.LIMITS.foldFrac;
+      let fold = false;
+      if (t) {
+        const n = t.n, pp = (i) => [t.px[(i + n) % n], t.pz[(i + n) % n]];
+        for (let k = 0; k < n && !fold; k++) {
+          if (S.menger(pp(k - 1), pp(k), pp(k + 1)) <= t.hw[k] * lim) fold = true;
+        }
+      }
+      if (fold) {
+        let best = 0, bd = Infinity;
+        for (let i = 0; i < P.length; i++) {
+          const d = Math.hypot(P[i][0] - tr.px[0], P[i][1] - tr.pz[0]);
+          if (d < bd) { bd = d; best = i; }
+        }
+        const path = P.slice(best).concat(P.slice(0, best)).map((p) => [p[0], p[1]]);
+        path[0] = [tr.px[0], tr.pz[0]];
+        const alt = pack(path);
+        if (alt && alt.pts.length >= 60 && alt.pts.length <= 120) out = alt;
       }
     }
-    pts = S.enforceSpacing(pts, 8);
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
-    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, q = (v) => Math.round(v * 4) / 4;
-    // The circuit's own mean half-width, inside the designer's 5–8 m (Monaco's 4.9 m reads 5).
-    let hw = 0; for (let k = 0; k < tr.n; k++) hw += tr.hw[k];
-    const baseHW = Math.min(8, Math.max(5, Math.round(hw / tr.n * 2) / 2));
-    return { pts: pts.map((p) => [q(p[0] - cx), q(p[1] - cz)]), lengthM: Math.round(tr.total), baseHW, centre: [cx, cz] };
+    return out;
   }
 
   /** What the designer authored at a corner (TURNS reads it back): bankDeg —

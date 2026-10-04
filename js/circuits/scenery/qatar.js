@@ -7,12 +7,12 @@
 (window.TrackScenery = window.TrackScenery || {})["qatar"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, px, pz, pyMin, night, hash, vadd, every,
-        place, backdrop, anchor, addBox, addCyl, addFrustum,
+        place, backdrop, anchor, addBox, addCyl, addFrustum, seat,
         palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
         modelGroup, groundPatch, floodMast, floodMastRing, circuitKit,
         bankedKerbStrip, sponsorHoarding, bleacher, acacia,
-        spectatorHill, terrainYAt } = api;
+        spectatorHill, terrainYAt, onTrack } = api;
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -591,15 +591,113 @@
       // Each patch is the walk's own step long (less 10 cm), not 14 m: the 2 m
       // overlap between consecutive patches draped the same terrain twice, one
       // lift slot apart — 41 flat-coplanar spots (ground-audit).
+      //
+      // Lusail's signature sandwich is artificial grass then warm sand runoff
+      // (Wikipedia / F1 destination guide / brief §1). Green band first; sand
+      // band immediately outside it. Sand uses a longer step + shorter chord
+      // than the green band: at ~7 m out, inside-curve neighbours would otherwise
+      // share faces (flatCoplanar) even when green at 1.5 m is clean.
+      // Sources: https://en.wikipedia.org/wiki/Lusail_International_Circuit
+      // https://www.formula1.com/en/latest/article/destination-guide-what-fans-can-eat-see-and-do-when-they-visit-qatar-for.6w898BzkTVMpvoYbQ9BHqJ
       const vergeStep = 14;
       const vergeLen = Math.max(1, Math.round(vergeStep / api.ds)) * api.ds - 0.4;
+      const GREEN_GAP = 1.55, GREEN_W = 3.4;
       every(vergeStep, (k) => {
         const s = ((k % n) + n) % n / n;
         for (const side of [-1, 1]) {
           // Pit keep-out wall owns the left shoulder on the S/F (gap 3).
           if (side === -1 && (s >= 0.94 || s <= 0.10)) continue;
-          groundPatch(k, side, 1.55 + side * 0.08, [3.4, 0.15, vergeLen], GRASS,
+          groundPatch(k, side, GREEN_GAP + side * 0.08, [GREEN_W, 0.15, vergeLen], GRASS,
             { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
         }
       });
+      {
+        // Discrete sand bay spans (not a full-lap every()): at 7 m out, a
+        // continuous chord ring flat-coplanars itself on every inside curve.
+        // Hero runoff windows keep the green→sand sandwich where the camera
+        // reads it; open desert beyond stays the dune ring.
+        const SAND_W = 8.0, SAND_COL = [0.72, 0.58, 0.38];
+        const SAND_GAP = GREEN_GAP + GREEN_W * 0.5 + SAND_W * 0.5 + 0.6; // ~8.3 m
+        const bays = [
+          // [s0, s1, side, step]
+          [0.10, 0.22, 1, 16],   // T2/T3 outer
+          [0.10, 0.22, -1, 16],
+          [0.26, 0.38, 1, 16],   // flowing mid-lap outer
+          [0.26, 0.38, -1, 16],
+          [0.52, 0.66, 1, 16],
+          [0.52, 0.66, -1, 16],
+          [0.78, 0.90, 1, 16],   // late complex → T16 approach
+          [0.78, 0.90, -1, 16],
+        ];
+        for (const [s0, s1, side, step] of bays) {
+          const bayLen = Math.max(1, Math.round(step / api.ds)) * api.ds - 1.6;
+          along(s0, s1, step, (k) => {
+            groundPatch(k, side, SAND_GAP + side * 0.12, [SAND_W, 0.12, bayLen], SAND_COL,
+              { id: `qatar-sand-apron-${k}-${side}`, samples: 2 });
+          });
+        }
+      }
+
+      // Team hospitality villas — Tilke 2023 rebuild: sixteen villas in four
+      // groups of four, curved fronts contrasting the rectilinear 402 m pit
+      // slab, with first-floor LED brand panels.
+      // https://tilke.de/portfolio/lusail-race-track-qatar/
+      (function hospitalityVillas() {
+        const LED = [
+          [0.85, 0.18, 0.16], [0.16, 0.42, 0.78], [0.92, 0.74, 0.14], [0.10, 0.62, 0.42],
+        ];
+        // Four clusters behind the pit / paddock face (left of S/F), spaced
+        // along the Guinness slab so they read as one paddock ensemble.
+        const emitVillaCluster = (stage, a0, b, g) => {
+          for (let v = 0; v < 4; v++) {
+            const dz = (v - 1.5) * 10.2;
+            const base = vadd(a0.c, a0.t, dz);
+            const wall = (v & 1) ? [0.93, 0.93, 0.91] : WHITE;
+            // Seated plinth so BFS support reaches the villa stack.
+            stage._mat = MAT.STONE;
+            if (seat && seat.box) {
+              seat.box(stage, base, [11.0, 0.7, 9.2], [0.82, 0.82, 0.80], b);
+            } else {
+              addBox(stage, vadd(base, a0.u, 0.35), [11.0, 0.7, 9.2], [0.82, 0.82, 0.80], b);
+            }
+            // Body + set-back upper storey (curved-front read via frustum).
+            addFrustum(stage, vadd(base, a0.u, 0.7), 9.2, 7.0, 7.6, wall, 8, b);
+            addBox(stage, vadd(vadd(base, a0.r, 1.0), a0.u, 5.0),
+              [7.6, 3.8, 7.8], wall, b);
+            // First-floor LED brand screen (Tilke: "Imposing LED Screens") —
+            // sits on the body face, not floating free.
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(base, a0.r, -4.4), a0.u, 5.0),
+              [0.20, 2.8, 6.4], LED[(g + v) % LED.length], b);
+            stage._mat = MAT.STONE;
+            // Roof slab bottom touches the upper storey top (5.0+1.9=6.9).
+            addBox(stage, vadd(base, a0.u, 7.15), [9.6, 0.5, 8.6], WHITE, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(base, a0.r, -4.8), a0.u, 3.6),
+              [2.2, 0.20, 6.6], LAMP, b);
+            stage._mat = 0;
+          }
+        };
+        // Literal modelGroup("…") ids — scenery-api-contract scans the source.
+        {
+          const a0 = anchor(K(0.955), -1, 56), b = [a0.r, a0.u, a0.t];
+          if (!(typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16))) {
+            modelGroup("qatar-hospitality-villas-1", {
+              center: vadd(a0.c, a0.u, 6.0), size: [20, 14, 46], basis: b,
+            }, (stage) => emitVillaCluster(stage, a0, b, 0), { required: true });
+          }
+        }
+        for (const [g, s0, id] of [
+          [1, 0.975, "qatar-hospitality-villas-2"],
+          [2, 0.995, "qatar-hospitality-villas-3"],
+          [3, 0.025, "qatar-hospitality-villas-4"],
+        ]) {
+          const a0 = anchor(K(s0), -1, 56);
+          if (typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16)) continue;
+          const b = [a0.r, a0.u, a0.t];
+          modelGroup(id, {
+            center: vadd(a0.c, a0.u, 6.0), size: [20, 14, 46], basis: b,
+          }, (stage) => emitVillaCluster(stage, a0, b, g));
+        }
+      })();
     };
