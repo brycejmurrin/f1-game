@@ -1315,7 +1315,11 @@ test("in a wet race an AI's planned stop fits the wet tread, not the plan's slic
   c.human = false; c.local = false; c.lap = 8; c.pitStops = 0; c.tyreWear = 0.4;
   c.tyre = { code: "W", tread: 2 };
   c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [8, 17], lapsAt: [8] };
-  assert.notEqual(pits.think(c), "", "the planned stop fires");
+  // On the RIGHT wet tyre the dry plan's lap is not a stop: the wet stint is
+  // re-cut on the wet's own life (this stub measures none, so it runs on).
+  assert.equal(pits.think(c), "", "a wet set at 40 % does not stop on the dry plan's lap");
+  c.tyreWear = 1.3; c.tyreWearF = 1.3; c.tyreWearR = 1.3;
+  assert.notEqual(pits.think(c), "", "a wet set past its life does");
   assert.equal(c.pitNext && c.pitNext.tread, 2, `…onto wets: ${JSON.stringify(c.pitNext)}`);
 });
 

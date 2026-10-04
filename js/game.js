@@ -1692,7 +1692,7 @@ function makeCars() {
         // so the per-car update below is unchanged in shape. paceMult() is exactly
         // 1 outside career, making GP/TT bit-identical.
         tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),
-        // Tread class for gripMult(c); null on an AI car means "fits the right tyre".
+        // Tread class for gripMult(c); null on an AI car means "fits the right tyre" (wear off; a pit plan gets its set's tread in applyCompound).
         tread: (isP || mate) ? (resolvedParts.options.tyres.wetTread || 0) : null,
         // The fitted catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md
         // §6) — one axis, not a compound axis multiplied by an upgrade tier.
