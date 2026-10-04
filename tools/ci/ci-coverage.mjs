@@ -155,8 +155,10 @@ const selectionGate = {
   failsClosedOnInvalidBase: /fail\(\).*SELECTED GATE FAILED CLOSED/.test(selectAll)
     && /no valid comparison base/.test(selectAll)
     && /comparison base .* is unreachable/.test(selectAll),
-  surfacesBudgetSkips: /EXCLUDED \(declares/.test(selectAll)
-    && /SKIPPED \(over budget\)/.test(selectAll),
+  // Both dropped buckets are named as annotations (2026-10-04: DROPPED, was
+  // EXCLUDED / SKIPPED plain lines).
+  surfacesBudgetSkips: /::warning::DROPPED \(declares/.test(selectAll)
+    && /::warning::DROPPED \(over budget/.test(selectAll),
 };
 const report = {
   specsOnDisk: ALL_SPECS.length,

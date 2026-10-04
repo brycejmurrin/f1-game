@@ -94,6 +94,9 @@ export function replay(changed, budgetMin = 15) {
     oversize: (cut.oversize || []).map((s) => s.file),
     // Overflow is a RUN too: a routed spec packed into an extra budgeted shard.
     overflow: (cut.overflow || []).flat().map((s) => s.file),
+    // The over-budget pool is a RUN as well (2026-10-04): a routed spec that
+    // declares >= the gate's per-test timeout gets an `overbudget-<k>` job.
+    overBudgetRun: (cut.overBudgetRun || []).map((s) => s.file),
     selected: prioritise(cut.selected, { changedSpecs, imported }).map((s) => s.file),
     skipped: cut.skipped.map((s) => s.file),
     // `unreachable` is the third NAMED bucket (a spec bigger than the whole
@@ -107,7 +110,7 @@ export function recall(cases = CASES) {
   return cases.map((c) => {
     const r = replay(c.changed);
     const hit = r.selected.includes(c.catches) || (r.oversize || []).includes(c.catches)
-      || (r.overflow || []).includes(c.catches);
+      || (r.overflow || []).includes(c.catches) || (r.overBudgetRun || []).includes(c.catches);
     // A case is "reported" when the selector either picked the catching spec or
     // said plainly that it could not help (infra) / could not afford it. Silence
     // is the only real failure: a selection that omits the spec with no word.
@@ -163,10 +166,15 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
      All remaining over-budget misses are real limits of the selected gate,
      and ones that should be read rather than buried under a routine line.
 
+     2026-10-04: routed declared-slow specs run in the over-budget pool
+     (select-specs.mjs MAX_OVER_BUDGET_SHARDS), so terrain-over-road and
+     audio-smoke are CAUGHT and the floor rose 1 -> 5: every reproduction in
+     CASES is now caught outright, and losing one is a regression.
+
      Raise this when the selector genuinely improves. Never lower it to make a
      red go away: below the floor means recall REGRESSED, which is the whole
      point of keeping five reproductions of faults that actually shipped. */
-  const RECALL_FLOOR = 1;
+  const RECALL_FLOOR = 5;
   if (hits < RECALL_FLOOR) {
     console.log(`\nRECALL REGRESSED: ${hits}/${rows.length} caught, floor is ${RECALL_FLOOR}.`);
     console.log("A change made the selector worse at the faults it is known to catch.");
