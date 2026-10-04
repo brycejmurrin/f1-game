@@ -290,6 +290,19 @@ test("the season goal is RESOLVED at the winter: missed costs reputation", () =>
   assert.equal(career.rep, 45, "missing the goal costs 5 reputation");
 });
 
+test("rollover clears the weekend-started stamp: next season's same round is not pre-locked", () => {
+  // markWeekendStarted stamps season.startedRound; it survived the winter, and
+  // objectiveLocked() (startedRound === round) locked that round's brief a year on.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.startedRound = 0;
+  Career.rollover();
+  assert.equal("startedRound" in career.season, false, "the stamp is last season's");
+  assert.equal(Career.objectiveLocked(), false);
+});
+
 test("a multi-year contract suppresses the winter market until it expires", () => {
   // deal.left 3 -> 2 after the decrement: still under contract, so no seats are
   // drawn and the hub goes straight to next season. This is the fix for a

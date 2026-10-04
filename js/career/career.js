@@ -1203,7 +1203,9 @@ function teamStandings() {
   const rows = Teams.LIST
     .filter((t) => Teams.isReal(t) || t.id === career.team)
     .map((t) => ({ id: t.id, tier: t.tier, pts: career.season.teamPts[t.id] || 0 }));
-  rows.sort((a, b) => b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : 1));
+  rows.sort((a, b) => (typeof SeasonCal !== "undefined" && SeasonCal.rankTeams)
+    ? SeasonCal.rankTeams(career.season, a.id, b.id)   // the results sheet's order too
+    : (b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : 1)));
   rows.forEach((r, i) => { r.pos = i + 1; });
   return rows;
 }
@@ -1591,6 +1593,7 @@ function rollover() {
   // last season's round-1 brief was pre-selected for the new round 1.
   s.roundPts = {}; delete s.lastFl;
   delete s.stage; delete s.sprintOrder; delete s.qualiOrder; delete s.qualiTrack; delete s.qualiMode;
+  delete s.startedRound;   // markWeekendStarted's stamp: kept, it locked the same round's brief next year
   career.results = [];
   career.obj = null;
   career.objPick = null;

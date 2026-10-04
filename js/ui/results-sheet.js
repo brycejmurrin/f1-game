@@ -364,7 +364,7 @@ function buildResults(order, race) {
     tmHead.className = "sel-label";
     tmHead.textContent = "CONSTRUCTORS";
     els.resultsTable.appendChild(tmHead);
-    const tmList = Object.entries(season.teamPts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const tmList = Object.entries(season.teamPts).sort((a, b) => SeasonCal.rankTeams(season, a[0], b[0])).slice(0, 5);
     tmList.forEach(([teamId, pts], i) => {
       const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
       rankRow(els.resultsTable, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
@@ -598,7 +598,7 @@ function buildStandings() {
   body.appendChild(tmHead);
 
   const tmList = Object.entries(season.teamPts)
-    .sort((a, b) => b[1] - a[1]);
+    .sort((a, b) => SeasonCal.rankTeams(season, a[0], b[0]));   // the career's tie-break too
   tmList.forEach(([teamId, pts], i) => {
     const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
     rankRow(body, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);

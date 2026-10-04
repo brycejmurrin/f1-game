@@ -163,7 +163,15 @@ const SaveMigrate = (function () {
     career.facility = career.facility | 0;
     career.moves = rows(career.moves);
     // MY TEAM's hired seat: rows or null — `roster: {}` threw in wageBill().
-    career.roster = Array.isArray(career.roster) ? rows(career.roster) : null;
+    // Its numbers as cleanDeal's: wageBill() sums `salary`, and one "x" turned
+    // career.money into NaN, saved as null and read back as 0.
+    career.roster = Array.isArray(career.roster) ? rows(career.roster).map((d) => {
+      d.salary = finiteNumber(d.salary);
+      d.left = finiteNumber(d.left);
+      if (d.pending && typeof d.pending === "object" && !Array.isArray(d.pending)) d.pending.ask = finiteNumber(d.pending.ask);
+      else d.pending = null;
+      return d;
+    }) : null;
     career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
     return career;
   }
