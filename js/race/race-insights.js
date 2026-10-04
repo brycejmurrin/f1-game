@@ -151,7 +151,15 @@ const RaceInsights = (function () {
       for (const o of cars) if (o !== c && !o.retired && (o.prog || 0) > (c.prog || 0)) ahead++;
       return ahead + 1;
     }
-    const masteryKey = (mode, sectorIdx) => G.records.key() + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all");
+    const masteryKey = (mode, sectorIdx) => {
+      const key = G.records.key() + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all");
+      if (mode !== "sector") return key;
+      // A changed timing line measures a different duration on the same road.
+      // Keep lap/other drill records intact; unversioned sector scores cannot
+      // establish which split positions they measured.
+      const splits = G.track && G.track.def && G.track.def.sectors || [1 / 3, 2 / 3];
+      return key + ":splits:" + JSON.stringify(splits);
+    };
     // METRES UP THE ROAD, signed: + is ahead of us, − is behind. placeOf() sorts
     // by CUMULATIVE arc and is right for a POSITION; it is useless for a gap,
     // because a car a lap down sorts behind while sitting on your gearbox. Same
