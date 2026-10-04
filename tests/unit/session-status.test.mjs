@@ -66,3 +66,12 @@ test("collect preserves the first porcelain status column and complete path", (t
     else process.env.PATH = previousPath;
   }
 });
+
+test("a detached HEAD is told to name a branch, never `git push -u origin HEAD`", () => {
+  const base = { at: "2026-10-04T00:00:00Z", base: null, ahead: 0, behind: 0, unpushed: 0, upstream: null,
+    sessions: [], commits: [], dirty: [], logs: [], live: null };
+  const md = toMarkdown({ ...base, branch: "HEAD" });
+  assert.match(md, /detached HEAD — name a branch first: `git switch -c claude\/<topic>`/);
+  assert.doesNotMatch(md, /git push -u origin HEAD/);
+  assert.match(toMarkdown({ ...base, branch: "claude/x" }), /git push -u origin claude\/x/);
+});

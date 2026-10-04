@@ -149,6 +149,25 @@ test("RESULTS top-10 and the CHAMPION panel rank by countback, like STANDINGS", 
   assert.equal(h.els.resNext.textContent, "MAIN MENU");
 });
 
+test("RESULTS and STANDINGS share the career constructor tie policy", () => {
+  const { season, cars } = tiedSeason();
+  const teams = [
+    { id: "red", name: "RED", tier: 4, color: [1, 0, 0] },
+    { id: "blue", name: "BLUE", tier: 2, color: [0, 0, 1] },
+  ];
+  const h = bootResults({ season, cars, globals: { Teams: { POINTS, LIST: teams } } });
+  h.api.buildStandings();
+  assert.deepEqual(rowsOf(h.dom.byId("standings-body")).slice(2).map(nameOf), ["BLUE", "RED"]);
+  h.api.buildResults(cars.slice());
+  assert.deepEqual(rowsOf(h.els.resultsTable).slice(4).map(nameOf), ["BLUE", "RED"]);
+  // Equal tiers use stable IDs, never the order teams first scored in.
+  teams[0].tier = 2;
+  assert.ok(h.SeasonCal.rankTeams(season, "blue", "red") < 0);
+  assert.equal(h.SeasonCal.rankTeams(season, "red", "red"), 0);
+  season.teamPts.red++;
+  assert.ok(h.SeasonCal.rankTeams(season, "red", "blue") < 0, "points remain decisive");
+});
+
 test("a WATCHED real race (REAL REPLAY / HIGHLIGHTS) awards no badge and draws no YOUR RACE card; a driven one does", () => {
   // RealReplay.finish() ends a watched race through G.endRace -> buildResults,
   // with the FOLLOWED car as G.player (G.followCar). Nobody drove it: the sheet
@@ -652,4 +671,15 @@ test("RESULTS: your row keeps its lime ink and OPAQUE sticky ground on the podiu
     assert.equal(winner(["res-row", p], "color", ".res-pos").value, `var(${METAL[p]})`);
   }
   assert.match(winner(["res-row", "you"], "border-left").value, /var\(--you\)/, "off the podium, your row draws its own lime rule");
+});
+
+test("CONSTRUCTORS ties break like Career.teamStandings (points, then tier), not by insertion order", () => {
+  const { season, cars } = tiedSeason();
+  season.teamPts = { red: 10, blue: 10 };   // red first in insertion order
+  const Teams = { POINTS, LIST: [{ id: "red", name: "RED", color: [1, 0, 0], tier: 3 }, { id: "blue", name: "BLUE", color: [0, 0, 1], tier: 1 }] };
+  const h = bootResults({ season, cars, globals: { Teams } });
+  h.api.buildStandings();
+  const rows = rowsOf(h.dom.byId("standings-body")).map(nameOf);
+  const teams = rows.filter((n) => n === "RED" || n === "BLUE");
+  assert.deepEqual(teams, ["BLUE", "RED"], "equal points: the lower tier ranks first, as Career settles it");
 });

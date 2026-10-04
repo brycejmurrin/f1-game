@@ -448,6 +448,15 @@ TUNE_DEFS default  →  file "*"  →  file "track|tod|wx"  →  player localSto
   - `"*"` — a **global baseline** applied to every condition (currently `carGloss: 0.35` near-matte paint, plus the shipped broadcast HDR grade: blacks/shadows/midtones/highlights/whites/toe/shoulder and small gainR/gainB trims).
   - `"track|tod|wx"` — a per-condition override that wins over `"*"`.
 - A player's live tuner edits always win over the file; RESET falls back to the file.
+- **The sun is keyed by track × time of day.** `sunElev` / `sunAzim` resolve from the
+  `"track|tod|dry"` profile for every weather (shipped and player layers alike), and the
+  tuner writes them there whatever the weather on screen — weather does not move the sun.
+  A weather's own look is its tint: `sunTemp`, `keyMul`, `weatherSunMute`.
+  `light-presets.test.mjs` fails a shipped non-dry profile that sets either.
+- **A weather-arc stage flip cross-fades every knob** over the 25 s `WX_BLEND_S` window
+  (`js/lighting/atmosphere.js`), except the lamp `rebuild` knobs and the bake inputs
+  (`lampNearClamp`, `lampBake`, `tailLightEmit`), which hold their session values until the
+  next un-blended apply (a chip, a slider, a track load) so a mid-race flip never re-bakes.
 
 **Key format:** `trackId|timeOfDay|weather`
 - `timeOfDay` ∈ `dawn | day | dusk | night`  (the session "default" resolves to the track's own day/night)
@@ -624,7 +633,9 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `presets.js`
 
-44 of the 52 circuits have a full `tod × weather` grid (880 condition keys, plus `"*"` and the four ULTRA-only `"*|<tod>"` keys). Batches B1a (fuji, okayama from kyalami) and B1b (korea, jerez from madrid / bahrain) baked 2026-09-30 with no `wetness` pins — look-survey sheets still deferred. Remaining on `"*"` alone: anderstorp, brands_hatch, buddh, dijon, donington, mont_tremblant, mosport, zolder.
+All 52 circuits have a full `tod × weather` grid (1,040 condition keys, plus `"*"` and the four ULTRA-only `"*|<tod>"` keys; `light-presets.test.mjs` fails a circuit file without one). Batches B1a (fuji, okayama from kyalami) and B1b (korea, jerez from madrid / bahrain) baked 2026-09-30 with no `wetness` pins. The last eight were copied verbatim on 2026-10-04 from their nearest green-theme sibling (same country or climate): anderstorp ← nurburgring, brands_hatch and donington ← silverstone, buddh ← sepang, dijon ← magny_cours, mont_tremblant ← montreal, mosport ← watkins_glen, zolder ← spa. Look-survey sheets are deferred for all twelve.
+
+The `<track>|dusk|wet` profiles are short deltas (2026-10-04): `<track>|dusk|rain` minus its falling-rain knobs plus the wet-surface knobs of `<track>|day|wet`, replacing a COPY-ALL stamp with `ambientMul` 0 / `keyMul` 0.115. The 44 `dawn|dry` profiles still ship `ambientMul` 0 and await a rendered A/B; `light-presets.test.mjs` exempts them by name.
 
 Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
 sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
@@ -689,6 +700,14 @@ Cross-cutting from the frames:
 | Okayama | `okayama` | green | day | ✅ (B1a donor kyalami; look-survey deferred) |
 | Korea | `korea` | modern | day | ✅ (B1b donor madrid; look-survey deferred) |
 | Jerez | `jerez` | desert | day | ✅ (B1b donor bahrain; look-survey deferred) |
+| Anderstorp | `anderstorp` | green | day | ✅ (donor nurburgring; look-survey deferred) |
+| Brands Hatch | `brands_hatch` | green | day | ✅ (donor silverstone; look-survey deferred) |
+| Buddh | `buddh` | green | day | ✅ (donor sepang; look-survey deferred) |
+| Dijon-Prenois | `dijon` | green | day | ✅ (donor magny_cours; look-survey deferred) |
+| Donington Park | `donington` | green | day | ✅ (donor silverstone; look-survey deferred) |
+| Mont-Tremblant | `mont_tremblant` | green | day | ✅ (donor montreal; look-survey deferred) |
+| Mosport | `mosport` | green | day | ✅ (donor watkins_glen; look-survey deferred) |
+| Zolder | `zolder` | green | day | ✅ (donor spa; look-survey deferred) |
 
 ---
 

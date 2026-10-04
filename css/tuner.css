@@ -227,6 +227,10 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   padding-right: 10px;
 }
 #lt-rows.sf-scroll::before, #ct-rows.sf-scroll::before, #fb-rows.sf-scroll::before { margin-right: -8px; }
+/* The tuner dropdowns (flyby EASE / eye-look AT, camera COPY FROM) were the
+   only native controls here with no size: 20 px tall, under the 24 px WCAG
+   target the layout audit's tapUnder24 counts. Same floor the sheets use. */
+:is(#lt-rows, #ct-rows, #fb-rows, #fc-rows, #ct-copyrow) select { min-height: var(--tap-min); }
 #lt-json, #ct-json, #fb-json { flex-shrink: 0; }
 #lighting-inner .adv-item, #camtune-inner .adv-item, #flyby-inner .adv-item { margin: 7px 0; }
 #lighting-inner .adv-help, #camtune-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */

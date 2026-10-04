@@ -14,6 +14,16 @@ function loadBackendScripts(files, edges, opts) {
     if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
   }
   const inject = (src) => new Promise((resolve) => {
+    // NEVER MIX BUILDS. A lazy file is asked for as `?v=<booted build>`; once a
+    // newer deploy's worker controls this tab it has swept that generation, the
+    // request misses, and Pages (which ignores the query) answers with the NEW
+    // file for the OLD code. Refuse it — a missing global is every caller's
+    // fallback — and let UpdateCheck put up UPDATE READY instead.
+    if (typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad()) {
+      if (typeof Log !== "undefined") Log.warn("game", "lazy load refused, a newer build is active: " + src);
+      resolve(false);
+      return;
+    }
     const el = document.createElement("script");
     el.src = src + "?v=" + (window.__APEX_BUILD || 0);
     el.crossOrigin = "anonymous";

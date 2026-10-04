@@ -25,26 +25,77 @@ function boot(opts = {}) {
       createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"), createBufferSource: () => node("src"),
       createDynamicsCompressor: () => Object.assign(node("comp"), { threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) }),
       createBuffer: (ch, len, sr) => { const b = { sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }; buffers.push(b); return b; },
-      decodeAudioData: (ab, res, rej) => (opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
+      decodeAudioData: (ab, res, rej) => (decoded.push(ab._url || ""), opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
       resume: () => { resumes++; return Promise.resolve(); }, suspend: () => { ctx.state = "suspended"; return Promise.resolve(); }, close: () => { ctx.state = "closed"; return Promise.resolve(); } };
+    if (opts.mediaSource) ctx.createMediaElementSource = (el) => { mediaEls.push(el); return node("mediaEl"); };
     contexts.push(ctx);
     return ctx;
   }
-  const fetched = [];
+  const fetched = [], decoded = [], mediaEls = [];
   const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date: opts.Date || Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
     document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {}, navigator: {}, AudioContext: function () { return createContext(); },
-    fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(8), { _url: url })) }); } };
+    fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(/^blob:/.test(url) && opts.bytes || 8), { _url: url })) }); } };
+  if (opts.Audio) sb.Audio = opts.Audio;
   if (opts.perf) sb.performance = opts.perf;
   sb.window = sb;
   if (opts.clock) sb.Date = { now: opts.clock };
   const v = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v);
   vm.runInContext(SRC, v);
-  return { A: vm.runInContext("GameAudio", v), started, fetched, resumes: () => resumes, contexts, document: sb.document, listeners };
+  return { A: vm.runInContext("GameAudio", v), started, fetched, decoded, mediaEls, resumes: () => resumes, contexts, document: sb.document, listeners };
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+
+test("switching external music backends stops the outgoing player before starting the replacement", async () => {
+  const { A } = boot();
+  A.init(); await flush();
+  const calls = [];
+  const backend = (id) => ({ setVolume() {}, start() { calls.push(id + ":start"); }, stop() { calls.push(id + ":stop"); } });
+  const first = backend("spotify"), second = backend("other");
+  A.setMusicBackend(first);
+  A.setMusicBackend(first);
+  assert.deepEqual(calls, ["spotify:start"], "reselecting a source does not interrupt it");
+  A.setMusicBackend(second);
+  assert.deepEqual(calls, ["spotify:start", "spotify:stop", "other:start"]);
+  A.setMusicBackend(null); await flush();
+  assert.equal(calls.at(-1), "other:stop");
+  assert.equal(A.currentTrackId(), "builtin:menu", "the local soundtrack resumes");
+  A.stopMusic();
+  assert.equal(calls.filter((c) => c.endsWith(":stop")).length, 2, "no outgoing player is orphaned");
+});
+
+test("a rejected outgoing backend stop does not prevent switching music sources", async () => {
+  const { A } = boot();
+  A.init(); await flush();
+  A.setMusicBackend({ setVolume() {}, start() {}, stop() { return Promise.reject(new Error("device unavailable")); } });
+  A.setMusicBackend(null); await flush();
+  assert.equal(A.currentTrackId(), "builtin:menu");
+});
+
+test("empty MY TRACKS stays silent across resume, music toggles, and backend removal", async () => {
+  const { A, fetched } = boot();
+  A.init(); await flush();
+  A.addTracks([{ id: "user:last", name: "last", url: "blob:last" }]);
+  A.setMusicSource("user"); A.startMusic(); await flush();
+  assert.equal(A.currentTrackId(), "user:last");
+  A.removeTrack("user:last");
+  const before = fetched.length;
+  for (const resume of [
+    () => A.startMusic(),
+    () => { A.setMusicEnabled(false); A.setMusicEnabled(true); },
+    () => { A.setMusicBackend({ setVolume() {}, start() {}, stop() {} }); A.setMusicBackend(null); },
+  ]) {
+    resume(); await flush();
+    assert.equal(A.musicSource(), "user");
+    assert.equal(A.currentTrackId(), null);
+    assert.equal(fetched.length, before, "no builtin track is fetched as a fallback");
+  }
+  A.addTracks([{ id: "user:new", name: "new", url: "blob:new" }]);
+  A.startMusic(); await flush();
+  assert.equal(A.currentTrackId(), "user:new", "a new eligible upload restores playback");
+});
 
 test("a context rebuild replaces cached noise and keeps the delayed sample fallback", async () => {
   let now = 10000;
@@ -225,4 +276,80 @@ test("ui blips: one per click, and MENU SOUNDS OFF silences them without touchin
   assert.equal(A.uiEnabled(), false);
   A.lap();
   assert.ok(oscs() - n > 0, "race sfx are not menu sounds");
+});
+
+// ── uploads and PCM (2026-10-04) ───────────────────────────────────────────
+// music-lib caps an upload at 25 MB of BYTES; decoded, that is up to ~1.26 GB
+// of Float32 (64 kbps Opus, ~55 min). Desktop decoded every upload in full.
+// A stub <audio>: `duration` is what loadedmetadata reports for any src.
+function fakeAudio(duration) {
+  const made = [];
+  function Audio() {
+    const el = { preload: "", currentTime: 0, duration: NaN, onloadedmetadata: null, onerror: null, onended: null, onplaying: null,
+      _src: "", pause() {}, load() {}, removeAttribute() { el._src = ""; }, play() { return Promise.resolve(); } };
+    Object.defineProperty(el, "src", { get: () => el._src, set(v) {
+      el._src = v; el.duration = duration;
+      Promise.resolve().then(() => { if (el.onloadedmetadata) el.onloadedmetadata(); });
+    } });
+    made.push(el);
+    return el;
+  }
+  Audio.made = made;
+  return Audio;
+}
+const UPLOAD = { id: "user:7", name: "dj mix", url: "blob:apex/7" };
+
+test("an upload streams through the media element on desktop, never through decodeAudioData", async () => {
+  const Audio = fakeAudio(3300);
+  const { A, fetched, decoded, mediaEls } = boot({ Audio, mediaSource: true });
+  A.init(); await flush();
+  A.addTracks([UPLOAD]);
+  assert.equal(A.playTrackId(UPLOAD.id), true);
+  await flush();
+  assert.equal(mediaEls.length, 1, "the upload plays through createMediaElementSource");
+  assert.equal(mediaEls[0].src, UPLOAD.url);
+  assert.ok(!fetched.includes(UPLOAD.url) && !decoded.includes(UPLOAD.url), "and its bytes are never fetched for a full decode");
+  assert.equal(A.currentTrackId(), UPLOAD.id);
+});
+
+test("the shipped tracks still decode on desktop next to a streamed upload", async () => {
+  const { A, decoded } = boot({ Audio: fakeAudio(200), mediaSource: true });
+  A.init(); await flush();
+  A.addTracks([UPLOAD]);
+  A.playTrackId("builtin:song3"); await flush();
+  assert.ok(decoded.some((u) => /song3/.test(u)), "the A/B default for builtins is unchanged on desktop");
+});
+
+test("without streaming, an upload longer than the cap is refused before it decodes", async () => {
+  // A media element exists but cannot be routed into the context, so the
+  // decode path is the fallback; the file's own metadata says 55 minutes.
+  const { A, fetched, decoded } = boot({ Audio: fakeAudio(3300) });
+  A.init(); await flush();
+  A.addTracks([UPLOAD]);
+  A.setMusicSource("user");
+  A.playTrackId(UPLOAD.id); await flush();
+  assert.ok(fetched.includes(UPLOAD.url), "precondition: the decode path fetched it");
+  assert.ok(!decoded.includes(UPLOAD.url), "a 55-minute upload must not reach decodeAudioData");
+  assert.equal(A.currentTrackId(), null, "the only eligible track failed: the list stops instead of looping on it");
+});
+
+test("without streaming, a song-length upload still decodes and plays", async () => {
+  const { A, decoded } = boot({ Audio: fakeAudio(240) });
+  A.init(); await flush();
+  A.addTracks([UPLOAD]);
+  A.playTrackId(UPLOAD.id); await flush();
+  assert.ok(decoded.includes(UPLOAD.url), "four minutes is within the cap");
+  assert.equal(A.currentTrackId(), UPLOAD.id);
+});
+
+test("with no media element at all, the cap falls back to the file size", async () => {
+  // 20 MB at the 128 kbps estimate is ~22 min: refused. 2 MB (~2 min): decoded.
+  let r = boot({ bytes: 20 * 1024 * 1024 });
+  r.A.init(); await flush();
+  r.A.addTracks([UPLOAD]); r.A.playTrackId(UPLOAD.id); await flush();
+  assert.ok(!r.decoded.includes(UPLOAD.url), "a 20 MB upload is too long to decode by its size");
+  r = boot({ bytes: 2 * 1024 * 1024 });
+  r.A.init(); await flush();
+  r.A.addTracks([UPLOAD]); r.A.playTrackId(UPLOAD.id); await flush();
+  assert.ok(r.decoded.includes(UPLOAD.url), "a 2 MB upload decodes");
 });

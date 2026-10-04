@@ -4684,21 +4684,20 @@ const WGX = (function () {
     // into rgba8unorm converts sRGB → linear, so a mean-normalised 128-grey
     // asphalt scan lands at ~0.22 and `albedo * tex * 2.0` crushes or — on
     // implementations that encode the other way — washes the road vs WebGL2.
-    function _matLayerBytes(img, size) {
-      if (!img) return null;
-      if (img instanceof Uint8Array || img instanceof Uint8ClampedArray) return img;
-      if (typeof ImageData !== "undefined" && img instanceof ImageData) return img.data;
-      try {
-        const cv = (typeof OffscreenCanvas !== "undefined")
-          ? new OffscreenCanvas(size, size)
-          : Object.assign(document.createElement("canvas"), { width: size, height: size });
-        const c2d = cv.getContext("2d", { alpha: true, colorSpace: "srgb" })
-          || cv.getContext("2d", { alpha: true })
-          || cv.getContext("2d");
-        if (!c2d) return null;
-        c2d.drawImage(img, 0, 0, size, size);
-        return c2d.getImageData(0, 0, size, size).data;
-      } catch (_) { return null; }
+    // The bytes come from Assets.readLayerBytes (scratch WebGL2, every unpack
+    // conversion off), NOT a 2D canvas: drawImage()+getImageData() goes through
+    // a premultiplied backing store, and the albedo alpha is roughness, so the
+    // metal/low-alpha layers came back RGB-quantised on every engine.
+    // Returns per-layer byte views (null where the readback could not run).
+    function _matLayerBytes(size, images, n) {
+      const out = new Array(n).fill(null);
+      if (typeof Assets === "undefined" || !Assets.readLayerBytes) return out;
+      const page = size * size * 4;
+      const data = new Uint8Array(page * n);
+      let done = [];
+      try { done = Assets.readLayerBytes(size, images, n, data); } catch (_) { done = []; }
+      for (const i of done) out[i] = data.subarray(i * page, (i + 1) * page);
+      return out;
     }
     function createTextureArray(size, images, layers) {
       if (!size || !images) return null;
@@ -4712,18 +4711,21 @@ const WGX = (function () {
         });
         let filled = 0;
         const bpr = size * 4;
+        const layerBytes = _matLayerBytes(size, images, n);
         for (let i = 0; i < n; i++) {
           const img = images[i];
           if (!img) continue;
           try {
-            const bytes = _matLayerBytes(img, size);
+            const bytes = layerBytes[i];
             if (bytes && bytes.length >= bpr * size) {
               device.queue.writeTexture({ texture: tex, origin: [0, 0, i] }, bytes,
                 { bytesPerRow: bpr, rowsPerImage: size }, [size, size, 1]);
             } else {
+              // No WebGL2 for the readback: still straight alpha (the strip
+              // decodes with premultiplyAlpha "none"; the destination says so).
               device.queue.copyExternalImageToTexture(
                 { source: img, flipY: false },
-                { texture: tex, origin: [0, 0, i] },
+                { texture: tex, origin: [0, 0, i], premultipliedAlpha: false },
                 [size, size]);
             }
             filled++;

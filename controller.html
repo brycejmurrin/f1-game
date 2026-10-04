@@ -103,6 +103,7 @@
   #code { font: 600 30px/1 var(--font-hud); letter-spacing: .3em; text-transform: uppercase;
           text-align: center; width: min(78vw, 300px); background: var(--surf-1); color: var(--text); border: 1px solid var(--plate-line);
           border-radius: var(--r-md); padding: 12px 0 12px .3em; box-shadow: inset 0 2px 6px rgba(0,0,0,.35); }
+  #code[maxlength="32"] { font-size: clamp(12px, 3vw, 16px); letter-spacing: .02em; width: min(88vw, 520px); padding-left: 0; }
   #code:focus { outline: 2px solid var(--red); outline-offset: 2px; }
   #scan[hidden], #scan-box[hidden] { display: none; }
   #scan-box { position: relative; width: min(72vw, 46vh); aspect-ratio: 1; border-radius: var(--r-lg); overflow: hidden; background: #000; border: 1px solid var(--plate-line); }
@@ -402,6 +403,7 @@
 </section>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/hash32.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/net/bytes.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/net/nostr.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/net/rendezvous.js?v=dev"></script>

@@ -19,6 +19,23 @@
     night: false,
     theme: "green",
     sceneryTheme: "permanent",
+    // Hamilton Straight's authored stand replaces the generic seven shells.
+    ownPitStraight: true,
+    pit: {
+      architecture: {
+        // Populous (opened 2011): continuously changing angular Wing roof.
+        // https://populous.com/showcases/silverstone-circuit
+        // Built photographs inspected; exact photo years/heights unknown.
+        // Stylized above the existing garage row, not its real 360 m length.
+        // u runs Club/arrival end -> Abbey/departure end of the built row.
+        roofProfile: [
+          [0, 12.0, 15.2], [0.22, 9.8, 10.4], [0.42, 10.8, 13.2],
+          [0.60, 9.8, 10.4], [0.79, 11.2, 14.2], [1, 9.8, 10.4],
+        ],
+        roofColor: [0.88, 0.90, 0.92], fasciaColor: [0.94, 0.93, 0.90],
+        soffitColor: [0.94, 0.93, 0.90], edgeColor: [0.22, 0.24, 0.27],
+      },
+    },
     lengthKm: 5.9,
     // TYRE SEVERITY: what the SURFACE and the speeds do to a tyre, on top of the
     // work the LAYOUT already makes it do (js/physics/tyre-model.js derives that

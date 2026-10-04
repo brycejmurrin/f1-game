@@ -164,7 +164,7 @@ jobs:
           Bounded rolling record (KEEP samples per key, per env bucket), written
           by tools/ci/spec-timings.mjs. Merge this branch to let
           select-budget.mjs bill specs from measurements instead of one 2026-08-07
-          mean; nothing reads it until then."
+          mean; the select job already reads this branch as an overlay (APEX_SPEC_TIMINGS)."
           # force-with-lease is wrong here: the branch is a rolling proposal this
           # bot owns, and a plain -f keeps it at exactly the latest merge.
           git push -f origin "$TIMINGS_BRANCH"
