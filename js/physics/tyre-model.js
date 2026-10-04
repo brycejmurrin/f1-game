@@ -316,14 +316,18 @@ const TyreModel = (function () {
   }
   /** [frontShare, rearShare] for this tick. Averages to exactly 1, by construction. */
   function axleShare(c, aTop) {
+    const d = axleTilt(c, aTop);
+    return [1 + d, 1 - d];
+  }
+  /** The tilt d itself (front 1 + d, rear 1 - d): update()'s per-car-per-step read, no array. */
+  function axleTilt(c, aTop) {
     const lng = longSigned(c, aTop);
     const bb = c.brakeBias != null && isFinite(c.brakeBias) ? c.brakeBias : BB_REF;
     // One expression for both directions: braking is lng < 0, so -lng tilts
     // front, and traction is lng > 0, so -lng tilts rear. Brake bias only gets
     // a say over the braking half — it does not move a traction event.
     const bias = lng < 0 ? clamp(1 + AXLE_BB * (bb - BB_REF), 0.3, 1.7) : 1;
-    const d = clamp(AXLE_REST - lng * AXLE_LONG * bias, -0.9, 0.9);
-    return [1 + d, 1 - d];
+    return clamp(AXLE_REST - lng * AXLE_LONG * bias, -0.9, 0.9);
   }
   const AXLE_EVEN = Object.freeze({ f: 1, r: 1 });
 
@@ -421,6 +425,13 @@ const TyreModel = (function () {
   /** One tick of the two-state thermal model. Returns [surface, bulk] in C.
    *  `slide` is body-slip intensity 0..1 (human only); `track` is asphalt °C. */
   function stepTemp(ts, tb, { load, vFrac, amb, track, life, slide, dt }) {
+    return tempInto([0, 0], ts, tb, load, vFrac, amb, track, life, slide, dt);
+  }
+  // stepTemp's body, writing [surface, bulk] into `out` (update() passes one
+  // scratch pair per instance: 22 cars x 60 Hz of fresh arrays otherwise).
+  // Both are computed from the OLD ts/tb before either is written, so passing
+  // the car's own state in and assigning out[] after cannot alias.
+  function tempInto(out, ts, tb, load, vFrac, amb, track, life, slide, dt) {
     const w = warmRate(life);
     const v = clamp(vFrac, 0, 1);
     const ld = Math.max(0, load);
@@ -433,7 +444,8 @@ const TyreModel = (function () {
     const nb = tb + (EXCH * (ts - tb) - COOL_B * (tb - amb)) * dt;
     // Clamped well outside anything the model produces, purely so a pathological
     // dt can never NaN a car's grip.
-    return [clamp(ns, -40, 400), clamp(nb, -40, 400)];
+    out[0] = clamp(ns, -40, 400); out[1] = clamp(nb, -40, 400);
+    return out;
   }
 
   // Grip against the window. Quadratic either side so the edges are forgiving
@@ -454,13 +466,16 @@ const TyreModel = (function () {
   // BLISTERING accumulates when the BULK is over its limit and never heals.
   const GRAIN_RATE = 0.055, GRAIN_HEAL = 0.02, GRAIN_GRIP = 0.05;
   const BLIST_OVER = 35, BLIST_RATE = 0.0012, BLIST_GRIP = 0.14;
-  function stepGrain(grain, { ts, life, slide, dt }) {
+  // Destructuring fronts over positional bodies: update() calls the bodies, no literal per car per step.
+  function stepGrain(grain, { ts, life, slide, dt }) { return grainStep(grain, ts, life, slide, dt); }
+  function stepBlister(blister, { tb, life, dt }) { return blisterStep(blister, tb, life, dt); }
+  function grainStep(grain, ts, life, slide, dt) {
     const opt = optTemp(life);
     const cold = clamp(((opt - T_WINDOW) - ts) / TEMP_SPAN, 0, 1);
     const g = (grain || 0) + (cold > 0 ? GRAIN_RATE * cold * clamp(slide, 0, 1) : -GRAIN_HEAL) * dt;
     return clamp(g, 0, 1);
   }
-  function stepBlister(blister, { tb, life, dt }) {
+  function blisterStep(blister, tb, life, dt) {
     const over = tb - (optTemp(life) + T_WINDOW + BLIST_OVER);
     return clamp((blister || 0) + (over > 0 ? BLIST_RATE * over * dt : 0), 0, 1);
   }
@@ -617,6 +632,7 @@ const TyreModel = (function () {
   // ── SESSION ───────────────────────────────────────────────────────────────
   function create(G) {
     Log.info("game", "TyreModel.create");
+    const _tT = [0, 0], _axOut = { f: 1, r: 1 };   // update()'s temperature pair and axleSplit's answer, reused
     // Cold-boot sync: G.raceTyreWear already holds the store / shipped default
     // (SettingsDefaults "real"). Starting at "off" left planLaps() on the
     // whole-race branch until the next setter write or gridUp — so the
@@ -771,12 +787,10 @@ const TyreModel = (function () {
       // blisters; it just never grains, and the field is scored on one curve
       // either way because blistering is the bulk-temperature failure.
       const slide = c.human ? (c.skidIntensity || 0) : 0;
-      const t = stepTemp(c.tyreTs, c.tyreTb, {
-        load, vFrac, amb, track: trk, life: c.tyre.life, slide, dt,
-      });
+      const t = tempInto(_tT, c.tyreTs, c.tyreTb, load, vFrac, amb, trk, c.tyre.life, slide, dt);
       c.tyreTs = t[0]; c.tyreTb = t[1];
-      c.tyreGrain = stepGrain(c.tyreGrain, { ts: c.tyreTs, life: c.tyre.life, slide, dt });
-      c.tyreBlister = stepBlister(c.tyreBlister, { tb: c.tyreTb, life: c.tyre.life, dt });
+      c.tyreGrain = grainStep(c.tyreGrain, c.tyreTs, c.tyre.life, slide, dt);
+      c.tyreBlister = blisterStep(c.tyreBlister, c.tyreTb, c.tyre.life, dt);
       // WEAR is distance, so it stops when the car does. Slip-speed factor is
       // 1 when rolling (slide 0) and rises with body slip.
       const lapFrac = Math.abs(c.speed || 0) * dt / track.total;
@@ -784,9 +798,9 @@ const TyreModel = (function () {
       const slipMul = 1 + W_SLIP_SPD * clamp(slide, 0, 1);
       const dw = lapFrac * load * slipMul * LEVELS[level] / effLifeLaps(c.tyre.life, G.lapsTarget);
       c.tyreWear = (c.tyreWear || 0) + dw;
-      const sh = axleShare(c, G.aTop());
-      c.tyreWearF = (c.tyreWearF || 0) + dw * sh[0];
-      c.tyreWearR = (c.tyreWearR || 0) + dw * sh[1];
+      const d = axleTilt(c, G.aTop());
+      c.tyreWearF = (c.tyreWearF || 0) + dw * (1 + d);
+      c.tyreWearR = (c.tyreWearR || 0) + dw * (1 - d);
     }
 
     // The three multipliers game.js reads. Each is EXACTLY 1 when the setting is
@@ -809,10 +823,13 @@ const TyreModel = (function () {
     // wear twice; a ratio is what the per-axle seam actually wants, and it
     // cancels the temperature and defect terms (both axles share them) down to
     // the one thing that really differs. Exactly 1/1 while the setting is off.
+    // ONE scratch per instance: every reader (player-forces, engineer, the
+    // debug report) takes .f/.r before its next call, and none keeps it.
     function axleSplit(c) {
       if (!on() || !c || c.tyreWearF == null) return AXLE_EVEN;
       const base = gripFor(c.tyreWear);
-      return { f: gripFor(c.tyreWearF) / base, r: gripFor(c.tyreWearR) / base };
+      _axOut.f = gripFor(c.tyreWearF) / base; _axOut.r = gripFor(c.tyreWearR) / base;
+      return _axOut;
     }
     // QUALIFYING runs light and on a set its out-lap has brought into the
     // window. The session is one standing lap (lapsTarget 1), so the race's

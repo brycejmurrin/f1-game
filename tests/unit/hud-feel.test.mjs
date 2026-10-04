@@ -151,6 +151,27 @@ test("the tach redline latches with hysteresis instead of flickering on the 92 %
   player.rpm = MAX_RPM * 0.905; tick(); assert.equal(on(), false, "and re-entry needs 92 % again, so the band is dead in both directions");
 });
 
+// The gearbox chip is display:none under body.cockpit-cam (css/track-detail.css),
+// so its frame-rate writes wait there — but the hysteresis keeps tracking, and
+// the first frame out of the cockpit paints the live values.
+test("under cockpit-cam the hidden gear/tach writes wait; the redline latch keeps its history", () => {
+  const { els, player, dom, tick } = boot();
+  player.gear = 4; player.rpm = IDLE_RPM + (MAX_RPM - IDLE_RPM) * 0.5; tick();
+  assert.equal(els.gear.textContent, "4");
+  assert.equal(els.rpmFill.style.width, "50%");
+  dom.document.body.classList.add("cockpit-cam");
+  player.gear = 6; player.rpm = MAX_RPM * 0.93; tick();   // enters the redline while hidden
+  assert.equal(els.gear.textContent, "4", "no write to the hidden chip");
+  assert.equal(els.rpmFill.style.width, "50%");
+  player.rpm = MAX_RPM * 0.905; tick();                   // inside the band: the latch must remember 93 %
+  dom.document.body.classList.remove("cockpit-cam");
+  tick();
+  assert.equal(els.gear.textContent, "6", "out of the cockpit: the live gear");
+  assert.ok(els.tach.classList.contains("redline"), "the latch entered at 93 % while hidden and holds at 90.5 %");
+  assert.equal(els.rpmFill.style.width, (clampFrac(MAX_RPM * 0.905) * 100).toFixed(0) + "%");
+});
+function clampFrac(rpm) { return Math.min(1, Math.max(0, (rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM))); }
+
 test("the OVERTAKE chip spells every state differently and reads the 2026 allowance in MJ", () => {
   const { els, player, G, tick } = boot();
   tick();

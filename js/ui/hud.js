@@ -73,7 +73,7 @@ const teamCss = (c) => {
 let _secRows = null;
 let _secFlash = [0, 0, 0];
 let _limitsDots = null;
-let _hudCamKey = "";
+let _hudCamMode = null, _hudCamProf = null;   // compared field by field: no key string per frame
 // The readouts js/ui/hud-readouts.js derives (gap laps, ERS, BB, blue flag, the
 // race DELTA's best-lap trace, the spoken HUD). Optional: the node HUD harness
 // boots hud.js without it, and every use below is guarded on _ro.
@@ -110,7 +110,9 @@ function resolveHudVis(want, autoHide) {
   if (want === "off") return true;
   return !!autoHide;
 }
-let _hudVisKey = "";
+// The last inputs and outcomes, compared field by field — the same test the
+// 7-part key string made, without building that string every frame.
+const _hudVis = { map: null, gaps: null, mode: null, prof: null, hideMap: null, hideGaps: null, mapLow: null };
 function syncHudVisClasses(modeId) {
   const onboard = !!ONBOARD_IDS[modeId];
   const prof = G.hudProfile || "standard";
@@ -121,9 +123,10 @@ function syncHudVisClasses(modeId) {
   const hideGaps = resolveHudVis(G.hudGapsVis, prof === "minimal");
   const mapLow = !hideMap && prof === "broadcast";
   const gapsLow = !hideGaps && prof === "broadcast";
-  const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + prof + "|" + hideMap + "|" + hideGaps + "|" + mapLow;
-  if (key === _hudVisKey) return;
-  _hudVisKey = key;
+  const v = _hudVis, mapVis = G.hudMapVis || "auto", gapsVis = G.hudGapsVis || "auto";
+  if (v.map === mapVis && v.gaps === gapsVis && v.mode === modeId && v.prof === prof
+    && v.hideMap === hideMap && v.hideGaps === hideGaps && v.mapLow === mapLow) return;
+  v.map = mapVis; v.gaps = gapsVis; v.mode = modeId; v.prof = prof; v.hideMap = hideMap; v.hideGaps = hideGaps; v.mapLow = mapLow;
   _fitKey = ""; _cssRootKey = "";
   const body = document.body;
   body.classList.toggle("hud-hide-map", hideMap);
@@ -147,9 +150,8 @@ function syncHudCamClasses() {
   const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
   const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
   const prof = G.hudProfile || "standard";
-  const key = modeId + "|" + prof;
-  if (key !== _hudCamKey) {
-    _hudCamKey = key;
+  if (modeId !== _hudCamMode || prof !== _hudCamProf) {
+    _hudCamMode = modeId; _hudCamProf = prof;
     const body = document.body;
     // No hud-onboard class here: the per-widget MAP/GAPS settings own that.
     // ONBOARD_IDS is still live — syncHudVisClasses() reads it for MAP-AUTO.
@@ -961,15 +963,24 @@ function skinAccent(t) {
 }
 
 // Gear, tachometer and speed — every frame (updateHud, above its 10 Hz gate).
+// The gearbox chip (gear + tach) is display:none under body.cockpit-cam
+// (css/track-detail.css — no breakpoint brings it back): its writes wait,
+// and the cockpit-cam toggle's own refreshHud(true) repaints it on the way out.
+// The bar width is compared as a whole percent: Math.round IS toFixed(0) for
+// 0..100 (both round half up), so the string is built only when it moves.
+let _rpmPct = -1;
 function paintInstruments(player) {
-  hText(els.gear, "" + player.gear);
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-  hStyle(els.rpmFill, "width", (rpmFrac * 100).toFixed(0) + "%");
   // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
   // pulse animation) every tick the needle hovered on the line, which is
   // exactly where a driver holding a gear sits. Enter at 92%, leave at 89%.
   _redline = player.rpm > MAX_RPM * (_redline ? 0.89 : 0.92);
-  hToggle(els.tach, "redline", _redline);
+  if (!document.body.classList.contains("cockpit-cam")) {
+    hText(els.gear, "" + player.gear);
+    const pct = Math.round(rpmFrac * 100);
+    if (pct !== _rpmPct || !(pct >= 0)) { _rpmPct = pct; hStyle(els.rpmFill, "width", (rpmFrac * 100).toFixed(0) + "%"); }
+    hToggle(els.tach, "redline", _redline);
+  }
   const kph = G.dashKph(player.speed);   // SPEED UNITS is display-only (js/ui/appearance-opts.js)
   hText(els.speed, "" + (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(kph) : Math.round(kph)));
 }

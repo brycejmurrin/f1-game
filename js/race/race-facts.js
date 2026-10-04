@@ -123,10 +123,15 @@ const RaceFacts = (function () {
       return order;
     }
 
+    // ONE answer per instance, reused every step: race-radio reads `f` and walks
+    // `ev` before the next observe, and its `last` (the request() snapshot) is
+    // the latest `f` either way. The events in `ev` are still fresh objects.
+    const _out = { f: null, ev: [] }, _f = {}, _fastestOut = { car: null, time: 0 }, _finishers = [];
     function observe(G, dt) {
-      const ev = [], finishers = [];
+      const ev = _out.ev, finishers = _finishers;
+      ev.length = 0; finishers.length = 0; _out.f = null;
       const p = G.player;
-      if (!p || !G.cars || !G.track) return { f: null, ev };
+      if (!p || !G.cars || !G.track) return _out;
       if (G.cars !== cars) { reset(); cars = G.cars; }
       lapLen = G.track.total || lapLen || 1;
       t = G.raceT || 0;
@@ -194,7 +199,9 @@ const RaceFacts = (function () {
       // EVERY CAR IN: the classification is final, and endRace (race-control's
       // finishDelay) no longer waits on a penalty — release the held finishes now
       // or the last car home with a +5 s never hears its result.
-      if (cars.every((c) => c.finished || c.retired))
+      let allIn = true;
+      for (let i = 0; i < cars.length; i++) if (!(cars[i].finished || cars[i].retired)) { allIn = false; break; }
+      if (allIn)
         for (const c of cars) { const s = bag(c); if (s.finDue != null) { s.finDue = null; finishers.push(c); } }
 
       order = rank(cars);
@@ -333,23 +340,23 @@ const RaceFacts = (function () {
           toGo = Math.max(1, Math.min(toGo, Math.floor(at / lapLen) - Math.floor((p.prog || 0) / lapLen) + 1));
         }
       }
-      const f = {
-        t, laps,
-        lap: p.lap || 0,
-        toGo,
-        leaderToGo,
-        pos: pos || raw, rawPos: raw, n: order.length,
-        gridPos: grid && grid.has(p) ? grid.get(p) : null,
-        ahead, behind, gapA: gA, gapB: gB, rateA, rateB,
-        leader, second, leadGap: leader && second ? gap(leader, second) : null,
-        lastLap: p.lastLap || 0, best: Number.isFinite(p.best) ? p.best : 0,
-        fastest: fastest.car ? { car: fastest.car, time: fastest.time } : null,
-        energy: p.energy == null ? null : p.energy,
-        finished: !!p.finished, retired: !!p.retired, pitting: inPits(p),
-        caution,
-        started,
-      };
-      return { f, ev };
+      const f = _f;
+      f.t = t; f.laps = laps;
+      f.lap = p.lap || 0;
+      f.toGo = toGo;
+      f.leaderToGo = leaderToGo;
+      f.pos = pos || raw; f.rawPos = raw; f.n = order.length;
+      f.gridPos = grid && grid.has(p) ? grid.get(p) : null;
+      f.ahead = ahead; f.behind = behind; f.gapA = gA; f.gapB = gB; f.rateA = rateA; f.rateB = rateB;
+      f.leader = leader; f.second = second; f.leadGap = leader && second ? gap(leader, second) : null;
+      f.lastLap = p.lastLap || 0; f.best = Number.isFinite(p.best) ? p.best : 0;
+      if (fastest.car) { _fastestOut.car = fastest.car; _fastestOut.time = fastest.time; f.fastest = _fastestOut; } else f.fastest = null;
+      f.energy = p.energy == null ? null : p.energy;
+      f.finished = !!p.finished; f.retired = !!p.retired; f.pitting = inPits(p);
+      f.caution = caution;
+      f.started = started;
+      _out.f = f;
+      return _out;
     }
 
     return {
