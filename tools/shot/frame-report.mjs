@@ -137,6 +137,32 @@ function propBoxes(track, FlybySeq) {
   return out;
 }
 
+/** THE ROAD IS ALWAYS CLEAR (js/camera/flyby-seq.js onRoadPose). The registry's
+ *  boxes are axis-aligned, so an angled grandstand's box reaches across the
+ *  straight beside it: Suzuka's #565 (25.5 x 56.6 m) stood 1.6 m from the
+ *  grid-front eye and the report scored the grid 0 % visible while the render
+ *  showed every car. A box that holds a road point at running height (a 5 x 5
+ *  grid of its footprint projected onto the lap, |lat| under the half-width, the box's
+ *  floor below road + 1 m) is over-covering and is dropped; bridges and
+ *  gantries sit above that height and keep their boxes. */
+function offRoad(boxes, track, Tracks) {
+  const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  let dropped = 0;
+  const kept = boxes.filter((b) => {
+    if (b.part || !(b.w > 2 && b.d > 2)) return true;           // trees and thin parts: their own model
+    for (let k = 0; k < 25; k++) {             // 5 x 5 over the footprint: a 93 m stand is crossed mid-edge
+      const x = b.x + ((k % 5) / 2 - 1) * b.w / 2 * 0.9, z = b.z + (Math.floor(k / 5) / 2 - 1) * b.d / 2 * 0.9;
+      const pr = Tracks.project(track, x, z, null, b.y);
+      if (!pr || !isFinite(pr.lat)) continue;
+      Tracks.sample(track, pr.s, smp);
+      if (Math.abs(pr.lat) < (smp.hw || 7) - 0.5 && b.y - b.h / 2 < smp.p[1] + 1) { dropped++; return false; }
+    }
+    return true;
+  });
+  kept.droppedOverRoad = dropped;
+  return kept;
+}
+
 /** Linear barriers (walls, fences, stands) carry an arc span, not a box: lay
  *  them as oriented 6 m slabs at hw + gap, the way the emitter did. */
 function spanBoxes(track, Tracks) {
@@ -502,7 +528,7 @@ Accepts: ${KNOWN.filter((k) => k.startsWith("--")).join(" ")}`);
   const g = await createGame({ track });
   const bootMs = Date.now() - t0;
   const sb = g.sandbox, G = g.G, T = G.track, FlybySeq = sb.FlybySeq, Tracks = sb.Tracks;
-  const props = propBoxes(T, FlybySeq), spans = spanBoxes(T, Tracks), cars = carBoxes(G, Tracks);
+  const props = offRoad(propBoxes(T, FlybySeq), T, Tracks), spans = spanBoxes(T, Tracks), cars = carBoxes(G, Tracks);
   const gm = groundModel(T, Tracks);
   const scene = { allBoxes: props.concat(spans, cars), boxes: null, groundAt: gm.groundAt, maxGroundY: gm.maxGroundY, range };
   const ctx = { track: T, FlybySeq, Tracks, boxes: scene.allBoxes, cars, scene };

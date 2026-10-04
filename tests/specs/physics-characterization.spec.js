@@ -50,8 +50,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, "..", "data", "physics-baseline.json");
 const UPDATING = !!process.env.APEX_UPDATE_BASELINE;
 
-test.skip(!UPDATING && !fs.existsSync(BASELINE),
-  "no physics baseline committed — generate with APEX_UPDATE_BASELINE=1 (see the header)");
+// A MISSING BASELINE IS A FAILURE, NOT A SKIP (2026-10-04). This file-level
+// skip turned a deleted or renamed baseline into a green "master gate near
+// game.js" (driving-model, a required check): every scenario skipped, and the
+// reporter counted skips as done. Only the regeneration run may proceed
+// without one.
+if (!UPDATING && !fs.existsSync(BASELINE)) {
+  throw new Error(`no physics baseline at ${path.relative(path.join(HERE, "..", ".."), BASELINE)} — ` +
+    "restore it, or generate it with APEX_UPDATE_BASELINE=1 and a stated APEX_BASELINE_REASON (see the header)");
+}
 
 // Fixed scenarios. Each is a seed, a start state and a scripted input sequence.
 // Kept small and varied rather than long: the point is to touch several regions

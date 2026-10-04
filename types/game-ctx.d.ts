@@ -638,7 +638,7 @@ interface GameCtx {
   readonly initRainDrops: () => void;
   readonly isFloodActiveSession: () => boolean;
   readonly _nightAmbientBand: () => number;
-  readonly applyLightTune: (fromApplyRace?: boolean) => void;
+  readonly applyLightTune: (fromApplyRace?: boolean, opts?: { holdRebuild?: boolean }) => void;
 
   // ── Renderer + local (s,x) <-> world conversion ───────────────────────────
   readonly smp: TrackSample;

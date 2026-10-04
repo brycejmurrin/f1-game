@@ -123,6 +123,23 @@ test("sweep ignores teleports and cars owned by another simulator",()=>{
   collision.resolveCollisions([a,b],1/60);a.prog=a.s=18;
   collision.resolveCollisions([a,b],1/60);close(a.prog,18);
 });
+// c.vLat is +RIGHT of the nose (PlayerForces' frame; game.js writes it back
+// along (-fz, fx)). In the contact plane (prog, x) a body at angle θ has
+// forward (cos θ, sin θ) and RIGHT (-sin θ, cos θ). A player yawed 90° (nose
+// toward +x) sliding RIGHT is therefore moving toward -prog, into a car parked
+// behind it, and the impulse must take that slide off. Until 2026-10-04
+// body()/pushVelocity() used the LEFT vector: the same slide read as moving
+// AWAY, no impulse fired, and the world kept carrying the car into the other.
+test("a yawed player's right slide is a closing contact, a left slide is not",()=>{
+  for(const [vLat,closing] of [[5,true],[-5,false]]){
+    const {collision}=setup(),a=car(10,0),b=car(7,0);
+    a.human=true;a.yawVis=Math.PI/2;a.vLat=vLat;a.yawRateCur=0;
+    collision.resolveCollisions([a,b],1/60);
+    assert.ok(a.contactT>0||b.contactT>0,"anti-vacuity: the pair overlapped");
+    if(closing)assert.ok(a.vLat<4,`a right slide into the car behind kept vLat ${a.vLat}`);
+    else close(a.vLat,vLat);
+  }
+});
 test("a rotated remote contact only changes the locally owned car",()=>{
   const {collision}=setup(),a=car(0,30),b=car(0,20,2.8);
   a.human=b.human=true;a.yawVis=Math.PI/2;b.remote=true;

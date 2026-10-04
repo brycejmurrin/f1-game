@@ -175,6 +175,19 @@ test("css/hud.css reads the tokens through one data-hl rule, compensated for ban
   assert.match(m[1], /transform-origin:\s*var\(--hl-o/);
 });
 
+// THE HOUSE UNIT IS svh (css/tokens.css): vh is the LARGE viewport, the height
+// with the browser toolbars retracted, so on a phone browser a vh offset is
+// measured against space that is not on screen. The MOVE & SIZE translate, the
+// mirror's height cap and the three opt-in readouts (RELATIVE 38, STRATEGY 40,
+// INPUTS 22) were the last vh in this sheet.
+test("no HUD position, size or MOVE & SIZE offset is measured in the large viewport (vh)", () => {
+  const src = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const hits = src.split("\n").filter((l) => /\d(?:\.\d+)?vh\b/.test(l)).map((l) => l.trim());
+  assert.deepEqual(hits, [], "css/hud.css must use svh, not vh");
+  const m = CSS.match(/\[data-hl\]\s*\{([^}]*)\}/);
+  assert.match(m[1], /--hl-y, 0\) \* 1svh/, "the MOVE & SIZE vertical offset is a share of the small viewport");
+});
+
 const plain = (o) => JSON.parse(JSON.stringify(o));
 const TD = fs.readFileSync(path.join(ROOT, "css/track-detail.css"), "utf8");
 

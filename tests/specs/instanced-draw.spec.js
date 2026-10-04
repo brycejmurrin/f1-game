@@ -35,7 +35,7 @@ test.describe("GLX instanced draw", () => {
 
     const r = await page.evaluate(() => {
       const graph = __apex.trackGraph && __apex.trackGraph();
-      if (!graph) return { skipped: "no graph on the loaded track" };
+      if (!graph) return { noGraph: true };
       const { batches, bakeOnly } = graph.batches();
 
       // Take the largest batch — the one an instanced renderer would care about.
@@ -55,7 +55,10 @@ test.describe("GLX instanced draw", () => {
       return ok;
     });
 
-    test.skip(!!r.skipped, r.skipped || "");
+    // NOT a skip (2026-10-04). A null trackGraph() on a built Monza is graph
+    // construction breaking outright — the same "loudest failure reads as
+    // green" trap the zero-batch line below names — so it FAILS here.
+    expect(r.noGraph, "a built Monza has no TrackGraph (__apex.trackGraph() is null)").toBeFalsy();
     // NOT a skip. Zero batches is instancing failing completely, which is the
     // regression this file exists to catch — routing it to test.skip() made the
     // loudest possible failure report as green. track-graph.test.mjs already
@@ -75,7 +78,7 @@ test.describe("GLX instanced draw", () => {
 
     const r = await page.evaluate(() => {
       const graph = __apex.trackGraph && __apex.trackGraph();
-      if (!graph) return { skipped: "no graph" };
+      if (!graph) return { noGraph: true };
       const { batches } = graph.batches();
       const big = batches.reduce((a, b) => (b.count > a.count ? b : a));
       const batch = GLX.createInstancedBatch(big.geo, big.matrices, big.colors, { cellSize: 72 });
@@ -96,7 +99,7 @@ test.describe("GLX instanced draw", () => {
       return out;
     });
 
-    test.skip(!!r.skipped, r.skipped || "");
+    expect(r.noGraph, "a built Monza has no TrackGraph (__apex.trackGraph() is null)").toBeFalsy();
     expect(r.batches, "a built Monza produced no instanced batches at all").toBeGreaterThan(0);
     expect(r.cells).toBeGreaterThan(0);
     expect(r.none, "an empty frustum should cull everything").toBe(0);
