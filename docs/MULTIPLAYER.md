@@ -74,7 +74,12 @@ reads its own message back. The topic (the plaintext NIP-01 `x` tag) is
 `NetRendezvous.topic()` — HKDF over the PBKDF2-stretched room key, info
 `apex26-rendezvous-v<PROTOCOL>/topic|<slot>` — never a bare hash of the code:
 SHA-256 of a ~30-bit code let anyone reading public relay traffic brute-force
-live codes in minutes; now every guess costs the 120 000-round PBKDF2. The full Trystero room join (its own
+live codes in minutes. The 120 000-round PBKDF2 slows that, but its salt is a
+constant, so the cost is paid ONCE for the whole 31^6 code space (~1e14
+iterations — a GPU-day), not once per room: whoever builds that table can map
+any live topic to its code, open the offer and post an answer. The room code
+is therefore a rendezvous, not an authentication; the VERIFICATION CODE under
+`rendezvous.js` below is what tells two players they are talking to each other. The full Trystero room join (its own
 RTCPeerConnection carrying the answer, which died exactly when ours started;
 its only failure signal a console.warn we had to intercept) was an opt-in
 legacy branch behind apex26.nostrTrystero and was deleted 2026-09-10 — the
@@ -112,6 +117,20 @@ the tag instead of being accepted, and two rooms under one code never share a
 key. v1 (constant salt, no AAD) is not accepted: both peers run the same build.
 Codes are minted by rejection sampling, not `byte % 31` (256 is not a multiple
 of 31, so the modulo made the first eight letters 9/8 as likely).
+
+VERIFICATION CODE (2026-10-04). Once a connection is up, both screens show a
+4-letter code on that player's row in the room (`NetRendezvous.verifyFor`):
+SHA-256 over the two DTLS fingerprints, sorted, drawn from the room-code
+alphabet. DTLS authenticates exactly those certificates, so someone who opened
+the sealed offer (see the precomputed-table note under `nostr.js`) and sat in
+the middle holds a different certificate on each leg, and the two screens
+show different codes. The host reads the code aloud and REMOVEs a guest whose
+screen disagrees. What it protects: the pairing — that the person in your room
+is the one you invited, on the room-code and the invite-link path alike. What
+it does not: the code has 31^4 ≈ 9.2e5 values, so a middleman who can grind
+that many certificates inside the connect window could collide it; and it
+keeps nobody from READING an offer (host IPs, the HELLO profile) — the room
+code's secrecy is all that does.
 
 The optional private Worker path uses a **32-character private room token**,
 randomly drawn with WebCrypto rejection sampling (>158 bits of entropy). The
@@ -189,7 +208,13 @@ generation of the scripts actually running, with a version.json fetch only as
 the fallback for an unstamped shell (a tab left open across a deploy used to
 fetch the NEW number while running the OLD code) — and REFUSES a mismatched
 peer: different builds mean different splines, barriers and constants. Scenery
-is deliberately not checked (props never affect physics)
+is deliberately not checked (props never affect physics). AN ANSWER NAMES ITS
+OFFER (`o`, `offerId()`: a 32-bit hash of the offer's ICE ufrag + DTLS
+fingerprint, in the code's JSON tail so an answer without it still decodes):
+an SDP answer carries only the answerer's own credentials, so an answer to an
+older invite was accepted onto a newer pending one and ICE then spun for 60 s.
+`acceptAnswer` now refuses it as `wrong_offer` ("That answer is for an older
+invite"), and the room-code host keeps such a repost seen and silent
 
 ### `js/net/snapshot.js` — `NetSnapshot`
 
