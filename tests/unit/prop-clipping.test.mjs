@@ -141,6 +141,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // pine/marshalPost/backdrop no longer double-shift. Caps follow the measured
 // counts — raises where correctly placed stands now overlap, lowers where the
 // double-shift had been inventing contacts.
+// 2026-10-04: Spa 8→5 after clearing the misplaced La Source pine foreground
+// and softening the forest backdrop; measured with clip-audit spa --json.
+// Local hill relief was retained so the new footing skirts stay above terrain.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );

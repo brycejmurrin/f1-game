@@ -19,6 +19,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { runInContext } from "node:vm";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -63,6 +64,140 @@ const narrowOnce = (() => { let t = null; return () => {
   return t || (t = built(Object.assign({}, T.LIST.find((d) => d.id === STREET), { pit: { mode: "narrow" } })));
 }; })();
 const keptNodes = (t) => { let n = 0; for (let k = 0; k < t.n; k++) n += t.pit.keep[k] > 0 ? 1 : 0; return n; };
+
+const foldedArchitecture = {
+  roofProfile: [[0, 12, 15.2], [0.22, 9.8, 10.4], [0.42, 10.8, 13.2],
+    [0.60, 9.8, 10.4], [0.79, 11.2, 14.2], [1, 9.8, 10.4]],
+  roofColor: [0.88, 0.90, 0.92], fasciaColor: [0.94, 0.93, 0.90],
+  soffitColor: [0.94, 0.93, 0.90], edgeColor: [0.22, 0.24, 0.27],
+};
+const plainData = (value) => JSON.parse(JSON.stringify(value));
+
+test("pit architecture accepts only bounded finite row profiles and copies author data", () => {
+  const P = ctxOnce().TrackPit;
+  const spec = structuredClone(foldedArchitecture);
+  const a = P.resolve({ pit: { architecture: spec } }).architecture;
+  assert.deepEqual(plainData(a), spec);
+  spec.roofProfile[0][1] = 18;
+  spec.roofColor[0] = 0;
+  assert.equal(a.roofProfile[0][1], 12);
+  assert.equal(a.roofColor[0], 0.88);
+  assert.ok(P.resolve({ pit: { architecture: { roofProfile: [[0, 9.6, 9.6], [1, 9.6, 9.6]] } } }).architecture);
+  const invalid = [
+    { roofProfile: [[0, 12, 12]] },
+    { roofProfile: [[0.1, 12, 12], [1, 12, 12]] },
+    { roofProfile: [[0, 12, 12], [0.9, 12, 12]] },
+    { roofProfile: [[0, 12, 12], [0, 13, 13], [1, 12, 12]] },
+    { roofProfile: [[0, 12, 12], [0.8, 12, 12], [0.7, 12, 12], [1, 12, 12]] },
+    { roofProfile: [[0, NaN, 12], [1, 12, 12]] },
+    { roofProfile: [[0, 12, Infinity], [1, 12, 12]] },
+    { roofProfile: [[0, 12, 12], [0.5, , 12], [1, 12, 12]] },
+    { roofProfile: [[0, 9.4, 12], [1, 12, 12]] },
+    { roofProfile: [[0, 9.5, 12], [1, 12, 12]] },
+    { roofProfile: [[0, 12, 18.1], [1, 12, 12]] },
+    { roofProfile: Array.from({ length: 8 }, (_, i) => [i / 7, 12, 12]) },
+    { ...foldedArchitecture, roofColor: [1.1, 0, 0] },
+    { ...foldedArchitecture, edgeColor: [0, NaN, 0] },
+    { ...foldedArchitecture, roofColor: [0.8, , 0.8] },
+  ];
+  for (const recipe of invalid) assert.equal(P.resolve({ pit: { architecture: recipe } }).architecture, null);
+  assert.equal(P.resolve({}).architecture, null);
+});
+
+test("folded pit roof preserves lane, bays, signs and lights with bounded closed geometry on either side", () => {
+  const env = ctxOnce(), t = buildOnce(FULL);
+  const SP = runInContext("SceneryPits", env.sandbox);
+  const spline = runInContext("TrackSpline", env.sandbox);
+  const curve = (s) => spline.curvature(t, s);
+  const def = { ...t.def, pit: { ...(t.def.pit || {}), architecture: null } };
+  const ordinary = env.TrackPit.build(t, def, curve);
+  const dressed = env.TrackPit.build(t, { ...def, pit: { ...def.pit, architecture: foldedArchitecture } }, curve);
+  for (const key of Object.keys(ordinary).filter((key) => key !== "architecture"))
+    assert.deepEqual(dressed[key], ordinary[key], `${key} must not change with roof dressing`);
+  assert.deepEqual(plainData(dressed.architecture), foldedArchitecture, "the validated recipe survives the built pit copy");
+  const render = (pit) => {
+    const track = { ...t, pit: { ...pit, row: { ...pit.row } } };
+    const out = { pos: [], nrm: [], col: [], idx: [], mat: [] }, lamps = [];
+    const result = SP.build({ track, out, rawBox: env.TrackGeom.addBox, rawEmit: env.TrackGeom.emit,
+      upOf: env.TrackMesh.upOf, bankOffsetAt: env.TrackMesh.bankOffsetAt, curvature: curve,
+      registerLamp: (lamp) => { lamps.push(lamp); return true; } });
+    env.trim(0);
+    return { track, out, lamps, result };
+  };
+  const plain = render(ordinary);
+  for (const side of [1, -1]) {
+    const noRoof = side === 1 ? plain : render({ ...ordinary, side });
+    const withRoof = render({ ...dressed, side });
+    const { roof, ...counts } = withRoof.result;
+    assert.deepEqual(counts, plainData(noRoof.result));
+    assert.deepEqual(withRoof.lamps, noRoof.lamps, "roof must not move or add lamps");
+    assert.deepEqual(withRoof.track.pitSigns, noRoof.track.pitSigns, "team decals and boards must not move");
+    assert.deepEqual(withRoof.track.pitSignal, noRoof.track.pitSignal);
+    assert.deepEqual(withRoof.track.pit.row.placed, noRoof.track.pit.row.placed);
+    assert.ok(roof && roof.vertices <= 1400 && roof.triangles <= 500);
+    assert.ok(Math.abs(roof.spanM - wrap(dressed.row.s1 - dressed.row.s0, t.total)) < 1e-6);
+    const block = withRoof.out.__blocks.find((b) => b.id === "pit-architecture-roof");
+    assert.ok(block && block.from && block.count === roof.vertices);
+    const stage = block.from, edges = new Map();
+    assert.equal(stage.mat.length, stage.pos.length / 3);
+    assert.ok([...stage.pos, ...stage.nrm, ...stage.col].every(Number.isFinite));
+    const point = (i) => stage.pos.slice(i * 3, i * 3 + 3);
+    const key = (P) => P.map((v) => v.toFixed(8)).join(",");
+    for (let i = 0; i < stage.idx.length; i += 3) {
+      const indices = stage.idx.slice(i, i + 3), points = indices.map(point);
+      const ab = points[1].map((v, a) => v - points[0][a]);
+      const ac = points[2].map((v, a) => v - points[0][a]);
+      const normal = env.TrackGeom.cross(ab, ac), area2 = Math.hypot(...normal);
+      assert.ok(area2 > 1e-8, "no degenerate roof triangle");
+      const stored = stage.nrm.slice(indices[0] * 3, indices[0] * 3 + 3);
+      assert.ok(normal.reduce((sum, v, a) => sum + v * stored[a], 0) / area2 > 0.999,
+        "triangle winding agrees with its geometric normal");
+      if (stage.mat[indices[0]] === env.TrackGeom.MAT.ROOF)
+        assert.ok(stored[1] > 0.5, "roof top faces upward on both pit sides");
+      for (let e = 0; e < 3; e++) {
+        const pair = [key(points[e]), key(points[(e + 1) % 3])].sort().join("|");
+        edges.set(pair, (edges.get(pair) || 0) + 1);
+      }
+    }
+    assert.ok([...edges.values()].every((uses) => uses === 2), "shared stations and only outer end caps close the crown");
+    const expectedPoint = (s, q, y) => {
+      const f = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+      spline.sample(t, s, f);
+      const r = env.TrackGeom.norm(f.r), tangent = env.TrackGeom.norm(f.t);
+      const u = env.TrackGeom.norm(env.TrackGeom.cross(r, tangent));
+      const lat = side * (f.hw + dressed.off.workOut + q);
+      const k = Math.round(s / (t.total / t.n)) % t.n;
+      const height = env.TrackMesh.bankOffsetAt(t, k, lat) + y;
+      return f.p.map((v, a) => v + r[a] * lat + u[a] * height);
+    };
+    for (const [s, q, y] of [[dressed.row.s0, 0, 12], [dressed.row.s0, dressed.bay.depth, 15.2],
+      [dressed.row.s1, 0, 9.8], [dressed.row.s1, dressed.bay.depth, 10.4],
+      [dressed.row.s0, 0, 9.26], [dressed.row.s1, dressed.bay.depth, 9.26]]) {
+      const expected = expectedPoint(s, q, y);
+      assert.ok(Array.from({ length: stage.pos.length / 3 }, (_, i) => point(i))
+        .some((P) => Math.hypot(...P.map((v, a) => v - expected[a])) < 1e-6),
+      "profile endpoints use the actual row and garage depth, not scenery fractions");
+    }
+    const twisting = env.TrackPit.resolve({ pit: { architecture: {
+      roofProfile: [[0, 9.6, 18], [1, 18, 9.6]],
+    } } }).architecture;
+    const twisted = render({ ...dressed, side, architecture: twisting });
+    assert.ok(twisted.result.roof, "an accepted twisting profile still emits its crown");
+    const twistedStage = twisted.out.__blocks.find((b) => b.id === "pit-architecture-roof").from;
+    assert.ok([...twistedStage.pos, ...twistedStage.nrm, ...twistedStage.col].every(Number.isFinite));
+    for (let i = 0; i < twistedStage.mat.length; i++) {
+      if (twistedStage.mat[i] === env.TrackGeom.MAT.ROOF)
+        assert.ok(twistedStage.nrm[i * 3 + 1] > 0.5, "twisting roof top stays outward/upward on both sides");
+    }
+  }
+  const invalid = env.TrackPit.build(t, { ...def, pit: { ...def.pit, architecture: {
+    roofProfile: [[0, NaN, 12], [1, 12, 12]],
+  } } }, curve);
+  const fallback = render(invalid);
+  for (const key of ["pos", "nrm", "col", "idx", "mat"])
+    assert.deepEqual(fallback.out[key], plain.out[key], "invalid recipe preserves ordinary geometry exactly");
+  assert.deepEqual(fallback.result, plain.result);
+});
 
 test("every circuit gets a complex; a street circuit gets the STREET one, built between its walls", () => {
   const T = tracksOnce(), full = buildOnce(FULL), street = buildOnce(STREET);

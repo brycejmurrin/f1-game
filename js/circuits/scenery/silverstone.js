@@ -299,7 +299,13 @@
         }
       }
 
-      stand(0.46, 1, 12, 110, { tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      // Hamilton Straight stand faces the Wing from the opposite side.
+      // Circuit-credited built aerial (photo year unknown):
+      // https://www.grandprix.com/photos/cfb499a3-9c15-409a-89ad-847dec0a233c/aerial-photograph-of-the-silverstone-wing
+      // Measured row midpoint: racing .0033358, scenery shift .5232951.
+      // The old .46 anchor sat on Club's curve; keep the stand on the straight.
+      stand(0.48004, -1, 12, 110, { tiers: 3, roof: "cantilever", suites: true,
+        endWalls: true, pylons: true, roofCol: [0.78, 0.80, 0.82] });
       // Tall stepped seating boxes flanking The Wing (research priority).
       stand(0.442, 1, 14, 48, { tiers: 3, roof: "cantilever", endWalls: true, pylons: true });
       stand(0.498, 1, 14, 48, { tiers: 3, roof: "cantilever", endWalls: true, pylons: true });
@@ -468,8 +474,10 @@
       forestEdge(0.71, 0.75,  1, 18, { density: 0.4,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Aintree outer copse
       forestEdge(0.35, 0.39, -1, 19, { density: 0.3,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Vale outer field copse
       // Very thin Hangar Straight fringe only — silhouette hangars need sky behind them
-      forestEdge(0.18, 0.28,  1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
-      forestEdge(0.18, 0.28, -1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
+      // Keep the Hangar airfield horizon open: density .08 still means 8 m
+      // trunk spacing; use an explicit sparse 24 m rhythm in these far belts.
+      forestEdge(0.18, 0.28,  1, 160, { spacing: 24, density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
+      forestEdge(0.18, 0.28, -1, 160, { spacing: 24, density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
 
       // Hangar Straight's RAF T2 halls: three long, shallow barrel silhouettes
       // parallel to the old perimeter track. Keep the 8%-density fringe above;

@@ -1,6 +1,27 @@
 # Circuit de Spa-Francorchamps — Visual Design Brief
 
-**Setting:** DAY, green theme (Ardennes forest). ~7.0 km, 20 turns, clockwise.
+**Setting:** DAY, green theme (Ardennes forest). 2025 FIA layout: 7.004 km, 19 numbered corners, clockwise; the game currently has 20 curated markers.
+
+## Accuracy references and placement limits
+
+The [official circuit overview](https://www.spa-francorchamps.be/en/the-circuit)
+shows rolling wooded Ardennes terrain. Backdrop relief and colors should follow
+that character; the procedural mountain emitter still classifies its upper
+faces as rock even when their color is forest green. Mixed broadleaf/conifer
+woodland should replace existing placements, with bounded deterministic recipes.
+
+The [Spa Grand Prix seating guide](https://www.spagrandprix.com/en/news/16_where-to-sit-at-the-belgian-grand-prix)
+and [ELMS's January 12, 2022 report](https://www.europeanlemansseries.com/en/news/all-change-at-spa-francorchamps-61df2080cd561e2412cb7b04/11259)
+identify the permanent covered Raidillon stand. Existing Gold 3 scenery labels
+are unreliable: authored fractions .075/.085/.105 currently map to built racing
+fractions about .0327/.0427/.0627, near the rendered La Source area. Confirm
+footprints against the road trace before moving or detailing that landmark.
+The earlier landmark table is an authoring brief, not a surveyed placement map.
+
+The 2025 FIA event map lists 7004 m and 19 corners; the current built spline is
+about 6948 m with 20 curated markers. Neither the decorative height profile nor
+the corner labels establish a surveyed elevation reconstruction. Resolve those
+separately with fixed-scale plan registration and reliable elevation data.
 
 ## 1. Setting
 Carved into the hilly Ardennes forest of eastern Belgium. Roads thread through dense pine and deciduous woodland on steep terrain. Notoriously changeable weather — often misty, damp, and wet even when one part of the track is dry.

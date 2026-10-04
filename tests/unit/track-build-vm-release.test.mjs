@@ -183,7 +183,9 @@ const STRIP = {
   //   the Racing Kit tip; measured 2026-10-02)
   // → white Haas 340719/313802 (the same +8 as monaco: the Haas bay's
   //   HDR-bright box cannot enclose; emission unchanged)
-  monza: { before: 340719, after: 313802 },
+  // → track-realism batch (2026-10-04): 14 terrain-conforming gravel-margin
+  //   patches add 264 triangles. All survive; existing strip count is unchanged.
+  monza: { before: 340983, after: 314066 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
