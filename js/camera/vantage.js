@@ -263,12 +263,18 @@ function crY(p0, p1, p2, p3, t) {
 // How far a live camera hangs off the racing line through a bend. +kA is a
 // left-hander, and +right is the outside of it. One-shot solves (no dt) and
 // Reduce Motion return 0 so a parked frame stays the shipped pose. `gain` is
-// metres at a hairpin; a fast kink gets less.
+// metres at a hairpin; a fast kink gets less. A snap (and Reduce Motion) also
+// zeroes the eased state, so the first live frame eases out from the snapped
+// pose instead of from the previous race's last bend.
 const _hangOut = Object.create(null);
 const _hangFast = Object.create(null);
+function hangReset(key, lambda) {
+  _hangOut[key] = 0; _hangFast[key] = 0;
+  if (typeof CamFeel !== "undefined") CamFeel.follow(key, 0, lambda, 0);
+}
 function bendHang(key, kA, dt, reduce, gain, lambda, snap) {
-  if (reduce || !gain || (!(dt > 0) && !snap)) return 0;
-  if (!kA) { _hangOut[key] = 0; _hangFast[key] = 0; if (typeof CamFeel !== "undefined") CamFeel.follow(key, 0, lambda, 0); return 0; }
+  if (!(dt > 0) || reduce || !gain) { if (snap || reduce) hangReset(key, lambda); return 0; }
+  if (!kA) { hangReset(key, lambda); return 0; }
   const raw = clamp(kA * 18, -1, 1);
   if (!(dt > 0)) {   // a snap reseeds (like speedOpen) so the next live frame does not pop from a stale hang
     _hangOut[key] = raw; _hangFast[key] = 0;

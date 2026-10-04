@@ -678,15 +678,20 @@ self.addEventListener("fetch", (event) => {
   // life of the cache generation. Network-first there, cache as the offline
   // fallback — tools/check/offline-precache-check.cjs still passes because the
   // fallback is the precache.
-  event.respondWith((async () => {
+  let cacheWrite = Promise.resolve();
+  const remember = (res) => {
+    const copy = res.clone();
+    cacheWrite = (async () => {
+      const cache = await openCache(await currentCacheName());
+      await cache.put(req, copy);
+    })().catch(noteCacheWriteFail);
+  };
+  const response = (async () => {
     if (DEV_HOST && url.origin === self.location.origin) {
       try {
         const res = await fetch(req);
         if (res && res.ok) {
-          try {
-            const cache = await openCache(await currentCacheName());
-            await cache.put(req, res.clone());
-          } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
+          remember(res);
           return res;
         }
       } catch (_) { /* offline: fall through to the cache */ }
@@ -699,13 +704,14 @@ self.addEventListener("fetch", (event) => {
     try {
       const res = await fetch(req);
       if (res && res.ok) {
-        try {
-          const cache = await openCache(await currentCacheName());
-          await cache.put(req, res.clone());
-        } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
+        remember(res);
       }
       return res;
     } catch (_) { /* network rejected */ }
     return Response.error();
-  })());
+  })();
+  // Keep the write alive without delaying a good response on version.json or
+  // CacheStorage. Register synchronously while the fetch event is dispatching.
+  event.waitUntil(response.then(() => cacheWrite));
+  event.respondWith(response);
 });

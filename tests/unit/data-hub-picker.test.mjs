@@ -127,3 +127,16 @@ test("a pick that lands while latestSession() is in flight is not overwritten by
   await h.drain();
   assert.deepEqual(h.resultKeys, [400], "RESULTS shows the session the player picked, not the latest one");
 });
+
+test("returning to the tab whose pick landed detached rebuilds it: no picker stuck on loading…", async () => {
+  const h = harness();
+  await pickInLive(h);
+  h.tab("results"); await h.flush();
+  await h.settle("sessions(40)");                  // LIVE's detached picker answers
+  await h.drain();
+  h.tab("live");                                   // back inside LIVE's cache window
+  await h.drain();
+  const [gpSel, sesSel] = h.content().selects();
+  assert.ok(gpSel.children.length > 1, "the GP select is filled");
+  assert.notEqual(sesSel.children.map((o) => o.textContent).join(" | "), "loading…", "the session select is not stuck on loading…");
+});

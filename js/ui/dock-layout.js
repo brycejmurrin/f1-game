@@ -211,6 +211,21 @@ const DockLayout = (function () {
       document.addEventListener("pointermove", onPointerMove, true);
       document.addEventListener("pointerup", onPointerUp, true);
       document.addEventListener("pointercancel", onPointerUp, true);
+      // REPOSITION ends with SETTINGS. Only its own toggle used to turn it off,
+      // so BACK/RESUME without DONE left the capture-phase drag live in the race:
+      // the dock slid under the thumb on every throttle/steer press.
+      const settings = $("pmsettings");
+      if (settings && typeof MutationObserver !== "undefined") {
+        new MutationObserver(() => { if (settings.hidden && editing) setEditing(false); })
+          .observe(settings, { attributes: true, attributeFilter: ["hidden"] });
+      }
+    }
+    // apply() bakes the fractions into PIXELS of the pad at paint time, so a
+    // rotation must repaint: a portrait offset kept its pixels in landscape and
+    // pushed the dock off the top (the header promises relative placement).
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("resize", paint, { passive: true });
+      window.addEventListener("orientationchange", paint, { passive: true });
     }
 
     // Re-apply when the player switches STEERING INPUT (store.set notifies

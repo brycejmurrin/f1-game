@@ -37,9 +37,39 @@ const RaceControl = (function () {
   // THE CHEQUERED FLAG IS OUT once any classified car has taken it: every
   // other car finishes at its NEXT line crossing (a lapped car does not drive
   // the leader's distance), and classification is laps completed, then time.
-  function flagOut(cars) {
-    for (const c of cars || []) if (c && c.finished && !c.retired) return true;
+  function flagOut(cars, at = Infinity) {
+    for (const c of cars || []) if (c && c.finished && !c.retired && (c.finishT || 0) <= at) return true;
     return false;
+  }
+
+  // Motion owners integrate independently, but the flag follows the CLOCK,
+  // never roster order. Keep lap clocks immediate; settle finishes and their
+  // presentation after every owner has reported its crossings for this step.
+  let lineCars = null;
+  const lineEntries = [];
+  function beginLineStep(cars) { lineCars = cars; lineEntries.length = 0; }
+  function settleLine(e) {
+    const { c, cross, time, target, cars } = e;
+    cross.flagged = target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars, time)));
+    if (cross.flagged) { c.finished = true; c.finishT = time; }
+  }
+  function deferLine(c, cross, newS, callback) {
+    if (!lineCars || !cross || cross.direction < 0) return false;
+    const e = lineEntries.find((e) => e.cross === cross);
+    if (!e) return false;
+    e.callback = callback; e.newS = newS;
+    return true;
+  }
+  function settleLineStep() {
+    // At an exact tie the full-distance crossing raises the flag first.
+    lineEntries.sort((a, b) => (a.time - b.time) || ((b.c.lap > b.target) - (a.c.lap > a.target)));
+    for (const e of lineEntries) settleLine(e);
+  }
+  function endLineStep() {
+    lineCars = null;
+    settleLineStep();
+    for (const e of lineEntries) if (e.callback) e.callback(e.c, e.cross, e.newS);
+    lineEntries.length = 0;
   }
 
   // One line-crossing transition for every motion owner. updateCar normally
@@ -74,13 +104,12 @@ const RaceControl = (function () {
       c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
       c._lapTimeAtLine = lapDone;
       c.lapTime = (c.lapTime || 0) - lapDone;   // the post-line remainder (0 without dt)
-      const target = Number(lapsTarget);
-      const flagged = target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars)));
-      if (flagged) {
-        c.finished = true;
-        c.finishT = Number.isFinite(raceT) ? Math.max(0, raceT - over) : 0;
-      }
-      return { direction: 1, changed: true, lapDone, flagged, recross };
+      const cross = { direction: 1, changed: true, lapDone, flagged: false, recross };
+      const e = { c, cross, target: Number(lapsTarget), cars,
+        time: Number.isFinite(raceT) ? Math.max(0, raceT - over) : 0 };
+      if (lineCars === cars) lineEntries.push(e);
+      else settleLine(e);
+      return cross;
     }
     if (ds < 0 && oldS < total * 0.5 && newS > total * 0.5) {
       if (!(c.lap > 0)) return { direction: -1, changed: false, lapDone: null, flagged: false };
@@ -509,6 +538,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, flagOut, lineTransition, finishOrder, runOrder, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

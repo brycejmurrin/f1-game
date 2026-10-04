@@ -381,13 +381,13 @@ const CareerBackup = (function () {
       const id = f + ":" + idx;
       const chk = slotPayloadOk(row.data);
       if (!chk.ok) return chk;
+      // An empty row is "nothing to restore", never "delete": build() exports
+      // all six slots, so writing its nulls wiped saves the backup never had.
+      if (row.data == null) { skipped.push(id); continue; }
       if (Object.prototype.hasOwnProperty.call(expected, id)) {
         const now = revisionOf(f, idx);
         if (expected[id] !== now) return { ok: false, reason: "conflict", slot: id };
       }
-      // An empty row is "nothing to restore", never "delete": build() exports
-      // all six slots, so writing its nulls wiped saves the backup never had.
-      if (row.data == null) { skipped.push(id); continue; }
       if (liveConflict(f, idx)) return { ok: false, reason: "conflict", slot: id };
       plan.push({ f: f, i: idx, data: row.data, id: id });
     }
@@ -412,18 +412,21 @@ const CareerBackup = (function () {
 
     const s = store();
     const identity = [];
+    // The second mode confirmation must not replay already-restored global progress.
+    // MY TEAM identity still accompanies its slot on that confirmation.
+    const progressExtras = o.includeExtras !== false && o.includeProgressExtras !== false;
     if (s && typeof s.write === "function") {
-      if (envelope.season != null && isObj(envelope.season) && o.includeExtras !== false
+      if (envelope.season != null && isObj(envelope.season) && progressExtras
           && !seasonAhead(s.get("season", null), envelope.season)) {
         s.write("season", envelope.season);
       }
-      if (envelope.badges != null && isObj(envelope.badges) && o.includeExtras !== false) {
+      if (envelope.badges != null && isObj(envelope.badges) && progressExtras) {
         s.write("badges", mergeBadges(s.get("badges", null), envelope.badges));
       }
-      if (envelope.daily != null && isObj(envelope.daily) && o.includeExtras !== false) {
+      if (envelope.daily != null && isObj(envelope.daily) && progressExtras) {
         s.write("daily.v1", mergeDaily(s.get("daily.v1", null), envelope.daily));
       }
-      if (envelope.records != null && isObj(envelope.records) && o.includeExtras !== false) {
+      if (envelope.records != null && isObj(envelope.records) && progressExtras) {
         s.write("records", envelope.records);
       }
       // Identity only with a MY TEAM slot actually written; a key the backup
@@ -447,7 +450,7 @@ const CareerBackup = (function () {
       }
     }
 
-    if (typeof Career !== "undefined" && Career && Career.load) Career.load();
+    if (typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
     log("info", "career backup imported " + written.length + " slot(s)");
     return {
       ok: true,

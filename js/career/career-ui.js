@@ -108,18 +108,21 @@ function create(G) {
     return out;
   }
 
-  function runImport(envelope, focusFlavour, otherConfirmed, rawText) {
+  function runImport(pending, otherConfirmed) {
+    const { envelope, focusFlavour, rawText, revisions } = pending;
     const result = CareerBackup.apply(envelope, {
       focusFlavour,
       otherFlavourConfirmed: !!otherConfirmed,
-      expectedRevisions: expectedRevisions(),
+      expectedRevisions: revisions,
+      // A second confirmation restores only the mode still awaiting consent.
+      flavours: [otherConfirmed ? (focusFlavour === "driver" ? "myteam" : "driver") : focusFlavour],
+      includeProgressExtras: !otherConfirmed,
       rawText,
     });
     if (result.ok) {
-      Career.load();
       G.refreshCareerButton();
       if (result.needsConfirm && !otherConfirmed) {
-        pendingImport = { envelope, focusFlavour, rawText };
+        pendingImport = pending;
         armedImport = `${focusFlavour}:other`;
         announce("CAREER RESTORED — CONFIRM OTHER MODE?");
         build();
@@ -220,11 +223,11 @@ function create(G) {
         if (G.soundOn) GameAudio.uiTick();
         armedDelete = "";
         if (otherArmed && pendingImport) {
-          runImport(pendingImport.envelope, pendingImport.focusFlavour, true, pendingImport.rawText);
+          runImport(pendingImport, true);
           return;
         }
         if (armedImport === id && pendingImport && pendingImport.focusFlavour === s.flavour) {
-          runImport(pendingImport.envelope, s.flavour, false, pendingImport.rawText);
+          runImport(pendingImport, false);
           return;
         }
         pickBackupFile((obj, err, text) => {
@@ -232,12 +235,23 @@ function create(G) {
           if (!obj) { announce("IMPORT FAILED — BAD FILE"); return; }
           const v = CareerBackup.validate(obj, text);
           if (!v.ok) { announce("IMPORT FAILED — " + String(v.reason || "error").toUpperCase()); return; }
-          pendingImport = { envelope: obj, focusFlavour: s.flavour, rawText: text };
+          pendingImport = { envelope: obj, focusFlavour: s.flavour, rawText: text, revisions: expectedRevisions() };
           armedImport = id;
           build();
         });
       };
       card.appendChild(imp);
+      if (armed && pendingImport) {
+        const target = otherArmed ? (s.flavour === "driver" ? "myteam" : "driver") : s.flavour;
+        const mode = target === "myteam" ? "My Team" : "Driver career";
+        for (const row of pendingImport.envelope.slots) {
+          if (!row || (row.flavour === "myteam" ? "myteam" : "driver") !== target || !row.data) continue;
+          const rawRound = row.data.season && row.data.season.round;
+          const round = Number.isInteger(rawRound) && rawRound >= 0 ? rawRound : 0;
+          const year = row.data.year | 0 || 2026;
+          card.appendChild(el("div", "cr-note", `${mode} · ${year} · ${round} rounds completed · Destination slot ${(row.i | 0) + 1}`));
+        }
+      }
     }
     if (s.used) {
       const id = `${s.flavour}:${s.i}`;
@@ -1113,7 +1127,7 @@ function create(G) {
       right.appendChild(head(h.kind === "left" ? "THE MARKET" : "OR SIGN SOMEBODY ELSE"));
       const seats = el("div", "cr-seats");
       for (const a2 of Career.freeAgents()) {
-        if (a2.code === h.code && h.kind === "renew") continue;   // they are the offer above
+        if (a2.code === h.code) continue;   // renew through the offer; a poached driver has left
         const b2 = el("button", "cr-seat");
         b2.append(el("span", "cr-seat-role", a2.name),
           el("span", "cr-seat-who", a2.ask.toLocaleString() + " cr / round"));

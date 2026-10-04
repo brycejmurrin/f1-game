@@ -490,6 +490,14 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.equal(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("ot"), null);
   assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason("tower"), null);
   assert.equal(h({ live: false }).hiddenReason("flag").soft, true, "event chips are edited blind, not locked");
+  // The four opt-in readouts hide on the same classes css/hud.css uses for them.
+  for (const id of ["damage", "rel", "strat", "inputs"]) {
+    assert.match(h({ hide: id, live: false, classes: ["desktop"] }).hiddenReason(id).reason, /HUD element list/, id + " off");
+    assert.equal(h({ classes: ["hud-prof-minimal", "desktop"], live: false }).hiddenReason(id).reason, "MINIMAL style", id);
+    assert.equal(h({ classes: ["hud-bcam", "desktop"], live: false }).hiddenReason(id).reason, "TV camera", id);
+    assert.equal(h({ classes: ["bc-on", "desktop"], live: false }).hiddenReason(id).soft, false, id + " in a broadcast replay");
+    assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason(id), null, id + " shown on desktop");
+  }
   // Live: a drawn element is never marked, whatever the classes say.
   const L = load3({ classes: ["hud-prof-minimal"], live: true });
   const ot = L.els["#hud-ot"] || (L.els["#hud-ot"] = fakeEl());

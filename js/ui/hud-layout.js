@@ -419,19 +419,21 @@ const HudLayout = (function () {
      appears only on an event (flag, limits strike, message) is edited blind. */
   const BOTTOM = ["gearbox", "energy", "tyre", "ot", "aero", "bb"];
   const CHIPS = ["energy", "ot", "aero"];
+  const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
   const HIDE_RULES = Object.freeze([
     [["map"], (h) => h("hud-hide-map"), "MAP is off for this camera or style (DISPLAY › HUD › MAP)"],
     [["gaps"], (h) => h("hud-hide-gaps"), "GAPS is off for this style (DISPLAY › HUD › GAPS)"],
     [BOTTOM, (h) => h("hud-prof-broadcast") && h("hud-bcam"), "BROADCAST style on a TV camera keeps the frame clean"],
     [["sectors", "tyre", "limits"], (h) => h("bc-on"), "the broadcast replay shows its own timing"],
-    [CHIPS.concat(["bb", "sectors"]), (h) => h("hud-prof-minimal"), "MINIMAL style"],
+    [READOUTS, (h) => h("bc-on"), "the broadcast replay keeps the frame clean"],
+    [CHIPS.concat(["bb", "sectors"], READOUTS), (h) => h("hud-prof-minimal"), "MINIMAL style"],
     [CHIPS.concat(["bb"]), (h) => h("hud-met-timing"), "LAYOUT is TIMING"],
     [CHIPS.concat(["bb", "sectors", "tyre"]), (h) => h("hud-met-compact"), "LAYOUT is COMPACT"],
     [["sectors"], (h) => h("hud-met-driver"), "LAYOUT is DRIVER"],
-    [["gearbox", "ot", "aero", "energy", "bb", "limits"], (h) => h("hud-bcam"), "TV camera"],
+    [["gearbox", "ot", "aero", "energy", "bb", "limits"].concat(READOUTS), (h) => h("hud-bcam"), "TV camera"],
     [["sectors"], (h) => h("hud-bcam") && !h("hud-prof-broadcast"), "TV camera"],
     [["gearbox"], (h) => h("cockpit-cam"), "the wheel's display shows it in the cockpit"],
-    [["gearbox", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"], (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
+    [["gearbox", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"].concat(READOUTS), (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
     [CHIPS.concat(["tyre", "bb"]), (h, a) => h("cockpit-cam") && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
@@ -442,7 +444,8 @@ const HudLayout = (function () {
     [["mirror"], (h, a, off, el) => !!(el && el.hidden), "MIRROR is off or not needed now (DISPLAY › HUD › MIRROR)", true],
   ].map(Object.freeze));
   // body[data-hud-hide~=…] token for each of our ids (js/ui/hud-elements.js).
-  const TOGGLE = Object.freeze({ gearbox: "gear", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", sectors: "sectors", limits: "limits" });
+  const TOGGLE = Object.freeze({ gearbox: "gear", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", sectors: "sectors", limits: "limits",
+    damage: "damage", rel: "rel", strat: "strat", inputs: "inputs" });
   /** Live: is element `el` drawn? (hidden attribute, display none, zero box) */
   function drawn(el) {
     if (!el || el.hidden) return false;

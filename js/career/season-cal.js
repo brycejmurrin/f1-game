@@ -294,10 +294,10 @@ function load() {
   // calendar and erase the unknown circuit for good. A build that knows every id
   // reads the save whole again; restart()/applyConfig() hand out a new object.
   shrunkSeason = rawIds != null && season === raw && season.config.trackIds.length !== rawIds ? season : null;
-  if (raw && !lossy) save(season);
+  if (raw && !lossy) save(season, { migration: true });
   return season;
 }
-function save(season) {
+function save(season, options) {
   if (!season || typeof season !== "object") {
     lastSave = { ok: false, durable: false, reason: "invalid" };
     return lastSave;
@@ -315,9 +315,9 @@ function save(season) {
   }
   activeCfg = frozenConfig(season.config || activeCfg || config());
   season.config = activeCfg;
-  if (typeof store.write === "function") lastSave = store.write(SAVE_KEY, season);
+  if (typeof store.write === "function") lastSave = store.write(SAVE_KEY, season, options);
   else {
-    const durable = store.set(SAVE_KEY, season) !== false;
+    const durable = store.set(SAVE_KEY, season, options) !== false;
     lastSave = { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
   }
   armRevision(season);
@@ -498,22 +498,19 @@ function rank(season, a, b) {
   return 0;
 }
 
-// CONSTRUCTORS' order for two team ids — the one comparator the results sheet,
-// the STANDINGS sheet and Career.teamStandings share, so no two screens disagree
-// on a tie. Points, then the team's pace tier (the career's long-standing
-// tie-break; there is no per-team finishing record to count back), then the id
-// so the order is total and stable.
+// Keep constructor ties consistent with career winter goals and history:
+// points first, then the existing team-tier policy, then a stable team ID.
 function rankTeams(season, a, b) {
-  const tp = (season && season.teamPts) || {};
-  const d = (tp[b] || 0) - (tp[a] || 0);
+  const pts = (season && season.teamPts) || {};
+  const d = (pts[b] || 0) - (pts[a] || 0);
   if (d) return d;
   const list = (typeof Teams !== "undefined" && Teams.LIST) || [];
-  const tier = (id) => { const t = list.find((x) => x.id === id); return t && Number.isFinite(t.tier) ? t.tier : 99; };
-  const e = tier(a) - tier(b);
-  if (e) return e;
-  const sa = String(a);
-  const sb = String(b);
-  return sa < sb ? -1 : sa > sb ? 1 : 0;
+  const ta = list.find((t) => t.id === a);
+  const tb = list.find((t) => t.id === b);
+  const tierA = ta && Number.isFinite(ta.tier) ? ta.tier : Infinity;
+  const tierB = tb && Number.isFinite(tb.tier) ? tb.tier : Infinity;
+  if (tierA !== tierB) return tierA - tierB;
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 const SPRINT_SEED_OFFSET = 1000;

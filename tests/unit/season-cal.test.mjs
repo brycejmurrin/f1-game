@@ -815,7 +815,7 @@ test("rankTeams: points, then the team's tier, then the id — one order for eve
 
 test("boot's migrate-and-save never writes back a season load() refused (game.js)", () => {
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season\);/);
+  assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season, \{ migration: true \}\);/);
 });
 
 test("mid-weekend reads the season's own config: the title menu (flow gp) still says AFTER THE SPRINT", () => {
