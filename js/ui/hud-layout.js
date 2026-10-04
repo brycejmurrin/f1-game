@@ -422,7 +422,7 @@ const HudLayout = (function () {
   /** Why element `id` is not on screen now: {reason, soft} or null when it is
    *  (or nothing says otherwise). While the HUD is up the live element has the
    *  last word: drawn = null whatever the classes say; hidden with no known
-   *  class = "hidden right now" (soft). Outside a race the classes decide. */
+   *  class reads "hidden right now" (soft). Outside a race the classes decide. */
   function hiddenReason(id) {
     const row = ELEMENTS.find((e) => e[0] === id);
     if (!row || !doc) return null;
