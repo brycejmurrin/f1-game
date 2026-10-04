@@ -486,7 +486,9 @@
       //     T5 Clubhouse — from the published circuit map, not re-verified
       //     against a survey this pass.
       const BANK = { rows: 3, rise: 0.95, depth: 1.6, density: 0.26, step: 12 };
-      spectatorHill(0.091, 0.114, -1, 24, BANK);                       // T1 Crowthorne (0.1055)
+      // Ends at 0.101, before the apex: run to 0.114 its treads folded over
+      // each other round the tight corner (clip-audit 1.23 m severe at 0.113).
+      spectatorHill(0.088, 0.101, -1, 24, BANK);                       // T1 Crowthorne (0.1055)
       spectatorHill(0.152, 0.178, 1, 20, { ...BANK, rows: 2 });        // T2 Jukskei Sweep (0.165)
       spectatorHill(0.380, 0.400, -1, 22, BANK);                       // T4 Sunset (0.391)
       spectatorHill(0.405, 0.425, -1, 22, { ...BANK, density: 0.22 }); // T5 Clubhouse (0.4115)
