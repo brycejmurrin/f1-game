@@ -1710,6 +1710,9 @@ const PitLane = (function () {
       const plan = c && c.pitPlan;
       // A HUMAN's plan is advice (planFor): nothing here ever arms it.
       if (!plan || c.human || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
+      // The flying-start run-up hands the player's car to the AI for a few
+      // seconds (js/race/flying-start.js); its plan is still the player's.
+      if (G.flyingStart && G.flyingStart.owns(c)) return "";
       // The last lap, or the leader already flagged: no stop pays (the player's
       // engineer has the same finalLap guard). A lapped AI still boxed for wets.
       if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars))) return "";

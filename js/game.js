@@ -4111,7 +4111,13 @@ function clearMenuScreens() {
 const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)") : { matches: false };
 function syncRotateBlocker(moveFocus) {
   const box = $("rotate-device"); if (!box) return false;
+  // Measured WITHOUT css/responsive.css's pause-card rule (body.rotate-measure):
+  // that rule hides the gate while the card is up, and the card is what this
+  // function decides to hide — read through it, the gate could never return.
+  const body = typeof document !== "undefined" ? document.body : null;
+  if (body) body.classList.add("rotate-measure");
   const active = getComputedStyle(box).display !== "none";
+  if (body) body.classList.remove("rotate-measure");
   box.setAttribute("aria-hidden", active ? "false" : "true");
   // The pause CARD and an active blocker never share the screen. #pausemenu is
   // a modal <dialog> (TopModal), so left open it sits in the top layer ABOVE
@@ -4474,7 +4480,7 @@ const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] 
 const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
-  Damage.contact(a, b, impact);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
+  Damage.contact(a, b, impact, track.total);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
   if (!a.isPlayer && !b.isPlayer) return;
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
