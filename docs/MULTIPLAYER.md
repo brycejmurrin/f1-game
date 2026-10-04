@@ -223,7 +223,10 @@ arrival, so a quit peer is timed out while the tab is in the background
 ### `js/net/netplay.js` — `NetPlay`
 
 the game side (NetPlay.create(G)). AUTHORITY: each peer fully owns its own
-car; the host additionally owns the AI and race control. So your own car is
+car; the host additionally owns the AI and race control — and, since
+2026-10-04, the AI POSES: guests draw the host's AI rather than simulating
+their own (design, wire budget and the silence grace:
+[notes/MULTIPLAYER-AI-REPLICATION.md](notes/MULTIPLAYER-AI-REPLICATION.md)). So your own car is
 NEVER corrected — no rollback, no reconciliation, no host advantage — at the
 cost of the two screens disagreeing by ~1 m under heavy contact. A rival is
 POSED from replicated state, so updateCar() early-outs on netPlay.owns(c),
