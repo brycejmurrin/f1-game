@@ -10,7 +10,7 @@
         tree, bush, ridge, mountain, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum, forestEdge } = api;
+        addBox, addCyl, addFrustum, forestEdge, cameraTower, acacia, circuitKit } = api;
 
       const LIME = [0.95, 0.94, 0.90], LIME_D = [0.86, 0.85, 0.80];
       const TILE = [0.68, 0.33, 0.21], TILE_D = [0.54, 0.27, 0.18];
@@ -378,5 +378,29 @@
       for (const [s0, s1] of [[0.12, 0.32], [0.48, 0.9]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 20, { density: 0.46, hMin: 8, hMax: 14, pineFrac: 0.82, col: PINE, col2: PINE_D });
+      }
+
+      // ── HAIRPIN MEADOW (0.34–0.46) — the one open stretch was bare grass.
+      // Scattered cork oaks (sobreiros): the low, spreading, dark-crowned tree
+      // of the Portuguese plateau, kept 40 m+ back so the hairpin sightline
+      // stays open. acacia()'s flat umbrella + low fork is the closest form.
+      every(18, (k) => {
+        const s = k / n;
+        if (s < 0.345 || s > 0.455) return;
+        const h = hash(k * 59 + 7);
+        if (h < 0.5) return;
+        acacia(k, h < 0.75 ? -1 : 1, 40 + h * 30, 6 + h * 3,
+          h < 0.65 ? [0.20, 0.27, 0.15] : [0.17, 0.23, 0.13],
+          { spread: 1.25, barkCol: [0.36, 0.24, 0.17] });
+      });
+      // Braking boards into the hairpin and the high camera over it.
+      sponsorHoarding(0.388, 0.412, -1, 9, { h: 1.2, step: 10,
+        palette: [[0.14, 0.36, 0.22], [0.86, 0.22, 0.18], [0.94, 0.86, 0.24], LIME] });
+      cameraTower(K(0.430), 1, 26, { h: 14, col: [0.58, 0.60, 0.64] });
+      cameraTower(K(0.700), -1, 24, { h: 12, col: [0.58, 0.60, 0.64] });
+      if (circuitKit) {
+        circuitKit.recoveryBay({
+          id: "kit:estoril:hairpin-recovery", frac: 0.405, side: -1, gap: 30, size: [12, 5, 16],
+        });
       }
     };

@@ -98,12 +98,13 @@ pubkey — never by reputation or uptime
 room codes — the BACKUP way in, and the only part of the game leaning on
 someone else's server. NOTHING TO DEPLOY: a public Nostr relay network is the
 default meeting place (js/net/nostr.js), and worker/rendezvous.js (one
-Cloudflare Durable Object per code) is an optional upgrade when its URL is
+Cloudflare Durable Object per opaque room id) is an optional upgrade when its URL is
 set. On the DEFAULT public path the payload is sealed with AES-GCM under a key
 derived from the room code (`seal()`/`open()`, called by
-`NetNostr.directExchange` on every exchange) and the room id is a hash of the
-code, so a relay operator carries bytes it cannot read and the code is the only
-secret. ENVELOPE v2 (2026-09-10): PBKDF2 runs once per code into a memoised
+`NetNostr.directExchange` on every exchange). Its public routing topic derives
+from the stretched key; recovering a six-character code requires offline
+guessing through PBKDF2. The short code is still the only secret, so this public
+mode does not have the private token's entropy guarantee. ENVELOPE v2 (2026-09-10): PBKDF2 runs once per code into a memoised
 HKDF base, every envelope derives its own AES key from a random 16-byte salt
 (`[salt 16][iv 12][ct+tag]`), and the slot name ("offer"/"answer") is the
 AES-GCM additional data — so a sealed offer replayed into the answer slot fails
@@ -112,20 +113,43 @@ key. v1 (constant salt, no AAD) is not accepted: both peers run the same build.
 Codes are minted by rejection sampling, not `byte % 31` (256 is not a multiple
 of 31, so the modulo made the first eight letters 9/8 as likely).
 
-The optional private Worker path uses the same browser-side envelope as a
-`v2.<base64url>` string. `httpPut` sends versioned ciphertext and `httpGet`
-opens it locally, so the Worker operator cannot read the SDP it carries — and
-cannot ALTER it either, because `openPrivate` refuses anything that is not a
-v2 envelope (the legacy "read a plaintext record" branch is gone, and the
-Worker itself refuses to store one). Because a fresh salt and IV make even
-identical retries produce different bytes, the host also sends a separate
-random owner capability; the Worker uses that stable capability — never
-ciphertext equality — to permit a retry while rejecting another writer. A
-code is DISPOSABLE, not an account: nothing personal is retained and the Worker
-deletes the room after two minutes. It carries the SAME invite/answer strings
-the manual flow uses, so the relay is a courier and never a participant. Every
-call resolves to a typed error, never throws — when the relay is down the lobby
-must fall back to the link/QR, which need nothing.
+The optional private Worker path uses a **32-character private room token**,
+randomly drawn with WebCrypto rejection sampling (>158 bits of entropy). The
+host shares it through COPY/SHARE; both players configure the same Worker URL.
+The public Nostr path still uses six-character spoken codes. The private path
+never accepts those shorter secrets and never falls back to `Math.random`.
+
+The token stays in the peers. HKDF derives a separate 256-bit routing id with
+`apex26-rendezvous-private-v3/room` as its info string. HTTP uses only
+`/v3/r/<64-lowercase-hex-id>/<offer|answer>`, not the token. Encryption keeps the
+existing salted `v2.<base64url>` AES-GCM envelope and its distinct HKDF info and
+slot AAD. The routing id therefore cannot serve as the encryption key material.
+This fixes the old `/r/<six-character-code>` route, which disclosed that material
+to the operator. Merely hashing a short code would still permit offline guessing.
+
+The Worker can observe timing, drop traffic, or replay an existing same-slot
+ciphertext; it cannot decrypt SDP or forge new authenticated contents without the
+shared token. Slot AAD rejects offer-as-answer substitution. A separate random
+owner capability permits host retries despite fresh ciphertext on every write.
+The token is disposable and the Worker expires records after two minutes.
+
+Private protocol 3 must be deployed on the Worker and used by both browsers.
+The Worker refuses legacy `/r/` requests with 426 before allocating a room. New
+clients require `X-Apex-Rendezvous: 3` (CORS-exposed) and report an actionable
+upgrade error for old Workers, rather than retrying a secret-bearing legacy path.
+Deploy the updated Worker, reload both players, and create a new token. Existing
+private room codes are intentionally incompatible; manual invite links/QR remain
+available during rollout. Phone-controller QR links carry the Worker URL beside
+the token in the fragment, which is not sent to the static host. CONNECT applies
+the relay for that document only using `setSessionUrl`, without changing saved
+preferences. That setter accepts HTTPS (or loopback HTTP for development),
+rejects credentials/query/fragment in relay URLs, and can explicitly select the
+public backend with `null`; `undefined` restores the saved preference. Every
+network call resolves to a typed error, never throws. See [the Worker deployment guide](../worker/README.md).
+
+Cryptographic API references: [WebCrypto random values](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
+and [HKDF key derivation](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey).
+
 Shown even when unconfigured: a feature that hides itself on an unset URL
 guarantees nobody discovers it
 
