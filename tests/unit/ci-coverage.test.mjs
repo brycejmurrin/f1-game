@@ -891,8 +891,10 @@ test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: s
   // The apt + Xvfb + DISPLAY recipe is one composite action since 2026-09-22;
   // each job keeps the step NAME and the opt-out `if:` and takes the body by `uses:`.
   const mesa = fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8");
-  assert.match(mesa, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n\s+echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
+  assert.match(mesa, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n[\s\S]*?echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
     "the action's Xvfb must export DISPLAY so the pinned test command line is unchanged");
+  // …and WAIT for the server's socket before the first browser launch (2026-10-04).
+  assert.match(mesa, /\[ -S \/tmp\/\.X11-unix\/X99 \] && break/, "the action waits for Xvfb's socket");
   for (const [name, job] of [["smoke", smokeJob], ["selected", selectedJob]]) {
     assert.match(job, /- name: Mesa llvmpipe \+ Xvfb\n\s+if: [^\n]*inputs\.gl != 'swiftshader'\n\s+uses: \.\/\.github\/actions\/mesa-xvfb/,
       `${name} must install Mesa + Xvfb through the action, and skip it on the \`gl: swiftshader\` opt-out`);
@@ -1439,4 +1441,24 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   // The matrix job's name still varies, which is the whole reason this exists.
   assert.match(ciWorkflow, /^    name: Selected specs \(change-aware gate\)$/m);
   assert.match(ciWorkflow, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
+});
+
+test("every workflow job carries a cap, and the Pages publishable check holds no Pages token", () => {
+  /* 2026-10-04: five jobs ran under the 360-minute default — pages.yml's
+     `deploy` among them, inside the never-cancelled `pages` lock, so one hang
+     could wedge every later deploy for six hours. `publishable` inherited the
+     workflow's pages: write + id-token: write to run one read-only script. */
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  const missing = [];
+  for (const f of fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n))) {
+    const wf = parseYAML(fs.readFileSync(new URL(f, dir), "utf8"));
+    for (const [id, job] of Object.entries(wf.jobs || {})) {
+      if (job.uses) continue;   // a reusable-workflow call: its own jobs carry caps
+      if (job["timeout-minutes"] == null) missing.push(`${f}:${id}`);
+    }
+  }
+  assert.deepEqual(missing, [], "a job with no timeout-minutes runs for up to 360 minutes on a hang");
+  const pages = parseYAML(pagesWorkflow);
+  assert.deepEqual(pages.jobs.publishable.permissions, { contents: "read" });
+  assert.ok(pages.jobs.deploy["timeout-minutes"] <= 30, "the deploy job holds the Pages lock: keep its cap tight");
 });
