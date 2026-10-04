@@ -223,9 +223,11 @@ Input.init(canvas, { onPause: () => {
   // the pause button — and its close door then reopened SETTINGS over a race
   // that was not paused. Press the layer's own Escape door instead, exactly as
   // Escape does (js/ui/modal.js), so the tool closes back to the pause menu.
+  // ONLY those three: the lighting and camera tuners, the flyby and photo mode
+  // are closed by setPaused(false) itself, so there the key resumes as before.
   if (G.paused && typeof UiLayers !== "undefined") {
     const top = UiLayers.top();
-    if (top && top !== els.pausemenu && top !== els.pmsettings) {
+    if (top && (top.id === "garrival" || top.id === "photo-studio" || top.id === "spotifypanel")) {
       const door = top.dataset && top.dataset.escClose ? document.getElementById(top.dataset.escClose) : null;
       if (door) { door.click(); return; }
     }

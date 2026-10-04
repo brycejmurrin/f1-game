@@ -74,8 +74,11 @@ test("racing (not paused): the key pauses, whatever layer the DOM reports", () =
   assert.deepEqual(r.clicks, []);
 });
 
-test("a layer with no Escape door falls through to the toggle", () => {
-  const r = rig({ top: { id: "overlay", dataset: {} } });
+test("a tool setPaused(false) closes itself (the lighting tuner) still resumes on the key", () => {
+  // ui-button-touch.spec.js "pause key leaves tuner-owned photo mode": the
+  // lighting tuner has its own Escape door, but unpausing is what closes it.
+  const r = rig({ top: { id: "lighting", dataset: { escClose: "lt-close" } } });
   r.fn();
   assert.deepEqual(r.toggles, [[false, "key"]]);
+  assert.deepEqual(r.clicks, []);
 });
