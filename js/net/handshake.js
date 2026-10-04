@@ -225,7 +225,7 @@ const NetHandshake = (function () {
   // guest: acceptInvite(theirCode) -> code, send it back, done.
   //
   // `profile` is whatever the lobby needs to build the rival's car: team,
-  // driver, livery, and the parts SETUP IDS. Ids, never resolved multipliers —
+  // driver and the parts SETUP IDS. Ids, never resolved multipliers —
   // a peer declaring `{cornering: 9}` should be impossible, not merely rude.
   // Gather fully, then emit. Shared by both halves so the two can never drift.
   async function makeCode(pc, kind, profile, opts) {

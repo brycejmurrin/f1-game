@@ -237,6 +237,15 @@ const NetPlay = (function () {
     let lastPhaseA = null, lastPhaseB = null, lastPhaseC = null;
     let peerProfile = null;
     let lastReason = null;
+    // start({onStop}): the lobby's "this race is over" hook (a guest's own race
+    // rules come back). LOCAL stops only — quit, race again — never a mid-race
+    // drop, which keeps racing; a drop's later local stop finds us inactive.
+    let onStop = null;
+    function runOnStop(reason) {
+      if (reason != null && reason !== "local") return;
+      const f = onStop; onStop = null;
+      if (f) { try { f(); } catch (e) { Log.warn("net", "play onStop threw: " + (e && e.message)); } }
+    }
     let lastSlotFallback = null;
     // Lap/sector times rivals reported. A DEBUG CHANNEL, not gameplay: the only
     // reader is __apex.netPeerLaps(). Entries carry whatever reportLap's caller
@@ -675,6 +684,7 @@ const NetPlay = (function () {
       }
 
       role = opts.role === "host" ? "host" : "guest";
+      onStop = typeof opts.onStop === "function" ? opts.onStop : null;
       peerProfile = opts.peerProfile || null;
       sessions.clear(); peerEpochs.clear();
       epoch = Date.now().toString(36) + "-" + (++epochSerial);
@@ -904,7 +914,7 @@ const NetPlay = (function () {
       // Inactive: nothing to stop, but a reason left by a mid-race drop must
       // not follow the player into the next SOLO race (the pause menu read
       // "Disconnected — return to the lobby" for every race after).
-      if (!active) { lastReason = null; return false; }
+      if (!active) { lastReason = null; runOnStop(reason); return false; }
       active = false;
       lastReason = reason || "local";
       Log.info("net", "play stop " + lastReason);
@@ -931,6 +941,7 @@ const NetPlay = (function () {
       G.netStart = null;
       armedPeers.clear();
       startSeen = false;
+      runOnStop(reason);
       return true;
     }
 
