@@ -468,6 +468,23 @@ look-ahead floor that let every AI carry `sqrt(vC² + 449)` into an apex was
 removed on 2026-09-15 with the `corner` difficulty dimension
 (`docs/notes/AI-FIELD-RESEARCH.md`).
 
+**2026-10-04 — the AI drives the plan it makes.** `brakeDecision` is now
+FEED-FORWARD plus a P trim: `brakeTarget` hands back its binding sample, and the
+pedal starts at `(v² − vC²)/(2·d·brake)` — exactly the planner's `0.85·brake`
+budget on the envelope — instead of a pure P band that reached 0.85 only at
+~6 m/s of standing overspeed (the AI arrived 12–41 % above its own `vC` at
+Monza and braked into the apex). Consistency still moves the onset (`soft`)
+and the trim. The AI's arc advance is ground distance ÷ `frenetH(s, x)`, as
+the player's `trackFrom` charges (an AI-only geometry read: speed·dt gave ~7 %
+free arc round the outside of a bend and nothing on the inside). X-mode's
+downforce cost reaches the AI's lateral ACTUATOR (`lateralScale(…, aeroDfMult(c))`)
+but not the planner: `xArmed` requires `!braking`, so every braked corner is a
+Z-mode corner by the time the car reaches it, and a planner that saw the open
+flap on the straight would brake early for downforce the car will have back.
+The DIFF table is NOT re-scaled for it yet: solo AI laps moved +1.0 % (monza),
++0.2 % (spa) and +2.5 % (monaco), circuit-dependent like the 2026-09 drift, and
+`hard` already sits at both documented ceilings (`ai` 1.030, `corner` 1.00).
+
 ### Racecraft: who passes, who yields
 
 The AI's traffic decisions live in `js/physics/ai-drive.js` as pure rules; the
