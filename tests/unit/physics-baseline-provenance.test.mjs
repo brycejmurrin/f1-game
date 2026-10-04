@@ -12,8 +12,8 @@
  *           empty one)
  *   hash    sha256 of the scenario data as serialised — a number edited by
  *           hand no longer matches, so the edit has to be a regen
- *   sha     a full commit id; when this checkout can see that commit (not a
- *           shallow CI clone) it must be an ancestor of HEAD — a baseline
+ *   sha     a full commit id; when this checkout can see that commit on some
+ *           ref (not a shallow CI clone) it must be an ancestor of HEAD — a baseline
  *           blessed on some other branch is not this tree's measurement
  *   at      an ISO timestamp
  *
@@ -55,6 +55,14 @@ test("the blessing sha is a commit this tree descends from (when the checkout ca
     cp.execSync(`git cat-file -e ${b.sha}^{commit}`, { cwd: ROOT, stdio: "ignore" });
     known = true;
   } catch (_) { /* shallow clone or no git: the ancestry half cannot be checked here */ }
+  // An object no ref reaches is a stray in this clone's pack (a rebased-away
+  // commit GitHub happened to send), not history: a clone without it skips
+  // this check, so one with it must too — or the verdict depends on the pack.
+  if (known) {
+    try {
+      known = cp.execSync(`git for-each-ref --contains ${b.sha} --count=1`, { cwd: ROOT, encoding: "utf8" }).trim() !== "";
+    } catch (_) { known = false; }
+  }
   if (!known) return;
   let ancestor = false;
   try {

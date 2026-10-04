@@ -10,7 +10,7 @@
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        floodMast, sailCanopy, sponsorHoarding, seat,
+        floodMast, sailCanopy, sponsorHoarding, seat, stonePine, cameraTower, circuitKit,
         drape, addBox, addCyl, addCone } = api;
 
       const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
@@ -379,8 +379,38 @@
         }
       }
       // Sponsor boards down the main straight and around Turn 1.
-      sponsorHoarding(0.955, 0.100, -1, 6.5, {
-        h: 1.25, step: 10,
-        palette: [[0.86, 0.16, 0.14], [0.94, 0.93, 0.88], [0.12, 0.32, 0.66], [0.96, 0.78, 0.10]],
+      const BOARDS = [[0.86, 0.16, 0.14], [0.94, 0.93, 0.88], [0.12, 0.32, 0.66], [0.96, 0.78, 0.10]];
+      sponsorHoarding(0.955, 0.100, -1, 6.5, { h: 1.25, step: 10, palette: BOARDS });
+      // Braking-zone boards into Repsol (T4) and Campsa (T9) — the two
+      // back-half TV shots that otherwise showed bare guardrail.
+      sponsorHoarding(0.318, 0.342, 1, 9, { h: 1.1, step: 10, palette: BOARDS });
+      sponsorHoarding(0.585, 0.606, -1, 9, { h: 1.1, step: 10, palette: BOARDS });
+
+      // ── Back-half dressing: the 0.17–0.66 sweep was trees and guardrail only.
+      // Stone pines (Pinus pinea) are the Vallès hillside tree around
+      // Montmeló; a loose second rank well beyond the existing pines/scrub
+      // (14–38 m) so the crowns never overlap the near row.
+      every(26, (k) => {
+        const s = k / n;
+        if (!((s > 0.17 && s < 0.43) || (s > 0.47 && s < 0.556))) return;
+        const h = hash(k * 43 + 11);
+        if (h < 0.45) return;
+        stonePine(k, h < 0.72 ? 1 : -1, 46 + h * 22, 10 + h * 5,
+          h < 0.6 ? [0.20, 0.33, 0.17] : [0.16, 0.29, 0.15], { spread: 1.1 });
       });
+      // Broadcast camera towers on the outside of the long corners (T3, Repsol,
+      // Campsa, La Caixa) — the familiar high-angle feeds of this circuit.
+      for (const [s, side, gap] of [[0.240, -1, 26], [0.352, 1, 24], [0.612, -1, 26], [0.735, 1, 28]]) {
+        cameraTower(K(s), side, gap, { h: 14, col: [0.60, 0.62, 0.66] });
+      }
+      if (circuitKit) {
+        // Marshal shelter at the T5 braking point (La Caixa already has a post).
+        circuitKit.marshalShelter({
+          id: "kit:catalunya:t5-marshal", frac: 0.300, side: 1, gap: 10, size: [3, 3, 3],
+        });
+        // Recovery truck bay behind the Campsa run-off.
+        circuitKit.recoveryBay({
+          id: "kit:catalunya:campsa-recovery", frac: 0.598, side: -1, gap: 30, size: [12, 5, 16],
+        });
+      }
     };
