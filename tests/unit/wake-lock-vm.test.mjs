@@ -4,7 +4,7 @@
  * js/game.js and PlatformSession) with the SAME mock, the same
  * sequences and the same expected logs as the browser spec.
  *
- * Ported: all 8 tests. Not portable: none — every assertion reads the mock's
+ * Ported: all 9 tests. Not portable: none — every assertion reads the mock's
  * `__wakeLog` (a JSON array) and two of them the page-error record.
  *
  * WHY A TWIN, WHY NOW (2026-09-16). The browser copy was CI's dominant flake:
@@ -135,7 +135,10 @@ test("quitting mid-race (no results screen) also releases it", async () => {
   assert.deepEqual(log(), ["request:screen", "release"]);
 });
 
-test("hiding the page releases it; becoming visible re-acquires it", async () => {
+test("hiding the page releases it; RESUME after the return re-acquires it", async () => {
+  // A hidden tab pauses the race (PlatformSession), and a paused race holds no
+  // lock (setPaused drops it), so becoming visible under the pause card asks
+  // for nothing — RESUME does.
   await fresh(); mockWakeLock();
   await race();
   await waitFor(() => log().includes("request:screen"), "request:screen");
@@ -146,8 +149,24 @@ test("hiding the page releases it; becoming visible re-acquires it", async () =>
 
   doc().hidden = false;
   visibilityChange();
-  await waitFor(() => log().length >= 3, "the re-acquire on show");
+  await tick();
+  assert.deepEqual(log(), ["request:screen", "release"], "still paused: the screen may sleep");
 
+  doc().getElementById("pm-resume").onclick();
+  await waitFor(() => log().length >= 3, "the re-acquire on resume");
+  assert.deepEqual(log(), ["request:screen", "release", "request:screen"]);
+});
+
+test("pausing releases it; resuming re-acquires it", async () => {
+  // The pause card can sit for minutes; holding the screen awake under it
+  // drained a phone for nothing (review 2026-10-04).
+  await fresh(); mockWakeLock();
+  await race();
+  await waitFor(() => log().includes("request:screen"), "request:screen");
+  doc().getElementById("pausebtn").click();
+  await waitFor(() => log().length >= 2, "the release on pause");
+  doc().getElementById("pm-resume").onclick();
+  await waitFor(() => log().length >= 3, "the re-acquire on resume");
   assert.deepEqual(log(), ["request:screen", "release", "request:screen"]);
 });
 
