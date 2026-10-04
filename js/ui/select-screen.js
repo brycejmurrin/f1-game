@@ -36,15 +36,12 @@ const saveDismiss = $("save-dismiss");
 const writeFailed = () => (store.writeFailed ? store.writeFailed() : store.broken);
 // Spoken ONCE per failure through #announce-live, the always-present polite
 // region: emptied, then filled a beat later, the beat js/game.js showAnnounce
-// and js/ui/hud.js sayFlag use, so a screen reader hears a CHANGE. Through the
-// shared announcer's queue when it is loaded (LiveRegion), so this line cannot
-// overwrite a flag or a radio call that was written a moment before.
+// and js/ui/hud.js sayFlag use, so a screen reader hears a CHANGE.
 let saveSpoken = false, saveLiveT = 0;
 const sayOnce = (text) => {
   const live = $("announce-live");
   if (saveSpoken || !live) return;
   saveSpoken = true;
-  if (typeof LiveRegion !== "undefined" && LiveRegion.say) { LiveRegion.say(text, "save"); return; }
   live.textContent = "";
   clearTimeout(saveLiveT);
   saveLiveT = setTimeout(() => { live.textContent = text; }, 60);
