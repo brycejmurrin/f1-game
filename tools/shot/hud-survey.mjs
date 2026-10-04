@@ -22,7 +22,8 @@
 //   --wait <s boot budget, 180>  --json (summary JSON as the last stdout block)
 //   --list (cells, no browser)  --plan  --self-test  --merge <dir…>
 //   one-cell knobs: --device --cam --profile --layout --map --gaps --mirror
-//   --preset (name or inline JSON offsets) --preset-set cam|both --theme --cvd
+//   --preset (name or inline JSON offsets) --preset-set cam|both
+//   --preset-prof shown|standard|minimal|broadcast (the HUD style written) --theme --cvd
 //   --contrast --text-size --hud-scale --ui-scale --btn-scale --tyres --hud
 //   --tod --steer --profile-live --off <HudElements ids,…> --name. --url is NOT supported: local tree only.
 //
@@ -33,7 +34,8 @@
 // reaches with set-then-reload, for one boot instead of two. Every other knob
 // is LIVE: camera (__apex.camera), MAP / GAPS / MIRROR (their SETTINGS rows,
 // #pm-hudmap/-hudgaps/-hudmirror: set the select, dispatch change), MOVE & SIZE
-// (HudLayout.resetSet + applyPreset / set on the camera's set, or both),
+// (HudLayout.resetSet on every style + applyPreset / set on the camera's set,
+// or both, of the style on screen or the cell's presetProf),
 // HudElements toggles (all on, then the cell's offs), theme / CVD / contrast /
 // text size (AppearanceOpts), HUD / UI / BUTTON SIZE (__apex.hudScale /
 // uiScale / btnScale), tyre wear (__apex.tyres), time of day
@@ -74,7 +76,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const require = createRequire(import.meta.url);
 
 const CELL_FLAGS = { "--device": "device", "--cam": "cam", "--profile": "profile", "--layout": "layout", "--map": "map",
-  "--gaps": "gaps", "--mirror": "mirror", "--preset": "preset", "--preset-set": "presetSet", "--theme": "theme",
+  "--gaps": "gaps", "--mirror": "mirror", "--preset": "preset", "--preset-set": "presetSet", "--preset-prof": "presetProf", "--theme": "theme",
   "--cvd": "cvd", "--contrast": "contrast", "--text-size": "textSize", "--hud-scale": "hudScale", "--ui-scale": "uiScale",
   "--btn-scale": "btnScale", "--tyres": "tyres", "--hud": "hud", "--tod": "tod", "--steer": "steer", "--profile-live": "profileLive", "--off": "off", "--name": "name" };
 export const KNOWN_FLAGS = ["--matrix", "--track", "--frac", "--only", "--shard", "--out", "--no-shots", "--backend", "--gl",
@@ -204,12 +206,13 @@ export function applyCell(c) {
   step("go", () => a.go());
   step("camera", () => a.camera(c.cam));
   step("preset", () => {
-    HudLayout.resetSet("cockpit");
-    HudLayout.resetSet("other");
+    // Every style: a previous cell's presetProf write must not leak.
+    for (const pn of HudLayout.PROFILES || [undefined]) { HudLayout.resetSet("cockpit", pn); HudLayout.resetSet("other", pn); }
     const sets = c.presetSet === "both" ? ["cockpit", "other"] : [HudLayout.camSet(c.cam)];
+    const pn = c.presetProf && c.presetProf !== "shown" ? c.presetProf : undefined;
     for (const sn of sets) {
-      if (typeof c.preset === "string") { if (!HudLayout.applyPreset(c.preset, sn)) throw new Error("unknown preset " + c.preset); }
-      else for (const [id, v] of Object.entries(c.preset)) HudLayout.set(id, v, sn);
+      if (typeof c.preset === "string") { if (!HudLayout.applyPreset(c.preset, sn, pn)) throw new Error("unknown preset " + c.preset); }
+      else for (const [id, v] of Object.entries(c.preset)) HudLayout.set(id, v, sn, pn);
     }
   });
   if (c.profileLive && c.profileLive !== "none") step("profileLive", () => row("pm-hudprofile", c.profileLive));

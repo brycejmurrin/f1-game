@@ -6,8 +6,10 @@
 //
 // A CELL is one HUD configuration on one device:
 //   { device, track, cam, profile, layout, map, gaps, mirror, preset, presetSet,
-//     theme, cvd, contrast, textSize, hudScale, uiScale, btnScale, tyres, hud,
-//     tod, off: [HudElements ids switched OFF] }
+//     presetProf (the HUD STYLE whose layout the preset is written into:
+//     "shown" = the style on screen at the time, else a style name), theme,
+//     cvd, contrast, textSize, hudScale, uiScale, btnScale, tyres, hud, tod,
+//     off: [HudElements ids switched OFF] }
 // BOOT KEYS need a fresh page: device (the viewport), track (one race build
 // per page) and the two store keys js/game.js reads once at eval —
 // hudProfile and hudMetricsLayout. Every other knob is applied LIVE per cell
@@ -46,6 +48,10 @@ export const CAMS = Object.freeze(["chase", "far", "drift", "cockpit", "hood", "
 // js/ui/hud.js BCAM_IDS / ONBOARD_IDS.
 export const BCAM_IDS = Object.freeze(["heli", "side", "cinematic", "low", "overhead", "rival", "pitwall", "drone"]);
 export const ONBOARD_IDS = Object.freeze(["cockpit", "hood", "tcam", "visor", "helmet"]);
+// CamGroups.COCKPIT_LAYOUT (js/camera/cam-groups.js): the cameras that draw a
+// steering wheel, so MOVE & SIZE gives them the cockpit layout — and the same
+// pair mode-switch.js marks body.cockpit-cam (with a wheel that has a screen).
+export const COCKPIT_LAYOUT_IDS = Object.freeze(["cockpit", "helmet"]);
 // Cameras whose framing the TV director / auto-cut owns: no camera-keyed expectation.
 const DYNAMIC_CAMS = new Set(["tv", "trackside"]);
 // HudElements.ELEMENTS ids (js/ui/hud-elements.js) → the probe key each hides
@@ -65,6 +71,7 @@ export const ENUMS = Object.freeze({
   gaps: ["on", "auto", "off"],
   mirror: ["auto", "on", "off"],
   presetSet: ["cam", "both"],
+  presetProf: ["shown", "standard", "minimal", "broadcast"],
   theme: ["dark", "light"],
   cvd: ["off", "deutan", "protan", "tritan"],
   contrast: ["off", "high"],
@@ -83,7 +90,7 @@ export const ENUMS = Object.freeze({
 export const PRESETS = Object.freeze({
   shipped: [],
   clean: ["tower", "map", "gaps", "sectors", "limits", "ot", "aero"],
-  big: ["tower", "map", "gearbox"],
+  big: ["tower", "map", "gaps", "gearbox"],
   corners: ["gearbox", "energy", "tyre"],
 });
 // HudLayout.ELEMENTS ids and LIM (js/ui/hud-layout.js).
@@ -97,7 +104,7 @@ export const TRACK_RE = /^[a-z][a-z0-9_-]{0,39}$/;
 
 export const DEFAULT_CELL = Object.freeze({
   device: "desktop-1280", track: "monza", cam: "chase", profile: "standard", layout: "full", map: "on", gaps: "on",
-  mirror: "auto", preset: "shipped", presetSet: "cam", theme: "dark", cvd: "off", contrast: "off", textSize: "normal",
+  mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "off", textSize: "normal",
   hudScale: null, uiScale: null, btnScale: null, tyres: "on", hud: "on", tod: "day", steer: "default", profileLive: "none", off: Object.freeze([]),
 });
 export const BOOT_KNOBS = Object.freeze(["device", "track", "profile", "layout", "steer"]);
@@ -211,6 +218,7 @@ export function cellId(c) {
   if (typeof c.preset === "object") parts.push("offsets-" + hash6(JSON.stringify(c.preset)));
   else if (c.preset !== "shipped") parts.push(c.preset);
   if (c.presetSet !== "cam") parts.push("both-sets");
+  if (c.presetProf !== "shown") parts.push("into-" + c.presetProf);
   for (const k of ["hudScale", "uiScale", "btnScale"]) if (c[k] != null) parts.push(k.replace("Scale", "") + c[k]);
   if (c.off && c.off.length) parts.push("off-" + c.off.join("."));
   return parts.join("-").replace(/[^a-z0-9._-]/gi, "_");
@@ -403,10 +411,14 @@ export const LEADS = Object.freeze([
   { name: "lead04-plates-off-short", device: SHORT, off: ["pos", "lap", "time", "best"], hudScale: 175, btnScale: 300,
     lead: "plates off, HUD 175, BUTTON max at 734x343: no touch button off-screen, --hud-z-dock written",
     checks: [{ type: "onScreen", keys: TOUCH_BUTTONS.slice() }, { type: "varWritten", var: "--hud-z-dock" }] },
-  // 5. A STANDARD-set move survives a switch to BROADCAST without a double shift.
+  // 5. A BROADCAST-style move, written while STANDARD shows, lands once on the
+  // live switch to BROADCAST. Since #843 each HUD STYLE keeps its own layout
+  // (js/ui/hud-layout.js SIX LAYOUTS), so the move is written into the
+  // broadcast style's other set (presetProf) — a STANDARD-set move no longer
+  // reaches the BROADCAST HUD at all, by design.
   { name: "lead05-base", profileLive: "broadcast", lead: "baseline for lead 5 (STANDARD boot, live switch to BROADCAST)" },
-  { name: "lead05-broadcast-moved", profileLive: "broadcast", preset: { tower: { x: -30 }, map: { y: 10 } },
-    lead: "other-set TOWER x-30 + MAP y+10 under BROADCAST: tower on-screen, map moved once",
+  { name: "lead05-broadcast-moved", profileLive: "broadcast", presetProf: "broadcast", preset: { tower: { x: -30 }, map: { y: 10 } },
+    lead: "BROADCAST-style other-set TOWER x-30 + MAP y+10, then a live switch to BROADCAST: tower on-screen, map moved once",
     checks: [{ type: "onScreen", keys: ["tower", "map"] }, { type: "shift", key: "map", vs: "lead05-base", axis: "y", pct: 10, tolPct: 3 }] },
   // 6. Light theme: tower digits must read against their plate.
   { name: "lead06-light-contrast", theme: "light", lead: "LIGHT theme: .hud-top .hud-value contrast vs plate >= 4.5",
@@ -433,9 +445,12 @@ export const LEADS = Object.freeze([
   // 12. BROADCAST on a small phone, big HUD, gaps forced on.
   { name: "lead12-broadcast-640-hud175", device: "phone-640x360", profile: "broadcast", hudScale: 175, gaps: "on",
     lead: "BROADCAST 640x360 HUD 175 GAPS ON: gaps vs map", checks: [{ type: "noOverlap", a: "gaps", b: ["map"] }] },
-  // 13. Which cameras count as "cockpit": HudLayout, MAP AUTO and cockpit-cam disagree?
+  // 13. Which cameras count as "cockpit": do HudLayout's set, MAP AUTO and
+  // cockpit-cam each match CamGroups (js/camera/cam-groups.js)? They are TWO
+  // questions on purpose: VISOR and HOOD are ONBOARD (MAP AUTO hides) but draw
+  // no wheel (other layout, no cockpit-cam).
   ...["visor", "hood"].map((cam) => ({ name: `lead13-${cam}-consistency`, cam, map: "auto",
-    lead: `${cam.toUpperCase()}: HudLayout set vs MAP AUTO onboard vs cockpit-cam`, checks: [{ type: "camConsistency" }] })),
+    lead: `${cam.toUpperCase()}: HudLayout set / MAP AUTO / cockpit-cam vs CamGroups`, checks: [{ type: "camConsistency" }] })),
   // 14. LARGER text must not clip the ERS label out of its bar.
   { name: "lead14-larger-energy", textSize: "larger", lead: "TEXT LARGER: #hud-energy label clipped?",
     checks: [{ type: "clip", sel: "#hud-energy", label: "#hud-energy .hud-energy-label" }] },
@@ -464,6 +479,15 @@ export function contrastRatio(fg, bg, under = { r: 128, g: 128, b: 128 }) {
   return +((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toFixed(2);
 }
 
+/** What CamGroups says camera `cell.cam` should give: the MOVE & SIZE set
+ *  (COCKPIT_LAYOUT), the map hide (MAP ON / OFF, or AUTO: ONBOARD or MINIMAL —
+ *  js/ui/hud.js) and body.cockpit-cam (the COCKPIT_LAYOUT pair, default wheel). */
+export function camGroupFacts(cell) {
+  const wheel = COCKPIT_LAYOUT_IDS.includes(cell.cam);
+  const prof = cell.profileLive && cell.profileLive !== "none" ? cell.profileLive : cell.profile;
+  const mapAutoHides = cell.map === "off" || (cell.map === "auto" && (ONBOARD_IDS.includes(cell.cam) || prof === "minimal"));
+  return { layoutSet: wheel ? "cockpit" : "other", mapAutoHides, cockpitCam: wheel };
+}
 /** Decide one cell's CHECKS. rec = this cell's measured record (state.vars,
  *  records, transientRecords, extras[i]); byId(id) → another cell's record. */
 export function evaluateChecks(cell, rec, byId = () => null) {
@@ -526,9 +550,10 @@ export function evaluateChecks(cell, rec, byId = () => null) {
     } else if (ch.type === "camConsistency") {
       const s = rec.state || {};
       const facts = { layoutSet: s.layoutSet, mapAutoHides: /\bhud-hide-map\b/.test(s.bodyHud || ""), cockpitCam: /\bcockpit-cam\b/.test(s.bodyHud || "") };
-      const cockpitish = [facts.layoutSet === "cockpit", facts.mapAutoHides, facts.cockpitCam];
-      const agree = cockpitish.every((v) => v === cockpitish[0]);
-      add(`${cell.cam}: ${JSON.stringify(facts)} — ${agree ? "consistent" : "INCONSISTENT (the three 'is this a cockpit view' answers disagree)"}`, agree ? "info" : "medium");
+      const want = camGroupFacts(cell);
+      const off = Object.keys(want).filter((k) => facts[k] !== want[k]);
+      add(`${cell.cam}: ${JSON.stringify(facts)} — ${off.length ? `INCONSISTENT with CamGroups: ${off.map((k) => `${k} ${JSON.stringify(facts[k])}, want ${JSON.stringify(want[k])}`).join("; ")}` : "consistent with CamGroups"}`,
+        off.length ? "medium" : "info");
     } else if (ch.type === "clip") {
       if (!x || x.missing) { add(`${ch.label} not found`, "medium"); return; }
       const clipped = x.scrollH > x.clientH + 1 || x.scrollW > x.clientW + 1
@@ -645,7 +670,9 @@ export function expectedVisibility(cell, ctx = {}) {
   const prof = cell.profileLive && cell.profileLive !== "none" ? cell.profileLive : cell.profile;
   const minimal = prof === "minimal", broadcast = prof === "broadcast";
   const lay = cell.layout;
-  const placed = new Set(typeof cell.preset === "object" ? Object.keys(cell.preset) : PRESETS[cell.preset] || []);
+  // A preset written into another style's layout places nothing on this HUD.
+  const writtenTo = cell.presetProf && cell.presetProf !== "shown" ? cell.presetProf : cell.profile;
+  const placed = new Set(writtenTo !== prof ? [] : typeof cell.preset === "object" ? Object.keys(cell.preset) : PRESETS[cell.preset] || []);
   const portraitBlock = dev.touch && dev.h > dev.w && dev.w <= 743 && dev.h <= 956;
   const E = {};
   const want = (key, v, why) => { E[key] = { want: v, why }; };
@@ -681,7 +708,8 @@ export function expectedVisibility(cell, ctx = {}) {
   else camRule("bb", !(bcam || (!desktop && !placed.has("bb"))), "BRAKE BIAS is desktop-only unless placed (css/hud.css)");
   if (cell.tyres === "off") want("tyre", false, "TYRE WEAR off hides the widget (js/ui/hud.js)");
   else if (lay === "timing" || lay === "compact") want("tyre", false, "TYRES drop under TIMING / COMPACT");
-  else camRule("tyre", !(broadcast && bcam), "BROADCAST + broadcast cam hides .hud-bottom");
+  else camRule("tyre", !((broadcast && bcam) || (cockpitCam && !desktop && !placed.has("tyre"))),
+    "BROADCAST + broadcast cam hides .hud-bottom; touch cockpit hides it unless MOVE & SIZE placed it (css/track-detail.css)");
   if (cell.mirror === "off") want("mirror", false, "MIRROR: OFF");
   else if (cell.mirror === "on") camRule("mirror", true, "MIRROR: ON");
   // HudElements: an element switched OFF must be gone — and only that one,
@@ -896,6 +924,7 @@ export function selfTest(analyze = analyzeOverlap) {
   check("desktop cockpit expects OT/AERO, not gearbox", cock.ot.want && cock.aero.want && cock.gearbox.want === false);
   const pc = expectedVisibility(normalizeCell({ cam: "cockpit", device: "phone-landscape-844x390" }), { desktop: false, cockpitCam: true });
   check("touch cockpit hides OT unless placed", pc.ot.want === false && pc.speed.want === true);
+  check("touch cockpit hides TYRES unless placed", pc.tyre.want === false && cock.tyre.want === true);
   const offGear = expectedVisibility(normalizeCell({ off: ["gear"] }), { desktop: true });
   check("HudElements gear OFF hides the gearbox only", offGear.gearbox.want === false && offGear.speed.want === true);
   const L = expandMatrix("leads");

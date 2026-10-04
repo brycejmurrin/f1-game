@@ -115,18 +115,39 @@ const HudLayout = (function () {
     minimal: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), other: fz({}) }),
     broadcast: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), other: fz({}) }),
   });
-  // TOUCH DEVICES keep the cockpit's shipped hide of ENERGY / OVERTAKE / AERO /
-  // BRAKE BIAS (css/track-detail.css): the OT / AERO / BOOST buttons carry those
-  // states, and on a phone the pedal and steer columns leave no room beside the
-  // wheel at any fixed offset (tests/specs/hud-layout.spec.js measured clashes on
-  // every phone shape). A piece the player PLACES carries data-hl-user and shows.
+  // TOUCH DEVICES keep the cockpit's shipped hide of ENERGY / TYRES / OVERTAKE /
+  // AERO / BRAKE BIAS (css/track-detail.css): the OT / AERO / BOOST buttons carry
+  // those states, and on a phone the pedal and steer columns leave no room beside
+  // the wheel at any fixed offset (tests/specs/hud-layout.spec.js measured clashes
+  // on every phone shape; the hud-survey put the x-30 TYRES on both steer buttons
+  // at 844x390). A piece the player PLACES carries data-hl-user and shows.
   // PRESETS: [id, label, partial offsets laid over the set's shipped layout].
+  // An offset is a share of the SCREEN but the bottom cluster is fixed px,
+  // centred, so a preset has to clear its neighbours at every width. The
+  // desktop row (css/touch-controls.css "gear speed energy ot aero", TYRES and
+  // BRAKE BIAS on an implicit second row under gear / speed), measured at 1280
+  // (hud-survey, chase, bottom zoom 1): gear 225..487 y582-647, speed 507..594,
+  // energy 614..804 y606-624, OT 824..913 y595-636, AERO 933..1054, TYRES
+  // 291..421 y648-690, BB 520..582 y662-689; at 1920 every x is +320.
+  // BIG: the SIZE 125 gearbox grows about its bottom centre to 192..520 and
+  //   met SPEED (507) — x-3 (-38px at 1280, -58 at 1920) leaves 25px. The map
+  //   grows 128 -> 160 authored px at top zoom 1.25 (10..210) under the gap
+  //   strip anchored at its unscaled right (178) — x+5 (+64 / +96px) puts the
+  //   strip at 242, 32px clear, and it grows with the rest.
+  // CORNERS: the gearbox (262 wide) does not fit right of AERO at 1280 (226px
+  //   left), so it goes to the right corner ABOVE the chip row: x+50, y-10 is
+  //   865..1127 y510-575 at 1280 (20px over OT's 595), 1505..1769 y835-900 at
+  //   1920. ENERGY x-34 lands in the gearbox's vacated spot, 179..369 at 1280
+  //   and 281..471 at 1920 (SPEED from 507 / 827); TYRES, 323px left of it,
+  //   cannot share that offset (x-34 puts it at -144): x-21 is 22..152 at 1280
+  //   and 208..338 at 1920. At the 0.85 bottom zoom fitHud has painted every
+  //   piece sits closer to the centre and the same gaps only grow.
   const PRESETS = Object.freeze([
     ["shipped", "SHIPPED", {}],
     ["clean", "CLEAN", { tower: { s: 85 }, map: { s: 85 }, gaps: { s: 90 }, sectors: { s: 90 },
       limits: { s: 90 }, ot: { s: 90 }, aero: { s: 90 } }],
-    ["big", "BIG", { tower: { s: 125 }, map: { s: 125 }, gearbox: { s: 125 } }],
-    ["corners", "CORNERS", { gearbox: { x: 34, y: 0 }, energy: { x: -34, y: 0 }, tyre: { x: -34, y: 0 } }],
+    ["big", "BIG", { tower: { s: 125 }, map: { s: 125 }, gaps: { x: 5, s: 125 }, gearbox: { x: -3, s: 125 } }],
+    ["corners", "CORNERS", { gearbox: { x: 50, y: -10 }, energy: { x: -34, y: 0 }, tyre: { x: -21, y: 0 } }],
   ].map((p) => Object.freeze([p[0], p[1], fz(p[2])])));
 
   const store = typeof GameStore !== "undefined" ? GameStore.store : null;
@@ -411,9 +432,9 @@ const HudLayout = (function () {
     [["sectors"], (h) => h("hud-bcam") && !h("hud-prof-broadcast"), "TV camera"],
     [["gearbox"], (h) => h("cockpit-cam"), "the wheel's display shows it in the cockpit"],
     [["gearbox", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"], (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
-    [CHIPS.concat(["bb"]), (h, a) => h("cockpit-cam") && !h("desktop") && !a, "touch cockpit: the buttons carry it — move it to show it", true],
-    [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
+    [CHIPS.concat(["tyre", "bb"]), (h, a) => h("cockpit-cam") && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
+    [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],
     [["announce"], () => true, "shows with a race message", true],
@@ -490,7 +511,7 @@ const HudLayout = (function () {
         " style's layout: each HUD STYLE keeps its own, because BROADCAST anchors the timing tower, map and gaps differently. " +
         "The cockpit cameras (COCKPIT, HELMET) keep their own layout, " +
         "because the steering wheel covers the bottom of the screen; on a desktop their shipped layout puts OVERTAKE, AERO, ENERGY " +
-        "and TYRES beside the wheel (on a touch screen the buttons carry OVERTAKE and AERO until you place them). " +
+        "and TYRES beside the wheel (on a touch screen there is no room beside it, so they stay hidden until you place them). " +
         "An element marked HIDDEN is not drawn in the current mode, so its sliders are off. " +
         "A PRESET is a starting point you can still tweak. In a race, hold a slider to see the HUD through this page.";
     };
