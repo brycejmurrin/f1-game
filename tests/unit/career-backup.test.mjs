@@ -7,6 +7,9 @@
  *   (3) hostile payloads are rejected with a reason and change nothing
  *   (4) import over a newer live revision is refused
  *   (5) career-cross-tab.test.mjs still green (run beside this file)
+ *   (6) a backup's empty rows never erase local slots; badges merge as a
+ *       union; a further-along local standalone season is kept
+ *   (7) malformed history / offers / moves / roster rows cannot crash career
  *
  * Plus one mini-dom UI pin: slot cards expose EXPORT / IMPORT buttons.
  *
@@ -266,6 +269,95 @@ test("import from a driver card does not touch myteam without confirm", () => {
   });
   assert.equal(full.ok, true);
   assert.equal(JSON.parse(h.disk.get("apex26.career.myteam.0")).money, 210);
+});
+
+test("a sparse backup restores its own slots and never erases the ones it lacks", () => {
+  // Device A only ever used driver slot 1; build() still exports all six rows.
+  const a = loadHarness();
+  a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
+  a.disk.set("apex26.careerSlot", JSON.stringify("driver:0"));
+  a.Career.load();
+  const envelope = a.CareerBackup.build();
+  assert.equal(envelope.slots.filter((s) => s.data == null).length, 5);
+
+  // Device B holds saves in slots the backup has as empty rows.
+  const b = loadHarness();
+  b.disk.set("apex26.career.driver.2", JSON.stringify(save({ money: 999999, seed: 7 })));
+  b.disk.set("apex26.career.myteam.1", JSON.stringify(save({ flavour: "myteam", money: 4242, team: "custom" })));
+  b.disk.set("apex26.careerSlot", JSON.stringify("driver:2"));
+  b.Career.load();
+
+  const partial = b.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" });
+  assert.equal(partial.ok, true);
+  assert.deepEqual([...partial.written], ["driver:0"]);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 111);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.2")).money, 999999, "driver slot 3 erased");
+  // "ALL MODES?" with no MY TEAM saves in the backup must not wipe MY TEAM.
+  const all = b.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), {
+    focusFlavour: "driver", otherFlavourConfirmed: true,
+  });
+  assert.equal(all.ok, true);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.myteam.1")).money, 4242, "MY TEAM slot 2 erased");
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.2")).money, 999999);
+});
+
+test("import unions badges and keeps a standalone season that is further along", () => {
+  const a = loadHarness();
+  a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
+  a.disk.set("apex26.badges", JSON.stringify({ v: 1, got: { first_win: 50, pole: 10 } }));
+  a.disk.set("apex26.season", JSON.stringify({ round: 1, pts: { "haas:0": 25 }, teamPts: {}, driverCodes: {} }));
+  a.Career.load();
+  const envelope = a.CareerBackup.build();
+
+  const b = loadHarness();
+  b.disk.set("apex26.badges", JSON.stringify({ v: 1, got: { first_win: 20, champion: 30 } }));
+  b.disk.set("apex26.season", JSON.stringify({ round: 20, pts: { "haas:0": 400 }, teamPts: {}, driverCodes: {} }));
+  b.Career.load();
+  assert.equal(b.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" }).ok, true);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.badges")).got,
+    { first_win: 20, pole: 10, champion: 30 }, "badges must be a union, earliest unlock kept");
+  assert.equal(JSON.parse(b.disk.get("apex26.season")).round, 20, "a later local season was replaced");
+
+  // Same round, more local points: still the local one.
+  const c = loadHarness();
+  c.disk.set("apex26.season", JSON.stringify({ round: 1, pts: { "haas:0": 26 }, teamPts: {}, driverCodes: {} }));
+  c.Career.load();
+  c.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" });
+  assert.equal(JSON.parse(c.disk.get("apex26.season")).pts["haas:0"], 26);
+
+  // A local season BEHIND the backup's takes the backup's; no local badges take the backup's.
+  const d = loadHarness();
+  d.disk.set("apex26.season", JSON.stringify({ round: 0, pts: {}, teamPts: {}, driverCodes: {} }));
+  d.Career.load();
+  d.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" });
+  assert.equal(JSON.parse(d.disk.get("apex26.season")).pts["haas:0"], 25);
+  assert.deepEqual(JSON.parse(d.disk.get("apex26.badges")).got, { first_win: 50, pole: 10 });
+});
+
+test("malformed history / offers / moves / roster rows import without crashing career", () => {
+  const h = loadHarness();
+  const driver = Object.assign(save(), {
+    history: [null, 3, "x", [1], { year: 2025, pos: 1, wins: 2 }],
+    offers: [null, { team: "haas" }], moves: [7, { id: "m" }],
+  });
+  const team = Object.assign(save({ flavour: "myteam", team: "haas" }), { roster: {} });
+  const envelope = { format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: driver }, { flavour: "myteam", i: 0, data: team },
+  ] };
+  const r = h.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { otherFlavourConfirmed: true });
+  assert.equal(r.ok, true);
+  const d0 = JSON.parse(h.disk.get("apex26.career.driver.0"));
+  assert.deepEqual(d0.history, [{ year: 2025, pos: 1, wins: 2 }]);
+  assert.deepEqual(d0.offers, [{ team: "haas" }]);
+  assert.deepEqual(d0.moves, [{ id: "m" }]);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.myteam.0")).roster, null);
+  const rows = h.Career.slots();
+  assert.equal(rows.find((s) => s.flavour === "driver" && s.i === 0).titles, 1);
+  // MY TEAM: settleRound sums the roster's wages — `{}` threw there.
+  h.disk.set("apex26.careerSlot", JSON.stringify("myteam:0"));
+  h.Career.load();
+  h.Career.engage(true);
+  assert.doesNotThrow(() => h.Career.settleRound([{ team: { id: "haas" } }], { team: { id: "haas" } }));
 });
 
 /* ── mini-dom UI: EXPORT / IMPORT on slot cards ─────────────────────────── */

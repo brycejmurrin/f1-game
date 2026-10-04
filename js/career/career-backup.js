@@ -245,6 +245,36 @@ const CareerBackup = (function () {
     return result;
   }
 
+  // A standalone season further along than the backup's (a later round, or
+  // more points at the same round) is newer progress: keep it.
+  function seasonPts(sz) {
+    let n = 0;
+    if (isObj(sz.pts)) for (const k of Object.keys(sz.pts)) n += Number.isFinite(sz.pts[k]) ? sz.pts[k] : 0;
+    return n;
+  }
+  function seasonAhead(local, incoming) {
+    if (!isObj(local)) return false;
+    const a = local.round | 0, b = incoming.round | 0;
+    return a !== b ? a > b : seasonPts(local) > seasonPts(incoming);
+  }
+
+  // Badges are earned once and never revoked: import is a UNION of the two
+  // { got: { id: ts } } maps, the earlier unlock time winning.
+  function mergeBadges(local, incoming) {
+    if (!isObj(local)) return incoming;
+    const out = Object.assign({}, incoming, local);
+    if (isObj(local.got) || isObj(incoming.got)) {
+      const got = Object.assign({}, isObj(incoming.got) ? incoming.got : {});
+      const mine = isObj(local.got) ? local.got : {};
+      for (const id of Object.keys(mine)) {
+        const t = mine[id];
+        if (!Number.isFinite(got[id]) || (Number.isFinite(t) && t < got[id])) got[id] = t;
+      }
+      out.got = got;
+    }
+    return out;
+  }
+
   function apply(envelope, opts) {
     const o = opts || {};
     const checked = validate(envelope, o.rawText);
@@ -279,6 +309,9 @@ const CareerBackup = (function () {
         const now = revisionOf(f, idx);
         if (expected[id] !== now) return { ok: false, reason: "conflict", slot: id };
       }
+      // An empty row is "nothing to restore", never "delete": build() exports
+      // all six slots, so writing its nulls wiped saves the backup never had.
+      if (row.data == null) { skipped.push(id); continue; }
       if (liveConflict(f, idx)) return { ok: false, reason: "conflict", slot: id };
       plan.push({ f: f, i: idx, data: row.data, id: id });
     }
@@ -303,11 +336,12 @@ const CareerBackup = (function () {
 
     const s = store();
     if (s && typeof s.write === "function") {
-      if (envelope.season != null && isObj(envelope.season) && o.includeExtras !== false) {
+      if (envelope.season != null && isObj(envelope.season) && o.includeExtras !== false
+          && !seasonAhead(s.get("season", null), envelope.season)) {
         s.write("season", envelope.season);
       }
       if (envelope.badges != null && isObj(envelope.badges) && o.includeExtras !== false) {
-        s.write("badges", envelope.badges);
+        s.write("badges", mergeBadges(s.get("badges", null), envelope.badges));
       }
       if (envelope.daily != null && isObj(envelope.daily) && o.includeExtras !== false) {
         s.write("daily.v1", envelope.daily);

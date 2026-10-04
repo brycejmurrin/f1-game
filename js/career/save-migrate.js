@@ -142,16 +142,17 @@ const SaveMigrate = (function () {
     career.owned = Array.isArray(career.owned) ? career.owned : [];
     career.fitted = career.fitted && typeof career.fitted === "object" ? career.fitted : {};
     // Only object rows: a null or a number in the ledger threw on the first
-    // `r.round` read in the history screen.
-    career.results = Array.isArray(career.results)
-      ? career.results.filter((r) => r && typeof r === "object" && !Array.isArray(r)) : [];
-    career.history = Array.isArray(career.history) ? career.history : [];
+    // `r.round` read in the history screen (and history on the title screen's
+    // Career.slots(); offers and moves the same way).
+    const rows = (a) => (Array.isArray(a) ? a.filter((r) => r && typeof r === "object" && !Array.isArray(r)) : []);
+    career.results = rows(career.results);
+    career.history = rows(career.history);
     career.dev = career.dev && typeof career.dev === "object" ? career.dev : {};
     career.tdev = career.tdev && typeof career.tdev === "object" ? career.tdev : {};
     career.aiParts = career.aiParts && typeof career.aiParts === "object" && !Array.isArray(career.aiParts)
       ? career.aiParts : {};
     career.seats = career.seats && typeof career.seats === "object" ? career.seats : {};
-    career.offers = Array.isArray(career.offers) ? career.offers : [];
+    career.offers = rows(career.offers);
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
     // Which of the round's three briefs was chosen, {round, i}. No CAREER_V rung:
     // absent reads as index 0, which is the kind the single dealt brief always
@@ -160,7 +161,9 @@ const SaveMigrate = (function () {
       && !Array.isArray(career.objPick) ? career.objPick : null;
     career.budgetLvl = Math.max(0, career.budgetLvl | 0);
     career.facility = career.facility | 0;
-    career.moves = Array.isArray(career.moves) ? career.moves : [];
+    career.moves = rows(career.moves);
+    // MY TEAM's hired seat: rows or null — `roster: {}` threw in wageBill().
+    career.roster = Array.isArray(career.roster) ? rows(career.roster) : null;
     career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
     return career;
   }
