@@ -92,12 +92,16 @@ const Damage = (function () {
   }
 
   /** Car-to-car contact: game.js collideFx(a, b, impact), every pair, before
-   *  its player-only early-out. */
-  function contact(a, b, impact) {
+   *  its player-only early-out. `trackLen` (m) wraps the prog difference: prog
+   *  counts laps, so a lapped pair touching nose-to-tail is ~L apart in prog and
+   *  the unwrapped sign booked a rear hit as a FRONT one (and the reverse). */
+  function contact(a, b, impact, trackLen) {
     if (!a || !b) return;
     const pa = Number.isFinite(a.prog) ? a.prog : a.s || 0;
     const pb = Number.isFinite(b.prog) ? b.prog : b.s || 0;
-    const dl = pb - pa, dx = (b.x || 0) - (a.x || 0);
+    let dl = pb - pa;
+    if (trackLen > 0) dl = ((dl + trackLen / 2) % trackLen + trackLen) % trackLen - trackLen / 2;
+    const dx = (b.x || 0) - (a.x || 0);
     hitAt(a, dl, dx, impact);
     hitAt(b, -dl, -dx, impact);
   }

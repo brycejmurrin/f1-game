@@ -4447,6 +4447,8 @@ const AI_HEAD_MAX = 0.45;      // rad: the heading a car may hold off the road t
 const AI_YAW_LAT = 0.6;        // share of LAT_MAX·grip the heading change may spend (a_lat = v·yawRate)
 const AI_YAW_MAX = 1.2;        // rad/s: yaw-rate cap at crawl speeds
 const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separation bias may move the target
+// WallClamp.apply's ctx, pooled like _aiBr: a fresh literal + addShake closure per car per tick was ~1,300 objects/s at 22 cars.
+const _wallCtx = { track: null, dt: 0, steer: 0, postLim, smp, wrapS, worldFromTrack, soundOn: false, incidentSim, addShake(d) { shake = Math.min(1, shake + d); } };
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
@@ -4459,7 +4461,7 @@ const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] 
 const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
-  Damage.contact(a, b, impact);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
+  Damage.contact(a, b, impact, track ? track.total : 0);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
   if (!a.isPlayer && !b.isPlayer) return;
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
@@ -4729,7 +4731,7 @@ function updateCar(c, dt, ranked) {
   // Only a car inside OT_GAP·speed can earn (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
   for (const o of ranked) {
-    if (o === c || o.finished) continue;
+    if (o === c || o.finished || o.retired || pits.inLane(o)) continue;   // a car in the pit lane is not on the road
     const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
     const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
     if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
@@ -4748,7 +4750,7 @@ function updateCar(c, dt, ranked) {
                           _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
                           _aiOtFire.gapAhead = gapAhead * (c.speed || 1),
                           _aiOtFire.roomL = roomL, _aiOtFire.roomR = roomR, _aiOtFire.speed = c.speed, _aiOtFire.vTop = vTop(),
-                          _aiOtFire.aheadSpeed = blocker ? blocker.speed : (ahead ? ahead.speed : c.speed),
+                          _aiOtFire.aheadSpeed = blocker ? blocker._snapSpeed : (ahead ? ahead._snapSpeed : c.speed),
                           _aiOtFire.kAhead = Tracks.curvature(track, wrapS(c.s + 40)),
                           _aiOtFire.street = !!track.street, _aiOtFire.team = c.team, _aiOtFire.seat = c.seat,
                           _aiOtFire.stats = c.houseStats, _aiOtFire.other = blocker,
@@ -4855,7 +4857,7 @@ function updateCar(c, dt, ranked) {
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * tyres.tractionMul(c) * (gripMult(c) / gripMult()); _aiBr.pace = PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
     _aiBr.grip = gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
-    _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
+    _aiBr.blockerSpeed = blocker ? blocker._snapSpeed : 0;
     _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
     _aiBr.errMul = AiDrive.mistakePhase(c.errT) === 1 ? AiDrive.mistakeBrakeMul() : 1;   // a missed braking point
     const br = AiDrive.brakeDecision(_aiBr);
@@ -4870,7 +4872,7 @@ function updateCar(c, dt, ranked) {
     // of sitting behind a car, and it is in the CORNERS that it decides
     // anything. The tow keeps its own straight-only gate below: a slipstream
     // needs a straight, a wake does not.
-    c.wake = towCar ? wakeOf(towGap, towCar.x - c.x) : 0;   // cleared in clear air, or dirtyAirMul sticks
+    c.wake = towCar ? wakeOf(towGap, towCar._snapX - c.x) : 0;   // cleared in clear air, or dirtyAirMul sticks
     c.towing = (towCar && !braking && kMax < 0.006) ? c.wake : 0;
     if (c.towing > 0) {
       vmax *= 1 + AiDrive.towGain(!!track.street) * c.towing;
@@ -4894,7 +4896,7 @@ function updateCar(c, dt, ranked) {
     const followR = blocker ? AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : c.atkWant ? 0.6 : 0, c.team, c.seat, blocker, c.houseStats, (c.runT || 0) + AiDrive.startGapT(c.calm = AiDrive.startCalm(c.launchOn, c.calmUntil, raceT))) : 0;
     const qWin = Math.max(16, followR + 6);
     const capBlocks = blocker && blockerGap < qWin &&
-      !(blocker === c.passOf && Math.abs(c.x - blocker.x) >= 1.8);
+      !(blocker === c.passOf && Math.abs(c.x - blocker._snapX) >= 1.8);
     if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
     c.queueT = AiDrive.queueTime(c.queueT, capBlocks && blocker === c._qOf && cautionLevel() < 2, dt); c._qOf = capBlocks ? blocker : null;   // held behind the SAME car (AiDrive.queuePress)
     if (capBlocks) {
@@ -4912,10 +4914,10 @@ function updateCar(c, dt, ranked) {
       // must never command a STANDSTILL — which it did behind a stopped car,
       // and a stopped AI can never steer out. The crawl is itself capped at the
       // vmax race control already granted, so VSC and red flag still win.
-      const q = blocker.speed + clamp(blockerGap - follow, -6, 8);
+      const q = blocker._snapSpeed + clamp(blockerGap - follow, -6, 8);
       const crawl = onLane ? 0 : Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
       vmax = Math.min(vmax, Math.max(q, crawl));
-      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street, blockerGap, follow, BRAKE, vTop() / VMAX);
+      const qb = AiDrive.queueBrake(c.speed, blocker._snapSpeed, !!track.street, blockerGap, follow, BRAKE, vTop() / VMAX);
       if (qb) { braking = true; brakeLvl = qb; }
     }
     // The other half of LET PASS: stop accelerating away. A multiplier, not a
@@ -4924,11 +4926,11 @@ function updateCar(c, dt, ranked) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO.speed >= c.speed - 0.5) vmax = Math.min(vmax, alongO.speed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
-    squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x, c.kTurn) &&
+    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
+    squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
     if (squeezed) {
-      vmax = Math.min(vmax, alongO.speed * AiDrive.squeezeEase(!!track.street));
+      vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.squeezeEase(!!track.street));
       if (!unstuckActive) { braking = true; brakeLvl = Math.max(brakeLvl, AiDrive.squeezeBrake()); }
     }
     // when wedged in/stopped, power out instead of braking
@@ -5317,7 +5319,7 @@ function updateCar(c, dt, ranked) {
           if (po.passOf === c) { po.passOf = null; po.passCool = po.passFailT; }
         }
       }
-      else if (AiDrive.passSideClosed(sideRoom, c.passSide * (AiDrive.passTarget(po.x, c.passSide, CLEAR, hw) - c.x), WCAR)) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed: no room left to REACH the pass lane
+      else if (AiDrive.passSideClosed(sideRoom, c.passSide * (AiDrive.passTarget(po._snapX, c.passSide, CLEAR, hw) - c.x), WCAR)) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed: no room left to REACH the pass lane
       else if (squeezed) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }             // walked to the edge: abandon it
       // NOT ON: at the turn-in and still not half alongside — that is a lunge
       // (the FIA's inside-pass entitlement is the front axle past the mirror
@@ -5335,7 +5337,7 @@ function updateCar(c, dt, ranked) {
     if (blocker) {
       _aiOtPull.street = !!track.street; _aiOtPull.traits = aiT; _aiOtPull.speed = c.speed;
       _aiOtPull.team = c.team; _aiOtPull.seat = c.seat; _aiOtPull.stats = c.houseStats;
-      _aiOtPull.blockerSpeed = blocker.speed; _aiOtPull.blockerGap = blockerGap;
+      _aiOtPull.blockerSpeed = blocker._snapSpeed; _aiOtPull.blockerGap = blockerGap;
       _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker; _aiOtPull.roadL = roadL; _aiOtPull.roadR = roadR;
       // Side-pick + incentive inputs. kA is the same AI-only curvature read the
       // racing line above already makes — the arc reaches the AI's choice of
@@ -5448,8 +5450,8 @@ function updateCar(c, dt, ranked) {
     // side-by-side neither has lost yet. Between AI cars the contact-time
     // election below stays; a human runs no election at all, which is why
     // the aim is the right moment there (AiDrive.aimIntrudes).
-    const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO.x, CLEAR);
-    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x, c.kTurn);
+    const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO._snapX, CLEAR);
+    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn);
     // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
     // AiDrive.humanYieldGrace; this end only carries the per-car timer.
     // Are WE steering into them (aim vs where we already are), and is there
@@ -5464,7 +5466,7 @@ function updateCar(c, dt, ranked) {
     if (!yieldMine && aimClose && alongO.human) yieldMine = true;
     c.sbsT = yieldMine ? (c.sbsT || 0) + dt : 0;   // read by COMMIT OR YIELD above, next frame
     if (yieldMine) {
-      desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);
+      desiredX = alongDx <= 0 ? Math.max(desiredX, alongO._snapX + CLEAR) : Math.min(desiredX, alongO._snapX - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
       // Only a car ALREADY inside the gap is an emergency for the controller
       // below; at aim distance the heading state bends the line in time.
@@ -5752,11 +5754,8 @@ function updateCar(c, dt, ranked) {
   // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
   // human slide-along scrub + conditional road→world writeback when xPinned.
   // Collide keeps the post-contact soft clamp; peers editing walls own this file.
-  WallClamp.apply(c, {
-    track, dt, steer, postLim, smp,
-    wrapS, worldFromTrack, soundOn, incidentSim,
-    addShake(d) { shake = Math.min(1, shake + d); },
-  });
+  _wallCtx.track = track; _wallCtx.dt = dt; _wallCtx.steer = steer; _wallCtx.soundOn = soundOn;
+  WallClamp.apply(c, _wallCtx);
   Damage.observe(c, dt, vTop());   // DISPLAY-ONLY damage readout (js/race/damage.js): barrier strikes + pit repair; nothing reads it back
   c.brakeDemand = braking ? brakeLvl : 0; c.throttleDemand = onThrottle ? throttleLvl : 0; c.steerCommand = steer;
   c.steerVis = damp(c.steerVis, steer, 10, dt);
