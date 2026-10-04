@@ -810,3 +810,29 @@ test("fetchTraces never caches a set with a failed request (a hub closed mid-loa
   await D.fetchTraces(s);
   assert.equal(puts.length, 1, "a complete set is cached");
 });
+
+test("leaving the tab mid-download drops the queued position requests; a pick here re-renders the sibling tabs", async () => {
+  // cancel() left ~20 /location requests in the transport's FIFO, so every
+  // other tab queued behind a download nobody would watch; and the picker
+  // changed the shared `sel` without telling LIVE / TELEMETRY / RESULTS.
+  const { script, ctx } = load();
+  let cancels = 0;
+  const invalidated = [];
+  ctx.F1API = { locationData: () => new Promise(() => {}), cancelAll() { cancels++; } };
+  const D = vm.runInContext("DataRealRace", ctx);
+  const node = () => ({ appendChild() {}, isConnected: true });
+  let onPick = null;
+  const tab = D.create({ el: node, clear() {}, emptyMsg: node, spinner: node, sel: { meta: null, meetingKey: null },
+    ensureSession: () => Promise.resolve(null), buildPicker: (fn) => { onPick = fn; return node(); },
+    invalidateOther: (except) => invalidated.push(except), teamChip: node, fmtDateTime: String, findTeam: () => null,
+    close() {}, isOpen: () => true });
+  tab.cancel();
+  assert.equal(cancels, 0, "nothing in flight: other tabs' requests are left alone");
+  const s = { ...script, t0: Date.UTC(2026, 8, 20, 11), drivers: script.drivers.slice(0, 3).map((d) => ({ ...d, lapStart: [0], laps: [90] })) };
+  assert.equal(tab.loadTraces(s, null, null), true, "the download started");
+  tab.cancel();
+  assert.equal(cancels, 1, "a download in flight is cancelled with the tab");
+  await tab.loadRealRace();
+  onPick({ sessionKey: null });
+  assert.deepEqual(invalidated, ["race"], "a WATCH & DRIVE pick invalidates the other session tabs");
+});

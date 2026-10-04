@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
-  parseToolingFastArgv, TOOLING_FAST_USAGE }
+  parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail }
   from "../../tools/ci/tooling-fast.mjs";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "apex-tf-"));
@@ -139,6 +139,53 @@ test("the arithmetic contract fails", () => assert.equal(1, 2));
     assert.match(log, /actual: 1/);
     assert.match(log, /operator: 'strictEqual'/);
     assert.doesNotMatch(log, /reason=timeout/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("tapFailureDetail keeps deepEqual body rows and indexed actual members", () => {
+  const tap = [
+    "not ok 1 - ceiling breach",
+    "  ---",
+    "  error: |-",
+    "    Expected values to be strictly deep-equal:",
+    "    + actual - expected",
+    "",
+    "    + [",
+    "    +   'js/net/lobby.js lines: 1895 > 1894 (+1)'",
+    "    + ]",
+    "    - []",
+    "",
+    "  name: 'AssertionError'",
+    "  expected:",
+    "  actual:",
+    "    0: 'js/net/lobby.js lines: 1895 > 1894 (+1)'",
+    "  operator: 'deepStrictEqual'",
+    "  ...",
+  ].join("\n");
+  const detail = tapFailureDetail(tap).join("\n");
+  assert.match(detail, /js\/net\/lobby\.js lines: 1895 > 1894 \(\+1\)/);
+  assert.match(detail, /0: 'js\/net\/lobby\.js/);
+  assert.match(detail, /operator: 'deepStrictEqual'/);
+});
+
+test("deepequal TAP failures keep the actual member list and error body", async () => {
+  // The defect this exists for: Structural guards #841 (2026-10-04) failed
+  // ratchets.test.mjs with empty Expected/Received because the runner kept
+  // only the `actual:` / `expected:` keys and dropped `0: '…'` rows and the
+  // `error: |-` deepEqual dump — so nobody could see which metric was over.
+  const dir = tmp();
+  try {
+    const file = path.join(dir, "deepeq.test.mjs");
+    fs.writeFileSync(file, `import test from "node:test"; import assert from "node:assert/strict";
+test("ceiling breach", () => assert.deepEqual(["js/net/lobby.js lines: 1895 > 1894 (+1)"], []));
+`);
+    const logPath = path.join(dir, "suite.log");
+    const result = await runToolingFast([file], { jobs: 1, logPath, localTimingsPath: null });
+    assert.equal(result.ok, false);
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.match(log, /not ok 1 - ceiling breach/);
+    assert.match(log, /js\/net\/lobby\.js lines: 1895 > 1894 \(\+1\)/);
+    assert.match(log, /operator: 'deepStrictEqual'/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
