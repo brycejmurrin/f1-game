@@ -126,3 +126,38 @@ test("codeFrom lifts a BARE code out of brackets, quotes and a sentence's end", 
   // \u2026an unbracketed one does not glue on a punctuated last word.
   assert.equal(LobbyCodes.codeFrom(code.slice(0, 76) + "\n" + code.slice(76, 152) + "\nok!"), code.slice(0, 152));
 });
+
+// L8-e: a share sheet that fails (not cancelled) has SPENT the tap; Safari then
+// refuses a clipboard write. Try the copy once, and if it fails say which tap
+// will work instead of "Could not copy".
+function bootShare({ shareError, clipboardOk }) {
+  const said = [];
+  const sb = {
+    console, Object, Array, String, Promise,
+    navigator: { share: async () => { const e = new Error("x"); e.name = shareError; throw e; } },
+    NetHandshake: { inviteFromUrl: () => null, inviteUrl: (c) => "https://x.test/#vs=" + c },
+    NetQr: { draw: () => true },
+    NetScan: { supported: () => false, create: () => ({ start: async () => ({ ok: false }), stop() {} }) },
+  };
+  const ctx = vm.createContext(sb);
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "lobby-codes.js" });
+  ctx.ApexClipboard = { write: async () => clipboardOk };
+  const codes = vm.runInContext("LobbyCodes", ctx).create({
+    els: () => ({}), $: () => null, say: (m, err) => said.push([m, !!err]),
+    makeAnswer() {}, acceptAnswer() {}, cancelledResult: () => ({ ok: false }),
+    has: () => false, focusInto() {}, shownStep: () => null,
+  });
+  return { codes, said };
+}
+
+test("a failed share copies if it still can, else asks for the COPY tap", async () => {
+  const lost = bootShare({ shareError: "NotAllowedError", clipboardOk: false });
+  assert.equal(await lost.codes.handOff({ url: "u" }, "CODE"), false);
+  assert.deepEqual(lost.said.at(-1), ["Sharing failed — tap COPY to copy the code.", true]);
+  const kept = bootShare({ shareError: "DataError", clipboardOk: true });
+  assert.equal(await kept.codes.handOff({ url: "u" }, "CODE"), true);
+  assert.match(kept.said.at(-1)[0], /copied instead/);
+  const cancelled = bootShare({ shareError: "AbortError", clipboardOk: true });
+  assert.equal(await cancelled.codes.handOff({ url: "u" }, "CODE"), false);
+  assert.equal(cancelled.said.length, 0, "a cancelled sheet is the player's choice: nothing said, nothing copied");
+});

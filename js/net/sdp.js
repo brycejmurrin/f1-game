@@ -63,6 +63,15 @@ const NetSdp = (function () {
     return words.slice(0, bestAt).join(":") + "::" + words.slice(bestAt + bestLen).join(":");
   }
 
+  // Addresses no OTHER device can ever reach: fe80::/10 link-local (its zone
+  // is stripped on the way in, so it would arrive as a bare fe80:: that names
+  // nothing on the far side) and ::1. Each one cost one of MAX_CANDS slots.
+  function unreachableV6(b) {
+    if (b[0] === 0xfe && (b[1] & 0xc0) === 0x80) return true;
+    for (let i = 0; i < 15; i++) if (b[i]) return false;
+    return b[15] === 1;
+  }
+
   function parseCandidate(text) {
     const t = text.trim().split(/\s+/);
     if (t.length < 8 || t[6] !== "typ") return null;
@@ -84,6 +93,7 @@ const NetSdp = (function () {
     if (addr.indexOf(":") >= 0) {
       const b = v6ToBytes(addr);
       if (!b) return null;
+      if (unreachableV6(b)) return null;
       if (type === "host") return { kind: C_HOST6, addr: b, port };
       if (type === "srflx") return { kind: C_SRFLX6, addr: b, port };
       if (type === "relay") return { kind: C_RELAY6, addr: b, port };   // a v6 TURN allocation is the whole relay leg on v6-only paths
@@ -91,6 +101,7 @@ const NetSdp = (function () {
     }
     const b = v4ToBytes(addr);
     if (!b) return null;
+    if (b[0] === 127) return null;                    // loopback: this machine only
     if (type === "host") return { kind: C_HOST4, addr: b, port };
     if (type === "srflx") return { kind: C_SRFLX4, addr: b, port };
     if (type === "relay") return { kind: C_RELAY4, addr: b, port };
@@ -155,7 +166,9 @@ const NetSdp = (function () {
       const c = parseCandidate(m[1]);
       // An unparseable candidate is skipped, not fatal: a stack may offer TCP
       // or a type we do not pack, and the UDP ones are what connect.
-      if (!c || c.port < 0 || c.port > 65535) continue;
+      // Number("abc") is NaN, and NaN fails both range tests — it was packed
+      // as port 0. A port is an integer 1..65535 or the candidate is noise.
+      if (!c || !Number.isInteger(c.port) || c.port < 1 || c.port > 65535) continue;
       if (!byKind.has(c.kind)) byKind.set(c.kind, []);
       byKind.get(c.kind).push(c);
     }

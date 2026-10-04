@@ -224,7 +224,12 @@ two packets; a late packet EXTRAPOLATES ALONG s, which follows the road by
 construction and so cannot dead-reckon a rival into a barrier. s and head both
 wrap the short way — getting that wrong sends a car backwards down the lap
 once per lap. predict() leads sample(): contact must not be resolved against
-the delayed DRAWN pose
+the delayed DRAWN pose. A second packet type, AGED (type 2, 15 B/car: the
+13 plus a u16 age in ms behind the header tick), carries cars posed at
+different moments — the host's relay — so each keeps its own stamp. Lag and
+jitter are measured from the transport's ARRIVAL stamp, not the frame that
+drained the inbox; own-car snapshots go out at a fixed 20 Hz whatever the
+frame rate (the period is advanced, not reset to `now`)
 
 ### `js/net/session.js` — `NetSession`
 
@@ -234,7 +239,10 @@ and a heartbeat, so an abandoned car can be handed back to the AI instead of
 standing still on track. A PONG is a clock sample only if it echoes an
 outstanding ping's id AND that ping's own t0 (the last eight sent are kept,
 each answered once) — the echoed t0 is what every peer timestamp is converted
-through, and it used to be taken on trust
+through, and it used to be taken on trust. A gap between pumps longer than
+`stallForgiveMs` is forgiven as OUR stall — except while `document.hidden`,
+where the page pumps slowly on purpose and the transport still stamps every
+arrival, so a quit peer is timed out while the tab is in the background
 
 ### `js/net/netplay.js` — `NetPlay`
 
@@ -257,8 +265,9 @@ teamIndex*2 + seat — a byte both peers compute identically, which is what lets
 a snapshot say WHICH car it describes. cars[] index cannot: makeCars() drops
 the custom team unless the local player picked it, so the grids differ in
 length and order. The host RELAYS — guests have no connection to each other,
-so it forwards every rival in one multi-entry snapshot, unaltered and under
-that guest's own id. Authority does not move; it is a courier. A packet with
+so it forwards every rival in ONE aged snapshot per guest (one datagram, not
+one per car — 9 sends a tick became 6 in a four-player room), unaltered and
+under each guest's own id. Authority does not move; it is a courier. A packet with
 an unknown id is DROPPED, never guessed at — which is also how a guest ignores
 its own car coming back round the relay
 

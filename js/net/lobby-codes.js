@@ -170,6 +170,14 @@ const LobbyCodes = (function () {
         try { await navigator.share(data); say("Shared."); return true; }
         catch (e) {
           if (e && e.name === "AbortError") return false;
+          // THE TAP IS SPENT. share() consumed the user activation, and after
+          // its await a clipboard write needs one again — Safari refuses both
+          // writeText and execCommand("copy") there, so this used to end in
+          // "Could not copy". Try once (Chromium's activation outlives a quick
+          // rejection); if it fails, ask for the one tap that will work.
+          if (await ApexClipboard.write(fallbackText)) { say("Sharing failed — copied instead."); return true; }
+          say("Sharing failed — tap COPY to copy the code.", true);
+          return false;
         }
       }
       return copy(fallbackText);

@@ -186,8 +186,17 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   const ld = JSON.stringify({ backend: lens.backend, glass: lens.glass });
   expect(lens.backend.glass, ld).toBeGreaterThan(glass0);
   expect(lens.glass && lens.glass.live, ld).toBeGreaterThan(0);
-  const bands = await glassBands(page, lens.glass.screen, on.m.rect);
-  test.info().annotations.push({ type: "mirror-glass-bands", description: JSON.stringify(bands) });
+  // The HUD rows are read at the rect the backend COMPOSITED at for this frame
+  // (lens.backend.rect), never the `on` snapshot: between the two the radio
+  // card step and hud.js's 10 Hz refits can move #hud-mirror (its top is the
+  // runtime --hud-top-h), and mirror-pass.js re-measures every 500 ms, so the
+  // composite follows and a stale rect samples rows a few px off — one bright
+  // feature then lands in the "wrong" band, and the glass-0 verdict flipped
+  // run to run on an unchanged image (2026-10-04: a bisect blamed a
+  // netplay-only merge; the glass means were identical in every run).
+  expect(lens.backend.rect, ld).toEqual(lens.rect);
+  const bands = await glassBands(page, lens.glass.screen, lens.backend.rect);
+  test.info().annotations.push({ type: "mirror-glass-bands", description: JSON.stringify({ bands, rect: lens.backend.rect, onRect: on.m.rect }) });
   if (requirePixels) expect(bands, "GLX presents through #game-soft").toBeTruthy();
   if (bands) {
     const bd = JSON.stringify(bands);

@@ -6,8 +6,9 @@ const Assets = (function () {
   // the shell's own script/link tags), so these fetches use DEFAULT caching
   // rather than force-cache: force-cache would serve a stale pack out of the
   // HTTP cache indefinitely, and a rebaked pack would never reach anyone who
-  // had already loaded the old one. Normal revalidation plus sw.js's
-  // build-numbered cache generation is what makes a rebake actually land.
+  // had already loaded the old one. sw.js serves assets/pack/ NETWORK-FIRST
+  // (cache only as the offline / slow fallback), so normal revalidation is
+  // what makes a rebake land — from the first boot after the deploy.
   const PACK_DIR = "assets/pack/";
   const MANIFEST = PACK_DIR + "manifest.json";
   const MAT_LAYERS = 17;                 // MAT.FLAT(0) … MAT.ASPHALT(16)
