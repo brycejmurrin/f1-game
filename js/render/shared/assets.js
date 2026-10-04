@@ -163,11 +163,12 @@ const Assets = (function () {
     let albedo = null, normal = null, albedoTex = null, normalTex = null;
     try {
       // Start both downloads together; decode and upload remain sequential.
-      // Promise.all observes either rejection immediately, including a normal
-      // fetch that fails while the albedo request is still pending.
+      // The NORMAL strip is optional: its fetch and decode fail on their own
+      // (normal = null, albedo still ships) — sharing the albedo's Promise.all
+      // let a missing normal strip discard the whole pack (_tier "off").
       const [albedoBlob, normalBlob] = await Promise.all([
         _fetchStrip(variant.albedo),
-        variant.normal ? _fetchStrip(variant.normal) : null,
+        variant.normal ? _fetchStrip(variant.normal).catch(() => null) : null,
       ]);
       if (generation !== _loadGeneration) return false;
       albedo = await _decodeStrip(albedoBlob, size, present);
@@ -177,13 +178,14 @@ const Assets = (function () {
       }
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) throw new Error("albedo-upload");
-      if (variant.normal) {
-        normal = await _decodeStrip(normalBlob, size, present);
+      if (normalBlob) {
+        try { normal = await _decodeStrip(normalBlob, size, present); }
+        catch (_) { normal = null; }   // undecodable normal strip: albedo alone
         if (generation !== _loadGeneration) {
           _discardLoad(albedo, normal, albedoTex, normalTex);
           return false;
         }
-        normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
+        if (normal) normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
         // A missing normal array is survivable — albedo alone still helps.
       }
     } catch (e) {

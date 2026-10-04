@@ -1047,6 +1047,7 @@ const GLXPost = (function () {
     // lit shaders write the same range they write into sceneTex.
     let mirFBO = null, mirTex = null, mirDepthRB = null, mirW = 0, mirH = 0, mirHdr = false;
     let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null, mirFlip = true;
+    const _mirRectScratch = [0, 0, 0, 0];   // mirRect points here (or is null); doubles, like TLX: no float32 rounding
     let mirRenders = 0, mirComposites = 0, mirGlass = 0;
     // MIPMAPPED: the target is supersampled (js/render/shared/mirror-pass.js SS)
     // and minified into the HUD rect, so a plain LINEAR read skipped texels and
@@ -1194,11 +1195,12 @@ const GLXPost = (function () {
       end() { if (!mirActive) return; mirActive = false; mirRenders++; mirrorMips(); },
       active: () => mirActive,
       bindTarget: bindMirrorTarget,
-      rect(r, flip) { mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; mirFlip = flip !== false; },
+      // Called every frame: fill the scratch, never mint an array (TLX mirrorRect does the same).
+      rect(r, flip) { mirRect = r && r.length === 4 ? _mirRectScratch : null; if (mirRect) for (let i = 0; i < 4; i++) mirRect[i] = +r[i] || 0; mirFlip = flip !== false; },
       composite: mirrorComposite,
       glass: mirrorGlass,
       state: () => ({ ready: !!mirTex && mirRenders > 0, dead: mirDead, w: mirW, h: mirH, hdr: mirHdr,
-        renders: mirRenders, composites: mirComposites, glass: mirGlass, rect: mirRect, flip: mirFlip }),
+        renders: mirRenders, composites: mirComposites, glass: mirGlass, rect: mirRect ? mirRect.slice() : null, flip: mirFlip }),
     };
 
     function invalidateUniformCache() {

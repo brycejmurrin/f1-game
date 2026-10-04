@@ -1842,7 +1842,9 @@ const TLX = (function () {
       function ensureStream(slot, verts) {
         if (slot.geo && slot.cap >= verts) return false;
         const cap = Math.max(slot.cap * 2, verts, slot.min);
-        if (slot.geo) slot.geo.dispose();
+        // disposeGeometry, not geo.dispose(): the pooled wrapper Mesh (and any
+        // parked shadow caster) keyed on the old geo must go with it.
+        if (slot.geo) disposeGeometry(slot.geo);
         const geo = new THREE.BufferGeometry();
         const ib = new THREE.InterleavedBuffer(new Float32Array(cap * slot.stride), slot.stride);
         ib.setUsage(THREE.DynamicDrawUsage);
@@ -1879,7 +1881,7 @@ const TLX = (function () {
       // object is read in begin(), the chunk draw happens in present().
       let frameAllLights = null;    // frame.allLights — the full baked track set
       let framePerChunk = 0;        // frame.perChunkLights — the 0..1 knob
-      let _lgKey = null, _lgSrc = null, _lgChunks = null;   // bake-once cache
+      let _lgKey = null, _lgSrc = null, _lgChunks = null, _lgKP = [NaN, NaN, NaN, NaN, NaN];   // bake-once cache (+ key parts)
       // The flattened lamp-cell list handed to LampChunks.resolve. KEPT across
       // rebakes: resolve() caches its full-cap bake in a WeakMap keyed on this
       // ARRAY, so a fresh [] per rebake re-ran the O(chunks x lamps) bake on
@@ -3153,7 +3155,16 @@ const TLX = (function () {
           }
           if (maps.albedo) matOwnedAlbedo = maps.albedo;
           if (maps.normal) matOwnedNormal = maps.normal;
-          lit.setMaterialMaps(maps);
+          // A map the new pack lacks (an albedo-only pack) must rebind the
+          // placeholder: lit.setMaterialMaps skips a falsy slot, which left
+          // the node sampling the texture releaseOwned() just disposed.
+          if ((!maps.albedo && matPlaceAlbedo) || (!maps.normal && matPlaceNormal)) {
+            lit.setMaterialMaps(Object.assign({}, maps, {
+              albedo: maps.albedo || matPlaceAlbedo, normal: maps.normal || matPlaceNormal,
+            }));
+          } else {
+            lit.setMaterialMaps(maps);
+          }
         },
         materialMapState() {
           const sc = (lit && lit.uniforms && lit.uniforms.matTexScale && lit.uniforms.matTexScale.array) || [];
@@ -3883,7 +3894,7 @@ const TLX = (function () {
           if (!fx || !verts || !(vertCount > 0)) return true;
           const fresh = ensureStream(skidStream, vertCount);
           if (dirty || fresh) {
-            skidStream.ib.array.set(verts.subarray(0, vertCount * 5));
+            skidStream.ib.array.set(verts.length <= vertCount * 5 ? verts : verts.subarray(0, vertCount * 5));
             uploadStream(skidStream, vertCount * 5);
           }
           skidStream.geo.setDrawRange(0, vertCount);
@@ -3898,12 +3909,19 @@ const TLX = (function () {
           if (!fx || !fx.lineMat || !verts || !(vertCount > 0)) return false;
           const fresh = ensureStream(lineStream, vertCount);
           if (dirty || fresh) {
-            lineStream.ib.array.set(verts.subarray(0, vertCount * 7));
+            lineStream.ib.array.set(verts.length <= vertCount * 7 ? verts : verts.subarray(0, vertCount * 7));
             uploadStream(lineStream, vertCount * 7);
             const tris = Math.max(0, vertCount - 2);
-            const idx = new Uint32Array(tris * 3);
-            for (let i = 0; i < tris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
-            lineStream.geo.setIndex(new THREE.BufferAttribute(idx, 1));
+            // The index is a pure function of position — (i, i+1, i+2) — so it
+            // is built ONCE per stream geometry at full capacity and the draw
+            // range trims it. A fresh BufferAttribute per re-upload orphaned the
+            // old index's GPU buffer (three frees an index only on geo dispose).
+            const capTris = Math.max(0, lineStream.cap - 2);
+            if (!lineStream.geo.index || lineStream.geo.index.count < capTris * 3) {
+              const idx = new Uint32Array(capTris * 3);
+              for (let i = 0; i < capTris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
+              lineStream.geo.setIndex(new THREE.BufferAttribute(idx, 1));
+            }
             lineStream.geo.setDrawRange(0, tris * 3);
           }
           fx.lineSpeed.value = (opts && opts.speed) || 0;
@@ -3961,7 +3979,8 @@ const TLX = (function () {
           const slot = partStreams[additive ? 1 : 0];
           const verts = (floatCount / 10) | 0;
           ensureStream(slot, verts);
-          slot.ib.array.set(data.subarray(0, floatCount));
+          // Per-frame: set() the source whole when it is exactly the payload; a subarray view only when it is longer.
+          slot.ib.array.set(data.length <= floatCount ? data : data.subarray(0, floatCount));
           uploadStream(slot, floatCount);
           slot.geo.setDrawRange(0, verts);
           pushRec(slot.geo, null, fx.particleMats[additive ? 1 : 0], undefined, undefined, 0, null, null);
@@ -4016,11 +4035,13 @@ const TLX = (function () {
             if (!AL || !(knob > 0) || !total || cellSplit) {
               if (_lgKey !== "off") { lit.setLampGrid(null); _lgKey = "off"; }
               if (!total) _lgChs = _lgChsFirst = null;   // no chunked geometry: do not pin the old track's cells
-              _lampGridState = { on: false, lamps: AL ? (AL.length / 15) | 0 : 0,
-                                 chunks: total, idx: 0,
-                                 why: cellSplit ? "chunked records disagree on cellSize"
-                                    : !(knob > 0) ? "knob is 0"
-                                    : !AL ? "no baked lamp set" : "no chunked geometry" };
+              const lamps = AL ? (AL.length / 15) | 0 : 0;
+              const why = cellSplit ? "chunked records disagree on cellSize"
+                : !(knob > 0) ? "knob is 0"
+                : !AL ? "no baked lamp set" : "no chunked geometry";
+              const st = _lampGridState;   // per-frame path: reuse an identical "off" record
+              if (!st || st.on || st.lamps !== lamps || st.chunks !== total || st.idx !== 0 || st.why !== why)
+                _lampGridState = { on: false, lamps, chunks: total, idx: 0, why };
             } else {
               // `first` stands in for chunk-array identity; a track reload also
               // replaces frameAllLights, which _lgSrc already catches.
@@ -4028,7 +4049,13 @@ const TLX = (function () {
               // The knob enters as capFor(knob), the only way the bake depends on
               // it: the slider is step 0.001, so keying the raw float rebuilt the
               // grid on every drag step that mapped to the same cap.
-              const key = LampChunks.capFor(knob) + "|" + total + "|" + nrec + "|" + cell + "|" + (typeof LampBake !== "undefined" ? LampBake.gen() : 0);
+              // Compared as numbers first: the string is built only when a part moves.
+              const kp = _lgKP, kCap = LampChunks.capFor(knob), kGen = typeof LampBake !== "undefined" ? LampBake.gen() : 0;
+              if (kp[0] !== kCap || kp[1] !== total || kp[2] !== nrec || kp[3] !== cell || kp[4] !== kGen) {
+                kp[0] = kCap; kp[1] = total; kp[2] = nrec; kp[3] = cell; kp[4] = kGen;
+                kp.str = kCap + "|" + total + "|" + nrec + "|" + cell + "|" + kGen;
+              }
+              const key = kp.str;
               if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== first) {
                 let note;
                 try {
