@@ -140,3 +140,27 @@ test("no lit condition ships the crushing stamp: ambientMul ≥ 0.15 and keyMul 
   }
   assert.deepEqual(bad, [], "a non-night preset crushes ambient or switches the sun off");
 });
+
+test("no preset sets a condition-gated knob where its gate is shut (dead entries)", () => {
+  // Two knobs are read only under one condition, so a value anywhere else is
+  // dead weight that a reader takes for a live setting:
+  //  - lightning: js/game.js's strike loop runs only while isRaining()
+  //    (trackWetness() >= 0.72). Wetness is 0 for overcast/fog/dry and at most
+  //    0.5 for "wet", and an arc flips a stage at wetness <= 0.67 (weather-arc.js
+  //    arcSeq), so only "rain" profiles are ever read.
+  //  - nightAmbLift: read only by _nightAmbientBand() (js/game.js), which
+  //    atmosphere.js calls for night sessions alone.
+  // 12 overcast lightning and 44 dawn|wet nightAmbLift entries were deleted
+  // 2026-10-04 (review-wgx-lighting item 16).
+  const src = read("js/game.js");
+  assert.match(src, /if \(raining && _ltBase && LT\.lightning > 0\)/, "the lightning gate moved — re-check this test");
+  assert.match(read("js/lighting/atmosphere.js"), /if \(isNightSession\) _nightAmbientBand\(\);/, "the night-band gate moved — re-check this test");
+  const P = presets(), dead = [];
+  for (const [key, o] of Object.entries(P)) {
+    const [, tod, wx] = key.split("|");
+    if (!wx) continue;
+    if ("lightning" in o && wx !== "rain") dead.push(`${key}.lightning`);
+    if ("nightAmbLift" in o && tod !== "night") dead.push(`${key}.nightAmbLift`);
+  }
+  assert.deepEqual(dead, [], "a preset sets a knob its condition never reads");
+});
