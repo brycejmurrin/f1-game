@@ -173,6 +173,13 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // prop it used to clear. Two pairs, fighting from 96 m, against 122 spots
 // removed everywhere else. Measured, not assumed — coplanar-audit --why names
 // the prop (js/track/scenery/build-props.js).
+// spa 1 → 0 (2026-10-04, #878): the two remaining spots were duplicate
+// footbridge piers (custom modelGroup 3×3 boxes AND overheadSpan's
+// ground-anchored legs) sharing a 17.6 m² face 15 mm apart once SRTM
+// elevation moved the legs. Keep the span's terrain-following legs;
+// drop the Frenet boxes that neither reached grade nor matched the
+// deck (supports:false hung the deck — ground-audit unsupported 4>3).
+// Cap stays at the measured 0.
 // 2026-09-24: FIGHT_MAX 150 -> 300 m re-baselined every circuit at the wider
 // window (584 spots measured at 300 m before TrackGeom.MIN_SEP, 289 after). At
 // the old 150 m window no circuit grew (106 -> 99); every raise here is a pair

@@ -115,6 +115,32 @@ const TrackPit = (function () {
   const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
   /** Resolve a def's pit choices: side, mode, limit and the band set. */
+  // Architectural dressing only: normalized along the BUILT garage row, not
+  // scenery/start fractions. Invalid recipes leave the ordinary complex intact.
+  // Heights clear the existing upper roof (9.23 m including its alternating lift).
+  function architecture(spec) {
+    if (!spec || typeof spec !== "object" || !Array.isArray(spec.roofProfile)) return null;
+    const profile = spec.roofProfile;
+    if (profile.length < 2 || profile.length > 7) return null;
+    let previous = -1;
+    for (const knot of profile) {
+      if (!Array.isArray(knot) || knot.length !== 3 || !Array.from(knot).every(Number.isFinite) ||
+          knot[0] < 0 || knot[0] > 1 || knot[0] <= previous ||
+          knot[1] < 9.6 || knot[1] > 18 || knot[2] < 9.6 || knot[2] > 18) return null;
+      previous = knot[0];
+    }
+    if (profile[0][0] !== 0 || profile[profile.length - 1][0] !== 1) return null;
+    const result = { roofProfile: profile.map((knot) => knot.slice()) };
+    for (const key of ["roofColor", "fasciaColor", "soffitColor", "edgeColor"]) {
+      const color = spec[key];
+      if (color === undefined) continue;
+      if (!Array.isArray(color) || color.length !== 3 ||
+          !Array.from(color).every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) return null;
+      result[key] = color.slice();
+    }
+    return result;
+  }
+
   function resolve(def) {
     const p = (def && def.pit) || {};
     const street = !!(def && def.street);
@@ -142,6 +168,7 @@ const TrackPit = (function () {
       painted,
       hasWall: !painted && b.platform > 0,
       hasBays: !painted && p.bays !== false,
+      architecture: architecture(p.architecture),
     };
   }
 
@@ -363,6 +390,7 @@ const TrackPit = (function () {
     return {
       side: r.side, mode: r.mode, limitKph: r.limitKph, bands: r.bands, off: r.off,
       painted: r.painted, hasWall: r.hasWall, hasBays,
+      architecture: r.architecture,
       sA, sIn, sOut, sB, entryM: win.entryM, exitM: win.exitM, lenM, entryRoadM, exitRoadM, grow,
       w, v, b, keep,
       row: { pitch, boxLen: BOX_LEN, first, count, boxes, s0: rowS0, s1: rowS1, tail: ROW_TAIL },

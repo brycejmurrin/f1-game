@@ -98,6 +98,7 @@ function wirePhone() {
 // multiplayer stack the pairing rides on, then the module owns the pairing and
 // feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
 let phonePad = null;
+let phonePadLoading = false, phonePadGeneration = 0;
 // The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
 // screen shows VISOR (the cockpit without its steering wheel — js/camera/vantage.js) while
 // it drives, and goes back when the phone is gone, unless the player cycled away meanwhile.
@@ -126,15 +127,21 @@ function phonePadDash() {
 }
 $("pm-phonepad").onclick = () => {
   const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad) {
-    phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
+  if (phonePad || phonePadLoading) {
+    phonePadGeneration++; phonePadLoading = false;
+    if (phonePad) phonePad.cancel();
+    phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
     if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);   // what lost() does: cancel() closes the link without calling it
     phonePadCam = -1;
     return;
   }
   box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
+  const generation = ++phonePadGeneration;
+  phonePadLoading = true;
   ensureNet().then((ok) => {
-    if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
+    if (generation !== phonePadGeneration) return;
+    phonePadLoading = false;
+    if (!ok) { btn.textContent = "STEER THIS GAME WITH A PHONE"; status.textContent = "Could not load the pairing stack — check the connection."; return; }
     $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
     phonePad = PhonePad.host({
       hud: phonePadDash,
@@ -142,6 +149,7 @@ $("pm-phonepad").onclick = () => {
       qr: (url, code) => {
         LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
         $("pm-phonepad-code").textContent = code || "";
+        $("pm-phonepad-code").setAttribute("data-private", String(!!code && code.length > 6));
         $("pm-phonepad-pair").hidden = !code;
         // The code appears below the button: bring it into view on the sheet,
         // or a short screen shows "scan the code" with nothing to scan.

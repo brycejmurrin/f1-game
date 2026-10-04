@@ -1,7 +1,7 @@
 // @ts-check
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
-const HERO_MODELS = ["qatar-pit-slab", "qatar-t1-vvip-canopy"];
+const HERO_MODELS = ["qatar-pit-slab", "qatar-t1-vvip-canopy", "qatar-hospitality-villas-1"];
 
 test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   test.setTimeout(180_000);
@@ -46,7 +46,10 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   const night = await collectSession();
 
   await page.evaluate(() => window.__apex.race("qatar", "day", "dry"));
-  await page.waitForFunction(() => !window.__apex.lightState().builtNight, null, { polling: 100, timeout: 15_000 });
+  // BOOT_MS, not a fixed 15 s: after the hospitality-villa + sand-bay dress the
+  // night→day rebuild measures ~10 s headless (apex-eval), and SwiftShader
+  // regularly exceeds the old 15 s ceiling while still finishing cleanly.
+  await page.waitForFunction(() => !window.__apex.lightState().builtNight, null, { polling: 100, timeout: BOOT_MS });
   const day = await collectSession();
 
   expect(metadata.sceneryCoordinates).toBe("racing");

@@ -357,6 +357,10 @@ const GameAudioSoundtrack = (function () {
        built-in playlist left off rather than restarting from track one. */
     function setMusicBackend(b) {
       if (b === backend) return;
+      if (backend) {
+        try { const p = backend.stop(); if (p && p.catch) p.catch(() => {}); }
+        catch (e) { /* replacing a failed backend must still restore the soundtrack */ }
+      }
       backend = b || null;
       if (backend) {
         stopInternal();
@@ -365,7 +369,7 @@ const GameAudioSoundtrack = (function () {
           if (musicEnabled && host.enabled()) backend.start();
         } catch (e) { /* a broken backend must not take the audio down */ }
       } else if (musicEnabled && host.enabled() && host.context()) {
-        playIndex(musicIndex);
+        resumePlaylist();
       }
     }
     function musicBackend() { return backend; }
@@ -387,7 +391,12 @@ const GameAudioSoundtrack = (function () {
       // interrupt it — going to the grid must not restart the track from zero.
       // Whatever is playing keeps playing; we only start something if silent.
       if (musicOn && (musicSrc || musicStreaming)) return;
-      playIndex(musicIndex);
+      resumePlaylist();
+    }
+
+    function resumePlaylist() {
+      const i = eligible(musicIndex) ? musicIndex : seekEligible(musicIndex, 1);
+      if (i < 0) stopInternal(); else playIndex(i);
     }
 
     function stopInternal() {
