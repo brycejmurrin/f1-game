@@ -791,6 +791,23 @@ test("the host leaving the ROOM says so, drops the room flag and shows the pick 
   } finally { h.lobby.cancel(); }
 });
 
+test("the host leaving the ROOM forgets every guest it relayed, not just the host", async () => {
+  // onClose deleted only this transport's id; the relayed "g2" profile lived
+  // on until open()/cancel(), so the next room's roster and seat clashes saw a
+  // guest from a room that no longer exists.
+  const { h, made, closers } = closableHarness();
+  try {
+    await h.lobby.join();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+    made[0].deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
+    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "the relayed guest is in the roster");
+    closers[0]("transport");
+    assert.equal(h.lobby.roomState().peers.length, 0, "the room is over: no profile survives it");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a transport that never connected closes silently: the watcher's diagnosis is not overwritten", async () => {
   // waitForOpen() said WHICH failure it was, then dropPending() closed the
   // transport, whose close event ran the peer-leave handler synchronously and

@@ -213,6 +213,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
+  // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
+  "tests/unit/data-hub-picker.test.mjs",
   "tests/unit/data-lazy-loader.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.

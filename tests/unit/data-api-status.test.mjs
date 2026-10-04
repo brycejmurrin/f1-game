@@ -87,6 +87,42 @@ test("a cache entry stamped in the future (clock stepped back) is not served as 
 // ---- net+data hunt 2026-09-02 §Round 2: hub close aborts nothing / Retry-After
 // capped at 25 s / quota purge by age not size --------------------------------
 
+test("a session result cached before the session froze is refetched, not served for a week", async () => {
+  // sessionTtl() picks the TTL at READ time: once a session is 6 h old it said
+  // "frozen, a week", so the empty classification cached an hour into the race
+  // was served for seven days. The TTL is now capped at the time since the
+  // freeze instant, which an entry written before it always exceeds.
+  let now = Date.parse("2026-10-04T13:00:00Z");   // the race started 12:00Z
+  let published = false, fetches = 0;
+  const store = new Map();
+  class FakeDate extends Date { constructor(...a) { super(...(a.length ? a : [now])); } static now() { return now; } }
+  const context = vm.createContext({
+    fetch: async (url) => {
+      fetches++;
+      let body = [];
+      if (/sessions\?meeting_key/.test(url)) body = [{ session_key: 9999, meeting_key: 1, session_name: "Race", session_type: "Race", date_start: "2026-10-04T12:00:00Z" }];
+      else if (/session_result/.test(url)) body = published ? [{ position: 1, driver_number: 1 }] : [];
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) };
+    },
+    AbortController,
+    localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i] ?? null,
+      getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
+    Date: FakeDate, setTimeout: (f) => setImmediate(f), clearTimeout() {},
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  const api = context.__api;
+  await api.sessionsForMeeting(1);                 // the picker records date_start
+  assert.equal((await api.sessionResult(9999)).length, 0, "an hour in: not published yet");
+  published = true;
+  now += 6.5 * 3600e3;                             // 7.5 h after the start: frozen, and published
+  assert.equal((await api.sessionResult(9999)).length, 1, "the pre-freeze empty entry is refetched");
+  const after = fetches;
+  now += 5 * 24 * 3600e3;
+  assert.equal((await api.sessionResult(9999)).length, 1);
+  assert.equal(fetches, after, "an entry written after the freeze is served from cache");
+});
+
 const hubSource = await readFile(new URL("../../js/data/hub.js", import.meta.url), "utf8");
 
 // fetch that never resolves, exposes its AbortSignal, and can be told to

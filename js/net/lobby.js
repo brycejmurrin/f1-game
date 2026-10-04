@@ -209,6 +209,9 @@ const NetLobby = (function () {
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
           } else {
+            // The room is over: relayed profiles ("g2", "g3"…) are keyed by the
+            // host's ids, not this transport's, so the delete above missed them.
+            _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
             if (G.setNetRoom) G.setNetRoom(false);
             show("pick");
             say(role === "guest" ? "The host left the room." : "Your friend left the room.", true);

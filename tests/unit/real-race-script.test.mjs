@@ -238,7 +238,9 @@ function pendingWatchHarness() {
   const requests = [], launches = [];
   let opened = true;
   const { D } = load({
-    F1API: { locationData: () => new Promise((resolve) => requests.push(resolve)) },
+    // cancelAll: cancel() drops a download's queued requests (a no-op here, so
+    // the stale completions below still arrive and must be discarded).
+    F1API: { locationData: () => new Promise((resolve) => requests.push(resolve)), cancelAll() {} },
     RealRace: { launch: (script, opts) => { launches.push({ script, opts }); return true; } },
   });
   const dom = makeDom();
