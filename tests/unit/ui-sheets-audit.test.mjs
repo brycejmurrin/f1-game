@@ -653,3 +653,14 @@ test("RESULTS: your row keeps its lime ink and OPAQUE sticky ground on the podiu
   }
   assert.match(winner(["res-row", "you"], "border-left").value, /var\(--you\)/, "off the podium, your row draws its own lime rule");
 });
+
+test("CONSTRUCTORS ties break like Career.teamStandings (points, then tier), not by insertion order", () => {
+  const { season, cars } = tiedSeason();
+  season.teamPts = { red: 10, blue: 10 };   // red first in insertion order
+  const Teams = { POINTS, LIST: [{ id: "red", name: "RED", color: [1, 0, 0], tier: 3 }, { id: "blue", name: "BLUE", color: [0, 0, 1], tier: 1 }] };
+  const h = bootResults({ season, cars, globals: { Teams } });
+  h.api.buildStandings();
+  const rows = rowsOf(h.dom.byId("standings-body")).map(nameOf);
+  const teams = rows.filter((n) => n === "RED" || n === "BLUE");
+  assert.deepEqual(teams, ["BLUE", "RED"], "equal points: the lower tier ranks first, as Career settles it");
+});
