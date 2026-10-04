@@ -786,7 +786,7 @@ function create(G) {
 }
 
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
-         applySettings, applyGarage, applyCareer, isGarageKey, isCareerKey, create,
+         applySettings, applyGarage, applyCareer, isGarageKey, isCareerKey, garageValue, create,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();
