@@ -4113,6 +4113,10 @@ function syncRotateBlocker(moveFocus) {
   // game-vm harness) reads every display as shown, and would pause every race.
   if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
   if (paused) els.pausemenu.hidden = active || photoMode;
+  // Re-read after the pause card settles: setPaused above re-enters this with
+  // the card still up, which css/responsive.css lets hide the blocker, and that
+  // nested call wrote aria-hidden="true" onto a blocker that is now painting.
+  box.setAttribute("aria-hidden", getComputedStyle(box).display !== "none" ? "false" : "true");
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;
