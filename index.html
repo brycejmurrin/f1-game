@@ -599,6 +599,14 @@
        js/ui/hud.js sayFlag() speaks each flag change through #announce-live
        instead. A role here as well would read the flag twice where it works. -->
   <div id="hud-flag" hidden></div>
+  <!-- OPT-IN READOUTS (SETTINGS › DISPLAY › HUD, all shipped off). RELATIVE:
+       the two cars ahead and behind on the road (js/ui/hud-relative.js builds
+       the rows). STRATEGY: tyre laps, pit loss, next stop, undercut cue
+       (js/ui/hud-strategy.js). INPUTS: a 3 s throttle/brake/steer trace and
+       the gear (js/ui/hud-inputs.js). -->
+  <div id="hud-rel" role="list" aria-label="Relative: cars around you on track" hidden></div>
+  <div id="hud-strat" role="group" aria-label="Strategy" hidden></div>
+  <div id="hud-inputs" role="group" aria-label="Input trace" hidden><canvas id="hud-inputs-cv" width="128" height="48" role="img" aria-label="Inputs"></canvas><span id="hud-inputs-gear" aria-hidden="true">N</span></div>
 </div>
 
 <div id="lights" hidden>
@@ -3657,6 +3665,9 @@
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-relative.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-strategy.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-inputs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/pause-opts.js?v=dev"></script>
