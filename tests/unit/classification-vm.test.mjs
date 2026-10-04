@@ -64,3 +64,50 @@ test("a car that retires past 90 % of the winner's laps is classified and scores
     assert.ok(late.finPos < early.finPos, "the classified retirement ranks above the unclassified one");
   } finally { g2.close(); }
 });
+
+test("the live loop flags a lapped human on the same step as the winner in either roster order", async () => {
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = game.apex, G = game.G;
+    a.headless(true);
+    for (const humanFirst of [true, false]) {
+      await game.race("monza", "day", "dry", { laps: 3 });
+      const p = G.player, lead = G.cars.find((c) => !c.human), L = G.track.total;
+      for (const c of G.cars) if (c !== p && c !== lead) a.retire(G.cars.indexOf(c));
+      a.jump((L - 0.4) / L, 50, -4); a.aim(0);
+      p.lap = 2; p._prevS = p.s; p.prog = 2 * L - 0.4; p.lapTime = 70;
+      Object.assign(lead, { lap: 3, s: L - 0.1, _prevS: L - 0.1, prog: 3 * L - 0.1, speed: 50, x: 4, lapTime: 60 });
+      const rest = G.cars.filter((c) => c !== p && c !== lead);
+      G.cars.splice(0, G.cars.length, ...(humanFirst ? [p, lead] : [lead, p]), ...rest);
+      a.setInput({ throttle: true, steer: 0 });
+      game.step(1);
+      assert.equal(lead.finished, true);
+      assert.equal(p.finished, true, `human-first=${humanFirst}: the later crossing receives the flag`);
+      assert.ok(p.finishT > lead.finishT, "crossing times retain their real order");
+      assert.ok(p.lastLap > 0, "ordinary lap timing still runs");
+    }
+  } finally { game.close(); }
+});
+
+test("the live loop charges a caution pass first gained on the finish step", async () => {
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = game.apex, G = game.G;
+    a.headless(true);
+    await game.race("monza", "day", "dry", { laps: 3 });
+    const p = G.player, rival = G.cars.find((c) => !c.human), L = G.track.total;
+    for (const c of G.cars) if (c !== p && c !== rival) a.retire(G.cars.indexOf(c));
+    G.holdCaution(3, "test safety car"); G.applyCaution({ level: 3 });
+    a.jump((L - 0.5) / L, 60, -4); a.aim(0);
+    p.lap = 3; p._prevS = p.s; p.prog = 3 * L - 0.5;
+    Object.assign(rival, { lap: 3, s: L - 0.4, _prevS: L - 0.4, prog: 3 * L - 0.4, speed: 20, x: 4 });
+    a.setInput({ throttle: true, steer: 0 });
+    game.step(1);
+    assert.equal(p.finished, true);
+    assert.equal(p.penalty, 0, "the observation precedes the movement on this step");
+    game.step(1);
+    assert.equal(p.penalty, 10, "the first finished observation still judges the final pass");
+    game.step(5);
+    assert.equal(p.penalty, 10, "the offence is charged once");
+  } finally { game.close(); }
+});

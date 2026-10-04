@@ -1276,6 +1276,26 @@ test("AUTO fits the plan's letter, and the HUD names the set the crew will fit",
   assert.match(pits.planInfo(c).text, / S$/, "…and a selected set overrides it on the HUD too");
 });
 
+test("AUTO keeps the announced stint through box latch and the actual tyre fit", () => {
+  for (const seq of [["soft", "medium"], ["soft", "medium", "soft"]]) {
+    const { pits, car, G, zone, hw, fitted } = strategySession(5);
+    const c = car(0);
+    c.lap = 2; c._planLap = 2; c.pitStops = 0; c.pitArmed = true;
+    c.tyreLog = [{ code: "S", lap0: 0, lap1: null }];
+    c.pitPlan = { stops: seq.length - 1, seq, stints: [2, 3], lapsAt: [2, 4], pitLossLaps: 0.2 };
+    c.s = (zone.sIn + pits.boxThroughFor(c)) % G.track.total;
+    c.x = pits.laneCentre(hw, zone.side, c.s); c.speed = 0;
+    assert.equal(pits.nextCode(c), "M", "the approach promises medium");
+    pits.update(c, 0.1);
+    assert.equal(c.pitState, "box");
+    assert.equal(c.pitStops, 1);
+    assert.equal(pits.nextCode(c), "M", "latching must not skip to the next stint");
+    for (let i = 0; i < 30; i++) pits.update(c, 0.1);
+    assert.equal(c.pitState, "out");
+    assert.deepEqual(fitted.map((r) => r.code), ["M"], "the crew fits exactly the announced set once");
+  }
+});
+
 test("the player's plan starts on the set the player is on", () => {
   // No `start` was passed: every player got the planner's own choice — "hard,
   // BOX L11" for a hypersoft gone by lap 4.

@@ -36,6 +36,18 @@ function copyTree(src, dest) {
   fs.cpSync(src, dest, { recursive: true, dereference: true });
 }
 
+function copyIsolated(src, dest) {
+  // Resolve the existing parent to catch paths routed back into src by symlinks.
+  // Custom destinations are always NEW: never recursively delete caller paths.
+  const target = path.join(fs.realpathSync(path.dirname(dest)), path.basename(dest));
+  const relative = path.relative(fs.realpathSync(src), target);
+  if (!relative || (relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative))) {
+    throw new Error("sync-web: --out must not overlap the source tree");
+  }
+  fs.mkdirSync(target);   // exclusive reservation: EEXIST preserves any existing destination
+  fs.cpSync(src, target, { recursive: true, dereference: true, force: false, errorOnExist: true });
+}
+
 function resolveSrc() {
   const explicit = opt("--src");
   if (explicit) {
@@ -81,10 +93,11 @@ function capSync() {
 }
 
 function usage() {
-  console.log(`usage: node mobile/scripts/sync-web.mjs [--dev] [--src DIR] [--skip-sync]
+  console.log(`usage: node mobile/scripts/sync-web.mjs [--dev] [--src DIR] [--skip-sync] [--out DIR]
   copies a stamped staged site into mobile/www (Capacitor webDir)
   --dev        allow remaining ?v=dev cache tags
   --src DIR    use this staged folder instead of artifacts/site or _site
+  --out DIR    copy to a new isolated destination with an existing parent (requires --skip-sync)
   --skip-sync  copy only; do not run npx cap sync android`);
 }
 
@@ -93,15 +106,21 @@ function main() {
     usage();
     process.exit(0);
   }
+  const out = opt("--out");
+  if (flag("--out") && (!out || out.startsWith("--") || !flag("--skip-sync"))) {
+    throw new Error("sync-web: --out requires a directory and --skip-sync (Capacitor uses mobile/www)");
+  }
+  const www = out ? path.resolve(ROOT, out) : WWW;
   const src = prepareSrc();
-  copyTree(src, WWW);
+  if (out) copyIsolated(src, www);
+  else copyTree(src, www);
   let syncOut = null;
   if (!flag("--skip-sync")) syncOut = capSync();
-  const html = fs.readFileSync(path.join(WWW, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(www, "index.html"), "utf8");
   console.log(JSON.stringify({
     ok: true,
     src,
-    www: WWW,
+    www,
     stamped: !hasDevTags(html),
     synced: !flag("--skip-sync"),
     cap: syncOut ? "ok" : null,

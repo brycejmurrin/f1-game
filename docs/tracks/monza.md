@@ -8,6 +8,27 @@ start/finish, increasing in racing direction), Left/Right side, lateral distance
 and tinted `[r,g,b]` 0–1. Consume fraction positions through the scenery API so
 track shifting and reversal remain correct.
 
+## Accuracy references and layout limits
+
+The [2025 FIA Italian GP event documents](https://www.fia.com/news/f1-2025-italian-grand-prix-preview)
+place the first sector line 233 m before Turn 4 and the second 215 m before
+Turn 8. Measure these offsets on the built racing arc, using the curated turn
+anchors; a raw path-length denominator is not the rendered spline length.
+Driving Coach sector mastery keys include the split pair, keeping scores for
+different timing boundaries separate. Legacy sector scores remain stored but
+have no known boundary pair; full-lap and other drill records keep their keys.
+
+The FIA's [2024 Italian GP preview](https://www.fia.com/news/f1-2024-italian-grand-prix-preview)
+describes a 2.5 m gravel strip outside Turn 2 and a 2.5 m strip beside Turns
+4–5, separated from the asphalt by 1 m. These support bounded visual runoff
+margins; scenery gravel alone does not change driving traction or collision.
+
+The old banking crossing is at Serraglio, between the Lesmos and Ascari. The
+existing .70–.76 flyover row above is an unverified legacy authoring position,
+not a surveyed anchor. Do not relocate it until an aerial/map crossing is
+registered against the actual trace. The current road width and spline scale
+also need independent measured registration before adjustment.
+
 ## 1. Setting
 The "Temple of Speed," opened 1922, set inside the **Royal Villa park of Monza** — Europe's largest walled park (~688 ha) just north of Milan. Track threads through dense woodland of **umbrella pines** and tall deciduous trees, past the neoclassical **Villa Reale**, ornamental lakes, and the crumbling old banked oval (Sopraelevata).
 

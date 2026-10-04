@@ -825,6 +825,7 @@ test("strategy events require this race epoch and the sender's own car", () => {
 test("a lapped rival's finish (fin at a lap below the target) finishes it on the other peer", () => {
   const { G, s } = started("host");
   G.lapsTarget = 3; G.raceT = 100;
+  G.player.finished = true; G.player.lap = 4;           // the host has already raised the flag
   const rival = G.cars[1];
   rival.lap = 2;                                       // its pose: on lap 2, flagged out at this crossing
   s.deliver("lap", { lap: 2, time: null, best: null, code: "D1", fin: 99.5, invalid: true });
@@ -836,6 +837,7 @@ test("a lapped rival's finish (fin at a lap below the target) finishes it on the
 test("a fin ahead of the pose waits for the pose to reach THAT lap, not the target", () => {
   const { G, s } = started("host");
   G.lapsTarget = 3; G.raceT = 100;
+  G.player.finished = true; G.player.lap = 4;
   const rival = G.cars[1];
   rival.lap = 1;                                       // the pose trails the crossing by the interp delay
   s.deliver("lap", { lap: 2, time: null, best: null, code: "D1", fin: 99.5, invalid: true });

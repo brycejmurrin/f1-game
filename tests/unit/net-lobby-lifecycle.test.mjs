@@ -18,11 +18,11 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts, rendezvous,
-                   href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
+function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts,
+                   rendezvous, href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
   const elements = new Map();
   const element = (id) => {
-    const el = { id, hidden: true, value: "", textContent: "", focus() {} };
+    const el = { id, hidden: true, value: "", textContent: "", focus() {}, setAttribute(k, v) { this[k] = v; }, removeAttribute(k) { delete this[k]; } };
     elements.set(id, el);
     return el;
   };
@@ -32,7 +32,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   const status = element("vs-status");
   status.classList = { toggle() {} };
   for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
-                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join"]) element(id);
+                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value"]) element(id);
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -93,7 +93,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
       supported: () => true,
       create: () => scanFactory(),
     },
-    NetRendezvous: rendezvous || {},
+    NetRendezvous: rendezvous || { usingPrivateRelay: () => false },
     NetSession: { create: netSession || (() => { throw new Error("no NetSession in this harness"); }) },
     NetPlay: null,
     // isReal mirrors js/data/teams.js (pinned by the Legends test below).
@@ -881,7 +881,7 @@ test("join()'s late prompt does not wipe an error said during its ICE wait", asy
 // screen shows a different one.
 test("a connection shows its verification code, and only the HOST can remove that guest", async () => {
   const pcs = [];
-  const rendezvous = { verifyFor: async (pc) => (pc && pc.remoteDescription ? "K7QZ" : null) };
+  const rendezvous = { usingPrivateRelay: () => false, verifyFor: async (pc) => (pc && pc.remoteDescription ? "K7QZ" : null) };
   const made = [], closers = [];
   const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
     netSession: fakeNetSession(made), transportStatus: "open", rendezvous });
@@ -921,4 +921,32 @@ test("a guest cannot remove anybody, and a transport with no pc shows no code", 
     assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "the loopback-style fake has no descriptions: no code");
     assert.equal(h.lobby.removeGuest("peer"), false, "REMOVE is the host's");
   } finally { h.lobby.cancel(); }
+});
+
+test("HOST A RACE (link) closes a room code left open by a code join", () => {
+  // INVITE ANOTHER -> HOST A RACE after a guest joined by code: the reopened
+  // room kept advertising a dead offer for up to JOIN_TIMEOUT_MS, and a friend
+  // told the code waited on Connecting… for a NAT error. host() must stop it,
+  // exactly as codeHost() does before its own generation.
+  const at = SOURCE.indexOf("async function host()");
+  assert.ok(at > 0, "host() present");
+  const body = SOURCE.slice(at, SOURCE.indexOf("await readyIce()", at));
+  assert.match(body, /stopCodeWait\(\)/);
+  assert.match(body, /codeReopen = null/);
+  assert.match(body, /clearTimeout\(codeReopenTimer\)/);
+});
+
+test("private room entry accepts a full shared token and public entry still asks for six characters", () => {
+  for (const privateRelay of [true, false]) {
+    const h = harness({ rendezvous: { usingPrivateRelay: () => privateRelay } });
+    h.lobby.wire();
+    try {
+      h.click("vs-code-join");
+      const input = h.elements.get("vs-code-in");
+      assert.equal(input.maxLength, privateRelay ? 64 : 8);
+      assert.equal(input["aria-label"], privateRelay ? "Private room token" : "Room code");
+      assert.match(h.elements.get("vs-code-hint").textContent, privateRelay ? /32 characters/ : /Six letters/);
+      assert.match(input.placeholder, privateRelay ? /32-character token/ : /ABC234/);
+    } finally { h.lobby.cancel(); }
+  }
 });
