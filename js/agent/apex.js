@@ -52,7 +52,7 @@ function settled(promise, out) {
 // post-reset snapshots at the same seed, and tests/specs/agent-determinism.spec.js
 // is the guard that keeps it honest.
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
-  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
+  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT",

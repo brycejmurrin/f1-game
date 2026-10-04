@@ -535,9 +535,25 @@ const GameAudio = (function () {
     }
   }
 
+  // A LEVEL CHANGE IS A GLIDE, NOT A STEP. A `.value =` write is a step in the
+  // middle of whatever waveform is playing — an audible click on the mute
+  // button, a zipper on a dragged volume slider. setTargetAtTime approaches the
+  // target exponentially, 63 % per time constant and ~95 % after three
+  // (https://developer.mozilla.org/en-US/docs/Web/API/AudioParam/setTargetAtTime),
+  // so tau 0.02 s settles in ~60 ms: instant to a hand, smooth to an ear.
+  // cancelScheduledValues first, so a glide still in flight cannot pull the
+  // level back toward an older target.
+  const LEVEL_TAU = 0.02;
+  function glideLevel(param, v) {
+    if (!param || !ctx) return;
+    const t = ctx.currentTime;
+    param.cancelScheduledValues(t);
+    param.setTargetAtTime(v, t, LEVEL_TAU);
+  }
+
   function setEnabled(b) {
     isEnabled = !!b;
-    if (master) master.gain.value = isEnabled ? 0.8 : 0;
+    if (master) glideLevel(master.gain, isEnabled ? 0.8 : 0);
   }
 
   function enabled() {
@@ -548,7 +564,20 @@ const GameAudio = (function () {
     return !!ctx && isEnabled && sfxEnabled;
   }
 
-  const LOW_GEAR_RATE = [0.6, 0.72, 0.84];
+  // THE PITCH CURVE IS A FUNCTION OF RPM ALONE. playbackRate = (IDLE + rev*SPAN)
+  // x the trims. There was a per-gear multiplier on top (LOW_GEAR_RATE 0.60 /
+  // 0.72 / 0.84 for gears 1-3): the same 15 000 rpm limiter sat 884 cents lower
+  // in 1st than in 4th, and the 3->4 upshift dropped LESS than 4->5 (-369 vs
+  // -603 cents) because the multiplier jumped to 1 there. Without it an upshift
+  // drops by the rpm step alone, which shrinks up the box as the ratios close
+  // (game.js rpmFor, PhysicsConsts.GEAR_TOP). The base was retuned so the RANGE
+  // barely moved: SPAN puts the shipped voice's limiter (pitch 0.85, rev range
+  // 1.3) exactly where top gear's was — (0.17 + 0.5115*1.3)*0.85 = 0.7097, as
+  // (0.25 + 0.45*1.3)*0.85 was — and IDLE sits between the old 1st-gear idle
+  // (0.25*0.6) and the old 4th+ idle (0.25). Not lower: at the tuner's corner
+  // (IDLE 0.5 x PITCH 0.6) the rate must stay over 0.05, which the old 1st gear
+  // already broke (0.045) where no check looked.
+  const RATE_IDLE = 0.17, RATE_SPAN = 0.5115;
   // Absolute playbackRate jump that is a gear discontinuity, not a rev climb.
   // A 1→3 skip at ~16 m/s moves ~0.13 → ~0.54; the 0.035 s setTargetAtTime
   // tau held the idle rate across the shift frame and took 0.10–0.15 s to
@@ -658,16 +687,16 @@ const GameAudio = (function () {
       // applyTuneNodes: game.js calls setVoice() before startEngine(), when
       // these sources do not exist yet, so a start that read voice.detune alone
       // would run on the bare manufacturer value until the next slider move.
-      engSrcIdle.detune.value = voice.detune + (tune.detune - 1) * 30;
+      engSrcIdle.detune.value = sampleDetuneCents();
       // BufferSource.playbackRate defaults to 1.0. Starting the loop at that
-      // and then aiming toward the real rate (~0.25–0.70) with setTargetAtTime
+      // and then aiming toward the real rate (~0.14–0.71) with setTargetAtTime
       // is an audible pitch spike the moment engGainIdle opens — measured at
       // lights-out as rate 0.937 before settling near 0.61. Seed the rate from
       // the last known ask (sample→sample restart / mid-race upgrade) or from
       // the stock idle end so the first audible frame is already in-family.
       const seedRate = lastRate > 0.02
         ? lastRate
-        : 0.25 * tune.idle * voice.rateTrim * tune.pitch * LOW_GEAR_RATE[0];
+        : RATE_IDLE * tune.idle * voice.rateTrim * tune.pitch;
       engSrcIdle.playbackRate.value = seedRate;
       engSrcIdle.playbackRate._apexAimTgt = seedRate;
       engSrcIdle.loopStart = engLoop.start; engSrcIdle.loopEnd = engLoop.end;
@@ -1128,13 +1157,12 @@ const GameAudio = (function () {
     // starting at the Web Audio default of 1.0).
     {
       const g = (typeof gear === "number" && isFinite(gear)) ? Math.max(1, Math.min(8, Math.round(gear))) : 8;
-      const gmul = g <= 3 ? LOW_GEAR_RATE[g - 1] : 1.0;
-      const rate = (0.25 * tune.idle + revC * 0.45 * tune.revRange) * (1 + 0.04 * b * tune.boostPitch) * gmul * voice.rateTrim * tune.pitch * (1 + 0.05 * revFlare);   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
+      const rate = (RATE_IDLE * tune.idle + revC * RATE_SPAN * tune.revRange) * (1 + 0.04 * b * tune.boostPitch) * voice.rateTrim * tune.pitch * (1 + 0.05 * revFlare);   // idle ~0.14x .. limiter ~0.71x on the shipped voice, the same in every gear
       const gearChanged = typeof gear === "number" && isFinite(gear) && isFinite(lastGearSeen) && g !== lastGearSeen;
       if (usingSamples) {
         // rateTrim is a CONSTANT per-manufacturer offset: pitch stays monotonic
-        // in rev and the gear ordering is unchanged (same trim on both sides).
-        // IDLE moves only the 0.25 end, REV RANGE only the 0.45 span, PITCH the
+        // in rev, and with no gear term the same rev is the same note in any gear.
+        // IDLE moves only the RATE_IDLE end, REV RANGE only the RATE_SPAN span, PITCH the
         // sum — the decoupling TUNE_DEF explains.
         lastRate = rate;
         const cur = engSrcIdle.playbackRate.value;
@@ -1206,7 +1234,7 @@ const GameAudio = (function () {
       * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift));
     aimParam(engFilter.frequency, cut * camMix.cut, t, 0.05, 1e-4);
     // Compensate the tape-speed tilt. lastRate is the pitch ratio the core was
-    // just handed, ~0.25 idle to ~0.70 redline; resampling costs roughly
+    // just handed, ~0.14 idle to ~0.71 redline; resampling costs roughly
     // -20*log10(rate) dB of perceived top end, so put a fraction of that back.
     // Scaled by the BRIGHTNESS trim, so a player who wants a muffled idle
     // can still have it, and capped so it cannot turn into a treble boost.
@@ -1531,16 +1559,26 @@ const GameAudio = (function () {
   function setSkid(x, wet) {
     if (!engineOn || !skidGain) return;
     const v = clamp01(x || 0);
-    // A DIRECT write, kept (a setTargetAtTime would turn the step into a ramp),
-    // but only on a change: `.value =` is setValueAtTime(v, now) — a timeline
-    // insertion every physics step, 0 onto 0 on every step not sliding. An exact
-    // value (the hard 0) always lands; a sub-1e-4 wobble (~-80 dBFS) does not.
+    // A GLIDE, not a `.value =` step. This runs once per rendered frame and the
+    // slide input is unsmoothed (offroad is a 0 -> 0.5 step), so direct writes
+    // stair-stepped the gain of broadband noise at the frame rate: crackle.
+    // tau 0.02 s (glideLevel) is fast enough that a slide still bites and the
+    // hard 0 still lands within ~60 ms. Scheduled only on a change: a timeline
+    // insertion every frame, 0 onto 0 on every frame not sliding, is what the
+    // guard was for. An exact value (the hard 0) always lands; a sub-1e-4
+    // wobble (~-80 dBFS) does not.
     const sv = layers.screech ? v * (wet ? 0.10 : 0.16) * tune.screech : 0;   // wetter = quieter, sibilant
     const sp = skidGain._apexSkidV;
-    if (sp !== sv && (sv === 0 || sp === undefined || Math.abs(sp - sv) >= 1e-4)) { skidGain.gain.value = sv; skidGain._apexSkidV = sv; }
+    if (sp !== sv && (sv === 0 || sp === undefined || Math.abs(sp - sv) >= 1e-4)) { glideLevel(skidGain.gain, sv); skidGain._apexSkidV = sv; }
     if (v > 0) {
       const base = wet ? 480 : 760;                    // wet: lower splash vs dry: screech
-      skidFilter.frequency.value = base + v * 320 + Math.sin(now() * 30) * 60;
+      // The ~4.8 Hz wobble rides the same glide: per-frame steps of the centre
+      // frequency were the filter's own zipper.
+      const f = base + v * 320 + Math.sin(now() * 30) * 60;
+      if (Math.abs((skidFilter.frequency._apexSkidF ?? -1) - f) >= 1) {
+        skidFilter.frequency.setTargetAtTime(f, now(), LEVEL_TAU);
+        skidFilter.frequency._apexSkidF = f;
+      }
     }
   }
 
@@ -1731,6 +1769,18 @@ const GameAudio = (function () {
     applyTuneNodes();
   }
 
+  // DETUNE on the SAMPLE core, in cents. Player detune rides ON TOP of the
+  // manufacturer's cents, so the voice's character survives the slider. On the
+  // synth core detune is chorus WIDTH (engB's spread, 0 = none); the sample core
+  // has ONE source, so there it can only transpose. It read (detune - 1) * 30,
+  // which made the shipped detune 0 ("chorus off", TUNE_DEF) a 30-cent-flat
+  // transposition of every TEAM voice. Now [0,1] is no offset at all — off
+  // means off on both cores — and (1,4] adds up to +90 cents, a tenth of what
+  // the PITCH slider covers: a character trim, not a second pitch control.
+  function sampleDetuneCents() {
+    return voice.detune + Math.max(0, tune.detune - 1) * 30;
+  }
+
   // The two tune fields that are NOT per-frame expressions: detune lives on the
   // sample sources and sub-octave weight on the gain engC was built behind, so
   // both are written when the tune (or the voice) changes rather than 60x a
@@ -1738,13 +1788,7 @@ const GameAudio = (function () {
   function applyTuneNodes() {
     if (!ctx) return;
     const t = now();
-    // Player detune rides ON TOP of the manufacturer's cents, so the voice's
-    // character survives the slider: 1.0 is exactly voice.detune, and the range
-    // [0,3] spans -30..+60 cents around it. That is a tenth of what the PITCH
-    // slider covers, which is the point — this is chorus/character width, not
-    // a second pitch control.
-    const cents = voice.detune + (tune.detune - 1) * 30;
-    if (engSrcIdle && engSrcIdle.detune) engSrcIdle.detune.setTargetAtTime(cents, t, 0.05);
+    if (engSrcIdle && engSrcIdle.detune) engSrcIdle.detune.setTargetAtTime(sampleDetuneCents(), t, 0.05);
 
     const subGain = engC && engC._apexSubGain;
     if (subGain) subGain.gain.setTargetAtTime(voice.subLvl * tune.sub, t, 0.05);
@@ -1786,24 +1830,37 @@ const GameAudio = (function () {
   }
 
   /* setRivals(list) — the cars around you, in the PLAYER'S track frame.
-   * Each entry: { lat, arc, rev, approach }
+   * Each entry: { lat, arc, rev, approach, voice, slot }
    *   lat      metres to the RIGHT (negative = your left)
    *   arc      metres AHEAD (negative = behind)
    *   rev      0..1, their engine speed
-   *   approach metres/second of closing (positive = coming at you)
-   * Sorted nearest-first by game.js; anything past RIVAL_VOICES is dropped.
+   *   approach metres/second of LINE-OF-SIGHT closing (positive = coming at
+   *            you; 0 when level with you — js/audio/rivals.js)
+   *   voice    their power unit (ENGINE_VOICES key)
+   *   slot     which of the RIVAL_VOICES plays them, bound to the car
+   * Sorted nearest-first by js/audio/rivals.js; anything past RIVAL_VOICES is dropped.
    *
    * Safe to call every frame, and safe to call with [] — an empty list is how
    * the field goes quiet when you drive away from it.
    */
+  // Which rival row each voice plays this call (-1 = none). A row's `slot` is
+  // the voice RivalAudio bound to that CAR, so a rank swap moves no voice;
+  // a row without one (an older caller) falls back to its rank.
+  const _rivalRow = [];
   function setRivals(list) {
     if (!engineOn || !rivalVoices.length) return;
     const t = now();
     const n = layers.rivals && list ? Math.min(list.length, rivalVoices.length) : 0;
+    for (let i = 0; i < rivalVoices.length; i++) _rivalRow[i] = -1;
+    for (let k = 0; k < n; k++) {
+      const sl = list[k].slot;
+      const vi = Number.isInteger(sl) && sl >= 0 && sl < rivalVoices.length && _rivalRow[sl] < 0 ? sl : k;
+      if (_rivalRow[vi] < 0) _rivalRow[vi] = k;
+    }
     for (let i = 0; i < rivalVoices.length; i++) {
       const v = rivalVoices[i];
-      if (i >= n) { aimGain(v.gain, 0, t, 0.12); continue; }
-      const r = list[i];
+      if (_rivalRow[i] < 0) { aimGain(v.gain, 0, t, 0.12); continue; }
+      const r = list[_rivalRow[i]];
       const lat = +r.lat || 0, arc = +r.arc || 0;
       const dist = Math.hypot(lat, arc);
       if (!(dist < RIVAL_RANGE)) { aimGain(v.gain, 0, t, 0.12); continue; }
@@ -2037,16 +2094,16 @@ const GameAudio = (function () {
    */
   /* ---------------- mixer ----------------
      Two independent levels under the master mute: the SFX bus (engine, skids,
-     rain, UI) and the music gain. Both take 0..1 and apply immediately, so a
-     slider moves the level while it is being dragged. */
+     rain, UI) and the music gain. Both take 0..1 and apply at once (a ~60 ms
+     glide, glideLevel), so a slider moves the level while it is being dragged. */
   function setSfxVolume(v) {
     sfxVol = clamp01(typeof v === "number" ? v : 1);
-    if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
     return sfxVol;
   }
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
-    if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
     // A race that started with SFX off wanted rain but built no nodes
     // (startRain returns on !sfxOk()); turning SFX on must start it.
     if (sfxEnabled && rainWanted && !rainSrc) startRain();
@@ -2223,7 +2280,7 @@ const GameAudio = (function () {
     detuneCents() { return engSrcIdle && engSrcIdle.detune ? +engSrcIdle.detune.value.toFixed(4) : 0; },
     // The rev-compensating shelf, in dB. Rises as the engine pitches down.
     tiltDb() { return tiltEq ? +tiltEq.gain.value.toFixed(2) : 0; },
-    rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
+    rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value : 0; },   // exact: tools/check/audio-test.cjs and the tune tests take ratios of it
     centroidHz() {
       if (!ctx || !engineOn || !engGain) return 0;
       if (!dbgAnalyser) {

@@ -218,7 +218,7 @@ let hudProfile = store.get("hudProfile", "standard");
 if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "full");
-if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
+if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "full";   // the default above, not AUTO (settings-export def "full")
 // AUTO is always the full set: fitHud scales / stacks / drops gaps instead of
 // hiding a cluster. A FORCED name strips the half of the metrics the other
 // half is named for (css/hud.css) — TIMING keeps sectors+gaps, DRIVER keeps
@@ -670,6 +670,7 @@ function onCarLineFinish(c, cross) {
 function onIncidentLineCross(c, cross, newS) {
   if (!c || !cross || RaceControl.deferLine(c, cross, newS, onIncidentLineCross)) return;
   if (cross.direction < 0) {
+    if (cross.changed) c._secValid = false;
     if (cross.changed && c.isPlayer) {
       sectorIdx = sectorAt(newS); sectorStartT = c.lapTime; sectorValid = false;
       if (isTimeTrial()) restartTTRecorders();
@@ -1057,7 +1058,7 @@ function radioWho(kind) {
   return (who ? who + " · " : "") + "RADIO";
 }
 const radioNum = () => (player && player.num != null ? String(player.num) : "");
-function showAnnounce(msg, dur, kind) {
+function showAnnounce(msg, dur, kind, quiet) {
   kind = kind || "race";
   _annPri = ANN_PRI[kind] || 2;
   els.announceText.textContent = msg;
@@ -1073,7 +1074,7 @@ function showAnnounce(msg, dur, kind) {
   // step is not announced by NVDA, JAWS or macOS VoiceOver. Cleared, then set a
   // beat later so a repeated line is still a change (tetralogical.com/blog/2024/05/01).
   const live = els.announceLive, said = els.announceWho.textContent + ": " + msg;
-  if (live) { live.textContent = ""; clearTimeout(showAnnounce._t); showAnnounce._t = setTimeout(() => { live.textContent = said; }, 60); }
+  if (live && !quiet) { live.textContent = ""; clearTimeout(showAnnounce._t); showAnnounce._t = setTimeout(() => { live.textContent = said; }, 60); }
   // A card of small type takes a beat longer to read than a billboard did, and
   // ANN_MIN_S is the floor under every caller's number — the shortest asked for
   // was 1.4 s, which nobody reads at racing speed.
@@ -1088,6 +1089,7 @@ function showAnnounce(msg, dur, kind) {
   // above — is the utterance's whole budget.
   const _annCh = RadioVoice.SPEAKERS[kind] || "radio";
   const _annLead = state === "race" || state === "count" ? GameAudio.radioLeadS(_annCh) : 0;
+  if (quiet) return;   // a refresh of the card already up: no second voice, squelch or screen-reader line
   radioVoice.say(msg, announceT, kind, _annLead);
   // ...and the RADIO around it — click, hiss, squelch (engine.js radioSting).
   // On the CARD, not the utterance: the spoken radio ships off, and here it
@@ -1174,7 +1176,7 @@ function fmtTime(t) {
 // a threshold crossed while the banner was busy waits for the next tick rather
 // than being silently spent. Both early returns below are silent drops, and
 // the camera one is permanent — see the note on it.
-function announce(msg, dur, kind, still) {   // still(): false once a queued line is no longer true
+function announce(msg, dur, kind, still, quiet) {   // still(): false once a queued line is no longer true; quiet: card only
   kind = kind || "race";
   const pri = ANN_PRI[kind] || 2;
   if (hudProfile !== "broadcast") {
@@ -1213,7 +1215,7 @@ function announce(msg, dur, kind, still) {   // still(): false once a queued lin
     _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: performance.now() });
     return true;
   }
-  showAnnounce(msg, dur, kind);
+  showAnnounce(msg, dur, kind, quiet);
   return true;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
@@ -1917,8 +1919,7 @@ function gridUp(preOrder) {
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
     // never a simRnd() draw — the stream's draw count is a contract. Season /
     // career round + seasonSeed match armReliability (docs/BUGS.md B6).
-    const hSeed = (typeof Career !== "undefined" && Career.inCareer && Career.inCareer())
-      ? Career.seasonSeed() : simSeed();
+    const hSeed = luckSeed();
     const hRound = isChampionship() ? SeasonCal.drawRound(season) : raceIndex;
     const h = DriverRatings.hash32(hSeed + ":" + hRound + ":" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
@@ -2080,6 +2081,9 @@ function dropTrackWorld() {
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
 // drive-out keeps animating. Frees the old world first, adopts the new one whole; a
 // newer build or live() going false abandons it and frees its partial uploads.
+// The race arms the sentinel and then enters "count", not "race": a stepped build
+// abandoned by startRace() finishes during the countdown and must not disarm it.
+function raceArmedSentinel() { return state === "race" || state === "count"; }
 async function loadTrackStepped(idx, live) {
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
@@ -2096,7 +2100,7 @@ async function loadTrackStepped(idx, live) {
     built = msg ? await TrackBuildClient.replay(msg, def, gfx) : await Tracks.buildPaced(def, opts, live, freeTrackMeshes);
     if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
   } finally {
-    try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
+    try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
   if (!built) return false;
   _loadTrackBody(idx, def, built, prevId);
@@ -2123,7 +2127,7 @@ function loadTrack(idx) {
   } finally {
     // Only disarm if a RACE is not the thing that armed it — a build during a
     // live race must not clear the race's own flag.
-    try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
+    try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
 }
 // Every GPU resource a built track owns (the old world before a rebuild, or a
@@ -2466,12 +2470,13 @@ let raceIndex = 0;
 // be simulated). The seed is the CAREER's inside a career and the SIM seed
 // outside one — the two places a run's reproducibility is already anchored.
 // Nothing here draws from simRnd: see js/race/reliability.js.
+// (seed, round, driver) luck: the career's per-season seed, a standalone Season's own (SeasonCal.luckSeed: a reload cannot re-roll it), else the session's.
+const luckSeed = () => (Career.inCareer() ? Career.seasonSeed() : flow === "season" && season ? SeasonCal.luckSeed(season, simSeed()) : simSeed());
 function armReliability(field) {
-  const c = Career.data();
   const team = player ? player.team : Teams.LIST[teamIdx];
   Reliability.arm(field, {
     level: raceReliability,
-    seed: Career.inCareer() && c ? Career.seasonSeed() : simSeed(),   // per season, not per career
+    seed: luckSeed(),   // per season, not per career
     // drawRound(), not season.round: arm() hashes (seed, round, driver) and the
     // two legs of a sprint weekend share a round, so both would retire the same
     // cars. Career and no-sprint seasons get season.round back unchanged.
@@ -2657,7 +2662,7 @@ async function startRaceBody() {
   if (session === "race") { raceIndex++; armReliability(cars); }
   resultT = 0;
   camRoll = 0; camSlipSm = 0;
-  shake = 0; hitStop = 0;   // decay only in the race camera — a crash before the flag or a quit left them for the next grid
+  shake = 0; hitStop = 0; _thunderT = -1; announce._waitAt = NaN;   // a crash's shake, a queued thunder or the WAITING card's quiet window from the last session must not reach this grid
   // player can be null (roster/team resolution miss) — don't let startRace throw.
   sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = 0; sectorValid = true;
   // The SPLITS reset here, with the rest of the session — not in loadTrack,
@@ -2967,8 +2972,10 @@ function endRace(forcedOrder) {
   // field with nothing. Below that it is not classified. c.classified carries
   // the verdict to the points tables (SeasonCal.award, career settlement).
   // c.lap is the lap a car is ON (the winner's reads laps+1 at the flag), so
-  // laps COMPLETED is c.lap - 1 for every car.
-  const winDone = fin.length ? Math.max(...fin.map((c) => c.lap || 0)) - 1 : 0;
+  // laps COMPLETED is c.lap - 1 for every car. With no finisher (the only human
+  // retired, finishDelay ended it early) the leader on the road is the reference.
+  const ref = fin.length ? fin : run;
+  const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
   const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= Math.floor(0.9 * winDone)) : [];
   for (const c of cars) c.classified = (!c.retired && !c.dsq) || lateOut.includes(c);
   const live = fin.concat(run, lateOut).sort((a, b) => lapsAt(b) - lapsAt(a));
@@ -3051,10 +3058,10 @@ const G = {
   openDailyPicker: () => openTimeTrial(true),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
-  // The stateless-draw round, resolved EXACTLY as armReliability() does: the
-  // championship round in a season/career, else the per-session race counter.
-  // js/race/quali-model.js reads this so a non-career season's qualifying execution draw varies
-  // round to round instead of being frozen at a hardcoded 0.
+  // The bare championship round in a season/career, else the per-session race
+  // counter. NOT armReliability()'s draw round — that is SeasonCal.drawRound(),
+  // which splits a sprint weekend in two; js/race/quali-model.js calls drawRound
+  // itself and reads this only as the fallback when SeasonCal is absent.
   get seasonRound() { return isChampionship() && season ? season.round : raceIndex; },
   get ttNewRecord() { return ttNewRecord; }, set ttNewRecord(v) { ttNewRecord = v; },
   get ttSessionTs() { return ttSessionTs; },
@@ -3151,7 +3158,7 @@ const G = {
   },
   get hudMetricsLayout() { return hudMetricsLayout; },
   set hudMetricsLayout(v) {
-    if (HUD_MET_LAYOUTS.indexOf(v) < 0) v = "auto";
+    if (HUD_MET_LAYOUTS.indexOf(v) < 0) v = "full";
     hudMetricsLayout = v;
     store.set("hudMetricsLayout", hudMetricsLayout);
   },
@@ -4146,7 +4153,7 @@ function quitToMenu() {
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
   mirrorPass.cancelPreparation();
-  closeLightTuner(false);
+  closeLightTuner(false); _ltNextT = 0; _thunderT = -1;   // a queued strike or thunder is not the menu's either
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
   // stop is clearMenuScreens(), which startRaceBody() reaches near the END of
@@ -4266,7 +4273,8 @@ function update(dt) {
       // The wait is real on the host — it lasts as long as the slowest guest's
       // circuit build — so say so rather than showing a dead gantry. It decays
       // and hides itself once netStart lands.
-      if (announceT <= 0) announce("WAITING FOR PLAYERS…", 1, "info");
+      // The card refreshes every ANN_MIN_S; its squelch and speech only on the first show and then every 30 s.
+      if (announceT <= 0) { const t = performance.now(), loud = !(t - announce._waitAt < 30000); if (loud) announce._waitAt = t; announce("WAITING FOR PLAYERS…", 1, "info", null, !loud); }
     } else {
       countT += dt;
     }
@@ -4308,6 +4316,8 @@ function update(dt) {
       // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = restartPending;
       restartPending = false;
+      // Nothing consumes RECOVER/shift/boost edges before green, so a tap on the grid fired at lights-out (a free ~58 km/h re-place, or 2nd gear with no drive).
+      Input.clearDriveEdges();
       announce("LIGHTS OUT!", 1.4, "race");
       if (soundOn) GameAudio.lightsOut();
       // Qualifying normally never gets here: js/race/flying-start.js rolls the
@@ -5293,7 +5303,7 @@ function updateCar(c, dt, ranked) {
       const zk = Math.round(c.s + _atk.toTurnIn);
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
-        if (!c.errT && !alongO && DriverRatings.hash32(((typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) ? Career.seasonSeed() : simSeed()) + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+        if (!c.errT && !alongO && DriverRatings.hash32(luckSeed() + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
       }
     } else c.zoneKey = -1;
     c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
@@ -5880,11 +5890,12 @@ function updateCar(c, dt, ranked) {
     const ns = sectorAt(c.s);
     if (ns !== c._secIdx) {
       const fwd = ds > 0 && c._secIdx != null && (c._secIdx < ns || (c._secIdx === 2 && ns === 0));
-      if (fwd && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
+      // _secValid is the player's sectorValid, per car: after a BACKWARD entry the next forward exit times a fragment.
+      if (fwd && c._secValid !== false && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
         const e = c.lapTime - (ns === 0 ? s3Past : 0) - c._secT0;
         if (e >= 2 && e < fieldSectorBests[c._secIdx]) fieldSectorBests[c._secIdx] = e;
       }
-      c._secIdx = ns; c._secT0 = c.lapTime;
+      c._secValid = fwd || c._secIdx == null; c._secIdx = ns; c._secT0 = c.lapTime;
     }
   }
   // Sector detection (curated splits via sectorAt). Must run before finish-line
@@ -6555,7 +6566,7 @@ function render(dt) {
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
   // its visibility in lockstep with #game or a blank menu still shows the last blit.
-  if (!_softEl) _softEl = document.getElementById("game-soft");   // created lazily by the backend; cached once found
+  if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");   // only a soft-presenting backend creates it (at init); cached once found
   if (_softEl && _softEl.style.visibility !== vis) _softEl.style.visibility = vis;
   // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
   // owes them): shaders, textures and shadow maps warm up under the picker, not
@@ -7538,7 +7549,7 @@ function render(dt) {
     // drawPlayerWheels lifts by the same number off _groundMat.
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
     if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
-    const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2);   // rival LOD by camera distance (js/car/field-lod.js)
+    const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2, fovY, c);   // rival LOD by projected size: camera distance x lens, with hysteresis (js/car/field-lod.js)
     // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
       const x = tmpP[0], y = tmpP[1], z = tmpP[2], r = 8;
@@ -8160,7 +8171,7 @@ function tickBody(now) {
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
     _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
-    PerfGov.recordSimulation(steps, steps === 5 ? physAcc : 0);
+    PerfGov.recordSimulation(steps, steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0);   // only what the line below drops; the sub-step remainder carries
     if (steps === 5 && physAcc >= PHYS_DT) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
@@ -8257,7 +8268,7 @@ const { openTimeTrial, consumeGhostHash, openCareer, openCareerSlots, refreshCar
     // Point the shared car UI at the contract without overwriting GP preferences.
     const ti = Teams.LIST.findIndex((t) => t.id === c.team);
     if (ti >= 0) teamIdx = ti;
-    driverIdx = c.seat;
+    driverIdx = c.seat; clampDriverIdx();   // a hand-edited or imported save can carry any seat
     recomputePlayerMods();
   }
   },
@@ -8689,6 +8700,7 @@ function setPaused(p, why) {
   if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   paused = p; replayBuf.onPause(!!p); // REPLAY overlay while paused
+  if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); }   // a paused screen may sleep; a networked race runs on under the card
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
     // closeSettings disarms key/pad slots AND the wheel wizard (beginAxisCapture
