@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // show.mjs — one phone page of the game: menus, then the car from each side.
+// @doc One HTML page of menus then car views (JPEGs inline): `show.mjs [--out dir] [--team id]`.
+// @skill playwright-probe
 //
 //   node tools/shot/show.mjs
 //   node tools/shot/show.mjs --out artifacts/show
