@@ -156,7 +156,7 @@ const Car3D = (function () {
   const TYRE_BAND     = { 0: [0.92, 0.92, 0.90], 1: [0.85, 0.10, 0.08], 2: [0.95, 0.15, 0.05] };
   const BRAKE_CALIPER = { 0: null, 1: null, 2: [0.75, 0.08, 0.05] };
   // Side-on endplate height: aero level + rearSweep + fin (tier0 ≤ tyre crown).
-  const REAR_TYRE_CROWN = AXLES.wheelY + 0.34, REAR_WING_TOP = 1.10;
+  const REAR_TYRE_CROWN = AXLES.wheelY + 0.34, REAR_WING_TOP = 1.00;
   function endplateGeom(aLvl, style) {
     const aN = Math.max(0, Math.min(1, (aLvl || 0) / 4));
     const st = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
@@ -165,9 +165,9 @@ const Car3D = (function () {
     const lift = Math.pow(aN, 0.85), topLift = Math.pow(lift, 1.15);
     const sweepN = Math.max(0, (sweep + 0.02) / 0.14);
     const finN = Math.max(0, (fin - 0.55) / 0.90);
-    // Grow UP from a low plank, capped at REAR_WING_TOP (the pre-#784 lvl-4 top; a real wing ≲ 1.0 m): the old rise reached 1.58 m.
+    // Grow UP from a low plank, capped at REAR_WING_TOP = a real wing's ~1.0 m (lvl 1-4 0.79/0.85/0.91/0.95; the #784 rise reached 1.58 m).
     const rise = Math.min(REAR_WING_TOP - (REAR_TYRE_CROWN - 0.02),
-      Math.pow(topLift, 0.6) * (0.34 + 0.06 * sweepN + 0.05 * finN));
+      Math.pow(topLift, 0.6) * (0.29 + 0.03 * sweepN + 0.03 * finN));
     const topY = (REAR_TYRE_CROWN - 0.02) + rise, sy = 0.22 + 0.80 * rise;   // bottom = topY - sy stays ≈ 0.44–0.53
     const cy = topY - 0.015 - sy * 0.5;
     const chord = 0.48 + 0.24 * topLift, rearZ = -2.69, frontZ = rearZ + chord;
