@@ -1,7 +1,8 @@
 // start-lights — the start gantry's five lamps follow the countdown.
 //
 // js/race/start-lights.js finds the gantry nearest the start line in the
-// scenery registry and, every frame of the "count" state, re-spawns one
+// scenery registry (with none there, the engine's start gate) and, every
+// frame of the "count" state, re-spawns one
 // additive glow particle per lit lamp (G.lightsLit, one a second in game.js).
 // Until 2026-10-01 the gantry was three static grey boxes the countdown never
 // touched (the second graphics-detail survey, item 5). Run in a VM with
@@ -26,11 +27,16 @@ function load() {
 
 // A straight 100-node track running along +z (tangent +z, so "right" is −x
 // under the module's rotation; the lamps' lateral order is not asserted).
-function track(gantries) {
+function track(gantries, startGate) {
   const n = 100, px = new Float32Array(n), py = new Float32Array(n), pz = new Float32Array(n);
   for (let k = 0; k < n; k++) { px[k] = 0; py[k] = 0; pz[k] = k * 4; }
-  return { n, px, py, pz, props: { list: gantries.map((g) => ({ kind: "gantry", side: 0, w: 16, h: 9, d: 1, x: 0, y: 4.5, z: g.k * 4, k: g.k })) } };
+  return { n, px, py, pz, startGate,
+    props: { list: gantries.map((g) => Object.assign({ kind: "gantry", side: 0, w: 16, h: 9, d: 1, x: 0, y: 4.5, z: g.k * 4, k: g.k }, g)) } };
 }
+// The engine's start gate as js/track/tracks.js buildGate records it: the beam's
+// centre 15 m before the line (z = -15 on this straight), the direction of
+// travel, and how far toward the grid its face stands.
+const GATE = { c: [0, 6.2, -15], t: [0, 0, 1], face: 0.65 };
 const stub = () => { const calls = []; return { calls, glow: (...a) => calls.push(a) }; };
 
 test("each lit lamp is one additive glow on the start gantry, under the beam, proud of the grid-facing face", () => {
@@ -66,7 +72,7 @@ test("all five on, none outside the count, none without a start gantry", () => {
   assert.equal(P.calls.length, 0, "before the first lamp nothing glows");
   P = stub();
   SL.create({ state: "count", lightsLit: 4, track: track([{ k: 50 }]) }, { Particles: P }).update();
-  assert.equal(P.calls.length, 0, "a gantry mid-lap is not the start gantry");
+  assert.equal(P.calls.length, 0, "a gantry mid-lap is not the start gantry (and this track has no engine gate either)");
   P = stub();
   assert.doesNotThrow(() => SL.create({ state: "count", lightsLit: 4, track: null }, { Particles: P }).update());
   assert.doesNotThrow(() => SL.create({ state: "count", lightsLit: 4, track: { n: 100 } }, { Particles: P }).update());
@@ -80,6 +86,39 @@ test("lamp positions are memoised per track and recomputed on a new one", () => 
   assert.equal(sl.lampsFor(t1), sl.lampsFor(t1), "same track → same array");
   assert.notEqual(sl.lampsFor(t2), sl.lampsFor(t1));
   assert.ok(Math.abs(sl.lampsFor(t2)[0][2] - (4 - 0.3)) < 1e-6, "the new track's gantry node moved the lamps");
+});
+
+test("no gantry at the line: the lamps hang on the engine start gate's beam, which every circuit has", () => {
+  // 22 of 52 circuits had no gantry within 3 % of the line until 2026-10-04 and
+  // started in the dark: eight dress none, five span the line with an
+  // overheadSpan, nine authored theirs where RS() lands it hundreds of metres off.
+  const P = stub();
+  load().create({ state: "count", lightsLit: 5, track: track([{ k: 50 }], GATE) }, { Particles: P }).update();
+  assert.equal(P.calls.length, 5, "all five lamps light on the gate");
+  for (const c of P.calls) {
+    assert.ok(Math.abs(c[1] - 6.2) < 1e-6, `lamp height ${c[1]} is the gate beam's centre`);
+    assert.ok(Math.abs(c[2] - (-15 - 0.65)) < 1e-6, `lamp z ${c[2]} sits proud of the beam's grid-facing face`);
+  }
+  const xs = P.calls.map((c) => c[0]).sort((a, b) => a - b);
+  assert.ok(Math.abs(xs[4] - xs[0] - 3.6) < 1e-6 && Math.abs(xs[2]) < 1e-6, "a 0.9 m pitch, centred on the beam");
+  // A gantry at the line still wins over the gate.
+  const sl = load().create({ state: "count", lightsLit: 1, track: null }, { Particles: stub() });
+  assert.ok(Math.abs(sl.lampsFor(track([{ k: 1 }], GATE))[0][2] - 3.7) < 1e-6, "the scenery gantry at the line is preferred");
+});
+
+test("a record that names its lamp row (a startLights span) places the lamps there, and wins a tie", () => {
+  // js/track/scenery/models.js overheadSpan({ startLights: true }) registers its
+  // deck as a gantry with `lamp` (the deck's centre) and `face` (half its depth
+  // and a little): the housing formula would bury the row inside a thick deck.
+  const P = stub();
+  const span = { k: 1, y: 3, h: 12, lamp: [0, 8.1, 4], face: 0.85, startLights: true };
+  const plain = { k: 1, lamp: [0, 6.9, 4], face: 0.3 };   // a gantry() at the same node (Singapore's)
+  load().create({ state: "count", lightsLit: 5, track: track([plain, span], GATE) }, { Particles: P }).update();
+  assert.equal(P.calls.length, 5);
+  for (const c of P.calls) {
+    assert.ok(Math.abs(c[1] - 8.1) < 1e-6, `lamp height ${c[1]} is the span's named row`);
+    assert.ok(Math.abs(c[2] - (4 - 0.85)) < 1e-6, `lamp z ${c[2]} stands \`face\` toward the grid`);
+  }
 });
 
 test("game.js wires StartLights and the particle pool exposes glow", () => {

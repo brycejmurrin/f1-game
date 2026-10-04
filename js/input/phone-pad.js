@@ -559,9 +559,12 @@ const PhonePad = (function () {
     }
     // A held control: pointer down = on, up/cancel/leave = off. Pedals carry a
     // travel (0..1 along the pedal's height) so a gentle brake is possible.
+    const releases = [];
+    const releaseAll = () => { for (const r of releases) r(); };
     function hold(el, on, off, travel) {
       if (!el) return;
       const ids = new Set();
+      releases.push(() => { if (!ids.size) return; ids.clear(); el.classList.remove("on"); off(); });
       const down = (e) => {
         ids.add(e.pointerId);
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
@@ -578,8 +581,20 @@ const PhonePad = (function () {
       el.addEventListener("pointermove", move);
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
-      el.addEventListener("lostpointercapture", up);
+      // WebKit keeps ONE capture slot: pressing LOOK while GAS is held steals
+      // GAS's capture, and treating that as a lift dropped the throttle under a
+      // thumb still on it. Only a control that is gone counts as released
+      // (js/input/hold-buttons.js holdTargetGone); a stray lift is caught below.
+      el.addEventListener("lostpointercapture", (e) => { if (!el.isConnected || !el.getClientRects().length) up(e); });
       el.addEventListener("contextmenu", (e) => e.preventDefault());
+    }
+    if (typeof document !== "undefined") {
+      // Every finger up (a pointerup that landed elsewhere), or the page hidden
+      // by a call / app switch: nothing is held, so nothing stays pinned.
+      const allUp = (e) => { if (!e.touches || !e.touches.length) releaseAll(); };
+      document.addEventListener("touchend", allUp, true);
+      document.addEventListener("touchcancel", allUp, true);
+      document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
     }
     function travelOf(el, e) {
       const r = el.getBoundingClientRect();

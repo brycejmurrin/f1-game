@@ -389,9 +389,14 @@ const CarShade = (function () {
   function endplate(out, ep, s, col, crownCol, crownSurf, tri) {
     const X0 = 0.488, X1 = 0.521, f = ep.front, r = ep.rear, seg = 4;
     const q = (x, e) => [[s * x, f.bottom, f.z - e], [s * x, f.top, f.z - e], [s * x, r.top, r.z + e], [s * x, r.bottom, r.z + e]];
-    // Radii front-bottom, front-top, rear-top, rear-bottom: the last stays under 78 mm,
-    // or at level 4 (plate bottom 0.525) the light's lower edge (0.603) falls off the rear face.
-    const fr = fracs(q(X1, 0), [0.10, 0.07, 0.04, 0.07]), CT = 0.018;
+    // Radii front-bottom, front-top, rear-top, rear-bottom. Cap rear radii so the
+    // endplate light (y 0.62 ± 0.017) stays on the rear face: level 4's tall
+    // plate needs the bottom cap (bottom 0.525 vs light 0.603), and the PR's
+    // tier-0 plank (rear.top ≈ tyre crown) needs the top cap.
+    const lightLo = 0.603, lightHi = 0.637;
+    const rBot = Math.max(0.02, Math.min(0.07, lightLo - r.bottom - 0.01));
+    const rTop = Math.max(0.015, Math.min(0.04, r.top - lightHi - 0.01));
+    const fr = fracs(q(X1, 0), [0.10, 0.07, rTop, rBot]), CT = 0.018;
     skin(out, [rquad(q(X1, 0), fr, seg), rquad(q(X0, 0), fr, seg)], col, tri);
     // The crown straddles the top edge as the flat strip did (y top +- 9 mm), its
     // ends inset half its thickness so they finish flush with the plate's edges.

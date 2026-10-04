@@ -11,7 +11,7 @@
    it shipped. Offsets divide by the element's own --hud-z (its band zoom), so
    a 10% move is 10% of the screen at every HUD SIZE.
 
-   TWO LAYOUTS: the cockpit cameras (COCKPIT, VISOR) put the steering wheel
+   TWO LAYOUTS: the cockpit cameras (COCKPIT, VISOR, HELMET) put the steering wheel
    across the bottom of the screen, so a layout tuned for the chase camera
    would sit on it. One stored object, apex26.hudLayout:
    {v: 2, cockpit: {id: {x, y, s}}, other: {…}} — a missing element is the
@@ -62,7 +62,7 @@ const HudLayout = (function () {
   ].map(Object.freeze));
   const IDS = ELEMENTS.map((e) => e[0]);
   const SETS = Object.freeze(["cockpit", "other"]);
-  const COCKPIT_CAMS = Object.freeze({ cockpit: 1, visor: 1 });
+  const COCKPIT_CAMS = Object.freeze({ cockpit: 1, visor: 1, helmet: 1 });   // HELMET looks at the same wheel
   const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], s: [50, 200] });
   const DEF = Object.freeze({ x: 0, y: 0, s: 100 });
   const fz = (o) => { for (const k in o) Object.freeze(o[k]); return Object.freeze(o); };
@@ -102,6 +102,7 @@ const HudLayout = (function () {
   const doc = typeof document !== "undefined" ? document : null;
   let cam = "other";         // which layout the race is using (setCam)
   let preview = null;        // the layout the settings fold is editing, while it is open
+  let foldEl = null;         // the MOVE & SIZE <details>, once built
   let selected = null;       // the element the fold has selected (outlined while peeking)
 
   function num(v, k) {
@@ -207,6 +208,13 @@ const HudLayout = (function () {
   // same correction, so neighbours keep their spacing.
   function fit() {
     if (!doc || typeof window === "undefined" || !window.innerWidth) return;
+    // The fold is never collapsed when SETTINGS closes (or a race resumes), so
+    // its preview outlived the page and pinned the edited layout over every
+    // camera for the session. A fold no longer on screen hands back the camera's.
+    if (preview && !(foldEl && foldEl.open && foldEl.getClientRects && foldEl.getClientRects().length)) {
+      if (foldEl) foldEl.open = false;
+      preview = null; selected = null; apply();
+    }
     const W = window.innerWidth, H = window.innerHeight;
     const a = all()[shown()];
     const groups = new Map();   // "x,y" offset -> [{ el, e, r }]
@@ -325,11 +333,11 @@ const HudLayout = (function () {
     const sum = el("summary", { id: "pm-hudlayout-sum", className: "adv-more-btn" });
     const body = el("div", { id: "pm-hudlayout-body", attrs: { role: "group", "aria-label": "HUD element position and size" } });
     const fold = el("details", { className: "pm-renderer-sub" }, [sum, body]);
-    fold.id = "pm-hudlayout";   // a plain assignment, so tools/check/shell-ids.mjs sees the mount-once guard's target
+    fold.id = "pm-hudlayout"; foldEl = fold;   // a plain assignment, so tools/check/shell-ids.mjs sees the mount-once guard's target
     const paintSum = () => { sum.textContent = "MOVE & SIZE · " + (isShipped() ? "SHIPPED" : "CUSTOM"); };
 
     body.appendChild(el("p", { className: "adv-help", textContent:
-      "Move and resize each race HUD element. The cockpit cameras (COCKPIT, VISOR) keep their own layout, " +
+      "Move and resize each race HUD element. The cockpit cameras (COCKPIT, VISOR, HELMET) keep their own layout, " +
       "because the steering wheel covers the bottom of the screen; on a desktop their shipped layout puts OVERTAKE, AERO, ENERGY " +
       "and TYRES beside the wheel (on a touch screen the buttons carry OVERTAKE and AERO until you place them). A PRESET is a starting point you can still tweak. In a race, hold a slider to see the HUD through this page." }));
 

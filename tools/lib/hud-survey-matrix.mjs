@@ -45,7 +45,7 @@ export const CAMS = Object.freeze(["chase", "far", "drift", "cockpit", "hood", "
   "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "rival", "pitwall", "drone", "tv", "helmet"]);
 // js/ui/hud.js BCAM_IDS / ONBOARD_IDS.
 export const BCAM_IDS = Object.freeze(["heli", "side", "cinematic", "low", "overhead", "rival", "pitwall", "drone"]);
-export const ONBOARD_IDS = Object.freeze(["cockpit", "hood", "tcam"]);
+export const ONBOARD_IDS = Object.freeze(["cockpit", "hood", "tcam", "visor", "helmet"]);
 // Cameras whose framing the TV director / auto-cut owns: no camera-keyed expectation.
 const DYNAMIC_CAMS = new Set(["tv", "trackside"]);
 // HudElements.ELEMENTS ids (js/ui/hud-elements.js) → the probe key each hides

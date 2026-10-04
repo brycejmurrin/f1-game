@@ -1064,7 +1064,12 @@
       }
 
       // ── TRACK FURNITURE ───────────────────────────────────────────────────
-      gantry(0.0, 8.2, [0.20, 0.22, 0.26]);
+      // The start gantry stands over the REAL line. This def's scenery is
+      // SOURCE-space and reversed, so RS(s) = startFrac − s + _sceneryShift
+      // and the line is at s = startFrac + _sceneryShift (the brands_hatch
+      // sl() idiom, inverted for the reverse map); gantry(0.0) stood 624 m on.
+      const SL = Math.round(((api.def.startFrac + api.def._sceneryShift) % 1) * 1e4) / 1e4;
+      gantry(SL, 8.2, [0.20, 0.22, 0.26]);
       gantry(0.235, 8.0, [0.22, 0.24, 0.28]);
 
       scaffoldStand(0.615, 0.665, -1, 9, {

@@ -38,7 +38,8 @@ Night races run under floodlights.
 
 **Build your own circuit** in the TRACK DESIGNER (title menu): RANDOMISE or
 draw a loop, drag its points, stamp corners, hairpins and chicanes, pick a
-theme, and let the designer's checks (and their FIX buttons) make it raceable —
+theme (sixteen, each with time of day, trees and crowd options), and let the
+designer's checks (and their FIX buttons) make it raceable —
 then SAVE it and race the full field or a time trial on it, or share it as a
 link. The designer's HOW TO tab walks through it; the long form is
 [docs/TRACK-DESIGNER.md](docs/TRACK-DESIGNER.md).

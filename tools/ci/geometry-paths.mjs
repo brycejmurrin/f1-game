@@ -133,9 +133,9 @@ export const PARTS_ERE = () => {
  *  comment — so a game.js edit needs no sweep, and that is the diff class
  *  that was paying for ten fleet rebuilds. */
 export const TARGETED = [
-  { ere: "^(js/lighting/|js/render/shared/light-budget\\.js$)",
+  { ere: "^(js/lighting/|js/render/shared/light-budget\\.js$|js/race/start-lights\\.js$)",
     suites: ["tests/unit/lamp-fixture-anchor.test.mjs"],
-    why: "builds every circuit's lights from js/lighting/{frame-lights,knobs,lighting,track-lights}.js and light-budget.js" },
+    why: "builds every circuit's lights from js/lighting/{frame-lights,knobs,lighting,track-lights}.js and light-budget.js, and hangs its start lamps with js/race/start-lights.js" },
   { ere: "^js/garage/pit-signs\\.js$",
     suites: ["tests/unit/pit-signs.test.mjs"],
     why: "the pit bay signs' atlas + decal (pick-tests routes this file to sweeps; the fleet trigger never did)" },

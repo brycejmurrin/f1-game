@@ -765,14 +765,23 @@
       grandstandEx(0.70, -1, 30, 48, null, null,
         { livery: "scaffold", tiers: 2, roof: "truss", endWalls: true });
 
-      // Start/finish gantry + halfway scoring gantry
-      gantry(0.0, 7.5, [0.12, 0.12, 0.16]);
+      // Start/finish gantry + halfway scoring gantry. The start gantry and its
+      // light cluster stand over the REAL line: this def mirrors its lap
+      // (sceneryLapMirror), so RS(s) = _sceneryShift − s and the line is at
+      // s = _sceneryShift (the brands_hatch sl() idiom, inverted for the
+      // mirror); at frac 0 both stood half a lap from the grid.
+      const SL = Math.round(api.def._sceneryShift * 1e4) / 1e4;
+      gantry(SL, 7.5, [0.12, 0.12, 0.16]);
       gantry(0.5, 7.0, [0.12, 0.12, 0.16]);
-      // Lit start-light cluster is an explicit safe overhead model.
+      // The start-light cluster is an explicit safe overhead model, and it is
+      // where js/race/start-lights.js hangs the countdown lamps (startLights):
+      // an unlit housing, not the static red it was, which read as lamps lit
+      // all race long. 1.6 m deep so its grid face stands proud of the
+      // gantry's 1.4 m beam it threads — at 0.9 the lamps sat inside the beam.
       overheadSpan({
-        id: "start-light-cluster", frac: 0, clearance: 6.9,
-        thickness: 1.4, depth: 0.9, span: 4.5,
-        color: [0.95, 0.05, 0.05], required: true, supports: false,
+        id: "start-light-cluster", frac: SL, clearance: 6.9,
+        thickness: 1.4, depth: 1.6, span: 4.5, startLights: true,
+        color: [0.10, 0.10, 0.12], required: true, supports: false,
       });
 
       for (const s of [0.07, 0.16, 0.28, 0.36, 0.47, 0.60, 0.68, 0.76, 0.84, 0.94]) {

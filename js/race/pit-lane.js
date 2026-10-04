@@ -1688,6 +1688,21 @@ const PitLane = (function () {
       }
       return _rivals;
     }
+    /** Laps to this car's stop on a WET set, from the wet class's life rather
+     *  than the dry plan: 99 (no stop) when the set on the car reaches the
+     *  flag (G.tyres.lapsLeft, measured, with the 1.1 margin `fits` uses);
+     *  otherwise midway between the first lap a fresh wet reaches the flag and
+     *  the lap this one is gone — the split that wastes least of either set. */
+    function wetLapsToStop(c, tread) {
+      const lap = c.lap || 0, left = Math.max(0, G.lapsTarget - lap);
+      if (!G.tyres.lapsLeft || !G.tyres.lapsOn) return 99;
+      const fresh = G.tyres.planLaps(TyreModel.AI_CLASS[TyreModel.classForTread(tread)].life, G.lapsTarget) / (c.pitPlan.loadK || 1);
+      // The measured rate only after two laps on the set (replan's rule): one
+      // lap after a stop read 27 % and stopped two fresh wets again, measured.
+      const onSet = G.tyres.lapsOn(c) >= 2 ? G.tyres.lapsLeft(c) : fresh * (1 - Math.min(1, G.tyres.spent(c)));
+      if (onSet == null || onSet * 1.1 >= left) return 99;
+      return Math.max(0, Math.round(((G.lapsTarget - fresh) + (lap + onSet)) / 2) - lap);
+    }
     function think(c) {
       const plan = c && c.pitPlan;
       // A HUMAN's plan is advice (planFor): nothing here ever arms it.
@@ -1697,14 +1712,21 @@ const PitLane = (function () {
       if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars))) return "";
       // A red flag (4) is not a pit window: the field is held and the restart clears arms.
       if (cautionLevel() >= 4) return "";
-      const stopsLeft = plan.stops - (c.pitStops || 0);
+      let stopsLeft = plan.stops - (c.pitStops || 0);
       const nextAt = plan.lapsAt[c.pitStops || 0];
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
       // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
       // dry->rain arc did not have.
       const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
-      const lapsToStop = nextAt == null ? 99 : nextAt - (c.lap || 0);
+      // ON THE RIGHT WET TYRE THE DRY PLAN'S LAPS MEAN NOTHING: plan.lapsAt was
+      // cut for slicks, and every stop in a wet race refits the wet class
+      // (below), so a 2-stop dry plan stopped a wet twice and a wet that could
+      // reach the flag still came in on the slick's lap. The wet stint is
+      // re-cut on the wet class's own life (wetLapsToStop).
+      const wetRun = wantTread > 0 && !wrongTread;
+      let lapsToStop = nextAt == null ? 99 : nextAt - (c.lap || 0);
+      if (wetRun) { lapsToStop = wetLapsToStop(c, wantTread); stopsLeft = lapsToStop < 99 ? 1 : 0; }
       const wear = G.tyres.spent(c);
       // The cars around it, only when a rival rule could fire (a stop near, a
       // used set): the scan is a pass over the field, per AI per tick.
@@ -1716,10 +1738,16 @@ const PitLane = (function () {
       else c._stuckFrom = null;
       const stuckLong = c._stuckFrom != null && (c.prog || 0) - c._stuckFrom >= AiDrive.STRAT.STUCK_LAPS * G.track.total;
       // Would the NEXT set carry the car from a stop now to its own planned
-      // stop (or the flag)? A rival call that answers no is not taken.
+      // stop (or the flag)? A rival call that answers no is not taken — nor a
+      // CAUTION stop: pulled up to CAUTION_REACH laps forward onto a set that
+      // cannot reach the flag, the "free" stop bought a second one. Bahrain,
+      // 12 laps, SC on lap 2: 19 of 21 one-stop plans ran two stops, 2 ran three.
+      const caution = cautionLevel();
       let fits = true;
-      if (near) {
-        const nextCls = plan.seq[(c.pitStops || 0) + 1], nextStop = plan.lapsAt[(c.pitStops || 0) + 1];
+      if (near || (caution >= 2 && caution < 4 && stopsLeft > 0 && lapsToStop <= AiDrive.STRAT.CAUTION_REACH)) {
+        // (On a wet run the next set is the wet class, run to the flag.)
+        const nextCls = wetRun ? TyreModel.classForTread(wantTread) : plan.seq[(c.pitStops || 0) + 1];
+        const nextStop = wetRun ? null : plan.lapsAt[(c.pitStops || 0) + 1];
         const life = nextCls && TyreModel.AI_CLASS[nextCls] ? G.tyres.planLaps(TyreModel.AI_CLASS[nextCls].life, G.lapsTarget) / (plan.loadK || 1) : Infinity;
         fits = (nextStop != null ? nextStop : G.lapsTarget) - (c.lap || 0) <= life * 1.1;
       }
@@ -1729,7 +1757,7 @@ const PitLane = (function () {
         rivalBehindBoxed: !!(near && near.behind), stuckBehind: !!(near && near.stuck && stuckLong),
         rivalUsed: !!c._rivalStop, fits,
         react: temper ? temper.react : 0, attack: temper ? temper.attack : 0,
-        cautionLevel: cautionLevel(),   // per AI per tick: the allocation-free read
+        cautionLevel: caution,   // per AI per tick: the allocation-free read
         wear,
         wrongTread,
         // …so the worn rule can ask whether the stop has laps left to pay for

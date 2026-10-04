@@ -292,6 +292,27 @@ test("the renderer's blocking spec stays inside the gate it was written for", ()
     `${SPEC} is not in test:gfx, which is the group js/render/ routes to`);
 });
 
+test("the physics-core blocking spec stays inside the gate it was written for", () => {
+  /* tests/specs/physics-boot.spec.js exists BECAUSE js/physics/ routed to a
+     plan that could never run: every other test:physics-core spec is either
+     FIXED_GATE (characterization), a VM twin / vmPage adapter, or EXCLUDED for
+     declaring >= 180 s (physics-hotpath 300 s, debris 540 s). A player-forces
+     PR then selected 0 specs, dropped 2, and failed Selected specs (verdict)
+     — PR #826 run 37165166486.
+
+     Cheapness is load-bearing, same contract as render-boot. */
+  const SPEC = "tests/specs/physics-boot.spec.js";
+  assert.ok(fs.existsSync(path.join(ROOT, SPEC)), `${SPEC} is gone; so is physics-core's only selected-gate boot`);
+  assert.equal(maxDeclaredTimeout(SPEC), 0,
+    `${SPEC} declares a timeout, which excludes it from the selected gate — that is the hole it was written to close`);
+  const cut = fit([SPEC], 15, { rank: () => 3 });
+  assert.deepEqual(cut.selected.map((r) => r.file), [SPEC],
+    `${SPEC} did not fit the budgeted shard: ${JSON.stringify({ skipped: cut.skipped, unreachable: cut.unreachable, over: cut.overBudgetSpecs })}`);
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.ok([...specsOf(["test:physics-core"], pkg.scripts)].includes(SPEC),
+    `${SPEC} is not in test:physics-core, which is the group js/physics/ routes to`);
+});
+
 test("each missed case is attributed to the bucket that actually excluded it", () => {
   /* The footer of select-recall.mjs attributed all four misses to the
      deliberate `>=` per-test budget policy. That was right for three of them

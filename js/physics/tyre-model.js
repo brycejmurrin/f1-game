@@ -586,8 +586,13 @@ const TyreModel = (function () {
     c.tyre = record || classRecord("medium");
     // `null` is the competent-field sentinel: ordinary AI is assumed to have
     // the right weather tyre. Player and MY TEAM cars carry an explicit tread,
-    // which a real stop must replace.
-    if (c.tread !== null) c.tread = c.tyre.tread || 0;
+    // which a real stop must replace. SO DOES AN AI WITH A STRATEGY: a pit
+    // plan exists only with wear on (gridUp), and then the AI is fitted a real
+    // set — the weather's at the lights, a weather stop when it turns — so it
+    // runs on that set's tread exactly as the player does. Left null, an AI
+    // still on slicks as the rain came in cornered on full wets until its stop.
+    // Wear off (no plan) keeps the sentinel: that field cannot change tyres.
+    if (c.tread !== null || (c.pitPlan && !c.human)) c.tread = c.tyre.tread || 0;
     if (c.tyreBaseMods) {
       const out = c.mods || (c.mods = {}), tm = c.tyre.mods || null;
       for (const k of STAT_KEYS) out[k] = c.tyreBaseMods[k] * (tm && tm[k] != null ? tm[k] : 1);

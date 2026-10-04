@@ -479,11 +479,11 @@
       // supportGap 2 on the start line, as Bahrain's: the legs stand on the
       // pit-wall strip. At 4.5 the right leg lands inside the pit complex,
       // which supersedes it, since the pit lane runs beside the start straight.
-      const cotaGantry = (s, id, clearance, supportGap = 4.5) => {
+      const cotaGantry = (s, id, clearance, supportGap = 4.5, startLights = false) => {
         const k = K(s), supportWidth = 0.8, thick = 0.9;
         const ok = overheadSpan({
           id, frac: s, clearance, thickness: thick, depth: 1.4,
-          supportGap, supportWidth,
+          supportGap, supportWidth, startLights,
           span: hw[k] * 2 + supportGap * 2 + supportWidth * 2,
           color: darkSteel, required: true,
         });
@@ -501,7 +501,7 @@
           }, { required: true });
         }
       };
-      cotaGantry(0.00, "cota-start-gantry", 7.5, 2);
+      cotaGantry(0.00, "cota-start-gantry", 7.5, 2, true);   // carries the countdown lamps (js/race/start-lights.js)
       cotaGantry(0.50, "cota-drs-gantry", 7.0);
 
       // Ground-conforming runoff at COTA's two defining braking zones.

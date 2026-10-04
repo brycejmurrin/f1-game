@@ -578,13 +578,8 @@ const FLAP_CACHE_MAX = 128;
 // per car per frame, so an indexOf+splice reorder on every hit is not free
 // here. Distinct flap signatures per race stay well under 128, so eviction
 // order is moot at realistic cardinality.
-function getAeroFlap(aLvl, col, idx, style, el, finish) {
-  const c = col || [0.9, 0.9, 0.1];
-  // aLvl is passed through RAW — catalog options use fractional levels and the
-  // wing geometry depends on the exact value, so it must not be truncated here
-  // either (it is part of the cache key for the same reason).
-  const g = el || Car3D.aeroFlaps(aLvl, style)[idx | 0];
-  if (!g) return null;
+// One element's key: its solve (cacheKey carries level + recipe), colour, finish.
+function _flapKey(g, aLvl, style, c, finish) {
   const sig = g.cacheKey || (g.id + aLvl + "|" + (style ? [
     style.frontSweep, style.frontTaper, style.frontRise,
     style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d"));
@@ -592,22 +587,62 @@ function getAeroFlap(aLvl, col, idx, style, el, finish) {
   // array and no closure. The whole key build runs per flap per car per frame.
   // Finish is part of the key: the same element/level/colour renders a different
   // MATERIAL under a satin/chrome livery, so two finishes must not share a mesh.
-  const key = sig + "|" + c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2) + "|" + (finish || "");
-  if (_flapMeshes[key]) return _flapMeshes[key];
-  const mesh = _gfx.createMesh(Car3D.buildFlapGeom(g, c, finish));
-  _flapMeshes[key] = mesh;
-  _flapOrder.push(key);
-  if (_flapOrder.length > FLAP_CACHE_MAX) {
-    const old = _flapOrder.shift();
+  return sig + "|" + c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2) + "|" + (finish || "");
+}
+function _flapPut(cache, order, max, key, data) {
+  const mesh = cache[key] = _gfx.createMesh(data);
+  order.push(key);
+  if (order.length > max) {
+    const old = order.shift();
     // freeMesh, not deleteMesh: no backend has ever had a deleteMesh (GLX, TLX and
     // WGX all expose freeMesh — see the contract in js/render/gfx.js), so the old
     // `&& _gfx.deleteMesh` guard silently skipped the free and every evicted flap
     // leaked its GL buffers for the life of the page. Same call the two frees
     // above this function already make.
-    if (_flapMeshes[old] && _gfx.freeMesh) _gfx.freeMesh(_flapMeshes[old]);
-    delete _flapMeshes[old];
+    if (cache[old] && _gfx.freeMesh) _gfx.freeMesh(cache[old]);
+    delete cache[old];
   }
   return mesh;
+}
+function getAeroFlap(aLvl, col, idx, style, el, finish) {
+  const c = col || [0.9, 0.9, 0.1];
+  // aLvl is passed through RAW — catalog options use fractional levels and the
+  // wing geometry depends on the exact value, so it must not be truncated here
+  // either (it is part of the cache key for the same reason).
+  const g = el || Car3D.aeroFlaps(aLvl, style)[idx | 0];
+  if (!g) return null;
+  const key = _flapKey(g, aLvl, style, c, finish);
+  return _flapMeshes[key] || _flapPut(_flapMeshes, _flapOrder, FLAP_CACHE_MAX, key, Car3D.buildFlapGeom(g, c, finish));
+}
+// THE WHOLE FLAP SET AS ONE STATIC MESH at a REST pose — closed (zAngle, Z-mode)
+// or `open` (xAngle, X-mode); `only` "front"/"rear" as drawAeroFlaps. Each element
+// posed exactly as drawAeroFlaps' matrix poses it (about local X by the angle,
+// then hung at its own pivot — tools/car/parts-sweep.mjs appendFlaps) and baked
+// into one buffer: one draw with the same options, the same surfaces. It is what
+// a rival past FieldLod.flapsM() and the mirror / PiP draw (they drew NO flaps:
+// a rear wing stripped to its main plane) and any car whose wings are at rest.
+const _flapSets = {}, _flapSetOrder = [];
+const FLAP_SET_MAX = 64;   // ~11 teams x 2 poses a race (+ the cockpit's front-only)
+function getAeroFlapSet(aLvl, col, style, finish, open, only) {
+  const c = col || [0.9, 0.9, 0.1], flaps = Car3D.aeroFlaps(aLvl, style);
+  if (!flaps.length) return null;
+  const key = _flapKey(flaps[0], aLvl, style, c, finish) + (open ? "|X|" : "|Z|") + (only || "");
+  if (_flapSets[key]) return _flapSets[key];
+  const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  for (const fg of flaps) {
+    if (only && fg.wing !== only) continue;
+    const g = Car3D.buildFlapGeom(fg, c, finish), ang = open ? fg.xAngle : fg.zAngle;
+    const ca = Math.cos(ang), sa = Math.sin(ang), base = out.pos.length / 3;
+    for (let i = 0; i < g.pos.length; i += 3) {
+      const y = g.pos[i + 1], z = g.pos[i + 2], ny = g.nrm[i + 1], nz = g.nrm[i + 2];
+      out.pos.push(g.pos[i], y * ca - z * sa + fg.y, y * sa + z * ca + fg.z);
+      out.nrm.push(g.nrm[i], ny * ca - nz * sa, ny * sa + nz * ca);
+    }
+    for (const v of g.col) out.col.push(v);
+    for (const m of g.mat) out.mat.push(m);
+    for (const k of g.idx) out.idx.push(base + k);
+  }
+  return _flapPut(_flapSets, _flapSetOrder, FLAP_SET_MAX, key, out);
 }
 
 function _rigBox(out, cx, cy, cz, sx, sy, sz, col) {
@@ -1736,7 +1771,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);

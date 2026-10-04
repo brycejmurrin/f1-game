@@ -157,7 +157,12 @@
       grandstandEx(0.02, -1, 9, 70, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", endWalls: true });
       ledFascia(0.02, -1, 9, 70, 2);
-      gantry(0.0, 9, DARK);
+      // The start gantry stands over the REAL line, re-keyed through sl() (the
+      // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
+      // alone put the gantry — and the start lamps it carries — 536 m away.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      gantry(sl(0.0), 9, DARK);
 
       // s 0.03-0.06 R — PIT-EXIT TUNNEL: Yas Marina's pit lane surfaces via a
       // tunnel UNDER the main straight — an F1 first, and this circuit's
@@ -674,18 +679,12 @@
         }
       }
 
-      {
-        const rawBox = TrackGeom.addBox;
-        const aL = anchor(K(0.0), -1, 7), aR = anchor(K(0.0), 1, 7);
-        for (let j = 0; j < 5; j++) {
-          const t = (j + 0.5) / 5;
-          const bx = aL.c[0] + (aR.c[0] - aL.c[0]) * t;
-          const bz = aL.c[2] + (aR.c[2] - aL.c[2]) * t;
-          rawBox(out, [bx, aL.c[1] + 8.5, bz], [1.6, 1.6, 0.8], [0.85, 0.10, 0.08], [aL.r, aL.u, aL.t]);
-        }
-        // a second photo/scoring gantry just before T1
-        gantry(0.96, 9, DARK);
-      }
+      // Five static red boxes hung here at K(0.0) as the start lights until
+      // 2026-10-04: lit through green running, and left floating once the
+      // start gantry moved to the line. js/race/start-lights.js lights the
+      // gantry's own lamps with the countdown instead.
+      // a second photo/scoring gantry just before T1
+      gantry(0.96, 9, DARK);
 
       {
         const k = K(0.28);

@@ -89,7 +89,7 @@ backup path is `js/career/career-backup.js` (`CareerBackup`):
 
 - **Format** `apex26-career-backup-v1` — `{ format, exportedAt, build, slots[{flavour,i,data}], season?, badges?, daily?, records? }`. Ghosts are refused on import and never written on export.
 - **Export** dumps all six slots (empty ones as `data: null`) through `NativeDownload` so Capacitor Share works on Android/iOS.
-- **Import** validates (wrong format, NaN money, array-where-object, >5 MB blob → reject, change nothing) → runs `SaveMigrate.migrateCareer` per slot → writes through `store.write` (IndexedDB mirror included). A newer live revision is refused the same way `Career.save()` refuses a stale tab. Importing from a DRIVER card does not touch MY TEAM slots until the player confirms **ALL MODES?** (and the reverse).
+- **Import** validates (wrong format, NaN money, array-where-object, >5 MB blob → reject, change nothing) → runs `SaveMigrate.migrateCareer` per slot → writes through `store.write` (IndexedDB mirror included). Only the backup's SAVED slots are written: an empty row (`data: null`) leaves that local slot alone, never deletes it. Badges merge as a union (earliest unlock kept); a local standalone season further along than the backup's (later round, or more points at the same round) is kept. A newer live revision is refused the same way `Career.save()` refuses a stale tab. Importing from a DRIVER card does not touch MY TEAM slots until the player confirms **ALL MODES?** (and the reverse).
 - **UI** — EXPORT / IMPORT on each slot card in the CAREER MODES picker (`career-ui.js`); no new screen.
 
 ### The durable mirror (IndexedDB)

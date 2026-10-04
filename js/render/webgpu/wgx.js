@@ -152,7 +152,7 @@ const WGX = (function () {
   // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
   const TRACK_LIGHT_CAP = 1024;                         // lights (64 B each -> 65536 B)
   const CHUNK_IDX_CAP = 16384;                          // u32 indices (65536 B)
-  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 16
+  const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 48
 
   // Keyed on the DEVICE (IS_MOBILE), not the memory tier — the same key
   // js/render/glx/shadow.js uses, and for its reason: GRAPHICS: HIGH on a phone
@@ -332,13 +332,28 @@ const WGX = (function () {
     // to the centre-most vertex per station makes neighbouring samples
     // along-track BY CONSTRUCTION, rather than by a distance test that cannot
     // tell the two apart.
+    // ...AT lat 0, not at a vertex: buildRoad has no lat-0 column (the centre
+    // line's sit at +-0.30), so "the centre-most vertex" was the -0.30 one and
+    // every sample sat 0.30 m off centre — all WGX paint (edge lines, dashes,
+    // pit lane), the asphalt test and the bury hole shifted 0.30 m sideways vs
+    // GLX. Interpolate the nearest vertex either side to lat 0; a station with
+    // one side only keeps its centre-most vertex, as before.
     const byStation = new Map();
     for (let i = 0; i < raw.length; i++) {
       const r = raw[i], key = Math.round(r.s * 100);
-      const prev = byStation.get(key);
-      if (!prev || Math.abs(r.lat) < Math.abs(prev.lat)) byStation.set(key, r);
+      let st = byStation.get(key);
+      if (!st) { st = { neg: null, pos: null }; byStation.set(key, st); }
+      const side = r.lat < 0 ? "neg" : "pos";
+      if (!st[side] || Math.abs(r.lat) < Math.abs(st[side].lat)) st[side] = r;
     }
-    raw = [...byStation.values()];
+    raw = [];
+    for (const { neg, pos } of byStation.values()) {
+      if (neg && pos && pos.lat > 0) {
+        const t = -neg.lat / (pos.lat - neg.lat);
+        raw.push({ px: neg.px + (pos.px - neg.px) * t, pz: neg.pz + (pos.pz - neg.pz) * t,
+                   s: neg.s, hw: neg.hw, lat: 0 });
+      } else raw.push(neg && (!pos || Math.abs(neg.lat) < Math.abs(pos.lat)) ? neg : pos);
+    }
     raw.sort((a, b) => a.s - b.s);
     const MAX_S = 2000;
     // Decimating STATIONS, not vertices: with one point per station this stride
@@ -735,9 +750,14 @@ const WGX = (function () {
       settleFrames: 30,
       ignore: () => _cssApplying,
     });
-    function _wgxEscalate(why) {
-      if (_outProbeOff) {
-        try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ }
+    // `force` = a real device.lost. _outProbeOff mutes the output-probe and
+    // GPU-error ladders in capture mode, never a dead device: that early
+    // return froze the canvas (no _lost, rung, reload or GLX). Muted calls
+    // repeat once per GPU error after the cap, so the warning prints once.
+    let _capMuteWarned = false;
+    function _wgxEscalate(why, force) {
+      if (_outProbeOff && !force) {
+        if (!_capMuteWarned) { _capMuteWarned = true; try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ } }
         return;
       }
       if (_lost) return;
@@ -904,7 +924,9 @@ const WGX = (function () {
         // Persist WHY, not just that: WebKit's info.message names the loss
         // ("GPU hang", the imgui-class setPipeline loss) where Dawn says
         // "unknown", and COPY DIAG is the only channel a phone has.
-        _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + _lostDetail(info) + ")");
+        // force: SCREENSHOTS NATIVE / 2D BLIT (_outProbeOff) must not mute a
+        // dead device — forced, the call always latches _lost and climbs.
+        _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + _lostDetail(info) + ")", true);
         return;
       }
       // HIDDEN-TAB LOSS IS NOT A CRASH. iOS purges the GPU resources of a
@@ -1016,6 +1038,10 @@ const WGX = (function () {
     const DRAW_F32_STRIDE = DRAW_STRIDE >> 2;   // 64
     const drawRing = new Float32Array(MAX_DRAWS * DRAW_F32_STRIDE);
     const blitData  = new Float32Array(BLIT_BYTES / 4);
+    // BlitU tone lanes (_blitParams): the stand-in the fallback blit and the boot
+    // smoke tests resolve with — the knob defaults, Narkowicz at white point 1.
+    const _TONE_IDS = ["acesA", "acesB", "acesC", "acesD", "acesE", "whitePoint"];
+    const _TONE_STANDIN = Object.freeze({ acesA: 2.51, acesB: 0.03, acesC: 2.43, acesD: 0.59, acesE: 0.14, whitePoint: 1 });
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
     const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
     const _projZ01  = new Float32Array(16);   // Z01·P scratch (off-axis garage/setup)
@@ -1025,7 +1051,7 @@ const WGX = (function () {
     const _dynOff = [0];   // single-element dynamic-offset scratch
 
     // Culling frame state.
-    let frameViewProj = null, frameEye = null, frameCullDist = 0;
+    let frameViewProj = null, frameEye = null, frameCullDist = 0, frameCullFog = null;
     // Per-chunk lamp state: knob + full baked set (frame fields, cleared by
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
@@ -1258,6 +1284,7 @@ const WGX = (function () {
         get frameViewProj() { return frameViewProj; },
         get frameEye() { return frameEye; },
         get frameCullDist() { return frameCullDist; },
+        get frameCullFog() { return frameCullFog; },
         get framePerChunk() { return framePerChunk; },
         get frameAllLights() { return frameAllLights; },
         get frameRoadChunkLamps() { return frameRoadChunkLamps; },
@@ -3253,7 +3280,10 @@ const WGX = (function () {
       d[132] = f.lampFog != null ? f.lampFog : 0;
       d[133] = SHD.lampArmed ? 1 : 0;
       d[134] = SHD.lampIdx;
-      d[135] = (T && T.matTexMix != null) ? T.matTexMix : 1;
+      // params8.w = BAKED MATERIALS mix, forced to 0 with no albedo array bound
+      // (GLX: uMatTexMix = matAlbedoTex ? mix : 0). The 1x1 placeholder's alpha
+      // 255 otherwise read as rough 1.0 and pushed every world surface matte.
+      d[135] = _matAlbedoOn ? ((T && T.matTexMix != null) ? T.matTexMix : 1) : 0;
       // params9 (floats 136..139): LIT tuner knobs. Always pack the resolved value — WGSL reads them directly, so 0
       // is a real "off", not an unset slot. Defaults = shipped GLX look.
       d[136] = (T && T.ambContactDark != null) ? T.ambContactDark : 1.0;
@@ -3342,6 +3372,7 @@ const WGX = (function () {
       frameViewProj = f.viewProj || null;
       frameEye = f.eye || null;
       frameCullDist = f.cullDist || 0;
+      frameCullFog = f.cullFog || null;
       framePerChunk = +f.perChunkLights || 0;
       frameRoadChunkLamps = +f.roadChunkLamps || 0;
       frameAllLightsGen = +f.allLightsGen || 0;
@@ -3716,8 +3747,7 @@ const WGX = (function () {
     // Fallback path: tonemap blit (HDR scene -> swapchain). Used when
     // the post chain never built or a target is missing this frame.
     function _tonemapBlit(exposure) {
-      blitData[0] = exposure; blitData[1] = 0; blitData[2] = 0; blitData[3] = 0;
-      device.queue.writeBuffer(blitUBO, 0, blitData);
+      device.queue.writeBuffer(blitUBO, 0, _blitParams(blitData, exposure, _TONE_STANDIN));
       const bp = encoder.beginRenderPass({
         colorAttachments: [{ view: currentView, clearValue: { r: 0, g: 0, b: 0, a: 1 },
           loadOp: "clear", storeOp: "store" }],
@@ -3726,6 +3756,14 @@ const WGX = (function () {
       bp.setBindGroup(0, blitBindGroup);
       bp.draw(3, 1, 0, 0);
       bp.end();
+    }
+
+    // BlitU = params (exposure, flip, mip, _) + tone (aces a,b,c,d | e, whitePoint)
+    // from T: _TONE_STANDIN, or a frame's tune (the mirror; null = knob defaults).
+    function _blitParams(dst, exposure, T) {
+      dst[0] = exposure; dst[1] = 0; dst[2] = 0; dst[3] = 0;
+      for (let i = 0; i < 6; i++) dst[4 + i] = PostCommon.knob(T, _TONE_IDS[i]);
+      return dst;
     }
 
     // Separable 5-tap gaussian (GLX BLUR_FS). `times` = 1 for SSAO, 2 for god-ray.
@@ -3904,7 +3942,7 @@ const WGX = (function () {
     // The live glass's group (drawMirrorGlass): built lazily on mirSampleView,
     // dropped with it — a resize must never leave it naming a destroyed view.
     let _mirGlassBG = null, _mirGlass = 0;
-    const _mirData = new Float32Array(4);
+    const _mirData = new Float32Array(BLIT_BYTES / 4);
     function _mirrorFree() {
       try { if (mirTex) mirTex.destroy(); } catch (_) { /* already invalid */ }
       try { if (mirDepthTex) mirDepthTex.destroy(); } catch (_) { /* already invalid */ }
@@ -3960,8 +3998,10 @@ const WGX = (function () {
     }
     // Into the present target, after the post chain / fallback blit and before
     // the soft-display and capture copies read it. Its own UBO: blitUBO is
-    // queue-written by the fallback blit in this same submit.
-    function _mirrorComposite(exposure) {
+    // queue-written by the fallback blit in this same submit. T = the frame's
+    // tune when the composite ran — its white point + ACES knobs, as GLX
+    // MIRROR_FS / TLX mirror — or _TONE_STANDIN when the frame took the blit.
+    function _mirrorComposite(exposure, T) {
       if (!_mirRect || !mirSampleView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
       const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
       const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
@@ -3973,7 +4013,8 @@ const WGX = (function () {
         { binding: 0, resource: mirSampleView }, { binding: 1, resource: _mirSamp }, { binding: 2, resource: { buffer: _mirUBO } }] });
       // z = the mip level for this minification (target texels per rect pixel, log2).
       const lod = Math.max(0, Math.log2(Math.max(mirW / w, mirH / h)));
-      _mirData[0] = exposure; _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = lod; _mirData[3] = 0;   // y = flip left-right (0: the broadcast PiP)
+      _blitParams(_mirData, exposure, T);
+      _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = lod;   // y = flip left-right (0: the broadcast PiP)
       device.queue.writeBuffer(_mirUBO, 0, _mirData);
       const mp = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "load", storeOp: "store" }] });
       mp.setViewport(x, y, w, h, 0, 1);
@@ -4238,7 +4279,7 @@ const WGX = (function () {
       // Fallback: post disabled / targets absent -> tonemap blit.
       if (!_postReady || !pComposite || !ldrView || bloomLv.length === 0) {
         _tonemapBlit(exposure);
-        _mirrorComposite(exposure);
+        _mirrorComposite(exposure, _TONE_STANDIN);
         const disp = _softDisplayEncode();
         const cap = _capEncode();
         try { device.queue.submit(SHD.frameSubmitList(encoder)); }
@@ -4431,11 +4472,12 @@ const WGX = (function () {
       const spread = PostCommon.knob(T, "bloomSpread");
       const nLv = bloomLv.length;
       if (bloomAmt > 0) {
-        // Downsample: mip0 bright-pass gates the scene; mips 1..N plain downsample.
+        // Downsample (GLX post.js / TLX order): mip0 = the bright pass (mode 2),
+        // mip1 = Karis 13-tap of it (mode 1), mips 2..N plain 13-tap (mode 0).
         for (let i = 0; i < nLv; i++) {
           const src = i === 0 ? { w: tw, h: th } : bloomLv[i - 1];
           const s = postScratch;
-          s[0] = 1 / src.w; s[1] = 1 / src.h; s[2] = i === 0 ? threshold : 0; s[3] = 0;
+          s[0] = 1 / src.w; s[1] = 1 / src.h; s[2] = i === 0 ? threshold : 0; s[3] = i === 0 ? 2 : i === 1 ? 1 : 0;
           device.queue.writeBuffer(bloomDownUBO[i], 0, s, 0, _Post.BLOOM_DOWN_UNIFORM_BYTES / 4);
           const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
             loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
@@ -4596,7 +4638,7 @@ const WGX = (function () {
           timerRead = _gpuReadBuf;
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
-      _mirrorComposite(exposure);
+      _mirrorComposite(exposure, _postReady ? o.tune : _TONE_STANDIN);   // !_postReady: the catch took the blit
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
       try { device.queue.submit(SHD.frameSubmitList(encoder)); }
@@ -5245,7 +5287,7 @@ const WGX = (function () {
             typeof buf.getMappedRange !== "function") {
           throw { _skip: true };   // implementation without readback — cannot check
         }
-        device.queue.writeBuffer(blitUBO, 0, new Float32Array([1, 0, 0, 0]));   // exposure = 1
+        device.queue.writeBuffer(blitUBO, 0, _blitParams(new Float32Array(BLIT_BYTES / 4), 1, _TONE_STANDIN));   // exposure 1, stand-in curve
         const bg = device.createBindGroup({
           layout: blitPipeline.getBindGroupLayout(0),
           entries: [
@@ -5311,7 +5353,7 @@ const WGX = (function () {
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
         buf = device.createBuffer({ size: 256 * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-        device.queue.writeBuffer(blitUBO, 0, new Float32Array([1, 0, 0, 0]));
+        device.queue.writeBuffer(blitUBO, 0, _blitParams(new Float32Array(BLIT_BYTES / 4), 1, _TONE_STANDIN));
         const bg = device.createBindGroup({
           layout: blitPipeline.getBindGroupLayout(0),
           entries: [

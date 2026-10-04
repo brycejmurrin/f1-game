@@ -1371,21 +1371,23 @@ const {
   getLiveries, resolveLivery, wingColorOf,
 } = customLiv;
 
-// Draw a car's two MOVEABLE wing elements (active aero) at flap blend `blend`
+// Draw a car's MOVEABLE wing elements (active aero) at flap blend `blend`
 // (0 = Z-mode, 1 = X-mode), given that car's world model matrix. Shared by the
-// in-race draw loop and the GARAGE preview turntable, so the wings a player
-// inspects in the garage are the same geometry at the same angles as the ones
-// that open on track.
+// in-race draw loop, the mirror / PiP (CarDraw.drawMirrorCar) and the GARAGE
+// turntable, so the wings a player inspects are the ones that open on track.
+// At rest (blend 0 or 1), or `still` (the nearer rest pose: a rival past
+// FieldLod.flapsM(), the mirror / PiP), ONE baked set (CarMesh.getAeroFlapSet).
 const _flapWorld = new Float32Array(16);
 // `only` limits the draw to one wing ("front"/"rear") — the COCKPIT body build
 // skips the rear assembly entirely, so drawing the rear plane there would hang
 // it in mid-air behind a car that has no rear wing.
-function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only) {
+function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   const col = wingColorOf(team), b = clamp(blend, 0, 1);
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
   const finish = resolveLivery(team).finish || null;
+  if (still || b === 0 || b === 1) { const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only); if (set) gfx.draw(set, modelMat, mat); return; }
   const flaps = Car3D.aeroFlaps(aLvl, style);   // NOT `els` — that name is the
   for (let i = 0; i < flaps.length; i++) {      // file-wide DOM registry
     const fg = flaps[i];
@@ -1668,9 +1670,6 @@ function makeCars() {
       const lane = clamp((idx % 2 ? 1 : -1) * ((idx >> 1) / half) * 0.78
         + (simRnd() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
-      const visualSetup = (isP || mate) ? getTeamParts(team.id)
-        : (Career.inCareer() && Career.aiSetup ? Career.aiSetup(team) : null);
-      const visStamp = visualSetup ? Parts.CATALOG.map((cat) => visualSetup[cat.id] || "").join(",") : "";
       cars.push({
         team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num,
         // Role flags — see setCarRole. Today the only human IS the local player,
@@ -1692,7 +1691,7 @@ function makeCars() {
         // so the per-car update below is unchanged in shape. paceMult() is exactly
         // 1 outside career, making GP/TT bit-identical.
         tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),
-        // Tread class for gripMult(c); null on an AI car means "fits the right tyre".
+        // Tread class for gripMult(c); null on an AI car means "fits the right tyre" (wear off; a pit plan gets its set's tread in applyCompound).
         tread: (isP || mate) ? (resolvedParts.options.tyres.wetTread || 0) : null,
         // The fitted catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md
         // §6) — one axis, not a compound axis multiplied by an upgrade tier.
@@ -1701,9 +1700,7 @@ function makeCars() {
         tyre: null, tyreWear: 0, tyreLap0: 0, tyreStints: 0,
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
-        visualSetup, visStamp,
-        visPaint: visStamp ? visStamp + ":" + d.num : "",
-        visSh: visStamp ? visStamp + ":sh" : "",
+        ...CarDraw.carVisual(team, d.num, isP || mate, getTeamParts),   // visualSetup/visStamp/visPaint/visSh: the menu prep's cache keys too
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otE: 0, deploying: false,
@@ -2536,10 +2533,15 @@ async function startRaceBody() {
     // return) and quitToMenu() lower it, so this arm left the menu behind a
     // z-36 pointer-events:auto scrim with an inert skip handler — reload only.
     loadingScreen.stop();
+    // A conflict can surface on RESTART or the next round, with the race HUD,
+    // in-race class and engine still up: tear all of it down to the title.
+    if (careerSaveConflict || seasonSaveConflict) {
+      quitToMenu();
+      announce("SAVE CONFLICT — reload " + (careerSaveConflict ? "career" : "season"), 3, "info");
+      return false;
+    }
     setState("menu", "save-conflict"); $("race-settings").hidden = true;
-    if (careerSaveConflict) announce("SAVE CONFLICT — reload career", 3, "info");
-    else if (seasonSaveConflict) announce("SAVE CONFLICT — reload season", 3, "info");
-    else { buildSelect(); els.select.hidden = false; }
+    buildSelect(); els.select.hidden = false;
     return false;
   }
   resultsCam.reset();   // restore a montage before replacing the previous field
@@ -3498,7 +3500,7 @@ const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAero
 const { renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust } = setupCam;
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
-const shadowPass = ShadowPass.create(G, { teamMesh, vStd });
+const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster });
 // The HUD rear-view mirror (js/render/shared/mirror-pass.js): a second camera, rendered in the env probe's slot below.
 const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, drawCar: carDraw.drawMirrorCar, renderPosOf, playerAnchor, yawVisInterp, basisMat,
   carPaint: (wet, night) => carPaintMat(wet ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)),
@@ -6507,14 +6509,6 @@ const _gradeDawn  = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0
 const _gradeDay   = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
 const _gradeOut = { shadow: null, hi: null, str: 0 };
 const _presentOpts = {};
-// ── Exhaust heat haze (composite post) ───────────────────────────────────────
-// The player-car draw loop records the tailpipe's world position + plume
-// strength; render() projects it to screen UV just before present() and hands
-// {u, v, str} to the composite pass, which UV-warps a small rising region
-// (COMPOSITE_FS uHaze*). Off on memory-limited phones (mobileTier).
-const _hazeWorld = [0, 0, 0];
-let _hazeStr = 0;
-const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 // The lens the last frame was built with — see where it is filled, below.
@@ -6883,42 +6877,30 @@ function render(dt) {
   frame.upViewDir = _upVS;
   frame.eye = camEye;
   const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
-  // Radial draw-distance cull for chunked scenery.
-  // Free/debug camera: mobile caps at 700 m (the pushed-out photo-mode far
-  // plane can frame a whole ~5 M-vert city and jetsam-kill the tab); desktop
-  // keeps the full vista (gfx.begin also thins the fog under dbgCam, so a
-  // fog-derived cull would visibly pop there).
-  // Normal play: fog-wall radial cull — past ~95% fog opacity (3/density) a
-  // chunk is invisible anyway, so skip it. Only kicks in when that distance is
-  // inside the far plane (900 m as-shipped, scaled by the RENDER DISTANCE
-  // knob; night city 0.004 -> 750 m, fog/rain closer); clear day (0.0012 ->
-  // 2.5 km) stays uncapped — zero visual change there.
-  // Feature-shedding tier 3+ also caps the radius at the far plane: scenery
-  // vertex/draw load is the one big cost class the resolution scale and shed
-  // passes don't touch, and by tier 3 the device has proven it can't afford
-  // the full vista (the fog wall hides most of the cut).
-  // Cull off the density the SHADER renders — glx.js uploads frame.fogDensity *
-  // FOG DENSITY. Off the raw base, FOG DENSITY 0 ("off") still culled scenery at
-  // 250 m with no fog drawn. (FOG BOOST bakes in upstream; it was unaffected.)
-  // The THINNING the cinematic and the debug camera render through, or null for
-  // an ordinary frame. Read by gfx.begin() far below; named here because the
-  // cull right underneath has to know that this frame's fog wall is not where
-  // frame.fogDensity says it is — thinning the draw while culling scenery at the
-  // unthinned wall is a hard edge of missing world instead of a vista.
+  // Radial draw-distance cull for chunked scenery, in two halves every backend's
+  // chunk loop applies together (Frustum.radialCulled, js/render/shared/frustum.js).
+  // frame.cullDist, the HARD radius. Free/debug camera and cinematic: mobile caps
+  // at 700 m (a pushed-out photo-mode far plane frames a whole ~5 M-vert city and
+  // jetsam-kills the tab; the cinematic runs seconds after the build's transient
+  // peak), desktop keeps the full vista. Feature-shedding tier 3+ caps at the far
+  // plane (scenery vertex/draw load is the one big cost class the resolution
+  // scale and shed passes don't touch). Otherwise the sphere that contains the
+  // frustum (far-plane corners sit farther than farPlane) — look-identical.
+  // frame.cullFog, the FOG WALL: [density, height falloff] as the SHADER renders
+  // them (frame.fogDensity * FOG DENSITY — off the raw base, FOG DENSITY 0 still
+  // culled scenery at 250 m with no fog drawn). A chunk goes once even its
+  // nearest point raised to its top is 99.99 % fogged: HEIGHT-AWARE, because one
+  // eye-level radius (3/density, 750 m at night) culled floodlights, hotels and
+  // hills while only 65-70 % fogged. Off (density 0) under dbgCam/cine: they
+  // render a THINNED fog (_fogMul, read by gfx.begin() far below), and culling
+  // at frame.fogDensity's unthinned wall is a hard edge of missing world.
   const _fogMul = cine ? FlybySeq.FOG
     : (dbgCam ? (dbgCam.fog != null ? dbgCam.fog : 0.15) : null);
-  const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
-  const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
-  // Sphere that contains the perspective frustum (far-plane corners sit
-  // farther from the eye than farPlane). Look-identical pre-reject; not 300 m.
+  const _cullFog = frame.cullFog || (frame.cullFog = [0, 0]);
+  _cullFog[0] = (dbgCam || cine) ? 0 : (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
+  _cullFog[1] = LT.fogHeight != null ? LT.fogHeight : (frame.fogHeight || 0);   // uFogHeight's own fallback
   const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
-  // The cinematic takes the debug camera's rule for the same reason it takes its
-  // far plane — and the same MOBILE CAP. loadTrack()'s own comment calls the
-  // build's transient peak "the moment a near-limit phone gets jetsam killed",
-  // and this frame runs seconds after it; framing a whole ~5 M-vert city there
-  // is not a risk worth a nicer horizon.
-  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0)
-    : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : (_fogCull || _farCull));
+  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0) : (PerfGov.tier() >= 3 ? farPlane : _farCull);
   // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
   // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
   // different lenses for months with nothing able to see it, because every hook
@@ -6950,11 +6932,11 @@ function render(dt) {
     const _msh = LT.moonShadow != null ? LT.moonShadow : 0.25;
     frame.moonGate = Math.max(frame.moonK, clamp((_msh - 0.5) * 2, 0, 1));
   }
-  // Resolve the moving player before any shadow-map pass. AI keeps using the
-  // pooled matrices from the preceding frame; only the player's high-speed,
-  // chase-camera shadow makes that latency visible.
+  // Resolve the moving player before any shadow-map pass (first-person views cast
+  // the cockpit body where the car loop draws it). AI keeps the pooled matrices
+  // from the preceding frame; only the player's shadow makes that latency visible.
   const _hasLivePlayerShadow = !!(player && state !== "menu");
-  if (_hasLivePlayerShadow) currentCarGroundMat(player, shadowPass.livePlayerMat);
+  if (_hasLivePlayerShadow) { currentCarGroundMat(player, shadowPass.livePlayerMat); shadowPass.resolvePlayer(_smpPlayer, yawVisInterp(player)); }
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
   if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps
@@ -7398,7 +7380,7 @@ function render(dt) {
   const paint = carPaintMat(wet
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
-  _hazeStr = 0; shadowPass.beginFrame();   // per-frame accumulators: the haze strength is re-recorded by the player block below (the menu flyby breaks before any car, so a stale one warped a fixed world point forever), car shadows flush in one batch after the loop
+  carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt); shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
   carDraw.beginDecals();   // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
     // The title-screen flyby draws the WORLD, not the last race's grid.
@@ -7566,23 +7548,7 @@ function render(dt) {
       const skid = c.skidIntensity || 0;
       skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);
     }
-    // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
-    // strength for this frame (projected to screen UV just before present()).
-    // Any time of day, throttle-driven via exhaustPop, strongest under active
-    // boost. Skipped on memory-limited phones (mobileTier — same gate as the
-    // other post extras). Anchor is pushed well behind/above the body so the
-    // composite warp (which already skips car-paint pixels) sits in the air
-    // wake rather than on the rear wing from chase cam.
-    if (c.isPlayer) {
-      const _hzDep = isErsDeploying(c);
-      _hazeStr = gfx.mobileTier ? 0 : (c.exhaustPop || 0) * (_hzDep ? 1.0 : 0.45);
-      if (_hazeStr > 0.02) {
-        // Behind/above the tailpipe (up +0.85, fwd −3.5 on the car frame).
-        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.85 - tmpMat[8] * 3.5;
-        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.85 - tmpMat[9] * 3.5;
-        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.85 - tmpMat[10] * 3.5;
-      }
-    }
+    carFx.haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
     // ── Transient particle FX emitters (visual-only: they READ car state and
     // write none of it, so headless physics is untouched). They live HERE
     // because the car's world basis (tmpMat / tmpP / tmpF / tmpR) is already
@@ -7717,21 +7683,16 @@ function render(dt) {
     // on the HUD alone would be a lie about what the physics is doing.
     // Skipped in cockpit view (that branch `continue`s well above this) and for
     // a loaded GLB body, whose wings are somebody else's geometry.
-    // Distance-gated for RIVALS like the brake rings — 4 flaps x 21 AI is ~84
-    // draws a frame, each its own mesh. The cue is the car AHEAD opening its
-    // wings: FieldLod.flapsM() is 80 m (150 m with apex26.fieldLod=0, generous
-    // next to the rings' 40 m because a swinging wing stays legible). The
+    // MOVING only for RIVALS within FieldLod.flapsM() (80 m; 150 m with
+    // apex26.fieldLod=0) — the cue is the car AHEAD opening its wings. Past it
+    // the whole set is ONE static mesh at the nearer rest pose, never dropped:
+    // dropping it stripped every far rival's rear wing to its main plane. The
     // player is never gated — it is the car you are looking at.
     if (!carDraw.modelBuf) {
-      let drawFlaps = true;
-      if (!c.isPlayer) {
-        const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
-        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < FieldLod.flapsM() ** 2;
-      }
-      if (drawFlaps) {
-        const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
-        drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
-      }
+      const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
+      const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero, null,
+        !c.isPlayer && fdx * fdx + fdy * fdy + fdz * fdz >= FieldLod.flapsM() ** 2);
     }
     // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
     // mirrored light on each rear wing endplate). FIA strobe in the wet (~4 Hz,
@@ -7947,7 +7908,7 @@ function render(dt) {
   // lamp loop + 4 blur passes + a nearest-lamp re-sort) — a top GPU cost on
   // the phones that overheat/jetsam at night. Shedding it up-front beats
   // waiting for the perf governor to watch the device struggle to tier 4.
-  // Same hard gate as the exhaust-haze pass above (gfx.mobileTier).
+  // Same hard gate as the exhaust haze (gfx.mobileTier, at present).
   const _lampVol = (frame.lights && _sunLumGR < 0.45 && !gfx.mobileTier)
     ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
@@ -8026,23 +7987,8 @@ function render(dt) {
   po.ssrTopUV = _ssrLow ? 0.82 : 0.62;
   po.ssrNear  = _ssrLow ? -1.0 : -2.5;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
-  // EXHAUST HEAT HAZE: project the recorded tailpipe position through the
-  // frame's view-proj to a screen UV for the composite warp. Near-field only —
-  // fades out past ~45 m so TV/orbit long shots stay clean.
-  po.haze = null;
-  if (_hazeStr > 0.02) {
-    const m = _mVP, hx = _hazeWorld[0], hy = _hazeWorld[1], hz = _hazeWorld[2];
-    const cw = m[3] * hx + m[7] * hy + m[11] * hz + m[15];
-    if (cw > 0.1) {
-      const cu = (m[0] * hx + m[4] * hy + m[8] * hz + m[12]) / cw * 0.5 + 0.5;
-      const cv = (m[1] * hx + m[5] * hy + m[9] * hz + m[13]) / cw * 0.5 + 0.5;
-      if (cu > -0.2 && cu < 1.2 && cv > -0.2 && cv < 1.2) {
-        _hazeOpts.u = cu; _hazeOpts.v = cv;
-        _hazeOpts.str = _hazeStr * clamp(1.4 - cw / 40, 0, 1);
-        if (_hazeOpts.str > 0.02) po.haze = _hazeOpts;
-      }
-    }
-  }
+  // EXHAUST HEAT HAZE: the marked anchor through this frame's view-proj -> {u, v, str} for the composite warp (COMPOSITE_FS uHaze*). Off on memory-limited phones.
+  po.haze = gfx.mobileTier ? null : carFx.haze.at(_mVP);
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
@@ -8053,10 +7999,7 @@ function render(dt) {
   if (!_backendProved && ++_provedFrames >= PROVE_FRAMES) {
     _backendProved = true;
     if (_probeArmed) { _probeArmed = false; try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* nothing was armed if storage is blocked */ } }
-    // A backend that PROVED itself owes nothing for an older strike — without
-    // this, one kill months ago plus one today retires the pick on what looks
-    // like a first failure.
-    try { localStorage.removeItem("apex26.gfxProbeStrikes"); } catch (_) { /* blocked storage */ }
+    rendererBoot.proved();   // clears an older crash strike — only when the PICK ran, not its GLX fallback
   }
 }
 
@@ -8670,7 +8613,11 @@ els.resNext.onclick = () => {
   // Career never jumps straight into the next round: the weekend is one step of a
   // longer loop, and the hub is where you spend what you just earned.
   if (isCareer()) {
-    els.results.hidden = true;
+    // The full return-to-menu teardown first, then the hub on top of it (the
+    // title's own CAREER path). Hiding the sheet alone left state "results":
+    // the hub's GARAGE drew the frozen race frame, and a race started later
+    // from MAIN MENU sat on PREPARING… forever (every intro gates on "menu").
+    quitToMenu();
     trackIdx = Career.trackIndex();
     openCareer();
     return;

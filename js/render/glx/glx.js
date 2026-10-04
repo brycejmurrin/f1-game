@@ -163,7 +163,7 @@ const GLXBackend = (function () {
   let frameViewProj = null;
   let frameSunDir = null;
   let frameEye = null;
-  let frameCullDist = 0;   // >0: radial draw-distance cap for chunked scenery (mobile free-cam) — bounds chunk count when the far plane is pushed out
+  let frameCullDist = 0, frameCullFog = null;   // hard radial cap (>0) and the fog-wall pair for Frustum.radialCulled — js/render/shared/frustum.js
   let frameLights = null;
   // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
   // both to bind a per-chunk light subset instead of this frame's global 32.
@@ -743,10 +743,9 @@ const GLXBackend = (function () {
       //
       // Bounded, because a device that dies on EVERY boot must not be trapped in
       // a reload loop: two automatic recoveries per tab session, then stop and
-      // leave the dead canvas rather than cycling forever. The latches above
-      // make each retry lighter than the last, which is what gives the retry a
-      // reason to succeed. sessionStorage (not local) so a genuinely new visit
-      // always gets its two attempts back.
+      // SAY SO (error overlay, TLX's wording). The latches above make each retry
+      // lighter, which gives it a reason to succeed. sessionStorage (not local)
+      // so a genuinely new visit always gets its two attempts back.
       //
       // A HIDDEN loss takes none of the above. iOS drops the context of a
       // backgrounded tab routinely; reloading on the timer put the player on
@@ -773,6 +772,7 @@ const GLXBackend = (function () {
         var _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
         sessionStorage.setItem(_rk, String(_n));
         if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
+        else if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
       } catch (_) { /* No sessionStorage: skip the auto-recovery rather than risk an unbounded reload loop with no way to count attempts. */ }
     }, false);
     // The restore obeys the same two-reload budget as the loss: a device that
@@ -861,7 +861,7 @@ const GLXBackend = (function () {
         get sunDir() { return frameSunDir; },
         get sunColor() { return frameSunColor; },
         get eye() { return frameEye; },
-        get cullDist() { return frameCullDist; },
+        get cullDist() { return frameCullDist; }, get cullFog() { return frameCullFog; },
         get invProj() { return frameInvProj; },
         get invVP() { return frameInvVP; },
         get proj() { return frameProj; },
@@ -1548,7 +1548,7 @@ const GLXBackend = (function () {
     // per cube on vegas at 900 m, 45.3 / 376,791 at 300 m.
     //
     // MIN, never an override: where the main camera is already culling tighter
-    // (the tier-3 fog cull), the probe keeps that tighter value. A cullDist of
+    // (the tier-3 far-plane cap), the probe keeps that tighter value. A cullDist of
     // 0 means "no cull", so it is treated as unbounded rather than as zero.
     frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
     begin(frame);
@@ -1654,7 +1654,7 @@ const GLXBackend = (function () {
     frameSunDir = frame.sunDir;
     frameSunColor = frame.sunColor;
     frameEye = frame.eye;
-    frameCullDist = frame.cullDist || 0;
+    frameCullDist = frame.cullDist || 0; frameCullFog = frame.cullFog || null;
     frameInvProj = frame.invProj || null;
     frameInvVP = frame.invViewProj || null;
     frameProj = frame.proj || null;

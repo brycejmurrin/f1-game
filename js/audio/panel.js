@@ -430,9 +430,9 @@ const AudioPanel = (() => {
      * voice list actually changing — not by a timer, and not by a re-open that
      * would throw away a half-made selection. */
     const VOICE_CHANNELS = [
-      ["control", "RACE CONTROL", "Penalties, warnings and flags."],
-      ["coach", "COACH", "Practice drills and driving advice, through a clean headset."],
-      ["radio", "TEAM RADIO", "Your engineer and spotter share this recorded voice. TEST plays a race call."],
+      ["control", "RACE CONTROL", "Penalties, warnings and flags. Any of the six recorded voices."],
+      ["coach", "COACH", "Practice drills and driving advice, through a clean headset. Any of the six recorded voices."],
+      ["radio", "TEAM RADIO", "Your engineer and spotter share this voice — any of the six recorded voices. TEST plays a race call."],
     ];
     /* THE ANNOUNCER'S ROW IS THE SAME ROW, IN A DIFFERENT SECTION. It is a
      * RadioVoice channel (js/audio/radio-voice.js TONE) so it gets a voice, a
@@ -440,7 +440,7 @@ const AudioPanel = (() => {
      * so it cannot live under that switch's heading where every other control
      * greys out with it. Its own <details>, its own host, one shared builder. */
     const ANN_CHANNEL = ["announcer", "ANNOUNCER",
-      "A recorded voice introduces the circuit and commentates during the race. A system voice changes the pre-race welcome; race commentary follows RADIO VOICE. TEST plays the welcome."];
+      "A recorded voice — any of the six — introduces the circuit and commentates during the race. A system voice changes the pre-race welcome; race commentary follows RADIO VOICE. TEST plays the welcome."];
     let voiceRowsFor = null;   // the voice-list length the rows were built against
 
     function voiceRow(ch, label, blurb) {

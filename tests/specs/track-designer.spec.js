@@ -138,6 +138,28 @@ test.describe("Track designer", () => {
     }, before, { polling: 100, timeout: 15_000 });
   });
 
+  test("a new theme with a scenery option: WINTER SNOW · NIGHT · PACKED saves, lists as a night circuit and builds", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 11);
+    await page.locator('#trackdesigner [data-theme="winter"]').click();
+    await page.locator('#trackdesigner [data-look="time:night"]').click();
+    await page.locator('#trackdesigner [data-look="crowd:packed"]').click();
+    await expect(page.locator('#trackdesigner [data-look="time:night"]')).toHaveAttribute("aria-pressed", "true");
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
+    const st = await page.evaluate(() => TrackDesigner.state().design);
+    expect(st.theme).toBe("winter");
+    expect(st.look).toEqual({ time: "night", trees: "normal", crowd: "packed" });
+    const saved = await page.evaluate(() => TrackDesigner.save());
+    expect(saved && saved.ok).toBe(true);
+    const def = await page.evaluate((id) => { const t = Tracks.LIST.find((x) => x.id === id); return t ? { night: t.night, terrainMat: t.terrainMat } : null; }, saved.id);
+    expect(def).toEqual({ night: true, terrainMat: "SNOW" });
+    await page.evaluate(() => TrackDesigner.close());
+    await page.evaluate((id) => window.__apex.race(id), saved.id);
+    await page.waitForFunction((id) => window.__apex.info().track === id, saved.id, { polling: 100, timeout: TRACK_MS });
+    expect((await page.evaluate(() => window.__apex.info())).total).toBeGreaterThanOrEqual(2500);
+  });
+
   test("a saved circuit survives a reload: the registry re-appends it and the stored id resolves", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);

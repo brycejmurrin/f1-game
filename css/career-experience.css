@@ -26,9 +26,48 @@
 [data-results-part="head"] > strong { font-size: var(--fs-6); font-style: italic; }
 [data-results-part="head"] > span { color: var(--dim); }
 [data-results-part="podium"] { display: flex; gap: var(--gap); padding: var(--pad) 0 0; margin: 0; list-style: none; }
-[data-results-part="podium"] > li { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--gap); padding: var(--pad); background: var(--carbon); border-top: 3px solid var(--career-team, var(--red)); overflow-wrap: anywhere; }
-[data-results-part="podium"] > li > strong { font-family: var(--font-hud); font-size: var(--fs-6); }
-[data-results-part="podium"] small { color: var(--dim); }
+/* Podium names must stay readable. `overflow-wrap: anywhere` shattered
+   "George" into Geor/ge under the sticky player row on phone portrait, and
+   on short landscape the name line vanished so slots looked empty
+   (layout-audit 2026-10-04). Wrap only at spaces; never mid-word; keep the
+   line from being flex-shrunk away; team may ellipsis. */
+[data-results-part="podium"] > li {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.35);
+  padding: calc(var(--pad) * 0.7);
+  background: var(--carbon);
+  border-top: 3px solid var(--career-team, var(--red));
+  overflow: visible;
+  overflow-wrap: normal; word-break: normal; hyphens: none;
+}
+[data-results-part="podium"] > li > span:first-child { flex: 0 0 auto; color: var(--dim); font-size: var(--fs-micro); }
+[data-results-part="podium"] > li > strong {
+  flex: 0 0 auto; color: var(--text);
+  font-family: var(--font-hud); font-size: var(--fs-6);
+}
+[data-results-part="podium"] > li > strong + span {
+  flex: 0 0 auto; min-width: 0; max-width: 100%;
+  color: var(--text);
+  font-size: var(--fs-2); line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: normal; word-break: normal; hyphens: none;
+}
+[data-results-part="podium"] small {
+  flex: 0 0 auto; min-width: 0; max-width: 100%;
+  color: var(--dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Short phone landscape: the story + podium was taller than the sheet body,
+   so overflow:hidden on .sheet clipped the name row and left P1–P3 looking
+   empty. Drop the team line, tighten type/padding, keep names in view. */
+@media (orientation: landscape) and (max-height: 500px) {
+  [data-results-part="story"] { padding: calc(var(--pad) * 0.55); margin-bottom: calc(var(--pad) * 0.45); }
+  [data-results-part="podium"] { gap: calc(var(--gap) * 0.5); padding-top: calc(var(--pad) * 0.45); }
+  [data-results-part="podium"] > li { padding: calc(var(--pad) * 0.4); gap: 2px; }
+  [data-results-part="podium"] > li > strong { font-size: var(--fs-4); }
+  [data-results-part="podium"] > li > strong + span { font-size: var(--fs-micro); }
+  [data-results-part="podium"] small { display: none; }
+}
 @media (prefers-reduced-motion: no-preference) {
   :root:not([data-motion="reduce"]) [data-results-part="story"] { animation: career-reveal 240ms ease-out both; }
   :root:not([data-motion="reduce"]) [data-results-part="podium"] > li { animation: career-reveal 240ms ease-out backwards; animation-delay: calc(var(--podium-place) * 55ms); }

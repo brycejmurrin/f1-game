@@ -107,12 +107,12 @@ const SPEC = [
   { k: "lookCareer", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js CAREER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookGarage", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js GARAGE (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookPopups", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js POPUPS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
-  { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)" },
+  { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)", perDevice: true },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
   { k: "buildWorker", lane: "raw", group: "display", def: "0", src: "js/track/build-client.js BUILD IN BACKGROUND (only \"1\" is on)", oneOf: ["0", "1"] },
   { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/debris-opts.js + js/physics/debris-world.js create() (only \"1\" is on)" },
-  { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId" },
+  { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
   { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/game.js boot (unset = TLX/Three on every device)" },
   { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)" },
@@ -222,7 +222,7 @@ const SPEC = [
     subsystem: "the driving model: moves tests/data/physics-baseline.json" },
   { k: "steerLock", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
   { k: "steerSpeed", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
-  { k: "carWeight", lane: "json", group: "steering", def: (G) => (G && G.gfx && G.gfx.isMobile) ? 10 : 5, src: "js/input/steer-tuning.js (10 on a touch device, 5 on a pointer — see the comment there)" },
+  { k: "carWeight", lane: "json", group: "steering", def: (G) => (G && G.gfx && G.gfx.isMobile) ? 10 : 5, src: "js/input/steer-tuning.js (10 on a touch device, 5 on a pointer — see the comment there)", perDevice: true },
   { k: "adaptiveButtons", lane: "json", group: "steering", def: 5, src: "js/input/steer-tuning.js",
     subsystem: "the driving model: moves tests/data/physics-baseline.json" },
   { k: "brakeCue", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js" },
@@ -295,7 +295,10 @@ function collect(mode, G) {
     const def = defaultOf(row, G);
     const has = stored !== null;
     let diff = has && !row.info && (row.changed ? row.changed(stored) : !same(stored, def));
-    let value = has ? stored : def;
+    // perDevice: an UNSET key whose default depends on this device (a phone's
+    // LOW resolution, its touch steering weight) exports as null, so loading
+    // the file elsewhere keeps THAT device's default instead of pinning ours.
+    let value = has ? stored : (all && row.perDevice ? null : def);
     if (diff && isObj(stored) && isObj(def) && Object.keys(def).length) {
       value = objDiff(stored, def);
       if (!Object.keys(value).length) diff = false;
@@ -387,6 +390,7 @@ function applySettings(file, G) {
     const g = groups[row.group];
     if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     const v = g[row.k];
+    if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
     if (!typeOk(v, def) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
@@ -644,7 +648,11 @@ function create(G) {
     picker.click();
   }
 
-  const flash = (b, label, msg, ms) => { b.textContent = `${label} — ${msg}`; setTimeout(() => { b.textContent = label; }, ms || 1800); };
+  // One label timer per button: a FAILED / NOT A JSON FILE restore landing after
+  // the button was armed wiped "OVERWRITE …?" while the next tap still loaded.
+  const flashT = new Map();
+  const unflash = (b) => { clearTimeout(flashT.get(b)); flashT.delete(b); };
+  const flash = (b, label, msg, ms) => { unflash(b); b.textContent = `${label} — ${msg}`; flashT.set(b, setTimeout(() => { flashT.delete(b); b.textContent = label; }, ms || 1800)); };
   const disarm = () => { if (armed) { armed.el.textContent = armed.label; armed = null; } clearTimeout(armT); };
 
   const saveBtn = (id, label, title, make, name) => {
@@ -672,7 +680,7 @@ function create(G) {
     b.onclick = () => {
       if (reloading) return;
       if (!armed || armed.el !== b) {
-        disarm();
+        disarm(); unflash(b);
         armed = { el: b, label };
         b.textContent = `${label} — OVERWRITE ${what}?`;
         armT = setTimeout(disarm, ARM_MS);

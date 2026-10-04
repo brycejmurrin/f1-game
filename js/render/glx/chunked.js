@@ -403,7 +403,7 @@ const GLXChunked = (function () {
       Frustum.extractPlanes(F.viewProj, _fcPlanes);
       const chunks = mesh.chunks;
       const eye = F.eye;
-      const cd = F.cullDist, cd2 = cd * cd,
+      const cd = F.cullDist, cf = F.cullFog,   // Frustum.radialCulled: hard radius + fog wall
             ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
       // The ROAD (surfaceId 16) only takes per-chunk lamp sets when PER-CHUNK
       // ROAD asks for it. It is drawn chunked on most devices for the frustum
@@ -503,7 +503,7 @@ const GLXChunked = (function () {
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) ||
-              (cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) ||
+              Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf) ||
               !_occVisible(mesh, i)) { if (!md) flush(); continue; }
           visible++;
           const g = GI.ids[i];
@@ -575,7 +575,7 @@ const GLXChunked = (function () {
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           if (!(Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
-                !(cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) &&
+                !Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf) &&
                 _occVisible(mesh, i))) { plain = 0; continue; }
           if (plain && _mdOffsets[n - 1] + _mdCounts[n - 1] * stride === ch.byteOffset) _mdCounts[n - 1] += ch.count;
           else { _mdCounts[n] = ch.count; _mdOffsets[n] = ch.byteOffset; n++; }
@@ -590,7 +590,7 @@ const GLXChunked = (function () {
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           const vis = Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
-                      !(cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) &&
+                      !Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf) &&
                       _occVisible(mesh, i);
           if (vis) {
             if (runOff < 0) { runOff = ch.byteOffset; runCount = ch.count; }
@@ -662,7 +662,7 @@ const GLXChunked = (function () {
       _occStats.passes++;
       let tested = 0, culled = 0, queries = 0;
       Frustum.extractPlanes(F.viewProj, _fcPlanes);
-      const eye = F.eye, cd = F.cullDist, cd2 = cd * cd;
+      const eye = F.eye, cd = F.cullDist, cf = F.cullFog;
       const ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
       const prevProg = gl.getParameter(gl.CURRENT_PROGRAM);
       gl.useProgram(_occProg);
@@ -692,7 +692,7 @@ const GLXChunked = (function () {
               }
             }
             const cand = Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
-                         !(cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2);
+                         !Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf);
             if (!cand) { st.flag[i] = 1; continue; }   // out of frustum: not our business, and never left hidden
             tested++;
             if (st.flag[i] === 0) culled++;

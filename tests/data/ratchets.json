@@ -9,7 +9,7 @@
       "lines": 3245
     },
     "js/car/car3d.js": {
-      "lines": 3435
+      "lines": 3475
     },
     "js/game.js": {
       "codeLines": 4828,
@@ -43,7 +43,7 @@
       "slack": 5
     },
     "dynamicIdReads": {
-      "ceiling": 70,
+      "ceiling": 71,
       "slack": 5
     },
     "implicitAsserts": {
@@ -59,7 +59,7 @@
       "slack": 0
     },
     "rawSpacing": {
-      "ceiling": 305,
+      "ceiling": 311,
       "slack": 0
     },
     "shellNodes": {

@@ -51,7 +51,15 @@ test("the survey's tables lockstep the game's: CamModes, HudLayout, HudElements,
   }
   const hud = read("js/ui/hud.js");
   assert.ok(hud.includes(`const BCAM_IDS = { ${M.BCAM_IDS.map((c) => `${c}: 1`).join(", ")} };`));
-  assert.ok(hud.includes(`const ONBOARD_IDS = { ${M.ONBOARD_IDS.map((c) => `${c}: 1`).join(", ")} };`));
+  // The onboard set lives as a literal in hud.js, or (once CamGroups lands)
+  // as the CamGroups module's ONBOARD table — compare it as a set either way.
+  let onboardSrc = (hud.match(/const ONBOARD_IDS = \{([^}]*)\}/) || [])[1];
+  const camGroups = ["js", "camera", "cam-groups.js"].join("/");   // not on every branch yet
+  if (onboardSrc == null && fs.existsSync(path.join(ROOT, camGroups))) {
+    onboardSrc = (read(camGroups).match(/const ONBOARD = Object\.freeze\(\{([^}]*)\}/) || [])[1];
+  }
+  assert.ok(onboardSrc != null, "an onboard camera table in hud.js or cam-groups.js");
+  assert.deepEqual([...onboardSrc.matchAll(/([a-z]+): 1/g)].map((m) => m[1]).sort(), [...M.ONBOARD_IDS].sort(), "ONBOARD_IDS = the game's onboard cameras");
   for (const t of M.HUD_TARGETS) if (t.sel.startsWith("#")) assert.ok(read("index.html").includes(`id="${t.sel.slice(1)}"`), `${t.sel} is static DOM`);
 });
 
@@ -262,7 +270,7 @@ test("expected-visible rules", () => {
     assert.equal(d[k].want, true, k);
   assert.equal(d["btn-ot"].want, false, "desktop hides the touch stack");
   assert.equal(E({ map: "auto", cam: "cockpit" }).map.want, false);
-  assert.equal(E({ map: "auto", cam: "visor" }).map.want, true, "visor is not ONBOARD for MAP AUTO");
+  assert.equal(E({ map: "auto", cam: "visor" }).map.want, false, "visor is ONBOARD for MAP AUTO (hud.js / CamGroups)");
   assert.equal(E({ map: "on", profile: "minimal" }).map.want, true, "MAP ON beats MINIMAL");
   assert.equal(E({ profile: "minimal" }).sectors.want, false);
   assert.equal(E({ profile: "broadcast", cam: "heli" }).sectors.want, true);

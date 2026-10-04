@@ -387,6 +387,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/lamp-density.test.mjs",
+  // The night lamp-shadow map holds one flood while the car sits between two:
+  // the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.
+  "tests/unit/lamp-shadow-pick.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
@@ -471,6 +474,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Faenza Street fit on McLaren silently photographed as medium.
   "tests/unit/parts-locked-equivalent.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
+  "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
