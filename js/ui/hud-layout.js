@@ -200,6 +200,12 @@ const HudLayout = (function () {
     if (hi > size - EDGE) return size - EDGE - hi;
     return 0;
   }
+  // Pieces that share one offset move as ONE BLOCK: clamping each on its own
+  // pulled AERO (the right-hand chip) back onto OVERTAKE beside it — the shipped
+  // cockpit layout moves both +30vw, and at 1280 wide only AERO overran the
+  // edge, so it landed on top of OT (measured: visor x 1176 vs 1177). The block
+  // is clamped by the UNION of its members' rects and every member gets the
+  // same correction, so neighbours keep their spacing.
   function fit() {
     if (!doc || typeof window === "undefined" || !window.innerWidth) return;
     // The fold is never collapsed when SETTINGS closes (or a race resumes), so
@@ -211,6 +217,7 @@ const HudLayout = (function () {
     }
     const W = window.innerWidth, H = window.innerHeight;
     const a = all()[shown()];
+    const groups = new Map();   // "x,y" offset -> [{ el, e, r }]
     for (const [id, , sel] of ELEMENTS) {
       const e = a[id];
       if (!e || isDefEl(e)) continue;
@@ -220,9 +227,18 @@ const HudLayout = (function () {
       el.style.setProperty("--hl-y", String(e.y));
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) continue;                // hidden right now: nothing to keep on screen
-      const dx = clampAxis(r.left, r.right, W), dy = clampAxis(r.top, r.bottom, H);
-      if (dx) el.style.setProperty("--hl-x", String(+(e.x + dx / W * 100).toFixed(2)));
-      if (dy) el.style.setProperty("--hl-y", String(+(e.y + dy / H * 100).toFixed(2)));
+      const k = e.x + "," + e.y;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push({ el, e, r });
+    }
+    for (const g of groups.values()) {
+      let l = Infinity, t = Infinity, rr = -Infinity, bb = -Infinity;
+      for (const m of g) { l = Math.min(l, m.r.left); t = Math.min(t, m.r.top); rr = Math.max(rr, m.r.right); bb = Math.max(bb, m.r.bottom); }
+      const dx = clampAxis(l, rr, W), dy = clampAxis(t, bb, H);
+      for (const m of g) {
+        if (dx) m.el.style.setProperty("--hl-x", String(+(m.e.x + dx / W * 100).toFixed(2)));
+        if (dy) m.el.style.setProperty("--hl-y", String(+(m.e.y + dy / H * 100).toFixed(2)));
+      }
     }
   }
 

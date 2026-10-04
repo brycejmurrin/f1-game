@@ -184,7 +184,12 @@ const PlayerForces = (function () {
     // is measured against |vx|: atan2(vLat, -4) parked both axles on the tanh
     // plateau with a sign that flipped on vLat ≈ 0 (a steady slide on a straight
     // reverse, measured). Only the steer term changes sign with direction.
-    const vx = Math.max(vAbs, 4), dirS = c.speed < 0 ? -1 : 1;
+    // Soft-blend that sign through standstill: a hard `speed < 0 ? -1 : 1`
+    // snapped the steer term by ~2·δ in one tick (measured: slipFront −0.182 →
+    // +0.491 when speed 0 → −0.083 at full lock — 38.6°, exactly 2·δ). Full
+    // reverse authority is unchanged above DIR_BLEND; the |vx| floor stays.
+    const DIR_BLEND = 1;   // m/s — ~12 reverse-accel ticks; REVERSE_ACCEL·dt ≈ 0.083
+    const vx = Math.max(vAbs, 4), dirS = clamp(c.speed / DIR_BLEND, -1, 1);
     const slipF = Math.atan2((c.vLat || 0) + af * (c.yawRateCur || 0), vx) - dirS * delta;
     const slipR = Math.atan2((c.vLat || 0) - ar * (c.yawRateCur || 0), vx);
     // Debris side-world (A2): shed tyre marbles under lock-up / slide. Reads the

@@ -288,3 +288,34 @@ test("fit pulls a moved piece back on screen without touching the stored offset"
   assert.ok(r.right <= 1000 - 4 + 1e-6, "right edge inside the screen: " + r.right);
   assert.equal(ctx.HudLayout.get("map", "other").x, 5, "stored offset unchanged");
 });
+
+test("fit clamps pieces that share an offset as ONE block, so neighbours keep their spacing", () => {
+  // OT and AERO both ship +30vw in the cockpit; at 1000 wide only AERO overruns
+  // the right edge. Clamped one by one, AERO landed on top of OT.
+  const mk = (left, w) => {
+    const props = {}, attrs = { "data-hl": "" };
+    return {
+      props,
+      style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
+      setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+      getBoundingClientRect() { const x = left + (parseFloat(props["--hl-x"] || 0) - 30) * 10; return { left: x, right: x + w, top: 500, bottom: 530, width: w, height: 30 }; },
+    };
+  };
+  const ot = mk(880, 70), aero = mk(960, 100);   // at +30vw: OT 880-950, AERO 960-1060 (past 1000)
+  const written = { hudLayout: { v: 2, cockpit: { ot: { x: 30, y: -14, s: 100 }, aero: { x: 30, y: -14, s: 100 } }, other: {} } };
+  const blank = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
+  const ctx = {
+    console, window: { innerWidth: 1000, innerHeight: 600 },
+    document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => true } },
+      querySelector: (sel) => (sel === "#hud-ot" ? ot : sel === "#hud-aero" ? aero : blank) },
+    GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  ctx.HudLayout.setCam("cockpit");
+  ctx.HudLayout.fit();
+  const o = ot.getBoundingClientRect(), r = aero.getBoundingClientRect();
+  assert.ok(r.right <= 1000 - 4 + 1e-6, "the block ends on screen: " + r.right);
+  assert.ok(o.right <= r.left, `OT (${o.left}-${o.right}) still left of AERO (${r.left}-${r.right})`);
+  assert.equal(ot.props["--hl-x"], aero.props["--hl-x"], "one correction for the whole block");
+});

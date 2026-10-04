@@ -1712,9 +1712,8 @@ const Car3D = (function () {
       // 0.76 + 0.10*inScale (0.86 at the default tier), the rear wing peaked
       // ~0.97, and the car's silhouette therefore had its highest point at the
       // BACK — inverted from every real car, where the hoop leads and the wing
-      // sits under it. The T-camera bar in part("helmet") was already drawn at
-      // y 0.955 on a 35 mm stalk with 95 mm of air under it; that stalk is gone
-      // and this blade carries the bar, so the change costs no triangles.
+      // sits under it. The T-camera assembly (pod + bar) rides this blade's
+      // crown via the snorkel-aware podY below — not a literal at y 0.955.
       // Height is regulation and therefore FIXED — an engine spec buys mouth
       // width (`in` still scales w), not a taller roll structure.
       const hoopF = 0.76 + 0.10 * inScale, hoopR = 0.74 + 0.09 * inScale;
@@ -1778,6 +1777,12 @@ const Car3D = (function () {
               tcamColour(liv.tcam, opts && opts.teamId, opts && opts.num, accentC), [0.05, 0.05, 0.06]);
       addBox(out, 0, podY + 0.002, podZ + 0.062, 0.052, 0.026, 0.012,
              [0.02, 0.02, 0.03], SURFACES.metal);   // lens boss on the front face
+      // T-CAMERA BAR — the horizontal wing of the T. Shares podY/podZ with the
+      // housing: a literal at the C12.4.1 blade (y 0.955 in part("helmet")) left
+      // the bar ~15 cm under every snorkel pod (McLaren factory |barY−podY| =
+      // 0.182). Bodywork, not driver — draw it whether or not a helmet is in.
+      addBox(out, 0, podY - 0.010, podZ, 0.30, 0.055, 0.06, DARK);
+      addBox(out, 0, podY + 0.023, podZ, 0.03, 0.02, 0.03, [0.12, 0.75, 0.28], SURFACES.paint);
 
       const engOutlet = engStyle && engStyle.outlet != null ? engStyle.outlet
                       : (engT === 2 ? 2 : engT === 0 ? 0 : 1);
@@ -2544,13 +2549,7 @@ const Car3D = (function () {
     // was the dark mass across the view, and the thing "cutting" the wheel.
     if (!ckpt) addBox(out, 0, 0.76, -0.24, 0.15, 0.09, 0.13, INTAKE);
 
-    if (!(opts && opts.noDriver)) {
-      // No stalk: the T bar lands on the roll-structure blade built in
-      // part("engineCover"), which reaches the C12.4.1 y 0.968 the bar was
-      // already floating at.
-      addBox(out, 0, 0.955, -0.30, 0.30, 0.055, 0.06, DARK);    // T bar
-      addBox(out, 0, 0.988, -0.30, 0.03, 0.02, 0.03, [0.12, 0.75, 0.28], SURFACES.paint);
-    }
+    // T-camera bar + LED live next to the snorkel-aware pod in part("engineCover").
 
     part("halo");
     if (!ckpt) {

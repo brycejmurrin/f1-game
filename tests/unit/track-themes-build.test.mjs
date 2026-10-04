@@ -13,7 +13,7 @@
 // the lap: TrackThemes.cityGaps / BELT_REF_M / LAMP_BUDGET); survey() lists
 // the start straight once; and one dresser that throws leaves the others.
 //
-// Run: node --test tests/unit/track-themes-build.test.mjs   (~8 presets × 2 full builds + 8 at 6.9 km)
+// Run: node --test tests/unit/track-themes-build.test.mjs   (16 presets × 2 full builds + 16 at 6.9 km + 18 scenery-option builds at 6.9 km)
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -125,6 +125,37 @@ test("every preset at ~6.9 km (the validator's lap cap) builds under 1.0 M prop 
     assert.ok(lamps <= LONG_LAMP_CAP, `${theme} at ${Math.round(r.track.total)} m: ${lamps} lamps ≤ ${LONG_LAMP_CAP}`);
   }
   for (const r of rows) console.log("themes @7 km: " + r);
+});
+
+// SCENERY OPTIONS (TrackThemes.LOOK): the heaviest combination — NIGHT (flood
+// masts + roadside lamps), MANY TREES, PACKED CROWD — on every preset at the lap
+// cap stays under the same caps, and a night street preset run by DAY (the
+// day city, the fleet's densest dressing) thins like harbour.
+test("every preset with NIGHT · MANY TREES · PACKED CROWD at ~6.9 km stays under 1.0 M prop vertices and 480 lamps; FEW < MANY", { timeout: 900000 }, () => {
+  const { Tracks, ctx } = boot();
+  const T = ctx.TrackThemes;
+  const rows = [];
+  const heavy = { time: "night", trees: "many", crowd: "packed" };
+  const cases = T.ORDER.map((theme) => [theme, heavy]).concat([["marina", { time: "day", trees: "many", crowd: "packed" }], ["twilight", { time: "day", trees: "many", crowd: "packed" }]]);
+  for (const [theme, look] of cases) {
+    const design = Object.assign(longDesign(ctx, 7, theme), { look });
+    const before = (Tracks._vmConsole || []).length;
+    const r = verifyDef(Tracks, scaledDef(ctx, design), { quiet: true });
+    const lamps = r.track.lampPosts ? r.track.lampPosts.length : 0;
+    const tag = `${theme} ${look.time}/${look.trees}/${look.crowd} ${Math.round(r.track.total)} m`;
+    rows.push(`${tag}: props ${r.props}, lamps ${lamps}`);
+    assert.ok(r.props > 0 && r.props < LONG_PROP_CAP, `${tag}: props ${r.props} < ${LONG_PROP_CAP}`);
+    assert.ok(lamps <= LONG_LAMP_CAP, `${tag}: ${lamps} lamps ≤ ${LONG_LAMP_CAP}`);
+    if (look.time === "night") assert.equal(r.track.def.night, true, tag + ": night");
+    const warned = (Tracks._vmConsole || []).slice(before).filter((l) => /custom scenery .* failed/.test(l));
+    assert.deepEqual(warned, [], tag + ": no dresser threw");
+  }
+  for (const r of rows) console.log("look @7 km: " + r);
+  // TREES and CROWD do something: FEW builds fewer props than MANY / PACKED.
+  const few = verifyDef(Tracks, scaledDef(ctx, Object.assign(designFor(ctx, 7, "parkland"), { look: { trees: "few", crowd: "few" } })), { quiet: true }).props;
+  const many = verifyDef(Tracks, scaledDef(ctx, Object.assign(designFor(ctx, 7, "parkland"), { look: { trees: "many", crowd: "packed" } })), { quiet: true }).props;
+  console.log(`look parkland seed 7: few/few ${few} < many/packed ${many}`);
+  assert.ok(few < many, `FEW (${few}) < MANY (${many})`);
 });
 
 // CustomTracks.toRaw (js/editor/custom-tracks.js) must pass the design:

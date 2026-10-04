@@ -117,3 +117,51 @@ test("step writes axle/force/yaw fields without NaN (wear off)", () => {
   // force pair should be non-zero — either way the model engaged.
   assert.ok(c.forceFront !== 0 || c.forceRear !== 0, "tyres produced force");
 });
+
+test("brake-to-reverse does not snap front slip by ~2·steer (dirS blend)", () => {
+  // Fail-before: hard `speed < 0 ? -1 : 1` jumped slipFront by ≈ 2·δ when the
+  // car crossed standstill with lock held (game-vm: −0.182 → +0.491 at δ≈0.34).
+  const { PlayerForces, TyreModel, PhysicsConsts } = load();
+  const G = {
+    PLAYER_GRIP: 1.15, FRONT_GRIP: 0.94, DRIFT: 0,
+    YAW_INERTIA: 0.58, YAW_DAMP: 1.0,
+  };
+  const api = PlayerForces.create(G);
+  const tyres = TyreModel.create({
+    get raceTyreWear() { return "off"; },
+    store: { get: () => "off", set: () => {} },
+  });
+  const L = 3.2, FRONT_WEIGHT = PhysicsConsts.FRONT_WEIGHT;
+  const ar = FRONT_WEIGHT * L, af = L - ar;
+  const delta = 0.34;
+  function slipAt(speed) {
+    const c = {
+      human: true, isPlayer: false, speed, axEstSm: -8, aeroX: 0, wake: 0,
+      vLat: 0, yawRateCur: 0.25, head: 0, brakeStab: 1, rearUtil: 0.4,
+      brakeBias: null, rollBalance: 0.5, lateralAccel: 0, offroad: false,
+      tread: 0, flatSpot: 0,
+    };
+    api.step(c, {
+      dt: DT, driverDelta: delta, assistDelta: 0, lineDelta: 0,
+      onThrottle: false, throttleLvl: 0, gearMult: 1,
+      deploy: 0, braking: true, surfaceMu: 1, kerbGrip: 1, bankMu: 1,
+      modsCornering: 1, loadF: FRONT_WEIGHT + 0.1, loadR: 1 - FRONT_WEIGHT - 0.1,
+      vertLoad: 0, af, ar, sp: Math.min(1, Math.abs(speed) / 3), steer: 1,
+      weatherGrip: 1, aeroDf: 1, dirtyMul: 1, coastCut: 0,
+      vTopNow: 72, tyres,
+    });
+    return c.slipFront;
+  }
+  const s0 = slipAt(0);
+  const sRev = slipAt(-0.083);
+  const dSlip = Math.abs(sRev - s0);
+  // Hard flip costs ≈ 2·δ (~0.68). Soft blend over 1 m/s costs ≈ δ·0.083 (~0.03).
+  assert.ok(dSlip < 0.15,
+    `slipFront jump across standstill must stay small; got Δ=${dSlip.toFixed(4)} (s0=${s0.toFixed(4)}, sRev=${sRev.toFixed(4)})`);
+  // Still reverses the steer contribution once fully in reverse.
+  const sFull = slipAt(-2);
+  assert.ok(Math.sign(sFull - s0) !== 0 || Math.abs(sFull - s0) > 0.2,
+    "full reverse must still flip the steer term relative to standstill");
+  assert.ok(Math.abs(sFull - slipAt(2)) > Math.abs(delta),
+    "forward vs reverse at |v|≥DIR_BLEND must differ by about 2·δ");
+});

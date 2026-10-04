@@ -50,8 +50,8 @@ fn fbm(p_in: vec2<f32>) -> f32 {
   //    of the "single-source" candidates (acesTonemap, js/render/glx/shaders/glsl-chunks.js). Not used
   //    by the sky (which outputs HDR straight to an LDR swapchain here), but
   //    included as the seed of the shared post-math the Composite port will use.
-  // Coefficients are passed in (TONE CURVE knobs on the composite path; the BLIT
-  // stand-in passes the shipped defaults). Defaults 2.51/0.03/2.43/0.59/0.14
+  // Coefficients are passed in (TONE CURVE knobs on the composite and mirror
+  // paths; the fallback BLIT passes the shipped defaults). Defaults 2.51/0.03/2.43/0.59/0.14
   // reproduce the Narkowicz curve byte-for-byte. e is floored >0 by the slider
   // min so the denominator can't reach 0 for x>=0.
   // Surface-family hash/noise (GLXChunks.surfaceNoise / ignoise). Distinct from
@@ -1567,8 +1567,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // effect is gated on carPaint>0 AND on a non-dark albedo — non-paint meshes
   // (carPaint=0) and the dark carbon/tyre parts stay untouched. Cells in object
   // space (in.objPos / GLX vObjPos) so glitter stays welded to the bodywork.
+  // Faded out at range AND inside 4 m, where a cell is several pixels (GLX).
   if (carPaint > 0.001 && litNoL > 0.0 && sparkle > 0.001) {
-    var spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * sparkle;
+    var spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * smoothstep(1.5, 4.0, vDist) * sparkle;
     spFade = spFade * smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b)));
     if (spFade > 0.01) {
       let cell = floor(in.objPos * 220.0);
@@ -1601,11 +1602,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let skyT = pow(max(Rw.y, 1e-4), 0.40);
     var envColor = mix(F.skyHorizon.xyz, F.skyZenith.xyz, skyT);
     // the live env probe (params5.x) replaces the gradient near the car (GLX
-    // uEnvStr; faded with eye distance — one cube is parallax-wrong far away)
+    // uEnvStr; faded with eye distance — one cube is parallax-wrong far away).
+    // Read with -y like every other probe tap: the faces are stored y-down
+    // (see RgEnv above); the raw Rw showed wet road and glass the probe upside down.
     if (F.params5.x > 0.001) {
       let probeW = clamp(F.params5.x, 0.0, 1.0) * clamp(1.0 - (vDist - 60.0) / 90.0, 0.0, 1.0);
       if (probeW > 0.001) {
-        envColor = mix(envColor, textureSampleLevel(envCube, envCubeSamp, Rw, rough * 2.5).rgb, probeW);
+        envColor = mix(envColor, textureSampleLevel(envCube, envCubeSamp, vec3<f32>(Rw.x, -Rw.y, Rw.z), rough * 2.5).rgb, probeW);
       }
     }
     let envSunAlign = max(dot(Rw, F.sunDir.xyz), 0.0);
@@ -1772,7 +1775,11 @@ fn vs_main(@location(0) aPos : vec3<f32>,
   //    stand-in for the full Phase-4 post chain (bloom/SSAO/godray/SSR/grade/
   //    flare/FXAA). Fullscreen triangle; uv flips Y into texture space.
   const BLIT = `
-struct BlitU { params : vec4<f32> };   // x = exposure, y > 0.5 = flip left-right, z = mip level (both the rear-view mirror; 0 elsewhere)
+// params: x = exposure, y > 0.5 = flip left-right, z = mip level (both the rear-view
+// mirror; 0 elsewhere). aces = TONE CURVE a,b,c,d; tone = (e, whitePoint, _, _): the
+// mirror packs the frame's knobs (GLX MIRROR_FS), the fallback blit + smoke tests the
+// stand-in (wgx.js _blitParams).
+struct BlitU { params : vec4<f32>, aces : vec4<f32>, tone : vec4<f32> };
 @group(0) @binding(0) var srcTex  : texture_2d<f32>;
 @group(0) @binding(1) var srcSamp : sampler;
 @group(0) @binding(2) var<uniform> B : BlitU;
@@ -1794,9 +1801,7 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let uv = vec2<f32>(select(in.uv.x, 1.0 - in.uv.x, B.params.y > 0.5), in.uv.y);
   let hdr = textureSampleLevel(srcTex, srcSamp, uv, B.params.z).rgb * B.params.x;
-  // Stand-in resolve: fixed shipped ACES coefficients (the TONE CURVE knobs only
-  // reach the full composite path, not this fallback blit).
-  return vec4<f32>(acesTonemap(hdr, 2.51, 0.03, 2.43, 0.59, 0.14), 1.0);
+  return vec4<f32>(acesTonemap(hdr / max(B.tone.y, 1e-3), B.aces.x, B.aces.y, B.aces.z, B.aces.w, B.tone.x), 1.0);
 }`;
 
   //    r16float blocker map (PCSS-lite blocker-search source; GLX BLOCKER_FS
@@ -2153,7 +2158,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     LIGHT_STRIDE_BYTES: 64,     // one Light
     MAX_LIGHTS: 48,
     DRAW_UNIFORM_BYTES: 144,    // DrawU used bytes: mat3 lamp masks at 112 + lampRange at 128 (dynamic-offset stride is 256)
-    BLIT_UNIFORM_BYTES: 16,     // BlitU
+    BLIT_UNIFORM_BYTES: 48,     // BlitU
     DEPTH_RESOLVE: `
 @group(0) @binding(0) var src : texture_depth_multisampled_2d;
 struct DROut { @builtin(position) clip : vec4<f32> };

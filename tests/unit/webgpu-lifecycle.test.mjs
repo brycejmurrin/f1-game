@@ -384,6 +384,8 @@ function makeGpuHarness(opts = {}) {
     fireWindow(type) { windowListeners.get(type)?.(); },
     loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
     setEncoderFail(v) { failEncoder = !!v; },
+    // This VM's Log ring (seedLog): what a phone's COPY DIAG would carry.
+    logs: (filter) => context.Log.records(filter),
   };
 }
 
@@ -1527,6 +1529,60 @@ test("device.lost climbs the ladder: full -> lite (level 1 persisted, reload)", 
   assert.equal(reloads, 1, "the rung retry is a reload, not a GLX surrender");
 });
 
+// SETTINGS ▸ DISPLAY ▸ SCREENSHOTS NATIVE ("0") / 2D BLIT ("1") set _outProbeOff,
+// which mutes the black-output probe and its escalation. It must not mute a
+// dead device: the visible device.lost branch escalates through _wgxEscalate
+// alone, and the flag's early return there left a frozen canvas with no rung,
+// no reload and no WebGL2 fallback. A saved-only "1" on hardware is "ignored"
+// for presentation but still set the flag, so it froze the same way.
+for (const [label, lane, val] of [
+  ["NATIVE (local 0)", "local", "0"],
+  ["saved 2D BLIT on hardware (local 1)", "local", "1"],
+  ["2D BLIT this tab (session 1)", "session", "1"],
+]) {
+  test(`device.lost escalates in SCREENSHOTS capture mode: ${label}`, async () => {
+    const storage = new Map(lane === "local" ? [["apex26.wgxCapture", val]] : []);
+    const session = new Map(lane === "session" ? [["apex26.wgxCapture", val]] : []);
+    let reloads = 0;
+    const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+    const gfx = await h.create();
+    gfx.resize();
+    gfx.begin({});
+    gfx.present({});
+    h.loseDevice({ reason: "unknown" });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "a visible loss climbs to the lite rung in capture mode too");
+    assert.match(storage.get("apex26.gfxWgxFail") || "", /device lost \(unknown/, "reason recorded for COPY DIAG");
+    assert.equal(reloads, 1, "the rung retry reloads — a lost device cannot be revived in place");
+    assert.equal(gfx.backendState().lost, true, "every entry point must see the dead device");
+    assert.equal(h.logs({ ns: "gfx" }).filter((r) => /suppressed escalate/.test(r.msg)).length, 0,
+      "device.lost is not the output probe: nothing about it is suppressed");
+  });
+}
+
+test("capture mode still mutes the GPU-error flood ladder, and says so ONCE", async () => {
+  // What _outProbeOff IS for: a capture session on a software/odd adapter must
+  // not climb the ladder on its own validation noise. But the old early return
+  // left _lost false, so every error after the cap re-entered _wgxEscalate and
+  // logged a warn per error — the per-draw flood GPU_ERR_LOG_CAP exists to stop.
+  const storage = new Map([["apex26.wgxCapture", "0"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  gfx.resize();
+  for (let f = 0; f < 6; f++) {
+    for (let i = 0; i < 10; i++) h.device.onuncapturederror({ error: { message: "flood " + f + "." + i } });
+    gfx.begin({}); gfx.present({});
+  }
+  assert.equal(storage.get("apex26.gfxWgxLevel"), undefined, "capture mode: no rung for a GPU-error flood");
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined);
+  assert.equal(reloads, 0);
+  assert.equal(gfx.backendState().lost, false, "the device is not lost; capture keeps presenting");
+  assert.equal(h.logs({ ns: "gfx" }).filter((r) => /suppressed escalate/.test(r.msg)).length, 1,
+    "the suppression is announced once, not once per GPU error");
+});
+
 test("device.lost on the lite rung climbs to minimal (level 2), not GLX", async () => {
   const storage = new Map();
   const session = new Map();
@@ -2068,6 +2124,73 @@ test("bloom pipelines target POST_HDR_FORMAT, the bloom mips' own format", () =>
     "pBloomDown must target POST_HDR_FORMAT (the bloom mip texture format)");
   assert.match(WGX_SOURCE, /fsPipe\((?:core\.)?_?Post\.BLOOM_UP,\s*(?:core\.)?POST_HDR_FORMAT/,
     "pBloomUp must target POST_HDR_FORMAT (the bloom mip texture format)");
+});
+
+// WGX POST PARITY (2026-10-04): four places WGX's post chain diverged from the
+// GLX/TLX references (glsl-post.js, tsl-post.js). Source pins plus the uploads.
+test("WGX post parity: SSAO normal, haze plume space, bloom order, mirror tone curve", async () => {
+  const post = POST_SOURCE.replace(/^[ \t]*\/\/.*$/gm, "");
+  const glsl = await readFile(new URL("js/render/glx/shaders/glsl-post.js", ROOT), "utf8");
+  // 1. WGSL dpdy steps DOWN the framebuffer, GL dFdy UP (three maps dFdy to
+  //    "- dpdy"): un-negated, the reconstructed normal faced away from the eye.
+  assert.match(glsl, /vec3 crN = cross\(dFdx\(P\), dFdy\(P\)\);/, "the GLX reference");
+  assert.match(post, /let crN = cross\(dpdx\(P\), -dpdy\(P\)\);/);
+  const bareDpdy = [...post.matchAll(/(\S)\s*dpdy\(/g)].filter((m) => m[1] !== "-").map((m) => m[0]);
+  assert.deepEqual(bareDpdy, [], "every dpdy in the post chain is negated (y-down window coords)");
+  // 2. The plume anchor (dirtFx.yz) is uploaded GL-space (y-up): test + scroll
+  //    in GL uv, the warp's y flipped back to texture space.
+  assert.match(glsl, /vec2 hd = \(vUV - uHazeUV - vec2\(0\.0, 0\.08\)\) \* vec2\(3\.2, 1\.0\);/, "the GLX reference");
+  assert.match(post, /let gUV = vec2<f32>\(in\.uv\.x, 1\.0 - in\.uv\.y\);\s*let hd = \(gUV - U\.dirtFx\.yz - vec2<f32>\(0\.0, 0\.08\)\) \* vec2<f32>\(3\.2, 1\.0\);/);
+  assert.match(post, /let hp = gUV\.y \* 90\.0 - U\.fx\.z \* 11\.0;/);
+  assert.match(post, /sceneUV = in\.uv \+ vec2<f32>\(hw\.x, -hw\.y\);/, "the shimmer rises");
+  assert.doesNotMatch(post, /in\.uv - U\.dirtFx\.yz/, "y-down uv against a y-up anchor");
+  // 3. Bloom: bright pass FIRST (one bilinear tap, GLX BRIGHT_FS knee), Karis
+  //    on the first downsample of it — never Karis over the full-res scene.
+  const down = /const BLOOM_DOWN = `([\s\S]*?)`;/.exec(POST_SOURCE)[1];
+  const iBright = down.indexOf("if (U.mode > 1.5)"), iKaris = down.indexOf("if (U.mode > 0.5)");
+  assert.ok(iBright > 0 && iBright < iKaris && iKaris < down.indexOf("let w0 = 0.125"), "bright pass, then Karis");
+  const bright = down.slice(iBright, down.indexOf("let t  = U.texel"));
+  assert.equal((bright.match(/textureSampleLevel/g) || []).length, 1, "one bilinear tap (a 2x2 box at half res)");
+  assert.match(glsl, /float knee = uThreshold \* 0\.5 \+ 1e-4;/);
+  assert.match(bright, /let knee = U\.threshold \* 0\.5 \+ 1e-4;/, "GLX BRIGHT_FS knee");
+  assert.match(bright, /return vec4<f32>\(c \* \(max\(soft, lum - U\.threshold\) \/ max\(lum, 1e-4\)\), 1\.0\);/);
+  assert.doesNotMatch(bright, /\bw0\b|1\.0 \+ max/, "no Karis on the bright pass");
+  assert.doesNotMatch(down, /U\.threshold > 0\.0/, "the mode lane picks the pass, not the threshold");
+  assert.match(WGX_SOURCE, /s\[2\] = i === 0 \? threshold : 0; s\[3\] = i === 0 \? 2 : i === 1 \? 1 : 0;/);
+  // 4. The mirror takes the frame's white point + five ACES knobs (GLX
+  //    MIRROR_FS, TLX mirror); the fallback blit + smoke tests the stand-in.
+  assert.match(glsl, /acesTonemap\(c \* uExposure \/ uWhitePoint\)/, "the GLX reference");
+  assert.match(CHUNKS_SOURCE, /struct BlitU \{ params : vec4<f32>, aces : vec4<f32>, tone : vec4<f32> \};/);
+  assert.match(CHUNKS_SOURCE, /acesTonemap\(hdr \/ max\(B\.tone\.y, 1e-3\), B\.aces\.x, B\.aces\.y, B\.aces\.z, B\.aces\.w, B\.tone\.x\)/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /acesTonemap\(hdr, 2\.51/, "hard-coded coefficients");
+  assert.match(CHUNKS_SOURCE, /BLIT_UNIFORM_BYTES:\s*48/);
+  assert.match(WGX_SOURCE, /_mirrorComposite\(exposure, _postReady \? o\.tune : _TONE_STANDIN\);/);
+  assert.match(WGX_SOURCE, /_tonemapBlit\(exposure\);\s*_mirrorComposite\(exposure, _TONE_STANDIN\);/);
+  assert.equal((WGX_SOURCE.match(/writeBuffer\(blitUBO, 0, _blitParams\([^)]*\), 1, _TONE_STANDIN\)\)/g) || []).length, 2,
+    "both boot smoke tests write the whole BlitU (zero tone lanes = a 0/0 curve = 'rendered black')");
+
+  // The uploads, through the mock device.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  gfx.mirrorRect([0.4, 0.1, 0.2, 0.06]);
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+  gfx.mirrorEnd();
+  assert.equal(gfx.begin({}), true);
+  const mark = h.writes.length;
+  gfx.present({ exposure: 2, threshold: 0.875, bloom: 0.5, tune: { bloomSpread: 0.5,
+    whitePoint: 1.25, acesA: 3, acesB: 0.25, acesC: 3.5, acesD: 0.75, acesE: 0.5 } });
+  const ws = h.writes.slice(mark);
+  const i0 = ws.findIndex((w) => w.values.length === 4 && w.values[2] === 0.875);
+  assert.ok(i0 >= 0, "the bloom level-0 upload");
+  const modes = [];
+  for (let i = i0; i < ws.length && ws[i].values.length === 4 && (i === i0 || ws[i].values[2] === 0); i++) modes.push(ws[i].values[3]);
+  assert.ok(modes.length >= 3, `a 3+ level chain at 320x180, got ${modes.length}`);
+  assert.deepEqual(modes, [2, 1, ...modes.slice(2).map(() => 0)], "bright pass, Karis, then plain");
+  const mir = ws.filter((w) => w.buffer.desc.size === 48 && w.values[1] === 1).at(-1);
+  assert.ok(mir, "the mirror composite's BlitU upload (flip = 1)");
+  assert.equal(mir.values[0], 2, "exposure");
+  assert.deepEqual(mir.values.slice(4, 10), [3, 0.25, 3.5, 0.75, 0.5, 1.25], "aces a..e + whitePoint from the tune");
 });
 
 test("shadow model UBO flushes once per pass (not per cast)", () => {
