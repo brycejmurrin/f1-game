@@ -4,6 +4,11 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "cota",
+    // The pit complex (TrackPit) on the LEFT of the main straight: COTA runs
+    // anticlockwise and the paddock is the infield. Without this the engine
+    // built lane, wall and garages on the default right (the main stand) while
+    // scenery/cota.js stood the pit wall, garages and race control on the left.
+    pit: { side: -1 },
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.8 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.

@@ -13,6 +13,11 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "korea",
+    // The pit complex (TrackPit) on the LEFT of the main straight, the side
+    // scenery/korea.js builds its pit wall, garages and paddock on (harbour
+    // side; the main grandstand faces it from the right). Without this the
+    // engine built lane and garages on the default right, under the stand.
+    pit: { side: -1 },
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against

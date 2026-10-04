@@ -333,29 +333,37 @@
             addBox(stage, vadd(vadd(a.c, a.r, rs * (W / 2 + 0.2)), a.u, 3), [0.6, 1.4, LEN], GLASS_LIT, b);
         }, { required: true });
       };
-      grandPrixPlaza(K(0.012), 1, 15);
-      grandstandEx(0.05, 1, 20, 82, null, null,
+      // THE PIT/PADDOCK FRONTAGE IS RE-KEYED THROUGH sl() (the gantry idiom
+      // above): this file's s = 0 is the scenery origin (sceneryStartFrac
+      // 0.8575), so K(0.012) stood the Plaza at engine frac ~0.855, on the
+      // Harmon approach ~900 m before the engine pit lane (0.96-0.03, LEFT,
+      // `pit.side: -1`). sl(f) lands at engine frac f. The Plaza IS the pit
+      // building on the infield, so it now stands on the LEFT, behind the
+      // street pit lane; the main stand, light masts and broadcast compound
+      // keep the right.
+      grandPrixPlaza(K(sl(0.012)), -1, 34);
+      grandstandEx(sl(0.05), 1, 20, 82, null, null,
         { livery: "darkSteel", tiers: 3, roof: "truss", suites: true, endWalls: true, pylons: true });
-      lotBleacher("vegas-lot-bleacher-paddock", 0.0745, -1, 16, 9,
+      lotBleacher("vegas-lot-bleacher-paddock", sl(0.0745), -1, 16, 9,
         { rows: 8, ribbon: MAGENTA });
       // pit-lane light masts — bright LED headlights (supplement engine's generic posts)
       for (let i = 0; i < 4; i++) {
-        const a = anchor(K(0.01 + i * 0.012), 1, 9);
+        const a = anchor(K(sl(0.01 + i * 0.012)), 1, 9);
         addCyl(out, a.c, 0.28, 15, [0.35, 0.35, 0.38], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 15), [3.5, 1.2, 1.2], LED, [a.r, a.u, a.t]); // bright light head
       }
       if (circuitKit) {
         circuitKit.hospitality({
-          id: "kit:vegas:paddock-hospitality", frac: 0.045,
+          id: "kit:vegas:paddock-hospitality", frac: sl(0.045),
           side: -1, gap: 30, size: [18, 9, 46], modules: 5,
         });
         circuitKit.serviceCompound({
-          id: "kit:vegas:paddock-service", frac: 0.022,
+          id: "kit:vegas:paddock-service", frac: sl(0.022),
           side: -1, gap: 15, size: [22, 5, 34], vehicles: 8,
         });
       }
-      broadcastCompound(K(0.09), 1, 44, { vans: 4, dishes: 3, mastH: 11 });
-      cameraTower(K(0.002), -1, 15, { h: 20, boom: 1.4 });
+      broadcastCompound(K(sl(0.09)), 1, 44, { vans: 4, dishes: 3, mastH: 11 });
+      cameraTower(K(sl(0.002)), -1, 34, { h: 20, boom: 1.4 });
 
       {
         const pads = [
@@ -679,7 +687,12 @@
       {
         const k = K(0.66);
         const aL = anchor(k, -1, 3.5), aR = anchor(k, 1, 3.5);
-        const span = (hw[k] || 7) * 2 + 10;
+        // Width from the two ANCHORED piers, not hw[k]: k is an authored-frame
+        // node (K() is unshifted; anchor() applies the 0.8575 origin shift), so
+        // hw[k] read the half-width ~0.14 lap away from where the gateway
+        // stands. The piers stand 3.5 m off each road edge, so their spacing
+        // is 2*hw + 7 at the anchored node; + 3 keeps the old 2*hw + 10.
+        const span = Math.hypot(aL.c[0] - aR.c[0], aL.c[2] - aR.c[2]) + 3;
         // Piers
         for (const [sd, a] of [[-1, aL], [1, aR]]) {
           const b = [a.r, a.u, a.t];

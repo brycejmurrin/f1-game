@@ -157,6 +157,10 @@ const TrackBuildClient = (function () {
       m[base] = h.chunks == null ? h : gfx.createMesh(recs[tok.__rec].args[0]);
       m[k] = null;
     }
+    // The worker built against its own def copy; carry back what the build
+    // derived onto it (build-worker.js), as a main-thread build would leave it.
+    if (Number.isFinite(msg.sceneryShift)) def._sceneryShift = msg.sceneryShift;
+    if (Number.isFinite(msg.startFrac)) def._startFrac = msg.startFrac;
     track.def = def;
     track._gfx = gfx;
     track.surface = TrackSurface.profile(def, track);
