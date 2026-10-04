@@ -20,8 +20,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function harness() {
+function harness({ motion } = {}) {
   let docRoot = null;
+  const scrolls = [];
   class El {
     constructor(tag) {
       this.tagName = tag.toUpperCase(); this.children = []; this.parentNode = null; this.attrs = {}; this.dataset = {};
@@ -51,10 +52,11 @@ function harness() {
     find(pred) { for (const ch of this.children) { if (pred(ch)) return ch; const r = ch.find(pred); if (r) return r; } return null; }
     selects() { const out = []; (function walk(n) { n.children.forEach((c) => { if (c.tagName === "SELECT") out.push(c); walk(c); }); })(this); return out; }
     focus() {}
-    scrollIntoView() {}
+    scrollIntoView(o) { scrolls.push({ id: this.id, o }); }
   }
   docRoot = new El("html");
-  const document = { createElement: (t) => new El(t), getElementById: () => null, addEventListener() {}, activeElement: null, hidden: false };
+  const document = { createElement: (t) => new El(t), getElementById: () => null, addEventListener() {}, activeElement: null, hidden: false,
+    documentElement: { dataset: motion ? { motion } : {} } };
   const pending = [], resultKeys = [];
   const defer = (name, value) => new Promise((res) => pending.push({ name, res: () => res(value) }));
   const LATEST = { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
@@ -90,7 +92,7 @@ function harness() {
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, drain, flush, pending, resultKeys };
+  return { DataHub, root, content, tab, settle, drain, flush, pending, resultKeys, scrolls, document };
 }
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
@@ -126,4 +128,34 @@ test("a pick that lands while latestSession() is in flight is not overwritten by
   h.tab("results");
   await h.drain();
   assert.deepEqual(h.resultKeys, [400], "RESULTS shows the session the player picked, not the latest one");
+});
+
+test("returning to the tab whose pick landed detached rebuilds it: no picker stuck on loading…", async () => {
+  const h = harness();
+  await pickInLive(h);
+  h.tab("results"); await h.flush();
+  await h.settle("sessions(40)");                  // LIVE's detached picker answers
+  await h.drain();
+  h.tab("live");                                   // back inside LIVE's cache window
+  await h.drain();
+  const [gpSel, sesSel] = h.content().selects();
+  assert.ok(gpSel.children.length > 1, "the GP select is filled");
+  assert.notEqual(sesSel.children.map((o) => o.textContent).join(" | "), "loading…", "the session select is not stuck on loading…");
+});
+
+// MOTION: REDUCED reaches the tab strip. scrollIntoView's explicit `behavior`
+// beats CSS scroll-behavior, so neither reduced-motion backstop (the OS query's
+// `scroll-behavior: auto`, html[data-motion]) could reach this glide: the hub
+// has to ask, live, at the call.
+test("the active tab scrolls into view instantly under MOTION: REDUCED, smoothly otherwise", async () => {
+  const h = harness({ motion: "reduce" });
+  h.DataHub.open("live"); await h.drain();
+  h.tab("results"); await h.drain();
+  const reduced = h.scrolls.filter((c) => c.id === "dh-tab-results").pop();
+  assert.ok(reduced, "switching tabs scrolls the active tab button into view");
+  assert.equal(reduced.o.behavior, "auto", "MOTION: REDUCED must not glide the tab strip");
+  h.document.documentElement.dataset = {};          // the player turns it back off, mid-session
+  h.tab("live"); await h.drain();
+  const full = h.scrolls.filter((c) => c.id === "dh-tab-live").pop();
+  assert.equal(full.o.behavior, "smooth", "read live: full motion glides again without a reload");
 });

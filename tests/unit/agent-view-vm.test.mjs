@@ -1061,6 +1061,14 @@ test("Monza surveys clean", async () => {
   assert.equal(s.summary.clean, true);
 });
 
+test("terrain carved under the road is not a cliff", async () => {
+  // Zandvoort's crest at 0.583: terrain -2.4 m under a road at 6.1 m, carved and
+  // hidden. Read as ground it was an 8 m wall either side of the centreline.
+  await load("zandvoort");
+  const s = g.apex.survey();
+  assert.equal(s.summary.groundCliffs, 0, JSON.stringify(s.groundCliffs));
+});
+
 test("no circuit ships a model the guard had to reject", async () => {
   await load("vegas");
   const s = g.apex.survey();

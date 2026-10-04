@@ -96,6 +96,8 @@ function flyMs() {
 // The world's boxes come from js/camera/flyby-sight.js (FlybySight.propBoxes /
 // spanBoxes): the flyby PLANNER judges its candidate eyes against the same
 // model, so the planner and this report cannot disagree about what is where.
+// FlybySight.offRoad drops the axis-aligned boxes that reach across the road at
+// running height (Suzuka's #565 grandstand scored the grid 0 % visible).
 
 function carBoxes(G, Tracks) {
   const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
@@ -438,7 +440,7 @@ Accepts: ${KNOWN.filter((k) => k.startsWith("--")).join(" ")}`);
   const g = await createGame({ track });
   const bootMs = Date.now() - t0;
   const sb = g.sandbox, G = g.G, T = G.track, FlybySeq = sb.FlybySeq, Tracks = sb.Tracks;
-  const props = sb.FlybySight.propBoxes(T), spans = sb.FlybySight.spanBoxes(T), cars = carBoxes(G, Tracks);
+  const props = sb.FlybySight.offRoad(sb.FlybySight.propBoxes(T), T), spans = sb.FlybySight.spanBoxes(T), cars = carBoxes(G, Tracks);
   const gm = groundModel(T, Tracks);
   const scene = { allBoxes: props.concat(spans, cars), boxes: null, groundAt: gm.groundAt, maxGroundY: gm.maxGroundY, range };
   const ctx = { track: T, FlybySeq, Tracks, boxes: scene.allBoxes, cars, scene };

@@ -18,7 +18,7 @@
  *
  * What to look for:
  *   - within a gear, rate rises monotonically with rev (climb)
- *   - gears 1-3 read lower than 4-8 (deeper low-gear launch)
+ *   - the same rev reads the same rate in every gear (pitch is rpm alone)
  *   - boost adds a few percent
  */
 const { chromium } = require("playwright");
@@ -109,11 +109,11 @@ if (argv.includes("--help") || argv.includes("-h")) {
   // sanity assertions
   let ok = true;
   for (let g = 1; g <= 8; g++) { const a = r.rate[g]; for (let i = 1; i < a.length; i++) if (a[i] < a[i - 1] - 1e-3) { ok = false; console.log(`FAIL: g${g} pitch not monotonic in rev`); } }
-  if (r.rate[1][4] >= r.rate[4][4]) { ok = false; console.log("FAIL: gear 1 redline not lower than gear 4"); }
+  for (let g = 1; g <= 8; g++) for (let i = 0; i < revs.length; i++) if (Math.abs(r.rate[g][i] - r.rate[4][i]) > 1e-3) { ok = false; console.log(`FAIL: g${g} rev ${revs[i]} reads ${r.rate[g][i]} but g4 ${r.rate[4][i]} (pitch must be rpm alone)`); }
   console.log(`load (g4, rev .6): coast rate ${r.coast.rate} cen ${Math.round(r.coast.cen)} Hz -> pull rate ${r.pull.rate} cen ${Math.round(r.pull.cen)} Hz`);
   if (Math.abs(r.pull.rate - r.coast.rate) > 1e-3) { ok = false; console.log("FAIL: load must not move pitch"); }
   if (!(r.pull.cen > r.coast.cen)) { ok = false; console.log("FAIL: pulling must read brighter than coasting"); }
-  console.log(ok ? "PASS: pitch climbs with rev in every gear; gears 1-3 lower than 4-8" : "CHECK FAILED");
+  console.log(ok ? "PASS: pitch climbs with rev and is the same at the same rev in every gear" : "CHECK FAILED");
 
   // Per-manufacturer voices: same invariants must hold under every voice, and
   // the timbres must actually differ (relative rate offsets + centroid spread).

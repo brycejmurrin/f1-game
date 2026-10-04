@@ -73,6 +73,34 @@ const FlybySight = (function () {
     return out;
   }
 
+  /** THE ROAD IS ALWAYS CLEAR (js/camera/flyby-seq.js onRoadPose). The registry's
+   *  boxes are axis-aligned, so an angled grandstand's box reaches across the
+   *  straight beside it: Suzuka's #565 (25.5 x 56.6 m) stood 1.6 m from the
+   *  grid-front eye and the report scored the grid 0 % visible while the render
+   *  showed every car. A box that holds a road point at running height (a 5 x 5
+   *  grid of its footprint projected onto the lap, |lat| under the half-width,
+   *  the box's floor below road + 1 m) is over-covering and is dropped; bridges
+   *  and gantries sit above that height and keep their boxes. Applied to
+   *  propBoxes by sceneOf (the planner) and by frame-report.mjs alike. */
+  function offRoad(boxes, track) {
+    if (!(track.n > 0 && track.px)) return boxes;              // no spline (a test's bare box list): no road to clear
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    let dropped = 0;
+    const kept = boxes.filter((b) => {
+      if (b.part || !(b.w > 2 && b.d > 2)) return true;           // trees and thin parts: their own model
+      for (let k = 0; k < 25; k++) {             // 5 x 5 over the footprint: a 93 m stand is crossed mid-edge
+        const x = b.x + ((k % 5) / 2 - 1) * b.w / 2 * 0.9, z = b.z + (Math.floor(k / 5) / 2 - 1) * b.d / 2 * 0.9;
+        const pr = Tracks.project(track, x, z, null, b.y);
+        if (!pr || !isFinite(pr.lat)) continue;
+        Tracks.sample(track, pr.s, smp);
+        if (Math.abs(pr.lat) < (smp.hw || 7) - 0.5 && b.y - b.h / 2 < smp.p[1] + 1) { dropped++; return false; }
+      }
+      return true;
+    });
+    kept.droppedOverRoad = dropped;
+    return kept;
+  }
+
   /** Linear barriers (walls, fences, stands) carry an arc span, not a box: lay
    *  them as oriented 6 m slabs at hw + gap, the way the emitter did. */
   const SPAN_OP = { wall: 1, fence: 0.25, guardrail: 1, tyreWall: 1, bleacher: 0.9, scaffoldStand: 0.6, terrace: 0.9, tieredBowl: 0.9 };
@@ -103,7 +131,7 @@ const FlybySight = (function () {
   const cellKey = (ix, iz) => ix * 100003 + iz;
   function sceneOf(track) {
     if (track._fsScene) return track._fsScene;
-    const boxes = propBoxes(track).concat(spanBoxes(track));
+    const boxes = offRoad(propBoxes(track), track).concat(spanBoxes(track));
     const cells = new Map();
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
@@ -451,5 +479,5 @@ const FlybySight = (function () {
     return { inF, vis, nearSubj, near, thirds: th, inside, steep, cover, cost };
   }
 
-  return Object.freeze({ propBoxes, spanBoxes, sceneOf, rayBox, transmit, nearThirds, frame, camera, project, NEAR_M });
+  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, rayBox, transmit, nearThirds, frame, camera, project, NEAR_M });
 })();

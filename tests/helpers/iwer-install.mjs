@@ -37,26 +37,42 @@ export async function installIwer(page, opts = {}) {
   }
   await page.addInitScript({ path: IWER_VENDOR });
   const stereo = opts.stereo !== false;
-  await page.addInitScript((stereoOn) => {
-    try {
-      localStorage.setItem("apex26.tlxForceGL", "1");
-      localStorage.setItem("apex26.gfxBackend", "three");
-      // This suite qualifies the XR lifecycle, not desktop HIGH performance.
-      // IWER shares the canvas framebuffer; SwiftShader renders both eyes on
-      // the CPU. Keep the existing LOW preset from competing with XR timers.
-      localStorage.setItem("apex26.gfxPreset", JSON.stringify("low"));
-    } catch (_) { /* */ }
-    const root = globalThis.IWER || {};
-    if (!root.XRDevice || !root.metaQuest3) {
-      globalThis.__iwerInstall = { ok: false, reason: "IWER UMD missing XRDevice/metaQuest3", keys: Object.keys(root).slice(0, 20) };
-      return;
+  await page.addInitScript(installIwerFixture, stereo);
+}
+
+/** Serializable browser fixture, also exercised against the actual pinned UMD. */
+export function installIwerFixture(stereoOn) {
+  try {
+    localStorage.setItem("apex26.tlxForceGL", "1");
+    localStorage.setItem("apex26.gfxBackend", "three");
+    // This suite qualifies the XR lifecycle, not desktop HIGH performance.
+    // IWER shares the canvas framebuffer; SwiftShader renders both eyes on
+    // the CPU. Keep the existing LOW preset from competing with XR timers.
+    localStorage.setItem("apex26.gfxPreset", JSON.stringify("low"));
+  } catch (_) { /* */ }
+  const root = globalThis.IWER || {};
+  if (!root.XRDevice || !root.metaQuest3) {
+    globalThis.__iwerInstall = { ok: false, reason: "IWER UMD missing XRDevice/metaQuest3", keys: Object.keys(root).slice(0, 20) };
+    return;
+  }
+  const device = new root.XRDevice(root.metaQuest3);
+  // Pinned IWER 2.5.0 forwards XRRigidTransform itself to XRSpace's array
+  // clone, producing NaN matrices. Adapt only this emulator to WebXR's public
+  // transform contract; native XR and the production rig stay untouched.
+  // Actual-vendor pose regression: tests/unit/xr-phase0.test.mjs.
+  if (device.version === "2.5.0") {
+    const proto = root.XRReferenceSpace.prototype;
+    const offset = proto.getOffsetReferenceSpace;
+    if (!offset.__apexMatrixAdapter) {
+      const adapted = function (transform) { return offset.call(this, transform.matrix); };
+      adapted.__apexMatrixAdapter = true;
+      proto.getOffsetReferenceSpace = adapted;
     }
-    const device = new root.XRDevice(root.metaQuest3);
-    device.installRuntime({ forceInstall: true });
-    device.stereoEnabled = !!stereoOn;
-    globalThis.__iwerDevice = device;
-    globalThis.__iwerInstall = { ok: true, stereo: !!stereoOn };
-  }, stereo);
+  }
+  device.installRuntime({ forceInstall: true });
+  device.stereoEnabled = !!stereoOn;
+  globalThis.__iwerDevice = device;
+  globalThis.__iwerInstall = { ok: true, stereo: !!stereoOn };
 }
 
 /**

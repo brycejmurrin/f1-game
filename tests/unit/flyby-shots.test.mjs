@@ -723,6 +723,15 @@ test("the loading screen flies only the world built for THIS selection", () => {
     assert.match(body, new RegExp("if \\(world\\) " + call.replace(/[()|]/g, "\\$&")), call + " waits for the right world");
 });
 
+// CPU TIME, NOT WALL TIME (2026-10-04). The two "every shot was pre-planned"
+// legs below tell a cache hit (well under a millisecond) from a cold plan
+// (150-380 ms on a built-up circuit) by timing one solve. Wall time measured
+// the box too: tooling-fast runs files in parallel next to other agents' work,
+// and a descheduled cache hit read as a cold plan. process.cpuUsage() counts
+// only the time this process actually ran, so the same 20/25 ms bounds now
+// measure the work.
+const cpuMs = (since) => { const d = process.cpuUsage(since); return (d.user + d.system) / 1000; };
+
 test("warm() plans the opening shots at once and the rest in slices, never through solve()", async () => {
   await withTrack("monza", async (track, g) => {
     const F = g.sandbox.FlybySeq, list = F.vary(F.DEFAULT, 11);
@@ -735,7 +744,7 @@ test("warm() plans the opening shots at once and the rest in slices, never throu
     // Everything is planned: a solve at each shot's middle is a cache hit (fast).
     let total = 0; for (const s of list) total += s.dur;
     let acc = 0, worst = 0;
-    for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
+    for (const s of list) { const t0 = process.cpuUsage(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, cpuMs(t0)); acc += s.dur; }
     assert.ok(worst < 20, `every shot was pre-planned (worst solve ${worst.toFixed(1)} ms)`);
     return null;
   }, { fresh: true });   // a COLD plan cache, and its own timer queue to flush
@@ -771,7 +780,7 @@ test("the menu plans the flyby; the loading screen reuses every plan (no plannin
     assert.ok(b1.every((s, i) => s === b2[i]), "a re-made list binds to the SAME shot objects");
     let total = 0; for (const s of list) total += s.dur;
     let acc = 0, worst = 0; F.reset();
-    for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
+    for (const s of list) { const t0 = process.cpuUsage(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, cpuMs(t0)); acc += s.dur; }
     assert.ok(worst < 25, `every shot was planned in the menu (worst solve ${worst.toFixed(1)} ms)`);
     return null;
   });
@@ -1495,7 +1504,30 @@ test("FlybySight: a box between the eye and a point hides it; a box the point si
 test("frame-report casts the planner's own box model (FlybySight), not a copy", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/shot/frame-report.mjs"), "utf8");
   assert.ok(/FlybySight\.propBoxes\(T\)/.test(src) && /FlybySight\.spanBoxes\(T\)/.test(src), "frame-report builds its boxes through FlybySight");
+  assert.ok(/FlybySight\.offRoad\(/.test(src), "frame-report clears the road through FlybySight.offRoad, as the planner's sceneOf does");
+  assert.ok(!/function offRoad/.test(src), "no second copy of the road-clear filter in frame-report");
   assert.ok(!/function propBoxes|function spanBoxes/.test(src), "no second copy of the box model in frame-report");
+});
+
+test("FlybySight.offRoad: a box across the road at running height is dropped, a bridge-height one and a tree part kept; the planner's scene applies it", async () => {
+  await withTrack("monza", (track, g) => {
+    const S = g.sandbox.FlybySight, Tr = g.sandbox.Tracks;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    Tr.sample(track, track.total * 0.3, smp);
+    const [x, y, z] = smp.p;
+    const low = { kind: "building", x, y: y + 2, z, w: 10, h: 4, d: 10, op: 1 };
+    const high = { kind: "building", x, y: y + 10, z, w: 10, h: 4, d: 10, op: 1 };
+    const trunk = { kind: "tree", x, y: y + 2, z, w: 10, h: 4, d: 10, op: 1, part: "trunk" };
+    const kept = S.offRoad([low, high, trunk], track);
+    assert.deepEqual(kept.map((b) => b === low ? "low" : b === high ? "high" : "trunk"), ["high", "trunk"],
+      "the road-level box goes, the one floating 8 m over the road and the tree part stay");
+    assert.equal(kept.droppedOverRoad, 1);
+    const props = S.propBoxes(track), clear = S.offRoad(props, track);
+    assert.ok(clear.droppedOverRoad > 0, "Monza's registry has boxes over the road to drop");
+    assert.equal(S.sceneOf(track).boxes.length, clear.length + S.spanBoxes(track).length,
+      "sceneOf (the planner) holds exactly the report's boxes: offRoad(propBoxes) + spanBoxes");
+    return null;
+  });
 });
 
 test("the planner frames its subject: Monza's turn-first clears the grandstand, the grid walk holds the field", async () => {
