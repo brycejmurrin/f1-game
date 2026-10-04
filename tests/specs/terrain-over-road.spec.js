@@ -92,7 +92,9 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   expect(audit.sceneryCoordinates).toBe("racing");
   expect(audit.terrainOuter).toBe(120);
   expect(audit.dressingExclusions).toEqual(expect.arrayContaining([
-    expect.objectContaining({ kind: "city", s0: 0.02, s1: 0.14 }),
+    // 0.02-0.30: the Magdalena Mixiuhca park band (T1 -> Esses), where the
+    // generic city pass stood 20-50 m towers 25-30 m off both edges.
+    expect.objectContaining({ kind: "city", s0: 0.02, s1: 0.30 }),
     expect.objectContaining({ kind: "city", s0: 0.60, s1: 0.94 }),
     expect.objectContaining({ kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 }),
   ]));

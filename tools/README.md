@@ -247,7 +247,6 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/carshot.mjs** | Cropped studio-orbit car JPEG, self-booting: `carshot.mjs [az] [tod] [teamIdx] [out]` → `artifacts/tmp/carshot.jpg`. | playwright-probe |
 | **car/cockpit-pale-sweep.mjs** | Does anything in the COCKPIT read as a blank pale slab? Ray-casts the real Car3D cockpit from the driver's eye. | playwright-probe |
 | **car/crest-sweep.mjs** | Measures every team crest offline by replaying `LiveryTex.drawCrest` into a recording 2D context + scanline raster. | playwright-probe |
-| **car/emblems.mjs** | Author-time: builds the ORIGINAL team emblems in `js/car/crest-paths.js` from geometric primitives (no traced logos). | garage-parts-livery |
 | **car/flank-occlusion.mjs** | Ray-tests cover-flank stations against the real car mesh + wheels from a garage camera; reports what is hidden. | garage-parts-livery |
 | **car/helmet-sheet.mjs** | Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact-sheet PNG. | playwright-probe |
 | **car/helmet-trace.mjs** | Projects the helmet shell into a side-on photo, samples the real colour per (t, az), writes a colour map. | playwright-probe |
@@ -258,6 +257,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/render-car.mjs** | Headless batch renderer for `carview.html` — orbit presets, `--team=all` walks the grid, contact sheet; needs :3456. | playwright-probe |
 | **car/spine-station.mjs** | Measures + rasterises where every spine design lands on the cover flank, and the crown's own mark — offline, no browser. | garage-parts-livery |
 | **car/trace-car.mjs** | Trace the ISOLATED car into SVG: carview beauty + empty-stage plate -> exact matte -> contours + interior edges. | garage-parts-livery |
+| **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
 
 ### `tools/ui/`
 
@@ -406,7 +406,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **track/clip-baseline.json** | `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/coplanar-audit.cjs` |
-| **track/float-baseline.json** | `manifest.cjs`, `tests/unit/scenery-grounding.test.mjs` |
+| **track/float-baseline.json** | `manifest.cjs`, `tests/unit/scenery-grounding.test.mjs`, `track/float-audit.cjs` |
 | **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/specs/f1-track-accuracy.spec.js`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |
 | **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/props-tri-ratchet.test.mjs` |
 

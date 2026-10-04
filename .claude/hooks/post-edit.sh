@@ -62,9 +62,9 @@ case "$REL" in
       MISSING+=("add it to a group in tests/groups.json (a spec: one topical browser group; a unit file: toolingFast or a ci.yml node group), then \`node tools/gen/gen-test-groups.mjs\`")
     fi
     grep -qF "$BASE" docs/TESTING.md 2>/dev/null || MISSING+=("give it a row in the docs/TESTING.md §5 coverage table (what it covers)")
-    case "$REL" in tests/specs/*)
-      grep -q "setTimeout" "$REL" 2>/dev/null || MISSING+=("if it boots a race, declare \`test.setTimeout\` above 180 s so the selected CI gate excludes it by name (select-specs.mjs)") ;;
-    esac
+    # (No "declare > 180 s" advice: that used to tell authors how to opt a
+    # spec OUT of the change-aware gate. Since 2026-10-04 a declared-slow
+    # routed spec runs in select-specs' over-budget pool instead.)
     if [ ${#MISSING[@]} -gt 0 ]; then
       say "$BASE is not fully registered — test:guards fails the commit until it is:"
       for m in "${MISSING[@]}"; do printf '  - %s\n' "$m"; done

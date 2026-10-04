@@ -13,6 +13,25 @@ function create(G) {
 // sites are unchanged (`r.track` still reads synchronously); a caller needing
 // the track BUILT writes `await __apex.race(id)`. The resolved value drops
 // `then` so a second await cannot recurse.
+// RACE ORDER as the game classifies it: running cars by distance, then the
+// retired behind them. A plain prog sort ranked a parked DNF ahead of the cars
+// it stopped in front of, so obs/timing/fieldState disagreed with world().ego.pos
+// and gapAhead measured to a car that is out of the race.
+function raceOrder(cars) {
+  const byProg = (a, b) => b.prog - a.prog;
+  return cars.filter((c) => !c.retired).sort(byProg)
+    .concat(cars.filter((c) => c.retired).sort(byProg));
+}
+// The three UI scales take a PERCENT. A fraction (1.6) or junk used to be
+// snapped and SAVED: uiScale(1.6) stored 40 %, uiScale("abc") the default.
+// null still resets; undefined reads.
+function badPct(name, v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v === "number" && isFinite(v) && v > 3) return null;
+  return { ok: false, error: "bad_argument",
+           message: name + "() takes a percent; got " + JSON.stringify(v),
+           fix: "pass e.g. " + name + "(130) for 130 %, or null to reset" };
+}
 function settled(promise, out) {
   const value = Object.assign({}, out);
   return Object.assign({}, out, {
@@ -661,6 +680,7 @@ const api = {
   // "+ = right" comment was backwards), half-width hw (m), speed (m/s), arc s.
   probe() {
     if (!G.player || !G.track) return null;
+    const lineAt = (s) => { const ln = TrackLine.at(G.track, wrapS(s)); return ln.x * ln.w; };
     Tracks.sample(G.track, G.player.s, smp);
     let angle = 0;
     if (G.player.head != null) {
@@ -674,6 +694,10 @@ const api = {
       k: Tracks.curvature(G.track, G.player.s),
       hw: smp.hw,
       speed: G.player.speed, s: G.player.s,
+      // The racing-line assist's pursuit target (game.js updateCar): the AI
+      // line x*w at the same speed-scaled look-ahead. Where the line IS — the
+      // corner's sign alone says nothing (past an apex the line is outside).
+      lineAhead: G.track.line ? lineAt(G.player.s + Math.min(90, Math.max(25, Math.abs(G.player.speed) * 0.9))) : null,
     };
   },
   // Look-ahead road sampler for closed-loop driving (the autopilot harness):
@@ -1647,9 +1671,7 @@ const api = {
     // behind everyone who did, which is the order endRace() builds for a real
     // flag. Waving one home here would hand a parked car a finish and points.
     G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = G.raceT; } });
-    const home = G.cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
-    const out = G.cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
-    endRace(home.concat(out));
+    endRace(raceOrder(G.cars));
     return { state: G.state };
   },
 
@@ -1972,7 +1994,15 @@ const api = {
   renderScale(v) {
     if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
-    PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
+    // A FRACTION, 0.5..1 (the opposite unit to uiScale). Unchecked, "auto"
+    // reached GLX/WGX as NaN (Math.max(0.5, NaN) is NaN: a NaN-sized buffer)
+    // and 60 silently pinned 1.0 — and every call switched the governor off.
+    if (typeof v !== "number" || !isFinite(v) || v < 0.5 || v > 1) {
+      return { ok: false, error: "bad_argument",
+               message: "renderScale() takes a fraction 0.5..1 or true; got " + JSON.stringify(v),
+               fix: "renderScale(0.75), or renderScale(true) for the adaptive governor" };
+    }
+    PerfGov.setAutoRes(false); gfx.setRenderScale(v); return this.renderScale();
   },
 
   // govHold(on?) — hold the governor's feature ladder at the tier it is on
@@ -2008,9 +2038,9 @@ const api = {
   // perf() — thin governor snapshot (alias of renderScale report + tier parts).
   perf() { return this.renderScale(); },
 
-  uiScale(v) { return G.setScale("uiScale", "--ui-scale", v); },
-  hudScale(v) { return G.setScale("hudScale", "--hud-scale", v); },
-  btnScale(v) { return G.setScale("hudBtnScale", "--hud-btn-scale", v); },
+  uiScale(v) { return badPct("uiScale", v) || G.setScale("uiScale", "--ui-scale", v); },
+  hudScale(v) { return badPct("hudScale", v) || G.setScale("hudScale", "--hud-scale", v); },
+  btnScale(v) { return badPct("btnScale", v) || G.setScale("hudBtnScale", "--hud-btn-scale", v); },
 
   safeMode(v) {
     if (v === undefined) return { strikes: PerfGov.strikes(), tierFloor: PerfGov.tierFloor(), tier: PerfGov.tier() };
@@ -2046,7 +2076,7 @@ const api = {
     Tracks.sample(G.track, G.player.s, smp);
 
     // nearest rivals by progress (leader-first order)
-    const sorted = G.cars.slice().sort((a, b) => b.prog - a.prog);
+    const sorted = raceOrder(G.cars);
     const pi = sorted.findIndex((c) => c.isPlayer);
     const rivalAhead  = pi > 0 ? sorted[pi - 1] : null;
     const rivalBehind = pi < sorted.length - 1 ? sorted[pi + 1] : null;
@@ -2173,7 +2203,7 @@ const api = {
 
   timing() {
     if (!G.player || !G.track) return null;
-    const sorted = G.cars.slice().sort((a, b) => b.prog - a.prog);
+    const sorted = raceOrder(G.cars);
     const pi = sorted.findIndex((c) => c.isPlayer);
     const ahead  = pi > 0               ? sorted[pi - 1] : null;
     const behind = pi < sorted.length - 1 ? sorted[pi + 1] : null;
@@ -2197,7 +2227,7 @@ const api = {
 
   fieldState() {
     if (!G.track || !G.cars.length) return null;
-    const sorted = G.cars.slice().sort((a, b) => b.prog - a.prog);
+    const sorted = raceOrder(G.cars);
     const leader = sorted[0];
     return sorted.map((c, pos) => ({
       pos:      pos + 1,

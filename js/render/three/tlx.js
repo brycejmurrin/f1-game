@@ -319,7 +319,7 @@ const TLX = (function () {
             // gl.makeXRCompatible() when ENTER VR actually runs (three's
             // XRManager does the same before setSession).
             glCtx = canvas.getContext("webgl2", {
-              antialias: !isMobile,        // must agree with the renderer's own antialias
+              antialias: false,            // must agree with the renderer's own antialias (below)
               alpha: false,
               depth: true,
               stencil: false,
@@ -332,22 +332,21 @@ const TLX = (function () {
           alpha: false,
           premultipliedAlpha: false,
           ...(glCtx ? { context: glCtx } : {}),
-          // js/render/glx/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
-          // the context-level AA path". This is NOT the scene target's MSAA
-          // (msaa() below is honestly 1: the post chain deliberately has no
-          // multisampled scene target — see the DEVIATION note in tlx-post.js).
-          // three turns antialias:true into renderer.samples = 4, and samples
-          // applies to the DEFAULT CANVAS target: a 4x multisampled colour+depth
-          // store at the full backing-store size, resolved every frame. With the
-          // post chain up the canvas receives exactly one fullscreen FXAA quad,
-          // which has no interior edges for MSAA to find — so on a phone that is
-          // ~20 MB and a full-res resolve per frame bought for nothing, against
-          // the jetsam budget that made GLX write the same line. Desktop keeps it
-          // for the post-less fallback path (a broken post factory renders the
-          // world straight to the canvas, where the samples do work).
-          // Lite WebGPU (phone / WebKit / software): MSAA-4 resolve has come
-          // back blank (WGX forces 1).
-          antialias: forceWebGL ? !isMobile : !_liteGpu,
+          // The WebGL2 path matches js/render/glx/glx.js's context: NO canvas AA.
+          // This is NOT the scene target's MSAA (sceneSamples below carries the
+          // geometric AA, preset-driven like glx/post.js). three turns
+          // antialias:true into renderer.samples = 4, and samples applies to the
+          // DEFAULT CANVAS target: a 4x multisampled colour+depth store at the
+          // full backing-store size, resolved every frame. With the post chain
+          // up the canvas receives exactly one fullscreen FXAA quad, which has
+          // no interior edges for MSAA to find — 36 B/px (~75 MB at 1080p,
+          // ~190 MB at 2880x1800) and a full-res resolve per frame bought for
+          // nothing. The post-less fallback (a broken post factory renders the
+          // world straight to the canvas) goes without MSAA, exactly like GLX's.
+          // Native WebGPU keeps it (the scene target is single-sample there:
+          // core WebGPU cannot resolve depth). Lite WebGPU (phone / WebKit /
+          // software): MSAA-4 resolve has come back blank (WGX forces 1).
+          antialias: forceWebGL ? false : !_liteGpu,
           // WebKit #269582: a float swapchain crashed / painted black through
           // iOS 26.x. HDR stays in offscreen targets (tlx-post); only the
           // canvas format downgrades. Same as WGX_LITE → bgra8unorm.
@@ -369,7 +368,7 @@ const TLX = (function () {
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
-          try { if (typeof renderer.dispose === "function") renderer.dispose(); } catch (_) { /* best-effort */ }
+          try { disposeKeepingContext(renderer); } catch (_) { /* best-effort */ }
           throw e;
         }
         // three r185.1 WebGPUAttributeUtils creates every GPUBuffer with
@@ -1046,6 +1045,7 @@ const TLX = (function () {
       } catch (_) { chunks = null; }
 
       let post = null;
+      let _sceneSamples = 0;
       // WebXR Phase 0: set while an XRWebGLLayer is attached. Skips resize()
       // (three's setSize is a no-op under XRManager presenting; we likewise
       // must not fight the immersive layer's drawing-buffer size).
@@ -1056,14 +1056,15 @@ const TLX = (function () {
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
-              // SCENE MSAA (2026-10-01): 4 samples on the scene target on the
-              // desktop WebGL2 backend only — GLX's HIGH/ULTRA recipe. The
-              // WebGL backend resolves colour AND the depth texture by
+              // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
+              // GRAPHICS preset exactly like glx/post.js (4x on ULTRA, 2x
+              // below, clamped to what the HDR format supports). The WebGL
+              // backend resolves colour AND the depth texture by
               // blitFramebuffer (resolveDepthBuffer), so SSAO/SSR/godray read a
               // resolved depth. Phones keep the GLX mobile recipe (FXAA alone);
               // the native-WebGPU TLX path stays single-sample: core WebGPU
               // cannot resolve a depth attachment (docs/research/WEBGPU-PARITY.md).
-              sceneSamples: (forceWebGL && !isMobile) ? 4 : 0 });
+              sceneSamples: (_sceneSamples = sceneSamplesFor(renderer, forceWebGL, isMobile)) });
           if (post && !post.enabled()) {
             try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
             post = null;
@@ -2604,58 +2605,37 @@ const TLX = (function () {
       }
 
       /** Read the raw (un-colour-managed, un-premultiplied) pixels of each
-       * pack layer into `data` via a throwaway WebGL2 context — byte-parity
-       * with GLX's texSubImage3D upload; see createTextureArray for why a 2d
-       * canvas cannot do this. Falls back to the 2d round-trip only when
-       * WebGL2 itself is unavailable (better a colour-shifted pack than none).
-       * Returns the number of layers written. */
+       * pack layer into `data` through Assets.readLayerBytes (one scratch
+       * WebGL2 context, shared with WGX) — byte-parity with GLX's
+       * texSubImage3D upload; see createTextureArray for why a 2d canvas
+       * cannot do this. Falls back to the 2d round-trip only for layers the
+       * WebGL2 readback could not write (better a colour-shifted pack than
+       * none). Returns the number of layers written. */
       function readbackTextureLayers(size, images, n, data) {
-        let filled = 0;
         const page = size * size * 4;
-        const cv = (typeof OffscreenCanvas !== "undefined")
-          ? new OffscreenCanvas(size, size)
-          : Object.assign(document.createElement("canvas"), { width: size, height: size });
-        const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
-        if (gl) {
-          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-          gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-          const tex = gl.createTexture();
-          const fbo = gl.createFramebuffer();
-          gl.bindTexture(gl.TEXTURE_2D, tex);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-          for (let i = 0; i < n; i++) {
-            const img = images[i];
-            if (!img) continue;
-            try {
-              gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-              gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-              if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) continue;
-              gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE,
-                new Uint8Array(data.buffer, data.byteOffset + i * page, page));
-              filled++;
-            } catch (_) { /* one bad layer must not sink the pack (GLX parity) */ }
-          }
-          gl.deleteFramebuffer(fbo);
-          gl.deleteTexture(tex);
-          const lose = gl.getExtension("WEBGL_lose_context");
-          if (lose) { try { lose.loseContext(); } catch (_) {} }
-          if (filled) return filled;
-        }
-        const cv2 = (typeof OffscreenCanvas !== "undefined")
-          ? new OffscreenCanvas(size, size)
-          : Object.assign(document.createElement("canvas"), { width: size, height: size });
-        const c2d = cv2.getContext("2d", { willReadFrequently: true });
-        if (!c2d) return filled;
+        let done = [];
+        try {
+          if (typeof Assets !== "undefined" && Assets.readLayerBytes) done = Assets.readLayerBytes(size, images, n, data);
+        } catch (_) { done = []; }
+        let filled = done.length;
+        const have = new Set(done);
+        let c2d = null;
         for (let i = 0; i < n; i++) {
           const img = images[i];
-          if (!img) continue;
+          if (!img || have.has(i)) continue;
           try {
+            if (!c2d) {
+              const cv2 = (typeof OffscreenCanvas !== "undefined")
+                ? new OffscreenCanvas(size, size)
+                : Object.assign(document.createElement("canvas"), { width: size, height: size });
+              c2d = cv2.getContext("2d", { willReadFrequently: true });
+              if (!c2d) return filled;
+            }
             c2d.clearRect(0, 0, size, size);
             c2d.drawImage(img, 0, 0, size, size);
             data.set(c2d.getImageData(0, 0, size, size).data, i * page);
             filled++;
-          } catch (_) { /* ditto */ }
+          } catch (_) { /* one bad layer must not sink the pack (GLX parity) */ }
         }
         return filled;
       }
@@ -2933,7 +2913,7 @@ const TLX = (function () {
         get aspect() { return H ? W / H : 1; },
         hdrMode() { return !!(post && post.hdrOk()); },   // M8: float scene target when the chain is up
         maxLights: _maxLights,   // lit-shader light slots (16 on _liteGpu; LightBudget.slots() mirrors it)
-        msaa() { return 1; },
+        msaa() { return post && _sceneSamples > 1 ? _sceneSamples : 1; },
         pcss() { return !!(shadowSys && shadowSys.S.pcssEnabled); },   // WebGPU blocker map live (tlx-shadow.js)
         isMobile,
         mobileTier,
@@ -4709,11 +4689,64 @@ const TLX = (function () {
       try {
         if (_abortDisplay && _abortDisplay.parentNode) _abortDisplay.parentNode.removeChild(_abortDisplay);
       } catch (_) { /* already detached */ }
-      try {
-        if (_abortRenderer && typeof _abortRenderer.dispose === "function") _abortRenderer.dispose();
-      } catch (_) { /* three dispose best-effort */ }
+      try { disposeKeepingContext(_abortRenderer); } catch (_) { /* three dispose best-effort */ }
       return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
     }
+  }
+
+  // Dispose a three renderer WITHOUT losing the WebGL2 context it rendered to.
+  // r186 WebGLBackend.dispose() ends with WEBGL_lose_context.loseContext(), and
+  // on the forceWebGL path that context is #game's own (bootRenderer hands it
+  // to three): the GLX fallback that _fail() boots next calls
+  // getContext("webgl2") on the same canvas and gets the SAME object back,
+  // dead or about to die. Lost before GLX.init → link fails → claim-fail
+  // reload; lost after → GLX's webglcontextlost handler latches
+  // apex26.envProbeOff / perChunkOff for good and counts a reload strike.
+  // Neutering the extension lookup keeps the rest of the dispose (three frees
+  // its own buffers/textures/programs, so GLX inherits a clean context). If
+  // the lookup cannot be neutered, skip the dispose: a one-off leak of three's
+  // objects beats a lost context. The WebGPU backend has no loseContext.
+  function disposeKeepingContext(r) {
+    if (!r || typeof r.dispose !== "function") return;
+    const be = r.backend;
+    if (be && !be.isWebGPUBackend) {
+      const ext = be.extensions;
+      if (!ext || typeof ext.get !== "function") return;
+      const get = ext.get;
+      ext.get = function (name) { return name === "WEBGL_lose_context" ? null : get.apply(this, arguments); };
+    }
+    const p = r.dispose();
+    if (p && typeof p.catch === "function") p.catch(function () { /* best-effort */ });
+  }
+
+  // Scene-target MSAA for the three WebGL2 backend: glx/post.js's rule.
+  // Desktop only (phones: FXAA alone, the jetsam budget), 4x on GRAPHICS:
+  // ULTRA, 2x below, never more than the HDR colour format and DEPTH24 support
+  // (getInternalformatParameter — many GPUs render RGBA16F but not
+  // multisampled RGBA16F). Native WebGPU stays single-sample: core WebGPU
+  // cannot resolve a depth attachment.
+  function sceneSamplesFor(renderer, forceWebGL, isMobile) {
+    if (!forceWebGL || isMobile) return 0;
+    let s = 4;
+    try {
+      const gl = renderer && renderer.backend && renderer.backend.gl;
+      if (gl && typeof gl.getInternalformatParameter === "function") {
+        const hdr = !!(gl.getExtension("EXT_color_buffer_float") || gl.getExtension("EXT_color_buffer_half_float"));
+        const cs = gl.getInternalformatParameter(gl.RENDERBUFFER, hdr ? gl.RGBA16F : gl.RGBA8, gl.SAMPLES);
+        const ds = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, gl.SAMPLES);
+        s = Math.min(s, cs && cs.length ? cs[0] : 0, ds && ds.length ? ds[0] : 0);
+      }
+    } catch (_) { s = 0; }
+    // GameStore JSON-encodes apex26.gfxPreset ("\"ultra\""); a raw string
+    // (a probe's --ls) still compares. Unset = desktop HIGH → the cap.
+    let ultra = false;
+    try {
+      let p = localStorage.getItem("apex26.gfxPreset");
+      try { p = JSON.parse(p); } catch (_) { /* not JSON: compare the raw string */ }
+      ultra = p === "ultra" || (p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+    } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
+    if (!ultra && s > 2) s = 2;
+    return s < 2 ? 0 : s;
   }
 
   return { create, lastFailure: () => _lastFailure };

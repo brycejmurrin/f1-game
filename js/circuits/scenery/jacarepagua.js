@@ -9,7 +9,7 @@
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
         bush, ridge, mountain,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        floodMast, cameraTower, sponsorHoarding, palm, terrace,
+        floodMast, cameraTower, sponsorHoarding, palm, terrace, scaffoldStand,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
         addBox, addCyl, addCone, addPrism, addFrustum } = api;
 
@@ -348,6 +348,17 @@
         floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2, light: false });
       }
       cameraTower(K(0.205), -1, 24, { h: 15 });
+      // Back-half dressing (JAC-M3 keeps it furniture, not planting): the
+      // 0.11–0.34 and 0.65–0.85 legs were guardrail and restinga only.
+      // Green-and-gold braking boards into T3 and the final corner, the high
+      // cameras over T9 and the final corner, and a period tube-and-plank
+      // stand on the outside of T3's approach.
+      const VERDE = [[0.10, 0.44, 0.24], [0.94, 0.86, 0.20], [0.10, 0.22, 0.52], [0.92, 0.90, 0.88]];
+      sponsorHoarding(0.178, 0.198, -1, 8, { h: 1.3, step: 10, palette: VERDE });
+      sponsorHoarding(0.852, 0.872, -1, 8, { h: 1.3, step: 10, palette: VERDE });
+      cameraTower(K(0.640), 1, 30, { h: 14 });
+      cameraTower(K(0.860), 1, 28, { h: 14 });
+      scaffoldStand(0.170, 0.190, -1, 30);
       // JAC-M1: a readable Brazilian flag rank against Pedra Branca. Each flag
       // has a thin mast and three physically layered fabric panels (green
       // field, gold lozenge read, blue centre), avoiding coplanar colour cards.

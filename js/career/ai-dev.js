@@ -55,15 +55,32 @@ const CareerAiDev = (function () {
     return bag.fitted;
   }
 
+  /** The team's WORKS build read outside any era, as acceptOffer() does for the
+   *  player (career.js): under a ban getFactorySetup() resolves a banned works
+   *  part to its fallback, and seeding that into the bag lost the engine or
+   *  floor for good. The installed ruleset is put back exactly. */
+  function worksSetup(team) {
+    const key = Parts.legalityKey ? Parts.legalityKey() : "";
+    if (!key || !Parts.legality) return Parts.getFactorySetup(team);
+    const fn = Parts.legality();
+    Parts.setLegality(null, "");
+    try { return Parts.getFactorySetup(team); } finally { Parts.setLegality(fn, key); }
+  }
+
   function ensureSeed(career, team) {
     const bag = bagOf(career, team.id);
     if (bag.fitted) return bag;
-    const factory = Parts.getFactorySetup(team);
-    bag.fitted = Object.assign({}, factory);
-    for (const id of Object.values(factory)) {
+    const works = worksSetup(team);
+    bag.fitted = Object.assign({}, works);
+    for (const id of Object.values(works)) {
       if (bag.owned.indexOf(id) < 0) bag.owned.push(id);
     }
     return bag;
+  }
+
+  function optionOf(catId, id) {
+    const cat = Parts.CATALOG.find((c) => c.id === catId);
+    return cat ? cat.options.find((o) => o.id === id) || null : null;
   }
 
   /** One catalog step that raises summed mods and stays under `cap`. */
@@ -113,33 +130,65 @@ const CareerAiDev = (function () {
       const cap = teamCap(team, career);
       const step = pickStep(team, bag.fitted, cap);
       if (!step) continue;
+      // A step that replaces a part the era outlaws SHELVES it: the bag still
+      // owns it, and scrubFitted() puts it back once it is legal again.
+      const prev = bag.fitted[step.cat];
+      const prevOpt = prev != null ? optionOf(step.cat, prev) : null;
+      if (prevOpt && !Parts.isOptionAvailable(prevOpt, team)) {
+        if (!bag.shelved || typeof bag.shelved !== "object") bag.shelved = {};
+        if (bag.shelved[step.cat] == null) bag.shelved[step.cat] = prev;
+      }
       bag.fitted = step.trial;
       if (bag.owned.indexOf(step.id) < 0) bag.owned.push(step.id);
     }
   }
 
-  /** Drop fitted ids the current ruleset bans. The replacement is that
-   *  team's factory row for the category, and the banned id leaves `owned`
-   *  so a later winter cannot treat it as already paid for. */
+  /** Run after every applyRegs() at rollover. It never fits the ERA-RESOLVED
+   *  factory row and never drops a part from `owned`: the old scrub did both,
+   *  so a banned works engine or floor became the DEFAULT for the rest of the
+   *  career. Race-time resolution (Career.aiSetup → fittedOf →
+   *  Parts.resolveSetup → _resolve) already enforces the era every race, so a
+   *  banned id may stay fitted. Per category it touches only three cases:
+   *  the fitted id is banned, a banned id was shelved there, or a works id is
+   *  missing from `owned` (a pre-fix save's scar; seeding owns every works id).
+   *  Each fits the best-scoring LEGAL part the bag owns there when that beats
+   *  what is fitted, shelving a banned id it displaces — so the works part
+   *  returns the winter its era lapses. No ban, no shelf: a no-op. */
   function scrubFitted(career) {
     if (!career || !career.aiParts || typeof Parts === "undefined") return;
     for (const team of Teams.LIST) {
       if (!Teams.isReal || !Teams.isReal(team)) continue;
       const bag = career.aiParts[team.id];
       if (!bag || !bag.fitted || typeof bag.fitted !== "object") continue;
-      const factory = Parts.getFactorySetup(team);
+      if (!Array.isArray(bag.owned)) bag.owned = [];
+      const shelf = bag.shelved && typeof bag.shelved === "object" ? bag.shelved : {};
+      const works = worksSetup(team);
+      const legal = (o) => !!o && Parts.isOptionAvailable(o, team);
       for (const cat of Parts.CATALOG) {
-        const id = bag.fitted[cat.id];
-        if (id == null) continue;
-        const opt = cat.options.find((o) => o.id === id);
-        if (opt && Parts.isOptionAvailable(opt, team)) continue;
-        bag.fitted[cat.id] = factory[cat.id];
-        const oi = bag.owned ? bag.owned.indexOf(id) : -1;
-        if (oi >= 0) bag.owned.splice(oi, 1);
+        const w = works[cat.id];
+        const scar = w != null && bag.owned.indexOf(w) < 0;
+        if (scar) bag.owned.push(w);
+        const cur = bag.fitted[cat.id];
+        const curLegal = cur == null || legal(optionOf(cat.id, cur));
+        if (curLegal && shelf[cat.id] == null && !scar) continue;
+        let best = null;
+        let bestScore = scoreMods(Parts.getMods(bag.fitted, team)) + (curLegal ? 1e-9 : -1e-9);
+        for (const opt of cat.options) {
+          if (opt.id === cur || bag.owned.indexOf(opt.id) < 0 || !legal(opt)) continue;
+          const trial = Object.assign({}, bag.fitted, { [cat.id]: opt.id });
+          const sc = scoreMods(Parts.getMods(trial, team));
+          if (sc > bestScore) { best = trial; bestScore = sc; }
+        }
+        if (best) {
+          if (!curLegal && shelf[cat.id] == null) shelf[cat.id] = cur;
+          bag.fitted = best;
+        }
+        if (shelf[cat.id] != null && legal(optionOf(cat.id, shelf[cat.id]))) delete shelf[cat.id];
       }
+      if (Object.keys(shelf).length) bag.shelved = shelf; else delete bag.shelved;
     }
   }
 
-  return { developWinter, fittedOf, teamCap, pickStep, scoreMods, scrubFitted };
+  return { developWinter, fittedOf, teamCap, pickStep, scoreMods, scrubFitted, worksSetup };
 })();
 Object.freeze(CareerAiDev);

@@ -116,14 +116,37 @@ const WORKERS = Number.isFinite(REQUESTED_WORKERS) && REQUESTED_WORKERS > 0
   ? REQUESTED_WORKERS
   : (process.env.CI ? 2 : LOCAL_WORKERS);
 
+// DEFAULT DISCOVERY IS tests/specs/*.spec.js, AND NOTHING ELSE (2026-10-04).
+// testDir is "./tests" with Playwright's default testMatch
+// (`**/*.@(spec|test).?(c|m)[jt]s?(x)`), so every tests/unit/*.test.mjs (493
+// node:test files) was collected by a bare `npm test`; and the headless
+// project's own testIgnore REPLACED the top-level `**/manual/**`
+// (playwright/lib/common: takeFirst(project.testIgnore, config.testIgnore)), so
+// tests/manual/ was collected too. The match is now `specs/**` and the manual
+// ignore is repeated in EVERY project.
+//
+// testDir itself stays "./tests": junit classnames, titlePath() and the
+// reporter's spec keys are testDir-relative ("specs/x.spec.js"), and
+// junit-failed.mjs, spec-timings.mjs and the flaky quarantine all prefix
+// "tests/" to them — a testDir of tests/specs would re-key every one of them.
+//
+// tests/manual/ holds the suites a HUMAN runs on purpose (the per-circuit
+// blank scan and contact sheets, the gallery emitters): hundreds of
+// SwiftShader frames or images for review, gating nothing. They run by
+// explicit path (tests/manual/README.md), so a command line that names one
+// opts that run into manual discovery. The env var carries the decision to
+// Playwright's worker processes, which re-evaluate this file without the CLI
+// arguments.
+export const MANUAL_RUN = process.env.APEX_MANUAL_RUN === "1"
+  || process.argv.some((a) => /(^|[\\/])manual[\\/].+\.spec\.js/.test(a));
+if (MANUAL_RUN) process.env.APEX_MANUAL_RUN = "1";
+export const TEST_MATCH = MANUAL_RUN ? ["specs/**/*.spec.js", "manual/**/*.spec.js"] : ["specs/**/*.spec.js"];
+export const MANUAL_IGNORE = MANUAL_RUN ? [] : ["**/manual/**"];
+
 export default defineConfig({
   testDir: "./tests",
-  // tests/manual/ holds the suites a HUMAN runs on purpose: the per-circuit
-  // blank scan and contact sheets, and the gallery emitters. They render
-  // hundreds of SwiftShader frames or produce images for review, so they gate
-  // nothing and stay out of default discovery. Run them by explicit path
-  // (see tests/manual/README.md).
-  testIgnore: ["**/manual/**"],
+  testMatch: TEST_MATCH,
+  testIgnore: MANUAL_IGNORE,
   globalSetup: './tests/helpers/global-setup.js',
   fullyParallel: true,
   workers: WORKERS,
@@ -179,7 +202,8 @@ export default defineConfig({
       // Everything NOT in RENDER_SPECS / XR_SPECS. Run alone (fast) with:
       //   npx playwright test --project=headless --workers=8
       name: "headless",
-      testIgnore: [...RENDER_SPECS, ...XR_SPECS],
+      // A project's testIgnore REPLACES the top-level one: repeat the manual rule.
+      testIgnore: [...RENDER_SPECS, ...XR_SPECS, ...MANUAL_IGNORE],
       use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
     },
     {
@@ -187,6 +211,7 @@ export default defineConfig({
       // CPU thrash:  npx playwright test --project=render --workers=4
       name: "render",
       testMatch: RENDER_SPECS,
+      testIgnore: MANUAL_IGNORE,
       use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
     },
     {
@@ -194,6 +219,7 @@ export default defineConfig({
       // Quest GPU / multiview / foveation / XRGPUBinding need a headset.
       name: "xr-emulated",
       testMatch: XR_SPECS,
+      testIgnore: MANUAL_IGNORE,
       use: { ...devices["Desktop Chrome"], launchOptions: XR_LAUNCH },
     },
   ],

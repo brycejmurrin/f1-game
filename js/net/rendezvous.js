@@ -5,15 +5,19 @@ const NetRendezvous = (function () {
   // No 0/O, no 1/I/L — the characters people mishear and mistype.
   const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   const CODE_LEN = 6;
+  const PRIVATE_CODE_LEN = 32;   // 32 unbiased base-31 draws: >158 bits, shared out of band
+  const PRIVATE_PROTOCOL = "3";
 
   const DEFAULT_URL = "";
   const STORE_KEY = "apex26.rendezvous";
+  let sessionUrl;   // QR pairing can select a relay for this document, never another tab/device
 
   const POLL_MS = 1200;             // how often to ask if the other side arrived
   const POLL_TIMEOUT_MS = 120000;   // give up after two minutes — see the TTL
   const FETCH_TIMEOUT_MS = 8000;
 
   function baseUrl() {
+    if (sessionUrl !== undefined) return sessionUrl;
     let raw = DEFAULT_URL;
     try { raw = (localStorage.getItem(STORE_KEY) || "").trim() || DEFAULT_URL; } catch (e) { /* storage blocked (private mode): use the default */ }
     if (!raw) return null;
@@ -32,6 +36,21 @@ const NetRendezvous = (function () {
     } catch (e) { return false; }
   }
 
+  // The controller receives its host's relay URL in the QR fragment. Keep it
+  // local to this page and allow only secure endpoints (loopback HTTP for dev).
+  // null selects public signalling; undefined restores the saved preference.
+  function setSessionUrl(url) {
+    if (url == null) { sessionUrl = url === undefined ? undefined : null; return true; }
+    try {
+      const u = new URL(url);
+      const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+      if (u.username || u.password || u.search || u.hash ||
+          !(u.protocol === "https:" || (u.protocol === "http:" && loopback))) return false;
+      sessionUrl = u.href.replace(/\/+$/, "");
+      return true;
+    } catch (e) { return false; }
+  }
+
   // REJECTION SAMPLING, not `byte % 31`: 256 is not a multiple of 31, so the
   // modulo made the first 8 letters (2..9) 9/8 as likely as the rest — a
   // measurable bias in the only secret a room code has. Bytes at or above the
@@ -44,10 +63,13 @@ const NetRendezvous = (function () {
     return out;
   }
   function makeCode() {
+    const privateRelay = usingPrivateRelay();
+    if (privateRelay && (typeof crypto === "undefined" || !crypto.getRandomValues)) return null;
+    const length = privateRelay ? PRIVATE_CODE_LEN : CODE_LEN;
     let out = "";
-    while (out.length < CODE_LEN) {
-      const n = randomBytes(CODE_LEN * 2);
-      for (let i = 0; i < n.length && out.length < CODE_LEN; i++) {
+    while (out.length < length) {
+      const n = randomBytes(length * 2);
+      for (let i = 0; i < n.length && out.length < length; i++) {
         if (n[i] < RAND_LIMIT) out += ALPHABET[n[i] % ALPHABET.length];
       }
     }
@@ -62,10 +84,13 @@ const NetRendezvous = (function () {
       .replace(/O/g, "0").replace(/[IL]/g, "1");
   }
 
-  const valid = (code) => {
+  const validLength = (code, length) => {
     const c = normalise(code);
-    return c.length === CODE_LEN && [...c].every((ch) => ALPHABET.indexOf(ch) >= 0);
+    return c.length === length && [...c].every((ch) => ALPHABET.indexOf(ch) >= 0);
   };
+  const valid = (code) => validLength(code, usingPrivateRelay() ? PRIVATE_CODE_LEN : CODE_LEN);
+  const privateCodeError = () => ERR("bad_code", "Private rooms need a new 32-character token. Ask the host to share a new token, or use the invite link.");
+  const protocolError = () => ERR("relay_version", "Update the private room Worker and reload both players, or use the invite link. This relay uses an incompatible protocol.");
 
   const ERR = (error, message) => ({ ok: false, error, message });
   const enc = () => new TextEncoder();
@@ -85,6 +110,8 @@ const NetRendezvous = (function () {
         cache: "no-store",
         signal: ctrl ? ctrl.signal : undefined,
       }, opts));
+      const protocol = res.headers && res.headers.get("x-apex-rendezvous");
+      if (res.status === 426 || (res.status === 404 && protocol !== PRIVATE_PROTOCOL)) return protocolError();
       if (res.status === 404) return ERR("not_found", "Nobody is waiting on that code.");
       if (res.status === 409) return ERR("taken", "That code is already in use — make a new one.");
       if (res.status === 429) return ERR("rate_limited", "The room service is busy. Wait a minute or use the invite link.");
@@ -95,6 +122,7 @@ const NetRendezvous = (function () {
       // (which spends the poll's retries on it) — this network is intercepting.
       try { body = text ? JSON.parse(text) : null; }
       catch (e) { return ERR("relay", "The room service answered with something unexpected — this network may be intercepting it. Use the invite link instead."); }
+      if (protocol !== PRIVATE_PROTOCOL) return protocolError();
       return { ok: true, body };
     } catch (e) {
       const aborted = e && e.name === "AbortError";
@@ -152,8 +180,14 @@ const NetRendezvous = (function () {
   // THE PUBLIC TOPIC comes from the STRETCHED key, never from the code. The
   // Nostr `x` tag is plaintext on every relay (NIP-01): as a bare SHA-256 of
   // the code (one guess = one hash over ~30 bits) a reader of public traffic
-  // could recover a live code in minutes and open its envelopes. Each guess
-  // pays the 120 000-round PBKDF2 in keyFor().
+  // could recover a live code in minutes and open its envelopes. A guess now
+  // pays the 120 000-round PBKDF2 in keyFor() — BUT the salt is a constant, so
+  // that cost is paid ONCE for the whole 31^6 code space (~1e14 iterations: a
+  // GPU-day, then a lookup table for every future room), not once per room.
+  // Stretching slows a casual reader; it does not stop a determined one from
+  // opening an offer or posting an answer first. What does stop the attack
+  // that matters — someone sitting between the two players — is verifyCode()
+  // below, shown on both screens once connected.
   // PROTOCOL rides in the info string: a build on another protocol meets on a
   // different topic and never half-talks to this one (the handshake's build
   // check is the loud refusal once a link is up).
@@ -167,7 +201,51 @@ const NetRendezvous = (function () {
     return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
+  // Routing and encryption share only a high-entropy secret held by the peers.
+  // Sending that secret in /r/<code> handed the old Worker the AES key material.
+  // A six-character secret would still permit offline guessing of an opaque id.
+  async function privateRoomId(code) {
+    if (!validLength(code, PRIVATE_CODE_LEN)) throw new Error("private token required");
+    const bits = await crypto.subtle.deriveBits(
+      { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0),
+        info: enc().encode("apex26-rendezvous-private-v3/room") }, await keyFor(code), 256);
+    return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
   const aad = (slot) => enc().encode(String(slot || ""));
+
+  // THE VERIFICATION CODE: 4 letters from the room-code alphabet, derived from
+  // BOTH ends' DTLS fingerprints (sorted, so both screens compute the same
+  // string). The fingerprints are what DTLS actually authenticates, so a peer
+  // in the middle — one who opened the sealed offer with a precomputed code
+  // table and answered it himself — holds a different certificate on each leg,
+  // and the two screens show different codes. The room code is the rendezvous;
+  // this is the check that the person who arrived is the one you invited. The
+  // host compares it aloud and removes a guest whose code differs.
+  // 31^4 ≈ 9.2e5 values: a middleman must grind that many certificates INSIDE
+  // the connect window to collide, which is the bound the docs state.
+  const VERIFY_LEN = 4;
+  async function verifyCode(fpA, fpB) {
+    const norm = (f) => String(f || "").replace(/[^0-9a-f]/gi, "").toLowerCase();
+    const a = norm(fpA), b = norm(fpB);
+    if (!a || !b) return null;
+    const pair = a < b ? a + "|" + b : b + "|" + a;
+    const d = new Uint8Array(await crypto.subtle.digest("SHA-256",
+      enc().encode("apex26-verify-v1|" + pair)));
+    let out = "";
+    for (let i = 0; i < d.length && out.length < VERIFY_LEN; i++) {
+      if (d[i] < RAND_LIMIT) out += ALPHABET[d[i] % ALPHABET.length];   // unbiased, as makeCode()
+    }
+    return out.length === VERIFY_LEN ? out : null;
+  }
+  // From a CONNECTED RTCPeerConnection: our certificate and the one we saw.
+  // Never rejects; null for a loopback/fake transport with no descriptions.
+  async function verifyFor(pc) {
+    try {
+      const fp = (d) => (d && d.sdp && NetSdp.fingerprint ? NetSdp.fingerprint(d.sdp) : null);
+      return await verifyCode(fp(pc && pc.localDescription), fp(pc && pc.remoteDescription));
+    } catch (e) { return null; }
+  }
 
   async function seal(code, text, slot) {
     const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
@@ -224,9 +302,10 @@ const NetRendezvous = (function () {
   // you control beats a stranger's), the public Nostr relay pool otherwise —
   // which is the default, and the reason room codes need nothing deployed.
   async function httpPut(code, slot, payload, owner) {
+    if (!validLength(code, PRIVATE_CODE_LEN)) return privateCodeError();
     try {
       const sealed = await sealPrivate(code, slot, payload);
-      return call(`/r/${normalise(code)}/${slot}`, {
+      return call(`/v3/r/${await privateRoomId(code)}/${slot}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ payload: sealed, ...(owner ? { owner } : {}) }),
@@ -237,7 +316,11 @@ const NetRendezvous = (function () {
   }
 
   async function httpGet(code, slot) {
-    const got = await call(`/r/${normalise(code)}/${slot}`, { method: "GET" });
+    if (!validLength(code, PRIVATE_CODE_LEN)) return privateCodeError();
+    let room;
+    try { room = await privateRoomId(code); }
+    catch (e) { return ERR("crypto", "This browser could not protect the room token. Use the invite link instead."); }
+    const got = await call(`/v3/r/${room}/${slot}`, { method: "GET" });
     if (!got.ok) return got;
     const payload = got.body && await openPrivate(code, slot, got.body.payload);
     if (!payload) return ERR("corrupt", "The room service returned an unreadable code. Use the invite link instead.");
@@ -337,9 +420,9 @@ const NetRendezvous = (function () {
   }
 
   return {
-    ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, PROTOCOL, topic, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
-    configured, usingPrivateRelay, setUrl, baseUrl, swap, hostRoom,
-    seal, open, sealPrivate, openPrivate,
+    ALPHABET, CODE_LEN, PRIVATE_CODE_LEN, POLL_TIMEOUT_MS, PROTOCOL, topic, privateRoomId, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
+    configured, usingPrivateRelay, setUrl, setSessionUrl, baseUrl, swap, hostRoom,
+    seal, open, sealPrivate, openPrivate, verifyCode, verifyFor, VERIFY_LEN,
     makeCode, normalise, valid,
     put, get: httpGet, waitFor,
   };
