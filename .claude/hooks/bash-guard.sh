@@ -8,6 +8,12 @@
 #    APEX_SKIP_GUARDS=1 only when the guards themselves are what you are fixing.
 #    Before the guards, `ratchets.mjs --auto-raise` absorbs ≤ 40 lines of growth
 #    in a ratcheted file into the commit (the raise is staged and printed).
+#    Every shape of commit is seen (shellparse.py: `git -c k=v`, `--no-pager`,
+#    `bash -c`, `env`/VAR= prefixes, an absolute git path), a pathspec counts as
+#    committed content, and a commit whose tracked files differ between the
+#    index and the working tree is refused — the guards read the working tree,
+#    so they must agree with what is committed. APEX_GUARD_PROBE=1 (hook env,
+#    tests only) stops after the classification.
 #  §Verification 6/7 — a test-bg run is stopped with `test-bg.mjs --stop`,
 #    never by PID; `pkill -f` / `killall` against chrome, node or playwright
 #    matches your own shell and orphans browsers. Kill orphan Chrome by a
@@ -191,9 +197,41 @@ except Exception:
 fi
 
 # --- guards before git commit ---------------------------------------------------
-if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+commit([[:space:]]|$)' \
-   && ! printf '%s' "$CMD" | grep -Eq -- '--dry-run|APEX_SKIP_GUARDS=1'; then
-  if [ ! -d "$ROOT/node_modules" ]; then
+# WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
+# `git( -C dir)? commit` on the raw text, so `git -c k=v commit`, `git
+# --no-pager commit`, `bash -c "git commit"`, `env X=1 git commit`,
+# `GIT_AUTHOR_NAME=x git commit` and `/usr/bin/git commit` all committed with
+# no guard run. shellparse.py tokenises the command as the shell will
+# (quotes, heredoc bodies, wrappers, `sh -c` bodies, VAR=value prefixes) and
+# returns every `git … commit` with its -a / pathspec / --dry-run reading. An
+# unparseable command (unbalanced quote) falls back to a broad regex on SCAN.
+HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
+COMMIT_JSON=$(printf '%s' "$CMD" | python3 "$HOOKDIR/shellparse.py" commit 2>/dev/null)
+if [ -z "$COMMIT_JSON" ] || [ "$COMMIT_JSON" = "null" ]; then
+  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|\$)"; then
+    COMMIT_JSON='[{"all":true,"paths":[],"include":false,"dry":false,"skip":false,"gitdir":null}]'
+  else
+    COMMIT_JSON='[]'
+  fi
+fi
+# One line: RUN ALL GITDIR PATHS… — RUN=1 when any commit is real (not
+# --dry-run), ALL=1 when any is -a/--all, PATHS the union of pathspecs.
+read -r C_RUN C_ALL C_GITDIR C_PATHS <<EOF
+$(printf '%s' "$COMMIT_JSON" | python3 -c '
+import json,sys
+c=[x for x in json.load(sys.stdin) if not x.get("dry") and not x.get("skip")]
+paths=sorted({p for x in c for p in x.get("paths") or []})
+gd=next((x["gitdir"] for x in c if x.get("gitdir")), "") or "-"
+print("1" if c else "0", "1" if any(x.get("all") for x in c) else "0", gd, " ".join(paths))
+' 2>/dev/null)
+EOF
+if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUARDS=1'; then
+  # `git -C <dir> commit` commits in <dir>'s tree, not the hook's cwd.
+  if [ -n "$C_GITDIR" ] && [ "$C_GITDIR" != "-" ]; then
+    R2="$(git -C "$C_GITDIR" rev-parse --show-toplevel 2>/dev/null || true)"
+    [ -n "$R2" ] && ROOT="$R2"
+  fi
+  if [ -z "${APEX_GUARD_PROBE:-}" ] && [ ! -d "$ROOT/node_modules" ]; then
     echo "BLOCKED: node_modules is missing, so 'npm run test:guards' cannot run before this commit. Run the SessionStart install (bash tools/env/cloud-agent-install.sh) first." >&2
     exit 2
   fi
@@ -209,10 +247,17 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:spa
   # on the command line, stages at commit time, and nothing staged must never
   # read as "nothing to check").
   STAGED=$(cd "$ROOT" && git diff --cached --name-only 2>/dev/null)
+  # A PATHSPEC COMMITS WHAT IT NAMES (2026-10-04): `git commit docs/a.md
+  # js/game.js` with only docs/a.md staged used to take the docs-only path
+  # and commit js/game.js unguarded. The named paths join the set judged.
+  COMMITTED="$STAGED"
+  for p in $C_PATHS; do COMMITTED="$COMMITTED
+$p"; done
   GENERATED_DOCS=$(cd "$ROOT" && node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ')
   [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md docs/notes/PREPUSH-GATE-LADDER.md"
   DOCS_ONLY=0
-  if [ -n "$STAGED" ] && ! printf '%s' "$CMD" | grep -Eq -- '(^|[[:space:]])-[a-zA-Z]*a|--all'; then
+  # `--all` / -a stage at commit time: the index is not what will be committed.
+  if [ -n "$STAGED$C_PATHS" ] && [ "$C_ALL" != "1" ]; then
     DOCS_ONLY=1
     while IFS= read -r f; do
       [ -z "$f" ] && continue
@@ -224,8 +269,11 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:spa
       esac
       printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
     done <<EOF
-$STAGED
+$COMMITTED
 EOF
+  fi
+  if [ -n "${APEX_GUARD_PROBE:-}" ] && [ "$DOCS_ONLY" = 1 ]; then
+    echo "bash-guard probe: commit docs-only" >&2; exit 0
   fi
   if [ "$DOCS_ONLY" = 1 ]; then
     if ! (cd "$ROOT" && node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1); then
@@ -236,6 +284,36 @@ EOF
     echo "docs-only commit: ran docs-integrity only (no ratchet raise, no test:guards)." >&2
     exit 0
   fi
+  # THE GUARDS MEASURE THE WORKING TREE; THE COMMIT IS THE INDEX (2026-10-04).
+  # A tracked file whose working copy differs from what is staged makes the
+  # verdict about content this commit does not carry — green on an unstaged
+  # fix while the staged half is red, or the reverse. Stash-free: the
+  # `git diff` (worktree vs index) names are compared with what is committed,
+  # and the commit is refused until they agree. `-a` stages everything, and a
+  # pathspec commits its paths from the working tree, so neither counts; the
+  # synced auto-memory under .claude/memory/ never reaches a guard.
+  if [ "$C_ALL" != "1" ]; then
+    UNSTAGED=$(cd "$ROOT" && git diff --name-only 2>/dev/null | while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      case "$f" in .claude/memory/*) continue ;; esac
+      covered=0
+      for p in $C_PATHS; do
+        p="${p%/}"; case "$f" in "$p"|"$p"/*) covered=1 ;; esac
+        [ "$p" = "." ] && covered=1
+      done
+      [ "$covered" = 1 ] || printf '%s\n' "$f"
+    done)
+    if [ -n "$UNSTAGED" ]; then
+      N=$(printf '%s\n' "$UNSTAGED" | grep -c .)
+      echo "BLOCKED: the guards measure the working tree, but $N tracked file(s) differ from what this commit holds (unstaged changes):" >&2
+      printf '%s\n' "$UNSTAGED" | head -10 | sed 's/^/  /' >&2
+      echo "Stage them (git add), commit with -a, or set them aside (git stash push -- <paths>), then commit again — so the guard verdict is about this commit. APEX_SKIP_GUARDS=1 bypasses when that is deliberate." >&2
+      exit 2
+    fi
+  fi
+  if [ -n "${APEX_GUARD_PROBE:-}" ]; then
+    echo "bash-guard probe: commit code paths=${C_PATHS:-}" >&2; exit 0
+  fi
   # Size ratchets first (tools/check/ratchets.mjs --auto-raise): growth of up
   # to 40 lines in a ratcheted file raises its ceiling and STAGES
   # tests/data/ratchets.json, so the raise is in this commit's diff instead of
@@ -245,6 +323,12 @@ EOF
     if grep -q '^RAISED\|^LOWERED' "$RLOG"; then
       (cd "$ROOT" && git add tests/data/ratchets.json) || true
       grep '^RAISED\|^LOWERED' "$RLOG" >&2
+      # A pathspec commit (--only, git's default with paths) commits ONLY the
+      # named paths, so the staged raise would be left behind.
+      if [ -n "$C_PATHS" ] && ! printf ' %s ' "$C_PATHS" | grep -q ' tests/data/ratchets.json \| tests/data/ \| tests/ \| \. '; then
+        echo "BLOCKED: the ratchet raise above is staged, but this pathspec commit carries only the paths it names. Add tests/data/ratchets.json to the command (or commit without a pathspec)." >&2
+        exit 2
+      fi
     fi
   else
     echo "BLOCKED: a size ratchet is over its ceiling by more than the auto-raise allows ($RLOG):" >&2

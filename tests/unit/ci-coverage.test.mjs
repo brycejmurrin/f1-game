@@ -10,6 +10,7 @@ import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import vm from "node:vm";
+import { parse as parseYAML } from "yaml";
 import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
 // DERIVED, never re-typed. This file was the FIFTH place the selected gate's
 // per-test timeout appeared as a literal, and raising it 120 -> 180 s reddened
@@ -317,6 +318,42 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   for (const j of ["guards", "unit-plan", "node-suites", "smoke", "selected", "baseline-trial", "poke-train"]) {
     assert.match(body, new RegExp(`- ${j}\\b`), `ci-verdict must need ${j}`);
   }
+  // 2026-10-04: CI needed `selected` and not `selected-verdict`, so a plan
+  // that dropped every routed spec (selected skipped) passed CI while the
+  // verdict failed. Requiring only `CI` would have lost that rule.
+  assert.match(body, /^      - selected-verdict$/m, "ci-verdict must need selected-verdict");
+  // Every job a required check names must feed CI, so requiring CI alone
+  // loses no rule (the API showed 12 fast-tier names on 2026-10-04).
+  const parsed = parseYAML(ciWorkflow);
+  const needs = new Set(parsed.jobs["ci-verdict"].needs);
+  for (const [id, job] of Object.entries(parsed.jobs)) {
+    if (id === "ci-verdict") continue;
+    assert.ok(needs.has(id), `job ${id} (${job.name || id}) does not feed CI — a red there would pass the required check`);
+  }
+});
+
+test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once per run", () => {
+  const job = parseYAML(ciWorkflow).jobs["selected-verdict"];
+  const script = job.steps.map((st) => st.run || "").join("\n");
+  // The dropped test sits OUTSIDE the `selected` case: a plan that ran one
+  // spec and named forty as unaffordable used to be green.
+  assert.match(script, /if \[ "\$\{DROPPED:-0\}" != "0" \]; then/);
+  assert.match(script, /exit 1\n\s*fi\n\s*elif \[ "\$SELECTED" = "skipped" \]/,
+    "dropped > 0 off the train must exit 1 whatever `selected` did");
+  assert.match(script, /CALLED" = "true"/, "the train still only warns");
+  const uses = job.steps.map((st) => st.uses || "").join("\n");
+  assert.match(uses, /actions\/download-artifact@[0-9a-f]{40}/, "pinned by SHA like every other action");
+  assert.match(uses, /actions\/cache\/save@/);
+  assert.ok(job.steps.filter((st) => st.uses || /junit-failed/.test(st.run || ""))
+    .every((st) => st["continue-on-error"] === true), "the carry-forward is reporting: it may never decide the verdict");
+  // …and no `selected` shard saves it any more (one key per run, one writer).
+  const selected = parseYAML(ciWorkflow).jobs.selected;
+  assert.ok(!selected.steps.some((st) => /cache\/save/.test(st.uses || "")), "a shard must not race for the carry-forward key");
+  const names = selected.steps.map((st) => st.with?.name || "").filter(Boolean);
+  assert.ok(names.length >= 2 && names.every((n) => n.includes("${{ strategy.job-index }}")),
+    `every selected artifact name carries the job index: ${names.join(", ")}`);
+  // The poke must not outrun a dropped-spec red.
+  assert.match(parseYAML(ciWorkflow).jobs["poke-train"].if, /&& needs\.select\.outputs\.dropped == '0' \}\}$/);
 });
 
 test("unit-plan feeds the node-suites matrix and can skip unused slices", () => {
@@ -1384,15 +1421,17 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   assert.match(job, /^    if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
     "!cancelled(): a skipped `selected` must still be judged, but a cancelled run (a draft's run superseded by ready_for_review, #510) has no verdict; the events are select's own");
   assert.doesNotMatch(job, /^    if: \$\{\{ always\(\)/m, "always() turned a superseded run's cancelled `selected` into a red verdict");
-  // The reading: select must pass; selected passes, or is skipped with nothing dropped.
+  // The reading: select must pass; selected passes or is skipped; and (since
+  // 2026-10-04) ANY dropped routed spec is a red off the train, whether or not
+  // `selected` ran — the dropped-count used to be read only on a skip.
   assert.match(job, /SELECT: \$\{\{ needs\.select\.result \}\}/);
   assert.match(job, /SELECTED: \$\{\{ needs\.selected\.result \}\}/);
   assert.match(job, /DROPPED: \$\{\{ needs\.select\.outputs\.dropped \}\}/);
   assert.match(job, /success\) ;;\n\s+\*\) echo "::error::the selection itself did not pass/);
-  assert.match(job, /skipped\)\n\s+if \[ "\$\{DROPPED:-0\}" = "0" \]; then/, "an empty plan with nothing dropped is a pass");
-  assert.match(job, /elif \[ "\$CALLED" = "true" \]; then echo "::warning::/, "on the train an unaffordable plan warns");
-  assert.match(job, /else echo "::error::the plan is empty because \$\{DROPPED\} routed spec\(s\) were unaffordable[^\n]*; exit 1/,
-    "on a push or PR an unaffordable plan is a red — the renderer case that poked a train with no backend booted");
+  assert.match(job, /if \[ "\$CALLED" = "true" \]; then\n\s+echo "::warning::/, "on the train an unaffordable plan warns");
+  assert.match(job, /echo "::error::the plan dropped \$\{DROPPED\} routed spec\(s\)[^\n]*\n\s+exit 1/,
+    "on a push or PR a dropped spec is a red — the renderer case that poked a train with no backend booted, and the 41 routed specs that never ran");
+  assert.match(job, /elif \[ "\$SELECTED" = "skipped" \]; then\n\s+echo "nothing this diff touches has a spec/, "an empty plan with nothing dropped is a pass");
   assert.match(job, /\*\) echo "::error::selected specs \$SELECTED"; exit 1 ;;/);
   // It joins the Pages aggregate like every other job (no needs on the renderer chain).
   const verdict = report.jobs.find((j) => j.name === "selected-verdict");
