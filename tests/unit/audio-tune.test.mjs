@@ -261,15 +261,14 @@ test("a fresh engine carries the shipped voice, and an identity trim reduces to 
     pitch: 0.85, revRange: 1.3, detune: 0, sub: 0.25, limiter: 2.25, limRate: 0.8, limPitch: 0, whine: 0.5,
   }), "the shipped ENGINE voice");
   A.setTune(TUNE_IDENTITY);
-  // The pre-tune formula, verbatim from the commit that introduced the trim.
-  // IDLE and CURVE at 1 must reduce the four-knob curve to exactly this.
-  const LOW = [0.6, 0.72, 0.84];   // LOW_GEAR_RATE, engine.js
+  // The pre-tune formula: IDLE and CURVE at 1 must reduce the four-knob curve
+  // to exactly this. No gear term since 2026-10-04 (LOW_GEAR_RATE removed, the
+  // base retuned to 0.17 + 0.5115 rev so the shipped limiter did not move).
   for (const gear of [1, 2, 3, 4, 6, 8]) {
     for (const rev of REVS) {
       for (const b of [0, 1]) {
         A.setEngine(rev, b, false, 0.6, gear, {});
-        const gmul = gear <= 3 ? LOW[gear - 1] : 1.0;
-        const want = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul * 1.0;
+        const want = (0.17 + rev * 0.5115) * (1 + 0.04 * b) * 1.0;
         assert.ok(Math.abs(A.rate() - want) < 1e-4,
           `gear ${gear} rev ${rev} boost ${b}: ${A.rate()} != ${want.toFixed(4)}`);
       }
@@ -305,11 +304,16 @@ test("pitch stays monotonic in rev under EVERY profile and at both ends of every
         prev = r;
       }
     }
-    // gear ordering at redline: a low gear must still read lower than a high one
-    A.setEngine(1, 0, false, 0.6, 1, {});
-    const g1 = A.rate();
-    A.setEngine(1, 0, false, 0.6, 4, {});
-    assert.ok(g1 < A.rate(), `${label}: gear 1 no longer reads below gear 4 at redline`);
+    // The same rpm is the same note in every gear: the gearbox reaches the
+    // pitch only through the rpm it hands the engine (game.js rpmFor).
+    for (const rev of [0, 0.5, 1]) {
+      A.setEngine(rev, 0, false, 0.6, 4, {});
+      const g4 = A.rate();
+      for (const gear of [1, 2, 3, 8]) {
+        A.setEngine(rev, 0, false, 0.6, gear, {});
+        assert.ok(Math.abs(A.rate() - g4) < 1e-9, `${label}: rev ${rev} reads ${A.rate()} in gear ${gear} but ${g4} in 4th`);
+      }
+    }
   }
 });
 
@@ -504,10 +508,16 @@ test("DETUNE lands on the sample core's own detune param", async () => {
   A.setTune({ detune: 3 });          // +60 cents on the "default" voice
   assert.ok(Math.abs(A.detuneCents() - (neutral + 60)) < 1e-6,
     `detune 3 should sit 60 cents above neutral, got ${A.detuneCents()} vs ${neutral}`);
-  A.setTune({ detune: 0 });          // -30 cents
-  assert.ok(Math.abs(A.detuneCents() - (neutral - 30)) < 1e-6,
-    `detune 0 should sit 30 cents below neutral, got ${A.detuneCents()}`);
+  // 0 is "chorus off" (the shipped value). On the one-source sample core it
+  // was a 30-cent-flat transposition of every TEAM voice; now 0..1 is no
+  // offset at all.
+  A.setTune({ detune: 0 });
+  assert.ok(Math.abs(A.detuneCents() - neutral) < 1e-6,
+    `detune 0 must not transpose the sample core, got ${A.detuneCents()} vs ${neutral}`);
+  A.setTune({ detune: 0.5 });
+  assert.ok(Math.abs(A.detuneCents() - neutral) < 1e-6, "anywhere in 0..1 is no offset on the sample core");
   // A FINE trim: an order of magnitude under what PITCH spans.
+  A.setTune({ detune: 3 });
   assert.ok(Math.abs(Math.pow(2, (A.detuneCents() - neutral) / 1200) - 1) < 0.05,
     "detune must stay a fine trim, not a second pitch control");
 });
@@ -857,6 +867,101 @@ test("four fallback voices are four cars as well", () => {
   A.setRivals([0, 1, 2, 3].map((i) => ({ lat: 0, arc: 4 + i * 4, rev: 0.6, approach: 0 })));
   const hz = A.rivalState().map((v) => v.hz);
   assert.equal(new Set(hz).size, 4, `four fallback voices share a pitch: ${hz.join(", ")}`);
+});
+
+test("a voice stays with its car when two rivals swap places", async () => {
+  // js/audio/rivals.js binds each car to a voice (row.slot) for as long as it
+  // stays in the voiced set. setRivals must play a row on ITS voice, not on
+  // the voice of its rank: a rank swap used to glide the two pans across each
+  // other and jump each note by the slot-detune delta.
+  const A = await sampleEngine();
+  const left = { lat: -4, arc: 6, rev: 0.6, approach: 0, slot: 0 };
+  const right = { lat: 4, arc: 8, rev: 0.6, approach: 0, slot: 1 };
+  A.setRivals([left, right]);
+  const before = A.rivalState();
+  right.arc = 5;   // the right-hand car is now nearer: the list is re-sorted
+  A.setRivals([right, left]);
+  const after = A.rivalState();
+  assert.ok(before[0].pan < 0 && after[0].pan < 0, "voice 0 is still the car on your left");
+  assert.ok(before[1].pan > 0 && after[1].pan > 0, "voice 1 is still the car on your right");
+  assert.equal(after[0].rate, before[0].rate, "and neither note moved: same car, same rev, same detune");
+  assert.equal(after[1].rate, before[1].rate);
+  assert.equal(after[2].gain, 0, "the unbound voices stay silent");
+});
+
+test("the same rpm is the same note in every gear, and upshift drops shrink up the box", async () => {
+  // LOW_GEAR_RATE (0.60/0.72/0.84 on gears 1-3) put the 15 000 rpm limiter 884
+  // cents lower in 1st than in 4th and made the 3->4 drop (-369 c) smaller than
+  // 4->5 (-603 c). The shipped voice now pitches by rpm alone.
+  const A = await sampleEngine();
+  const GEAR_TOP = [0.095, 0.16, 0.25, 0.36, 0.50, 0.66, 0.83, 1.0];   // js/physics/consts.js
+  const IDLE = 5000, MAX = 15000;                                       // ditto
+  const rate = (rev, gear) => { A.setEngine(rev, 0, false, 0.6, gear, {}); return A.rate(); };
+  const drops = [];
+  for (let g = 1; g < 8; g++) {
+    const rpm = Math.max(IDLE, MAX * GEAR_TOP[g - 1] / GEAR_TOP[g]);   // game.js rpmFor right after the shift
+    drops.push(1200 * Math.log2(rate((rpm - IDLE) / (MAX - IDLE), g + 1) / rate(1, g)));
+  }
+  for (let i = 1; i < drops.length; i++)
+    assert.ok(Math.abs(drops[i]) < Math.abs(drops[i - 1]), `upshift drops must shrink: ${drops.map(Math.round).join(" ")}`);
+  // The range barely moved: the top-gear limiter is where the shipped voice had
+  // it (0.7097), and the idle lies between the old 1st-gear idle (0.1275) and
+  // the old 4th-and-up idle (0.2125).
+  assert.ok(Math.abs(rate(1, 8) - 0.7097) < 0.001, `top-gear limiter moved to ${rate(1, 8)}`);
+  for (const g of [1, 4, 8])
+    assert.ok(rate(0, g) > 0.1275 && rate(0, g) < 0.2125, `idle in gear ${g} is ${rate(0, g)}`);
+});
+
+test("the shipped detune 0 leaves the sample core at the voice's own cents", async () => {
+  const A = await sampleEngine();
+  assert.equal(A.tune().detune, 0, "precondition: the shipped voice has detune off");
+  assert.equal(A.detuneCents(), 0, "the default voice is 0 cents, not 30 flat");
+});
+
+test("mute, the SFX bus and the music level glide instead of stepping", async () => {
+  // A `.value =` write is a step mid-waveform: a click on the mute button and a
+  // zipper on a dragged slider. Each must cancel what is in flight and aim with
+  // setTargetAtTime (tau ~20 ms).
+  const { GameAudio: A, release, ctx } = boot();
+  const gains = [];
+  const mk = ctx.createGain;
+  ctx.createGain = () => { const n = mk(); gains.push(n); return n; };
+  A.init();
+  A.startMusic();
+  await release();
+  const [master, sfxBus] = gains;   // created first, in that order (engine.js createCtx)
+  const glided = (p, v, what) => {
+    assert.equal(p.lastMethod, "target", `${what}: a setTargetAtTime, not a direct write`);
+    assert.ok(p.cancels > 0, `${what}: the in-flight glide is cancelled first`);
+    assert.ok(Math.abs(p.value - v) < 1e-9, `${what}: aimed at ${v}, got ${p.value}`);
+  };
+  A.setEnabled(false); glided(master.gain, 0, "master mute");
+  A.setEnabled(true); glided(master.gain, 0.8, "master unmute");
+  A.setSfxVolume(0.4); glided(sfxBus.gain, 0.4, "sfx volume");
+  A.setSfxEnabled(false); glided(sfxBus.gain, 0, "sfx off");
+  A.setSfxEnabled(true);
+  const music = gains.find((g) => g !== master && g !== sfxBus && g.gain.value === 0.5 * 0.52);
+  assert.ok(music, "precondition: the music gain exists at its default level");
+  A.setMusicVolume(0.25); glided(music.gain, 0.25 * 0.52, "music volume");
+});
+
+test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
+  const { GameAudio: A, release, ctx } = boot();
+  const nodes = [];
+  for (const k of ["createGain", "createBiquadFilter"]) {
+    const mk = ctx[k];
+    ctx[k] = () => { const n = mk(); nodes.push(n); return n; };
+  }
+  A.init(); await release(); A.startEngine();
+  A.setSkid(0.7, false);
+  const gain = nodes.find((n) => n.kind === "gain" && n.gain.value > 0 && Math.abs(n.gain.value - A.skidLevel()) < 1e-12);
+  assert.ok(gain, "precondition: the skid gain is found");
+  assert.equal(gain.gain.lastMethod, "target", "the slide level is a glide, not a stepped .value");
+  const filt = nodes.find((n) => n.kind === "biquad" && n.frequency.lastMethod === "target" && n.frequency.value > 700 && n.frequency.value < 1200);
+  assert.ok(filt, "the screech filter centre is a glide too");
+  A.setSkid(0, false);
+  assert.equal(A.skidLevel(), 0, "releasing the slide still aims at an exact 0");
+  assert.equal(gain.gain.lastMethod, "target");
 });
 
 test("pausing and resuming does not strand nodes that keep rendering", async () => {
@@ -1603,8 +1708,9 @@ async function runAudioProbe(pageErrorBrowser = 0) {
           }
           const rate = {}, cen = {};
           for (let gear = 1; gear <= 8; gear++) {
-            const trim = gear <= 3 ? 0.5 + gear * 0.1 : 1;
-            rate[gear] = values.map((rev) => (1 + rev) * trim);
+            // Healthy = pitch by rev alone, the same in every gear (engine.js
+            // RATE_IDLE / RATE_SPAN; there is no low-gear multiplier any more).
+            rate[gear] = values.map((rev) => 1 + rev);
             cen[gear] = values.map((rev) => 200 + rev * 100);
           }
           return { rate, cen, boostOff: 1, boostOn: 1.04,

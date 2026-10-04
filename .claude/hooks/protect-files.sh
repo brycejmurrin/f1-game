@@ -1,5 +1,6 @@
 #!/bin/bash
-# PreToolUse guard for Write/Edit/MultiEdit/NotebookEdit. Three rules from
+# PreToolUse guard for Write/Edit/MultiEdit/NotebookEdit AND Bash (the files a
+# command writes, read by shellparse.py — 2026-10-04). Three rules from
 # AGENTS.md that prose could only request, made deterministic:
 #
 #  1. §Verification 11 — a GENERATED file is never hand-edited, in any

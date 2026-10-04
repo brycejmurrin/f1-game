@@ -27,7 +27,7 @@ if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.crea
 })();
 
 
-let hapRepaintWired = false;   // the gamepadconnected repaint is wired once
+let hapRepaintWired = false;   // device capability repaint is wired once
 let trigHapWired = false;      // TRIGGER HAPTICS row paint + gamepadconnected
 const SLIDER_MIN = 1, SLIDER_MAX = 10;
 const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
@@ -617,10 +617,11 @@ function applySteerTuning() {
     hapItem.hidden = !Input.hapticsSupported();
     if (!hapRepaintWired && typeof window.addEventListener === "function") {
       hapRepaintWired = true;
-      window.addEventListener("gamepadconnected", () => {
+      const repaintHaptics = () => {
         hapItem.hidden = !Input.hapticsSupported();
         paintTriggerHapRow();
-      });
+      };
+      for (const event of ["gamepadconnected", "gamepaddisconnected", "apexhapticschange"]) window.addEventListener(event, repaintHaptics);
     }
   }
   paintTriggerHapRow();

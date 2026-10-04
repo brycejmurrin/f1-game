@@ -97,6 +97,7 @@ jobs:
   # Push requests read .github/gpu-census-request.json from THIS commit.
   plan:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       images: ${{ steps.split.outputs.images }}
       track: ${{ steps.split.outputs.track }}

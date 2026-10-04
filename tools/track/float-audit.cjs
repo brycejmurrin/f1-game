@@ -697,6 +697,14 @@ this ranked list as a lead at most.`);
 if (args[0] === "--all") {
   const { Tracks } = buildContext();
   const ids = require("../lib/circuit-scope.cjs").scope(Tracks.LIST.map((d) => d.id));   // APEX_CIRCUITS narrows --all
+  // THE SAME CAPS AS THE GATE. tests/unit/scenery-grounding.test.mjs holds each
+  // circuit at tools/track/float-baseline.json, and the caps are where the
+  // known-legitimate flags live (Madrid's and Mexico's airliners in flight —
+  // a plane rests on nothing). Exiting 1 on those made `npm run test:float`
+  // red on a clean tree; now it fails only where the gate would: a count
+  // over its cap, or any floating cluster on a circuit with no entry.
+  const caps = JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "track", "float-baseline.json"), "utf8"));
+  const over = (res) => res.floating.length > (caps[res.id] || 0);
   const out = [];
   let bad = 0;
   for (const id of ids) {
@@ -704,7 +712,7 @@ if (args[0] === "--all") {
       const res = audit(id);
       out.push(res);
       if (!asJson) printOne(res, topN);
-      if (res.floating.length) bad++;
+      if (over(res)) bad++;
     } catch (e) {
       console.error(`FAIL ${id}: ${e.message}`);
       bad++;
@@ -716,8 +724,9 @@ if (args[0] === "--all") {
     const dirty = out.filter((o) => o.floating.length);
     console.log(dirty.length
       ? `${dirty.length}/${ids.length} circuits have unsupported floating clusters: ` +
-        dirty.map((o) => `${o.id}(${o.floating.length})`).join(", ")
+        dirty.map((o) => `${o.id}(${o.floating.length}${over(o) ? ` > cap ${caps[o.id] || 0}` : ""})`).join(", ")
       : `All ${ids.length} circuits clean — every elevated prop cluster is supported.`);
+    if (dirty.length && !bad) console.log("all within tools/track/float-baseline.json (the scenery-grounding gate's caps) — exit 0");
   }
   process.exit(bad ? 1 : 0);
 } else if (args.includes("--why")) {

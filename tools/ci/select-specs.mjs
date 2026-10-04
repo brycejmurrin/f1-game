@@ -136,8 +136,25 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // was the verdict for a routed spec on every diff that also routed smaller
 // ones, so menu-traversal and ui-redesign broke on the deploy branch after two
 // menu PRs and only the 11-night rota would ever have run them (2026-09-29).
-// Leftovers are still skipped BY NAME.
-export const MAX_OVERFLOW_SHARDS = 2;
+// Leftovers are still skipped BY NAME — and since 2026-10-04 a name is a RED
+// on a pull request (ci.yml selected-verdict fails on dropped > 0), so the
+// allowance is sized to carry a typical multi-area diff: `--since HEAD~10` on
+// the 2026-10-04 tip (67 files) squeezed out 14 routed specs, ~1,900 s of
+// expected work, which two jobs' worth dropped and six carry.
+export const MAX_OVERFLOW_SHARDS = 6;
+// ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
+// per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
+// land in overBudgetSpecs and never run on any PR or train: 41 of them on
+// `--since HEAD~10` (career, gamepad, menu-keyboard, quali, camera-tuner,
+// webgl/tlx probes, ui-scale, 13 circuit foundations…), covered only by the
+// 11-night rota, while post-edit.sh told every new spec author to declare
+// > 180 s to join them. They now ride in their OWN pool — packed into
+// `overbudget-<k>` jobs, never beside the budgeted specs, each job's kill
+// timer derived from the largest declared per-test figure it carries — with
+// its own allowance of this many TARGET_SHARD_SEC jobs. Only what that pool
+// cannot afford is left in overBudgetSpecs, by name, and on a pull request a
+// name is a red verdict.
+export const MAX_OVER_BUDGET_SHARDS = 8;
 
 // THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
 // OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job
@@ -269,7 +286,8 @@ export function measuredCheap(file, db = timings()) {
  *  is exactly `cap.tests` x the fallback's boundary — an UNMEASURED selection
  *  cuts where the fallback says (7.5 s/test since 2026-09-29, the llvmpipe
  *  p75). `db` pins the timing history (tests pass an empty one). */
-export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS, staleFirst = false } = {}) {
+export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS,
+  overBudgetShards = MAX_OVER_BUDGET_SHARDS, staleFirst = false } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
@@ -354,15 +372,15 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     ? (a, b) => a.rank - b.rank || (lastRun(a.file) < lastRun(b.file) ? -1 : lastRun(a.file) > lastRun(b.file) ? 1 : 0) || a.tests - b.tests
     : (a, b) => a.rank - b.rank || a.tests - b.tests;
   counted.sort(order);
-  const selected = [], skipped = [], unreachable = [], oversize = [];
+  const selected = [], skipped = [], unreachable = [], oversize = [], overBudgetPool = [];
   let used = 0, usedSec = 0;
   for (const r of counted) {
     // An over-budget spec never joins the budgeted set. Affected (rank < 3)
     // it runs outside it, its job's cap derived from its own declared timeout;
-    // merely routed, it is reported as over budget exactly as before.
+    // merely routed, it joins the over-budget pool (MAX_OVER_BUDGET_SHARDS).
     if (r.overBudget) {
       if (r.rank < 3) oversize.push(r);
-      else overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
+      else overBudgetPool.push(r);
       continue;
     }
     // A spec bigger than the budget still RUNS (oversize): shards() packs it
@@ -404,7 +422,9 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
   // 8 s, packs into a shared selected job, and poisons the next Navigate
   // (PR #604). Keep it SKIPPED by name; the overflow filter below also
   // refuses it so a future order change cannot re-admit it.
-  for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) skipped.push(r);
+  // A declared-slow spill goes to the over-budget pool instead, which bills it
+  // in its own jobs with its own declared per-test figure.
+  for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) (r.overBudget ? overBudgetPool : skipped).push(r);
   // OVERFLOW: skipped specs that fit one job each, up to `overflowShards` jobs'
   // worth of expected seconds, in the same order as the budgeted cut.
   // Never overflow a mega-sweep (overBudget with a solo-class declaration, or
@@ -420,13 +440,29 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     for (const r of skipped) {
       const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
       const own = r.ownTimeoutSec || 0;
-      if (own >= SOLO_OWN_TIMEOUT_SEC) { left.push(r); continue; }
+      // A solo-class declaration never packs as overflow: it goes to the
+      // over-budget pool below, whose jobs shards() gives it alone.
+      if (own >= SOLO_OWN_TIMEOUT_SEC) { overBudgetPool.push(r); continue; }
       if (sec <= TARGET_SHARD_SEC && sec <= room) { overflow.push(r); room -= sec; } else left.push(r);
     }
     skipped.length = 0;
     skipped.push(...left);
   }
-  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
+  // THE OVER-BUDGET POOL: up to `overBudgetShards` jobs' worth of expected
+  // seconds, in the same order as the budgeted cut. A spec whose own expected
+  // run exceeds a job is still admitted while room lasts — shards() splits it
+  // with --shard=i/n. What does not fit is named in overBudgetSpecs (dropped).
+  const overBudgetRun = [];
+  {
+    let room = overBudgetShards * TARGET_SHARD_SEC;
+    overBudgetPool.sort(order);
+    for (const r of overBudgetPool) {
+      const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
+      if (sec <= room) { overBudgetRun.push(r); room -= sec; continue; }
+      overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
+    }
+  }
+  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
     unreadable,
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
@@ -446,13 +482,22 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  to the whole command), a spec carrying menu-baseline (its goldens are
  *  SwiftShader captures, so ci.yml drops llvmpipe for any job naming it), and
  *  a mega-sweep whose declared per-test budget is SOLO_OWN_TIMEOUT_SEC or more
- *  (all-circuits props/terrain walks — see that constant). The job holding the
- *  budgeted specs is named `selected` — ci.yml's carry-forward of failing
- *  specs keys on that name. */
+ *  (all-circuits props/terrain walks — see that constant). The over-budget
+ *  pool (routed specs declaring >= the gate's per-test timeout) packs in its
+ *  OWN bins, `overbudget-<k>`, so a declared 300-540 s figure never raises the
+ *  kill timer of the budgeted jobs.
+ *
+ *  EVERY JOB NAME IS UNIQUE (2026-10-04). The budgeted bins were all named
+ *  `selected`, and ci.yml keyed the failing-spec cache and the timings
+ *  artifact on the name: run 37198214523's three `selected` jobs raced for one
+ *  cache key (two "Unable to reserve cache") and uploaded three artifacts
+ *  called `spec-timings-junit-selected-selected`. Budgeted bins are now
+ *  `selected-<i>`, and a final pass suffixes any repeat. */
 export function shards(r, db = timings()) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
-  for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || [])]) {
+  for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || []),
+                   ...(r.overBudgetRun || []).map((x) => ({ ...x, pool: true }))]) {
     const sec = cost(s);
     const perTest = Math.max(SELECTED_GATE.perTestTimeoutSec, s.ownTimeoutSec || 0);
     const base = path.basename(s.file, ".spec.js");
@@ -465,25 +510,29 @@ export function shards(r, db = timings()) {
       continue;
     }
     const solo = /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
-    items.push({ solo, budgeted: !!s.budgeted, name: `oversize-${base}`,
+    items.push({ solo, budgeted: !!s.budgeted, pool: !!s.pool, name: `oversize-${base}`,
       files: [s.file], shard: "", tests: s.tests, sec, perTest });
   }
   const bins = [];
   for (const it of items.filter((x) => x.solo)) bins.push({ ...it, items: [it] });
-  const packable = items.filter((x) => !x.solo).sort((a, b) => b.sec - a.sec);
-  const open = [];
-  for (const it of packable) {
-    const bin = open.find((b) => b.sec + it.sec <= TARGET_SHARD_SEC);
-    if (bin) { bin.items.push(it); bin.sec += it.sec; continue; }
-    const fresh = { items: [it], sec: it.sec };
-    open.push(fresh); bins.push(fresh);
+  // First-fit-decreasing, the over-budget pool in bins of its own.
+  for (const pool of [false, true]) {
+    const packable = items.filter((x) => !x.solo && x.pool === pool).sort((a, b) => b.sec - a.sec);
+    const open = [];
+    for (const it of packable) {
+      const bin = open.find((b) => b.sec + it.sec <= TARGET_SHARD_SEC);
+      if (bin) { bin.items.push(it); bin.sec += it.sec; continue; }
+      const fresh = { items: [it], sec: it.sec, pool };
+      open.push(fresh); bins.push(fresh);
+    }
   }
-  let k = 0;
+  let k = 0, sel = 0, ob = 0;
   const out = bins.map((b) => {
     const files = b.items.flatMap((x) => x.files);
     const budgeted = b.items.some((x) => x.budgeted);
     const name = b.solo ? b.name
-      : budgeted ? "selected"
+      : budgeted ? `selected-${++sel}`
+      : b.pool ? `overbudget-${++ob}`
       : b.items.length === 1 ? b.items[0].name : `packed-${++k}`;
     const perTest = Math.max(...b.items.map((x) => x.perTest));
     const sec = Math.round(b.sec);
@@ -493,8 +542,17 @@ export function shards(r, db = timings()) {
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
       circuits: (r.circuits || []).join(",") };
   });
-  // `selected` first: the job a reader looks for, and the carry-forward's.
-  return out.sort((a, b) => (a.name === "selected" ? -1 : b.name === "selected" ? 1 : 0));
+  // Unique names: a matrix name keys ci.yml's timings artifact, and a repeat
+  // there is an upload that collides.
+  const seen = new Map();
+  for (const j of out) {
+    const n = (seen.get(j.name) || 0) + 1;
+    seen.set(j.name, n);
+    if (n > 1) j.name = `${j.name}-${n}`;
+  }
+  // The budgeted `selected-<i>` jobs first: the ones a reader looks for.
+  const isSel = (j) => j.name.startsWith("selected-");
+  return out.sort((a, b) => (isSel(a) === isSel(b) ? 0 : isSel(a) ? -1 : 1));
 }
 
 // TRACKED (infra) PATHS — a change here makes the SELECTION ITSELF untrustworthy,
@@ -836,7 +894,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `their own median (retries ${SELECTED_GATE.retries}, ${SELECTED_GATE.perTestTimeoutSec}s/test, surviving 1 timeout); ` +
     `selected ${r.testsSelected} tests, ${r.secSelected} s`);
   for (const s of r.overBudgetSpecs) console.error(
-    `EXCLUDED (declares ${s.ownTimeoutSec}s test budget > gate ${SELECTED_GATE.perTestTimeoutSec}s): ${s.file}`);
+    `DROPPED (declares ${s.ownTimeoutSec}s/test and the over-budget pool is full): ${s.file}`);
   for (const s of r.coveredByFixedGates) console.error(
     `COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByVmTwin || []) console.error(
@@ -845,6 +903,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `UNREACHABLE (declares ${s.tests} tests, over the whole ${r.secFit} s budget — this gate can ` +
     `NEVER run it): ${s.file}`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
+  for (const s of r.overBudgetRun || []) console.error(
+    `OVER-BUDGET POOL (routed; declares ${s.ownTimeoutSec}s/test, runs in an overbudget job): ${s.file} (${s.tests} tests)`);
   for (const s of r.oversize) console.error(
     `OVERSIZE (outside the budget, packed by expected time, ~${s.sec} s` +
     `${s.overBudget ? `, cap from its own ${s.ownTimeoutSec}s/test` : ""}): ${s.file} (${s.tests} tests)`);
@@ -856,4 +916,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `UNREADABLE (missing, renamed or unparseable — NOT selected and NOT covered): ${s.file}`);
   for (const s of r.selected) console.log(s.file);
   for (const s of r.oversize) console.log(s.file);
+  for (const s of r.overflow || []) console.log(s.file);
+  for (const s of r.overBudgetRun || []) console.log(s.file);
 }
