@@ -3259,7 +3259,7 @@ test("WGX hoists every pack layer with textureSample so walls match GLX aniso", 
   assert.match(chunks, /let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15/,
     "glass/flag stay off the hoist; everything else picks the hoisted tap");
   const peelLit = chunks.indexOf("N = paintPeelN(N, in.objPos, vDist, carPaint)");
-  const bump = chunks.indexOf("applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn)");
+  const bump = chunks.indexOf("applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos)");
   assert.ok(peelLit > 0 && bump > peelLit,
     "wall bump must run after peel like GLX, not before detail");
 });

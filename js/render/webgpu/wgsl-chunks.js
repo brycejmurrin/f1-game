@@ -209,12 +209,14 @@ fn applyMaterialTexNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wp
   let amt = select(0.55, 0.10, mid == 16) * F.params8.w * fade * aa;
   *N_ptr = normalize(*N_ptr + (T * dxy.x + B * dxy.y) * amt);
 }
-fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>, litNrm: vec4<f32>, packOn: bool) {
+// Procedural bump ONLY. The baked map is applied by fs_main straight after,
+// as GLX/TLX do: called from here it shared these early returns (wall fp >=
+// 0.26 m, ground fp >= 0.65 m) and cut out in a seam inside its own fade.
+fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos: vec3<f32>, fwWpos: vec3<f32>) {
   if (mid == 0 || mid == 3 || mid == 15 || mid >= 20) { return; }
   let bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
   if (bumpFade <= 0.005) { return; }
   var N = *N_ptr;
-  let N0 = N;   // pre-bump: the baked map's plane + tangent frame come from it
   if (matWallLike(mid)) {
     let an = abs(N);
     let hc = select(wpos.x, wpos.z, an.x > an.z);
@@ -246,7 +248,6 @@ fn applyMaterialNormal(mid: i32, N_ptr: ptr<function, vec3<f32>>, vd: f32, wpos:
     N = normalize(N + vec3<f32>(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
   }
   *N_ptr = N;
-  applyMaterialTexNormal(mid, N_ptr, vd, wpos, fwWpos, litNrm, packOn, N0);
 }
 fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, vd: f32, wpos: vec3<f32>, nrm: vec3<f32>, fwWpos: vec3<f32>, litPack: vec4<f32>, packOn: bool) {
   if (mid == 0) { return; }
@@ -350,7 +351,9 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     rough = min(1.0, rough + 0.10 * far);
   }
   var tuv = vec2<f32>(0.0);
-  let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15;
+  // matScale > 0: a MAT with no baked layer keeps its procedural look (GLX
+  // matTexUV returns false at scale 0); the hoisted sample goes unused.
+  let hoisted = packOn && mid >= 1 && mid <= 16 && mid != 3 && mid != 15 && matScale(mid) > 0.0;
   if (hoisted) {
     // Implicit-LOD + aniso sample hoisted in fs_main (GLX texture()).
     let k = F.params8.w * far;
@@ -668,7 +671,9 @@ fn trkFromWorld(wp: vec3<f32>) -> vec4<f32> {
   let onRibbon = select(dCenter <= hw + 0.8, abs(x) <= hw + 0.55, tangOk);
   let valid = gated && hw > 0.5 && onRibbon;
   // xyz = track (s, lateral x, half-width); w = 1 when the LUT hit is valid.
-  // Asphalt vs verge is classified in fs_main from abs(x) < hw - 0.45.
+  // Asphalt vs verge: vs_main stamps abs(x) < hw - 0.45 (a flat id spans the
+  // whole triangle, so the margin keeps kerb vertices clear of LUT error);
+  // fs_main classifies the rest per fragment at abs(x) < hw - 0.10.
   return select(vec4<f32>(0.0), vec4<f32>(s, x, hw, 1.0), valid);
 }
 // fs_main gate: need comes from the per-draw uniform D (uniform control flow),
@@ -890,7 +895,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // not fall back to the shattered interpolator.
   let useWorldTrk = fromWorld.w > 0.5;
   let vTrk = select(select(vec3<f32>(0.0), in.trk, !isRoadDraw), fromWorld.xyz, useWorldTrk);
-  let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.45;
+  // GLX stamps the WHOLE running surface ASPHALT (buildRoad columns 2..11, out
+  // to |x| = hw). 0.10 m, not the vertex test's 0.45: the 0.2 m edge-line paint
+  // covers what is left, and a kerb (from hw + 0.05 out) turns ASPHALT only
+  // where the LUT's lateral error tops 0.15 m (0-2% of kerb inner-rail points
+  // across monza/monaco/baku/singapore/spa/suzuka; 0-0.7% at the old 0.45).
+  let lutAsphalt = abs(fromWorld.y) < fromWorld.z - 0.10;
   let vsMat = in.matId;
   let classified = select(select(0.0, 16.0, lutAsphalt), vsMat, vsMat > 0.5);
   // surfaceId 16 is the isRoadDraw flag, not a material stamp. Forcing 16
@@ -1067,7 +1077,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
   // Wall/MAT bump AFTER detail + peel, matching GLX glsl-lit.js. Lighting
   // still uses the bumped N; SAA does not (Nsaa / geo+peel mix).
-  applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn);
+  // The baked normal map composes on top with its OWN fade (GLX/TLX call it
+  // separately); NmatPre, the pre-bump N, picks its tile plane + tangent frame.
+  let NmatPre = N;
+  applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos);
+  applyMaterialTexNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn, NmatPre);
   let V = normalize(F.eye.xyz - in.wpos);
   let L = F.sunDir.xyz;
   let H = normalize(L + V + vec3<f32>(1e-5));   // +eps: normalize(0) NaNs at V==-L
@@ -1166,9 +1180,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
   applyMaterial(i32(vMatId + 0.5), &albedo, &rough, vDist, in.wpos, in.nrm, fwWpos, litPack, packOn);
-  if (i32(vMatId + 0.5) == 16) {
-    roadMarkings(&albedo, &rough, vTrk, fwTrk, F.pitLane, F.pitBox);
-  }
+  // Unconditional, as GLX/TLX call it: roadMarkings gates itself on hw > 0.5,
+  // and vTrk is zero off the ribbon (LUT miss) and on every non-road draw once
+  // the LUT exists. Gating on vMatId == 16 dropped the EDGE LINES: they sit in
+  // the outer 0.2 m, outside the asphalt inset, so that id never reached them.
+  roadMarkings(&albedo, &rough, vTrk, fwTrk, F.pitLane, F.pitBox);
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
 
@@ -1402,6 +1418,74 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       shadowTintAmt * clamp(1.0 - litNoL, 0.0, 1.0));
   }
 
+  // Physically-based punctual lights (floodlights / street lamps) — verbatim
+  // math from GLX LIT_FS (js/render/glx/shaders/glsl-lit.js), factored into lampContrib
+  // above: windowed 1/d² falloff, aimed spot cone, diffuse pool + GGX spec. No
+  // per-light shadows (cost); the cone shapes the light. The nearest floodlight
+  // also 4-tap-PCF-samples lampShadowTex. ORDER (GLX/TLX parity): the bake and
+  // both lamp loops run HERE, before the sun spec and the lacquer's ccTrans
+  // absorb, so the clearcoat env mirror darkens lamp light like it does in GLX.
+  var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
+  // BAKED LAMP POOLS (GLX/TLX parity): an upward-facing fragment near the baked
+  // surface height takes EVERY lamp's diffuse pool and bounce from the light
+  // map, and each live lamp's diffuse/bounce steps aside by bakeW. Level-0
+  // samples: no implicit derivative, legal in any control flow.
+  let bUv = (in.wpos.xz - F.bakeA.xy) / max(F.bakeA.zw, vec2<f32>(1e-3));
+  // Tile atlas: the indirection names this tile's slot (empty -> live loop);
+  // the slot's gutter holds the neighbours, so the bilinear tap matches the
+  // full grid and never crosses slots. Bounce = the same slot + 0.5 v.
+  let bG = bUv * F.bakeD.xy;
+  let bTile = clamp(floor(bG), vec2<f32>(0.0), max(F.bakeD.xy - 1.0, vec2<f32>(0.0)));
+  let bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
+  let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
+  let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
+  let bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
+  let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0)) && bSlot.x >= 0.0;
+  let bakeW = select(0.0, smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(in.wpos.y - bT.a))),
+                     F.bakeB.w > 0.5 && bIn);
+  color = color + albedo * bT.rgb * F.bakeB.xyz * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85)
+                + albedo * bB * (F.params3.x * bakeW) * (1.0 - metalness);
+  if (D.lampRange.z > 0.5) {
+    // Per-chunk mode (chunked draws only): this draw's lamps are its slice of
+    // the baked chunkLampIdx table over the full trackLights set. The shadow
+    // compare is an ABSOLUTE track-light index (F.params10.x), so the
+    // per-chunk reorder needs no slot remap — GLX's setLampShadowSlot dance
+    // is structural here. Uniform CF: lampRange is uniform per draw.
+    let lrOff = u32(D.lampRange.x);
+    let lrCnt = u32(D.lampRange.y);
+    let sIdx = i32(F.params10.x);
+    for (var i = 0u; i < lrCnt; i = i + 1u) {
+      let idx = chunkLampIdx[lrOff + i];
+      let r = lampContrib(trackLights[idx], i32(idx) == sIdx, in.wpos, N, V,
+                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat, bakeW);
+      color = color + r.col;
+      lampFog = lampFog + r.fog;
+    }
+  } else {
+    let nL = i32(F.params0.w);
+    // Chunk-AABB lamp cull (bit-exact): drawChunked sets a bit only for lights
+    // whose radius reaches the chunk's AABB, so a cleared bit is precisely a
+    // light lampContrib's ld2 > rad*rad reject would discard for EVERY
+    // fragment of this draw — same output, ~3 ALU instead of the distance
+    // math per culled light. Non-chunked draws carry all-ones masks (no cull).
+    let lampM0 = u32(D.mat3.x);
+    let lampM1 = u32(D.mat3.y);
+    for (var i = 0; i < nL; i = i + 1) {
+      // Both select arms evaluate — mask the shift amounts so the unselected
+      // arm's underflowed count stays a defined shift (WGSL: >=32 is indeterminate).
+      let lampBit = u32(i);
+      let masked = select((lampM1 >> ((lampBit - 24u) & 31u)) & 1u,
+                          (lampM0 >> (lampBit & 31u)) & 1u, i < 24);
+      if (masked == 0u) { continue; }
+      let r = lampContrib(lights[i], i == i32(F.params8.z), in.wpos, N, V,
+                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat, bakeW);
+      color = color + r.col;
+      lampFog = lampFog + r.fog;
+    }
+  }
+  // (lampSh - bakeW) carving can undershoot a baked fragment; never below black.
+  color = max(color, vec3<f32>(0.0));
+
   // Cook-Torrance sun specular, soft-clipped so highlights sheen not clip.
   // specCol is * litNoL; a backface paid two GGX evals for 0.
   if (NoL > 0.0) {
@@ -1494,72 +1578,6 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let addCC = envCC * envW;
     color = color + addCC / (1.0 + addCC * 0.35);
   }
-
-  // Physically-based punctual lights (floodlights / street lamps) — verbatim
-  // math from GLX LIT_FS (js/render/glx/shaders/glsl-lit.js), factored into lampContrib
-  // above: windowed 1/d² falloff, aimed spot cone, diffuse pool + GGX spec. No
-  // per-light shadows (cost); the cone shapes the light. The nearest floodlight
-  // also 4-tap-PCF-samples lampShadowTex.
-  var lampFog = vec3<f32>(0.0);   // lamp irradiance reaching the fog column (Block 6)
-  // BAKED LAMP POOLS (GLX/TLX parity): an upward-facing fragment near the baked
-  // surface height takes EVERY lamp's diffuse pool and bounce from the light
-  // map, and each live lamp's diffuse/bounce steps aside by bakeW. Level-0
-  // samples: no implicit derivative, legal in any control flow.
-  let bUv = (in.wpos.xz - F.bakeA.xy) / max(F.bakeA.zw, vec2<f32>(1e-3));
-  // Tile atlas: the indirection names this tile's slot (empty -> live loop);
-  // the slot's gutter holds the neighbours, so the bilinear tap matches the
-  // full grid and never crosses slots. Bounce = the same slot + 0.5 v.
-  let bG = bUv * F.bakeD.xy;
-  let bTile = clamp(floor(bG), vec2<f32>(0.0), max(F.bakeD.xy - 1.0, vec2<f32>(0.0)));
-  let bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
-  let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
-  let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
-  let bB = textureSampleLevel(lampBakeTex, envSamp, bUvD + vec2<f32>(0.0, 0.5), 0.0).rgb * F.bakeB.xyz;
-  let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0)) && bSlot.x >= 0.0;
-  let bakeW = select(0.0, smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(in.wpos.y - bT.a))),
-                     F.bakeB.w > 0.5 && bIn);
-  color = color + albedo * bT.rgb * F.bakeB.xyz * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85)
-                + albedo * bB * (F.params3.x * bakeW) * (1.0 - metalness);
-  if (D.lampRange.z > 0.5) {
-    // Per-chunk mode (chunked draws only): this draw's lamps are its slice of
-    // the baked chunkLampIdx table over the full trackLights set. The shadow
-    // compare is an ABSOLUTE track-light index (F.params10.x), so the
-    // per-chunk reorder needs no slot remap — GLX's setLampShadowSlot dance
-    // is structural here. Uniform CF: lampRange is uniform per draw.
-    let lrOff = u32(D.lampRange.x);
-    let lrCnt = u32(D.lampRange.y);
-    let sIdx = i32(F.params10.x);
-    for (var i = 0u; i < lrCnt; i = i + 1u) {
-      let idx = chunkLampIdx[lrOff + i];
-      let r = lampContrib(trackLights[idx], i32(idx) == sIdx, in.wpos, N, V,
-                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat, bakeW);
-      color = color + r.col;
-      lampFog = lampFog + r.fog;
-    }
-  } else {
-    let nL = i32(F.params0.w);
-    // Chunk-AABB lamp cull (bit-exact): drawChunked sets a bit only for lights
-    // whose radius reaches the chunk's AABB, so a cleared bit is precisely a
-    // light lampContrib's ld2 > rad*rad reject would discard for EVERY
-    // fragment of this draw — same output, ~3 ALU instead of the distance
-    // math per culled light. Non-chunked draws carry all-ones masks (no cull).
-    let lampM0 = u32(D.mat3.x);
-    let lampM1 = u32(D.mat3.y);
-    for (var i = 0; i < nL; i = i + 1) {
-      // Both select arms evaluate — mask the shift amounts so the unselected
-      // arm's underflowed count stays a defined shift (WGSL: >=32 is indeterminate).
-      let lampBit = u32(i);
-      let masked = select((lampM1 >> ((lampBit - 24u) & 31u)) & 1u,
-                          (lampM0 >> (lampBit & 31u)) & 1u, i < 24);
-      if (masked == 0u) { continue; }
-      let r = lampContrib(lights[i], i == i32(F.params8.z), in.wpos, N, V,
-                          albedo, metalness, wetSheen, rough, a, f0, NoV, clearcoat, bakeW);
-      color = color + r.col;
-      lampFog = lampFog + r.fog;
-    }
-  }
-  // (lampSh - bakeW) carving can undershoot a baked fragment; never below black.
-  color = max(color, vec3<f32>(0.0));
 
   // [Block 4] Metallic-flake SPARKLE (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js). A
   // view-dependent micro-glint: each tiny cell gets a random flake tilt and flashes

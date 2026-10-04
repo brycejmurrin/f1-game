@@ -3268,7 +3268,10 @@ const WGX = (function () {
       d[132] = f.lampFog != null ? f.lampFog : 0;
       d[133] = SHD.lampArmed ? 1 : 0;
       d[134] = SHD.lampIdx;
-      d[135] = (T && T.matTexMix != null) ? T.matTexMix : 1;
+      // params8.w = BAKED MATERIALS mix, forced to 0 with no albedo array bound
+      // (GLX: uMatTexMix = matAlbedoTex ? mix : 0). The 1x1 placeholder's alpha
+      // 255 otherwise read as rough 1.0 and pushed every world surface matte.
+      d[135] = _matAlbedoOn ? ((T && T.matTexMix != null) ? T.matTexMix : 1) : 0;
       // params9 (floats 136..139): LIT tuner knobs. Always pack the resolved value — WGSL reads them directly, so 0
       // is a real "off", not an unset slot. Defaults = shipped GLX look.
       d[136] = (T && T.ambContactDark != null) ? T.ambContactDark : 1.0;

@@ -1299,7 +1299,9 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /if \(isRoadDraw && N\.y < 0\.0\) \{ N = -N; \}/);
   assert.doesNotMatch(CHUNKS_SOURCE, /wp\.y = wp\.y \+ 0\.08/);
   assert.match(WGX_SOURCE, /const flip = \(i % 3 === 1\) \? 1 : \(i % 3 === 2\) \? -1 : 0;/);
-  assert.match(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
+  // Unconditional like GLX/TLX (hw-gated inside): the vMatId == 16 gate this
+  // pinned never reached the edge lines (surface-id-parity.test.mjs).
+  assert.doesNotMatch(CHUNKS_SOURCE, /if \(i32\(vMatId \+ 0\.5\) == 16\) \{\s*roadMarkings/);
   assert.match(CHUNKS_SOURCE, /let onRibbon = select\(dCenter <= hw \+ 0\.8, abs\(x\) <= hw \+ 0\.55, tangOk\)/);
   assert.match(CHUNKS_SOURCE, /if \(bury && !isRoadDraw && fromWorld\.w > 0\.5\) \{\s*discard;/);
   assert.doesNotMatch(CHUNKS_SOURCE, /let slab = max\(fwWpos/);
@@ -1799,7 +1801,8 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // …and the footprint must reach every consumer as a parameter.
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
                     /let fwTrkAttr = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
-                    /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
+                    /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos\);/,
+                    /applyMaterialTexNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn, NmatPre\);/,
                     // F, not U. This pin was written against the shipped text and so
                     // FROZE a compile error: `U` is the SKY program's binding, and this
                     // call sits in LIT, which binds `F : FrameU`. Dawn rejected the whole
