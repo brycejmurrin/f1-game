@@ -35,7 +35,7 @@ function load(stored = {}) {
   return ctx;
 }
 
-test("defaults every element on; hide writes data-hud-hide", () => {
+test("defaults every chrome element on; hide writes data-hud-hide", () => {
   const ctx = load();
   const H = ctx.HudElements;
   assert.equal(H.isOn("speed"), true);
@@ -44,7 +44,8 @@ test("defaults every element on; hide writes data-hud-hide", () => {
   assert.match(ctx.__body.dataset.hudHide, /\bspeed\b/);
   assert.equal(ctx.__written.hudElements.speed, "off");
   H.set("speed", true);
-  assert.equal(ctx.__body.dataset.hudHide, undefined);
+  // Only the opt-in readouts (shipped off) are left in the hide list.
+  assert.equal(ctx.__body.dataset.hudHide, "rel strat inputs");
 });
 
 test("stored offs restore on load", () => {
@@ -55,6 +56,22 @@ test("stored offs restore on load", () => {
   assert.equal(H.isOn("speed"), true);
   assert.match(ctx.__body.dataset.hudHide, /\btyre\b/);
   assert.match(ctx.__body.dataset.hudHide, /\bot\b/);
+});
+
+test("opt-in readouts ship OFF, store only an explicit on, and hide via data-hud-hide", () => {
+  const ctx = load();
+  const H = ctx.HudElements;
+  for (const id of ["rel", "strat", "inputs"]) assert.equal(H.isOn(id), false, id);
+  assert.match(ctx.__body.dataset.hudHide, /\brel\b.*\bstrat\b.*\binputs\b/);
+  H.set("rel", true);
+  assert.equal(ctx.__written.hudElements.rel, "on");
+  assert.doesNotMatch(ctx.__body.dataset.hudHide, /\brel\b/);
+  H.set("rel", false);
+  assert.deepEqual({ ...ctx.__written.hudElements }, {}, "back to the shipped default: nothing stored");
+  const back = load({ hudElements: { inputs: "on", speed: "off" } }).HudElements;
+  assert.equal(back.isOn("inputs"), true);
+  assert.equal(back.isOn("speed"), false);
+  assert.equal(back.isOn("strat"), false);
 });
 
 test("CSS contracts: hide selectors and no new class sprawl for the checklist", () => {
