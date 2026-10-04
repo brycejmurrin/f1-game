@@ -171,8 +171,11 @@ if (store.subscribe) store.subscribe((change) => {
   armRevision();
 });
 
-function load() {
-  migrateSlots();
+function load(options) {
+  // An import already wrote migrated slots. Refresh its live view without
+  // rewriting other slots that may still await the player's confirmation.
+  const persist = !(options && options.persist === false);
+  if (persist) migrateSlots();
   const live = String(store.get("careerSlot", "driver:0")).split(":");
   slotFlavour = flavourIn(live[0]);
   slotIdx = slotIn(live[1]);
@@ -188,7 +191,7 @@ function load() {
   // the key it was migrated FROM), so persisting the climbed shape is this
   // function's job — otherwise a v0 save would migrate in memory on every boot
   // and never on disk, and the next build's ladder would start from v0 again.
-  save({ migration: true });
+  if (persist) save({ migration: true });
   applyRegs();
   return career;
 }
@@ -1203,7 +1206,9 @@ function teamStandings() {
   const rows = Teams.LIST
     .filter((t) => Teams.isReal(t) || t.id === career.team)
     .map((t) => ({ id: t.id, tier: t.tier, pts: career.season.teamPts[t.id] || 0 }));
-  rows.sort((a, b) => b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : 1));
+  rows.sort((a, b) => (typeof SeasonCal !== "undefined" && SeasonCal.rankTeams)
+    ? SeasonCal.rankTeams(career.season, a.id, b.id)
+    : (b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
   rows.forEach((r, i) => { r.pos = i + 1; });
   return rows;
 }
@@ -1363,6 +1368,8 @@ function renewHire(years) {
 }
 function hireDriver(code, years) {
   if (!career || careerConflict || career.flavour !== "myteam") return false;
+  const hire = career.roster && career.roster[0];
+  if (hire && hire.pending && hire.pending.kind === "left" && hire.code === code) return false;
   const agent = FREE_AGENTS.find((x) => x.code === code);
   if (!agent) return false;
   career.roster = [rosterEntry(agent, clamp(years | 0 || 1, 1, 3))];

@@ -347,7 +347,11 @@ const Input = (function () {
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false;
     if (tiltRemote || !gyroAttached) tiltSeen = false;
   }
-  function setRemoteHaptics(fn) { remoteHaptics = typeof fn === "function" ? fn : null; }
+  function setRemoteHaptics(fn) {
+    const had = !!remoteHaptics;
+    remoteHaptics = typeof fn === "function" ? fn : null;
+    if (had !== !!remoteHaptics && typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("apexhapticschange"));
+  }
 
   // Drive the FULL tilt pipeline with an explicit timestep instead of wall-clock:
   // feed a raw tilt angle (deg) and dt (s), get back the steer command (-1..1)

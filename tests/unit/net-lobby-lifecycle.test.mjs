@@ -19,10 +19,10 @@ function deferred() {
 }
 
 function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts,
-                   href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
+                   rendezvous, href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
   const elements = new Map();
   const element = (id) => {
-    const el = { id, hidden: true, value: "", textContent: "", focus() {} };
+    const el = { id, hidden: true, value: "", textContent: "", focus() {}, setAttribute(k, v) { this[k] = v; }, removeAttribute(k) { delete this[k]; } };
     elements.set(id, el);
     return el;
   };
@@ -32,7 +32,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   const status = element("vs-status");
   status.classList = { toggle() {} };
   for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
-                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join"]) element(id);
+                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value"]) element(id);
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -93,7 +93,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
       supported: () => true,
       create: () => scanFactory(),
     },
-    NetRendezvous: {},
+    NetRendezvous: rendezvous || { usingPrivateRelay: () => false },
     NetSession: { create: netSession || (() => { throw new Error("no NetSession in this harness"); }) },
     NetPlay: null,
     // isReal mirrors js/data/teams.js (pinned by the Legends test below).
@@ -885,4 +885,19 @@ test("HOST A RACE (link) closes a room code left open by a code join", () => {
   assert.match(body, /stopCodeWait\(\)/);
   assert.match(body, /codeReopen = null/);
   assert.match(body, /clearTimeout\(codeReopenTimer\)/);
+});
+
+test("private room entry accepts a full shared token and public entry still asks for six characters", () => {
+  for (const privateRelay of [true, false]) {
+    const h = harness({ rendezvous: { usingPrivateRelay: () => privateRelay } });
+    h.lobby.wire();
+    try {
+      h.click("vs-code-join");
+      const input = h.elements.get("vs-code-in");
+      assert.equal(input.maxLength, privateRelay ? 64 : 8);
+      assert.equal(input["aria-label"], privateRelay ? "Private room token" : "Room code");
+      assert.match(h.elements.get("vs-code-hint").textContent, privateRelay ? /32 characters/ : /Six letters/);
+      assert.match(input.placeholder, privateRelay ? /32-character token/ : /ABC234/);
+    } finally { h.lobby.cancel(); }
+  }
 });

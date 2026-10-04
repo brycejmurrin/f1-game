@@ -8914,7 +8914,7 @@ lastFrame = performance.now();
 XrBoot.bind({ gfx, tickBody, windowTick: tick, getCamMode: () => camMode,
   setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); } });
 XrBoot.mountUi();
-requestAnimationFrame(tick);
+XrBoot.afterTick(tick);
 
 // --- debug / test hook (no effect unless explicitly called) ---
 // Lets a test harness stage the camera anywhere on the track without having to
