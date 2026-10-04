@@ -289,6 +289,24 @@ const NetSdp = (function () {
     return (await verify(rebuilt)) ? bytes : null;
   }
 
-  return { VERSION, pack, unpack, packChecked, verify };
+  // WHO MADE THIS DESCRIPTION: its DTLS fingerprint and ICE ufrag, the two
+  // facts that survive pack()/unpack() and that a fresh RTCPeerConnection
+  // never repeats. sha-256 first because that is the one pack() carries — a
+  // stack listing another algorithm first must still read the same on both
+  // ends. Lower-case hex, no colons, so the host's verbatim SDP and the
+  // guest's rebuilt one compare equal.
+  function fingerprint(sdp) {
+    const text = String(sdp || "");
+    const fp = line(text, /^a=fingerprint:sha-256 (\S+)/mi) || line(text, /^a=fingerprint:\S+ (\S+)/mi);
+    const hex = fp ? fp.replace(/[^0-9a-f]/gi, "").toLowerCase() : "";
+    return hex || null;
+  }
+  function identity(sdp) {
+    const fp = fingerprint(sdp);
+    const ufrag = line(String(sdp || ""), /^a=ice-ufrag:(\S+)/mi);
+    return fp && ufrag ? { fp, ufrag } : null;
+  }
+
+  return { VERSION, pack, unpack, packChecked, verify, fingerprint, identity };
 })();
 Object.freeze(NetSdp);

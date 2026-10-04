@@ -27,6 +27,8 @@ const PACK = path.join(ROOT, "assets", "pack");
 const MANIFEST = path.join(PACK, "manifest.json");
 const BUDGET_BYTES = 8 * 1024 * 1024;         // must match tools/gen/assets.mjs
 const ALLOWED = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
+// What every pack-strip createImageBitmap must ask for (see the P1 test below).
+const STRAIGHT_BITMAP = { premultiplyAlpha: "none", colorSpaceConversion: "none" };
 
 const TOOL_SRC = fs.readFileSync(path.join(ROOT, "tools", "gen", "assets.mjs"), "utf8");
 const hasPack = fs.existsSync(MANIFEST);
@@ -146,7 +148,8 @@ test("material strips download together, then preserve sequential decode and upl
       assert.deepEqual(Object.keys(images), ["1", "3"]);
       for (const id of [1, 3]) {
         assert.equal(images[id].closed, 0, "upload must precede bitmap release");
-        assert.deepEqual(images[id].crop, [0, id * 4, 4, 4]);
+        assert.deepEqual(images[id].crop.slice(0, 4), [0, id * 4, 4, 4]);
+        assert.deepEqual({ ...images[id].crop[4] }, STRAIGHT_BITMAP);
         assert.strictEqual(images[id].pixels, kind === "albedo" ? albedo.pixels : normal.pixels);
       }
       return { kind };
@@ -185,7 +188,8 @@ test("an albedo-only material variant never requests or decodes a normal strip",
     },
     async createImageBitmap(source, ...crop) {
       assert.strictEqual(source, blob);
-      assert.deepEqual(crop, [0, 2, 2, 2]);
+      assert.deepEqual(crop.slice(0, 4), [0, 2, 2, 2]);
+      assert.deepEqual({ ...crop[4] }, STRAIGHT_BITMAP, "the crop decodes straight, un-colour-managed");
       decoded++;
       return { close() {} };
     },
@@ -331,21 +335,20 @@ for (const failFallback of [true, false]) {
     const bitmaps = [];
     function bitmap() { const b = { closed: 0, close() { this.closed++; } }; bitmaps.push(b); return b; }
     let crops = 0, fallbackCrops = 0, uploads = 0;
+    const blob = { size: 100 };
     const assets = assetLoader({
       async fetch(url) {
         return url.endsWith("manifest.json")
           ? { ok: true, json: async () => ({ materials: { size: 8, albedo: "a.png", layers: [{ mat: 1, scale: 1 }, { mat: 2, scale: 1 }] } }) }
-          : { ok: true, blob: async () => ({ size: 100 }) };
+          : { ok: true, blob: async () => blob };
       },
-      async createImageBitmap(source, ...crop) {
-        if (crop.length && ++crops === 2) throw Error("crop unsupported");
-        if (source.canvas && ++fallbackCrops === 2 && failFallback) throw Error("fallback failed");
+      async createImageBitmap(source, ...args) {
+        const crop = args.length > 1;
+        if (crop && source === blob && ++crops === 2) throw Error("crop unsupported");
+        // The fallback crops the full-strip BITMAP, never a canvas.
+        if (crop && source !== blob && ++fallbackCrops === 2 && failFallback) throw Error("fallback failed");
         return bitmap();
       },
-      OffscreenCanvas: class {
-        constructor() { this.canvas = true; }
-        getContext() { return { clearRect() {}, drawImage() {} }; }
-      }
     });
     assets.init({
       createTextureArray(size, images) {
@@ -361,6 +364,104 @@ for (const failFallback of [true, false]) {
     for (const b of bitmaps) assert.equal(b.closed, 1, "every bitmap is released exactly once");
   });
 }
+
+// P1 2026-10-04: the albedo strip's alpha is ROUGHNESS. createImageBitmap's
+// default premultiplyAlpha is UA-chosen and Chromium premultiplies: the metal
+// layer (mean alpha 104) uploaded at 40 % brightness (artifacts/probe/
+// run-premul.mjs: meanR 152.6 straight vs 61.5 default). Every decode — the
+// crop, the full-strip fallback and its crops — must ask for straight,
+// un-colour-managed pixels, and no path may route through a 2D canvas (its
+// backing store premultiplies in every engine).
+for (const path of ["crop", "fallback"]) {
+  test(`every material-strip createImageBitmap passes straight-alpha options (${path} path)`, async () => {
+    const calls = [];
+    const blob = { size: 64 };
+    const touched = [];
+    const assets = assetLoader({
+      async fetch(url) {
+        return url.endsWith("manifest.json")
+          ? { ok: true, json: async () => ({ materials: { size: 4, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }, { mat: 16, scale: 2 }] } }) }
+          : { ok: true, blob: async () => blob };
+      },
+      async createImageBitmap(source, ...args) {
+        calls.push({ source, args });
+        if (path === "fallback" && source === blob && args.length > 1) throw Error("crop unsupported");
+        return { close() {} };
+      },
+      OffscreenCanvas: class { constructor() { touched.push("OffscreenCanvas"); } getContext(k) { touched.push(k); return null; } },
+      document: { createElement(t) { touched.push(t); return { getContext() { return null; } }; } },
+    });
+    assets.init({ createTextureArray() { return {}; }, setMaterialMaps() {} });
+    assert.equal(await assets.load(), true);
+    assert.ok(calls.length >= (path === "crop" ? 4 : 6), `decoded ${calls.length}`);
+    for (const c of calls) {
+      const opts = c.args[c.args.length - 1];
+      assert.equal(typeof opts, "object", "the options object is the last argument");
+      assert.deepEqual({ ...opts }, STRAIGHT_BITMAP);
+      assert.ok(c.args.length === 1 || c.args.length === 5, `full decode or 4-arg crop + options, got ${c.args.length}`);
+    }
+    if (path === "fallback") {
+      const fullDecodes = calls.filter(c => c.source === blob && c.args.length === 1);
+      assert.equal(fullDecodes.length, 2, "albedo and normal each fall back to one full-strip decode");
+      assert.ok(calls.some(c => c.source !== blob && c.args.length === 5), "layers are cropped from the decoded bitmap");
+    }
+    assert.deepEqual(touched, [], "no canvas is created on either decode path");
+  });
+}
+
+test("readLayerBytes reads layers straight through a scratch WebGL2 context, never a 2D canvas", () => {
+  const pixelStore = new Map(), uploaded = [], contexts = [];
+  let lost = 0;
+  const GL = { UNPACK_FLIP_Y_WEBGL: 1, UNPACK_PREMULTIPLY_ALPHA_WEBGL: 2, UNPACK_COLORSPACE_CONVERSION_WEBGL: 3,
+    NONE: 0, TEXTURE_2D: 10, FRAMEBUFFER: 11, COLOR_ATTACHMENT0: 12, FRAMEBUFFER_COMPLETE: 13, RGBA: 14, UNSIGNED_BYTE: 15 };
+  const gl = { ...GL,
+    pixelStorei(k, v) { pixelStore.set(k, v); },
+    createTexture() { return {}; }, createFramebuffer() { return {}; },
+    bindTexture() {}, bindFramebuffer() {}, framebufferTexture2D() {},
+    checkFramebufferStatus() { return GL.FRAMEBUFFER_COMPLETE; },
+    texImage2D(...a) { uploaded.push(a[a.length - 1]); },
+    readPixels(x, y, w, h, f, t, dst) { dst.fill(uploaded[uploaded.length - 1].fill); },
+    deleteFramebuffer() {}, deleteTexture() {},
+    getExtension(n) { return n === "WEBGL_lose_context" ? { loseContext() { lost++; } } : null; },
+  };
+  const assets = assetLoader({
+    OffscreenCanvas: class { getContext(kind, attrs) { contexts.push({ kind, attrs }); return kind === "webgl2" ? gl : null; } },
+  });
+  const size = 2, page = size * size * 4, n = 4;
+  const data = new Uint8Array(page * n);
+  const direct = new Uint8Array(page).fill(7);
+  const images = [];
+  images[1] = { fill: 41 };            // an ImageBitmap stand-in
+  images[2] = direct;                  // already bytes: copied, not uploaded
+  images[3] = { fill: 99 };
+  const done = assets.readLayerBytes(size, images, n, data);
+  assert.deepEqual([...done], [1, 2, 3]);
+  assert.equal(contexts.length, 1);
+  assert.equal(contexts[0].kind, "webgl2");
+  assert.deepEqual({ ...contexts[0].attrs }, { premultipliedAlpha: false, antialias: false });
+  assert.equal(pixelStore.get(GL.UNPACK_PREMULTIPLY_ALPHA_WEBGL), false);
+  assert.equal(pixelStore.get(GL.UNPACK_COLORSPACE_CONVERSION_WEBGL), GL.NONE);
+  assert.equal(pixelStore.get(GL.UNPACK_FLIP_Y_WEBGL), false);
+  assert.equal(uploaded.length, 2, "byte layers skip the GPU round trip");
+  assert.equal(data[page], 41); assert.equal(data[2 * page], 7); assert.equal(data[3 * page], 99);
+  assert.equal(data[0], 0, "an absent layer is left untouched");
+  assert.equal(lost, 1, "the scratch context is released");
+});
+
+test("WGX and TLX take pack bytes from Assets.readLayerBytes, not a 2D-canvas getImageData", () => {
+  const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  const fnBody = (src, sig) => {
+    const at = src.indexOf(sig);
+    assert.ok(at >= 0, `missing ${sig}`);
+    return src.slice(at, src.indexOf("\n    }\n", at));
+  };
+  const wgxBytes = fnBody(wgx, "function _matLayerBytes(");
+  assert.match(wgxBytes, /Assets\.readLayerBytes\(/);
+  assert.doesNotMatch(wgxBytes, /getImageData|getContext\("2d"/, "WGX layer bytes must not round-trip a premultiplied canvas");
+  assert.match(wgx, /premultipliedAlpha: false \}/, "the no-WebGL2 copyExternalImageToTexture keeps straight alpha");
+  assert.match(tlx, /Assets\.readLayerBytes\(size, images, n, data\)/);
+});
 
 test("unload invalidates an in-flight pack upload and frees its partial texture", async () => {
   let releaseNormal, normalStarted;

@@ -202,3 +202,20 @@ test("each rung climbed is logged once; a newer-build or junk save warns; a miss
   assert.deepEqual(lines.map((l) => l[0]), ["warn", "warn"], "newer build + array warn; a missing save (null) is silent");
   assert.ok(lines.every((l) => l[1] === "game"));
 });
+
+// review-race-career-data #5: `career.seat | 0` let `seat: 5` / `-1` through,
+// game.js copies it into driverIdx, and makeCars then marks no car as the
+// player. The seat is clamped to the team's grid row; MY TEAM's is always 0.
+test("the career seat is clamped to the team's grid row (MY TEAM: seat 0)", () => {
+  const SM = load();
+  const seatOf = (o) => SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), o)).seat;
+  assert.equal(seatOf({ seat: 1 }), 1, "a valid seat is kept");
+  assert.equal(seatOf({ seat: 5 }), 1, "past the row: the last seat");
+  assert.equal(seatOf({ seat: -1 }), 0);
+  assert.equal(seatOf({ seat: "x" }), 0);
+  assert.equal(seatOf({ seat: 1e309 }), 1, "overflow clamps, never wraps");
+  assert.equal(seatOf({ team: "nobody", seat: 3 }), 1, "an unknown team still has two seats");
+  assert.equal(seatOf({ flavour: "myteam", team: "custom", seat: 1 }), 0);
+  const once = JSON.stringify(SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), { seat: 9 })));
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+});

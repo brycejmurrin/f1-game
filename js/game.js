@@ -3322,7 +3322,7 @@ const G = {
   initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
   _nightAmbientBand: () => _nightAmbientBand(),
-  applyLightTune: (fromApplyRace) => applyLightTune(fromApplyRace),
+  applyLightTune: (fromApplyRace, opts) => applyLightTune(fromApplyRace, opts),
   // Stable bindings consumed by js/agent/apex.js (functions hoist; consts are
   // initialised before ApexApi.create(G) runs at the end of boot).
   smp, smp2, canvas,
@@ -6259,7 +6259,7 @@ const { TUNE_DEFS, LT, buildTrackLights } = LightTune;
 // (LightStore.create(G), assigned with the other modules below). These six are
 // thin passes through to it, kept so every call site here reads unchanged.
 function ltKey() { return ltStore.key(); }
-function applyLightTune(fromApplyRace) { ltStore.apply(fromApplyRace); }
+function applyLightTune(fromApplyRace, opts) { ltStore.apply(fromApplyRace, opts); }
 function setLightTune(id, v) {
   // A deliberate re-enable of PER-CHUNK LAMPS clears the crash latch. It is set
   // on a real context loss (js/render/glx/glx.js) and persisted so a reboot into the

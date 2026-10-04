@@ -108,6 +108,14 @@ const SaveMigrate = (function () {
     return deal;
   }
 
+  function clampSeat(seat, teamId) {
+    const team = typeof Teams !== "undefined" && Teams && Array.isArray(Teams.LIST)
+      ? Teams.LIST.find((t) => t && t.id === teamId) : null;
+    const n = team && Array.isArray(team.drivers) && team.drivers.length ? team.drivers.length : 2;
+    const i = Math.trunc(Number(seat)) || 0;
+    return Math.max(0, Math.min(n - 1, i));
+  }
+
   // Fill in every optional key so the rest of the code never guards for undefined,
   // and climb the migration ladder.
   //
@@ -128,10 +136,14 @@ const SaveMigrate = (function () {
     career.year = career.year | 0 || 2026;
     career.money = finiteNumber(career.money);
     career.rep = Math.max(0, Math.min(100, Number(career.rep) || 0));
-    career.seat = career.seat | 0;
     career.driver = career.driver && typeof career.driver === "object"
       ? career.driver : { name: "Your Name", code: "YOU", num: 99 };
     career.team = typeof career.team === "string" && career.team ? career.team : null;
+    // THE SEAT IS AN INDEX INTO THE TEAM'S GRID ROW. game.js copies it straight
+    // into driverIdx, and makeCars marks the player by `di === driverIdx`, so a
+    // hand-edited or imported `seat: 5` / `-1` gridded a race with no player car.
+    // MY TEAM's player is always seat 0; a DRIVER seat is clamped to the row.
+    career.seat = career.flavour === "myteam" ? 0 : clampSeat(career.seat, career.team);
     career.deal = cleanDeal(career.deal);
     career.seed = career.seed | 0;
     // A plain object or the empty season: a number or string here (a hand edit,

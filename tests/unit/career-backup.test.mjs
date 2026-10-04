@@ -340,35 +340,71 @@ test("import unions badges and keeps a standalone season that is further along",
   assert.deepEqual(JSON.parse(d.disk.get("apex26.badges")).got, { first_win: 50, pole: 10 });
 });
 
-test("import merges the Daily Challenge history per day: the faster best and the later streak stand", () => {
+// review-race-career-data #7: liveConflict compared Career.slotRevision() —
+// the store's CURRENT revision of the same key — with itself, so a write to the
+// live slot that did not raise conflicted() (here: a local, non-Career writer)
+// was overwritten by the import. It now compares the revision Career ARMED.
+test("import refuses the live slot once its revision moved past the one Career armed", () => {
+  const h = loadHarness();
+  fillSix(h);
+  h.Career.engage(true);
+  const envelope = h.CareerBackup.build();
+  const liveKey = "apex26.career.driver.0";
+  assert.equal(h.Career.armedRevision(), h.CareerBackup.revisionOf("driver", 0), "armed at load");
+  h.store.write("career.driver.0", save({ flavour: "driver", money: 777, round: 7 }));
+  assert.equal(h.Career.conflicted(), false, "a local write does not flag the career");
+  assert.notEqual(h.Career.armedRevision(), h.CareerBackup.revisionOf("driver", 0));
+  const applied = h.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { otherFlavourConfirmed: true });
+  assert.equal(applied.ok, false);
+  assert.equal(applied.reason, "conflict");
+  assert.equal(applied.slot, "driver:0");
+  assert.equal(JSON.parse(h.disk.get(liveKey)).money, 777, "the newer live save must stay");
+});
+
+// review-race-career-data #8: daily.v1 and records were written wholesale, so
+// importing last week's backup reset today's streak and per-day bests.
+test("import merges the daily challenge per day and keeps the later streak; records only fill gaps", () => {
   const a = loadHarness();
   a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
   a.disk.set("apex26.daily.v1", JSON.stringify({
-    days: { "2026-10-01": { best: 80, laps: 5, classes: { std: { best: 80, laps: 5 } } }, "2026-10-02": { best: 90, laps: 1 } },
-    streak: { count: 2, last: "2026-10-02" },
+    days: { "2026-09-20": { best: 80.5, laps: 3 }, "2026-09-21": { best: 79.9, laps: 2, classes: { standard: { best: 79.9, laps: 2 } } } },
+    streak: { count: 2, last: "2026-09-21" },
   }));
+  a.disk.set("apex26.records", JSON.stringify({ bahrain: { t: 90 }, monza: { t: 80 } }));
   a.Career.load();
   const envelope = a.CareerBackup.build();
 
   const b = loadHarness();
   b.disk.set("apex26.daily.v1", JSON.stringify({
-    days: { "2026-10-01": { best: 85, laps: 7, classes: { std: { best: 79, laps: 2 } } }, "2026-10-03": { best: 70, laps: 3 } },
-    streak: { count: 3, last: "2026-10-03" },
+    days: { "2026-09-21": { best: 81.2, laps: 5, classes: { standard: { best: 81.2, laps: 4 }, open: { best: 78, laps: 1 } } },
+      "2026-10-03": { best: 77.7, laps: 1 } },
+    streak: { count: 9, last: "2026-10-03" },
   }));
+  b.disk.set("apex26.records", JSON.stringify({ monza: { t: 85 } }));
   b.Career.load();
   assert.equal(b.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" }).ok, true);
-  const d = JSON.parse(b.disk.get("apex26.daily.v1"));
-  assert.equal(d.days["2026-10-01"].best, 80, "the backup's faster day best wins");
-  assert.equal(d.days["2026-10-01"].laps, 7, "the larger lap count stands");
-  assert.equal(d.days["2026-10-01"].classes.std.best, 79, "the local faster class best is not overwritten");
-  assert.equal(d.days["2026-10-02"].best, 90, "a day only the backup has is restored");
-  assert.equal(d.days["2026-10-03"].best, 70, "a newer local day survives the restore");
-  assert.deepEqual(d.streak, { count: 3, last: "2026-10-03" }, "the later streak stands");
+  const daily = JSON.parse(b.disk.get("apex26.daily.v1"));
+  assert.deepEqual(daily.streak, { count: 9, last: "2026-10-03" }, "the later streak survives an older backup");
+  assert.deepEqual(daily.days["2026-10-03"], { best: 77.7, laps: 1 }, "a day the backup lacks stays");
+  assert.deepEqual(daily.days["2026-09-20"], { best: 80.5, laps: 3 }, "a day only the backup has is restored");
+  assert.equal(daily.days["2026-09-21"].best, 79.9, "the faster best of the two");
+  assert.equal(daily.days["2026-09-21"].laps, 5, "the larger lap count");
+  assert.deepEqual(daily.days["2026-09-21"].classes, {
+    standard: { best: 79.9, laps: 4 }, open: { best: 78, laps: 1 },
+  }, "per-class bests merge the same way");
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.records")), { bahrain: { t: 90 }, monza: { t: 85 } },
+    "records: the backup fills what is missing, never replaces a local entry");
 
-  const c = loadHarness();   // nothing local: the backup's history as-is
+  // The backup's streak wins when it is the later one; no local daily takes the backup's.
+  const c = loadHarness();
+  c.disk.set("apex26.daily.v1", JSON.stringify({ days: {}, streak: { count: 1, last: "2026-09-01" } }));
   c.Career.load();
   c.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" });
-  assert.equal(JSON.parse(c.disk.get("apex26.daily.v1")).days["2026-10-02"].best, 90);
+  assert.deepEqual(JSON.parse(c.disk.get("apex26.daily.v1")).streak, { count: 2, last: "2026-09-21" });
+  const d = loadHarness();
+  d.Career.load();
+  d.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" });
+  assert.equal(JSON.parse(d.disk.get("apex26.daily.v1")).streak.count, 2);
 });
 
 test("malformed history / offers / moves / roster rows import without crashing career", () => {
