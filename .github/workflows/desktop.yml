@@ -1,7 +1,8 @@
 # Desktop packaging (Electron)
 #
 # Two lanes:
-#   1. pack-smoke — non-draft PRs that touch desktop/ or tools/desktop/:
+#   1. pack-smoke — non-draft PRs that touch desktop/, tools/desktop/ or any
+#      file stage-files.mjs packages (js/, css/, assets/, vendor/, the shell…):
 #      ubuntu-only electron-builder --dir + Playwright _electron (xvfb + soft GL).
 #      Windows / macOS pack-smoke lives on tag / workflow_dispatch only (Actions
 #      load: 1 job per PR push, not 3). Does NOT compete with pages.yml.
@@ -22,11 +23,27 @@ name: Desktop packages
 
 on:
   pull_request:
+    # Everything tools/desktop/stage-files.mjs stages into the app is an input
+    # of the package (STAGE_ROOT_FILES + STAGE_DIRS); keep this list in step
+    # with it. Draft PRs still skip the job (see pack-smoke's `if`).
     paths:
       - "desktop/**"
       - "tools/desktop/**"
       - ".github/workflows/desktop.yml"
       - "docs/notes/DESKTOP-TEST-PLAN.md"
+      - "index.html"
+      - "bench.html"
+      - "controller.html"
+      - "cockpit-view.html"
+      - "version.json"
+      - "manifest.json"
+      - "sw.js"
+      - ".nojekyll"
+      - "js/**"
+      - "css/**"
+      - "icons/**"
+      - "assets/**"
+      - "vendor/**"
   workflow_dispatch:
     inputs:
       signed_verify:

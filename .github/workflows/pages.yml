@@ -9,10 +9,10 @@ on:
   # exactly that commit. It is started two ways: ci.yml's `poke-train` job
   # dispatches it when a deploy-branch push's FAST tier (guards, node suites,
   # census, change-aware selection — the verdict an agent waits for) goes
-  # green. That fast tier no longer shares a cancelling `ship-push` group:
-  # each ship push keys ci.yml concurrency on github.sha so every merge
-  # finishes (trade-off: more runner minutes / longer queue in a burst). The
-  # train itself is unchanged — unique concurrency_key into ci.yml, and this
+  # green. That fast tier shares ci.yml's non-cancelling `ship-fast` group: a
+  # running fast tier always finishes, and in a burst only the newest WAITING
+  # push survives (an older pending one ends `cancelled` = superseded; its
+  # commits ride the newer tip). The train itself is unchanged — unique concurrency_key into ci.yml, and this
   # file's `pages-gate-*` group never cancels. The cron below is the BACKSTOP.
   # The cron is not a clock here:
   # GitHub's scheduler runs this repository's schedules hours late (ci.yml's
