@@ -107,6 +107,8 @@ function boot(opts = {}) {
       : opts.tokens ? () => ({ getPropertyValue: (k) => ALL_TOKENS[k] || "" }) : undefined,
   };
   sb.window = sb;
+  // #announce-live's one writer, as in the shell (it loads before hud.js).
+  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
   // The OVERTAKE chip converts the allowance to MJ through the real module.
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
@@ -158,17 +160,24 @@ test("under cockpit-cam the hidden gear/tach writes wait; the redline latch keep
   const { els, player, dom, tick } = boot();
   player.gear = 4; player.rpm = IDLE_RPM + (MAX_RPM - IDLE_RPM) * 0.5; tick();
   assert.equal(els.gear.textContent, "4");
-  assert.equal(els.rpmFill.style.width, "50%");
+  assert.equal(els.rpmFill.style.getPropertyValue("--rpm"), "0.50");
   dom.document.body.classList.add("cockpit-cam");
   player.gear = 6; player.rpm = MAX_RPM * 0.93; tick();   // enters the redline while hidden
   assert.equal(els.gear.textContent, "4", "no write to the hidden chip");
-  assert.equal(els.rpmFill.style.width, "50%");
+  assert.equal(els.rpmFill.style.getPropertyValue("--rpm"), "0.50");
   player.rpm = MAX_RPM * 0.905; tick();                   // inside the band: the latch must remember 93 %
   dom.document.body.classList.remove("cockpit-cam");
   tick();
   assert.equal(els.gear.textContent, "6", "out of the cockpit: the live gear");
   assert.ok(els.tach.classList.contains("redline"), "the latch entered at 93 % while hidden and holds at 90.5 %");
-  assert.equal(els.rpmFill.style.width, (clampFrac(MAX_RPM * 0.905) * 100).toFixed(0) + "%");
+  assert.equal(els.rpmFill.style.getPropertyValue("--rpm"), (Math.round(clampFrac(MAX_RPM * 0.905) * 100) / 100).toFixed(2));
+  // The fill is the whole tach, clipped at --rpm: its colour stops sit on fixed
+  // revs instead of sliding with a fill whose width WAS the revs.
+  const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
+  const fill = css.match(/#hud-rpm-fill \{([^}]*)\}/)[1];
+  assert.match(fill, /width: 100%/);
+  assert.match(fill, /clip-path: inset\(0 calc\(\(1 - var\(--rpm, 0\)\) \* 100%\) 0 0\)/);
+  assert.equal(els.rpmFill.style.width || "", "", "the width is never written per frame any more");
 });
 function clampFrac(rpm) { return Math.min(1, Math.max(0, (rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM))); }
 

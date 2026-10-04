@@ -3,6 +3,10 @@
 
 const Onboard = (function () {
   const KEY = "onboarded";      // store adds the apex26. prefix
+  // The races the marks have had, persisted beside the bitmask: it was session
+  // memory, so RACES_MAX "two races and the player has seen enough" restarted
+  // at every page load and an unseen mark could still appear a month in.
+  const RACES_KEY = "onboardRaces";
   const MARKS = ["brake", "ot", "aero"];
   const BIT = { brake: 1, ot: 2, aero: 4 };
   const ALL = 7;
@@ -74,7 +78,8 @@ const Onboard = (function () {
       loaded = true;
       const v = store.get(KEY, 0);
       shown = Number.isInteger(v) ? v : 0;
-      races = 0;
+      const r = store.get(RACES_KEY, 0);
+      races = Number.isInteger(r) && r > 0 ? r : 0;
     }
     function done() {
       load();
@@ -101,7 +106,7 @@ const Onboard = (function () {
         // A red-flag standing restart also runs count -> race, and it must not
         // burn one of the two races these marks get. A genuine start has the
         // race clock at zero; a restart resumes the clock the flag stopped.
-        if (G.state === "race" && lastState === "count" && !(G.raceT > 1)) races++;
+        if (G.state === "race" && lastState === "count" && !(G.raceT > 1) && !done()) { races++; store.set(RACES_KEY, races); }
         lastState = G.state;
       }
       // PAUSED is not racing: a mark fired under the pause card is consumed unseen.
@@ -136,6 +141,7 @@ const Onboard = (function () {
       cool = 0;
       loaded = true;
       store.set(KEY, 0);
+      store.set(RACES_KEY, 0);
     }
     function state() {
       load();
