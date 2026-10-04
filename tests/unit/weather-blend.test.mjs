@@ -112,3 +112,62 @@ test("the weather arc asks for the fade and game.js ticks it", () => {
   assert.match(game, /applyRaceSettings: \(blendS\) => applyRaceSettings\(blendS\)/, "the façade forwards the blend");
   assert.match(game, /wxArc\.tick\(dt\);[^\n]*\n\s*_atmo\.tick\(dt\);/, "the fade ticks right after the arc");
 });
+
+// ── L5-b: weather never paints daylight into night or midday into twilight ──
+// atmosphere.js's overcast branch flattened the "default" horizon to a daylight
+// grey with no night guard (the seven night-default circuits run "default"),
+// the fog branch gave explicit dusk/dawn the midday fog grey, and wet/rain left
+// the clear fog colour under a greyed sky. (review-wgx-lighting items 3 and 8.)
+const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+const sat = (c) => Math.max(...c) - Math.min(...c);
+function bootNight() {
+  const b = boot();
+  b.G.track.def.night = true;
+  b.G.track.def.palette = Object.assign({}, b.G.track.def.palette,
+    { zenith: [0.01, 0.02, 0.05], horizon: [0.04, 0.03, 0.06], fog: [0.015, 0.017, 0.035] });
+  return b;
+}
+
+test("a night-default circuit keeps a night horizon in every weather", () => {
+  for (const wx of ["dry", "wet", "rain", "overcast", "fog"]) {
+    const { G, atmo } = bootNight();
+    G.raceWeather = wx; atmo.applyRaceSettings();
+    // 0.11: the night FOG murk [0.09,0.10,0.13] is 0.100 by design; the overcast bug was ~0.73.
+    assert.ok(lum(G.frameSky.horizon) <= 0.11, `${wx}: night horizon luminance ${lum(G.frameSky.horizon).toFixed(3)} > 0.11`);
+    assert.ok(lum(G.frame.fogColor) <= 0.15, `${wx}: night fog luminance ${lum(G.frame.fogColor).toFixed(3)}`);
+  }
+  const day = boot(); day.G.raceWeather = "overcast"; day.atmo.applyRaceSettings();
+  assert.deepEqual(host(day.G.frameSky.horizon), [0.74, 0.73, 0.74], "a day overcast still flattens to the grey deck");
+});
+
+test("dusk and dawn fog take the horizon's hue, not the midday grey", () => {
+  for (const tod of ["dusk", "dawn"]) {
+    const { G, atmo } = boot();
+    G.raceTimeOfDay = tod; atmo.applyRaceSettings();
+    const clearExp = G.frame.exposure, hz = host(G.frameSky.horizon);
+    G.raceWeather = "fog"; atmo.applyRaceSettings();
+    const fc = host(G.frame.fogColor);
+    assert.notDeepEqual(fc, [0.74, 0.76, 0.78], `${tod}: still the midday grey`);
+    assert.ok(fc[0] > fc[2], `${tod}: fog ${fc} is not warm like its horizon ${hz}`);
+    assert.ok(sat(fc) < sat(hz), `${tod}: fog must be a desaturated horizon`);
+    assert.ok(Math.abs(lum(fc) - lum(hz)) < 0.08, `${tod}: fog luminance ${lum(fc)} strays from the horizon's ${lum(hz)}`);
+    assert.ok(G.frame.exposure <= Math.max(clearExp, 1.03) + 1e-9, `${tod}: fog lifted exposure to ${G.frame.exposure}`);
+  }
+  const day = boot(); day.G.raceTimeOfDay = "day"; day.G.raceWeather = "fog"; day.atmo.applyRaceSettings();
+  assert.deepEqual(host(day.G.frame.fogColor), [0.74, 0.76, 0.78], "day fog keeps its grey");
+});
+
+test("wet and rain fog follow the sky's overcast grey, so terrain meets the skyline", () => {
+  const { G, atmo } = boot();
+  atmo.applyRaceSettings();
+  const clear = host(G.frame.fogColor);
+  const greyH = [0.58, 0.58, 0.60];
+  const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
+  let last = dist(clear, greyH);
+  for (const wx of ["wet", "rain"]) {
+    G.raceWeather = wx; atmo.applyRaceSettings();
+    const d = dist(host(G.frame.fogColor), greyH);
+    assert.ok(d < last - 1e-6, `${wx}: fog ${host(G.frame.fogColor)} did not move toward the grey horizon (${d} vs ${last})`);
+    last = d;
+  }
+});
