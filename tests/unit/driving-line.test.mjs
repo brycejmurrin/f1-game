@@ -250,3 +250,41 @@ test("with a baked racing line the ribbon follows IT, easing to the centre where
   assert.ok(Math.abs(lat(api.straight - 30) - 5.5) < 0.3, `turn-in follows the baked line: ${lat(api.straight - 30).toFixed(2)}`);
   assert.ok(Math.abs(lat(api.straight / 2)) < 0.3, `no opinion = centre: ${lat(api.straight / 2).toFixed(2)}`);
 });
+
+test("on banking the ribbon rides the road's own node-to-node LERP, LIFT above it — never the nearest node", () => {
+  const DL = load();
+  const api = stadium();
+  const tr = api.track, n = tr.n;
+  // steep, alternating banking: the nearest-node lift is up to a metre off the
+  // road mesh between nodes, the case that sank chevrons into Zandvoort's tarmac
+  const lift = new Float32Array(n), bsign = new Float32Array(n).fill(1);
+  for (let k = 0; k < n; k++) lift[k] = k % 2 ? 2 : 0.2;
+  tr.bankP = { lift, bsign };
+  // the road mesh's per-node formula (js/track/core/mesh.js bankOffsetAt)
+  const nodeBank = (k, o) => {
+    const w = tr.hw[k]; let f = (bsign[k] * o + w) / (2 * w);
+    f = f < 0 ? 0 : f > 1 ? 1 : f;
+    return lift[k] * (f - 0.5);
+  };
+  const c = DL.build(api);
+  const LIFT = 0.03, ds = api.total / c.n;
+  const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+  let between = 0, worst = 0;
+  for (let q = 0; q < c.n; q++) {
+    const s = q * ds;
+    api.sample(s, smp);
+    const fi = s / api.total * n, i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
+    if (f > 0.1 && f < 0.9) between++;
+    for (let side = 0; side < 2; side++) {
+      const o = (q * 2 + side) * DL.STRIDE, v = c.verts;
+      const off = (v[o] - smp.p[0]) * smp.r[0] + (v[o + 2] - smp.p[2]) * smp.r[2];   // the stadium is flat: up = +y
+      const road = nodeBank(i, off) + (nodeBank(j, off) - nodeBank(i, off)) * f;
+      worst = Math.max(worst, Math.abs(v[o + 1] - (road + LIFT)));
+    }
+  }
+  assert.ok(between > c.n / 2, `most samples fall between nodes (${between}/${c.n}), so the lerp is what is tested`);
+  assert.ok(worst < 1e-4, `ribbon height − (lerped road + LIFT) worst ${worst.toFixed(4)} m`);
+  // and the exported helper is the same number at a mid-node point
+  const sMid = 10.5 * api.total / n;
+  assert.ok(Math.abs(DL.bankOffset(tr, sMid, 3) - (nodeBank(10, 3) + nodeBank(11, 3)) / 2) < 1e-6);
+});
