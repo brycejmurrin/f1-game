@@ -100,8 +100,8 @@ const ResultsCam = (function () {
       }
       return best || cars[0] || null;
     }
-    function cheqPose() {
-      const p = subject();
+    function cheqPose(car) {
+      const p = car || subject();
       if (!p || !G.camVantage) return null;
       const mode = "side";
       const v = G.camVantage(mode, p.s || 0, p.x || 0, p.speed || 0, 0, chequeredExtra(p));
@@ -139,7 +139,7 @@ const ResultsCam = (function () {
       reel = highlightsReel(tags, w.t0, w.t1, HIGHLIGHT_MAX_S);
       if (!reel.length && w.frames > 2) {
         const dur = Math.min(HIGHLIGHT_CLIP_S, Math.max(1, w.t1 - w.t0));
-        reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: 0 }];
+        reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: -1 }];   // no tagged car: film the winner
       }
       if (!reel.length || !buf.beginScrub(false)) return false;
       phase = "highlights"; reelIdx = 0; clipAge = 0; age = 0;
@@ -152,7 +152,7 @@ const ResultsCam = (function () {
       if (!buf || !clip) return;
       const t = clip.t0 + Math.min(clip.t1 - clip.t0, clipAge);
       buf.apply(t);
-      const pose = cheqPose() || doOrbit();
+      const pose = cheqPose((G.cars || [])[clip.car]) || doOrbit();   // film the clip's car, not always the winner
       if (pose) publish(pose);
     }
     function tick(dt) {

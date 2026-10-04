@@ -598,7 +598,10 @@ const Input = (function () {
      folding saturation into the same divisor means a worn stick that tops out
      at 0.85 still reaches full lock. */
   function padAxisShape(raw) {
-    const v = clamp(raw - padRestOffset, -1, 1);
+    // Rescale each side of the calibrated centre to its own travel: a bare
+    // `raw - off` capped the far side at 1 - |off| (~89% on a drifted stick).
+    const off = padRestOffset, d = raw - off;
+    const v = clamp(d / Math.max(0.05, d >= 0 ? 1 - off : 1 + off), -1, 1);
     const a = Math.abs(v);
     if (a <= padDeadzone) return 0;
     const span = Math.max(0.05, 1 - padDeadzone - padSaturation);
@@ -1069,7 +1072,9 @@ const Input = (function () {
     // Right stick (standard mapping axes 2/3) → free-look. Menu nav still uses
     // both sticks via padNavDir; free-look is only consumed in-race by CamFeel.
     {
-      const rx = readPadAxis(axes, 2), ry = readPadAxis(axes, 3);
+      // A wheel pedal mapped onto axis 2/3 is not a look stick (pad-menu's padNavDirOf excludes it too).
+      const ped = (i) => i === padAxisMap.throttle || i === padAxisMap.brake;
+      const rx = ped(2) ? 0 : readPadAxis(axes, 2), ry = ped(3) ? 0 : readPadAxis(axes, 3);
       const mag = Math.hypot(rx, ry);
       if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
       else {

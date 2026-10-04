@@ -295,3 +295,16 @@ test("a car crossing the start/finish line interpolates through the seam, not ro
   const out = R.lerpCar(new Float32Array(9), Float32Array.of(10, 0, 0, 0, 0, 0, 0, 0, 0), Float32Array.of(20, 0, 0, 0, 0, 0, 0, 0, 0), 0.5);
   assert.equal(out[0], 15);
 });
+
+test("a grid over 22 cars (MY TEAM / LEGENDS) records instead of resetting every sample", () => {
+  const R = boot();
+  assert.ok(R.budgetOk(24, R.capacityFor(24)), "24 cars fit the byte cap");
+  for (const n of [23, 24, 26]) {
+    const field = cars(n);
+    const api = R.create({ cars: field, netPlay: { active: () => false } });
+    for (let i = 0; i < R.HZ * 2; i++) api.sample(i / R.HZ, field);
+    const w = api.window();
+    assert.ok(w.frames >= R.HZ * 2 - 1, n + " cars: frames=" + w.frames);
+    assert.equal(w.cars, Math.min(R.MAX_CARS, n));
+  }
+});

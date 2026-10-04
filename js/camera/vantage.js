@@ -266,10 +266,15 @@ function crY(p0, p1, p2, p3, t) {
 // metres at a hairpin; a fast kink gets less.
 const _hangOut = Object.create(null);
 const _hangFast = Object.create(null);
-function bendHang(key, kA, dt, reduce, gain, lambda) {
-  if (!(dt > 0) || reduce || !gain) return 0;
-  if (!kA) { _hangOut[key] = 0; _hangFast[key] = 0; return 0; }
+function bendHang(key, kA, dt, reduce, gain, lambda, snap) {
+  if (reduce || !gain || (!(dt > 0) && !snap)) return 0;
+  if (!kA) { _hangOut[key] = 0; _hangFast[key] = 0; if (typeof CamFeel !== "undefined") CamFeel.follow(key, 0, lambda, 0); return 0; }
   const raw = clamp(kA * 18, -1, 1);
+  if (!(dt > 0)) {   // a snap reseeds (like speedOpen) so the next live frame does not pop from a stale hang
+    _hangOut[key] = raw; _hangFast[key] = 0;
+    if (typeof CamFeel !== "undefined") CamFeel.follow(key, raw, lambda, 0);
+    return raw * gain;
+  }
   const prev = _hangOut[key] || 0;
   // A chicane flips sign before a hairpin-rate head can arrive, and the two
   // sides cancel. Catch faster for a short stretch after the flip, then go
@@ -503,7 +508,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // shows the corner you're arriving at instead of a fixed patch of asphalt.
     // The one-shot path (no dt) keeps the shipped 12 m lead.
     const ohLead = extra.dt > 0 ? 8 + 16 * spN : 12;
-    const ohOut = bendHang("ohBend", kA, extra.dt, extra.reduceMotion, 7 * hangScale("overhead"), 2.2);
+    const ohOut = bendHang("ohBend", kA, extra.dt, extra.reduceMotion, 7 * hangScale("overhead"), 2.2, extra.snap);
     eye[0] = p[0] - t[0] * 9 + r[0] * ohOut; eye[1] = p[1] + 34; eye[2] = p[2] - t[2] * 9 + r[2] * ohOut;
     tgt[0] = p[0] + t[0] * ohLead; tgt[1] = p[1]; tgt[2] = p[2] + t[2] * ohLead;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 46;
@@ -527,7 +532,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
   } else if (mode === "reverse") {
     eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
-    const revOut = bendHang("revBend", kA, extra.dt, extra.reduceMotion, 3.6 * hangScale("reverse"), 5);
+    const revOut = bendHang("revBend", kA, extra.dt, extra.reduceMotion, 3.6 * hangScale("reverse"), 5, extra.snap);
     eye[0] += r[0] * revOut; eye[2] += r[2] * revOut;
     tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(60, 72, spFov);
@@ -598,7 +603,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const slipRaw = clamp((extra.slipLat || 0) / 8, -1, 1);
     const slipN = typeof CamFeel !== "undefined" ? CamFeel.follow("driftSlip", slipRaw, 7, extra.dt || 0) : slipRaw;
     Tracks.sample(track, wrapS(s - 6.2), cvB);
-    const bend = bendHang("driftBend", kA, extra.dt, extra.reduceMotion, 1, 6.5);
+    const bend = bendHang("driftBend", kA, extra.dt, extra.reduceMotion, 1, 6.5, extra.snap);
     const cx = x * 0.5 - slipN * 6.5 + bend * 5.5 * hangScale("drift");
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 6.2) + 2.4 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.75; tgt[2] = p[2];
@@ -668,7 +673,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // Chase hangs outside and looks into the apex. Far does not: its length
     // already swings it, and a second hang was cancelling that.
     if (!far) {
-      const chaseOut = bendHang("chaseBend", kA, extra.dt, extra.reduceMotion, 4.6 * hangScale("chase"), 6);
+      const chaseOut = bendHang("chaseBend", kA, extra.dt, extra.reduceMotion, 4.6 * hangScale("chase"), 6, extra.snap);
       eye[0] += r[0] * chaseOut; eye[2] += r[2] * chaseOut;
       const aimIn = chaseOut * 0.7;
       tgt[0] -= r[0] * aimIn; tgt[2] -= r[2] * aimIn;
