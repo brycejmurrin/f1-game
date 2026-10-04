@@ -6,8 +6,8 @@
    the shadow batches and the ground/attitude matrices, and reads the caches
    only through this surface. Depends on nothing in game.js by name: state
    comes through the G façade (gfx / store / cars / raceT / camEye / camMode /
-   raceTimeOfDay / track / teamIdx / driverIdx / headlessMode / frame), the four
-   helpers that could not leave game.js through deps (resolveLivery,
+   dbgCam / state / raceTimeOfDay / track / teamIdx / driverIdx / headlessMode /
+   frame), the four helpers that could not leave game.js through deps (resolveLivery,
    partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali). */
 "use strict";
 
@@ -482,6 +482,25 @@ const CarDraw = (function () {
           { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: haloSz, num,
             parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
       }, COCKPIT_BODY_CACHE_MAX);
+    }
+    // THE PLAYER'S SHADOW CASTER IN A FIRST-PERSON VIEW (ShadowPass.resolvePlayer,
+    // deps.cockpitCaster): in cockpit, helmet and visor, the mesh and matrix the
+    // car loop's cockpit branch draws the body with — the same mode test, and
+    // GameCams.cockpitViewmodelAxes over the same inputs (the player's road
+    // sample and interpolated yawVis, the final eye, the mode's seat), written
+    // into `out`. null in every other view: the exterior silhouette casts.
+    // Pinned against game.js's branch: tests/unit/car-presentation-canary.test.mjs.
+    const _ckR = [0, 0, 0], _ckU = [0, 1, 0], _ckF = [0, 0, 0], _ckP = [0, 0, 0];
+    function cockpitCaster(c, smp, yv, out) {
+      const id = !G.dbgCam && (G.state === "race" || G.state === "count") ? CamModes.CAM_MODES[G.camMode].id : "";
+      if (id !== "cockpit" && id !== "helmet" && id !== "visor") return null;
+      const seat = id === "visor" ? "visor" : "cockpit";
+      GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(seat), GameCams.seatUp(seat));
+      out[0] = _ckR[0]; out[1] = _ckR[1]; out[2] = _ckR[2]; out[3] = 0;
+      out[4] = _ckU[0]; out[5] = _ckU[1]; out[6] = _ckU[2]; out[7] = 0;
+      out[8] = _ckF[0]; out[9] = _ckF[1]; out[10] = _ckF[2]; out[11] = 0;
+      out[12] = _ckP[0]; out[13] = _ckP[1]; out[14] = _ckP[2]; out[15] = 1;
+      return cockpitBodyMesh(c.team, c);
     }
     // Hub transform (translate + upscale) + scratch matrices for the steering roll
     // and per-element LCD offsets. The rig z is NOT cosmetic: the cockpit near
@@ -1064,7 +1083,7 @@ const CarDraw = (function () {
     }
 
     return (_instance = {
-      teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh,
+      teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
