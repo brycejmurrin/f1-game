@@ -386,7 +386,10 @@
 /* ---------- category tabs ---------- */
 .cs-tab {
   display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
-  padding: 6px 10px; border-radius: var(--r-md); min-width: 0; overflow: hidden;
+  /* --tap-min, not 0: this rule shares @layer components and specificity with
+     the tap-target floor in css/components.css and loads later, so a 0 here
+     silently cancelled that WCAG 2.5.8 width floor. */
+  padding: 6px 10px; border-radius: var(--r-md); min-width: var(--tap-min); overflow: hidden;
   background: var(--plate); border: 1px solid var(--plate-line);
   cursor: pointer; text-align: left;
 }
