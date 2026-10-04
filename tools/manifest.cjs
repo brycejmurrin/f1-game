@@ -280,6 +280,7 @@ const FULL = [
   "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
+  "js/camera/flyby-sight.js",   // FlybySight: the flyby planner's (and frame-report's) sightline/occluder model
   "js/camera/flyby-seq.js",
   "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)

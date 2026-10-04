@@ -93,73 +93,9 @@ function flyMs() {
 // The world as boxes + a height field
 // ---------------------------------------------------------------------------
 
-const TREEISH = /tree|pine|palm|cypress|acacia|broadleaf|conifer/i;
-
-/** track.props → cast boxes. Opacity is a judgement per kind, named here. */
-function propBoxes(track, FlybySeq) {
-  const out = [];
-  track.props.list.forEach((p, i) => {
-    if (!(p.w > 0 && p.h > 0 && p.d > 0)) return;
-    const base = { kind: p.kind, id: i, rec: p };
-    if (TREEISH.test(p.kind)) {
-      // A trunk you cannot see through and a canopy you mostly cannot. Where
-      // the canopy starts is a per-species judgement: a stone pine is an
-      // umbrella on a bare stem, a palm a tuft on a pole.
-      const y0 = p.y - p.h / 2, tw = Math.max(0.35, Math.min(p.w, p.d) * 0.12);
-      const c0 = /stonePine|palm/.test(p.kind) ? 0.6 : /cypress/.test(p.kind) ? 0.1 : 0.35;
-      out.push({ ...base, x: p.x, y: y0 + p.h * c0 / 2 + 0.1, z: p.z, w: tw, h: p.h * c0 + 0.2, d: tw, op: 1, part: "trunk" });
-      out.push({ ...base, x: p.x, y: y0 + p.h * (1 + c0) / 2, z: p.z, w: p.w * 0.85, h: p.h * (1 - c0), d: p.d * 0.85,
-                 op: 0.8, part: "canopy" });
-      return;
-    }
-    if (p.kind === "gantry") {
-      // A beam across the road on two posts, not a wall: keep the top third.
-      out.push({ ...base, x: p.x, y: p.y + p.h / 3, z: p.z, w: p.w, h: p.h / 3, d: p.d, op: 1, solid: true });
-      return;
-    }
-    if (/ridge|mountain|hill|peak/.test(p.kind)) {
-      // An AABB round a mountain is mostly sky: stack three shrinking tiers so
-      // the silhouette is a stepped pyramid, not a rectangle.
-      const y0 = p.y - p.h / 2;
-      for (let t = 0; t < 3; t++) {
-        const k = 1 - t / 3;
-        out.push({ ...base, x: p.x, y: y0 + p.h * (t + 0.5) / 3, z: p.z, w: p.w * k, h: p.h / 3, d: p.d * k, op: 0.9, part: "tier" + t });
-      }
-      return;
-    }
-    let op = 1;
-    if (p.kind === "structure") op = Math.min(1, (p.fill || 0) * 1.6);
-    else if (/bush|hedge/.test(p.kind)) op = 0.6;
-    else if (p.kind === "prop") op = 0.7;
-    if (op < 0.05) return;
-    out.push({ ...base, x: p.x, y: p.y, z: p.z, w: p.w, h: p.h, d: p.d, op, solid: FlybySeq.isSolid(p) });
-  });
-  return out;
-}
-
-/** Linear barriers (walls, fences, stands) carry an arc span, not a box: lay
- *  them as oriented 6 m slabs at hw + gap, the way the emitter did. */
-function spanBoxes(track, Tracks) {
-  const out = [], smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
-  const L = track.total;
-  const OP = { wall: 1, fence: 0.25, guardrail: 1, tyreWall: 1, bleacher: 0.9, scaffoldStand: 0.6, terrace: 0.9, tieredBowl: 0.9 };
-  const H = { guardrail: 0.9, tyreWall: 1.1 };
-  track.props.spans.forEach((sp, j) => {
-    let a = sp.s0 * L, b = sp.s1 * L;
-    if (b < a) b += L;
-    const h = sp.h || H[sp.kind] || 1.5;
-    for (let s = a; s < b; s += 6) {
-      Tracks.sample(track, s % L, smp);
-      const rl = Math.hypot(smp.r[0], smp.r[2]) || 1, rx = smp.r[0] / rl, rz = smp.r[2] / rl;
-      const lat = (smp.hw + (sp.gap || 0)) * (sp.side >= 0 ? 1 : -1);
-      const thick = /bleacher|stand|terrace|bowl/.test(sp.kind) ? Math.max(4, h) : 0.5;
-      out.push({ kind: sp.kind, id: "span" + j, x: smp.p[0] + rx * (lat + Math.sign(lat) * thick / 2),
-                 y: smp.p[1] + h / 2, z: smp.p[2] + rz * (lat + Math.sign(lat) * thick / 2),
-                 w: thick, h, d: 6.2, rot: [rx, rz], op: OP[sp.kind] != null ? OP[sp.kind] : 0.8 });
-    }
-  });
-  return out;
-}
+// The world's boxes come from js/camera/flyby-sight.js (FlybySight.propBoxes /
+// spanBoxes): the flyby PLANNER judges its candidate eyes against the same
+// model, so the planner and this report cannot disagree about what is where.
 
 function carBoxes(G, Tracks) {
   const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
@@ -502,7 +438,7 @@ Accepts: ${KNOWN.filter((k) => k.startsWith("--")).join(" ")}`);
   const g = await createGame({ track });
   const bootMs = Date.now() - t0;
   const sb = g.sandbox, G = g.G, T = G.track, FlybySeq = sb.FlybySeq, Tracks = sb.Tracks;
-  const props = propBoxes(T, FlybySeq), spans = spanBoxes(T, Tracks), cars = carBoxes(G, Tracks);
+  const props = sb.FlybySight.propBoxes(T), spans = sb.FlybySight.spanBoxes(T), cars = carBoxes(G, Tracks);
   const gm = groundModel(T, Tracks);
   const scene = { allBoxes: props.concat(spans, cars), boxes: null, groundAt: gm.groundAt, maxGroundY: gm.maxGroundY, range };
   const ctx = { track: T, FlybySeq, Tracks, boxes: scene.allBoxes, cars, scene };
